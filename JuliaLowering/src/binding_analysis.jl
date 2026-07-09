@@ -32,11 +32,10 @@ unnecessary `Core.Box` allocations during closure conversion.
 This is called on the outermost lambda, and recursively processes nested lambdas.
 """
 function analyze_def_and_use!(ctx, ex)
-    @stm ex begin
-        [K"lambda" _ _ body _...] -> begin
-            _analyze_nested_lambdas!(ctx, body)
-            _analyze_lambda_vars!(ctx, ex)
-        end
+    match ex
+    case K"lambda"(_, _, body, _...)
+        _analyze_nested_lambdas!(ctx, body)
+        _analyze_lambda_vars!(ctx, ex)
     end
 end
 
@@ -334,10 +333,12 @@ function _analyze_lambda_vars!(ctx, ex)
     isempty(candidates) && return
 
     state = DefUseState(ctx, candidates)
-    @stm ex begin
-        [K"lambda" _ _ body] -> du_visit!(ctx, state, body)
-        [K"lambda" _ _ body rett] -> (du_visit!(ctx, state, body);
-                                      du_visit!(ctx, state, rett))
+    match ex
+    case K"lambda"(_, _, body)
+        du_visit!(ctx, state, body)
+    case K"lambda"(_, _, body, rett)
+        du_visit!(ctx, state, body)
+        du_visit!(ctx, state, rett)
     end
 
     for id in union(state.live, state.unused)

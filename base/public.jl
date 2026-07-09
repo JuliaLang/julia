@@ -10,6 +10,8 @@ public
 
 # Types
     AbstractLock,
+    Except,
+    MatchSlurp,
     AbstractOneTo,
     AbstractPipe,
     AsyncCondition,
@@ -30,6 +32,12 @@ public
     acquire,
     @acquire,
     release,
+
+# declared exceptions and pattern matching
+    except_call,
+    unwrap_except,
+    matcher,
+    pattern_match,
 
 # arrays
     has_offset_axes,

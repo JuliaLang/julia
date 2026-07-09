@@ -1156,13 +1156,14 @@ function bodyfunction(basemethod::Method)
                     elseif fsym.mod === Core && fsym.name === :_apply_iterate
                         fsym = callexpr.args[3]
                     end
-                    if isa(fsym, Symbol)
-                        return getfield(fmod, fsym)::Function
-                    elseif isa(fsym, GlobalRef)
-                        return getfield(fsym.mod, fsym.name)::Function
-                    elseif isa(fsym, Core.SSAValue)
-                        fsym = ast.code[fsym.id]
-                    else
+                    match fsym
+                    case f::Symbol
+                        return getfield(fmod, f)::Function
+                    case gr::GlobalRef
+                        return getfield(gr.mod, gr.name)::Function
+                    case ssa::Core.SSAValue
+                        fsym = ast.code[ssa.id]
+                    case _
                         return nothing
                     end
                 elseif isa(fsym, Core.SSAValue)

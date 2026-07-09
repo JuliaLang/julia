@@ -1606,14 +1606,15 @@ macro world(sym, world)
     if world == :∞
         world = Expr(:call, get_world_counter)
     end
-    if isa(sym, Symbol)
-        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(GlobalRef(__module__, sym)))))
-    elseif isa(sym, GlobalRef)
-        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(sym))))
-    elseif isa(sym, Expr) && sym.head === :(.) &&
+    match sym
+    case ::Symbol
+        :($(_resolve_in_world)($(esc(world)), $(QuoteNode(GlobalRef(__module__, sym)))))
+    case ::GlobalRef
+        :($(_resolve_in_world)($(esc(world)), $(QuoteNode(sym))))
+    case ::Expr if sym.head === :(.) &&
             length(sym.args) == 2 && isa(sym.args[2], QuoteNode) && isa(sym.args[2].value, Symbol)
-        return :($(_resolve_in_world)($(esc(world)), $(GlobalRef)($(esc(sym.args[1])), $(sym.args[2]))))
-    else
+        :($(_resolve_in_world)($(esc(world)), $(GlobalRef)($(esc(sym.args[1])), $(sym.args[2]))))
+    case _
         error("`@world` requires a symbol or GlobalRef")
     end
 end

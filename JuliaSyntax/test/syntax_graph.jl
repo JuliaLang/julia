@@ -713,3 +713,33 @@ end
         end
     end
 end
+
+@static if isdefined(Base, :pattern_match)
+@testset "Kind matchers for the match statement" begin
+    st = JuliaSyntax.parsestmt(SyntaxTree, "f(a, b + c)")
+    # a bare Kind matches any tree of that kind
+    @test Base.pattern_match(K"call", st) == ()
+    @test Base.pattern_match(K"function", st) === nothing
+    @test Base.pattern_match(K"call", "not a tree") === nothing
+    # the call form destructures children (exact arity without a slurp)
+    m = Base.matcher(K"call", Base.MatchCapture(), Base.MatchCapture(),
+                     Base.MatchCapture())
+    caps = Base.pattern_match(m, st)
+    @test length(caps) == 3 && kind(caps[1]) == K"Identifier"
+    @test Base.pattern_match(Base.matcher(K"call", Base.MatchCapture()), st) ===
+        nothing
+    # slurps are allowed anywhere and bind a SyntaxList slice
+    m2 = Base.matcher(K"call", Base.MatchCapture(),
+                      Base.MatchSlurp(Base.MatchCapture()))
+    caps2 = Base.pattern_match(m2, st)
+    @test length(caps2) == 2 && length(caps2[2]) == 2
+    m3 = Base.matcher(K"call", Base.MatchSlurp(Base.MatchCapture()),
+                      Base.MatchCapture())
+    caps3 = Base.pattern_match(m3, st)
+    @test length(caps3) == 2 && kind(caps3[2]) == K"call"
+    # nested kind matchers
+    m4 = Base.matcher(K"call", Base.MatchWildcard(), Base.MatchWildcard(),
+                      Base.matcher(K"call", Base.MatchSlurp(Base.MatchWildcard())))
+    @test Base.pattern_match(m4, st) == ()
+end
+end

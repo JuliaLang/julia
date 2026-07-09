@@ -243,6 +243,13 @@ end
 # `[syntax]` entry (and defining over it would error), so skip it then.
 if !isdefined(@__MODULE__, Symbol("#_internal_julia_parse"))
 function var"#_internal_julia_parse"(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    if !isdefined(Base, :JuliaSyntax)
+        # During bootstrap of the sysimage, submodule loads (e.g.
+        # `load_irshow!`) resolve to this binding through the module-nesting
+        # walk in `Meta.parser_for_module` before `Base.JuliaSyntax` is
+        # available; fall back to the default parser there.
+        return Core._parse(code, filename, lineno, offset, options)
+    end
     return Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options;
                                              syntax_version=Base.VersionNumber(1, 14, 0))
 end

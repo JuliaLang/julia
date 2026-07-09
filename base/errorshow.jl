@@ -82,12 +82,13 @@ function showerror(io::IO, ex::TypeError)
     elseif ex.func === :var"dict key"
         print(io, "$(limitrepr(ex.got)) is not a valid key for type $(ex.expected)")
     else
-        if isvarargtype(ex.got)
-            targs = (ex.got,)
-        elseif isa(ex.got, Type)
-            targs = ("Type{", ex.got, "}")
-        else
-            targs = ("a value of type $(typeof(ex.got))",)
+        targs = match ex.got as got
+        case _ if isvarargtype(got)
+            (got,)
+        case ::Type
+            ("Type{", got, "}")
+        case _
+            ("a value of type $(typeof(got))",)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
@@ -165,6 +166,8 @@ showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
 showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
+showerror(io::IO, ex::MatchError) = (print(io, "MatchError: no `case` matched value ");
+                                     show(io, ex.value))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
 showerror(io::IO, ex::DimensionMismatch) = print(io, "DimensionMismatch: ", ex.msg)

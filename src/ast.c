@@ -1289,7 +1289,19 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
 {
     jl_value_t *parser = NULL;
     if (inmodule) {
-        parser = jl_get_global(inmodule, jl_symbol("#_internal_julia_parse"));
+        // Submodules inherit the parser (and thereby the syntax version) of
+        // their enclosing module. N.B.: Should match the definition in
+        // base/meta.jl:parser_for_module.
+        jl_module_t *m = inmodule;
+        while (1) {
+            parser = jl_get_global(m, jl_symbol("#_internal_julia_parse"));
+            if (parser && parser != jl_nothing)
+                break;
+            jl_module_t *p = m->parent;
+            if (p == NULL || p == m)
+                break;
+            m = p;
+        }
     }
     if ((!parser || parser == jl_nothing) && jl_core_module) {
         parser = jl_get_global(jl_core_module, jl_symbol("_parse"));

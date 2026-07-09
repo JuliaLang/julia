@@ -579,6 +579,85 @@ Using [`zip`](@ref) will create an iterator that is a tuple containing the subit
 The `zip` iterator will iterate over all subiterators in order, choosing the ``i``th element of each subiterator in the
 ``i``th iteration of the `for` loop. Once any of the subiterators run out, the `for` loop will stop.
 
+## [Pattern Matching: the `match` Statement](@id man-match)
+
+!!! compat "Julia 1.14"
+    The `match` statement requires Julia 1.14.
+
+The `match` statement checks a value against a sequence of *patterns*, running the body of the
+first `case` arm whose pattern matches:
+
+```julia
+match x
+case ::Float64
+    "a 64-bit float"
+case 0
+    "zero"
+case (a, b) if a > b
+    "a decreasing pair"
+case _
+    "something else"
+end
+```
+
+The control flow is that of an `if`/`elseif` chain, evaluated top to bottom, combined with
+destructuring: identifiers in argument position of a pattern (like `a` and `b` above) are
+*captures*, bound to the corresponding components of the value over the arm's guard and body.
+Falling through the end of a match without any pattern matching throws a [`MatchError`](@ref).
+
+A `match` is an expression; its value is the value of the selected arm's body. An arm with an
+*empty* body evaluates to the matched value itself. The matched value can also be given a name
+over the whole match with `as`:
+
+```julia
+match classify(x) as it
+case ::Integer          # empty body: the match evaluates to `it`
+case r"^[0-9]+$"        # regular expressions match strings
+    parse(Int, it)
+case _
+    zero(it)
+end
+```
+
+The available pattern forms are:
+
+  * A bare identifier at the *top level* of a pattern is *resolved*: its value is used as a
+    matcher. Plain values match by [`isequal`](@ref) (so `case 1` matches `1` and `1.0`, and
+    `case NaN` matches `NaN`), functions act as predicates (`case ==(c)`, `case in(1:3)`), and
+    a bare type matches the type object itself, not its instances. This means enum-like
+    constants can be matched by name: `case Apple` matches the value of `Apple` rather than
+    silently capturing, and a misspelled constant raises an `UndefVarError`.
+  * `_` matches anything, binding nothing.
+  * `$x` matches the value of `x` by `isequal` in any position of a pattern.
+  * `::T` matches values of type `T`; `x::T` also captures the value.
+  * `(p₁, p₂, ...)` matches `Tuple`s of exactly that length; `[p₁, p₂, r...]` matches
+    `AbstractVector`s, with an optional trailing slurp; `k => v` matches `Pair`s; `(; a, b)`
+    matches any value with the given properties.
+  * `T(p₁, p₂)` destructures the fields of a struct type `T` in order. Calls to non-type
+    functions are evaluated and their result used as a matcher; overload [`Base.matcher`](@ref)
+    to customize how call patterns match ("active patterns"), or add methods to
+    [`Base.pattern_match`](@ref) for new matcher objects.
+  * `p₁ | p₂` matches either alternative; all alternatives must bind the same capture names.
+  * Any pattern may be followed by an `if` guard, which is evaluated with the captures bound.
+
+Each arm — its pattern captures together with its body — runs in its own scope, like the body
+of a `let` block: assignments inside an arm do not escape it. A `match` participates in the
+default `break` scope (see [labeled break](@ref man-loops)): a plain `break` exits the match
+(with value `nothing`), `break _ value` exits the match with a value, and `return` returns from
+the enclosing function. Unlabeled `continue` is not allowed inside a match arm, keeping `break`
+and `continue` scopes coupled; to continue (or break out of) an enclosing loop from inside an
+arm, label the loop with `@label` and use `continue label` / `break label`.
+
+There is also an inline destructuring form with the full pattern language, which throws
+[`MatchError`](@ref) if the pattern does not match:
+
+```julia
+match (x, (a, b)) = f()
+```
+
+`match` and `case` are contextual keywords: existing uses such as the [`match`](@ref) function
+or variables named `case` continue to work.
+
 ## Exception Handling
 
 When an unexpected condition occurs, a function may be unable to return a reasonable value to
@@ -939,6 +1018,88 @@ julia> try
        end
 2
 ```
+
+## [Declared Exceptions](@id man-declared-exceptions)
+
+!!! compat "Julia 1.14"
+    Declared exceptions require Julia 1.14.
+
+Exceptions thrown with `throw` unwind the stack to the nearest enclosing `try`/`catch`. This is
+appropriate for unexpected conditions, but for *expected* failure cases (a missing file, a key
+not found, a cancellation request) it hides the failure from the function's signature and makes
+handling at the callsite indirect. *Declared exceptions* let a method declare the exceptions
+that are part of its API, using the `except` keyword after the signature:
+
+```julia
+function read_setting(cfg, name)::String except KeyError
+    haskey(cfg, name) || throw(KeyError(name))?
+    return cfg[name]
+end
+```
+
+Declared exceptions do not unwind the stack. If a caller does nothing special, they behave
+exactly like thrown exceptions:
+
+```julia
+read_setting(cfg, "missing-name")   # throws KeyError
+```
+
+A callsite *opts in* to receiving a callee's declared exceptions with the postfix `?` operator,
+which re-propagates them as declared exceptions of the enclosing function — provided they fit
+the enclosing function's own declaration; anything else is thrown:
+
+```julia
+function read_port(cfg)::Int except KeyError
+    return parse(Int, read_setting(cfg, "port")?)
+end
+```
+
+The callsite filter form `expr except E` propagates only exceptions of type `E`. Each
+propagation step is explicit: an exception travels on the declared channel exactly as far as
+each caller has declared it, and becomes an ordinary thrown exception at the first boundary
+that doesn't. To raise a declared exception, apply `?` to `throw` itself, as in the first
+example. In a function with no `except` declaration, using `?` implies an inferred
+`except Any` declaration (useful for higher-order functions and closures, which do not inherit
+the enclosing function's declaration).
+
+Declared exceptions are *handled* with `case except` arms of a `match` statement, which match
+against the exceptional channel of the scrutinee call:
+
+```julia
+function read_port_or_default(cfg)::Int
+    match read_setting(cfg, "port")
+    case except KeyError(k)
+        0
+    case s::String
+        parse(Int, s)
+    end
+end
+```
+
+If a match has only `case except` arms, a non-exceptional value passes through unchanged. A
+declared exception that no `case except` arm matches is thrown — unless the match expression
+itself is marked for propagation, which is just the ordinary postfix syntax applied to the
+match expression:
+
+```julia
+match read_setting(cfg, "port")
+case except KeyError(k)
+    "0"
+end except CancellationRequest   # propagate CancellationRequest, throw anything else
+```
+
+In a literal (eager) comprehension, `?` in the body propagates from the comprehension itself:
+the first declared exception aborts the collection and propagates from the enclosing function.
+Lazy generator expressions do not support propagation (the generator may outlive the enclosing
+function call).
+
+The mechanism is implemented as a calling convention: a method with a declaration is split into
+an inner entry point returning a [`Base.Except`](@ref) value — a single wrapper type carrying
+either the ordinary result or a declared exception — reachable via [`Base.except_call`](@ref),
+analogous to `Core.kwcall`, and an ordinary entry point that unwraps it, throwing the
+exception. Because both states are wrapped in the one type, they can never be confused, and no
+stack unwinding is involved on the declared path, so declared exceptions are as cheap as
+returning a value.
 
 ## [Tasks (aka Coroutines)](@id man-tasks)
 

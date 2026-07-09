@@ -444,7 +444,10 @@ end
 
 function is_eventually_call(ex::SyntaxTree)
     k = kind(ex)
-    return k == K"call" || ((k == K"where" || k == K"::") && is_eventually_call(ex[1]))
+    return k == K"call" ||
+        ((k == K"where" || k == K"::" ||
+          # declared exception type: f(x)::T except E = ...
+          (k == K"except" && numchildren(ex) == 2)) && is_eventually_call(ex[1]))
 end
 
 function find_parameters_ind(exs)

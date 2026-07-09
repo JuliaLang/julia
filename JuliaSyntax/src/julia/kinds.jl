@@ -241,8 +241,11 @@ register_kinds!(JuliaSyntax, 0, [
             # contextual keywords
             "abstract"
             "as"
+            "case"
             "doc"
+            "except"
             "goto"
+            "match"
             "mutable"
             "outer"
             "primitive"
@@ -390,6 +393,12 @@ register_kinds!(JuliaSyntax, 0, [
         # typegroup is a keyword (see above in keywords section)
         # Container for a single statement/atom plus any trivia and errors
         "wrapper"
+        # Pattern matching (`match`/`case` are keywords, see above)
+        "match_assign"     # inline `match pat = val` destructuring
+        "case_except"      # exception arm, produced from flagged K"case"
+        "guard"            # `pat if cond` in a case arm
+        # Declared exceptions (`except` is a keyword, see above)
+        "question"         # postfix `expr?` exception propagation
     "END_SYNTAX_KINDS"
 
     # Kinds not corresponding to surface syntax in RawGreenNode, but required

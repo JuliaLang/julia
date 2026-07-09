@@ -129,6 +129,29 @@ JL_DLLEXPORT void jl_setup_new_module(jl_module_t *m, jl_value_t *syntax_version
     ct->world_age = last_age;
 }
 
+// apply just the syntax version recorded in a module expression (used for
+// baremodules, which skip the standard `_setup_module!` setup but should
+// still be parsed with their file's declared syntax version)
+static void jl_module_apply_syntax_version(jl_module_t *m, jl_value_t *syntax_version)
+{
+    if (syntax_version == jl_nothing)
+        return;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("set_syntax_version"), ct->world_age);
+    if (f != NULL) {
+        jl_value_t **fargs;
+        JL_GC_PUSHARGS(fargs, 3);
+        fargs[0] = f;
+        fargs[1] = (jl_value_t*)m;
+        fargs[2] = syntax_version;
+        jl_apply(fargs, 3);
+        JL_GC_POP();
+    }
+    ct->world_age = last_age;
+}
+
 JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym_t *name, jl_value_t *syntax_version,
                                               int std_imports, const char *filename, int lineno)
 {
@@ -151,6 +174,9 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
     // add standard imports unless baremodule
     if (std_imports && jl_base_module != NULL) {
         jl_setup_new_module(newm, syntax_version);
+    }
+    else if (jl_base_module != NULL) {
+        jl_module_apply_syntax_version(newm, syntax_version);
     }
 
     if (parent_module == jl_main_module && name == jl_symbol("Base") && jl_base_module == NULL) {

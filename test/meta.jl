@@ -286,3 +286,20 @@ end
 @testset "Base.Meta docstrings" begin
     @test isempty(Docs.undocumented_names(Meta))
 end
+
+# Meta.parser_for_module walks the module nesting chain, so submodules (and
+# non-entry files of a package) inherit the enclosing module's syntax version
+let outer = Module(:VPOuter)
+    Base.set_syntax_version(outer, v"1.14")
+    inner = Core.eval(outer, :(module VPInner end))
+    @test Meta.parser_for_module(inner) === Meta.parser_for_module(outer)
+    @test Base.include_string(inner, "match 1\ncase 1\n    2\nend") == 2
+end
+
+# baremodules also inherit the syntax version recorded by the parser in the
+# module expression (their files parse at the package's declared version)
+let vp = Base.VersionedParse(v"1.14.0")
+    ex = vp("baremodule VPBare\nend", "x.jl", 1, 0, :statement)[1]
+    bm = Core.eval(Module(:VPWrap), ex)
+    @test Base.include_string(bm, "match 1\ncase 1\n    7\nend") == 7
+end
