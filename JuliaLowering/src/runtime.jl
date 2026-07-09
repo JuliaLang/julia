@@ -7,6 +7,15 @@
 #-------------------------------------------------------------------------------
 # Functions/types used by code emitted from lowering, but not called by it directly
 
+@inline function _invoke_in_world(w::UInt, f::F, @nospecialize(args...)) where {F}
+    if ccall(:jl_is_in_pure_context, Int8, ()) != 0
+        # Similar to `Base.invoke_in_world` but also works inside generated-function
+        # expansion (see `jl_code_for_staged`)
+        return Core._call_in_world_total(w, f, args...)
+    end
+    return Base.invoke_in_world(w, f, args...)
+end
+
 # Re-dispatch `f(args...)` at the pinned lowering world (see `jl_lowering_world`)
 @inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
     w = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
@@ -16,7 +25,7 @@
         # FIXME: as a side effect, enabling the Base lowering hook now affects
         #        JuliaLowering execution not passing through the hook
     end
-    return Base.invoke_in_world(w, f, args...)
+    return _invoke_in_world(w, f, args...)
 end
 
 # Return the current exception. In JuliaLowering we use this rather than the
@@ -264,6 +273,18 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     # Run code generator - this acts like a macro expander
     ex0 = g.gen(sc, args...)
+
+    # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
+    world = Base.tls_world_age()
+
+    # Lower the generated code in the lowering world
+    return invoke_in_lowering_world(_lower_generated_code, g, source, graph, sc,
+                                   __module__, world, ex0)
+end
+
+function _lower_generated_code(g::GeneratedFunctionStub, source::Method, graph,
+                               sc::SyntaxContext, __module__::Module,
+                               world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
         ex0 = expr_to_est(
             graph, ex0, source_location(LineNumberNode, g.srcref))
@@ -279,8 +300,6 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     end
 
     @jl_assert base_layer(sc).mod == __module__ ex0
-    # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
-    world = Base.tls_world_age()
     ex0 = JuliaSyntax.fill_context!(ex0, sc)
     ctx1 = MacroExpansionContext(ex0, world, true)
     ex1 = expand_forms_1(ctx1, ex0)
@@ -335,7 +354,7 @@ end
 #
 # (This should do what fl_defined_julia_global does for flisp lowering)
 function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_counter())
-    return Base.invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
+    return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
 # "Reserve" a binding: create the binding if it doesn't exist but do not assign

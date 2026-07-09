@@ -155,7 +155,7 @@ function _eval_dot(world::UInt, mod, ex::SyntaxTree)
         ex = ex[1]
     end
     kind(ex) in KSet"Identifier Symbol" && mod isa Module ?
-        Base.invoke_in_world(world, getproperty, mod, Symbol(ex.name_val)) :
+        _invoke_in_world(world, getproperty, mod, Symbol(ex.name_val)) :
         nothing
 end
 
@@ -171,8 +171,8 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
         if kind(st) === K"Value"
             st.value
         elseif kind(st) === K"Identifier"
-            Base.invoke_in_world(ctx.world, getproperty,
-                                 syntax_module(st), Symbol(st.name_val))
+            _invoke_in_world(ctx.world, getproperty,
+                             syntax_module(st), Symbol(st.name_val))
         elseif kind(st) === K"." &&
                 # TODO: correct mod?
                 (ed = _eval_dot(ctx.world, mod, st); !isnothing(ed))
@@ -231,7 +231,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         macro_args = [mctx, raw_args...]
         macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
         expanded = try
-            Base.invoke_in_world(ctx.world, macfunc, macro_args...)
+            _invoke_in_world(ctx.world, macfunc, macro_args...)
         catch exc
             newexc = exc isa MacroExpansionError ?
                 MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.err) :
@@ -254,7 +254,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         end
         macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
         st_out = try
-            Base.invoke_in_world(ctx.world, macfunc, macro_args...)
+            _invoke_in_world(ctx.world, macfunc, macro_args...)
         catch exc
             if exc isa MethodError && exc.f === macfunc && !isempty(
                 methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, ctx.world, st))
