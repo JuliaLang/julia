@@ -37,7 +37,27 @@ $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
 	echo 1 > $@
 
-$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-patched: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2025-15661.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2025-15661.patch-applied
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55199.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2025-15661.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55199.patch-applied
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55200.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55199.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55200.patch-applied
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-unconst-backport.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55200.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-unconst-backport.patch-applied
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-patched: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-unconst-backport.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-patched
