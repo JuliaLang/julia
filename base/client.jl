@@ -540,7 +540,7 @@ function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::B
     finally
         popdisplay(d)
         active_repl = last_active_repl
-        active_repl_backend = last_active_repl_backend
+        global active_repl_backend = last_active_repl_backend
     end
     nothing
 end
