@@ -284,7 +284,8 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml/toml.jl")
 include("linking.jl")
-include("loading.jl")
+include("loading/environment.jl")
+include("loading/loading.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
@@ -306,7 +307,7 @@ using .Docs
 Docs.loaddocs(CoreDocs.DOCS)
 @eval CoreDocs DOCS = DocLinkedList()
 
-include("precompilation.jl")
+include("loading/precompilation.jl")
 
 # finally, now make `include` point to the full version
 for m in methods(include)
