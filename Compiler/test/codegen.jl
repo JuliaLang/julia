@@ -116,12 +116,16 @@ end
 function test_jl_dump_llvm_opt()
     mktemp() do func_file, func_io
         mktemp() do llvm_file, llvm_io
+            # suspend tier parking so the call below compiles (and is dumped)
+            # rather than running interpreted
+            ccall(:jl_tier_suspend_parking, Cvoid, ())
             @eval(test_jl_dump_compiles_internal(x) = x)
             ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), func_io.handle)
             ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), llvm_io.handle)
             @eval test_jl_dump_compiles_internal(1)
             ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), C_NULL)
             ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), C_NULL)
+            ccall(:jl_tier_resume_parking, Cvoid, ())
             close(func_io)
             close(llvm_io)
             @test stat(func_file).size !== 0
@@ -836,6 +840,9 @@ f48917(x, w) = (y = (a=1, b=x); z = (; a=(a=(1, w), b=(3, y))))
 @test f48917(1,2) == (a = (a = (1, 2), b = (3, (a = 1, b = 1))),)
 
 # https://github.com/JuliaLang/julia/issues/50317 getproperty allocation on struct with 1 field
+# (tier parking suspended so the warmup calls compile and @timed measures
+# compiled steady state)
+ccall(:jl_tier_suspend_parking, Cvoid, ())
 struct Wrapper50317
     lock::ReentrantLock
 end
@@ -862,6 +869,7 @@ let res = @timed a50317[:b]
     @test res.bytes == 0
     return res
 end
+ccall(:jl_tier_resume_parking, Cvoid, ())
 
 # https://github.com/JuliaLang/julia/issues/50964
 @noinline bar50964(x::Core.Const) = Base.inferencebarrier(1)
