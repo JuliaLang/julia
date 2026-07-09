@@ -747,7 +747,7 @@ end
 
 
 # More efficient commutative operations
-for (fJ, fC, fI) in ((:+, :add, 0), (:*, :mul, 1))
+for (fJ, fC) in ((:+, :add), (:*, :mul))
     @eval begin
         function ($fJ)(a::BigFloat, b::BigFloat, c::BigFloat)
             z = BigFloat()
@@ -1151,7 +1151,7 @@ isnegative(x::BigFloat) = signbit(x) && !iszero(x) && !isnan(x)
 
 function nextfloat!(x::BigFloat, n::Integer=1)
     signbit(n) && return prevfloat!(x, abs(n))
-    for i = 1:n
+    for _ = 1:n
         ccall((:mpfr_nextabove, libmpfr), Int32, (Ref{BigFloat},), x)
     end
     return x
@@ -1159,7 +1159,7 @@ end
 
 function prevfloat!(x::BigFloat, n::Integer=1)
     signbit(n) && return nextfloat!(x, abs(n))
-    for i = 1:n
+    for _ = 1:n
         ccall((:mpfr_nextbelow, libmpfr), Int32, (Ref{BigFloat},), x)
     end
     return x

@@ -177,7 +177,6 @@ function get(val::AbstractScopedValue{T}) where {T}
         v === nothing && return nothing
         return Some{T}(something(v)::T)
     end
-    return nothing
 end
 
 function Base.getindex(val::AbstractScopedValue{T})::T where T

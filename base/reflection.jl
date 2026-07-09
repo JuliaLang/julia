@@ -34,7 +34,7 @@ function code_lowered(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); gener
                 code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
-                      "This can happen if the provided argument types (", t, ") are ",
+                      "This can happen if the provided argument types (", argtypes, ") are ",
                       "not concrete types, but the `generated` argument is `true`.")
             end
         else

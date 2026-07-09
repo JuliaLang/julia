@@ -175,6 +175,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     isempty(t) && return
     print(io, ":")
     show_circular(io, t) && return
+    keywidth = 0
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -187,7 +188,6 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         hascolor = get(recur_io, :color, false)
         ks = Vector{String}(undef, min(rows, length(t)))
         vs = Vector{String}(undef, min(rows, length(t)))
-        keywidth = 0
         valwidth = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
@@ -705,7 +705,7 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && properx <: alias
                     if alias isa UnionAll
                         free_before = find_free_typevars(x)
-                        (ti, env) = typeintersect_env(x, unbounded_typealias(alias))
+                        (_ti, env) = typeintersect_env(x, unbounded_typealias(alias))
                         # ti === Union{} && continue # impossible, since we already checked that x <: alias
                         env = env::SimpleVector
                         # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
@@ -823,7 +823,7 @@ function show_typealias_name(io::IO, name::GlobalRef)
     return nothing
 end
 
-function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
+function show_typealias(io::IO, name::GlobalRef, env::SimpleVector, wheres::Vector)
     show_typealias_name(io, name)
     isempty(env) && return
     io = IOContext(io)
@@ -888,7 +888,7 @@ function show_typealias(io::IO, @nospecialize(x::Type))
     alias = make_typealias(x, io)
     alias === nothing && return false
     wheres = make_wheres(io, alias[2], x)
-    show_typealias(io, alias[1], x, alias[2], wheres)
+    show_typealias(io, alias[1], alias[2], wheres)
     show_wheres(io, wheres)
     return true
 end
@@ -900,7 +900,6 @@ function make_typealiases(@nospecialize(x::Type))
     mods = modulesof!(Set{Module}(), x)
     replace!(mods, Core=>Base)
     free_before = find_free_typevars(x)
-    vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
     each = Any[]
     for p in uniontypes(unwrap_unionall(x))
@@ -999,7 +998,7 @@ function show_unionaliases(io::IO, x::Union)
         alias = aliases[1]
         env = alias[2]::SimpleVector
         wheres = make_wheres(io, env, x)
-        show_typealias(io, alias[1], x, env, wheres)
+        show_typealias(io, alias[1], env, wheres)
         show_wheres(io, wheres)
     else
         for alias in aliases
@@ -1007,7 +1006,7 @@ function show_unionaliases(io::IO, x::Union)
             first = false
             env = alias[2]::SimpleVector
             wheres = make_wheres(io, env, x)
-            show_typealias(io, alias[1], x, env, wheres)
+            show_typealias(io, alias[1], env, wheres)
             show_wheres(io, wheres)
         end
         if tvar
@@ -1603,7 +1602,7 @@ end
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
 
-show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
+show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 
 ## Abstract Syntax Tree (AST) printing ##
 
@@ -1642,7 +1641,7 @@ const ExprNode = Union{Expr, QuoteNode, SlotNumber, LineNumberNode, SSAValue,
 # head is :$ and which is not inside a quote to fallback to the "unhandled" case:
 # this is behavior is triggered by IOContext(io, :unquote_fallback => true)
 print(        io::IO, ex::ExprNode)    = (show_unquoted(IOContext(io, :unquote_fallback => false), ex, 0, -1); nothing)
-show(         io::IO, ex::ExprNode)    = show_unquoted_quote_expr(IOContext(io, :unquote_fallback => true), ex, 0, -1, 0)
+show(         io::IO, ex::ExprNode)    = show_unquoted_quote_expr(IOContext(io, :unquote_fallback => true), ex, 0, -1)
 show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
 show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
 show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
@@ -1794,7 +1793,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
             show_unquoted(io, Expr(:(=), item.args[1], item.args[2]), indent, parens ? 0 : prec, quote_level)
         elseif kw && is_expr(item, :(=), 2)
             item = item::Expr
-            show_unquoted_expr_fallback(io, item, indent, quote_level)
+            show_unquoted_expr_fallback(io, item)
         else
             show_unquoted(io, item, indent, parens ? 0 : prec, quote_level)
         end
@@ -1896,9 +1895,9 @@ function show_unquoted(io::IO, ex::SlotNumber, ::Int, ::Int)
     end
 end
 
-function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
+function show_unquoted(io::IO, ex::QuoteNode, indent::Int, _prec::Int)
     if isa(ex.value, Symbol)
-        show_unquoted_quote_expr(io, ex.value, indent, prec, 0)
+        show_unquoted_quote_expr(io, ex.value, indent, 0)
     else
         print(io, "\$(QuoteNode(")
         # QuoteNode does not allows for interpolation, so if ex.value is an
@@ -1909,7 +1908,7 @@ function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
     end
 end
 
-function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int, quote_level::Int)
+function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, quote_level::Int)
     if isa(value, Symbol)
         sym = value::Symbol
         if value in quoted_syms
@@ -2015,7 +2014,7 @@ is_core_macro(@nospecialize(arg), macro_name::Symbol) = false
 # as an ordinary symbol, which is true in indexing expressions.
 const beginsym = gensym(:beginsym)
 
-function show_unquoted_expr_fallback(io::IO, ex::Expr, indent::Int, quote_level::Int)
+function show_unquoted_expr_fallback(io::IO, ex::Expr)
     print(io, "\$(Expr(")
     show(io, ex.head)
     for arg in ex.args
@@ -2466,7 +2465,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         end
 
     elseif head === :quote && nargs == 1 && isa(args[1], Symbol)
-        show_unquoted_quote_expr(IOContext(io, beginsym=>false), args[1]::Symbol, indent, 0, quote_level+1)
+        show_unquoted_quote_expr(IOContext(io, beginsym=>false), args[1]::Symbol, indent, quote_level+1)
     elseif head === :quote && !(get(io, :unquote_fallback, true)::Bool)
         if nargs == 1 && is_expr(args[1], :block)
             show_block(IOContext(io, beginsym=>false), "quote", Expr(:quote, (args[1]::Expr).args...), indent,
@@ -2572,12 +2571,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # Reset SOURCE_SLOTNAMES. Raw SlotNumbers are not valid in Expr(:toplevel), but
         # we want to show bad ASTs reasonably to make errors understandable.
         lambda_io = IOContext(io, :SOURCE_SLOTNAMES => false)
-        show_unquoted_expr_fallback(lambda_io, ex, indent, quote_level)
+        show_unquoted_expr_fallback(lambda_io, ex)
     else
         unhandled = true
     end
     if unhandled
-        show_unquoted_expr_fallback(io, ex, indent, quote_level)
+        show_unquoted_expr_fallback(io, ex)
     end
     nothing
 end

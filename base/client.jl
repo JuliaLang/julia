@@ -171,8 +171,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 lasterr = scrub_repl_backtrace(lasterr)
                 istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
-                errcount = 0
-                lasterr = nothing
             else
                 ast = __repl_entry_client_lower(Main, ast)
                 value = __repl_entry_client_eval(Main, ast)
@@ -484,7 +482,6 @@ function run_fallback_repl(interactive::Bool)
                 for stmt in ex.args
                     eval_user_input(stderr, stmt, true)
                 end
-                body = ex.args
             else
                 eval_user_input(stderr, ex, true)
             end

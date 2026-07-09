@@ -659,7 +659,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
     f = ex.f
-    ft = typeof(f)
     lines = String[]
     line_score = Int[]
     # These functions are special cased to only show if first argument is matched.
@@ -815,7 +814,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             if !isempty(kwargs)::Bool
                 unexpected = Symbol[]
                 if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
-                    for (k, v) in kwargs
+                    for (k, _) in kwargs
                         if !(k::Symbol in kwords)
                             push!(unexpected, k::Symbol)
                         end
@@ -896,7 +895,6 @@ function _backtrace_find_and_remove_cycles(t)
     # Third:  number of cycle repetitions
 
     t_curr = 1
-    frame_counter = 1
 
     while t_curr ≤ length(t)
         (last_frame, n) = t[t_curr]
@@ -1006,7 +1004,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
 
         print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
 
-        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
+        frame_counter, _nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max; prefix)
         frame_counter += 1
 
         if i < length(trace)
@@ -1285,7 +1283,6 @@ function _backtrace_collapse_repeated_locations!(trace)
                 params, last_params = Base.unwrap_unionall(m.sig).parameters::SimpleVector, Base.unwrap_unionall(last_m.sig).parameters::SimpleVector
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
-                    issame = true
                     if pos_sig_params == params
                         kept_frames[i] = false
                     end

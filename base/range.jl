@@ -668,9 +668,8 @@ function print_range(io::IO, r::AbstractArray,
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end
-    screenheight, screenwidth = sz[1] - 4, sz[2]
+    _, screenwidth = sz[1] - 4, sz[2]
     screenwidth -= length(pre) + length(post)
-    postsp = ""
     sepsize = length(sep)
     m = 1 # treat the range as a one-row matrix
     n = length(r)
@@ -1244,7 +1243,7 @@ function intersect(r::StepRange, s::StepRange)
     start2, step2, stop2 = first_step_last_ascending(s)
     a = lcm(step1, step2)
 
-    g, x, y = gcdx(step1, step2)
+    g, x, _ = gcdx(step1, step2)
 
     if !iszero(rem(start1 - start2, g))
         # Unaligned, no overlap possible.

@@ -526,7 +526,7 @@ function _hashed_allunique(C)
     seen = Set{@default_eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
-        for i in OneTo(1000)
+        for _ in OneTo(1000)
             v, s = something(x)
             in!(v, seen) && return false
             x = iterate(C, s)

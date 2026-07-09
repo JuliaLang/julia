@@ -108,13 +108,13 @@ function evalpoly(z::Complex, p::Tuple)
         end
         ai = :a0
         push!(as, :($ai = $a))
-        C = Expr(:block,
-                 :(x = real(z)),
-                 :(y = imag(z)),
-                 :(r = x + x),
-                 :(s = muladd(x, x, y*y)),
-                 as...,
-                 :(muladd($ai, z, $b)))
+        Expr(:block,
+             :(x = real(z)),
+             :(y = imag(z)),
+             :(r = x + x),
+             :(s = muladd(x, x, y*y)),
+             as...,
+             :(muladd($ai, z, $b)))
     else
         _evalpoly(z, p)
     end
@@ -742,7 +742,7 @@ function _hypot(x, y)
 
     # Order the operands
     if ay > ax
-        axu, ayu = ayu, axu
+        axu = ayu
         ax, ay = ay, ax
     end
 

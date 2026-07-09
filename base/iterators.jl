@@ -863,7 +863,7 @@ length(d::Drop) = _diff_length(d.xs, 1:d.n, IteratorSize(d.xs), HasLength())
 
 function iterate(it::Drop)
     y = iterate(it.xs)
-    for i in 1:it.n
+    for _ in 1:it.n
         y === nothing && return y
         y = iterate(it.xs, y[2])
     end
@@ -1569,7 +1569,7 @@ approx_iter_type(itrT::Type) = _approx_iter_type(itrT, Base._return_type(iterate
 # having to typesplit on Nothing
 function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
     valstate === nothing && return nothing
-    val, st = valstate
+    _, st = valstate
     return iterate(itr, st)
 end
 function _approx_iter_type(itrT::Type, vstate::Type)

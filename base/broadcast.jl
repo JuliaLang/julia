@@ -1043,7 +1043,7 @@ end
         end
     end
     @inbounds if bitst != 0
-        destc[indc+=1] = remain
+        destc[indc+1] = remain
     end
     return dest
 end
