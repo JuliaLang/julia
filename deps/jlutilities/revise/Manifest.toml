@@ -78,8 +78,8 @@ version = "1.11.0"
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
 git-tree-sha1 = "521a88f82e52920a3c72b8f43090e23ab3687657"
-repo-rev = "master"
-repo-url = "https://github.com/JuliaDebug/JuliaInterpreter.jl.git"
+repo-rev = "kf/define_method"
+repo-url = "https://github.com/KenoAIStaging/JuliaInterpreter.jl.git"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
 version = "0.11.4"
 
@@ -127,9 +127,9 @@ version = "1.11.0"
 
 [[deps.LoweredCodeUtils]]
 deps = ["CodeTracking", "Compiler", "JuliaInterpreter"]
-git-tree-sha1 = "4987815630a795f1f611c82d734fc51265b40476"
+git-tree-sha1 = "1d4c737ab26f51ceed52ab2019c09b7660eb7440"
 repo-rev = "kf/define_method"
-repo-url = "https://github.com/JuliaDebug/LoweredCodeUtils.jl.git"
+repo-url = "https://github.com/KenoAIStaging/LoweredCodeUtils.jl.git"
 uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
 version = "3.8.0"
 
@@ -212,9 +212,9 @@ version = "1.11.0"
 
 [[deps.Revise]]
 deps = ["CRC32c", "CodeTracking", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "UUIDs"]
-git-tree-sha1 = "23466595a5ff24240de621805b6815ae859b924f"
+git-tree-sha1 = "6098400ed73008c45f5f47b35ae114475436ad37"
 repo-rev = "kf/define_method"
-repo-url = "https://github.com/timholy/Revise.jl.git"
+repo-url = "https://github.com/KenoAIStaging/Revise.jl.git"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
 version = "3.16.2"
 
