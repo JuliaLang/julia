@@ -101,7 +101,7 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
 static inline uint8_t last_byte_mask(jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     uint32_t unused = jl_datatype_unusedbits(dt);
-    return unused ? (uint8_t)(0xff >> unused) : 0xff;
+    return (uint8_t)(0xff >> unused);
 }
 
 static inline int primitive_bits_equal(const void *a, const void *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
