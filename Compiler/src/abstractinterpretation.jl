@@ -3711,9 +3711,6 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, ssta
         return abstract_eval_foreignglobal(interp, e, sstate, sv)
     elseif ehead === :cfunction
         return abstract_eval_cfunction(interp, e, sstate, sv)
-    elseif ehead === :method
-        rt = (length(e.args) == 1) ? Any : Method
-        return RTEffects(rt, Any, EFFECTS_UNKNOWN)
     elseif ehead === :copyast
         return abstract_eval_copyast(interp, e, sstate, sv)
     elseif ehead === :invoke || ehead === :invoke_modify
@@ -4158,12 +4155,7 @@ end
             (; rt, exct, effects, refinements) = abstract_eval_special_value(interp, stmt, sstate, frame)
         else
             hd = stmt.head
-            if hd === :method
-                fname = stmt.args[1]
-                if isa(fname, SlotNumber)
-                    changes = StateUpdate(fname, VarState(Any, frame.currpc, #= undef =# false))
-                end
-            elseif (hd === :code_coverage_effect ||
+            if (hd === :code_coverage_effect ||
                     # :boundscheck can be narrowed to Bool
                     (hd !== :boundscheck && is_meta_expr(stmt)))
                 rt = Nothing
@@ -4833,15 +4825,6 @@ end
 # Core transfer function: update an alias table for a single statement.
 # Handles assignments (`y = x`) and `NewvarNode` declaration
 function update_alias_table!(aliases::Vector{Int}, @nospecialize(stmt), code::Vector{Any})
-    if isa(stmt, Expr) && stmt.head === :method && length(stmt.args) >= 1
-        fname = stmt.args[1]
-        if isa(fname, SlotNumber)
-            # :method can assign to a slot without an explicit `=` wrapper.
-            # Kill alias information for that slot and any slots pointing to it.
-            clear_slot_aliases!(aliases, slot_id(fname))
-        end
-        return
-    end
     if isa(stmt, NewvarNode)
         # When a slot is killed, also clear any slots that alias it, since
         # those aliases are now stale (the target has a new undefined value).

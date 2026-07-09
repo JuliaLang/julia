@@ -4465,6 +4465,10 @@ let ex = @Meta.lower function return_my_method(); 1; end
     @test isa(Core.eval(@__MODULE__, ex), Method)
 end
 
+# Core.define_method validates its internal signature and body representation.
+@test_throws TypeError Core.define_method(@__MODULE__, :invalid_method, nothing, nothing)
+@test_throws ErrorException Core.define_method(@__MODULE__, :invalid_method, Core.svec(), nothing)
+
 # Capturing a @nospecialize argument should result in an Any field in the closure
 module NoSpecClosure
     K(@nospecialize(x)) = y -> x

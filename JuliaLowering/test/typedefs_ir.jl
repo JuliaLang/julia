@@ -407,7 +407,8 @@ end
 26  (call core.svec)
 27  SourceLocation::2:5
 28  (call core.svec %₂₅ %₂₆ %₂₇)
-29  --- method core.nothing %₂₈
+29  (call core.define_method TestMod core.nothing %₂₈
+    --- code_info
     slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁)
@@ -716,7 +717,8 @@ end
 33  (call core.svec)
 34  SourceLocation::3:5
 35  (call core.svec %₃₂ %₃₃ %₃₄)
-36  --- method core.nothing %₃₅
+36  (call core.define_method TestMod core.nothing %₃₅
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   (new %₁ 1)
@@ -735,7 +737,7 @@ end
     3   (return %₂)
 45  (call core.svec slot₂/f)
 46  (call JuliaLowering.replace_captured_locals %₄₄ %₄₅)
-47  --- method core.nothing %₄₃ %₄₆
+47  (call core.define_method TestMod core.nothing %₄₃ %₄₆)
 48  latestworld
 49  TestMod.X
 50  (call core.apply_type_or_typeapp core.Type %₄₉)
@@ -743,7 +745,8 @@ end
 52  (call core.svec)
 53  SourceLocation::5:5
 54  (call core.svec %₅₁ %₅₂ %₅₃)
-55  --- method core.nothing %₅₄
+55  (call core.define_method TestMod core.nothing %₅₄
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/x]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/x)
@@ -755,7 +758,8 @@ end
 60  (call core.svec)
 61  SourceLocation::6:5
 62  (call core.svec %₅₉ %₆₀ %₆₁)
-63  --- method core.nothing %₆₂
+63  (call core.define_method TestMod core.nothing %₆₂
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
     1   TestMod.ReallyXIPromise
     2   slot₁/#ctor-self#
@@ -776,7 +780,8 @@ end
 68  (call core.svec)
 69  SourceLocation::10:5
 70  (call core.svec %₆₇ %₆₈ %₆₉)
-71  --- method core.nothing %₇₀
+71  (call core.define_method TestMod core.nothing %₇₀
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/a slot₃/b(!read) slot₄/c(!read)]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/a)
@@ -828,7 +833,8 @@ end
 33  (call core.svec)
 34  SourceLocation::3:5
 35  (call core.svec %₃₂ %₃₃ %₃₄)
-36  --- method core.nothing %₃₅
+36  (call core.define_method TestMod core.nothing %₃₅
+    --- code_info
     slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁ 1)
@@ -843,7 +849,8 @@ end
 44  (call core.svec %₃₈ %₃₉)
 45  SourceLocation::4:5
 46  (call core.svec %₄₃ %₄₄ %₄₅)
-47  --- method core.nothing %₄₆
+47  (call core.define_method TestMod core.nothing %₄₆
+    --- code_info
     slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁ 1)
@@ -862,7 +869,8 @@ end
 59  (call core.svec)
 60  SourceLocation::5:5
 61  (call core.svec %₅₈ %₅₉ %₆₀)
-62  --- method core.nothing %₆₁
+62  (call core.define_method TestMod core.nothing %₆₁
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   TestMod.A
@@ -909,7 +917,8 @@ end
 26  (call core.svec)
 27  SourceLocation::4:5
 28  (call core.svec %₂₅ %₂₆ %₂₇)
-29  --- method core.nothing %₂₈
+29  (call core.define_method TestMod core.nothing %₂₈
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/xs]
     1   slot₁/#ctor-self#
     2   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
@@ -960,7 +969,8 @@ end
 32  (call core.svec %₂₇)
 33  SourceLocation::4:5
 34  (call core.svec %₃₁ %₃₂ %₃₃)
-35  --- method core.nothing %₃₄
+35  (call core.define_method TestMod core.nothing %₃₄
+    --- code_info
     slots: [slot₁/#ctor-self# slot₂/xs slot₃/tmp slot₄/tmp]
     1   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
     2   (call core.nfields %₁)
@@ -1093,7 +1103,8 @@ A{<:Real}() = A(1)
 8   (call core.svec)
 9   SourceLocation::1:1
 10  (call core.svec %₇ %₈ %₉)
-11  --- method core.nothing %₁₀
+11  (call core.define_method TestMod core.nothing %₁₀
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.A
     2   (call %₁ 1)
@@ -1144,7 +1155,8 @@ end
 29  (call core.svec)
 30  SourceLocation::3:5
 31  (call core.svec %₂₈ %₂₉ %₃₀)
-32  --- method core.nothing %₃₁
+32  (call core.define_method TestMod core.nothing %₃₁
+    --- code_info
     slots: [slot₁/#ctor-self#(!read) slot₂/x slot₃/tmp slot₄/T(single_assign)]
     1   TestMod.typeof
     2   (= slot₄/T (call %₁ slot₂/x))

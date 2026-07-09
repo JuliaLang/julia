@@ -1691,12 +1691,21 @@ JL_CALLABLE(jl_f_define_method)
 
     // Method definition: define_method(module, fname_or_mt, argdata, code)
     jl_value_t *fname = args[1];
+    JL_TYPECHK(define_method, simplevector, args[2]);
+    jl_svec_t *argdata = (jl_svec_t*)args[2];
+    if (jl_svec_len(argdata) != 3 ||
+            !jl_is_svec(jl_svecref(argdata, 0)) ||
+            jl_svec_len((jl_svec_t*)jl_svecref(argdata, 0)) == 0 ||
+            !jl_is_svec(jl_svecref(argdata, 1)) ||
+            !jl_is_linenode(jl_svecref(argdata, 2)))
+        jl_error("define_method: invalid argument data");
+    if (!jl_is_code_info(args[3]) && !jl_is_expr(args[3]))
+        jl_error("define_method: method body must be a CodeInfo or Expr");
     jl_methtable_t *mt = NULL;
     if (jl_is_mtable(fname))
         mt = (jl_methtable_t*)fname;
-    jl_value_t *atypes = args[2];
     jl_value_t *meth = args[3];
-    jl_method_t *ret = jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, module);
+    jl_method_t *ret = jl_method_def(argdata, mt, (jl_code_info_t*)meth, module);
     return (jl_value_t *)ret;
 }
 
