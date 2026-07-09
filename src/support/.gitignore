@@ -5,3 +5,5 @@
 /*.pdb
 /libsupport.a
 /libsupport-debug.a
+/rletest
+/eytzingertest
