@@ -19,7 +19,7 @@ function fl_parse(text::AbstractString, filename::AbstractString, lineno, offset
 end
 
 function fl_lower(ex, mod::Module, filename::Union{String,Ptr{UInt8}}="none",
-                  lineno=0, world::Unsigned=typemax(Csize_t), warn::Bool=false)
+                  lineno::Integer=0, world::UInt=typemax(Csize_t), warn::Bool=false)
     warn = warn ? 1 : 0
     ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Csize_t, Csize_t, Cint),
           ex, mod, filename, lineno, world, warn)

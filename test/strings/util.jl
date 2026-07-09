@@ -178,7 +178,7 @@ end
         @test collect(Iterators.partition("foobars",n))[1]=="foobars"
     end
 
-    # HOWEVER enumerate explicitly slices String "atoms" so `Chars` are returned
+    # HOWEVER enumerate explicitly slices String "atoms" so `Tuple{Int, Char}` pairs are returned
     let v=collect(Iterators.partition(enumerate("foobars"),1))
         @test v==Vector{Tuple{Int64, Char}}[[(1, 'f')],[(2, 'o')],[(3, 'o')],[(4, 'b')],[(5, 'a')],[(6, 'r')], [(7, 's')]]
     end

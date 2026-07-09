@@ -45,8 +45,10 @@ end
 
 include("serialization.jl")
 
-# Basic inference tests
 @static if isdefined(Base, :infer_return_type)
-    @test Base.infer_return_type(JuliaSyntax.sourcetext, (JuliaSyntax.SyntaxTree,)) <: AbstractString
-    @test Base.infer_return_type(JuliaSyntax.byte_range, (JuliaSyntax.SyntaxTree,)) == UnitRange{Int}
+    @testset "Basic inference tests" begin
+        @test Base.infer_return_type(JuliaSyntax.sourcetext, (JuliaSyntax.SyntaxTree,)) <: AbstractString
+        @test Base.infer_return_type(JuliaSyntax.byte_range, (JuliaSyntax.SyntaxTree,)) == UnitRange{Int}
+        @test Base.infer_return_type(JuliaSyntax.hasproperty, (JuliaSyntax.SyntaxTree,Symbol)) == Bool
+    end
 end

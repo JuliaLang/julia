@@ -92,8 +92,8 @@ end
     end
 
     # All arithmetic operators return missing when operating on two missing's
-    # All arithmetic operators return missing when operating on a scalar and an missing
-    # All arithmetic operators return missing when operating on an missing and a scalar
+    # All arithmetic operators return missing when operating on a scalar and a missing
+    # All arithmetic operators return missing when operating on a missing and a scalar
     for f in arithmetic_operators
         @test ismissing(f(missing, missing))
         @test ismissing(f(1, missing))
@@ -114,8 +114,8 @@ end
     two_argument_functions = [atan, hypot, log]
 
     # All two-argument functions return missing when operating on two missing's
-    # All two-argument functions return missing when operating on a scalar and an missing
-    # All two-argument functions return missing when operating on an missing and a scalar
+    # All two-argument functions return missing when operating on a scalar and a missing
+    # All two-argument functions return missing when operating on a missing and a scalar
     for f in two_argument_functions
         @test ismissing(f(missing, missing))
         @test ismissing(f(1, missing))

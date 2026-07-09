@@ -77,7 +77,7 @@ JL_DLLEXPORT int jl_profile_is_running(void)
     return profile_running;
 }
 
-// Any function that acquires this lock must be either a unmanaged thread
+// Any function that acquires this lock must be either an unmanaged thread
 // or in the GC safe region and must NOT allocate anything through the GC
 // while holding this lock.
 // Certain functions in this file might be called from an unmanaged thread
@@ -218,9 +218,6 @@ JL_DLLEXPORT int jl_profile_is_buffer_full(void)
     return profile_bt_size_cur + ((JL_BT_MAX_ENTRY_SIZE + 1) + 6) > profile_bt_size_max;
 }
 
-NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
-NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
-
 #define PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE (0)
 #define PROFILE_TASK_DEBUG_FORCE_STOP_THREAD_FAILURE (0)
 
@@ -356,7 +353,7 @@ static int jl_ignore_sigint(void)
     // On Unix, we get the SIGINT before the debugger which makes it very
     // hard to interrupt a running process in the debugger with `Ctrl-C`.
     // Manually raise a `SIGINT` on current thread with the signal temporarily
-    // unblocked and use it's behavior to decide if we need to handle the signal.
+    // unblocked and use its behavior to decide if we need to handle the signal.
 #ifndef _OS_WINDOWS_
     jl_sigint_passed = 0;
     pthread_sigmask(SIG_UNBLOCK, &jl_sigint_sset, NULL);
@@ -381,7 +378,7 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 }
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
-void jl_fprint_sigill(ios_t *s, void *_ctx);
+static void jl_fprint_sigill(ios_t *s, void *_ctx);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
     || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
     || (defined(_OS_LINUX_) && defined(_CPU_ARM_)) \
@@ -446,6 +443,113 @@ static void stack_overflow_warning(void)
     jl_safe_printf("Warning: detected a stack overflow; program state may be corrupted, so further execution might be unreliable.\n");
 }
 
+// Async-signal-safe replacement for libc strsignal(). We call this from fatal-signal
+// handlers, and glibc's strsignal() is not async-signal-safe: it routes through gettext
+// (to localize the description), which calls malloc(). If the interrupted thread already
+// held the malloc arena lock, that reentrant malloc() self-deadlocks. A fixed table of
+// string literals avoids gettext/malloc entirely and is portable across libc flavors
+// (musl/BSD/macOS lack glibc's sigdescr_np/sigabbrev_np). Cases are #ifdef-guarded so this
+// compiles wherever a given signal is (or is not) defined.
+static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
+{
+    switch (sig) {
+#ifdef SIGHUP
+    case SIGHUP:     return "Hangup";
+#endif
+#ifdef SIGINT
+    case SIGINT:     return "Interrupt";
+#endif
+#ifdef SIGQUIT
+    case SIGQUIT:    return "Quit";
+#endif
+#ifdef SIGILL
+    case SIGILL:     return "Illegal instruction";
+#endif
+#ifdef SIGTRAP
+    case SIGTRAP:    return "Trace/breakpoint trap";
+#endif
+#ifdef SIGABRT
+    case SIGABRT:    return "Aborted";
+#endif
+#if defined(SIGABRT_COMPAT) && (!defined(SIGABRT) || SIGABRT_COMPAT != SIGABRT)
+    case SIGABRT_COMPAT: return "Aborted";
+#endif
+#ifdef SIGBUS
+    case SIGBUS:     return "Bus error";
+#endif
+#ifdef SIGFPE
+    case SIGFPE:     return "Floating point exception";
+#endif
+#ifdef SIGKILL
+    case SIGKILL:    return "Killed";
+#endif
+#ifdef SIGUSR1
+    case SIGUSR1:    return "User defined signal 1";
+#endif
+#ifdef SIGSEGV
+    case SIGSEGV:    return "Segmentation fault";
+#endif
+#ifdef SIGUSR2
+    case SIGUSR2:    return "User defined signal 2";
+#endif
+#ifdef SIGPIPE
+    case SIGPIPE:    return "Broken pipe";
+#endif
+#ifdef SIGALRM
+    case SIGALRM:    return "Alarm clock";
+#endif
+#ifdef SIGTERM
+    case SIGTERM:    return "Terminated";
+#endif
+#ifdef SIGBREAK
+    case SIGBREAK:   return "Break";
+#endif
+#ifdef SIGSTKFLT
+    case SIGSTKFLT:  return "Stack fault";
+#endif
+#ifdef SIGCHLD
+    case SIGCHLD:    return "Child exited";
+#endif
+#ifdef SIGCONT
+    case SIGCONT:    return "Continued";
+#endif
+#ifdef SIGSTOP
+    case SIGSTOP:    return "Stopped (signal)";
+#endif
+#ifdef SIGTSTP
+    case SIGTSTP:    return "Stopped";
+#endif
+#ifdef SIGTTIN
+    case SIGTTIN:    return "Stopped (tty input)";
+#endif
+#ifdef SIGTTOU
+    case SIGTTOU:    return "Stopped (tty output)";
+#endif
+#ifdef SIGURG
+    case SIGURG:     return "Urgent I/O condition";
+#endif
+#ifdef SIGXCPU
+    case SIGXCPU:    return "CPU time limit exceeded";
+#endif
+#ifdef SIGXFSZ
+    case SIGXFSZ:    return "File size limit exceeded";
+#endif
+#ifdef SIGVTALRM
+    case SIGVTALRM:  return "Virtual timer expired";
+#endif
+#ifdef SIGPROF
+    case SIGPROF:    return "Profiling timer expired";
+#endif
+#ifdef SIGWINCH
+    case SIGWINCH:   return "Window changed";
+#endif
+#ifdef SIGSYS
+    case SIGSYS:     return "Bad system call";
+#endif
+    default:         return "Unknown signal";
+    }
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
@@ -484,7 +588,7 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
 #endif
 }
 
-void jl_fprint_sigill(ios_t *s, void *_ctx)
+static void jl_fprint_sigill(ios_t *s, void *_ctx)
 {
     char *pc = (char*)jl_get_pc_from_ctx(_ctx);
     // unsupported platform
@@ -575,10 +679,8 @@ void jl_fprint_sigill(ios_t *s, void *_ctx)
 #endif
 }
 
-void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-
 // make it invalid for a task to return from this point to its stack
-// this is generally quite an foolish operation, but does free you up to do
+// this is generally quite a foolish operation, but does free you up to do
 // arbitrary things on this stack now without worrying about corrupt state that
 // existed already on it
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
@@ -636,9 +738,9 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
         if (si_code)
-            jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, jl_strsignal(sig));
         else
-            jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, jl_strsignal(sig));
         if (sig == SIGQUIT) {
             jl_print_task_backtraces(0);
         }

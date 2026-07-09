@@ -64,7 +64,7 @@ function _Set(itr, ::EltypeUnknown)
     return Set{T}(itr)
 end
 
-empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
+empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = emptymutable(s, U)
 
 # return an empty set with eltype T, which is mutable (can be grown)
 # by default, a Set is returned
@@ -177,7 +177,7 @@ iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
 
 @propagate_inbounds Iterators.only(s::Set) = Iterators._only(s, first)
 
-# In case the size(s) is smaller than size(t) its more efficient to iterate through
+# In case the size(s) is smaller than size(t) it's more efficient to iterate through
 # elements of s instead and only delete the ones also contained in t.
 # The threshold for this decision boils down to a tradeoff between
 # size(s) * cost(in() + delete!()) ≶ size(t) * cost(delete!())
@@ -200,7 +200,7 @@ end
 """
     unique(itr)
 
-Return an array containing only the unique elements of collection `itr`,
+Return an `AbstractArray` containing only the unique elements of collection `itr`,
 as determined by [`isequal`](@ref) and [`hash`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
@@ -264,7 +264,7 @@ unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin]:r[begin])
 """
     unique(f, itr)
 
-Return an array containing one value from `itr` for each unique value produced by `f`
+Return an `AbstractArray` containing one value from `itr` for each unique value produced by `f`
 applied to elements of `itr`.
 
 # Examples
@@ -656,14 +656,36 @@ allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
 
 allequal(f, xs) = allequal(Generator(f, xs))
 
-function allequal(f, xs::Tuple)
-    length(xs) <= 1 && return true
-    f1 = f(xs[1])
-    for x in tail(xs)
-        isequal(f1, f(x)) || return false
+function _allequal_loop(f, xs::Tuple)
+    val = f(xs[1])
+    for i in 2:length(xs)
+        isequal(val, f(xs[i])) || return false
     end
     return true
 end
+
+function allequal(f, xs::Tuple)
+    if @generated
+        n = fieldcount(xs)
+        if n <= 32
+            n <= 1 && return true
+            checks = Expr[:(isequal(val, f(getfield(xs, $i)))) for i in 2:n]
+            expr = foldr((a, b) -> :($a && $b), checks)
+            return quote
+                val = f(getfield(xs, 1))
+                $expr
+            end
+        else
+            return :(return _allequal_loop(f, xs))
+        end
+    else
+        length(xs) <= 1 && return true
+        return _allequal_loop(f, xs)
+    end
+end
+
+allequal(f, ::Tuple{}) = true
+allequal(xs::Tuple) = allequal(identity, xs)
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 

@@ -36,9 +36,9 @@ end
 pipe_reader(p::ProcessChain) = p.out
 pipe_writer(p::ProcessChain) = p.in
 
-# a lightweight pair of a child OS_HANDLE and associated Task that will
+# A lightweight pair of a child OS_HANDLE and associated Task that will
 # complete only after all content has been read from it for synchronizing
-# state without the kernel to aide
+# state without the kernel to aid.
 struct SyncCloseFD
     fd
     t::Task
@@ -552,8 +552,10 @@ const SIGHUP  = 1
 const SIGINT  = 2
 const SIGQUIT = 3 # !windows
 const SIGKILL = 9
+const SIGUSR1 = Sys.isapple() ? 30 : 10 # !windows
 const SIGPIPE = 13 # !windows
 const SIGTERM = 15
+const SIGINFO = 29 # apple/BSD only; use SIGUSR1 on linux
 
 function test_success(proc::Process)
     @assert process_exited(proc) "process did not exit successfully"

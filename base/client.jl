@@ -31,10 +31,18 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd, out)
-    # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
-    cmd.exec .= expanduser.(cmd.exec)
-
+function repl_cmd(cmd::AbstractCmd, out)
+    if !(cmd isa Cmd)
+        # Pipelines and redirects: run directly without shell wrapping.
+        try
+            run(ignorestatus(cmd))
+        catch
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
+        return nothing
+    end
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
@@ -77,6 +85,9 @@ function repl_cmd(cmd, out)
     end
     nothing
 end
+
+repl_cmd(@nospecialize(cmd), out) =
+    throw(ArgumentError("repl_cmd: expected an `AbstractCmd`, got $(typeof(cmd))"))
 
 # deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
@@ -492,7 +503,7 @@ function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::B
         repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
         repl.history_file = history_file
     end
-    # Make sure any displays pushed in .julia/config/startup.jl ends up above the
+    # Make sure any displays pushed in .julia/config/startup.jl end up above the
     # REPLDisplay
     d = REPL.REPLDisplay(repl)
     last_active_repl = @isdefined(active_repl) ? active_repl : nothing

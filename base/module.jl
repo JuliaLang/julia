@@ -128,7 +128,7 @@ making its exports available to the `to` module; this is the lowered form of
 `using A`.
 
 ```
-using A.B            => _module_using(Main, Expr(:., :A, :B))
+using A.B            => _eval_using(Main, Expr(:., :A, :B))
 ```
 
 See also [`_using`](@ref Core._using).

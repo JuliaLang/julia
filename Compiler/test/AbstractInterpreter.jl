@@ -104,6 +104,15 @@ overlay_match(::Any) = nothing
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
 
+# overlay method should shadow the base method with the same signature,
+# filtering it out from method match results
+overlay_shadow_zero() = Any[]
+overlay_shadow_zero(xs::Vector{Int}...) = Int[xs[i][j] for i=eachindex(xs) for j=eachindex(xs[i])]
+@overlay OVERLAY_MT overlay_shadow_zero() = error()
+@test Base.infer_return_type((Vector{Vector{Int}},); interp=MTOverlayInterp()) do x
+    overlay_shadow_zero(x...)
+end == Vector{Int}
+
 # partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
@@ -157,7 +166,7 @@ gpu_factorial3(x::Int) = myfactorial(x, raise_on_gpu3)
 @test Base.infer_effects(gpu_factorial2, (Int,); interp=MTOverlayInterp()) |> Compiler.is_consistent_overlay
 let effects = Base.infer_effects(gpu_factorial3, (Int,); interp=MTOverlayInterp())
     # check if `@consistent_overlay` together works with `@assume_effects`
-    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intetionally) undefined.
+    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intentionally) undefined.
     @test Compiler.is_consistent_overlay(effects)
     @test Compiler.is_foldable(effects)
 end
@@ -564,4 +573,22 @@ let interp = InvokeInterp()
     end
     @test isa(result, String)
     @test contains(result, "[1] error(::Char, ::Char, ::Char, ::Char)")
+end
+
+# Test that is_already_cached handles OverlayCodeCache returning InferenceResult.
+# Regression test: OverlayCodeCache.getindex may return InferenceResult (from the
+# local inference cache) rather than CodeInstance, which lacks an :inferred field.
+using REPL.REPLCompletions: completions
+@newinterp OverlayCacheInterp true
+@test let
+    interp = OverlayCacheInterp()
+    # completions has a call graph deep enough that during inference the same
+    # MethodInstance is encountered through different callers, exercising the
+    # OverlayCodeCache local-cache path in is_already_cached.
+    f = completions
+    args = ("", 0)
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t,
+        Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    Compiler.typeinf_ext_toplevel(interp, mi, Compiler.SOURCE_MODE_NOT_REQUIRED)
+    true
 end

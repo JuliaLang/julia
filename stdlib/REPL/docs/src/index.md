@@ -2,7 +2,7 @@
 EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/REPL/docs/src/index.md"
 ```
 
-# The Julia REPL
+# REPL
 
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into
 the `julia` executable. In addition to allowing quick and easy evaluation of Julia statements,
@@ -870,11 +870,13 @@ It is possible to get an interface which is similar to the IPython REPL and the 
 
 ```julia
 atreplinit() do repl
-    @eval import REPL
-    if !isdefined(repl, :interface)
-        repl.interface = REPL.setup_interface(repl)
+    @eval begin
+        import REPL
+        if !isdefined($repl, :interface)
+            $repl.interface = REPL.setup_interface($repl)
+        end
+        REPL.numbered_prompt!($repl)
     end
-    REPL.numbered_prompt!(repl)
 end
 ```
 

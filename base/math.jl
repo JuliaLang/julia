@@ -23,7 +23,7 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
             significand_bits, exponent_bits, exponent_bias,
-            exponent_max, exponent_raw_max, clamp, clamp!
+            exponent_max, exponent_raw_max, clamp, clamp!, two_mul
 
 using Core.Intrinsics: sqrt_llvm, min_float, max_float
 
@@ -45,30 +45,6 @@ end
 end
 
 # non-type specific math functions
-
-function two_mul(x::T, y::T) where {T<:Number}
-    xy = x*y
-    xy, fma(x, y, -xy)
-end
-
-@assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
-    if Core.Intrinsics.have_fma(Float64)
-        xy = x*y
-        return xy, fma(x, y, -xy)
-    end
-    return Base.twomul(x,y)
-end
-
-@assume_effects :consistent @inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
-    if Core.Intrinsics.have_fma(T)
-        xy = x*y
-        return xy, fma(x, y, -xy)
-    end
-    xy = widen(x)*y
-    Txy = T(xy)
-    return Txy, T(xy-Txy)
-end
-
 
 """
     evalpoly(x, p)
@@ -239,17 +215,9 @@ function _pi_over_180(z::AbstractFloat)
 end
 
 # rounded to closest representable number where necessary
-function _180_over_pi(z::Union{Float16, Float32})
-    if z isa Float16
-        r = Float16(57.28)
-    elseif z isa Float32
-        r = 57.29578f0
-    end
-    r
-end
-function _pi_over_180(::Float16)
-    Float16(0.01746)
-end
+_180_over_pi(::Float16) = Float16(57.28)
+_180_over_pi(::Float32) = 57.29578f0
+_pi_over_180(::Float16) = Float16(0.01746)
 
 """
     rad2deg(x)
@@ -528,7 +496,7 @@ acosh(x::Number)
 
 Compute the inverse hyperbolic tangent of `x`.
 
-See also [`tanh`](@ref), [`tanh`](@ref).
+See also [`tanh`](@ref), [`atanh`](@ref).
 """
 atanh(x::Number)
 
@@ -655,7 +623,7 @@ Stacktrace:
 """
 log1p(x)
 
-@inline function sqrt(x::Union{Float32,Float64})
+@inline function sqrt(x::IEEEFloat)
     x < zero(x) && throw_complex_domainerror(:sqrt, x)
     sqrt_llvm(x)
 end
@@ -813,14 +781,16 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
-@inline function _hypot(x::Float32, y::Float32)
+# @assume_effects :nothrow: isinf guards handle Inf inputs; muladd(x,x,y*y) is always ≥ 0
+# so the sqrt call never throws.
+@assume_effects :nothrow @inline function _hypot(x::Float32, y::Float32)
     if isinf(x) || isinf(y)
         return Inf32
     end
     _x, _y = Float64(x), Float64(y)
     return Float32(sqrt(muladd(_x, _x, _y*_y)))
 end
-@inline function _hypot(x::Float16, y::Float16)
+@assume_effects :nothrow @inline function _hypot(x::Float16, y::Float16)
     if isinf(x) || isinf(y)
         return Inf16
     end
@@ -862,13 +832,8 @@ min(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(x, y
 max(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(y, x) ? x : y
 minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
-function min(x::T, y::T) where {T<:IEEEFloat}
-    return min_float(x, y)
-end
-
-function max(x::T, y::T) where {T<:IEEEFloat}
-    return max_float(x, y)
-end
+min(x::T, y::T) where {T<:IEEEFloat} = min_float(x, y)
+max(x::T, y::T) where {T<:IEEEFloat} = max_float(x, y)
 
 """
     ldexp(x, n)
@@ -966,7 +931,9 @@ function exponent(x::T) where T<:IEEEFloat
     @noinline throw2(x) = throw(DomainError(x, "Cannot be ±0.0."))
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && throw1(x)
-    k = Int(xs >> significand_bits(T))
+    # use `% Int` instead of `Int(...)` to preserve `:nothrow` (the shifted value
+    # always fits in `exponent_bits(T)` bits, well below `typemax(Int)`)
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && throw2(x)
         m = leading_zeros(xs) - exponent_bits(T)
@@ -1079,7 +1046,9 @@ function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
-    k = Int(xs >> significand_bits(T))
+    # use `% Int` instead of `Int(...)` to preserve `:nothrow` (after masking the sign
+    # bit, xs >> significand_bits(T) is at most 2^exponent_bits(T)-1, which always fits in Int)
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && return x, 0 # +-0
         m = leading_zeros(xs) - exponent_bits(T)
@@ -1191,7 +1160,7 @@ end
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
-    # double-double numbers and return the high double. References:
+    # double-double numbers and returns the high double. References:
     # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
@@ -1320,7 +1289,7 @@ include("special/pow.jl")
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:sqrt,:fourthroot,:log1p)
+             :atanh,:log,:log2,:log10,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))

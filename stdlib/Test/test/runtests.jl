@@ -1097,6 +1097,11 @@ uninferable_small_union(i) = (1, nothing)[i]
 @test_throws ErrorException @inferred(Missing, uninferable_small_union(1))
 @test_throws ErrorException @inferred(Missing, uninferable_small_union(2))
 @test_throws ArgumentError @inferred(nothing, uninferable_small_union(1))
+let T = Core.TypeVar(:T)
+    f_free_typevar_result() = Rational{T}
+    err = @test_throws ErrorException @inferred(f_free_typevar_result())
+    @test occursin("return type Type{Rational{T}} does not match inferred return type", err.value.msg)
+end
 
 # Ensure @inferred only evaluates the arguments once
 inferred_test_global = 0
@@ -1152,8 +1157,7 @@ end
 end
 
 @testset "provide informative location in backtrace for test failures" begin
-    win2unix(filename) = replace(filename, "\\" => '/')
-    utils = win2unix(tempname())
+    utils = tempname()
     write(utils,
     """
     function test_properties2(value)
@@ -1161,7 +1165,7 @@ end
     end
     """)
 
-    included = win2unix(tempname())
+    included = tempname()
     write(included,
     """
     @testset "Other tests" begin
@@ -1178,12 +1182,12 @@ end
     end))
     """)
 
-    runtests = win2unix(tempname())
+    runtests = tempname()
     write(runtests,
     """
     using Test
 
-    include("$utils")
+    include($(repr(utils)))
 
     function test_properties(value)
         @test isodd(value)
@@ -1194,11 +1198,13 @@ end
         @noinline test_properties(8)
         test_properties2(8)
 
-        include("$included")
+        include($(repr(included)))
     end
     """)
-    msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
-    msg = win2unix(msg)
+    # Disable homedir contraction in stack traces so paths match tempname() output
+    msg = withenv("JULIA_STACKTRACE_CONTRACT_HOMEDIR" => "0") do
+        read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
+    end
     regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n  Stacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
     failures = map(eachmatch(regex, msg)) do m
         m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n  Stacktrace:\n((?:.|\n)*)", m.match)
@@ -2401,6 +2407,30 @@ end
         @test recorded_error2 isa Test.Error
         @test recorded_error2.context !== nothing
         @test occursin("(x, y) = (42, \"hello\")", recorded_error2.context)
+    end
+
+    # Unexpected pass (broken=true) should show context before "Got correct result" message
+    @testset "context shown for unexpected pass in context testset" begin
+        mock_parent4 = MockParentTestSet()
+        ctx_ts4 = Test.ContextTestSet(mock_parent4, :x, 42)
+
+        unbroken_result = Test.Error(:test_unbroken, "x != 99", "true", "", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts4, unbroken_result)
+
+        @test length(mock_parent4.results) == 1
+        recorded = mock_parent4.results[1]
+        @test recorded isa Test.Error
+        @test recorded.context !== nothing
+        @test occursin("x = 42", recorded.context)
+
+        str = sprint(show, recorded)
+        @test occursin("Unexpected Pass", str)
+        @test occursin("Context:", str)
+        @test occursin("x = 42", str)
+        # Context should appear before "Got correct result"
+        ctx_pos = findfirst("Context:", str)
+        got_pos = findfirst("Got correct result", str)
+        @test first(ctx_pos) < first(got_pos)
     end
 end
 

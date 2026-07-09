@@ -218,6 +218,7 @@ mutable struct TTY <: LibuvStream
     sendbuf::Union{IOBuffer, Nothing}
     lock::ReentrantLock # advisory lock
     throttle::Int
+    raw_lock::ReentrantLock # exclusive access to raw mode
     @static if Sys.iswindows(); ispty::Bool; end
     function TTY(handle::Ptr{Cvoid}, status)
         tty = new(
@@ -228,7 +229,8 @@ mutable struct TTY <: LibuvStream
             nothing,
             nothing,
             ReentrantLock(),
-            DEFAULT_READ_BUFFER_SZ)
+            DEFAULT_READ_BUFFER_SZ,
+            ReentrantLock())
         associate_julia_struct(handle, tty)
         finalizer(uvfinalize, tty)
         @static if Sys.iswindows()
@@ -564,7 +566,7 @@ displaysize(io::IO) = displaysize()
 displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
-# This is a fancy way to make de-specialize a call to `displaysize(io::IO)`
+# This is a fancy way to de-specialize a call to `displaysize(io::IO)`
 # which is unfortunately invalidated by REPL
 #  (https://github.com/JuliaLang/julia/issues/56080)
 #
@@ -888,7 +890,7 @@ end
 
 if Sys.iswindows()
     # the low performance version of stop_reading is required
-    # on Windows due to a NT kernel bug that we can't use a blocking
+    # on Windows due to an NT kernel bug that we can't use a blocking
     # stream for non-blocking (overlapped) calls,
     # and a ReadFile call blocking on one thread
     # causes all other operations on that stream to lockup

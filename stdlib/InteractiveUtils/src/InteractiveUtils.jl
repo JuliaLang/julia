@@ -43,17 +43,17 @@ The memory consumption estimate is an approximate lower bound on the size of the
 The output of `varinfo` is intended for display purposes only.  See also [`names`](@ref) to get an array of symbols defined in
 a module, which is suitable for more general manipulations.
 """
-function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int=0)
+function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int=0, world::UInt=Base.get_world_counter())
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     rows = Vector{Any}[]
     workqueue = [(m, ""),]
     while !isempty(workqueue)
         m2, prep = popfirst!(workqueue)
-        for v in names(m2; all, imported)
-            if !isdefined(m2, v) || !occursin(pattern, string(v))
+        for v in names(m2; all, imported, world)
+            if !Base.invoke_in_world(world, isdefined, m2, v) || !occursin(pattern, string(v))
                 continue
             end
-            value = getglobal(m2, v)
+            value = Base.invoke_in_world(world, getglobal, m2, v)
             isbuiltin = value === Base || value === Base.active_module() || value === Core
             if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
                 push!(workqueue, (value, "$prep$v."))
@@ -102,32 +102,40 @@ See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
+    println(io, "Build Info:")
+    if Base.isdebugbuild()
+        println(io, "  DEBUG build")
+    end
+    if !isempty(Base.TAGGED_RELEASE_BANNER)
+        println(io, "  ", Base.TAGGED_RELEASE_BANNER)
+    end
     if !isempty(Base.GIT_VERSION_INFO.commit_short_raw)
-        println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
+        println(io, "  Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
+    end
+    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
+    if verbose
+        println(io, "  Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
     end
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
-    if Base.isdebugbuild() || !isempty(Base.TAGGED_RELEASE_BANNER) || (Base.GIT_VERSION_INFO.tagged_commit && !official_release)
-        println(io, "Build Info:")
-        if Base.isdebugbuild()
-            println(io, "  DEBUG build")
-        end
-        if !isempty(Base.TAGGED_RELEASE_BANNER)
-            println(io, "  ", Base.TAGGED_RELEASE_BANNER)
-        end
-        if Base.GIT_VERSION_INFO.tagged_commit && !official_release
-            println(io,
-                """
+    if Base.GIT_VERSION_INFO.tagged_commit && !official_release
+        println(io,
+            """
 
-                    Note: This is an unofficial build, please report bugs to the project
-                    responsible for this build and not to the Julia project unless you can
-                    reproduce the issue using official builds available at https://julialang.org
-                """
-            )
-        end
+                Note: This is an unofficial build, please report bugs to the project
+                responsible for this build and not to the Julia project unless you can
+                reproduce the issue using official builds available at https://julialang.org
+            """
+        )
     end
+
+    jit_triple = let _jit = ccall(:JLJITGetJuliaOJIT, Ptr{Cvoid}, ())
+        unsafe_string(ccall(:JLJITGetTripleString, Cstring, (Ptr{Cvoid},), _jit))
+    end
+    jit_cpu = first(Base.current_image_targets()).name
+
     println(io, "Platform Info:")
     println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
-        "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
+        "macOS" : Sys.KERNEL, " (", jit_triple, ")")
 
     if verbose
         lsb = ""
@@ -148,25 +156,29 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if verbose
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(chomp(takestring!(cpuio)), "\n"))
+        for (i, _line) in enumerate(split(chomp(takestring!(cpuio)), "\n"))
             prefix = i == 1 ? "  CPU: " : "       "
+            line = if i == 1
+                strip(x -> isspace(x) || x == ':', _line) * " (" * Sys.CPU_NAME * "):"
+            else
+                _line
+            end
             println(io, prefix, line)
         end
     else
         cpu = Sys.cpu_info()
-        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model)
+        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model, " (", Sys.CPU_NAME, ")")
     end
 
     if verbose
-        println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
+        println(io, "  Memory: $(Sys.total_memory()/2^30) GiB ($(Sys.free_memory()/2^20) MiB free)")
         try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
         print(io, "  Load Avg: ")
         Base.print_matrix(io, Sys.loadavg()')
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
-    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
+    println(io, "  LLVM: libLLVM-", Base.libllvm_version, " (", Sys.JIT, ", ", jit_cpu, ")")
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
       $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
@@ -229,11 +241,11 @@ function methodswith(@nospecialize(t::Type), @nospecialize(f::Base.Callable), me
     return meths
 end
 
-function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
+function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool, world::UInt)
     meths = Method[]
-    for nm in names(m)
-        if isdefinedglobal(m, nm)
-            f = getglobal(m, nm)
+    for nm in names(m; world)
+        if Base.invoke_in_world(world, isdefinedglobal, m, nm)
+            f = Base.invoke_in_world(world, getglobal, m, nm)
             if isa(f, Base.Callable)
                 methodswith(t, f, meths; supertypes = supertypes)
             end
@@ -242,18 +254,18 @@ function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
     return unique(meths)
 end
 
-methodswith(@nospecialize(t::Type), m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
+methodswith(@nospecialize(t::Type), m::Module; supertypes::Bool=false, world::UInt=Base.get_world_counter()) = _methodswith(t, m, supertypes, world)
 
-function methodswith(@nospecialize(t::Type); supertypes::Bool=false)
+function methodswith(@nospecialize(t::Type); supertypes::Bool=false, world::UInt=Base.get_world_counter())
     meths = Method[]
     for mod in Base.loaded_modules_array()
-        append!(meths, _methodswith(t, mod, supertypes))
+        append!(meths, _methodswith(t, mod, supertypes, world))
     end
     return unique(meths)
 end
 
 # subtypes
-function _subtypes_in!(mods::Array, @nospecialize(x::Type))
+function _subtypes_in!(mods::Array, @nospecialize(x::Type), world::UInt)
     xt = unwrap_unionall(x)
     if !isabstracttype(x) || !isa(xt, DataType)
         # Fast path
@@ -263,9 +275,9 @@ function _subtypes_in!(mods::Array, @nospecialize(x::Type))
     while !isempty(mods)
         m = pop!(mods)
         xt = xt::DataType
-        for s in unsorted_names(m, all = true)
-            if !isdeprecated(m, s) && isdefinedglobal(m, s)
-                t = getglobal(m, s)
+        for s in unsorted_names(m; all = true, world)
+            if !isdeprecated(m, s) && Base.invoke_in_world(world, isdefinedglobal, m, s)
+                t = Base.invoke_in_world(world, getglobal, m, s)
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
                 if isa(dt, DataType)
                     if dt.name.name === s && dt.name.module == m && supertype(dt).name == xt.name
@@ -281,7 +293,7 @@ function _subtypes_in!(mods::Array, @nospecialize(x::Type))
     return permute!(sts, sortperm(map(string, sts)))
 end
 
-subtypes(m::Module, x::Type) = _subtypes_in!([m], x)
+subtypes(m::Module, x::Type; world::UInt=Base.get_world_counter()) = _subtypes_in!([m], x, world)
 
 """
     subtypes(T::DataType)
@@ -300,7 +312,7 @@ julia> subtypes(Integer)
  Unsigned
 ```
 """
-subtypes(x::Type) = _subtypes_in!(Base.loaded_modules_array(), x)
+subtypes(x::Type; world::UInt=Base.get_world_counter()) = _subtypes_in!(Base.loaded_modules_array(), x, world)
 
 """
     supertypes(T::Type)

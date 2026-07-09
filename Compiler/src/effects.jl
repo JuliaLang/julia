@@ -47,7 +47,7 @@ of the method being analyzed. They are represented as `Bool` or `UInt8` bits wit
 following meanings:
 - `consistent::UInt8`:
   * `ALWAYS_TRUE`: this method is guaranteed to return or terminate consistently.
-  * `ALWAYS_FALSE`: this method may be not return or terminate consistently, and there is
+  * `ALWAYS_FALSE`: this method might not return or terminate consistently, and there is
     no need for further analysis with respect to this effect property as this conclusion
     will not be refined anyway.
   * `CONSISTENT_IF_NOTRETURNED`: the `:consistent`-cy of this method can later be refined to
@@ -71,7 +71,7 @@ following meanings:
 - `terminates::Bool`: this method is guaranteed to terminate.
 - `notaskstate::Bool`: this method does not access any state bound to the current
   task and may thus be moved to a different task without changing observable
-  behavior. Note that this currently implies that `noyield` as well, since
+  behavior. Note that this currently implies `noyield` as well, since
   yielding modifies the state of the current task, though this may be split
   in the future.
 - `inaccessiblememonly::UInt8`:
@@ -92,11 +92,11 @@ following meanings:
   assertions (such as `:consistent` or `:effect_free`) as well, but we do not model this,
   and they assume the absence of undefined behavior.
 - `nonoverlayed::UInt8`:
-  * `ALWAYS_TRUE`: this method is guaranteed to not invoke any methods that defined in an
+  * `ALWAYS_TRUE`: this method is guaranteed to not invoke any methods that are defined in an
     [overlayed method table](@ref OverlayMethodTable).
   * `CONSISTENT_OVERLAY`: this method may invoke overlayed methods, but all such overlayed
     methods are `:consistent` with their non-overlayed original counterparts
-    (see [`Base.@assume_effects`](@ref) for the exact definition of `:consistenct`-cy).
+    (see [`Base.@assume_effects`](@ref) for the exact definition of `:consistent`-cy).
   * `ALWAYS_FALSE`: this method may invoke overlayed methods.
 - `nortcall::Bool`: this method does not call `Core.Compiler.return_type`,
   and it is guaranteed that any other methods this method might call also do not call
@@ -106,9 +106,9 @@ Note that the representations above are just internal implementation details and
 to change in the future. See [`Base.@assume_effects`](@ref) for more detailed explanation
 on the definitions of these properties.
 
-Along the abstract interpretation, `Effects` at each statement are analyzed locally and they
+During abstract interpretation, `Effects` at each statement are analyzed locally and they
 are merged into the single global `Effects` that represents the entire effects of the
-analyzed method (see the implementation of `merge_effects!`). Each effect property is
+analyzed method (see the implementation of `merge_effects`). Each effect property is
 initialized with `ALWAYS_TRUE`/`true` and then transitioned towards `ALWAYS_FALSE`/`false`.
 Note that within the current flow-insensitive analysis design, effects detected by local
 analysis on each statement usually taint the global conclusion conservatively.

@@ -80,8 +80,30 @@ end
 function kwarg_decl(m::Method, kwtype = nothing)
     if !(m.sig === Tuple || m.sig <: Tuple{Core.Builtin, Vararg}) # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
-        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
+        sig_params = (unwrap_unionall(m.sig)::DataType).parameters
+        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, sig_params...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
+        if kwli === nothing
+            # a compiled keyword sorter is specialized on the dispatch (egality)
+            # spelling of closed type-valued slots, so retry the lookup with
+            # `Type{X}` slots as `Core.TypeEgal{X}`
+            new_params = Any[kwtype, NamedTuple]
+            changed = false
+            for p in sig_params
+                if p isa TypeEq
+                    tp = type_parameter(p)
+                    if tp isa Type && !has_free_typevars(tp)
+                        p = Core.TypeEgal{tp}
+                        changed = true
+                    end
+                end
+                push!(new_params, p)
+            end
+            if changed
+                sig = rewrap_unionall(Tuple{new_params...}, m.sig)
+                kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
+            end
+        end
         if kwli !== nothing
             kwli = kwli::Method
             slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
@@ -306,13 +328,8 @@ function _modulecolor(method::Method)
     # method table is shared, we now need to distinguish "primary" methods by trying to
     # check if there is a primary `DataType` to identify it with. c.f. how `jl_method_def`
     # would derive this same information (for the name).
-    ft = argument_datatype((unwrap_unionall(method.sig)::DataType).parameters[1])
-    # `ft` should be the type associated with the first argument in the method signature.
-    # If it's `Type`, try to unwrap it again.
-    if isType(ft)
-        ft = argument_datatype(ft.parameters[1])
-    end
-    if ft === nothing || parentmodule(method) === parentmodule(ft) !== Core
+    ft = argument_datatypename((unwrap_unionall(method.sig)::DataType).parameters[1])
+    if ft === nothing || parentmodule(method) === ft.module !== Core
         return nothing
     end
     m = parentmodule_before_main(method)

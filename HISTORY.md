@@ -35,7 +35,7 @@ New library functions
 ---------------------
 
 * `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock` ([#56845]).
-* `nth` function to access the `n`-th element of a generic iterable ([#56580]).
+* `Iterators.nth` function to access the `n`-th element of a generic iterable ([#56580]).
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
 * The `fieldindex` function (to get the index of a struct's field) is now exported ([#58119]).
 * `Base.donotdelete` is now public. It prevents dead code elimination of its arguments ([#55774]).

@@ -241,8 +241,8 @@ LoweringError:
 Expression:
   label:foo
 Containing expressions:
-  (lambda (block) (block) (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing (= #₂/tmp label:foo) (= #₃/binding_type (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅/type_tmp #₃/binding_type) (= #₄/tmp #₂/tmp) (if (call core.isa #₄/tmp #₅/type_tmp) core.nothing (= #₄/tmp (call top.convert #₅/type_tmp #₄/tmp))) #₄/tmp)) #₂/tmp))
-  (block (block (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing) (= #₂/tmp label:foo) (= #₃/binding_type (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅/type_tmp #₃/binding_type) (= #₄/tmp #₂/tmp) (if (call core.isa #₄/tmp #₅/type_tmp) core.nothing (= #₄/tmp (call top.convert #₅/type_tmp #₄/tmp))) #₄/tmp)) #₂/tmp))
+  (lambda (block) (block) (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing (= #₂ label:foo) (= #₃ (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅ #₃) (= #₄/tmp #₂) (if (call core.isa #₄/tmp #₅) core.nothing (= #₄/tmp (call top.convert #₅ #₄/tmp))) #₄/tmp)) #₂))
+  (block (block (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing) (= #₂ label:foo) (= #₃ (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅ #₃) (= #₄/tmp #₂) (if (call core.isa #₄/tmp #₅) core.nothing (= #₄/tmp (call top.convert #₅ #₄/tmp))) #₄/tmp)) #₂))
   (lambda (block) (block) (block (= #₁/x label:foo)))
   (lambda (block) (block) (= x label:foo))
 

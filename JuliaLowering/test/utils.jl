@@ -15,17 +15,14 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, sourcetext, set_numeric_flags
+using .JuliaSyntax: SourceAttrType, new_id!, sourcetext
 
-using .JuliaLowering:
-    SyntaxGraph, new_id!,
-    Kind, SourceRef, SyntaxTree, NodeId,
-    setattr!, is_leaf, numchildren, children,
-    @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
-    syntax_graph, Bindings, ScopeLayer, mapchildren
+using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
+    ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,
+    is_leaf, mapchildren, numchildren, setattr!, showprov, syntax_graph
 
 function _ast_test_graph()
-    graph = JuliaLowering.ensure_desugaring_attributes!(
+    JuliaLowering.ensure_desugaring_attributes!(
         JuliaLowering.ensure_macro_attributes!(SyntaxGraph()))
 end
 
@@ -76,7 +73,7 @@ end
 """
     format_as_ast_macro(ex)
 
-Format AST `ex` as a Juila source code call to the `@ast_` macro for generating
+Format AST `ex` as a Julia source code call to the `@ast_` macro for generating
 test case comparisons with the `≈` function.
 """
 format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
@@ -84,12 +81,6 @@ format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
 #-------------------------------------------------------------------------------
 
 # Test tools
-
-function desugar(mod::Module, src::String)
-    ex = parsestmt(SyntaxTree, src, filename="foo.jl")
-    ctx = JuliaLowering.DesugaringContext(syntax_graph(ex), Bindings(), ScopeLayer[], mod)
-    JuliaLowering.expand_forms_2(ctx, ex)
-end
 
 function uncomment_description(desc)
     replace(desc, r"^# ?"m=>"")
@@ -147,6 +138,7 @@ function setup_ir_test_module(preamble)
 end
 
 function format_ir_for_test(mod, case)
+    @assert !case.is_broken
     ex = parsestmt(SyntaxTree, case.input)
     try
         if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
@@ -167,8 +159,6 @@ function format_ir_for_test(mod, case)
         elseif case.expect_error && (exc isa LoweringError)
             return sprint(io->Base.showerror(io, exc, show_detail=false))
         elseif case.expect_error && (exc isa MacroExpansionError)
-            return sprint(io->Base.showerror(io, exc))
-        elseif case.is_broken
             return sprint(io->Base.showerror(io, exc))
         else
             throw("Error in test case \"$(case.description)\"")
@@ -209,7 +199,7 @@ function refresh_ir_test_cases(filename, pattern=nothing)
         println(io, "#*******************************************************************************")
     end
     for case in cases
-        if isnothing(pattern) || occursin(pattern, case.description)
+        if !case.is_broken && (isnothing(pattern) || occursin(pattern, case.description))
             ir = format_ir_for_test(test_mod, case)
             if rstrip(ir) != case.output
                 @info "Refreshing test case $(repr(case.description)) in $filename"
@@ -375,7 +365,7 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
 end
 
 function fl_macroexpand(mod::Module, x::Expr)
-    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, false, legacyscope)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, true, false, true)
 end
 
 function fl_lower(mod::Module, x::Expr)
@@ -387,7 +377,7 @@ function fl_eval(mod::Module, x::Expr)
 end
 
 function jl_macroexpand(mod::Module, x::SyntaxTree; expr_compat_mode=false)
-    JuliaLowering.expand_forms_1(mod, x, expr_compat_mode, Base.get_world_counter())
+    JuliaLowering.expand_forms_1(mod, x, expr_compat_mode, Base.get_world_counter())[2]
 end
 
 function jl_lower(mod::Module, st::SyntaxTree; expr_compat_mode=false)

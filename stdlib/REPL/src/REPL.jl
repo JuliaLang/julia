@@ -434,7 +434,7 @@ end
     start_repl_backend(backend::REPLBackend)
 
     Call directly to run backend loop on current Task.
-    Use @async for run backend on new Task.
+    Use @async to run backend on new Task.
 
     Does not return backend until loop is finished.
 """
@@ -451,12 +451,22 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        ast_or_func, show_value = take!(backend.repl_channel)
+        ast_or_func, show_value = try
+            take!(backend.repl_channel)
+        catch e
+            # An asynchronous interrupt may be forwarded to this task if user code
+            # finished evaluating just as Ctrl-C arrived (issue #58689); ignore it
+            # rather than tearing down the REPL session.
+            e isa InterruptException && continue
+            rethrow()
+        end
         if show_value == -1
             # exit flag
             break
         end
-        if show_value == 2 # 2 indicates a function to be called
+        # Mark this task as the foreground task while running user work, so that
+        # components like the precompile keyboard menu know who owns interactive stdin.
+        Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
             f = ast_or_func
             try
                 ret = f()
@@ -1323,9 +1333,11 @@ function setup_interface(
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd),
-                :(Base.cmd_gen($(Base.shell_parse(line::String)[1]))),
-                outstream(repl))
+            cmd_ex = Base.shell_parse(line::String)[1]
+            if Meta.isexpr(cmd_ex, :tuple)
+                cmd_ex = :(Base.cmd_gen($cmd_ex))
+            end
+            Expr(:call, :(Base.repl_cmd), cmd_ex, outstream(repl))
         end,
         sticky = true)
 

@@ -457,6 +457,9 @@ end
     Base.AbstractOneTo
 
 Abstract type for ranges that start at 1 and have a step size of 1.
+
+!!! compat "Julia 1.13"
+    This type requires at least Julia 1.13.
 """
 abstract type AbstractOneTo{T} <: AbstractUnitRange{T} end
 
@@ -971,7 +974,7 @@ unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
 unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     u = oftype(r.offset, i) - r.offset
-    T(r.ref + u*r.step)
+    convert(T, (r.ref + u*r.step))
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 

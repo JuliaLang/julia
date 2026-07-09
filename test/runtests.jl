@@ -37,13 +37,12 @@ if use_revise
     Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
     Pkg.instantiate()
     using Revise
-    union!(Revise.stdlib_names, Symbol.(STDLIBS))
     push!(DEPOT_PATH, popfirst!(DEPOT_PATH))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
+        ENV["JULIA_REVISE_WORKER_ONLY"] = "1"
         using Revise
         const STDLIBS = $STDLIBS
-        union!(Revise.stdlib_names, Symbol.(STDLIBS))
         revise_trackall()
     end
 end
@@ -92,7 +91,7 @@ limited_worker_rss && move_to_node1("Distributed")
 
 # Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
 # as well get them all started early. JuliaLowering_stdlibs both takes a while and
-# uses a lot of a memory at the beginning so try to run it early to keep total memory
+# uses a lot of memory at the beginning so try to run it early to keep total memory
 # use flatter.
 for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
@@ -239,6 +238,7 @@ cd(@__DIR__) do
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
+                trylock(stdin.raw_lock) || return
                 term = Base.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
                     Base.Terminals.raw!(term, true)
@@ -259,8 +259,10 @@ cd(@__DIR__) do
                     isa(e, InterruptException) || rethrow()
                 finally
                     Base.Terminals.raw!(term, false)
+                    unlock(stdin.raw_lock)
                 end
             end
+            Base.errormonitor(stdin_monitor)
         end
         o_ts_duration = @elapsed Experimental.@sync begin
             for p in workers()
@@ -392,7 +394,7 @@ cd(@__DIR__) do
         foreach(wait, all_tasks)
     finally
         if @isdefined stdin_monitor
-            schedule(stdin_monitor, InterruptException(); error=true)
+            istaskdone(stdin_monitor) || schedule(stdin_monitor, InterruptException(); error=true)
         end
         if @isdefined test_timers
             foreach(close, values(test_timers))
@@ -400,7 +402,7 @@ cd(@__DIR__) do
     end
 
     #=
-`   Construct a testset on the master node which will hold results from all the
+    Construct a testset on the master node which will hold results from all the
     test files run on workers and on node1. The loop goes through the results,
     inserting them as children of the overall testset if they are testsets,
     handling errors otherwise.

@@ -46,6 +46,17 @@ end
     return nothing
 end
 
+# `supertype(::UnionAll)` can throw (its recursion hits `supertype(::Union)` for
+# inputs like `Union{S,T} where {S,T}`), so it must be `:foldable` rather than
+# `:total` and a dead call to it must not be eliminated (issue #61988)
+@test Compiler.is_foldable(Base.infer_effects(supertype, (UnionAll,)))
+@test !Compiler.is_nothrow(Base.infer_effects(supertype, (UnionAll,)))
+@test !fully_eliminated((UnionAll,)) do x
+    supertype(x)
+    return nothing
+end
+@test_throws MethodError (x -> (supertype(x); nothing))(Union{S,T} where {S,T})
+
 # Test that a missing methtable identification gets tainted
 # appropriately
 struct FCallback; f::Union{Nothing, Function}; end
@@ -372,7 +383,7 @@ let effects = Base.infer_effects(f_glob_assign_int, (); optimize=false)
     @test !Compiler.is_effect_free(effects)
     @test Compiler.is_nothrow(effects)
 end
-# effects modeling for for setglobal!
+# effects modeling for setglobal!
 global SETGLOBAL!_NOTHROW::Int = 0
 let effects = Base.infer_effects(; optimize=false) do
         setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)
@@ -930,7 +941,8 @@ unknown_sparam_nothrow1(x::Ref{T}) where T = (T; nothing)
 unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 @test Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Int},)))
 @test Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{<:Integer},)))
-@test !Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type,)))
+@test Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Ref{T}} where {T},)))
+@test Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type,)))
 @test !Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Nothing,)))
 @test !Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Union{Type{Int},Nothing},)))
 @test !Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Any,)))
@@ -1011,6 +1023,19 @@ end
     @isdefined($(gensym("some_undef_symbol")))
 end |> !Compiler.is_consistent
 
+# `@isdefined`-guarded read of a slot whose value is a `MustAlias` must still refine
+# the slot's `undef` info
+function isdefined_alias_loop(t::Tuple)
+    local prev
+    s = ""
+    for x in t
+        @isdefined(prev) && (s = prev)
+        prev = x
+    end
+    return s
+end
+@test Compiler.is_nothrow(Base.infer_effects(isdefined_alias_loop, (Tuple{String,String},)))
+
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
 f50198() = (hf50198(Ref(:x)[]); nothing)
@@ -1049,9 +1074,13 @@ end |> Compiler.is_nothrow
 # Effects for :compilerbarrier
 f1_compilerbarrier(b) = Base.compilerbarrier(:type, b)
 f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
+f3_compilerbarrier(b) = Base.compilerbarrier(:blackbox, b)
 
 @test !Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
 @test Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))
+# :blackbox is not consistent (prevents CSE/constant-folding) but is nothrow
+@test !Compiler.is_consistent(Base.infer_effects(f3_compilerbarrier, (Bool,)))
+@test Compiler.is_nothrow(Base.infer_effects(f3_compilerbarrier, (Bool,)))
 
 # Optimizer-refined effects
 function f1_optrefine(b)
@@ -1496,3 +1525,56 @@ function null_offset(offset)
     Ptr{UInt8}(C_NULL) + offset
 end
 @test null_offset(Int(100)) == Ptr{UInt8}(UInt(100))
+
+# https://github.com/JuliaLang/julia/issues/61435
+function catch_error_61435(f, x)
+    try
+        f(x)
+    catch
+        return :caught
+    end
+end
+let f = (x) -> Core.Intrinsics.sext_int(Int16, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (Int8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int16,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
+    @test catch_error_61435(f, Int16(0)) === :caught
+end
+let f = (x) -> Core.Intrinsics.zext_int(UInt16, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (UInt8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (UInt16,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (UInt32,)))
+    @test catch_error_61435(f, UInt16(0)) === :caught
+end
+let f = (x) -> Core.Intrinsics.trunc_int(Int16, x)
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int16,)))
+    @test Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
+    @test catch_error_61435(f, Int16(0)) === :caught
+end
+
+# issue #57324
+module Issue57324
+struct T <: AbstractVector{Float64}
+    m::Memory{UInt64}
+end
+function f(w)
+    r = Base.OneTo(w.m[1])
+    setindex!(w, 0.0, r[1])
+end
+Base.setindex!(w::T, v, i::Int) = _setindex!(w, i)
+function _setindex!(w, i)
+    w.m[w.m[1]] = 0 > i ? nothing : 0
+    w
+end
+Base.size(::T) = (0,)
+end
+let effects = Base.infer_effects(Issue57324.f, (Issue57324.T,))
+    @test Compiler.is_terminates(effects)
+    @test Compiler.is_notaskstate(effects)
+    @test Compiler.is_nortcall(effects)
+end
+
+# issue #61590
+@test !Compiler.is_consistent(Base.infer_effects(getproperty, (Core.TypeName, Symbol)))
+@test !Compiler.is_consistent(Base.infer_effects(getfield, (Core.TypeName, Symbol)))

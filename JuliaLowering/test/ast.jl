@@ -1,3 +1,8 @@
+let node = JS.newleaf(SyntaxGraph(), LineNumberNode(1), K"Value", nothing)
+    @test JS.hasattr(node, :value)
+    @test node.value === nothing
+end
+
 @testset "assert_syntaxtree" begin
     st = parsestmt(SyntaxTree, "function foo end")
     g = st._graph
@@ -43,7 +48,7 @@ end
 
         st = @ast_ [K"block" 1::K"Value" [K"block"]]
         @test JuliaLowering.flatten_blocks(st) ≈
-            @ast_ [K"block" 1::K"Value" "nothing"::K"core"]
+            @ast_ [K"block" 1::K"Value" (::K"nothing")]
 
         st = @ast_ [K"block" 1::K"Value" [K"block"] 1::K"Value"]
         @test JuliaLowering.flatten_blocks(st) ≈
@@ -72,7 +77,7 @@ end
 
         st = @ast_ [K"call" [K"block" 1::K"Value" [K"block"]]]
         @test JuliaLowering.flatten_blocks(st) ≈
-            @ast_ [K"call" [K"block" 1::K"Value" "nothing"::K"core"]]
+            @ast_ [K"call" [K"block" 1::K"Value" (::K"nothing")]]
 
         st = @ast_ [K"call" [K"block" 1::K"Value" [K"block"] 1::K"Value"]]
         @test JuliaLowering.flatten_blocks(st) ≈

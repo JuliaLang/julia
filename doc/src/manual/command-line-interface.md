@@ -70,7 +70,7 @@ expression.
 
 !!! compat "Julia 1.11"
     The special entry point `Main.main` was added in Julia 1.11. For compatibility with prior julia versions,
-    add an explicit `@isdefined(var"@main") ? (@main) : exit(main(ARGS))` at the end of your scripts.
+    add an explicit `@static @isdefined(var"@main") ? (@main) : exit(main(ARGS))` at the end of your scripts.
 
 Only the `main` binding in the `Main` module has this behavior and only if
 the macro `@main` was used within the defining module.
@@ -175,7 +175,7 @@ The following is a complete list of command-line switches available when launchi
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print command-line options (this message)|
 |`--help-hidden`                        |Print uncommon options not shown by `-h`|
-|`--project[={<dir>\|@temp\|@.}]`       |Set `<dir>` as the active project/environment. Or, create a temporary environment with `@temp`. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
+|`-P`, `--project[={<dir>\|@temp\|@.}]` |Set `<dir>` as the active project/environment. Or, create a temporary environment with `@temp`. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
 |`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is unset, load `~/.julia/config/startup.jl`|

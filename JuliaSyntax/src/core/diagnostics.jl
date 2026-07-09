@@ -50,7 +50,7 @@ function _file_url(filename)
             path = abspath(filename)
         end
         return "file://$(path)"
-    catch exc
+    catch
         # abspath may fail if working directory doesn't exist
         # TODO: It seems rather non-ideal to have the behavior here depend on
         # the state of the local filesystem. And yet links in diagnostics seem

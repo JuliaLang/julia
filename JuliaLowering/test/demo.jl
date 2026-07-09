@@ -3,7 +3,10 @@
 using JuliaSyntax
 using JuliaLowering
 
-using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, is_leaf, @ast, numchildren, children, child, setattr!, sourceref, makenode, sourcetext, showprov, lookup_binding
+using JuliaSyntax: ensure_attributes
+using JuliaLowering: @ast, SyntaxGraph, SyntaxTree, child, children, is_leaf,
+    lookup_binding, makenode, newnode!, numchildren, setattr!, setchildren!, showprov,
+    sourceref
 
 using JuliaSyntaxFormatter
 
@@ -81,9 +84,9 @@ else
 eval(JuliaLowering.@SyntaxTree :(baremodule M
     using Base
 
-    using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope, MacroExpansionError, makenode
+    using JuliaLowering: @ast, @chk, JuliaLowering, MacroExpansionError, adopt_scope, makenode
     using JuliaSyntax
-    using JuliaLowering: @inert, @label, @goto, @islocal
+    using JuliaLowering: @goto, @inert, @islocal, @label
     using Base: @locals
 
     macro K_str(str)

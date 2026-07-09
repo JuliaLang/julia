@@ -289,9 +289,9 @@ Containing expressions:
 LoweringError:
 #= line 1 =# - 2D `nrow` cannot be mixed with `row` in `ncat`
 Expression:
-  (nrow-2 (row 1))
+  (nrow 2 (row 1))
 Containing expressions:
-  (ncat-3 (nrow-2 (row 1)))
+  (ncat 3 (nrow 2 (row 1)))
 
 ########################################
 # Error: bad nrow nesting
@@ -309,7 +309,7 @@ LoweringError:
 Expression:
   (row 1)
 Containing expressions:
-  (ncat-3 (row (row 1)))
+  (ncat 3 (row (row 1)))
 
 ########################################
 # Simple getindex

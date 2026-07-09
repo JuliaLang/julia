@@ -45,7 +45,7 @@ typedef struct _jl_ast_context_t {
 static jl_ast_context_t jl_ast_main_ctx;
 
 #ifdef __clang_gcanalyzer__
-jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
+extern jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #else
 #define jl_ast_ctx(fl_ctx) container_of(fl_ctx, jl_ast_context_t, fl)
 #endif
@@ -98,7 +98,7 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_module_t *m = ctx->module;
     assert(m != NULL);
-    // Get the outermost function name from the `parsed_method_stack` top
+    // Get the outermost function name from the bottom of `parsed_method_stack`
     char *funcname = NULL;
     value_t parsed_method_stack = args[0];
     if (parsed_method_stack != fl_ctx->NIL) {
@@ -235,10 +235,12 @@ void jl_init_common_symbols(void)
     jl_invoke_sym = jl_symbol("invoke");
     jl_invoke_modify_sym = jl_symbol("invoke_modify");
     jl_foreigncall_sym = jl_symbol("foreigncall");
+    jl_foreignglobal_sym = jl_symbol("foreignglobal");
     jl_cfunction_sym = jl_symbol("cfunction");
     jl_quote_sym = jl_symbol("quote");
     jl_inert_sym = jl_symbol("inert");
     jl_top_sym = jl_symbol("top");
+    jl_tuple_sym = jl_symbol("tuple");
     jl_core_sym = jl_symbol("core");
     jl_globalref_sym = jl_symbol("globalref");
     jl_line_sym = jl_symbol("line");
@@ -330,7 +332,7 @@ void jl_init_common_symbols(void)
     jl_latestworld_sym = jl_symbol("latestworld");
 }
 
-JL_DLLEXPORT void jl_lisp_prompt(void)
+void jl_lisp_prompt(void)
 {
     // Make `--lisp` sigatomic in order to avoid triggering the sigint safepoint.
     // We don't have our signal handler registered in that case anyway...
@@ -481,6 +483,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             JL_GC_PUSH3(&file, &linenum, &inlinedat);
             value_t lst = e;
             file = scm_to_julia_(fl_ctx, car_(lst), mod);
+            assert(jl_is_symbol(file));
             lst = cdr_(lst);
             linenum = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);
@@ -842,18 +845,13 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
                 jl_array_ptr_ref(new_code, i)
             ));
         }
-        new_ci->code = new_code;
-        jl_gc_wb(new_ci, new_code);
-        new_ci->slotnames = jl_array_copy(new_ci->slotnames);
-        jl_gc_wb(new_ci, new_ci->slotnames);
-        new_ci->slotflags = jl_array_copy(new_ci->slotflags);
-        jl_gc_wb(new_ci, new_ci->slotflags);
-        new_ci->ssaflags = jl_array_copy(new_ci->ssaflags);
-        jl_gc_wb(new_ci, new_ci->ssaflags);
+        jl_gc_write(new_ci, new_ci->code, jl_array_t, new_code);
+        jl_gc_write(new_ci, new_ci->slotnames, jl_array_t, jl_array_copy(new_ci->slotnames));
+        jl_gc_write(new_ci, new_ci->slotflags, jl_array_t, jl_array_copy(new_ci->slotflags));
+        jl_gc_write(new_ci, new_ci->ssaflags, jl_array_t, jl_array_copy(new_ci->ssaflags));
 
         if (jl_is_array(new_ci->ssavaluetypes)) {
-            new_ci->ssavaluetypes = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->ssavaluetypes);
-            jl_gc_wb(new_ci, new_ci->ssavaluetypes);
+            jl_gc_write(new_ci, new_ci->ssavaluetypes, jl_value_t, (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->ssavaluetypes));
         }
         JL_GC_POP();
         return (jl_value_t*)new_ci;
@@ -991,7 +989,7 @@ static int is_self_escaping_expr(jl_expr_t *e) JL_NOTSAFEPOINT
 
 // any AST, except those that cannot contain symbols
 // and have no side effects
-int need_esc_node(jl_value_t *e) JL_NOTSAFEPOINT
+static int need_esc_node(jl_value_t *e) JL_NOTSAFEPOINT
 {
     if (jl_is_linenode(e)
         || jl_is_ssavalue(e)
@@ -1048,18 +1046,20 @@ lno_ok:
         JL_GC_PROMISE_ROOTED(ctx_module);
         margs[0] = jl_toplevel_eval(ctx_module, margs[0]);
         jl_method_instance_t *mfunc = NULL;
-        mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+        mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
         JL_GC_PROMISE_ROOTED(mfunc);
         if (mfunc == NULL && retry_lno != NULL) {
             margs[1] = retry_lno;
-            mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+            mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
             JL_GC_PROMISE_ROOTED(mfunc);
         }
         if (mfunc == NULL) {
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
         }
-        jl_timing_show_macro(mfunc, margs[1], inmodule, JL_TIMING_DEFAULT_BLOCK);
+        // margs[1] may still be a MacroSource; timing wants the inner LineNumberNode
+        jl_timing_show_macro(mfunc, retry_lno != NULL ? retry_lno : margs[1],
+                             inmodule, JL_TIMING_DEFAULT_BLOCK);
         *ctx = mfunc->def.method->module;
         result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }

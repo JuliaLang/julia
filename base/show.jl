@@ -588,7 +588,6 @@ end
 
 print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 
-show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
@@ -607,10 +606,16 @@ end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
+modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
+modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, parentmodule(x))
+    elseif x isa TypeEq
+        modulesof!(s, x)
+    elseif x isa Core.TypeEgal
+        modulesof!(s, x)
     elseif x isa Union
         modulesof!(s, x.a)
         modulesof!(s, x.b)
@@ -618,11 +623,45 @@ function modulesof!(s::Set{Module}, x::Type)
     s
 end
 
-# given an IO context for printing a type, reconstruct the proper type that
-# we're attempting to represent.
-# Union{T} where T is a degenerate case and is equal to T.ub, but we don't want
-# to print them that way, so filter those out from our aliases completely.
-function makeproper(io::IO, @nospecialize(x::Type))
+function has_other_free_typevars(@nospecialize(x), free_before)
+    has_free_typevars(x) || return false
+    for v in find_free_typevars(x)
+        seen = false
+        for p in free_before
+            if p === v
+                seen = true
+                break
+            end
+        end
+        seen || return true
+    end
+    return false
+end
+
+# Return a copy of the type alias `alias` with every bounded binder replaced by
+# an unbounded one, so that `typeintersect_env` can match an open `x` (whose free
+# typevars are not yet known to satisfy the alias' bounds) against the alias.
+# The binders are rewritten from the innermost outward, so that a bound that
+# references an outer binder is rewritten consistently with that binder.
+function unbounded_typealias(@nospecialize(alias))
+    alias isa UnionAll || return alias
+    body = unbounded_typealias(alias.body)
+    var = alias.var
+    if var.lb === Union{} && var.ub === Any
+        body === alias.body && return alias
+        return UnionAll(var, body)
+    end
+    newvar = TypeVar(var.name)
+    return UnionAll(newvar, UnionAll(var, body){newvar})
+end
+
+# Reconstruct the closed type that the (possibly open) `x` is a piece of, by
+# re-wrapping it in the typevars bound by the surrounding printing context (the
+# `:unionall_env` entries of `io`). Subtype tests use this so that the
+# context-bound typevars are quantified rather than treated as rigid free
+# variables, while the rest of the alias machinery keeps operating on the open
+# `x` whose free typevars must be matched against the alias' parameters.
+function reapply_unionall_env(io::Union{IO,Nothing}, @nospecialize(x))
     if io isa IOContext
         for (key, val) in io.dict
             if key === :unionall_env && val isa TypeVar
@@ -630,30 +669,28 @@ function makeproper(io::IO, @nospecialize(x::Type))
             end
         end
     end
-    has_free_typevars(x) && return Any
     return x
 end
 
-function make_typealias(@nospecialize(x::Type))
+function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
     Any === x && return nothing
     x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
     replace!(mods, Core=>Base)
+    properx = reapply_unionall_env(io, x)
     aliases = Tuple{GlobalRef,SimpleVector}[]
-    xenv = UnionAll[]
-    for p in uniontypes(unwrap_unionall(x))
-        p isa UnionAll && push!(xenv, p)
-    end
-    x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
             if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getglobal(mod, name)
-                if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && x <: alias
+                if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && properx <: alias
                     if alias isa UnionAll
-                        (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                        free_before = find_free_typevars(x)
+                        (ti, env) = typeintersect_env(x, unbounded_typealias(alias))
                         # ti === Union{} && continue # impossible, since we already checked that x <: alias
                         env = env::SimpleVector
+                        # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
+                        env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
                         # TODO: In some cases (such as the following), the `env` is over-approximated.
                         #       We'd like to disable `fix_inferred_var_bound` since we'll already do that fix-up here.
                         #       (or detect and reverse the computation of it here).
@@ -671,11 +708,9 @@ function make_typealias(@nospecialize(x::Type))
                                 ex isa TypeError || rethrow()
                                 continue
                             end
-                        for p in xenv
-                            applied = rewrap_unionall(applied, p)
-                        end
-                        has_free_typevars(applied) && continue
-                        applied === x || continue # it couldn't figure out the parameter matching
+                        applied = rewrap_free_typevars(applied, free_before)
+                        has_other_free_typevars(applied, free_before) && continue
+                        applied == x || continue # it couldn't figure out the parameter matching
                     elseif alias === x
                         env = Core.svec()
                     else
@@ -713,8 +748,8 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
         return o isa TypeVar &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o.ub) != 0 &&
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o.lb) != 0
     end
     for i = n:-1:1
         p = env[i]
@@ -754,7 +789,7 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     nothing
 end
 
-function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
+function show_typealias_name(io::IO, name::GlobalRef)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
         # IOContext. If :module is not set, default to Main.
@@ -766,6 +801,11 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
         end
     end
     print(io, name.name)
+    return nothing
+end
+
+function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
+    show_typealias_name(io, name)
     isempty(env) && return
     io = IOContext(io)
     for p in wheres
@@ -826,8 +866,7 @@ function show_wheres(io::IO, wheres::Vector{TypeVar})
 end
 
 function show_typealias(io::IO, @nospecialize(x::Type))
-    properx = makeproper(io, x)
-    alias = make_typealias(properx)
+    alias = make_typealias(x, io)
     alias === nothing && return false
     wheres = make_wheres(io, alias[2], x)
     show_typealias(io, alias[1], x, alias[2], wheres)
@@ -841,6 +880,7 @@ function make_typealiases(@nospecialize(x::Type))
     x <: Tuple && return aliases, Union{}
     mods = modulesof!(Set{Module}(), x)
     replace!(mods, Core=>Base)
+    free_before = find_free_typevars(x)
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
     each = Any[]
@@ -854,12 +894,14 @@ function make_typealiases(@nospecialize(x::Type))
             if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
-                    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                    (ti, env) = typeintersect_env(x, unbounded_typealias(alias))
                     ti === Union{} && continue
                     # make sure this alias wasn't from an unrelated part of the Union
                     mod2 = modulesof!(Set{Module}(), alias)
                     mod in mod2 || (mod === Base && Core in mod2) || continue
                     env = env::SimpleVector
+                    # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
+                    env = Core.svec(Any[e isa SimpleVector ? e[1] : e for e in env]...)
                     applied = alias
                     if !isempty(env)
                         applied = try
@@ -878,10 +920,12 @@ function make_typealiases(@nospecialize(x::Type))
                     for p in xenv
                         applied = rewrap_unionall(applied, p)
                     end
-                    has_free_typevars(applied) && continue
+                    applied = rewrap_free_typevars(applied, free_before)
+                    has_other_free_typevars(applied, free_before) && continue
                     applied <: x || continue # parameter matching didn't make a subtype
                     print_without_params(x) && (env = Core.svec())
                     for typ in each # check that the alias also fully subsumes at least component of the input
+                        typ isa TypeVar && continue
                         if typ <: applied
                             push!(aliases, Core.svec(GlobalRef(mod, name), env, applied, (ul, -length(env))))
                             break
@@ -917,8 +961,7 @@ function make_typealiases(@nospecialize(x::Type))
 end
 
 function show_unionaliases(io::IO, x::Union)
-    properx = makeproper(io, x)
-    aliases, applied = make_typealiases(properx)
+    aliases, applied = make_typealiases(x)
     isempty(aliases) && return false
     first = true
     tvar = false
@@ -926,7 +969,7 @@ function show_unionaliases(io::IO, x::Union)
         if isa(typ, TypeVar)
             tvar = true # sort bare TypeVars to the end
             continue
-        elseif rewrap_unionall(typ, properx) <: applied
+        elseif typ <: applied
             continue
         end
         print(io, first ? "Union{" : ", ")
@@ -963,8 +1006,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     if !print_without_params(x)
-        properx = makeproper(io, x)
-        if make_typealias(properx) !== nothing || (unwrap_unionall(x) isa Union && x <: make_typealiases(properx)[2])
+        if make_typealias(x, io) !== nothing || (unwrap_unionall(x) isa Union && x <: make_typealiases(x)[2])
             show(IOContext(io, :compact => true), x)
             if !(get(io, :compact, false)::Bool)
                 printstyled(io, " (alias for "; color = :light_black)
@@ -987,12 +1029,42 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
+function show_typeegal(io::IO, @nospecialize(x::Core.TypeEgal))
+    print(io, "Core.TypeEgal{")
+    show(io, type_parameter(x))
+    print(io, "}")
+end
+function show(io::IO, @nospecialize(x::Core.AnyType))
+    if x isa Core.TypeofBottom
+        print(io, "Union{}")
+    elseif x isa Core.TypeEgal
+        show_typeegal(io, x)
+    elseif x isa TypeEq
+        show_typeeq(io, x)
+    else
+        _show_type(io, inferencebarrier(x))
+    end
+end
+# `Type{T}` is the familiar user-facing spelling and is used for all normal
+# (compact) printing. In non-compact contexts (e.g. the REPL's `text/plain`
+# display) the canonical kind name `TypeEq{T}` is shown instead, so that a
+# concrete `Type{T}` renders as `Type{T} (alias for TypeEq{T})`.
+function show_typeeq(io::IO, @nospecialize(x::TypeEq))
+    print(io, get(io, :compact, true)::Bool ? "Type{" : "TypeEq{")
+    show(io, type_parameter(x))
+    print(io, "}")
+end
 function _show_type(io::IO, @nospecialize(x::Type))
-    if print_without_params(x)
+    if x isa Core.TypeEgal
+        show_typeegal(io, x)
+        return
+    elseif print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
+        return
+    elseif x isa TypeEq
+        show_typeeq(io, x)
         return
     elseif x isa DataType
         show_datatype(io, x)
@@ -1003,6 +1075,9 @@ function _show_type(io::IO, @nospecialize(x::Type))
         end
         print(io, "Union")
         show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+        return
+    elseif x === Union{}
+        print(io, "Union{}")
         return
     end
 
@@ -1763,7 +1838,14 @@ function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)
         # invalid SSAValue, print this in red for better recognition
         printstyled(io, "%", val.id; color=:red)
     else
-        print(io, "%", val.id)
+        cls = Base.Compiler.IRShow.ssa_warn_type_class(io, val.id)
+        if cls === Base.Compiler.IRShow.SSA_WARN_TYPE_STRONG
+            printstyled(io, "%", val.id; color=:light_red, bold=true)
+        elseif cls === Base.Compiler.IRShow.SSA_WARN_TYPE_MILD
+            printstyled(io, "%", val.id; color=warn_color(), bold=true)
+        else
+            print(io, "%", val.id)
+        end
     end
 end
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allow_macroname=false)
@@ -2500,7 +2582,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
-    elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
+    elseif isType(ft) && (f = type_parameter(ft); !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
@@ -2744,11 +2826,12 @@ function show(io::IO, tv::TypeVar)
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, @nospecialize(b))
+    function show_bound(io::IO, @nospecialize(b)) # b::Union{Core.AnyType,TypeVar}
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
-        show(io, b)
+        b isa TypeVar ? show(io, b) : show(io, b::Core.AnyType)
         parens && print(io, ")")
+        nothing
     end
     lb, ub = tv.lb, tv.ub
     if !in_env && lb !== Bottom
@@ -3042,6 +3125,8 @@ end
 nocolor(io::IO) = IOContext(io, :color => false)
 alignment_from_show(io::IO, x::Any) =
     textwidth(sprint(show, x, context=nocolor(io), sizehint=0))
+alignment_from_show(io::IO, x::AbstractString) =
+    textwidth(sprint(show, MIME"text/plain"(), x, context=nocolor(io), sizehint=0))
 
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are
@@ -3333,24 +3418,12 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, max_world)
     end
     if (partition.kind & PARTITION_MASK_FLAG) != 0
-        first = false
-        print(io, " [")
-        if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
-            print(io, "exported")
-        end
-        if (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0
-            first ? (first = false) : print(io, ",")
-            print(io, "re-exported")
-        end
-        if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
-            first ? (first = false) : print(io, ",")
-            print(io, "deprecated")
-        end
-        if (partition.kind & PARTITION_FLAG_DEPWARN) != 0
-            first ? (first = false) : print(io, ",")
-            print(io, "depwarn")
-        end
-        print(io, "]")
+        flags = String[]
+        (partition.kind & PARTITION_FLAG_EXPORTED)            != 0 && push!(flags, "exported")
+        (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0 && push!(flags, "re-exported")
+        (partition.kind & PARTITION_FLAG_DEPRECATED)          != 0 && push!(flags, "deprecated")
+        (partition.kind & PARTITION_FLAG_DEPWARN)             != 0 && push!(flags, "depwarn")
+        print(io, " [", join(flags, ","), "]")
     end
     print(io, " - ")
     kind = binding_kind(partition)

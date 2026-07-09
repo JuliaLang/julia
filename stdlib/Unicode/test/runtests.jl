@@ -100,7 +100,7 @@ end
     end
 end
 
-@testset "#5939 uft8proc character predicates" begin
+@testset "#5939 utf8proc character predicates" begin
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
     for c in vcat(alower,ulower,['ª'])
@@ -305,7 +305,7 @@ end
     @test normalize("\0W", casefold=true) == "\0w"
 end
 
-@testset "ut8proc_map with GenericString" begin
+@testset "utf8proc_map with GenericString" begin
     @test normalize(GenericString("\u006e\u0303"), :NFC) == "\u00f1"
 end
 

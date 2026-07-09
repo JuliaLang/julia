@@ -113,6 +113,8 @@ public
 
 # Strings
     escape_raw_string,
+    raw_substring,
+    unannotate,
 
 # Chars
     ismalformed,
@@ -143,4 +145,5 @@ public
     runtests,
     text_colors,
     depwarn,
+    blackbox,
     donotdelete

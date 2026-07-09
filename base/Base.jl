@@ -64,6 +64,9 @@ include("osutils.jl")
 include("subarray.jl")
 include("views.jl")
 
+# String views
+include("strings/stringview.jl")
+
 # numeric operations
 include("div.jl")
 include("twiceprecision.jl")
@@ -272,7 +275,6 @@ include("errorshow.jl")
 include("util.jl")
 
 include("initdefs.jl")
-Filesystem.__postinit__()
 
 # worker threads
 include("threadcall.jl")
@@ -340,6 +342,7 @@ set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
 
+Filesystem.__postinit__()
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 

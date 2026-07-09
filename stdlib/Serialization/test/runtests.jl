@@ -184,7 +184,7 @@ create_serialization_stream() do s # immutable struct with 1 field
     @test invokelatest(deserialize, s) == utype
 end
 
-create_serialization_stream() do s # immutable struct with 2 field
+create_serialization_stream() do s # immutable struct with 2 fields
     usertype = "SerializeSomeType4"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2)"))
@@ -193,7 +193,7 @@ create_serialization_stream() do s # immutable struct with 2 field
     @test invokelatest(deserialize, s) === utval
 end
 
-create_serialization_stream() do s # immutable struct with 3 field
+create_serialization_stream() do s # immutable struct with 3 fields
     usertype = "SerializeSomeType5"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2,3)"))
@@ -202,13 +202,25 @@ create_serialization_stream() do s # immutable struct with 3 field
     @test invokelatest(deserialize, s) === utval
 end
 
-create_serialization_stream() do s # immutable struct with 4 field
+create_serialization_stream() do s # immutable struct with 4 fields
     usertype = "SerializeSomeType6"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
     @test invokelatest(deserialize, s) === utval
+end
+
+create_serialization_stream() do s # union types
+    serialize(s, Union{Int,Float64})
+    serialize(s, Union{Int,Missing})
+    serialize(s, Union{Int,Float64,String})
+    serialize(s, [Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}])
+    seek(s, 0)
+    @test deserialize(s) === Union{Int,Float64}
+    @test deserialize(s) === Union{Int,Missing}
+    @test deserialize(s) === Union{Int,Float64,String}
+    @test deserialize(s) == Type[Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}]
 end
 
 # Expression
@@ -693,15 +705,18 @@ end
     for i in 1:10
         old_m[i] = i^2
     end
-    old_x = memoryref(old_m, 5)
-    @test old_x[] == 25
-    old_d = Dict(:x => old_x)
+    # Test roundtrip at every offset
+    for idx in 1:10
+        old_x = memoryref(old_m, idx)
+        @test old_x[] == idx^2
+        old_d = Dict(:x => old_x)
 
-    old_str = sprint(serialize, old_d)
-    new_d = deserialize(IOBuffer(old_str))
+        old_str = sprint(serialize, old_d)
+        new_d = deserialize(IOBuffer(old_str))
 
-    @test new_d[:x] isa MemoryRef
-    @test new_d[:x][] == 25
+        @test new_d[:x] isa MemoryRef
+        @test new_d[:x][] == idx^2
+    end
 end
 
 @testset "Memory" begin

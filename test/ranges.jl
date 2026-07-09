@@ -2815,6 +2815,23 @@ end
     @test promote(MyUnitRange(UnitRange(3.0, 4.0)), Base.OneTo(3)) == (3.0:4.0, 1.0:3.0)
 end
 
+@testset "StepRangeLen indexing with implicit conversion (#61580) " begin
+    # testing direct path where the result type of range arithmetic
+    # will implicitly convert to element type.
+    struct Num61580
+        x::Float64
+        global _mknum(x::Float64) = new(x)
+    end
+    Base.convert(::Type{Num61580}, x::Real) = _mknum(Float64(x))
+    r1 = StepRangeLen{Num61580,Float64,Float64,Int64}(0.0, 1.0, 5, 1)
+    @test r1[1] === convert(Num61580, 0.0)
+
+    # a more concrete example where the result of range arithmetic
+    # is already of the element type.
+    r2 = range(Time(0), step = Hour(9), length = 3)
+    @test r2[begin:end] == [Time(0), Time(9), Time(18)]  # can be indexed
+end
+
 @testset "StepRange(::StepRangeLen)" begin
     ind = StepRangeLen(2, -1, 2)
     @test StepRange(ind) == ind

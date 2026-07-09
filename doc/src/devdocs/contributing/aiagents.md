@@ -1,6 +1,6 @@
 # Using AI agents to work on Julia
 
-> ![WARNING]
+> [!WARNING]
 > You are responsible for the code you submit in PRs. Do not submit PRs
 > containing AI-generated code that you do not understand or that does not
 > meet the ordinary quality bar for PRs to julia.
@@ -45,5 +45,5 @@ additional information as links - you will need to copy any relevant text into
 the prompt.
 
 Note that Codex rebuilds the environment after every invocation. This can
-add significant latency. Codex work best for well-defined tasks that can
+add significant latency. Codex works best for well-defined tasks that can
 be solved in a single shot.

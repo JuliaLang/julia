@@ -34,7 +34,7 @@ function writefixed(buf, pos, v::T,
         return pos + 3
     end
 
-    bits = Core.bitcast(UInt64, x)
+    bits = reinterpret(UInt64, x)
     mant = bits & MANTISSA_MASK
     exp = Int((bits >> 52) & EXP_MASK)
 

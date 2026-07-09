@@ -8,7 +8,7 @@ const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), 
 const TESTNAMES = [
         "subarray", "core", "compiler", "compiler_extras", "worlds", "atomics",
         "keywordargs", "numbers", "subtype", "typegroup",
-        "char", "strings", "triplequote", "unicode", "intrinsics",
+        "char", "strings", "triplequote", "unicode", "intrinsics", "apint",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "rational",
@@ -80,7 +80,7 @@ function test_path(test)
 end
 
 """
-`(; tests, net_on, exit_on_error, seed) = choosetests(choices)` selects a set of tests to be
+`(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 

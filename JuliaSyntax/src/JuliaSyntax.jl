@@ -12,18 +12,14 @@ end
 # Public API, in the order of docs/src/api.md
 
 # Parsing.
-export parsestmt,
-    parseall,
-    parseatom
+export parseall, parseatom, parsestmt
 
 @_public parse!,
     ParseStream,
     build_tree
 
 # Tokenization
-export tokenize,
-    Token,
-    untokenize
+export Token, tokenize, untokenize
 
 # Source file handling
 @_public sourcefile,
@@ -43,6 +39,12 @@ export SourceFile
 # Expression predicates, kinds and flags
 export @K_str, kind
 @_public Kind
+@_public PrecedenceLevel, PREC_NONE, PREC_ASSIGNMENT,
+    PREC_PAIRARROW, PREC_CONDITIONAL, PREC_ARROW, PREC_LAZYOR, PREC_LAZYAND,
+    PREC_COMPARISON, PREC_PIPE_LT, PREC_PIPE_GT, PREC_COLON, PREC_PLUS,
+    PREC_BITSHIFT, PREC_TIMES, PREC_RATIONAL, PREC_POWER, PREC_DECL,
+    PREC_WHERE, PREC_DOT, PREC_QUOTE, PREC_UNICODE_OPS, PREC_COMPOUND_ASSIGN,
+    generic_operators_by_level
 
 @_public flags,
     SyntaxHead,
@@ -53,7 +55,6 @@ export @K_str, kind
     is_prefix_op_call,
     is_postfix_op_call,
     is_dotted,
-    is_suffixed,
     is_decorated,
     numeric_flags,
     has_flags,
