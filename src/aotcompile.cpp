@@ -580,7 +580,8 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
     for (auto &def : compiled_functions) {
         jl_code_instance_t *this_code = def.first;
         jl_method_instance_t *mi = jl_get_ci_mi(this_code);
-        if (this_code->owner == jl_nothing && jl_atomic_load_relaxed(&this_code->max_world) == ~(size_t)0 && this_code->def == (jl_value_t*)mi)
+        if ((this_code->owner == jl_nothing || this_code->owner == (jl_value_t*)jl_trim_sym) &&
+            jl_atomic_load_relaxed(&this_code->max_world) == ~(size_t)0 && this_code->def == (jl_value_t*)mi)
             compiled_mi[mi] = this_code;
     }
     size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
