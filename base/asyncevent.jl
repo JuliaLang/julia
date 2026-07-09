@@ -184,12 +184,20 @@ function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
             lock(t.cond)
             try
                 set = t.set
-                if !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
+                while !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
                     iolock_end()
-                    set = wait(t.cond, tok; waitee=t)
+                    ret = wait(t.cond, tok; waitee=t)
                     unlock(t.cond)
                     iolock_begin()
                     lock(t.cond)
+                    if ret isa Bool
+                        set = ret
+                        break
+                    end
+                    # A wakeup that did not come from this object's notify
+                    # (e.g. the exit-time draining of parked tasks): re-check
+                    # the state and re-park.
+                    set = t.set
                 end
             finally
                 unlock(t.cond)
