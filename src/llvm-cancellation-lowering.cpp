@@ -38,6 +38,8 @@ static bool hasResetSafeMetadata(Instruction *I) {
     return I->getMetadata("julia.reset_safe") != nullptr;
 }
 
+namespace {
+
 struct CancellationLowering {
     Function *cancel_point_func;
     Value *pgcstack;
@@ -346,6 +348,8 @@ bool CancellationLowering::runOnFunction(Function &F) {
 
     return Changed;
 }
+
+} // anonymous namespace
 
 PreservedAnalyses CancellationLoweringPass::run(Function &F, FunctionAnalysisManager &AM) {
     CancellationLowering CL(*F.getParent());

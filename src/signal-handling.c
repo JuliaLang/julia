@@ -768,7 +768,7 @@ JL_DLLEXPORT int jl_consume_sigint_pending(void) JL_NOTSAFEPOINT
 // and notify the sigint listener task, which drives the rest of the
 // cancellation state machine. Callable from non-Julia threads; must not
 // allocate or take Julia-side locks.
-void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
+static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
 {
     // Set the episode source's cancellation state to SAFE severity directly:
     // the state byte is the level that every cancellation point and every

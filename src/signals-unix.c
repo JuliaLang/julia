@@ -66,9 +66,6 @@ static int thread0_exit_count = 0;
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf);
 
-// Task abandonment callback - defined in task.c
-extern JL_NORETURN void jl_abandon_task_cb(void);
-
 #if !defined(_OS_DARWIN_)
 extern void jl_fake_signal_return(void);
 // Create a trampoline function that does the stack manipulations for jl_call_in_ctx/jl_call_in_state

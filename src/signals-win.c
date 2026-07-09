@@ -688,9 +688,6 @@ JL_DLLEXPORT void jl_membarrier(void) {
     FlushProcessWriteBuffers();
 }
 
-// Task abandonment callback - defined in task.c
-extern JL_NORETURN void jl_abandon_task_cb(void);
-
 #ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
 // === Cancellation-handler delivery ==========================================
 // The suspend-based analog of the Unix implementation (see signals-unix.c):
