@@ -692,7 +692,7 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         end
         return res
     catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
         rethrow()
     finally
         Base.relockall(c.lock, token)

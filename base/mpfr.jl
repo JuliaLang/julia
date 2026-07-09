@@ -1199,10 +1199,10 @@ Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
     The `base` keyword requires at least Julia 1.8.
 """
 function setprecision(f::Function, ::Type{T}, prec::Integer; kws...) where T
-    depwarn("""
-            The fallback `setprecision(::Function, ...)` method is deprecated. Packages overloading this method should
-            implement their own specialization using `ScopedValue` instead.
-            """, :setprecision)
+    Base.depwarn("""
+                 The fallback `setprecision(::Function, ...)` method is deprecated. Packages overloading this method should
+                 implement their own specialization using `ScopedValue` instead.
+                 """, :setprecision)
     old_prec = precision(T)
     setprecision(T, prec; kws...)
     try
