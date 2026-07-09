@@ -395,6 +395,11 @@ end
     elseif k == K"doc"
         retexpr.head = :macrocall
         retexpr.args = [GlobalRef(Core, Symbol("@doc")), loc, args...]
+    elseif k == K"case"
+        if has_flags(nodehead, EXCEPT_ARM_FLAG)
+            # `case except pat` exception arm
+            retexpr.head = :case_except
+        end
     elseif k == K"dotcall" || k == K"call"
         # Julia's standard `Expr` ASTs have children stored in a canonical
         # order which is not always source order. We permute the children

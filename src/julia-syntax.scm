@@ -1131,10 +1131,687 @@
            (and (eq? (car ex) 'where)
                 (just-arglist? (cadr ex))))))
 
+;; --- declared exceptions ---------------------------------------------------
+;;
+;; A method may declare the exceptions that are part of its API:
+;;
+;;     function f(x)::T except E
+;;         haskey(d, x) || throw(KeyError(x))?
+;;         return d[x]
+;;     end
+;;
+;; Like keyword arguments, this is lowered by splitting the method: an inner
+;; method contains the body and returns a `Base.Except` value carrying
+;; either the ordinary result or a declared exception; the outer method
+;; (the ordinary entry point, with the original name) unwraps the inner
+;; method's result, throwing the exception for callers that do not
+;; participate; and a method is added to the `Base.except_call` generic
+;; function (the declared-exception analog of `Core.kwcall`) giving callers
+;; direct access to the inner method.
+;;
+;; Within the body of a declared method, the propagation sites
+;;
+;;     ex?            surface form (question ex)
+;;     ex except F    surface form (except ex F)
+;;     throw(e)?
+;;
+;; are rewritten to return exceptional `Except` values when the exception
+;; matches the declaration (and the site filter `F`, if any), and to throw
+;; it otherwise.
+;; A method with no declaration whose body contains propagation sites
+;; receives an inferred declaration of `(core Any)`; closures (including
+;; `do` blocks) do not inherit the enclosing method's declaration and are
+;; handled by the same rule when their bodies are eventually lowered. Sites
+;; outside of any declaration (at top level, or in lazy generators, which
+;; may outlive the enclosing frame) throw any declared exception that
+;; surfaces. In a literal comprehension, a site in the body propagates from
+;; the comprehension itself: the elements are collected through
+;; `Base.except_collect`, which short-circuits on the first exceptional
+;; element.
+
+(define (except-decl? e) (and (pair? e) (eq? (car e) 'except) (length= e 3)))
+
+(define (except-site? e)
+  (and (pair? e) (memq (car e) '(question except))))
+
+(define (throw-func? f)
+  (or (eq? f 'throw)
+      (and (pair? f)
+           (case (car f)
+             ((core top) (eq? (cadr f) 'throw))
+             ((globalref) (eq? (caddr f) 'throw))
+             ((|.|) (let ((q (caddr f)))
+                      (and (pair? q) (memq (car q) '(quote inert))
+                           (eq? (cadr q) 'throw))))
+             (else #f)))))
+
+(define (throw-call? e)
+  (and (pair? e) (eq? (car e) 'call) (length= e 3) (throw-func? (cadr e))))
+
+;; does `e` contain a declared-exception propagation site at the current
+;; function nesting level? Nested function definitions receive their own
+;; (possibly inferred) declarations; lazy generators do not propagate, but
+;; sites inside the generator of a literal comprehension propagate from the
+;; comprehension itself.
+(define (has-except-site? e)
+  (and (pair? e)
+       (not (quoted? e))
+       (or (except-site? e)
+           (and (memq (car e) '(comprehension typed_comprehension))
+                (any (lambda (x)
+                       (if (and (pair? x) (eq? (car x) 'generator))
+                           (any has-except-site? (cdr x))
+                           (has-except-site? x)))
+                     (cdr e)))
+           (and (not (function-def? e))
+                (not (memq (car e) '(macro module toplevel generator flatten
+                                     comprehension typed_comprehension)))
+                (any has-except-site? (cdr e))))))
+
+;; code testing/propagating a computed value `valex` at a propagation site:
+;; an exceptional `Except` result is propagated from the enclosing method
+;; if its exception matches the declaration `E` (and the site filter `F`,
+;; if any) and thrown otherwise. With no declaration (`E` = #f), every
+;; surfacing declared exception is thrown. On the ordinary path the value
+;; is extracted from the `Except` (any other value passes through
+;; unchanged; `Base.except_result` is the identity on non-`Except`s).
+(define (except-value-check valex E F)
+  (let ((r (make-ssavalue))
+        (p (make-ssavalue)))
+    `(block (= ,r ,valex)
+            (if (call (top except_iserr) ,r)
+                (block (= ,p (call (top except_exception) ,r))
+                       ,(if E
+                            `(if ,(if F
+                                      `(&& (call (core isa) ,p ,F)
+                                           (call (core isa) ,p ,E))
+                                      `(call (core isa) ,p ,E))
+                                 (return (call (top except_error) ,p))
+                                 (call (core throw) ,p))
+                            `(call (core throw) ,p)))
+                (call (top except_result) ,r)))))
+
+;; expand one propagation site `(question ex)` / `(except ex F)`
+(define (expand-question-site ex E F)
+  (define (rw x) (rewrite-except-sites x E))
+  (cond
+   ((and E (throw-call? ex))
+    ;; throw(e)? raises `e` on the declared channel
+    (let ((exc (make-ssavalue)))
+      `(block (= ,exc ,(rw (caddr ex)))
+              (if ,(if F
+                       `(&& (call (core isa) ,exc ,F)
+                            (call (core isa) ,exc ,E))
+                       `(call (core isa) ,exc ,E))
+                  (return (call (top except_error) ,exc))
+                  (call (core throw) ,exc)))))
+   ((throw-call? ex)
+    ;; outside any declaration, throw(e)? throws
+    `(call (core throw) ,(caddr ex)))
+   ((and (pair? ex) (eq? (car ex) 'match))
+    ;; match ... end? / match ... end except F: unmatched declared
+    ;; exceptions of the scrutinee become the value of the match, checked
+    ;; at this site
+    (except-value-check
+     (expand-match (if E (rewrite-match-parts ex E) ex) #t) E F))
+   ((and (pair? ex) (eq? (car ex) 'call))
+    ;; call through except_call to receive declared exceptions as values;
+    ;; keyword parameters stay in the position just after the callee
+    (let* ((f      (rw (cadr ex)))
+           (fargs  (cddr ex))
+           (params (and (pair? fargs) (pair? (car fargs))
+                        (eq? (caar fargs) 'parameters)
+                        (rw (car fargs))))
+           (rest   (map rw (if params (cdr fargs) fargs))))
+      (except-value-check
+       `(call (top except_call) ,@(if params (list params) '()) ,f ,@rest)
+       E F)))
+   (else
+    ;; arbitrary expression: check its value
+    (except-value-check (rewrite-except-sites ex E) E F))))
+
+;; `?` in the body of a literal comprehension propagates from the
+;; comprehension itself: collect through except_collect (short-circuiting on
+;; the first exceptional element) and treat the collection as a site.
+(define (rewrite-except-comprehension e E)
+  (let* ((typed (eq? (car e) 'typed_comprehension))
+         (gen   (last e)))
+    (if (not (and (pair? gen) (eq? (car gen) 'generator) (length= gen 3)))
+        (error "`?` is only supported in comprehensions with a single `for` clause"))
+    (let* ((body (cadr gen))
+           (spec (caddr gen))
+           (filt (and (pair? spec) (eq? (car spec) 'filter) spec))
+           (spec (if filt (caddr filt) spec)))
+      (if (not (and (pair? spec) (eq? (car spec) '=)))
+          (error "`?` is only supported in comprehensions with a single `for` clause"))
+      (if (and filt (has-except-site? (cadr filt)))
+          (error "`?` is not supported in comprehension `if` conditions"))
+      (let* ((var  (cadr spec))
+             (iter (rewrite-except-sites (caddr spec) E))
+             (iter (if filt
+                       `(call (top Filter) (-> ,var ,(cadr filt)) ,iter)
+                       iter))
+             ;; the closure returns an Except: ordinary elements, or
+             ;; declared exceptions from propagation sites
+             (lam  `(-> ,var (call (top except_value)
+                                   ,(rewrite-except-sites body E))))
+             (coll (if typed
+                       `(call (top except_collect_typed)
+                              ,(rewrite-except-sites (cadr e) E) ,lam ,iter)
+                       `(call (top except_collect) ,lam ,iter))))
+        (except-value-check coll E #f)))))
+
+;; rewrite all propagation sites in the body of a method declaring exception
+;; type `E`. Does not descend into nested function definitions (which carry
+;; their own declarations), quoted code, or lazy generators.
+(define (rewrite-except-sites e E)
+  (cond ((or (atom? e) (quoted? e)) e)
+        ((eq? (car e) 'question)
+         (expand-question-site (cadr e) E #f))
+        ((except-decl? e)
+         (expand-question-site (cadr e) E (rewrite-except-sites (caddr e) E)))
+        ((or (function-def? e)
+             (memq (car e) '(macro module toplevel generator flatten)))
+         e)
+        ((memq (car e) '(comprehension typed_comprehension))
+         (if (has-except-site? e)
+             (rewrite-except-comprehension e E)
+             e))
+        ((eq? (car e) 'match)
+         ;; rewrite scrutinee, guards and arm bodies, but not patterns
+         (rewrite-match-parts e E))
+        ((eq? (car e) 'match_assign)
+         (list 'match_assign (cadr e) (rewrite-except-sites (caddr e) E)))
+        (else (cons (car e)
+                    (map (lambda (x) (rewrite-except-sites x E)) (cdr e))))))
+
+;; fill in names for anonymous arguments so they can be forwarded to the
+;; inner method, returning (cons new-arglist forward-expressions). The
+;; forward expressions have any `parameters` section first.
+(define (except-forwarded-args argl)
+  (define (fwd-name a)
+    ;; returns (cons new-arg forwarded-expr)
+    (cond ((symbol? a) (cons a a))
+          ((and (decl? a) (length= a 3) (symbol? (cadr a)))
+           (cons a (cadr a)))
+          ((and (decl? a) (length= a 2))
+           (let ((g (gensy)))
+             (cons `(|::| ,g ,(cadr a)) g)))
+          ((vararg? a)
+           (let ((inner (fwd-name (cadr a))))
+             (cons `(... ,(car inner)) `(... ,(cdr inner)))))
+          ((kwarg? a)
+           (let ((inner (fwd-name (cadr a))))
+             (cons `(kw ,(car inner) ,(caddr a)) (cdr inner))))
+          (else
+           (error (string "unsupported argument form in `except` method definition \""
+                          (deparse a) "\"")))))
+  (define (fwd-kw p)
+    (cond ((symbol? p) `(kw ,p ,p))
+          ((and (decl? p) (length= p 3) (symbol? (cadr p)))
+           `(kw ,(cadr p) ,(cadr p)))
+          ((kwarg? p)
+           (let ((n (if (symbol? (cadr p)) (cadr p)
+                        (and (decl? (cadr p)) (length= (cadr p) 3) (symbol? (cadr (cadr p)))
+                             (cadr (cadr p))))))
+             (if n `(kw ,n ,n)
+                 (error (string "unsupported keyword argument form in `except` method definition \""
+                                (deparse p) "\"")))))
+          ((vararg? p) p)
+          (else
+           (error (string "unsupported keyword argument form in `except` method definition \""
+                          (deparse p) "\"")))))
+  (let loop ((args argl) (newa '()) (fwds '()) (kwfwds #f))
+    (if (null? args)
+        (cons (reverse newa)
+              (if kwfwds
+                  (cons `(parameters ,@kwfwds) (reverse fwds))
+                  (reverse fwds)))
+        (let ((a (car args)))
+          (if (and (pair? a) (eq? (car a) 'parameters))
+              (loop (cdr args) (cons a newa) fwds (map fwd-kw (cdr a)))
+              (let ((na (fwd-name a)))
+                (loop (cdr args) (cons (car na) newa) (cons (cdr na) fwds) kwfwds)))))))
+
+;; wrap the values of ordinary `return`s in an inner except method in
+;; ordinary-state `Except`s, so that the value path is distinguished from
+;; declared exceptions. Does not descend into nested function definitions
+;; or quoted code.
+(define (wrap-except-value-returns e)
+  (cond ((or (atom? e) (quoted? e)) e)
+        ((eq? (car e) 'return)
+         `(return (call (top except_value)
+                        ,(if (and (length> e 1) (not (equal? (cadr e) '(null))))
+                             (wrap-except-value-returns (cadr e))
+                             '(null)))))
+        ((or (function-def? e)
+             (memq (car e) '(macro module toplevel generator flatten)))
+         e)
+        (else (cons (car e) (map wrap-except-value-returns (cdr e))))))
+
+;; split a method definition with a declared exception type `E` into inner,
+;; outer, and except_call methods. `e` is (function sig body) with the
+;; `except` declaration already stripped from the signature.
+(define (expand-except-function-def e E)
+  (let* ((sig  (cadr e))
+         (body (caddr e))
+         (where (if (and (pair? sig) (eq? (car sig) 'where))
+                    (let ((w (flatten-where-expr sig)))
+                      (begin0 (cddr w) (set! sig (cadr w))))
+                    #f))
+         (dcl  (and (pair? sig) (eq? (car sig) '|::|)))
+         (rett (and dcl (caddr sig)))
+         (callsig (if dcl (cadr sig) sig)))
+    (if (not (and (pair? callsig) (eq? (car callsig) 'call)))
+        (error (string "invalid `except` declaration \"" (deparse (cadr e)) "\"")))
+    (let ((fname (cadr callsig)))
+      (if (not (or (symbol? fname)
+                   (and (pair? fname) (memq (car fname) '(|.| globalref)))))
+          (error (string "unsupported function name in `except` method definition \""
+                         (deparse fname) "\"")))
+      (let* ((argl+fwd (except-forwarded-args (cddr callsig)))
+             (argl     (car argl+fwd))
+             (fwds     (cdr argl+fwd))
+             (mangled  (symbol (string "#" (or (undot-name fname) '_) "#except#"
+                                       (string (current-julia-module-counter '())))))
+             (apply-where (lambda (s) (if where `(where ,s ,@where) s)))
+             (lno (let ((b (blockify body)))
+                    (if (and (pair? (cdr b)) (linenum? (cadr b)))
+                        (list (cadr b))
+                        '())))
+             (fwd-call `(call ,mangled ,@fwds))
+             ;; The inner method returns an Except: ordinary returns (and
+             ;; the tail value) are wrapped in the ordinary state;
+             ;; propagation sites return exceptional-state values.
+             (inner-def `(function ,(apply-where `(call ,mangled ,@argl))
+                                   ,(rewrite-except-sites
+                                     `(block ,@lno
+                                             (return (call (top except_value)
+                                                           ,(wrap-except-value-returns
+                                                             (blockify body)))))
+                                     E)))
+             (outer-sig (let ((c `(call ,fname ,@argl)))
+                          (apply-where (if rett `(|::| ,c ,rett) c))))
+             (outer-def `(function ,outer-sig
+                                   (block ,@lno
+                                          (return (call (top unwrap_except) ,fwd-call)))))
+             ;; entry point on the Base.except_call generic function. Like
+             ;; the Core.kwcall entry for keyword arguments, the method is
+             ;; named after the function being defined (so that closure
+             ;; methods are legal in local scopes) but its signature places
+             ;; it in except_call's method table.
+             (ec-def (method-def-expr
+                      (if (symbol? fname) fname #f)
+                      (map analyze-typevar (or where '()))
+                      (fix-arglist
+                       (arglist-unshift
+                        (arglist-unshift argl `(|::| ,(gensy) (call (core TypeEqOf) ,fname)))
+                        `(|::| ,(gensy) (call (core typeof) (top except_call))))
+                       #f)
+                      `(block ,@lno (return ,fwd-call))
+                      '(core Any))))
+        (expand-forms
+         `(block ,inner-def
+                 ,outer-def
+                 ,ec-def
+                 ,(if (symbol? fname) fname '(null))))))))
+
+;; anonymous function with a declared exception type:
+;; (function (except (tuple args...) E) body)
+
+;; --- match statement ---------------------------------------------------------
+;;
+;; A match statement checks its scrutinee against a sequence of `case`
+;; patterns, running the body of the first arm that matches:
+;;
+;;     match x
+;;     case (a, b) if a > b
+;;         a
+;;     case ::Number
+;;         x
+;;     end
+;;
+;; Patterns are compiled to matcher objects checked at runtime through the
+;; `Base.pattern_match` protocol (returning `nothing` on mismatch or a tuple
+;; of captured values), with call patterns constructed through the
+;; extensible `Base.matcher` entry point. Identifiers in argument position
+;; are captures, bound (like `let`) over the arm's guard and body; a bare
+;; identifier at the top level of a pattern is resolved and its value used
+;; as a matcher. A match participates in the default break scope: it
+;; expands into an anonymous `symbolicblock`, with arm results delivered by
+;; valued breaks, so `break` (or `break _ value`) in an arm body exits the
+;; match. Falling through all arms throws `MatchError`. `case except` arms
+;; match the declared-exception channel of the scrutinee call (see the
+;; declared exceptions lowering above). The inline destructuring form
+;; `match pat = val` uses the same pattern compiler with captures assigned
+;; in the enclosing scope.
+
+(define (empty-match-body? b)
+  (and (pair? b) (eq? (car b) 'block)
+       (every linenum? (cdr b))))
+
+(define (flatten-or-pattern pat)
+  (if (and (pair? pat) (eq? (car pat) 'call) (length= pat 4)
+           (eq? (cadr pat) '|\||))
+      (append (flatten-or-pattern (caddr pat)) (flatten-or-pattern (cadddr pat)))
+      (list pat)))
+
+;; compile a match pattern into (cons matcher-expr capture-names), with the
+;; names in binding order. `depth` 0 is the top level of the pattern, where
+;; bare identifiers are resolved as matchers rather than treated as captures.
+(define (compile-match-pattern pat depth)
+  (define (check-dup names news)
+    (for-each (lambda (n)
+                (if (memq n names)
+                    (error (string "duplicate capture name \"" n "\" in match pattern"))))
+              news)
+    (append names news))
+  (define (subpatterns pats depth)
+    ;; returns (cons matcher-exprs capture-names)
+    (let loop ((ps pats) (exprs '()) (names '()))
+      (if (null? ps)
+          (cons (reverse exprs) names)
+          (let ((r (compile-match-pattern (car ps) depth)))
+            (loop (cdr ps) (cons (car r) exprs)
+                  (check-dup names (cdr r)))))))
+  (cond
+   ((eq? pat '_) (cons `(call (top MatchWildcard)) '()))
+   ((symbol? pat)
+    (if (> depth 0)
+        (cons `(call (top MatchCapture)) (list pat))
+        ;; resolved matcher: the identifier's value
+        (cons pat '())))
+   ((atom? pat) (cons pat '()))
+   ((eq? (car pat) '$)
+    (cons `(call (top AsValue) ,(cadr pat)) '()))
+   ((eq? (car pat) '|::|)
+    (cond ((length= pat 2)
+           (cons `(call (top TypeMatcher) ,(cadr pat)) '()))
+          ((eq? (cadr pat) '_)
+           (cons `(call (top TypeMatcher) ,(caddr pat)) '()))
+          ((symbol? (cadr pat))
+           (cons `(call (top CaptureTyped) ,(caddr pat)) (list (cadr pat))))
+          (else
+           (error (string "invalid match pattern \"" (deparse pat) "\"")))))
+   ((eq? (car pat) 'tuple)
+    (if (and (pair? (cdr pat)) (pair? (cadr pat)) (eq? (caadr pat) 'parameters))
+        (begin
+          (if (length> pat 2)
+              (error (string "cannot mix positional and property patterns in \""
+                             (deparse pat) "\"")))
+          ;; property pattern (; a, b::T, c = pat)
+          (let loop ((ps (cdadr pat)) (propnames '()) (subs '()) (names '()))
+            (if (null? ps)
+                (cons `(call (top PropertyMatcher)
+                             (vect ,@(map (lambda (n) `(inert ,n)) (reverse propnames)))
+                             (tuple ,@(reverse subs)))
+                      names)
+                (let ((p (car ps)))
+                  (cond ((symbol? p)
+                         (loop (cdr ps) (cons p propnames)
+                               (cons `(call (top MatchCapture)) subs)
+                               (check-dup names (list p))))
+                        ((and (pair? p) (eq? (car p) '|::|) (length= p 3)
+                              (symbol? (cadr p)))
+                         (loop (cdr ps) (cons (cadr p) propnames)
+                               (cons `(call (top CaptureTyped) ,(caddr p)) subs)
+                               (check-dup names (list (cadr p)))))
+                        ((and (pair? p) (memq (car p) '(kw =)) (length= p 3)
+                              (symbol? (cadr p)))
+                         (let ((r (compile-match-pattern (caddr p) (+ depth 1))))
+                           (loop (cdr ps) (cons (cadr p) propnames)
+                                 (cons (car r) subs)
+                                 (check-dup names (cdr r)))))
+                        (else
+                         (error (string "unsupported property pattern \""
+                                        (deparse p) "\""))))))))
+        (let ((r (subpatterns (cdr pat) (+ depth 1))))
+          (cons `(call (top TupleMatcher) (tuple ,@(car r))) (cdr r)))))
+   ((eq? (car pat) 'vect)
+    (let loop ((ps (cdr pat)) (subs '()) (names '()) (slurp #f))
+      (if (null? ps)
+          (cons `(call (top VectMatcher) (tuple ,@(reverse subs))
+                       ,(if slurp '(true) '(false)))
+                names)
+          (let ((p (car ps)))
+            (if (and (pair? p) (eq? (car p) '...))
+                (begin
+                  (if (not (null? (cdr ps)))
+                      (error "slurp pattern only allowed in final position of a match pattern"))
+                  (let ((r (compile-match-pattern (cadr p) (+ depth 1))))
+                    (loop (cdr ps) (cons (car r) subs)
+                          (check-dup names (cdr r)) #t)))
+                (let ((r (compile-match-pattern p (+ depth 1))))
+                  (loop (cdr ps) (cons (car r) subs)
+                        (check-dup names (cdr r)) slurp)))))))
+   ((eq? (car pat) 'call)
+    (cond ((and (length= pat 4) (eq? (cadr pat) '|\||))
+           ;; alternation: all alternatives must bind the same names
+           (let* ((alts (flatten-or-pattern pat))
+                  (compiled (map (lambda (a) (compile-match-pattern a depth)) alts))
+                  (canonical (cdr (car compiled))))
+             (for-each
+              (lambda (c)
+                (if (not (and (length= (cdr c) (length canonical))
+                              (every (lambda (n) (memq n (cdr c))) canonical)))
+                    (error "all alternatives of `|` in a match pattern must bind the same names")))
+              compiled)
+             (cons `(call (top OrMatcher)
+                          (tuple ,@(map car compiled))
+                          (tuple ,@(map (lambda (c)
+                                          `(tuple ,@(map (lambda (n)
+                                                           (let loop ((ns (cdr c)) (i 1))
+                                                             (if (eq? (car ns) n)
+                                                                 i
+                                                                 (loop (cdr ns) (+ i 1)))))
+                                                         canonical)))
+                                        compiled)))
+                   canonical)))
+          ((and (length= pat 4) (eq? (cadr pat) '=>))
+           (let* ((k (compile-match-pattern (caddr pat) (+ depth 1)))
+                  (v (compile-match-pattern (cadddr pat) (+ depth 1))))
+             (cons `(call (top PairMatcher) ,(car k) ,(car v))
+                   (check-dup (cdr k) (cdr v)))))
+          ((has-parameters? (cddr pat))
+           (error (string "keyword arguments are not supported in match call patterns \""
+                          (deparse pat) "\"")))
+          (else
+           ;; call pattern f(patterns...); a `rest...` subpattern compiles
+           ;; to a MatchSlurp marker for the matcher protocol
+           (let loop ((ps (cddr pat)) (exprs '()) (names '()) (slurped #f))
+             (if (null? ps)
+                 (cons `(call (top matcher) ,(cadr pat) ,@(reverse exprs))
+                       names)
+                 (let ((p (car ps)))
+                   (if (and (pair? p) (eq? (car p) '...) (length= p 2))
+                       (begin
+                         (if slurped
+                             (error (string "only one slurp pattern is allowed in a match call pattern \""
+                                            (deparse pat) "\"")))
+                         (let ((r (compile-match-pattern (cadr p) (+ depth 1))))
+                           (loop (cdr ps)
+                                 (cons `(call (top MatchSlurp) ,(car r)) exprs)
+                                 (check-dup names (cdr r)) #t)))
+                       (let ((r (compile-match-pattern p (+ depth 1))))
+                         (loop (cdr ps) (cons (car r) exprs)
+                               (check-dup names (cdr r)) slurped)))))))))
+   ((memq (car pat) '(question except))
+    (error "`?` and `except` are not allowed inside match patterns"))
+   (else
+    ;; any other expression (macro calls like r"...", dotted names, curly
+    ;; types, quoted exprs, ...) is evaluated and resolved as a matcher
+    (cons pat '()))))
+
+;; code for one `case` arm: on match, deliver the arm's result by a valued
+;; break out of the match's anonymous symbolicblock; otherwise fall through
+(define (compile-match-arm arm subject (wrap-result #f))
+  (let* ((patguard (cadr arm))
+         (body (caddr arm))
+         (guard (and (pair? patguard) (eq? (car patguard) 'guard)
+                     (caddr patguard)))
+         (pat (if guard (cadr patguard) patguard))
+         (m+n (compile-match-pattern pat 0))
+         (caps (make-ssavalue))
+         (armres (make-ssavalue))
+         (resultex (if (empty-match-body? body) subject body))
+         ;; in leftover mode the match evaluates to an Except, so arm
+         ;; results are wrapped in the ordinary state
+         (resultex (if wrap-result `(call (top except_value) ,resultex) resultex))
+         (success `(block (= ,armres ,resultex) (break _ ,armres)))
+         (bindings (let loop ((ns (cdr m+n)) (i 1) (out '()))
+                     (if (null? ns)
+                         (reverse out)
+                         (loop (cdr ns) (+ i 1)
+                               (cons `(= ,(car ns) (call (core getfield) ,caps ,i))
+                                     out))))))
+    `(block (= ,caps (call (top pattern_match) ,(car m+n) ,subject))
+            (if (call (core ===) ,caps (core nothing))
+                (null)
+                ,(let ((inner (if guard `(if ,guard ,success) success)))
+                   (if (null? bindings)
+                       inner
+                       ;; captures are scoped to the arm, like `let`
+                       `(let (block ,@bindings) ,inner)))))))
+
+;; Expand a match statement. With `leftover-pass`, unmatched declared
+;; exceptions of the scrutinee become the value of the match (to be checked
+;; at the enclosing `?`/`except` propagation site) rather than being thrown.
+(define (expand-match e (leftover-pass #f))
+  (let* ((scrut0 (cadr e))
+         (asname (and (pair? scrut0) (eq? (car scrut0) 'as) (caddr scrut0)))
+         (scrut  (if asname (cadr scrut0) scrut0))
+         (arms   (cddr e)))
+    (if (null? arms)
+        (error "`match` requires at least one `case` arm"))
+    (for-each (lambda (a)
+                (if (not (and (pair? a) (memq (car a) '(case case_except))
+                              (length= a 3)))
+                    (error "malformed `case` arm in `match`")))
+              arms)
+    (define (dispatch armlist subject fallthrough)
+      `(block ,@(map (lambda (a) (compile-match-arm a subject leftover-pass))
+                     armlist)
+              ,fallthrough))
+    (let* ((value-arms  (filter (lambda (a) (eq? (car a) 'case)) arms))
+           (except-arms (filter (lambda (a) (eq? (car a) 'case_except)) arms))
+           (resvar (make-ssavalue))
+           (core
+            (if (null? except-arms)
+                (let ((sv (make-ssavalue)))
+                  `(block (= ,sv ,scrut)
+                          ,@(if asname `((= ,asname ,sv)) '())
+                          ,(dispatch value-arms sv
+                             `(call (core throw) (call (top MatchError) ,sv)))))
+                (begin
+                  (if (and (pair? scrut) (memq (car scrut) '(question except)))
+                      (error "cannot combine a `?`/`except`-propagated scrutinee with `case except` arms"))
+                  (if (not (and (pair? scrut) (eq? (car scrut) 'call)))
+                      (error "`case except` requires the match scrutinee to be a function call"))
+                  (let* ((raw (make-ssavalue))
+                         (payload (make-ssavalue))
+                         (rawval (make-ssavalue))
+                         (scrutf (cadr scrut))
+                         (fargs (cddr scrut))
+                         (params (and (pair? fargs) (pair? (car fargs))
+                                      (eq? (caar fargs) 'parameters)
+                                      (car fargs)))
+                         (rest (if params (cdr fargs) fargs))
+                         (rawcall `(call (top except_call)
+                                         ,@(if params (list params) '())
+                                         ,scrutf ,@rest)))
+                    `(block
+                      (= ,raw ,rawcall)
+                      (if (call (top except_iserr) ,raw)
+                          (block (= ,payload (call (top except_exception) ,raw))
+                                 ,@(if asname `((= ,asname ,payload)) '())
+                                 ,(dispatch except-arms payload
+                                    (if leftover-pass
+                                        `(call (top except_error) ,payload)
+                                        `(call (core throw) ,payload))))
+                          (block (= ,rawval (call (top except_result) ,raw))
+                                 ,@(if asname `((= ,asname ,rawval)) '())
+                                 ,(if (null? value-arms)
+                                      ;; only except arms: non-exceptional
+                                      ;; values pass through (still wrapped
+                                      ;; in leftover mode)
+                                      (if leftover-pass
+                                          `(call (top except_value) ,rawval)
+                                          rawval)
+                                      (dispatch value-arms rawval
+                                        `(call (core throw) (call (top MatchError) ,rawval))))))))))))
+      ;; Assigning the block to a temporary keeps it in value position even
+      ;; when the match appears as a statement. The `as` binding is scoped
+      ;; over the match like `let`.
+      `(block (= ,resvar (symbolicblock loop-exit
+                          ,(if asname `(let (block ,asname) ,core) core)))
+              ,resvar))))
+
+;; Inline match-destructuring `match pat = val`: uses the same pattern
+;; compiler, with captures assigned in the enclosing scope (like
+;; destructuring assignment); a mismatch throws MatchError.
+(define (expand-match-assign e)
+  (let* ((pat (cadr e))
+         (rhs (caddr e))
+         (m+n (compile-match-pattern pat 1))
+         (v (make-ssavalue))
+         (caps (make-ssavalue)))
+    `(block (= ,v ,rhs)
+            (= ,caps (call (top pattern_match) ,(car m+n) ,v))
+            (if (call (core ===) ,caps (core nothing))
+                (call (core throw) (call (top MatchError) ,v))
+                (null))
+            ,@(let loop ((ns (cdr m+n)) (i 1) (out '()))
+                (if (null? ns)
+                    (reverse out)
+                    (loop (cdr ns) (+ i 1)
+                          (cons `(= ,(car ns) (call (core getfield) ,caps ,i))
+                                out))))
+            ,v)))
+
+;; rewrite declared-exception propagation sites in the scrutinee, guards and
+;; arm bodies of a match, but not in patterns
+(define (rewrite-match-parts e E)
+  (let* ((scrut0 (cadr e))
+         (scrut  (if (and (pair? scrut0) (eq? (car scrut0) 'as))
+                     `(as ,(rewrite-except-sites (cadr scrut0) E) ,(caddr scrut0))
+                     (rewrite-except-sites scrut0 E))))
+    `(match ,scrut
+            ,@(map (lambda (a)
+                     (let* ((pg (cadr a))
+                            (body (caddr a))
+                            (pg2 (if (and (pair? pg) (eq? (car pg) 'guard))
+                                     `(guard ,(cadr pg)
+                                             ,(rewrite-except-sites (caddr pg) E))
+                                     pg)))
+                       (list (car a) pg2 (rewrite-except-sites body E))))
+                   (cddr e)))))
+
+(define (expand-anon-except-def e)
+  (let* ((argl-ex (cadr (cadr e)))
+         (E       (caddr (cadr e)))
+         (body    (caddr e))
+         (argl (if (pair? argl-ex)
+                   (tuple-to-arglist (filter (lambda (x) (not (linenum? x))) argl-ex))
+                   (list argl-ex)))
+         (name (symbol (string "#" (current-julia-module-counter '())))))
+    (expand-forms
+     `(block (local ,name)
+             (function (except (call ,name ,@argl) ,E) ,body)))))
+
 (define (expand-function-def e)   ;; handle function definitions
-  (if (just-arglist? (cadr e))
-      (expand-forms (cons '-> (cdr e)))
-      (expand-function-def- e)))
+  (cond ((just-arglist? (cadr e))
+         (expand-forms (cons '-> (cdr e))))
+        ((except-decl? (cadr e))
+         ;; function f(x) except E ... end
+         (if (just-arglist? (cadr (cadr e)))
+             (expand-anon-except-def e)
+             (expand-except-function-def `(,(car e) ,(cadr (cadr e)) ,(caddr e))
+                                         (caddr (cadr e)))))
+        ((and (length= e 3) (has-except-site? (caddr e)))
+         ;; no declaration, but the body has propagation sites: infer
+         ;; `except Any`
+         (expand-except-function-def e '(core Any)))
+        (else (expand-function-def- e))))
 
 ;; convert (where (where x S) T) to (where x T S)
 (define (flatten-where-expr e)
@@ -2697,6 +3374,21 @@
    'typegroup      expand-typegroup-def
    'try            expand-try
 
+   'match
+   (lambda (e) (expand-forms (expand-match e)))
+   'match_assign
+   (lambda (e) (expand-forms (expand-match-assign e)))
+
+   ;; declared-exception propagation sites outside of any declaration (at
+   ;; top level, or in lazy generators): declared exceptions are thrown
+   'question
+   (lambda (e) (expand-forms (expand-question-site (cadr e) #f #f)))
+   'except
+   (lambda (e)
+     (if (length= e 3)
+         (expand-forms (expand-question-site (cadr e) #f #f))
+         (error "malformed \"except\" expression")))
+
    'lambda
    (lambda (e)
      `(lambda ,(map expand-forms (cadr e))
@@ -3103,7 +3795,13 @@
    (lambda (e)
      (check-no-return e)
      (check-no-thisfunction e)
-     (expand-generator e #f '()))
+     ;; propagation sites in lazy generators are outside any declaration:
+     ;; rewrite them to throw before the body is moved into a closure
+     (let ((e (if (any has-except-site? (cdr e))
+                  (cons 'generator (map (lambda (x) (rewrite-except-sites x #f))
+                                        (cdr e)))
+                  e)))
+       (expand-generator e #f '())))
 
    'flatten
    (lambda (e) (expand-generator (cadr e) #t '()))
@@ -3116,21 +3814,28 @@
          (begin (if (and (eq? (caadr e) 'generator)
                          (any (lambda (x) (eq? x ':)) (cddr (cadr e))))
                     (error "comprehension syntax with `:` ranges has been removed"))
-                (expand-forms `(call (top collect) ,(cadr e))))))
+                (if (has-except-site? e)
+                    ;; comprehension at top level (outside any declaration):
+                    ;; still collect through except_collect, throwing any
+                    ;; declared exception that surfaces
+                    (expand-forms (rewrite-except-comprehension e #f))
+                    (expand-forms `(call (top collect) ,(cadr e)))))))
 
    'typed_comprehension
    (lambda (e)
-     (expand-forms
-      (or (and (eq? (caaddr e) 'generator)
-               (let ((ranges (cddr (caddr e))))
-                 (if (any (lambda (x) (eq? x ':)) ranges)
-                     (error "comprehension syntax with `:` ranges has been removed"))
-                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)))
-                             ranges)
-                      ;; TODO: this is a hack to lower simple comprehensions to loops very
-                      ;; early, to greatly reduce the # of functions and load on the compiler
-                      (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
-          `(call (top collect) ,(cadr e) ,(caddr e)))))
+     (if (has-except-site? e)
+         (expand-forms (rewrite-except-comprehension e #f))
+         (expand-forms
+          (or (and (eq? (caaddr e) 'generator)
+                   (let ((ranges (cddr (caddr e))))
+                     (if (any (lambda (x) (eq? x ':)) ranges)
+                         (error "comprehension syntax with `:` ranges has been removed"))
+                     (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)))
+                                 ranges)
+                          ;; TODO: this is a hack to lower simple comprehensions to loops very
+                          ;; early, to greatly reduce the # of functions and load on the compiler
+                          (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
+              `(call (top collect) ,(cadr e) ,(caddr e))))))
 
     'gc_preserve
     (lambda (e)
@@ -3969,16 +4674,21 @@ f(x) = yt(x)
    ex))
 
 ;; replace leading (function) argument type with `typ`
-(define (fix-function-arg-type te typ iskw namemap type-sp)
+(define (fix-function-arg-type te typ funcarg-pos namemap type-sp)
   (let* ((typapp (caddr te))
          (types  (rename-sig-types (cddr typapp) namemap))
          (closure-type (if (null? type-sp)
                            typ
                            `(call (core apply_type) ,typ ,@type-sp)))
+         ;; position of the function's own type in the signature: 3 for
+         ;; Core.kwcall methods, 2 for Base.except_call methods, 1 otherwise
          (newtypes
-          (if iskw
-              `(,(car types) ,(cadr types) ,closure-type ,@(cdddr types))
-              `(,closure-type ,@(cdr types))))
+          (cond ((= funcarg-pos 3)
+                 `(,(car types) ,(cadr types) ,closure-type ,@(cdddr types)))
+                ((= funcarg-pos 2)
+                 `(,(car types) ,closure-type ,@(cddr types)))
+                (else
+                 `(,closure-type ,@(cdr types)))))
          (loc (caddddr te)))
     `(call (core svec)
            (call (core svec) ,@newtypes)
@@ -4551,20 +5261,21 @@ f(x) = yt(x)
                            (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function))))
                         (mk-method ;; expression to make the method
                          (if short '()
-                             (let* ((iskw ;; TODO jb/functions need more robust version of this
-                                     (contains (lambda (x) (eq? x 'kwftype)) sig))
+                             (let* ((funcarg-pos ;; TODO jb/functions need more robust version of this
+                                     (cond ((contains (lambda (x) (eq? x 'kwftype)) sig) 3)
+                                           ((contains (lambda (x) (eq? x 'except_call)) sig) 2)
+                                           (else 1)))
                                     (renamemap (map cons closure-param-names closure-param-syms))
                                     (arg-defs (replace-vars
-                                               (fix-function-arg-type sig `(globalref (thismodule) ,type-name) iskw namemap closure-param-syms)
+                                               (fix-function-arg-type sig `(globalref (thismodule) ,type-name) funcarg-pos namemap closure-param-syms)
                                                renamemap)))
                                (append (map (lambda (gs tvar)
                                               (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
                                             closure-param-syms closure-param-names)
                                        `((method #f ,(cl-convert arg-defs fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)
                                                  ,(convert-lambda lam2
-                                                                  (if iskw
-                                                                      (caddr (lam:args lam2))
-                                                                      (car (lam:args lam2)))
+                                                                  (list-ref (lam:args lam2)
+                                                                            (- funcarg-pos 1))
                                                                   #f closure-param-names #f toplevel-pure parsed-method-stack)))))))
                         (mk-closure  ;; expression to make the closure
                          (let* ((var-exprs (map (lambda (v)

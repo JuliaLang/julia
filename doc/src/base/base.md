@@ -69,8 +69,12 @@ Finally:
 `in` and `isa` are parsed as infix operators;
 `public` is parsed as a keyword when beginning a toplevel statement;
 `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop;
-and `as` is used as a keyword to rename an identifier brought into scope by `import` or `using`.
-Creation of variables named `where`, `in`, `isa`, `outer` and `as` is allowed, though.
+`as` is used as a keyword to rename an identifier brought into scope by `import` or `using`;
+`match` is parsed as a keyword when it begins a `match` statement, with `case` parsed as a keyword
+at the start of each arm inside it;
+and `except` is parsed as a keyword for declared exceptions, both on method signatures and as an
+infix callsite filter.
+Creation of variables named `where`, `in`, `isa`, `outer`, `as`, `match`, `case` and `except` is allowed, though.
 
 ```@docs
 module
@@ -322,6 +326,12 @@ Base.@gensym
 var"name"
 Base.@goto
 Base.@label
+Base.matcher
+Base.pattern_match
+Base.MatchSlurp
+Base.Except
+Base.except_call
+Base.unwrap_except
 Base.@simd
 Base.@polly
 Base.@generated
@@ -445,6 +455,7 @@ Core.FieldError
 Core.InexactError
 Core.InterruptException
 Base.KeyError
+Base.MatchError
 Base.LoadError
 Base.MethodError
 Base.MissingException

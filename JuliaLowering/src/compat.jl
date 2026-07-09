@@ -205,12 +205,12 @@ function _dst_separate_dotop(st::SyntaxTree)
 end
 
 function _dst_eq_to_in(st::SyntaxTree)
-    return @stm st begin
-        [K"filter" cond is...] ->
-            @ast st._graph st [K"filter" est_to_dst(cond)
-                       [K"iteration" mapsyntax(_dst_eq_to_in, is)...]]
-        [K"=" l r] ->
-            @ast st._graph st [K"in" est_to_dst(l) est_to_dst(r)]
+    return match st
+    case K"filter"(cond, is...)
+        @ast st._graph st [K"filter" est_to_dst(cond)
+                   [K"iteration" mapsyntax(_dst_eq_to_in, is)...]]
+    case K"="(l, r)
+        @ast st._graph st [K"in" est_to_dst(l) est_to_dst(r)]
     end
 end
 
@@ -236,17 +236,19 @@ function _dst_sink_parameters(sl::SyntaxList)
 end
 
 function _dst_importpath(st::SyntaxTree)
-    return @stm st begin
-        [K"as" p name] ->
-            @ast st._graph st [K"as" _dst_importpath(st[1]) est_to_dst(name)]
-        [K"." xs...] ->
-            @ast st._graph st [K"importpath" mapsyntax(est_to_dst, xs)...]
+    return match st
+    case K"as"(p, name)
+        @ast st._graph st [K"as" _dst_importpath(st[1]) est_to_dst(name)]
+    case K"."(xs...)
+        @ast st._graph st [K"importpath" mapsyntax(est_to_dst, xs)...]
     end
 end
 
-_dst_eq_to_kw(st::SyntaxTree) = @stm st begin
-    [K"=" l r] -> @ast st._graph st [K"kw" l r]
-    x -> x
+_dst_eq_to_kw(st::SyntaxTree) = match st
+    case K"="(l, r)
+        @ast st._graph st [K"kw" l r]
+    case _
+        st
 end
 
 # flisp: tuple-to-arglist.  Fix parsing mistakes where anon function arglist is
@@ -260,22 +262,31 @@ end
 # (a=1;b=1)->1
 function _dst_fix_arglist(st::SyntaxTree)
     g = st._graph
-    @stm st begin
-        [K"::" [K"call" _...] _] -> st
-        [K"call" _...] -> st
-        [K"tuple" xs...] -> let fixed = mapsyntax(_dst_eq_to_kw, xs)
-            fixed == xs ? st : @ast g st [K"tuple" fixed...]
-        end
-        [K"where" x tvs...] -> let fixed = _dst_fix_arglist(x)
-            fixed == x ? st : @ast g st [K"where" fixed tvs...]
-        end
-        [K"block" x1 x2] ->
-            @ast g st [K"tuple" _dst_eq_to_kw(x1)
-                       [K"parameters" _dst_eq_to_kw(x2)]]
-        [K"block" x] -> @ast g st [K"tuple" _dst_eq_to_kw(x)]
-        [K"block"] -> @ast g st [K"tuple"]
-        [K"block" _...] -> @jl_assert false st
-        x -> @ast g st [K"tuple" _dst_eq_to_kw(x)]
+    match st
+    case K"::"(K"call"(_...), _)
+        st
+    case K"call"(_...)
+        st
+    case K"tuple"(xs...)
+        fixed = mapsyntax(_dst_eq_to_kw, xs)
+        fixed == xs ? st : @ast g st [K"tuple" fixed...]
+    case K"where"(x, tvs...)
+        fixed = _dst_fix_arglist(x)
+        fixed == x ? st : @ast g st [K"where" fixed tvs...]
+    case K"except"(x, E)
+        fixed = _dst_fix_arglist(x)
+        fixed == x ? st : @ast g st [K"except" fixed E]
+    case K"block"(x1, x2)
+        @ast g st [K"tuple" _dst_eq_to_kw(x1)
+                   [K"parameters" _dst_eq_to_kw(x2)]]
+    case K"block"(x)
+        @ast g st [K"tuple" _dst_eq_to_kw(x)]
+    case K"block"()
+        @ast g st [K"tuple"]
+    case K"block"(_...)
+        @jl_assert false st
+    case _
+        @ast g st [K"tuple" _dst_eq_to_kw(st)]
     end
 end
 
@@ -303,26 +314,35 @@ function _est_to_dst_ident(st::SyntaxTree)
     end
 end
 
-has_if_generated(st::SyntaxTree) = @stm st begin
-    (_, when=is_leaf(st)||is_quoted(st)) -> false
-    [K"function" _...] -> false
-    ([K"=" call _], when=is_eventually_call(call)) -> false
-    [K"->" _...] -> false
-    [K"if" [K"generated"] _ _] -> true
-    _ -> any(has_if_generated, children(st))
+has_if_generated(st::SyntaxTree) = match st
+    case _ if is_leaf(st)||is_quoted(st)
+        false
+    case K"function"(_...)
+        false
+    case K"="(call, _) if is_eventually_call(call)
+        false
+    case K"->"(_...)
+        false
+    case K"if"(K"generated"(), _, _)
+        true
+    case _
+        any(has_if_generated, children(st))
 end
 
 # The (if (generated) gen nongen) form is troublesome because everything
 # surrounding it is implicitly quoted (with `gen` interpolated into it), so
 # converting the function's AST before proper quoting is incorrect.
-split_generated(st::SyntaxTree, gen_part) = @stm st begin
-    (_, when=is_leaf(st)||is_quoted(st)) -> st
-    [K"if" [K"generated"] gen nongen] -> if gen_part
-        @ast(st._graph, st, [K"$" gen])
-    else
-        nongen
-    end
-    _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
+split_generated(st::SyntaxTree, gen_part) = match st
+    case _ if is_leaf(st)||is_quoted(st)
+        st
+    case K"if"(K"generated"(), gen, nongen)
+        if gen_part
+            @ast(st._graph, st, [K"$" gen])
+        else
+            nongen
+        end
+    case _
+        mapchildren(x->split_generated(x, gen_part), st._graph, st)
 end
 
 # Set [no]specialize on a function parameter's identifier.  `meta` is a symbol
@@ -364,37 +384,42 @@ end
 
 function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
     g = st._graph
-    @stm st begin
-        [K"where" x tvs...] -> let fixed = apply_arglist_meta(x, meta)
-            fixed == x ? st : @ast g st [K"where" fixed tvs...]
-        end
-        [K"::" x t] ->  let fixed = apply_arglist_meta(x, meta)
-            fixed == x ? st : @ast g st [K"::" fixed t]
-        end
-        [K"call" f args...] -> mapchildren(x->
+    match st
+    case K"where"(x, tvs...)
+        fixed = apply_arglist_meta(x, meta)
+        fixed == x ? st : @ast g st [K"where" fixed tvs...]
+    case K"except"(x, E)
+        fixed = apply_arglist_meta(x, meta)
+        fixed == x ? st : @ast g st [K"except" fixed E]
+    case K"::"(x, t)
+        fixed = apply_arglist_meta(x, meta)
+        fixed == x ? st : @ast g st [K"::" fixed t]
+    case K"call"(f, args...)
+        mapchildren(x->
             x == f ? strip_arg_meta(f) : apply_arg_meta(x, meta), st._graph, st)
-        [K"tuple" _...] -> mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
+    case K"tuple"(_...)
+        mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
     end
 end
 
 # nothing if not found, or symbol if 0-arg [no]specialize, or dict arg->meta
 function collect_body_arg_meta(st)
     out = nothing
-    for c in children(st)
+    @label body_meta for c in children(st)
         k = kind(c)
-        @stm c begin
-            [K"meta" [K"Identifier"] idents...] -> begin
-                meta = Symbol(c[1].name_val::String)
-                meta in (:specialize, :nospecialize) || continue
-                length(idents) == 0 && return meta
-                isnothing(out) && (out = Dict{String, Symbol}())
-                for id in idents
-                    kind(id) === K"Identifier" && (out[id.name_val] = meta)
-                end
+        match c
+        case K"meta"(K"Identifier"(), idents...)
+            meta = Symbol(c[1].name_val::String)
+            meta in (:specialize, :nospecialize) || continue body_meta
+            length(idents) == 0 && return meta
+            isnothing(out) && (out = Dict{String, Symbol}())
+            for id in idents
+                kind(id) === K"Identifier" && (out[id.name_val] = meta)
             end
-            # Only leading meta statements are recognized in lowering.  Ideally
-            # meta after non-meta statements would be an error.
-            _ -> break
+        # Only leading meta statements are recognized in lowering.  Ideally
+        # meta after non-meta statements would be an error.
+        case _
+            break body_meta
         end
     end
     out
@@ -420,224 +445,234 @@ function est_to_dst(st::SyntaxTree)
     g = ensure_macro_attributes!(st._graph)
     rec = var"#self#"
 
-    return @stm st begin
-        [K"Identifier"] -> _est_to_dst_ident(st)
-        [K"Value"] -> st.value === nothing ? newleaf(g, st, K"nothing") : st
-        (_, when=is_leaf(st)) -> st
-        ([K"unknown_head" l r],
-         when=(s=st.name_val; Base.isoperator(s))) -> let
-             (op_s, out_k) = s[1] === '.' ?
-                 (s[nextind(s,1):prevind(s,end)], K".op=") :
-                 (s[1:prevind(s,end)], K"op=")
+    return match st
+    case K"Identifier"()
+        _est_to_dst_ident(st)
+    case K"Value"()
+        st.value === nothing ? newleaf(g, st, K"nothing") : st
+    case _ if is_leaf(st)
+        st
+    case K"unknown_head"(l, r) if (s=st.name_val; Base.isoperator(s))
+        (op_s, out_k) = s[1] === '.' ?
+            (s[nextind(s,1):prevind(s,end)], K".op=") :
+            (s[1:prevind(s,end)], K"op=")
 
-             op_leaf = newleaf(g, st, K"Identifier")
-             setattr!(op_leaf, :name_val, op_s)
-             setattr!(op_leaf, :scope_layer, st.scope_layer)
-             @ast g st [out_k rec(l) op_leaf rec(r)]
-         end
-        [K"comparison" cs0...] -> let cs = copy(cs0)
-            for (i, c) in enumerate(cs)
-                cs[i] = iseven(i) ? _dst_separate_dotop(cs[i]) : rec(cs[i])
-            end
-            mknode(st, cs)
+        op_leaf = newleaf(g, st, K"Identifier")
+        setattr!(op_leaf, :name_val, op_s)
+        setattr!(op_leaf, :scope_layer, st.scope_layer)
+        @ast g st [out_k rec(l) op_leaf rec(r)]
+    case K"comparison"(cs0...)
+        cs = copy(cs0)
+        for (i, c) in enumerate(cs)
+            cs[i] = iseven(i) ? _dst_separate_dotop(cs[i]) : rec(cs[i])
         end
-        [K"'" x] ->
-            @ast g st [K"call" "'"::K"Identifier"(scope_layer=st.scope_layer) rec(x)]
-        [K"." f [K"tuple" args...]] -> _expand_literal_pow(
+        mknode(st, cs)
+    case K"'"(x)
+        @ast g st [K"call" "'"::K"Identifier"(scope_layer=st.scope_layer) rec(x)]
+    case K"."(f, K"tuple"(args...))
+        _expand_literal_pow(
             @ast g st [K"dotcall" rec(f) _dst_sink_parameters(args)...])
-        ([K"inert" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
-            @ast g st st[1]=>K"Symbol"
-        ([K"inert_syntaxtree" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
-            @ast g st st[1]=>K"Symbol"
-        [K"inert" _] -> st
-        [K"inert_syntaxtree" _] -> st
-        [K"module" _...] -> st
-        [K"toplevel" _...] -> st
-        [K"for" [K"=" _ _] body] ->
-            @ast g st [K"for" [K"iteration"(st[1]) _dst_eq_to_in(st[1])] rec(body)]
-        [K"for" [K"block" iters...] body] ->
-            @ast g st [K"for"
-                [K"iteration"(st[1]) mapsyntax(_dst_eq_to_in, iters)...]
-                rec(body)
-            ]
-        (_, when=(k = kind(st); k in KSet"tuple vect braces")) ->
-            @ast g st [k _dst_sink_parameters(children(st))...]
-        (_, when=(k = kind(st); k in KSet"curly ref")) ->
-            @ast g st [k _dst_separate_dotop(st[1])
-                       _dst_sink_parameters(children(st)[2:end])...]
-        # tuple arg should not be converted or desugared
-        [K"foreigncall" [K"tuple" _...] args...] ->
-            @ast g st [K"foreigncall" [K"foreignsymbol" st[1]] args...]
-        [K"foreignglobal" [K"tuple" _...]] ->
-            @ast g st [K"foreignglobal" [K"foreignsymbol" st[1]]]
-        ([K"call" [K"Identifier"] sym args...],
-         when=(st[1].name_val::String === "ccall" ||
-               st[1].name_val::String === "cglobal")) -> if kind(sym) === K"tuple"
-             @ast g st [K"call" st[1] [K"foreignsymbol" st[2]] mapsyntax(rec, args)...]
-         else
-             @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
-         end
-        [K"call" f args...] -> let
-            out_k, out_f = @stm _dst_separate_dotop(f) begin
-                [K"." op] -> (K"dotcall", op)
-                f_sep -> (K"call", f_sep)
-            end
-            out = @ast g st [out_k
-                out_f _dst_sink_parameters(children(st)[2:end])...
-            ]
-            _expand_literal_pow(out)
+    case K"inert"(K"Identifier"()) if !hasattr(st[1], :mod)
+        @ast g st st[1]=>K"Symbol"
+    case K"inert_syntaxtree"(K"Identifier"()) if !hasattr(st[1], :mod)
+        @ast g st st[1]=>K"Symbol"
+    case K"inert"(_)
+        st
+    case K"inert_syntaxtree"(_)
+        st
+    case K"module"(_...)
+        st
+    case K"toplevel"(_...)
+        st
+    case K"for"(K"="(_, _), body)
+        @ast g st [K"for" [K"iteration"(st[1]) _dst_eq_to_in(st[1])] rec(body)]
+    case K"for"(K"block"(iters...), body)
+        @ast g st [K"for"
+            [K"iteration"(st[1]) mapsyntax(_dst_eq_to_in, iters)...]
+            rec(body)
+        ]
+    case _ if (k = kind(st); k in KSet"tuple vect braces")
+        @ast g st [k _dst_sink_parameters(children(st))...]
+    case _ if (k = kind(st); k in KSet"curly ref")
+        @ast g st [k _dst_separate_dotop(st[1])
+                   _dst_sink_parameters(children(st)[2:end])...]
+    # tuple arg should not be converted or desugared
+    case K"foreigncall"(K"tuple"(_...), args...)
+        @ast g st [K"foreigncall" [K"foreignsymbol" st[1]] args...]
+    case K"foreignglobal"(K"tuple"(_...))
+        @ast g st [K"foreignglobal" [K"foreignsymbol" st[1]]]
+    case K"call"(K"Identifier"(), sym, args...) if (st[1].name_val::String === "ccall" ||
+                                                    st[1].name_val::String === "cglobal")
+        if kind(sym) === K"tuple"
+            @ast g st [K"call" st[1] [K"foreignsymbol" st[2]] mapsyntax(rec, args)...]
+        else
+            @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
         end
-        [K"try" tryb cvar catchb rest...] -> let
-            has_catch = !(_is_false(cvar) && _is_false(catchb))
-            cvar_out = _is_false(cvar) ?
-                newleaf(g, cvar, K"Placeholder") : rec(cvar)
-            has_finally = length(rest) >= 1 && !_is_false(rest[1])
-            has_else = length(rest) === 2
-            @ast g st [K"try" rec(tryb)
-                has_catch ? [K"catch"(catchb) cvar_out rec(catchb)] : nothing
-                has_else ? [K"else"(rest[2]) rec(rest[2])] : nothing
-                has_finally ? [K"finally"(rest[1]) rec(rest[1])] : nothing
-            ]
+    case K"call"(f, args...)
+        out_k, out_f = match _dst_separate_dotop(f) as f_sep
+        case K"."(op)
+            (K"dotcall", op)
+        case _
+            (K"call", f_sep)
         end
-        [K"flatten" _] -> let
-            out_iters = SyntaxList(g)
-            next = st
-            while kind(next) === K"flatten"
-                push!(out_iters, _dst_iterspec(next, next[1][2:end]))
-                next = next[1][1]
-            end
-            @jl_assert kind(next) === K"generator" st next
-            push!(out_iters, _dst_iterspec(next, next[2:end]))
-            @ast g st [K"generator" rec(next[1]) out_iters...]
+        out = @ast g st [out_k
+            out_f _dst_sink_parameters(children(st)[2:end])...
+        ]
+        _expand_literal_pow(out)
+    case K"try"(tryb, cvar, catchb, rest...)
+        has_catch = !(_is_false(cvar) && _is_false(catchb))
+        cvar_out = _is_false(cvar) ?
+            newleaf(g, cvar, K"Placeholder") : rec(cvar)
+        has_finally = length(rest) >= 1 && !_is_false(rest[1])
+        has_else = length(rest) === 2
+        @ast g st [K"try" rec(tryb)
+            has_catch ? [K"catch"(catchb) cvar_out rec(catchb)] : nothing
+            has_else ? [K"else"(rest[2]) rec(rest[2])] : nothing
+            has_finally ? [K"finally"(rest[1]) rec(rest[1])] : nothing
+        ]
+    case K"flatten"(_)
+        out_iters = SyntaxList(g)
+        next = st
+        while kind(next) === K"flatten"
+            push!(out_iters, _dst_iterspec(next, next[1][2:end]))
+            next = next[1][1]
         end
-        [K"comprehension" _ _ _...] -> let
-            arg = rec(@ast g st [K"generator" children(st)...])
-            @ast g st [K"comprehension" arg]
+        @jl_assert kind(next) === K"generator" st next
+        push!(out_iters, _dst_iterspec(next, next[2:end]))
+        @ast g st [K"generator" rec(next[1]) out_iters...]
+    case K"comprehension"(_, _, _...)
+        arg = rec(@ast g st [K"generator" children(st)...])
+        @ast g st [K"comprehension" arg]
+    case K"generator"(body, iters...)
+        @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
+    case K"="(l, r) if is_eventually_call(l)
+        # no fix_arglist needed, since this func can't be anonymous
+        l = apply_arglist_meta(l, collect_body_arg_meta(r))
+        if has_if_generated(r)
+            gen, nongen = split_generated(r, true), split_generated(r, false)
+            r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
+        else
+            r2 = rec(r)
         end
-        [K"generator" body iters...] ->
-            @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
-        ([K"=" l r], when=(is_eventually_call(l))) -> let
-            # no fix_arglist needed, since this func can't be anonymous
-            l = apply_arglist_meta(l, collect_body_arg_meta(r))
-            if has_if_generated(r)
-                gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
-            else
-                r2 = rec(r)
-            end
-            @ast g st [K"function" rec(l) r2]
+        @ast g st [K"function" rec(l) r2]
+    case K"function"(l, r)
+        l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
+        if has_if_generated(r)
+            gen, nongen = split_generated(r, true), split_generated(r, false)
+            r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
+        else
+            r2 = rec(r)
         end
-        [K"function" l r] -> let
-            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
-            if has_if_generated(r)
-                gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
-            else
-                r2 = rec(r)
-            end
-            @ast g st [K"function" rec(l) r2]
+        @ast g st [K"function" rec(l) r2]
+    case K"->"(l, r)
+        l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
+        if has_if_generated(r)
+            gen, nongen = split_generated(r, true), split_generated(r, false)
+            r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
+        else
+            r2 = rec(r)
         end
-        [K"->" l r] -> let
-            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
-            if has_if_generated(r)
-                gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
-            else
-                r2 = rec(r)
-            end
-            @ast g st [K"->" rec(l) r2]
+        @ast g st [K"->" rec(l) r2]
+    case K"macro"(l, r)
+        l = apply_arglist_meta(l, collect_body_arg_meta(r))
+        @ast g st [K"macro" rec(l) rec(r)]
+    case K"do"(K"call"(f, args...), lam)
+        @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]
+    case K"let"(binds, body) if kind(binds) !== K"block"
+        @ast g st [K"let" [K"block"(binds) rec(binds)] rec(body)]
+    case _ if kind(st) in KSet"using import"
+        # dot_importpath = (. _...)
+        # as_or_dotip = dot_importpath | (as dot_importpath name)
+        # replaces dot_importpath with (importpath _...) in
+        # (using as_or_dotip...)
+        # (using (: as_or_dotip as_or_dotip...))
+        paths, maybe_colon = match st[1]
+        case K":"(paths...)
+            (paths, st[1])
+        case _
+            (children(st), nothing)
         end
-        [K"macro" l r] -> let
-            l = apply_arglist_meta(l, collect_body_arg_meta(r))
-            @ast g st [K"macro" rec(l) rec(r)]
+        out_cs = mapsyntax(_dst_importpath, paths)
+        if !isnothing(maybe_colon)
+            out_c1 = @ast g maybe_colon [K":" out_cs...]
+            out_cs = SyntaxList(out_c1)
         end
-        [K"do" [K"call" f args...] lam] -> let
-            @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]
-        end
-        ([K"let" binds body], when=(kind(binds) !== K"block")) ->
-            @ast g st [K"let" [K"block"(binds) rec(binds)] rec(body)]
-        (_, when=(kind(st) in KSet"using import")) -> let
-            # dot_importpath = (. _...)
-            # as_or_dotip = dot_importpath | (as dot_importpath name)
-            # replaces dot_importpath with (importpath _...) in
-            # (using as_or_dotip...)
-            # (using (: as_or_dotip as_or_dotip...))
-            paths, maybe_colon = @stm st[1] begin
-                [K":" paths...] -> (paths, st[1])
-                _ -> (children(st), nothing)
-            end
-            out_cs = mapsyntax(_dst_importpath, paths)
-            if !isnothing(maybe_colon)
-                out_c1 = @ast g maybe_colon [K":" out_cs...]
-                out_cs = SyntaxList(out_c1)
-            end
-            mknode(st, out_cs)
-        end
+        mknode(st, out_cs)
 
-        #-----------------------------------------------------------------------
-        # Heads not emitted from parsing
-        ([K"meta" s vs...],
-         when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
-             # Should be handled in the function case
-             newleaf(g, st, K"nothing")
-        [K"meta" syms...] ->
-            @ast g st [K"meta" mapsyntax(
-                s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
-                syms)...
-           ]
-        [K"boundscheck" x] -> mknode(st, SyntaxList(g))
-        [K"inbounds" [K"Identifier"]] -> newnode(g, st, K"inbounds_pop", SyntaxList(g))
-        [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
-        [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
-        [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
-        [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
+    #-----------------------------------------------------------------------
+    # Heads not emitted from parsing
+    case K"meta"(s, vs...) if (meta=get(s, :name_val, "")::String;
+                               meta in ("nospecialize", "specialize"))
+        # Should be handled in the function case
+        newleaf(g, st, K"nothing")
+    case K"meta"(syms...)
+        @ast g st [K"meta" mapsyntax(
+            s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
+            syms)...
+        ]
+    case K"boundscheck"(x)
+        mknode(st, SyntaxList(g))
+    case K"inbounds"(K"Identifier"())
+        newnode(g, st, K"inbounds_pop", SyntaxList(g))
+    case K"core"(x)
+        setattr!(mkleaf(st), :name_val, x.name_val)
+    case K"top"(x)
+        setattr!(mkleaf(st), :name_val, x.name_val)
+    case K"static_parameter"(x)
+        setattr!(mkleaf(st), :var_id, x.value::IdTag)
+    case K"copyast"(K"inert"(ex))
+        @ast g st [K"call"
             interpolate_ast::K"Value"
             Expr::K"Value"
             [K"inert"(st[1]) ex]
         ]
-        [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
-        [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
-        [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
-        [K"symbolicblock" id body] -> let s = id.name_val::String
-            if is_writeonly_est_name(s)
-                @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
-            else
-                @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
-            end
+    case K"symbolicgoto"(lab)
+        setattr!(mkleaf(st), :name_val, lab.name_val)
+    case K"oldsymbolicgoto"(lab)
+        setattr!(mkleaf(st), :name_val, lab.name_val)
+    case K"symboliclabel"(lab)
+        setattr!(mkleaf(st), :name_val, lab.name_val)
+    case K"symbolicblock"(id, body)
+        s = id.name_val::String
+        if is_writeonly_est_name(s)
+            @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
+        else
+            @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
         end
-        [K"unknown_head" cs...] -> let head = st.name_val
-            if head === "latestworld-if-toplevel"
-                newleaf(g, st, K"latestworld_if_toplevel")
-            else
-                @jl_assert(false, (st, string(
-                    "unknown expr head (corresponding to no kind) between",
-                    " macro-expansion and desugaring: ")))
-            end
+    case K"unknown_head"(cs...)
+        head = st.name_val
+        if head === "latestworld-if-toplevel"
+            newleaf(g, st, K"latestworld_if_toplevel")
+        else
+            @jl_assert(false, (st, string(
+                "unknown expr head (corresponding to no kind) between",
+                " macro-expansion and desugaring: ")))
         end
-        ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
-        [K"cfunction" typ fptr rt at sym] -> let
-            # Identifier callables are scope-resolved against the outermost
-            # lowering layer (which corresponds to the method module used by
-            # `method.c`'s `jl_toplevel_eval`), so the IR carries a binding
-            # reference matching `@cfunction`'s runtime resolution. Other
-            # forms (e.g. function definitions) stay inert.
-            out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
-                          kind(fptr[1]) == K"Identifier"
-                ident = setattr!(mkleaf(fptr[1]), :scope_layer, 1)
-                @ast g fptr [K"static_eval"(fptr) ident]
-            else
-                rec(fptr)
-            end
-            @ast g st [K"cfunction"
-                rec(typ) out_fptr
-                [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
-                [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
-                rec(sym)
-            ]
+    case K"latestworld"() if !is_leaf(st)
+        newleaf(g, st, K"latestworld")
+    case K"cfunction"(typ, fptr, rt, at, sym)
+        # Identifier callables are scope-resolved against the outermost
+        # lowering layer (which corresponds to the method module used by
+        # `method.c`'s `jl_toplevel_eval`), so the IR carries a binding
+        # reference matching `@cfunction`'s runtime resolution. Other
+        # forms (e.g. function definitions) stay inert.
+        out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
+                      kind(fptr[1]) == K"Identifier"
+            ident = setattr!(mkleaf(fptr[1]), :scope_layer, 1)
+            @ast g fptr [K"static_eval"(fptr) ident]
+        else
+            rec(fptr)
         end
+        @ast g st [K"cfunction"
+            rec(typ) out_fptr
+            [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
+            [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
+            rec(sym)
+        ]
 
-        # avoid creating excess nodes
-        _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))
+    # avoid creating excess nodes
+    case _
+        let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))
             out_cs == children(st).ids ? st : mknode(st, out_cs)
         end
     end

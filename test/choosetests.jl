@@ -20,7 +20,7 @@ const TESTNAMES = [
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "client", "terminfo",
-        "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
+        "errorshow", "sets", "goto", "match", "except", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs", "gc",
         "misc", "threads", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",

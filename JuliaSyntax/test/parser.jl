@@ -1108,6 +1108,62 @@ tests = [
     JuliaSyntax.parse_stmts => [
         ((v = v"1.12",), "@callmemacro(b::Float64) = 2") => "(= (macrocall-p (macro_name callmemacro) (::-i b Float64)) 2)"
     ],
+    JuliaSyntax.parse_stmts => [
+        # match statement (1.14+)
+        ((v=v"1.14",), "match x\ncase 1\n\"one\"\ncase 2\n\"two\"\nend")  =>  "(match x (case 1 (block (string \"one\"))) (case 2 (block (string \"two\"))))"
+        ((v=v"1.14",), "match f() as v\ncase ::Int\nv + 1\nend")  =>  "(match (as (call f) v) (case (::-pre Int) (block (call-i v + 1))))"
+        ((v=v"1.14",), "match x\ncase (a, b) if a > b\na\nend")  =>  "(match x (case (guard (tuple-p a b) (call-i a > b)) (block a)))"
+        ((v=v"1.14",), "match g()\ncase except E(c)\nc\ncase s\ns\nend")  =>  "(match (call g) (case-except (call E c) (block c)) (case s (block s)))"
+        # Empty arm body
+        ((v=v"1.14",), "match x\ncase 1\nend")  =>  "(match x (case 1 (block)))"
+        # One-line arms with `;`; alternation patterns
+        ((v=v"1.14",), "match x\ncase 1; 2\ncase 3 | 4\n5\nend")  =>  "(match x (case 1 (block 2)) (case (call-i 3 | 4) (block 5)))"
+        # Pair patterns
+        ((v=v"1.14",), "match p\ncase k => v\nk\nend")  =>  "(match p (case (call-i k => v) (block k)))"
+        # Inline match-destructuring
+        ((v=v"1.14",), "match (a, b) = val")  =>  "(match_assign (tuple-p a b) val)"
+        # match as an expression
+        ((v=v"1.14",), "y = match x\ncase 1\n2\nend")  =>  "(= y (match x (case 1 (block 2))))"
+        # Postfix propagation on the match expression
+        ((v=v"1.14",), "match f()\ncase except E(c)\nc\nend?")  =>  "(question (match (call f) (case-except (call E c) (block c))))"
+        ((v=v"1.14",), "match f()\ncase except E(c)\nc\nend except E2")  =>  "(except-i (match (call f) (case-except (call E c) (block c))) E2)"
+        # Declared exceptions: postfix ? and callsite/signature except (1.14+)
+        ((v=v"1.14",), "f(x)?")  =>  "(question (call f x))"
+        ((v=v"1.14",), "g() except E")  =>  "(except-i (call g) E)"
+        ((v=v"1.14",), "y = f() except E")  =>  "(= y (except-i (call f) E))"
+        ((v=v"1.14",), "k => v except E")  =>  "(except-i (call-i k => v) E)"
+        ((v=v"1.14",), "function f(x)::T except E\nbody\nend")  =>  "(function (except-i (::-i (call f x) T) E) (block body))"
+        ((v=v"1.14",), "function f(x) except E\nbody\nend")  =>  "(function (except-i (call f x) E) (block body))"
+        ((v=v"1.14",), "f(x) except E = rhs")  =>  "(function-= (except-i (call f x) E) rhs)"
+        # Definitions containing `?` have no special tree structure; inferred
+        # exception declarations are handled in lowering
+        ((v=v"1.14",), "f(x) = g(x)?")  =>  "(function-= (call f x) (question (call g x)))"
+        ((v=v"1.14",), "function f()\ng()?\nend")  =>  "(function (call f) (block (question (call g))))"
+        ((v=v"1.14",), "x -> g(x)?")  =>  "(-> (tuple x) (question (call g x)))"
+        ((v=v"1.14",), "function f()\nmap(a -> g(a)?, x)\nend")  =>  "(function (call f) (block (call map (-> (tuple a) (question (call g a))) x)))"
+        # match/case/except remain identifiers in all other positions
+        ((v=v"1.14",), "match(x, y)")  =>  "(call match x y)"
+        ((v=v"1.14",), "match = 3")  =>  "(= match 3)"
+        ((v=v"1.14",), "Base.match(r, s)")  =>  "(call (. Base match) r s)"
+        ((v=v"1.14",), "for match in xs\nend")  =>  "(for (iteration (in match xs)) (block))"
+        ((v=v"1.14",), "match - x")  =>  "(call-i match - x)"
+        ((v=v"1.14",), "match:x")  =>  "(call-i match : x)"
+        ((v=v"1.14",), "match => x")  =>  "(call-i match => x)"
+        ((v=v"1.14",), "q = match")  =>  "(= q match)"
+        ((v=v"1.14",), "x = case + except")  =>  "(= x (call-i case + except))"
+        ((v=v"1.14",), "case = 1")  =>  "(= case 1)"
+        ((v=v"1.14",), "except = 2")  =>  "(= except 2)"
+        ((v=v"1.14",), "match\"str\"")  =>  "(macrocall @match_str (string-r \"str\"))"
+        # Yes really, this parses as a match statement on the value of `match`
+        ((v=v"1.14",), "match match\ncase 1\nend")  =>  "(match match (case 1 (block)))"
+        # On older syntax versions everything remains an identifier / error
+        ((v=v"1.13",), "match x\ncase 1\n1\nend")  =>  "(wrapper match (error-t x))"
+        ((v=v"1.13",), "g() except E")  =>  "(wrapper (call g) (error-t except E))"
+        ((v=v"1.13",), "f(x)?")  =>  PARSE_ERROR
+        # Error cases
+        ((v=v"1.14",), "match x\nend")  =>  PARSE_ERROR
+        ((v=v"1.14",), "match x\ncase 1 \"bad\"\nend")  =>  PARSE_ERROR
+    ],
     JuliaSyntax.parse_docstring => [
         """ "notdoc" ]        """ => "(string \"notdoc\")"
         """ "notdoc" \n]      """ => "(string \"notdoc\")"

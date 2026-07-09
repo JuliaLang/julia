@@ -1712,9 +1712,11 @@ end
 
 # Expand the (sym, lib) argument to ccall / cglobal
 function expand_csymbol(ctx, ex)
-    @stm ex begin
-        [K"static_eval" _] -> ex # already done
-        _ -> expand_forms_2(ctx, ex)
+    match ex
+    case K"static_eval"(_)
+        ex # already done
+    case _
+        expand_forms_2(ctx, ex)
     end
 end
 
@@ -1947,16 +1949,16 @@ end
 #-------------------------------------------------------------------------------
 
 function expand_dot(ctx, ex)
-    @stm ex begin
-        # eg, `f = .+`
-        # Upstream TODO: Remove the (. +) representation and replace with use
-        # of DOTOP_FLAG? This way, `K"."` will be exclusively used for
-        # getproperty.
-        [K"." op] -> @ast ctx ex [K"call" "BroadcastFunction"::K"top" op]
-        [K"." l r] -> begin
-            @jl_assert is_leaf(r) || kind(r) in KSet"inert inert_syntaxtree" ex
-            @ast ctx ex [K"call" "getproperty"::K"top" l r]
-        end
+    match ex
+    # eg, `f = .+`
+    # Upstream TODO: Remove the (. +) representation and replace with use
+    # of DOTOP_FLAG? This way, `K"."` will be exclusively used for
+    # getproperty.
+    case K"."(op)
+        @ast ctx ex [K"call" "BroadcastFunction"::K"top" op]
+    case K"."(l, r)
+        @jl_assert is_leaf(r) || kind(r) in KSet"inert inert_syntaxtree" ex
+        @ast ctx ex [K"call" "getproperty"::K"top" l r]
     end
 end
 
@@ -2151,37 +2153,44 @@ end
 #   (x::T, (y::U, z))
 #   strip out stmts = (local x) (decl x T) (local x) (decl y U) (local z)
 function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
-    declname = @stm ex begin
-        [K"Identifier"] -> ex
-        # TODO: consider removing support for Expr(:global, GlobalRef(...)) and
-        # other Exprs that cannot be produced by the parser (tested by
-        # test/precompile.jl #50538).
-        ([K"Value"], when=ex.value isa GlobalRef) -> ex
-        [K"Placeholder"] -> nothing
-        ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
-            t2 = expand_forms_2(ctx, t)
-            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t2)))
+    declname = match ex
+    case K"Identifier"()
+        ex
+    # TODO: consider removing support for Expr(:global, GlobalRef(...)) and
+    # other Exprs that cannot be produced by the parser (tested by
+    # test/precompile.jl #50538).
+    case K"Value"() if ex.value isa GlobalRef
+        ex
+    case K"Placeholder"()
+        nothing
+    case K"::"(K"Identifier"(), t) if type_decls
+        x = ex[1]
+        t2 = expand_forms_2(ctx, t)
+        push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t2)))
+        make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
+    case K"::"(K"Placeholder"(), t) if type_decls
+        # TODO: Currently, this ignores the LHS in `_::T = val`.
+        # We should probably do one of the following:
+        # - Throw a LoweringError if that's not too breaking
+        # - `convert(T, rhs)::T` and discard the result which is what
+        #   `x::T = rhs` would do if x is never used again.
+        nothing
+    case K"::"(x, t) if !type_decls
+        make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
+    case _ if kind(ex) in KSet"call curly where"
+        make_lhs_decls(ctx, stmts, declkind, declmeta, ex[1], type_decls)
+    case K"tuple"(xs...)
+        for x in xs
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
-        ([K"::" [K"Placeholder"] t], when=type_decls) -> let
-            # TODO: Currently, this ignores the LHS in `_::T = val`.
-            # We should probably do one of the following:
-            # - Throw a LoweringError if that's not too breaking
-            # - `convert(T, rhs)::T` and discard the result which is what
-            #   `x::T = rhs` would do if x is never used again.
-        end
-        ([K"::" x t], when=!type_decls) ->
-            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
-        (_, when=kind(ex) in KSet"call curly where") ->
-            make_lhs_decls(ctx, stmts, declkind, declmeta, ex[1], type_decls)
-        [K"tuple" xs...] -> for x in xs
+    case K"parameters"(xs...)
+        for x in xs
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
-        [K"parameters" xs...] -> for x in xs
-            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
-        end
-        [K"..." x] -> nothing # from recursion above
-        [K"ref" _ _...] -> nothing # decl is ignored; syntax TODO
+    case K"..."(x)
+        nothing # from recursion above
+    case K"ref"(_, _...)
+        nothing # decl is ignored; syntax TODO
     end
 
     if !isnothing(declname)
@@ -2200,13 +2209,19 @@ function expand_decls(ctx, ex)
     stmts = SyntaxList(ctx)
     for c in children(ex)
         simple = kind(c) in KSet"Identifier :: Value Placeholder"
-        lhs = @stm c begin
-            (_, when=simple) -> c
-            [K"=" x _] -> x
-            [K".=" x _] -> x
-            [K"op=" x _ _] -> x
-            [K".op=" x _ _] -> x
-            [K"function" x _] -> x
+        lhs = match c
+        case _ if simple
+            c
+        case K"="(x, _)
+            x
+        case K".="(x, _)
+            x
+        case K"op="(x, _, _)
+            x
+        case K".op="(x, _, _)
+            x
+        case K"function"(x, _)
+            x
         end
         # type decls are handled elsewhere unless simple
         make_lhs_decls(ctx, stmts, declkind, get(ex, :meta, nothing), lhs, simple)
@@ -2238,24 +2253,28 @@ function expand_const_decl(ctx, ex)
         # pre-desugared const
         return @ast ctx ex [K"constdecl" ex[1] ex[2]]
     end
-    @stm ex[1] begin
-        # const is ignored on function
-        [K"function" _ _] -> expand_forms_2(ctx, ex[1])
-        [K"global" [K"function" _ _]] -> expand_forms_2(ctx, ex[1])
+    match ex[1]
+    # const is ignored on function
+    case K"function"(_, _)
+        expand_forms_2(ctx, ex[1])
+    case K"global"(K"function"(_, _))
+        expand_forms_2(ctx, ex[1])
 
-        [K"global" x] -> let decls = SyntaxList(ctx)
-            @jl_assert kind(x) === K"=" ex
-            make_lhs_decls(
-                ctx, decls, K"global", get(ex[1], :meta, nothing), x[1], false)
-            ex2 = @ast ctx ex [K"const" x]
-            @ast ctx ex [K"block" decls... expand_const_decl(ctx, ex2)]
-        end
-        [K"=" _ _] -> expand_assignment(ctx, ex[1], true)
-        # Expr(:const, v) where v is a Symbol or a GlobalRef is an unfortunate
-        # remnant from the days when const-ness was a flag that could be set on
-        # any global.  It creates a binding with kind PARTITION_KIND_UNDEF_CONST.
-        # TODO: deprecate and delete this "feature"
-        [K"Identifier"] -> @ast ctx ex [K"constdecl" ex[1]]
+    case K"global"(x)
+        decls = SyntaxList(ctx)
+        @jl_assert kind(x) === K"=" ex
+        make_lhs_decls(
+            ctx, decls, K"global", get(ex[1], :meta, nothing), x[1], false)
+        ex2 = @ast ctx ex [K"const" x]
+        @ast ctx ex [K"block" decls... expand_const_decl(ctx, ex2)]
+    case K"="(_, _)
+        expand_assignment(ctx, ex[1], true)
+    # Expr(:const, v) where v is a Symbol or a GlobalRef is an unfortunate
+    # remnant from the days when const-ness was a flag that could be set on
+    # any global.  It creates a binding with kind PARTITION_KIND_UNDEF_CONST.
+    # TODO: deprecate and delete this "feature"
+    case K"Identifier"()
+        @ast ctx ex [K"constdecl" ex[1]]
     end
 end
 
@@ -2378,20 +2397,21 @@ end
 # desugarable AST to macro AST.  Fortunately there are only two places (meta
 # nkw, and destructuring arg assignments) we do this, so handle them manually.
 function prepend_function_body(ctx, body, ex)
-    @stm body begin
-        [K"_generated_body" [K"quote" gen] nongen] -> begin
-            ex_est = @stm ex begin
-                [K"meta" [K"Symbol"] n] ->
-                    @ast ctx ex [K"meta" "nkw"::K"Identifier" n]
-                # TODO: need to handle destructuring arg assignments
-                [K"block" _... [K"nothing"]] ->
-                    newleaf(ctx, ex, K"Value", nothing)
-                _ -> @jl_assert false (ex, "unexpected prepend_function_body")
-            end
-            @ast ctx body [K"_generated_body"
-                [K"quote" [K"block" ex_est gen]] [K"block" ex nongen]]
+    match body
+    case K"_generated_body"(K"quote"(gen), nongen)
+        ex_est = match ex
+        case K"meta"(K"Symbol"(), n)
+            @ast ctx ex [K"meta" "nkw"::K"Identifier" n]
+        # TODO: need to handle destructuring arg assignments
+        case K"block"(_..., K"nothing"())
+            newleaf(ctx, ex, K"Value", nothing)
+        case _
+            @jl_assert false (ex, "unexpected prepend_function_body")
         end
-        _ -> @ast ctx body [K"block" ex body]
+        @ast ctx body [K"_generated_body"
+            [K"quote" [K"block" ex_est gen]] [K"block" ex nongen]]
+    case _
+        @ast ctx body [K"block" ex body]
     end
 end
 
@@ -2565,25 +2585,25 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
 end
 
 function expand_kw_args(ctx, kws)
-    kargl, restkw = @stm kws begin
-        [K"parameters" xs... [K"..." va]] -> (xs, va)
-        [K"parameters" xs...] -> (xs, nothing)
+    kargl, restkw = match kws
+    case K"parameters"(xs..., K"..."(va))
+        (xs, va)
+    case K"parameters"(xs...)
+        (xs, nothing)
     end
     kw_decls = SyntaxList(ctx.graph)
     kw_syms = SyntaxList(ctx.graph)
     kw_defaults = SyntaxList(ctx.graph)
     for raw_a in kargl
         a = expand_function_arg(ctx, raw_a, false)
-        @stm a begin
-            [K"kw" [K"::" n t] v] -> begin
-                push!(kw_decls, a[1])
-                push!(kw_defaults, v)
-            end
-            [K"::" n t] -> begin
-                push!(kw_decls, a)
-                push!(kw_defaults, @ast ctx a [K"call" "throw"::K"core"
-                    [K"call" "UndefKeywordError"::K"core" a[1]=>K"Symbol"]])
-            end
+        match a
+        case K"kw"(K"::"(n, t), v)
+            push!(kw_decls, a[1])
+            push!(kw_defaults, v)
+        case K"::"(n, t)
+            push!(kw_decls, a)
+            push!(kw_defaults, @ast ctx a [K"call" "throw"::K"core"
+                [K"call" "UndefKeywordError"::K"core" a[1]=>K"Symbol"]])
         end
     end
     kw_names = mapindex(kw_decls, 1)
@@ -2747,16 +2767,20 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
     ]
 end
 
-_lower_destructuring_arg(stmts, ctx, ex) = @stm ex begin
-    [K"tuple" _...] -> let arg2 = newsym(ctx, ex, "destructured")
+_lower_destructuring_arg(stmts, ctx, ex) = match ex
+    case K"tuple"(_...)
+        arg2 = newsym(ctx, ex, "destructured")
         push!(stmts, @ast(ctx, ex, [K"local"(meta=CompileHints(:is_destructured_arg, true))
             [K"=" ex arg2]]))
         arg2
-    end
-    [K"::" x t] -> @ast ctx ex [K"::" _lower_destructuring_arg(stmts, ctx, x) t]
-    [K"kw" x t] -> @ast ctx ex [K"kw" _lower_destructuring_arg(stmts, ctx, x) t]
-    [K"..." x]  -> @ast ctx ex [K"..." _lower_destructuring_arg(stmts, ctx, x)]
-    _ -> ex
+    case K"::"(x, t)
+        @ast ctx ex [K"::" _lower_destructuring_arg(stmts, ctx, x) t]
+    case K"kw"(x, t)
+        @ast ctx ex [K"kw" _lower_destructuring_arg(stmts, ctx, x) t]
+    case K"..."(x)
+        @ast ctx ex [K"..." _lower_destructuring_arg(stmts, ctx, x)]
+    case _
+        ex
 end
 
 function lower_destructuring_args!(ctx, args)
@@ -2772,36 +2796,735 @@ end
 # `arg` is the first arg to a function's `call`.  return (1) whether this is an
 # :overlay expression, (2) the method table expression, and (3) the typed arg
 # expression `(:: #self# t)`
+#-------------------------------------------------------------------------------
+# match statement
+#
+# A match statement checks its scrutinee against a sequence of `case`
+# patterns, running the body of the first arm that matches. Patterns are
+# compiled to matcher objects checked at runtime through the
+# `Base.pattern_match` protocol, with call patterns constructed through the
+# extensible `Base.matcher` entry point. A match participates in the
+# default break scope: it expands into an anonymous `symbolicblock` with
+# arm results delivered by valued breaks. Falling through all arms throws
+# `MatchError`; `case except` arms match the declared-exception channel of
+# the scrutinee call. See the corresponding lowering in
+# `src/julia-syntax.scm`.
+
+function _is_empty_match_body(ex::SyntaxTree)
+    kind(ex) == K"block" || return false
+    return all(children(ex)) do c
+        kind(c) == K"Value" && c.value isa LineNumberNode
+    end
+end
+
+function _flatten_or_pattern!(alts::SyntaxList, pat::SyntaxTree)
+    if kind(pat) == K"call" && numchildren(pat) == 3 &&
+            kind(pat[1]) == K"Identifier" && pat[1].name_val == "|"
+        _flatten_or_pattern!(alts, pat[2])
+        _flatten_or_pattern!(alts, pat[3])
+    else
+        push!(alts, pat)
+    end
+    return alts
+end
+
+# compile a match pattern into an expression constructing its matcher,
+# appending capture-name identifiers to `names` in binding order. `depth` 0
+# is the top level of the pattern, where bare identifiers are resolved as
+# matchers rather than treated as captures.
+function _compile_match_pattern!(ctx, names::SyntaxList, pat::SyntaxTree, depth::Int)
+    function checkdup!(n)
+        if any(x->x.name_val == n.name_val, names)
+            throw(LoweringError(n, "duplicate capture name in match pattern"))
+        end
+        push!(names, n)
+    end
+    k = kind(pat)
+    if k == K"Placeholder"
+        return @ast ctx pat [K"call" "MatchWildcard"::K"top"]
+    elseif k == K"Identifier"
+        if depth > 0
+            checkdup!(pat)
+            return @ast ctx pat [K"call" "MatchCapture"::K"top"]
+        else
+            # resolved matcher: the identifier's value
+            return pat
+        end
+    elseif is_leaf(pat)
+        return pat
+    elseif k == K"$" && numchildren(pat) == 1
+        return @ast ctx pat [K"call" "AsValue"::K"top" pat[1]]
+    elseif k == K"::"
+        if numchildren(pat) == 1
+            return @ast ctx pat [K"call" "TypeMatcher"::K"top" pat[1]]
+        elseif numchildren(pat) == 2 && kind(pat[1]) == K"Placeholder"
+            return @ast ctx pat [K"call" "TypeMatcher"::K"top" pat[2]]
+        elseif numchildren(pat) == 2 && kind(pat[1]) == K"Identifier"
+            checkdup!(pat[1])
+            return @ast ctx pat [K"call" "CaptureTyped"::K"top" pat[2]]
+        end
+        throw(LoweringError(pat, "invalid match pattern"))
+    elseif k == K"tuple"
+        if numchildren(pat) >= 1 && kind(pat[end]) == K"parameters"
+            if numchildren(pat) > 1
+                throw(LoweringError(pat, "cannot mix positional and property patterns"))
+            end
+            propnames = SyntaxList(ctx)
+            subs = SyntaxList(ctx)
+            for p in children(pat[end])
+                kp = kind(p)
+                if kp == K"Identifier"
+                    checkdup!(p)
+                    push!(propnames, @ast ctx p p.name_val::K"Symbol")
+                    push!(subs, @ast ctx p [K"call" "MatchCapture"::K"top"])
+                elseif kp == K"::" && numchildren(p) == 2 && kind(p[1]) == K"Identifier"
+                    checkdup!(p[1])
+                    push!(propnames, @ast ctx p p[1].name_val::K"Symbol")
+                    push!(subs, @ast ctx p [K"call" "CaptureTyped"::K"top" p[2]])
+                elseif (kp == K"kw" || kp == K"=") && numchildren(p) == 2 &&
+                        kind(p[1]) == K"Identifier"
+                    push!(propnames, @ast ctx p p[1].name_val::K"Symbol")
+                    push!(subs, _compile_match_pattern!(ctx, names, p[2], depth + 1))
+                else
+                    throw(LoweringError(p, "unsupported property pattern"))
+                end
+            end
+            return @ast ctx pat [K"call" "PropertyMatcher"::K"top"
+                [K"vect" propnames...]
+                [K"tuple" subs...]]
+        end
+        subs = mapsyntax(x->_compile_match_pattern!(ctx, names, x, depth + 1),
+                         children(pat))
+        return @ast ctx pat [K"call" "TupleMatcher"::K"top" [K"tuple" subs...]]
+    elseif k == K"vect"
+        subs = SyntaxList(ctx)
+        slurp = false
+        for (i, p) in enumerate(children(pat))
+            if kind(p) == K"..." && numchildren(p) == 1
+                i == numchildren(pat) ||
+                    throw(LoweringError(p, "slurp pattern only allowed in final position"))
+                slurp = true
+                push!(subs, _compile_match_pattern!(ctx, names, p[1], depth + 1))
+            else
+                push!(subs, _compile_match_pattern!(ctx, names, p, depth + 1))
+            end
+        end
+        return @ast ctx pat [K"call" "VectMatcher"::K"top"
+            [K"tuple" subs...] slurp::K"Bool"]
+    elseif k == K"call"
+        f = pat[1]
+        fname = kind(f) == K"Identifier" ? f.name_val : nothing
+        if fname == "|" && numchildren(pat) == 3
+            # alternation: all alternatives must bind the same names
+            alts = _flatten_or_pattern!(SyntaxList(ctx), pat)
+            altmatchers = SyntaxList(ctx)
+            altnames = Vector{Vector{String}}()
+            for alt in alts
+                ns = SyntaxList(ctx)
+                push!(altmatchers, _compile_match_pattern!(ctx, ns, alt, depth))
+                push!(altnames, String[n.name_val for n in ns])
+                if length(altnames) == 1
+                    for n in ns
+                        checkdup!(n)
+                    end
+                end
+            end
+            canonical = altnames[1]
+            perms = SyntaxList(ctx)
+            for (alt, ns) in zip(alts, altnames)
+                if sort(ns) != sort(canonical)
+                    throw(LoweringError(alt, "all alternatives of `|` in a match pattern must bind the same names"))
+                end
+                idxs = SyntaxList(ctx)
+                for n in canonical
+                    i = findfirst(==(n), ns)
+                    push!(idxs, @ast ctx alt i::K"Value")
+                end
+                push!(perms, @ast ctx alt [K"tuple" idxs...])
+            end
+            return @ast ctx pat [K"call" "OrMatcher"::K"top"
+                [K"tuple" altmatchers...] [K"tuple" perms...]]
+        elseif fname == "=>" && numchildren(pat) == 3
+            kp = _compile_match_pattern!(ctx, names, pat[2], depth + 1)
+            vp = _compile_match_pattern!(ctx, names, pat[3], depth + 1)
+            return @ast ctx pat [K"call" "PairMatcher"::K"top" kp vp]
+        elseif any(c->kind(c) == K"parameters", children(pat))
+            throw(LoweringError(pat, "keyword arguments are not supported in match call patterns"))
+        else
+            # call pattern f(patterns...); a `rest...` subpattern compiles
+            # to a MatchSlurp marker for the matcher protocol
+            subs = SyntaxList(ctx)
+            slurped = false
+            for x in children(pat)[2:end]
+                if kind(x) == K"..." && numchildren(x) == 1
+                    slurped &&
+                        throw(LoweringError(pat, "only one slurp pattern is allowed in a match call pattern"))
+                    slurped = true
+                    inner = _compile_match_pattern!(ctx, names, x[1], depth + 1)
+                    push!(subs, @ast ctx x [K"call" "MatchSlurp"::K"top" inner])
+                else
+                    push!(subs, _compile_match_pattern!(ctx, names, x, depth + 1))
+                end
+            end
+            return @ast ctx pat [K"call" "matcher"::K"top" f subs...]
+        end
+    elseif k == K"question" || (k == K"except" && numchildren(pat) == 2)
+        throw(LoweringError(pat, "`?` and `except` are not allowed inside match patterns"))
+    else
+        # any other expression (dotted names, curly types, quoted exprs,
+        # expanded macro calls like r"...") is evaluated and resolved as a
+        # matcher
+        return pat
+    end
+end
+
+# code for one `case` arm: on match, deliver the arm's result by a valued
+# break out of the match's anonymous symbolicblock; otherwise fall through
+function _compile_match_arm(ctx, arm::SyntaxTree, subject; wrap_result::Bool=false)
+    patguard = arm[1]
+    body = arm[end]
+    guard = nothing
+    pat = patguard
+    if kind(patguard) == K"guard" && numchildren(patguard) == 2
+        pat = patguard[1]
+        guard = patguard[2]
+    end
+    names = SyntaxList(ctx)
+    m = _compile_match_pattern!(ctx, names, pat, 0)
+    caps = ssavar(ctx, arm, "captures")
+    armres = ssavar(ctx, arm, "armresult")
+    resultex = _is_empty_match_body(body) ? subject : body
+    if wrap_result
+        # in leftover mode the match evaluates to an Except, so arm
+        # results are wrapped in the ordinary state
+        resultex = @ast ctx arm [K"call" "except_value"::K"top" resultex]
+    end
+    success = @ast ctx arm [K"block"
+        [K"=" armres resultex]
+        [K"break" "_"::K"Placeholder" armres]]
+    inner = isnothing(guard) ? success : @ast ctx arm [K"if" guard success]
+    if !isempty(names)
+        bindings = SyntaxList(ctx)
+        for (i, n) in enumerate(names)
+            push!(bindings, @ast ctx n [K"=" n
+                [K"call" "getfield"::K"core" caps i::K"Value"]])
+        end
+        # captures are scoped to the arm, like `let`
+        inner = @ast ctx arm [K"let" [K"block" bindings...] inner]
+    end
+    @ast ctx arm [K"block"
+        [K"=" caps [K"call" "pattern_match"::K"top" m subject]]
+        [K"if" [K"call" "==="::K"core" caps (::K"nothing")]
+            (::K"nothing")
+            inner]]
+end
+
+# Expand a match statement. With `leftover`, unmatched declared exceptions
+# of the scrutinee become the value of the match (to be checked at the
+# enclosing `?`/`except` propagation site) rather than being thrown.
+function expand_match(ctx, ex; leftover::Bool=false)
+    numchildren(ex) >= 1 || throw(LoweringError(ex, "malformed `match`"))
+    scrut = ex[1]
+    asname = nothing
+    if kind(scrut) == K"as" && numchildren(scrut) == 2
+        asname = scrut[2]
+        scrut = scrut[1]
+    end
+    arms = children(ex)[2:end]
+    isempty(arms) && throw(LoweringError(ex, "`match` requires at least one `case` arm"))
+    for a in arms
+        (kind(a) in KSet"case case_except" && numchildren(a) == 2) ||
+            throw(LoweringError(a, "malformed `case` arm in `match`"))
+    end
+    valuearms = SyntaxList(ctx)
+    exceptarms = SyntaxList(ctx)
+    for a in arms
+        push!(kind(a) == K"case" ? valuearms : exceptarms, a)
+    end
+    resvar = ssavar(ctx, ex, "matchresult")
+    function dispatch(armlist, subject, fallthrough)
+        stmts = SyntaxList(ctx)
+        for a in armlist
+            push!(stmts, _compile_match_arm(ctx, a, subject; wrap_result=leftover))
+        end
+        @ast ctx ex [K"block" stmts... fallthrough]
+    end
+    core = if isempty(exceptarms)
+        sv = ssavar(ctx, ex, "scrutinee")
+        @ast ctx ex [K"block"
+            [K"=" sv scrut]
+            isnothing(asname) ? nothing : [K"=" asname sv]
+            dispatch(valuearms, sv,
+                @ast ctx ex [K"call" "throw"::K"core"
+                    [K"call" "MatchError"::K"top" sv]])]
+    else
+        if kind(scrut) == K"question" || (kind(scrut) == K"except" && numchildren(scrut) == 2)
+            throw(LoweringError(scrut, "cannot combine a `?`/`except`-propagated scrutinee with `case except` arms"))
+        end
+        kind(scrut) == K"call" ||
+            throw(LoweringError(scrut, "`case except` requires the match scrutinee to be a function call"))
+        raw = ssavar(ctx, ex, "raw")
+        payload = ssavar(ctx, ex, "payload")
+        rawval = ssavar(ctx, ex, "rawvalue")
+        rawcall = @ast ctx scrut [K"call" "except_call"::K"top" children(scrut)...]
+        excbranch = @ast ctx ex [K"block"
+            [K"=" payload [K"call" "except_exception"::K"top" raw]]
+            isnothing(asname) ? nothing : [K"=" asname payload]
+            dispatch(exceptarms, payload,
+                leftover ? (@ast ctx ex [K"call" "except_error"::K"top" payload]) :
+                    (@ast ctx ex [K"call" "throw"::K"core" payload]))]
+        valbranch = @ast ctx ex [K"block"
+            [K"=" rawval [K"call" "except_result"::K"top" raw]]
+            isnothing(asname) ? nothing : [K"=" asname rawval]
+            isempty(valuearms) ?
+                # only except arms: non-exceptional values pass through
+                # (still wrapped in leftover mode)
+                (leftover ? (@ast ctx ex [K"call" "except_value"::K"top" rawval]) : rawval) :
+                dispatch(valuearms, rawval,
+                    @ast ctx ex [K"call" "throw"::K"core"
+                        [K"call" "MatchError"::K"top" rawval]])]
+        @ast ctx ex [K"block"
+            [K"=" raw rawcall]
+            [K"if" [K"call" "except_iserr"::K"top" raw]
+                excbranch
+                valbranch]]
+    end
+    if !isnothing(asname)
+        # the `as` binding is scoped over the match like `let`
+        core = @ast ctx ex [K"let" [K"block" asname] core]
+    end
+    # Assigning the block to a temporary keeps it in value position even
+    # when the match appears as a statement
+    @ast ctx ex [K"block"
+        [K"=" resvar [K"symbolicblock" "loop-exit"::K"symboliclabel" core]]
+        resvar]
+end
+
+# Inline match-destructuring `match pat = val`: uses the same pattern
+# compiler, with captures assigned in the enclosing scope (like
+# destructuring assignment); a mismatch throws MatchError.
+function expand_match_assign(ctx, ex)
+    numchildren(ex) == 2 || throw(LoweringError(ex, "malformed `match` destructuring"))
+    names = SyntaxList(ctx)
+    m = _compile_match_pattern!(ctx, names, ex[1], 1)
+    v = ssavar(ctx, ex, "value")
+    caps = ssavar(ctx, ex, "captures")
+    assigns = SyntaxList(ctx)
+    for (i, n) in enumerate(names)
+        push!(assigns, @ast ctx n [K"=" n
+            [K"call" "getfield"::K"core" caps i::K"Value"]])
+    end
+    @ast ctx ex [K"block"
+        [K"=" v ex[2]]
+        [K"=" caps [K"call" "pattern_match"::K"top" m v]]
+        [K"if" [K"call" "==="::K"core" caps (::K"nothing")]
+            [K"call" "throw"::K"core" [K"call" "MatchError"::K"top" v]]
+            (::K"nothing")]
+        assigns...
+        v]
+end
+
+# rewrite declared-exception propagation sites in the scrutinee, guards and
+# arm bodies of a match, but not in patterns
+function rewrite_match_parts(ctx, ex, E)
+    scrut = ex[1]
+    scrut = if kind(scrut) == K"as" && numchildren(scrut) == 2
+        @ast ctx scrut [K"as" rewrite_except_sites(ctx, scrut[1], E) scrut[2]]
+    else
+        rewrite_except_sites(ctx, scrut, E)
+    end
+    arms = SyntaxList(ctx)
+    for a in children(ex)[2:end]
+        ka = kind(a)
+        if ka in KSet"case case_except" && numchildren(a) == 2
+            pg = a[1]
+            if kind(pg) == K"guard" && numchildren(pg) == 2
+                pg = @ast ctx pg [K"guard" pg[1] rewrite_except_sites(ctx, pg[2], E)]
+            end
+            push!(arms, @ast ctx a [ka pg rewrite_except_sites(ctx, a[2], E)])
+        else
+            push!(arms, a)
+        end
+    end
+    @ast ctx ex [K"match" scrut arms...]
+end
+
+#-------------------------------------------------------------------------------
+# Declared exceptions
+#
+# A method may declare the exceptions that are part of its API with
+# `function f(x)::T except E`. Like keyword arguments, this is lowered by
+# splitting the method into an inner method returning a `Base.Except`
+# value (with the propagation sites `ex?` / `ex except F` / `throw(e)?` in
+# its body rewritten to return exceptional-state values for exceptions
+# matching the declaration), an outer method that unwraps the inner result
+# (throwing the exception for callers that do not participate), and an
+# entry point on the `Base.except_call` generic function (the
+# declared-exception analog of `Core.kwcall`). A
+# method with propagation sites but no declaration receives an inferred
+# `except Any` declaration; sites outside any declaration (at top level, or
+# in lazy generators) throw declared exceptions that surface. See the
+# corresponding lowering in `src/julia-syntax.scm`.
+
+function is_except_site(ex::SyntaxTree)
+    k = kind(ex)
+    return k == K"question" || (k == K"except" && numchildren(ex) == 2)
+end
+
+# does `ex` contain a declared-exception propagation site at the current
+# function nesting level? Nested function definitions receive their own
+# (possibly inferred) declarations; lazy generators do not propagate, but
+# sites inside the generator of a literal comprehension propagate from the
+# comprehension itself.
+function has_except_site(ex::SyntaxTree)
+    is_leaf(ex) && return false
+    is_except_site(ex) && return true
+    k = kind(ex)
+    if k == K"comprehension" || k == K"typed_comprehension"
+        return any(children(ex)) do x
+            kind(x) == K"generator" ? any(has_except_site, children(x)) :
+                has_except_site(x)
+        end
+    end
+    if k == K"function" || k == K"->" || k == K"macro" || k == K"module" ||
+            k == K"toplevel" || k == K"generator" || k == K"flatten" ||
+            k == K"quote" || k == K"inert" || k == K"inert_syntaxtree" ||
+            (k == K"=" && numchildren(ex) == 2 && is_eventually_call(ex[1]))
+        return false
+    end
+    return any(has_except_site, children(ex))
+end
+
+function is_throw_func(ex::SyntaxTree)
+    k = kind(ex)
+    if k == K"Identifier" || k == K"core" || k == K"top"
+        return ex.name_val == "throw"
+    elseif k == K"." && numchildren(ex) == 2
+        q = ex[2]
+        if kind(q) == K"inert" && numchildren(q) == 1
+            q = q[1]
+        end
+        return (kind(q) == K"Symbol" || kind(q) == K"Identifier") &&
+            q.name_val == "throw"
+    end
+    return false
+end
+
+# code testing/propagating a computed value `valex` at a propagation site:
+# an exceptional `Except` result is propagated from the enclosing method if
+# its exception matches the declaration `E` (and the site filter `F`, if
+# any) and thrown otherwise. With no declaration (`E === nothing`), every
+# surfacing declared exception is thrown. On the ordinary path the value is
+# extracted from the `Except` (any other value passes through unchanged;
+# `Base.except_result` is the identity on non-`Except`s).
+function except_value_check(ctx, srcex, valex, E, F)
+    r = ssavar(ctx, srcex, "declared")
+    p = ssavar(ctx, srcex, "payload")
+    handle = if isnothing(E)
+        @ast ctx srcex [K"call" "throw"::K"core" p]
+    else
+        test = isnothing(F) ?
+            (@ast ctx srcex [K"call" "isa"::K"core" p E]) :
+            (@ast ctx srcex [K"&&"
+                [K"call" "isa"::K"core" p F]
+                [K"call" "isa"::K"core" p E]])
+        @ast ctx srcex [K"if" test
+            [K"return" [K"call" "except_error"::K"top" p]]
+            [K"call" "throw"::K"core" p]]
+    end
+    @ast ctx srcex [K"block"
+        [K"=" r valex]
+        [K"if" [K"call" "except_iserr"::K"top" r]
+            [K"block"
+                [K"=" p [K"call" "except_exception"::K"top" r]]
+                handle]
+            [K"call" "except_result"::K"top" r]]]
+end
+
+# expand one propagation site `(question ex)` / `(except ex F)`
+function expand_question_site(ctx, srcex, ex, E, F)
+    rw = isnothing(E) ? identity : (x -> rewrite_except_sites(ctx, x, E))
+    k = kind(ex)
+    if k == K"call" && numchildren(ex) == 2 && is_throw_func(ex[1])
+        if isnothing(E)
+            # outside any declaration, throw(e)? throws
+            return @ast ctx srcex [K"call" "throw"::K"core" ex[2]]
+        end
+        # throw(e)? raises `e` on the declared channel
+        exc = ssavar(ctx, srcex, "exc")
+        test = isnothing(F) ?
+            (@ast ctx srcex [K"call" "isa"::K"core" exc E]) :
+            (@ast ctx srcex [K"&&"
+                [K"call" "isa"::K"core" exc F]
+                [K"call" "isa"::K"core" exc E]])
+        return @ast ctx srcex [K"block"
+            [K"=" exc rw(ex[2])]
+            [K"if" test
+                [K"return" [K"call" "except_error"::K"top" exc]]
+                [K"call" "throw"::K"core" exc]]]
+    elseif k == K"match"
+        # match ... end? / match ... end except F: unmatched declared
+        # exceptions of the scrutinee become the value of the match, checked
+        # at this site
+        m = isnothing(E) ? ex : rewrite_match_parts(ctx, ex, E)
+        return except_value_check(ctx, srcex, expand_match(ctx, m; leftover=true), E, F)
+    elseif k == K"call"
+        # call through except_call to receive declared exceptions as values
+        args = mapsyntax(rw, children(ex))
+        return except_value_check(ctx, srcex,
+            (@ast ctx ex [K"call" "except_call"::K"top" args...]), E, F)
+    else
+        # arbitrary expression: check its value
+        return except_value_check(ctx, srcex, rw(ex), E, F)
+    end
+end
+
+# `?` in the body of a literal comprehension propagates from the
+# comprehension itself: collect through except_collect (short-circuiting on
+# the first exceptional element) and treat the collection as a site.
+function rewrite_except_comprehension(ctx, ex, E)
+    typed = kind(ex) == K"typed_comprehension"
+    gen = ex[end]
+    @jl_assert kind(gen) == K"generator" ex
+    if numchildren(gen) != 2
+        throw(LoweringError(ex, "`?` is only supported in comprehensions with a single `for` clause"))
+    end
+    body = gen[1]
+    spec = gen[2]
+    cond = nothing
+    if kind(spec) == K"filter"
+        cond = spec[2]
+        spec = spec[1]
+    end
+    if kind(spec) != K"iteration" || numchildren(spec) != 1 ||
+            kind(spec[1]) != K"in"
+        throw(LoweringError(ex, "`?` is only supported in comprehensions with a single `for` clause"))
+    end
+    if !isnothing(cond) && has_except_site(cond)
+        throw(LoweringError(cond, "`?` is not supported in comprehension `if` conditions"))
+    end
+    var = spec[1][1]
+    iter = rewrite_except_sites(ctx, spec[1][2], E)
+    if !isnothing(cond)
+        iter = @ast ctx spec [K"call" "Filter"::K"top"
+            [K"->" [K"tuple" var] cond] iter]
+    end
+    # the closure returns an Except: ordinary elements, or declared
+    # exceptions from propagation sites
+    lam = @ast ctx gen [K"->" [K"tuple" var]
+        [K"call" "except_value"::K"top" rewrite_except_sites(ctx, body, E)]]
+    coll = typed ?
+        (@ast ctx ex [K"call" "except_collect_typed"::K"top"
+            rewrite_except_sites(ctx, ex[1], E) lam iter]) :
+        (@ast ctx ex [K"call" "except_collect"::K"top" lam iter])
+    return except_value_check(ctx, ex, coll, E, nothing)
+end
+
+# rewrite all propagation sites in the body of a method declaring exception
+# type `E`. Does not descend into nested function definitions (which carry
+# their own declarations), quoted code, or lazy generators.
+function rewrite_except_sites(ctx, ex, E)
+    is_leaf(ex) && return ex
+    k = kind(ex)
+    if k == K"question"
+        return expand_question_site(ctx, ex, ex[1], E, nothing)
+    elseif k == K"except" && numchildren(ex) == 2
+        return expand_question_site(ctx, ex, ex[1], E,
+                                    rewrite_except_sites(ctx, ex[2], E))
+    elseif k == K"function" || k == K"->" || k == K"macro" || k == K"module" ||
+            k == K"toplevel" || k == K"generator" || k == K"flatten" ||
+            k == K"quote" || k == K"inert" || k == K"inert_syntaxtree" ||
+            (k == K"=" && numchildren(ex) == 2 && is_eventually_call(ex[1]))
+        return ex
+    elseif (k == K"comprehension" || k == K"typed_comprehension") &&
+            has_except_site(ex)
+        return rewrite_except_comprehension(ctx, ex, E)
+    elseif k == K"match"
+        # rewrite scrutinee, guards and arm bodies, but not patterns
+        return rewrite_match_parts(ctx, ex, E)
+    elseif k == K"match_assign" && numchildren(ex) == 2
+        return @ast ctx ex [K"match_assign" ex[1]
+            rewrite_except_sites(ctx, ex[2], E)]
+    else
+        return mapchildren(x->rewrite_except_sites(ctx, x, E), ctx, ex)
+    end
+end
+
+# wrap the values of ordinary `return`s in an inner except method in
+# ordinary-state `Except`s, so that the value path is distinguished from
+# declared exceptions. Does not descend into nested function definitions
+# or quoted code.
+function wrap_except_value_returns(ctx, ex)
+    is_leaf(ex) && return ex
+    k = kind(ex)
+    if k == K"return"
+        val = numchildren(ex) == 1 ?
+            wrap_except_value_returns(ctx, ex[1]) :
+            (@ast ctx ex (::K"nothing"))
+        return @ast ctx ex [K"return" [K"call" "except_value"::K"top" val]]
+    elseif k == K"function" || k == K"->" || k == K"macro" || k == K"module" ||
+            k == K"toplevel" || k == K"generator" || k == K"flatten" ||
+            k == K"quote" || k == K"inert" || k == K"inert_syntaxtree" ||
+            (k == K"=" && numchildren(ex) == 2 && is_eventually_call(ex[1]))
+        return ex
+    else
+        return mapchildren(x->wrap_except_value_returns(ctx, x), ctx, ex)
+    end
+end
+
+# route one of the split definitions through keyword or plain method
+# lowering, mirroring the tail of `expand_function_def`
+function _except_route_def(ctx, src, mtable, sparams, argl, body, rett, pos_va)
+    has_kws = kind(argl[end]) === K"parameters" && numchildren(argl[end]) > 0
+    if has_kws
+        keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, pos_va)
+    else
+        @ast ctx src [K"block"
+            kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
+            [K"method_defs" mtable [K"block"
+                method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
+            [K"removable" mtable]]
+    end
+end
+
+# split a method definition with declared exception type `E` into inner,
+# outer, and except_call methods. `argl` is the processed argument list
+# (as in `expand_function_def`), including the self argument first and any
+# keyword parameters last.
+function except_method_def_expr(ctx, src, E, mtable, sparams, argl, body, rett, pos_va)
+    has_kws = kind(argl[end]) === K"parameters" && numchildren(argl[end]) > 0
+    kws = has_kws ? argl[end] : nothing
+    pargl = has_kws ? argl[1:end-1] : argl
+
+    # forwarded positional arguments (skipping the self argument)
+    fwd = SyntaxList(ctx)
+    for a in pargl[2:end]
+        decl = kind(a) == K"kw" ? a[1] : a
+        @jl_assert kind(decl) == K"::" decl
+        push!(fwd, decl[1])
+    end
+    if pos_va && !isempty(fwd)
+        fwd[end] = @ast ctx fwd[end] [K"..." fwd[end]]
+    end
+    # forwarded keyword arguments
+    kwfwd = isnothing(kws) ? nothing : let l = SyntaxList(ctx)
+        for p in children(kws)
+            if kind(p) == K"..."
+                push!(l, p)
+            else
+                decl = kind(p) == K"kw" ? p[1] : p
+                n = kind(decl) == K"::" ? decl[1] : decl
+                @jl_assert kind(n) == K"Identifier" p
+                push!(l, @ast ctx p [K"kw" n n])
+            end
+        end
+        l
+    end
+
+    inner_name = let n = kind(mtable) === K"Identifier" ? mtable.name_val : "_",
+        mangled = string(startswith(n, '#') ? "" : "#", n, "#except#")
+        newsym(ctx, argl[1], reserve_module_binding_i(ctx.mod, mangled))
+    end
+    fwd_call = if isnothing(kwfwd)
+        @ast ctx src [K"call" inner_name fwd...]
+    else
+        @ast ctx src [K"call" inner_name fwd... [K"parameters" kwfwd...]]
+    end
+
+    # (1) Inner method: returns an Except. Ordinary returns (and the tail
+    # value) are wrapped in the ordinary state; propagation sites return
+    # exceptional-state values.
+    inner_defs = let arg1 = @ast ctx inner_name [K"::" inner_name [K"function_type" inner_name]]
+        inner_argl = SyntaxList(ctx)
+        push!(inner_argl, arg1)
+        append!(inner_argl, pargl[2:end])
+        isnothing(kws) || push!(inner_argl, kws)
+        inner_body = @ast ctx src [K"block"
+            [K"return" [K"call" "except_value"::K"top"
+                wrap_except_value_returns(ctx, body)]]]
+        _except_route_def(ctx, src, inner_name, sparams, inner_argl,
+                          rewrite_except_sites(ctx, inner_body, E),
+                          @ast(ctx, src, "Any"::K"core"), pos_va)
+    end
+    # (2) Outer method: the ordinary entry point, which throws declared
+    # exceptions for callers that do not participate
+    outer_defs = let outer_body = @ast ctx src [K"block"
+            [K"return" [K"call" "unwrap_except"::K"top" fwd_call]]]
+        _except_route_def(ctx, src, mtable, sparams, argl, outer_body, rett, pos_va)
+    end
+    # (3) Base.except_call entry point. Like the Core.kwcall entry for
+    # keyword arguments, the method definition is associated with the
+    # function being defined (so that closure methods are legal in local
+    # scopes) but its signature places it in except_call's method table.
+    ec_defs = let arg1_name = setmeta!(
+            # the name is forwarded by keyword and optional-positional
+            # method machinery, so it can only be a placeholder when
+            # neither is present
+            newsym(ctx, src, "#except_call_self#";
+                   unused=length(pos_opt_args(argl)) == 0 && !has_kws),
+            :is_except_call_self, true)
+        arg1 = @ast ctx src [K"::" arg1_name
+            [K"call" "typeof"::K"core" "except_call"::K"top"]]
+        arg2 = @ast ctx src [K"::" newsym(ctx, src, "#func#") argl[1][2]]
+        ec_argl = SyntaxList(ctx)
+        push!(ec_argl, arg1)
+        push!(ec_argl, arg2)
+        append!(ec_argl, pargl[2:end])
+        isnothing(kws) || push!(ec_argl, kws)
+        ec_body = @ast ctx src [K"block" [K"return" fwd_call]]
+        _except_route_def(ctx, src, mtable, sparams, ec_argl, ec_body,
+                          @ast(ctx, src, "Any"::K"core"), pos_va)
+    end
+    @ast ctx src [K"block"
+        inner_defs
+        outer_defs
+        ec_defs
+        kind(mtable) === K"nothing" ? (::K"nothing") : mtable
+    ]
+end
+
 function expand_function_arg1(ctx, arg)
     if kind(arg) === K"overlay"
         _, _, x = expand_function_arg1(ctx, arg[2])
         return true, arg[1], x
     end
-    aname = @stm arg begin
-        [K"::" [K"Identifier"] t] -> arg[1]
-        _ -> newsym(ctx, arg, "#self#")
+    aname = match arg
+    case K"::"(K"Identifier"(), t)
+        arg[1]
+    case _
+        newsym(ctx, arg, "#self#")
     end
-    atype = @stm arg begin
-        [K"::" t] -> t
-        [K"::" _ t] -> t
-        _ -> @ast ctx arg [K"function_type" arg]
+    atype = match arg
+    case K"::"(t)
+        t
+    case K"::"(_, t)
+        t
+    case _
+        @ast ctx arg [K"function_type" arg]
     end
     # first arg to Expr(:method)
-    mt = @stm arg begin
-        [K"Identifier"] -> arg
-        [K"Value"] -> arg # TODO delete with globalref support
-        [K"Placeholder"] -> arg
-        _ -> @ast ctx arg (::K"nothing")
+    mt = match arg
+    case K"Identifier"()
+        arg
+    case K"Value"()
+        arg # TODO delete with globalref support
+    case K"Placeholder"()
+        arg
+    case _
+        @ast ctx arg (::K"nothing")
     end
     return false, mt, @ast ctx arg [K"::" aname atype]
 end
 
-fix_argname(ctx, arg, used) = @stm arg begin
-    [K"Identifier"] -> arg
+fix_argname(ctx, arg, used) = match arg
+    case K"Identifier"()
+        arg
     # Lowering should be able to use placeholder args as rvalues internally,
     # e.g. for kw method dispatch.
-    ([K"Placeholder"], when=used) -> newsym(ctx, arg, "#arg#")
-    ([K"Placeholder"], when=!used) -> arg
+    case K"Placeholder"() if used
+        newsym(ctx, arg, "#arg#")
+    case K"Placeholder"() if !used
+        arg
 end
 
 # flisp: fill-missing-argname, llist-types, llist-vars, dots->vararg
@@ -2810,26 +3533,27 @@ end
 # specifies that even placeholder/underscore arguments might be read from
 # internally.  Desugar type, but desugar default values later, since
 # `default...` is unfortunately allowed, so do that in body desugaring.
-expand_function_arg(ctx, arg, used) = @stm arg begin
-    [K"::" x t] ->
+expand_function_arg(ctx, arg, used) = match arg
+    case K"::"(x, t)
         @ast ctx arg [K"::" fix_argname(ctx, x, used) t]
-    [K"::" t] -> let aname = newsym(ctx, arg, "#arg#"; unused=true)
+    case K"::"(t)
+        aname = newsym(ctx, arg, "#arg#"; unused=true)
         hasattr(arg, :meta) && setattr!(aname, :meta, arg.meta)
         @ast ctx arg [K"::" fix_argname(ctx, aname, used) t]
-    end
-    [K"kw" x v] ->
+    case K"kw"(x, v)
         @ast ctx arg [K"kw" expand_function_arg(ctx, x, used) v]
     # note: not correct for kwargs
-    [K"..." x] -> let inner = expand_function_arg(ctx, x, used)
+    case K"..."(x)
+        inner = expand_function_arg(ctx, x, used)
         @jl_assert kind(inner) === K"::" inner arg
         @ast ctx x [K"::" inner[1] [K"curly" "Vararg"::K"core" inner[2]]]
-    end
-    _ -> @ast ctx arg [K"::" fix_argname(ctx, arg, used) "Any"::K"core"]
+    case _
+        @ast ctx arg [K"::" fix_argname(ctx, arg, used) "Any"::K"core"]
 end
 
 # Normalize and expand all positional arguments to (:: identifier t), then call
 # a helper to create the method(s).
-function expand_function_def(ctx, src, raw_args, wheres, body, rett)
+function expand_function_def(ctx, src, raw_args, wheres, body, rett; except_E=nothing)
     @jl_assert length(raw_args) >= 1 (body, "expected a self arg")
     let arg_stmts = lower_destructuring_args!(ctx, raw_args)
         if !isempty(arg_stmts)
@@ -2850,12 +3574,21 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
         end
     end
     sparams = mapsyntax(x->typevar_bounds(ctx, x), wheres)
-    if has_kws
-        pos_va = @stm raw_args[end-1] begin
-            [K"kw" [K"..." _] _...] -> true
-            [K"..." _] -> true
-            _ -> false
+    pos_va = length(raw_args) > (has_kws ? 1 : 0) &&
+        match raw_args[end - (has_kws ? 1 : 0)]
+        case K"kw"(K"..."(_), _...)
+            true
+        case K"..."(_)
+            true
+        case _
+            false
         end
+    if !isnothing(except_E)
+        @jl_assert !overlay (src, "`except` declarations are not supported on overlay methods")
+        return except_method_def_expr(ctx, src, except_E, mtable, sparams,
+                                      argl, body, rett, pos_va)
+    end
+    if has_kws
         keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, pos_va)
     else
         @ast ctx src [K"block"
@@ -2867,8 +3600,8 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     end
 end
 
-expand_opaque_closure(ctx, ex) = @stm ex begin
-    [K"opaque_closure" argt rt_lb rt_ub allow_partial lam] -> begin
+expand_opaque_closure(ctx, ex) = match ex
+    case K"opaque_closure"(argt, rt_lb, rt_ub, allow_partial, lam)
         @jl_assert kind(lam[1]) === K"tuple" ex
         check_no_parameters(ex, lam[1])
         raw_args = append!(SyntaxList(ctx.graph), children(lam[1]))
@@ -2900,20 +3633,19 @@ expand_opaque_closure(ctx, ex) = @stm ex begin
         is_va = !isempty(raw_args) && kind(raw_args[end]) === K"..."
         body = @ast ctx lam[2] [K"block" arg_stmts... lam[2]]
 
-    @ast ctx ex [K"_opaque_closure"
-        ssavar(ctx, ex, "opaque_closure_id") # only a placeholder. Must be :local
-        expand_forms_2(ctx, out_argt)
-        expand_forms_2(ctx, out_rt_lb)
-        expand_forms_2(ctx, out_rt_ub)
-        allow_partial
-        nargs::K"Integer"
-        is_va::K"Bool"
-        ::K"SourceLocation"(lam)
-        [K"lambda"(lam, is_toplevel_thunk=false, toplevel_pure=false)
-            [K"block" arg_names...]
-            [K"block"]
-            expand_forms_2(ctx, body)]]
-    end
+        @ast ctx ex [K"_opaque_closure"
+            ssavar(ctx, ex, "opaque_closure_id") # only a placeholder. Must be :local
+            expand_forms_2(ctx, out_argt)
+            expand_forms_2(ctx, out_rt_lb)
+            expand_forms_2(ctx, out_rt_ub)
+            allow_partial
+            nargs::K"Integer"
+            is_va::K"Bool"
+            ::K"SourceLocation"(lam)
+            [K"lambda"(lam, is_toplevel_thunk=false, toplevel_pure=false)
+                [K"block" arg_names...]
+                [K"block"]
+                expand_forms_2(ctx, body)]]
 end
 
 #-------------------------------------------------------------------------------
@@ -2942,9 +3674,11 @@ function expand_macro_def(ctx, ex)
         # `macro m end`
         return @ast ctx ex [K"function" _make_macro_name(ctx, ex[1])]
     end
-    (sig, name, args) = @stm ex begin
-        [K"macro" [K"call" n a...] _] -> (ex[1], n, remove_empty_parameters(a))
-        _ -> @jl_assert false ex
+    (sig, name, args) = match ex
+    case K"macro"(K"call"(n, a...), _)
+        (ex[1], n, remove_empty_parameters(a))
+    case _
+        @jl_assert false ex
     end
 
     scope_ref = kind(name) == K"." ? name[1] : name
@@ -2989,13 +3723,19 @@ end
 # used, e.g. in all `sparams`, where flisp generally uses a list (name, lb, ub)
 function typevar_bounds(ctx, ex)
     any = @ast ctx ex "Any"::K"core"
-    (name, lb, ub) = bounds = @stm ex begin
-        [K"Identifier"] -> (ex, any, any)
-        [K"Placeholder"] -> (ex, any, any)
-        ([K"comparison" lb op x _ ub], when=op.name_val==="<:") -> (x, lb, ub)
-        ([K"comparison" ub op x _ lb], when=op.name_val===">:") -> (x, lb, ub)
-        [K"<:" x ub] -> (x, any, ub)
-        [K">:" x lb] -> (x, lb, any)
+    (name, lb, ub) = bounds = match ex
+    case K"Identifier"()
+        (ex, any, any)
+    case K"Placeholder"()
+        (ex, any, any)
+    case K"comparison"(lb, op, x, _, ub) if op.name_val==="<:"
+        (x, lb, ub)
+    case K"comparison"(ub, op, x, _, lb) if op.name_val===">:"
+        (x, lb, ub)
+    case K"<:"(x, ub)
+        (x, any, ub)
+    case K">:"(x, lb)
+        (x, lb, any)
     end
     @ast ctx ex [K"_typevar" name lb ub]
 end
@@ -3230,50 +3970,47 @@ end
 function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres)
     sig2 = sig
     ctor_self = nothing
-    @stm sig begin
-        [K"::" x rett] -> let
-            call2, ctor_self = rewrite_ctor_sig(
-                ctx, x, tname, global_tname, struct_typevars, wheres)
-            sig2 = @ast(ctx, sig, [K"::" call2 rett])
-        end
-        # recognize `(_::(Type{X{T}} where T))(...)` as an inner-style
-        # constructor for X (rewrite it to `X{T}(...) where T`)
-        ([K"call" [K"::" _ [K"where" _...]] args...], when=begin
+    match sig
+    case K"::"(x, rett)
+        call2, ctor_self = rewrite_ctor_sig(
+            ctx, x, tname, global_tname, struct_typevars, wheres)
+        sig2 = @ast(ctx, sig, [K"::" call2 rett])
+    # recognize `(_::(Type{X{T}} where T))(...)` as an inner-style
+    # constructor for X (rewrite it to `X{T}(...) where T`)
+    case K"call"(K"::"(_, K"where"(_...)), args...) if begin
              t, inner_wheres = flatten_wheres(ex[1][2])
              isempty(wheres) && kind(t) === K"curly" && get(t[1], :name_val, "") == "Type"
-         end) -> let
-             append!(wheres, inner_wheres)
-             ex2 = @ast ctx ex [K"call" t[2] args...]
-             return rewrite_ctor_sig(
-                 ctx, ex2, tname, global_tname, struct_typevars, wheres)
+         end
+        append!(wheres, inner_wheres)
+        ex2 = @ast ctx ex [K"call" t[2] args...]
+        return rewrite_ctor_sig(
+            ctx, ex2, tname, global_tname, struct_typevars, wheres)
+    case K"call"(K"curly"(name, curlyargs...), args...)
+        # if curlyargs is the wrong length, fall back to the ones in `new`
+        # TODO: this isn't quite the same as flisp, which passes curlyargs
+        # to new-call and checks there.  We print the wrong message with
+        # `struct X{T}; X{T,U}() = new(); end`.
+        if (kind(name) !== K"::" && is_same_identifier_like(name, tname) &&
+            length(curlyargs) == length(struct_typevars))
+            @jl_assert is_leaf(name) (sig, "didn't find ctor name in sig")
+            ctor_self = newsym(ctx, sig, "#ctor-self#")
+            sig2 = @ast ctx sig [K"call"
+                [K"::" ctor_self
+                    [K"curly" "Type"::K"core"
+                     [K"curly" global_tname curlyargs...]]]
+                args...]
         end
-        [K"call" [K"curly" name curlyargs...] args...] -> let
-            # if curlyargs is the wrong length, fall back to the ones in `new`
-            # TODO: this isn't quite the same as flisp, which passes curlyargs
-            # to new-call and checks there.  We print the wrong message with
-            # `struct X{T}; X{T,U}() = new(); end`.
-            if (kind(name) !== K"::" && is_same_identifier_like(name, tname) &&
-                length(curlyargs) == length(struct_typevars))
-                @jl_assert is_leaf(name) (sig, "didn't find ctor name in sig")
-                ctor_self = newsym(ctx, sig, "#ctor-self#")
-                sig2 = @ast ctx sig [K"call"
-                    [K"::" ctor_self
-                        [K"curly" "Type"::K"core"
-                         [K"curly" global_tname curlyargs...]]]
-                    args...]
-            end
+    case K"call"(name, args...)
+        if kind(name) !== K"::" && is_same_identifier_like(name, tname)
+            @jl_assert is_leaf(name) (sig, "didn't find ctor name in sig")
+            ctor_self = newsym(ctx, sig, "#ctor-self#")
+            sig2 = @ast ctx sig [K"call"
+                [K"::" ctor_self [K"curly" "Type"::K"core" global_tname]]
+                args...]
         end
-        [K"call" name args...] -> let
-            if kind(name) !== K"::" && is_same_identifier_like(name, tname)
-                @jl_assert is_leaf(name) (sig, "didn't find ctor name in sig")
-                ctor_self = newsym(ctx, sig, "#ctor-self#")
-                sig2 = @ast ctx sig [K"call"
-                    [K"::" ctor_self [K"curly" "Type"::K"core" global_tname]]
-                    args...]
-            end
-        end
-        # anonymous function
-        [K"tuple" _...] -> (sig, nothing)
+    # anonymous function
+    case K"tuple"(_...)
+        (sig, nothing)
     end
     sig_out = isempty(wheres) ? sig2 : @ast ctx sig [K"where" sig2 wheres...]
     return sig_out, ctor_self
@@ -3314,18 +4051,20 @@ end
 #     (t::Type{X{A,B}})() = new()
 function rewrite_ctor(ctx, ex, tname, global_tname, struct_typevars, field_types)
     is_leaf(ex) && return ex
-    @stm ex begin
-        [K"inert" _] -> ex
-        [K"function" call body] -> let (sig, wheres) = flatten_wheres(call)
-            call2, ctor_self =
-                rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres)
-            body2 = _rewrite_ctor_new_calls(
-                ctx, body, global_tname,
-                mapsyntax(x->typevar_bounds(ctx, x), wheres),
-                struct_typevars, ctor_self, field_types)
-            @ast ctx ex [K"function" call2 body2]
-        end
-        x -> mapchildren(e->rewrite_ctor(
+    match ex
+    case K"inert"(_)
+        ex
+    case K"function"(call, body)
+        (sig, wheres) = flatten_wheres(call)
+        call2, ctor_self =
+            rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres)
+        body2 = _rewrite_ctor_new_calls(
+            ctx, body, global_tname,
+            mapsyntax(x->typevar_bounds(ctx, x), wheres),
+            struct_typevars, ctor_self, field_types)
+        @ast ctx ex [K"function" call2 body2]
+    case _
+        mapchildren(e->rewrite_ctor(
             ctx, e, tname, global_tname, struct_typevars, field_types), ctx, ex)
     end
 end
@@ -3908,15 +4647,15 @@ end
 
 function expand_wheres(ctx, ex)
     body = ex[1]
-    @stm ex begin
-        [K"where" _ [K"_typevars" [K"block" names...] [K"block" stmts...]]] ->
-            for n in Iterators.reverse(names)
-                body = @ast ctx ex [K"call" "UnionAll"::K"core" n body]
-            end
-        [K"where" _ tvs...] ->
-            for v in Iterators.reverse(tvs)
-                body = expand_where(ctx, ex, body, v)
-            end
+    match ex
+    case K"where"(_, K"_typevars"(K"block"(names...), K"block"(stmts...)))
+        for n in Iterators.reverse(names)
+            body = @ast ctx ex [K"call" "UnionAll"::K"core" n body]
+        end
+    case K"where"(_, tvs...)
+        for v in Iterators.reverse(tvs)
+            body = expand_where(ctx, ex, body, v)
+        end
     end
     body
 end
@@ -4120,6 +4859,18 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"?"
         @jl_assert numchildren(ex) == 3 ex
         expand_forms_2(ctx, @ast ctx ex [K"if" children(ex)...])
+    elseif k == K"match"
+        expand_forms_2(ctx, expand_match(ctx, ex))
+    elseif k == K"match_assign"
+        expand_forms_2(ctx, expand_match_assign(ctx, ex))
+    elseif k == K"question"
+        # declared-exception propagation site outside of any declaration:
+        # declared exceptions are thrown
+        @jl_assert numchildren(ex) == 1 ex
+        expand_forms_2(ctx, expand_question_site(ctx, ex, ex[1], nothing, nothing))
+    elseif k == K"except"
+        @jl_assert numchildren(ex) == 2 ex
+        expand_forms_2(ctx, expand_question_site(ctx, ex, ex[1], nothing, nothing))
     elseif k == K"&&" || k == K"||"
         cs = expand_cond_children(ctx, ex)
         isempty(cs) && return @ast ctx ex (k === K"&&")::K"Bool"
@@ -4155,30 +4906,28 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"="
         expand_assignment(ctx, ex)
     elseif k == K"break"
-        @stm ex begin
-            [K"break"] ->
-                @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"]
-            [K"break" [K"Placeholder"]] ->
-                @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"]
-            [K"break" [K"Identifier"]] -> begin
-                @ast ctx ex [K"break" ex[1]=>K"symboliclabel"]
-            end
-            [K"break" [K"Placeholder"] val] ->
-                @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"
-                             expand_forms_2(ctx, val)]
-            [K"break" [K"Identifier"] val] -> begin
-                @ast ctx ex [K"break" ex[1]=>K"symboliclabel"
-                             expand_forms_2(ctx, val)]
-            end
+        match ex
+        case K"break"()
+            @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"]
+        case K"break"(K"Placeholder"())
+            @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"]
+        case K"break"(K"Identifier"())
+            @ast ctx ex [K"break" ex[1]=>K"symboliclabel"]
+        case K"break"(K"Placeholder"(), val)
+            @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"
+                         expand_forms_2(ctx, val)]
+        case K"break"(K"Identifier"(), val)
+            @ast ctx ex [K"break" ex[1]=>K"symboliclabel"
+                         expand_forms_2(ctx, val)]
         end
     elseif k == K"continue"
-        @stm ex begin
-            [K"continue"] ->
-                @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
-            [K"continue" [K"Placeholder"]] ->
-                @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
-            [K"continue" [K"Identifier"]] ->
-                @ast ctx ex [K"break" string(ex[1].name_val, "#cont")::K"symboliclabel"]
+        match ex
+        case K"continue"()
+            @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
+        case K"continue"(K"Placeholder"())
+            @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
+        case K"continue"(K"Identifier"())
+            @ast ctx ex [K"break" string(ex[1].name_val, "#cont")::K"symboliclabel"]
         end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
@@ -4190,14 +4939,22 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"comprehension"
         @jl_assert numchildren(ex) == 1 ex
         @jl_assert kind(ex[1]) == K"generator" ex
-        @ast ctx ex [K"call"
-            "collect"::K"top"
-            expand_forms_2(ctx, ex[1])
-        ]
+        if has_except_site(ex)
+            # comprehension outside of any declaration: still collect
+            # through except_collect, throwing any declared exception
+            expand_forms_2(ctx, rewrite_except_comprehension(ctx, ex, nothing))
+        else
+            @ast ctx ex [K"call"
+                "collect"::K"top"
+                expand_forms_2(ctx, ex[1])
+            ]
+        end
     elseif k == K"typed_comprehension"
         @jl_assert numchildren(ex) == 2 ex
         @jl_assert kind(ex[2]) == K"generator" ex
-        if numchildren(ex[2]) == 2 && kind(ex[2][2]) == K"iteration"
+        if has_except_site(ex)
+            expand_forms_2(ctx, rewrite_except_comprehension(ctx, ex, nothing))
+        elseif numchildren(ex[2]) == 2 && kind(ex[2][2]) == K"iteration"
             # Hack to lower simple typed comprehensions to loops very early,
             # greatly reducing the number of functions and load on the compiler
             expand_forms_2(ctx, expand_comprehension_to_loops(ctx, ex))
@@ -4209,32 +4966,57 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             ]
         end
     elseif k == K"generator"
+        if any(has_except_site, children(ex))
+            # propagation sites in lazy generators are outside any
+            # declaration: rewrite them to throw before the body is moved
+            # into a closure
+            ex = mapchildren(x->rewrite_except_sites(ctx, x, nothing), ctx, ex)
+        end
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"function"
         if numchildren(ex) == 1
             return @ast ctx ex [K"block" [K"function_decl" ex[1]] ex[1]]
         end
-        sig, wheres = flatten_wheres(ex[1])
-        name, args, rett = @stm sig begin
-            [K"::" [K"call" f as...] t] -> (f, as, t)
-            [K"call" f as...] -> (f, as, @ast(ctx, sig, "Any"::K"core"))
-            [K"tuple" as...] -> (nothing, as, @ast(ctx, sig, "Any"::K"core"))
+        sig0 = ex[1]
+        except_E = nothing
+        if kind(sig0) == K"except" && numchildren(sig0) == 2
+            # function f(x)::T except E ... end
+            except_E = sig0[2]
+            sig0 = sig0[1]
+        elseif has_except_site(ex[2])
+            # no declaration, but the body has propagation sites: infer
+            # `except Any`
+            except_E = @ast ctx ex "Any"::K"core"
+        end
+        sig, wheres = flatten_wheres(sig0)
+        name, args, rett = match sig
+        case K"::"(K"call"(f, as...), t)
+            (f, as, t)
+        case K"call"(f, as...)
+            (f, as, @ast(ctx, sig, "Any"::K"core"))
+        case K"tuple"(as...)
+            (nothing, as, @ast(ctx, sig, "Any"::K"core"))
         end
         if isnothing(name)
             name = newsym(ctx, sig, "#anon#")
             @ast ctx ex [K"block" [K"local" name] expand_function_def(
-                ctx, ex, SyntaxList(name, args...), wheres, ex[2], rett)]
+                ctx, ex, SyntaxList(name, args...), wheres, ex[2], rett;
+                except_E)]
         else
             expand_function_def(
-                ctx, ex, SyntaxList(name, args...), wheres, ex[2], rett)
+                ctx, ex, SyntaxList(name, args...), wheres, ex[2], rett;
+                except_E)
         end
     elseif k == K"->"
         sig, wheres = flatten_wheres(ex[1])
         @jl_assert kind(sig) === K"tuple" ex
         name = newsym(ctx, sig, "#->#")
         rett = @ast(ctx, sig, "Any"::K"core")
+        except_E = has_except_site(ex[2]) ?
+            (@ast ctx ex "Any"::K"core") : nothing
         @ast ctx ex [K"block" [K"local" name] expand_function_def(
-            ctx, ex, SyntaxList(name, children(sig)...), wheres, ex[2], rett)]
+            ctx, ex, SyntaxList(name, children(sig)...), wheres, ex[2], rett;
+            except_E)]
     elseif k == K"macro"
         @ast ctx ex [K"block"
             [K"assert"

@@ -147,14 +147,16 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     end
     basetype = Int32
     typename = T
-    if isa(T, Expr) && T.head === :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
+    match T
+    case ::Expr if T.head === :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
         typename = T.args[1]
         basetype = Core.eval(__module__, T.args[2])
         if !isa(basetype, DataType) || !(basetype <: Integer) || !isbitstype(basetype)
             throw(ArgumentError(
                 LazyString("invalid base type for Enum ", typename, ", ", T, "=::", basetype, "; base type must be an integer primitive type")))
         end
-    elseif !isa(T, Symbol)
+    case ::Symbol
+    case _
         throw(ArgumentError(LazyString("invalid type expression for enum ", T)))
     end
     values = Vector{basetype}()
@@ -175,21 +177,20 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         else
             doc = nothing
         end
-        if isa(s, Symbol)
+        s, i, hasexpr = match s
+        case ::Symbol
             if i == typemin(basetype) && !isempty(values)
                 throw(ArgumentError(LazyString("overflow in value \"", s, "\" of Enum ", typename)))
             end
-        elseif isa(s, Expr) &&
-               (s.head === :(=) || s.head === :kw) &&
+            (s, i, hasexpr)
+        case ::Expr if (s.head === :(=) || s.head === :kw) &&
                length(s.args) == 2 && isa(s.args[1], Symbol)
-            i = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
-            if !isa(i, Integer)
+            j = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
+            if !isa(j, Integer)
                 throw(ArgumentError(LazyString("invalid value for Enum ", typename, ", ", s, "; values must be integers")))
             end
-            i = convert(basetype, i)
-            s = s.args[1]
-            hasexpr = true
-        else
+            (s.args[1], convert(basetype, j), true)
+        case _
             throw(ArgumentError(LazyString("invalid argument for Enum ", typename, ": ", s)))
         end
         s = s::Symbol

@@ -743,13 +743,15 @@
                  (if (or (eqv? nxt #\,) (eqv? nxt #\) ) (eqv? nxt #\}) (eqv? nxt #\]))
                      t
                      (begin (ts:put-back! s t spc)
-                            (parse-assignment s parse-pair)))))
-        (parse-assignment s parse-pair))))
+                            (parse-assignment s parse-with-except)))))
+        (parse-assignment s parse-with-except))))
 
 (define (eventually-call? ex)
   (and (pair? ex)
        (or (eq? (car ex) 'call)
-           (and (or (eq? (car ex) 'where) (eq? (car ex) '|::|))
+           (and (or (eq? (car ex) 'where) (eq? (car ex) '|::|)
+                    ;; declared exception type: f(x)::T except E = ...
+                    (and (eq? (car ex) 'except) (length= ex 3)))
                 (eventually-call? (cadr ex))))))
 
 (define (add-line-number blk linenode)
@@ -785,7 +787,7 @@
 
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s)
-  (let loop ((ex     (list (parse-pair s)))
+  (let loop ((ex     (list (parse-with-except s)))
              (first? #t)
              (t      (peek-token s)))
     (if (not (eqv? t #\,))
@@ -799,9 +801,22 @@
         (begin (take-token s)
                (if (eq? (peek-token s) '=) ;; allow x, = ...
                    (loop ex #f (peek-token s))
-                   (loop (cons (parse-pair s) ex) #f (peek-token s)))))))
+                   (loop (cons (parse-with-except s) ex) #f (peek-token s)))))))
 
 (define (parse-pair s) (parse-RtoL s parse-cond is-prec-pair? #f parse-pair))
+
+;; parse the infix contextual keyword `except`, used for declared-exception
+;; filtering (`expr except E`) and for exception declarations on method
+;; signatures (`f(x)::T except E = rhs`). Binds tighter than assignment and
+;; commas but looser than pairs:
+;;   y = f() except E   =>  (= y (except (call f) E))
+;;   k => v except E    =>  (except (call => k v) E)
+(define (parse-with-except s)
+  (let loop ((ex (parse-pair s)))
+    (if (eq? (peek-token s) 'except)
+        (begin (take-token s)
+               (loop (list 'except ex (parse-pair s))))
+        ex)))
 
 (define (parse-cond s)
   (let ((ex (parse-arrow s)))
@@ -1136,9 +1151,48 @@
   (let ((nxt (peek-token s)))
     (parse-call-with-initial-ex s (parse-unary-prefix s) nxt)))
 
+;; Determine whether `match` at the current position begins a `match`
+;; statement, as opposed to being used as a plain identifier (e.g. calling
+;; the `Base.match` function). `match` is a contextual keyword: it only
+;; starts a match statement when followed, after whitespace, by a token
+;; that could begin a scrutinee expression but could not continue an
+;; expression in which `match` is a leading identifier.
+(define (initiates-match? s)
+  ;; note: peek-token must be called before ts:space? so that the space
+  ;; flag refers to the upcoming token
+  (let* ((t   (peek-token s))
+         (spc (ts:space? s)))
+    (cond ((or (eof-object? t) (newline? t) (closing-token? t) (eq? t 'do))
+           ;; `match` as a standalone expression, argument, or before a
+           ;; block continuation keyword is an identifier
+           #f)
+          ((and (not spc) (memv t '(#\( #\[ #\{ #\" #\` |'| |.| ?)))
+           ;; match(x), match[i], match{T}, match"str", match`c`, match',
+           ;; match?, match.f are call/index/macro/postfix uses
+           #f)
+          ((eq? t '|'|)
+           ;; with preceding whitespace, ' starts a char literal scrutinee
+           #t)
+          ((and (symbol? t)
+                (or (operator? t) (memq t '(in isa)))
+                (not (memq t '(! ¬ √ ∛ ∜))))
+           ;; `match == x`, `match => x`, `match in x`, `match = x`,
+           ;; `match - x` etc. use `match` as an identifier; only operators
+           ;; that are exclusively unary prefix can start a scrutinee
+           #f)
+          (else #t))))
+
 (define (parse-call-with-initial-ex s ex tok)
-  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract)))
-      (parse-resword s ex)
+  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract))
+          ;; `match` is a contextual keyword
+          (and (eq? tok 'match) (eq? ex 'match) (initiates-match? s)))
+      (let ((ex (parse-resword s ex)))
+        ;; postfix `?` on a block expression propagates declared
+        ;; exceptions:  match f() \n case except E(c) \n c \n end?
+        (if (and (eq? (peek-token s) '?) (not (ts:space? s)))
+            (begin (take-token s)
+                   (list 'question ex))
+            ex))
       (parse-call-chain s ex #f)))
 
 (define (parse-unary-prefix s)
@@ -1278,6 +1332,12 @@
                                (list t ex)
                                (list 'call t ex)))))
                  ex))
+            ((?)
+             ;; postfix `?` propagates declared exceptions: f(x)?
+             (if (and (not (ts:space? s)) (not macrocall?))
+                 (begin (take-token s)
+                        (loop (list 'question ex)))
+                 ex))
             ((|.'|) (error "the \".'\" operator is discontinued"))
             ((#\{ )
              (disallow-space s ex t)
@@ -1378,6 +1438,42 @@
                (take-lineendings s))
         s)))
 
+;; parse one `case` arm of a `match` statement: `case [except] pattern
+;; [if guard]` followed by the arm body, which extends until the next
+;; `case` or the closing `end`. An empty body is allowed (the arm then
+;; evaluates to the matched value).
+(define (parse-match-case s)
+  (let* ((except? (if (eq? (peek-token s) 'except)
+                      ;; `case except PAT` matches the declared-exception
+                      ;; channel of the scrutinee call. (To match against a
+                      ;; variable that happens to be named `except`,
+                      ;; parenthesize it.)
+                      (let ((spc (ts:space? s)))
+                        (take-token s)
+                        (let ((t2 (peek-token s)))
+                          (if (and spc
+                                   (not (or (newline? t2) (eqv? t2 #\;)
+                                            (memq t2 '(if end))
+                                            (eof-object? t2))))
+                              #t
+                              (begin (ts:put-back! s 'except spc)
+                                     #f))))
+                      #f))
+         (pat  (parse-with-except s))
+         (patg (if (eq? (peek-token s) 'if)
+                   ;; guard: case x if x > 0
+                   (begin (take-token s)
+                          (list 'guard pat (parse-cond s)))
+                   pat)))
+    (let ((t (peek-token s)))
+      (if (not (or (newline? t) (eqv? t #\;) (memq t '(case end))
+                   (eof-object? t)))
+          (error (string "expected newline or \";\" after \"case\" pattern, got \"" t "\""))))
+    (let ((body (parse-Nary s parse-eq '(#\newline #\;) 'block
+                            (lambda (x) (memq x '(case end else elseif catch finally)))
+                            #t)))
+      (list (if except? 'case_except 'case) patg body))))
+
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
   (with-bindings
@@ -1475,8 +1571,14 @@
        ((function macro)
         (let* ((loc   (line-number-node s))
                (paren (eqv? (require-token s) #\())
-               (sig   (parse-def s (eq? word 'function) paren)))
-          (if (and (not paren) (symbol-or-interpolate? sig))
+               (sig   (parse-def s (eq? word 'function) paren))
+               ;; declared exception type on the signature:
+               ;; function f(x)::T except E ... end
+               (exc   (and (eq? word 'function)
+                           (eq? (peek-token s) 'except)
+                           (begin (take-token s)
+                                  (parse-pair s)))))
+          (if (and (not paren) (symbol-or-interpolate? sig) (not exc))
               (begin (if (not (eq? (require-token s) 'end))
                          (error (string "expected \"end\" in definition of " word " \"" sig "\"")))
                      (take-token s)
@@ -1495,6 +1597,7 @@
                                        (error (string "ambiguous signature in " word " definition. Try adding a comma if this is a 1-argument anonymous function."))
                                        (error (string "expected \"(\" in " word " definition")))
                                    sig)))
+                     (def  (if exc `(except ,def ,exc) def))
                      (body (parse-block s)))
                 (expect-end s word)
                 (list word def (add-line-number body loc))))))
@@ -1600,6 +1703,44 @@
                       finalb
                       eb)))
              (else (expect-end-error nxt 'try))))))
+       ((match)
+        ;; match statement / inline match destructuring. `match` is a
+        ;; contextual keyword, dispatched here from
+        ;; parse-call-with-initial-ex via initiates-match?
+        (let ((scrut (parse-with-except s)))
+          (if (eq? (peek-token s) '=)
+              ;; match pat = val
+              (begin (take-token s)
+                     (list 'match_assign scrut (parse-eq s)))
+              (let ((scrut (if (eq? (peek-token s) 'as)
+                               ;; match f() as v ... end binds the matched
+                               ;; value to v
+                               (begin (take-token s)
+                                      (let ((nm (parse-atom s)))
+                                        (if (not (symbol? nm))
+                                            (error "expected identifier after \"as\" in \"match\""))
+                                        (list 'as scrut nm)))
+                               scrut)))
+                (let ((t (peek-token s)))
+                  (if (not (or (newline? t) (eqv? t #\;) (memq t '(case end))
+                               (eof-object? t)))
+                      (error (string "expected newline or \";\" after \"match\" scrutinee, got \"" t "\""))))
+                (let loop ((arms '()))
+                  (let ((t (require-token s)))
+                    (cond ((eqv? t #\;)
+                           (take-token s)
+                           (loop arms))
+                          ((eq? t 'case)
+                           (take-token s)
+                           (loop (cons (parse-match-case s) arms)))
+                          ((eq? t 'end)
+                           (take-token s)
+                           (if (null? arms)
+                               (error "\"match\" requires at least one \"case\" arm"))
+                           (list* 'match scrut (reverse! arms)))
+                          (else
+                           (error (string "unexpected \"" t "\" in \"match\"; expected \"case\" or \"end\""))))))))))
+
        ((return)          (let ((t (peek-token s)))
                             (if (or (eqv? t #\newline) (closing-token? t))
                                 (list 'return '(null))

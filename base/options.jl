@@ -100,12 +100,13 @@ function show(io::IO, opt::JLOptions)
     fields = fieldnames(JLOptions)
     nfields = length(fields)
     for (i, f) in enumerate(fields)
-        v = getfield(opt, i)
-        if isa(v, Ptr{UInt8})
-            v = (v != C_NULL) ? unsafe_string(v) : ""
-        elseif isa(v, Ptr{Ptr{UInt8}})
-            v = unsafe_load_commands(v)
-        end
+        v = match getfield(opt, i)
+            case p::Ptr{UInt8}
+                p != C_NULL ? unsafe_string(p) : ""
+            case p::Ptr{Ptr{UInt8}}
+                unsafe_load_commands(p)
+            case _
+            end
         print(io, f, " = ", repr(v), i < nfields ? ", " : "")
     end
     print(io, ")")

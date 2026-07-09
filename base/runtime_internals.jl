@@ -983,16 +983,18 @@ If `T` is not a type, then return `false`.
 """
 function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
-    if isa(t, DataType)
-        return datatype_ismutationfree(t)
-    elseif isType(t)
+    # TypeVar, etc. are not mutation-free
+    match t
+    case dt::DataType
+        datatype_ismutationfree(dt)
+    case _ if isType(t)
         T = type_parameter(t)
-        return isa(T, Type) && ismutationfree(typeof(T))
-    elseif isa(t, Union)
-        return ismutationfree(t.a) && ismutationfree(t.b)
+        isa(T, Type) && ismutationfree(typeof(T))
+    case u::Union
+        ismutationfree(u.a) && ismutationfree(u.b)
+    case _
+        false
     end
-    # TypeVar, etc.
-    return false
 end
 
 datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x0200)
@@ -1006,16 +1008,18 @@ If `T` is not a type, then return `false`.
 """
 function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
-    if isa(t, DataType)
-        return datatype_isidentityfree(t)
-    elseif isType(t)
+    # TypeVar, etc. are not identity-free
+    match t
+    case dt::DataType
+        datatype_isidentityfree(dt)
+    case _ if isType(t)
         T = type_parameter(t)
-        return isa(T, Type) && isidentityfree(typeof(T))
-    elseif isa(t, Union)
-        return isidentityfree(t.a) && isidentityfree(t.b)
+        isa(T, Type) && isidentityfree(typeof(T))
+    case u::Union
+        isidentityfree(u.a) && isidentityfree(u.b)
+    case _
+        false
     end
-    # TypeVar, etc.
-    return false
 end
 
 """
@@ -1750,10 +1754,11 @@ end
 unionlen(@nospecialize(x)) = x isa Union ? unionlen(x.a) + unionlen(x.b) : 1
 
 function _uniontypes(@nospecialize(x), ts::Array{Any,1})
-    if x isa Union
-        _uniontypes(x.a, ts)
-        _uniontypes(x.b, ts)
-    else
+    match x
+    case u::Union
+        _uniontypes(u.a, ts)
+        _uniontypes(u.b, ts)
+    case _
         push!(ts, x)
     end
     return ts

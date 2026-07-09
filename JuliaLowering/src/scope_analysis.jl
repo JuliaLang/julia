@@ -412,6 +412,11 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         ex
     elseif k == K"softscope"
         newleaf(ctx, ex, K"TOMBSTONE")
+    elseif k == K"break" && numchildren(ex) >= 2
+        # For break with value, resolve the value expression but not the
+        # symbolic label. This must come before the !needs_resolution check
+        # since K"break" is in is_quoted.
+        @ast ctx ex [K"break" ex[1] _resolve_scopes(ctx, ex[2], scope)]
     elseif !needs_resolution(ex)
         ex
     elseif k == K"local"
@@ -446,10 +451,19 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         sparam_bindings = _resolve_scopes(ctx, ex[2], newscope)
         self_id = if numchildren(arg_bindings) === 0
             0
-        elseif getmeta(ex[1][1], :is_kwcall_self, false)
-            arg_bindings[3].var_id
         else
-            arg_bindings[1].var_id
+            i = 1
+            if getmeta(ex[1][i], :is_kwcall_self, false)
+                # Core.kwcall methods: the closure argument comes after the
+                # kwcall self and NamedTuple arguments
+                i += 2
+            end
+            if i <= numchildren(arg_bindings) &&
+                    getmeta(ex[1][i], :is_except_call_self, false)
+                # Base.except_call methods: the closure argument is next
+                i += 1
+            end
+            arg_bindings[i].var_id
         end
         lambda_bindings = LambdaBindings(self_id, newscope.id, newscope.locals_capt)
         body_stmts = SyntaxList(ctx)
