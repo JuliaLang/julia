@@ -1173,14 +1173,20 @@ function wait_forever()
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
                 # A Ctrl-C/SIGINT was delivered to this internal scheduler task while
                 # the thread was idle (it parked here after running a completed task).
-                # Forward it to the REPL backend if it is evaluating user code;
-                # otherwise no task could meaningfully observe it, so drop it (#58689).
-                backend = repl_backend_task()
-                if backend isa Task
+                # Forward it to a task that can observe it: the REPL backend if it is
+                # evaluating user code; nothing at an idle REPL prompt (drop it); the
+                # root task otherwise, e.g. a non-interactive script blocked in wait
+                # (#58689).
+                victim = repl_backend_task()
+                if !(victim isa Task)
+                    at_repl_prompt = @isdefined(active_repl_backend) && active_repl_backend !== nothing
+                    victim = (at_repl_prompt || istaskdone(roottask)) ? nothing : roottask
+                end
+                if victim isa Task
                     try
-                        throwto(backend, e)
+                        throwto(victim, e)
                     catch
-                        # delivery is best-effort: the backend may have been
+                        # delivery is best-effort: the victim may have been
                         # rescheduled concurrently, or a second interrupt may arrive
                         # while this task is suspended in the switch
                     end
