@@ -1495,56 +1495,84 @@ identify_package(envstack::EnvironmentStack, where::PkgId, name::String) = _noth
 identify_package(envstack::EnvironmentStack, name::String) = _nothing_or_first(identify_package_env(envstack, name))
 
 ## Locate ##
+#
+# Implements the manual's `paths[(uuid, name)]` map ("The paths map" in
+# doc/src/manual/code-loading.md), split into two steps:
+#
+#   1. `_logical_locate` — a *pure* computation over the parsed environment. It figures out
+#      *where a package's source should be* without touching the disk, producing a
+#      `LogicalLoadSpec`. A package that lives in a depot is described with the depot part
+#      left as the `@depot` placeholder (`@depot/packages/<Name>/<slug>`), since which depot
+#      actually holds it is the only genuinely disk-dependent, ambiguous part.
+#
+#   2. `reify` — turns a `LogicalLoadSpec` into a concrete on-disk `PkgLoadSpec` by
+#      expanding `@depot` against `DEPOT_PATH` and forming the entry-point path.
+#
+# The pure step is cheap and depends only on the (project, manifest) pair, so its result is
+# serializable and cacheable; all filesystem access is confined to `reify`.
 
-function _locate_package(env::ExplicitEnv, pkg::PkgId)::Union{Nothing, PkgLoadSpec, Missing}
+const DEPOT_TAG = "@depot"
+const DEPOT_TAG_PREFIX = DEPOT_TAG * Filesystem.path_separator # tagged roots are built with `joinpath`
+
+# Pure description of where a package's source might be. `roots` are candidate package
+# roots tried in order: a root beginning with the `@depot` sentinel is a depot-relative
+# directory (expanded against `DEPOT_PATH`, must exist to select that depot); any other root
+# is absolute and taken directly. `unresolved` is what `reify` returns if no root resolves.
+struct LogicalLoadSpec
+    roots::Vector{String}
+    name::String
+    entryfile::Union{Nothing, String}
+    is_extension::Bool          # entry computed via `find_ext_path` rather than `entry_path`
+    julia_syntax_version::VersionNumber
+    unresolved::Symbol          # `:missing` (stop the env-stack search) or `:nothing` (keep looking)
+end
+
+function _logical_locate(env::ExplicitEnv, pkg::PkgId)::Union{Nothing, Missing, LogicalLoadSpec}
     strategy = get(env.lookup_strategy, pkg.uuid, missing)
-    entryfile = get(env.entryfile, pkg.uuid, nothing)
     if !(strategy isa Missing) || haskey(env.lookup_strategy, pkg.uuid)
+        entryfile = get(env.entryfile, pkg.uuid, nothing)
         sv = get(env.syntax_version, pkg.uuid, VERSION)
         if strategy isa Missing
             # In project_deps but not in the manifest - stop searching.
             return missing
         elseif strategy isa Nothing
-            # stdlib (no `path` nor `git-tree-sha1`): load it from the stdlib location.
-            spec = _locate_package(stdlib_env(), pkg)
-            spec isa PkgLoadSpec && return spec
-            return nothing
+            # stdlib (no `path` nor `git-tree-sha1`): known location in the stdlib env.
+            return _logical_locate(stdlib_env(), pkg)
         elseif strategy isa String
-            if pkg.uuid == env.project_uuid
-                # The project-as-package: root is the project dir (already absolute).
-                return PkgLoadSpec(entry_path(strategy, pkg.name, entryfile), sv)
-            end
-            # `path` entries in a manifest are relative to the manifest directory.
-            root = normpath(abspath(dirname(env.manifest_path::String), strategy))
-            return PkgLoadSpec(entry_path(root, pkg.name, entryfile), sv)
+            # The project-as-package root is already absolute; `path` entries in a manifest
+            # are relative to the manifest directory.
+            root = pkg.uuid == env.project_uuid ? strategy :
+                   normpath(abspath(dirname(env.manifest_path::String), strategy))
+            return LogicalLoadSpec(String[root], pkg.name, entryfile, false, sv, :nothing)
         elseif strategy isa SHA1
-            for slug in (version_slug(pkg.uuid, strategy), version_slug(pkg.uuid, strategy, 4))
-                for depot in DEPOT_PATH
-                    path = joinpath(depot, "packages", pkg.name, slug)
-                    ispath(path) && return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), sv)
-                end
-            end
-            # No depot contains the package - stop searching.
-            return missing
+            roots = String[joinpath(DEPOT_TAG, "packages", pkg.name, version_slug(pkg.uuid, strategy)),
+                           joinpath(DEPOT_TAG, "packages", pkg.name, version_slug(pkg.uuid, strategy, 4))]
+            return LogicalLoadSpec(roots, pkg.name, entryfile, false, sv, :missing)
         end
     end
-    # The package might be an extension of a manifest package.
+    # The package might be an extension of a manifest package: it lives at the parent's
+    # root, with its entry point computed via `find_ext_path`.
     ext = _extension_parent(env, pkg)
     if ext !== nothing
         parent_uuid, _ = ext
-        parent_spec = _locate_package(env, PkgId(parent_uuid, env.names[parent_uuid]))
-        if parent_spec isa PkgLoadSpec
-            p = normpath(dirname(parent_spec.path), "..")
-            return PkgLoadSpec(find_ext_path(p, pkg.name), parent_spec.julia_syntax_version)
+        if get(env.lookup_strategy, parent_uuid, missing) === nothing
+            # A stdlib parent resolves to its entry file, not a package root, so let the
+            # stdlib env compute the extension path.
+            return _logical_locate(stdlib_env(), pkg)
+        end
+        parent = _logical_locate(env, PkgId(parent_uuid, env.names[parent_uuid]))
+        if parent isa LogicalLoadSpec
+            return LogicalLoadSpec(parent.roots, pkg.name, nothing, true, parent.julia_syntax_version, :nothing)
         end
     end
     return nothing
 end
 
-function _locate_package(env::ImplicitEnv, pkg::PkgId)::Union{Nothing, PkgLoadSpec}
+function _logical_locate(env::ImplicitEnv, pkg::PkgId)::Union{Nothing, LogicalLoadSpec}
     p = get(env.pkgs, pkg.name, nothing)
     if p !== nothing && p.uuid == pkg.uuid
-        return PkgLoadSpec(p.path, p.syntax_version)
+        # `p.path` is already the concrete (absolute) entry-point file.
+        return LogicalLoadSpec(String[p.path], pkg.name, nothing, false, p.syntax_version, :nothing)
     end
     # The package might be an extension of a package in this implicit environment.
     for (pname, ppkg) in env.pkgs
@@ -1552,10 +1580,42 @@ function _locate_package(env::ImplicitEnv, pkg::PkgId)::Union{Nothing, PkgLoadSp
         haskey(ppkg.extensions, pkg.name) || continue
         uuid5(ppkg.uuid, pkg.name) == pkg.uuid || continue
         root = dirname(dirname(ppkg.path)) # <root>/src/<name>.jl -> <root>
-        return PkgLoadSpec(find_ext_path(root, pkg.name), ppkg.syntax_version)
+        return LogicalLoadSpec(String[root], pkg.name, nothing, true, ppkg.syntax_version, :nothing)
     end
     return nothing
 end
+
+# Resolve a candidate root to a concrete directory/file, expanding the `@depot` placeholder
+# against `DEPOT_PATH` (the sole filesystem-dependent step). Returns `nothing` if a
+# depot-relative root exists in no depot.
+function reify_root(root::String)::Union{Nothing, String}
+    if startswith(root, DEPOT_TAG_PREFIX)
+        rel = chopprefix(root, DEPOT_TAG_PREFIX)
+        for depot in DEPOT_PATH
+            dir = joinpath(depot, rel)
+            ispath(dir) && return abspath(dir)
+        end
+        return nothing
+    end
+    return root
+end
+
+function reify(spec::LogicalLoadSpec)::Union{Nothing, Missing, PkgLoadSpec}
+    for root in spec.roots
+        resolved = reify_root(root)
+        resolved === nothing && continue
+        entry = spec.is_extension ? find_ext_path(resolved, spec.name) :
+                                    entry_path(resolved, spec.name, spec.entryfile)
+        return PkgLoadSpec(entry, spec.julia_syntax_version)
+    end
+    return spec.unresolved === :missing ? missing : nothing
+end
+
+# `reify` passes the pure `nothing`/`missing` outcomes through unchanged.
+reify(x::Nothing) = nothing
+reify(x::Missing) = missing
+
+_locate_package(env::Union{ExplicitEnv, ImplicitEnv}, pkg::PkgId) = reify(_logical_locate(env, pkg))
 
 function locate_package_spec(envstack::EnvironmentStack, pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing, Tuple{PkgLoadSpec, String}}
     specenv = _locate_package_spec(envstack, pkg, stopenv)
