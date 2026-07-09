@@ -732,7 +732,7 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
     while typ isa UnionAll
         covariant && constrains_param(var, typ.ub, covariant, type_constrains) && return true
         # typ.lb doesn't constrain var
-        typ = typ.body
+        typ = typ.inner
     end
     if typ isa Union
         # for unions, verify that both options would constrain var
@@ -783,7 +783,7 @@ function constrains_ref(d::Int, ub_is_any::Bool, @nospecialize(typ), covariant::
     while typ isa UnionAll
         covariant && constrains_ref(d, ub_is_any, typ.ub, covariant, type_constrains) && return true
         # typ.lb doesn't constrain the binder
-        typ = typ.body
+        typ = typ.inner
         d += 1
     end
     if typ isa Union
@@ -814,7 +814,7 @@ function constrains_ref(d::Int, ub_is_any::Bool, @nospecialize(typ), covariant::
                 dv = d
                 while vararg isa UnionAll
                     # keep the reference depth relative to its position
-                    vararg = vararg.body
+                    vararg = vararg.inner
                     dv += 1
                 end
                 if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
@@ -870,7 +870,7 @@ function sptype_for_ref(d::Int, output_tvar::TypeVar, sigtypes::Core.SimpleVecto
             sⱼu = sⱼ
             dj = d
             while sⱼu isa UnionAll
-                sⱼu = sⱼu.body
+                sⱼu = sⱼu.inner
                 dj += 1
             end
             if sⱼu isa DataType
@@ -914,7 +914,7 @@ end
 # the binder of the sig at (1-based, outermost-first) index `k`
 function nth_binder(@nospecialize(sig), k::Int)
     while k > 1
-        sig = (sig::UnionAll).body
+        sig = (sig::UnionAll).inner
         k -= 1
     end
     return sig::UnionAll
@@ -924,7 +924,7 @@ end
 # list) in `t`?
 function has_invariant_ref_occurrence(@nospecialize(t), d::Int)
     while t isa UnionAll
-        t = t.body
+        t = t.inner
         d += 1
     end
     t isa DataType || return false
@@ -959,7 +959,7 @@ function sparam_definitely_egal_from_spec(i::Int, nvals::Int, sig::UnionAll,
         sigarg_unwrapped = sigarg
         nsj = 0
         while sigarg_unwrapped isa UnionAll
-            sigarg_unwrapped = sigarg_unwrapped.body
+            sigarg_unwrapped = sigarg_unwrapped.inner
             nsj += 1
         end
         if sigarg_unwrapped isa TypeVarRef
@@ -1080,7 +1080,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             ty = type_sptype_to_egal(ty)
         end
         sptypes[i] = VarState(ty, typemin(Int), undef)
-        temp = u.body
+        temp = u.inner
     end
     return sptypes
 end
@@ -1096,7 +1096,7 @@ function sptypes_from_unspecialized(@nospecialize sig)
     let sig′ = sig
         while isa(sig′, UnionAll)
             nvals += 1
-            sig′ = sig′.body
+            sig′ = sig′.inner
         end
     end
     sptypes = Vector{VarState}(undef, nvals)
@@ -1110,9 +1110,9 @@ function sptypes_from_unspecialized(@nospecialize sig)
         vᵢ = ccall(:jl_unionall_bind_var, Ref{TypeVar}, (Any, Any, Csize_t), u, vars, i - 1)
         vars = Core.svec(vars..., vᵢ)
         ty = sptype_for_ref(nvals - i + 1, vᵢ, sigtypes, sig)
-        undef = !(u.lb === Bottom && constrains_ref(1, u.ub === Any, u.body, #=covariant=#true))
+        undef = !(u.lb === Bottom && constrains_ref(1, u.ub === Any, u.inner, #=covariant=#true))
         sptypes[i] = VarState(ty, typemin(Int), undef)
-        temp = u.body
+        temp = u.inner
     end
     return sptypes
 end

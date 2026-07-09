@@ -55,7 +55,7 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
     elseif isa(c, UnionAll)
         # see if it is derived from the body
         # also handle the binder's bound here, since this construct bounds the mindepth to the smallest possible value
-        return is_derived_type(t, c.ub, mindepth) || is_derived_type(t, c.body, mindepth)
+        return is_derived_type(t, c.ub, mindepth) || is_derived_type(t, c.inner, mindepth)
     elseif isType(c)
         return is_derived_type(t, type_parameter(c), mindepth)
     elseif isa(c, DataType)
@@ -131,13 +131,13 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     # then unwrap `t`
     # NOTE that `TypeVar` / `Vararg` are handled separately to catch the logic errors
     if isa(c, UnionAll)
-        return __limit_type_size(t, c.body, sources, depth, allowed_tuplelen,
+        return __limit_type_size(t, c.inner, sources, depth, allowed_tuplelen,
                                  tf, BinderFrame(c, cf))::AnyType
     end
     if isa(t, UnionAll)
-        body = __limit_type_size(t.body, c, sources, depth, allowed_tuplelen,
+        body = __limit_type_size(t.inner, c, sources, depth, allowed_tuplelen,
                                  BinderFrame(t, tf), cf)
-        body === t.body && return t
+        body === t.inner && return t
         # a binder whose occurrences were all widened away is dropped by the
         # constructor, re-binding the body's outer references
         return UnionAll(t.name, t.lb, t.ub, body)::AnyType
@@ -352,12 +352,12 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         end
         while isa(c, UnionAll)
             cf = BinderFrame(c, cf)
-            c = c.body
+            c = c.inner
         end
     end
     while isa(t, UnionAll)
         tf = BinderFrame(t, tf)
-        t = t.body
+        t = t.inner
     end
     (isa(t, TypeVarRef) || isa(c, TypeVarRef)) &&
         return type_more_complex(t, c, sources, depth, tupledepth, allowed_tuplelen, tf, cf)

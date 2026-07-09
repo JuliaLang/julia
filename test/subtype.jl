@@ -2061,7 +2061,7 @@ end
                Tuple{Union, F36869{Int64, Missing}})
 
 # issue #37180
-@test !(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any}).body.parameters[1] isa Union)
+@test !(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any}).inner.parameters[1] isa Union)
 
 # issue #37255
 @test Type{Union{}} == Type{T} where {Union{}<:T<:Union{}}
@@ -3149,11 +3149,11 @@ end
 
 # issue #61242: free TypeVars are singleton-like by identity, not stand-ins for
 # their bounds or their enclosing UnionAll.
-@test Vector.body != Vector
-@test Vector.body <: Vector
-@test !(Vector <: Vector.body)
-@test typeintersect(Vector.body, Vector) == Vector.body
-@test typeintersect(Vector.body, Vector{Int}) === Union{}
+@test Vector.inner != Vector
+@test Vector.inner <: Vector
+@test !(Vector <: Vector.inner)
+@test typeintersect(Vector.inner, Vector) == Vector.inner
+@test typeintersect(Vector.inner, Vector{Int}) === Union{}
 let S = TypeVar(:S, Union{}, Number)
     @test typeintersect(Union{S, String}, Number) === Union{}
     @test typeintersect(Union{S, Int}, Number) === Int
@@ -3170,7 +3170,7 @@ let T = TypeVar(:T, Union{}, Real)
 end
 # under the de Bruijn representation the unwrapped body carries a positional
 # reference rather than a bounded free TypeVar, and is the wrapper's own body
-@test Sub61876A.body <: Wrapper61876
+@test Sub61876A.inner <: Wrapper61876
 @test typejoin(Sub61876A, Sub61876B) <: Wrapper61876
 
 # issue #61876: typeintersect with an innervar whose bound references the

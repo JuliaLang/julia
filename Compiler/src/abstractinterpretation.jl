@@ -3179,7 +3179,7 @@ function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
     if unwrapva(T) === Bottom
         return Bottom
     elseif isa(T, Type)
-        if isa(T, DataType) && (T::DataType).name === Ref.body.name
+        if isa(T, DataType) && (T::DataType).name === Ref.inner.name
             isref = true
             T = T.parameters[1]
             if isreturn && T === Any

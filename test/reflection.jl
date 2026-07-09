@@ -174,15 +174,15 @@ end
 @test isconcretetype(Union)
 @test !isconcretetype(Union{})
 @test !isconcretetype(Complex)
-@test !isconcretetype(Complex.body)
+@test !isconcretetype(Complex.inner)
 @test !isconcretetype(AbstractArray{Int,1})
 struct AlwaysHasLayout{T}
     x
 end
-@test !isconcretetype(AlwaysHasLayout) && !isconcretetype(AlwaysHasLayout.body)
+@test !isconcretetype(AlwaysHasLayout) && !isconcretetype(AlwaysHasLayout.inner)
 @test isconcretetype(AlwaysHasLayout{Any})
 @test isconcretetype(Ptr{Cvoid})
-@test !isconcretetype(Ptr) && !isconcretetype(Ptr.body)
+@test !isconcretetype(Ptr) && !isconcretetype(Ptr.inner)
 
 # issue #10165
 i10165(::Type) = 0

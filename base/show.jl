@@ -645,8 +645,8 @@ end
 # the body and in other bounds) are untouched, so each node rebuilds in place.
 function unbounded_typealias(@nospecialize(alias))
     alias isa UnionAll || return alias
-    body = unbounded_typealias(alias.body)
-    if body === alias.body && alias.lb === Union{} && alias.ub === Any
+    body = unbounded_typealias(alias.inner)
+    if body === alias.inner && alias.lb === Union{} && alias.ub === Any
         return alias
     end
     return UnionAll(alias.name, Union{}, Any, body)

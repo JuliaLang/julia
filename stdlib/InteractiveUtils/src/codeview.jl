@@ -133,7 +133,7 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
                 print_highlighted(io, "$(val)", :cyan) # show the "good" type
             end
             println(io)
-            sig = sig.body
+            sig = sig.inner
         end
     end
 end

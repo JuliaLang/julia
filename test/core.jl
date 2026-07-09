@@ -195,7 +195,7 @@ f11840(::DataType) = "DataType"
 f11840(::UnionAll) = "UnionAll"
 f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 @test f11840(Type) == "UnionAll"
-@test f11840(Type.body) == "Type"
+@test f11840(Type.inner) == "Type"
 @test f11840(Union{Int,Int8}) == "Type"
 @test f11840(Tuple) == "Tuple"
 @test f11840(TT11840) == "Tuple"
@@ -203,9 +203,9 @@ f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 g11840(::DataType) = 1
 g11840(::Type) = 2
 g11840(sig::Type{T}) where {T<:Tuple} = 3
-@test g11840(Vector.body) == 1
+@test g11840(Vector.inner) == 1
 @test g11840(Vector) == 2
-@test g11840(Vector.body) == 1
+@test g11840(Vector.inner) == 1
 @test g11840(Vector) == 2
 @test g11840(Tuple) == 3
 @test g11840(TT11840) == 3
@@ -214,9 +214,9 @@ g11840b(::DataType) = 1
 g11840b(::Type) = 2
 g11840b(sig::Type{T}) where {T<:Tuple} = 3
 @test g11840b(Vector) == 2
-@test g11840b(Vector.body) == 1
+@test g11840b(Vector.inner) == 1
 @test g11840b(Vector) == 2
-@test g11840b(Vector.body) == 1
+@test g11840b(Vector.inner) == 1
 @test g11840b(Tuple) == 3
 @test g11840b(TT11840) == 3
 
@@ -225,22 +225,22 @@ h11840(::Type) = '2'
 h11840(::UnionAll) = '3'
 h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Vector) == '3'
-@test h11840(Vector.body) == '1'
+@test h11840(Vector.inner) == '1'
 @test h11840(Vector) == '3'
 @test h11840(Union{Vector, Matrix}) == '2'
-@test h11840(Union{Vector.body, Matrix.body}) == '2'
+@test h11840(Union{Vector.inner, Matrix.inner}) == '2'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
 
 # issue #61242: free-TypeVar bodies and their enclosing UnionAlls bind as
 # distinct type objects.
 let f61242(::Type{T}) where T = T
-    @test f61242(Vector.body) === Vector.body
+    @test f61242(Vector.inner) === Vector.inner
     @test f61242(Vector) === Vector
 end
 let g61242(::Type{T}) where T = T
     @test g61242(Vector) === Vector
-    @test g61242(Vector.body) === Vector.body
+    @test g61242(Vector.inner) === Vector.inner
 end
 
 # sparam definedness must agree across `==`-equal representations of a type
@@ -669,14 +669,14 @@ abstract type Qux_{T} <: Sup_{Qux_{Int},T} end
 @test ===(Qux_{Int}, Qux_{Char}.super.parameters[1])
 @test ===(Qux_{Char}.super.parameters[2], Char)
 
-@test Qux_.body.super.parameters[1].super <: Sup_
-@test ===(Qux_{Int}, Qux_.body.super.parameters[1].super.parameters[1])
-@test ===(Int, Qux_.body.super.parameters[1].super.parameters[2])
+@test Qux_.inner.super.parameters[1].super <: Sup_
+@test ===(Qux_{Int}, Qux_.inner.super.parameters[1].super.parameters[1])
+@test ===(Int, Qux_.inner.super.parameters[1].super.parameters[2])
 
 mutable struct Foo_{T} x::Foo_{Int} end
 
-@test ===(Foo_.body.types[1], Foo_{Int})
-@test ===(Foo_.body.types[1].types[1], Foo_{Int})
+@test ===(Foo_.inner.types[1], Foo_{Int})
+@test ===(Foo_.inner.types[1].types[1], Foo_{Int})
 
 mutable struct Circ_{T} x::Circ_{T} end
 @test ===(Circ_{Int}, Circ_{Int}.types[1])
@@ -1224,7 +1224,7 @@ end
 # isassigned, issue #11167
 mutable struct Type11167{T,N} end
 function count11167()
-    let cache = Type11167.body.body.name.cache
+    let cache = Type11167.inner.inner.name.cache
         return count(!isnothing, cache)
     end
 end
@@ -1751,7 +1751,7 @@ let
     @test baar(StridedArray) == 2
     @test baar(Base.unwrap_unionall(StridedArray)) == 1
     @test baar(Vector) == 2
-    @test baar(Vector.body) == 0
+    @test baar(Vector.inner) == 0
 
     boor(x) = 0
     boor(x::Union) = 1
@@ -4248,9 +4248,9 @@ end
 @test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B))
 @test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B, A(), A()))
 @test_throws TypeError("new", DataType, Complex) eval(Expr(:new, Complex))
-@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:new, Complex.body))
+@test_throws TypeError("new", DataType, Complex.inner) eval(Expr(:new, Complex.inner))
 @test_throws TypeError("new", DataType, Complex) eval(Expr(:splatnew, Complex, ()))
-@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:splatnew, Complex.body, ()))
+@test_throws TypeError("new", DataType, Complex.inner) eval(Expr(:splatnew, Complex.inner, ()))
 
 end
 
@@ -5364,14 +5364,14 @@ struct A12238{T} end
 mutable struct B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
-@test B12238.body.body.types[1] === A12238{B12238{Int}.body}
+@test B12238.inner.inner.types[1] === A12238{B12238{Int}.inner}
 @test isa(A12238{B12238{Int}}.instance, A12238{B12238{Int}})
 let ft = Base.datatype_fieldtypes
-    @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
+    @test !isdefined(ft(B12238.inner.inner)[1], :instance)  # has free type vars
 end
 
 # issue #54969
-@test !isdefined(Memory.body, :instance)
+@test !isdefined(Memory.inner, :instance)
 
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0
@@ -5497,8 +5497,8 @@ mutable struct C16767{T}
     b::A16767{C16767{:a}}
 end
 let ft = Base.datatype_fieldtypes
-    @test ft(ft(B16767.body.types[1])[1].parameters[1])[1] === A16767{B16767.body}
-    @test ft(C16767.body.types[1].types[1].parameters[1])[1] === A16767{C16767{:a}}
+    @test ft(ft(B16767.inner.types[1])[1].parameters[1])[1] === A16767{B16767.inner}
+    @test ft(C16767.inner.types[1].types[1].parameters[1])[1] === A16767{C16767{:a}}
 end
 
 # issue #16340
@@ -6432,7 +6432,7 @@ end
 @test_throws UndefVarError(:T, :static_parameter) f_unused_undefined_sp()
 
 # note: the constant `5` here should be > DataType.ninitialized.
-# This tests that there's no crash due to accessing Type.body.layout.
+# This tests that there's no crash due to accessing Type.inner.layout.
 let f(n) = isdefined(typeof(n), 5)
     @test f(0) === false
     @test isdefined(Int, 5) === false
@@ -8052,13 +8052,13 @@ struct T44614_3{L, N}
     param::NTuple{N, T44614_1}
     T44614_3(a::Tuple{T44614_2{L}}, pars::NTuple{N, T44614_1}) where {L, N} = new{L, N}(a, pars)
 end
-@test sizeof((T44614_2{L} where L).body) == 24
+@test sizeof((T44614_2{L} where L).inner) == 24
 let T = T44614_3{L,2} where L
     # these values are computable, but we currently don't know how to compute them properly
     ex = ErrorException("Argument is an incomplete T44614_3 type and does not have a definite size.")
-    @test_throws ex sizeof(T.body)
+    @test_throws ex sizeof(T.inner)
     @test_throws ex sizeof(T)
-    @test_throws BoundsError fieldoffset(T.body, 2)
+    @test_throws BoundsError fieldoffset(T.inner, 2)
     @test fieldoffset(T{1}, 2) == 24
 end
 
@@ -8156,8 +8156,8 @@ struct S36104{K,V}
     S36104{K,V}(x::S36104) where {K,V} = new(x)
 end
 @test !isdefined(Base.unwrap_unionall(Base.ImmutableDict).name, :partial)
-@test !isdefined(S36104.body.body.name, :partial)
-@test hasfield(typeof(S36104.body.body.name), :partial)
+@test !isdefined(S36104.inner.inner.name, :partial)
+@test hasfield(typeof(S36104.inner.inner.name), :partial)
 struct S36104{K,V}   # check that redefining it works
     v::S36104{K,V}
     S36104{K,V}() where {K,V} = new()
@@ -8212,7 +8212,7 @@ function f37044(r)
     end
     return t.types
 end
-r37044 = Ref37044(A37044{Int}.body)
+r37044 = Ref37044(A37044{Int}.inner)
 @test f37044(r37044)[1] === Int
 
 a37265() = 0

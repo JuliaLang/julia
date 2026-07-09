@@ -1236,7 +1236,7 @@ function _contains_typeapp(@nospecialize(x))
         return true
     end
     if x isa UnionAll
-        return _contains_typeapp(x.body)
+        return _contains_typeapp(x.inner)
     end
     return false
 end
@@ -1324,7 +1324,7 @@ function typename(a::Union)
     ta === tb || throw(TypeNameError(a))
     return tb
 end
-typename(union::UnionAll) = typename(union.body)
+typename(union::UnionAll) = typename(union.inner)
 
 # Special inference support to avoid excess specialization of these methods.
 # TODO: Replace this by a generic heuristic.

@@ -4412,8 +4412,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_set_typetagof(jl_bottom_type, jl_typeofbottom_tag, GC_OLD_MARKED);
     jl_typeofbottom_type->instance = jl_bottom_type;
 
+    // the wrapped type is exposed as `inner`, freeing the legacy field names
+    // `body` and `var` to be served as computed compatibility properties by
+    // `Base.getproperty` (which materializes a canonical TypeVar per binder)
     jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, jl_anytype_type, jl_emptysvec,
-                                       jl_perm_symsvec(5, "name", "lb", "ub", "body", "flags"),
+                                       jl_perm_symsvec(5, "name", "lb", "ub", "inner", "flags"),
                                        jl_svec(5, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type,
                                                jl_any_type /*jl_uint32_type*/),
                                        jl_emptysvec, 0, 0, 5);

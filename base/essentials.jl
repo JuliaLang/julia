@@ -544,7 +544,7 @@ tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 function unwrap_unionall(@nospecialize(a))
     @_foldable_meta
     while isa(a,UnionAll)
-        a = a.body
+        a = a.inner
     end
     return a
 end
@@ -554,12 +554,12 @@ function rewrap_unionall(@nospecialize(t), @nospecialize(u))
     return ccall(:jl_rewrap_unionall, Any, (Any, Any), t, u)
 end
 
-# re-close exactly one binder (that of `u`) over a body derived from `u.body`
+# re-close exactly one binder (that of `u`) over a body derived from `u.inner`
 # with its reference framing preserved; normalizes like the `where` constructor
 # (drops a vacuous binder, `T where T<:S` => `S`)
 function rewrap_unionall_one(@nospecialize(t), u::UnionAll)
     @_foldable_meta
-    t === u.body && return u
+    t === u.inner && return u
     return ccall(:jl_rewrap_unionall_one, Any, (Any, Any), t, u)
 end
 
@@ -583,7 +583,7 @@ function unionall_depth(@nospecialize(u))
     n = 0
     while u isa UnionAll
         n += 1
-        u = u.body
+        u = u.inner
     end
     return n
 end
@@ -1307,7 +1307,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
     ua = ty
     while isa(ua, UnionAll)
         nparams = nparams + 1
-        ua = ua.body
+        ua = ua.inner
     end
     dt = ua::DataType
     # n.b. the materialized TypeVars carry the raw (de Bruijn) bounds; they only
@@ -1321,7 +1321,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
     while i !== nparams + 1
         u = ua::UnionAll
         @inbounds tvars[i] = ccall(:jl_new_typevar_raw, Any, (Any, Any, Any), u.name, u.lb, u.ub)
-        ua = u.body
+        ua = u.inner
         i = i + 1
     end
 

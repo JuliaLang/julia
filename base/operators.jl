@@ -87,7 +87,7 @@ supertype(T::DataType) = (@_total_meta; T.super)
 function supertype(T::UnionAll)
     @_foldable_meta
     # a fragment's supertype is framed for the same binder chain
-    return rewrap_unionall_one(supertype(T.body), T)
+    return rewrap_unionall_one(supertype(T.inner), T)
 end
 
 ## generic comparison ##

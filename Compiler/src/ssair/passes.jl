@@ -1124,7 +1124,7 @@ end
     sig = m.sig
     isa(sig, UnionAll) || return nothing
     # the binder's occurrences are positional references (depth 1 from the body)
-    sig = sig.body
+    sig = sig.inner
     isa(sig, DataType) || return nothing
     sig.name === Tuple.name || return nothing
     sig_parameters = sig.parameters::SimpleVector
@@ -1169,12 +1169,12 @@ end
     applyTbody = applyT
     while applyTbody isa UnionAll
         napply += 1
-        applyTbody = applyTbody.body
+        applyTbody = applyTbody.inner
     end
     narg = 0
     while arg isa UnionAll
         narg += 1
-        arg = arg.body
+        arg = arg.inner
     end
 
     (isa(arg, DataType) && isa(applyTbody, DataType)) || return nothing
@@ -1212,7 +1212,7 @@ function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::
     nbinders = 0
     while isa(applyT, UnionAll)
         nbinders += 1
-        applyT = applyT.body
+        applyT = applyT.inner
     end
 
     @assert applyT.name === typ.name

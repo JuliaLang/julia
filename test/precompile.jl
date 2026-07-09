@@ -527,7 +527,7 @@ precompile_test_harness(false) do dir
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
         ft = Base.datatype_fieldtypes
-        PV = ft(Foo.Value18343{Some}.body)[1]
+        PV = ft(Foo.Value18343{Some}.inner)[1]
         VR = ft(PV)[1].parameters[1]
         @test ft(PV)[1] === Array{VR,1}
         @test pointer_from_objref(ft(PV)[1]) ===

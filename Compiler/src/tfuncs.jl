@@ -727,7 +727,7 @@ function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
     if !has_free_typevars(a)
         unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === Ptr.body.name
+        if isa(unw, DataType) && unw.name === Ptr.inner.name
             T = unw.parameters[1]
             valid_as_lattice(T, true) || return Bottom
             return rewrap_unionall(T, a)
@@ -761,7 +761,7 @@ end
     a = widenconst(ptr)
     if !has_free_typevars(a)
         unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === Ptr.body.name
+        if isa(unw, DataType) && unw.name === Ptr.inner.name
             T = unw.parameters[1]
             # note: we could sometimes refine this to a PartialStruct if we analyzed `op(T, T)::T`
             valid_as_lattice(T, true) || return Bottom
@@ -774,7 +774,7 @@ end
     a = widenconst(ptr)
     if !has_free_typevars(a)
         unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === Ptr.body.name
+        if isa(unw, DataType) && unw.name === Ptr.inner.name
             T = unw.parameters[1]
             valid_as_lattice(T) || return Bottom
             return rewrap_unionall(ccall(:jl_apply_cmpswap_type, Any, (Any,), T), a)
@@ -869,7 +869,7 @@ end
         u = t
         while u isa UnionAll
             benv = (u, benv)
-            u = u.body
+            u = u.inner
         end
         local r
         if isa(u, DataType) && !isabstracttype(u)
@@ -1968,7 +1968,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 end
             end
         end
-        u = u.body
+        u = u.inner
     end
     return true
 end
@@ -2115,7 +2115,7 @@ end
     let ua = headtype
         while isa(ua, UnionAll)
             nbinders += 1
-            ua = ua.body
+            ua = ua.inner
         end
     end
     if largs - 1 > nbinders && isa(headtype, UnionAll) # e.g. !isvarargtype(headtype) && !istuple
@@ -2222,7 +2222,7 @@ end
             end
         end
         if ua isa UnionAll
-            ua = ua.body
+            ua = ua.inner
             #otherwise, sometimes ua isa Vararg (Core.TypeofVararg) or Tuple (DataType)
         end
     end
@@ -2255,7 +2255,7 @@ end
             for _ = 2:largs
                 appl = appl::UnionAll
                 push!(stripped, appl)
-                appl = appl.body
+                appl = appl.inner
             end
             isvarargtype(appl) && return TypeofVararg
             ans = Type{appl}
@@ -2434,7 +2434,7 @@ add_tfunc(memoryref_isassigned, 3, 3, memoryref_isassigned_tfunc, 20)
     a = widenconst(unwrapva(mem))
     if !has_free_typevars(a)
         unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === GenericMemory.body.body.body.name
+        if isa(unw, DataType) && unw.name === GenericMemory.inner.inner.inner.name
             A = unw.parameters[1]
             T = unw.parameters[2]
             AS = unw.parameters[3]

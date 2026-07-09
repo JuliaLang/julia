@@ -64,7 +64,7 @@ function compile_all_tvar_union(methsig)
 
         uppers[i] = ub
         vals[i] = ub
-        sigbody = sigbody.body
+        sigbody = sigbody.inner
     end
 
     all_success = true

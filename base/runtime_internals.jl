@@ -231,7 +231,7 @@ function binding_module(m::Module, s::Symbol)
     return unsafe_pointer_to_objref(p)::Module
 end
 
-const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
+const _NAMEDTUPLE_NAME = NamedTuple.inner.inner.name
 const _TYPE_NAME = TypeEq.name
 
 function _fieldnames(@nospecialize t)
@@ -1558,7 +1558,7 @@ function has_bottom_parameter(@nospecialize(t::Core.AnyType))
         # occurrences of the binder are inert references; account for their
         # bound once, at the binder, when any exist (bit 0 of `flags` is the memoized occurs bit)
         u = t::UnionAll
-        return (u.flags % Bool && has_bottom_parameter(u.ub)) || has_bottom_parameter(u.body)
+        return (u.flags % Bool && has_bottom_parameter(u.ub)) || has_bottom_parameter(u.inner)
     elseif ty === Union
         return has_bottom_parameter(getfield(t, :a)) & has_bottom_parameter(getfield(t, :b))
     end
@@ -1920,8 +1920,8 @@ function subst_trivial_bounds(@nospecialize(atype))
             return subst_trivial_bounds(subst)
         end
     end
-    body′ = subst_trivial_bounds(atype.body)
-    body′ === atype.body && return atype
+    body′ = subst_trivial_bounds(atype.inner)
+    body′ === atype.inner && return atype
     return rewrap_unionall_one(body′, atype)
 end
 

@@ -183,7 +183,7 @@ function _typename(a::Union)
     (ta isa Const && tb isa Const) && return Union{} # will throw an error (different type-names)
     return Core.TypeName # uncertain result
 end
-_typename(union::UnionAll) = _typename(union.body)
+_typename(union::UnionAll) = _typename(union.inner)
 _typename(a::DataType) = Const(a.name)
 _typename(a::TypeEq) = Core.TypeName
 
@@ -417,7 +417,7 @@ function _unioncomplexity(@nospecialize x)
     elseif isa(x, Union)
         return unioncomplexity(x.a) + unioncomplexity(x.b) + 1
     elseif isa(x, UnionAll)
-        return max(unioncomplexity(x.body), unioncomplexity(x.ub))
+        return max(unioncomplexity(x.inner), unioncomplexity(x.ub))
     elseif isa(x, TypeofVararg)
         return isdefined(x, :T) ? unioncomplexity(x.T) + 1 : 1
     else
@@ -429,7 +429,7 @@ function unionall_depth(@nospecialize ua) # aka subtype_env_size
     depth = 0
     while ua isa UnionAll
         depth += 1
-        ua = ua.body
+        ua = ua.inner
     end
     return depth
 end

@@ -781,7 +781,7 @@ function serialize(s::AbstractSerializer, u::UnionAll)
     writetag(s.io, UNIONALL_TAG)
     n = 0; t = u
     while isa(t, UnionAll)
-        t = t.body
+        t = t.inner
         n += 1
     end
     if isa(t, DataType) && t === unwrap_unionall(t.name.wrapper)
@@ -1701,13 +1701,13 @@ function deserialize(s::AbstractSerializer, ::Type{UnionAll})
         w = t.name.wrapper
         k = 0
         while isa(w, UnionAll)
-            w = w.body
+            w = w.inner
             k += 1
         end
         w = t.name.wrapper
         k -= n
         while k > 0
-            w = w.body
+            w = w.inner
             k -= 1
         end
         return w

@@ -71,11 +71,11 @@ type, we could write `Array{T,2} where T`, which is the union of `Array{T,2}` fo
 `T`: `Union{Array{Int8,2}, Array{Int16,2}, ...}`.
 
 Such a type is represented by a `UnionAll` object, which records the bound variable's name and
-its lower and upper bounds (in the fields `name`, `lb`, and `ub`), together with a wrapped body
-type (`Array{T,2}` in this example). The body does not contain a `TypeVar` object; instead it
-refers to the enclosing binder positionally, with a `Core.TypeVarRef` de Bruijn index:
-`TypeVarRef(n)` denotes the binder of the `n`-th enclosing `UnionAll`, counting outward from the
-reference.
+its lower and upper bounds (in the fields `name`, `lb`, and `ub`), together with a wrapped type
+(`Array{T,2}` in this example, stored in the field `inner`). The wrapped type does not contain
+a `TypeVar` object; instead it refers to the enclosing binder positionally, with a
+`Core.TypeVarRef` de Bruijn index: `TypeVarRef(n)` denotes the binder of the `n`-th enclosing
+`UnionAll`, counting outward from the reference.
 
 Consider the following methods:
 
@@ -97,11 +97,11 @@ UnionAll
   name: Symbol T
   lb: Union{}
   ub: abstract type Any
-  body: UnionAll
+  inner: UnionAll
     name: Symbol N
     lb: Union{}
     ub: abstract type Any
-    body: mutable struct Array{TypeVarRef(2), TypeVarRef(1)} <: DenseArray{TypeVarRef(2), TypeVarRef(1)}
+    inner: mutable struct Array{TypeVarRef(2), TypeVarRef(1)} <: DenseArray{TypeVarRef(2), TypeVarRef(1)}
       ref::GenericMemoryRef{:not_atomic, TypeVarRef(2), Core.AddrSpace{Core}(0x00)}
       size::NTuple{TypeVarRef(1), Int64}
     flags: UInt32 0x00000007
@@ -122,7 +122,12 @@ A `TypeVar` is not itself a type, nor is it stored in the structure of a `UnionA
 Instead, `TypeVar` objects are materialized on demand when a `UnionAll` is *opened* — for
 example by reflection, printing, or instantiation — at which point a fresh `TypeVar` carrying
 the binder's name and bounds is substituted for the corresponding positional references in the
-body. Type variables have lower and upper bounds on their values (in the fields
+body. For compatibility with the historical two-field layout, the properties `u.var` and
+`u.body` still work on a `UnionAll` `u`: `u.var` materializes a *canonical* `TypeVar` for the
+binder (memoized weakly, so repeated accesses agree on one object for as long as it remains
+reachable), and `u.body` is the wrapped type with the binder's references substituted by that
+variable, so that `u.body` mentions `u.var` and `UnionAll(u.var, u.body) == u`, as they did
+when these were stored fields. Type variables have lower and upper bounds on their values (in the fields
 `lb` and `ub`). The symbol `name` is purely cosmetic. Internally, `TypeVar`s are compared by
 address, so they are defined as mutable types to ensure that "different" type variables can be
 distinguished. However, by convention they should not be mutated.
@@ -199,11 +204,11 @@ TypeName
     name: Symbol T
     lb: Union{}
     ub: abstract type Any
-    body: UnionAll
+    inner: UnionAll
       name: Symbol N
       lb: Union{}
       ub: abstract type Any
-      body: mutable struct Array{TypeVarRef(2), TypeVarRef(1)} <: DenseArray{TypeVarRef(2), TypeVarRef(1)}
+      inner: mutable struct Array{TypeVarRef(2), TypeVarRef(1)} <: DenseArray{TypeVarRef(2), TypeVarRef(1)}
       flags: UInt32 0x00000007
     flags: UInt32 0x00000005
   Typeofwrapper: abstract type Type{Array} <: Any

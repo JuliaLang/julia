@@ -2796,10 +2796,10 @@ end
 function has_unbound_vars(@nospecialize sig)
     while sig isa UnionAll
         # each binder is checked positionally against its own body (depth 1)
-        if !Core.Compiler.constrains_ref(1, sig.ub === Any, sig.body, #=covariant=#true, #=type_constrains=#true)
+        if !Core.Compiler.constrains_ref(1, sig.ub === Any, sig.inner, #=covariant=#true, #=type_constrains=#true)
             return true
         end
-        sig = sig.body
+        sig = sig.inner
     end
     return false
 end
