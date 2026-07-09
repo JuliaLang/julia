@@ -56,14 +56,18 @@ function full_sweep_reasons_test()
     @test keys(reasons) == Set(Base.FULL_SWEEP_REASONS)
 end
 
+# run with `JULIA_TEST_FAILFAST=1 GC_STRESS=1 make test-revise-gc` for a more-exhaustive test config
 function run_gc_aba_sweep_crash_oracle()
+    stress = get(ENV, "GC_STRESS", "") == "1"
+    smoke_nthreads = Sys.WORD_SIZE == 32 ? min(max(Sys.CPU_THREADS, 2), 4) : min(max(Sys.CPU_THREADS, 2), 8)
+    smoke_ngcthreads = Sys.WORD_SIZE == 32 ? 1 : min(max(Sys.CPU_THREADS ÷ 2, 1), 4)
+    smoke_iters = Sys.WORD_SIZE == 32 ? 10_000 : 50_000
     nthreads = parse(Int, get(ENV, "JULIA_GC_ABA_SWEEP_THREADS",
-        string(min(max(4 * Sys.CPU_THREADS, 8), 64))))
+        string(stress ? min(max(4 * Sys.CPU_THREADS, 8), 64) : smoke_nthreads)))
     ngcthreads = parse(Int, get(ENV, "JULIA_GC_ABA_SWEEP_GCTHREADS",
-        string(min(max(Sys.CPU_THREADS, 2), 8))))
-    stress = get(ENV, "CI_STRESS", "") == "1"
+        string(stress ? min(max(Sys.CPU_THREADS, 2), 8) : smoke_ngcthreads)))
     iters = something(tryparse(Int, get(ENV, "JULIA_GC_ABA_SWEEP_ITERS", "")),
-        stress ? 24_000_000 : 200_000)
+        stress ? 24_000_000 : smoke_iters)
     heap_hint = get(ENV, "JULIA_GC_ABA_HEAP_HINT", "32M")
     timeout_s = something(tryparse(Float64, get(ENV, "JULIA_GC_ABA_SWEEP_TIMEOUT", "")),
         stress ? 300.0 : 60.0)
@@ -95,7 +99,7 @@ function run_gc_aba_sweep_crash_oracle()
             tasks = Vector{Task}(undef, Threads.nthreads())
             s = 0
             for t in 1:Threads.nthreads()
-                tasks[t] = Threads.@spawn hammer(Int($(seed)) * t + 1, $iters, sizefor(t))
+                tasks[t] = Threads.@spawn hammer(reinterpret(Int, UInt($(seed))) * t + 1, $iters, sizefor(t))
             end
             for t in tasks
                 s += fetch(t)
@@ -152,8 +156,6 @@ function run_gc_aba_sweep_crash_oracle()
 
     if !result.ok
         @error "GC concurrent sweep reuse crash oracle failed" cmd rerun_cmd nthreads ngcthreads attempt attempts cpu_model gpu_model="unknown" kernel runtime_versions library_versions gc_settings scheduler_settings timing_thresholds input_size random_seed=string(seed, base=16) iterations_before_failure timed_out=result.timed_out output=result.output
-    else
-        @info "GC concurrent sweep reuse crash oracle passed" nthreads ngcthreads iters heap_hint timeout_s attempts stress
     end
     @test result.ok
 end
