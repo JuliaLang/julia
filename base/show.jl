@@ -675,6 +675,19 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
     mods = modulesof!(Set{Module}(), x)
     replace!(mods, Core=>Base)
     properx = reapply_unionall_env(io, x)
+    # Open the outer binders once, so that every intersection below expresses
+    # its environment in terms of this single set of TypeVars. `make_wheres`
+    # and the `:unionall_env` printing context match binders against the
+    # environment by object identity, so the env entries, the returned binder
+    # list, and the free typevars nested inside env entries must all come from
+    # the same opening.
+    xvars = TypeVar[]
+    xb = x
+    while xb isa UnionAll
+        v, xb = unionall_open(xb)
+        push!(xvars, v)
+    end
+    free_before = find_free_typevars(xb)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     for mod in mods
         for name in unsorted_names(mod)
@@ -682,8 +695,7 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
                 alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && properx <: alias
                     if alias isa UnionAll
-                        free_before = find_free_typevars(x)
-                        (ti, env) = typeintersect_env(x, unbounded_typealias(alias))
+                        (ti, env) = typeintersect_env(xb, unbounded_typealias(alias))
                         # ti === Union{} && continue # impossible, since we already checked that x <: alias
                         env = env::SimpleVector
                         # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
@@ -707,7 +719,7 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
                             end
                         applied = rewrap_free_typevars(applied, free_before)
                         has_other_free_typevars(applied, free_before) && continue
-                        applied == x || continue # it couldn't figure out the parameter matching
+                        applied == xb || continue # it couldn't figure out the parameter matching
                     elseif alias === x
                         env = Core.svec()
                     else
@@ -719,7 +731,7 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
         end
     end
     if length(aliases) == 1 # TODO: select the type with the "best" (shortest?) environment
-        return aliases[1]
+        return (aliases[1][1], aliases[1][2], xvars)
     end
 end
 
@@ -830,82 +842,26 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
     nothing
 end
 
-# structural bound equality modulo a pairing of free TypeVars (`amap` maps
-# variables that may appear on the `a` side to their counterparts on the `b`
-# side); used to recognize alpha-copies of binders in `make_wheres`
-function _alpha_eq_bound(@nospecialize(a), @nospecialize(b), amap::IdDict{TypeVar,TypeVar})
-    a === b && return true
-    if a isa TypeVar
-        return get(amap, a, a) === b
-    end
-    typeof(a) === typeof(b) || return a == b
-    if a isa DataType
-        b = b::DataType
-        a.name === b.name || return false
-        ap, bp = a.parameters, b.parameters
-        length(ap) === length(bp) || return false
-        for i in eachindex(ap)
-            _alpha_eq_bound(ap[i], bp[i], amap) || return false
-        end
-        return true
-    elseif a isa Union
-        b = b::Union
-        return _alpha_eq_bound(a.a, b.a, amap) && _alpha_eq_bound(a.b, b.b, amap)
-    elseif a isa UnionAll
-        b = b::UnionAll
-        return _alpha_eq_bound(a.lb, b.lb, amap) && _alpha_eq_bound(a.ub, b.ub, amap) &&
-               _alpha_eq_bound(a.body, b.body, amap)
-    end
-    return a == b
-end
-
-function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
+# Assemble the `where` list for an alias application: `xvars` are the binders
+# of the aliased type, from the same opening that produced `env` (so the env
+# entries reference these TypeVar objects by identity).
+function make_wheres(io::IO, env::SimpleVector, xvars::Vector{TypeVar})
     seen = IdSet()
     wheres = TypeVar[]
-    # record things printed by the context
+    # skip things already printed by the context
     if io isa IOContext
         for (key, val) in io.dict
-            if key === :unionall_env && val isa TypeVar && has_typevar(x, val)
+            if key === :unionall_env && val isa TypeVar &&
+               any(@nospecialize(e) -> e === val || has_typevar(e, val), env)
                 push!(seen, val)
             end
         end
     end
-    # record things in x to print outermost
-    # (opening materializes fresh TypeVars, so intersection-env entries that
-    # denote the same binder are only alpha-copies; track them for dedup below)
-    opened = TypeVar[]
-    while x isa UnionAll
-        v, x = unionall_open(x)
+    # record the binders of x to print outermost
+    for v in xvars
         if !(v in seen)
             push!(seen, v)
             push!(wheres, v)
-            push!(opened, v)
-        end
-    end
-    # match intersection-env entries against the binders opened above: an env
-    # entry that alpha-matches a binder (bounds compared modulo already-matched
-    # binder pairs, so dependent bounds line up) replaces it in the output.
-    # Iterate to a fixpoint since a match can enable further matches.
-    amap = IdDict{TypeVar,TypeVar}()
-    changed = true
-    while changed
-        changed = false
-        for i = length(env):-1:1
-            p = env[i]
-            if p isa TypeVar && !(p in seen)
-                k = findfirst(q -> q.name === p.name &&
-                                   _alpha_eq_bound(q.lb, p.lb, amap) &&
-                                   _alpha_eq_bound(q.ub, p.ub, amap), opened)
-                if k !== nothing
-                    ok = opened[k]
-                    wi = findfirst(q -> q === ok, wheres)::Int
-                    wheres[wi] = p
-                    deleteat!(opened, k)
-                    push!(seen, p)
-                    amap[ok] = p
-                    changed = true
-                end
-            end
         end
     end
     # record remaining things in env to print innermost
@@ -936,7 +892,7 @@ end
 function show_typealias(io::IO, @nospecialize(x::Type))
     alias = make_typealias(x, io)
     alias === nothing && return false
-    wheres = make_wheres(io, alias[2], x)
+    wheres = make_wheres(io, alias[2], alias[3])
     show_typealias(io, alias[1], x, alias[2], wheres)
     show_wheres(io, wheres)
     return true
@@ -1047,7 +1003,7 @@ function show_unionaliases(io::IO, x::Union)
     if first && !tvar && length(aliases) == 1
         alias = aliases[1]
         env = alias[2]::SimpleVector
-        wheres = make_wheres(io, env, x)
+        wheres = make_wheres(io, env, TypeVar[])
         show_typealias(io, alias[1], x, env, wheres)
         show_wheres(io, wheres)
     else
@@ -1055,7 +1011,7 @@ function show_unionaliases(io::IO, x::Union)
             print(io, first ? "Union{" : ", ")
             first = false
             env = alias[2]::SimpleVector
-            wheres = make_wheres(io, env, x)
+            wheres = make_wheres(io, env, TypeVar[])
             show_typealias(io, alias[1], x, env, wheres)
             show_wheres(io, wheres)
         end
