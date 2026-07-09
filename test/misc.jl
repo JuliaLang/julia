@@ -1684,7 +1684,18 @@ end
 
 # Interrupt (SIGINT/Ctrl-C) delivery: an interrupt must reach user code, not be
 # swallowed by (or crash) the internal scheduler task (issue #58689).
-if !Sys.iswindows()
+if Sys.islinux()
+    const SYS_rrcall_check_presence = 1008
+    running_under_rr() = 0 == ccall(:syscall, Int,
+        (Int, Int, Int, Int, Int, Int, Int),
+        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
+else
+    running_under_rr() = false
+end
+# rr emulates signal delivery and does not interrupt blocking syscalls the way a
+# real SIGINT does, so these tests do not pass under it (the sleeping subprocess
+# never observes the InterruptException).
+if !Sys.iswindows() && !running_under_rr()
     # "Internal Task ERROR" is uppercased by `emphasize` when color is off
     has_internal_err(s) = occursin(r"internal task error"i, s)
     expect_output(output, pat; timeout=60) =
