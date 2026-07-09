@@ -887,6 +887,8 @@ struct ExplicitEnv
     project_weakdeps::Dict{String, UUID} # [weakdeps] in the active project's Project.toml
     project_extras::Dict{String, UUID}   # [extras] in the active project's Project.toml
     project_extensions::Dict{String, Vector{UUID}} # [extensions] in the active project's Project.toml
+    project_prefs::Dict{String, Any}     # [preferences] in the active project's Project.toml
+                                         # (see "Package/Environment Preferences" in the manual)
     workspace_deps::Dict{String, UUID}   # union of [deps] from all workspace member Project.tomls
     deps::Dict{UUID, Vector{UUID}}       # full dependency graph from Manifest.toml
     weakdeps::Dict{UUID, Vector{UUID}}   # full weak dependency graph from Manifest.toml
@@ -913,6 +915,7 @@ function ExplicitEnv(::Nothing, envpath::String="")
         Dict{String, UUID}(),     # project_weakdeps
         Dict{String, UUID}(),     # project_extras
         Dict{String, Vector{UUID}}(), # project_extensions
+        Dict{String, Any}(),      # project_prefs
         Dict{String, UUID}(),     # workspace_deps
         Dict{UUID, Vector{UUID}}(),   # deps
         Dict{UUID, Vector{UUID}}(),   # weakdeps
@@ -995,6 +998,8 @@ function ExplicitEnv(envpath::String; workspace::Bool=true)
         end
         project_extensions[name] = uuids
     end
+
+    project_prefs = get(Dict{String, Any}, project_d, "preferences")::Dict{String, Any}
 
     manifest = project_file_manifest_path(envpath)
     manifest_d = manifest === nothing ? Dict{String, Any}() : parsed_toml(manifest)
@@ -1189,7 +1194,7 @@ function ExplicitEnv(envpath::String; workspace::Bool=true)
 
     return ExplicitEnv(envpath, manifest, proj_name, proj_uuid,
                        project_deps, project_weakdeps, project_extras,
-                       project_extensions, workspace_deps,
+                       project_extensions, project_prefs, workspace_deps,
                        deps_expanded, weakdeps_expanded, extensions_expanded,
                        names, lookup_strategy, entryfile, syntax_version)
 end
@@ -1744,29 +1749,43 @@ function filter_preferences(prefs::Dict{String, Any}, pkg_name)
     end
 end
 
-function collect_preferences(project_toml::String, uuid::Union{UUID,Nothing})
+# Name under which preferences for `uuid` can be recorded in this environment's project
+# file: the project itself, or one of its [deps]/[extras]/[weakdeps] (mirrors `get_uuid_name`).
+function project_uuid_name(env::ExplicitEnv, uuid::UUID)::Union{Nothing, String}
+    if env.project_name !== nothing && env.project_uuid == uuid
+        return env.project_name
+    end
+    for section in (env.project_deps, env.project_extras, env.project_weakdeps)
+        for (name, u) in section
+            u == uuid && return name
+        end
+    end
+    return nothing
+end
+
+function collect_preferences(env::ExplicitEnv, uuid::Union{UUID,Nothing})
     # We'll return a list of dicts to be merged
     dicts = Dict{String, Any}[]
 
-    project = parsed_toml(project_toml)
     pkg_name = nothing
     if uuid !== nothing
         # If we've been given a UUID, map that to the name of the package as
         # recorded in the preferences section.  If we can't find that mapping,
         # exit out, as it means there's no way preferences can be set for that
         # UUID, as we only allow actual dependencies to have preferences set.
-        pkg_name = get_uuid_name(project, uuid)
+        pkg_name = project_uuid_name(env, uuid)
         if pkg_name === nothing
             return dicts
         end
     end
 
-    # Look first inside of `Project.toml` to see we have preferences embedded within there
-    proj_preferences = get(Dict{String, Any}, project, "preferences")::Dict{String, Any}
-    push!(dicts, filter_preferences(proj_preferences, pkg_name))
+    # Preferences embedded within the project file, snapshotted in the environment
+    push!(dicts, filter_preferences(env.project_prefs, pkg_name))
 
-    # Next, look for `(Julia)LocalPreferences.toml` files next to this `Project.toml`
-    project_dir = dirname(project_toml)
+    # Next, look for `(Julia)LocalPreferences.toml` files next to the project file.
+    # Deliberately resolved and parsed per query rather than stored in the environment,
+    # so that edits are picked up immediately.
+    project_dir = dirname(env.path)
     for name in preferences_names
         toml_path = joinpath(project_dir, name)
         if isfile(toml_path)
@@ -1824,23 +1843,28 @@ function get_projects_workspace_to_root(project_file)
 end
 
 function get_preferences(uuid::Union{UUID,Nothing} = nothing)
-    merged_prefs = Dict{String,Any}()
-    loadpath = load_path()
-    projects_to_merge_prefs = String[]
-    append!(projects_to_merge_prefs, Iterators.drop(loadpath, 1))
-    if length(loadpath) >= 1
-        prepend!(projects_to_merge_prefs, get_projects_workspace_to_root(first(loadpath)))
-    end
-
-    for env in reverse(projects_to_merge_prefs)
-        project_toml = env_project_file(env)
-        if !isa(project_toml, String)
-            continue
+    @lock require_lock begin
+    stack = current_env_stack()
+    # The explicit environments of the load path, with the workspace projects enclosing the
+    # primary environment included. Merged in reverse so that more proximal entries override
+    # the ones behind them, as documented in "Package/Environment Preferences" in the manual.
+    envs = ExplicitEnv[]
+    for i in eachindex(stack.envs)
+        env = stack.envs[i]
+        env isa ExplicitEnv || continue
+        if isempty(envs) && stack.roots[i] == first(stack.load_path)
+            for project_file in get_projects_workspace_to_root(env.path)
+                push!(envs, project_file == env.path ? env : cached_explicit_env(project_file))
+            end
+        else
+            push!(envs, env)
         end
-
-        # Collect all dictionaries from the current point in the load path, then merge them in
-        dicts = collect_preferences(project_toml, uuid)
+    end
+    merged_prefs = Dict{String,Any}()
+    for env in Iterators.reverse(envs)
+        dicts = collect_preferences(env, uuid)
         merged_prefs = recursive_prefs_merge(merged_prefs, dicts)
     end
     return merged_prefs
+    end
 end
