@@ -850,6 +850,7 @@ end
     if isprimitivetype(T)
         return Core.bitsizeof(T) % 8 != 0
     end
+    T isa Union && return any(has_bit_padding, uniontypes(T))
     for i in 1:fieldcount(T)
         has_bit_padding(fieldtype(T, i)) && return true
     end

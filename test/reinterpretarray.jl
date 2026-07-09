@@ -718,7 +718,11 @@ end
         x::RUInt17
         y::UInt8
     end
+    struct RHasUnionUInt17
+        x::Union{UInt8, RUInt17}
+    end
     @test_throws ArgumentError reinterpret(RHasUInt17, (0x01, 0x02, 0x03, 0x04))
+    @test_throws ArgumentError reinterpret(RHasUnionUInt17, (0x01, 0x02, 0x03))
     @test_throws ArgumentError reinterpret(
         NTuple{4, UInt8},
         RHasUInt17(Core.Intrinsics.trunc_int(RUInt17, UInt32(1)), 0x02),

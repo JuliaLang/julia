@@ -162,6 +162,7 @@ end
     chain17 = Core.Intrinsics.trunc_int(TestUInt17, chain24)
     @test Core.Intrinsics.zext_int(UInt64, chain24) === 0x0000_0000_00cc_ddee
     @test Core.Intrinsics.zext_int(UInt32, chain17) === 0x0000_ddee
+    @test invokelatest(Core.Intrinsics.zext_int, UInt64, x63) === 0x7fff_ffff_ffff_ffff
 
     ref63 = Ref(ui63)
     @test ref63[] === ui63

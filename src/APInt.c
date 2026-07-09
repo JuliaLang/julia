@@ -832,7 +832,7 @@ JL_DLLEXPORT void APInt_zext(jl_datatype_t *ty, integerPart *pa,
     memcpy(pr, pa, inumbytes);
     if (bits) {
         ((unsigned char *)pr)[inumbytes - 1] =
-            ((unsigned char *)pa)[inumbytes - 1] << bits >> bits;
+            ((unsigned char *)pa)[inumbytes - 1] & (unsigned char)(0xFF >> bits);
     }
     memset((char *)pr + inumbytes, 0, onumbytes - inumbytes);
 }

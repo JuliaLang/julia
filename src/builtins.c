@@ -159,6 +159,8 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
             }
             else {
                 if (jl_datatype_nfields(ft) == 0) {
+                    // Odd-bit primitives have trailing unused bits, which are
+                    // represented as padding even though they have no fields.
                     if (!primitive_bits_equal(ao, bo, ft))
                         return 0;
                 }
