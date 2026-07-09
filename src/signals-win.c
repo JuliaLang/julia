@@ -643,6 +643,10 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     uv_mutex_unlock(&bt_data_prof_lock);
 }
 
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+static void jl_win_init_cancel_handler_delivery(void);
+#endif
+
 void jl_install_default_signal_handlers(void)
 {
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
