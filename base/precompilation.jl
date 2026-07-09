@@ -1,8 +1,8 @@
 module Precompilation
 
-using Base: CoreLogging, PkgId, UUID, SHA1, StaleCacheKey, parsed_toml, project_file_name_uuid, project_names,
-            project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
-            base_project, env_project_file, isdefined
+using Base: CoreLogging, PkgId, UUID, SHA1, StaleCacheKey, parsed_toml,
+            project_file_manifest_path, get_deps, preferences_names,
+            base_project, isdefined
 
 const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{PkgId,Config}

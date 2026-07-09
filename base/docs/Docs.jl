@@ -65,8 +65,7 @@ function.
 
 include("bindings.jl")
 
-import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
-import .Base: Callable, with_output_color
+import .Base.Meta: quot, isexpr, unblock, unescape
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 

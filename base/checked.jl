@@ -18,11 +18,9 @@ export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
 
 import Core: Intrinsics
 import .Intrinsics:
-       checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
-       checked_srem_int,
-       checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
-       checked_urem_int
-import Base: no_op_err, @inline, @noinline, checked_length, BitInteger
+       checked_sadd_int, checked_ssub_int, checked_smul_int,
+       checked_uadd_int, checked_usub_int, checked_umul_int
+import Base: no_op_err, @inline, @noinline, checked_length
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)

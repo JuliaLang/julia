@@ -4,12 +4,12 @@ module GMP
 
 export BigInt
 
-import .Base: *, *%, +, +%, -, -%, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
+import .Base: *, *%, +, +%, -, -%, /, <, <<, >>, >>>, <=, ==, >, >=, ^, ~, &, |, xor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod, sum, prod,
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
-             widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
+             invmod, _prevpow2, _nextpow2, ndigits0zpb,
+             widen, signed, unsafe_trunc, iszero, isone, big, flipsign, signbit,
              sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
              ispositive, isnegative, clamp
 
@@ -873,7 +873,7 @@ if Limb === UInt64 === UInt
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
-    using .Base: HASH_SECRET, hash_bytes, hash_finalizer
+    using .Base: HASH_SECRET, hash_bytes
 
     # UnsafeLimbView provides a safe iterator interface to BigInt limb data
     struct UnsafeLimbView <: AbstractVector{UInt8}

@@ -9,14 +9,14 @@ export
 import
     .Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
         inv, exp, exp2, exponent, factorial, floor, fma, muladd, hypot, isinteger,
-        isfinite, isinf, isnan, issubnormal, ldexp, log, log2, log10, max, min, mod, modf,
+        isfinite, isinf, isnan, issubnormal, ldexp, log, log2, log10, max, min, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, _precision, exp10, expm1, log1p,
-        eps, signbit, sign, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
+        eps, signbit, sign, sin, cos, sincos, tan, sec, csc, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n, decompose, minmax, _precision_with_base_2,
+        isone, big, decompose, minmax, _precision_with_base_2,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
         uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
         ispositive, isnegative
