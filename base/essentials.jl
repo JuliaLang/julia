@@ -851,6 +851,11 @@ julia> Core.bitsizeof(Float32)
 
 julia> Core.bitsizeof(1.0)
 64
+
+julia> primitive type MyUInt63 <: Unsigned 63 end
+
+julia> Core.bitsizeof(MyUInt63)
+63
 ```
 """
 Core.bitsizeof
