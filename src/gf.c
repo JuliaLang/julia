@@ -2605,6 +2605,50 @@ static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *
         else {
             replaced_edge = replaced_dispatch;
         }
+        if (replaced_edge && invokeTypes == NULL && ambig) {
+            // The new method is (pairwise) ambiguous with `mi`'s method, so over this
+            // edge it can only replace "dispatch to `mi`" with "throw a MethodError".
+            // A call-edge group whose signature slot is marked `PossiblyAmbiguous` was
+            // recorded at a call site that already accounts for a MethodError from
+            // ambiguous dispatch; keep the backedge if every record of `mi` in the
+            // caller is such a group (a later addition that wins the dispatch outright
+            // still invalidates via `is_replacing`). Any unmarked group, optimized
+            // single-edge record, or invoke record for `mi` demands invalidation.
+            jl_svec_t *edges = jl_atomic_load_relaxed(&caller->edges);
+            size_t nedges = jl_svec_len(edges);
+            int found_marked = 0;
+            for (size_t j = 0; j < nedges; ) {
+                jl_value_t *edge = jl_svecref(edges, j);
+                if (jl_is_long(edge)) { // a call-edge group: (±n, sig, callees...)
+                    ssize_t nmatches = jl_unbox_long(edge);
+                    if (nmatches < 0)
+                        nmatches = -nmatches;
+                    int marked = j + 1 < nedges && jl_typetagis(jl_svecref(edges, j + 1), jl_possibly_ambiguous_type);
+                    for (ssize_t k = 0; k < nmatches && j + 2 + (size_t)k < nedges; k++) {
+                        jl_value_t *callee = jl_svecref(edges, j + 2 + (size_t)k);
+                        if (jl_is_code_instance(callee))
+                            callee = (jl_value_t*)jl_get_ci_mi((jl_code_instance_t*)callee);
+                        if (callee == (jl_value_t*)mi) {
+                            if (!marked)
+                                goto found_plain;
+                            found_marked = 1;
+                        }
+                    }
+                    j += 2 + (size_t)nmatches;
+                    continue;
+                }
+                if (jl_is_code_instance(edge))
+                    edge = (jl_value_t*)jl_get_ci_mi((jl_code_instance_t*)edge);
+                if (edge == (jl_value_t*)mi)
+                    goto found_plain;
+                j += 1;
+            }
+            if (found_marked) {
+                insb = set_next_edge(backedges, insb, invokeTypes, caller);
+                continue;
+            }
+        found_plain:;
+        }
         if (replaced_edge) {
             invalidate_code_instance(caller, max_world, 1);
             insb = clear_next_edge(backedges, insb, invokeTypes, caller);

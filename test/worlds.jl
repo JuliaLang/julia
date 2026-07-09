@@ -680,3 +680,145 @@ let ci = method_instance(iter61667, ()).cache
     Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
     @test ci.max_world == typemax(UInt)
 end
+
+# Ambiguity-tolerant backedges (Core.PossiblyAmbiguous call-edge marker): a
+# newly-inserted method that is pairwise-ambiguous with a callee can only turn
+# "dispatch to the callee" into "throw a MethodError" over the affected intersection.
+# A caller whose call-edge group for the callee carries the marker on its signature
+# slot was inferred with that pessimization (may-throw MethodError, no
+# devirtualization) and must survive such an insertion; a caller recording the callee
+# through a plain group or the optimized single-edge format must be invalidated. A new
+# method that outright wins part of the callee's dispatch must invalidate either way:
+# the marker tolerates ambiguities only.
+function ambig_rt_find_mi(f, target::Type)
+    for m in methods(f)
+        for spec in Base.specializations(m)
+            spec === nothing && continue
+            spec.specTypes == target && return spec
+        end
+    end
+    return nothing
+end
+function ambig_rt_edge_counts(ci::Core.CodeInstance, callee_mi::Core.MethodInstance)
+    # count records of `callee_mi`, split by whether the containing call-edge group is
+    # marked with `Core.PossiblyAmbiguous` on its signature slot (records outside a
+    # marked group, e.g. the optimized single-edge format, count as plain)
+    marked = plain = 0
+    isdefined(ci, :edges) || return (marked, plain)
+    edges = ci.edges
+    i = 1
+    while i <= length(edges)
+        e = edges[i]
+        if e isa Int
+            n = abs(e)
+            groupmarked = edges[i+1] isa Core.PossiblyAmbiguous
+            for j in i+2:i+1+n
+                x = edges[j]
+                x isa Core.CodeInstance && (x = x.def)
+                if x === callee_mi
+                    groupmarked ? (marked += 1) : (plain += 1)
+                end
+            end
+            i += 2 + n
+        else
+            x = e
+            x isa Core.CodeInstance && (x = x.def)
+            x === callee_mi && (plain += 1)
+            i += 1
+        end
+    end
+    return (marked, plain)
+end
+
+# callee with a pre-existing ambiguity: the caller records a wrapped edge
+ambig_rt_q(x::Integer, y) = 1
+ambig_rt_q(x, y::AbstractString) = 2
+ambig_rt_qcaller(x::Int8, @nospecialize(y)) = ambig_rt_q(x, y)
+# a second-level caller, to observe that invalidation still cascades
+ambig_rt_qouter(@nospecialize(y)) = ambig_rt_qcaller(Int8(1), y)
+let
+    @test precompile(ambig_rt_qcaller, (Int8, Any))
+    @test precompile(ambig_rt_qouter, (Any,))
+    qmi = ambig_rt_find_mi(ambig_rt_qcaller, Tuple{typeof(ambig_rt_qcaller), Int8, Any})
+    calleemi = ambig_rt_find_mi(ambig_rt_q, Tuple{typeof(ambig_rt_q), Int8, Any})
+    outermi = ambig_rt_find_mi(ambig_rt_qouter, Tuple{typeof(ambig_rt_qouter), Any})
+    @test qmi !== nothing && calleemi !== nothing && outermi !== nothing
+    qci = qmi.cache
+    outerci = outermi.cache
+    @test qci.max_world == typemax(UInt)
+    @test outerci.max_world == typemax(UInt)
+    # the ambiguity was visible at inference time, so the call-edge group must be marked
+    @test ambig_rt_edge_counts(qci, calleemi) == (1, 0)
+    # insert a method pairwise-ambiguous with ambig_rt_q(::Integer, ::Any) whose overlap
+    # with the call signature is fully covered by the ambiguity: the caller tolerates it
+    @eval ambig_rt_q(x, y::AbstractChar) = 3
+    @test qci.max_world == typemax(UInt)
+    @test outerci.max_world == typemax(UInt)
+    # dispatch behaves per the new world through the surviving CodeInstance
+    @test Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), 2) === 1
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), "s")
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), 'c')
+    # insert a method that outright wins part of the callee's dispatch: despite the
+    # wrapped edge this must invalidate, and the invalidation must cascade to callers
+    # of the surviving CodeInstance
+    @eval ambig_rt_q(x::Int8, y::Integer) = 4
+    @test qci.max_world != typemax(UInt)
+    @test outerci.max_world != typemax(UInt)
+    @test Base.inferencebarrier(ambig_rt_qcaller)(Int8(1), 2) === 4
+end
+
+# callee without an ambiguity: the caller records a plain edge, which a new pairwise-ambiguous
+# method must invalidate even though the pruned lookup result is unchanged
+ambig_rt_p(x::Integer, y) = 1
+ambig_rt_pcaller(x::Int8, @nospecialize(y)) = ambig_rt_p(x, y)
+let
+    @test precompile(ambig_rt_pcaller, (Int8, Any))
+    pmi = ambig_rt_find_mi(ambig_rt_pcaller, Tuple{typeof(ambig_rt_pcaller), Int8, Any})
+    calleemi = ambig_rt_find_mi(ambig_rt_p, Tuple{typeof(ambig_rt_p), Int8, Any})
+    @test pmi !== nothing && calleemi !== nothing
+    pci = pmi.cache
+    @test pci.max_world == typemax(UInt)
+    @test ambig_rt_edge_counts(pci, calleemi) == (0, 1)
+    @eval ambig_rt_p(x, y::AbstractString) = 2
+    @test pci.max_world != typemax(UInt)
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_pcaller)(Int8(1), "s")
+    @test Base.inferencebarrier(ambig_rt_pcaller)(Int8(1), 2) === 1
+end
+
+# closing a strict specificity cycle by method insertion: a 4-method chain has strict
+# pairwise specificity everywhere (no ambiguity anywhere, all edges plain), but adding
+# the fifth method closes a specificity cycle (see the "strict specificity cycle" block
+# in test/ambiguous.jl), which changes dispatch in regions the new method does not win —
+# e.g. a point that used to select the chain's third method now throws. The caller must
+# be invalidated (via the pairwise ambiguity between the closing method and the union member
+# of the chain).
+abstract type AmbigCycRTAbsC end
+abstract type AmbigCycRTCplx <: AmbigCycRTAbsC end
+struct AmbigCycRTCplxF64 <: AmbigCycRTCplx end
+abstract type AmbigCycRTAbsF end
+struct AmbigCycRTF <: AmbigCycRTAbsF end
+struct AmbigCycRTOtherC <: AmbigCycRTAbsC end
+Base.Experimental.@max_methods 5 function ambig_rt_cyc end
+ambig_rt_cyc(::AmbigCycRTCplx) = 1
+ambig_rt_cyc(::AmbigCycRTAbsC) = 2
+ambig_rt_cyc(::Union{AmbigCycRTF, AmbigCycRTAbsC}) = 3
+ambig_rt_cyc(::AmbigCycRTAbsF) = 4
+ambig_rt_cyccaller(@nospecialize(x)) = ambig_rt_cyc(x)
+let
+    @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTF()) === 3
+    @test precompile(ambig_rt_cyccaller, (Any,))
+    cmi = ambig_rt_find_mi(ambig_rt_cyccaller, Tuple{typeof(ambig_rt_cyccaller), Any})
+    @test cmi !== nothing
+    cci = cmi.cache
+    @test cci.max_world == typemax(UInt)
+    # no ambiguity exists yet, so no call-edge group may be marked
+    @test !any(e -> e isa Core.PossiblyAmbiguous, cci.edges)
+    # close the cycle
+    @eval ambig_rt_cyc(::Union{AmbigCycRTCplxF64, AmbigCycRTAbsF}) = 5
+    @test cci.max_world != typemax(UInt)
+    # dispatch in the newly-contested region now throws
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTF())
+    @test_throws MethodError Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTCplxF64())
+    # a point whose applicable subset is still strictly ordered keeps dispatching
+    @test Base.inferencebarrier(ambig_rt_cyccaller)(AmbigCycRTOtherC()) === 2
+end
