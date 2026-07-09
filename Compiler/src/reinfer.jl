@@ -234,6 +234,11 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
+                        # the signature slot may carry the `Core.PossiblyAmbiguous` marker
+                        marked = sig isa Core.PossiblyAmbiguous
+                        if marked
+                            sig = (sig::Core.PossiblyAmbiguous).sig
+                        end
                         nmatches = abs(edge)
                         fully_covers = edge > 0
                         min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, matches)

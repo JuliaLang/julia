@@ -200,23 +200,33 @@ function method_match_edge(info::MethodMatchInfo, i::Int, mi_edge::Bool)
 end
 
 function has_encoded_lookup(edges::Vector{Any}, info::MethodMatchInfo,
-                            encoded_nmatches::Int, mi_edge::Bool)
+                            encoded_nmatches::Int, mi_edge::Bool, marked::Bool)
     i = 1
     while i <= length(edges)
         entry = edges[i]
         if entry isa Int
             n = abs(entry)
             next_i = i + 2 + n
-            if next_i - 1 <= length(edges) && entry === encoded_nmatches &&
-                    edges[i + 1] == info.atype
-                matches = true
+            if next_i - 1 <= length(edges) && entry === encoded_nmatches
+                atypeᵢ = edges[i + 1]
+                markedᵢ = atypeᵢ isa PossiblyAmbiguous
+                markedᵢ && (atypeᵢ = (atypeᵢ::PossiblyAmbiguous).sig)
+                matches = atypeᵢ == info.atype
                 for j = 1:n
+                    matches || break
                     if edges[i + 1 + j] !== method_match_edge(info, j, mi_edge)
                         matches = false
-                        break
                     end
                 end
-                matches && return true
+                if matches
+                    # Every call site with this signature in the caller shares this group,
+                    # and a marked group relaxes invalidation for all of them. A call site
+                    # inferred without the ambiguity pessimization cannot share that
+                    # relaxation, so the group loses its marker; the plain form is valid for
+                    # both kinds of site.
+                    markedᵢ && !marked && (edges[i + 1] = info.atype)
+                    return true
+                end
             end
             i = next_i
         else
@@ -249,7 +259,14 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
         end
     end
     nmatches = length(info.results)
-    if nmatches == length(info.edges) == 1 && fully_covering(info)
+    # A call inferred in the presence of a possible ambiguity records its edge group
+    # with the signature wrapped in `Core.PossiblyAmbiguous`: inference pessimized the
+    # call for a MethodError from ambiguous dispatch and the optimizer devirtualized
+    # nothing, so the compiled code tolerates method additions that merely introduce or
+    # extend an ambiguity over this signature. The optimized single-edge format has no
+    # signature slot to carry the marker, so such calls always use the group format.
+    marked = any_ambig(info)
+    if !marked && nmatches == length(info.edges) == 1 && fully_covering(info)
         # try the optimized format for the representation, if possible and applicable
         # if this doesn't succeed, the backedge will be less precise,
         # but the forward edge will maintain the precision
@@ -270,8 +287,8 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     # add check for whether this lookup already existed in the edges list
     # encode nmatches as negative if fully_covers is false
     encoded_nmatches = fully_covering(info) ? nmatches : -nmatches
-    if !has_encoded_lookup(edges, info, encoded_nmatches, mi_edge)
-        push!(edges, encoded_nmatches, info.atype)
+    if !has_encoded_lookup(edges, info, encoded_nmatches, mi_edge, marked)
+        push!(edges, encoded_nmatches, marked ? PossiblyAmbiguous(info.atype) : info.atype)
         for i = 1:nmatches
             edge = method_match_edge(info, i, mi_edge)
             if edge isa CodeInstance

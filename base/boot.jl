@@ -690,6 +690,18 @@ struct PartialTask
     PartialTask(@nospecialize(fetch_type)) = new(fetch_type)
 end
 
+# Wraps the signature type of a recorded call edge to mark that the enclosing
+# CodeInstance was inferred in the presence of a possible method ambiguity for that
+# call: the inferred results already account for a MethodError from ambiguous dispatch
+# and no call target was devirtualized, so they remain valid when a method addition
+# merely introduces or extends an ambiguity over the signature (an addition that can
+# win the dispatch still invalidates). The wrapper appears only in the signature slot
+# of a call-edge group; callee objects are never wrapped.
+struct PossiblyAmbiguous
+    sig
+    PossiblyAmbiguous(@nospecialize(sig)) = new(sig)
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
