@@ -131,8 +131,6 @@ end
 checked_abs(x::UnsignedInt) = x
 checked_abs(x::Bool) = x
 
-
-
 """
     Base.add_with_overflow(x, y) -> (r, f)
 
@@ -158,7 +156,6 @@ function add_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
     x +% y, x > ~y
 end
 end
-
 
 throw_overflowerr_binaryop(op, x, y) = (@noinline;
     throw(OverflowError(LazyString(x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
@@ -198,7 +195,6 @@ checked_add(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T) where {T} =
 checked_add(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) where {T} =
     checked_add(checked_add(x1, x2), x3, x4, x5, x6, x7, x8)
 
-
 """
     Base.sub_with_overflow(x, y) -> (r, f)
 
@@ -237,7 +233,6 @@ function checked_sub(x::T, y::T) where T<:Integer
     b && throw_overflowerr_binaryop(:-, x, y)
     z
 end
-
 
 """
     Base.mul_with_overflow(x, y) -> (r, f)
