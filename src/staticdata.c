@@ -423,16 +423,16 @@ static int needs_uniquing(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFE
     return caching_tag(v, query_cache) == 1;
 }
 
-static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAFEPOINT
-{
-    if (*addr != newval)
-        ptrhash_put(&field_replace, (void*)addr, newval);
-}
-
 // whether `record_field_change` has already registered a replacement for `addr`
 static int has_field_change(jl_value_t **addr) JL_NOTSAFEPOINT
 {
     return ptrhash_get(&field_replace, (void*)addr) != HT_NOTFOUND;
+}
+
+static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAFEPOINT
+{
+    if (has_field_change(addr) || *addr != newval)
+        ptrhash_put(&field_replace, (void*)addr, newval);
 }
 
 static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DISABLED
@@ -641,14 +641,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         // cache was not rewritten gets an empty cache here, rather than leaking
         // whatever the live runtime cache happened to contain. Builtin functions
         // are an exception: their cache is not part of the codegen ordering and
-        // is not repopulated at load, so keep it. Builtins are recognized by
-        // their method having neither source nor a generator (cf. the
-        // jl_is_builtinfunc heuristic in gf.c).
+        // is not repopulated at load, so keep it. Builtin-like functions are
+        //  recognized by their method having neither source nor a generator
+        // (cf. the jl_is_builtinfunc computation).
         jl_value_t *midef = mi->def.value;
         int is_builtin = jl_is_method(midef) &&
             ((jl_method_t*)midef)->source == NULL &&
             ((jl_method_t*)midef)->generator == NULL;
-        if (!is_builtin && !has_field_change((jl_value_t**)&mi->cache))
+        if (native_functions && !is_builtin && !has_field_change((jl_value_t**)&mi->cache))
             record_field_change((jl_value_t**)&mi->cache, NULL);
         // don't recurse into all backedges memory (yet)
         jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
