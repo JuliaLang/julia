@@ -4397,6 +4397,7 @@ void post_boot_hooks(void)
     jl_partial_struct_type = (jl_datatype_t*)core("PartialStruct");
     jl_interconditional_type = (jl_datatype_t*)core("InterConditional");
     jl_partial_opaque_type = (jl_datatype_t*)core("PartialOpaque");
+    jl_possibly_ambiguous_type = (jl_datatype_t*)core("PossiblyAmbiguous");
     jl_inter_must_alias_type = (jl_datatype_t*)core("InterMustAlias");
 
     export_jl_small_typeof();

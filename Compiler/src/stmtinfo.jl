@@ -79,7 +79,14 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
         end
     end
     nmatches = length(info.results)
-    if nmatches == length(info.edges) == 1 && fully_covering(info)
+    # A call inferred in the presence of a possible ambiguity records its edge group
+    # with the signature wrapped in `Core.PossiblyAmbiguous`: inference pessimized the
+    # call for a MethodError from ambiguous dispatch and the optimizer devirtualized
+    # nothing, so the compiled code tolerates method additions that merely introduce or
+    # extend an ambiguity over this signature. The optimized single-edge format has no
+    # signature slot to carry the marker, so such calls always use the group format.
+    marked = any_ambig(info)
+    if !marked && nmatches == length(info.edges) == 1 && fully_covering(info)
         # try the optimized format for the representation, if possible and applicable
         # if this doesn't succeed, the backedge will be less precise,
         # but the forward edge will maintain the precision
@@ -100,12 +107,22 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     # encode nmatches as negative if fully_covers is false
     encoded_nmatches = fully_covering(info) ? nmatches : -nmatches
     for i in 1:length(edges)
-        if edges[i] === encoded_nmatches && edges[i+1] == info.atype
-            # TODO: must also verify the CodeInstance match too
-            return nothing
+        if edges[i] === encoded_nmatches
+            atypeᵢ = edges[i+1]
+            markedᵢ = atypeᵢ isa PossiblyAmbiguous
+            markedᵢ && (atypeᵢ = atypeᵢ.sig)
+            if atypeᵢ == info.atype
+                # TODO: must also verify the CodeInstance match too
+                if markedᵢ && !marked
+                    # a plain group wins over a marked one: some call site with this
+                    # signature does not tolerate ambiguous dispatch
+                    edges[i+1] = info.atype
+                end
+                return nothing
+            end
         end
     end
-    push!(edges, encoded_nmatches, info.atype)
+    push!(edges, encoded_nmatches, marked ? PossiblyAmbiguous(info.atype) : info.atype)
     for i = 1:nmatches
         edge = info.edges[i]
         m = info.results[i]
