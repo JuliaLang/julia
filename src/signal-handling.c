@@ -339,6 +339,9 @@ static void jl_clear_force_sigint(void)
     jl_last_sigint_trigger = 0;
 }
 
+#ifndef _OS_DARWIN_
+// (unused on macOS: signals-mach.c performs the repeat-^C check in its own
+// exception flow)
 static int jl_check_force_sigint(void)
 {
     static double accum_weight = 0;
@@ -361,6 +364,7 @@ static int jl_check_force_sigint(void)
     jl_disable_sigint_time = 0;
     return 0;
 }
+#endif
 
 #ifndef _OS_WINDOWS_
 // Not thread local, should only be accessed by the signal handler thread.

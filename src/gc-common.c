@@ -561,11 +561,9 @@ JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 // points that clear the enclosing reset region; the remaining GMP call then
 // simply degrades to level-triggered cancellation.
 
-#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
 // The handler contract is the preserve_all calling convention; keeping the
 // note handler to general registers satisfies it under any compiler.
-__attribute__((target("general-regs-only")))
-#endif
+JL_GENERAL_REGS_ONLY
 static void jl_gmp_defer_note(void *state, uint8_t sev)
 {
     (void)sev;

@@ -494,8 +494,8 @@ JL_NO_ASAN static void jl_cancel_handler_restore(jl_ptls_t ptls, void *_ctx) JL_
 // Between the (still-FP-live) interrupted context and the final sigreturn,
 // the runtime's own code must not clobber FP/vector registers: the kernel
 // captures the live FP state into the self-signal's frame and sigreturn
-// replays it verbatim. Have the compiler enforce that.
-#define JL_GENERAL_REGS_ONLY __attribute__((target("general-regs-only")))
+// replays it verbatim. JL_GENERAL_REGS_ONLY (support/platform.h) has the
+// compiler enforce that.
 
 // Called by the shim: invoke the registered handler with its arguments from
 // the save area. The handler itself preserves all register state it touches
@@ -1596,7 +1596,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
         }
 
-#if (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L) || defined(HAVE_KEVENT)
+#if defined(SIGINFO) || (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L) || defined(HAVE_KEVENT)
 noexit_critical:
 #endif
         signal_bt_size = 0;
