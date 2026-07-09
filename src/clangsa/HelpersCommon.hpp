@@ -44,7 +44,7 @@ inline bool isInLLVMHeaderFile(SourceLocation Loc, const SourceManager &SM) {
 // event loop and can reach arbitrary safepoints.
 inline bool nameIsNonSafepointRuntimeHelper(StringRef Name) {
   return (Name.starts_with("uv_") || Name.starts_with("unw_") ||
-          Name.starts_with("_U")) &&
+          Name.starts_with("_U") || Name.starts_with("mdb_")) &&
          Name != "uv_run";
 }
 

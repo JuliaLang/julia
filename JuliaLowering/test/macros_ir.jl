@@ -43,7 +43,7 @@ end
 1   (method TestMod.@add_one)
 2   latestworld
 3   TestMod.@add_one
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
 6   (call core.svec)
 7   SourceLocation::1:7
@@ -66,7 +66,7 @@ end
 1   (method TestMod.@foo)
 2   latestworld
 3   TestMod.@foo
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
 6   (call core.svec)
 7   SourceLocation::1:7
@@ -206,7 +206,7 @@ end
 1   (method TestMod.foo)
 2   latestworld
 3   TestMod.foo
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -229,7 +229,7 @@ end
 1   (method TestMod.foo)
 2   latestworld
 3   TestMod.foo
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -254,7 +254,7 @@ end
 1   (method TestMod.foo)
 2   latestworld
 3   TestMod.foo
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10

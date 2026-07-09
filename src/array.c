@@ -88,10 +88,6 @@ STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *d
     return a;
 }
 
-jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz);
-
-JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str);
-
 JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                                             size_t nel, int own_buffer)
 {
@@ -272,8 +268,6 @@ JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2)
         jl_array_ptr_set(a, n + i, jl_array_ptr_ref(a2, i));
     }
 }
-
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *data, size_t len);
 
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary)
 {

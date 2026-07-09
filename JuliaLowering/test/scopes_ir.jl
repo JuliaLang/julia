@@ -141,7 +141,7 @@ end
 2   (method TestMod.f)
 3   latestworld
 4   TestMod.f
-5   (call core.Typeof %₄)
+5   (call core.TypeEqOf %₄)
 6   (call core.svec %₅ core.Any)
 7   (call core.svec)
 8   SourceLocation::3:14
@@ -193,7 +193,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -407,7 +407,7 @@ end
 6   (method TestMod.f)
 7   latestworld
 8   TestMod.f
-9   (call core.Typeof %₈)
+9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉ core.Any)
 11  (call core.svec)
 12  SourceLocation::2:12
@@ -427,7 +427,7 @@ end
 21  (method TestMod.g)
 22  latestworld
 23  TestMod.g
-24  (call core.Typeof %₂₃)
+24  (call core.TypeEqOf %₂₃)
 25  (call core.svec %₂₄)
 26  (call core.svec)
 27  SourceLocation::3:12
@@ -463,7 +463,7 @@ end
 6   (method TestMod.f)
 7   latestworld
 8   TestMod.f
-9   (call core.Typeof %₈)
+9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉)
 11  (call core.svec)
 12  SourceLocation::2:12

@@ -501,30 +501,6 @@ static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots)
     }
 }
 
-/// Link the function in the source module into the destination module if
-/// needed, setting up mapping information.
-/// Similar to orc::cloneFunctionDecl, but more complete for greater correctness
-Function *IRLinker_copyFunctionProto(Module *DstM, Function *SF) {
-  // If there is no linkage to be performed or we are linking from the source,
-  // bring SF over, if we haven't already.
-  if (SF->getParent() == DstM)
-    return SF;
-  if (auto *F = DstM->getNamedValue(SF->getName()))
-      return cast<Function>(F);
-  auto *F = Function::Create(SF->getFunctionType(), SF->getLinkage(),
-                             SF->getAddressSpace(), SF->getName(), DstM);
-  F->copyAttributesFrom(SF);
-#if JL_LLVM_VERSION < 210000
-  F->IsNewDbgInfoFormat = SF->IsNewDbgInfoFormat;
-#endif
-
-  // Remove these copied constants since they point to the source module.
-  F->setPersonalityFn(nullptr);
-  F->setPrefixData(nullptr);
-  F->setPrologueData(nullptr);
-  return F;
-}
-
 static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Function *func, Function *specfunc, bool target_specsig)
 {
     std::string gf_thunk_name;
@@ -1041,8 +1017,6 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     builder.CreateRet(val);
 }
 
-void multiversioning_preannotate(Module &M);
-
 // See src/processor.h for documentation about this table. Corresponds to jl_image_shard_t.
 static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, unsigned threads) {
     SmallVector<Constant *, 0> tables(sizeof(jl_image_shard_t) / sizeof(void *) * threads);
@@ -1152,12 +1126,14 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
 // among the threads equally. The weight calculated here is an estimation of
 // how expensive a particular function is going to be to compile.
 
+namespace {
 struct FunctionInfo {
     size_t weight;
     size_t bbs;
     size_t insts;
     size_t clones;
 };
+}  // anonymous namespace
 
 static FunctionInfo getFunctionWeight(const Function &F)
 {
@@ -1183,6 +1159,7 @@ static FunctionInfo getFunctionWeight(const Function &F)
     return info;
 }
 
+namespace {
 struct ModuleInfo {
     size_t globals;
     size_t funcs;
@@ -1191,8 +1168,9 @@ struct ModuleInfo {
     size_t clones;
     size_t weight;
 };
+}  // anonymous namespace
 
-ModuleInfo compute_module_info(Module &M) {
+static ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
     info.globals = 0;
     info.funcs = 0;
@@ -1219,12 +1197,14 @@ ModuleInfo compute_module_info(Module &M) {
     return info;
 }
 
+namespace {
 struct Partition {
     StringMap<bool> globals;
     StringMap<unsigned> fvars;
     StringMap<unsigned> gvars;
     size_t weight;
 };
+}  // anonymous namespace
 
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, DenseMap<GlobalValue *, unsigned> &fvars, DenseMap<GlobalValue *, unsigned> &gvars) {
     bool bad = false;
@@ -1443,6 +1423,7 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     return partitions;
 }
 
+namespace {
 struct ImageTimer {
     uint64_t elapsed = 0;
     std::string name;
@@ -1491,7 +1472,9 @@ struct ImageTimer {
             elapsed = 0;
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct ShardTimers {
     ImageTimer deserialize;
     ImageTimer materialize;
@@ -1523,10 +1506,13 @@ struct ShardTimers {
         out << llvm::formatv("{0:F3}  total  Total time taken\n", total / 1e9);
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct AOTOutputs {
     SmallVector<char, 0> unopt, opt, obj, asm_;
 };
+}  // anonymous namespace
 
 // Perform the actual optimization and emission of the output files
 static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimers &timers,
@@ -2165,7 +2151,7 @@ static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserve
 
 jl_emission_params_t default_emission_params = { 1 };
 
-void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
+static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                            const char *unopt_bc_fname, const char *obj_fname,
                            const char *asm_fname, ios_t *z, ios_t *s,
                            jl_emission_params_t *params, Module &dataM)

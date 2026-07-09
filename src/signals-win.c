@@ -139,9 +139,9 @@ void restore_signals(void)
     SetConsoleCtrlHandler(NULL, 0);
 }
 
-int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c);
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
 
-static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread)
+static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread) JL_NOTSAFEPOINT
 {
     jl_jmp_buf *saferestore = jl_get_safe_restore();
     if (saferestore) { // restarting jl_ or profile

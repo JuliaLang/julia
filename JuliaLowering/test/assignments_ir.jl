@@ -48,7 +48,7 @@ end
 1   (method TestMod.b)
 2   latestworld
 3   TestMod.b
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::3:9

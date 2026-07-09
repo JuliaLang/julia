@@ -1080,9 +1080,6 @@ static void lock_low32(void) JL_NOTSAFEPOINT
     return;
 }
 
-// Actual definition in `ast.c`
-void jl_lisp_prompt(void);
-
 #ifdef _OS_LINUX_
 static void rr_detach_teleport(void) JL_NOTSAFEPOINT {
 #define RR_CALL_BASE 1000

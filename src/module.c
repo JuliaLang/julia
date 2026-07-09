@@ -206,7 +206,7 @@ retry:
 }
 
 // find a binding from a module's `usings` list
-struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, modstack_t *st, size_t world, int trust_cache)
+static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, modstack_t *st, size_t world, int trust_cache)
 {
     // First check if we've hit a cycle in this resolution
     {
@@ -395,6 +395,68 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
     jl_gc_write(bpart, bpart->restriction, jl_value_t, resolution.binding_or_const);
     bpart->kind = resolution.ultimate_kind;
+}
+
+static void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world)
+{
+    jl_binding_partition_t *bpart = *pbpart;
+    while (1) {
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
+            break;
+        }
+        *bnd = (jl_binding_t*)bpart->restriction;
+        bpart = jl_get_binding_partition(*bnd, world);
+    }
+    *pbpart = bpart;
+}
+
+static void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world, int *depwarn)
+{
+    int passed_explicit = 0;
+    jl_binding_partition_t *bpart = *pbpart;
+    while (1) {
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
+            if (!passed_explicit && depwarn)
+                *depwarn |= bpart->kind & PARTITION_FLAG_DEPWARN;
+            break;
+        }
+        if (!passed_explicit && depwarn)
+            *depwarn |= bpart->kind & PARTITION_FLAG_DEPWARN;
+        if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
+            passed_explicit = 1;
+        *bnd = (jl_binding_t*)bpart->restriction;
+        bpart = jl_get_binding_partition(*bnd, world);
+    }
+    *pbpart = bpart;
+}
+
+static void jl_walk_binding_inplace_worlds(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t *min_world, size_t *max_world, int *depwarn, size_t world)
+{
+    int passed_explicit = 0;
+    jl_binding_partition_t *bpart = *pbpart;
+    while (bpart) {
+        size_t bpart_min_world = jl_atomic_load_relaxed(&bpart->min_world);
+        if (*min_world < bpart_min_world)
+            *min_world = bpart_min_world;
+        size_t bpart_max_world = jl_atomic_load_relaxed(&bpart->max_world);
+        if (*max_world > bpart_max_world)
+            *max_world = bpart_max_world;
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
+            if (!passed_explicit && depwarn)
+                *depwarn |= bpart->kind & PARTITION_FLAG_DEPWARN;
+            break;
+        }
+        if (!passed_explicit && depwarn)
+            *depwarn |= bpart->kind & PARTITION_FLAG_DEPWARN;
+        if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
+            passed_explicit = 1;
+        *bnd = (jl_binding_t*)bpart->restriction;
+        bpart = jl_get_binding_partition(*bnd, world);
+    }
+    *pbpart = bpart;
 }
 
 STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b JL_PROPAGATES_ROOT, jl_value_t *parent, _Atomic(jl_binding_partition_t *)*insert, size_t world, size_t max_world, modstack_t *st) JL_GLOBALLY_ROOTED
@@ -820,7 +882,7 @@ static int is_module_open(jl_module_t *m)
     return open;
 }
 
-extern void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
+void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("new strong globals cannot be created in a generated function. Declare them outside using `global x::Any`.");
@@ -935,6 +997,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t w
 
 static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world)
 {
+    assert(b); // alloc=1 parameter ensured that jl_get_module_binding returns a valid binding
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     if (jl_options.depwarn) {
         int needs_depwarn = 0;
@@ -1692,7 +1755,7 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL
     jl_gc_write(bpart, bpart->restriction, jl_value_t, val);
 }
 
-void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *invalidated_bpart, jl_binding_partition_t *new_bpart, size_t new_world)
+static void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *invalidated_bpart, jl_binding_partition_t *new_bpart, size_t new_world)
 {
     jl_value_t *invalidate_code_for_globalref = NULL;
     if (jl_base_module != NULL)
@@ -2062,7 +2125,7 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
     return (jl_value_t*)a;
 }
 
-void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
+static void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
     jl_array_grow_end(a, 1);
     //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
     jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)name);
@@ -2113,7 +2176,7 @@ static void _materialize_reexported_bindings(jl_module_t *m, size_t world, jl_ar
     }
 }
 
-void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings, size_t world)
+static void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings, size_t world)
 {
     // Materialize reexported bindings first
     jl_array_t *visited_modules = jl_alloc_vec_any(0);
@@ -2161,7 +2224,7 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
     }
 }
 
-void append_exported_names(jl_array_t* a, jl_module_t *m, int all, size_t world)
+static void append_exported_names(jl_array_t* a, jl_module_t *m, int all, size_t world)
 {
     // First, materialize all reexported bindings
     jl_array_t *visited_modules = jl_alloc_vec_any(0);

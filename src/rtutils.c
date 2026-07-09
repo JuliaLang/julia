@@ -622,9 +622,6 @@ static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const
     return n;
 }
 
-JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT;
-
 JL_DLLEXPORT int jl_is_identifier(const char *str) JL_NOTSAFEPOINT
 {
     size_t i = 0;

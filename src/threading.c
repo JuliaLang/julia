@@ -65,7 +65,7 @@ static void jl_delete_thread(void*) JL_NOTSAFEPOINT_ENTER;
 static pthread_key_t jl_task_exit_key;
 static pthread_key_t jl_safe_restore_key;
 
-__attribute__((constructor)) void _jl_init_safe_restore(void)
+static __attribute__((constructor)) void _jl_init_safe_restore(void)
 {
     pthread_key_create(&jl_safe_restore_key, NULL);
     pthread_key_create(&jl_task_exit_key, jl_delete_thread);
@@ -280,9 +280,6 @@ static uv_mutex_t tls_lock; // controls write-access to these variables:
 _Atomic(jl_ptls_t*) jl_all_tls_states JL_GLOBALLY_ROOTED;
 int jl_all_tls_states_size;
 static uv_cond_t cond;
-// concurrent reads are permitted, using the same pattern as mtsmall_arraylist
-// it is implemented separately because the API of direct jl_all_tls_states use is already widely prevalent
-void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 // return calling thread's ID
 JL_DLLEXPORT int16_t jl_threadid(void)
@@ -487,10 +484,6 @@ void jl_safepoint_resume_all_threads(jl_task_t *ct)
             jl_safepoint_resume_thread(tid);
     };
 }
-
-void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
-void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
 static void jl_delete_thread(void *value)
 {

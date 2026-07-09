@@ -487,7 +487,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                        (ex, "function_type of local without known closure type"))
             ctx.closure_infos[func_name.var_id].type_name
         else
-            @ast ctx ex [K"call" "Typeof"::K"core" _convert_closures(ctx, func_name)]
+            @ast ctx ex [K"call" "TypeEqOf"::K"core" _convert_closures(ctx, func_name)]
         end
     elseif k == K"method_defs"
         name = ex[1]

@@ -326,7 +326,7 @@ JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_modu
     }
 }
 
-jl_value_t *expr_arg1(jl_value_t *expr) {
+static jl_value_t *expr_arg1(jl_value_t *expr) {
     jl_array_t *args = ((jl_expr_t*)expr)->args;
     return jl_array_ptr_ref(args, 0);
 }
@@ -404,7 +404,7 @@ static void add_edge(arraylist_t *edges_list, arraylist_t *inlinestack, int32_t 
     *p_pc = (i - 2) / 3 + 1;
 }
 
-jl_debuginfo_t *jl_linetable_to_debuginfo(jl_array_t *codelocs_any, jl_array_t *linetable)
+static jl_debuginfo_t *jl_linetable_to_debuginfo(jl_array_t *codelocs_any, jl_array_t *linetable)
 {
     size_t nlocs = jl_array_nrows(codelocs_any);
     jl_value_t *toplocinfo = jl_array_ptr_ref(linetable, 0);
@@ -1284,19 +1284,8 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     jl_sym_t *name;
     jl_method_t *m = NULL;
     jl_value_t *argtype = NULL;
-    jl_svec_t *new_atypes = NULL;
-    JL_GC_PUSH5(&ft, &f, &m, &argtype, &new_atypes);
+    JL_GC_PUSH4(&ft, &f, &m, &argtype);
     size_t i, na = jl_svec_len(atypes);
-
-    if (jl_is_typeegal(ft)) {
-        // Lowering spells callable-value method definitions with `Core.Typeof`.
-        // Type-valued callees still define methods at the equality level, so
-        // equal UnionAll spellings share the constructor method they define.
-        ft = (jl_value_t*)jl_wrap_Type(jl_typeegal_T(ft));
-        new_atypes = jl_svec_copy(atypes);
-        jl_svecset(new_atypes, 0, ft);
-        atypes = new_atypes;
-    }
 
     argtype = jl_apply_tuple_type(atypes, 1);
     if (!jl_is_datatype(argtype))

@@ -190,10 +190,6 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     }
 }
 
-// This prevents `ct` from returning via error handlers or other unintentional
-// means by destroying some old state before we start destroying that state in atexit hooks.
-void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
-
 // cause this process to exit with WEXITSTATUS(exitcode), after waiting to finish all julia, C, and C++ cleanup
 JL_DLLEXPORT void jl_exit(int exitcode)
 {
@@ -382,8 +378,6 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
     }
     return;
 }
-
-void post_boot_hooks(void);
 
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;

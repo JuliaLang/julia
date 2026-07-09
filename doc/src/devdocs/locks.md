@@ -55,6 +55,8 @@ exception frames, and taking/releasing locks.
 * `RLST_mutex` (`std::mutex`)
 * `llvm_printing_mutex` (`std::mutex`)
 * `jl_locked_stream.mutex` (`std::mutex`)
+* `ObjCache.Mutex` (`std::mutex`)
+* `ObjCache.LogMutex` (`std::mutex`)
 * `debuginfo_asyncsafe` (`uv_rwlock_t`) (can still acquire `jl_in_stackwalk` (`uv_mutex_t`, Win32 only))
 * `profile_show_peek_cond_lock` (`jl_mutex_t`)
 * `trampoline_lock` (`uv_mutex_t`)

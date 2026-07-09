@@ -1221,7 +1221,7 @@
                                             n)))
                   (farg    (if (decl? argname)
                                (adj-decl argname)
-                               `(|::| |#self#| (call (core Typeof) ,argname))))
+                               `(|::| |#self#| (call (core TypeEqOf) ,argname))))
                   (body       (insert-after-meta body (cdr argl-stmts)))
                   (argl    (cdr argl))
                   (argl    (fix-arglist
@@ -3964,7 +3964,7 @@ f(x) = yt(x)
 (define (rename-sig-types ex namemap)
   (pattern-replace
    (pattern-set
-    (pattern-lambda (call (core (-/ Typeof)) name)
+    (pattern-lambda (call (core (-/ TypeEqOf)) name)
                     (sig-type-expr namemap name __)))
    ex))
 

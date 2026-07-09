@@ -80,6 +80,7 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
+#include <llvm/CodeGen/MIRPrinter.h>
 
 #ifdef USE_ITTAPI
 #include "ittapi/ittnotify.h"
@@ -96,43 +97,43 @@ static bool jl_floattemp_var_needed(const Triple &TT) {
 
 //Drag some useful type functions into our namespace
 //to reduce verbosity of our code
-auto getInt1Ty(LLVMContext &ctxt) {
+static auto getInt1Ty(LLVMContext &ctxt) {
     return Type::getInt1Ty(ctxt);
 }
-auto getInt8Ty(LLVMContext &ctxt) {
+static auto getInt8Ty(LLVMContext &ctxt) {
     return Type::getInt8Ty(ctxt);
 }
-auto getInt16Ty(LLVMContext &ctxt) {
+static auto getInt16Ty(LLVMContext &ctxt) {
     return Type::getInt16Ty(ctxt);
 }
-auto getInt32Ty(LLVMContext &ctxt) {
+static auto getInt32Ty(LLVMContext &ctxt) {
     return Type::getInt32Ty(ctxt);
 }
-auto getInt64Ty(LLVMContext &ctxt) {
+static auto getInt64Ty(LLVMContext &ctxt) {
     return Type::getInt64Ty(ctxt);
 }
-auto getHalfTy(LLVMContext &ctxt) {
+static auto getHalfTy(LLVMContext &ctxt) {
     return Type::getHalfTy(ctxt);
 }
-auto getFloatTy(LLVMContext &ctxt) {
+static auto getFloatTy(LLVMContext &ctxt) {
     return Type::getFloatTy(ctxt);
 }
-auto getDoubleTy(LLVMContext &ctxt) {
+static auto getDoubleTy(LLVMContext &ctxt) {
     return Type::getDoubleTy(ctxt);
 }
-auto getBFloatTy(LLVMContext &ctxt) {
+static auto getBFloatTy(LLVMContext &ctxt) {
     return Type::getBFloatTy(ctxt);
 }
-auto getFP128Ty(LLVMContext &ctxt) {
+static auto getFP128Ty(LLVMContext &ctxt) {
     return Type::getFP128Ty(ctxt);
 }
-auto getVoidTy(LLVMContext &ctxt) {
+static auto getVoidTy(LLVMContext &ctxt) {
     return Type::getVoidTy(ctxt);
 }
-auto getCharTy(LLVMContext &ctxt) {
+static auto getCharTy(LLVMContext &ctxt) {
     return getInt32Ty(ctxt);
 }
-auto getPointerTy(LLVMContext &ctxt) {
+static auto getPointerTy(LLVMContext &ctxt) {
     return PointerType::get(ctxt, 0);
 }
 
@@ -149,7 +150,7 @@ typedef Instruction TerminatorInst;
 #undef DEBUG_TYPE //LLVM occasionally likes to set DEBUG_TYPE in a header...
 #define DEBUG_TYPE "julia_irgen_codegen"
 
-void setName(jl_codegen_output_t &out, Value *V, const Twine &Name)
+static void setName(jl_codegen_output_t &out, Value *V, const Twine &Name)
 {
     // we do the constant check again later, duplicating it here just makes sure the assertion
     // fires on debug builds even if debug info is not enabled
@@ -162,21 +163,21 @@ void setName(jl_codegen_output_t &out, Value *V, const Twine &Name)
     }
 }
 
-void maybeSetName(jl_codegen_output_t &out, Value *V, const Twine &Name)
+static void maybeSetName(jl_codegen_output_t &out, Value *V, const Twine &Name)
 {
     // To be used when we may get an Instruction or something that is not an instruction i.e Constants/Arguments
     if (isa<Instruction>(V))
         V->setName(Name);
 }
 
-void setName(jl_codegen_output_t &out, Value *V, std::function<std::string()> GetName)
+static void setName(jl_codegen_output_t &out, Value *V, std::function<std::string()> GetName)
 {
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
     if (!out.get_context().shouldDiscardValueNames() && !isa<Constant>(V))
         V->setName(Twine(GetName()));
 }
 
-void setNameWithField(jl_codegen_output_t &out, Value *V, std::function<StringRef()> GetObjName, jl_datatype_t *jt, unsigned idx, const Twine &suffix)
+static void setNameWithField(jl_codegen_output_t &out, Value *V, std::function<StringRef()> GetObjName, jl_datatype_t *jt, unsigned idx, const Twine &suffix)
 {
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
     if (!out.get_context().shouldDiscardValueNames() && !isa<Constant>(V)) {
@@ -267,6 +268,7 @@ extern void _chkstk(void);
 #define prepare_call(Callee) prepare_call_in(jl_Module, (Callee))
 
 // types
+namespace {
 struct jl_typecache_t {
     PointerType *T_ptr;
     Type *T_size;
@@ -326,7 +328,9 @@ struct jl_typecache_t {
         T_pjlarray = getPointerTy(context);
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct jl_tbaacache_t {
     // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
     MDNode *tbaa_root;     // Everything
@@ -404,7 +408,9 @@ struct jl_tbaacache_t {
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct jl_noaliascache_t {
     // Each domain operates completely independently.
     // "No aliasing" is inferred if it is implied by any domain.
@@ -455,7 +461,9 @@ struct jl_noaliascache_t {
         aliasscope.initialize(context);
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct jl_debugcache_t {
     // Basic DITypes
     DIDerivedType *jl_pvalue_dillvmt;
@@ -470,6 +478,7 @@ struct jl_debugcache_t {
 
     void initialize(Module *m);
 };
+}  // anonymous namespace
 
 
 // constants
@@ -487,7 +496,10 @@ static bool is_uniquerep_Type(jl_value_t *t)
     return jl_is_typeegal(t);
 }
 
+namespace {
 class jl_codectx_t;
+}  // anonymous namespace
+namespace {
 struct JuliaVariable {
 public:
     StringLiteral name;
@@ -507,8 +519,8 @@ public:
             var->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLImportStorageClass); // Cross-library imports must be explicit for COFF (Windows)
         return var;
     }
-    GlobalVariable *realize(jl_codectx_t &ctx);
 };
+}  // anonymous namespace
 static inline void add_named_global(JuliaVariable *name, void *addr)
 {
     add_named_global(name->name, addr);
@@ -519,17 +531,17 @@ typedef FunctionType *(*TypeFnContextOnly)(LLVMContext &C);
 typedef FunctionType *(*TypeFnContextAndSizeT)(LLVMContext &C, Type *T_size);
 typedef FunctionType *(*TypeFnContextAndTriple)(LLVMContext &C, const Triple &triple);
 
-FunctionType *invoke_type(TypeFnContextOnly f, Module &M)
+static FunctionType *invoke_type(TypeFnContextOnly f, Module &M)
 {
     return f(M.getContext());
 }
 
-FunctionType *invoke_type(TypeFnContextAndSizeT f, Module &M)
+static FunctionType *invoke_type(TypeFnContextAndSizeT f, Module &M)
 {
     return f(M.getContext(), M.getDataLayout().getIntPtrType(M.getContext()));
 }
 
-FunctionType *invoke_type(TypeFnContextAndTriple f, Module &M)
+static FunctionType *invoke_type(TypeFnContextAndTriple f, Module &M)
 {
     return f(M.getContext(), Triple(M.getTargetTriple()));
 }
@@ -577,7 +589,7 @@ static inline void add_named_global(StringRef name, T *addr)
     add_named_global(name, (void*)(uintptr_t)addr);
 }
 
-AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::AttrKind> attrkinds, std::initializer_list<Attribute> extra={})
+static AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::AttrKind> attrkinds, std::initializer_list<Attribute> extra={})
 {
     SmallVector<Attribute, 8> attrs(attrkinds.size() + extra.size());
     for (size_t i = 0; i < attrkinds.size(); i++)
@@ -1689,6 +1701,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
         bool &allunbox, size_t &nbytes, size_t &align, size_t &min_align, size_t &inline_roots);
 
 // Alias Analysis Info (analogous to llvm::AAMDNodes)
+namespace {
 struct jl_aliasinfo_t {
     MDNode *tbaa = nullptr;          // '!tbaa': Struct-path TBAA. TBAA graph forms a tree (indexed by offset).
                                      //          Two pointers do not alias if they are not transitive parents
@@ -1760,11 +1773,13 @@ struct jl_aliasinfo_t {
 #endif
     }
 };
+}  // anonymous namespace
 
 // A class to hold GC roots that can be either:
 // 1. Materialized: a SmallVector of Value* that have already been loaded
 // 2. Lazy: a pointer + count + tbaa that allows loading on demand
 // This allows deferring the load of GC roots until they are actually needed.
+namespace {
 struct jl_gc_roots_t {
 private:
     // Materialized roots (when ptr is null)
@@ -1826,9 +1841,11 @@ public:
     // Extract roots from [first, first+numel), lazily
     jl_gc_roots_t slice(jl_codectx_t &ctx, size_t first, size_t numel) const;
 };
+}  // anonymous namespace
 
 // metadata tracking for a llvm Value* during codegen
 const uint8_t UNION_BOX_MARKER = 0x80;
+namespace {
 struct jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     // For unions, we may need to keep a reference to the boxed part individually.
@@ -2002,8 +2019,10 @@ struct jl_cgval_t {
     {
     }
 };
+}  // anonymous namespace
 
 // per-local-variable information
+namespace {
 struct jl_varinfo_t {
     Instruction *boxroot; // an address, if the var might be in a jl_value_t** stack slot (marked ctx.tbaa().tbaa_const, if appropriate)
     jl_cgval_t value; // a stack slot or constant value
@@ -2035,9 +2054,11 @@ struct jl_varinfo_t {
     {
     }
 };
+}  // anonymous namespace
 
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
+namespace {
 class jl_codectx_t {
 public:
     IRBuilder<> builder;
@@ -2113,12 +2134,9 @@ public:
         return aliasscope_cache;
     }
 };
+}  // anonymous namespace
 
 static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val);
-
-GlobalVariable *JuliaVariable::realize(jl_codectx_t &ctx) {
-    return realize(jl_Module);
-}
 
 jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(tbaa), tbaa_struct(nullptr) {
     MDNode *alias_scope = nullptr;
@@ -3142,10 +3160,6 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
 
 
 // Logging for code coverage and memory allocation
-
-extern "C" JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line);
-extern "C" JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line);
-extern "C" JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line);
 
 static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const char *name)
 {
@@ -7225,7 +7239,7 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 }
 
 
-Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, jl_codegen_output_t &out) JL_NOTSAFEPOINT
+static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, jl_codegen_output_t &out) JL_NOTSAFEPOINT
 {
     ++EmittedToJLInvokes;
     jl_codectx_t ctx(out, codeinst);
@@ -10551,6 +10565,11 @@ static void init_jit_functions(void)
     add_named_global(jlunlockfield_func, &jl_unlock_field);
     add_named_global(jlgetabiconverter_func, &jl_get_abi_converter);
 
+    jl_get_pgcstack_func_t get_pgcstack;
+    jl_pgcstack_key_t pgcstack_key;
+    jl_pgcstack_getkey(&get_pgcstack, &pgcstack_key);
+    add_named_global("jl_get_pgcstack_resolved", get_pgcstack);
+
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
     add_named_global("__julia_personality", &__julia_personality);
@@ -10813,80 +10832,71 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_init_codegen_impl(void)
 
 extern "C" JL_DLLEXPORT_CODEGEN void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 {
-    // output LLVM timings and statistics
-    // Guard against exits before we have initialized the ExecutionEngine
-    if (jl_ExecutionEngine)
+    if (jl_ExecutionEngine) {
+        jl_ExecutionEngine->shutdown();
+        // output LLVM timings and statistics
+        // Guard against exits before we have initialized the ExecutionEngine
         jl_ExecutionEngine->printTimers();
+    }
     PrintStatistics();
 }
 
 // the rest of this file are convenience functions
 // that are exported for assisting with debugging from gdb
-extern "C" void jl_dump_llvm_value(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_value(void *v)
 {
     llvm_dump((Value*)v);
 }
 
-extern "C" void jl_dump_llvm_inst_function(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_inst_function(void *v)
 {
     llvm_dump(cast<Instruction>(((Value*)v))->getParent()->getParent());
 }
 
-extern "C" void jl_dump_llvm_type(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_type(void *v)
 {
     llvm_dump((Type*)v);
 }
 
-extern "C" void jl_dump_llvm_module(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_module(void *v)
 {
     llvm_dump((Module*)v);
 }
 
-extern "C" void jl_dump_llvm_metadata(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_metadata(void *v)
 {
     llvm_dump((Metadata*)v);
 }
 
-extern "C" void jl_dump_llvm_debugloc(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_debugloc(void *v)
 {
     llvm_dump((DebugLoc*)v);
 }
 
-namespace llvm {
-    class MachineBasicBlock;
-    class MachineFunction;
-    raw_ostream& operator<<(raw_ostream &OS, const MachineBasicBlock &MBB);
-#if JL_LLVM_VERSION >= 200000
-    void printMIR(raw_ostream &OS, const MachineModuleInfo &MMI,
-                const MachineFunction &MF);
-#else
-    void printMIR(raw_ostream &OS, const MachineFunction &MF);
-#endif
-}
-extern "C" void jl_dump_llvm_mbb(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_mbb(void *v)
 {
     errs() << *(llvm::MachineBasicBlock*)v;
 }
 #if JL_LLVM_VERSION >= 200000
-extern "C" void jl_dump_llvm_mfunction(void *m, void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_mfunction(void *m, void *v)
 {
     llvm::printMIR(errs(), *(llvm::MachineModuleInfo*)v,
                 *(llvm::MachineFunction*)v);
 }
 #else
-extern "C" void jl_dump_llvm_mfunction(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_mfunction(void *v)
 {
     llvm::printMIR(errs(), *(llvm::MachineFunction*)v);
 }
 #endif
 
-extern void jl_write_bitcode_func(void *F, char *fname) {
+extern "C" JL_DLLEXPORT_CODEGEN void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::OF_None);
     llvm::WriteBitcodeToFile(*((llvm::Function*)F)->getParent(), OS);
 }
 
-extern void jl_write_bitcode_module(void *M, char *fname) {
+extern "C" JL_DLLEXPORT_CODEGEN void jl_write_bitcode_module(void *M, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::OF_None);
     llvm::WriteBitcodeToFile(*(llvm::Module*)M, OS);

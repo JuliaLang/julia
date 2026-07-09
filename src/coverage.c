@@ -83,7 +83,7 @@ static int is_skip_filename(const char *filename) JL_NOTSAFEPOINT
     return 0;
 }
 
-JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line)
 {
     assert(!codegen_imaging_mode());
     if (is_skip_filename(filename) || line < 0)
@@ -93,7 +93,7 @@ JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTS
     uv_mutex_unlock(&coverage_lock);
 }
 
-JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT
+JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line)
 {
     uv_mutex_lock(&coverage_lock);
     uint64_t *ret = allocLine(logdata_get_or_create(&coverageData, filename), line);
@@ -101,7 +101,7 @@ JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) 
     return ret;
 }
 
-JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line)
 {
     // TODO: remove `len` and use C-style strings exclusively
     //       (kept for backwards-compatibility with JuliaInterpreter)

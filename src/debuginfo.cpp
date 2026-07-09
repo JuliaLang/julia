@@ -50,14 +50,18 @@ static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
     return *DebugRegistry;
 }
 
+namespace {
 struct debug_link_info {
     StringRef filename;
     uint32_t crc32;
 };
+}  // anonymous namespace
 
 #if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
-extern "C" void __register_frame(void*) JL_NOTSAFEPOINT;
-extern "C" void __deregister_frame(void*) JL_NOTSAFEPOINT;
+extern "C" {
+    JL_DLLIMPORT extern void __register_frame(void*) JL_NOTSAFEPOINT;
+    JL_DLLIMPORT extern void __deregister_frame(void*) JL_NOTSAFEPOINT;
+}
 
 template <typename callback>
 static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f) JL_NOTSAFEPOINT
@@ -122,11 +126,13 @@ JITDebugInfoRegistry::get_objfile_map() {
 
 JITDebugInfoRegistry::JITDebugInfoRegistry() { }
 
+namespace {
 struct unw_table_entry
 {
     int32_t start_ip_offset;
     int32_t fde_offset;
 };
+}  // anonymous namespace
 
 // some actions aren't signal (especially profiler) safe so we acquire a lock
 // around them to establish a mutual exclusion with unwinding from a signal
@@ -1318,7 +1324,7 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
-extern "C" jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT_CODEGEN jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
 {
     return getJITDebugRegistry().lookupCodeInstance((size_t)p);
 }

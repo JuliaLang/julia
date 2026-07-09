@@ -40,7 +40,7 @@ void jl_gc_init_page(void)
 
 // Try to allocate a memory block for multiple pages
 // Return `NULL` if allocation failed. Result is aligned to `GC_PAGE_SZ`.
-char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
+static char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 {
     size_t pages_sz = GC_PAGE_SZ * pg_cnt;
 #ifdef _OS_WINDOWS_
@@ -72,7 +72,7 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 // smaller `MIN_BLOCK_PG_ALLOC` a `jl_memory_exception` is thrown.
 // Assumes `gc_pages_lock` is acquired, the lock is released before the
 // exception is thrown.
-char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT
+static char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT
 {
     unsigned pg_cnt = block_pg_cnt;
     char *mem = NULL;

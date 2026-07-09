@@ -249,6 +249,8 @@ static jl_varbinding_t *lookup_binding(jl_stenv_t *e, jl_tvar_t *v, int *innerva
     }
     return NULL;
 }
+#else
+extern jl_varbinding_t *lookup_binding(jl_stenv_t *e, jl_tvar_t *v, int *innervar) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #endif
 jl_varbinding_t *lookup_binding(jl_stenv_t *e, jl_tvar_t *v, int *innervar) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 
@@ -812,7 +814,6 @@ int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFE
     return 0;
 }
 
-jl_value_t *simple_union(jl_value_t *a, jl_value_t *b);
 // compute a least upper bound of `a` and `b`
 static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
 {
@@ -840,7 +841,6 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
     return simple_union(a, b);
 }
 
-jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi);
 // Compute a greatest lower bound of `a` and `b`
 // For the subtype path, we need to over-estimate this by returning `b` in many cases.
 // But for `merge_env`, we'd better under-estimate and return a `Union{}`
@@ -7052,7 +7052,7 @@ static int num_occurs(jl_tvar_t *v, jl_typeenv_t *env)
     return 0;
 }
 
-int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
+static int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
 {
     size_t i, la = jl_nparams(a), lb = jl_nparams(b);
     for (i = 0; i < la || i < lb; i++) {

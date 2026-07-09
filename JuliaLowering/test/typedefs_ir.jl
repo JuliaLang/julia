@@ -1168,7 +1168,7 @@ A{<:Real}() = A(1)
 3   TestMod.A
 4   (call core.apply_type %₃ %₂)
 5   (call core.UnionAll %₂ %₄)
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   (call core.svec %₆)
 8   (call core.svec)
 9   SourceLocation::1:1
