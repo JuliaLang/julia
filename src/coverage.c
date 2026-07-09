@@ -127,7 +127,7 @@ JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL
     return ret;
 }
 
-static void clear_log_data(logdata_t *logData, int resetValue) JL_NOTSAFEPOINT
+static void clear_log_data(logdata_t *logData) JL_NOTSAFEPOINT
 {
     size_t sz = logData->size;
     void **tab = logData->table;
@@ -140,7 +140,7 @@ static void clear_log_data(logdata_t *logData, int resetValue) JL_NOTSAFEPOINT
                 logdata_block *data = vec->blocks[j];
                 for (int k = 0; k < logdata_blocksize; k++) {
                     if ((*data)[k] > 0)
-                        (*data)[k] = resetValue;
+                        (*data)[k] = 1;
                 }
             }
         }
@@ -152,7 +152,7 @@ static void clear_log_data(logdata_t *logData, int resetValue) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_clear_malloc_data(void) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&coverage_lock);
-    clear_log_data(&mallocData, 1);
+    clear_log_data(&mallocData);
     uv_mutex_unlock(&coverage_lock);
 }
 
@@ -160,7 +160,7 @@ JL_DLLEXPORT void jl_clear_malloc_data(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_clear_coverage_data(void) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&coverage_lock);
-    clear_log_data(&coverageData, 0);
+    clear_log_data(&coverageData);
     uv_mutex_unlock(&coverage_lock);
 }
 
