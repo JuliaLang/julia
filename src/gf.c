@@ -3367,8 +3367,65 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     JL_GC_POP();
 }
 
+// walk up to the enclosing package root: the topmost enclosing module below `Main`
+// (`Base`'s parent chain terminates in `Main`, so a plain parent walk would conflate
+// every package)
+static jl_module_t *module_root(jl_module_t *m) JL_NOTSAFEPOINT
+{
+    while (m->parent != NULL && m->parent != m && m->parent != jl_main_module)
+        m = m->parent;
+    return m;
+}
+
+// 0 = silent (default), 1 = warn, 2 = error; from JULIA_WARN_SEALED
+static int warn_sealed_level(void)
+{
+    static _Atomic(int) level = -1;
+    int l = jl_atomic_load_relaxed(&level);
+    if (l == -1) {
+        char *e = getenv("JULIA_WARN_SEALED");
+        if (e == NULL || e[0] == '\0' || !strcmp(e, "0") || !strcmp(e, "no"))
+            l = 0;
+        else if (!strcmp(e, "error"))
+            l = 2;
+        else
+            l = 1;
+        jl_atomic_store_relaxed(&level, l);
+    }
+    return l;
+}
+
+static void check_sealed_extension(jl_method_t *method)
+{
+    int level = warn_sealed_level();
+    if (level == 0)
+        return;
+    jl_value_t *sig = jl_unwrap_unionall((jl_value_t*)method->sig);
+    if (!jl_is_datatype(sig) || jl_nparams(sig) == 0)
+        return;
+    jl_value_t *ft = jl_unwrap_unionall(jl_tparam0(sig));
+    if (jl_is_some_Type(ft))
+        ft = jl_unwrap_unionall(jl_some_Type_T(ft));
+    if (!jl_is_datatype(ft))
+        return;
+    jl_typename_t *tn = ((jl_datatype_t*)ft)->name;
+    if (!tn->sealed || method->module == NULL || tn->module == NULL)
+        return;
+    if (module_root(method->module) == module_root(tn->module))
+        return;
+    if (level == 2)
+        jl_errorf("Module %s extends sealed function %s.%s (JULIA_WARN_SEALED=error)",
+                  jl_symbol_name(method->module->name),
+                  jl_symbol_name(tn->module->name), jl_symbol_name(tn->singletonname));
+    jl_printf(JL_STDERR, "WARNING: Module %s extends sealed function %s.%s; "
+                         "dependent compiled code will be invalidated.\n",
+              jl_symbol_name(method->module->name),
+              jl_symbol_name(tn->module->name), jl_symbol_name(tn->singletonname));
+}
+
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
+    check_sealed_extension(method);
     jl_typemap_entry_t *newentry = jl_method_table_add(mt, method, simpletype);
     JL_GC_PUSH1(&newentry);
     JL_LOCK(&world_counter_lock);
