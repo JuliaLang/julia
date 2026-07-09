@@ -143,13 +143,54 @@ static int8_t jl_cachearg_offset(void)
 /// ----- Insertion logic for special entries ----- ///
 
 
+// The specializations cache is keyed by `jl_types_equal`, which identifies
+// spellings that are not structurally identical whenever binders are involved
+// (an existential over a covariant position can be written with the `where`
+// inside or outside the tuple, e.g. `Tuple{Type{Memory{T}} where T, ...}` ==
+// `Tuple{Type{Memory{T}}, ...} where T`). The structural type hash
+// distinguishes such spellings, so it can only key this cache for signatures
+// that contain no binders at all; everything else falls back to the
+// linear-scan class (hash 0), as it did when the hash of any type mentioning
+// a type variable was itself 0.
+static int speccache_unhashable(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (jl_is_unionall(t) || jl_is_tvarref(t) || jl_is_typevar(t))
+        return 1;
+    if (jl_is_uniontype(t))
+        return speccache_unhashable(((jl_uniontype_t*)t)->a) ||
+               speccache_unhashable(((jl_uniontype_t*)t)->b);
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *v = (jl_vararg_t*)t;
+        return (v->T && speccache_unhashable(v->T)) ||
+               (v->N && speccache_unhashable(v->N));
+    }
+    if (jl_is_typeeq(t))
+        return speccache_unhashable(jl_typeeq_T(t));
+    if (jl_is_typeegal(t))
+        return speccache_unhashable(jl_typeegal_T(t));
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        size_t i, np = jl_nparams(dt);
+        for (i = 0; i < np; i++) {
+            if (speccache_unhashable(jl_tparam(dt, i)))
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static uint_t speccache_hash_sig(jl_value_t *sig) JL_NOTSAFEPOINT
+{
+    jl_value_t *usig = jl_is_unionall(sig) ? jl_unwrap_unionall(sig) : sig;
+    if (speccache_unhashable(usig))
+        return 0;
+    return ((jl_datatype_t*)usig)->hash;
+}
+
 uint_t speccache_hash(size_t idx, jl_value_t *data)
 {
     jl_method_instance_t *ml = (jl_method_instance_t*)jl_svecref(data, idx); // This must always happen inside the lock
-    jl_value_t *sig = ml->specTypes;
-    if (jl_is_unionall(sig))
-        sig = jl_unwrap_unionall(sig);
-    return ((jl_datatype_t*)sig)->hash;
+    return speccache_hash_sig(ml->specTypes);
 }
 
 static int speccache_eq(size_t idx, const void *ty, jl_value_t *data, uint_t hv) JL_CANSAFEPOINT
@@ -160,7 +201,7 @@ static int speccache_eq(size_t idx, const void *ty, jl_value_t *data, uint_t hv)
     jl_value_t *sig = ml->specTypes;
     if (ty == sig)
         return 1;
-    uint_t h2 = ((jl_datatype_t*)(jl_is_unionall(sig) ? jl_unwrap_unionall(sig) : sig))->hash;
+    uint_t h2 = speccache_hash_sig(sig);
     if (h2 != hv)
         return 0;
     return jl_types_equal(sig, (jl_value_t*)ty);
@@ -191,7 +232,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
         return jl_atomic_load_relaxed(&m->unspecialized); // handle builtin methods
     jl_value_t *ut = jl_is_unionall(type) ? jl_unwrap_unionall(type) : type;
     JL_TYPECHK(specializations, datatype, ut);
-    uint_t hv = ((jl_datatype_t*)ut)->hash;
+    uint_t hv = speccache_hash_sig(type);
     jl_genericmemory_t *speckeyset = NULL;
     jl_value_t *specializations = NULL;
     size_t i = -1, cl = 0, lastcl;
@@ -253,9 +294,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
         JL_GC_PUSH1(&mi);
         if (!jl_is_svec(specializations)) {
             jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
-            jl_value_t *type = mi->specTypes;
-            jl_value_t *ut = jl_is_unionall(type) ? jl_unwrap_unionall(type) : type;
-            uint_t hv = ((jl_datatype_t*)ut)->hash;
+            uint_t hv = speccache_hash_sig(mi->specTypes);
             cl = 7;
             i = cl - 1;
             specializations = (jl_value_t*)jl_svec_fill(cl, jl_nothing);
