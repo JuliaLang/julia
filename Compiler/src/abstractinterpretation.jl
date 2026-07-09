@@ -2641,20 +2641,24 @@ function abstract_invoke_split_effects(interp::AbstractInterpreter, arginfo::Arg
         break
     end
     checkfut === nothing && return call
-    return Future{CallMeta}(isready(call) && isready(checkfut), interp, sv) do interp, sv
-        r = call[]
-        # Only use the precondition if the plain call resolved to the single method
-        # that declared it
-        info = r.info
-        if !(isa(info, MethodMatchInfo) && length(info.results) == 1 && info.results[1].method === m)
-            return r
+    # NB: the `let` gives the closure single-assignment bindings to capture
+    # (the loop above reassigns the outer ones, which would otherwise box them)
+    return let check = check, cond_effects = cond_effects, checkfut = checkfut
+        Future{CallMeta}(isready(call) && isready(checkfut), interp, sv) do interp, sv
+            r = call[]
+            # Only use the precondition if the plain call resolved to the single method
+            # that declared it
+            info = r.info
+            if !(isa(info, MethodMatchInfo) && length(info.results) == 1 && info.results[1].method === m)
+                return r
+            end
+            rcheck = checkfut[]
+            # The check must be a boolean predicate that we may freely insert (or delete)
+            widenconst(rcheck.rt) === Bool || return r
+            is_foldable_nothrow(rcheck.effects) || return r
+            return CallMeta(r.rt, r.exct, r.effects,
+                InvokeSplitEffectsInfo(info, check, cond_effects, rcheck.info))
         end
-        rcheck = checkfut[]
-        # The check must be a boolean predicate that we may freely insert (or delete)
-        widenconst(rcheck.rt) === Bool || return r
-        is_foldable_nothrow(rcheck.effects) || return r
-        return CallMeta(r.rt, r.exct, r.effects,
-            InvokeSplitEffectsInfo(info, check, cond_effects, rcheck.info))
     end
 end
 

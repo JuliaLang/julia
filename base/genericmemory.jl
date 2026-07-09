@@ -143,7 +143,7 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     destp = pointer(dest, doffs)
     srcp = pointer(src, soffs)
     endp = pointer(src, soffs + n - 1)
-    if destp < srcp || destp > endp
+    @inbounds if destp < srcp || destp > endp
         for i = 1:n
             if isassigned(src, soffs + i - 1)
                 dest[doffs + i - 1] = src[soffs + i - 1]

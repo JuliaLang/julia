@@ -404,7 +404,9 @@ function _unique!_impl(f, A::AbstractVector, seen::Set, current::Integer, i::Int
     end
     return resize!(A, current - firstindex(A)::Int + 1)::typeof(A)
 end
-_unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer) =
+# NB: the `where {F}` forces specialization on `f`, which this wrapper only
+# forwards (Julia's heuristics would otherwise widen it, leaving a dynamic call)
+_unique!(f::F, A::AbstractVector, seen::Set, current::Integer, i::Integer) where {F} =
     @split_effects :nothrow _unique!_impl(f, A, seen, current, i)
 
 
@@ -1006,7 +1008,9 @@ function _replace!_impl(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int
     end
     t
 end
-_replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) where {K,V} =
+# NB: the `where {F}` forces specialization on `new`, which this wrapper only
+# forwards (Julia's heuristics would otherwise widen it, leaving a dynamic call)
+_replace!(new::F, t::Dict{K,V}, A::AbstractDict, count::Int) where {F<:Callable,K,V} =
     @split_effects :nothrow _replace!_impl(new, t, A, count)
 
 function _replace!(new::Callable, t::Set{T}, ::AbstractSet, count::Int) where {T}

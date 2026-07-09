@@ -401,8 +401,10 @@ module IteratorsMD
         # Eagerly do boundscheck before calculating each item of the CartesianIndex so that
         # we can pass `@inbounds` hint to inside the map and generates more efficient SIMD codes (#42115)
         @boundscheck checkbounds(iter, I...)
+        # NB: semantic `@inbounds`: with the eager check above elided by a
+        # caller's `@inbounds`, the component lookups must not re-check (#42115)
         index = map(iter.indices, I) do r, i
-            getindex(r, i)
+            @inbounds getindex(r, i)
         end
         CartesianIndex(index)
     end
@@ -413,8 +415,9 @@ module IteratorsMD
     @inline function Base.getindex(iter::CartesianIndices{N,R},
         I::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon}, N}) where {N,R}
         @boundscheck checkbounds(iter, I...)
+        # NB: semantic `@inbounds` (see the scalar `getindex` method above; #42115)
         indices = map(iter.indices, I) do r, i
-            getindex(r, i)
+            @inbounds getindex(r, i)
         end
         CartesianIndices(indices)
     end
@@ -1682,9 +1685,9 @@ end
     S = IndexStyle(A)
     ninds = length(inds)
     if (isa(S, IndexLinear) && ninds != 1)
-        return isassigned(A, _to_linear_index(A, inds...))
+        return @inbounds isassigned(A, _to_linear_index(A, inds...))
     elseif (!isa(S, IndexLinear) && ninds != ndims(A))
-        return isassigned(A, _to_subscript_indices(A, inds...)...)
+        return @inbounds isassigned(A, _to_subscript_indices(A, inds...)...)
     else
        try
             A[inds...]
@@ -1814,8 +1817,8 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
 # contains a `Dict`/`get!`/`push!`-based hashing pass and an unbounded
 # collision-resolution loop, which independently keep the whole generated
 # body from being split at once.
-_hash_store!(hashes::Vector{UInt}, A::AbstractArray, k::Int, I::CartesianIndex) = (hashes[k] = hash(hashes[k], hash(A[I])); nothing)
-_collide_check!(collided::BitArray, A::AbstractArray, k::Int, j::CartesianIndex, i::CartesianIndex) = (isequal(A[j], A[i]) || (collided[k] = true); nothing)
+_hash_store!(hashes::AbstractVector{UInt}, A::AbstractArray, k::Int, I::CartesianIndex) = (hashes[k] = hash(hashes[k], hash(A[I])); nothing)
+_collide_check!(collided::AbstractVector{Bool}, A::AbstractArray, k::Int, j::CartesianIndex, i::CartesianIndex) = (isequal(A[j], A[i]) || (collided[k] = true); nothing)
 
 @generated function _unique_dims(A::AbstractArray{T,N}, dim::Integer) where {T,N}
     quote

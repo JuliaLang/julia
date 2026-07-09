@@ -54,9 +54,6 @@ if Base.REFLECTION_COMPILER[] === nothing && !CHECK_BOUNDS_OFF && !COVERAGE
     isdefined(Base.Broadcast, Symbol("chunkedcopyto!")) && @test nb_throws(Base.Broadcast.chunkedcopyto!, Tuple{BitVector, Base.Broadcast.Broadcasted{Base.Broadcast.DefaultArrayStyle{1}, Tuple{Base.OneTo{Int64}}, typeof(&), Tuple{BitVector, BitVector}}}) == 0
     isdefined(Base.Broadcast, Symbol("copy")) && @test nb_throws(Base.Broadcast.copy, Tuple{Base.Broadcast.Broadcasted{Base.Broadcast.Style{Tuple}, Nothing, typeof(+), Tuple{Tuple{Int64,Int64,Int64}, Tuple{Int64,Int64,Int64}}}}) == 0
     isdefined(Base.Broadcast, Symbol("fill!")) && @test nb_throws(Base.Broadcast.fill!, Tuple{Base.Broadcast.BitMaskedBitArray{1,1}, Bool}) == 0
-    # base/combinatorics.jl
-    isdefined(Base, Symbol("swapcols!")) && @test nb_throws(Base.swapcols!, Tuple{Matrix{Float64}, Int, Int}) == 0
-    isdefined(Base, Symbol("swaprows!")) && @test nb_throws(Base.swaprows!, Tuple{Matrix{Float64}, Int, Int}) == 0
     # base/dict.jl
     isdefined(Base, Symbol("skip_deleted")) && @test nb_throws(Base.skip_deleted, Tuple{Dict{Int,Int}, Int}) == 0
     # base/genericmemory.jl
@@ -81,18 +78,11 @@ if Base.REFLECTION_COMPILER[] === nothing && !CHECK_BOUNDS_OFF && !COVERAGE
     # base/multidimensional.jl
     isdefined(Base, Symbol("_unsafe_getindex!")) && @test nb_throws(Base._unsafe_getindex!, Tuple{BitVector, BitMatrix, Vector{Int}, Int}) == 0
     isdefined(Base, Symbol("isassigned")) && @test nb_throws(Base.isassigned, Tuple{Matrix{Int64}, Int, Int}) == 0
-    # base/permuteddimsarray.jl
-    isdefined(Base, Symbol("setindex!")) && @test nb_throws(Base.setindex!, Tuple{PermutedDimsArray{Float64,2,(2,1),(2,1),Matrix{Float64}}, Float64, Int64, Int64}) == 0
-    isdefined(Base, Symbol("isassigned")) && @test nb_throws(Base.isassigned, Tuple{PermutedDimsArray{Float64,2,(2,1),(2,1),Matrix{Float64}}, Int64, Int64}) == 0
     # base/reduce.jl
     isdefined(Base, Symbol("mapreduce_impl")) && @test nb_throws(Base.mapreduce_impl, Tuple{typeof(identity), typeof(Base.add_sum), Vector{Float64}, Int, Int, Int}) == 0
     isdefined(Base, Symbol("_mapreduce")) && @test nb_throws(Base._mapreduce, Tuple{typeof(identity), typeof(Base.add_sum), IndexLinear, Vector{Float64}}) == 0
     # base/regex.jl
     isdefined(Base, Symbol("count")) && @test nb_throws(Base.count, Tuple{Char, String}) == 0
-    # base/reshapedarray.jl
-    isdefined(Base, Symbol("isassigned")) && @test nb_throws(Base.isassigned, Tuple{Base.ReshapedArray{Int,2,UnitRange{Int},Tuple{}}, Int}) == 0
-    isdefined(Base, Symbol("getindex")) && @test nb_throws(Base.getindex, Tuple{Base.ReshapedArray{Int,2,UnitRange{Int},Tuple{}}, Int}) == 0
-    isdefined(Base, Symbol("getindex")) && @test nb_throws(Base.getindex, Tuple{Base.ReshapedArray{Int,2,UnitRange{Int},Tuple{}}, Base.ReshapedIndex{Int}}) == 0
     # base/runtime_internals.jl
     isdefined(Base, Symbol("fieldname")) && @test nb_throws(Base.fieldname, Tuple{DataType, Int}) == 0
     # base/ryu/exp.jl
@@ -119,16 +109,12 @@ if Base.REFLECTION_COMPILER[] === nothing && !CHECK_BOUNDS_OFF && !COVERAGE
     isdefined(Base, Symbol("_utf_dfa_step")) && @test nb_throws(Base._utf_dfa_step, Tuple{UInt32,UInt8}) == 0
     # base/strings/substring.jl
     isdefined(Base, Symbol("SubString")) && @test nb_throws(Base.SubString, Tuple{String}) == 0
-    isdefined(Base, Symbol("codeunit")) && @test nb_throws(Base.codeunit, Tuple{SubString{String},Int64}) == 0
-    isdefined(Base, Symbol("getindex")) && @test nb_throws(Base.getindex, Tuple{SubString{String},Int64}) == 0
     # base/strings/util.jl
     isdefined(Base, Symbol("chopprefix")) && @test nb_throws(Base.chopprefix, Tuple{Base.AnnotatedString{String},String}) == 0
     isdefined(Base, Symbol("chopsuffix")) && @test nb_throws(Base.chopsuffix, Tuple{String,String}) == 0
     isdefined(Base, Symbol("chomp")) && @test nb_throws(Base.chomp, Tuple{String}) == 0
     # base/subarray.jl
     isdefined(Base, Symbol("_maybe_reindex")) && @test nb_throws(Base._maybe_reindex, Tuple{SubArray{Float64,2,Matrix{Float64},Tuple{UnitRange{Int64},UnitRange{Int64}},false}, Tuple{Int64,Int64}, Tuple{}}) == 0
-    isdefined(Base, Symbol("getindex")) && @test nb_throws(Base.getindex, Tuple{SubArray{Float64,2,Matrix{Float64},Tuple{Base.Slice{Base.OneTo{Int64}},UnitRange{Int64}},true}, Int64}) == 0
-    isdefined(Base, Symbol("getindex")) && @test nb_throws(Base.getindex, Tuple{SubArray{Float64,1,Vector{Float64},Tuple{UnitRange{Int64}},true}, Int64}) == 0
     # base/summarysize.jl
     isdefined(Base, Symbol("summarysize")) && @test nb_throws(Base.summarysize, Tuple{Any}) == 0
 end

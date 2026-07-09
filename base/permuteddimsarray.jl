@@ -67,22 +67,20 @@ function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
 end
 Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)
 
-@inline function _getindex_impl(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
+@inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(A, I...)
-    val = getindex(A.parent, genperm(I, iperm)...)
+    @inbounds val = getindex(A.parent, genperm(I, iperm)...)
     val
 end
-Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm} = (@inline; Base.@split_effects :nothrow _getindex_impl(A, I...))
-@inline function _setindex_impl!(A::PermutedDimsArray{T,N,perm,iperm}, val, I::Vararg{Int,N}) where {T,N,perm,iperm}
+@inline function Base.setindex!(A::PermutedDimsArray{T,N,perm,iperm}, val, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(A, I...)
-    setindex!(A.parent, val, genperm(I, iperm)...)
+    @inbounds setindex!(A.parent, val, genperm(I, iperm)...)
     val
 end
-Base.setindex!(A::PermutedDimsArray{T,N,perm,iperm}, val, I::Vararg{Int,N}) where {T,N,perm,iperm} = (@inline; Base.@split_effects :nothrow _setindex_impl!(A, val, I...); val)
 
 function Base.isassigned(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(Bool, A, I...) || return false
-    x = isassigned(A.parent, genperm(I, iperm)...)
+    @inbounds x = isassigned(A.parent, genperm(I, iperm)...)
     x
 end
 

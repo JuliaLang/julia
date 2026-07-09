@@ -592,7 +592,7 @@ end
     end
     # Safety: The boundscheck checked r is inbounds in s,
     # and since we also checked r is not empty, j must be inbounds in s
-    j = nextind(s, j) - 1
+    j = @inbounds nextind(s, j) - 1
     n = (j - i + 1) % UInt
     ss = _string_n(n)
     GC.@preserve s ss unsafe_copyto!(pointer(ss), pointer(s, i), n)
@@ -623,9 +623,9 @@ end
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
     end
     j < i && return 0
-    i, k = thisind(s, i), i
+    @inbounds i, k = thisind(s, i), i
     c = j - i + (i == k)
-    length_continued(s, i, j, c)
+    @inbounds length_continued(s, i, j, c)
 end
 
 @assume_effects :terminates_globally @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)

@@ -379,7 +379,9 @@ function _accumulate!(op, B, A::AbstractVector, dims::Nothing, init::Some)
     _accumulate1!(op, B, v1, A, 1)
 end
 
-function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})
+# NB: the `where {F}` forces specialization on `op`, which this body only
+# forwards (Julia's heuristics would otherwise widen it, leaving dynamic calls)
+function _accumulate!(op::F, B, A, dims::Integer, init::Union{Nothing, Some}) where {F}
     dims > 0 || throw(ArgumentError("dims must be a positive integer"))
     inds_t = axes(A)
     axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
@@ -449,7 +451,8 @@ end
     B
 end
 
-function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
+# NB: the `where {F}` forces specialization on `op` (see `_accumulate!`)
+function _accumulate1!(op::F, B, v1, A::AbstractVector, dim::Integer) where {F}
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     inds = LinearIndices(A)
     inds == LinearIndices(B) || throw(DimensionMismatch("LinearIndices of A and B don't match"))

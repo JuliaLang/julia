@@ -2016,6 +2016,10 @@ function synthesize_nothrow_check_ir(ir0::IRCode, plan::Vector{Pair{Int,Int}})
             else
                 inst[:stmt] = ReturnNode(false)
             end
+            # An unreachable `ReturnNode()` slot has `Union{}` type; the value
+            # returns must carry the usual `Any` type of a `ReturnNode` so that
+            # the inliner can reuse the slot for the `GotoNode` to its join block
+            inst[:type] = Any
         elseif isa(stmt, Expr) && inst[:type] === Union{} && !has_flag(inst[:flag], IR_FLAG_NOTHROW)
             inst[:stmt] = nothing
             inst[:type] = Nothing

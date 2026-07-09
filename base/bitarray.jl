@@ -665,13 +665,12 @@ end
 
 ## Indexing: getindex ##
 
-@inline function _unsafe_bitgetindex_impl(Bc::Vector{UInt64}, i::Int)
+@inline function unsafe_bitgetindex(Bc::Vector{UInt64}, i::Int)
     i1, i2 = get_chunks_id(i)
     u = UInt64(1) << i2
-    r = (Bc[i1] & u) != 0
+    @inbounds r = (Bc[i1] & u) != 0
     return r
 end
-unsafe_bitgetindex(Bc::Vector{UInt64}, i::Int) = @split_effects :nothrow _unsafe_bitgetindex_impl(Bc, i)
 
 @inline function getindex(B::BitArray, i::Int)
     @boundscheck checkbounds(B, i)
@@ -685,15 +684,13 @@ end
     _unsafe_bitsetindex!(Bc, x, i1, i2)
 end
 
-@inline function _unsafe_bitsetindex_impl!(Bc::Array{UInt64}, x::Bool, i1::Int, i2::Int)
+@inline function _unsafe_bitsetindex!(Bc::Array{UInt64}, x::Bool, i1::Int, i2::Int)
     u = UInt64(1) << i2
-    begin
+    @inbounds begin
         c = Bc[i1]
         Bc[i1] = ifelse(x, c | u, c & ~u)
     end
 end
-_unsafe_bitsetindex!(Bc::Array{UInt64}, x::Bool, i1::Int, i2::Int) =
-    @split_effects :nothrow _unsafe_bitsetindex_impl!(Bc, x, i1, i2)
 
 @inline function setindex!(B::BitArray, x, i::Int)
     @boundscheck checkbounds(B, i)

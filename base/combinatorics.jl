@@ -106,11 +106,8 @@ function swapcols!(a::AbstractMatrix, i, j)
     cols = axes(a,2)
     @boundscheck i in cols || throw(BoundsError(a, (:,i)))
     @boundscheck j in cols || throw(BoundsError(a, (:,j)))
-    return @split_effects :nothrow _swapcols_impl!(a, i, j)
-end
-function _swapcols_impl!(a::AbstractMatrix, i, j)
     for k in axes(a,1)
-        a[k,i],a[k,j] = a[k,j],a[k,i]
+        @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
     end
 end
 
@@ -120,11 +117,8 @@ function swaprows!(a::AbstractMatrix, i, j)
     rows = axes(a,1)
     @boundscheck i in rows || throw(BoundsError(a, (:,i)))
     @boundscheck j in rows || throw(BoundsError(a, (:,j)))
-    return @split_effects :nothrow _swaprows_impl!(a, i, j)
-end
-function _swaprows_impl!(a::AbstractMatrix, i, j)
     for k in axes(a,2)
-        a[i,k],a[j,k] = a[j,k],a[i,k]
+        @inbounds a[i,k],a[j,k] = a[j,k],a[i,k]
     end
 end
 

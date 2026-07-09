@@ -265,12 +265,15 @@ _maybe_reindex(V, I, ::Tuple{AbstractArray{<:AbstractCartesianIndex}, Vararg{Any
 _maybe_reindex(V, I, A::Tuple{AbstractArray{<:AbstractCartesianIndex{1}}, Vararg{Any}}) =
     (@inline; _maybe_reindex(V, I, tail(A)))
 _maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@inline; _maybe_reindex(V, I, tail(A)))
-function _maybe_reindex_impl(V, I, ::Tuple{})
+function _maybe_reindex(V, I, ::Tuple{})
     @inline
-    idxs = to_indices(V.parent, reindex(V.indices, I))
+    # NB: this sits on the `unsafe_view` path, which promises *unchecked*
+    # reindexing (callers construct views whose indices may be out of bounds
+    # for the wrapped view but valid for its parent), so the `@inbounds` is
+    # semantically load-bearing rather than an optimization.
+    @inbounds idxs = to_indices(V.parent, reindex(V.indices, I))
     SubArray(V.parent, idxs)
 end
-_maybe_reindex(V, I, A::Tuple{}) = (@inline; @split_effects :nothrow _maybe_reindex_impl(V, I, A))
 
 ## Re-indexing is the heart of a view, transforming A[i, j][x, y] to A[i[x], j[y]]
 #
@@ -306,13 +309,12 @@ reindex(idxs::Tuple{AbstractArray{<:Any,N}, Vararg{Any}}, subidxs::Tuple{Vararg{
 
 # In general, we simply re-index the parent indices by the provided ones
 SlowSubArray{T,N,P,I} = SubArray{T,N,P,I,false}
-function _getindex_impl(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
+function getindex(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
     @inline
     @boundscheck checkbounds(V, I...)
-    r = V.parent[reindex(V.indices, I)...]
+    @inbounds r = V.parent[reindex(V.indices, I)...]
     r
 end
-getindex(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N} = (@inline; @split_effects :nothrow _getindex_impl(V, I...))
 
 # But SubArrays with fast linear indexing pre-compute a stride and offset
 FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
@@ -321,23 +323,21 @@ FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
 @inline _reindexlinear(V::FastSubArray, i::Int) = V.offset1 + V.stride1*i
 @inline _reindexlinear(V::FastSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ V.stride1 .* i
 
-function _getindex_impl(V::FastSubArray, i::Int)
+function getindex(V::FastSubArray, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    r = V.parent[_reindexlinear(V, i)]
+    @inbounds r = V.parent[_reindexlinear(V, i)]
     r
 end
-getindex(V::FastSubArray, i::Int) = (@inline; @split_effects :nothrow _getindex_impl(V, i))
 
 # For vector views with linear indexing, we disambiguate to favor the stride/offset
 # computation as that'll generally be faster than (or just as fast as) re-indexing into a range.
-function _getindex_impl(V::FastSubArray{<:Any, 1}, i::Int)
+function getindex(V::FastSubArray{<:Any, 1}, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    r = V.parent[_reindexlinear(V, i)]
+    @inbounds r = V.parent[_reindexlinear(V, i)]
     r
 end
-getindex(V::FastSubArray{<:Any, 1}, i::Int) = (@inline; @split_effects :nothrow _getindex_impl(V, i))
 
 # We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange,
 # or if all the indices are scalars, i.e. the view is for a single value only
@@ -372,39 +372,36 @@ const _OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, Ide
 function getindex(V::FastContiguousSubArray, i::_OneBasedRanges)
     @inline
     @boundscheck checkbounds(V, i)
-    r = V.parent[_reindexlinear(V, i)]
+    @inbounds r = V.parent[_reindexlinear(V, i)]
     r
 end
 
 @inline getindex(V::FastContiguousSubArray, i::Colon) = getindex(V, to_indices(V, (:,))...)
 
 # Indexed assignment follows the same pattern as `getindex` above
-function _setindex_impl!(V::SubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
+function setindex!(V::SubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
     @inline
     @boundscheck checkbounds(V, I...)
-    V.parent[reindex(V.indices, I)...] = x
+    @inbounds V.parent[reindex(V.indices, I)...] = x
     V
 end
-setindex!(V::SubArray{T,N}, x, I::Vararg{Int,N}) where {T,N} = (@inline; @split_effects :nothrow _setindex_impl!(V, x, I...); V)
-function _setindex_impl!(V::FastSubArray, x, i::Int)
+function setindex!(V::FastSubArray, x, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    V.parent[_reindexlinear(V, i)] = x
+    @inbounds V.parent[_reindexlinear(V, i)] = x
     V
 end
-setindex!(V::FastSubArray, x, i::Int) = (@inline; @split_effects :nothrow _setindex_impl!(V, x, i); V)
-function _setindex_impl!(V::FastSubArray{<:Any, 1}, x, i::Int)
+function setindex!(V::FastSubArray{<:Any, 1}, x, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    V.parent[_reindexlinear(V, i)] = x
+    @inbounds V.parent[_reindexlinear(V, i)] = x
     V
 end
-setindex!(V::FastSubArray{<:Any, 1}, x, i::Int) = (@inline; @split_effects :nothrow _setindex_impl!(V, x, i); V)
 
 function setindex!(V::FastSubArray, x, i::AbstractUnitRange{Int})
     @inline
     @boundscheck checkbounds(V, i)
-    V.parent[_reindexlinear(V, i)] = x
+    @inbounds V.parent[_reindexlinear(V, i)] = x
     V
 end
 
@@ -413,19 +410,19 @@ end
 function isassigned(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
     @inline
     @boundscheck checkbounds(Bool, V, I...) || return false
-    r = isassigned(V.parent, reindex(V.indices, I)...)
+    @inbounds r = isassigned(V.parent, reindex(V.indices, I)...)
     r
 end
 function isassigned(V::FastSubArray, i::Int)
     @inline
     @boundscheck checkbounds(Bool, V, i) || return false
-    r = isassigned(V.parent, _reindexlinear(V, i))
+    @inbounds r = isassigned(V.parent, _reindexlinear(V, i))
     r
 end
 function isassigned(V::FastSubArray{<:Any, 1}, i::Int)
     @inline
     @boundscheck checkbounds(Bool, V, i) || return false
-    r = isassigned(V.parent, _reindexlinear(V, i))
+    @inbounds r = isassigned(V.parent, _reindexlinear(V, i))
     r
 end
 

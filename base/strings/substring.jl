@@ -145,7 +145,7 @@ length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
     @boundscheck checkbounds(s, i)
-    return codeunit(s.string, s.offset + i)
+    @inbounds return codeunit(s.string, s.offset + i)
 end
 
 function iterate(s::SubString, i::Integer=firstindex(s))
@@ -159,7 +159,7 @@ end
 
 function getindex(s::SubString, i::Integer)
     @boundscheck checkbounds(s, i)
-    return getindex(s.string, s.offset + i)
+    @inbounds return getindex(s.string, s.offset + i)
 end
 
 # `isascii(::AbstractVector)` reduces to `@inbounds codeunit(::SubString{String}, ::Int)`, total.
@@ -168,7 +168,7 @@ isascii(ss::SubString{String}) = @assume_effects :nothrow :foldable isascii(code
 function isvalid(s::SubString, i::Integer)
     ib = true
     @boundscheck ib = checkbounds(Bool, s, i)
-    return ib && isvalid(s.string, s.offset + i)::Bool
+    @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
 @propagate_inbounds thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)

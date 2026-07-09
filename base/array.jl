@@ -231,14 +231,19 @@ function isassigned(a::Array, i::Int...)
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(Bool, a, i...) || return false
     ii = _sub2ind(size(a), i...)
-    return isassigned(memoryrefnew(a.ref, ii, false))
+    # NB: the `@inbounds` is semantic, not an optimization: it determines the
+    # `@_boundscheck` value observed inside the callee, so that `isassigned`
+    # inside a caller's `@inbounds` block reports `true` without inspecting
+    # memory (see test/boundscheck_exec.jl)
+    return @inbounds isassigned(memoryrefnew(a.ref, ii, false))
 end
 
 function isassigned(a::Vector, i::Int) # slight compiler simplification for the most common case
     @inline
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(Bool, a, i) || return false
-    return isassigned(memoryrefnew(a.ref, i, false))
+    # NB: semantic `@inbounds` (see the `isassigned(::Array, ::Int...)` method above)
+    return @inbounds isassigned(memoryrefnew(a.ref, i, false))
 end
 
 
@@ -987,11 +992,11 @@ julia> getindex(A, "a")
 """
 function getindex end
 
-function _getindex_linear_impl(A::Array, i1::Int, i2::Int, I::Int...)
+function getindex(A::Array, i1::Int, i2::Int, I::Int...)
+    @inline
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
-    return A[_to_linear_index(A, i1, i2, I...)]
+    return @inbounds A[_to_linear_index(A, i1, i2, I...)]
 end
-getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; @split_effects :nothrow _getindex_linear_impl(A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})
@@ -2903,8 +2908,7 @@ function indexin(a, b::AbstractArray)
     ]
 end
 
-_getindex_at(a::Tuple, idx) = a[idx]
-_getindex_at(a::AbstractArray, idx) = a[idx]
+_getindex_at(a, idx) = a[idx]
 
 function _findin(a::Union{AbstractArray, Tuple}, b::AbstractSet)
     ind  = Vector{eltype(keys(a))}()

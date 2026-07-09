@@ -1361,7 +1361,11 @@ end
 # To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
 @propagate_inbounds getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
 
-@inline unsafe_getindex(A::AbstractArray, I...) = Base.@split_effects :nothrow getindex(A, I...)
+# NB: `unsafe_getindex`/`unsafe_setindex!` are the documented explicitly-unchecked
+# access tier: the caller vouches for the indices, and no bounds check may run
+# (not even as a guarded slow path), so the `@inbounds` here is semantically
+# load-bearing rather than an optimization.
+@inline unsafe_getindex(A::AbstractArray, I...) = @inbounds getindex(A, I...)
 
 struct CanonicalIndexError <: Exception
     func::String
@@ -1382,12 +1386,10 @@ _getindex(::IndexStyle, A::AbstractArray, I...) =
 ## IndexLinear Scalar indexing: canonical method is one Int
 _getindex(::IndexLinear, A::AbstractVector, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))  # ambiguity resolution in case packages specialize this (to be avoided if at all possible, but see Interpolations.jl)
 _getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
-_getindex(style::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M =
-    Base.@split_effects :nothrow _getindex_impl(style, A, I...)
-function _getindex_impl(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
+function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @inline
     @boundscheck checkbounds(A, I...) # generally _to_linear_index requires bounds checking
-    r = getindex(A, _to_linear_index(A, I...))
+    @inbounds r = getindex(A, _to_linear_index(A, I...))
     r
 end
 _to_linear_index(A::AbstractArray, i::Integer) = i
@@ -1399,7 +1401,7 @@ _to_linear_index(A::AbstractArray, I::Integer...) = (@inline; _sub2ind(A, I...))
 function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Int,M}) where M
     @inline
     @boundscheck checkbounds(A, I...) # generally _to_subscript_indices requires bounds checking
-    r = getindex(A, _to_subscript_indices(A, I...)...)
+    @inbounds r = getindex(A, _to_subscript_indices(A, I...)...)
     r
 end
 function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) where {T,N}
@@ -1463,7 +1465,7 @@ function setindex!(A::AbstractArray, v, I...)
 end
 function unsafe_setindex!(A::AbstractArray, v, I...)
     @inline
-    r = Base.@split_effects :nothrow setindex!(A, v, I...)
+    @inbounds r = setindex!(A, v, I...)
     r
 end
 
@@ -1479,12 +1481,10 @@ _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
 
 ## IndexLinear Scalar indexing
 _setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
-_setindex!(style::IndexLinear, A::AbstractArray, v, I::Vararg{Int,M}) where M =
-    Base.@split_effects :nothrow _setindex_impl!(style, A, v, I...)
-function _setindex_impl!(::IndexLinear, A::AbstractArray, v, I::Vararg{Int,M}) where M
+function _setindex!(::IndexLinear, A::AbstractArray, v, I::Vararg{Int,M}) where M
     @inline
     @boundscheck checkbounds(A, I...)
-    r = setindex!(A, v, _to_linear_index(A, I...))
+    @inbounds r = setindex!(A, v, _to_linear_index(A, I...))
     r
 end
 
@@ -1496,7 +1496,7 @@ end
 function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) where M
     @inline
     @boundscheck checkbounds(A, I...)
-    r = setindex!(A, v, _to_subscript_indices(A, I...)...)
+    @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
     r
 end
 

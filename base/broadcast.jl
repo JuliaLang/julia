@@ -616,7 +616,7 @@ Base.@propagate_inbounds function Base.getindex(bc::Broadcasted, Is::Vararg{Unio
 end
 @inline function _getindex(::IndexStyle, bc, I)
     @boundscheck checkbounds(bc, I)
-    return Base.@split_effects :nothrow _broadcast_getindex(bc, I)
+    @inbounds _broadcast_getindex(bc, I)
 end
 Base.@propagate_inbounds function _getindex(s::IndexCartesian, bc, I::Integer)
     C = CartesianIndices(axes(bc))
