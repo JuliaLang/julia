@@ -152,17 +152,17 @@ JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
     }
 }
 
-static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache);
+static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache);
 
-JL_DLLEXPORT jl_array_t* jl_compute_new_ext(void)
+JL_DLLEXPORT jl_array_t* jl_compute_new_used_ci(void)
 {
     if (newly_inferred == NULL)
         return jl_alloc_vec_any(0);
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
-    jl_array_t *new_ext = queue_external(newly_inferred, &query_cache);
+    jl_array_t *new_used = queue_used(newly_inferred, &query_cache);
     destroy_query_cache(&query_cache);
-    return new_ext;
+    return new_used;
 }
 
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
@@ -514,11 +514,11 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     return final_result;
 }
 
-// Given the list of CodeInstances or MethodInstances that were inferred during the build,
-// select those that are (1) external, (2) still valid, (3) are inferred to be called from
-// the worklist or explicitly added by a `precompile` statement, and (4) are the most
-// recently computed result for that method. These will be preserved in the image.
-static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache)
+// Given the list of CodeInstances or MethodInstances that were inferred during
+// the build, select those that are (1) internal or are inferred to be called
+// from the worklist or explicitly added by a `precompile` statement. This will
+// be used as roots for exploring what to include in the final image.
+static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache)
 {
     if (list == NULL)
         return NULL;
@@ -529,8 +529,8 @@ static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache)
     size_t n0 = jl_array_nrows(list);
     htable_new(&visited, n0);
     arraylist_new(&stack, 0);
-    jl_array_t *new_ext = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&new_ext);
+    jl_array_t *new_used = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&new_used);
     for (i = n0; i-- > 0; ) {
         jl_value_t *v = jl_array_ptr_ref(list, i);
         if (jl_is_code_instance(v)) {
@@ -540,31 +540,31 @@ static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache)
             int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
             if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
                 continue; // ignore replaced methods
-            if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
-                int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
+            if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m)) {
+                int found = jl_object_in_image((jl_value_t*)m->module) ? has_backedge_to_worklist(mi, &visited, &stack, query_cache) : 1;
                 assert(found == 0 || found == 1 || found == 2);
                 assert(stack.len == 0);
                 if (found == 1) {
-                    jl_array_ptr_1d_push(new_ext, (jl_value_t*)ci);
+                    jl_array_ptr_1d_push(new_used, (jl_value_t*)ci);
                 }
             }
         }
         else if (jl_is_method_instance(v)) {
-            jl_array_ptr_1d_push(new_ext, v);
+            jl_array_ptr_1d_push(new_used, v);
         }
     }
     htable_free(&visited);
     arraylist_free(&stack);
     JL_GC_POP();
-    // reverse new_ext
-    n0 = jl_array_nrows(new_ext);
-    jl_value_t **news = jl_array_data(new_ext, jl_value_t*);
+    // reverse new_used
+    n0 = jl_array_nrows(new_used);
+    jl_value_t **news = jl_array_data(new_used, jl_value_t*);
     for (i = 0; i < n0 / 2; i++) {
         jl_value_t *temp = news[i];
         news[i] = news[n0 - i - 1];
         news[n0 - i - 1] = temp;
     }
-    return new_ext;
+    return new_used;
 }
 
 // For every method:
