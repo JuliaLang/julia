@@ -230,7 +230,8 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, matches)
+                        # the optimized single-edge format is never ambiguity-tolerant
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, false, matches)
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
@@ -241,7 +242,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         end
                         nmatches = abs(edge)
                         fully_covers = edge > 0
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, matches)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, marked, matches)
                         j += 2 + nmatches
                         edge = sig
                     elseif edge isa Core.Binding
@@ -476,7 +477,7 @@ end
 # pruned `ml_matches` lookup is cheaper (~8 is the empirical crossover).
 const VERIFY_INTERF_CAP = 8
 
-function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, matches::Vector{Any})
+function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, marked::Bool, matches::Vector{Any})
     # verify that these edges intersect with the same methods as before
     mi = nothing
     expected_deleted = false
@@ -600,9 +601,14 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         empty!(matches)
         maxworld[] = 0
     else
-        # FIXME: the edge format does not encode whether or not this ambiguity was accounted
-        # for in inference / optimizer / etc. so we are forced to invalidate conservatively.
-        if has_ambig[] != 0
+        # A fresh ambiguity can make dispatch throw a MethodError at points the recorded
+        # matches used to win (a method whose overlap is fully covered by an ambiguity is
+        # pruned from this include_ambiguous=false lookup, so the set comparison below
+        # cannot see it). A call edge recorded with its signature wrapped in
+        # `Core.PossiblyAmbiguous` was inferred with that pessimization (may-throw
+        # MethodError, no devirtualized targets), so any such change is tolerable there;
+        # for a plain edge it must invalidate.
+        if has_ambig[] != 0 && !marked
             maxworld[] = 0
         end
         # setdiff!(result, expected)

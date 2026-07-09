@@ -663,3 +663,45 @@ let ambig = Ref{Int32}(0)
 end
 
 nothing
+
+# strict specificity cycle: `morespecific` detects and neutralizes pairwise 2-cycles
+# into mutual ambiguities, but longer cycles have every pairwise edge strictly ordered,
+# so no pairwise probe can see them; the sort in `ml_matches` detects them (as an SCC
+# through the interference sets) and reports them via the result-wide ambiguity output
+# that package-image edge validation relies on. The construction mirrors the classic
+# Complex/AbstractComplex chain:
+#   Complex -> AbstractComplex -> Union{Float64, AbstractComplex}
+#           -> AbstractFloat -> Union{ComplexF64, AbstractFloat} -> Complex
+abstract type AmbigCycAbsC end               # ~ AbstractComplex
+abstract type AmbigCycCplx <: AmbigCycAbsC end  # ~ Complex
+struct AmbigCycCplxF64 <: AmbigCycCplx end   # ~ ComplexF64
+abstract type AmbigCycAbsF end               # ~ AbstractFloat
+struct AmbigCycF <: AmbigCycAbsF end         # ~ Float64
+struct AmbigCycOtherC <: AmbigCycAbsC end    # applicable subset strictly ordered here
+let sigs = Any[AmbigCycCplx, AmbigCycAbsC, Union{AmbigCycF, AmbigCycAbsC},
+               AmbigCycAbsF, Union{AmbigCycCplxF64, AmbigCycAbsF}]
+    for i in 1:5
+        j = mod1(i + 1, 5)
+        a = Tuple{typeof(sin), sigs[i]}
+        b = Tuple{typeof(sin), sigs[j]}
+        @test Base.morespecific(a, b)
+        @test !Base.morespecific(b, a)
+    end
+end
+ambcyc(::AmbigCycCplx) = 1
+ambcyc(::AmbigCycAbsC) = 2
+ambcyc(::Union{AmbigCycF, AmbigCycAbsC}) = 3
+ambcyc(::AmbigCycAbsF) = 4
+ambcyc(::Union{AmbigCycCplxF64, AmbigCycAbsF}) = 5
+let has_ambig = Ref{Int32}(0)
+    ms = Base._methods_by_ftype(Tuple{typeof(ambcyc), Any}, nothing, -1, Base.get_world_counter(),
+                                false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), has_ambig)
+    @test ms isa Vector
+    @test length(ms) == 5
+    @test has_ambig[] == 1
+end
+# points inside the cycle's contested regions throw; a point whose applicable subset is
+# strictly ordered still dispatches
+@test_throws MethodError ambcyc(AmbigCycCplxF64())
+@test_throws MethodError ambcyc(AmbigCycF())
+@test ambcyc(AmbigCycOtherC()) == 2

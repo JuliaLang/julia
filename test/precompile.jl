@@ -3799,4 +3799,352 @@ precompile_test_harness("Ambiguity-pruned dispatch edge revalidation") do load_p
     @eval @test_throws MethodError AmbigPruneB.caller(Int8(1), "hi")
 end
 
+precompile_test_harness("PossiblyAmbiguous edge tolerates build-time ambiguity") do load_path
+    # When the ambiguity already existed when the image was built, inference was
+    # pessimized for it (may-throw MethodError, no devirtualization) and recorded the
+    # call edge with its signature wrapped in `Core.PossiblyAmbiguous`. Loading in a
+    # world with the same ambiguity must revalidate the image rather than
+    # conservatively invalidating.
+    write(joinpath(load_path, "AmbigTolA.jl"),
+        """
+        module AmbigTolA
+        m(x::Integer, y) = 1
+        m(x, y::AbstractString) = 2
+        end
+        """)
+    write(joinpath(load_path, "AmbigTolB.jl"),
+        """
+        module AmbigTolB
+        using AmbigTolA
+        caller(x::Int8, @nospecialize(y)) = AmbigTolA.m(x, y)
+        precompile(caller, (Int8, Any))
+        end
+        """)
+    Base.compilecache(Base.PkgId("AmbigTolB"))
+
+    @eval using AmbigTolA
+    # No new methods: the ambiguity recorded at build time is unchanged at load time.
+    @eval using AmbigTolB
+
+    invokelatest() do
+        m = only(methods(AmbigTolB.caller))
+        target = Tuple{typeof(AmbigTolB.caller), Int8, Any}
+        mi = nothing
+        for spec in Base.specializations(m)
+            spec === nothing && continue
+            if spec.specTypes == target
+                mi = spec
+                break
+            end
+        end
+        @test mi !== nothing
+        # The precompiled CodeInstance must have survived revalidation. Check before
+        # calling caller, since calling it would create a fresh, valid CodeInstance.
+        ci = isdefined(mi, :cache) ? mi.cache : nothing
+        revalidated = false
+        while ci !== nothing
+            if ci.max_world == typemax(UInt)
+                revalidated = true
+                break
+            end
+            ci = isdefined(ci, :next) ? ci.next : nothing
+        end
+        @test revalidated
+        # Behavior is unchanged from build time: the covered region dispatches, the
+        # ambiguous region throws. The calls go through `inferencebarrier` so that compiling
+        # this closure does not itself create a CodeInstance for `caller` before the
+        # scan above runs (which would make the scan pass spuriously).
+        @test Base.inferencebarrier(AmbigTolB.caller)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(AmbigTolB.caller)(Int8(1), "hi")
+    end
+end
+
+precompile_test_harness("Post-build pruned-only ambiguity conservatively invalidates") do load_path
+    # Methods added after the build that are mutually ambiguous over their entire
+    # intersection with the call signature are both pruned from the fresh lookup, so the
+    # recorded match set is unchanged, but the fresh lookup reports the ambiguity. The
+    # call was built without any ambiguity (its edge is not marked), and the call-level
+    # marker cannot distinguish which region the new ambiguity affects, so the image is
+    # conservatively invalidated (the addition only changes a no-method MethodError into
+    # an ambiguity MethodError here, but proving that requires per-callee information).
+    write(joinpath(load_path, "AmbigElseA.jl"),
+        """
+        module AmbigElseA
+        n(x::Integer, y::Integer) = 1
+        end
+        """)
+    write(joinpath(load_path, "AmbigElseB.jl"),
+        """
+        module AmbigElseB
+        using AmbigElseA
+        caller(x::Int8, @nospecialize(y)) = AmbigElseA.n(x, y)
+        precompile(caller, (Int8, Any))
+        end
+        """)
+    Base.compilecache(Base.PkgId("AmbigElseB"))
+
+    @eval using AmbigElseA
+    # A mutually-ambiguous pair whose ambiguity fully covers both intersections with the call
+    # signature Tuple{typeof(n), Int8, Any}: both are pruned from the include_ambiguous=false
+    # lookup, and neither intersects the recorded match n(::Integer, ::Integer).
+    @eval AmbigElseA.n(x::Union{Int8,Int16}, y::String) = 2
+    @eval AmbigElseA.n(x::Union{Int8,Int32}, y::String) = 3
+    @eval using AmbigElseB
+
+    invokelatest() do
+        m = only(methods(AmbigElseB.caller))
+        target = Tuple{typeof(AmbigElseB.caller), Int8, Any}
+        mi = nothing
+        for spec in Base.specializations(m)
+            spec === nothing && continue
+            if spec.specTypes == target
+                mi = spec
+                break
+            end
+        end
+        @test mi !== nothing
+        # The precompiled CodeInstance must have survived revalidation. Check before
+        # calling caller, since calling it would create a fresh, valid CodeInstance.
+        ci = isdefined(mi, :cache) ? mi.cache : nothing
+        revalidated = false
+        while ci !== nothing
+            if ci.max_world == typemax(UInt)
+                revalidated = true
+                break
+            end
+            ci = isdefined(ci, :next) ? ci.next : nothing
+        end
+        @test !revalidated
+        # Behavior after re-inference is unchanged either way: the covered region
+        # dispatches to the recorded match, the newly-ambiguous region throws. The calls
+        # go through `inferencebarrier` so that compiling this closure does not itself
+        # create a CodeInstance for `caller` before the scan above runs.
+        @test Base.inferencebarrier(AmbigElseB.caller)(Int8(1), 2) === 1
+        @test_throws MethodError Base.inferencebarrier(AmbigElseB.caller)(Int8(1), "hi")
+    end
+end
+
+precompile_test_harness("Marked call edge does not tolerate a new winning method") do load_path
+    # A caller built against a known ambiguity records its dispatch edge wrapped in
+    # `Core.PossiblyAmbiguous`, which tolerates additional ambiguities. A method added after
+    # the build that outright WINS part of the recorded match's coverage appears in the
+    # fresh (pruned) lookup result, so the set comparison must invalidate the image
+    # regardless of the wrapper: the stale rettype does not account for the newcomer.
+    write(joinpath(load_path, "AmbigWinA.jl"),
+        """
+        module AmbigWinA
+        m(x::Integer, y) = 1
+        m(x, y::AbstractString) = 2
+        end
+        """)
+    write(joinpath(load_path, "AmbigWinB.jl"),
+        """
+        module AmbigWinB
+        using AmbigWinA
+        caller(x::Int8, @nospecialize(y)) = AmbigWinA.m(x, y)
+        precompile(caller, (Int8, Any))
+        end
+        """)
+    Base.compilecache(Base.PkgId("AmbigWinB"))
+
+    @eval using AmbigWinA
+    # Strictly more specific than m(::Integer, ::Any) over (Int8, Int) and disjoint
+    # from m(::Any, ::AbstractString): a genuine new dispatch winner, no new ambiguity.
+    @eval AmbigWinA.m(x::Int8, y::Int) = 3
+    @eval using AmbigWinB
+
+    invokelatest() do
+        m = only(methods(AmbigWinB.caller))
+        target = Tuple{typeof(AmbigWinB.caller), Int8, Any}
+        mi = nothing
+        for spec in Base.specializations(m)
+            spec === nothing && continue
+            if spec.specTypes == target
+                mi = spec
+                break
+            end
+        end
+        @test mi !== nothing
+        ci = isdefined(mi, :cache) ? mi.cache : nothing
+        revalidated = false
+        while ci !== nothing
+            if ci.max_world == typemax(UInt)
+                revalidated = true
+                break
+            end
+            ci = isdefined(ci, :next) ? ci.next : nothing
+        end
+        @test !revalidated
+        # the newcomer wins in its region; the old match still wins elsewhere; the
+        # build-time ambiguity still throws (inferencebarrier: see the comment in the
+        # "Ambiguity-pruned dispatch edge revalidation" test)
+        @test Base.inferencebarrier(AmbigWinB.caller)(Int8(1), 2) === 3
+        @test Base.inferencebarrier(AmbigWinB.caller)(Int8(1), 1.5) === 1
+        @test_throws MethodError Base.inferencebarrier(AmbigWinB.caller)(Int8(1), "hi")
+    end
+end
+
+precompile_test_harness("Deleted ambiguity partner still revalidates a marked call edge") do load_path
+    # Deleting the ambiguity partner before load leaves the fresh lookup with the same single
+    # match, now unflagged. The recorded wrapped edge demanded less than what the new
+    # world provides (the pessimized inference results remain sound when the ambiguity
+    # disappears), so the image must be revalidated.
+    write(joinpath(load_path, "AmbigDelA.jl"),
+        """
+        module AmbigDelA
+        m(x::Integer, y) = 1
+        m(x, y::AbstractString) = 2
+        end
+        """)
+    write(joinpath(load_path, "AmbigDelB.jl"),
+        """
+        module AmbigDelB
+        using AmbigDelA
+        caller(x::Int8, @nospecialize(y)) = AmbigDelA.m(x, y)
+        precompile(caller, (Int8, Any))
+        end
+        """)
+    Base.compilecache(Base.PkgId("AmbigDelB"))
+
+    @eval using AmbigDelA
+    invokelatest() do
+        m2 = only(filter(mm -> mm.sig == Tuple{typeof(AmbigDelA.m), Any, AbstractString},
+                         collect(methods(AmbigDelA.m))))
+        Base.delete_method(m2)
+    end
+    @eval using AmbigDelB
+
+    invokelatest() do
+        m = only(methods(AmbigDelB.caller))
+        target = Tuple{typeof(AmbigDelB.caller), Int8, Any}
+        mi = nothing
+        for spec in Base.specializations(m)
+            spec === nothing && continue
+            if spec.specTypes == target
+                mi = spec
+                break
+            end
+        end
+        @test mi !== nothing
+        ci = isdefined(mi, :cache) ? mi.cache : nothing
+        revalidated = false
+        while ci !== nothing
+            if ci.max_world == typemax(UInt)
+                revalidated = true
+                break
+            end
+            ci = isdefined(ci, :next) ? ci.next : nothing
+        end
+        @test revalidated
+        # the formerly-ambiguous region now dispatches to the surviving method
+        @test Base.inferencebarrier(AmbigDelB.caller)(Int8(1), "hi") === 1
+        @test Base.inferencebarrier(AmbigDelB.caller)(Int8(1), 2) === 1
+    end
+end
+
+precompile_test_harness("Marked group edge tolerates an unchanged ambiguity") do load_path
+    # A build-time partial ambiguity where BOTH matches survive the pruned lookup: the
+    # call records the section (Int-header) edge format with each member wrapped in
+    # `Core.PossiblyAmbiguous`. Loading with the ambiguity unchanged must revalidate; a
+    # post-build method that wins part of the ambiguous region must invalidate.
+    write(joinpath(load_path, "AmbigPairA.jl"),
+        """
+        module AmbigPairA
+        m(x::Int8, y) = 1
+        m(x, y::AbstractString) = 2
+        end
+        """)
+    write(joinpath(load_path, "AmbigPairB1.jl"),
+        """
+        module AmbigPairB1
+        using AmbigPairA
+        caller(@nospecialize(x), @nospecialize(y)) = AmbigPairA.m(x, y)
+        precompile(caller, (Any, Any))
+        end
+        """)
+    write(joinpath(load_path, "AmbigPairB2.jl"),
+        """
+        module AmbigPairB2
+        using AmbigPairA
+        caller(@nospecialize(x), @nospecialize(y)) = AmbigPairA.m(x, y)
+        precompile(caller, (Any, Any))
+        end
+        """)
+    Base.compilecache(Base.PkgId("AmbigPairB1"))
+    Base.compilecache(Base.PkgId("AmbigPairB2"))
+
+    @eval using AmbigPairA
+    # B1 loads with the build-time ambiguity unchanged: must revalidate
+    @eval using AmbigPairB1
+    invokelatest() do
+        m = only(methods(AmbigPairB1.caller))
+        target = Tuple{typeof(AmbigPairB1.caller), Any, Any}
+        mi = nothing
+        for spec in Base.specializations(m)
+            spec === nothing && continue
+            if spec.specTypes == target
+                mi = spec
+                break
+            end
+        end
+        @test mi !== nothing
+        ci = isdefined(mi, :cache) ? mi.cache : nothing
+        validated_ci = nothing
+        while ci !== nothing
+            if ci.max_world == typemax(UInt)
+                validated_ci = ci
+                break
+            end
+            ci = isdefined(ci, :next) ? ci.next : nothing
+        end
+        @test validated_ci !== nothing
+        if validated_ci !== nothing
+            # the pair does not fully cover, so the group has a -2 Int header; the
+            # signature slot carries the marker and the member edges stay plain
+            edgelist = collect(Any, validated_ci.edges)
+            idx = findfirst(e -> e isa Int && e == -2, edgelist)
+            @test idx !== nothing
+            if idx !== nothing
+                @test edgelist[idx+1] isa Core.PossiblyAmbiguous
+                @test edgelist[idx+2] isa Core.CodeInstance
+                @test edgelist[idx+3] isa Core.CodeInstance
+            end
+            @test count(e -> e isa Core.PossiblyAmbiguous, edgelist) == 1
+        end
+        @test Base.inferencebarrier(AmbigPairB1.caller)(Int8(1), 1.5) === 1
+        @test Base.inferencebarrier(AmbigPairB1.caller)("a", "b") === 2
+        @test_throws MethodError Base.inferencebarrier(AmbigPairB1.caller)(Int8(1), "hi")
+    end
+
+    # a post-build method that wins part of the ambiguous region: B2 must NOT revalidate
+    @eval AmbigPairA.m(x::Int8, y::String) = 3
+    @eval using AmbigPairB2
+    invokelatest() do
+        m = only(methods(AmbigPairB2.caller))
+        target = Tuple{typeof(AmbigPairB2.caller), Any, Any}
+        mi = nothing
+        for spec in Base.specializations(m)
+            spec === nothing && continue
+            if spec.specTypes == target
+                mi = spec
+                break
+            end
+        end
+        @test mi !== nothing
+        ci = isdefined(mi, :cache) ? mi.cache : nothing
+        revalidated = false
+        while ci !== nothing
+            if ci.max_world == typemax(UInt)
+                revalidated = true
+                break
+            end
+            ci = isdefined(ci, :next) ? ci.next : nothing
+        end
+        @test !revalidated
+        @test Base.inferencebarrier(AmbigPairB2.caller)(Int8(1), "hi") === 3
+    end
+end
+
+
+
 finish_precompile_test!()
