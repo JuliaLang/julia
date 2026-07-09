@@ -397,6 +397,13 @@ function __init__()
     # Environment caches populated at sysimage build time must not be consulted at runtime.
     reset_stdlib_env()
     empty!(EXPLICIT_ENV_CACHE)
+    # Per-process environment-resolution caches (populated only during precompilation, where
+    # the environment is immutable). Reset here so entries baked into the sysimage at build
+    # time are never consulted at runtime.
+    ENV_STACK[] = nothing
+    empty!(_frozen_parsed)
+    empty!(_frozen_env_project_file)
+    empty!(_frozen_manifest_path)
     Filesystem.__postinit__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback

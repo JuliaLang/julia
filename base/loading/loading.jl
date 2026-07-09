@@ -1207,7 +1207,17 @@ function __require(into::Module, mod::Symbol)
         return topmod
     end
     @lock require_lock begin
-    ENV_STACK[] = EnvironmentStack()
+    # In a precompile worker the active project and manifest are immutable for the
+    # process's lifetime, so resolve the environment stack once and keep it across all
+    # (nested and subsequent) `require`s instead of rebuilding and re-stating per call.
+    # Outside precompilation the environment can change while a package loads (e.g. `Pkg`
+    # operations in its top-level code), so every `require` resolves a fresh stack and
+    # clears it when done.
+    if _env_frozen()
+        ENV_STACK[] === nothing && (ENV_STACK[] = EnvironmentStack())
+    else
+        ENV_STACK[] = EnvironmentStack()
+    end
     try
         uuidkey_env = identify_package_env(into, String(mod))
         # Core.println("require($(PkgId(into)), $mod) -> $uuidkey_env")
@@ -1244,7 +1254,8 @@ function __require(into::Module, mod::Symbol)
         end
         return _require_prelocked(uuidkey, env)
     finally
-        ENV_STACK[] = nothing
+        # Keep the frozen stack alive for the whole precompile worker process.
+        _env_frozen() || (ENV_STACK[] = nothing)
     end
     end
 end

@@ -264,16 +264,36 @@ TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, con
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
+# Whether environment resolution is "frozen" for this process: true in package precompile
+# workers, where the active project/manifest and the environment's filesystem layout are
+# immutable for the process's lifetime, so freshness `stat`s can be skipped. Restricted to
+# incremental output: a non-incremental `--output-o` process (sysimage generation) can run
+# arbitrary scripts that mutate the environment.
+_env_frozen() = generating_output(#=incremental=#true)
+
+# TOML files whose freshness is "frozen" for this process (only used during precompilation,
+# where the environment is immutable). Reset per process in `Base.__init__`.
+const _frozen_parsed = Set{String}()
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
         if !haskey(toml_cache.d, project_file)
             d = CachedTOMLDict(toml_cache.p, project_file)
             toml_cache.d[project_file] = d
+            _env_frozen() && push!(_frozen_parsed, project_file)
             return d.d
         else
             d = toml_cache.d[project_file]
-            return get_updated_dict(toml_cache.p, d)
+            # In a precompile worker the file is immutable for the process's lifetime, so
+            # once we have parsed it in this process reuse the dict instead of re-`stat`ing
+            # it for freshness. Restricted to files parsed by this process (not entries baked
+            # into the sysimage) and to precompilation (`generating_output`).
+            if _env_frozen() && project_file in _frozen_parsed
+                return d.d
+            end
+            dd = get_updated_dict(toml_cache.p, d)
+            _env_frozen() && push!(_frozen_parsed, project_file)
+            return dd
         end
     end
 end
@@ -520,8 +540,16 @@ end
 #  - `false`: nonexistent / nothing to see here
 #  - `true`: `env` is an implicit environment
 #  - `path`: the path of an explicit project file
+# In a precompile worker the filesystem layout of environments is immutable, so cache the
+# classification for the process's lifetime rather than re-`stat`ing the same directories
+# and project-file candidates on every `require`.
+const _frozen_env_project_file = Dict{String, Union{Bool, String}}()
 function env_project_file(env::String)::Union{Bool,String}
     @lock require_lock begin
+    if _env_frozen()
+        cached = get(_frozen_env_project_file, env, nothing)
+        cached === nothing || return cached
+    end
     if isdir(env)
         project_file = locate_project_file(env)
     elseif basename(env) in project_names && isfile_casesensitive(env)
@@ -529,6 +557,7 @@ function env_project_file(env::String)::Union{Bool,String}
     else
         project_file = false
     end
+    _env_frozen() && (_frozen_env_project_file[env] = project_file)
     return project_file
     end
 end
@@ -662,8 +691,19 @@ function parser_for_active_project()
 end
 
 # find project file's corresponding manifest file
+const _frozen_manifest_path = Dict{String, Union{Nothing, String}}() # cached in precompile workers
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     @lock require_lock begin
+    if _env_frozen()
+        cached = get(_frozen_manifest_path, project_file, missing)
+        cached === missing || return cached
+    end
+    manifest_path = _project_file_manifest_path(project_file)
+    _env_frozen() && (_frozen_manifest_path[project_file] = manifest_path)
+    return manifest_path
+    end
+end
+function _project_file_manifest_path(project_file::String)::Union{Nothing,String}
     dir = abspath(dirname(project_file))
     isfile_casesensitive(project_file) || return nothing
     d = parsed_toml(project_file)
@@ -689,7 +729,6 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         end
     end
     return manifest_path
-    end
 end
 
 # given a directory (implicit env from LOAD_PATH) and a name,
