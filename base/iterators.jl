@@ -14,7 +14,7 @@ using .Base:
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
-    any, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
+    any, eachindex, ntuple, zero, prod, identity, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
     afoldl, mod1, @default_eltype
 using .Core
