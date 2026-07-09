@@ -210,7 +210,14 @@ function multiq_deletemin()
         heap = tpheaps[rn1]
         task = heap.tasks[1]
         if ccall(:jl_set_task_tid, Cint, (Any, Cint), task, tid-1) == 0
+            # This task is sticky to a different thread, so we can't run it.
+            # Wake that thread so it can come pick up its own work, then keep
+            # looking for something we are allowed to run.
+            task_tid = ccall(:jl_get_task_tid, Int16, (Any,), task)
             unlock(heap.lock)
+            if task_tid != Int16(-1)
+                ccall(:jl_wakeup_thread, Cvoid, (Int16,), task_tid)
+            end
             continue
         end
         break
