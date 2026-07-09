@@ -1847,14 +1847,7 @@ if !Sys.iswindows() && !running_under_rr()
                          Dict("JULIA_LOAD_PATH" => "@stdlib"))
             p = run(pipeline(cmd; stdout=devnull, stderr=devnull); wait=false)
             exited = timedwait(() -> process_exited(p), 120) === :ok
-            # Known-broken under cancellation semantics: the worker's message
-            # infrastructure is spawned under its startup ^C episode scope, so
-            # the SIGINT sent by `interrupt` cancels the connection-serving
-            # tasks along with the in-flight request and the worker stops
-            # responding. Distributed needs to shield its infrastructure and
-            # scope only request execution to the interrupt (worker-side
-            # follow-up to the cancellation rework).
-            @test_broken exited && p.exitcode == 0
+            @test exited && p.exitcode == 0
             process_running(p) && kill(p, Base.SIGKILL)
             wait(p)
         end
