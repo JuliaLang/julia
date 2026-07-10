@@ -577,23 +577,23 @@ STATIC_INLINE void jl_gmp_guard_enter(jl_task_t *ct, jl_reset_ctx_t *hctx,
     hctx->handler.fn = &jl_gmp_defer_note;
     hctx->handler.state = (void*)deferred;
     jl_signal_fence(); // contents before publication (same-thread signal)
-    ct->cancel_handler_ctx = hctx;
+    jl_atomic_store_release(&ct->cancel_handler_ctx, hctx);
     jl_signal_fence();
 }
 
 STATIC_INLINE void jl_gmp_guard_leave(jl_task_t *ct, volatile sig_atomic_t *deferred)
 {
     jl_signal_fence();
-    ct->cancel_handler_ctx = NULL;
+    jl_atomic_store_release(&ct->cancel_handler_ctx, NULL);
     jl_signal_fence();
     if (*deferred) {
         // A cancellation was delivered while inside the allocator: chain
         // into the reset region published across the enclosing GMP call
         // (synchronously - this is a safe point by construction). The
         // re-executed cancellation point at the reset throws the request.
-        jl_reset_ctx_t *rctx = (jl_reset_ctx_t*)ct->reset_ctx;
+        jl_reset_ctx_t *rctx = jl_atomic_load_relaxed(&ct->reset_ctx);
         if (rctx != NULL && rctx->sp != 0) {
-            ct->reset_ctx = NULL;
+            jl_atomic_store_release(&ct->reset_ctx, NULL);
             jl_longjmp(rctx->ctx.uc_mcontext, 1);
         }
     }

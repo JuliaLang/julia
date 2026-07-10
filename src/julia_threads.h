@@ -464,14 +464,14 @@ typedef struct _jl_task_t {
     // The published reset (sp != 0) context of the current compiled
     // cancellation region, NULL outside such regions. Only ever consumed
     // for the thread's *current* task.
-    volatile jl_reset_ctx_t *reset_ctx;
+    _Atomic(jl_reset_ctx_t *) reset_ctx;
     // The published handler (sp == 0) context of the current foreign call
     // carrying a cancellation handler, NULL outside such calls. May be
     // active *at the same time* as a reset region, and takes delivery
     // priority while published: the handler's span (e.g. a protected
     // allocator) is exactly where a longjmp must not land, and the handler
     // can defer the cancellation and chain into the reset on region exit.
-    volatile jl_reset_ctx_t *cancel_handler_ctx;
+    _Atomic(jl_reset_ctx_t *) cancel_handler_ctx;
 } jl_task_t;
 
 JL_DLLEXPORT void *jl_get_ptls_states(void);

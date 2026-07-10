@@ -625,7 +625,8 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     if (ptls2 == NULL)
         return;
     jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct2 == NULL || (ct2->reset_ctx == NULL && ct2->cancel_handler_ctx == NULL))
+    if (ct2 == NULL || (jl_atomic_load_acquire(&ct2->reset_ctx) == NULL &&
+                        jl_atomic_load_acquire(&ct2->cancel_handler_ctx) == NULL))
         return;
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
     kern_return_t ret = thread_suspend(thread);
@@ -646,7 +647,7 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
         jl_atomic_load_relaxed(&ct2->bound_cancel_token);
     int bound_cancelled = bound != NULL && bound != jl_nothing &&
         (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80);
-    jl_reset_ctx_t *hctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->cancel_handler_ctx;
+    jl_reset_ctx_t *hctx = ct2 == NULL ? NULL : jl_atomic_load_acquire(&ct2->cancel_handler_ctx);
     if (hctx != NULL) {
         // Handler flavor: hijack the thread to run fn(state, severity) on
         // its own stack via the resumable jl_call_in_state machinery - at
@@ -675,11 +676,11 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
         }
     }
     else {
-        jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->reset_ctx;
+        jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : jl_atomic_load_acquire(&ct2->reset_ctx);
         if (reset_ctx != NULL && reset_ctx->sp != 0 && bound_cancelled) {
             // Reset flavor: consume the reset point (prevents a double
             // reset) and longjmp there.
-            ct2->reset_ctx = NULL;
+            jl_atomic_store_release(&ct2->reset_ctx, NULL);
             host_thread_state_t state;
             unsigned int count = MACH_THREAD_STATE_COUNT;
             memset(&state, 0, sizeof(state));

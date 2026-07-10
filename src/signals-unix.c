@@ -863,7 +863,8 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
         return;
     // Only send if the task has an interruptible-region context published
     // (a compiled reset point, or a foreign call with a cancellation handler)
-    if (ct->reset_ctx == NULL && ct->cancel_handler_ctx == NULL)
+    if (jl_atomic_load_relaxed(&ct->reset_ctx) == NULL &&
+        jl_atomic_load_relaxed(&ct->cancel_handler_ctx) == NULL)
         return;
     pthread_mutex_lock(&in_signal_lock);
     // This request is best-effort and produces no acknowledgment token (see
@@ -1024,7 +1025,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
         int bound_cancelled = bound != NULL && bound != jl_nothing &&
             (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80);
-        jl_reset_ctx_t *hctx = (jl_reset_ctx_t*)ct->cancel_handler_ctx;
+        jl_reset_ctx_t *hctx = jl_atomic_load_acquire(&ct->cancel_handler_ctx);
         if (hctx != NULL) {
             // Handler flavor: run the registered cancellation handler on
             // this thread, signal-handler-style, and resume. The context
@@ -1038,13 +1039,13 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
 #endif
         }
         else {
-            jl_reset_ctx_t *reset_ctx = (jl_reset_ctx_t*)ct->reset_ctx;
+            jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct->reset_ctx);
             if (reset_ctx != NULL && reset_ctx->sp != 0 && bound_cancelled) {
                 // Reset flavor: abandon the interrupted register state and
                 // longjmp to the reset point, whose re-executed check
                 // observes the cancellation and throws. Clear reset_ctx
                 // before the longjmp to prevent a double reset.
-                ct->reset_ctx = NULL;
+                jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
                 jl_longjmp_in_ctx(sig, ctx, reset_ctx->ctx.uc_mcontext);
             }
         }
@@ -1502,7 +1503,18 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                     rescue_task = jl_check_sigint_rescue_abandon(); // consumes the expiry
                 if (rescue_task != NULL) {
                     jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
-                    if (ct != NULL && ct != rescue_task) {
+                    jl_value_t *bound = ct == NULL ? NULL :
+                        jl_atomic_load_acquire(&ct->bound_cancel_token);
+                    jl_value_t *sigsrc = (jl_value_t*)jl_atomic_load_acquire(&jl_sigint_source);
+                // Only a task actually governed by the ^C source may be
+                // ripped away: thread 0 can be running unrelated work while
+                // the real victim is stalled elsewhere, and a no-op rung
+                // beats destroying a bystander. Unbound work (no published
+                // token, e.g. an uninstrumented foreground loop) remains
+                // abandonable - it is indistinguishable from the victim.
+                    int governed = bound == NULL || bound == jl_nothing ||
+                        (sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc));
+                    if (ct != NULL && ct != rescue_task && governed) {
                         if (jl_abandon_task(ct, rescue_task)) {
                             jl_safe_printf("\nWARNING: Abandoned the current task and switched to a rescue task.\n"
                                              "         This may leave the process in an inconsistent state.\n");

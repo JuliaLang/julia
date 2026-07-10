@@ -487,7 +487,17 @@ JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
 // N.B.: The rescue task is rooted on the Julia side (Base keeps a global
 // reference).
 static jl_task_t *sigint_rescue_task = NULL;
-static volatile int sigint_rescue_timer_expired = 0;
+// Rescue-timer expiry, tagged with an episode generation. The flag is
+// written by timer threads (a POSIX timer signal, a Win32 timer-queue
+// callback) and read/consumed by the signal listener and the Julia-side
+// listener; `volatile` is not inter-thread synchronization, and a queued
+// timer firing that lands after the episode was reset must not leak its
+// expiry into the fresh episode. The generation is bumped on every arm and
+// reset; an expiry is only visible while its recorded generation is
+// current.
+static _Atomic(uint32_t) sigint_rescue_gen = 0;
+static _Atomic(uint32_t) sigint_rescue_armed_gen = 0;   // generation of the last arm
+static _Atomic(uint32_t) sigint_rescue_expired_gen = 0; // 0 = no expiry
 
 // Classifies the ^C episode state recorded on the root task's cancellation
 // request (see base/Base.jl's sigint listener), for escalation decisions and
@@ -519,6 +529,11 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
+    // Open a fresh expiry generation: a stale fire from a previous arming
+    // (recorded against the old generation) stays invisible.
+    uint32_t gen = jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1) + 1;
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen, gen);
+    (void)gen;
     if (!sigint_rescue_timer_created)
         return;
     struct itimerspec its;
@@ -556,6 +571,11 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
+    // Open a fresh expiry generation: a stale fire from a previous arming
+    // (recorded against the old generation) stays invisible.
+    uint32_t gen = jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1) + 1;
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen, gen);
+    (void)gen;
     if (sigint_rescue_kq == -1)
         return;
     struct kevent ev;
@@ -591,7 +611,8 @@ static VOID CALLBACK sigint_rescue_timer_cb(PVOID param, BOOLEAN fired)
     int est = jl_sigint_episode_state();
     if (est == 0)
         return; // the episode already completed - stand down
-    sigint_rescue_timer_expired = 1;
+    jl_atomic_store_release(&sigint_rescue_expired_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_armed_gen));
     if (est == 2) {
         jl_safe_printf("\nWARNING: Cancellation is in progress, but has not completed within 1s.\n"
                          "         Press ^C again to also stop waiting for external resources (e.g. in-flight I/O).\n");
@@ -609,6 +630,11 @@ static VOID CALLBACK sigint_rescue_timer_cb(PVOID param, BOOLEAN fired)
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
+    // Open a fresh expiry generation: a stale fire from a previous arming
+    // (recorded against the old generation) stays invisible.
+    uint32_t gen = jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1) + 1;
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen, gen);
+    (void)gen;
     uv_mutex_lock(&sigint_state_lock);
     if (sigint_rescue_timer_handle == NULL) {
         if (!CreateTimerQueueTimer(&sigint_rescue_timer_handle, NULL,
@@ -637,6 +663,11 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
+    // Open a fresh expiry generation: a stale fire from a previous arming
+    // (recorded against the old generation) stays invisible.
+    uint32_t gen = jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1) + 1;
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen, gen);
+    (void)gen;
 }
 
 JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
@@ -650,18 +681,25 @@ JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 // records this itself.)
 static void jl_sigint_rescue_timer_expired(void) JL_NOTSAFEPOINT
 {
-    sigint_rescue_timer_expired = 1;
+    jl_atomic_store_release(&sigint_rescue_expired_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_armed_gen));
 }
 #endif
 
 // Check if the rescue timer has expired and we should abandon the current task.
 // Returns the rescue task if abandonment should proceed, NULL otherwise.
 // Clears the expired flag if it was set.
+static int sigint_rescue_expiry_current(void) JL_NOTSAFEPOINT
+{
+    uint32_t egen = jl_atomic_load_acquire(&sigint_rescue_expired_gen);
+    return egen != 0 && egen == jl_atomic_load_relaxed(&sigint_rescue_gen);
+}
+
 static jl_task_t *jl_check_sigint_rescue_abandon(void) JL_NOTSAFEPOINT
 {
-    if (!sigint_rescue_timer_expired)
+    if (!sigint_rescue_expiry_current())
         return NULL;
-    sigint_rescue_timer_expired = 0;
+    jl_atomic_store_relaxed(&sigint_rescue_expired_gen, 0);
     return sigint_rescue_task;
 }
 
@@ -670,14 +708,14 @@ static jl_task_t *jl_check_sigint_rescue_abandon(void) JL_NOTSAFEPOINT
 // period has passed.
 JL_DLLEXPORT int jl_sigint_rescue_timer_expired_peek(void) JL_NOTSAFEPOINT
 {
-    return sigint_rescue_timer_expired;
+    return sigint_rescue_expiry_current();
 }
 
 // An escalated severity was just delivered: consume the expiry and start a
 // fresh grace period for the next rung.
 JL_DLLEXPORT void jl_sigint_escalation_delivered(void) JL_NOTSAFEPOINT
 {
-    sigint_rescue_timer_expired = 0;
+    jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1); // invalidate the expiry
     jl_arm_sigint_rescue_timer();
 }
 
@@ -685,7 +723,7 @@ JL_DLLEXPORT void jl_sigint_escalation_delivered(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_reset_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
     jl_disarm_sigint_rescue_timer();
-    sigint_rescue_timer_expired = 0;
+    jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1); // invalidate the expiry
 }
 
 // Set while a ^C notification has been posted to the event loop but not yet

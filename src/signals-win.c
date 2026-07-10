@@ -235,7 +235,14 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
                 rescue_task = jl_check_sigint_rescue_abandon(); // consumes the expiry
             if (rescue_task != NULL) {
                 jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
-                if (ct != NULL && ct != rescue_task) {
+                jl_value_t *bound = ct == NULL ? NULL :
+                    jl_atomic_load_acquire(&ct->bound_cancel_token);
+                jl_value_t *sigsrc = (jl_value_t*)jl_atomic_load_acquire(&jl_sigint_source);
+                // See signals-unix.c: only abandon work governed by (or not
+                // bound under) the ^C source.
+                int governed = bound == NULL || bound == jl_nothing ||
+                    (sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc));
+                if (ct != NULL && ct != rescue_task && governed) {
                     if (jl_abandon_task(ct, rescue_task)) {
                         jl_safe_printf("\nWARNING: Abandoned the current task and switched to a rescue task.\n"
                                          "         This may leave the process in an inconsistent state.\n");
@@ -794,7 +801,8 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     if (ptls2 == NULL)
         return;
     jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct2 == NULL || (ct2->reset_ctx == NULL && ct2->cancel_handler_ctx == NULL))
+    if (ct2 == NULL || (jl_atomic_load_acquire(&ct2->reset_ctx) == NULL &&
+                        jl_atomic_load_acquire(&ct2->cancel_handler_ctx) == NULL))
         return;
     HANDLE hThread = ptls2->system_id;
     if ((DWORD)-1 == SuspendThread(hThread))
@@ -815,7 +823,7 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
         jl_atomic_load_relaxed(&ct2->bound_cancel_token);
     int bound_cancelled = bound != NULL && bound != jl_nothing &&
         (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80);
-    jl_reset_ctx_t *hctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->cancel_handler_ctx;
+    jl_reset_ctx_t *hctx = ct2 == NULL ? NULL : jl_atomic_load_acquire(&ct2->cancel_handler_ctx);
     if (hctx != NULL) {
 #ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
         // Handler flavor: hijack the thread to run fn(state, severity) on
@@ -840,7 +848,7 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
 #endif
     }
     else {
-        jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->reset_ctx;
+        jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : jl_atomic_load_acquire(&ct2->reset_ctx);
         if (reset_ctx != NULL && reset_ctx->sp != 0 && bound_cancelled) {
             CONTEXT ctxThread;
             memset(&ctxThread, 0, sizeof(CONTEXT));
@@ -848,7 +856,7 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
             if (GetThreadContext(hThread, &ctxThread)) {
                 // Reset flavor: consume the reset point (prevents a double
                 // reset) and longjmp there.
-                ct2->reset_ctx = NULL;
+                jl_atomic_store_release(&ct2->reset_ctx, NULL);
                 if (jl_simulate_longjmp(reset_ctx->ctx.uc_mcontext, &ctxThread)) {
                     ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
                     SetThreadContext(hThread, &ctxThread);
