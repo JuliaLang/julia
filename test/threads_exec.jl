@@ -83,6 +83,14 @@ module AbstractIrrationalExamples
     )
 end
 
+macro big_expr(n, x)
+    x = esc(x)
+    for _ in 1:n
+        x = :($x + 1 - 1)
+    end
+    x
+end
+
 @testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
 
 @test Threads.threadid() == 1
@@ -463,6 +471,56 @@ function test_fence()
     @test commbuf.correct[2] == true
 end
 test_fence()
+
+# Test asymmetric thread fences
+struct AsymmetricFenceTestData
+    n::Int
+    x::AtomicMemory{Int}
+    y::AtomicMemory{Int}
+    read_x::AtomicMemory{Int}
+    read_y::AtomicMemory{Int}
+end
+function test_asymmetric_fence(data::AsymmetricFenceTestData, cond1, cond2, threadid, it)
+    if (threadid % 2) == 0
+        @atomic :monotonic data.x[it] = 1
+        Threads.atomic_fence_heavy()
+        @atomic :monotonic data.read_y[it] = @atomic :monotonic data.y[it]
+        wait(cond1)
+        notify(cond2)
+    else
+        @atomic :monotonic data.y[it] = 1
+        Threads.atomic_fence_light()
+        @atomic :monotonic data.read_x[it] = @atomic :monotonic data.x[it]
+        notify(cond1)
+        wait(cond2)
+    end
+end
+function test_asymmetric_fence(data::AsymmetricFenceTestData, cond1, cond2, threadid)
+    for i = 1:data.n
+        test_asymmetric_fence(data, cond1, cond2, threadid, i)
+    end
+end
+function test_asymmetric_fence()
+    asymmetric_test_count = 200_000
+    cond1 = Threads.Event(true)
+    cond2 = Threads.Event(true)
+    data = AsymmetricFenceTestData(asymmetric_test_count,
+                                   AtomicMemory{Int}(undef, asymmetric_test_count),
+                                   AtomicMemory{Int}(undef, asymmetric_test_count),
+                                   AtomicMemory{Int}(undef, asymmetric_test_count),
+                                   AtomicMemory{Int}(undef, asymmetric_test_count))
+    for i = 1:asymmetric_test_count
+        @atomic :monotonic data.x[i] = 0
+        @atomic :monotonic data.y[i] = 0
+        @atomic :monotonic data.read_x[i] = typemax(Int)
+        @atomic :monotonic data.read_y[i] = typemax(Int)
+    end
+    t1 = @Threads.spawn test_asymmetric_fence(data, cond1, cond2, 1)
+    t2 = @Threads.spawn test_asymmetric_fence(data, cond1, cond2, 2)
+    wait(t1); wait(t2)
+    @test !any((data.read_x .== 0) .& (data.read_y .== 0))
+end
+test_asymmetric_fence()
 
 # Test load / store with various types
 let atomictypes = (Int8, Int16, Int32, Int64, Int128,
@@ -1115,7 +1173,7 @@ end
     end
 end
 
-# @spawn racying with sync_end
+# @spawn racing with sync_end
 
 hidden_spawn(f) = Threads.@spawn f()
 
@@ -1176,6 +1234,33 @@ end
     @test check_sync_end_race() === nothing
 end
 
+@testset "no lost wakeups under bursty spawn (#61820, #50425)" begin
+    # A multiqueue insert wakes one thread in the pool; bursts of tasks spawned
+    # across an idle pool must all still run to completion (regression smoke test
+    # that wake-one does not drop wakeups).
+    for pool in (:default, :interactive)
+        nt = Threads.threadpoolsize(pool)
+        n = 50 * nt
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn pool Threads.atomic_add!(done, 1)
+        end
+        @test timedwait(() -> done[] == n, 60.0) === :ok
+    end
+    # nested spawns must also complete
+    let n = 20 * Threads.threadpoolsize(:default)
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn begin
+                a = Threads.@spawn Threads.atomic_add!(done, 1)
+                b = Threads.@spawn Threads.atomic_add!(done, 1)
+                fetch(a); fetch(b)
+            end
+        end
+        @test timedwait(() -> done[] == 2n, 60.0) === :ok
+    end
+end
+
 # issue #41546, thread-safe package loading
 @testset "package loading" begin
     ntasks = max(threadpoolsize(:default), 4)
@@ -1226,7 +1311,7 @@ end
     end
 end
 
-#Thread safety of threacall
+# Thread safety of threadcall
 function threadcall_threads()
     Threads.@threads for i = 1:8
         ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
@@ -1364,6 +1449,15 @@ end
                 @test !istaskdone(tasks[3])
 
                 teardown(tasks, event)
+
+                @test_throws CompositeException begin
+                    waitall(Threads.@spawn(div(1, i)) for i = 0:1)
+                end
+
+                tasks = [Threads.@spawn(div(1, i)) for i = 0:1]
+                wait(tasks[1]; throw=false)
+                wait(tasks[2]; throw=false)
+                @test_throws CompositeException waitall(tasks)
             end
         end
     end
@@ -1410,6 +1504,9 @@ end
             Rational{I}(c)
         end
         function is_racy_rational_from_irrational()
+            # `local` is needed to avoid sharing (and racily clobbering) the
+            # outer function's `task`/`ok` while it is fetching them
+            local task, ok
             worker_count = 10 * Threads.nthreads()
             task = ConcurrencyUtilities.run_concurrently_in_new_task(construct, worker_count)
             schedule(task)
@@ -1652,6 +1749,55 @@ end
         @test !isempty(read(tmp_output_filename, String))
         close(tmp_output_file)
         rm(tmp_output_filename)
+    end
+end
+
+include("threads_comprehensions.jl")
+
+# This test is designed to trigger the performance regression from #60241:
+#   Thread 1                           Thread 2
+#   --------                           --------
+#   call f()
+#     infer f(), g()
+#     emit LLVM IR f()
+#       set f() invoke
+#     emit LLVM IR g() (slow!)         call f()
+#       ...                              materialize f()
+#       ...                                emit trampoline for g()
+#                                        run f()
+#                                          tojlinvoke trampoline for g()
+#     call f()
+#       f() already materialized
+#
+# We can tell the trampoline was generated if calling f() with a large integer
+# allocates (the trampoline will box the integer).
+
+@testset "Race invoke trampolines" begin
+    for i=1:10
+        @eval begin
+            @noinline function g(x)
+                x = @big_expr(4000, x)
+                if x > 0
+                    f(x-1)
+                else
+                    0
+                end
+            end
+
+            @noinline function f(x)
+                if x > 0
+                    g(x-1)
+                else
+                    0
+                end
+            end
+
+            t = Threads.@spawn f(10)
+            f(10)
+            wait(t)
+        end
+
+        @test @eval @allocations(f(10000)) == 0
     end
 end
 

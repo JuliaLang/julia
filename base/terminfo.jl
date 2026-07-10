@@ -12,7 +12,7 @@ A structured representation of a terminfo file, without any knowledge of
 particular capabilities, solely based on `term(5)`.
 
 !!! warning
-  This is not part of the public API, and thus subject to change without notice.
+    This is not part of the public API, and thus subject to change without notice.
 
 # Fields
 
@@ -44,19 +44,16 @@ end
 A parsed terminfo paired with capability information.
 
 !!! warning
-  This is not part of the public API, and thus subject to change without notice.
+    This is not part of the public API, and thus subject to change without notice.
 
 # Fields
 
 - `names::Vector{String}`: The names this terminal is known by.
-- `flags::Int`: The number of flags specified.
-- `numbers::BitVector`: A mask indicating which of `TERM_NUMBERS` have been
-  specified.
-- `strings::BitVector`: A mask indicating which of `TERM_STRINGS` have been
-  specified.
-- `extensions::Vector{Symbol}`: A list of extended capability variable names.
-- `capabilities::Dict{Symbol, Union{Bool, Int, String}}`: The capability values
-  themselves.
+- `flags::Dict{Symbol, Bool}`: A mapping of flag capability names to their values.
+- `numbers::Dict{Symbol, Int}`: A mapping of number capability names to their values.
+- `strings::Dict{Symbol, String}`: A mapping of string capability names to their values.
+- `extensions::Union{Nothing, Set{Symbol}}`: The set of extended capability names, or `nothing` if there are no extensions.
+- `aliases::Dict{Symbol, Symbol}`: A mapping of alias names to their corresponding capability names in any of the above categories.
 
 See also: `TermInfoRaw` and `TermCapability`.
 """
@@ -69,7 +66,7 @@ struct TermInfo
     aliases::Dict{Symbol, Symbol}
 end
 
-TermInfo() = TermInfo([], Dict(), Dict(), Dict(), nothing, Dict())
+TermInfo() = TermInfo(String[], Dict{Symbol, Bool}(), Dict{Symbol, Int}(), Dict{Symbol, String}(), nothing, Dict{Symbol, Symbol}())
 
 function read(data::IO, ::Type{TermInfoRaw})
     # Parse according to `term(5)`

@@ -51,12 +51,13 @@ exception frames, and taking/releasing locks.
       `jl_ast_context_list_t` pool.  Likewise, the `ResourcePool<?>::mutexes`
       just protect the associated resource pool.
 
-* `jl_in_stackwalk` (`uv_mutex_t`, Win32 only)
 * `ResourcePool<?>.mutex` (`std::mutex`)
 * `RLST_mutex` (`std::mutex`)
 * `llvm_printing_mutex` (`std::mutex`)
 * `jl_locked_stream.mutex` (`std::mutex`)
-* `debuginfo_asyncsafe` (`uv_rwlock_t`)
+* `ObjCache.Mutex` (`std::mutex`)
+* `ObjCache.LogMutex` (`std::mutex`)
+* `debuginfo_asyncsafe` (`uv_rwlock_t`) (can still acquire `jl_in_stackwalk` (`uv_mutex_t`, Win32 only))
 * `profile_show_peek_cond_lock` (`jl_mutex_t`)
 * `trampoline_lock` (`uv_mutex_t`)
 * `bt_data_prof_lock` (`uv_mutex_t`)
@@ -87,6 +88,7 @@ exception frames, and taking/releasing locks.
 * `jl_method_t.writelock`
 * `typecache_lock`
 * `libmap_lock`
+* `JuliaOJIT.LinkerMutex` (`std::mutex`)
 
 ### Level 4
 
@@ -188,7 +190,16 @@ g()                   # recompile g
 ```
 
 After compiling the two versions of `g()`, the global cache looks like this:
-![Global cache state after invalidation](./img/invalidation-example.png)
+```@raw html
+<img src="img/invalidation-example.svg" alt="Global cache state after invalidation"/>
+```
+```@raw latex
+\begin{figure}
+\centering
+\includegraphics[max width=\linewidth]{devdocs/img/invalidation-example.pdf}
+\caption{Global cache state after invalidation}
+\end{figure}
+```
 
 The maximum world age, `jl_world_counter`, is protected by the
 `world_counter_lock`.  Julia uses a form of optimistic concurrency control to
@@ -219,12 +230,21 @@ Type inference proceeds like so:
     on the backedges for invalidation.
 - Release `world_counter_lock`.
 
-![Two threads doing type inference while another adds a method](./img/typeinf-promotion.png)
+```@raw html
+<img src="img/typeinf-promotion.svg" alt="Two threads doing type inference while another adds a method"/>
+```
+```@raw latex
+\begin{figure}
+\centering
+\includegraphics[max width=\linewidth]{devdocs/img/typeinf-promotion.pdf}
+\caption{Two threads doing type inference while another adds a method}
+\end{figure}
+```
 
 In the above diagram, threads 1 and 2 are doing type inference (the dotted
 line), while thread 3 is activating a new method.  The solid boxes represent
 critical sections where the `world_counter_lock` is held.  `acq`, `rel`, and
-`read`, are acquire loads, release stores, and relaxed loads respectively.
+`read` are acquire loads, release stores, and relaxed loads respectively.
 
 T1 promotes its CI in time, but T2 takes too long, blocking on
 `world_counter_lock` until T3 has finished publishing the new method and

@@ -15,7 +15,7 @@ extern "C" {
 // ---------------------------------------------------------------------
 
 // Forward-declaration to avoid dependency in header file.
-struct jl_raw_alloc_t;  // Defined in gc-alloc-profiler.cpp
+struct jl_raw_alloc_t;  // Defined in gc-alloc-profiler.c
 
 typedef struct {
     struct jl_raw_alloc_t *allocs;

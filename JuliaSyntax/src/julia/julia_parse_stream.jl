@@ -1,0 +1,304 @@
+# Set for K"call", K"dotcall" or any syntactic operator heads
+# Distinguish various syntaxes which are mapped to K"call"
+const PREFIX_CALL_FLAG = RawFlags(0<<3)
+const INFIX_FLAG       = RawFlags(1<<3)
+const PREFIX_OP_FLAG   = RawFlags(2<<3)
+const POSTFIX_OP_FLAG  = RawFlags(3<<3)
+
+# The following flags are quite head-specific and may overlap with numeric flags
+
+"""
+Set when K"string" or K"cmdstring" was triple-delimited as with \"\"\" or ```
+"""
+const TRIPLE_STRING_FLAG = RawFlags(1<<8)
+
+"""
+Set when a K"string", K"cmdstring" or K"Identifier" needs raw string unescaping
+"""
+const RAW_STRING_FLAG = RawFlags(1<<9)
+
+"""
+Set for K"tuple", K"block" or K"macrocall" which are delimited by parentheses
+"""
+const PARENS_FLAG = RawFlags(1<<8)
+
+"""
+Set for various delimited constructs when they contains a trailing comma. For
+example, to distinguish `(a,b,)` vs `(a,b)`, and `f(a)` vs `f(a,)`. Kinds where
+this applies are: `tuple call dotcall macrocall vect curly braces <: >:`.
+"""
+const TRAILING_COMMA_FLAG = RawFlags(1<<9)
+
+"""
+Set for K"quote" for the short form `:x` as opposed to long form `quote x end`
+"""
+const COLON_QUOTE = RawFlags(1<<8)
+
+"""
+Set for K"toplevel" which is delimited by semicolons
+"""
+const TOPLEVEL_SEMICOLONS_FLAG = RawFlags(1<<8)
+
+"""
+Set for K"function" in short form definitions such as `f() = 1`
+"""
+const SHORT_FORM_FUNCTION_FLAG = RawFlags(1<<8)
+
+"""
+Set for K"struct" when mutable
+"""
+const MUTABLE_FLAG = RawFlags(1<<8)
+
+"""
+Set for K"module" when it's not bare (`module`, not `baremodule`)
+"""
+const BARE_MODULE_FLAG = RawFlags(1<<8)
+
+# Flags holding the dimension of an nrow or other UInt8 not held in the source
+# TODO: Given this is only used for nrow/ncat, we could actually use all the flags?
+const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
+
+function set_numeric_flags(n::Integer)
+    f = RawFlags((n << 8) & NUMERIC_FLAGS)
+    if numeric_flags(f) != n
+        error("Numeric flags unable to hold large integer $n")
+    end
+    f
+end
+
+function call_type_flags(f::RawFlags)
+    f & 0b11000
+end
+
+function numeric_flags(f::RawFlags)
+    Int((f >> 8) % UInt8)
+end
+
+flags(tok::SyntaxToken) = remove_flags(flags(tok.head), NUMERIC_FLAGS)
+
+"""
+    is_prefix_call(x)
+
+Return true for normal prefix function call syntax such as the `f` call node
+parsed from `f(x)`.
+"""
+is_prefix_call(x)     = call_type_flags(x) == PREFIX_CALL_FLAG
+
+"""
+    is_infix_op_call(x)
+
+Return true for infix operator calls such as the `+` call node parsed from
+`x + y`.
+"""
+is_infix_op_call(x)   = call_type_flags(x) == INFIX_FLAG
+
+"""
+    is_prefix_op_call(x)
+
+Return true for prefix operator calls such as the `+` call node parsed from `+x`.
+"""
+is_prefix_op_call(x)  = call_type_flags(x) == PREFIX_OP_FLAG
+
+"""
+    is_postfix_op_call(x)
+
+Return true for postfix operator calls such as the `'ᵀ` call node parsed from `x'ᵀ`.
+"""
+is_postfix_op_call(x) = call_type_flags(x) == POSTFIX_OP_FLAG
+
+"""
+    numeric_flags(x)
+
+Return the number attached to a `SyntaxHead`. This is only for kinds `K"nrow"`
+and `K"ncat"`, for now.
+"""
+numeric_flags(x) = numeric_flags(flags(x))
+
+function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
+    str = (is_error(kind(head)) ? untokenize(kind(head); unique=false) :
+           untokenize(kind(head); unique=unique))::String
+    if include_flag_suff
+        is_trivia(head)  && (str = str*"-t")
+        is_infix_op_call(head)   && (str = str*"-i")
+        is_prefix_op_call(head)  && (str = str*"-pre")
+        is_postfix_op_call(head) && (str = str*"-post")
+
+        k = kind(head)
+        # Handle numeric flags for nodes that take them
+        if k in KSet"nrow ncat typed_ncat DotsIdentifier"
+            n = numeric_flags(head)
+            n != 0 && (str = str*"-"*string(n))
+        else
+            # Handle head-specific flags that overlap with numeric flags
+            if k in KSet"string cmdstring Identifier"
+                has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"-s")
+                has_flags(head, RAW_STRING_FLAG) && (str = str*"-r")
+            elseif k in KSet"tuple block macrocall"
+                has_flags(head, PARENS_FLAG) && (str = str*"-p")
+            elseif k == K"quote"
+                has_flags(head, COLON_QUOTE) && (str = str*"-:")
+            elseif k == K"toplevel"
+                has_flags(head, TOPLEVEL_SEMICOLONS_FLAG) && (str = str*"-;")
+            elseif k == K"function"
+                has_flags(head, SHORT_FORM_FUNCTION_FLAG) && (str = str*"-=")
+            elseif k == K"struct"
+                has_flags(head, MUTABLE_FLAG) && (str = str*"-mut")
+            elseif k == K"module"
+                has_flags(head, BARE_MODULE_FLAG) && (str = str*"-bare")
+            end
+            if k in KSet"tuple call dotcall macrocall vect curly braces <: >:" &&
+                    has_flags(head, TRAILING_COMMA_FLAG)
+                str *= "-,"
+            end
+        end
+    end
+    str
+end
+
+
+#-------------------------------------------------------------------------------
+# ParseStream Post-processing
+
+function validate_tokens(stream::ParseStream)
+    txtbuf = unsafe_textbuf(stream)
+    charbuf = IOBuffer()
+
+    # Process terminal nodes in the output
+    fbyte = stream.output[1].byte_span+1  # Start after sentinel
+    for i = 2:length(stream.output)
+        node = stream.output[i]
+        if !is_terminal(node) || kind(node) == K"TOMBSTONE"
+            continue
+        end
+
+        k = kind(node)
+        nbyte = fbyte + node.byte_span
+        tokrange = fbyte:nbyte-1
+        error_kind = K"None"
+
+        if k in KSet"Integer BinInt OctInt HexInt"
+            # The following shouldn't be able to error...
+            # parse_int_literal
+            # parse_uint_literal
+        elseif k == K"Float" || k == K"Float32"
+            if k == K"Float"
+                x, code = parse_float_literal(Float64, txtbuf, fbyte, nbyte)
+                # jl_strtod_c can return "underflow" even for valid cases such
+                # as `5e-324` where the source is an exact representation of
+                # `x`. So only warn when underflowing to zero.
+                underflow0 = code === :underflow && x == 0
+            else
+                x, code = parse_float_literal(Float32, txtbuf, fbyte, nbyte)
+                underflow0 = code === :underflow && x == 0
+            end
+            if code === :ok
+                # pass
+            elseif code === :overflow
+                emit_diagnostic(stream, tokrange,
+                                error="overflow in floating point literal")
+                error_kind = K"ErrorNumericOverflow"
+            elseif underflow0
+                emit_diagnostic(stream, tokrange,
+                                warning="underflow to zero in floating point literal")
+            end
+        elseif k == K"Char"
+            @assert fbyte < nbyte # Already handled in the parser
+            truncate(charbuf, 0)
+            had_error = unescape_julia_string(charbuf, txtbuf, fbyte,
+                                              nbyte, stream.diagnostics)
+            if had_error
+                error_kind = K"ErrorInvalidEscapeSequence"
+            else
+                seek(charbuf,0)
+                read(charbuf, Char)
+                if !eof(charbuf)
+                    error_kind = K"ErrorOverLongCharacter"
+                    emit_diagnostic(stream, tokrange,
+                                    error="character literal contains multiple characters")
+                end
+            end
+        elseif k == K"String" && !has_flags(node, RAW_STRING_FLAG)
+            had_error = unescape_julia_string(devnull, txtbuf, fbyte,
+                                              nbyte, stream.diagnostics)
+            if had_error
+                error_kind = K"ErrorInvalidEscapeSequence"
+            end
+        elseif is_error(k) && k != K"error"
+            # Emit messages for non-generic token errors
+            tokstr = String(txtbuf[tokrange])
+            msg = if k in KSet"ErrorInvisibleChar ErrorUnknownCharacter ErrorIdentifierStart"
+                "$(_token_error_descriptions[k]) $(repr(tokstr[1]))"
+            elseif k in KSet"ErrorInvalidUTF8 ErrorBidiFormatting"
+                "$(_token_error_descriptions[k]) $(repr(tokstr))"
+            else
+                _token_error_descriptions[k]
+            end
+            emit_diagnostic(stream, tokrange, error=msg)
+        end
+
+        if error_kind != K"None"
+            # Update the node with new error kind
+            stream.output[i] = RawGreenNode(SyntaxHead(error_kind, EMPTY_FLAGS),
+                                          node.byte_span, node.orig_kind)
+        end
+
+        fbyte = nbyte
+    end
+    sort!(stream.diagnostics, by=first_byte)
+end
+
+function peek_dotted_op_token(ps)
+    # Peek the next token, but if it is a dot, peek the next one as well
+    t = peek_token(ps)
+    isdotted = kind(t) == K"."
+    if isdotted
+        t2 = peek_token(ps, 2)
+        if preceding_whitespace(t2)
+            isdotted = false
+        elseif !is_operator(t2)
+            isdotted = false
+        elseif kind(t2) == K"." && peek(ps, 3) == K"."
+            # Treat `..` as dotted K".", unless there's another dot after
+            isdotted = false
+        else
+            t = t2
+        end
+    end
+    # A compound assignment such as `x += y` is lexed as an operator carrying
+    # the special `PREC_COMPOUND_ASSIGN` precedence (immediately followed by an
+    # `=` token). Operators which don't form a compound assignment - eg `⋅`,
+    # `√`, or suffixed operators like `+₁` - are not marked this way, so `x ⋅= y`
+    # is left to be parsed as the identifier `⋅` followed by `=`, matching the
+    # reference parser.
+    isassign = is_prec_compound_assign(t)
+    return (isdotted, isassign, t)
+end
+
+function bump_dotted(ps, isdot, t, flags=EMPTY_FLAGS; emit_dot_node=false, remap_kind=K"None")
+    mark = position(ps)
+    if isdot
+        dotmark = mark
+        bump(ps, TRIVIA_FLAG)
+        if kind(t) == K"."
+            # .. => DotsIdentifier-2
+            bump(ps, TRIVIA_FLAG)
+            pos = emit(ps, dotmark, K"DotsIdentifier", set_numeric_flags(2))
+            nt = peek_token(ps)
+            # `..` directly followed by another operator (eg `a..+b`) is
+            # ambiguous and requires a space (the lexer used to glue these into
+            # an invalid operator token). The quote/interpolation/char operators
+            # `: :: $ '` begin an operand rather than continuing the operator,
+            # so `a..:b`, `a..$b` and `'a'..'b'` are allowed.
+            if is_operator(nt) && !preceding_whitespace(nt) && !(kind(nt) in KSet": :: $ '")
+                # a..+b  => (call-i a .. (error-t) (call + b))
+                bump_invisible(ps, K"error", TRIVIA_FLAG,
+                    error="`..` here is interpreted as a binary operator. A space is required if followed by another operator.")
+            end
+            return pos
+        end
+    end
+    min_supported_wrapping_arithmetic_op(ps, mark, t)
+    pos = bump(ps, flags, remap_kind=remap_kind)
+    isdot && emit_dot_node && (pos = emit(ps, dotmark, K"."))
+    return pos
+end

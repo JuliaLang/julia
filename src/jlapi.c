@@ -26,7 +26,21 @@ extern "C" {
 #include <fenv.h>
 #endif
 
-static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir);
+#if defined(__MINGW32__) && !defined(_UCRT) && FE_TOWARDZERO != 0xc00
+// Julia currently links msvcrt-os, whose MinGW fenv ABI uses the x87 control
+// word values. Newer MinGW headers use the UCRT/MSVC-compatible values.
+#pragma message "Using MSVCRT-compatible MinGW fenv ABI with UCRT/MSVC fenv.h rounding constants; redefining FE_* rounding constants."
+#undef FE_TONEAREST
+#undef FE_UPWARD
+#undef FE_DOWNWARD
+#undef FE_TOWARDZERO
+#define FE_TONEAREST 0x000
+#define FE_UPWARD 0x800
+#define FE_DOWNWARD 0x400
+#define FE_TOWARDZERO 0xc00
+#endif
+
+static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir) JL_NOTSAFEPOINT;
 
 /**
  * @brief Check if Julia is already initialized.
@@ -444,7 +458,7 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_value_t *f, jl_value_t *a,
 }
 
 /**
- * @brief Call a Julia function with three arguments.
+ * @brief Call a Julia function with four arguments.
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
@@ -547,7 +561,7 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT
 }
 
 /**
- * @brief Check if Julia has been build with assertions enabled.
+ * @brief Check if Julia has been built with assertions enabled.
  *
  * @return Returns 1 if assertions are enabled, 0 otherwise.
  */
@@ -1028,7 +1042,7 @@ static NOINLINE int true_main(int argc, char *argv[])
     return 0;
 }
 
-static void lock_low32(void)
+static void lock_low32(void) JL_NOTSAFEPOINT
 {
 #if defined(_OS_WINDOWS_) && defined(_P64) && defined(JL_DEBUG_BUILD)
     // Prevent usage of the 32-bit address space on Win64, to catch pointer cast errors.
@@ -1066,11 +1080,8 @@ static void lock_low32(void)
     return;
 }
 
-// Actual definition in `ast.c`
-void jl_lisp_prompt(void);
-
 #ifdef _OS_LINUX_
-static void rr_detach_teleport(void) {
+static void rr_detach_teleport(void) JL_NOTSAFEPOINT {
 #define RR_CALL_BASE 1000
 #define SYS_rrcall_detach_teleport (RR_CALL_BASE + 9)
     int err = syscall(SYS_rrcall_detach_teleport, 0, 0, 0, 0, 0, 0);
@@ -1087,7 +1098,7 @@ static void rr_detach_teleport(void) {
  * @param argv Array of command-line arguments.
  * @return An integer indicating the exit status of the REPL session.
  */
-JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
+JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_NOTSAFEPOINT_ENTER
 {
 #ifdef USE_TRACY
     if (getenv("JULIA_WAIT_FOR_TRACY"))
@@ -1143,7 +1154,7 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 // create an absolute-path copy of the input path format string
 // formed as `joinpath(replace(pwd(), "%" => "%%"), in)`
 // unless `in` starts with `%`
-static const char *absformat(const char *in)
+static const char *absformat(const char *in) JL_NOTSAFEPOINT
 {
     if (in[0] == '%' || jl_isabspath(in))
         return in;
@@ -1170,24 +1181,23 @@ static const char *absformat(const char *in)
     return out;
 }
 
-static char *absrealpath(const char *in, int nprefix)
+static char *absrealpath(const char *in, int nprefix) JL_NOTSAFEPOINT
 { // compute an absolute realpath location, so that chdir doesn't change the file reference
   // ignores (copies directly over) nprefix characters at the start of abspath
-#ifndef _OS_WINDOWS_
-    char *out = realpath(in + nprefix, NULL);
-    if (out) {
-        if (nprefix > 0) {
-            size_t sz = strlen(out) + 1;
-            char *cpy = (char*)malloc_s(sz + nprefix);
-            memcpy(cpy, in, nprefix);
-            memcpy(cpy + nprefix, out, sz);
-            free(out);
-            out = cpy;
-        }
+    char *out;
+    uv_fs_t req;
+    int realpath_ret = uv_fs_realpath(NULL, &req, in + nprefix, NULL);
+    if (realpath_ret >= 0) {
+        size_t sz = strlen((char*)(req.ptr)) + 1;
+        out = (char*)malloc_s(sz + nprefix);
+        memcpy(out, in, nprefix);
+        memcpy(out + nprefix, req.ptr, sz);
+        uv_fs_req_cleanup(&req);
     }
     else {
+        uv_fs_req_cleanup(&req);
         size_t sz = strlen(in + nprefix) + 1;
-        if (in[nprefix] == PATHSEPSTRING[0]) {
+        if (jl_isabspath(in + nprefix)) {
             out = (char*)malloc_s(sz + nprefix);
             memcpy(out, in, sz + nprefix);
         }
@@ -1205,27 +1215,6 @@ static char *absrealpath(const char *in, int nprefix)
             free(path);
         }
     }
-#else
-    // GetFullPathName intentionally errors if given an empty string so manually insert `.` to invoke cwd
-    char *in2 = (char*)malloc_s(JL_PATH_MAX);
-    if (strlen(in) - nprefix == 0) {
-        memcpy(in2, in, nprefix);
-        in2[nprefix] = '.';
-        in2[nprefix+1] = '\0';
-        in = in2;
-    }
-    DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
-    if (n <= 0) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    char *out = (char*)malloc_s(n + nprefix);
-    DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
-    if (n != m + 1) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    memcpy(out, in, nprefix);
-    free(in2);
-#endif
     return out;
 }
 

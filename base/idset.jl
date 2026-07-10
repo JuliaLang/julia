@@ -52,7 +52,7 @@ function push!(s::IdSet, @nospecialize(x))
     else
         if s.max < length(s.list)
             idx = s.max
-            @assert !isassigned(s.list, idx + 1)
+            @assert !isassigned(s.list, idx + 1) "bucket is already occupied"
             s.list[idx + 1] = x
             s.max = idx + 1
         else
@@ -61,7 +61,7 @@ function push!(s::IdSet, @nospecialize(x))
             idx = newidx[]
             s.max = idx < 0 ? -idx : idx + 1
         end
-        @assert s.list[s.max] === x
+        @assert s.list[s.max] === x "unexpected object in bucket"
         setfield!(s, :idxs, ccall(:jl_idset_put_idx, Any, (Any, Any, Int), s.list, s.idxs, idx))
         s.count += 1
     end

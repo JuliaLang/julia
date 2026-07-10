@@ -621,7 +621,7 @@ end
                 end
             end
         end
-        @testset begin
+        @testset "trig d/pi functions exactness" begin
             # If the machine supports fma (fused multiply add), we require exact equality.
             # Otherwise, we only require approximate equality.
             if has_fma[T]
@@ -644,6 +644,15 @@ end
                 T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
                 T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
             end
+        end
+
+        @testset "tanpi for Complex argument" begin
+            x = Complex{T}(12/11, 2/7)
+            @test tanpi(x) ≈ sinpi(x) / cospi(x)
+            # issue #57450
+            y = Complex{T}(0.5, 1000)
+            @test isfinite(tanpi(y))
+            @test tanpi(y) ≈ im
         end
     end
     scdm = sincosd(missing)
@@ -750,6 +759,14 @@ end
     @testset "accuracy of `cosc` around the origin" begin
         for t in (Float32, Float64)
             @test ulp_error_maximum(cosc, range(start = t(-1), stop = t(1), length = 5000)) < 4
+        end
+    end
+end
+
+@testset "accuracy of `sinpi`, `cospi` around the origin" begin
+    for f in (sinpi, cospi)
+        for t in (Float32, Float64)
+            @test ulp_error_maximum(f, range(start = t(-0.25), stop = t(0.25), length = 5000)) < (has_fma[t] ? 1.0 : 1.5)
         end
     end
 end
@@ -967,6 +984,8 @@ end
     f19872b(x) = x ^ (-1024)
     @test 0 < f19872b(2.0) < 1e-300
     @test issubnormal(2.0 ^ (-1024))
+    @test !issubnormal(big(2.0 ^ (-1024)))
+    @test !issubnormal(nextfloat(BigFloat(0)))
     @test issubnormal(f19872b(2.0))
     @test !issubnormal(f19872b(0.0))
     @test f19872a(2.0) === 32.0
@@ -1537,7 +1556,7 @@ end
             @test func(-zero(T), zero(T), -zero(T)) === -zero(T)
             for _ in 1:2^18
                 a, b, c = reinterpret.(T, rand(Base.uinttype(T), 3))
-                @test isequal(func(a, b, c), fma(a, b, c)) || (a,b,c)
+                @test isequal(func(a, b, c), fma(a, b, c)) context=(a,b,c)
             end
         end
         @test func(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
@@ -1559,9 +1578,9 @@ end
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
                 got, expected = T(x)^T(y), T(big(x)^T(y))
                 if isnan(expected)
-                    @test isnan_type(T, got) || T.((x,y))
+                    @test isnan_type(T, got) context=T.((x,y))
                 else
-                    @test got == expected || T.((x,y))
+                    @test got == expected context=T.((x,y))
                 end
             end
         end
@@ -1571,13 +1590,13 @@ end
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
                 if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) context=(x,y)
                 elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) context=(x,y)
                 elseif issubnormal(got)
-                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) context=(x,y)
                 else
-                    @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) context=(x,y)
                 end
             end
         end
@@ -1586,7 +1605,7 @@ end
             x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
+                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) context=(x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)

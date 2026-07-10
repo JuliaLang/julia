@@ -35,18 +35,22 @@ times, though only exactly one result will be returned.
 """
 mutable struct LazyString <: AbstractString
     const parts::Tuple
+    const compact::Bool # compact & limited output
     # Created on first access
     @atomic str::Union{String,Nothing}
-    global _LazyString(parts, str) = new(parts, str)
-    LazyString(args...) = new(args, nothing)
+    global _LazyString(parts, str) = new(parts, false, str)
+    LazyString(args...; compact::Bool=false) = new(args, compact, nothing)
 end
 
 """
     lazy"str"
+    lazy"str"c
 
 Create a [`LazyString`](@ref) using regular string interpolation syntax.
 Note that interpolations are *evaluated* at LazyString construction time,
-but *printing* is delayed until the first access to the string.
+but *printing* is delayed until the first access to the string.  The `lazy"str"c`
+variant uses an [`IOContext`](@ref) with `:compact=>true, :limit=>true` when
+printing, in order to keep the output string compact.
 
 See [`LazyString`](@ref) documentation for the safety properties for concurrent programs.
 
@@ -62,8 +66,13 @@ LazyString
 
 !!! compat "Julia 1.8"
     `lazy"str"` requires Julia 1.8 or later.
+
+!!! compat "Julia 1.14"
+    `lazy"str"c` requires Julia 1.14 or later.
 """
-macro lazy_str(text)
+macro lazy_str(text, flags...)
+    compact = flags == ("c",)
+    isempty(flags) || compact || throw(ArgumentError("unknown lazy-string flag: $flags"))
     parts = Any[]
     lastidx = idx = 1
     while (idx = findnext('$', text, idx)) !== nothing
@@ -74,15 +83,17 @@ macro lazy_str(text)
         lastidx = idx
     end
     lastidx <= lastindex(text) && push!(parts, text[lastidx:end])
-    :(LazyString($(parts...)))
+    :(LazyString($(parts...); compact=$compact))
 end
 
 function String(l::LazyString)
     old = @atomic :acquire l.str
     old === nothing || return old
     str = sprint() do io
-        for p in l.parts
-            print(io, p)
+        if l.compact
+            print(IOContext(io, :compact=>true, :limit=>true), l.parts...)
+        else
+            print(io, l.parts...)
         end
     end
     old, ok = @atomicreplace :acquire_release :acquire l.str nothing => str

@@ -33,6 +33,7 @@
 
 using namespace llvm;
 
+namespace {
 struct GCInvariantVerifier : public InstVisitor<GCInvariantVerifier> {
     bool Broken = false;
     bool Strong;
@@ -60,6 +61,7 @@ public:
 
     void checkStoreInst(Type *VTy, unsigned AS, Value &SI);
 };
+}  // anonymous namespace
 
 void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
     unsigned FromAS = I.getSrcTy()->getPointerAddressSpace();
@@ -186,7 +188,7 @@ void GCInvariantVerifier::visitIntToPtrInst(IntToPtrInst &IPI) {
 
 void GCInvariantVerifier::visitPtrToIntInst(PtrToIntInst &PII) {
     Check(!isSpecialAS(PII.getPointerAddressSpace()),
-          "Illegal inttoptr", &PII);
+          "Illegal ptrtoint", &PII);
 }
 
 PreservedAnalyses GCInvariantVerifierPass::run(Function &F, FunctionAnalysisManager &AM) {

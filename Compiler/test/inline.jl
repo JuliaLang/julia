@@ -151,8 +151,14 @@ end
     end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
+    is_bounds_throw_invoke_target(@nospecialize(callee)) =
+        callee === Base.throw_boundserror ||
+        callee == Core.GlobalRef(Base, :throw_boundserror) ||
+        callee == Core.GlobalRef(Base, :_throw_boundserror_indices) ||
+        (callee isa Core.MethodInstance && (callee.def.def.name === :throw_boundserror ||
+                                            callee.def.def.name === :_throw_boundserror_indices))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && !(x.args[2] in (Core.GlobalRef(Base, :throw_boundserror), Base.throw_boundserror))
+        x isa Expr && x.head === :invoke && !is_bounds_throw_invoke_target(x.args[2])
     end
 end
 
@@ -265,7 +271,7 @@ function foo_apply_apply_type_svec()
 end
 @test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
 
-# The that inlining doesn't drop ambiguity errors (#30118)
+# Test that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
 c30118(::Tuple{Ref, Ref}) = nothing
 b30118(x...) = c30118(x)
@@ -631,10 +637,12 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 
 # https://github.com/JuliaLang/julia/issues/42078
 # idempotency of callsite inlining
-function getcache(mi::Core.MethodInstance)
+function getcacheci(mi::Core.MethodInstance)
     cache = Compiler.code_cache(Compiler.NativeInterpreter())
     codeinst = Compiler.get(cache, mi, nothing)
-    return isnothing(codeinst) ? nothing : codeinst
+    codeinst === nothing && return nothing
+    codeinst isa Compiler.InferenceResult && (codeinst = codeinst.ci)
+    return codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
 let
@@ -652,7 +660,7 @@ let
     end
     let # make sure to discard the inferred source
         mi = only(methods(f42078)).specializations::Core.MethodInstance
-        codeinst = getcache(mi)::Core.CodeInstance
+        codeinst = getcacheci(mi)::Core.CodeInstance
         @atomic codeinst.inferred = nothing
     end
 
@@ -763,7 +771,7 @@ end
 # Issue #42264 - crash on certain union splits
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
-    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # in inlining. For this particular case, we're relying on `iterate(::CartesianIndex)` throwing an error, such
     # that the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
@@ -819,7 +827,7 @@ end
 # test single, non-dispatchtuple callsite inlining
 
 @constprop :none @inline test_single_nondispatchtuple(@nospecialize(t)) =
-    isa(t, DataType) && t.name === Type.body.name
+    isa(t, DataType) && t.name === Core.TypeEq.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(x)
@@ -830,7 +838,7 @@ let
 end
 
 @constprop :aggressive @inline test_single_nondispatchtuple(c, @nospecialize(t)) =
-    c && isa(t, DataType) && t.name === Type.body.name
+    c && isa(t, DataType) && t.name === Core.TypeEq.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(true, x)
@@ -1731,7 +1739,7 @@ let src = code_typed1(with_unmatched_typeparam)
             break
         end
     end
-    @test isnothing(found) || (source=src, statement=found)
+    @test isnothing(found) context=(; source=src, statement=found)
 end
 
 function twice_sitofp(x::Int, y::Int)
@@ -1856,7 +1864,7 @@ let i::Int, continue_::Bool
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
     # now delete the callsite flag, and see the second inlining pass can inline the call
-    @eval Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
+    ir.stmts[i][:flag] &= ~Compiler.IR_FLAG_NOINLINE
     inlining = Compiler.InliningState(interp)
     ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
@@ -1879,22 +1887,12 @@ let i::Int, continue_::Bool
     ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="CC: INLINING", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
-    # now delete the callsite flag, and see the second inlining pass can inline the call
-    @eval Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
+    # now delete the callsite flag, and see the second inlining pass does not inline the call, since inference recorded it should not
+    ir.stmts[i][:flag] &= ~Compiler.IR_FLAG_NOINLINE
     inlining = Compiler.InliningState(interp)
     ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
-    @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
-    @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
-    lins = Compiler.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
-    @test_broken (continue_ = length(lins) == 3) # see TODO in `ir_inline_linetable!`
-    if continue_
-        def1 = lins[1].method
-        @test def1 isa Core.MethodInstance && def1.def.name === :multi_inlining2
-        def2 = lins[2].method
-        @test def2 isa Core.MethodInstance && def2.def.name === :call_func_mul_int
-        def3 = lins[3].method
-        @test def3 isa Core.MethodInstance && def3.def.name === :call_func_mul_int
-    end
+    @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) !== nothing
+    @test findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt) === nothing
 end
 
 # Test special purpose inliner for Core.ifelse
@@ -2008,7 +2006,41 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
     end
     @test Base.return_types((Int,)) do x
         make_issue47349(Val(4))((x,nothing,Int))
-    end |> only === Type{Int}
+    end |> only == Core.TypeEgal{Int}
+end
+
+# JIT preparation should keep resolved invoke edges so inlined Type-argument
+# calls do not allocate.
+struct FastReadBuffer62001
+    data::Vector{UInt8}
+    position::Base.RefValue{Int}
+end
+FastReadBuffer62001() = FastReadBuffer62001(UInt8[0x01, 0x02], Ref(0))
+@inline function read_byte62001(buf::FastReadBuffer62001, ::Type{UInt8})
+    nextpos = buf.position[] + 1
+    nextpos > length(buf.data) && throw(EOFError())
+    buf.position[] = nextpos
+    @inbounds return buf.data[nextpos]
+end
+let buf = FastReadBuffer62001()
+    let src = code_typed1(Base.allocated,
+            Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}})
+        @test count(src.code) do @nospecialize x
+            Meta.isexpr(x, :invoke) &&
+            (x.args[1]::Core.CodeInstance).def.specTypes ==
+                Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}}
+        end == 1
+    end
+    for _ in 1:5
+        buf.position[] = 0
+        read_byte62001(buf, UInt8)
+    end
+    for _ in 1:5
+        buf.position[] = 0
+        Base.allocated(read_byte62001, buf, UInt8)
+    end
+    buf.position[] = 0
+    @test Base.allocated(read_byte62001, buf, UInt8) == 0
 end
 
 # Test that irinterp can make use of constant results even if they're big
@@ -2317,13 +2349,15 @@ end
 path = Ref{Symbol}(:unknown)
 function f59018_generator(x)
     if @generated
-        if x isa DataType && x.name === Type.body.name
+        # a runtime-dispatched type-valued argument reaches the generator as the
+        # egality kind `Core.TypeEgal{T}`; by-type expansion uses `Type{T}`
+        if x isa Core.TypeEq || x isa Core.TypeEgal
             path[] = :generator
-            return Core.sizeof(x.parameters[1])
+            return Core.sizeof(Base.type_parameter(x))
         end
     else
         path[] = :fallback
-        return Core.sizeof(x.parameters[1])
+        return Core.sizeof(x isa Union{Core.TypeEq, Core.TypeEgal} ? Base.type_parameter(x) : x.parameters[1])
     end
 end
 f59018() = f59018_generator(Base.inferencebarrier(Int64))
@@ -2351,6 +2385,33 @@ end
 let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, Int, Symbol))
     @test count(isinvoke(:merge_fallback), src.code) == 0
     @test count(iscall((src, Base.merge_fallback)), src.code) == 0
+end
+
+# @nospecialize annotation on uunamed arguments
+# https://github.com/JuliaLang/julia/issues/44428
+@noinline _issue44428_1(@nospecialize _::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_2(@nospecialize ::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_3(@nospecialize _) = println(Base.inferencebarrier(0))
+function issue44428(x)
+    _issue44428_1(x)
+    _issue44428_2(x)
+    _issue44428_3(x)
+end
+let src = code_typed1(issue44428, (Any,))
+    @test count(isinvoke(:_issue44428_1), src.code) == 1
+    @test count(isinvoke(:_issue44428_2), src.code) == 1
+    @test count(isinvoke(:_issue44428_3), src.code) == 1
+    @test count(x->Meta.isexpr(x,:call), src.code) == 0
+end
+
+# issue #61552
+let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
+        Tuple{typeof(ndims), Matrix{Float64}}, Core.svec())
+    codeinst = getcacheci(mi)::Core.CodeInstance
+    @test Compiler.use_const_api(codeinst)
+    @test codeinst.inferred === nothing
+    interp = Compiler.NativeInterpreter()
+    @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
 end
 
 end # module inline_tests

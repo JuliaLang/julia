@@ -2,7 +2,7 @@ using Test
 using Compiler: code_cache
 using Base: inferencebarrier
 using CompilerDevTools
-using CompilerDevTools: lookup_method_instance, SplitCacheInterp
+using CompilerDevTools: SplitCacheInterp, lookup_method_instance
 
 @testset "CompilerDevTools" begin
   do_work(x, y) = x + y

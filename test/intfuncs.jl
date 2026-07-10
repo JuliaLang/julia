@@ -57,14 +57,15 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
             @test_throws OverflowError gcd(typemin(T), T(0))
             @test_throws OverflowError gcd(T(0), typemin(T))
         elseif T != BigInt
+            negtmax = one(T)
             # For Unsigned Integer types, -typemax(T) == 1.
-            @test gcd(-typemax(T), T(1)) === T(1)
-            @test gcd(T(1), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), T(0)) === T(1)
-            @test gcd(T(0), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), -typemax(T)) === T(1)
-            @test gcd(-typemax(T), typemax(T)) === T(1)
-            @test gcd(typemax(T), -typemax(T)) === T(1)
+            @test gcd(negtmax, T(1)) === T(1)
+            @test gcd(T(1), negtmax) === T(1)
+            @test gcd(negtmax, T(0)) === T(1)
+            @test gcd(T(0), negtmax) === T(1)
+            @test gcd(negtmax, negtmax) === T(1)
+            @test gcd(negtmax, typemax(T)) === T(1)
+            @test gcd(typemax(T), negtmax) === T(1)
 
             # For Unsigned Integer types, typemin(T) == 0.
             @test gcd(typemin(T), T(1)) === T(1)
@@ -131,14 +132,15 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
                 @test_throws OverflowError lcm(typemin(T), typemin(T)+T(1)) # lcm(n, n+1) = n*(n+1).
                 @test_throws OverflowError lcm(typemin(T), typemin(T))
             else
+                negtmax = one(T)
                 # For Unsigned Integer types, -typemax(T) == 1.
-                @test lcm(-typemax(T), T(1)) === T(1)
-                @test lcm(T(1), -typemax(T)) === T(1)
-                @test lcm(-typemax(T), T(0)) === T(0)
-                @test lcm(T(0), -typemax(T)) === T(0)
-                @test lcm(-typemax(T), -typemax(T)) === T(1)
-                @test lcm(-typemax(T), typemax(T)) === typemax(T)
-                @test lcm(typemax(T), -typemax(T)) === typemax(T)
+                @test lcm(negtmax, T(1)) === T(1)
+                @test lcm(T(1), negtmax) === T(1)
+                @test lcm(negtmax, T(0)) === T(0)
+                @test lcm(T(0), negtmax) === T(0)
+                @test lcm(negtmax, negtmax) === T(1)
+                @test lcm(negtmax, typemax(T)) === typemax(T)
+                @test lcm(typemax(T), negtmax) === typemax(T)
 
                 # For Unsigned Integer types, typemin(T) == 0.
                 @test lcm(typemin(T), T(1)) === lcm(T(0), T(1)) === T(0)
@@ -217,6 +219,19 @@ end
     d, u, v = gcdx(x, y)
     @test x*u + y*v == d
 
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        @test_throws DomainError gcdx(typemin(T), typemin(T))
+        @test_throws DomainError gcdx(typemin(T), T(0))
+        @test_throws DomainError gcdx(T(0), typemin(T))
+        d, u, v = gcdx(typemin(T), T(-1))
+        @test d == T(1)
+        @test typemin(T) * u + T(-1) * v == T(1)
+        @test gcdx(T(-1), typemin(T)) == (d, v, u)
+        d, u, v = gcdx(typemin(T), T(1))
+        @test d == T(1)
+        @test typemin(T) * u + T(1) * v == T(1)
+        @test gcdx(T(1), typemin(T)) == (d, v, u)
+    end
 end
 
 # issue #58025
@@ -244,7 +259,7 @@ end
 
     @test gcdx(Int16(-32768), Int8(-128)) === (Int16(128), Int16(0), Int16(-1))
     @test gcdx(Int8(-128), UInt16(256)) === (0x0080, 0xffff, 0x0000)
-    @test_broken gcd(Int8(-128), UInt16(256)) === 0x0080
+    @test gcd(Int8(-128), UInt16(256)) === 0x0080
 end
 
 @testset "gcd/lcm/gcdx for custom types" begin
@@ -294,10 +309,20 @@ end
     # Verify issue described in PR 58010 is fixed
     @test invmod(UInt8(3), UInt16(50000)) === 0x411b
 
+    @test invmod(0x00000001, Int8(-128)) === Int32(-127)
+    @test invmod(0xffffffff, Int8(-38)) === Int32(-15)
+    @test invmod(Int8(-1), 0xffffffff) === 0xfffffffe
+    @test invmod(Int32(-1), typemin(Int64)) === Int64(-1)
+    @test invmod(0x3e81, Int16(-5716)) === Int16(-2407)
+
     for T in (Int8, UInt8)
         for x in typemin(T):typemax(T)
             for m in typemin(T):typemax(T)
-                if m != 0 && try gcdx(x, m)[1] == 1 catch _ true end
+                if !(
+                    iszero(m) ||
+                    iszero(mod(x, m)) && !isone(abs(m)) ||
+                    !isone(gcd(x, m))
+                )
                     y = invmod(x, m)
                     @test mod(widemul(y, x), m) == mod(1, m)
                     @test div(y, m) == 0
@@ -362,6 +387,10 @@ end
 
     @test powermod(-3, 0x80, 7) === 2
     @test powermod(0x03, 0x80, 0x07) === 0x02
+
+    @test powermod(511, 1, 0x00000021) === 0x00000010
+    @test powermod(Int8(-1), 0xff, Int8(33)) === Int8(32)
+    @test powermod(0, 10, -5) === 0
 end
 
 @testset "nextpow/prevpow" begin

@@ -302,7 +302,7 @@ end
 # https://github.com/JuliaArrays/StaticArrays.jl/issues/1155
 @test Base.return_types() do
     typeintersect(Int, Integer)
-end |> only === Type{Int}
+end |> only === Core.TypeEgal{Int}
 
 if bc_opt == bc_default
     # Array/Memory escape analysis
@@ -318,8 +318,7 @@ if bc_opt == bc_default
     for T in [Memory] # This requires changing the pointer_from_objref to something llvm sees through
         for ET in [Int, Float32, Union{Int, Float64}]
             no_allocate(T{ET}) #compile
-            # allocations aren't removed for Union eltypes which they theoretically could be eventually
-            test_alloc(T{ET}, broken=(ET==Union{Int, Float64}))
+            test_alloc(T{ET})
         end
     end
     function f() # this was causing a bug on an in progress version of #55913.

@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# NB: This file is `Core.eval`-uated into the (pre-existing) module Filesystem
+
+import Base: StringVector, utf8units
+
 export
     abspath,
     basename,
@@ -20,40 +24,126 @@ export
 
 if Sys.isunix()
     const path_separator    = "/"
-    const path_separator_re = r"/+"sa
-    const path_directory_re = r"(?:^|/)\.{0,2}$"sa
-    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"sa
-    const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"sa
+    @inline isseparator(c::Char) = c === '/'
+    @inline isseparator(c::UInt8) = c === UInt8('/')
 
     splitdrive(path::String) = ("",path)
 elseif Sys.iswindows()
     const path_separator    = "\\"
-    const path_separator_re = r"[/\\]+"sa
-    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"sa
-    const path_directory_re = r"(?:^|[/\\])\.{0,2}$"sa
-    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"sa
-    const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"sa
+    @inline isseparator(c::Char) = c === '/' || c === '\\'
+    @inline isseparator(c::UInt8) = c === UInt8('/') || c === UInt8('\\')
 
-    const splitdrive_re = let
-        # Slash in either direction.
-        S = raw"[\\/]"
-        # Not a slash in either direction.
-        N = raw"[^\\/]"
-        # Drive letter, e.g. `C:`
-        drive = "$(N):"
-        # UNC path, e.g. `\\server\share`
-        unc = "$(S)$(S)$(N)+$(S)$(N)+"
-        # Long drive letter, e.g. `\\?\C:`
-        long_drive = "$(S)$(S)\\?$(S)$(drive)"
-        # Long UNC path, e.g. `\\?\UNC\server\share`
-        long_unc = "$(S)$(S)\\?$(S)UNC$(S)$(N)+$(S)$(N)+"
-        # Need to match the long patterns first so they get priority.
-        Regex("^($long_unc|$long_drive|$unc|$drive|)(.*)\$", "sa")
+    @inline isdriveletter(c::Char) = isascii(c) && isdriveletter(UInt8(c))
+    @inline function isdriveletter(c::UInt8)
+        UInt8('A') <= c <= UInt8('Z') ||
+        UInt8('a') <= c <= UInt8('z')
     end
 
-    function splitdrive(path::String)
-        m = match(splitdrive_re, path)::AbstractMatch
-        String(something(m.captures[1])), String(something(m.captures[2]))
+    function _split_longunc(s::String)::Tuple{String, String}
+        # Long UNC path, e.g. `\\?\UNC\server\share`
+        # Based on previous implementation matching with regex
+        # S = raw"[\\/]"; N = raw"[^\\/]";
+        # r"^$(S)$(S)\?$(S)UNC$(S)$(N)+$(S)$(N)+"sa
+
+        if (ncodeunits(s) >= 11 &&
+            isseparator(codeunit(s, 1)) &&
+            isseparator(codeunit(s, 2)) &&
+            codeunit(s, 3) === UInt8('?') &&
+            isseparator(codeunit(s, 4)) &&
+            codeunit(s, 5) === UInt8('U') &&
+            codeunit(s, 6) === UInt8('N') &&
+            codeunit(s, 7) === UInt8('C') &&
+            isseparator(codeunit(s, 8))
+        )
+            # Ensure we have [sequence of non-separator] - single separator - [sequence of non-separator].
+            # Since the prefix raw"\\?\UNC\" is always 8 codeunits, we start at index 9.
+            i = findnext(isseparator, s, 9)
+            if (!isnothing(i) &&
+                i >= 10 && # implies !isseparator(s[9])
+                ncodeunits(s) > i && # Need something after the separator
+                !isseparator(codeunit(s, i+1)) # Consecutive separators does not count
+            )
+                # Stop just before next separator if it exists,
+                # otherwise the whole string is a drive
+                j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
+                return s[1:prevind(s, j)], s[j:end]
+            end
+        end
+        return "", s
+    end
+
+    function _split_longdriveletter(s::String)::Tuple{String, String}
+        # Long drive letter, e.g. `\\?\C:`
+        # Based on implementation matching with regex
+        # S = raw"[\\/]"; N = raw"[^\\/]"; drive = "$(N):";
+        # r"$(S)$(S)\?$(S)$(drive)"sa
+        if (ncodeunits(s) >= 6 &&
+            isseparator(codeunit(s, 1)) &&
+            isseparator(codeunit(s, 2)) &&
+            codeunit(s, 3) === UInt8('?') &&
+            isseparator(codeunit(s, 4)) &&
+            !isseparator(codeunit(s, 5)) && # Any ascii char except separators passes as the drive letter
+            codeunit(s, 6) == UInt8(':') # This effectively limits codeunit(s, 5) to ascii
+        )
+            return s[1:6], s[nextind(s, 6):end]
+        end
+        return "", s
+    end
+
+    function _split_uncpath(s::String)::Tuple{String, String}
+        # UNC path, e.g. `\\server\share`
+        # Based on previous implementation matching with regex
+        # S = raw"[\\/]"; N = raw"[^\\/]";
+        # r"$(S)$(S)$(N)+$(S)$(N)+"sa
+        if (ncodeunits(s) >= 5 && # Not shorter than `\\a\b`
+            isseparator(codeunit(s, 1)) &&
+            isseparator(codeunit(s, 2))
+        )
+            # Ensure we have [sequence of non-separator] - single separator - [sequence of non-separator].
+            # Since the prefix raw"\\" is always 2 codeunits, we start at index 3.
+            i = findnext(isseparator, s, 3)
+            if (!isnothing(i) &&
+                i >= 4 && # implies !isseparator(s[3])
+                ncodeunits(s) > i && # Need something after the separator
+                !isseparator(codeunit(s, i+1)) # Consecutive separators does not count
+            )
+                # Stop just before next separator if it exists,
+                # otherwise the whole string is a drive
+                j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
+                return s[1:prevind(s, j)], s[j:end]
+            end
+        end
+        return "", s
+    end
+
+    function splitdrive(path::String)::Tuple{String, String}
+        if !isempty(path)
+            # Fast return if path does not contain a drive
+            if !isseparator(codeunit(path, 1)) && (codeunit(path, 1) < 0x80)
+                # Drive letter, e.g. `C:`
+                # Any ascii char except separators passes as the drive letter
+                colonind = nextind(path, 1)
+                if checkbounds(Bool, path, colonind) && path[colonind] === ':'
+                    return path[1:colonind], path[colonind+1:end]
+                end
+            elseif ncodeunits(path) >= 2 && isseparator(codeunit(path, 2))
+                # All other drive types must start with two separators
+
+                # Long UNC path, e.g. `\\?\UNC\server\share`
+                drive, rest = _split_longunc(path)
+                !isempty(drive) && return drive, rest
+
+                # Long drive letter, e.g. `\\?\C:`
+                drive, rest = _split_longdriveletter(path)
+                !isempty(drive) && return drive, rest
+
+                # UNC path, e.g. `\\server\share`
+                drive, rest = _split_uncpath(path)
+                !isempty(drive) && return drive, rest
+            end
+        end
+
+        return "", path
     end
 else
     error("path primitives for this OS need to be defined")
@@ -68,6 +158,10 @@ first component is always the empty string.
 """
 splitdrive(path::AbstractString)
 
+# Average buffer size including null terminator for several filesystem operations.
+# On Windows we use the MAX_PATH = 260 value on Win32.
+const AVG_PATH = Sys.iswindows() ? 260 : 512
+
 """
     homedir()::String
 
@@ -78,11 +172,18 @@ Return the current user's home directory.
     (for example on how to specify the home directory via environment variables), see the
     [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
 
+    homedir(username::AbstractString)::Union{String,Nothing}
+
+Return the home directory for the given `username`, or `nothing` if the user does not exist.
+On Unix, this performs a lookup via `getpwnam_r`. On Windows, the user's SID is resolved and
+the profile path is read from the registry; if that fails, the profile directory is inferred
+from the current user's home directory.
+
 See also [`Sys.username`](@ref).
 """
 function homedir()
     buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
-    sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
+    sz = Base.RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
@@ -96,11 +197,29 @@ function homedir()
     end
 end
 
+function isabspath(path::String)
+    isempty(path) && return false
+    # Paths starting with "/" are considered absolute also on windows
+    # This captures e.g. UNC paths, but does not guarantee a valid path.
+    # Also note that isabspath(x) does not imply !isempty(splitdrive(x)[1])
+    isseparator(codeunit(path, 1) ) && return true
 
-if Sys.iswindows()
-    isabspath(path::AbstractString) = occursin(path_absolute_re, path)
-else
-    isabspath(path::AbstractString) = startswith(path, '/')
+    @static if Sys.iswindows()
+        # the letter before : in e.g. "C:\" must be a valid drive letter.
+        # This differs from `splitdrive`, where any non-separator single codeunit char is
+        # accepted.
+        firstsep = findfirst(isseparator, codeunits(path))
+        if (!isnothing(firstsep) &&
+            firstsep >= 3 &&
+            codeunit(path, firstsep-1) == UInt(':')
+        )
+            for b in codeunits(path)[1:firstsep-2]
+                !isdriveletter(b) && return false
+            end
+            return true
+        end
+    end
+    return false
 end
 
 """
@@ -133,7 +252,12 @@ julia> isdirpath("/home/")
 true
 ```
 """
-isdirpath(path::String) = occursin(path_directory_re, splitdrive(path)[2])
+function isdirpath(path::String)::Bool
+    # Reimplements occursin(r"(?:^|/)\.{0,2}$"sa, splitdrive(path)[2])
+
+    _, after_last_separator = _splitdir_nodrive("", splitdrive(path)[2])
+    return after_last_separator in ("", ".", "..")
+end
 
 """
     splitdir(path::AbstractString) -> (dir::AbstractString, file::AbstractString)
@@ -153,14 +277,15 @@ end
 
 # Common splitdir functionality without splitdrive, needed for splitpath.
 _splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
-function _splitdir_nodrive(a::String, b::String)
-    m = match(path_dir_splitter,b)
-    m === nothing && return (a,b)
-    cs = m.captures
-    getcapture(cs, i) = cs[i]::AbstractString
-    c1, c2, c3 = getcapture(cs, 1), getcapture(cs, 2), getcapture(cs, 3)
-    a = string(a, isempty(c1) ? c2[1] : c1)
-    a, String(c3)
+function _splitdir_nodrive(drive::String, path::String)::Tuple{String, String}
+    lastsepind = findlast(isseparator, path)
+
+    isnothing(lastsepind) && return drive, path
+
+    dir = path[1:something(findprev(!isseparator, path, lastsepind), 1)]
+    tail = path[nextind(path, lastsepind):end]
+
+    return drive * dir, tail
 end
 
 """
@@ -223,11 +348,23 @@ julia> splitext("/home/my.user/example")
 ("/home/my.user/example", "")
 ```
 """
-function splitext(path::String)
-    a, b = splitdrive(path)
-    m = match(path_ext_splitter, b)
-    m === nothing && return (path,"")
-    (a*something(m.captures[1])), String(something(m.captures[2]))
+function splitext(path::String)::Tuple{String, String}
+    drive, p = splitdrive(path)
+    lastdot = findlast('.', p)
+    if !isnothing(lastdot)
+        # No separator after the last dot
+        if isnothing(findnext(isseparator, p, lastdot))
+            # No separator just before the last dot
+            prev = prevind(p, lastdot)
+            if checkbounds(Bool, p, prev)
+                if !isseparator(p[prev])
+                    return drive * p[1:prev], p[lastdot:end]
+                end
+            end
+        end
+    end
+
+    return (path, "")
 end
 
 # NOTE: deprecated in 1.4
@@ -287,7 +424,7 @@ function joinpath(paths::Union{Tuple, AbstractVector})::String
         assertstring(paths[i])
         p_drive, p_path = splitdrive(paths[i])
 
-        if startswith(p_path, ('\\', '/'))
+        if !isempty(p_path) && isseparator(first(p_path))
             # second path is absolute
             if !isempty(p_drive) || !isempty(result_drive)
                 result_drive = p_drive
@@ -304,7 +441,7 @@ function joinpath(paths::Union{Tuple, AbstractVector})::String
         end
 
         # second path is relative to the first
-        if !isempty(result_path) && result_path[end] ∉ ('\\', '/')
+        if !isempty(result_path) && !isseparator(result_path[end])
             result_path *= "\\"
         end
 
@@ -312,7 +449,11 @@ function joinpath(paths::Union{Tuple, AbstractVector})::String
     end
 
     # add separator between UNC and non-absolute path
-    if !isempty(p_path) && result_path[1] ∉ ('\\', '/') && !isempty(result_drive) && result_drive[end] != ':'
+    if (!isempty(p_path) &&
+        !isseparator(result_path[1]) &&
+        !isempty(result_drive) &&
+        result_drive[end] != ':'
+    )
         return result_drive * "\\" * result_path
     end
 
@@ -372,6 +513,30 @@ julia> joinpath(["/home/myuser", "example.jl"])
 """
 joinpath
 
+function _split_at_separators(path::AbstractString; keepempty = true)
+    # Equivalent to Base.split(path, r"/+"sa; keepempty) (r"[\\/]+"sa on windows)
+    # Since there is no split between consecutive separators, keepempty
+    # only has an effect on strings starting or ending with separators.
+    out = String[]
+    start = 1
+
+    while true
+        nextsep = findnext(isseparator, path, start)
+
+        stop = isnothing(nextsep) ? lastindex(path) : prevind(path, nextsep)
+
+        substr = String(view(path, start:stop))
+        if keepempty || !isempty(substr)
+            push!(out, substr)
+        end
+
+        isnothing(nextsep) && break
+
+        start = something(findnext(!isseparator, path, nextsep+1), nextind(path, lastindex(path)))
+    end
+    return out
+end
+
 """
     normpath(path::AbstractString)::String
 
@@ -391,7 +556,7 @@ function normpath(path::String)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
-    parts = split(path, path_separator_re; keepempty=false)
+    parts = _split_at_separators(path, keepempty = false)
     filter!(!=("."), parts)
     while true
         clean = true
@@ -445,7 +610,7 @@ Which gives a path like `"/home/JuliaUser/data/"`.
 
 See also [`joinpath`](@ref), [`pwd`](@ref), [`expanduser`](@ref).
 """
-function abspath(a::String)::String
+@noinline function abspath(a::String)::String
     if !isabspath(a)
         cwd = pwd()
         a_drive, a_nodrive = splitdrive(a)
@@ -514,50 +679,233 @@ function realpath(path::AbstractString)
 end
 
 if Sys.iswindows()
-# on windows, ~ means "temporary file"
-expanduser(path::AbstractString) = path
-contractuser(path::AbstractString) = path
-else
-function expanduser(path::AbstractString)
+
+function homedir(username::AbstractString)
+    # For the current user, just return homedir().
+    current_user = try
+        Sys.username()
+    catch
+        err isa IOError || rethrow()
+        nothing
+    end
+    if username == current_user
+        return homedir()
+    end
+    # Look up the user's SID, then query the registry for their profile path.
+    # This is the same approach Go uses (os/user.Lookup on Windows).
+    home = _win_profile_from_registry(username)
+    home !== nothing && return home
+    # Fallback: assume profiles are siblings in the same parent directory,
+    # but only if the current user's home follows the <parent>/<username>
+    # convention. If not, we can't guess reliably.
+    userhome = homedir()
+    if current_user !== nothing && basename(userhome) == current_user
+        home = joinpath(dirname(userhome), username)
+        isdir(home) && return home
+    end
+    return nothing
+end
+function _win_profile_from_registry(username::AbstractString)
+    # Step 1: Resolve username to a SID via LookupAccountNameW.
+    # First call with zero-length buffers to get required sizes.
+    wuser = cwstring(username)
+    sid_size = Ref{UInt32}(0)
+    domain_size = Ref{UInt32}(0)
+    use = Ref{Int32}(0)
+    ccall((:LookupAccountNameW, "advapi32"), stdcall, Cint,
+          (Ptr{UInt16}, Ptr{UInt16}, Ptr{Cvoid}, Ptr{UInt32},
+           Ptr{UInt16}, Ptr{UInt32}, Ptr{Int32}),
+          C_NULL, wuser, C_NULL, sid_size, C_NULL, domain_size, use)
+    sid_size[] == 0 && return nothing
+    sid_buf = Vector{UInt8}(undef, sid_size[])
+    domain_buf = Vector{UInt16}(undef, domain_size[])
+    ret = ccall((:LookupAccountNameW, "advapi32"), stdcall, Cint,
+                (Ptr{UInt16}, Ptr{UInt16}, Ptr{UInt8}, Ptr{UInt32},
+                 Ptr{UInt16}, Ptr{UInt32}, Ptr{Int32}),
+                C_NULL, wuser, sid_buf, sid_size, domain_buf, domain_size, use)
+    ret == 0 && return nothing
+    # Step 2: Convert SID to string form (e.g. "S-1-5-21-...").
+    str_sid_ptr = Ref{Ptr{UInt16}}(C_NULL)
+    ret = ccall((:ConvertSidToStringSidW, "advapi32"), stdcall, Cint,
+                (Ptr{UInt8}, Ref{Ptr{UInt16}}), sid_buf, str_sid_ptr)
+    ret == 0 && return nothing
+    len = ccall(:wcslen, Csize_t, (Ptr{UInt16},), str_sid_ptr[])
+    sid_str = transcode(String, unsafe_wrap(Array, str_sid_ptr[], len))
+    ccall((:LocalFree, "kernel32"), stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), str_sid_ptr[])
+    # Step 3: Query the registry for the user's ProfileImagePath.
+    subkey = cwstring("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\$sid_str")
+    value = cwstring("ProfileImagePath")
+    buf_size = Ref{UInt32}(0)
+    # RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ = 0x00000006
+    HKEY_LOCAL_MACHINE = 0x80000002 % UInt
+    ret = ccall((:RegGetValueW, "advapi32"), stdcall, Clong,
+                (UInt, Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
+                HKEY_LOCAL_MACHINE, subkey, value, 0x00000006, C_NULL, C_NULL, buf_size)
+    buf_size[] == 0 && return nothing
+    buf = Vector{UInt16}(undef, buf_size[] ÷ 2)
+    ret = ccall((:RegGetValueW, "advapi32"), stdcall, Clong,
+                (UInt, Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
+                HKEY_LOCAL_MACHINE, subkey, value, 0x00000006, C_NULL, buf, buf_size)
+    ret != 0 && return nothing
+    # Remove trailing null and convert to String.
+    n = buf_size[] ÷ 2
+    n > 0 && buf[n] == 0 && (n -= 1)
+    home = transcode(String, buf[1:n])
+    return isdir(home) ? home : nothing
+end
+function contractuser(path::Union{String, SubString{String}})::String
+    # Walk prefixes of path, checking if any matches homedir() via inode.
+    # Only checks the current user's home (no ~username on Windows).
+    # Preserves the original path string after the matched prefix verbatim.
+    home_st = stat(homedir())
+    ispath(home_st) || return path
+    # check the full path (home directory itself, no trailing separator)
+    samefile(stat(path), home_st) && return "~"
+    # scan for separators; start after the first one to skip the root
+    m = findnext(path_separator_re, path, firstindex(path))
+    m === nothing && return path
+    while true
+        m = findnext(path_separator_re, path, nextind(path, last(m)))
+        m === nothing && return path
+        prefix = SubString(path, 1, prevind(path, first(m)))
+        st = stat(prefix)
+        ispath(st) || return path
+        if samefile(st, home_st)
+            return "~" * SubString(path, first(m))
+        end
+    end
+end
+
+else # !Sys.iswindows()
+
+function homedir(username::AbstractString)
+    # Thread-safe user lookup via getpwnam_r.
+    # pwd_storage holds the struct passwd; 256 bytes is a generous upper bound
+    # for all supported platforms (Linux x86-64: ~56 bytes, macOS arm64: ~80 bytes).
+    pwd_storage = zeros(UInt8, 256)
+    # The string buffer holds the pointed-to strings (pw_name, pw_dir, etc.).
+    # Start at 1024 and double on ERANGE if any string is unusually long.
+    buflen = 1024
+    while buflen <= 65536
+        str_buf = Vector{UInt8}(undef, buflen)
+        result = Ref{Ptr{Cvoid}}(C_NULL)
+        ret = ccall(:getpwnam_r, Cint,
+                    (Cstring, Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Ptr{Cvoid}}),
+                    username, pwd_storage, str_buf, Csize_t(buflen), result)
+        if ret == 34  # ERANGE: string buffer too small, retry with more space
+            buflen *= 2
+        elseif ret == 0 && result[] != C_NULL
+            # pw_uid sits at offset 2*sizeof(Ptr) in struct passwd on all supported
+            # platforms (after pw_name and pw_passwd, which are both pointer-sized)
+            uid = unsafe_load(Ptr{Cuint}(pointer(pwd_storage) + 2 * sizeof(Ptr{Cvoid})))
+            pd = Libc.getpwuid(uid, false)
+            return pd !== nothing ? pd.homedir : nothing
+        else
+            return nothing  # user not found or error
+        end
+    end
+    return nothing
+end
+function contractuser(path::Union{String, SubString{String}})::String
+    # Walk path prefixes from shortest to longest. At each existing prefix,
+    # check against the current user's home first, then the directory owner's
+    # home via inode comparison. This handles symlinks transparently.
+    # Preserves the original path string after the matched prefix verbatim.
+    home_st = stat(homedir())
+    ispath(home_st) || return path
+    cache_uid = ccall(:getuid, Cuint, ())
+    cache_uname = nothing
+    cache_home_st = nothing
+    # Check the full path (home directory itself, no trailing separator)
+    samefile(stat(path), home_st) && return "~"
+    # Scan for separators; start after the first one to skip the root
+    m = findnext(path_separator_re, path, firstindex(path))
+    m === nothing && return path
+    while true
+        m = findnext(path_separator_re, path, nextind(path, last(m)))
+        m === nothing && return path
+        prefix = SubString(path, 1, prevind(path, first(m)))
+        st = stat(prefix)
+        ispath(st) || return path
+        rest = SubString(path, first(m))
+        if samefile(st, home_st)
+            return "~" * rest
+        end
+        uid = st.uid
+        if uid != cache_uid
+            cache_uid = uid
+            pd = Libc.getpwuid(uid, false)
+            cache_uname = pd !== nothing && !isempty(pd.username) ? pd.username : nothing
+            if cache_uname !== nothing
+                pw_home = homedir(cache_uname)
+                cache_home_st = pw_home !== nothing ? stat(pw_home) : nothing
+            else
+                cache_home_st = nothing
+            end
+        end
+        if cache_home_st !== nothing && ispath(cache_home_st) && samefile(st, cache_home_st)
+            return "~$(cache_uname)" * rest
+        end
+    end
+end
+
+end # if Sys.iswindows()
+
+function expanduser(path::Union{String, SubString{String}})::String
     y = iterate(path)
     y === nothing && return path
     c, i = y::Tuple{eltype(path),Int}
     c != '~' && return path
-    y = iterate(path, i)
-    y === nothing && return homedir()
-    y[1]::eltype(path) == '/' && return homedir() * path[i:end]
-    throw(ArgumentError("~user tilde expansion not yet implemented"))
-end
-function contractuser(path::AbstractString)
-    home = homedir()
-    if path == home
-        return "~"
-    elseif startswith(path, home)
-        return joinpath("~", relpath(path, home))
-    else
+    # collect username: everything after ~ up to separator or end
+    m = findnext(path_separator_re, path, i)
+    j = prevind(path, m === nothing ?
+        nextind(path, lastindex(path)) : first(m))
+    username = SubString(path, i, j)
+    # can't use a regex because of bootstrap order
+    if isempty(username)
+        home = homedir()
+    elseif Sys.iswindows() || # ~username not supported on Windows
+        !all(c -> isletter(c) || isdigit(c) || c in "._-", username) # invalid
         return path
+    else
+        home = homedir(username)
+        home === nothing && return path
     end
-end
+    # use first separator in the rest of path in home
+    if m !== nothing
+        if Sys.iswindows()
+            sep = path[first(m)]
+            home = replace(home, path_separator_re => sep)
+        end
+        return home * SubString(path, first(m))
+    end
+    return home
 end
 
 
 """
     expanduser(path::AbstractString)::AbstractString
 
-On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
+Replace a tilde character at the start of a path with the current user's home directory.
+On Unix, `~username` at the start of a path is replaced with that user's home directory;
+if the user does not exist the path is returned unchanged. On Windows, only `~` expansion
+is supported (not `~username`).
 
 See also: [`contractuser`](@ref).
 """
-expanduser(path::AbstractString)
+expanduser(path::AbstractString) = expanduser(String(path))
 
 """
     contractuser(path::AbstractString)::AbstractString
 
-On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
+Replace a home directory prefix in `path` with a tilde. If the path starts with the
+current user's home directory it is replaced with `~`. On Unix, if it starts with
+another user's home directory it is replaced with `~username`. The path is returned
+unchanged if no home directory prefix is found.
 
 See also: [`expanduser`](@ref).
 """
-contractuser(path::AbstractString)
+contractuser(path::AbstractString) = contractuser(String(path))
 
 
 """
@@ -581,11 +929,11 @@ function relpath(path::String, startpath::String = ".")
         startpath_drive, startpath_without_drive = splitdrive(startpath)
         isempty(startpath_drive) && (startpath_drive = path_drive) # by default assume same as path drive
         uppercase(path_drive) == uppercase(startpath_drive) || return abspath(path) # if drives differ return first path
-        path_arr  = split(abspath(path_drive * path_without_drive),      path_separator_re)
-        start_arr = split(abspath(path_drive * startpath_without_drive), path_separator_re)
+        path_arr  = _split_at_separators(abspath(path_drive * path_without_drive))
+        start_arr = _split_at_separators(abspath(path_drive * startpath_without_drive))
     else
-        path_arr  = split(abspath(path),      path_separator_re)
-        start_arr = split(abspath(startpath), path_separator_re)
+        path_arr  = _split_at_separators(abspath(path))
+        start_arr = _split_at_separators(abspath(startpath))
     end
     i = 0
     while i < min(length(path_arr), length(start_arr))
@@ -610,14 +958,28 @@ end
 relpath(path::AbstractString, startpath::AbstractString) =
     relpath(String(path)::String, String(startpath)::String)
 
-for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
+for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath, :isabspath)
     @eval $f(path::AbstractString) = $f(String(path)::String)
 end
 
-# RFC3986 Section 2.1
-percent_escape(s) = '%' * join(map(b -> uppercase(string(b, base=16)), codeunits(s)), '%')
-# RFC3986 Section 2.3
-encode_uri_component(s) = replace(s, r"[^A-Za-z0-9\-_.~/]+" => percent_escape)
+function encode_uri_component(s::AbstractString)
+    out = empty!(StringVector(sizeof(s)))
+    for cu in utf8units(s)
+        # RFC3986 Section 2.3
+        if (UInt8('A') <= cu <= UInt8('Z') ||
+            UInt8('a') <= cu <= UInt8('z') ||
+            UInt8('0') <= cu <= UInt8('9') ||
+            cu in map(UInt8, ('-', '_', '.', '~', '/'))
+        )
+            push!(out, cu)
+        else
+            # RFC3986 Section 2.1
+            push!(out, UInt8('%'))
+            append!(out, codeunits(uppercase(string(cu, base = 16))))
+        end
+    end
+    String(out)
+end
 
 """
     uripath(path::AbstractString)
@@ -643,18 +1005,18 @@ function uripath end
     function uripath(path::String)
         path = abspath(path)
         if startswith(path, "\\\\") # UNC path, RFC8089 Appendix E.3
-            unixpath = join(eachsplit(path, path_separator_re, keepempty=false), '/')
+            unixpath = join(_split_at_separators(path, keepempty=false), '/')
             string("file://", encode_uri_component(unixpath)) # RFC8089 Section 2
         else
             drive, localpath = splitdrive(path) # Assuming that non-UNC absolute paths on Windows always have a drive component
-            unixpath = join(eachsplit(localpath, path_separator_re, keepempty=false), '/')
+            unixpath = join(_split_at_separators(localpath, keepempty=false), '/')
             encdrive = replace(encode_uri_component(drive), "%3A" => ':', "%7C" => '|') # RFC8089 Appendices D.2, E.2.1, and E.2.2
             string("file:///", encdrive, '/', encode_uri_component(unixpath)) # RFC8089 Section 2
         end
     end
 else
     function uripath(path::String)
-        localpath = join(eachsplit(abspath(path), path_separator_re, keepempty=false), '/')
+        localpath = join(_split_at_separators(abspath(path), keepempty=false), '/')
         host = if ispath("/proc/sys/fs/binfmt_misc/WSLInterop") # WSL sigil
             distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
             "wsl\$/$distro" # See <https://github.com/microsoft/terminal/pull/14993> and <https://learn.microsoft.com/en-us/windows/wsl/filesystems>

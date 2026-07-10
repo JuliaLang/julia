@@ -5,13 +5,22 @@ using Random, LinearAlgebra
 # For curmod_*
 include("testenv.jl")
 
-# re-register only the error hints that are being tested here (
-Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
-Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.fielderror_listfields_hint_handler, FieldError)
-Base.Experimental.register_error_hint(Base.fielderror_dict_hint_handler, FieldError)
+# re-register only the error hints that are being tested here,
+# but only if they aren't already registered (they are in the sysimage)
+function _register_if_missing(@nospecialize(handler), @nospecialize(exct::Type))
+    list = get(Base.Experimental._hint_handlers, Core.typename(exct), nothing)
+    if list === nothing || !any(((_, h),) -> h === handler, list)
+        Base.Experimental.register_error_hint(handler, exct)
+    end
+end
+_register_if_missing(Base.noncallable_number_hint_handler, MethodError)
+_register_if_missing(Base.string_concatenation_hint_handler, MethodError)
+_register_if_missing(Base.string_replace_hint_handler, MethodError)
+_register_if_missing(Base.methods_on_iterable, MethodError)
+_register_if_missing(Base.nonsetable_type_hint_handler, MethodError)
+_register_if_missing(Base.fielderror_listfields_hint_handler, FieldError)
+_register_if_missing(Base.fielderror_dict_hint_handler, FieldError)
+_register_if_missing(Base.apply_type_unionall_hint_handler, TypeError)
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
     errs = sprint(Base.showerror, err)
@@ -72,7 +81,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1,(1, 1, "")))
 
 mod_col = Base.text_colors[Base.STACKTRACE_FIXEDCOLORS[modul]]
-@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
+@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m\e[90m, \e[39m\e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
@@ -130,7 +139,62 @@ Base.show_method_candidates(buf, MethodError(method_c5,(Float64,)))
 @test occursin("\nClosest candidates are:\n  method_c5(::Type{Float64})$cmod$cfile$c5line", String(take!(buf)))
 
 Base.show_method_candidates(buf, MethodError(method_c5,(Int32,)))
-@test occursin("\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})$cmod$cfile$c5line", String(take!(buf)))
+@test occursin("\nClosest candidates are:\n  method_c5(::Type{!Matched{Float64}})$cmod$cfile$c5line", String(take!(buf)))
+
+module Issue41061
+    struct InnerT{T,N} end
+    export AliasT
+    const AliasT{T} = InnerT{T,3}
+    f_nested(x::Vector{Vector{Float64}}) = 1
+    f_nt(x::@NamedTuple{a::Int64, b::String}) = 1
+    f_nt_mismatched(x::@NamedTuple{a::Int64}) = 1
+    f_alias(x::AliasT{Int64}) = 1
+    f_pair_str(x::Pair{Int64,Float64}, y::String) = 1
+    struct ThreeParam{A,B,C} end
+    f_three(::ThreeParam{Tuple{Float64}}) = 1
+    f_tup_tv(x::Tuple{Int64, T, Float64}) where T<:Real = 1
+    f_two_int(a::Int64, b::Int64) = 1
+end
+@testset "type diff highlighting (#41061)" begin
+    buf41061 = IOBuffer()
+    # Nested type mismatches highlight only the innermost differing subtree
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nested, ([Int64[1,2,3]],)))
+    @test occursin("::Vector{Vector{!Matched{Float64}}}", String(take!(buf41061)))
+    # Color: gray inner match, red inner mismatch, gray inter-arg comma into a wholly-matched arg
+    let io = IOContext(buf41061, :color => true)
+        Base.show_method_candidates(io, MethodError(Issue41061.f_pair_str,
+            (Pair{Int64,Int64}(1, 2), "A")))
+        s = String(take!(buf41061))
+        @test occursin("\e[90mInt64\e[39m\e[90m, \e[39m\e[91mFloat64\e[39m", s)
+        @test occursin("\e[90m, \e[39m\e[90m::String\e[39m", s)
+    end
+    # NamedTuple with matching field names diffs per-field
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nt, ((a=1.0, b=:x),)))
+    @test occursin("::@NamedTuple{a::!Matched{Int64}, b::!Matched{String}}", String(take!(buf41061)))
+    # NamedTuples with mismatched field names fall back to whole-arg highlight
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nt_mismatched, ((b=Int64(1),),)))
+    @test occursin("!Matched::@NamedTuple{a::Int64}", String(take!(buf41061)))
+    # Aliases in modules not visible from the IO context get qualified
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_alias, (Issue41061.InnerT{Float64,3}(),)))
+    @test occursin("Issue41061.AliasT{!Matched{Int64}}", String(take!(buf41061)))
+    # Entire signature wrong: leaf bail wraps the entire `::Type` in error_color
+    let io = IOContext(buf41061, :color => true)
+        called = Issue41061.ThreeParam{Tuple{Char}, Dict{Int64,Int64}, Dict{Int64,Int64}}()
+        Base.show_method_candidates(io, MethodError(Issue41061.f_three, (called,)))
+        s = String(take!(buf41061))
+        @test occursin("\e[91m::", s)
+        @test occursin("ThreeParam{Tuple{Float64}}\e[39m", s)
+    end
+    # mismatched concrete element and TypeVar element each highlighted independently
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_tup_tv, ((1.0, "x", 2.0),)))
+    @test occursin("::Tuple{!Matched{Int64}, !Matched{T}, Float64}) where T<:Real", String(take!(buf41061)))
+    # Trailing missing-arg comma renders gray, matching the main-loop separator
+    let io = IOContext(buf41061, :color => true)
+        Base.show_method_candidates(io, MethodError(Issue41061.f_two_int, (Int64(1),)))
+        s = String(take!(buf41061))
+        @test occursin("\e[90m::Int64\e[39m\e[90m, \e[39m\e[91m::Int64\e[39m", s)
+    end
+end
 
 mutable struct Test_type end
 test_type = Test_type()
@@ -181,9 +245,10 @@ error_out3 = String(take!(buf))
 @test occursin("method_c6(; x) got unsupported keyword argument \"y\"$cmod$cfile$(c6line + 1)", error_out)
 @test occursin("method_c6(!Matched::Any; y)$cmod$cfile$(c6line + 2)", error_out)
 @test occursin("method_c6(::Any; y) got unsupported keyword argument \"x\"$cmod$cfile$(c6line + 2)", error_out1)
-@test occursin("method_c6_in_module(; x) got unsupported keyword argument \"y\"$cmod$cfile$(c6mline + 2)", error_out2)
-@test occursin("method_c6_in_module(!Matched::Any; y)$cmod$cfile$(c6mline + 3)", error_out2)
-@test occursin("method_c6_in_module(::Any; y) got unsupported keyword argument \"x\"$cmod$cfile$(c6mline + 3)", error_out3)
+c6mmod = "\n   @ $(Base.parentmodule_before_main(TestKWError))"
+@test occursin("method_c6_in_module(; x) got unsupported keyword argument \"y\"$c6mmod$cfile$(c6mline + 2)", error_out2)
+@test occursin("method_c6_in_module(!Matched::Any; y)$c6mmod$cfile$(c6mline + 3)", error_out2)
+@test occursin("method_c6_in_module(::Any; y) got unsupported keyword argument \"x\"$c6mmod$cfile$(c6mline + 3)", error_out3)
 
 c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
@@ -372,7 +437,7 @@ let undefvar
     err_str = @except_str Vector{Any}(undef, 1)[1] UndefRefError
     @test err_str == "UndefRefError: access to undefined reference"
     err_str = @except_str undefvar UndefVarError
-    @test err_str == "UndefVarError: `undefvar` not defined in local scope"
+    @test startswith(err_str, "UndefVarError: `undefvar` not defined in local scope")
     err_str = @except_str read(IOBuffer(), UInt8) EOFError
     @test err_str == "EOFError: read end of file"
     err_str = @except_str Dict()[:doesnotexist] KeyError
@@ -720,6 +785,21 @@ using Base.Experimental: @opaque
     test_worldage_error(f)
 end
 
+# suggest candidate methods on typename wrapper when parameterized call has no methods
+struct ParametricOuterBareInner{T}
+    x::T
+    ParametricOuterBareInner(x) = ParametricOuterBareInner{typeof(x)}(x)
+end
+let err_str
+    err_str = @except_str ParametricOuterBareInner{String}("abc") MethodError
+    @test occursin(
+        "Hint: constructors are defined for `$(curmod_prefix)ParametricOuterBareInner`, " *
+            "but not for `$(curmod_prefix)ParametricOuterBareInner{String}`",
+        err_str,
+    )
+    @test occursin("ParametricOuterBareInner(::Any)", err_str)
+end
+
 # Custom hints
 struct HasNoOne end
 function recommend_oneunit(io, ex, arg_types, kwargs)
@@ -740,7 +820,7 @@ let err_str
     @test occursin(Regex("MethodError: no method matching one\\(::.*HasNoOne; value::$(Int)\\)"), err_str)
     @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
 end
-pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[Core.typename(MethodError)])  # order is undefined, don't copy this
 
 function busted_hint(io, exc, notarg)  # wrong number of args
     print(io, "\nI don't have a hint for you, sorry")
@@ -752,7 +832,7 @@ catch ex
     io = IOBuffer()
     @test_logs (:error, "Hint-handler busted_hint for DomainError in $(@__MODULE__) caused an error") showerror(io, ex)
 end
-pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[Core.typename(DomainError)])  # order is undefined, don't copy this
 
 struct ANumber <: Number end
 let err_str = @except_str ANumber()(3 + 4) MethodError
@@ -1124,6 +1204,56 @@ let ex = try
     @test occursin("may have intended to extend", sprint(Base.showerror, ex))
 end
 
+module TestShadowedTypeHintA
+    struct Foo end
+    f(::Foo) = 1
+    g(::Foo, ::Int) = 1
+    diag(::Foo, x::T, y::T) where T = 1
+end
+module TestShadowedTypeHintB
+    struct Foo end
+end
+module TestShadowRedefA
+    module Sub
+        struct X end
+    end
+    f(::Sub.X) = 1
+    module Sub
+        struct X end
+    end
+end
+module TestShadowRedefB
+    struct Y; x; end
+    g(::Y) = 1
+    struct Y end
+end
+@testset "shadowed-type hint #41084" begin
+    ex = try TestShadowedTypeHintA.f(TestShadowedTypeHintB.Foo()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("You may have intended `", s)
+    @test occursin("TestShadowedTypeHintA.Foo", s)
+    @test occursin("TestShadowedTypeHintB.Foo", s)
+
+    ex = try sin("a") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowedTypeHintA.g(TestShadowedTypeHintB.Foo(), "not an int") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowedTypeHintA.diag(TestShadowedTypeHintB.Foo(), 1, "x") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowRedefA.f(TestShadowRedefA.Sub.X()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("appears to have been redefined", s)
+    @test !occursin("rather than", s)
+
+    ex = try TestShadowRedefB.g(TestShadowRedefB.Y()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("appears to have been redefined", s)
+    @test !occursin("rather than", s)
+end
+
 # Test that implementation detail of include() is hidden from the user by default
 let bt = try
         @noinline include("testhelpers/include_error.jl")
@@ -1297,14 +1427,21 @@ end
 
 for (expr, errmsg) in
     [
-        (:(struct Foo <: 1 end),       "can only subtype data types"),
+        (:(struct Foo <: 0x01 end),       "supertype must be a type, got a value of type `UInt8`"),
         (:(struct Foo <: Float64 end), "can only subtype abstract types"),
+        (:(struct Foo <: Dict end), "can only subtype abstract types"),
         (:(struct Foo <: Foo end),     "a type cannot subtype itself"),
         (:(struct Foo <: Tuple{Float64} end), "cannot subtype a tuple type"),
+        (:(struct Foo <: (Tuple{T} where T) end), "cannot subtype a tuple type"),
         (:(struct Foo <: NamedTuple{(:a,), Tuple{Int64}} end), "cannot subtype a named tuple type"),
+        (:(struct Foo <: NamedTuple end), "cannot subtype a named tuple type"),
         (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
         (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
         (:(struct Foo <: typeof(Core.apply_type) end), "cannot add subtypes to Core.Builtin"),
+        (:(struct Foo <: AbstractArray end), "supertype `AbstractArray{T, N}` has unbound type parameters"),
+        (:(struct Foo{T} <: AbstractArray{T} end), "supertype `AbstractArray{T, N}` has unbound type parameters"),
+        (:(struct Foo <: (AbstractArray{T, N} where T <: Integer where N) end), "supertype `AbstractArray{T<:Integer, N}` has unbound type parameters"),
+        (:(struct Foo <: Union{Int, Float64} end), "cannot subtype a Union type"),
     ]
     err = try @eval $expr
     catch e
@@ -1316,6 +1453,16 @@ end
 let err_str
     err_str = @except_str "a" + "b" MethodError
     @test occursin("String concatenation is performed with *", err_str)
+end
+
+# https://github.com/JuliaLang/julia/issues/57613
+let err_str
+    err_str = @except_str replace!("abc", "a" => "1") MethodError
+    @test occursin("`String`s cannot be modified with `replace!`", err_str)
+    err_str = @except_str replace!(uppercase, "abc") MethodError
+    @test occursin("`String`s cannot be modified with `replace!`", err_str)
+    err_str = @except_str replace!((1, 2), 1 => 0) MethodError
+    @test !occursin("cannot be modified with `replace!`", err_str)
 end
 
 # https://github.com/JuliaLang/julia/issues/55745
@@ -1475,4 +1622,74 @@ let err_str
     f56325 = x->x+1
     err_str = @except_str f56325(1,2) MethodError
     @test occursin("The anonymous function", err_str)
+end
+
+# Test that error hints catch abstract exception supertypes (issue #58367)
+
+module Hinterland
+
+abstract type AbstractHintableException <: Exception end
+struct ConcreteHintableException <: AbstractHintableException end
+gonnathrow() = throw(ConcreteHintableException())
+
+function Base.showerror(io::IO, exc::ConcreteHintableException)
+    print(io, "This is my exception")
+    Base.Experimental.show_error_hints(io, exc)
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(ConcreteHintableException) do io, exc
+        print(io, "\nThis hint caught my concrete exception type")
+    end
+    Base.Experimental.register_error_hint(AbstractHintableException) do io, exc
+        print(io, "\nThis other hint caught my abstract exception supertype")
+    end
+end
+
+end
+
+@testset "Hints for abstract exception supertypes" begin
+    exc = try
+        Hinterland.gonnathrow()
+    catch e
+        e
+    end
+    exc_print = sprint(Base.showerror, exc)
+    @test occursin("This hint caught my concrete exception type", exc_print)
+    @test occursin("This other hint caught my abstract exception supertype", exc_print)
+end
+
+@testset "MemoryRef BoundsError summary" begin
+    mem = Memory{Int}(undef, 10)
+    ref = memoryref(mem, 9)
+    err_str = @except_str memoryref(ref, 3) BoundsError
+    @test occursin("MemoryRef", err_str)
+    @test occursin("2-element", err_str)
+    @test occursin(" at index [3]", err_str)
+
+    ref2 = memoryref(mem, 10)
+    err_str2 = @except_str memoryref(ref2, 2) BoundsError
+    @test occursin("MemoryRef", err_str2)
+    @test occursin("1-element", err_str2)
+
+    memA = AtomicMemory{Int}(undef, 4)
+    refA = memoryref(memA, 4)
+    err_strA = @except_str memoryref(refA, 2) BoundsError
+    @test occursin("AtomicMemoryRef", err_strA)
+    @test occursin("1-element", err_strA)
+end
+
+# issue #4507
+@testset "apply_type TypeError hint for non-parameterizable types" begin
+    for expr in (:(Int{1}), :(Int{}), :(BitVector{1}), :(BitVector{}))
+        @test_throws TypeError eval(expr)
+    end
+    @test occursin("Hint: `Int64` takes no type parameters", sprint(showerror, try Int64{1} catch e; e end))
+    @test occursin("Hint: `Int64` takes no type parameters", sprint(showerror, try Int64{} catch e; e end))
+    @test occursin("Hint: `BitVector` takes no type parameters", sprint(showerror, try BitVector{1} catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try Core.apply_type(5, 2) catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try Union{Int64,Float64}{Int64} catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try typeassert(Int64, UnionAll) catch e; e end))
+    @test_throws ErrorException("too many parameters for type `Array`: expected 2, got 4") Array{1,2,3,4}
+    @test_throws ErrorException("too many parameters for type `BitArray`: expected 1, got 2") BitArray{1,2}
 end

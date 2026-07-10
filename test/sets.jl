@@ -692,6 +692,7 @@ end
     @test allequal(error(x) for x in [1])
     # Empty, but !haslength:
     @test allequal(error(x) for x in 1:3 if false)
+    @test @allocated(allequal((1, 1, 1, 1, 1, 1, 1, 2.0))) == 0
 end
 
 @testset "allequal(f, xs)" begin

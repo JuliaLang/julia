@@ -10,8 +10,8 @@ export cpu_isa
 A structure which represents the Instruction Set Architecture (ISA) of a
 computer.  It holds the `Set` of features of the CPU.
 
-The numerical values of the features are automatically generated from the C
-source code of Julia and stored in the `features_h.jl` Julia file.
+Feature bit indices come from the cpufeatures library's generated tables
+(extracted from LLVM's TableGen data at build time).
 """
 struct ISA
     features::Set{UInt32}
@@ -23,55 +23,156 @@ Base.isless(a::ISA,  b::ISA) = a < b
 
 include(string(Base.BUILDROOT, "features_h.jl"))  # include($BUILDROOT/base/features_h.jl)
 
-# Keep in sync with `arch_march_isa_mapping`.
+"""
+    _featurebytes_to_isa(buf::Vector{UInt8}) -> ISA
+
+Convert a raw feature byte buffer (from cpufeatures) into an ISA.
+"""
+function _featurebytes_to_isa(buf::Vector{UInt8})
+    features = Set{UInt32}()
+    for byte_idx in 0:length(buf)-1
+        b = buf[byte_idx + 1]
+        b == 0 && continue
+        for bit in 0:7
+            if (b >> bit) & 1 != 0
+                push!(features, UInt32(byte_idx * 8 + bit))
+            end
+        end
+    end
+    return ISA(features)
+end
+
+"""
+    _cross_lookup_cpu(arch::String, name::String) -> ISA
+
+Look up hardware features for a CPU on any architecture using the
+cross-arch tables. Works regardless of host architecture.
+Returns an empty ISA if the CPU or architecture is not found.
+"""
+function _cross_lookup_cpu(arch::String, name::String)
+    nbytes = ccall(:jl_cpufeatures_cross_nbytes, Csize_t, (Cstring,), arch)
+    nbytes == 0 && return ISA(Set{UInt32}())
+    buf = Vector{UInt8}(undef, nbytes)
+    written = ccall(:jl_cpufeatures_cross_lookup, Csize_t,
+                    (Cstring, Cstring, Ptr{UInt8}, Csize_t),
+                    arch, name, buf, nbytes)
+    written == 0 && return ISA(Set{UInt32}())
+    return _featurebytes_to_isa(buf)
+end
+
+"""
+    _build_bit_to_name(arch::String) -> Dict{UInt32, String}
+
+Build a mapping from feature bit index to feature name for an architecture.
+"""
+function _build_bit_to_name(arch::String)
+    nfeats = ccall(:jl_cpufeatures_cross_num_features, UInt32, (Cstring,), arch)
+    result = Dict{UInt32, String}()
+    for i in 0:nfeats-1
+        name_ptr = ccall(:jl_cpufeatures_cross_feature_name, Cstring, (Cstring, UInt32), arch, i)
+        name_ptr == C_NULL && continue
+        bit = ccall(:jl_cpufeatures_cross_feature_bit, Cint, (Cstring, UInt32), arch, i)
+        bit < 0 && continue
+        result[UInt32(bit)] = unsafe_string(name_ptr)
+    end
+    return result
+end
+
+"""
+    feature_names(arch::String, cpu::String) -> Vector{String}
+    feature_names(arch::String, isa::ISA) -> Vector{String}
+    feature_names(isa::ISA) -> Vector{String}
+    feature_names() -> Vector{String}
+
+Return sorted hardware feature names. Can query by CPU name (on any
+architecture) or by ISA. Defaults to the host architecture and CPU.
+
+# Examples
+```julia
+feature_names()                           # host CPU features
+feature_names("x86_64", "haswell")        # haswell's features
+feature_names("aarch64", "cortex-x925")   # cross-arch query
+```
+"""
+feature_names() = feature_names(string(Sys.ARCH), _host_isa())
+feature_names(isa::ISA) = feature_names(string(Sys.ARCH), isa)
+function feature_names(arch::String, cpu::String)
+    isa = _cross_lookup_cpu(arch, cpu)
+    return feature_names(arch, isa)
+end
+function feature_names(arch::String, isa::ISA)
+    mapping = _build_bit_to_name(arch)
+    return sort([get(mapping, bit, "unknown_$bit") for bit in isa.features])
+end
+
+"""
+    _lookup_cpu(name::String) -> ISA
+
+Look up hardware features for the named CPU on the host architecture.
+Returns an empty ISA if the CPU name is not found.
+"""
+function _lookup_cpu(name::String)
+    nbytes = ccall(:jl_cpufeatures_nbytes, Csize_t, ())
+    buf = Vector{UInt8}(undef, nbytes)
+    ret = ccall(:jl_cpufeatures_lookup, Cint, (Cstring, Ptr{UInt8}, Csize_t), name, buf, nbytes)
+    ret != 0 && return ISA(Set{UInt32}())
+    return _featurebytes_to_isa(buf)
+end
+
+"""
+    _host_isa() -> ISA
+
+Get the hardware features of the host CPU from the cpufeatures library.
+"""
+function _host_isa()
+    nbytes = ccall(:jl_cpufeatures_nbytes, Csize_t, ())
+    buf = Vector{UInt8}(undef, nbytes)
+    ccall(:jl_cpufeatures_host, Cvoid, (Ptr{UInt8}, Csize_t), buf, nbytes)
+    return _featurebytes_to_isa(buf)
+end
+
+# Build an ISA list for a given architecture family.
+# Uses cross-arch lookup so it works on any host.
+# Entries with empty cpuname get an empty ISA (generic baseline).
+function _make_isa_list(arch::String, entries::Vector{Pair{String,String}})
+    result = Pair{String,ISA}[]
+    for (label, cpuname) in entries
+        if isempty(cpuname)
+            push!(result, label => ISA(Set{UInt32}()))
+        else
+            push!(result, label => _cross_lookup_cpu(arch, cpuname))
+        end
+    end
+    return result
+end
+
+# ISA definitions per architecture family.
+# CPU names are LLVM names in the cpufeatures database.
+# Keep in sync with `arch_march_isa_mapping` in binaryplatforms.jl.
 const ISAs_by_family = Dict(
-    "i686" => [
-        # Source: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html.
-        # Implicit in all sets, because always required by Julia: mmx, sse, sse2
-        "pentium4" => ISA(Set{UInt32}()),
-        "prescott" => ISA(Set((JL_X86_sse3,))),
-    ],
-    "x86_64" => [
-        # Source: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html.
-        # Implicit in all sets, because always required by x86-64 architecture: mmx, sse, sse2
-        "x86_64" => ISA(Set{UInt32}()),
-        "core2" => ISA(Set((JL_X86_sse3, JL_X86_ssse3))),
-        "nehalem" => ISA(Set((JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt))),
-        "sandybridge" => ISA(Set((JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_aes, JL_X86_pclmul))),
-        "haswell" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c))),
-        "skylake" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c, JL_X86_rdseed, JL_X86_adx, JL_X86_prfchw, JL_X86_clflushopt, JL_X86_xsavec, JL_X86_xsaves))),
-        "skylake_avx512" => ISA(Set((JL_X86_movbe, JL_X86_sse3, JL_X86_ssse3, JL_X86_sse41, JL_X86_sse42, JL_X86_popcnt, JL_X86_pku, JL_X86_avx, JL_X86_avx2, JL_X86_aes, JL_X86_pclmul, JL_X86_fsgsbase, JL_X86_rdrnd, JL_X86_fma, JL_X86_bmi, JL_X86_bmi2, JL_X86_f16c, JL_X86_rdseed, JL_X86_adx, JL_X86_prfchw, JL_X86_clflushopt, JL_X86_xsavec, JL_X86_xsaves, JL_X86_avx512f, JL_X86_clwb, JL_X86_avx512vl, JL_X86_avx512bw, JL_X86_avx512dq, JL_X86_avx512cd))),
-    ],
-    "armv6l" => [
-        # The only armv6l processor we know of that runs Julia on armv6l
-        # We don't have a good way to tell the different armv6l variants apart through features,
-        # and honestly we don't care much since it's basically this one chip that people want to use with Julia.
-        "arm1176jzfs" => ISA(Set{UInt32}()),
-    ],
-    "armv7l" => [
-        "armv7l" => ISA(Set{UInt32}()),
-        "armv7l+neon" => ISA(Set((JL_AArch32_neon,))),
-        "armv7l+neon+vfpv4" => ISA(Set((JL_AArch32_neon, JL_AArch32_vfp4))),
-    ],
-    "aarch64" => [
-        # Implicit in all sets, because always required: fp, asimd
-        "armv8.0-a" => ISA(Set{UInt32}()),
-        "armv8.1-a" => ISA(Set((JL_AArch64_v8_1a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm))),
-        "armv8.2-a+crypto" => ISA(Set((JL_AArch64_v8_2a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_aes, JL_AArch64_sha2))),
-        "a64fx" => ISA(Set((JL_AArch64_v8_2a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_sha2, JL_AArch64_ccpp, JL_AArch64_complxnum, JL_AArch64_fullfp16, JL_AArch64_sve))),
-        "apple_m1" => ISA(Set((JL_AArch64_v8_5a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_aes, JL_AArch64_sha2, JL_AArch64_sha3, JL_AArch64_ccpp, JL_AArch64_complxnum, JL_AArch64_fp16fml, JL_AArch64_fullfp16, JL_AArch64_dotprod, JL_AArch64_rcpc, JL_AArch64_altnzcv))),
-    ],
-    "riscv64" => [
-        "riscv64" => ISA(Set{UInt32}()),
-    ],
-    "powerpc64le" => [
-        # We have no way to test powerpc64le features yet, so we're only going to declare the lowest ISA:
-        "power8" => ISA(Set{UInt32}()),
-    ],
-    "riscv64" => [
-        # We have no way to test riscv64 features yet, so we're only going to declare the lowest ISA:
-        "riscv64" => ISA(Set{UInt32}()),
-    ],
+    "i686" => _make_isa_list("x86_64", [
+        "pentium4" => "",
+        "prescott" => "prescott",
+    ]),
+    "x86_64" => _make_isa_list("x86_64", [
+        "x86_64" => "",
+        "core2" => "core2",
+        "nehalem" => "nehalem",
+        "sandybridge" => "sandybridge",
+        "haswell" => "haswell",
+        "skylake" => "skylake",
+        "skylake_avx512" => "skylake-avx512",
+    ]),
+    "aarch64" => _make_isa_list("aarch64", [
+        "armv8.0-a" => "",
+        "armv8.1-a" => "cortex-a76",
+        "armv8.2-a+crypto" => "cortex-a78",
+        "a64fx" => "a64fx",
+        "apple_m1" => "apple-a14",
+    ]),
+    "riscv64" => _make_isa_list("riscv64", [
+        "riscv64" => "",
+    ]),
 )
 
 # Test a CPU feature exists on the currently-running host
@@ -96,27 +197,13 @@ function normalize_arch(arch::String)
     return arch
 end
 
-let
-    # Collect all relevant features for the current architecture, if any.
-    FEATURES = UInt32[]
-    arch = normalize_arch(String(Sys.ARCH))
-    if arch in keys(ISAs_by_family)
-        for isa in ISAs_by_family[arch]
-            unique!(append!(FEATURES, last(isa).features))
-        end
-    end
-
-    # Use `@eval` to inline the list of features.
-    @eval function cpu_isa()
-        return ISA(Set{UInt32}(feat for feat in $(FEATURES) if test_cpu_feature(feat)))
-    end
-end
-
 """
     cpu_isa()
 
 Return the [`ISA`](@ref) (instruction set architecture) of the current CPU.
 """
-cpu_isa
+function cpu_isa()
+    return _host_isa()
+end
 
 end # module CPUID

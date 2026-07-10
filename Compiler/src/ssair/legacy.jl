@@ -5,7 +5,7 @@
     inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
 
 Inflates `ci::CodeInfo`-IR to `ir::IRCode`-format.
-This should be used with caution as it is a in-place transformation where the fields of
+This should be used with caution as it is an in-place transformation where the fields of
 the original `ci::CodeInfo` are modified.
 """
 function inflate_ir!(ci::CodeInfo, mi::MethodInstance)
@@ -13,7 +13,7 @@ function inflate_ir!(ci::CodeInfo, mi::MethodInstance)
     if ci.slottypes === nothing
         argtypes = va_process_argtypes(fallback_lattice,
             matching_cache_argtypes(fallback_lattice, mi),
-            ci.nargs, ci.isva)
+            ci.nargs, ci.isva, mi)
     else
         argtypes = ci.slottypes[1:ci.nargs]
     end

@@ -43,39 +43,35 @@ precompile_test_harness() do load_path
         let m = only(methods(TestAbsIntPrecompile1.basic_callee))
             mi = only(Base.specializations(m))
             ci = mi.cache
-            @test isdefined(ci, :next)
-            @test ci.owner === cache_owner
+            ci = check_presence(mi, nothing)
+            @test ci !== nothing
+            @test ci.owner === nothing
             @test ci.max_world == typemax(UInt)
             @test Base.module_build_id(TestAbsIntPrecompile1) ==
                 Base.object_build_id(ci)
-            ci = ci.next
-            @test !isdefined(ci, :next)
-            @test ci.owner === nothing
+            ci = check_presence(mi, cache_owner)
+            @test ci !== nothing
+            @test ci.owner === cache_owner
             @test ci.max_world == typemax(UInt)
             @test Base.module_build_id(TestAbsIntPrecompile1) ==
                 Base.object_build_id(ci)
         end
         let m = only(methods(sum, (Vector{Float64},)))
-            found = false
             for mi in Base.specializations(m)
                 if mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(sum),Vector{Float64}}
-                    ci = mi.cache
-                    @test isdefined(ci, :next)
+                    ci = check_presence(mi, nothing)
+                    @test ci !== nothing
+                    @test ci.owner === nothing
+                    @test ci.max_world == typemax(UInt)
+                    @test Base.module_build_id(TestAbsIntPrecompile1) == Base.object_build_id(ci)
+                    ci = check_presence(mi, cache_owner)
+                    @test ci !== nothing
                     @test ci.owner === cache_owner
                     @test ci.max_world == typemax(UInt)
                     @test Base.module_build_id(TestAbsIntPrecompile1) ==
                         Base.object_build_id(ci)
-                    ci = ci.next
-                    @test !isdefined(ci, :next)
-                    @test ci.owner === nothing
-                    @test ci.max_world == typemax(UInt)
-                    @test Base.module_build_id(TestAbsIntPrecompile1) ==
-                        Base.object_build_id(ci)
-                    found = true
-                    break
                 end
             end
-            @test found
         end
     end
 end

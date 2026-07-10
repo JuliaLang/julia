@@ -2727,7 +2727,7 @@ end
     @test cumsum(Any[1, 2.3]) == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
     @test cumsum([true,true,true]) == [1,2,3]
     @test cumsum(0x00:0xff)[end] === UInt(255*(255+1)÷2) # no overflow
-    @test accumulate(+, 0x00:0xff)[end] === 0x80         # overflow
+    @test accumulate(+%, 0x00:0xff)[end] === 0x80         # overflow
     @test_throws InexactError cumsum!(similar(0x00:0xff), 0x00:0xff) # overflow
 
     @test cumsum([[true], [true], [false]])::Vector{Vector{Int}} == [[1], [2], [2]]
@@ -3254,6 +3254,13 @@ end
     @test setindex!(zeros(2,2), fill(1.0), 1, 1, CI0) == [1.0 0.0; 0.0 0.0]
     @test setindex!(zeros(2,2), fill(1.0), 1, CI0, 1) == [1.0 0.0; 0.0 0.0]
     @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
+end
+
+@testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin
+    # can not just set `typ = Any` because that would include the predicate (non-throwing) methods of `checkbounds`, because `Type{Bool} <: Any`
+    for typ in (AbstractString, AbstractArray, Base.AbstractBroadcasted)
+        @test Base.infer_return_type(checkbounds, Tuple{typ, Vararg}) <: Nothing
+    end
 end
 
 # Throws ArgumentError for negative dimensions in Array

@@ -4,6 +4,8 @@ using Test, Logging
 
 import Logging: min_enabled_level, shouldlog, handle_message
 
+@test isempty(Test.detect_closure_boxes(Logging))
+
 @noinline func1() = backtrace()
 
 # see "custom log macro" testset
@@ -17,6 +19,13 @@ macro customlog(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourcei
     @test :AbstractLogger in names(Logging, all=true)  # exported public type
     @test :Info in names(Logging, all=true)            # non-exported public constant
     @test :handle_message in names(Logging, all=true)  # non-exported public function
+end
+
+@testset "LogLevel compatibility with integers" begin
+    @test Logging.Debug + 1000 == Logging.Info
+    @test Logging.Warn - 1000 == Logging.Info
+    @test Logging.Info < 500
+    @test 500 < Logging.Warn
 end
 
 @testset "ConsoleLogger" begin

@@ -138,12 +138,6 @@ const t_log_Float32 = (0.0,0.007782140442054949,0.015504186535965254,0.023167059
     0.6773988235918061,0.6813592248079031,0.6853040030989194,0.689233281238809,
     0.6931471805599453)
 
-# truncate lower order bits (up to 26)
-# ideally, this should be able to use ANDPD instructions, see #9868.
-@inline function truncbits(x::Float64)
-    reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
-end
-
 logb(::Type{Float32},::Val{2})  = 1.4426950408889634
 logb(::Type{Float32},::Val{:ℯ}) = 1.0
 logb(::Type{Float32},::Val{10}) = 0.4342944819032518
@@ -273,11 +267,12 @@ end
 
         # Step 3
         xu = reinterpret(UInt64,x)
-        m = Int(xu >> 52) & 0x07ff
+        # `% Int` rather than `Int(...)` to preserve `:nothrow` (the shifted value fits in 11 bits)
+        m = ((xu >> 52) % Int) & 0x07ff
         if m == 0 # x is subnormal
             x *= 1.8014398509481984e16 # 0x1p54, normalise significand
             xu = reinterpret(UInt64,x)
-            m = Int(xu >> 52) & 0x07ff - 54
+            m = ((xu >> 52) % Int) & 0x07ff - 54
         end
         m -= 1023
         y = reinterpret(Float64,(xu & 0x000f_ffff_ffff_ffff) | 0x3ff0_0000_0000_0000)
@@ -347,7 +342,8 @@ function log1p(x::Float64)
         z = 1.0 + x
         zu = reinterpret(UInt64,z)
         s = reinterpret(Float64,0x7fe0_0000_0000_0000 - (zu & 0xfff0_0000_0000_0000)) # 2^-m
-        m = Int(zu >> 52) & 0x07ff - 1023 # z cannot be subnormal
+        # `% Int` rather than `Int(...)` to preserve `:nothrow` (the shifted value fits in 11 bits)
+        m = ((zu >> 52) % Int) & 0x07ff - 1023 # z cannot be subnormal
         c = m > 0 ? 1.0-(z-x) : x-(z-1.0) # 1+x = z+c exactly
         y = reinterpret(Float64,(zu & 0x000f_ffff_ffff_ffff) | 0x3ff0_0000_0000_0000)
 
@@ -560,8 +556,8 @@ function _log_ext(xu::UInt64)
     # x = 2^k z; where z is in range [0x1.69555p-1,0x1.69555p-0) and exact.
     # The range is split into N subintervals.
     # The ith subinterval contains z and c is near the center of the interval.
-    tmp = reinterpret(Int64, xu - 0x3fe6955500000000) #0x1.69555p-1
-    z = reinterpret(Float64, xu - (tmp & 0xfff0000000000000))
+    tmp = reinterpret(Int64, xu -% 0x3fe6955500000000) #0x1.69555p-1
+    z = reinterpret(Float64, xu -% (tmp & 0xfff0000000000000))
     k = Float64(tmp >> 52)
     # log(x) = k*Ln2 + log(c) + log1p(z/c-1).
     # N.B. :nothrow and :noub since `idx` is known to be `1 ≤ idx ≤ length(t_log_table_compact)`

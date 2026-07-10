@@ -159,9 +159,21 @@ rand_generic(r::AbstractRNG, ::Type{Int64})  = rand(r, UInt64) % Int64
 rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
     complex(rand(r, T), rand(r, T))
 
+# Reuse the bulk (SIMD) rand! for T on a reinterpreted view, instead of the
+# per-element scalar fallback above.
+function rand!(r::AbstractRNG, A::Array{Complex{T}}, ::SamplerType{Complex{T}}) where {T<:Base.HWReal}
+    rand!(r, reinterpret(T, A))
+    return A
+end
+# Cannot reinterpret a 0-dim Complex{T} Array to T
+function rand!(r::AbstractRNG, A::Array{Complex{T},0}, sp::SamplerType{Complex{T}}) where {T<:Base.HWReal}
+    @inbounds A[] = rand(r, sp)
+    return A
+end
+
 ### random characters
 
-# returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
+# returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - 0x10ffff)
 function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:AbstractChar}
     c = rand(r, 0x00000000:0x0010f7ff)
     (c < 0xd800) ? T(c) : T(c+0x800)
@@ -368,7 +380,7 @@ function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
     isempty(r) && empty_collection_error()
     a = first(r)
     U = uint_sup(T)
-    s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
+    s = (last(r) -% first(r)) % unsigned(T) % U +% one(U) # overflow ok
     # mod(-s, s) could be put in the Sampler object for repeated calls, but
     # this would be an advantage only for very big s and number of calls
     SamplerRangeNDL(a, s)
@@ -386,7 +398,7 @@ end
 
 # similar to `randn_unlikely` : splitting this unlikely path out results in faster code
 @noinline function rand_unlikely(rng, s::U, m)::U where {U}
-    t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
+    t = mod(-%(s), s) # as s is unsigned, -s is equal to 2^L - s in the paper
     while (m % U) < t
         x = widen(rand(rng, U))
         m = x * s
@@ -518,14 +530,8 @@ _Sampler(RNG::Type{<:AbstractRNG}, t::Union{AbstractDict,AbstractSet}, n::Val{In
 _Sampler(::Type{<:AbstractRNG}, t::Union{AbstractDict,AbstractSet}, ::Val{1}) =
     SamplerTrivial(t)
 
-function nth(iter, n::Integer)::eltype(iter)
-    for (i, x) in enumerate(iter)
-        i == n && return x
-    end
-end
-
 rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{AbstractDict,AbstractSet}}) =
-    nth(sp[], rand(rng, 1:length(sp[])))
+    @inbounds Iterators.nth(sp[], rand(rng, 1:length(sp[])))
 
 
 ## random characters from a string

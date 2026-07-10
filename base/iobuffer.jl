@@ -59,7 +59,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     # When the buffer is resized, or a new buffer allocated, this is the maximum size of the buffer.
     # A new GenericIOBuffer may be constructed with an existing data larger than `maxsize`.
-    # When that happensm we must make sure to not have more than `maxsize` bytes in the buffer,
+    # When that happens, we must make sure to not have more than `maxsize` bytes in the buffer,
     # else reallocating will lose data. So, never write to indices > `maxsize + get_offset(io)`
     # This value is always in 0:typemax(Int).
     maxsize::Int
@@ -191,6 +191,7 @@ When `data` is not given, the buffer will be both readable and writable by defau
     offset leaving behind arbitrary values at other offsets. If `maxsize > length(data)`,
     the IOBuffer might re-allocate the data entirely, which
     may or may not be visible in any outstanding bindings to `array`.
+
 # Examples
 ```jldoctest
 julia> io = IOBuffer();
@@ -730,7 +731,7 @@ julia> String(take!(io))
 function take!(io::GenericIOBuffer)
     io.mark = -1
     if io.seekable
-        # If the buffer is seekable, then the previously consumed bytes from ptr+1:size
+        # If the buffer is seekable, then the previously consumed bytes from 1:ptr-1
         # must still be output, as they are not truly gone.
         # Hence, we output all bytes from 1:io.size
         offset = get_offset(io)
@@ -784,11 +785,13 @@ function take!(io::IOBuffer)
     return data
 end
 
-"Internal method. This method can be faster than takestring!, because it does not
+"""
+Internal method. This method can be faster than takestring!, because it does not
 reset the buffer to a usable state, and it does not check for io.reinit.
 Using the buffer after calling unsafe_takestring! may cause undefined behaviour.
 This function is meant to be used when the buffer is only used as a temporary
-string builder, which is discarded after the string is built."
+string builder, which is discarded after the string is built.
+"""
 function unsafe_takestring!(io::IOBuffer)
     used_span = get_used_span(io)
     nbytes = length(used_span)
@@ -806,7 +809,7 @@ function unsafe_takestring!(io::IOBuffer)
 end
 
 """
-    takestring!(io::IOBuffer) -> String
+    takestring!(io::IOBuffer)::String
 
 Return the content of `io` as a `String`, resetting the buffer to its initial
 state.

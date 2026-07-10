@@ -49,15 +49,30 @@ Fully implemented by:
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
 
-## Constructors and Types
+## Ranges
+
+### Constructing Ranges
+
+```@docs
+Base.:(:)(::Any, ::Any, ::Any)
+Base.:(:)(::CartesianIndex, ::CartesianIndex, ::CartesianIndex)
+Base.range
+Base.logrange
+```
+
+### Range Types
 
 ```@docs
 Base.AbstractRange
 Base.OrdinalRange
 Base.AbstractUnitRange
 Base.StepRange
+Base.StepRangeLen
 Base.UnitRange
+Base.AbstractOneTo
+Base.OneTo
 Base.LinRange
+Base.LogRange
 ```
 
 ## General Collections

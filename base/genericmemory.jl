@@ -88,31 +88,8 @@ memoryindex(ref::GenericMemoryRef) = memoryrefoffset(ref)
 
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
-_unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(memoryref(A, i)); A)
-function _unsetindex!(A::MemoryRef{T}) where T
-    @_terminates_locally_meta
-    @_propagate_inbounds_meta
-    @inline
-    @boundscheck memoryref(A, 1)
-    mem = A.mem
-    MemT = typeof(mem)
-    arrayelem = datatype_arrayelem(MemT)
-    elsz = datatype_layoutsize(MemT)
-    isbits = 0; isboxed = 1; isunion = 2
-    arrayelem == isbits && datatype_pointerfree(T::DataType) && return A
-    t = @_gc_preserve_begin mem
-    p = Ptr{Ptr{Cvoid}}(@inbounds pointer(A))
-    if arrayelem == isboxed
-        Intrinsics.atomic_pointerset(p, C_NULL, :monotonic)
-    elseif arrayelem != isunion
-        for j = 1:Core.sizeof(Ptr{Cvoid}):elsz
-            # XXX: this violates memory ordering, since it writes more than one C_NULL to each
-            Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
-        end
-    end
-    @_gc_preserve_end t
-    return A
-end
+_unsetindex!(A::Memory, i::Int) = (@_propagate_inbounds_meta; _unsetindex!(memoryref(A, i)); A)
+_unsetindex!(A::MemoryRef) = (@_propagate_inbounds_meta; Core.memoryrefunset!(A, :not_atomic, @_boundscheck); A)
 
 elsize(@nospecialize _::Type{A}) where {T,A<:GenericMemory{<:Any,T}} = aligned_sizeof(T) # XXX: probably supposed to be the stride?
 sizeof(a::GenericMemory) = Core.sizeof(a)
@@ -272,7 +249,7 @@ end
 
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
-    @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, (i1, i2, I...))
+    @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, i1, i2, I...)
     setindex!(A, x, i1)
 end
 

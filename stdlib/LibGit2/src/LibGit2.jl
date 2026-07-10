@@ -206,19 +206,18 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
     tree1 = GitTree(repo, b1_id)
     tree2 = GitTree(repo, b2_id)
     files = AbstractString[]
-    try
-        diff = diff_tree(repo, tree1, tree2)
-        for i in 1:count(diff)
-            delta = diff[i]
-            delta === nothing && break
-            if Consts.DELTA_STATUS(delta.status) in filter
-                Base.push!(files, unsafe_string(delta.new_file.path))
+    with(tree1) do tree1
+        with(tree2) do tree2
+            with(diff_tree(repo, tree1, tree2)) do diff
+                for i in 1:count(diff)
+                    delta = diff[i]
+                    delta === nothing && break
+                    if Consts.DELTA_STATUS(delta.status) in filter
+                        Base.push!(files, unsafe_string(delta.new_file.path))
+                    end
+                end
             end
         end
-        close(diff)
-    finally
-        close(tree1)
-        close(tree2)
     end
     return files
 end
@@ -262,15 +261,21 @@ The keyword arguments are:
   * `remoteurl::AbstractString=""`: the URL of `remote`. If not specified,
     will be assumed based on the given name of `remote`.
   * `refspecs=AbstractString[]`: determines properties of the fetch.
+  * `depth::Integer=0`: limit fetching to the specified number of commits from the tip
+    of each remote branch. `0` indicates a full fetch (the default).
+    Use `Consts.FETCH_DEPTH_UNSHALLOW` to fetch all missing data from a shallow clone.
+    Note: depth is, at the time of writing, only supported for network protocols (http, https, git, ssh), not for local filesystem paths.
+    (https://github.com/libgit2/libgit2/issues/6634)
   * `credentials=nothing`: provides credentials and/or settings when authenticating against
     a private `remote`.
   * `callbacks=Callbacks()`: user provided callbacks and payloads.
 
-Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
+Equivalent to `git fetch [--depth <depth>] [<remoteurl>|<repo>] [<refspecs>]`.
 """
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
+               depth::Integer=0,
                credentials::Creds=nothing,
                callbacks::Callbacks=Callbacks())
     rmt = if isempty(remoteurl)
@@ -290,7 +295,12 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
 
     result = try
         remote_callbacks = RemoteCallbacks(callbacks)
-        fo = FetchOptions(callbacks=remote_callbacks)
+        @static if LibGit2.VERSION >= v"1.7.0"
+            fo = FetchOptions(callbacks=remote_callbacks, depth=Cuint(depth))
+        else
+            depth != 0 && throw(ArgumentError("Depth parameter for fetch requires libgit2 >= 1.7.0"))
+            fo = FetchOptions(callbacks=remote_callbacks)
+        end
         fetch(rmt, refspecs, msg="from $(url(rmt))", options=fo)
     catch err
         if isa(err, GitError) && err.code === Error.EAUTH
@@ -365,8 +375,9 @@ end
 """
     branch(repo::GitRepo)
 
-Equivalent to `git branch`.
-Create a new branch from the current HEAD.
+Equivalent to `git branch --show-current`.
+Return the name of the current branch (HEAD reference).
+Throw if no branch is checked out.
 """
 function branch(repo::GitRepo)
     head_ref = head(repo)
@@ -436,17 +447,21 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
             close(cmt)
-            new_branch_ref === nothing && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
-            branch_ref = new_branch_ref
         end
+        if new_branch_ref === nothing
+            throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
+        end
+        branch_ref = new_branch_ref
     end
+
+    branch_ref′ = branch_ref # Avoids boxing `branch_ref`
     try
-        #TODO: what if branch tracks other then "origin" remote
+        #TODO: what if branch tracks other than "origin" remote
         if !isempty(track) # setup tracking
             try
                 with(GitConfig, repo) do cfg
                     set!(cfg, "branch.$branch_name.remote", Consts.REMOTE_ORIGIN)
-                    set!(cfg, "branch.$branch_name.merge", name(branch_ref))
+                    set!(cfg, "branch.$branch_name.merge", name(branch_ref′))
                 end
             catch
                 @warn "Please provide remote tracking for branch '$branch_name' in '$(path(repo))'"
@@ -455,15 +470,15 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
 
         if set_head
             # checkout selected branch
-            with(peel(GitTree, branch_ref)) do btree
+            with(peel(GitTree, branch_ref′)) do btree
                 checkout_tree(repo, btree)
             end
 
             # switch head to the branch
-            head!(repo, branch_ref)
+            head!(repo, branch_ref′)
         end
     finally
-        close(branch_ref)
+        close(branch_ref′)
     end
     return
 end
@@ -498,28 +513,30 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     isempty(commit) && return
 
     # grab head name
-    head_name = Consts.HEAD_FILE
+    head_name = Ref(Consts.HEAD_FILE)
     try
         with(head(repo)) do head_ref
-            head_name = shortname(head_ref)
+            head_name[] = shortname(head_ref)
             # if it is HEAD use short OID instead
-            if head_name == Consts.HEAD_FILE
-                head_name = string(GitHash(head_ref))
+            if head_name[] == Consts.HEAD_FILE
+                head_name[] = string(GitHash(head_ref))
             end
         end
     catch
     end
 
     # search for commit to get a commit object
-    obj = GitObject(repo, GitHash(commit))
-    peeled = peel(GitCommit, obj)
-    obj_oid = GitHash(peeled)
+    with(GitObject(repo, GitHash(commit))) do obj
+        with(peel(GitCommit, obj)) do peeled
+            obj_oid = GitHash(peeled)
 
-    # checkout commit
-    checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
+            # checkout commit
+            checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
 
-    GitReference(repo, obj_oid, force=force,
-                 msg="libgit2.checkout: moving from $head_name to $(obj_oid))")
+            with(GitReference(repo, obj_oid, force=force,
+                         msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid)")) do _ end
+        end
+    end
 
     return nothing
 end
@@ -539,11 +556,16 @@ The keyword arguments are:
   * `remote_cb::Ptr{Cvoid}=C_NULL`: a callback which will be used to create the remote
     before it is cloned. If `C_NULL` (the default), no attempt will be made to create
     the remote - it will be assumed to already exist.
+  * `depth::Integer=0`: create a shallow clone with a history truncated to the
+    specified number of commits. `0` indicates a full clone (the default).
+    Use `Consts.FETCH_DEPTH_UNSHALLOW` to fetch all missing data from a shallow clone.
+    Note: shallow clones are, at the time of writing, only supported for network protocols (http, https, git, ssh), not for local filesystem paths.
+    (https://github.com/libgit2/libgit2/issues/6634)
   * `credentials::Creds=nothing`: provides credentials and/or settings when authenticating
     against a private repository.
   * `callbacks::Callbacks=Callbacks()`: user provided callbacks and payloads.
 
-Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
+Equivalent to `git clone [-b <branch>] [--bare] [--depth <depth>] <repo_url> <repo_path>`.
 
 # Examples
 ```julia
@@ -552,12 +574,15 @@ repo1 = LibGit2.clone(repo_url, "test_path")
 repo2 = LibGit2.clone(repo_url, "test_path", isbare=true)
 julia_url = "https://github.com/JuliaLang/julia"
 julia_repo = LibGit2.clone(julia_url, "julia_path", branch="release-0.6")
+# Shallow clone with only the most recent commit
+shallow_repo = LibGit2.clone(repo_url, "shallow_path", depth=1)
 ```
 """
 function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Cvoid} = C_NULL,
+               depth::Integer = 0,
                credentials::Creds=nothing,
                callbacks::Callbacks=Callbacks())
     cred_payload = reset!(CredentialPayload(credentials))
@@ -573,7 +598,12 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
     lbranch = Base.cconvert(Cstring, branch)
     GC.@preserve lbranch begin
         remote_callbacks = RemoteCallbacks(callbacks)
-        fetch_opts = FetchOptions(callbacks=remote_callbacks)
+        @static if LibGit2.VERSION >= v"1.7.0"
+            fetch_opts = FetchOptions(callbacks=remote_callbacks, depth=Cuint(depth))
+        else
+            depth != 0 && throw(ArgumentError("Shallow clone (depth parameter) requires libgit2 >= 1.7.0"))
+            fetch_opts = FetchOptions(callbacks=remote_callbacks)
+        end
         clone_opts = CloneOptions(
                     bare = Cint(isbare),
                     checkout_branch = isempty(lbranch) ? Cstring(C_NULL) : Base.unsafe_convert(Cstring, lbranch),
@@ -633,7 +663,9 @@ function connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION;
     return rmt
 end
 
-""" git reset [<committish>] [--] <pathspecs>... """
+"""
+Equivalent to `git reset [<committish>] [--] <pathspecs>...`.
+"""
 function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractString...)
     obj = GitObject(repo, isempty(committish) ? Consts.HEAD_FILE : committish)
     # do not remove entries in the index matching the provided pathspecs with empty target commit tree

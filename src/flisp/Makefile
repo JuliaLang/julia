@@ -26,7 +26,7 @@ NATIVE_BUILDDIR := $(BUILDDIR)
 LLT_BUILDDIR := $(BUILDDIR)/$(LLTDIR)
 endif
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h)
+HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h) $(wildcard $(LLTDIR)/*.inc)
 
 OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
@@ -61,9 +61,9 @@ DEBUGFLAGS_COMMON += $(FLAGS_COMMON)
 
 default: release
 
-release: $(BUILDDIR)/$(EXENAME)$(EXE) $(BUILDDIR)/compile_commands.json
+release: $(BUILDDIR)/$(EXENAME)$(EXE) regenerate-compile_commands
 
-debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE) $(BUILDDIR)/compile_commands.json
+debug: $(BUILDDIR)/$(EXENAME)-debug$(EXE) regenerate-compile_commands
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -103,10 +103,20 @@ endif
 endif
 
 $(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(call link-exe,$@, \
+		$(JLDFLAGS) $(WIN_LD_LIBPATHS), \
+		$(WIN_LD_EXE_CRT_START) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) \
+		$(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CCLD) $(DEBUGFLAGS) $(JLDFLAGS), \
+		$(DOBJS) $(BUILDDIR)/flmain.dbg.obj $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS)))
 
 $(BUILDDIR)/$(EXENAME)$(EXE): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(JLDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(call link-exe,$@, \
+		$(JLDFLAGS) $(WIN_LD_LIBPATHS), \
+		$(WIN_LD_EXE_CRT_START) $(OBJS) $(BUILDDIR)/flmain.o $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) \
+		$(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CCLD) $(SHIPFLAGS) $(JLDFLAGS), \
+		$(OBJS) $(BUILDDIR)/flmain.o $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS)))
 
 $(BUILDDIR)/host/Makefile:
 	mkdir -p $(BUILDDIR)/host
@@ -140,8 +150,10 @@ CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) 
 INCLUDED_FLISP_FILES := flisp.c:cvalues.c flisp.c:types.c flisp.c:print.c flisp.c:read.c flisp.c:equal.c
 
 # Compilation database generation
-$(BUILDDIR)/compile_commands.json:
-	@{ \
+.PHONY: regenerate-compile_commands
+regenerate-compile_commands:
+	@TMPFILE=$$(mktemp $(abspath $(BUILDDIR)/compile_commands.json.XXXXXX)); \
+	{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		echo "["; \
 		first=true; \
@@ -158,16 +170,15 @@ $(BUILDDIR)/compile_commands.json:
 			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
 		done; \
 		echo "]"; \
-	} > $@.tmp
-	@# This ensures we replace the file atomically, and avoid spurious rewrites
-	@if ! cmp -s $@.tmp $@; then \
-		mv $@.tmp $@; \
+	} > $$TMPFILE; \
+	if ! cmp -s $$TMPFILE $(BUILDDIR)/compile_commands.json; then \
+		mv $$TMPFILE $(BUILDDIR)/compile_commands.json; \
 	else \
-		rm -f $@.tmp; \
+		rm -f $$TMPFILE; \
 	fi
 
-compile-database: $(BUILDDIR)/compile_commands.json
-	@echo "Compilation database created for flisp: $<"
+compile-database: regenerate-compile_commands
+	@echo "Compilation database created for src/flisp"
 
 clean:
 	rm -f $(BUILDDIR)/*.o
@@ -175,7 +186,7 @@ clean:
 	rm -f $(BUILDDIR)/*.a
 	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
 	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
-	rm -f $(BUILDDIR)/compile_commands.json
+	rm -f $(BUILDDIR)/compile_commands.json*
 	rm -f $(BUILDDIR)/host/*
 
-.PHONY: flisp-deps compile-database $(BUILDDIR)/compile_commands.json
+.PHONY: flisp-deps compile-database

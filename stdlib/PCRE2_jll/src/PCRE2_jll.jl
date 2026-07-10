@@ -16,7 +16,7 @@ artifact_dir::String = ""
 libpcre2_8_path::String = ""
 const libpcre2_8 = LazyLibrary(
     if Sys.iswindows()
-        BundledLazyLibraryPath("libpcre2-8.dll")
+        BundledLazyLibraryPath("libpcre2-8-0.dll")
     elseif Sys.isapple()
         BundledLazyLibraryPath("libpcre2-8.0.dylib")
     elseif Sys.islinux() || Sys.isfreebsd()

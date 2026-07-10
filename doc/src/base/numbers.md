@@ -33,7 +33,7 @@ Number  (Abstract Type)
       └─ Irrational
 ```
 
-### Abstract number types
+### Abstract Number Types
 
 ```@docs
 Core.Number
@@ -45,7 +45,7 @@ Core.Unsigned
 Base.AbstractIrrational
 ```
 
-### Concrete number types
+### Concrete Number Types
 
 ```@docs
 Core.Float16
@@ -76,6 +76,7 @@ Base.Irrational
 ```@docs
 Base.digits
 Base.digits!
+Base.ndigits
 Base.bitstring
 Base.parse
 Base.tryparse
@@ -85,6 +86,8 @@ Base.unsigned
 Base.float(::Any)
 Base.Math.significand
 Base.Math.exponent
+Base.Math.frexp
+Base.Math.ldexp
 Base.complex(::Complex)
 Base.bswap
 Base.hex2bytes
@@ -131,7 +134,20 @@ Base.Rounding.get_zero_subnormals
 Base.Rounding.set_zero_subnormals
 ```
 
-### Integers
+## Bit Operations
+
+```@docs
+Base.:(<<)
+Base.:(>>)
+Base.:(>>>)
+Base.bitrotate
+Base.:(~)
+Base.:(&)
+Base.:(|)
+Base.xor
+Base.nand
+Base.nor
+```
 
 ```@docs
 Base.count_ones
@@ -140,6 +156,11 @@ Base.leading_zeros
 Base.leading_ones
 Base.trailing_zeros
 Base.trailing_ones
+```
+
+### Integers
+
+```@docs
 Base.isodd
 Base.iseven
 Base.@int128_str

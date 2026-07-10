@@ -2,6 +2,8 @@
 
 using Test, InteractiveUtils
 
+@test isempty(Test.detect_closure_boxes(InteractiveUtils))
+
 @testset "highlighting" begin
     include("highlighting.jl")
 end
@@ -58,7 +60,7 @@ for u in Any[
     Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
     Union{Missing, Nothing}
 ]
-    @test InteractiveUtils.is_expected_union(u)
+    @test Base.Compiler.IRShow.is_expected_union(u)
 end
 
 for u in Any[
@@ -66,7 +68,7 @@ for u in Any[
     Union{Missing, Array},
     Union{Int, Tuple{Any, Int}}
 ]
-    @test !InteractiveUtils.is_expected_union(u)
+    @test !Base.Compiler.IRShow.is_expected_union(u)
 end
 mutable struct Stable{T,N}
     A::Array{T,N}
@@ -574,16 +576,16 @@ let errf = tempname(),
             @test startswith(errstr, """start
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """) || errstr
+                """) context=errstr
             @test occursin("""\nmiddle
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """, errstr) || errstr
+                """, errstr) context=errstr
             @test occursin("""\nlater
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """, errstr) || errstr
-            @test endswith(errstr, "\nend\n") || errstr
+                """, errstr) context=errstr
+            @test endswith(errstr, "\nend\n") context=errstr
         end
         rm(errf)
     end
@@ -632,7 +634,7 @@ expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...)
 # Make sure broadcasts in nested arguments are not processed.
 v = Any[1]
 expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
-@test contains(expansion, "Typeof(rand.(Ref(1)))")
+@test contains(expansion, "Core.Typeof(rand.(Ref(1)))")
 @test !contains(expansion, "(x1) =")
 
 # Issue # 45889
@@ -834,6 +836,10 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(file)
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
+
+module ModuleWithoutPathForEdit
+end
+@test_throws ErrorException("could not find source file for module: $(ModuleWithoutPathForEdit)") edit(ModuleWithoutPathForEdit)
 
 # compiler stdlib path updating
 file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
@@ -1053,4 +1059,50 @@ end # module
 @testset "Subtypes and deprecations" begin
     using .OuterModule
     @test_nowarn subtypes(Integer);
+end
+
+let code = """
+        using InteractiveUtils
+        @activate Compiler[:codegen, :reflection]
+        println("done compiling")
+    """
+    orig_compiler = realpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler"))
+    mktempdir() do dir
+        new_compiler = joinpath(dir, "Compiler")
+        cp(orig_compiler, new_compiler)
+        output = read(`$(Base.julia_cmd()) -g0 -O0 --startup-file=no --project=$(new_compiler) -e $code`, String)
+        @test occursin("done compiling", output)
+    end
+end
+
+var_line = @__LINE__()+1
+"""
+    docs for a global variable
+"""
+const _interactiveutils_some_var_ = 0
+
+@test InteractiveUtils.varloc(@__MODULE__, :_interactiveutils_some_var_) == (@__FILE__, var_line)
+
+@testset "world argument for varinfo and subtypes" begin
+    # varinfo: a non-const binding added after the recorded world should not
+    # appear when querying that older world (its partition does not yet exist
+    # at world_no_var, so `isdefined` in that world returns false).
+    M_varinfo = @eval module $(gensym()) end
+    world_no_var = Base.get_world_counter()
+    @eval M_varinfo begin
+        export tracked_var
+        tracked_var = 42
+    end
+    @test occursin("tracked_var", repr(varinfo(M_varinfo)))
+    @test !occursin("tracked_var", repr(varinfo(M_varinfo; world=world_no_var)))
+
+    # subtypes: subtype added after the recorded world should not appear when
+    # querying that older world.
+    M_sub = @eval module $(gensym())
+        abstract type MyAbstractParent end
+    end
+    world_no_subtype = Base.get_world_counter()
+    @eval M_sub struct MyConcreteChild <: MyAbstractParent end
+    @test length(subtypes(M_sub, M_sub.MyAbstractParent)) == 1
+    @test isempty(subtypes(M_sub, M_sub.MyAbstractParent; world=world_no_subtype))
 end

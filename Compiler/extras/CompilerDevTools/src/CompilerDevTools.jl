@@ -12,14 +12,14 @@ struct SplitCacheInterp <: Compiler.AbstractInterpreter
     owner::SplitCacheOwner
     inf_params::Compiler.InferenceParams
     opt_params::Compiler.OptimizationParams
-    inf_cache::Vector{Compiler.InferenceResult}
+    inf_cache::Compiler.InferenceCache
     codegen_cache::IdDict{CodeInstance,CodeInfo}
     function SplitCacheInterp(;
         world::UInt = Base.get_world_counter(),
         owner::SplitCacheOwner = SplitCacheOwner(),
         inf_params::Compiler.InferenceParams = Compiler.InferenceParams(),
         opt_params::Compiler.OptimizationParams = Compiler.OptimizationParams(),
-        inf_cache::Vector{Compiler.InferenceResult} = Compiler.InferenceResult[])
+        inf_cache::Compiler.InferenceCache = Compiler.InferenceCache())
         new(world, owner, inf_params, opt_params, inf_cache, IdDict{CodeInstance,CodeInfo}())
     end
 end

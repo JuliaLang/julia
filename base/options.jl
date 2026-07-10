@@ -70,9 +70,12 @@ struct JLOptions
     gc_sweep_always_full::Int8
     compress_sysimage::Int8
     alert_on_critical_error::Int8
+    target_sanitize_memory::Int8
+    target_sanitize_thread::Int8
+    target_sanitize_address::Int8
 end
 
-# This runs early in the sysimage != is not defined yet
+# This runs early in the sysimage when `!=` is not defined yet
 if sizeof(JLOptions) === ccall(:jl_sizeof_jl_options, Int, ())
 else
     ccall(:jl_throw, Cvoid, (Any,), "Option structure mismatch")

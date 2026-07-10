@@ -34,7 +34,7 @@ export HAMT
 # into the storage array.
 #
 # HAMT can be both persistent and non-persistent.
-# The `path` function searches for a matching entries, and for persistency
+# The `path` function searches for a matching entry, and for persistency
 # optionally copies the path so that it can be safely mutated.
 
 # TODO:
@@ -199,7 +199,7 @@ or grows the HAMT by inserting a new trie instead.
         end
         set!(trie, bi)
     else
-        @assert present
+        @assert present "!found && !present"
         # collision -> grow
         leaf = @inbounds trie.data[i]::Leaf{K,V}
         leaf_h = HashState(h, leaf.key)

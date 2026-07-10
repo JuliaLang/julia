@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-TOML.jl is a Julia standard library for parsing and writing TOML v1.0 files.
+TOML.jl is a Julia standard library for parsing and writing TOML v1.1 files.
 This module provides functions to parse TOML strings and files into Julia data structures
 and to serialize Julia data structures to TOML format.
 """
@@ -11,16 +11,10 @@ using Dates
 
 module Internals
     # The parser is defined in Base
-    using Base.TOML: Parser, parse, tryparse, ParserError, isvalid_barekey_char, reinit!
+    using Base.TOML: Parser, Printer, parse, tryparse, ParserError, reinit!
     # Put the error instances in this module
     for errtype in instances(Base.TOML.ErrorType)
         @eval using Base.TOML: $(Symbol(errtype))
-    end
-    # We put the printing functionality in a separate module since It
-    # defines a function `print` and we don't want that to collide with normal
-    # usage of `(Base.)print` in other files
-    module Printer
-        include("print.jl")
     end
 end
 
@@ -77,7 +71,7 @@ tryparsefile(p::Parser, f::AbstractString) =
     parse(x::Union{AbstractString, IO})
     parse(p::Parser, x::Union{AbstractString, IO})
 
-Parse the string  or stream `x`, and return the resulting table (dictionary).
+Parse the string or stream `x`, and return the resulting table (dictionary).
 Throw a [`ParserError`](@ref) upon failure.
 
 See also [`TOML.tryparse`](@ref).
@@ -132,7 +126,7 @@ sort tables according to the function given by the keyword argument `by`. If the
 
 The following data types are supported: `AbstractDict`, `AbstractVector`, `AbstractString`, `Integer`, `AbstractFloat`, `Bool`,
 `Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats
-need to be convertible to `Float64` and `Int64` respectively. For other data types,
+need to be convertible to `Int64` and `Float64` respectively. For other data types,
 pass the function `to_toml` that takes the data types and returns a value of a
 supported type.
 """

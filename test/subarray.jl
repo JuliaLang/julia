@@ -2,6 +2,9 @@
 
 using Test, Random, LinearAlgebra
 
+isdefined(Main, :StridedArrays) || @eval Main include("testhelpers/StridedArrays.jl")
+using .Main.StridedArrays
+
 ######## Utilities ###########
 
 # Generate an array similar to A[indx1, indx2, ...], but only call
@@ -92,21 +95,33 @@ function single_stride_dim(A::Array)
 end
 single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 
+function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
+    A_cconv = Base.cconvert(Ptr{T}, A)
+    GC.@preserve A_cconv begin
+        A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
+        for d in 1:N
+            stride_in_bytes = stride(A, d) * Base.elsize(typeof(A))
+            first_idx = first(axes(A, d))
+            A_ptr += (I[d] - first_idx) * stride_in_bytes
+        end
+        unsafe_load(A_ptr)
+    end
+end
+
 # Testing equality of AbstractArrays, using several different methods to access values
 function test_cartesian(@nospecialize(A), @nospecialize(B))
-    isgood = true
     for (IA, IB) in zip(CartesianIndices(A), CartesianIndices(B))
         @test A[IA] == B[IB]
         if A isa StridedArray
             v1 = GC.@preserve A unsafe_load(pointer(A.parent, sum((0,(strides(A) .* (IA.I .- 1))...))+Base.first_index(A)))
-            @test v1 == B[IB]
+            v2 = unsafe_strided_getindex(A, Tuple(IA)...)
+            @test v1 == v2 == B[IB]
         end
     end
 end
 
 function test_linear(@nospecialize(A), @nospecialize(B))
     @test length(A) == length(B)
-    isgood = true
     for (iA, iB) in zip(1:length(A), 1:length(B))
         @test A[iA] == B[iB]
         if A isa StridedArray
@@ -1101,6 +1116,41 @@ end
     @test Base.mightalias(permutedims(V1), permutedims(V1))
 end
 
+@testset "aliasing with PermutedDimsArray" begin
+    A = rand(3, 3)
+    P = PermutedDimsArray(A, (2, 1))
+    B = rand(3, 3)
+    Q = PermutedDimsArray(B, (2, 1))
+    @test Base.mightalias(A, P)
+    @test Base.mightalias(P, A)
+    @test !Base.mightalias(A, Q)
+    @test !Base.mightalias(P, Q)
+
+    A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+    P = PermutedDimsArray(A, (2, 1))
+    expected = collect(P)
+    copyto!(A, P)
+    @test A == expected
+
+    A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+    P = PermutedDimsArray(A, (2, 1))
+    expected = collect(A)
+    copyto!(P, A)
+    @test P == expected
+
+    M = fill(-1.0, 4, 4)
+    P = PermutedDimsArray(view(M, 1:2, 1:2), (2, 1))
+    @test_throws BoundsError copyto!(P, ones(Int, 3, 3))
+    @test all(==(-1.0), M[3:4, :])
+    @test all(==(-1.0), M[:, 3:4])
+end
+
+@testset "issue #61554" begin
+    P = PermutedDimsArray(zeros(2, 2), (2, 1))
+    copyto!(P, [1.0, 2.0, 3.0, 4.0])
+    @test collect(P) == [1.0 3.0; 2.0 4.0]
+    @test_throws BoundsError copyto!(P, [1.0, 2.0, 3.0, 4.0, 5.0])
+end
 
 @test @views quote var"begin" + var"end" end isa Expr
 
@@ -1154,4 +1204,10 @@ end
         @test array == [-3, 2, -1, 4, 5, -2, -4, 8]
         @test array2 == [-10, 2, -30, 4, -50, 6, -70, 8]
     end
+end
+
+# issue #57003
+@testset "copyto! @inbounds propagation" begin
+    @test @inbounds(copyto!(Vector{Int}(undef, 10), 1, collect(1:10), 1, 10)) == 1:10
+    @test_throws BoundsError copyto!(Vector{Int}(undef, 5), 1, collect(1:10), 1, 10)
 end

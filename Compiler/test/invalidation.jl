@@ -14,12 +14,12 @@ struct InvalidationTester <: Compiler.AbstractInterpreter
     world::UInt
     inf_params::Compiler.InferenceParams
     opt_params::Compiler.OptimizationParams
-    inf_cache::Vector{Compiler.InferenceResult}
+    inf_cache::Compiler.InferenceCache
     function InvalidationTester(;
                                 world::UInt = Base.get_world_counter(),
                                 inf_params::Compiler.InferenceParams = Compiler.InferenceParams(),
                                 opt_params::Compiler.OptimizationParams = Compiler.OptimizationParams(),
-                                inf_cache::Vector{Compiler.InferenceResult} = Compiler.InferenceResult[])
+                                inf_cache::Compiler.InferenceCache = Compiler.InferenceCache())
         return new(world, inf_params, opt_params, inf_cache)
     end
 end
@@ -116,8 +116,7 @@ begin
         @test any(iscall((src, pr48932_callee)), src.code)
     end
 
-    let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee))))
-        # Base.method_instance(pr48932_callee, (Any,))
+    let mi = only(Base.method_instances(pr48932_callee, Tuple, Base.get_world_counter()))
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
@@ -281,7 +280,7 @@ begin take!(GLOBAL_BUFFER)
         @test any(isinvoke(:pr48932_callee_inlined), src.code)
     end
 
-    let mi = Base.method_instance(pr48932_callee_inlined, (Int,))
+    let mi = only(Base.method_instances(pr48932_callee_inlined, (Any,), Base.get_world_counter()))
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
@@ -291,7 +290,7 @@ begin take!(GLOBAL_BUFFER)
         @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
-    let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
+    let mi = only(Base.method_instances(pr48932_caller_inlined, (Int,), Base.get_world_counter()))
         ci = mi.cache
         @test !isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
@@ -302,7 +301,7 @@ begin take!(GLOBAL_BUFFER)
     @test "42" == String(take!(GLOBAL_BUFFER))
 
     # test that we added the backedge from `pr48932_callee_inlined` to `pr48932_caller_inlined`:
-    # this redefinition below should invalidate the cache of `pr48932_callee_inlined` but not that of `pr48932_caller_inlined`
+    # this redefinition below should invalidate the cache of both `pr48932_callee_inlined` and `pr48932_caller_inlined`
     @noinline pr48932_callee_inlined(@nospecialize x) = (print(GLOBAL_BUFFER, x); nothing)
 
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inlined, Tuple{Any}))))
@@ -360,4 +359,15 @@ end
     @test occursin("SUCCESS: drop_all_caches test passed", err_after)
     @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int})", err_before)
     @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int}) # recompile", err_after)
+end
+
+# Test that backedge compaction clears mi.backedges when all backedges are removed
+begin
+    pr61102_callee(x) = 2x
+    pr61102_caller(x) = pr61102_callee(x)
+    pr61102_caller(0)
+    callee_mi = Base.method_instance(pr61102_callee, (Int,))
+    @test isdefined(callee_mi, :backedges)
+    pr61102_callee(x::Int) = 3x
+    @test !isdefined(callee_mi, :backedges)
 end

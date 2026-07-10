@@ -4,7 +4,7 @@
 
 declare ptr @julia.get_pgcstack()
 
-declare swiftcc void @sret_call(ptr noalias nocapture noundef nonnull sret([3 x ptr addrspace(10)]), ptr nonnull swiftself, ptr addrspace(10) nonnull)
+declare swiftcc void @sret_call(ptr noalias nocapture noundef nonnull "julia.return_roots"="3" sret([3 x ptr addrspace(10)]), ptr nonnull swiftself, ptr addrspace(10) nonnull)
 
 define hidden swiftcc nonnull ptr addrspace(10) @sret_select(ptr nonnull swiftself "gcstack" %0, ptr addrspace(10) noundef nonnull align 8 dereferenceable(88) %1, i1 %unpredictable) {
   ; CHECK-LABEL: @sret_select
@@ -17,7 +17,7 @@ define hidden swiftcc nonnull ptr addrspace(10) @sret_select(ptr nonnull swiftse
   %3 = alloca [3 x i64], align 8
   %4 = alloca [3 x i64], align 8
   %5 = select i1 %unpredictable, ptr %3, ptr %4
-  call swiftcc void @sret_call(ptr noalias nocapture noundef nonnull sret([3 x ptr addrspace(10)]) %5, ptr nonnull swiftself "gcstack" %0, ptr addrspace(10) nonnull %1)
+  call swiftcc void @sret_call(ptr noalias nocapture noundef nonnull "julia.return_roots"="3" sret([3 x ptr addrspace(10)]) %5, ptr nonnull swiftself "gcstack" %0, ptr addrspace(10) nonnull %1)
   ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
   ret ptr addrspace(10) %1
 }
@@ -43,12 +43,12 @@ false:                                            ; preds = %top
 
 ret:                                              ; preds = %false, %true
   %4 = phi ptr [ %2, %true ], [ %3, %false ]
-  call swiftcc void @sret_call(ptr noalias nocapture noundef nonnull sret([3 x ptr addrspace(10)]) %4, ptr nonnull swiftself "gcstack" %0, ptr addrspace(10) nonnull %1)
+  call swiftcc void @sret_call(ptr noalias nocapture noundef nonnull "julia.return_roots"="3" sret([3 x ptr addrspace(10)]) %4, ptr nonnull swiftself "gcstack" %0, ptr addrspace(10) nonnull %1)
   ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
   ret ptr addrspace(10) %1
 }
 
-declare swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }), ptr noalias nocapture noundef, ptr nonnull swiftself)
+declare swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }), ptr noalias nocapture noundef "julia.return_roots"="1", ptr nonnull swiftself)
 
 define hidden swiftcc void @sret_gc_root_phi(ptr nonnull swiftself "gcstack" %0, i1 %unpredictable) {
 top:
@@ -75,7 +75,7 @@ false:                                            ; preds = %top
 
 ret:                                              ; preds = %false, %true
   %4 = phi ptr [ %2, %true ], [ %3, %false ]
-  call swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }) %1, ptr noalias nocapture noundef %4, ptr nonnull swiftself "gcstack" %0)
+  call swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }) %1, ptr noalias nocapture noundef "julia.return_roots"="1" %4, ptr nonnull swiftself "gcstack" %0)
    ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
   ret void
 }
@@ -110,7 +110,7 @@ false:                                            ; preds = %top
 ret:                                              ; preds = %false, %true
   %5 = phi ptr [ %2, %true ], [ %3, %false ]
   %6 = select i1 %unpredictable2, ptr %4, ptr %5
-  call swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }) %1, ptr noalias nocapture noundef %6, ptr nonnull swiftself "gcstack" %0)
+  call swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }) %1, ptr noalias nocapture noundef "julia.return_roots"="1" %6, ptr nonnull swiftself "gcstack" %0)
    ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
   ret void
 }
@@ -145,7 +145,7 @@ false:                                            ; preds = %top
 ret:                                              ; preds = %false, %true
   %6 = phi ptr [ %2, %true ], [ %5, %false ]
 
-  call swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }) %1, ptr noalias nocapture noundef %6, ptr nonnull swiftself "gcstack" %0)
+  call swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }) %1, ptr noalias nocapture noundef "julia.return_roots"="1" %6, ptr nonnull swiftself "gcstack" %0)
    ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
   ret void
 }

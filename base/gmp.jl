@@ -4,14 +4,14 @@ module GMP
 
 export BigInt
 
-import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
+import .Base: *, *%, +, +%, -, -%, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod, sum, prod,
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
-             ispositive, isnegative, clamp, unsafe_takestring
+             ispositive, isnegative, clamp
 
 import Core: Signed, Float16, Float32, Float64
 
@@ -261,7 +261,7 @@ function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Inte
     count = Ref{Csize_t}()
     ccall((:__gmpz_export, libgmp), Ptr{T}, (Ptr{T}, Ref{Csize_t}, Cint, Csize_t, Cint, Csize_t, mpz_t),
         a, count, order, sizeof(T), endian, nails, n)
-    @assert count[] ≤ length(a)
+    @assert count[] ≤ length(a) "count[] > length(a)"
     return a, Int(count[])
 end
 
@@ -332,7 +332,7 @@ function BigInt(x::Integer)
     isbits(x) && typemin(Clong) <= x <= typemax(Clong) && return BigInt((x % Clong)::Clong)
     nd = ndigits(x, base=2)
     z = MPZ.realloc2(nd)
-    ux = unsigned(x < 0 ? -x : x)
+    ux = unsigned(x < 0 ? -%(x) : x)
     size = 0
     limbnbits = sizeof(Limb) << 3
     while nd > 0
@@ -484,6 +484,12 @@ promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
 `BigFloat`). See [`BigFloat`](@ref BigFloat(::Any, rounding::RoundingMode)) for
 information about some pitfalls with floating-point numbers.
+
+!!! note "big(x::BigFloat)"
+    Unlike `BigFloat(x)`, `big(x)` is a no-op when `x` is already a `BigFloat`,
+    ie. when doing `x = big(x)`, the precision of `x` remains unchanged even if the
+    current `BigFloat` precision is different.
+    ```
 """
 function big end
 
@@ -494,6 +500,7 @@ big(n::Integer) = convert(BigInt, n)
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
+                 (:+%, :add), (:-%,:sub), (:*%, :mul),
                  (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
                  (:&, :and), (:|, :ior), (:xor, :xor))
@@ -530,7 +537,7 @@ function invmod(x::BigInt, y::BigInt)
     if y < 0
         MPZ.add!(z, y)
     end
-    # The postcondition is: mod(z * x, y) == mod(big(1), m) && div(z, y) == 0
+    # The postcondition is: mod(z * x, y) == mod(big(1), y) && div(z, y) == 0
     return z
 end
 
@@ -552,10 +559,10 @@ end
 -(x::BigInt, c::CulongMax) = MPZ.sub_ui(x, c)
 -(c::CulongMax, x::BigInt) = MPZ.ui_sub(c, x)
 
-+(x::BigInt, c::ClongMax) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
-+(c::ClongMax, x::BigInt) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
--(x::BigInt, c::ClongMax) = c < 0 ? +(x, -(c % Culong)) : -(x, convert(Culong, c))
--(c::ClongMax, x::BigInt) = c < 0 ? -(x + -(c % Culong)) : -(convert(Culong, c), x)
++(x::BigInt, c::ClongMax) = c < 0 ? -(x, -%(c % Culong)) : x + convert(Culong, c)
++(c::ClongMax, x::BigInt) = c < 0 ? -(x, -%(c % Culong)) : x + convert(Culong, c)
+-(x::BigInt, c::ClongMax) = c < 0 ? +(x, -%(c % Culong)) : -(x, convert(Culong, c))
+-(c::ClongMax, x::BigInt) = c < 0 ? -(x + -%(c % Culong)) : -(convert(Culong, c), x)
 
 *(x::BigInt, c::CulongMax) = MPZ.mul_ui(x, c)
 *(c::CulongMax, x::BigInt) = x * c
@@ -766,13 +773,17 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     iszero(n) && pad < 1 && return ""
     nd1 = ndigits(n, base=base)
     nd  = max(nd1, pad)
-    sv  = Base.StringMemory(nd + isnegative(n))
-    GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
-    @inbounds for i = (1:nd-nd1) .+ isnegative(n)
-        sv[i] = '0' % UInt8
+    str = Base._string_n(nd + isnegative(n))
+    GC.@preserve str begin
+        p = pointer(str)
+        MPZ.get_str!(p + nd - nd1, base, n)
+        pad_len = nd - nd1
+        if pad_len > 0
+            Base.memset(p + isnegative(n), UInt8('0'), pad_len)
+        end
+        isnegative(n) && unsafe_store!(p, UInt8('-'))
     end
-    isnegative(n) && (sv[1] = '-' % UInt8)
-    unsafe_takestring(sv)
+    return str
 end
 
 function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
@@ -917,7 +928,7 @@ if Limb === UInt64 === UInt
                 return hash(unsafe_load(ptr), h)
             elseif sz == -1
                 limb = unsafe_load(ptr)
-                limb <= typemin(Int) % UInt && return hash(-(limb % Int), h)
+                limb <= typemin(Int) % UInt && return hash(-%(limb % Int), h)
             end
             pow = trailing_zeros(x)
             nd = Base.ndigits0z(x, 2)

@@ -134,7 +134,7 @@ It is also often useful to allow iteration over a collection in *reverse order*
 by iterating over [`Iterators.reverse(iterator)`](@ref). To actually support
 reverse-order iteration, however, an iterator
 type `T` needs to implement `iterate` for `Iterators.Reverse{T}`.
-(Given `r::Iterators.Reverse{T}`, the underling iterator of type `T` is `r.itr`.)
+(Given `r::Iterators.Reverse{T}`, the underlying iterator of type `T` is `r.itr`.)
 In our `Squares` example, we would implement `Iterators.Reverse{Squares}` methods:
 
 ```jldoctest squaretype
@@ -255,10 +255,10 @@ library module, only supports two dimensions, so it just defines
 `getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for [`setindex!`](@ref).
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
-`AbstractArray{Int, 1}`:
+`AbstractVector{Int}`:
 
 ```jldoctest squarevectype
-julia> struct SquaresVector <: AbstractArray{Int, 1}
+julia> struct SquaresVector <: AbstractVector{Int}
            count::Int
        end
 
@@ -400,10 +400,11 @@ perhaps range-types `Ind` of your own design. For more information, see
 | Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
 | `strides(A)`                                    |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
-| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                                             |
-| `Base.elsize(::Type{<:A})`                      |                                        | Return the stride (in number of bytes) between consecutive elements in the array.                                       |
-| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                              |
-| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension i.    |
+| `Base.unsafe_convert(::Type{Ptr{T}}, Base.cconvert(Ptr{T}, A))` |                        | Return the native address of an array. |
+| `Base.elsize(::Type{<:A})`                      |                                        | Return the stride (in number of bytes) between consecutive elements in the array.                    |
+| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                                |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension i.      |
+| `Base.cconvert(::Type{Ptr{T}}, A)`              |     `A`                                | Return an object that can be converted to the native address of the array with [`Base.unsafe_convert`](@ref) |
 
 A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
 Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
@@ -843,7 +844,7 @@ julia> function Base.setproperty!(p::Point, s::Symbol, f)
        end
 ```
 
-It is important that `getfield` and `setfield` are used inside `getproperty` and `setproperty!` instead of the dot syntax,
+It is important that `getfield` and `setfield!` are used inside `getproperty` and `setproperty!` instead of the dot syntax,
 since the dot syntax would make the functions recursive which can lead to type inference issues. We can now
 try out the new functionality:
 
@@ -876,7 +877,7 @@ To support rounding on a new type it is typically sufficient to define the singl
 `round(x::ObjType, r::RoundingMode)`. The passed rounding mode determines in which direction
 the value should be rounded. The most commonly used rounding modes are `RoundNearest`,
 `RoundToZero`, `RoundDown`, and `RoundUp`, as these rounding modes are used in the
-definitions of the one argument `round`, method, and `trunc`, `floor`, and `ceil`,
+definitions of the one argument `round` method, and `trunc`, `floor`, and `ceil`,
 respectively.
 
 In some cases, it is possible to define a three-argument `round` method that is more

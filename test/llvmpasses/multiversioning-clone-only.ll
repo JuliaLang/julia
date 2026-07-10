@@ -7,7 +7,7 @@
 ; CHECK: @jl_fvar_idxs = hidden constant [1 x i32] zeroinitializer
 ; CHECK: @jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer
 ; OPAQUE: @subtarget_cloned_gv = hidden global ptr null
-; OPAQUE: @subtarget_cloned.reloc_slot = hidden global ptr null
+; OPAQUE: @subtarget_cloned.reloc_slot = hidden global ptr @subtarget_cloned.autoinit_trampoline
 ; CHECK: @jl_fvar_count = hidden constant i64 1
 ; OPAQUE: @jl_fvar_ptrs = hidden global [1 x ptr] [ptr @subtarget_cloned]
 ; CHECK: @jl_clone_slots = hidden constant [5 x i32]
@@ -57,7 +57,7 @@ define noundef i32 @subtarget_cloned(i32 noundef %0) #2 {
 ; COM: should fixup this callsite since 2 is cloned for a subtarget
 ; CHECK: define{{.*}}@call_subtarget_cloned({{.*}}#[[CALL_SUBTARGET_CLONED_DEFAULT_ATTRS:[0-9]+]]
 ; CHECK-NEXT: [[FUNC_PTR:%[0-9]+]] = load{{.*}}@subtarget_cloned.reloc_slot{{.*}}!tbaa ![[TBAA_CONST_METADATA:[0-9]+]], !invariant.load
-; CHECK-NEXT: call{{.*}}[[FUNC_PTR]]
+; CHECK-NEXT: call{{.*}}[[FUNC_PTR]]({{.*}})
 ; CHECK: ret i32
 define noundef i32 @call_subtarget_cloned(i32 noundef %0) #3 {
     %2 = call noundef i32 @subtarget_cloned(i32 noundef %0)
@@ -66,12 +66,22 @@ define noundef i32 @call_subtarget_cloned(i32 noundef %0) #3 {
 
 ; CHECK: define{{.*}}@call_subtarget_cloned_but_not_cloned({{.*}}#[[BORING_DEFAULT_ATTRS]]
 ; CHECK-NEXT: [[FUNC_PTR:%[0-9]+]] = load{{.*}}@subtarget_cloned.reloc_slot{{.*}}!tbaa ![[TBAA_CONST_METADATA]], !invariant.load
-; CHECK-NEXT: call{{.*}}[[FUNC_PTR]]
+; CHECK-NEXT: call{{.*}}[[FUNC_PTR]]({{.*}})
 ; CHECK: ret i32
 define noundef i32 @call_subtarget_cloned_but_not_cloned(i32 noundef %0) #0 {
     %2 = call noundef i32 @subtarget_cloned(i32 noundef %0)
     ret i32 %2
 }
+
+; COM: check that the autoinit trampoline is generated correctly
+; CHECK: define{{.*}}@subtarget_cloned.autoinit_trampoline({{.*}}
+; CHECK-NEXT: top:
+; CHECK-NEXT: call ptr @ijl_autoinit_and_adopt_thread()
+; CHECK-NEXT: [[FUNC_PTR:%[0-9]+]] = load ptr, ptr @subtarget_cloned.reloc_slot{{.*}}!tbaa ![[TBAA_CONST_METADATA]], !invariant.load
+; CHECK-NEXT: call{{.*}}[[FUNC_PTR]]({{.*}})
+; CHECK: ret i32
+
+declare ptr @ijl_autoinit_and_adopt_thread()
 
 ; CHECK: define{{.*}}@boring.1({{.*}}#[[BORING_CLONEALL_ATTRS:[0-9]+]]
 ; CHECK-NEXT: ret i32 %0
@@ -106,10 +116,10 @@ define noundef i32 @call_subtarget_cloned_but_not_cloned(i32 noundef %0) #0 {
 ; CHECK-NOT: @subtarget_cloned_but_not_cloned.2
 
 ; COM: check for alias being rewritten to a function trampoline
-; CHECK: define{{.*}}@subtarget_cloned_aliased{{.*}}#[[SUBTARGET_ALIASED_ATTRS:[0-9]+]]
+; CHECK: define{{.*}}@subtarget_cloned_aliased{{[^.]*}}#[[SUBTARGET_ALIASED_ATTRS:[0-9]+]]
 ; CHECK-NOT: }
 ; CHECK: [[FUNC_PTR:%[0-9]+]] = load{{.*}}@subtarget_cloned.reloc_slot{{.*}}!tbaa ![[TBAA_CONST_METADATA]], !invariant.load
-; CHECK-NEXT: call{{.*}}[[FUNC_PTR]]
+; CHECK-NEXT: call{{.*}}[[FUNC_PTR]]({{.*}})
 ; CHECK: ret i32
 
 ; CHECK: attributes #[[BORING_DEFAULT_ATTRS]]
@@ -200,10 +210,10 @@ attributes #3 = {"julia.mv.clones"="6"}
 !1 = !{i32 1, !"julia.mv.annotated", i32 1}
 !2 = !{i32 1, !"julia.mv.specs", !3}
 !3 = !{!4, !5, !6, !7, !8}
-!4 = !{!"cpubase", !"nofeatures", i32 0, i32 2}
-!5 = !{!"cpucloneall", !"cloneall", i32 0, i32 2}
-!6 = !{!"cpufastmath", !"fastmathclone", i32 0, i32 4}
-!7 = !{!"cpuloop", !"loopclone", i32 0, i32 8}
+!4 = !{!"cpubase", !"nofeatures", i32 0, i32 0}
+!5 = !{!"cpucloneall", !"cloneall", i32 0, i32 1}
+!6 = !{!"cpufastmath", !"fastmathclone", i32 0, i32 8}
+!7 = !{!"cpuloop", !"loopclone", i32 0, i32 0}
 !8 = !{!"cpusimd", !"simdclone", i32 0, i32 16}
 ; CHECK-DAG: ![[TBAA_CONST_METADATA]] = !{![[JTBAA_CONST_METADATA:[0-9]+]], ![[JTBAA_CONST_METADATA]]
 ; CHECK-DAG: ![[JTBAA_CONST_METADATA]] = !{!"jtbaa_const"

@@ -47,7 +47,7 @@ const MARKDOWN_FACES = [
     :markdown_h6 => Face(height=1.05, inherit=:markdown_header),
     :markdown_admonition => Face(weight=:bold),
     :markdown_code => Face(inherit=:code),
-    :markdown_julia_prompt => Face(inherit=:repl_prompt_julia),
+    :markdown_julia_prompt => Face(slant=:italic, foreground=:bright_green, inherit=:repl_prompt_julia),
     :markdown_footnote => Face(inherit=:bright_yellow),
     :markdown_hrule => Face(inherit=:shadow),
     :markdown_inlinecode => Face(inherit=:markdown_code),
@@ -119,7 +119,7 @@ corresponding [`MD`](@ref) object.
 the manual section on [documentation](@ref man-documentation) for more information.
 
 # Examples
-```
+```jldoctest
 julia> s = doc"f(x) = 2*x"
   f(x) = 2*x
 
@@ -148,6 +148,7 @@ if Base.generating_output()
     **bold text**
     *italicized text*
     ***bold and italicized text***
+    ~~strikethrough effect~~
     > blockquote
     1. First item
     2. Second item

@@ -5,7 +5,7 @@ const GIT_CRED_ATTRIBUTES = ("protocol", "host", "path", "username", "password",
 """
     GitCredential
 
-Git credential information used in communication with git credential helpers. The field are
+Git credential information used in communication with git credential helpers. The fields are
 named using the [input/output key specification](https://git-scm.com/docs/git-credential#IOFMT).
 """
 mutable struct GitCredential
@@ -151,7 +151,7 @@ function fill!(cfg::GitConfig, cred::GitCredential)
 
         # "Once Git has acquired both a username and a password, no more helpers will be
         # tried." – https://git-scm.com/docs/gitcredentials#gitcredentials-helper
-        !isfilled(cred) && break
+        isfilled(cred) && break
     end
 
     return cred

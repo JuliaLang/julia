@@ -2,16 +2,22 @@
 
 ## MersenneTwister
 
+# Contiguous reinterpret view; `pointer` forwards to the parent's storage,
+# so it is safe in the bulk pointer-based fill paths below.
+const ContigReinterpretArray{T} =
+    Base.NonReshapedReinterpretArray{T,N,S,<:Base.MutableDenseArrayType{S}} where {N,S}
+const BulkArray{T} = Union{Array{T}, ContigReinterpretArray{T}}
+
 const MT_CACHE_F = 501 << 1 # number of Float64 in the cache
 const MT_CACHE_I = 501 << 4 # number of bytes in the UInt128 cache
 
 @assert dsfmt_get_min_array_size() <= MT_CACHE_F
 
 mutable struct MersenneTwister <: AbstractRNG
-    seed::Any
-    state::DSFMT_state
-    vals::Vector{Float64}
-    ints::Vector{UInt128}
+    seed::NTuple{2, UInt128}
+    const state::DSFMT_state
+    const vals::Memory{Float64}
+    const ints::Vector{UInt128} # it's temporarily resized internally
     idxF::Int
     idxI::Int
 
@@ -21,24 +27,12 @@ mutable struct MersenneTwister <: AbstractRNG
     adv_vals::Int64     # state of advance when vals is filled-up
     adv_ints::Int64     # state of advance when ints is filled-up
 
-    function MersenneTwister(seed, state, vals, ints, idxF, idxI,
-                             adv, adv_jump, adv_vals, adv_ints)
-        length(vals) == MT_CACHE_F && 0 <= idxF <= MT_CACHE_F ||
-            throw(DomainError((length(vals), idxF),
-                      "`length(vals)` and `idxF` must be consistent with $MT_CACHE_F"))
-        length(ints) == MT_CACHE_I >> 4 && 0 <= idxI <= MT_CACHE_I ||
-            throw(DomainError((length(ints), idxI),
-                      "`length(ints)` and `idxI` must be consistent with $MT_CACHE_I"))
-        new(seed, state, vals, ints, idxF, idxI,
-            adv, adv_jump, adv_vals, adv_ints)
-    end
+    global _MersenneTwister(::UndefInitializer) =
+        new((UInt128(0), UInt128(0)), DSFMT_state(),
+            Memory{Float64}(undef, MT_CACHE_F),
+            Vector{UInt128}(undef, MT_CACHE_I >> 4),
+            MT_CACHE_F, 0, 0, Base.GMP.ZERO, -1, -1)
 end
-
-MersenneTwister(seed, state::DSFMT_state) =
-    MersenneTwister(seed, state,
-                    Vector{Float64}(undef, MT_CACHE_F),
-                    Vector{UInt128}(undef, MT_CACHE_I >> 4),
-                    MT_CACHE_F, 0, 0, 0, -1, -1)
 
 """
     MersenneTwister(seed)
@@ -72,8 +66,7 @@ julia> x1 == x2
 true
 ```
 """
-MersenneTwister(seed=nothing) =
-    seed!(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
+MersenneTwister(seed=nothing) = seed!(_MersenneTwister(undef), seed)
 
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
@@ -90,10 +83,7 @@ function copy!(dst::MersenneTwister, src::MersenneTwister)
     dst
 end
 
-copy(src::MersenneTwister) =
-    MersenneTwister(src.seed, copy(src.state), copy(src.vals), copy(src.ints),
-                    src.idxF, src.idxI, src.adv, src.adv_jump, src.adv_vals, src.adv_ints)
-
+copy(src::MersenneTwister) = copy!(_MersenneTwister(undef), src)
 
 ==(r1::MersenneTwister, r2::MersenneTwister) =
     r1.seed == r2.seed && r1.state == r2.state &&
@@ -105,33 +95,26 @@ hash(r::MersenneTwister, h::UInt) =
     foldr(hash, (r.seed, r.state, r.vals, r.ints, r.idxF, r.idxI); init=h)
 
 function show(io::IO, rng::MersenneTwister)
-    # seed
-    if rng.adv_jump == 0 && rng.adv == 0
-        return print(io, MersenneTwister, "(", repr(rng.seed), ")")
-    end
-    print(io, MersenneTwister, "(", repr(rng.seed), ", (")
-    # state
     sep = ", "
-    show(io, rng.adv_jump)
-    print(io, sep)
-    show(io, rng.adv)
+    # seed
+    print(io, MersenneTwister, "(", repr(rng.seed[1]), sep, repr(rng.seed[2]))
+    if rng.adv_jump == 0 && rng.adv == 0
+        return print(io, ")")
+    end
+    # state
+    print(io, sep, rng.adv_jump, sep, rng.adv)
     if rng.adv_vals != -1 || rng.adv_ints != -1
         # "(0, 0)" is nicer on the eyes than (-1, 1002)
         s = rng.adv_vals != -1
-        print(io, sep)
-        show(io, s ? rng.adv_vals : zero(rng.adv_vals))
-        print(io, sep)
-        show(io, s ? rng.idxF : zero(rng.idxF))
+        print(io, sep, s ? rng.adv_vals : zero(rng.adv_vals),
+              sep, s ? rng.idxF : zero(rng.idxF))
     end
     if rng.adv_ints != -1
-        idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 represents one Int64
+        idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 = sizeof(Int64)
         idxI = Int(idxI) # idxI should always be an integer when using public APIs
-        print(io, sep)
-        show(io, rng.adv_ints)
-        print(io, sep)
-        show(io, idxI)
+        print(io, sep, rng.adv_ints, sep, idxI)
     end
-    print(io, "))")
+    print(io, ")")
 end
 
 ### low level API
@@ -242,27 +225,19 @@ end
 
 #### seed!()
 
-function initstate!(r::MersenneTwister, data::StridedVector, seed)
-    # we deepcopy `seed` because the caller might mutate it, and it's useful
-    # to keep it constant inside `MersenneTwister`; but multiple instances
-    # can share the same seed without any problem (e.g. in `copy`)
-    r.seed = deepcopy(seed)
-    dsfmt_init_by_array(r.state, reinterpret(UInt32, data))
+function initstate!(r::MersenneTwister, seed)
+    r.seed = seed # store the seed for `show`
+    seedvec = view(r.ints, 1:2) # re-use r.ints to temporarily store the seed
+    seedvec .= seed
+    dsfmt_init_by_array(r.state, reinterpret(UInt32, seedvec))
     reset_caches!(r)
     r.adv = 0
-    r.adv_jump = 0
+    r.adv_jump = Base.GMP.ZERO
     return r
 end
 
-# When a seed is not provided, we generate one via `RandomDevice()` rather
-# than calling directly `initstate!` with `rand(RandomDevice(), UInt32, 8)` because the
-# seed is printed in `show(::MersenneTwister)`, so we need one; the cost of `hash_seed` is a
-# small overhead compared to `initstate!`.
-# A random seed with 128 bits is a good compromise for almost surely getting distinct
-# seeds, while having them printed reasonably tersely.
-seed!(r::MersenneTwister, seeder::AbstractRNG) = seed!(r, rand(seeder, UInt128))
-seed!(r::MersenneTwister, ::Nothing) = seed!(r, RandomDevice())
-seed!(r::MersenneTwister, seed) = initstate!(r, rand(SeedHasher(seed), UInt32, 8), seed)
+seed!(r::MersenneTwister, seeder::AbstractRNG) =
+    initstate!(r, rand(seeder, NTuple{2, UInt128}))
 
 
 ### generation
@@ -405,7 +380,7 @@ function rand!(r::MersenneTwister, A::UnsafeView{Float64},
 end
 
 # fills up A reinterpreted as an array of Float64 with n64 values
-function _rand!(r::MersenneTwister, A::Array{T}, n64::Int, I::FloatInterval_64) where T
+function _rand!(r::MersenneTwister, A::BulkArray{T}, n64::Int, I::FloatInterval_64) where T
     # n64 is the length in terms of `Float64` of the target
     @assert sizeof(Float64)*n64 <= sizeof(T)*length(A) && isbitstype(T)
     GC.@preserve A rand!(r, UnsafeView{Float64}(pointer(A), n64), SamplerTrivial(I))
@@ -414,7 +389,7 @@ end
 
 ##### Array: Float64, Float16, Float32
 
-rand!(r::MersenneTwister, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) =
+rand!(r::MersenneTwister, A::BulkArray{Float64}, I::SamplerTrivial{<:FloatInterval_64}) =
     _rand!(r, A, length(A), I[])
 
 mask128(u::UInt128, ::Type{Float16}) =
@@ -424,7 +399,7 @@ mask128(u::UInt128, ::Type{Float32}) =
     (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
 for T in (Float16, Float32)
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen12{$T}})
+    @eval function rand!(r::MersenneTwister, A::BulkArray{$T}, ::SamplerTrivial{CloseOpen12{$T}})
         n = length(A)
         n128 = n * sizeof($T) ÷ 16
         _rand!(r, A, 2*n128, CloseOpen12())
@@ -452,7 +427,7 @@ for T in (Float16, Float32)
         A
     end
 
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen01{$T}})
+    @eval function rand!(r::MersenneTwister, A::BulkArray{$T}, ::SamplerTrivial{CloseOpen01{$T}})
         rand!(r, A, CloseOpen12($T))
         I32 = one(Float32)
         for i in eachindex(A)
@@ -490,7 +465,7 @@ function rand!(r::MersenneTwister, A::UnsafeView{UInt128}, ::SamplerType{UInt128
 end
 
 for T in BitInteger_types
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T})
+    @eval function rand!(r::MersenneTwister, A::BulkArray{$T}, sp::SamplerType{$T})
         GC.@preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp)
         A
     end
@@ -561,7 +536,9 @@ end
 function _randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X)
     adv = r.adv
     adv_jump = r.adv_jump
-    s = MersenneTwister(r.seed, DSFMT.dsfmt_jump(r.state, jumppoly))
+    s = _MersenneTwister(undef)
+    s.seed = r.seed
+    copy!(s.state, DSFMT.dsfmt_jump(r.state, jumppoly))
     reset_caches!(s)
     s.adv = adv
     s.adv_jump = adv_jump
@@ -589,14 +566,18 @@ jump!(r::MersenneTwister, steps::Integer) = copy!(r, jump(r, steps))
 # 3, 4: .adv_vals, .idxF (counters to reconstruct the float cache, optional if 5-6 not shown))
 # 5, 6: .adv_ints, .idxI (counters to reconstruct the integer cache, optional)
 
-Random.MersenneTwister(seed, advance::NTuple{6,Integer}) =
-    advance!(MersenneTwister(seed), advance...)
+MersenneTwister(s1::Integer, s2::Integer) = initstate!(_MersenneTwister(undef), (s1, s2))
 
-Random.MersenneTwister(seed, advance::NTuple{4,Integer}) =
-    MersenneTwister(seed, (advance..., 0, 0))
+MersenneTwister(s1::Integer, s2::Integer, s3::Integer, s4::Integer,
+                s5::Integer, s6::Integer, s7::Integer, s8::Integer) =
+    advance!(MersenneTwister(s1, s2), s3, s4, s5, s6, s7, s8)
 
-Random.MersenneTwister(seed, advance::NTuple{2,Integer}) =
-    MersenneTwister(seed, (advance..., 0, 0, 0, 0))
+MersenneTwister(s1::Integer, s2::Integer, s3::Integer, s4::Integer,
+                s5::Integer, s6::Integer) =
+    MersenneTwister(s1, s2, s3, s4, s5, s6, 0, 0)
+
+MersenneTwister(s1::Integer, s2::Integer, s3::Integer, s4::Integer) =
+    MersenneTwister(s1, s2, s3, s4, 0, 0, 0, 0)
 
 # advances raw state (per fill_array!) of r by n steps (Float64 values)
 function _advance_n!(r::MersenneTwister, n::Int64, work::Vector{Float64})

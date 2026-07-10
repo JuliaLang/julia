@@ -92,7 +92,7 @@ end
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
         xu &= ~sign_mask(Float64)
-        xu -= UInt64(52) << 52 # mess with the exponent
+        xu -%= (UInt64(52) << 52) # mess with the exponent
     end
     logxhi,logxlo = _log_ext(xu)
     xyhi, xylo = two_mul(logxhi,y)

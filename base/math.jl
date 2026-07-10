@@ -23,7 +23,7 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
             significand_bits, exponent_bits, exponent_bias,
-            exponent_max, exponent_raw_max, clamp, clamp!
+            exponent_max, exponent_raw_max, clamp, clamp!, two_mul
 
 using Core.Intrinsics: sqrt_llvm, min_float, max_float
 
@@ -46,30 +46,6 @@ end
 
 # non-type specific math functions
 
-function two_mul(x::T, y::T) where {T<:Number}
-    xy = x*y
-    xy, fma(x, y, -xy)
-end
-
-@assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
-    if Core.Intrinsics.have_fma(Float64)
-        xy = x*y
-        return xy, fma(x, y, -xy)
-    end
-    return Base.twomul(x,y)
-end
-
-@assume_effects :consistent @inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
-    if Core.Intrinsics.have_fma(T)
-        xy = x*y
-        return xy, fma(x, y, -xy)
-    end
-    xy = widen(x)*y
-    Txy = T(xy)
-    return Txy, T(xy-Txy)
-end
-
-
 """
     evalpoly(x, p)
 
@@ -84,6 +60,8 @@ a Goertzel-like [^DK62] algorithm if `x` is complex.
 
 !!! compat "Julia 1.4"
     This function requires Julia 1.4 or later.
+
+See also [`@evalpoly`](@ref).
 
 # Examples
 ```jldoctest
@@ -237,24 +215,16 @@ function _pi_over_180(z::AbstractFloat)
 end
 
 # rounded to closest representable number where necessary
-function _180_over_pi(z::Union{Float16, Float32})
-    if z isa Float16
-        r = Float16(57.28)
-    elseif z isa Float32
-        r = 57.29578f0
-    end
-    r
-end
-function _pi_over_180(::Float16)
-    Float16(0.01746)
-end
+_180_over_pi(::Float16) = Float16(57.28)
+_180_over_pi(::Float32) = 57.29578f0
+_pi_over_180(::Float16) = Float16(0.01746)
 
 """
     rad2deg(x)
 
 Convert `x` from radians to degrees.
 
-See also [`deg2rad`](@ref).
+See also [`deg2rad`](@ref), [`pi`](@ref).
 
 # Examples
 ```jldoctest
@@ -269,7 +239,7 @@ rad2deg(z::AbstractFloat) = z * _180_over_pi(z)
 
 Convert `x` from degrees to radians.
 
-See also [`rad2deg`](@ref), [`sind`](@ref), [`pi`](@ref).
+See also [`rad2deg`](@ref), [`pi`](@ref).
 
 # Examples
 ```jldoctest
@@ -290,6 +260,8 @@ log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 
 Compute the base `b` logarithm of `x`. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
+
+See also [`log2`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -335,7 +307,7 @@ const libm = Base.libm_name
 
 Compute hyperbolic sine of `x`.
 
-See also [`sin`](@ref).
+See also [`sin`](@ref), [`asinh`](@ref).
 """
 sinh(x::Number)
 
@@ -344,7 +316,7 @@ sinh(x::Number)
 
 Compute hyperbolic cosine of `x`.
 
-See also [`cos`](@ref).
+See also [`cos`](@ref), [`acosh`](@ref).
 """
 cosh(x::Number)
 
@@ -412,6 +384,8 @@ atan(x::Number)
     asinh(x)
 
 Compute the inverse hyperbolic sine of `x`.
+
+See also [`sinh`](@ref), [`asin`](@ref).
 """
 asinh(x::Number)
 
@@ -441,7 +415,7 @@ julia> sind(45)
 0.7071067811865476
 
 julia> sinpi(1/4)
-0.7071067811865475
+0.7071067811865476
 
 julia> round.(sincos(pi/6), digits=3)
 (0.5, 0.866)
@@ -462,7 +436,7 @@ Compute cosine of `x`, where `x` is in radians.
 
 Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
-See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
+See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref), [`acos`](@ref).
 """
 cos(x::Number)
 
@@ -503,6 +477,8 @@ asin(x::Number)
 Compute the inverse cosine of `x`, where the output is in radians.
 
 Return a `T(NaN)` if `isnan(x)`.
+
+See also [`acosd`](@ref) for output in degrees.
 """
 acos(x::Number)
 
@@ -510,6 +486,8 @@ acos(x::Number)
     acosh(x)
 
 Compute the inverse hyperbolic cosine of `x`.
+
+See also [`cosh`](@ref), [`acos`](@ref).
 """
 acosh(x::Number)
 
@@ -517,6 +495,8 @@ acosh(x::Number)
     atanh(x)
 
 Compute the inverse hyperbolic tangent of `x`.
+
+See also [`tanh`](@ref), [`atanh`](@ref).
 """
 atanh(x::Number)
 
@@ -532,7 +512,7 @@ Use [`Complex`](@ref) arguments to obtain [`Complex`](@ref) results.
     `log` has a branch cut along the negative real axis; `-0.0im` is taken
     to be below the axis.
 
-See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
+See also [`ℯ`](@ref), [`exp`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -567,7 +547,7 @@ log(x::Number)
 Compute the logarithm of `x` to base 2. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
-See also: [`exp2`](@ref), [`ldexp`](@ref), [`ispow2`](@ref).
+See also: [`exp2`](@ref), [`log`](@ref), [`ldexp`](@ref), [`ispow2`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -598,6 +578,8 @@ log2(x)
 
 Compute the logarithm of `x` to base 10.
 Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+
+See also: [`exp10`](@ref), [`log`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -641,7 +623,7 @@ Stacktrace:
 """
 log1p(x)
 
-@inline function sqrt(x::Union{Float32,Float64})
+@inline function sqrt(x::IEEEFloat)
     x < zero(x) && throw_complex_domainerror(:sqrt, x)
     sqrt_llvm(x)
 end
@@ -660,7 +642,7 @@ The prefix operator `√` is equivalent to `sqrt`.
     `sqrt` has a branch cut along the negative real axis; `-0.0im` is taken
     to be below the axis.
 
-See also: [`hypot`](@ref).
+See also [`cbrt`](@ref), [`fourthroot`](@ref), [`hypot`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -693,7 +675,9 @@ sqrt(x)
 """
     fourthroot(x)
 
-Return the fourth root of `x` by applying `sqrt` twice successively.
+Return the fourth root of `x`.
+
+See also [`cbrt`](@ref), [`sqrt`](@ref).
 """
 fourthroot(x::Number) = sqrt(sqrt(x))
 
@@ -703,10 +687,7 @@ fourthroot(x::Number) = sqrt(sqrt(x))
 Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
 
 This code is an implementation of the algorithm described in:
-An Improved Algorithm for `hypot(a,b)`
-by Carlos F. Borges
-The article is available online at arXiv at the link
-  https://arxiv.org/abs/1904.09481
+[*An Improved Algorithm for `hypot(a,b)`* by Carlos F. Borges](https://arxiv.org/abs/1904.09481)
 
     hypot(x...)
 
@@ -800,14 +781,16 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
-@inline function _hypot(x::Float32, y::Float32)
+# @assume_effects :nothrow: isinf guards handle Inf inputs; muladd(x,x,y*y) is always ≥ 0
+# so the sqrt call never throws.
+@assume_effects :nothrow @inline function _hypot(x::Float32, y::Float32)
     if isinf(x) || isinf(y)
         return Inf32
     end
     _x, _y = Float64(x), Float64(y)
     return Float32(sqrt(muladd(_x, _x, _y*_y)))
 end
-@inline function _hypot(x::Float16, y::Float16)
+@assume_effects :nothrow @inline function _hypot(x::Float16, y::Float16)
     if isinf(x) || isinf(y)
         return Inf16
     end
@@ -849,13 +832,8 @@ min(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(x, y
 max(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(y, x) ? x : y
 minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
-function min(x::T, y::T) where {T<:IEEEFloat}
-    return min_float(x, y)
-end
-
-function max(x::T, y::T) where {T<:IEEEFloat}
-    return max_float(x, y)
-end
+min(x::T, y::T) where {T<:IEEEFloat} = min_float(x, y)
+max(x::T, y::T) where {T<:IEEEFloat} = max_float(x, y)
 
 """
     ldexp(x, n)
@@ -892,7 +870,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         return flipsign(T(0.0), x)
     end
     n = e % Int
-    k += n
+    k = k +% n
     # overflow, if k is larger than maximum possible exponent
     if k >= exponent_raw_max(T)
         return flipsign(T(Inf), x)
@@ -953,7 +931,9 @@ function exponent(x::T) where T<:IEEEFloat
     @noinline throw2(x) = throw(DomainError(x, "Cannot be ±0.0."))
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && throw1(x)
-    k = Int(xs >> significand_bits(T))
+    # use `% Int` instead of `Int(...)` to preserve `:nothrow` (the shifted value
+    # always fits in `exponent_bits(T)` bits, well below `typemax(Int)`)
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && throw2(x)
         m = leading_zeros(xs) - exponent_bits(T)
@@ -1066,7 +1046,9 @@ function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
-    k = Int(xs >> significand_bits(T))
+    # use `% Int` instead of `Int(...)` to preserve `:nothrow` (after masking the sign
+    # bit, xs >> significand_bits(T) is at most 2^exponent_bits(T)-1, which always fits in Int)
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && return x, 0 # +-0
         m = leading_zeros(xs) - exponent_bits(T)
@@ -1178,7 +1160,7 @@ end
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
-    # double-double numbers and return the high double. References:
+    # double-double numbers and returns the high double. References:
     # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
@@ -1307,7 +1289,7 @@ include("special/pow.jl")
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:sqrt,:fourthroot,:log1p)
+             :atanh,:log,:log2,:log10,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))

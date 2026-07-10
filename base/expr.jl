@@ -9,7 +9,11 @@ const is_expr = isexpr
 """
     gensym([tag])
 
-Generates a symbol which will not conflict with other variable names (in the same module).
+Generate a symbol unique among all calls to this function within the same process.
+If a string or symbol tag argument is specified, it is included in the generated name.
+
+Note that packages may be precompiled in separate processes, so names will not be unique
+between definition time and run time.
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
@@ -19,10 +23,10 @@ gensym(ss::String...) = map(gensym, ss)
 gensym(s::Symbol) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Csize_t), s, -1 % Csize_t)
 
 """
-    @gensym
+    @gensym var1 var2 ...
 
-Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into
-`x = gensym("x"); y = gensym("y")`.
+Generate symbols with [`gensym`](@ref) and assign them to the given variables.
+For example, `@gensym x y` is transformed into `x = gensym("x"); y = gensym("y")`.
 """
 macro gensym(names...)
     blk = Expr(:block)
@@ -198,6 +202,9 @@ julia> macroexpand(M, :(@m2()), recursive=true)
 julia> macroexpand(M, :(@m2()), recursive=false)
 :(#= REPL[1]:6 =# @m1)
 ```
+
+!!! compat "Julia 1.13"
+    The `legacyscope` keyword argument requires at least Julia 1.13.
 """
 function macroexpand(m::Module, @nospecialize(x); recursive=true, legacyscope=true)
     ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, false, legacyscope)
@@ -218,6 +225,9 @@ for in-place expansion as it can be called separately if needed.
 !!! warning
     This function modifies the input expression `x` in place. Use `macroexpand` if you need
     to preserve the original expression.
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 """
 function macroexpand!(m::Module, @nospecialize(x); recursive=true, legacyscope=false)
     ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, true, legacyscope)
@@ -369,7 +379,7 @@ Give a hint to the compiler that calls within `block` are worth inlining.
     ```
 
 !!! warning
-    Although a callsite annotation will try to force inlining in regardless of the cost model,
+    Although a callsite annotation will try to force inlining regardless of the cost model,
     there are still chances it can't succeed in it. Especially, recursive calls can not be
     inlined even if they are annotated as `@inline`d.
 
@@ -693,7 +703,7 @@ were not executed.
 ---
 ## `:nothrow`
 
-The `:nothrow` settings asserts that this method does not throw an exception
+The `:nothrow` setting asserts that this method does not throw an exception
 (i.e. will either always return a value or never return).
 
 !!! note
@@ -711,7 +721,7 @@ The `:nothrow` settings asserts that this method does not throw an exception
 ---
 ## `:terminates_globally`
 
-The `:terminates_globally` settings asserts that this method will eventually terminate
+The `:terminates_globally` setting asserts that this method will eventually terminate
 (either normally or abnormally), i.e. does not loop indefinitely.
 
 !!! note
@@ -1448,8 +1458,14 @@ function make_atomic(order, ex)
         if length(ex.args) == 2
             if ex.head === :(+=)
                 op = :+
+            elseif ex.head === Symbol("+%=")
+                op = Symbol("+%")
             elseif ex.head === :(-=)
                 op = :-
+            elseif ex.head === Symbol("-%=")
+                op = Symbol("-%")
+            elseif ex.head === Symbol("*%=")
+                op = Symbol("*%")
             elseif ex.head === :(|=)
                 op = :|
             elseif ex.head === :(&=)
@@ -1797,9 +1813,9 @@ types of AST object inside, and even may sometimes evaluate and interpolate any
 quoted(@nospecialize(x)) = isa_ast_node(x) ? QuoteNode(x) : x
 
 # Implementation of generated functions
-function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
+function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool, loc::LineNumberNode)
     ci = ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Csize_t, Csize_t, Cint),
-               ex, defmod, "none", 0, typemax(Csize_t), 0)[1]
+               ex, defmod, loc.file, loc.line, typemax(Csize_t), 0)[1]
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error
             msg = ci.args[1]
@@ -1828,15 +1844,18 @@ function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecial
     body = g.gen(args...)
     file = source.file
     file isa Symbol || (file = :none)
+    loc = LineNumberNode(Int(source.line), source.file)
     lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
                Expr(:var"scope-block",
                     Expr(:block,
-                         LineNumberNode(Int(source.line), source.file),
+                         loc,
                          Expr(:meta, :push_loc, file, :var"@generated body"),
                          Expr(:return, Expr(:toplevel_pure, body)),
                          Expr(:meta, :pop_loc))))
     spnames = g.spnames
-    return generated_body_to_codeinfo(spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
+    return generated_body_to_codeinfo(
+        spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
         source.module,
-        source.isva)
+        source.isva,
+        loc)
 end

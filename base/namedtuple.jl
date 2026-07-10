@@ -159,7 +159,7 @@ end
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
 rest(t::NamedTuple) = t
-@inline rest(t::NamedTuple{names}, i::Int) where {names} = NamedTuple{rest(names,i)}(t)
+@inline rest(t::NamedTuple{names}, i) where {names} = NamedTuple{rest(names,i::Int)}(t)
 firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
@@ -185,7 +185,7 @@ function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {name
 end
 
 function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
-    # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
+    # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyway
     # _tuple_error(NT, nt)
     T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
     NT1 = NamedTuple{names, T1}
@@ -256,7 +256,7 @@ same_names(::NamedTuple{names}...) where {names} = true
 same_names(::NamedTuple...) = false
 
 # NOTE: this method signature makes sure we don't define map(f)
-function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
+function map(f::F, nt::NamedTuple{names}, nts::NamedTuple...) where {names, F}
     if !same_names(nt, nts...)
         throw(ArgumentError("Named tuple names do not match."))
     end

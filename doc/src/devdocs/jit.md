@@ -8,7 +8,16 @@ The JIT is responsible for managing compilation resources, looking up previously
 
 ## Overview
 
-![Diagram of the compiler flow](./img/compiler_diagram.png)
+```@raw html
+<img src="../img/compiler_diagram.svg" alt="Diagram of the compiler flow"/>
+```
+```@raw latex
+\begin{figure}
+\centering
+\includegraphics[max width=\linewidth]{devdocs/img/compiler_diagram.pdf}
+\caption{Diagram of the compiler flow}
+\end{figure}
+```
 
 Codegen produces an LLVM module containing IR for one or more Julia functions from the original Julia SSA IR produced by type inference (labeled as translate on the compiler diagram above). It also produces a mapping of code-instance to LLVM function name. However, though some optimizations have been applied by the Julia-based compiler on Julia IR, the LLVM IR produced by codegen still contains many opportunities for optimization. Thus, the first step the JIT takes is to run a target-independent optimization pipeline[^tdp] on the LLVM module. Then, the JIT runs a target-dependent optimization pipeline, which includes target-specific optimizations and code generation, and outputs an object file. Finally, the JIT links the resulting object file into the current process and makes the code available for execution. All of this is controlled by code in `src/jitlayers.cpp`.
 
@@ -18,7 +27,7 @@ Currently, only one thread at a time is permitted to enter the optimize-compile-
 
 ## Optimization Pipeline
 
-The optimization pipeline is based off LLVM's new pass manager, but the pipeline is customized for Julia's needs. The pipeline is defined in `src/pipeline.cpp`, and broadly proceeds through a number of stages as detailed below.
+The optimization pipeline is based on LLVM's new pass manager, but the pipeline is customized for Julia's needs. The pipeline is defined in `src/pipeline.cpp`, and broadly proceeds through a number of stages as detailed below.
 
 1. Early Simplification
    1. These passes are mainly used to simplify the IR and canonicalize patterns so that later passes can identify those patterns more easily. Additionally, various intrinsic calls such as branch prediction hints and annotations are lowered into other metadata or other IR features. [`SimplifyCFG`](https://llvm.org/docs/Passes.html#simplifycfg-simplify-the-cfg) (simplify control flow graph), [`DCE`](https://llvm.org/docs/Passes.html#dce-dead-code-elimination) (dead code elimination), and [`SROA`](https://llvm.org/docs/Passes.html#sroa-scalar-replacement-of-aggregates) (scalar replacement of aggregates) are some of the key players here.

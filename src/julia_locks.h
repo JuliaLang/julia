@@ -116,6 +116,7 @@ JL_DLLEXPORT void jl_unlock_field(jl_mutex_t *v) JL_NOTSAFEPOINT;
 
 #include <mutex>
 #include <condition_variable>
+
 // simple C++ shim around a std::unique_lock + gc-safe + disabled finalizers region
 // since we nearly always want that combination together
 class jl_unique_gcsafe_lock {

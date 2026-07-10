@@ -60,7 +60,7 @@ $(eval $(call staged-install, \
 
 clean-libuv:
 	rm -rf $(LIBUV_BUILDDIR)/build-configured $(LIBUV_BUILDDIR)/build-compiled
-	-$(MAKE) -C $(LIBUV_BUILDDIR) clean
+	-if [ -d $(LIBUV_BUILDDIR) ]; then $(MAKE) -C $(LIBUV_BUILDDIR) clean; fi
 
 
 get-libuv: $(LIBUV_SRC_FILE)

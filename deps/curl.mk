@@ -37,6 +37,14 @@ $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
+$(SRCCACHE)/curl-$(CURL_VER)/curl-async_thrdd.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/curl-async_thrdd.patch
+	echo 1 > $@
+
+$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(SRCCACHE)/curl-$(CURL_VER)/curl-async_thrdd.patch-applied
+	echo 1 > $@
+
 ## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
 # Disable....almost everything
 CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON)				\
@@ -54,15 +62,19 @@ CURL_CONFIGURE_FLAGS +=											\
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
+#   On macOS, we use OpenSSL and validate using SecTrust by default
 #   On other platforms, we use OpenSSL
 ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
+else ifeq ($(OS), Darwin)
+CURL_TLS_CONFIGURE_FLAGS := --with-openssl
+CURL_TLS_CONFIGURE_FLAGS := --with-apple-sectrust
 else
 CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CURL_CONFIGURE_FLAGS) \
@@ -86,7 +98,7 @@ $(eval $(call staged-install, \
 
 clean-curl:
 	-rm -f $(BUILDDIR)/curl-$(CURL_VER)/build-configured $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean
+	-if [ -d $(BUILDDIR)/curl-$(CURL_VER) ]; then $(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean; fi
 
 distclean-curl:
 	rm -rf $(SRCCACHE)/curl-$(CURL_VER).tar.bz2 $(SRCCACHE)/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)

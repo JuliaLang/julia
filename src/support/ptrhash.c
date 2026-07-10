@@ -23,7 +23,10 @@
 extern "C" {
 #endif
 
-HTIMPL(ptrhash, inthash, OP_EQ)
+static inline uint_t ptrhash_hash(uintptr_t key) JL_NOTSAFEPOINT {
+    return (uint_t)((key >> 4) ^ (key >> 9));
+}
+HTIMPL(ptrhash, ptrhash_hash, OP_EQ)
 
 #ifdef __cplusplus
 }

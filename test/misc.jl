@@ -5,6 +5,9 @@ include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
+# Modify when (intentionally) changing the number of boxes in Base methods
+@test length(Test.detect_closure_boxes(Base)) == 3
+
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
 @test_throws AssertionError (@assert false)
@@ -51,7 +54,7 @@ let
         @test occursin("random_object", ex.msg)
     end
 end
-# if the second argument is an expression, c
+# if the second argument is an expression, call it to generate the error message
 let deepthought(x, y) = 42
     try
         @assert 1 == 2 string("the answer to the ultimate question: ",
@@ -1560,6 +1563,9 @@ end
     @allocated _x = 1+2
     @test _x === 3
 
+    # test `@allocated` works for dotted operations
+    @test (@allocated 1 .+ 1) == 0
+
     n, m = 10, 20
     X = rand(n, m)
     treshape59278(X, n, m)
@@ -1587,10 +1593,7 @@ end
         _lock_conflicts,Threads.nthreads()
     '`, String)))
     @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
-end
 
-#TODO: merge with `@testset "Base/timing.jl"` once https://github.com/JuliaLang/julia/issues/52948 is resolved
-@testset "Base/timing.jl2" begin
     # Test the output of `format_bytes()`
     inputs = [(factor * (Int64(1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
     expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
@@ -1598,7 +1601,6 @@ end
                         "2.000 GB", "1.863 GiB", "1000.000 GB", "931.323 GiB", "2.000 TB", "1.819 TiB",
                         "1000.000 TB", "909.495 TiB", "2.000 PB", "1.776 PiB", "1000.000 PB", "888.178 PiB",
                         "2000.000 PB", "1776.357 PiB"]
-
     for ((n, binary), expected) in zip(inputs, expected_output)
         @test Base.format_bytes(n; binary) == expected
     end
@@ -1622,7 +1624,7 @@ end
 @testset "Base docstrings" begin
     undoc = Docs.undocumented_names(Base)
     @test_broken isempty(undoc)
-    @test isempty(setdiff(undoc, [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY, :AtomicMemoryRef, :Exception, :GenericMemoryRef, :GlobalRef, :IO, :LineNumberNode, :MemoryRef, :Method, :SegmentationFault, :TypeVar, :arrayref, :arrayset, :arraysize, :const_arrayref]))
+    @test isempty(setdiff(undoc, [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY, :AtomicMemoryRef, :Exception, :GenericMemoryRef, :GlobalRef, :IO, :AnyType, :LineNumberNode, :MemoryRef, :Method, :SegmentationFault, :TypeEq, :TypeVar, :arrayref, :arrayset, :arraysize, :const_arrayref]))
 end
 
 exported_names(m) = filter(s -> Base.isexported(m, s), names(m))
@@ -1676,6 +1678,116 @@ end
         catch e
             e::LoadError
             @test e.error isa ArgumentError
+        end
+    end
+end
+
+# Interrupt (SIGINT/Ctrl-C) delivery: an interrupt must reach user code, not be
+# swallowed by (or crash) the internal scheduler task (issue #58689).
+if !Sys.iswindows()
+    # "Internal Task ERROR" is uppercased by `emphasize` when color is off
+    has_internal_err(s) = occursin(r"internal task error"i, s)
+    expect_output(output, pat; timeout=60) =
+        timedwait(() -> occursin(pat, output[]), timeout) === :ok
+    function spawn_interrupt_test_repl()
+        cmd = addenv(`$(Base.julia_cmd()) -q -i --startup-file=no`, Dict("TERM" => "dumb"))
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+        p = run(cmd, pts, pts, pts; wait=false)
+        Base.close_stdio(pts)
+        output = Ref("")
+        @async try
+            while !eof(ptm)
+                output[] *= String(readavailable(ptm))
+            end
+        catch
+        end
+        return p, ptm, output
+    end
+    function cleanup_interrupt_test_repl(p, ptm)
+        process_running(p) && kill(p, Base.SIGKILL)
+        close(ptm)
+        wait(p)
+    end
+
+    @testset "SIGINT at idle REPL prompt" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            sleep(2)  # let the REPL go fully idle (thread parked in scheduler)
+            kill(p, 2) # SIGINT
+            sleep(3)
+            @test process_running(p)
+            @test !has_internal_err(output[])
+            write(ptm, "println(\"CHECK_\", 1+1)\n")
+            @test expect_output(output, "CHECK_2"; timeout=30)
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT during REPL evaluation of a sleep loop" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            # compile the error-display path up front; on a loaded machine doing it
+            # lazily can delay the InterruptException output past the timeout below
+            write(ptm, "error(\"warmup_display\")\n")
+            # the pty echoes the input line (which also contains "warmup_display"),
+            # so wait for the error display to finish and the prompt to return
+            @test expect_output(output, r"ERROR.*warmup_display.*julia>"s)
+            write(ptm, "while true; sleep(0.05); end\n")
+            sleep(3)  # let the loop start
+            kill(p, 2) # SIGINT
+            @test expect_output(output, "InterruptException")
+            @test !has_internal_err(output[])
+            @test process_running(p)
+            write(ptm, "println(\"CHECK_\", 1+1)\n")
+            @test expect_output(output, "CHECK_2"; timeout=30)
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT to a non-interactive process blocked in sleep" begin
+        errfile = tempname()
+        p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "sleep(600)"`;
+                         stdout=devnull, stderr=errfile); wait=false)
+        sleep(3)  # ensure it is sleeping
+        # even 1.11 needed a 2nd SIGINT here, so allow a few attempts
+        for i in 1:3
+            kill(p, 2) # SIGINT
+            timedwait(() -> process_exited(p), 10) === :ok && break
+        end
+        @test process_exited(p)
+        err = read(errfile, String)
+        @test occursin("InterruptException", err)
+        @test !has_internal_err(err)
+        process_running(p) && kill(p, Base.SIGKILL)
+        wait(p)
+    end
+
+    if Base.identify_package("Distributed") !== nothing
+        @testset "Distributed.interrupt reaches a busy worker" begin
+            script = """
+                using Distributed
+                w = addprocs(1)[1]
+                r = remotecall(Core.eval, w, Main, :(sleep(20); "completed"))
+                sleep(3)
+                interrupt(w)
+                v = try
+                    fetch(r)
+                catch e
+                    e
+                end
+                exit((v isa RemoteException || v isa InterruptException) ? 0 : 1)
+                """
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                         Dict("JULIA_LOAD_PATH" => "@stdlib"))
+            p = run(pipeline(cmd; stdout=devnull, stderr=devnull); wait=false)
+            exited = timedwait(() -> process_exited(p), 120) === :ok
+            @test exited && p.exitcode == 0
+            process_running(p) && kill(p, Base.SIGKILL)
+            wait(p)
         end
     end
 end

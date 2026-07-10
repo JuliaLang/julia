@@ -1,7 +1,7 @@
 function writefixed(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
-    @assert 0 < pos <= length(buf)
+    @assert 0 < pos <= length(buf) "invalid pos"
     startpos = pos
     x = Float64(v)
     pos = append_sign(x, plus, space, buf, pos)
@@ -34,7 +34,7 @@ function writefixed(buf, pos, v::T,
         return pos + 3
     end
 
-    bits = Core.bitcast(UInt64, x)
+    bits = reinterpret(UInt64, x)
     mant = bits & MANTISSA_MASK
     exp = Int((bits >> 52) & EXP_MASK)
 

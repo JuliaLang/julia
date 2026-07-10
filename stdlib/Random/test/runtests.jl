@@ -3,11 +3,14 @@
 using Test, SparseArrays
 using Test: guardseed
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+using Random
+
+@test isempty(Test.detect_closure_boxes(Random))
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
-using Random
 using Random.DSFMT
 
 using Random: default_rng, Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
@@ -171,7 +174,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
 
     ki[2] = UInt64(0)
 
-    # Zigurrat tables for the exponential distribution
+    # Ziggurat tables for the exponential distribution
     x1 = ziggurat_exp_r
     web[256] = x1/emantissa
     feb[256] = exp(-x1)
@@ -508,7 +511,7 @@ end
     end
 end
 
-@testset "reproducility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
+@testset "reproducibility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
     mta, mtb = RNG(42), RNG(42)
 
     @test rand(mta) == rand(mtb)
@@ -521,6 +524,14 @@ end
     @test rand(mta,1:10,10) == rand(mtb,1:10,10)
     @test rand(mta,Bool) == rand(mtb,Bool)
     @test bitrand(mta,10) == bitrand(mtb,10)
+
+    # rand! fast path for Array{Complex{T}} must be reproducible across equal RNGs.
+    for T in Base.uniontypes(Base.HWReal)
+        a, b = Vector{Complex{T}}(undef, 10), Vector{Complex{T}}(undef, 10)
+        @test rand!(mta, a) == rand!(mtb, b)
+        c, d = Array{Complex{T},0}(undef), Array{Complex{T},0}(undef)
+        @test rand!(mta, c) == rand!(mtb, d)
+    end
 
     @test randstring(mta) == randstring(mtb)
     @test randstring(mta,10) == randstring(mtb,10)
@@ -646,30 +657,6 @@ end
 # MersenneTwister initialization with invalid values
 @test_throws DomainError DSFMT.DSFMT_state(zeros(Int32, rand(0:DSFMT.JN32-1)))
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0, 0, 0, -1, -1)
-
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0, 0, 0, -1, -1)
-
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0, 0, 0, -1, -1)
-
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1, 0, 0, -1, -1)
-
-# seed is private to MersenneTwister
-let seed = rand(UInt32, 10)
-    r = MersenneTwister(seed)
-    @test r.seed == seed && r.seed !== seed
-    let r2 = Future.randjump(r, big(10)^20)
-        Random.seed!(r2)
-        @test seed == r.seed != r2.seed
-    end
-    resize!(seed, 4)
-    @test r.seed != seed
-end
-
 @testset "Random.seed!(rng, ...) returns rng" begin
     # issue #21248
     seed = rand(UInt)
@@ -714,6 +701,12 @@ let b = ['0':'9';'A':'Z';'a':'z']
         end
     end
     @test randstring(MersenneTwister(0)) == randstring(MersenneTwister(0), b)
+end
+
+@testset "`randstring` with $T" for T in (UInt8, UInt16, UInt32, Int8, Int16, Int32, UInt, Int)
+    # clamp it to a small value so that we don't allocate too much unnecessarily
+    n = clamp(rand(T), Int8) % T
+    @test randstring(n) isa String
 end
 
 # this shouldn't crash (#22403)
@@ -969,42 +962,28 @@ end
 @testset "show" begin
     @testset "MersenneTwister" begin
         m = MersenneTwister(123)
-        @test string(m) == "MersenneTwister(123)"
+        @test string(m) == "MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d)"
+        @test m == MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d)
         Random.jump!(m, 2*big(10)^20)
-        @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
-        @test m == MersenneTwister(123, (200000000000000000000, 0))
+        @test string(m) == "MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 0)"
+        @test m == MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 0)
         rand(m)
-        @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
+        @test string(m) == "MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 1002, 0, 1)"
 
-        @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
+        @test m == MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 1002, 0, 1)
         rand(m, Int64)
-        @test string(m) == "MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))"
-        @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
+        @test string(m) == "MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 2256, 0, 1, 1002, 1)"
+        @test m == MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 2256, 0, 1, 1002, 1)
 
         m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
-        @test string(m) == "MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)"
+        @test string(m) == "MersenneTwister(0x07a0cc280198a55c39fa6f802d242f8b, 0x8472a002c9dd8879235ae29f67bc7496)"
         rand(m, Int64)
-        @test string(m) == "MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
-        @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
+        @test string(m) == "MersenneTwister(0x07a0cc280198a55c39fa6f802d242f8b, 0x8472a002c9dd8879235ae29f67bc7496, 0, 1254, 0, 0, 0, 1)"
+        @test m == MersenneTwister(0x07a0cc280198a55c39fa6f802d242f8b, 0x8472a002c9dd8879235ae29f67bc7496, 0, 1254, 0, 0, 0, 1)
 
         m = MersenneTwister(0); rand(m, Int64); rand(m)
-        @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
-        @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
-
-        # negative seeds
-        Random.seed!(m, -3)
-        @test string(m) == "MersenneTwister(-3)"
-        Random.seed!(m, typemin(Int8))
-        @test string(m) == "MersenneTwister(-128)"
-
-        # string seeds
-        Random.seed!(m, "seed 1")
-        @test string(m) == "MersenneTwister(\"seed 1\")"
-        x = rand(m)
-        @test x == rand(MersenneTwister("seed 1"))
-        @test string(m) == """MersenneTwister("seed 1", (0, 1002, 0, 1))"""
-        # test that MersenneTwister's fancy constructors accept string seeds
-        @test MersenneTwister("seed 1", (0, 1002, 0, 1)) == m
+        @test string(m) == "MersenneTwister(0x48d73dc42d195740db2fa90498613fdf, 0x1911b814c02405e88c49bc52dc8a77ea, 0, 2256, 1254, 1, 0, 1)"
+        @test m == MersenneTwister(0x48d73dc42d195740db2fa90498613fdf, 0x1911b814c02405e88c49bc52dc8a77ea, 0, 2256, 1254, 1, 0, 1)
     end
 
     @testset "RandomDevice" begin

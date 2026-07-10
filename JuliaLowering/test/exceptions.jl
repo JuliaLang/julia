@@ -1,0 +1,612 @@
+test_mod = Module()
+
+@test isempty(current_exceptions())
+
+@testset "tail position" begin
+
+    @test JuliaLowering.include_string(test_mod, """
+    try
+        1
+    catch
+        2
+    end
+    """) == 1
+
+    @test JuliaLowering.include_string(test_mod, """
+    try
+        error("hi")
+        1
+    catch
+        2
+    end
+    """) == 2
+
+    @test JuliaLowering.include_string(test_mod, """
+    try
+        error("hi")
+    catch exc
+        exc
+    end
+    """) == ErrorException("hi")
+
+
+    @test JuliaLowering.include_string(test_mod, """
+    try
+        1
+    catch
+        2
+    else
+        3
+    end
+    """) == 3
+
+    @test JuliaLowering.include_string(test_mod, """
+    try
+        error("hi")
+        1
+    catch
+        2
+    else
+        3
+    end
+    """) == 2
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f()
+            try
+                return 1
+            catch
+            end
+            return 2
+        end
+        f()
+    end
+    """) == 1
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function g()
+            try
+                return 1
+            catch
+            end
+        end
+        g()
+    end
+    """) == 1
+
+    @test JuliaLowering.include_string(test_mod, """
+    let x = -1
+        while true
+            try
+                error("hi")
+            catch
+                x = 2
+                break
+            end
+        end
+        x
+    end
+    """) == 2
+
+    @test JuliaLowering.include_string(test_mod, """
+    let x = -1
+        while true
+            try
+                x = 2
+                break
+            catch
+            end
+        end
+        x
+    end
+    """) == 2
+end
+
+@testset "value position" begin
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        x = try
+            1
+        catch
+            2
+        end
+        x
+    end
+    """) == 1
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        x = try
+            error("hi")
+            1
+        catch
+            2
+        end
+        x
+    end
+    """) == 2
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        x = try
+            error("hi")
+        catch exc
+            exc
+        end
+        x
+    end
+    """) == ErrorException("hi")
+
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        x = try
+            1
+        catch
+            2
+        else
+            3
+        end
+        x
+    end
+    """) == 3
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        x = try
+            error("hi")
+            1
+        catch
+            2
+        else
+            3
+        end
+        x
+    end
+    """) == 2
+
+end
+
+@testset "not value/tail position" begin
+
+    @test JuliaLowering.include_string(test_mod, """
+    let x = -1
+        try
+            x = 1
+        catch
+            x = 2
+        end
+        x
+    end
+    """) == 1
+
+    @test JuliaLowering.include_string(test_mod, """
+    let x = -1
+        try
+            error("hi")
+            x = 1
+        catch
+            x = 2
+        end
+        x
+    end
+    """) == 2
+
+    @test JuliaLowering.include_string(test_mod, """
+    let x = -1
+        try
+            x = error("hi")
+        catch exc
+            x = exc
+        end
+        x
+    end
+    """) == ErrorException("hi")
+
+
+    @test JuliaLowering.include_string(test_mod, """
+    let x = -1
+        try
+            x = 1
+        catch
+            x = 2
+        else
+            x = 3
+        end
+        x
+    end
+    """) == 3
+
+    @test JuliaLowering.include_string(test_mod, """
+    let x = -1
+        try
+            error("hi")
+            x = 1
+        catch
+            x = 2
+        else
+            x = 3
+        end
+        x
+    end
+    """) == 2
+
+end
+
+@testset "exception stack" begin
+
+    @test JuliaLowering.include_string(test_mod, """
+    try
+        try
+            error("hi")
+        catch
+            error("ho")
+        end
+    catch
+        a = []
+        for x in current_exceptions()
+            push!(a, x.exception)
+        end
+        a
+    end
+    """) == [ErrorException("hi"), ErrorException("ho")]
+
+end
+
+@test isempty(current_exceptions())
+
+#-------------------------------------------------------------------------------
+@testset "try/finally" begin
+
+test_mod = Module()
+
+@test JuliaLowering.include_string(test_mod, """
+let x = -1
+    try
+        x = 1
+    finally
+        x = 2
+    end
+    x
+end
+""") == 2
+
+@test JuliaLowering.include_string(test_mod, """
+let x = -1
+    try
+        try
+            error("hi")
+            x = 1
+        finally
+            x = 2
+        end
+    catch
+    end
+    x
+end
+""") == 2
+
+JuliaLowering.include_string(test_mod, """
+begin
+    function nested_finally(a, x, b, c)
+        try
+            try
+                if x
+                    return b
+                end
+                c
+            finally
+                push!(a, 1)
+            end
+        finally
+            push!(a, 2)
+        end
+    end
+end
+""")
+@test (a = []; res = test_mod.nested_finally(a, true, 100, 200); (a, res)) == ([1,2], 100)
+@test (a = []; res = test_mod.nested_finally(a, false, 100, 200); (a, res)) == ([1,2], 200)
+
+@test JuliaLowering.include_string(test_mod, """
+try
+    1
+catch
+    2
+finally
+    3
+end
+""") == 1
+
+@test JuliaLowering.include_string(test_mod, """
+try
+    error("hi")
+    1
+catch
+    2
+finally
+    3
+end
+""") == 2
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_try_catch_nospecialize(@nospecialize(cond))
+        try
+            cond && throw(ArgumentError(""))
+        catch
+            return 1
+        end
+        return 2
+    end
+    (
+        f_try_catch_nospecialize(true),
+        f_try_catch_nospecialize(false),
+    )
+end
+""") == (1,2)
+
+@testset "continue/break and finally" for maybe_catch in ("", "catch _", "catch _\nelse")
+    # continue in try -> finally block -> loop-cont
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                continue
+            $maybe_catch
+            finally
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("finally", 1), ("try", 2), ("finally", 2), ("try", 3), ("finally", 3)]
+    @test isempty(current_exceptions())
+
+    # break in try -> finally block -> loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+                break
+            $maybe_catch
+            finally
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("finally", 1)]
+    @test isempty(current_exceptions())
+
+    # break/continue in loop in try -> loop-cont, loop-exit -> finally
+    @test JuliaLowering.include_string(test_mod, """
+    let out = [], x = 1
+        try
+            push!(out, ("try", x))
+            for outer x in 1:100
+                push!(out, ("loop", x))
+                x > 2 && break
+                continue
+                push!(out, ("bad", x))
+            end
+        $maybe_catch
+        finally
+            push!(out, ("finally", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("loop", 1), ("loop", 2), ("loop", 3), ("finally", 3)]
+    @test isempty(current_exceptions())
+
+    # break/continue in loop in finally -> loop-cont, loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = [], x = 1
+        try
+            push!(out, ("try", x))
+        $maybe_catch
+        finally
+            for outer x in 1:100
+                push!(out, ("loop", x))
+                x > 2 && break
+                continue
+                push!(out, ("bad", x))
+            end
+            push!(out, ("finally", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("loop", 1), ("loop", 2), ("loop", 3), ("finally", 3)]
+    @test isempty(current_exceptions())
+
+    # continue in finally -> loop-cont
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+            $maybe_catch
+            finally
+                continue
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("try", 2), ("try", 3)]
+    @test isempty(current_exceptions())
+
+    # break in finally -> loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2,3]
+            try
+                push!(out, ("try", x))
+            $maybe_catch
+            finally
+                break
+                push!(out, ("finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1)]
+    @test isempty(current_exceptions())
+
+    # TODO: commented out to avoid polluting the exception stack; need to port
+    # https://github.com/JuliaLang/julia/pull/55876
+
+    # # error in try -> continue in finally -> loop-cont
+    # @test JuliaLowering.include_string(test_mod, """
+    # let out = []
+    #     for x in [1,2,3]
+    #         try
+    #             push!(out, ("try", x))
+    #             error()
+    #         $maybe_catch
+    #         finally
+    #             continue
+    #             push!(out, ("finally", x))
+    #         end
+    #         push!(out, ("bad", x))
+    #     end
+    #     out
+    # end
+    # """) == [("try", 1), ("try", 2), ("try", 3)]
+    # @test isempty(current_exceptions())
+    #
+    # # error in try -> break in finally -> loop-exit
+    # @test JuliaLowering.include_string(test_mod, """
+    # let out = []
+    #     for x in [1,2,3]
+    #         try
+    #             push!(out, ("try", x))
+    #             error()
+    #         $maybe_catch
+    #         finally
+    #             break
+    #             push!(out, ("finally", x))
+    #         end
+    #         push!(out, ("bad", x))
+    #     end
+    #     out
+    # end
+    # """) == [("try", 1)]
+    # @test isempty(current_exceptions())
+
+    # (nested) continue in try -> finally block -> loop-cont
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2]
+            try
+                push!(out, ("try", x))
+                continue
+            $maybe_catch
+            finally
+                push!(out, ("finally", x))
+                try
+                    push!(out, ("try2", x))
+                    continue
+                finally
+                    push!(out, ("finally2", x))
+                end
+                push!(out, ("bad_finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("finally", 1), ("try2", 1), ("finally2", 1),
+             ("try", 2), ("finally", 2), ("try2", 2), ("finally2", 2)]
+    @test isempty(current_exceptions())
+
+    # (nested) break in try -> finally block -> loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = []
+        for x in [1,2]
+            try
+                push!(out, ("try", x))
+                break
+            $maybe_catch
+            finally
+                push!(out, ("finally", x))
+                try
+                    push!(out, ("try2", x))
+                    break
+                finally
+                    push!(out, ("finally2", x))
+                end
+                push!(out, ("bad_finally", x))
+            end
+            push!(out, ("bad", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("finally", 1), ("try2", 1), ("finally2", 1)]
+    @test isempty(current_exceptions())
+end
+
+@testset "goto from try/catch/else with finally" begin
+    # Test that @goto from try block with finally is prevented
+    @test_throws JuliaLowering.LoweringError r"goto from a try/finally block is not permitted" JuliaLowering.include_string(test_mod, """
+    function f()
+        try
+            @goto skip
+        finally
+            println("cleanup")
+        end
+        @label skip
+    end
+    """) broken=true
+
+    # Test that @goto from catch block with finally is prevented
+    @test_throws JuliaLowering.LoweringError r"goto from a catch/finally block is not permitted" JuliaLowering.include_string(test_mod, """
+    function f()
+        try
+            error()
+        catch
+            @goto skip
+        finally
+            println("cleanup")
+        end
+        @label skip
+    end
+    """) broken=true
+
+    # Test that @goto from else block with finally is prevented
+    @test_throws JuliaLowering.LoweringError r"goto from an else/finally block is not permitted" JuliaLowering.include_string(test_mod, """
+    function f()
+        try
+        catch
+        else
+            @goto skip
+        finally
+            println("cleanup")
+        end
+        @label skip
+    end
+    """) broken=true
+
+    # Test that @goto within try/catch/else is allowed when there's no finally
+    @test JuliaLowering.include_string(test_mod, """
+    function f()
+        try
+            @goto skip
+        catch
+        end
+        @label skip
+        return 42
+    end
+    f()
+    """) == 42
+end
+
+end

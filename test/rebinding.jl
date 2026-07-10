@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
+
 module Rebinding
     using Test
     make_foo() = Foo(1)
@@ -89,6 +91,47 @@ module Rebinding
     @test f_return_delete_me_implicit() == 6
     Base.delete_binding(DeleteMeModule, :delete_me_implicit)
     @test_throws UndefVarError f_return_delete_me_implicit()
+end
+
+# Retracting an `export` with `set_binding_visibility!` makes a name stop
+# resolving through `using`, and re-exporting restores it.
+module RebindingVisibility
+    using Test
+
+    module SrcMod
+        export visg
+        visg() = 42
+        public visp
+        visp() = 7
+    end
+    using .SrcMod
+
+    @test Base.isexported(SrcMod, :visg)
+    f_use_visg() = visg()
+    @test f_use_visg() == 42
+
+    # Retract the export: `visg` is still defined in SrcMod but no longer reachable here.
+    Base.set_binding_visibility!(SrcMod, :visg, :none)
+    @test !Base.isexported(SrcMod, :visg)
+    @test !Base.ispublic(SrcMod, :visg)
+    @test :visg ∉ names(SrcMod)
+    @test_throws UndefVarError f_use_visg()
+    @test SrcMod.visg() == 42
+
+    # Re-export and confirm implicit resolution is restored.
+    Base.set_binding_visibility!(SrcMod, :visg, :export)
+    @test Base.isexported(SrcMod, :visg)
+    @test :visg ∈ names(SrcMod)
+    @test f_use_visg() == 42
+
+    # The public flag is independent of export and not world-versioned.
+    @test Base.ispublic(SrcMod, :visp) && !Base.isexported(SrcMod, :visp)
+    Base.set_binding_visibility!(SrcMod, :visp, :none)
+    @test !Base.ispublic(SrcMod, :visp)
+    Base.set_binding_visibility!(SrcMod, :visp, :public)
+    @test Base.ispublic(SrcMod, :visp)
+
+    @test_throws ArgumentError Base.set_binding_visibility!(SrcMod, :visg, :bogus)
 end
 
 module RebindingPrecompile
@@ -204,6 +247,42 @@ module RebindingPrecompile
         end
     end
 
+    precompile_test_harness("export retraction") do load_path
+        write(joinpath(load_path, "RetractExport.jl"),
+              """
+              module RetractExport
+                export retract_me
+                const retract_me = 11
+              end
+              """)
+        Base.compilecache(Base.PkgId("RetractExport"))
+        write(joinpath(load_path, "UseRetractExport.jl"),
+              """
+              module UseRetractExport
+                using RetractExport
+                f_use_retract() = retract_me
+                @assert f_use_retract() == 11
+              end
+              """)
+        Base.compilecache(Base.PkgId("UseRetractExport"))
+        @eval using RetractExport
+        # Retract the export before loading the dependent package
+        invokelatest() do
+            Base.set_binding_visibility!(RetractExport, :retract_me, :none)
+        end
+        @eval using UseRetractExport
+        invokelatest() do
+            @test_throws UndefVarError UseRetractExport.f_use_retract()
+        end
+        # Re-export and confirm resolution is restored
+        invokelatest() do
+            Base.set_binding_visibility!(RetractExport, :retract_me, :export)
+        end
+        invokelatest() do
+            @test UseRetractExport.f_use_retract() == 11
+        end
+    end
+
     finish_precompile_test!()
 end
 
@@ -285,7 +364,7 @@ module RangeMerge
 
     function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
         params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-        d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, params)
+        d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, "", params)
         sprint(print, d)
     end
 
@@ -319,9 +398,8 @@ module UndefinedTransitions
     end
 end
 
-# Identical implicit partitions should be merge (#57923)
-for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),
-                convert(Core.Binding, GlobalRef(Base, :Intrinsics)))
+# Identical implicit partitions should be merged (#57923)
+for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),)
     # Test that these both only have two partitions
     @test isdefined(binding, :partitions)
     @test isdefined(binding.partitions, :next)
@@ -407,4 +485,98 @@ module Invalidate59272
     @test isa(Bar(), Foo.Bar)
     Core.eval(Foo, :(struct Bar; x; end))
     @test Bar(1) == Foo.Bar(1)
+end
+
+# Test that two const-prop'd pseudo `CodeInstance`s for the same `MethodInstance`
+# carrying *different* binding edges are both kept on the caller's edge list, so
+# that redefining either binding properly invalidates the caller (#61745).
+module Invalidate61745
+    using Test
+    module N
+        const foo = "foo_unchanged"
+        const bar = "bar_unchanged"
+    end
+    helper(s::Symbol) = getglobal(N, s)::String
+    caller_both() = helper(:foo) * helper(:bar)
+    @test caller_both() == "foo_unchangedbar_unchanged"
+    Core.eval(N, :(const foo = "foo_changed!"))
+    @test caller_both() == "foo_changed!bar_unchanged"
+    Core.eval(N, :(const bar = "bar_changed!"))
+    @test caller_both() == "foo_changed!bar_changed!"
+end
+
+# Test that codegen does not bake in a binding's value when there is no forward
+# edge from the `CodeInstance` to the binding. Without const-prop tracking the
+# `Module` argument, inference cannot record a `Binding` edge for `M.foo`, so
+# codegen must fall back to a runtime binding load to remain correct under
+# redefinition (#61745).
+module Invalidate61745_indirect
+    using Test
+    module M
+        const foo = "unchanged"
+    end
+    indirect_access(modref::Module) = Base.getproperty(modref, :foo)::String
+    caller() = indirect_access(M)
+    @test caller() == "unchanged"
+    Core.eval(M, :(const foo = "changed!"))
+    @test caller() == "changed!"
+end
+
+# Test @reexport
+module ReexportTests
+    using Test
+    using Base.Experimental: @reexport
+
+    # Test dynamic export additions through reexport
+    module Source1
+        export s1
+        s1() = "s1"
+    end
+    module Reexporter1
+        import ..@reexport
+        @reexport using ..Source1
+    end
+    module User1
+        using ..Reexporter1
+    end
+    @test (:s1,) ⊆ names(Reexporter1)
+    @test User1.s1() == "s1"
+    Core.eval(Source1, :(s2() = "s2"; export s2))
+    @test (:s1, :s2) ⊆ names(Reexporter1)
+    @test User1.s2() == "s2"
+
+    # Test reexport syntax, multiple modules
+    module Source2
+        export s3
+        s3() = "s3"
+    end
+    module Reexporter2
+        import ..@reexport
+        @reexport using ..Source2, ..Source1
+    end
+    module User2
+        using ..Reexporter2
+    end
+    @test (:s1, :s3) ⊆ names(Reexporter2)
+    @test User2.s1() == "s1"
+    @test User2.s3() == "s3"
+
+    # Test same name from different modules - one with reexport, one without
+    module Source3
+        export same_name
+        const same_name = 42
+    end
+    module Source4
+        export same_name
+        const same_name = 42
+    end
+    module Reexporter3
+        import ..@reexport
+        using ..Source4  # without reexport
+        @reexport using ..Source3
+    end
+    module User3
+        using ..Reexporter3
+    end
+    @test User3.same_name == 42
 end

@@ -47,6 +47,14 @@ Stack information representing execution context, with the following fields:
 
   Representation of the pointer to the execution context as returned by `backtrace`.
 
+- `pc::Int`
+
+  If `from_c`, this is a column number.  Otherwise, it is a 1-based statement
+  index within the frame's `linfo.debuginfo`, recovered from the DWARF column
+  emitted by codegen, or `0` when debuginfo is unavailable. Used internally by
+  `StackTraces.lookup` to resolve the `MethodInstance` for inlined frames; also
+  surfaced in low-level safe backtrace output (e.g. on segfault) but not in
+  Julia's default `show` for `StackFrame`.
 """
 struct StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
     "the name of the function containing the execution context"
@@ -64,10 +72,14 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     inlined::Bool
     "representation of the pointer to the execution context as returned by `backtrace`"
     pointer::UInt64  # Large enough to be read losslessly on 32- and 64-bit machines.
+    "if !from_c, 1-based statement index (PC) within the frame's CodeInfo, or 0 if unavailable"
+    pc::Int
 end
 
+StackFrame(func, file, line, linfo, from_c, inlined, pointer) =
+    StackFrame(func, file, line, linfo, from_c, inlined, pointer, 0)
 StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
-                                          nothing, false, false, 0)
+                                          nothing, false, false, 0, 0)
 
 """
     StackTrace
@@ -99,6 +111,36 @@ function hash(frame::StackFrame, h::UInt)
     return h
 end
 
+function _add_linetable_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
+    lt, ltpc = Base.Compiler.prev_debuginfo(di, pc)
+    if lt isa Core.DebugInfo
+        _add_linetable_frames!(frames, pointer, lt, ltpc)
+        edi, epc = Base.Compiler.edge_debuginfo(lt, ltpc)
+        edi !== nothing && _add_di_frames!(frames, pointer, edi, epc)
+    end
+    nothing
+end
+
+# 1. Push our own frame
+# 2. If there is a linetable, recurse on edges there (and not the linetable)
+# 3. Recurse on any of our own edges
+function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
+    @assert pc > 0 "invalid pc"
+    push!(frames, StackFrame(
+        di.def isa Symbol ? Symbol("macro expansion") : IRShow.method_name(di.def),
+        IRShow.debuginfo_file1(di),
+        @ccall(jl_cdi_firstxy(di::Any, pc::Int32)::NTuple{2, Int32})[1],
+        di.def isa Core.MethodInstance ? di.def : nothing,
+        false, # we can assume C frames aren't inlined into julia
+        !isempty(frames),
+        pointer,
+        pc))
+    _add_linetable_frames!(frames, pointer, di, pc)
+    edi, epc = Base.Compiler.edge_debuginfo(di, pc)
+    edi !== nothing && _add_di_frames!(frames, pointer, edi, epc)
+    nothing
+end
+
 """
     lookup(pointer::Ptr{Cvoid})::Vector{StackFrame}
 
@@ -107,20 +149,44 @@ up stack frame context information. Returns an array of frame information for al
 inlined at that point, innermost function first.
 """
 Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
-    infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)::Core.SimpleVector
+    frames = @ccall jl_lookup_code_address(pointer::Ptr{Cvoid}, false::Cint)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
-    isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
-    res = Vector{StackFrame}(undef, length(infos))
-    for i in 1:length(infos)
-        info = infos[i]::Core.SimpleVector
-        @assert length(info) == 6 "corrupt return from jl_lookup_code_address"
-        func = info[1]::Symbol
-        file = info[2]::Symbol
-        linenum = info[3]::Int
-        linfo = info[4]
-        res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer)
+
+    # this is equal to UNKNOWN
+    isempty(frames) && return [StackFrame(
+        empty_sym, empty_sym, -1, nothing, true, false, pointer)]
+
+    # If we aren't given a PC and CodeInstance for the last (non-inlined) frame,
+    # we can't recover any more information than `frames`, so use those.
+    # Otherwise, DebugInfo lets us recover `linfo` for inlined frames too, so
+    # ignore `frames` and construct them by traversing the DebugInfo tree
+    # instead.  This is a separate code path since attempting to enhance
+    # existing `frames` would require matching them to our tree traversal.
+    pc = frames[end][5]::Bool ? 0 : frames[end][7]::Int
+    di = let x = frames[end][4]
+        x isa Core.CodeInstance ? x.debuginfo : nothing
     end
-    return res
+    if pc <= 0 || !(di isa Core.DebugInfo)
+        out = Vector{StackFrame}(undef, length(frames))
+        for i in 1:length(frames)
+            f = frames[i]
+            @assert length(f) == 7 "corrupt return from jl_lookup_code_address"
+            func = f[1]::Symbol
+            file = f[2]::Symbol
+            linenum = f[3]::Int
+            linfo = f[4]
+            from_c = f[5]::Bool
+            inlined = f[6]::Bool
+            sv_pc = from_c ? f[7]::Int : 0
+            out[i] = StackFrame(
+                func, file, linenum, linfo, from_c, inlined, pointer, sv_pc)
+        end
+    else
+        out = Vector{StackFrame}()
+        _add_di_frames!(out, pointer, di, pc)
+        reverse!(out)
+    end
+    return out
 end
 
 const top_level_scope_sym = Symbol("top-level scope")
@@ -167,20 +233,22 @@ function lookup(ip::Base.InterpreterIP)
     if isempty(scopes)
         return [StackFrame(func, file, line, code, false, false, 0)]
     end
-    closure = let inlined::Bool = false, def = def
-        function closure_inner(lno)
-            if inlined
-                def = lno.method
-                def isa Union{Method,Core.CodeInstance,MethodInstance} || (def = nothing)
-            else
-                def = codeinfo
-            end
-            sf = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line, def, false, inlined, 0)
-            inlined = true
-            return sf
+    res = Vector{StackFrame}(undef, length(scopes))
+    inlined = false
+    def_local = def
+    for i in eachindex(scopes)
+        lno = scopes[i]
+        if inlined
+            def_local = lno.method
+            def_local isa Union{Method,Core.CodeInstance,MethodInstance} || (def_local = nothing)
+        else
+            def_local = codeinfo
         end
+        res[i] = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line,
+            def_local, false, inlined, 0)
+        inlined = true
     end
-    return map(closure, scopes)
+    return res
 end
 
 """
@@ -283,7 +351,8 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             else
                 # Equivalent to the default implementation of `show_custom_spec_sig`
                 # for `linfo isa CodeInstance`, but saves an extra dynamic dispatch.
-                show_spec_sig(io, def, frame_mi(frame).specTypes)
+                mi = frame_mi(frame)::MethodInstance
+                show_spec_sig(io, def::Method, mi.specTypes)
             end
         else
             m = linfo::Method
@@ -295,7 +364,8 @@ end
 # Can be extended by compiler packages to customize backtrace display of custom code instance frames
 function show_custom_spec_sig(io::IO, @nospecialize(owner), linfo::CodeInstance, frame::StackFrame)
     mi = Base.get_ci_mi(linfo)
-    return show_spec_sig(io, mi.def, mi.specTypes)
+    m = mi.def::Method # the case ::Module is handled in show_spec_linfo
+    return show_spec_sig(io, m, mi.specTypes)
 end
 
 function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))

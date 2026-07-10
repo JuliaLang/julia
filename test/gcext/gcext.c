@@ -219,7 +219,6 @@ static uint64_t xorshift_rng(void)
 }
 
 static treap_t *bigvals;
-static size_t bigval_startoffset;
 
 // Hooks to allocate and free external objects (bigval_t's).
 
@@ -419,7 +418,7 @@ void stk_push(jl_value_t *s, jl_value_t *v)
     }
 }
 
-// Return top value from `s`. Raise error if not empty.
+// Return top value from `s`. Raise error if empty.
 
 jl_value_t *stk_top(jl_value_t *s)
 {
@@ -428,7 +427,7 @@ jl_value_t *stk_top(jl_value_t *s)
     return stk->data[stk->size - 1];
 }
 
-// Pop a value from `s` and return it. Raise error if not empty.
+// Pop a value from `s` and return it. Raise error if empty.
 
 jl_value_t *stk_pop(jl_value_t *s)
 {
@@ -649,8 +648,6 @@ int main()
             module,
             jl_symbol("StackDataLarge"),
             (jl_value_t *)datatype_stack_external);
-    // Remember the offset of external objects
-    bigval_startoffset = jl_gc_external_obj_hdr_size();
     // Run the actual tests
     checked_eval_string(
             "let dir = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"

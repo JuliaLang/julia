@@ -2,6 +2,8 @@
 
 using Test, Mmap, Random
 
+@test isempty(Test.detect_closure_boxes(Mmap))
+
 file = tempname()
 write(file, "Hello World\n")
 t = b"Hello World"
@@ -269,6 +271,7 @@ A2 = mmap(s, Matrix{Int}, (m,n))
 seek(s, 0)
 A3 = mmap(s, Matrix{Int}, (m,n), convert(Int64, 2*sizeof(Int)))
 @test A == A3
+seek(s, 0)
 A4 = mmap(s, Matrix{Int}, (m,150), convert(Int64, (2+150*m)*sizeof(Int)))
 @test A[:, 151:end] == A4
 close(s)
@@ -340,6 +343,19 @@ open(file, "r+") do s
     A = mmap(s, Vector{UInt8}, (10,), 1)
     Mmap.sync!(A)
     finalize(A); A = nothing;
+end
+GC.gc()
+rm(file)
+
+# test #30537
+file = tempname()
+rdat = [fill(0x00, 8); fill(typemax(UInt8), 8); 0x00]
+open(f->write(f, rdat), file, "w+")
+for T in (Int32, UInt32, UInt64, Int64)
+    local b = Mmap.mmap(file, BitVector, (64), T(8))
+    @test b isa BitVector
+    @test all(b)
+    @test length(b) == 64
 end
 GC.gc()
 rm(file)

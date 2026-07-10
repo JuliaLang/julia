@@ -70,7 +70,7 @@ end
        ret i32 %3""", Int32, Tuple{Int32, Int32},
         Int32(1), Int32(2))) # llvmcall must be compiled to be called
 
-#Since LLVM 18, LLVM does a best effort to automatically include the intrinsics
+#Since LLVM 18, LLVM makes a best effort to automatically include the intrinsics
 function undeclared_ceil(x::Float64)
     llvmcall("""%2 = call double @llvm.ceil.f64(double %0)
         ret double %2""", Float64, Tuple{Float64}, x)
@@ -218,3 +218,24 @@ s = MyStruct()
 @test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
 @test s.kern == 0
 @test reinterpret(Int, s.ptr) == 0
+
+function too_few_args(x::Int32, y::Int32)
+    llvmcall("""%3 = add i32 %1, %0
+                ret i32 %3""",
+        Int32,
+        Tuple{Int32, Int32},
+        x)
+end
+@test_throws ErrorException too_few_args(Int32(1), Int32(1))
+
+function too_many_args(x::Int32, y::Int32)
+    llvmcall("""%3 = add i32 %1, %0
+                ret i32 %3""",
+        Int32,
+        Tuple{Int32, Int32},
+        x,y,x)
+end
+@test_throws ErrorException too_many_args(Int32(1), Int32(1))
+
+llvmcall_nothing_arg() = Core.Intrinsics.llvmcall("ret i8 0", Int8, Tuple{Nothing}, nothing)
+@test_throws ErrorException llvmcall_nothing_arg()

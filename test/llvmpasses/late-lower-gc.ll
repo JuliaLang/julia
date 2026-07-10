@@ -205,7 +205,7 @@ define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
 ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 10)
 ; CHECK: [[gc_slot_addr_:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
 ; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 10)
-  call void null(ptr sret([2 x [5 x ptr addrspace(10)]]) %2, ptr null, ptr addrspace(11) null, ptr null)
+  call void null(ptr sret([2 x [5 x ptr addrspace(10)]]) "julia.return_roots"="10" %2, ptr null, ptr addrspace(11) null, ptr null)
   %4 = insertelement <4 x ptr> zeroinitializer, ptr %2, i32 0
 ; CHECK: [[gc_slot_addr_:%.*]] = insertelement <4 x ptr> zeroinitializer, ptr [[gc_slot_addr_:%.*]], i32 0
 ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)

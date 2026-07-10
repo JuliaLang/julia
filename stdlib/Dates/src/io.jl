@@ -397,9 +397,8 @@ For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` strin
 "y-m-dTH:M:S.s". If you need to use a code character as a delimiter you can escape it using
 backslash. The date "1995y01m" would have the format "y\\ym\\m".
 
-Note that 12:00AM corresponds 00:00 (midnight), and 12:00PM corresponds to 12:00 (noon).
-When parsing a time with a `p` specifier, any hour (either `H` or `I`) is interpreted as
-as a 12-hour clock, so the `I` code is mainly useful for output.
+Note that 12:00AM corresponds to 00:00 (midnight), and 12:00PM corresponds to 12:00 (noon).
+When parsing a time with a `p` specifier, any hour (either `H` or `I`) is interpreted as a 12-hour clock, so the `I` code is mainly useful for output.
 
 Creating a DateFormat object is expensive. Whenever possible, create it once and use it many times
 or try the [`dateformat""`](@ref @dateformat_str) string macro. Using this macro creates the DateFormat
@@ -656,7 +655,7 @@ end
 """
     Time(t::AbstractString, df::DateFormat=ISOTimeFormat)
 
-Construct a `Time` by parsing the `t` date time string following the
+Construct a `Time` by parsing the `t` time string following the
 pattern given in the [`DateFormat`](@ref) object, or $ISOTimeFormat if omitted.
 
 Similar to `Time(::AbstractString, ::AbstractString)` but more efficient when
@@ -747,3 +746,12 @@ for date_type in (:Date, :DateTime)
     # Parsable output will have type info displayed, thus it is implied
     @eval Base.typeinfo_implicit(::Type{$date_type}) = true
 end
+
+# minimal Base.TOML support
+Base.TOML.Printer.printvalue(f::Function, io::IO, value::Date, sorted::Bool) =
+    Base.print(io, Dates.format(value, dateformat"YYYY-mm-dd"))
+Base.TOML.Printer.printvalue(f::Function, io::IO, value::Time, sorted::Bool) =
+    Base.print(io, Dates.format(value, dateformat"HH:MM:SS.sss"))
+Base.TOML.Printer.printvalue(f::Function, io::IO, value::DateTime, sorted::Bool) =
+    Base.print(io, Dates.format(value, dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z"))
+Base.TOML.Printer.is_valid_toml_value(@nospecialize(::Union{Date,Time,DateTime})) = true

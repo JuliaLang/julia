@@ -38,7 +38,7 @@ $(eval $(call staged-install, \
 
 clean-nghttp2:
 	-rm -f $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-configured $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/nghttp2-$(NGHTTP2_VER) clean
+	-if [ -d $(BUILDDIR)/nghttp2-$(NGHTTP2_VER) ]; then $(MAKE) -C $(BUILDDIR)/nghttp2-$(NGHTTP2_VER) clean; fi
 
 distclean-nghttp2:
 	rm -rf $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2 \

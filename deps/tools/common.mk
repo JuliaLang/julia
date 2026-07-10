@@ -289,6 +289,26 @@ endif
 
 ## phony targets ##
 
-.PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall version-check \
-	get-* extract-* configure-* compile-* fastcheck-* check-* install-* uninstall-* reinstall-* clean-* distclean-* \
-	update-llvm
+.PHONY: check
+.PHONY: check-*
+.PHONY: clean-*
+.PHONY: cleanall
+.PHONY: compile
+.PHONY: compile-*
+.PHONY: configure
+.PHONY: configure-*
+.PHONY: default
+.PHONY: distclean-*
+.PHONY: distcleanall
+.PHONY: extract
+.PHONY: extract-*
+.PHONY: fastcheck
+.PHONY: fastcheck-*
+.PHONY: get
+.PHONY: get-*
+.PHONY: install
+.PHONY: install-*
+.PHONY: reinstall
+.PHONY: reinstall-*
+.PHONY: uninstall
+.PHONY: uninstall-*

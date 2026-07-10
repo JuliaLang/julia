@@ -28,7 +28,7 @@ end
 """
     capture_exception(ex, bt)::Exception
 
-Returns an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
+Return an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
 
 Used in [`asyncmap`](@ref) and [`asyncmap!`](@ref) to capture exceptions thrown during
 the user-supplied function call.
@@ -160,7 +160,7 @@ const task_state_failed   = UInt8(2)
         elseif st === task_state_failed
             return :failed
         else
-            @assert false
+            @assert false "unexpected state"
         end
     elseif field === :backtrace
         # TODO: this field name should be deprecated in 2.0
@@ -303,7 +303,7 @@ end
 
 # just wait for a task to be done, no error propagation
 function _wait(t::Task)
-    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
+    t === current_task() && throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
@@ -383,8 +383,11 @@ completed tasks, and the other consists of uncompleted tasks.
     each runs serially, since this needs to scan the list of `tasks` each time and
     synchronize with each one every time this is called. Or consider using
     [`waitall(tasks; failfast=true)`](@ref waitall) instead.
+
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
 """
-waitany(tasks; throw=true) = _wait_multiple(tasks, throw)
+waitany(tasks; throw=true) = _wait_multiple(collect_tasks(tasks), throw)
 
 """
     waitall(tasks; failfast=true, throw=true) -> (done_tasks, remaining_tasks)
@@ -400,17 +403,22 @@ given tasks is finished by exception. If `throw` is `true`, throw
 
 The return value consists of two task vectors. The first one consists of
 completed tasks, and the other consists of uncompleted tasks.
+
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
 """
-waitall(tasks; failfast=true, throw=true) = _wait_multiple(tasks, throw, true, failfast)
+waitall(tasks; failfast=true, throw=true) = _wait_multiple(collect_tasks(tasks), throw, true, failfast)
 
-function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false)
+function collect_tasks(waiting_tasks)
     tasks = Task[]
-
     for t in waiting_tasks
         t isa Task || error("Expected an iterator of `Task` object")
         push!(tasks, t)
     end
+    return tasks
+end
 
+function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false)
     if (all && !failfast) || length(tasks) <= 1
         exception = false
         # Force everything to finish synchronously for the case of waitall
@@ -435,19 +443,21 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
             done_mask[i] = true
             exception |= istaskfailed(t)
             nremaining -= 1
-        else
-            done_mask[i] = false
         end
     end
 
-    if nremaining == 0
-        return tasks, Task[]
-    elseif any(done_mask) && (!all || (failfast && exception))
+    # We can return early if all tasks are done, or if any is done and we only
+    # needed to wait for one, or if any task failed and we have failfast
+    if nremaining == 0 || (any(done_mask) && (!all || (failfast && exception)))
         if throwexc && (!all || failfast) && exception
             exceptions = [TaskFailedException(t) for t in tasks[done_mask] if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else
-            return tasks[done_mask], tasks[.~done_mask]
+            if nremaining == 0
+                return tasks, Task[]
+            else
+                return tasks[done_mask], tasks[.~done_mask]
+            end
         end
     end
 
@@ -472,28 +482,47 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
     end
 
     while nremaining > 0
+        exception && failfast && break
         i = take!(chan)
         t = tasks[i]
         waiter_tasks[i] = sentinel
         done_mask[i] = true
         exception |= istaskfailed(t)
         nremaining -= 1
-
-        # stop early if requested, unless there is something immediately
-        # ready to consume from the channel (using a race-y check)
-        if (!all || (failfast && exception)) && !isready(chan)
-            break
-        end
+        # stop early if requested
+        all || break
     end
 
     close(chan)
 
+    # now just read which tasks finished directly: the channel is not needed anymore for that
+    # repeat until we get (acquire) the list of all dependent-exited tasks
+    changed = true
+    while changed
+        changed = false
+        for (i, done) in enumerate(done_mask)
+            done && continue
+            t = tasks[i]
+            if istaskdone(t)
+                done_mask[i] = true
+                exception |= istaskfailed(t)
+                nremaining -= 1
+                changed = true
+            end
+        end
+    end
+
     if nremaining == 0
+        if throwexc && exception
+            exceptions = [TaskFailedException(t) for t in tasks if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        end
         return tasks, Task[]
     else
         remaining_mask = .~done_mask
         for i in findall(remaining_mask)
             waiter = waiter_tasks[i]
+            waiter === sentinel && continue
             donenotify = tasks[i].donenotify::ThreadSynchronizer
             @lock donenotify list_deletefirst!(donenotify.waitq, waiter)
         end
@@ -841,6 +870,8 @@ function task_done_hook(t::Task)
             backend isa Task && throwto(backend, result)
         end
     end
+    ref = last_idle_task()
+    ref[] === t && (ref[] = nothing)
     # Clear sigatomic before waiting
     sigatomic_end()
     try
@@ -957,7 +988,9 @@ function enq_work(t::Task)
         else
             # Otherwise, put the task in the multiqueue.
             Partr.multiq_insert(t, t.priority)
-            tid = 0
+            # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
+            ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+            return t
         end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
@@ -1132,6 +1165,33 @@ function throwto(t::Task, @nospecialize exc)
     return try_yieldto(identity)
 end
 
+# The scheduler task on each thread remembers the last user task that went idle on it,
+# as the best victim for an InterruptException that would otherwise be delivered to
+# (and swallowed by) the scheduler task itself (issue #58689). To limit how long a
+# completed task can be kept from collection by this reference (see #57544), it is
+# cleared when the recorded task finishes on this same thread (task_done_hook); a task
+# that finishes elsewhere remains referenced until the next task goes idle here.
+const last_idle_task = OncePerThread{RefValue{Union{Task,Nothing}}}() do
+    RefValue{Union{Task,Nothing}}(nothing)
+end
+
+# Find a task that can meaningfully receive an InterruptException that was delivered
+# to a scheduler task. This is inherently best-effort (the victim may be racing to be
+# rescheduled concurrently); robust interrupt delivery requires cooperation from the
+# receiving code, which the runtime cannot guarantee here.
+function interrupt_victim()
+    backend = repl_backend_task()
+    backend isa Task && return backend
+    # an active REPL session that is not evaluating user code: drop the interrupt
+    @isdefined(active_repl_backend) && active_repl_backend !== nothing && return nothing
+    t = last_idle_task()[]
+    if t isa Task && !istaskdone(t) && t._state === task_state_runnable &&
+       (!t.sticky || Threads.threadid(t) == Threads.threadid())
+        return t
+    end
+    return istaskdone(roottask) ? nothing : roottask
+end
+
 function wait_forever()
     while true
         try
@@ -1139,16 +1199,31 @@ function wait_forever()
                 wait()
             end
         catch e
-            local errs = stderr
-            # try to display the failure atomically
-            errio = IOContext(PipeBuffer(), errs::IO)
-            emphasize(errio, "Internal Task ")
-            display_error(errio, current_exceptions())
-            write(errs, errio)
-            # victimize another random Task also
+            handled = false
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
-                backend = repl_backend_task()
-                backend isa Task && throwto(backend, e)
+                # A Ctrl-C/SIGINT was delivered to this internal scheduler task because
+                # no user task was running on this thread. Redirect it to a task that
+                # can meaningfully handle it, or drop it (issue #58689).
+                try
+                    victim = interrupt_victim()
+                    victim isa Task && throwto(victim, e)
+                    handled = true
+                catch e2
+                    # throwto throws an ErrorException if the victim cannot be switched
+                    # to (e.g. it was concurrently rescheduled), and rethrows an
+                    # InterruptException delivered while this task was suspended in the
+                    # switch; drop the interrupt in both cases. Anything else is an
+                    # unexpected failure and is reported below.
+                    handled = e2 isa InterruptException || e2 isa ErrorException
+                end
+            end
+            if !handled
+                local errs = stderr
+                # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Internal Task ")
+                display_error(errio, current_exceptions())
+                write(errs, errio)
             end
         end
     end
@@ -1211,6 +1286,7 @@ function wait()
         # thread sleep logic.
         sched_task = get_sched_task()
         if ct !== sched_task
+            istaskdone(ct) || (last_idle_task()[] = ct)
             istaskdone(sched_task) && (sched_task = @task wait())
             return yieldto(sched_task)
         end
@@ -1229,7 +1305,7 @@ end
 # update the `running_time_ns` field of `t` to include the time since it last started running.
 function record_running_time!(t::Task)
     if t.metrics_enabled && !istaskdone(t)
-        @atomic :monotonic t.running_time_ns += time_ns() - t.last_started_running_at
+        @atomic :monotonic t.running_time_ns +%= time_ns() -% t.last_started_running_at
     end
     return t
 end

@@ -70,7 +70,7 @@ function randstring end
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
 
-    function randstring(r::AbstractRNG, chars=b, n::Integer=8)
+    function randstring(r::AbstractRNG, chars, n::Int)
         T = eltype(chars)
         if T === UInt8
             str = Base._string_n(n)
@@ -83,9 +83,18 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
         end
     end
 
-    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
-    randstring(chars=b, n::Integer=8) = randstring(default_rng(), chars, n)
-    randstring(n::Integer) = randstring(default_rng(), b, n)
+    # Zero-arg methods:
+    randstring() = randstring(default_rng(), b, 8)
+    # One-arg methods:
+    randstring(r::AbstractRNG) = randstring(r, b, 8)
+    randstring(chars) = randstring(default_rng(), chars, 8)
+    randstring(n::Integer) = randstring(default_rng(), b, convert(Int, n))
+    # Two-arg methods:
+    randstring(r::AbstractRNG, chars) = randstring(r, chars, 8)
+    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, convert(Int, n))
+    randstring(chars, n::Integer) = randstring(default_rng(), chars, convert(Int, n))
+    # Three-arg methods:
+    randstring(r::AbstractRNG, chars, n::Integer) = randstring(r, chars, convert(Int, n))
 end
 
 
@@ -176,11 +185,6 @@ julia> randsubseq(Xoshiro(123), 1:8, 0.3)
 randsubseq(A::AbstractArray, p::Real) = randsubseq(default_rng(), A, p)
 
 
-## rand Less Than Masked 52 bits (helper function)
-
-"Return a sampler generating a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
-ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(Int)))
-
 ## shuffle & shuffle!
 
 function shuffle(rng::AbstractRNG, tup::NTuple{N}) where {N}
@@ -219,31 +223,22 @@ optionally supplying the random-number generator `rng`.
 
 # Examples
 ```jldoctest
-julia> shuffle!(Xoshiro(123), Vector(1:10))
-10-element Vector{Int64}:
-  5
-  4
-  2
-  3
-  6
- 10
-  8
-  1
-  9
-  7
+julia> shuffle!(Xoshiro(0), Vector(1:6))
+6-element Vector{Int64}:
+ 5
+ 1
+ 2
+ 6
+ 3
+ 4
 ```
 """
-function shuffle!(r::AbstractRNG, a::AbstractArray)
+function shuffle!(rng::AbstractRNG, a::AbstractArray)
     # keep it consistent with `randperm!` and `randcycle!` if possible
     require_one_based_indexing(a)
-    n = length(a)
-    @assert n <= Int64(2)^52
-    n == 0 && return a
-    mask = 3
-    @inbounds for i = 2:n
-        j = 1 + rand(r, ltm52(i, mask))
+    @inbounds for i = 2:length(a)
+        j = rand(rng, 1:i)
         a[i], a[j] = a[j], a[i]
-        i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
 end
@@ -278,18 +273,14 @@ indices, see [`randperm`](@ref).
 
 # Examples
 ```jldoctest
-julia> shuffle(Xoshiro(123), Vector(1:10))
-10-element Vector{Int64}:
-  5
-  4
-  2
-  3
-  6
- 10
-  8
-  1
-  9
-  7
+julia> shuffle(Xoshiro(0), 1:6)
+6-element Vector{Int64}:
+ 5
+ 1
+ 2
+ 6
+ 3
+ 4
 ```
 """
 function shuffle end
@@ -318,12 +309,14 @@ To randomly permute an arbitrary vector, see [`shuffle`](@ref) or
 
 # Examples
 ```jldoctest
-julia> randperm(Xoshiro(123), 4)
-4-element Vector{Int64}:
+julia> randperm(Xoshiro(0), 6)
+6-element Vector{Int64}:
+ 5
  1
- 4
  2
+ 6
  3
+ 4
 ```
 """
 randperm(r::AbstractRNG, n::T) where {T <: Integer} = randperm!(r, Vector{T}(undef, n))
@@ -342,29 +335,28 @@ optional `rng` argument specifies a random number generator (see
 
 # Examples
 ```jldoctest
-julia> randperm!(Xoshiro(123), Vector{Int}(undef, 4))
-4-element Vector{Int64}:
+julia> randperm!(Xoshiro(0), Vector{Int}(undef, 6))
+6-element Vector{Int64}:
+ 5
  1
- 4
  2
+ 6
  3
+ 4
 ```
 """
-function randperm!(r::AbstractRNG, a::AbstractArray{<:Integer})
+function randperm!(rng::AbstractRNG, a::AbstractArray{<:Integer})
     # keep it consistent with `shuffle!` and `randcycle!` if possible
     Base.require_one_based_indexing(a)
     n = length(a)
-    @assert n <= Int64(2)^52
     n == 0 && return a
     a[1] = 1
-    mask = 3
     @inbounds for i = 2:n
-        j = 1 + rand(r, ltm52(i, mask))
+        j = rand(rng, 1:i)
         if i != j # a[i] is undef (and could be #undef)
             a[i] = a[j]
         end
         a[j] = i
-        i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
 end
@@ -393,14 +385,14 @@ which are sampled uniformly.  If `n == 0`, `randcycle` returns an empty vector.
 
 # Examples
 ```jldoctest
-julia> randcycle(Xoshiro(123), 6)
+julia> randcycle(Xoshiro(0), 6)
 6-element Vector{Int64}:
  5
+ 1
  4
- 2
  6
  3
- 1
+ 2
 ```
 """
 randcycle(r::AbstractRNG, n::T) where {T <: Integer} = randcycle!(r, Vector{T}(undef, n))
@@ -424,30 +416,27 @@ which are sampled uniformly.  If `A` is empty, `randcycle!` leaves it unchanged.
 
 # Examples
 ```jldoctest
-julia> randcycle!(Xoshiro(123), Vector{Int}(undef, 6))
+julia> randcycle!(Xoshiro(0), Vector{Int}(undef, 6))
 6-element Vector{Int64}:
  5
+ 1
  4
- 2
  6
  3
- 1
+ 2
 ```
 """
-function randcycle!(r::AbstractRNG, a::AbstractArray{<:Integer})
+function randcycle!(rng::AbstractRNG, a::AbstractArray{<:Integer})
     # keep it consistent with `shuffle!` and `randperm!` if possible
     Base.require_one_based_indexing(a)
     n = length(a)
-    @assert n <= Int64(2)^52
     n == 0 && return a
     a[1] = 1
-    mask = 3
     # Sattolo's algorithm:
     @inbounds for i = 2:n
-        j = 1 + rand(r, ltm52(i-1, mask))
+        j = rand(rng, 1:i-1)
         a[i] = a[j]
         a[j] = i
-        i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
 end

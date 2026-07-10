@@ -50,7 +50,7 @@ AnnotatedString(s::S<:AbstractString) -> AnnotatedString{S}
 AnnotatedString(s::S<:AbstractString, annotations::Vector{$RegionAnnotation})
 ```
 
-A AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
+An AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
 like [`string`](@ref) but preserves any annotations present in the arguments.
 
 # Examples
@@ -75,8 +75,8 @@ More specifically, this is a simple wrapper around any other
 [`AbstractChar`](@ref), which holds a list of arbitrary labelled annotations
 (`$Annotation`) with the wrapped character.
 
-See also: [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
-and `annotate!`.
+See also [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
+`annotate!`.
 
 # Constructors
 
@@ -158,6 +158,37 @@ eltype(::Type{<:AnnotatedString{S}}) where {S} = AnnotatedChar{eltype(S)}
 firstindex(s::AnnotatedString) = firstindex(s.string)
 lastindex(s::AnnotatedString) = lastindex(s.string)
 
+"""
+    unannotate(s::AnnotatedString{S})::S
+    unannotate(s::SubString{AnnotatedString{S}})::SubString{S}
+    unannotate(s::SubString{AnnotatedString{SubString{S}}})::SubString{S}
+
+Get the underlying string of `s`, without copying.
+
+# Examples
+```jldoctest; setup=:(using Base: AnnotatedString)
+julia> s = AnnotatedString("abcde", [(1:3, :A, 4)])
+"abcde"
+
+julia> u = Base.unannotate(s)
+"abcde"
+
+julia> typeof(u)
+String
+```
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+"""
+unannotate(s::AnnotatedString) = s.string
+
+function unannotate(s::SubString{<:AnnotatedString})
+    start_index = first(parentindices(s)[1])
+    @inbounds raw_substring(parent(s).string, start_index, ncodeunits(s))
+end
+
+
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
@@ -204,16 +235,14 @@ cmp(a::AnnotatedString, b::AnnotatedString) = cmp(a.string, b.string)
 # To prevent substring equality from hitting the generic fallback
 
 function ==(a::SubString{<:AnnotatedString}, b::SubString{<:AnnotatedString})
-    SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) ==
-        SubString(b.string.string, b.offset, b.ncodeunits, Val(:noshift)) &&
-        annotations(a) == annotations(b)
+    unannotate(a) == unannotate(b) && annotations(a) == annotations(b)
 end
 
 ==(a::SubString{<:AnnotatedString}, b::AnnotatedString) =
-    annotations(a) == annotations(b) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b.string
+    annotations(a) == annotations(b) && unannotate(a) == b.string
 
 ==(a::SubString{<:AnnotatedString}, b::AbstractString) =
-    isempty(annotations(a)) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b
+    isempty(annotations(a)) && unannotate(a) == b
 
 ==(a::AbstractString, b::SubString{<:AnnotatedString}) = b == a
 
@@ -228,7 +257,7 @@ Create a `AnnotatedString` from any number of `values` using their
 This acts like [`string`](@ref), but takes care to preserve any annotations
 present (in the form of [`AnnotatedString`](@ref) or [`AnnotatedChar`](@ref) values).
 
-See also [`AnnotatedString`](@ref) and [`AnnotatedChar`](@ref).
+See also [`AnnotatedString`](@ref), [`AnnotatedChar`](@ref).
 
 ## Examples
 
@@ -250,7 +279,7 @@ function annotatedstring(xs...)
         size = filesize(s.io)
         if x isa AnnotatedString
             for annot in x.annotations
-                push!(annotations, setindex(annot, annot.region .+ size, :region))
+                push!(annotations, @inline(setindex(annot, annot.region .+ size, :region)))
             end
             print(s, x.string)
         elseif x isa SubString{<:AnnotatedString}
@@ -259,10 +288,10 @@ function annotatedstring(xs...)
                 if start <= x.offset + x.ncodeunits && stop > x.offset
                     rstart = size + max(0, start - x.offset - 1) + 1
                     rstop = size + min(stop, x.offset + x.ncodeunits) - x.offset
-                    push!(annotations, setindex(annot, rstart:rstop, :region))
+                    push!(annotations, @inline(setindex(annot, rstart:rstop, :region)))
                 end
             end
-            print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
+            print(s, unannotate(x))
         elseif x isa AnnotatedChar
             for annot in x.annotations
                 push!(annotations, (region=1+size:1+size, annot...))
@@ -293,12 +322,12 @@ function repeat(str::AnnotatedString, r::Integer)
     elseif allequal(a -> a.region, str.annotations) && first(str.annotations).region == fullregion
         newfullregion = firstindex(unannot):lastindex(unannot)
         for annot in str.annotations
-            push!(annotations, setindex(annot, newfullregion, :region))
+            push!(annotations, @inline(setindex(annot, newfullregion, :region)))
         end
     else
         for offset in 0:len:(r-1)*len
             for annot in str.annotations
-                push!(annotations, setindex(annot, annot.region .+ offset, :region))
+                push!(annotations, @inline(setindex(annot, annot.region .+ offset, :region)))
             end
         end
     end
@@ -318,10 +347,10 @@ function reverse(s::AnnotatedString)
     lastind = lastindex(s)
     AnnotatedString(
         reverse(s.string),
-        [setindex(annot,
+        [@inline(setindex(annot,
                   UnitRange(1 + lastind - last(annot.region),
                             1 + lastind - first(annot.region)),
-                  :region)
+                  :region))
          for annot in s.annotations])
 end
 
@@ -367,8 +396,8 @@ annotate!(s::SubString{<:AnnotatedString}, label::Symbol, @nospecialize(val::Any
 
 Annotate `char` with the labeled value `(label, value)`.
 """
-annotate!(c::AnnotatedChar, label::Symbol, @nospecialize(val::Any)) =
-    (push!(c.annotations, Annotation((; label, val))); c)
+annotate!(c::AnnotatedChar, label::Symbol, @nospecialize(value::Any)) =
+    (push!(c.annotations, Annotation((; label, value))); c)
 
 """
     annotations(str::Union{AnnotatedString, SubString{AnnotatedString}},
@@ -384,21 +413,33 @@ a vector of region–annotation tuples.
 In accordance with the semantics documented in [`AnnotatedString`](@ref), the
 order of annotations returned matches the order in which they were applied.
 
-See also: [`annotate!`](@ref).
+See also [`annotate!`](@ref).
 """
 annotations(s::AnnotatedString) = s.annotations
 
 function annotations(s::SubString{<:AnnotatedString})
-    RegionAnnotation[
-        setindex(ann, first(ann.region)-s.offset:last(ann.region)-s.offset, :region)
-        for ann in annotations(s.string, s.offset+1:s.offset+s.ncodeunits)]
+    substr_range = s.offset+1:s.offset+s.ncodeunits
+    result = RegionAnnotation[]
+    for ann in annotations(s.string, substr_range)
+        # Shift the region to be relative to the substring start
+        shifted_region = first(ann.region)-s.offset:last(ann.region)-s.offset
+        # @inline setindex makes :region const knowable (#60365)
+        push!(result, @inline(setindex(ann, shifted_region, :region)))
+    end
+    return result
 end
 
 function annotations(s::AnnotatedString, pos::UnitRange{<:Integer})
     # TODO optimise
-    RegionAnnotation[
-        setindex(ann, max(first(pos), first(ann.region)):min(last(pos), last(ann.region)), :region)
-        for ann in s.annotations if !isempty(intersect(pos, ann.region))]
+    result = RegionAnnotation[]
+    for ann in s.annotations
+        if !isempty(intersect(pos, ann.region))
+            clamped_region = max(first(pos), first(ann.region)):min(last(pos), last(ann.region))
+            # @inline setindex makes :region const knowable (#60365)
+            push!(result, @inline(setindex(ann, clamped_region, :region)))
+        end
+    end
+    return result
 end
 
 annotations(s::AnnotatedString, pos::Integer) = annotations(s, pos:pos)
@@ -430,7 +471,7 @@ This works by comparing the number of code units of each character before and
 after transforming with `f`, recording and aggregating any differences, then
 applying them to the annotation regions.
 
-Returns an `AnnotatedString{String}` (regardless of the original underling
+Returns an `AnnotatedString{String}` (regardless of the original underlying
 string type of `str`).
 """
 function annotated_chartransform(f::Function, str::AnnotatedString, state=nothing)
@@ -455,7 +496,7 @@ function annotated_chartransform(f::Function, str::AnnotatedString, state=nothin
         start, stop = first(annot.region), last(annot.region)
         start_offset = last(offsets[findlast(<=(start) ∘ first, offsets)::Int])
         stop_offset  = last(offsets[findlast(<=(stop) ∘ first, offsets)::Int])
-        push!(annots, setindex(annot, (start + start_offset):(stop + stop_offset), :region))
+        push!(annots, @inline(setindex(annot, (start + start_offset):(stop + stop_offset), :region)))
     end
     AnnotatedString(takestring!(outstr), annots)
 end
@@ -509,7 +550,7 @@ function eachregion(s::AnnotatedString, subregion::UnitRange{Int}=firstindex(s):
     pos = first(events).pos
     if pos > first(subregion)
         push!(regions, thisind(s, first(subregion)):prevind(s, pos))
-        push!(annots, [])
+        push!(annots, Annotation[])
     end
     activelist = Int[]
     for event in events
@@ -526,7 +567,7 @@ function eachregion(s::AnnotatedString, subregion::UnitRange{Int}=firstindex(s):
     end
     if last(events).pos < nextind(s, last(subregion))
         push!(regions, last(events).pos:thisind(s, last(subregion)))
-        push!(annots, [])
+        push!(annots, Annotation[])
     end
     RegionIterator(s.string, regions, annots)
 end

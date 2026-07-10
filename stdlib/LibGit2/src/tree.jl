@@ -7,6 +7,28 @@ function GitTree(c::GitCommit)
 end
 
 """
+    GitTree(repo::GitRepo, tree_oid::GitHash)
+
+Look up a tree object in the repository using its GitHash.
+This constructor wraps the libgit2 git_tree_lookup function.
+
+# Examples
+```julia
+tree_hash = LibGit2.GitHash(repo, "HEAD^{tree}")
+tree = LibGit2.GitTree(repo, tree_hash)
+```
+"""
+function GitTree(repo::GitRepo, tree_oid::GitHash)
+    ensure_initialized()
+    tree_out = Ref{Ptr{Cvoid}}(C_NULL)
+    oid_ptr = Ref(tree_oid)
+    @check ccall((:git_tree_lookup, libgit2), Cint,
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{GitHash}),
+                 tree_out, repo, oid_ptr)
+    return GitTree(repo, tree_out[])
+end
+
+"""
     treewalk(f, tree::GitTree, post::Bool=false)
 
 Traverse the entries in `tree` and its subtrees in post or pre order. Preorder
@@ -41,7 +63,7 @@ function treewalk(f, tree::GitTree, post::Bool = false)
     if err < 0
         err_class, _ = Error.last_error()
         if err_class != Error.Callback
-            # now we now the code is valid
+            # now we know the code is valid
             throw(GitError(err))
         end
     end

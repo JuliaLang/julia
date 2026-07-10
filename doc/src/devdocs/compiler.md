@@ -36,16 +36,6 @@ determine how to assign or pass it somewhere.
 They are created via one of the helper constructors, usually:
 `mark_julia_type` (for immediate values) and `mark_julia_slot` (for pointers to values).
 
-The function `convert_julia_type` can transform between any two types.
-It returns an R-value with `cgval.typ` set to `typ`.
-It'll cast the object to the requested representation,
-making heap boxes, allocating stack copies, and computing tagged unions as
-needed to change the representation.
-
-By contrast `update_julia_type` will change `cgval.typ` to `typ`,
-only if it can be done at zero-cost (i.e. without emitting any code).
-
-
 ## Union representation
 
 Inferred union types may be stack allocated via a tagged type representation.

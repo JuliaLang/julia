@@ -28,6 +28,14 @@ Surround words with one asterisk, `*`, to display the enclosed text in italics.
 A paragraph containing an *italicized* word.
 ```
 
+### Strikethrough
+
+Surround words with one or two tildes, `~` or`~~`, to display the enclosed text with a strikethrough, or a line through it.
+
+```
+A paragraph containing a ~~struck~~ word.
+```
+
 ### Literals
 
 Surround text that should be displayed exactly as written with single backticks, ``` ` ``` .
@@ -51,12 +59,14 @@ parts of a Julia program.
 
 ### ``\LaTeX``
 
-Surround text that should be displayed as mathematics using ``\LaTeX`` syntax with double backticks,
-``` `` ``` .
+Surround text that should be displayed as mathematics using ``\LaTeX`` syntax with double backticks:
+``` `` ```.
 
 ```
 A paragraph containing some ``\LaTeX`` markup.
 ```
+
+See the [Display equations](@ref) section for non-inline LaTeX.
 
 !!! tip
     As with literals in the previous section, if literal backticks need to be written within double
@@ -71,6 +81,13 @@ A paragraph containing some ``\LaTeX`` markup.
     ```
     @doc raw"``\LaTeX`` syntax in a docstring." functionname
     ```
+!!! note
+    Inline ``\LaTeX`` can also be created using a pair of single `$` characters. However
+    this is not recommended as `$` is also used for string interpolation. Thus using it can
+    easily lead to unintended results. For example, inside an `md` string the parser will
+    interpret an unmatched `$` as string interpolation, leading to unexpected errors or
+    worse, undesired behavior, when a variable is unexpectedly interpolated into a string.
+    In contrast, an unmatched ``` `` ``` results in a helpful error message.
 
 ### Links
 
@@ -289,6 +306,14 @@ f(a) = \frac{1}{2\pi}\int_{0}^{2\pi} (\alpha+R\cos(\theta))d\theta
 ```
 ````
 
+Note that the `\$\$` version is available but deprecated:
+
+```julia
+raw"$$H = - \sum p(x) \log p(x)$$"
+```
+
+See the [Inline elements](@ref) for inline ``\LaTeX`` and a note about the status of the dollar-sign (`\$`) deprecated form.
+
 ### Footnotes
 
 This syntax is paired with the inline syntax for [Footnote references](@ref). Make sure to read
@@ -389,6 +414,7 @@ However, unless the code rendering the Markdown special-cases that particular ad
 
 A custom title for the box can be provided as a string (in double quotes) after the admonition type.
 If no title text is specified after the admonition type, then the type name will be used as the title (e.g. `"Note"` for the `note` admonition).
+Note that admonition titles are parsed as plain strings and do not support inline Markdown or LaTeX formatting (e.g. ``\alpha`` in a title will not be rendered as math).
 
 Admonitions, like most other toplevel elements, can contain other toplevel elements (e.g. lists, images).
 
