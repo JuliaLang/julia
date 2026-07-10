@@ -50,6 +50,14 @@ const IR_FLAG_UNUSED      = one(UInt32) << 17
 const IR_FLAG_EFIIMO      = one(UInt32) << 18
 # This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 19
+# This `GotoIfNot` is the guard branch of an inlined effect split (see
+# `ir_inline_effectsplit!`): its false target starts a self-contained fallback
+# region that ends at the split's join block and is semantically equivalent to
+# the fall-through (assume) arm, differing only in assumed effects. Nothrow
+# shadow synthesis for an enclosing kernel uses this to compose inner splits:
+# the shadow keeps the guard and turns the fallback region into `return false`,
+# while the assume variant folds the guard to the assume arm.
+const IR_FLAG_SPLIT_GUARD = one(UInt32) << 20
 
 const NUM_IR_FLAGS = 3 # sync with julia.h
 

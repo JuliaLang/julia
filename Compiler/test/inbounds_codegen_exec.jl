@@ -121,4 +121,73 @@ if Base.REFLECTION_COMPILER[] === nothing && !CHECK_BOUNDS_OFF && !COVERAGE && S
     # base/summarysize.jl
     isdefined(Base, Symbol("summarysize")) && @test nb_throws(Base.summarysize, Tuple{Any}) == 0
 end
+
+# Deterministic structure pins for the Nanosoldier regressions found on the
+# first benchmark run of this branch (sum 6.6x, sum(skipmissing) 53x,
+# logical-indexing sum ~7x). These assert the SHAPE of the compiled code, not
+# timing: the split fast path must exist, the hot loop must vectorize, and the
+# synthesized (hoisted) precondition check must fold to O(1) index arithmetic.
+# An unfolded check reappears either as a vectorized early-exit pre-loop -
+# LLVM labels those blocks "middle.split" - or as bounds-error throws.
+function invoke_target_name(@nospecialize(x))
+    (x isa Expr && x.head === :invoke) || return nothing
+    t = x.args[1]
+    t isa Core.CodeInstance && (t = t.def)
+    t isa Core.MethodInstance || return nothing
+    m = t.def
+    return m isa Method ? m.name : nothing
+end
+count_invokes(src, name::Symbol) =
+    count(@nospecialize(x)->invoke_target_name(x) === name, src.code)
+full_llvm(@nospecialize(f), @nospecialize(tt)) =
+    sprint((io, a...)->code_llvm(io, a...; debuginfo=:none), f, tt)
+
+@testset "regression pins: reduction kernels vectorize with folded checks" begin
+    # sum/mean over arrays: mapreduce_impl splits _mapreduce_impl_base; the
+    # @simd accumulation loop must vectorize and the hoisted check must fold
+    # (["array", "reductions", ("sum", ...)] regressed 6.6x when the check
+    # stayed a loop)
+    for T in (Float64, Int64)
+        ir = full_llvm(Base.mapreduce_impl,
+                       Tuple{typeof(identity), typeof(Base.add_sum), Vector{T}, Int, Int, Int})
+        @test count("throw_boundserror", ir) + count("bounds_error", ir) == 0
+        @test occursin("vector.body", ir)
+        @test !occursin("middle.split", ir)
+    end
+
+    # sum(skipmissing(...)): the SkipMissing mapreduce_impl splits
+    # _mapreduce_impl_skipmissing_base (["union", "array", ("skipmissing", ...)]
+    # regressed up to 53x from per-element splits inside the loop)
+    for T in (Int8, Int64, Float64)
+        AT = Vector{Union{Missing, T}}
+        ir = full_llvm(Base.mapreduce_impl,
+                       Tuple{typeof(identity), typeof(Base.add_sum), Base.SkipMissing{AT}, Int, Int, Int})
+        @test count("throw_boundserror", ir) + count("bounds_error", ir) == 0
+        if T <: Integer
+            # LLVM does not vectorize the masked Float64 reduction on master
+            # either (select-guarded fadd chain); pin only the integer cases
+            @test occursin("vector.body", ir)
+        end
+        @test !occursin("middle.split", ir)
+    end
+end
+
+@testset "regression pins: logical indexing composes iterate splits" begin
+    # A[mask]: `_unsafe_getindex` splits the `_unsafe_getindex!` kernel, whose
+    # body contains the per-call `iterate(::LogicalIndex)` split diamonds; the
+    # composition must fold every inner fallback out of the assume arm, leaving
+    # only the single outlined kernel fallback (["array", "index",
+    # ("sumlogical", ...)] regressed ~7x when the per-element diamonds - a
+    # branch plus an opaque call - stayed in the loop)
+    mask = falses(4, 4); mask[1, 1] = true
+    LT = typeof(Base.LogicalIndex(mask))
+    for T in (Float32, Int32)
+        tt = (IndexLinear, Matrix{T}, LT)
+        src = only(code_typed(Base._unsafe_getindex, tt))[1]
+        @test count_invokes(src, Symbol("_unsafe_getindex!")) == 1
+        @test count_invokes(src, :_iterate_impl) == 0
+        ir = full_llvm(Base._unsafe_getindex, Tuple{tt...})
+        @test count("throw_boundserror", ir) + count("bounds_error", ir) == 0
+    end
+end
 end # native compiler && !CHECK_BOUNDS_OFF && !COVERAGE

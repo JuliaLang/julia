@@ -76,6 +76,66 @@ struct EffectSplit
         new(check, check_case, assume_case, else_case, Int[])
 end
 
+# The fallback region of an inlined (inner) effect split: `guardbb` ends in an
+# `IR_FLAG_SPLIT_GUARD`-marked `GotoIfNot` whose false target starts the
+# single-entry chain `fallbackbbs` ending at the `join` block, where it merges
+# back with the (fall-through) assume arm. The fallback is semantically
+# equivalent to the assume arm, so an enclosing kernel's nothrow shadow can
+# compose the inner split: the shadow keeps the guard and turns the fallback
+# into `return false` (the enclosing fallback then re-runs everything checked),
+# and the assume variant folds the guard to the assume arm.
+struct SplitGuardRegion
+    guardbb::Int
+    fallbackbbs::Vector{Int}
+    join::Int
+end
+
+# Discover the (well-formed) split-guard fallback regions of `ir`. Marked
+# guards whose fallback shape has been disturbed too much to recognize are
+# simply not reported - their fallback statements then fail
+# `scan_nothrow_split_ir` like any other effectful call.
+function split_guard_regions(ir::IRCode)
+    regions = SplitGuardRegion[]
+    nblocks = length(ir.cfg.blocks)
+    for bbidx = 1:nblocks
+        termidx = last(ir.cfg.blocks[bbidx].stmts)
+        term = ir.stmts[termidx][:stmt]
+        isa(term, GotoIfNot) || continue
+        has_flag(ir.stmts[termidx][:flag], IR_FLAG_SPLIT_GUARD) || continue
+        # Walk the single-entry fallback chain from the guard's false target
+        # towards the join block
+        fallbackbbs = Int[]
+        b = term.dest
+        while true
+            length(fallbackbbs) > nblocks && break # cycle; malformed
+            preds = ir.cfg.blocks[b].preds
+            expected = isempty(fallbackbbs) ? bbidx : fallbackbbs[end]
+            (length(preds) == 1 && preds[1] == expected) || break
+            # region blocks must be simple: no phis or nested control flow
+            ok = true
+            for i in ir.cfg.blocks[b].stmts
+                stmt = ir.stmts[i][:stmt]
+                if isa(stmt, PhiNode) || isa(stmt, PhiCNode) || isa(stmt, EnterNode) ||
+                   isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
+                    ok = false
+                    break
+                end
+            end
+            ok || break
+            push!(fallbackbbs, b)
+            succs = ir.cfg.blocks[b].succs
+            length(succs) == 1 || break
+            nb = succs[1]
+            if length(ir.cfg.blocks[nb].preds) > 1
+                push!(regions, SplitGuardRegion(bbidx, fallbackbbs, nb))
+                break
+            end
+            b = nb
+        end
+    end
+    return regions
+end
+
 copy(todo::InliningTodo) =
     InliningTodo(todo.mi, copy(todo.ir), todo.spec_info, todo.di, todo.linear_inline_eligible, todo.effects)
 
@@ -715,7 +775,12 @@ function ir_inline_effectsplit!(compact::IncrementalCompact, idx::Int, argexprs:
     compact.result[idx][:type] = Bool
     val = ir_inline_case_here!(compact, idx, check_argexprs, check_case, boundscheck, todo_bbs, Bool, line)
     compact.result[idx][:type] = orig_type
-    insert_node_here!(compact, NewInstruction(GotoIfNot(val, next_cond_bb), Any, line))
+    # The guard is marked so that nothrow-shadow synthesis for an enclosing
+    # kernel can compose this split (see `IR_FLAG_SPLIT_GUARD`). NB: do not add
+    # effect flags on the terminator - a "removable" combination can get it
+    # DCE'd by `compact!`.
+    insert_node_here!(compact, NewInstruction(GotoIfNot(val, next_cond_bb), Any, NoCallInfo(), line,
+                                              IR_FLAG_SPLIT_GUARD))
     finish_current_bb!(compact, 0)
 
     pn = PhiNode()
@@ -1736,8 +1801,9 @@ function analyze_invoke_split_effects(ir::IRCode, idx::Int, stmt::Expr, info::In
         # the fallback into a call
         else_todo = else_case::InliningTodo
         assumed_effects = apply_effects_overrides(else_todo.effects, info.cond_effects)
-        if info.cond_effects.nothrow && scan_nothrow_split_ir(else_todo.ir)
-            assume_case = InliningTodo(else_todo.mi, assume_nothrow_ir(else_todo.ir),
+        regions = split_guard_regions(else_todo.ir)
+        if info.cond_effects.nothrow && scan_nothrow_split_ir(else_todo.ir, regions)
+            assume_case = InliningTodo(else_todo.mi, assume_nothrow_ir(else_todo.ir, regions),
                 else_todo.spec_info, else_todo.di, assumed_effects)
         else
             assume_case = copy(else_todo)
@@ -1765,6 +1831,47 @@ is_element_store(ir::IRCode, @nospecialize(stmt)) =
 is_element_load(ir::IRCode, @nospecialize(stmt)) =
     is_known_call_of(ir, stmt, Core.memoryrefget) || is_known_call_of(ir, stmt, Core.memoryref_isassigned)
 
+# The element type of the `GenericMemoryRef` an element load/store operates
+# on, or `nothing` if it cannot be determined precisely
+function element_memory_eltype(ir::IRCode, @nospecialize(stmt))
+    (isexpr(stmt, :call) && length(stmt.args) >= 2) || return nothing
+    reft = widenconst(argextype(stmt.args[2], ir))
+    isa(reft, DataType) || return nothing
+    reft <: GenericMemoryRef || return nothing
+    length(reft.parameters) == 3 || return nothing
+    T = reft.parameters[2]
+    isa(T, TypeVar) && return nothing
+    return T
+end
+
+# Whether an element load may observe the effect of any of the deletable
+# element stores in `ir`: `Memory{T}` and `Memory{S}` are necessarily distinct
+# objects when `T !== S` (type parameters are invariant), so a load whose
+# memory eltype differs from every store's memory eltype cannot alias them.
+function load_may_alias_stores(ir::IRCode, @nospecialize(load), store_eltypes::Vector{Any})
+    lt = element_memory_eltype(ir, load)
+    lt === nothing && return true # imprecise: conservatively may-alias
+    for st in store_eltypes
+        (st === nothing || st === lt) && return true
+    end
+    return false
+end
+
+# The (unique-d) memory eltypes of all deletable element stores in `ir`; a
+# `nothing` entry marks a store whose memory type could not be determined
+function element_store_eltypes(ir::IRCode)
+    eltypes = Any[]
+    for i = 1:length(ir.stmts)
+        stmt = ir.stmts[i][:stmt]
+        is_element_store(ir, stmt) || continue
+        T = element_memory_eltype(ir, stmt)
+        if !(T in eltypes)
+            push!(eltypes, T)
+        end
+    end
+    return eltypes
+end
+
 # The nothrow shadow deletes element stores, so the values observed by element
 # loads may differ between the shadow and the real execution, and any branch
 # whose condition (transitively) depends on a loaded element value may diverge.
@@ -1782,12 +1889,15 @@ function has_element_stores(ir::IRCode)
     return false
 end
 
-function shadow_branch_plan(ir::IRCode)
+function shadow_branch_plan(ir::IRCode, regions::Vector{SplitGuardRegion})
     # without deleted stores the shadow observes exactly what the real
     # execution observes, so no branch can diverge
     has_element_stores(ir) || return Pair{Int,Int}[]
     nstmts = length(ir.stmts)
-    # SSA values (transitively) derived from element loads
+    # SSA values (transitively) derived from element loads that may observe
+    # the deleted stores; loads from memories whose eltype differs from every
+    # store's cannot alias them and observe identical values in the shadow
+    store_eltypes = element_store_eltypes(ir)
     taint = falses(nstmts)
     changed = true
     while changed
@@ -1795,7 +1905,7 @@ function shadow_branch_plan(ir::IRCode)
         for i = 1:nstmts
             taint[i] && continue
             stmt = ir.stmts[i][:stmt]
-            t = is_element_load(ir, stmt)
+            t = is_element_load(ir, stmt) && load_may_alias_stores(ir, stmt, store_eltypes)
             if !t
                 for useref in userefs(stmt)
                     v = useref[]
@@ -1826,8 +1936,13 @@ function shadow_branch_plan(ir::IRCode)
         end
     end
     anydata || return Pair{Int,Int}[]
-    # the guard branches into the must-throw region (i.e. the checks)
+    # the guard branches into the must-throw region (i.e. the checks); the
+    # fallback regions of inner splits behave exactly like must-throw regions
+    # here: the shadow rewrites them into `return false` exits
     region = must_throw_region(ir)
+    for r in regions, b in r.fallbackbbs
+        region[b] = true
+    end
     inset = falses(nblocks) # guards + blocks their execution is control-dependent on
     for tbb = 1:nblocks
         region[tbb] || continue
@@ -1909,20 +2024,24 @@ function shadow_branch_plan(ir::IRCode)
     return plan
 end
 
+# An edge-kill callback that also removes the corresponding entries from any
+# PhiNodes in the target block
+phiedge_stripper(ir::IRCode) = (from::Int, to::Int) -> begin
+    for i in ir.cfg.blocks[to].stmts
+        stmt = ir.stmts[i][:stmt]
+        isa(stmt, PhiNode) || continue
+        idx = findfirst(==(Int32(from)), stmt.edges)
+        idx === nothing && continue
+        deleteat!(stmt.edges, idx)
+        deleteat!(stmt.values, idx)
+    end
+end
+
 # Apply a shadow branch plan: replace each data branch by an unconditional
 # branch to the forced successor, killing the other edge (and any phi entries
 # for it in the abandoned successor chain)
 function force_shadow_branches!(ir::IRCode, plan::Vector{Pair{Int,Int}})
-    stripper = (from::Int, to::Int) -> begin
-        for i in ir.cfg.blocks[to].stmts
-            stmt = ir.stmts[i][:stmt]
-            isa(stmt, PhiNode) || continue
-            idx = findfirst(==(Int32(from)), stmt.edges)
-            idx === nothing && continue
-            deleteat!(stmt.edges, idx)
-            deleteat!(stmt.values, idx)
-        end
-    end
+    stripper = phiedge_stripper(ir)
     for (bb, keep) in plan
         block = ir.cfg.blocks[bb]
         terminst = ir.stmts[last(block.stmts)]
@@ -1962,9 +2081,18 @@ end
 # effect-split transformations below can handle: any statement that may throw
 # must either deterministically throw with no other side effects (these are
 # replaced by the transformations), or be one of the known-safe node kinds;
-# any non-throwing side effect must be a deletable element store.
-function scan_nothrow_split_ir(ir::IRCode)
+# any non-throwing side effect must be a deletable element store. Statements
+# in split-guard fallback regions are exempt (both transformations excise
+# them), and the guards themselves are recognized by their flag.
+function scan_nothrow_split_ir(ir::IRCode, regions::Vector{SplitGuardRegion})
+    exempt = falses(length(ir.stmts))
+    for r in regions
+        for b in r.fallbackbbs, i in ir.cfg.blocks[b].stmts
+            exempt[i] = true
+        end
+    end
     for i = 1:length(ir.stmts)
+        exempt[i] && continue
         inst = ir.stmts[i]
         stmt = inst[:stmt]
         if stmt === nothing || isa(stmt, ReturnNode) || isa(stmt, GotoNode) ||
@@ -1977,7 +2105,9 @@ function scan_nothrow_split_ir(ir::IRCode)
         end
         flag = inst[:flag]
         if isa(stmt, GotoIfNot)
-            has_flag(flag, IR_FLAG_NOTHROW) || return false
+            # split guards branch on a Bool the inner check produced; the
+            # branch itself cannot throw
+            has_flag(flag, IR_FLAG_NOTHROW) || has_flag(flag, IR_FLAG_SPLIT_GUARD) || return false
             continue
         end
         if has_flag(flag, IR_FLAG_NOTHROW)
@@ -2002,10 +2132,45 @@ end
 # throws become `return false`, and value returns become `return true`. The
 # result is `true` only if the callee, called with the same arguments, takes a
 # path that does not throw.
-function synthesize_nothrow_check_ir(ir0::IRCode, plan::Vector{Pair{Int,Int}})
+function synthesize_nothrow_check_ir(ir0::IRCode, plan::Vector{Pair{Int,Int}},
+                                     regions::Vector{SplitGuardRegion})
     ir = copy(ir0)
     isempty(plan) || force_shadow_branches!(ir, plan)
+    # Compose inner splits: keep their guards, but a failing guard means the
+    # enclosing kernel would take an inner (checked) fallback, so the shadow
+    # conservatively answers `false` there
+    stripper = phiedge_stripper(ir)
+    for r in regions
+        lastbb = r.fallbackbbs[end]
+        kill_edge!(ir, lastbb, r.join, stripper)
+        for b in r.fallbackbbs
+            bbstmts = ir.cfg.blocks[b].stmts
+            for i in bbstmts
+                inst = ir.stmts[i]
+                if b == lastbb && i == last(bbstmts)
+                    # NB: do not touch the flags of terminators, and give the
+                    # value return the usual `Any` type of a `ReturnNode` (see
+                    # the `ReturnNode` rewrites below)
+                    inst[:stmt] = ReturnNode(false)
+                    inst[:type] = Any
+                elseif isterminator(inst[:stmt])
+                    # keep intra-region gotos; their blocks stay consistent
+                else
+                    inst[:stmt] = nothing
+                    inst[:type] = Nothing
+                    inst[:flag] = IR_FLAGS_REMOVABLE
+                end
+            end
+        end
+    end
+    inregion = falses(length(ir.stmts))
+    for r in regions
+        for b in r.fallbackbbs, i in ir.cfg.blocks[b].stmts
+            inregion[i] = true
+        end
+    end
     for i = 1:length(ir.stmts)
+        inregion[i] && continue # already rewritten above
         inst = ir.stmts[i]
         stmt = inst[:stmt]
         if isa(stmt, ReturnNode)
@@ -2078,10 +2243,10 @@ end
 # conditional branches guarding the must-throw region are folded to their
 # non-throwing side, making the region unreachable and its guarding condition
 # computations dead.
-function assume_nothrow_ir(ir0::IRCode)
+function assume_nothrow_ir(ir0::IRCode, regions::Vector{SplitGuardRegion})
     ir = copy(ir0)
     region = must_throw_region(ir)
-    any(region) || return ir
+    (any(region) || !isempty(regions)) || return ir
     # PhiNodes inside the region would need extra bookkeeping when only some of
     # a block's incoming edges get killed; give up on folding if there are any.
     for bbidx = 1:length(ir.cfg.blocks)
@@ -2119,6 +2284,22 @@ function assume_nothrow_ir(ir0::IRCode)
             kill_edge!(ir, pbb, tbb)
         end
     end
+    # Under the nothrow assumption every inner split takes its (equivalent)
+    # assume arm: fold the guards to the fall-through, making the fallback
+    # regions unreachable and the guard conditions dead
+    stripper = phiedge_stripper(ir)
+    for r in regions
+        terminst = ir.stmts[last(ir.cfg.blocks[r.guardbb].stmts)]
+        term = terminst[:stmt]
+        isa(term, GotoIfNot) || continue
+        # NB: the cascade of `kill_edge!` empties the single-entry fallback
+        # chain and strips the join block's phi edge
+        kill_edge!(ir, r.guardbb, r.fallbackbbs[1], stripper)
+        # the assume arm is the fall-through
+        # NB: do not touch the flags of the replacement terminator
+        terminst[:stmt] = nothing
+        terminst[:type] = Nothing
+    end
     # Clear out the now-unreachable region blocks (also avoids dangling
     # references for the verifier)
     for tbb = 1:length(ir.cfg.blocks)
@@ -2127,6 +2308,20 @@ function assume_nothrow_ir(ir0::IRCode)
         for i in bb.stmts
             inst = ir.stmts[i]
             if i == last(bb.stmts)
+                inst[:stmt] = ReturnNode() # unreachable
+            else
+                inst[:stmt] = nothing
+                inst[:type] = Nothing
+                inst[:flag] = IR_FLAGS_REMOVABLE
+            end
+        end
+    end
+    for r in regions, b in r.fallbackbbs
+        isempty(ir.cfg.blocks[b].preds) || continue
+        bbstmts = ir.cfg.blocks[b].stmts
+        for i in bbstmts
+            inst = ir.stmts[i]
+            if i == last(bbstmts)
                 inst[:stmt] = ReturnNode() # unreachable
             else
                 inst[:stmt] = nothing
@@ -2177,13 +2372,14 @@ function analyze_invoke_split_effects_synthesis(ir::IRCode, idx::Int, stmt::Expr
     isa(else_todo, InliningTodo) || return nothing
     # If the callee is already nothrow, there is nothing to split
     is_nothrow(else_todo.effects) && return nothing
-    scan_nothrow_split_ir(else_todo.ir) || return nothing
-    plan = shadow_branch_plan(else_todo.ir)
+    regions = split_guard_regions(else_todo.ir)
+    scan_nothrow_split_ir(else_todo.ir, regions) || return nothing
+    plan = shadow_branch_plan(else_todo.ir, regions)
     plan === nothing && return nothing
     assumed_effects = Effects(else_todo.effects; nothrow=true)
-    check_case = InliningTodo(else_todo.mi, synthesize_nothrow_check_ir(else_todo.ir, plan),
+    check_case = InliningTodo(else_todo.mi, synthesize_nothrow_check_ir(else_todo.ir, plan, regions),
         else_todo.spec_info, else_todo.di, assumed_effects)
-    assume_case = InliningTodo(else_todo.mi, assume_nothrow_ir(else_todo.ir),
+    assume_case = InliningTodo(else_todo.mi, assume_nothrow_ir(else_todo.ir, regions),
         else_todo.spec_info, else_todo.di, assumed_effects)
     else_case = outline_case(else_todo, info, state)
     else_case === nothing && (else_case = else_todo)

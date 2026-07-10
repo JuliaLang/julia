@@ -202,4 +202,58 @@ if !CHECK_BOUNDS_OFF && !COVERAGE
     end
 end
 
+# Compositional splits: a kernel whose body contains inlined INNER effect
+# splits (guard + unchecked arm + outlined checked fallback) can itself be
+# split. The inner guards are recognized by `IR_FLAG_SPLIT_GUARD`; the outer
+# shadow keeps them (a failing inner guard makes the outer check answer false)
+# and the outer assume arm folds the inner fallbacks away.
+@inline esplit_inner_get(A, i) = Core.invoke_split_effects(:nothrow, getindex, A, i)
+function _esplit_compose_kernel(A::Vector{Int}, n::Int)
+    s = 0
+    for i = 1:n
+        s += esplit_inner_get(A, i)
+    end
+    return s
+end
+esplit_compose(A::Vector{Int}, n::Int) =
+    Core.invoke_split_effects(:nothrow, _esplit_compose_kernel, A, n)
+
+@testset "compositional splits: runtime semantics" begin
+    A = collect(1:100)
+    @test esplit_compose(A, 100) === _esplit_compose_kernel(A, 100)
+    @test esplit_compose(A, 17) === _esplit_compose_kernel(A, 17)
+    @test esplit_compose(A, 0) === 0
+    @test_throws BoundsError esplit_compose(A, 101)
+end
+
+if !CHECK_BOUNDS_OFF && !COVERAGE
+    @testset "compositional splits: structure" begin
+        # the kernel's optimized IR carries a flagged guard with a
+        # discoverable single-entry fallback region
+        kir = Compiler.typeinf_ircode(Compiler.NativeInterpreter(Base.get_world_counter()),
+            Base.method_instance(_esplit_compose_kernel, (Vector{Int}, Int)), nothing)[1]
+        guards = 0
+        for i = 1:length(kir.stmts)
+            inst = kir[Compiler.SSAValue(i)]
+            if inst[:stmt] isa Core.GotoIfNot && (inst[:flag] & Compiler.IR_FLAG_SPLIT_GUARD) != 0
+                guards += 1
+            end
+        end
+        @test guards == 1
+        regions = Compiler.split_guard_regions(kir)
+        @test length(regions) == 1
+        @test Compiler.scan_nothrow_split_ir(kir, regions)
+
+        # the outer split fires: its assume arm has no inner fallback invokes
+        # left, only the outer outlined fallback remains
+        src = code_typed1(esplit_compose, (Vector{Int}, Int))
+        @test count(@nospecialize(x)->invoked_name(x) === :_esplit_compose_kernel, src.code) == 1
+        @test count(@nospecialize(x)->invoked_name(x) === :getindex, src.code) == 0
+
+        # and the composed check folds out of codegen entirely
+        ir = sprint(code_llvm, esplit_compose, (Vector{Int}, Int))
+        @test !occursin("throw_boundserror", ir)
+    end
+end
+
 end # !CHECK_BOUNDS_OFF && !COVERAGE
