@@ -2341,7 +2341,7 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
             cond2 = each[2][2]
             assert_havelock(cond2.lock)
             for waiting in cond2.waitq
-                push!(waiters, waiting.task => (each[2][1] => each[1]))
+                push!(waiters, waiting => (each[2][1] => each[1]))
             end
         end
         while true

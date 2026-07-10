@@ -98,6 +98,11 @@ end
 
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
+    # Entry cancellation check before the child exists: a spawn under an
+    # already-cancelled scope must not run the command (its side effects
+    # cannot be taken back); shielded callers (`cancel = nothing`) scope the
+    # token away and pass through.
+    @cancel_check
     loop = eventloop()
     cpumask = cmd.cpus
     cpumask === nothing || (cpumask = as_cpumask(cpumask))

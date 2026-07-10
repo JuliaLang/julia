@@ -327,7 +327,13 @@ Stacktrace:
 ```
 """
 function bind(c::Channel, task::Task)
-    T = Task(() -> close_chnl_on_taskdone(task, c))
+    # The close-on-completion helper is internal lifetime management: it must
+    # run even when the binding scope's cancellation token is already
+    # cancelled (the task-start check would otherwise kill it before it can
+    # close the channel, leaving consumers parked forever).
+    T = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        Task(() -> close_chnl_on_taskdone(task, c))
+    end
     T.sticky = false
     _wait2(task, T)
     return c

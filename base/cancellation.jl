@@ -454,7 +454,7 @@ woken but frozen in place instead.
 """
 function cancel!(src::CancellationTokenSource,
                  request::CancellationRequest=CANCEL_REQUEST_SAFE)
-    sev = request.request & SEVERITY_MASK
+    sev = request.request
     if !(sev == 0x0 || sev == 0x3 || sev == 0x4)
         throw(ArgumentError("invalid cancellation severity $(repr(request.request))"))
     end
@@ -472,12 +472,37 @@ function cancel!(src::CancellationTokenSource,
     return true
 end
 
-function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
-    creq = CancellationRequest(sev)
+# The first walk of a fresh cancellation deduplicates by state advance
+# (`visited === nothing`); a redelivery walks an already-raised subtree, so
+# it deduplicates by an explicit visited set instead.
+function _cancel_walk!(src::CancellationTokenSource, sev::UInt8,
+                       visited::Union{Nothing, IdSet{CancellationTokenSource}}=nothing)
+    # Iterative worklist (no recursion): a deep source chain must not
+    # overflow the canceller's stack, and a reconverging ("linked") graph
+    # must visit each node once, not once per path.
+    pending = CancellationTokenSource[src]
+    visited === nothing || push!(visited, src)
+    while !isempty(pending)
+        _cancel_walk_node!(pop!(pending), sev, pending, visited)
+    end
+    return nothing
+end
+
+function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
+                            pending::Vector{CancellationTokenSource},
+                            visited::Union{Nothing, IdSet{CancellationTokenSource}})
     children = nothing
     towake = nothing
     tonotify = nothing
     _lock_source(node)
+    # Deliver at least the node's current severity: a concurrent higher-
+    # severity cancel! may have raised the state after this walk's own
+    # transition, and its walk can find the waiters already unlinked by
+    # this one - the claim below must then honor the escalated request.
+    st = @atomic :acquire node.state
+    stsev = st & SEVERITY_MASK
+    sev < stsev && (sev = stsev)
+    creq = CancellationRequest(sev)
     # Claim and unlink waiters at this node. The actual wakes happen after
     # the lock is released: waking may take other locks (a frozen task's
     # donenotify), and waiters take their waitee's lock *before* this node's
@@ -517,8 +542,11 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
         w = wnext
     end
     node.watchers = nothing
-    # Snapshot the live children (compacting away collected ones), then
-    # recurse without holding this node's lock.
+    # Snapshot the live children (compacting away collected ones) and queue
+    # the ones whose state this walk advanced; a child whose state was
+    # already at (or above) this severity has been walked - or is being
+    # walked - by whoever advanced it, so revisiting it would make a
+    # reconverging graph exponential.
     kids = node.children
     if kids !== nothing
         kids = kids::Vector{WeakRef}
@@ -530,8 +558,11 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
             kids[i] = kids[j]
             i += 1
             c = c::CancellationTokenSource
-            _raise_state!(c, sev)
-            children = (c, children)
+            advanced = _raise_state!(c, sev)
+            if visited === nothing ? advanced : !(c in visited)
+                visited === nothing || push!(visited, c)
+                children = (c, children)
+            end
         end
         i <= n && resize!(kids, i - 1)
     end
@@ -553,7 +584,7 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
     end
     while children !== nothing
         (c, children) = children::Tuple{CancellationTokenSource, Any}
-        _cancel_walk!(c, sev)
+        push!(pending, c)
     end
     return nothing
 end
@@ -575,7 +606,7 @@ function redeliver!(src::CancellationTokenSource)
     st == 0x00 && return false
     sev = st & SEVERITY_MASK
     Threads.atomic_fence_heavy()
-    _cancel_walk!(src, sev)
+    _cancel_walk!(src, sev, IdSet{CancellationTokenSource}())
     _cancel_running!(src, sev)
     return true
 end

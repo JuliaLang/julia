@@ -68,14 +68,19 @@ function sync_end(c::Channel{Any}, src::Union{Nothing, Base.CancellationTokenSou
                 end
             else
                 nremaining += 1
-                schedule(Task(()->begin
-                    try
-                        wait(event; cancel=nothing)
-                        put!(c, :__completion__)
-                    catch e
-                        close(c, e)
-                    end
-                end))
+                # Shield via the scope rather than a keyword: `event` can
+                # be any waitable (e.g. a Distributed.Future), whose `wait`
+                # method need not accept `cancel`.
+                schedule(Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                    Task(()->begin
+                        try
+                            wait(event)
+                            put!(c, :__completion__)
+                        catch e
+                            close(c, e)
+                        end
+                    end)
+                end)
             end
         end
     catch e

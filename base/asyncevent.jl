@@ -46,11 +46,15 @@ the async condition object itself.
 """
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
-    t = @task begin
-        unpreserve_handle(async)
-        while _trywait(async)
-            cb(async)
-            isopen(async) || return
+    # Shielded like the `Timer` callback task below: this task owns the
+    # handle's lifetime and must survive a cancelled constructing scope.
+    t = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        @task begin
+            unpreserve_handle(async)
+            while _trywait(async)
+                cb(async)
+                isopen(async) || return
+            end
         end
     end
     # here we are mimicking parts of _trywait, in coordination with task `t`
@@ -210,7 +214,7 @@ function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
     return set
 end
 
-waitqueue(t::Union{Timer, AsyncCondition}) = ILLRef(waitqueue(t.cond), t)
+waitqueue(t::Union{Timer, AsyncCondition}) = withwaitee(waitqueue(t.cond), t)
 
 wait(t::Union{Timer, AsyncCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
     wait(t, check_cancel_arg(cancel))
@@ -392,7 +396,13 @@ julia> begin
 function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs...)
     sticky = spawn === nothing ? current_task().sticky : !spawn
     timer = Timer(timeout; kwargs...)
-    t = @task begin
+    # The callback task carries the timer's lifetime (its preserve is
+    # balanced in the body): shield it from the constructing scope's
+    # cancellation token, so a cancelled scope can neither leak the preserve
+    # through the task-start check nor stop the timer - like before,
+    # `close(t)` ends it.
+    t = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        @task begin
         unpreserve_handle(timer)
         while _trywait(timer)
             try
@@ -403,6 +413,7 @@ function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs
                 return
             end
             isopen(timer) || return
+        end
         end
     end
     t.sticky = sticky
