@@ -1507,6 +1507,12 @@ end
 @test Base.infer_effects(invokelatest, Tuple{Vararg{Any}}) == Compiler.Effects()
 @test Base.infer_effects(invoke, Tuple{Vararg{Any}}) == Compiler.Effects()
 
+bitsizeof_int() = Core.bitsizeof(Int)
+let effects = Base.infer_effects(bitsizeof_int)
+    @test Compiler.is_foldable_nothrow(effects)
+    @test Compiler.is_inaccessiblememonly(effects)
+end
+
 # Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)
 let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
         Core._svec_ref(svec, i)
