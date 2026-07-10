@@ -394,9 +394,30 @@ define ptr addrspace(10) @two_objref_fields_no_merge(ptr addrspace(10) %a, ptr a
 }
 ; CHECK-LABEL: }{{$}}
 
+; Test that an allocation passed to `julia.escape` stays on the heap: the
+; intrinsic models the object escaping to an unknowable global memory location,
+; so it may be reached (and its memory accessed) through pointers the compiler
+; cannot see, e.g. from another thread while this task is suspended.
+; CHECK-LABEL: @escape_no_stack
+; CHECK-NOT: alloca
+; CHECK: call{{.*}}@julia.gc_alloc_obj
+; CHECK: ret void
+define void @escape_no_stack() {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(16) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 16, ptr addrspace(10) @tag) #7
+  call void @julia.escape(ptr addrspace(10) %v) #8
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  %val = load i64, ptr addrspace(11) %v_derived, align 8
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
 declare ptr @julia.ptls_states()
 
 declare ptr @julia.pointer_from_objref(ptr addrspace(11))
+
+declare void @julia.escape(ptr addrspace(10)) #8
 
 declare token @llvm.julia.gc_preserve_begin(...)
 

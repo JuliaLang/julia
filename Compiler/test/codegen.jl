@@ -1142,6 +1142,54 @@ loop_preserve_any_ea(10)
     @test Base.return_types() do; Base.blackbox(42); end |> only === Int
 end
 
+# compilerbarrier(:escape, x) models x as escaped to unknowable global memory:
+# the allocation must stay on the heap and cannot be elided or stack-promoted
+@testset "compilerbarrier :escape codegen" begin
+    # The raw pointer of the Ref is handed to foreign code inside GC.@preserve
+    # (the pattern from `do_threadcall`); with the barrier, the object must
+    # stay a heap allocation instead of being moved to the task stack.
+    function escape_ref(x::Int)
+        r = Ref(x)
+        Core.compilerbarrier(:escape, r)
+        GC.@preserve r begin
+            p = Base.unsafe_convert(Ptr{Int}, r)
+            ccall(:jl_breakpoint, Cvoid, (Ptr{Cvoid},), p)
+            unsafe_load(p)
+        end
+    end
+    # pre-optimization: the julia.escape intrinsic is emitted
+    ir_unopt = get_llvm(escape_ref, Tuple{Int}, true, false, false)
+    @test occursin("julia.escape", ir_unopt)
+    # optimized: the allocation survives on the heap (not moved to an alloca)
+    # and the intrinsic has been deleted by GC lowering
+    ir_opt = get_llvm(escape_ref, Tuple{Int})
+    heapallocregex = r"ijl_gc_(?:small|big|pool)_alloc|ijl_gc_alloc_typed|julia\.gc_alloc_obj|gc_alloc_bytes"
+    @test occursin(heapallocregex, ir_opt)
+    @test !occursin("julia.escape", ir_opt)
+    # control: without the barrier the same object is moved to the stack
+    function plain_ref(x::Int)
+        r = Ref(x)
+        GC.@preserve r begin
+            p = Base.unsafe_convert(Ptr{Int}, r)
+            ccall(:jl_breakpoint, Cvoid, (Ptr{Cvoid},), p)
+            unsafe_load(p)
+        end
+    end
+    ir_plain = get_llvm(plain_ref, Tuple{Int})
+    @test !occursin(heapallocregex, ir_plain)
+
+    # runtime semantics: identity, for both boxed and unboxed values
+    @test Core.compilerbarrier(:escape, 42) === 42
+    let v = [1, 2, 3]
+        @test Core.compilerbarrier(:escape, v) === v
+    end
+
+    # :escape is not an inference barrier: constant information flows through
+    @test Base.return_types() do
+        Val(Core.compilerbarrier(:escape, 2))
+    end |> only === Val{2}
+end
+
 # sret parameters must have an alignment attribute (required by LLVM LangRef).
 @testset "sret alignment attribute" begin
     struct SretAlignTest
