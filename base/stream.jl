@@ -1135,11 +1135,12 @@ function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false, cancel::
     return out
 end
 
-uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))
+uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)); owner=p)
 
 # caller must have acquired the iolock (which is released before returning)
 function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
-                            tok::MaybeToken=default_cancel_token())
+                            tok::MaybeToken=default_cancel_token(),
+                            @nospecialize(owner)=nothing)
     ct = current_task()
     src = tok === nothing ? nothing : tok.source
     if src !== nothing && iscancelled(src)
@@ -1152,7 +1153,10 @@ function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
         # Unwinding from an ABANDON_EXTERNAL (or stronger) cancellation:
         # issue the write, but do not wait for its completion. The request's
         # data stays C_NULL (no waiter), so its completion callback frees it.
-        uv_write_async(s, p, n)
+        # Root the buffer until then (writes complete in order; the last
+        # chunk's callback runs after every earlier chunk's).
+        uvw, _ = uv_write_async(s, p, n)
+        _root_detached_uvreq!(uvw, owner)
         iolock_end()
         return Int(n)
     end
@@ -1195,7 +1199,7 @@ function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
     catch err
         # (catch restored the sigatomic level from the try entry; the
         # teardown helper unwinds it)
-        _uv_write_cancelled_teardown!(s, w, uvw, err, src, ct)
+        _uv_write_cancelled_teardown!(s, w, uvw, err, src, ct, owner)
         rethrow()
     end
     # normal completion (or the wake lost the race to a completion that ran
@@ -1216,6 +1220,7 @@ function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
         # keep spamming the stream, and leave the freeing to the callback.
         ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
         uv_req_set_data(uvw, UV_REQ_DETACHED)
+        _root_detached_uvreq!(uvw, owner)
     end
     iolock_end()
     unpreserve_handle(ct)
@@ -1227,7 +1232,8 @@ end
 # completion callback (the written buffer must stay live while the OS may
 # still access it). Runs on the waiter's stack; the caller rethrows.
 function _uv_write_cancelled_teardown!(s::LibuvStream, w::Task, uvw::Ptr{Cvoid},
-                                       @nospecialize(err), src, ct::Task)
+                                       @nospecialize(err), src, ct::Task,
+                                       @nospecialize(owner)=nothing)
     iolock_begin()
     d = uv_req_data(uvw)
     if d == C_NULL
@@ -1283,8 +1289,10 @@ function _uv_write_cancelled_teardown!(s::LibuvStream, w::Task, uvw::Ptr{Cvoid},
     end
     if detach
         # Abandoning severities (or an escalation during teardown): detach
-        # the request - the completion callback frees it.
+        # the request - the completion callback frees it - and keep the
+        # written buffer rooted until it does.
         uv_req_set_data(uvw, UV_REQ_DETACHED)
+        _root_detached_uvreq!(uvw, owner)
     end
     w.wait_queue = nothing
     w.wait_uvreq = C_NULL
@@ -1295,9 +1303,10 @@ function _uv_write_cancelled_teardown!(s::LibuvStream, w::Task, uvw::Ptr{Cvoid},
     return
 end
 
-function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL,
+                  owner=nothing)
     tok = resolve_cancel_token(cancel)
-    nb = uv_write_noncancel(s, p, n, tok)
+    nb = uv_write_noncancel(s, p, n, tok, owner)
     @cancel_check(tok)
     @assert nb == n
     return nb
@@ -1308,6 +1317,25 @@ end
 # callback owns freeing the request. (A plain C_NULL data means the
 # completion callback already ran and the waiter owns the request.)
 const UV_REQ_DETACHED = Ptr{Cvoid}(UInt(0x1))
+
+# Buffers of detached write requests. A detached request (fire-and-forget
+# under an abandoning cancellation, or a waiter that departed) keeps
+# referencing the caller's memory until its completion callback runs - long
+# after the issuing frame, whose GC.@preserve was the buffer's only root,
+# has unwound. When the write's Julia owner is known it is rooted here,
+# keyed by the request, and released by the completion callback. Guarded by
+# the iolock (callbacks run under it). Raw-pointer writes (the generic
+# unsafe_write interface) have no discoverable owner - their contract is
+# pointer validity for the duration of the call - and detaching them retains
+# the pre-existing hazard; owner-carrying entry points avoid it.
+const _detached_uvreq_roots = IdDict{Ptr{Cvoid}, Any}()
+
+function _root_detached_uvreq!(req::Ptr{Cvoid}, @nospecialize(owner))
+    owner === nothing || (_detached_uvreq_roots[req] = owner)
+    return nothing
+end
+_unroot_detached_uvreq!(req::Ptr{Cvoid}) =
+    (isempty(_detached_uvreq_roots) || delete!(_detached_uvreq_roots, req); nothing)
 
 # helper function for uv_write that returns the uv_write_t struct of the last
 # chunk's write (and that chunk's size) rather than waiting on it, caller must
@@ -1341,8 +1369,22 @@ end
 # - smaller writes are buffered, final uv write on flush or when buffer full
 # - large isbits arrays are unbuffered and written directly
 
+function write(s::LibuvStream, a::Vector{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> write(s, a), cancel)
+    # Like the generic unsafe_write fallback below, but carrying the buffer's
+    # owner so a detached (abandoned) write keeps it rooted; see
+    # _detached_uvreq_roots.
+    GC.@preserve a begin
+        return Int(_unsafe_write_owned(s, pointer(a), UInt(sizeof(a)), a))
+    end
+end
+
 function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
     cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> unsafe_write(s, p, n), cancel)
+    return _unsafe_write_owned(s, p, n, nothing)
+end
+
+function _unsafe_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, @nospecialize(owner))
     while true
         # try to add to the send buffer
         iolock_begin()
@@ -1360,7 +1402,7 @@ function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelToke
         uv_write(s, arr)
     end
     # perform the output to the kernel
-    return uv_write(s, p, n)
+    return uv_write(s, p, n; owner)
 end
 
 function flush(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
@@ -1413,8 +1455,10 @@ end
 function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
     d = uv_req_data(req)
     if d == C_NULL || d == UV_REQ_DETACHED
-        # No owner for this req (a fire-and-forget write, or the waiter
-        # departed and left the freeing to us).
+        # No waiter for this req (a fire-and-forget write, or the waiter
+        # departed and left the freeing to us): release the buffer root, if
+        # one was recorded, and the request.
+        _unroot_detached_uvreq!(req)
         Libc.free(req)
     else
         # Mark the callback as done; the waiter (which inspects the req under

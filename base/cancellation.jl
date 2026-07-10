@@ -294,11 +294,50 @@ const WAITNODE_CANCELLED = 0x03  # cancellation claimed the wake
 # Record that a cancellation of `src` at severity `sev` was delivered to
 # (observed by) some task: either thrown at one of its cancellation points,
 # or handed to it by the cancellation walk waking its parked wait. Feeds the
-# ^C episode state machine ("was the request ever seen?").
-# TODO: propagate the delivered bits up the parent chain, so that a delivery
-# against a nested scope's source is visible on the episode source too.
+# ^C episode state machine ("was the request ever seen?"), so the bits are
+# propagated to every ancestor: a delivery against a nested scope's source
+# acknowledges the episode source too - otherwise the SIGINT classifier
+# would misread a successfully delivered cancellation as unacknowledged and
+# escalate a repeat ^C to abandonment.
 function _mark_delivered!(src::CancellationTokenSource, sev::UInt8)
-    @atomic :monotonic src.delivered |= (0x01 << sev)
+    bit = 0x01 << sev
+    # fast path: no parents (the common episode-source case)
+    @atomic :monotonic src.delivered |= bit
+    p = src.parents
+    p === nothing && return nothing
+    # Iterative ancestor walk (a Vector worklist - deep chains must not
+    # recurse - deduplicated so a reconverging linked graph is marked once
+    # per node). Delivery is rare; the allocation is fine.
+    pending = CancellationTokenSource[]
+    seen = IdSet{CancellationTokenSource}()
+    push!(seen, src)
+    _push_parents!(pending, seen, p)
+    while !isempty(pending)
+        node = pop!(pending)
+        @atomic :monotonic node.delivered |= bit
+        np = node.parents
+        np === nothing || _push_parents!(pending, seen, np)
+    end
+    return nothing
+end
+
+function _push_parents!(pending::Vector{CancellationTokenSource},
+                        seen::IdSet{CancellationTokenSource}, @nospecialize(p))
+    if p isa CancellationTokenSource
+        if !(p in seen)
+            push!(seen, p)
+            push!(pending, p)
+        end
+    elseif p isa Core.SimpleVector
+        for i in 1:length(p)
+            c = p[i]
+            c isa CancellationTokenSource || continue
+            if !(c in seen)
+                push!(seen, c)
+                push!(pending, c)
+            end
+        end
+    end
     return nothing
 end
 
@@ -881,8 +920,16 @@ function wait(tok::CancellationToken; cancel::CancelTokenArg=DEFAULT_CANCEL)
         return CancellationRequest(sev)
     end
     if govsrc !== nothing && !register_cancellation!(govsrc, ct)
-        _unregister_watcher!(src, ct)
-        @atomic :monotonic ct.wait_state = WAITNODE_IDLE
+        # The watcher registration above made this task claimable: the
+        # target's cancellation walk may already have claimed our wake and
+        # scheduled us. We must not throw while scheduled - reclaim our own
+        # wake, or park once to absorb the resume.
+        if (@atomicreplace ct.wait_state WAITNODE_WAITING => WAITNODE_IDLE).success
+            _unregister_watcher!(src, ct)
+        else
+            wait() # absorb the producer's schedule (discard the value)
+            @atomic :monotonic ct.wait_state = WAITNODE_IDLE
+        end
         checkcancel(govsrc) # delivers the cancellation (throws)
         error("cancellation registration refused, but the source is not cancelled")
     end
