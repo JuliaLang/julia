@@ -1922,21 +1922,26 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     # cache. Preserving them keeps the inference results callers depend on from
     # being dropped by the cache-clearing pass in staticdata.c. `cis` doubles as
     # the worklist, so edges discovered from appended entries are visited too.
-    i = 1
-    while i <= length(cis)
-        ci = cis[i]::CodeInstance
-        if isdefined(ci, :edges)
-            edges = ci.edges
-            for j = 1:length(edges)
-                isassigned(edges, j) || continue
-                edge = edges[j]
-                if edge isa CodeInstance && !(edge in seen)
-                    push!(seen, edge)
-                    push!(cis, edge)
+    #
+    # Skip under `--trim` where inferred-but-not-compiled entries are not useful
+    # at runtime without a Compiler / JIT.
+    if trim_mode == TRIM_NO
+        i = 1
+        while i <= length(cis)
+            ci = cis[i]::CodeInstance
+            if isdefined(ci, :edges)
+                edges = ci.edges
+                for j = 1:length(edges)
+                    isassigned(edges, j) || continue
+                    edge = edges[j]
+                    if edge isa CodeInstance && !(edge in seen)
+                        push!(seen, edge)
+                        push!(cis, edge)
+                    end
                 end
             end
+            i += 1
         end
-        i += 1
     end
 
     # Keep cache CodeInstances that represent an existing cache entry: either they are
