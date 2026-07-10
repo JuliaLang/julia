@@ -353,7 +353,11 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
         assert(i < m.mem->length);
         // isbits union selector bytes are always stored directly after the last memory element
         uint8_t sel = jl_genericmemory_typetagdata(m.mem)[i];
-        eltype = jl_nth_union_component(eltype, sel);
+        // the component may be a layout-aliased type (e.g. Type{Union{}}) that
+        // is not a datatype until normalized
+        eltype = normalize_typeofbottom_layout_alias(jl_nth_union_component(eltype, sel));
+        if (jl_is_datatype_singleton((jl_datatype_t*)eltype))
+            return ((jl_datatype_t*)eltype)->instance;
         data = (char*)m.mem->ptr + i * layout->size;
     }
     if (layout->size == 0) {
