@@ -92,26 +92,31 @@ static size_t typeenv_crossed_binders(jl_typeenv_t *env, jl_typeenv_t *stop) JL_
 }
 
 // interning cache for the small depths that essentially all real types use;
-// entries are permanently allocated. Pointer identity of TypeVarRefs is never
+// entries are permanently allocated during initialization (see
+// `jl_init_tvarref_cache`, run alongside the boxed-integer caches) and the
+// array is read-only afterwards. Pointer identity of TypeVarRefs is never
 // relied upon (egal compares the depth), this only reduces allocation.
 #define N_SMALL_TVARREFS 64
-static _Atomic(jl_tvarref_t*) small_tvarrefs[N_SMALL_TVARREFS];
+static jl_tvarref_t *small_tvarrefs[N_SMALL_TVARREFS];
+
+void jl_init_tvarref_cache(void)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    for (size_t depth = 1; depth <= N_SMALL_TVARREFS; depth++) {
+        jl_tvarref_t *r = (jl_tvarref_t*)jl_gc_permobj(ptls, sizeof(jl_tvarref_t), jl_tvarref_type, 0);
+        jl_set_typetagof(r, jl_tvarref_tag, GC_OLD_MARKED);
+        r->depth = depth;
+        small_tvarrefs[depth - 1] = r;
+    }
+}
 
 JL_DLLEXPORT jl_value_t *jl_new_tvarref(size_t depth)
 {
     if (depth == 0 || (ssize_t)depth < 0)
         jl_errorf("TypeVarRef depth must be positive");
     if (depth <= N_SMALL_TVARREFS) {
-        jl_tvarref_t *r = jl_atomic_load_relaxed(&small_tvarrefs[depth - 1]);
-        if (r == NULL) {
-            jl_task_t *ct = jl_current_task;
-            r = (jl_tvarref_t*)jl_gc_permobj(ct->ptls, sizeof(jl_tvarref_t), jl_tvarref_type, 0);
-            jl_set_typetagof(r, jl_tvarref_tag, GC_OLD_MARKED);
-            r->depth = depth;
-            jl_tvarref_t *expected = NULL;
-            if (!jl_atomic_cmpswap_relaxed(&small_tvarrefs[depth - 1], &expected, r))
-                r = expected; // lost the race; both objects are equivalent
-        }
+        jl_tvarref_t *r = small_tvarrefs[depth - 1];
+        assert(r != NULL);
         return (jl_value_t*)r;
     }
     jl_task_t *ct = jl_current_task;
@@ -4093,7 +4098,11 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
 // definition is still in progress.
 JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT)
 {
-    jl_datatype_t *super = ndt->super;
+    // one-time lazy initialization: every consumer that can observe a deferred
+    // supertype funnels through here, so the acquire pairs with the releasing
+    // compare-and-swap below and makes the computed object graph visible
+    _Atomic(jl_datatype_t*) *superp = (_Atomic(jl_datatype_t*)*)&ndt->super;
+    jl_datatype_t *super = jl_atomic_load_acquire(superp);
     if (super != NULL)
         return super;
     if (ndt->name->wrapper == NULL)
@@ -4112,8 +4121,14 @@ JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROP
     jl_value_t *s = inst_type_w_((jl_value_t*)primarydt->super,
                                  nparams == 0 ? NULL : &penv[nparams - 1],
                                  &stop, 1, 0);
-    jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t*)s);
-    return ndt->super;
+    // concurrent first queries compute equal (interned) values; the
+    // compare-and-swap keeps a single winner
+    super = NULL;
+    if (jl_atomic_cmpswap(superp, &super, (jl_datatype_t*)s)) {
+        jl_gc_wb(ndt, s);
+        super = (jl_datatype_t*)s;
+    }
+    return super;
 }
 
 JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable)

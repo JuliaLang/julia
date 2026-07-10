@@ -1669,6 +1669,7 @@ JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x)
 
 void jl_init_box_caches(void)
 {
+    jl_init_tvarref_cache();
     int64_t i;
     for (i = 0; i < NBOX_C; i++) {
         boxed_int32_cache[i]  = jl_permbox32(jl_int32_type, jl_int32_tag, i-NBOX_C/2);
