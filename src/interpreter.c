@@ -112,6 +112,22 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s) JL_CANSAF
 
 // expression evaluator
 
+// Debugging aid (JULIA_TIER_GC_STRESS=1): force a full collection before every
+// interpreted call and statement, so a value the interpreter failed to root is
+// freed at the first opportunity and a rooting hole reproduces deterministically
+// instead of depending on allocation pressure and platform timing.
+static int tier_gc_stress = -1;
+STATIC_INLINE void tier_gc_stress_hook(void) JL_CANSAFEPOINT
+{
+    int v = tier_gc_stress;
+    if (__builtin_expect(v < 0, 0)) {
+        const char *e = getenv("JULIA_TIER_GC_STRESS");
+        v = tier_gc_stress = (e && e[0] == '1');
+    }
+    if (__builtin_expect(v != 0, 0))
+        jl_gc_collect(JL_GC_FULL);
+}
+
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **argv;
@@ -120,6 +136,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     size_t i;
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
+    tier_gc_stress_hook();
     jl_value_t *result = jl_apply(argv, nargs);
     JL_GC_POP();
     return result;
@@ -191,6 +208,7 @@ static int jl_source_nssavalues(jl_code_info_t *src) JL_NOTSAFEPOINT
 
 static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s) JL_CANSAFEPOINT
 {
+    tier_gc_stress_hook();
     jl_value_t *res = eval_value(stmt, s);
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
