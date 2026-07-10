@@ -17,34 +17,6 @@ const PARKED_BIT = 0b10
 
 const MAX_SPIN_ITERS = 40
 
-# Advisory reentrant lock
-"""
-    ReentrantLock()
-
-Create a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
-acquire the lock as many times as required (this is what the "Reentrant" part
-of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
-
-Calling `lock` will also inhibit running of finalizers on that thread until the
-corresponding `unlock`. Use of the standard lock pattern illustrated below
-should naturally be supported, but beware of inverting the try/lock order or
-missing the try block entirely (e.g. attempting to return with the lock still
-held):
-
-This provides an acquire/release memory ordering on lock/unlock calls.
-
-```
-lock(l)
-try
-    <atomic work>
-finally
-    unlock(l)
-end
-```
-
-If [`!islocked(lck::ReentrantLock)`](@ref islocked) holds, [`trylock(lck)`](@ref trylock)
-succeeds unless there are other tasks attempting to hold the lock "at the same time."
-"""
 # The lock's contention parking: a spinlock-protected queue of tasks waiting
 # to acquire a ReentrantLock, linked through the dedicated
 # `lock_next`/`lock_queue` Task fields (see LockWaitQueue). Deliberately not
@@ -93,6 +65,34 @@ function _lock_notify_one(c::LockParking)
     return 0
 end
 
+# Advisory reentrant lock
+"""
+    ReentrantLock()
+
+Create a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
+acquire the lock as many times as required (this is what the "Reentrant" part
+of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
+
+Calling `lock` will also inhibit running of finalizers on that thread until the
+corresponding `unlock`. Use of the standard lock pattern illustrated below
+should naturally be supported, but beware of inverting the try/lock order or
+missing the try block entirely (e.g. attempting to return with the lock still
+held):
+
+This provides an acquire/release memory ordering on lock/unlock calls.
+
+```
+lock(l)
+try
+    <atomic work>
+finally
+    unlock(l)
+end
+```
+
+If [`!islocked(lck::ReentrantLock)`](@ref islocked) holds, [`trylock(lck)`](@ref trylock)
+succeeds unless there are other tasks attempting to hold the lock "at the same time."
+"""
 mutable struct ReentrantLock <: AbstractLock
     # offset = 16
     @atomic locked_by::Union{Task, Nothing}

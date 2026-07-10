@@ -22,8 +22,11 @@ function cancellable_spawn(f)
 end
 
 # whether `t` is parked (its wait links are enqueued on some waitee)
-is_parked(t::Task) = t.wait_queue !== nothing
-parked_on(t::Task, @nospecialize(x)) = t.wait_queue === x
+# Lock-contention parking uses its own link set (`lock_queue`), disjoint
+# from the condition-wait node (`wait_queue`); a task is parked if it is on
+# either.
+is_parked(t::Task) = t.wait_queue !== nothing || t.lock_queue !== nothing
+parked_on(t::Task, @nospecialize(x)) = t.wait_queue === x || t.lock_queue === x
 
 const collatz_code = quote
     collatz(n) = (n & 1) == 1 ? (3n + 1) : (n ÷ 2)
