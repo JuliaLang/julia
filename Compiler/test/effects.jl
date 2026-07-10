@@ -1553,6 +1553,27 @@ let f = (x) -> Core.Intrinsics.trunc_int(Int16, x)
     @test catch_error_61435(f, Int16(0)) === :caught
 end
 
+# Intrinsic width checks use logical primitive widths rather than storage sizes.
+primitive type EffectsUInt17 17 end
+primitive type EffectsUInt23 23 end
+let f = (x) -> Core.Intrinsics.bitcast(EffectsUInt17, x)
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt23,)))
+    @test Base.infer_exception_type(f, (EffectsUInt23,)) === ErrorException
+    @test !fully_eliminated((EffectsUInt23,)) do x
+        f(x)
+        return nothing
+    end
+end
+let f = (x) -> Core.Intrinsics.zext_int(EffectsUInt23, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt17,)))
+end
+let f = (x) -> Core.Intrinsics.sext_int(EffectsUInt23, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt17,)))
+end
+let f = (x) -> Core.Intrinsics.trunc_int(EffectsUInt17, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt23,)))
+end
+
 # issue #57324
 module Issue57324
 struct T <: AbstractVector{Float64}

@@ -3252,7 +3252,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         if !isconcrete
             return Union{ErrorException, TypeError}
         end
-        if !(isprimitivetype(ty) && isprimitivetype(xty) && Core.sizeof(ty) === Core.sizeof(xty))
+        if !(isprimitivetype(ty) && isprimitivetype(xty) && Core.bitsizeof(ty) === Core.bitsizeof(xty))
             return ErrorException
         end
         return Union{}
@@ -3278,14 +3278,14 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
-        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(Core.sizeof(ty) > Core.sizeof(xty))
+        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(Core.bitsizeof(ty) > Core.bitsizeof(xty))
             return ErrorException
         end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
             return ErrorException
         end
-        if f === Intrinsics.trunc_int && !(Core.sizeof(ty) < Core.sizeof(xty))
+        if f === Intrinsics.trunc_int && !(Core.bitsizeof(ty) < Core.bitsizeof(xty))
             return ErrorException
         end
         if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)
