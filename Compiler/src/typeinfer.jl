@@ -1859,7 +1859,10 @@ const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
 function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
-    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
+    # back to `nothing` at serialization time (see `src/staticdata.c`).
+    cache_owner = trim_mode == TRIM_NO ? nothing : :trim
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO, cache_owner)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative
     # invokelatest calls such as from `Core.finalizer` and `ccallable`

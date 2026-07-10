@@ -2075,6 +2075,7 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(top_sym) \
     XX(toplevel_sym) \
     XX(tuple_sym) \
+    XX(trim_sym) \
     XX(uninferred_sym) \
     XX(unordered_sym) \
     XX(unused_sym) \

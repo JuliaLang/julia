@@ -477,6 +477,12 @@ static void jl_rewrite_mi_caches(jl_code_instance_t **cis, size_t n) JL_GC_DISAB
         // this CodeInstance terminates its MethodInstance's chain, unless a
         // later CodeInstance for the same MethodInstance extends it below
         record_field_change((jl_value_t**)&ci->next, NULL);
+        if (jl_options.trim && ci->owner == (jl_value_t*)jl_trim_sym) {
+            // this is an "isolated" cache entry for `--trim` inference / AOT
+            // replace the owner with `nothing` so that these are available
+            // as ordinary cache entries at runtime
+            record_field_change((jl_value_t**)&ci->owner, jl_nothing);
+        }
         void **bp = ptrhash_bp(&mi_last, mi);
         // Register unconditionally (not via record_field_change) so this
         // cache rebuilds correctly, even if it matches what was there (which would
@@ -776,7 +782,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 }
                 else if (may_discard_trees &&
                          native_functions && // don't delete any code if making a ji file
-                         (ci->owner == jl_nothing) && // don't delete code for external interpreters
+                         (ci->owner == jl_nothing || ci->owner == (jl_value_t*)jl_trim_sym) && // don't delete code for external interpreters
                          !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
                          jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
                     // delete the code now: if we thought it was worth keeping, it would have been converted to object code
