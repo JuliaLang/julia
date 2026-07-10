@@ -2432,6 +2432,13 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     if (replacedmaxworld == ~(size_t)0) {
         assert(jl_atomic_load_relaxed(&replaced->min_world) - 1 <= max_world && "attempting to set illogical world constraints (probable race condition)");
         jl_atomic_store_release(&replaced->max_world, max_world);
+        // The tier promotion bit is one-shot per MethodInstance; the promoted
+        // code is now gone, so clear it (and the hotness count) to let future
+        // parked dispatches count toward a fresh promotion in the new world.
+        if (jl_atomic_load_relaxed(&replaced_mi->flags) & JL_MI_FLAGS_TIER_QUEUED) {
+            jl_atomic_store_relaxed(&replaced_mi->tier_count, 0);
+            jl_atomic_fetch_and_relaxed(&replaced_mi->flags, (uint8_t)~JL_MI_FLAGS_TIER_QUEUED);
+        }
         // recurse to all backedges to update their valid range also
         _invalidate_backedges(replaced_mi, replaced, max_world, depth + 1);
         // TODO: should we visit all forward edges now and delete ourself from all of those lists too?
@@ -4032,6 +4039,20 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     // if that didn't work and compilation is off, try running in the interpreter
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
         compile_option == JL_OPTIONS_COMPILE_MIN) {
+        // A latching consumer rejects the cached interpreter stub in the quick
+        // check at the top, but with compilation disabled no native code can be
+        // produced either way: reuse an existing stub rather than inserting an
+        // identical duplicate on every request.
+        jl_code_instance_t *existing = jl_atomic_load_relaxed(&mi->cache);
+        for (; existing; existing = jl_atomic_load_relaxed(&existing->next)) {
+            if (jl_atomic_load_relaxed(&existing->invoke) == jl_fptr_interpret_call_addr &&
+                existing->owner == jl_nothing &&
+                jl_atomic_load_relaxed(&existing->min_world) <= world &&
+                world <= jl_atomic_load_relaxed(&existing->max_world)) {
+                promote_cache_method(F, args, nargs, world, mi, mi == mi2 ? mi->specTypes : normalize_to_cacheable_sig(mi), cause);
+                return existing;
+            }
+        }
         jl_code_info_t *src = jl_code_for_interpreter(mi, world);
         // Root src explicitly: it is reachable as m->source only until a
         // concurrent thread publishes its own uncompressed copy there.

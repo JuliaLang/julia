@@ -678,6 +678,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     jl_atomic_store_relaxed(&mi->flags, 0);
     jl_atomic_store_relaxed(&mi->dispatch_status, 0);
     jl_atomic_store_relaxed(&mi->precompile, 0);
+    jl_atomic_store_relaxed(&mi->tier_count, 0);
     return mi;
 }
 
