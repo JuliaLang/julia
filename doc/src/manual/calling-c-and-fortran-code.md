@@ -926,6 +926,8 @@ module LibSolver
 
 using Libdl
 
+const libsolver = "libsolver.so"
+
 # handlers must not take locks, so resolve everything they need eagerly
 const STOP_FPTR = Ref(C_NULL)    # void solver_request_stop(solver_t *); async-signal-safe
 const STOP_HANDLER = Ref(C_NULL)
