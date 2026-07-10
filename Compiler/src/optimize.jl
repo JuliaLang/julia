@@ -64,7 +64,11 @@ const IR_FLAGS_EFFECTS =
 
 const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES
 
-const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM | IR_FLAG_RSIIMO
+# N.B.: RSIIMO is deliberately not included: `has_flag` requires all bits, and
+# nothing consumes an escape-analysis outcome for reset-safety yet. When such
+# a consumer exists, it needs its own (RSIIMO | INACCESSIBLEMEM_OR_ARGMEM)
+# qualification, not membership in this conjunction.
+const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
 has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 
