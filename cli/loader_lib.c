@@ -212,7 +212,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
 // which can break loading of some system libraries: <https://github.com/JuliaLang/julia/issues/34276>.
 // As a fix, on linux we probe the system libstdc++ to see if it is newer, and then load it if it is.
 // Otherwise, we load the bundled one. This improves compatibility with third party dynamic libs that
-// may depend on symbols exported by the system libstdxc++.
+// may depend on symbols exported by the system libstdc++.
 #ifdef _OS_LINUX_
 #ifndef GLIBCXX_LEAST_VERSION_SYMBOL
 #warning GLIBCXX_LEAST_VERSION_SYMBOL should always be defined in the makefile.
@@ -224,7 +224,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
 
 // Return the path to the libstdcxx to load.
 // If the path is found, return it.
-// Otherwise, print the error and exit.
+// Otherwise, return NULL.
 // The path returned must be freed.
 static const char *libstdcxxprobe(void)
 {

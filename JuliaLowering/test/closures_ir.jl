@@ -115,7 +115,7 @@ end
     4   (return %₁)
 13  latestworld
 14  TestMod.f
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅ core.Any)
 17  (call core.svec)
 18  SourceLocation::1:10
@@ -171,7 +171,7 @@ end
     2   (return %₁)
 13  latestworld
 14  TestMod.foo
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅ core.Any)
 17  (call core.svec)
 18  SourceLocation::1:10
@@ -227,7 +227,7 @@ end
     3   (return %₁)
 13  latestworld
 14  TestMod.f
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅ core.Any)
 17  (call core.svec)
 18  SourceLocation::1:10
@@ -274,7 +274,7 @@ end
 13  latestworld
 14  (= slot₁/T (call core.TypeVar :T))
 15  TestMod.f
-16  (call core.Typeof %₁₅)
+16  (call core.TypeEqOf %₁₅)
 17  slot₁/T
 18  (call core.svec %₁₆ %₁₇)
 19  slot₁/T
@@ -331,7 +331,7 @@ end
     6   (return %₅)
 13  latestworld
 14  TestMod.f
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅ core.Any)
 17  (call core.svec)
 18  SourceLocation::1:10
@@ -396,7 +396,7 @@ end
 5   (method TestMod.f)
 6   latestworld
 7   TestMod.f
-8   (call core.Typeof %₇)
+8   (call core.TypeEqOf %₇)
 9   (call core.svec %₈)
 10  (call core.svec)
 11  SourceLocation::3:14
@@ -785,7 +785,7 @@ end
     2   (return %₁)
 13  latestworld
 14  TestMod.f_after_if
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅ core.Any)
 17  (call core.svec)
 18  SourceLocation::1:10
@@ -832,7 +832,7 @@ end
     2   (return %₁)
 13  latestworld
 14  TestMod.f_ternary
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅ core.Any)
 17  (call core.svec)
 18  SourceLocation::1:10
@@ -885,7 +885,7 @@ end
     2   (return %₁)
 13  latestworld
 14  TestMod.f_or_guard
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅ core.Any)
 17  (call core.svec)
 18  SourceLocation::1:10
@@ -944,7 +944,7 @@ end
     2   (return %₁)
 13  latestworld
 14  TestMod.f_arg_reassign
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅ core.Any)
 17  (call core.svec)
 18  SourceLocation::1:10
@@ -1033,7 +1033,7 @@ end
     2   (return %₁)
 13  latestworld
 14  TestMod.f_local_no_box
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅)
 17  (call core.svec)
 18  SourceLocation::1:10
@@ -1077,7 +1077,7 @@ end
     2   (return %₁)
 13  latestworld
 14  TestMod.f_typed_local_no_box
-15  (call core.Typeof %₁₄)
+15  (call core.TypeEqOf %₁₄)
 16  (call core.svec %₁₅)
 17  (call core.svec)
 18  SourceLocation::1:10

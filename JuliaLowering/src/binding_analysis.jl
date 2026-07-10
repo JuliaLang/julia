@@ -238,7 +238,7 @@ function du_visit!(ctx, state::DefUseState, e)
         if haskey(ctx.closure_bindings, func_id)
             for lam in ctx.closure_bindings[func_id].lambdas
                 for (id, capt) in lam.locals_capt
-                    du_mark_captured!(state, id)
+                    capt && du_mark_captured!(state, id)
                 end
             end
         end

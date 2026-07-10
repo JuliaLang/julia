@@ -343,7 +343,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         else
             access
         end
-    elseif is_leaf(ex) || k == K"inert" || k == K"inert_syntaxtree" || k == K"static_eval"
+    elseif is_leaf(ex) || k == K"inert" || k == K"syntaxinert" || k == K"static_eval"
         ex
     elseif k == K"="
         convert_assignment(ctx, ex)
@@ -376,7 +376,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         binfo = get_binding(ctx, ex[1])
         if binfo.kind == :global
             # flisp has this, but our K"assert" handling is in a previous pass
-            # [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
+            # [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
             make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, _convert_closures(ctx, ex[2]))
         else
             newleaf(ctx, ex, K"TOMBSTONE")
@@ -487,7 +487,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                        (ex, "function_type of local without known closure type"))
             ctx.closure_infos[func_name.var_id].type_name
         else
-            @ast ctx ex [K"call" "Typeof"::K"core" _convert_closures(ctx, func_name)]
+            @ast ctx ex [K"call" "TypeEqOf"::K"core" _convert_closures(ctx, func_name)]
         end
     elseif k == K"method_defs"
         name = ex[1]
@@ -523,14 +523,22 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                                     ctx.closure_bindings, capture_rewrites, ctx.lambda_bindings,
                                     false, ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos)
 
+        argt = _convert_closures(ctx, ex[2])
+        rt_lb = _convert_closures(ctx, ex[3])
+        rt_ub = _convert_closures(ctx, ex[4])
+
         init_closure_args = SyntaxList(ctx)
         for id in field_orig_bindings
-            push!(init_closure_args, binding_ex(ctx, id))
+            init_arg = binding_ex(ctx, id)
+            if is_self_captured(ctx, init_arg)
+                init_arg = captured_var_access(ctx, init_arg)
+            end
+            push!(init_closure_args, init_arg)
         end
         @ast ctx ex [K"new_opaque_closure"
-            ex[2] # arg type tuple
-            ex[3] # return_lower_bound
-            ex[4] # return_upper_bound
+            argt # arg type tuple
+            rt_lb # return_lower_bound
+            rt_ub # return_upper_bound
             ex[5] # allow_partial
             [K"opaque_closure_method"
                 (::K"nothing")
@@ -614,7 +622,7 @@ end
 """
 Closure conversion and lowering of bindings
 
-This pass does a few things things:
+This pass does a few things:
 * Deal with typed variables (K"decl") and their assignments
 * Deal with const and non-const global assignments
 * Convert closures into types
@@ -627,7 +635,10 @@ Invariants:
 @fzone "JL: closures" function convert_closures(
     ctx::VariableAnalysisContext, ex::SyntaxTree{Attrs}
 ) where Attrs
-    ctx_out = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
+    # TODO: ctx.mod is used instead of syntax_module(ex) beyond this point,
+    # which is dubious
+    ctx_out = ClosureConversionCtx(ctx.graph, ctx.bindings,
+                                   ctx.layer.mod,
                                    ctx.closure_bindings, nothing,
                                    ex.lambda_bindings,
                                    false, true, SyntaxList(ctx.graph),

@@ -682,7 +682,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
 
     s = fdio(fd_mem, true)
 
-    # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
+    # On OSX, ftruncate must be used to set size of segment, just lseek does not work.
     # and only at creation time
     if (mode & JL_O_CREAT) == JL_O_CREAT
         rc = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, prod(dims)*sizeof(T))

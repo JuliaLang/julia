@@ -609,7 +609,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
-            # there may be atrailing separator here so use rstrip
+            # there may be a trailing separator here so use rstrip
             @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), Base.Filesystem.path_separator[1]))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
         end
@@ -766,7 +766,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
     # --print-before/--print-after with pass names is broken on Windows due to no-gnu-unique issues
     if !Sys.iswindows()
-        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization") do
+        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization", "JULIA_OBJCACHE" => "0") do
             let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
                 code = code[3]
@@ -1493,3 +1493,6 @@ end
 
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
 @test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
+
+# https://github.com/JuliaLang/julia/issues/59103
+@test test_read_success(setenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"

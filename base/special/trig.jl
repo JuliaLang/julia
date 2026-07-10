@@ -190,7 +190,7 @@ function sincos(x::T) where T<:Union{Float32, Float64}
     # calculate both kernels at the reduced y...
     si, co = sincos_kernel(y)
     # ... and use the same selection scheme as above: (sin, cos, -sin, -cos) for
-    # for sin and (cos, -sin, -cos, sin) for cos
+    # sin and (cos, -sin, -cos, sin) for cos
     if n == 0
         return si, co
     elseif n == 1
@@ -636,7 +636,7 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     ypw = poshighword(y)
     xpw = poshighword(x)
     # compute y/x for Float32
-    k = reinterpret(Int32, ypw-xpw)>>ATAN2_RATIO_BIT_SHIFT(T)
+    k = reinterpret(Int32, ypw -% xpw)>>ATAN2_RATIO_BIT_SHIFT(T)
 
     if k > ATAN2_RATIO_THRESHOLD(T) # |y/x| >  threshold
         z=T(pi)/2+T(0.5)*ATAN2_PI_LO(T)
@@ -1082,7 +1082,15 @@ sinpi(x::AbstractFloat) = sin(pi*x)
 cospi(x::AbstractFloat) = cos(pi*x)
 sincospi(x::AbstractFloat) = sincos(pi*x)
 tanpi(x::AbstractFloat) = tan(pi*x)
-tanpi(x::Complex) = sinpi(x) / cospi(x) # Is there a better way to do this?
+
+function tanpi(z::Complex)
+    zr, zi = reim(z)
+    iszero(zi) && return Complex(tanpi(zr))
+    sr, cr = sincospi(zr)
+    ti = tanh(zi * pi)
+    cz = Complex(cr, ti * sr)
+    Complex(sr, ti * cr) * cz / abs2(cz)
+end
 
 function sinpi(z::Complex{T}) where T
     F = float(T)

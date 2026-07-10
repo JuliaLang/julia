@@ -4,7 +4,7 @@
 
 The analyzer plugin that drives the analysis ships with julia. Its
 source code can be found in `src/clangsa`. Running it requires
-the clang dependency to be build. Set the `BUILD_LLVM_CLANG` variable
+the clang dependency to be built. Set the `BUILD_LLVM_CLANG` variable
 in your Make.user in order to build an appropriate version of clang.
 You may also want to use the prebuilt binaries using the
 `USE_BINARYBUILDER_LLVM` options.
@@ -169,16 +169,23 @@ void example() {
 }
 ```
 
-### `JL_PROPAGATES_ROOT`
+### `JL_PROPAGATES_ROOT`/`JL_PROPAGATES_ROOT_INDEXED(root, index)`
 
 This annotation is commonly found on accessor functions that return one rootable
 object stored within another. When annotated on a function argument, it tells
 the analyzer that the root for that argument also applies to the value returned
 by the function.
+Use `JL_PROPAGATES_ROOT_INDEXED(root, index)` when the return value is loaded
+from a specific indexed child of the rooting argument, where `root` and `index`
+are zero-based argument indices. The indexed form lets the analyzer model later
+overwrites or clears of that indexed child precisely.
+Non-literal indices conservatively fall back to ordinary root propagation,
+because distinct symbolic index expressions can alias in the analyzer.
 
 Usage Example:
 ```c
-jl_value_t *jl_svecref(jl_svec_t *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+jl_value_t *jl_svecref(jl_svec_t *t JL_PROPAGATES_ROOT, size_t i)
+    JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
 
 size_t example(jl_svec_t *svec) {
   jl_value_t *val = jl_svecref(svec, 1)
@@ -189,22 +196,34 @@ size_t example(jl_svec_t *svec) {
 }
 ```
 
-### `JL_ROOTING_ARGUMENT`/`JL_ROOTED_ARGUMENT`
+### `JL_ROOTED_BY_ARG(n)`/`JL_ROOTED_BY_ARG_INDEXED(root, index)`/`JL_OUT_ROOTED_BY_ARG(n)`/`JL_ROOTED_BY_RETURN`
 
-This is essentially the assignment counterpart to `JL_PROPAGATES_ROOT`.
+These are essentially the assignment counterpart to `JL_PROPAGATES_ROOT`.
 When assigning a value to a field of another value that is already rooted,
 the assigned value will inherit the root of the value it is assigned into.
 
+Use `JL_ROOTED_BY_ARG(n)` on the argument that is being assigned, where `n`
+is the zero-based argument index of the rooting argument. Use
+`JL_ROOTED_BY_ARG_INDEXED(root, index)` when the assigned value is stored in a
+specific indexed child of the rooting argument, where `index` is the zero-based
+argument index of the index argument. Use `JL_OUT_ROOTED_BY_ARG(n)` on an out
+argument when the value written through the out argument is rooted by argument
+`n`. Use `JL_ROOTED_BY_RETURN` on arguments that are rooted by the returned
+value. Variadic arguments cannot be annotated individually, so functions whose
+variadic arguments are rooted by the return value use `JL_ROOTED_VARARGS` on the
+function declaration.
+
 Usage Example:
 ```c
-void jl_svecset(void *t JL_ROOTING_ARGUMENT, size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
+void jl_svecset(void *t, size_t i, void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
+jl_svec_t *jl_svec1(void *a JL_ROOTED_BY_RETURN);
 
 
 size_t example(jl_svec_t *svec) {
   jl_value_t *val = jl_box_long(10000);
-  jl_svecset(svec, val);
-  // This is valid, because the annotations imply that the
-  // jl_svecset propagates the rooted-ness from `svec` to `val`
+  jl_svecset(svec, 0, val);
+  // This is valid, because the annotation implies that jl_svecset
+  // propagates the rooted-ness from `svec` to `val`
   jl_gc_safepoint();
   return jl_unbox_long(val);
 }
@@ -257,7 +276,7 @@ void example() {
 This annotation implies that a given value is always globally rooted.
 It can be applied to global variable declarations, in which case it
 will apply to the value of those variables (or values if the declaration
-if for an array), or to functions, in which case it will apply to the
+is for an array), or to functions, in which case it will apply to the
 return value of such functions (e.g. for functions that always return
 some private, globally rooted value).
 
@@ -269,8 +288,8 @@ jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;
 
 ### `JL_ALWAYS_LEAFTYPE`
 
-This annotations is essentially equivalent to `JL_GLOBALLY_ROOTED`, except that
-is should only be used if those values are globally rooted by virtue of being
+This annotation is essentially equivalent to `JL_GLOBALLY_ROOTED`, except that
+it should only be used if those values are globally rooted by virtue of being
 a leaftype. The rooting of leaftypes is a bit complicated. They are generally
 rooted through `cache` field of the corresponding `TypeName`, which itself is
 rooted by the containing module (so they're rooted as long as the containing

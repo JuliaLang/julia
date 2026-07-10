@@ -621,7 +621,7 @@ end
                 end
             end
         end
-        @testset begin
+        @testset "trig d/pi functions exactness" begin
             # If the machine supports fma (fused multiply add), we require exact equality.
             # Otherwise, we only require approximate equality.
             if has_fma[T]
@@ -644,6 +644,15 @@ end
                 T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
                 T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
             end
+        end
+
+        @testset "tanpi for Complex argument" begin
+            x = Complex{T}(12/11, 2/7)
+            @test tanpi(x) ≈ sinpi(x) / cospi(x)
+            # issue #57450
+            y = Complex{T}(0.5, 1000)
+            @test isfinite(tanpi(y))
+            @test tanpi(y) ≈ im
         end
     end
     scdm = sincosd(missing)
@@ -975,6 +984,8 @@ end
     f19872b(x) = x ^ (-1024)
     @test 0 < f19872b(2.0) < 1e-300
     @test issubnormal(2.0 ^ (-1024))
+    @test !issubnormal(big(2.0 ^ (-1024)))
+    @test !issubnormal(nextfloat(BigFloat(0)))
     @test issubnormal(f19872b(2.0))
     @test !issubnormal(f19872b(0.0))
     @test f19872a(2.0) === 32.0

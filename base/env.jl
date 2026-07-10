@@ -55,6 +55,12 @@ else # !windows
     _getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
     _hasenv(s::AbstractString) = _getenv(s) != C_NULL
 
+    if Sys.isapple()
+        _environ() = unsafe_load(ccall(:_NSGetEnviron, Ptr{Ptr{Cstring}}, ()))
+    else
+        _environ() = unsafe_load(cglobal(:environ, Ptr{Cstring}))
+    end
+
     function access_env(onError::Function, var::AbstractString)
         val = _getenv(var)
         val == C_NULL ? onError(var) : unsafe_string(val)
@@ -214,16 +220,18 @@ if Sys.iswindows()
     end
 else # !windows
     function iterate(::EnvDict, i=0)
+        envs = _environ()
         while true
-            env = ccall(:jl_environ, Any, (Int32,), i)
-            env === nothing && return nothing
-            env = env::String
+            envp = unsafe_load(envs, i + 1)
+            envp == C_NULL && return nothing
+            env = unsafe_string(envp)
+            i += 1
             m = findfirst('=', env)
             if m === nothing
                 @warn "malformed environment entry" env
                 continue
             end
-            return (Pair{String,String}(env[1:prevind(env, m)], env[nextind(env, m):end]), i+1)
+            return (Pair{String,String}(env[1:prevind(env, m)], env[nextind(env, m):end]), i)
         end
     end
 end # os-test

@@ -60,7 +60,7 @@ function min_enabled_level end
     catch_exceptions(logger)
 
 Return `true` if the logger should catch exceptions which happen during log
-record construction.  By default, messages are caught.
+record construction.  By default, exceptions are caught.
 
 By default all exceptions are caught to prevent log message generation from
 crashing the program.  This lets users confidently toggle little-used
@@ -307,7 +307,7 @@ function log_record_id(_module, level, message, log_kws)
             push!(_log_record_ids, id)
             return id
         end
-        h += 1
+        h +%= 1
     end
 end
 

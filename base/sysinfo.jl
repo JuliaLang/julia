@@ -474,7 +474,7 @@ function which(program_name::String)
             push!(program_names, base_pname)
         end
 
-        # But also try appending .exe and .com`
+        # But also try appending .exe and .com
         for pe in (".exe", ".com")
             push!(program_names, string(base_pname, pe))
         end

@@ -571,50 +571,53 @@ struct X
 end
 #---------------------
 1   (newvar slot₁/val)
-2   (call core.declare_global TestMod :X false)
-3   latestworld
-4   (call core.svec)
-5   (call core.svec :a :b)
-6   (call core.svec)
-7   (call core._structtype TestMod :X %₄ %₅ %₆ false 2)
-8   (= slot₂/X %₇)
-9   (call core._setsuper! %₇ core.Any)
-10  (call core.isdefinedglobal TestMod :X false)
-11  (gotoifnot %₁₀ label₁₅)
-12  TestMod.X
-13  (= slot₃/if_val (call core._equiv_typedef %₁₂ %₇))
-14  (goto label₁₆)
-15  (= slot₃/if_val false)
-16  slot₃/if_val
-17  (gotoifnot %₁₆ label₂₁)
-18  TestMod.X
-19  (= slot₄/if_val %₁₈)
-20  (goto label₂₂)
-21  (= slot₄/if_val false)
-22  slot₄/if_val
-23  (gotoifnot %₁₆ label₂₄)
-24  (call core.svec core.Any core.Any)
-25  (call core._typebody! %₂₂ %₇ %₂₄)
-26  (call core.declare_const TestMod :X %₂₅)
-27  latestworld
-28  TestMod.X
-29  SourceLocation:none:1:0
-30  (call top._defaultctors %₂₈ %₂₉)
-31  latestworld
-32  (= slot₁/val core.nothing)
-33  (call Base.Docs.Binding TestMod :X)
-34  (call Core.svec "X docs\n")
-35  (call Pair{Symbol, Any} :a "field a docs")
-36  (call Pair{Symbol, Any} :b "field b docs")
-37  (call Dict{Symbol, Any} %₃₅ %₃₆)
-38  (call Pair :fields %₃₇)
-39  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₃₈)
-40  (call Base.Docs.docstr %₃₄ %₃₉)
-41  TestMod.Union
-42  (call core.apply_type %₄₁)
-43  (call Base.Docs.doc! TestMod %₃₃ %₄₀ %₄₂)
-44  slot₁/val
-45  (return %₄₄)
+2   (gotoifnot true label₃₄)
+3   (call core.declare_global TestMod :X false)
+4   latestworld
+5   (call core.svec)
+6   (call core.svec :a :b)
+7   (call core.svec)
+8   (call core._structtype TestMod :X %₅ %₆ %₇ false 2)
+9   (= slot₂/X %₈)
+10  (call core._setsuper! %₈ core.Any)
+11  (call core.isdefinedglobal TestMod :X false)
+12  (gotoifnot %₁₁ label₁₆)
+13  TestMod.X
+14  (= slot₃/if_val (call core._equiv_typedef %₁₃ %₈))
+15  (goto label₁₇)
+16  (= slot₃/if_val false)
+17  slot₃/if_val
+18  (gotoifnot %₁₇ label₂₂)
+19  TestMod.X
+20  (= slot₄/if_val %₁₉)
+21  (goto label₂₃)
+22  (= slot₄/if_val false)
+23  slot₄/if_val
+24  (gotoifnot %₁₇ label₂₅)
+25  (call core.svec core.Any core.Any)
+26  (call core._typebody! %₂₃ %₈ %₂₅)
+27  (call core.declare_const TestMod :X %₂₆)
+28  latestworld
+29  TestMod.X
+30  SourceLocation:none:1:0
+31  (call top._defaultctors %₂₉ %₃₀)
+32  latestworld
+33  (= slot₁/val core.nothing)
+34  (call Base.Docs.Binding TestMod :X)
+35  (call Core.svec "X docs\n")
+36  (call Pair{Symbol, Any} :a "field a docs")
+37  (call Pair{Symbol, Any} :b "field b docs")
+38  (call Dict{Symbol, Any} %₃₆ %₃₇)
+39  (call Pair :fields %₃₈)
+40  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₃₉)
+41  (call Base.Docs.docstr %₃₅ %₄₀)
+42  TestMod.Union
+43  (call core.apply_type %₄₂)
+44  (call Base.Docs.doc! TestMod %₃₄ %₄₁ %₄₃)
+45  (gotoifnot true label₄₈)
+46  slot₁/val
+47  (return %₄₆)
+48  (return core.nothing)
 
 ########################################
 # Struct with outer constructor
@@ -814,16 +817,16 @@ end
 65  (call core.svec %₆₂ %₆₃ %₆₄)
 66  --- method core.nothing %₆₅
     slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
-    1   slot₁/#ctor-self#
-    2   TestMod.+
-    3   (call %₂ slot₂/y slot₃/z)
-    4   TestMod.ReallyXIPromise
-    5   (= slot₄/tmp (new %₁ %₃))
-    6   (call core.isa slot₄/tmp %₄)
+    1   TestMod.ReallyXIPromise
+    2   slot₁/#ctor-self#
+    3   TestMod.+
+    4   (call %₃ slot₂/y slot₃/z)
+    5   (= slot₄/tmp (new %₂ %₄))
+    6   (call core.isa slot₄/tmp %₁)
     7   (gotoifnot %₆ label₉)
     8   (goto label₁₁)
-    9   (call top.convert %₄ slot₄/tmp)
-    10  (= slot₄/tmp (call core.typeassert %₉ %₄))
+    9   (call top.convert %₁ slot₄/tmp)
+    10  (= slot₄/tmp (call core.typeassert %₉ %₁))
     11  slot₄/tmp
     12  (return %₁₁)
 67  latestworld
@@ -1165,7 +1168,7 @@ A{<:Real}() = A(1)
 3   TestMod.A
 4   (call core.apply_type %₃ %₂)
 5   (call core.UnionAll %₂ %₄)
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   (call core.svec %₆)
 8   (call core.svec)
 9   SourceLocation::1:1
@@ -1261,49 +1264,45 @@ typegroup
     end
 end
 #---------------------
-1   (call core.declare_global TestMod :A false)
-2   latestworld
-3   (call core.declare_global TestMod :B false)
-4   latestworld
-5   (= slot₂/A (call core.TypeVar :A))
-6   (= slot₃/B (call core.TypeVar :B))
-7   (call core.svec)
-8   (call core.svec :b)
+1   (= slot₂/A (call core.TypeVar :A))
+2   (= slot₃/B (call core.TypeVar :B))
+3   (call core.svec)
+4   (call core.svec :b)
+5   (call core.svec)
+6   slot₃/B
+7   (call core.svec %₆)
+8   (call core.svec %₃ %₄ %₅ false 1 core.Any %₇)
 9   (call core.svec)
-10  slot₃/B
-11  (call core.svec %₁₀)
-12  (call core.svec %₇ %₈ %₉ false 1 core.Any %₁₁)
-13  (call core.svec)
-14  (call core.svec :a)
-15  (call core.svec)
-16  slot₂/A
-17  (call core.svec %₁₆)
-18  (call core.svec %₁₃ %₁₄ %₁₅ false 1 core.Any %₁₇)
-19  slot₂/A
-20  slot₃/B
-21  (call core.svec %₁₉ %₂₀)
-22  (call core.svec %₁₂ %₁₈)
-23  (call core.resolve_typegroup TestMod %₂₁ %₂₂)
-24  (call top.indexed_iterate %₂₃ 1)
-25  (= slot₂/A (call core.getfield %₂₄ 1))
-26  (= slot₁/iterstate (call core.getfield %₂₄ 2))
-27  slot₁/iterstate
-28  (call top.indexed_iterate %₂₃ 2 %₂₇)
-29  (= slot₃/B (call core.getfield %₂₈ 1))
-30  slot₂/A
-31  (call core.declare_const TestMod :A %₃₀)
-32  latestworld
-33  slot₃/B
-34  (call core.declare_const TestMod :B %₃₃)
-35  latestworld
-36  TestMod.A
-37  SourceLocation::2:5
-38  (call top._defaultctors %₃₆ %₃₇)
-39  TestMod.B
-40  SourceLocation::5:5
-41  (call top._defaultctors %₃₉ %₄₀)
-42  latestworld
-43  (return core.nothing)
+10  (call core.svec :a)
+11  (call core.svec)
+12  slot₂/A
+13  (call core.svec %₁₂)
+14  (call core.svec %₉ %₁₀ %₁₁ false 1 core.Any %₁₃)
+15  slot₂/A
+16  slot₃/B
+17  (call core.svec %₁₅ %₁₆)
+18  (call core.svec %₈ %₁₄)
+19  (call core.resolve_typegroup TestMod %₁₇ %₁₈)
+20  (call top.indexed_iterate %₁₉ 1)
+21  (= slot₂/A (call core.getfield %₂₀ 1))
+22  (= slot₁/iterstate (call core.getfield %₂₀ 2))
+23  slot₁/iterstate
+24  (call top.indexed_iterate %₁₉ 2 %₂₃)
+25  (= slot₃/B (call core.getfield %₂₄ 1))
+26  slot₂/A
+27  (call core.declare_const TestMod :A %₂₆)
+28  latestworld
+29  slot₃/B
+30  (call core.declare_const TestMod :B %₂₉)
+31  latestworld
+32  TestMod.A
+33  SourceLocation::2:5
+34  (call top._defaultctors %₃₂ %₃₃)
+35  TestMod.B
+36  SourceLocation::5:5
+37  (call top._defaultctors %₃₅ %₃₆)
+38  latestworld
+39  (return core.nothing)
 
 ########################################
 # Typegroup with supertype and apply_type_or_typeapp replacement
@@ -1316,55 +1315,51 @@ typegroup
     end
 end
 #---------------------
-1   (call core.declare_global TestMod :A false)
-2   latestworld
-3   (call core.declare_global TestMod :B false)
-4   latestworld
-5   (= slot₂/A (call core.TypeVar :A))
-6   (= slot₃/B (call core.TypeVar :B))
-7   (call core.svec)
-8   (call core.svec :b)
-9   (call core.svec)
-10  TestMod.AbstractVector
+1   (= slot₂/A (call core.TypeVar :A))
+2   (= slot₃/B (call core.TypeVar :B))
+3   (call core.svec)
+4   (call core.svec :b)
+5   (call core.svec)
+6   TestMod.AbstractVector
+7   slot₃/B
+8   (call core.apply_type_or_typeapp %₆ %₇)
+9   TestMod.Union
+10  TestMod.Nothing
 11  slot₃/B
-12  (call core.apply_type_or_typeapp %₁₀ %₁₁)
-13  TestMod.Union
-14  TestMod.Nothing
-15  slot₃/B
-16  (call core.apply_type_or_typeapp %₁₃ %₁₄ %₁₅)
-17  (call core.svec %₁₆)
-18  (call core.svec %₇ %₈ %₉ false 1 %₁₂ %₁₇)
-19  (call core.svec)
-20  (call core.svec :a)
-21  (call core.svec)
-22  slot₂/A
-23  (call core.svec %₂₂)
-24  (call core.svec %₁₉ %₂₀ %₂₁ false 1 core.Any %₂₃)
-25  slot₂/A
-26  slot₃/B
-27  (call core.svec %₂₅ %₂₆)
-28  (call core.svec %₁₈ %₂₄)
-29  (call core.resolve_typegroup TestMod %₂₇ %₂₈)
-30  (call top.indexed_iterate %₂₉ 1)
-31  (= slot₂/A (call core.getfield %₃₀ 1))
-32  (= slot₁/iterstate (call core.getfield %₃₀ 2))
-33  slot₁/iterstate
-34  (call top.indexed_iterate %₂₉ 2 %₃₃)
-35  (= slot₃/B (call core.getfield %₃₄ 1))
-36  slot₂/A
-37  (call core.declare_const TestMod :A %₃₆)
-38  latestworld
-39  slot₃/B
-40  (call core.declare_const TestMod :B %₃₉)
-41  latestworld
-42  TestMod.A
-43  SourceLocation::2:5
-44  (call top._defaultctors %₄₂ %₄₃)
-45  TestMod.B
-46  SourceLocation::5:5
-47  (call top._defaultctors %₄₅ %₄₆)
-48  latestworld
-49  (return core.nothing)
+12  (call core.apply_type_or_typeapp %₉ %₁₀ %₁₁)
+13  (call core.svec %₁₂)
+14  (call core.svec %₃ %₄ %₅ false 1 %₈ %₁₃)
+15  (call core.svec)
+16  (call core.svec :a)
+17  (call core.svec)
+18  slot₂/A
+19  (call core.svec %₁₈)
+20  (call core.svec %₁₅ %₁₆ %₁₇ false 1 core.Any %₁₉)
+21  slot₂/A
+22  slot₃/B
+23  (call core.svec %₂₁ %₂₂)
+24  (call core.svec %₁₄ %₂₀)
+25  (call core.resolve_typegroup TestMod %₂₃ %₂₄)
+26  (call top.indexed_iterate %₂₅ 1)
+27  (= slot₂/A (call core.getfield %₂₆ 1))
+28  (= slot₁/iterstate (call core.getfield %₂₆ 2))
+29  slot₁/iterstate
+30  (call top.indexed_iterate %₂₅ 2 %₂₉)
+31  (= slot₃/B (call core.getfield %₃₀ 1))
+32  slot₂/A
+33  (call core.declare_const TestMod :A %₃₂)
+34  latestworld
+35  slot₃/B
+36  (call core.declare_const TestMod :B %₃₅)
+37  latestworld
+38  TestMod.A
+39  SourceLocation::2:5
+40  (call top._defaultctors %₃₈ %₃₉)
+41  TestMod.B
+42  SourceLocation::5:5
+43  (call top._defaultctors %₄₁ %₄₂)
+44  latestworld
+45  (return core.nothing)
 
 ########################################
 # Error: Duplicate field name in struct

@@ -1181,7 +1181,7 @@ end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
 
-# We consider a potential deprecatio warning an effect, so for completely unknown getglobal,
+# We consider a potential deprecation warning an effect, so for completely unknown getglobal,
 # we taint the effect_free bit.
 @test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 
@@ -1543,7 +1543,7 @@ let code = Any[
     sv.bb_states[#=block_id=#4].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
     sv.bb_states[#=block_id=#5].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
 
-    ir = Compiler.convert_to_ircode(src, sv)
+    ir = Compiler.convert_to_ircode!(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
     ir = Compiler.compact!(ir)
 
@@ -1890,6 +1890,20 @@ let (ir,rt) = only(Base.code_ircode((Int,)) do y
         f53521(1, y)
     end)
     @test rt == Union{Nothing,Float64}
+end
+
+# issue #62082: a frame-less (`catch_dest == 0`) EnterNode's scope operand must be
+# renumbered too, else `Core.current_scope()` reads a stale value in the scoped region
+let sval = ScopedValue(1)
+    @noinline observe_scope() = Core.current_scope()
+    function scope_renumber(c::Bool)
+        if c
+            error("x")
+        end
+        @with sval => 2 observe_scope()
+    end
+    @test scope_renumber(false) isa Base.ScopedValues.Scope
+    @test_throws ErrorException scope_renumber(true)
 end
 
 # Test that adce_pass! sets Refined on PhiNode values

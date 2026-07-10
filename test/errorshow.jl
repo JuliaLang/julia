@@ -15,6 +15,7 @@ function _register_if_missing(@nospecialize(handler), @nospecialize(exct::Type))
 end
 _register_if_missing(Base.noncallable_number_hint_handler, MethodError)
 _register_if_missing(Base.string_concatenation_hint_handler, MethodError)
+_register_if_missing(Base.string_replace_hint_handler, MethodError)
 _register_if_missing(Base.methods_on_iterable, MethodError)
 _register_if_missing(Base.nonsetable_type_hint_handler, MethodError)
 _register_if_missing(Base.fielderror_listfields_hint_handler, FieldError)
@@ -784,6 +785,21 @@ using Base.Experimental: @opaque
     test_worldage_error(f)
 end
 
+# suggest candidate methods on typename wrapper when parameterized call has no methods
+struct ParametricOuterBareInner{T}
+    x::T
+    ParametricOuterBareInner(x) = ParametricOuterBareInner{typeof(x)}(x)
+end
+let err_str
+    err_str = @except_str ParametricOuterBareInner{String}("abc") MethodError
+    @test occursin(
+        "Hint: constructors are defined for `$(curmod_prefix)ParametricOuterBareInner`, " *
+            "but not for `$(curmod_prefix)ParametricOuterBareInner{String}`",
+        err_str,
+    )
+    @test occursin("ParametricOuterBareInner(::Any)", err_str)
+end
+
 # Custom hints
 struct HasNoOne end
 function recommend_oneunit(io, ex, arg_types, kwargs)
@@ -1437,6 +1453,16 @@ end
 let err_str
     err_str = @except_str "a" + "b" MethodError
     @test occursin("String concatenation is performed with *", err_str)
+end
+
+# https://github.com/JuliaLang/julia/issues/57613
+let err_str
+    err_str = @except_str replace!("abc", "a" => "1") MethodError
+    @test occursin("`String`s cannot be modified with `replace!`", err_str)
+    err_str = @except_str replace!(uppercase, "abc") MethodError
+    @test occursin("`String`s cannot be modified with `replace!`", err_str)
+    err_str = @except_str replace!((1, 2), 1 => 0) MethodError
+    @test !occursin("cannot be modified with `replace!`", err_str)
 end
 
 # https://github.com/JuliaLang/julia/issues/55745

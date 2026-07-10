@@ -132,7 +132,7 @@ end
     end
 
     @testset "provenance via scavenging for LineNumberNodes" begin
-        # Provenenance of a node should generally be the last seen
+        # Provenance of a node should generally be the last seen
         # LineNumberNode in the depth-first traversal of the Expr, or the
         # initial line given if none have been seen yet.  If none have been seen
         # and no initial line was given, .source should still be defined on all

@@ -49,7 +49,7 @@ Although Julia currently uses `libc` `malloc`, it also supports pre-loading othe
 
 Julia’s mark phase is implemented through a parallel depth-first-search that traverses the object graph to determine which objects are alive.
 
-Julia stores age information for its generational GC in the object header: the lowest two bits of an object’s header store a mark bit, set when an object is marked, and an age bit, set when the object is promoted. Because Julia’s GC is non-moving, object age information can’t be only determined through the object's memory address, such as in GC implementations that allocate young objects in certain memory regions and relocate them to other memory regions during object promotion.
+Julia stores age information for its generational GC in the object header: the lowest two bits of an object’s header store a mark bit, set when an object is marked, and an age bit, set when the object is promoted. Because Julia’s GC is non-moving, object age information can’t be determined only through the object’s memory address, such as in GC implementations that allocate young objects in certain memory regions and relocate them to other memory regions during object promotion.
 
 Generational collection is implemented through sticky bits: objects are only pushed to the mark-stack, and therefore traced, if their mark-bits have not been set. When objects reach the oldest generation, their mark-bits aren't reset during a quick sweep, so these objects aren't traced during a subsequent mark phase. A full sweep, however, resets the mark-bits of all objects, so all of them are traced in a subsequent collection.
 

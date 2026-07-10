@@ -102,7 +102,7 @@ false
     A `Timer` requires yield points to update its state. For instance, `isopen(t::Timer)` cannot be
     used to timeout a non-yielding while loop.
 
-!!! compat "Julia 1.12
+!!! compat "Julia 1.12"
     The `timeout` and `interval` readable properties were added in Julia 1.12.
 
 """
@@ -423,7 +423,7 @@ function timedwait(testcb, timeout::Real; pollint::Real=0.1)
         if testcb()
             close(t)
             return :ok
-        elseif (time_ns() - start) > ns_timeout
+        elseif (time_ns() -% start) > ns_timeout
             close(t)
             break
         end

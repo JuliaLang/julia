@@ -32,8 +32,6 @@ endif
 
 LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 
-libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch
-
 $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-extracted
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied

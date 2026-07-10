@@ -837,6 +837,18 @@ function test_cat(::Type{TestAbstractArray})
 
     #58866 - ensure proper dimension calculation for 0-dimension elements
     @test [zeros(1, 0) zeros(1,0); zeros(0,0) zeros(0, 0)] == Matrix{Float64}(undef, 1, 0)
+
+    # type stability on hvncat_fill! internal iteration (#61426)
+    let
+        a1 = Matrix{Float64}(undef, 2, 2)
+        Base.hvncat_fill!(a1, true, (1, 2.0, 3, 4.0))
+        @test @allocated(Base.hvncat_fill!(a1, true, (1, 2.0, 3, 4.0))) == 0
+
+        a2 = Array{Float64, 3}(undef, 2, 3, 2)
+        xs = (1, 2.0, 3, 4.0, 5, 6.0, 7, 8.0, 9, 10.0, 11, 12.0)
+        @test @allocated(Base.hvncat_fill!(a2, false, xs)) == 0
+        @test @allocated(Base.hvncat_fill!(a2, true, xs)) == 0
+    end
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -850,7 +862,7 @@ function test_ind2sub(::Type{TestAbstractArray})
     end
 end
 
-# A custom linear slow array that insists upon Cartesian indexing
+# A custom slow array that insists upon Cartesian indexing
 mutable struct TSlowNIndexes{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end

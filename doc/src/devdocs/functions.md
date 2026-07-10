@@ -214,7 +214,7 @@ majority of dynamically-dispatched calls involve one or two arguments. In turn, 
 can be resolved by considering only the first argument. (Aside: proponents of single dispatch would
 not be surprised by this at all. However, this argument means "multiple dispatch is easy to optimize
 in practice", and that we should therefore use it, *not* "we should use single dispatch"!). So the
-method table and cache splits up on the structure based on a left-to-right decision tree so allow
+method table and cache splits up on the structure based on a left-to-right decision tree to allow
 efficient nearest-neighbor searches.
 
 The front end generates type declarations for all closures. Initially, this was implemented by

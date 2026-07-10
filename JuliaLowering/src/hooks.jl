@@ -26,11 +26,12 @@ function core_lowering_hook(@nospecialize(code), mod::Module, file::Union{String
             # TODO: this ignores module docstrings for now
             return Core.svec(est_to_expr(st0[2]))
         end
-        ctx1, st1 = expand_forms_1(  mod,  st0, true, world)
-        ctx2, st2 = expand_forms_2(  ctx1, st1)
-        ctx3, st3 = resolve_scopes(  ctx2, st2)
+        st0 = rebase_layers(st0, mod, JL_OLD_SYNTAX_VERSION)
+        st1 = expand_forms_1(st0, world, true)
+        ctx2, st2 = expand_forms_2(st1, world)
+        ctx3, st3 = resolve_scopes(ctx2, st2)
         ctx4, st4 = convert_closures(ctx3, st3)
-        ctx5, st5 = linearize_ir(    ctx4, st4)
+        ctx5, st5 = linearize_ir(ctx4, st4)
         ex = to_lowered_expr(st5)
         return Core.svec(ex, st5, ctx5)
     catch exc

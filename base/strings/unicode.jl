@@ -314,7 +314,7 @@ julia> lowercase('Ö')
 ```
 """
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
-    T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
+    T(@assume_effects :foldable :nothrow @ccall utf8proc_tolower(c::UInt32)::UInt32)
 
 lowercase(c::AnnotatedChar) = AnnotatedChar(lowercase(c.char), annotations(c))
 
@@ -335,7 +335,7 @@ julia> uppercase('ê')
 ```
 """
 uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
-    T(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+    T(@assume_effects :foldable :nothrow @ccall utf8proc_toupper(c::UInt32)::UInt32)
 
 uppercase(c::AnnotatedChar) = AnnotatedChar(uppercase(c.char), annotations(c))
 
@@ -360,7 +360,7 @@ julia> uppercase('ǆ')
 ```
 """
 titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
-    T(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
+    T(@assume_effects :foldable :nothrow @ccall utf8proc_totitle(c::UInt32)::UInt32)
 
 titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 
@@ -634,8 +634,6 @@ true
 ```
 """
 isprint(c::AbstractChar) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS
-
-# true in principal if a printer would use ink
 
 """
     isxdigit(c::AbstractChar)::Bool

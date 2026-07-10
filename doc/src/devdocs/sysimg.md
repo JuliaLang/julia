@@ -26,7 +26,7 @@ wrapper functions to automate this process.
 
 The system image can be compiled simultaneously for multiple CPU microarchitectures
 under the same instruction set architecture (ISA). Multiple versions of the same function
-may be created with minimum dispatch point inserted into shared functions
+may be created with minimal dispatch points inserted into shared functions
 in order to take advantage of different ISA extensions or other microarchitecture features.
 The version that offers the best performance will be selected automatically at runtime
 based on available CPU features.
@@ -94,7 +94,7 @@ performance and stability problems in some code.
 
 ### Implementation overview
 
-CPU and feature tables come from the [cpufeatures](https://github.com/gbaraldi/cpufeatures)
+CPU and feature tables come from the [cpufeatures](https://github.com/JuliaLang/cpufeatures)
 library. A build-time generator extracts tables from LLVM's TableGen data and emits
 standalone C headers (`generated/target_tables_{x86_64,aarch64,riscv64}.h`).
 

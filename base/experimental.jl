@@ -393,7 +393,7 @@ For a detailed definition of `:consistent`-cy, consult the corresponding section
 !!! note
     Note that the requirements for `:consistent`-cy include not only that the return values
     are egal, but also that the manner of termination is the same. However, it's important
-    to aware that when they throw exceptions, the exceptions themselves don't necessarily
+    to be aware that when they throw exceptions, the exceptions themselves don't necessarily
     have to be egal. In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is
     required to also throw one, but the exact exceptions may differ.
 
@@ -463,6 +463,29 @@ used with the [`Base.Experimental.@overlay`](@ref) macro to define methods for a
 without adding them to the global method table.
 """
 :@MethodTable
+
+"""
+   Experimental.@make_all_arithmetic_checked()
+
+This macro defines methods that overwrite the base definition of basic arithmetic (+,-,*),
+to use their checked variants instead. Explicitly overflowing arithmetic operators (+%,-%,*%)
+are not affected.
+
+!!! warning
+    This macro is temporary and will likely be replaced by a more complete mechanism in the
+    future. It is subject to change or removal without notice.
+"""
+macro make_all_arithmetic_checked()
+    esc(quote
+        Base.:(-)(x::Base.BitInteger)                         = Base.Checked.checked_neg(x)
+        Base.:(-)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_sub(x, y)
+        Base.:(-)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_sub(x, y)
+        Base.:(+)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_add(x, y)
+        Base.:(+)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_add(x, y)
+        Base.:(*)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_mul(x, y)
+        Base.:(-)(x::Base.AbstractChar, y::Base.AbstractChar)  = Base.Int(x) - Base.Int(y)
+    end)
+end
 
 """
     Base.Experimental.make_io_thread()
@@ -558,7 +581,7 @@ function task_running_time_ns(t::Task=current_task())
     if t == current_task()
         # These metrics fields can't update while we're running.
         # But since we're running we need to include the time since we last started running!
-        return t.running_time_ns + (time_ns() - t.last_started_running_at)
+        return t.running_time_ns +% (time_ns() -% t.last_started_running_at)
     else
         return t.running_time_ns
     end
@@ -583,8 +606,8 @@ function task_wall_time_ns(t::Task=current_task())
     start_at = t.first_enqueued_at
     start_at == 0 && return UInt64(0)
     end_at = t.finished_at
-    end_at == 0 && return time_ns() - start_at
-    return end_at - start_at
+    end_at == 0 && return time_ns() -% start_at
+    return end_at -% start_at
 end
 
 # wait_with_timeout
@@ -777,7 +800,7 @@ end
 """
     Base.Experimental.@set_syntax_version ver
 
-Sets the syntax version to the current module to `ver`. This overrides settings of `syntax.julia_version` or
+Sets the syntax version of the current module to `ver`. This overrides settings of `syntax.julia_version` or
 `compat.julia` from Project.toml.
 
 !!! compat "Julia 1.14"
