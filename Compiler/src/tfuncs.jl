@@ -2005,7 +2005,9 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
             ai = argtypes[i]
             if isa(ai, Const)
                 if !isa(ai.val, Type)
-                    if isa(ai.val, TypeVar)
+                    # the runtime accepts detached bound-variable references as
+                    # rigid `Union` operands, just like `TypeVar`s
+                    if isa(ai.val, TypeVar) || isa(ai.val, TypeVarRef)
                         hasnonType = true
                     else
                         return Bottom
@@ -2013,7 +2015,8 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
                 end
             else
                 if !(isTypeEq(ai) || (isTypeEgal(ai) && type_parameter(ai) isa Type))
-                    if !isa(ai, Type) || hasintersect(ai, Type) || hasintersect(ai, TypeVar)
+                    if !isa(ai, Type) || hasintersect(ai, Type) || hasintersect(ai, TypeVar) ||
+                       hasintersect(ai, TypeVarRef)
                         hasnonType = true
                     else
                         return Bottom
@@ -2022,7 +2025,7 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
             end
         end
         if largs == 2 # Union{T} --> T
-            return tmeet(widenconst(argtypes[2]), Union{Type,TypeVar})
+            return tmeet(widenconst(argtypes[2]), Union{Type,TypeVar,TypeVarRef})
         end
         hasnonType && return Type
         ty = Union{}
@@ -2137,18 +2140,19 @@ end
         elseif istuple && (pva = partial_typeofvararg_value(ai)) !== nothing
             anyeq = true
             push!(tparams, pva)
-        elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
+        elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) || isa(ai.val, TypeVarRef) ||
                                   valid_tparam(ai.val) || (istuple && isvarargtype(ai.val)))
             push!(tparams, ai.val)
         elseif isa(ai, PartialTypeVar)
             canconst = false
             push!(tparams, ai.tv)
         else
-            if widenconst(ai) <: TypeVar && widenconst(ai) !== Union{}
-                # A TypeVar value of unknown identity used as a type parameter
-                # yields a type with a free typevar, which `jl_isa` excludes
-                # from every closed `Type{...}` form this function could
-                # construct; only the top kind forms are sound here.
+            aiw = widenconst(ai)
+            if (aiw <: TypeVar || aiw <: TypeVarRef) && aiw !== Union{}
+                # A TypeVar (or detached bound-variable reference) of unknown
+                # identity used as a type parameter yields a type that `jl_isa`
+                # excludes from every closed `Type{...}` form this function
+                # could construct; only the top kind forms are sound here.
                 return isvarargtype(headtype) ? TypeofVararg : Type
             end
             uncertain = true

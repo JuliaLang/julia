@@ -27,6 +27,27 @@ end
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
 
+# a binder whose occurrences were all widened away is dropped by the
+# constructor, so repeated widening converges instead of accumulating
+# vacuous binders
+let t = Type{Vector{T}} where T
+    for _ in 1:3
+        t′ = Compiler.limit_type_size(t, Any, Any, 1, 4)
+        @test Compiler.unionall_depth(t′) <= Compiler.unionall_depth(t)
+        t = t′
+    end
+    @test Compiler.limit_type_size(t, Any, Any, 1, 4) === t
+end
+
+# detached bound-variable references are valid lattice elements through the
+# extended (wrapper) lattices, not only through `JLTypeLattice`
+let r = Core.TypeVarRef(1), 𝕃 = Compiler.fallback_lattice
+    @test Compiler.is_valid_lattice_norec(Compiler.JLTypeLattice(), r)
+    @test Compiler.tmeet(𝕃, r, r) === r
+    xt = Core.apply_type(Type, r)
+    @test Compiler.tmeet(𝕃, xt, r) === xt
+end
+
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X

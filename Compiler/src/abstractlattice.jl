@@ -10,7 +10,7 @@ A singleton type representing the lattice of Julia types, without any inference 
 """
 struct JLTypeLattice <: AbstractLattice; end
 widenlattice(::JLTypeLattice) = error("Type lattice is the least-precise lattice available")
-is_valid_lattice_norec(::JLTypeLattice, @nospecialize(elem)) = isa(elem, Type)
+is_valid_lattice_norec(::JLTypeLattice, @nospecialize(elem)) = isa(elem, Type) || isa(elem, TypeVarRef)
 
 """
     struct ConstsLattice <: AbstractLattice
@@ -116,6 +116,10 @@ end
 tmeet(::JLTypeLattice, ::TypeVarRef, @nospecialize(b::AnyType)) = b
 tmeet(::JLTypeLattice, @nospecialize(a::AnyType), ::TypeVarRef) = a
 tmeet(::JLTypeLattice, a::TypeVarRef, ::TypeVarRef) = a
+# extended lattices: the wrapper `tmeet` methods constrain their mask argument
+# to `AnyType`, so route a reference mask past them here — it constrains
+# nothing, and no extended-lattice element is refined by it
+@nospecializeinfer tmeet(::AbstractLattice, @nospecialize(v), ::TypeVarRef) = v
 
 """
     tmerge(𝕃::AbstractLattice, a, b)
