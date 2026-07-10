@@ -485,15 +485,25 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
     int8_t tpid = jl_threadpoolid(jl_atomic_load_relaxed(&ct->tid));
     if (tpid >= JL_SCHED_MAX_POOLS)
         tpid = -1; // treat as unpooled: legacy spin/sleep behavior
-    int spinning = 0;
+    // volatile: read in the outer JL_CATCH after a longjmp
+    volatile int spinning = 0;
+    jl_task_t *task = NULL;
 
+    // The outer handler exists to release the spinner slot on ANY unwind:
+    // trypoptask/checkempty can throw (SIGINT lands there too), and a leaked
+    // slot permanently gates jl_wakeup_threadpool for the whole pool.
+    JL_TRY {
     while (1) {
-        jl_task_t *task = get_next_task(trypoptask, q);
+        task = get_next_task(trypoptask, q);
         if (task) {
             // last spinner out with work: wake a successor
-            if (spinning && spin_exit(tpid))
-                jl_wakeup_threadpool(tpid);
-            return task;
+            if (spinning) {
+                int last = spin_exit(tpid);
+                spinning = 0;
+                if (last)
+                    jl_wakeup_threadpool(tpid);
+            }
+            break;
         }
 
         jl_ptls_t ptls = ct->ptls;
@@ -683,13 +693,20 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 jl_rethrow();
             }
             if (task)
-                return task;
+                break;
         }
         else {
             // maybe check the kernel for new messages too
             jl_process_events();
         }
     }
+    }
+    JL_CATCH {
+        if (spinning)
+            spin_exit(tpid);
+        jl_rethrow();
+    }
+    return task;
 }
 
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
