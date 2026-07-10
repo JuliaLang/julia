@@ -492,10 +492,12 @@ static jl_task_t *sigint_rescue_task = NULL;
 // callback) and read/consumed by the signal listener and the Julia-side
 // listener; `volatile` is not inter-thread synchronization, and a queued
 // timer firing that lands after the episode was reset must not leak its
-// expiry into the fresh episode. The generation is bumped on every arm and
-// reset; an expiry is only visible while its recorded generation is
-// current.
-static _Atomic(uint32_t) sigint_rescue_gen = 0;
+// expiry into the fresh episode. The generation is bumped on escalation
+// delivery and on episode reset (NOT on a mere re-arm - a standing offer
+// must survive the repeat press that accepts it); an expiry is only
+// visible while its recorded generation is current. Starts at 1 so a
+// recorded expiry can never collide with expired_gen's 0 sentinel.
+static _Atomic(uint32_t) sigint_rescue_gen = 1;
 static _Atomic(uint32_t) sigint_rescue_armed_gen = 0;   // generation of the last arm
 static _Atomic(uint32_t) sigint_rescue_expired_gen = 0; // 0 = no expiry
 
@@ -529,11 +531,13 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
-    // Open a fresh expiry generation: a stale fire from a previous arming
-    // (recorded against the old generation) stays invisible.
-    uint32_t gen = jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1) + 1;
-    jl_atomic_store_relaxed(&sigint_rescue_armed_gen, gen);
-    (void)gen;
+    // Record the current generation for this arming. Re-arming (a repeat
+    // press within the same rung) must NOT invalidate a standing expiry -
+    // a press after the offer printed is exactly what escalates. Only a
+    // rung change (jl_sigint_escalation_delivered) or episode close
+    // (jl_reset_sigint_rescue_timer) opens a fresh generation.
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_gen));
     if (!sigint_rescue_timer_created)
         return;
     struct itimerspec its;
@@ -571,11 +575,13 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
-    // Open a fresh expiry generation: a stale fire from a previous arming
-    // (recorded against the old generation) stays invisible.
-    uint32_t gen = jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1) + 1;
-    jl_atomic_store_relaxed(&sigint_rescue_armed_gen, gen);
-    (void)gen;
+    // Record the current generation for this arming. Re-arming (a repeat
+    // press within the same rung) must NOT invalidate a standing expiry -
+    // a press after the offer printed is exactly what escalates. Only a
+    // rung change (jl_sigint_escalation_delivered) or episode close
+    // (jl_reset_sigint_rescue_timer) opens a fresh generation.
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_gen));
     if (sigint_rescue_kq == -1)
         return;
     struct kevent ev;
@@ -630,11 +636,13 @@ static VOID CALLBACK sigint_rescue_timer_cb(PVOID param, BOOLEAN fired)
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
-    // Open a fresh expiry generation: a stale fire from a previous arming
-    // (recorded against the old generation) stays invisible.
-    uint32_t gen = jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1) + 1;
-    jl_atomic_store_relaxed(&sigint_rescue_armed_gen, gen);
-    (void)gen;
+    // Record the current generation for this arming. Re-arming (a repeat
+    // press within the same rung) must NOT invalidate a standing expiry -
+    // a press after the offer printed is exactly what escalates. Only a
+    // rung change (jl_sigint_escalation_delivered) or episode close
+    // (jl_reset_sigint_rescue_timer) opens a fresh generation.
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_gen));
     uv_mutex_lock(&sigint_state_lock);
     if (sigint_rescue_timer_handle == NULL) {
         if (!CreateTimerQueueTimer(&sigint_rescue_timer_handle, NULL,
@@ -663,11 +671,13 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
-    // Open a fresh expiry generation: a stale fire from a previous arming
-    // (recorded against the old generation) stays invisible.
-    uint32_t gen = jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1) + 1;
-    jl_atomic_store_relaxed(&sigint_rescue_armed_gen, gen);
-    (void)gen;
+    // Record the current generation for this arming. Re-arming (a repeat
+    // press within the same rung) must NOT invalidate a standing expiry -
+    // a press after the offer printed is exactly what escalates. Only a
+    // rung change (jl_sigint_escalation_delivered) or episode close
+    // (jl_reset_sigint_rescue_timer) opens a fresh generation.
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_gen));
 }
 
 JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
