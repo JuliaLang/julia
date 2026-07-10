@@ -31,6 +31,11 @@ extern "C" {
 
 #include <threading.h>
 
+// Native mutex (not jl_mutex_t): the paths below run on non-Julia threads
+// (the signal listener, Win32 console-ctrl handler threads, timer callback
+// threads), which have no Julia task to derive lock ownership from.
+static uv_mutex_t sigint_state_lock;
+
 // Profiler control variables
 uv_mutex_t live_tasks_lock;
 uv_mutex_t bt_data_prof_lock;
@@ -108,6 +113,7 @@ DWORD debuginfo_asyncsafe_held;
 
 void jl_init_profile_lock(void)
 {
+    uv_mutex_init(&sigint_state_lock);
     uv_rwlock_init(&debuginfo_asyncsafe);
 #ifndef _OS_WINDOWS_
     pthread_key_create(&debuginfo_asyncsafe_held, NULL);
@@ -466,13 +472,12 @@ static void jl_check_profile_autostop(void) JL_NOTSAFEPOINT
 // to the profile listener above): the signal listener sets a cancellation
 // request on the root task and pings this async condition; the Base-side
 // listener task then drives the cancellation state machine.
-jl_mutex_t sigint_state_lock;
 static uv_async_t *sigint_cond_loc = NULL;
 JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
 {
-    JL_LOCK_NOGC(&sigint_state_lock);
+    uv_mutex_lock(&sigint_state_lock);
     sigint_cond_loc = cond;
-    JL_UNLOCK_NOGC(&sigint_state_lock);
+    uv_mutex_unlock(&sigint_state_lock);
 }
 
 // The rescue timer implements the escalation state machine for ^C: if the
@@ -497,7 +502,7 @@ static int sigint_rescue_timer_created = 0;
 
 JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 {
-    JL_LOCK_NOGC(&sigint_state_lock);
+    uv_mutex_lock(&sigint_state_lock);
     if (!sigint_rescue_timer_created) {
         struct sigevent ev;
         memset(&ev, 0, sizeof(ev));
@@ -509,7 +514,7 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
         }
     }
     sigint_rescue_task = t;
-    JL_UNLOCK_NOGC(&sigint_state_lock);
+    uv_mutex_unlock(&sigint_state_lock);
 }
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
@@ -544,9 +549,9 @@ static int sigint_rescue_kq = -1;
 
 JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 {
-    JL_LOCK_NOGC(&sigint_state_lock);
+    uv_mutex_lock(&sigint_state_lock);
     sigint_rescue_task = t;
-    JL_UNLOCK_NOGC(&sigint_state_lock);
+    uv_mutex_unlock(&sigint_state_lock);
 }
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
@@ -575,9 +580,9 @@ static HANDLE sigint_rescue_timer_handle = NULL;
 
 JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 {
-    JL_LOCK_NOGC(&sigint_state_lock);
+    uv_mutex_lock(&sigint_state_lock);
     sigint_rescue_task = t;
-    JL_UNLOCK_NOGC(&sigint_state_lock);
+    uv_mutex_unlock(&sigint_state_lock);
 }
 
 static VOID CALLBACK sigint_rescue_timer_cb(PVOID param, BOOLEAN fired)
@@ -604,24 +609,24 @@ static VOID CALLBACK sigint_rescue_timer_cb(PVOID param, BOOLEAN fired)
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
-    JL_LOCK_NOGC(&sigint_state_lock);
+    uv_mutex_lock(&sigint_state_lock);
     if (sigint_rescue_timer_handle == NULL) {
         if (!CreateTimerQueueTimer(&sigint_rescue_timer_handle, NULL,
                                    sigint_rescue_timer_cb, NULL, 1000, 0,
                                    WT_EXECUTEONLYONCE))
             sigint_rescue_timer_handle = NULL;
     }
-    JL_UNLOCK_NOGC(&sigint_state_lock);
+    uv_mutex_unlock(&sigint_state_lock);
 }
 
 JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
-    JL_LOCK_NOGC(&sigint_state_lock);
+    uv_mutex_lock(&sigint_state_lock);
     if (sigint_rescue_timer_handle != NULL) {
         DeleteTimerQueueTimer(NULL, sigint_rescue_timer_handle, NULL);
         sigint_rescue_timer_handle = NULL;
     }
-    JL_UNLOCK_NOGC(&sigint_state_lock);
+    uv_mutex_unlock(&sigint_state_lock);
 }
 
 #else
@@ -706,7 +711,7 @@ static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
     // N.B.: This runs on a dedicated (non-Julia) thread - the signal listener
     // thread, a Win32 console ctrl handler thread, or a timer callback
     // thread - so briefly blocking on the state lock is fine.
-    JL_LOCK_NOGC(&sigint_state_lock);
+    uv_mutex_lock(&sigint_state_lock);
     if (sigint_cond_loc != NULL) {
         jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
         uv_async_send(sigint_cond_loc);
@@ -730,7 +735,7 @@ static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
                 jl_wakeup_thread_from_foreign(tid);
         }
     }
-    JL_UNLOCK_NOGC(&sigint_state_lock);
+    uv_mutex_unlock(&sigint_state_lock);
 }
 
 // The cancellation token source governing the current interactive foreground

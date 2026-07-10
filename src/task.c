@@ -1676,10 +1676,12 @@ JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
 // Whether `src` is `node` itself or one of its (transitive) parents.
 // `parents` edges are const after construction, so the walk needs no locks.
 // Multi-parent ("linked") sources make this a DAG search; the work is
-// bounded so that a pathological diamond lattice cannot stall the canceller
-// - on overflow the node is conservatively treated as a non-member, and the
-// cancellation is recovered level-triggered at the task's next cancellation
-// point.
+// bounded so that a pathological diamond lattice cannot stall the canceller.
+// On exhaustion (deep chains, wide fan-in) the node is conservatively
+// treated as a MEMBER: the consumer sends a best-effort interruption signal
+// whose delivery re-checks the task's own bound source, so over-approximating
+// is harmless, while a miss would strand a reset region protecting code that
+// has no later cancellation point.
 static int cancel_source_subtree_member(jl_value_t *node, jl_value_t *src) JL_NOTSAFEPOINT
 {
     jl_value_t *stack[32];
@@ -1689,13 +1691,15 @@ static int cancel_source_subtree_member(jl_value_t *node, jl_value_t *src) JL_NO
         if (node == src)
             return 1;
         if (++steps >= 256)
-            return 0;
+            return 1; // budget exhausted: conservatively a member
         jl_value_t *up = ((jl_cancel_source_t*)node)->parents;
         if (up != NULL && jl_is_svec(up)) {
             size_t n = jl_svec_len(up);
             for (size_t i = 1; i < n; i++) {
                 if (top < sizeof(stack) / sizeof(stack[0]))
                     stack[top++] = jl_svecref(up, i);
+                else
+                    return 1; // dropped a parent edge: conservatively a member
             }
             up = n == 0 ? NULL : jl_svecref(up, 0);
         }
@@ -1715,14 +1719,18 @@ static int cancel_source_subtree_member(jl_value_t *node, jl_value_t *src) JL_NO
 JL_DLLEXPORT jl_value_t *jl_cancel_collect_bound(jl_value_t *src)
 {
     jl_array_t *out = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&out);
+    // `t` must stay rooted across the allocating push below: the snapshotted
+    // thread can switch tasks in the meantime, dropping what may be the last
+    // other reference.
+    jl_task_t *t = NULL;
+    JL_GC_PUSH2(&out, &t);
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (int tid = 0; tid < nthreads; tid++) {
         jl_ptls_t ptls2 = allstates[tid];
         if (ptls2 == NULL)
             continue;
-        jl_task_t *t = jl_atomic_load_relaxed(&ptls2->current_task);
+        t = jl_atomic_load_relaxed(&ptls2->current_task);
         if (t == NULL)
             continue;
         jl_value_t *bound = jl_atomic_load_acquire(&t->bound_cancel_token);
@@ -1773,6 +1781,12 @@ JL_NORETURN void jl_abandon_task_cb(void)
 
     // Clear abandon_to now that we have it
     ptls->abandon_to = NULL;
+
+    // The victim may have been abandoned inside a GC-safe region (e.g. a
+    // gc_safe foreign call); the rescue task runs managed code, so
+    // transition back to GC-unsafe first (this cooperates with - and may
+    // briefly wait for - a collection in progress).
+    jl_gc_unsafe_enter(ptls);
 
 #ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
     // A cancellation-handler delivery in flight on this thread dies with the
