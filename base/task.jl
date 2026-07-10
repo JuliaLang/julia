@@ -986,8 +986,17 @@ function enq_work(t::Task)
         else
             # Otherwise, put the task in the multiqueue.
             Partr.multiq_insert(t, t.priority)
-            # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
-            ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+            tid = Threads.threadid(t)
+            if tid != 0 && tid != Threads.threadid()
+                # The task's tid is pinned to another thread: it is that thread's current
+                # task, parked hosting its thread-sleep logic in wait(), and can only be
+                # resumed by that thread. A pool wake could pick a thread that cannot run
+                # this task, leaving it stranded and its host asleep (#58689).
+                ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+            else
+                # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
+                ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+            end
             return t
         end
     end
