@@ -1,17 +1,7 @@
 --- a/mpz/realloc.c
 +++ b/mpz/realloc.c
-@@ -42,29 +42,48 @@
-   if (sizeof (mp_size_t) == sizeof (int))
-     {
-       if (UNLIKELY (new_alloc > ULONG_MAX / GMP_NUMB_BITS))
--	MPZ_OVERFLOW;
-+	__GMP_ALLOC_OVERFLOW_FUNC ();
-     }
-   else
-     {
-       if (UNLIKELY (new_alloc > INT_MAX))
--	MPZ_OVERFLOW;
-+	__GMP_ALLOC_OVERFLOW_FUNC ();
+@@ -50,21 +50,40 @@
+ 	__GMP_ALLOC_OVERFLOW_FUNC ();
      }
  
 -  if (ALLOC (m) == 0)
