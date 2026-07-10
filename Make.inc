@@ -1689,7 +1689,12 @@ WIN_LD_CRT_END_OBJ := $(build_private_libdir)/crtend.o
 WIN_LD_CRT_END := $(WIN_MINGW_CRT_LIBS) $(WIN_LD_CRT_END_OBJ)
 WIN_LD_STDCXX := $(build_shlibdir)/$(call versioned_libname,libstdc++,6)
 WIN_LD_ATOMIC := $(build_shlibdir)/$(call versioned_libname,libatomic,1)
-WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 $(WIN_LD_ATOMIC) -lole32 -lsynchronization
+# libuv's WaitOnAddress/WakeByAddressSingle use needs libsynchronization.
+# Resolve it to a full path through the compiler: the raw-ld links (flisp,
+# libjulia, the test libraries) do not search the toolchain's own library
+# directories, where some environments (e.g. msys2 mingw32) keep it.
+WIN_LD_SYNCHRONIZATION := $(shell $(CC) -print-file-name=libsynchronization.a)
+WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 $(WIN_LD_ATOMIC) -lole32 $(WIN_LD_SYNCHRONIZATION)
 WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32
 OSLIBS += --export-all-symbols --version-script=$(BUILDROOT)/src/julia.expmap \
 	--no-whole-archive $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS)
