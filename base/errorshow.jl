@@ -210,6 +210,10 @@ end
 
 # Must match `jl_inst_arg_tuple_type`: reflection through `typesof` should agree
 # with actual dispatch, including egality keys for closed type-valued arguments.
+# (One deliberate divergence: for a detached fragment — a type with dangling
+# bound-variable references — dispatch keys pin the value by egality while
+# `Core.Typeof` falls back to the kind, since its result must be a complete
+# type; see the `Typeof` definition in boot.jl.)
 typesof(@nospecialize args...) = Tuple{Any[Core.Typeof(arg) for arg in args]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)

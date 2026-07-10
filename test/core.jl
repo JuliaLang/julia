@@ -9239,3 +9239,51 @@ pinned_gci_62001(::Type{<:PinnedSA62001{<:PinnedPL62001}}, ::Type{<:Type{Val{S}}
 # a generated function's generator receives the representative value
 @generated pinned_gg_62001(::Type{<:Type{Val{S}}}) where {S} = QuoteNode(S)
 @test pinned_gg_62001(Type{Val{pinned_schema_62001}}) === pinned_schema_62001
+
+@testset "detached TypeVarRef values through apply_type and dispatch keys" begin
+    r = TypeVarRef(1)
+    # compiled `apply_type` calls must agree with the interpreted results
+    # instead of being inferred unreachable, for constant operands...
+    @eval gU62272() = Core.apply_type(Union, $r, Int)
+    @eval g162272() = Core.apply_type(Union, $r)
+    @eval gV62272() = Core.apply_type(Vector, $r)
+    @test gU62272() === Core.apply_type(Union, r, Int)
+    @test g162272() === r
+    @test gV62272() === Core.apply_type(Vector, r)
+    # ...for reference-typed operands of unknown identity...
+    fU62272(x::TypeVarRef) = Core.apply_type(Union, x, Int)
+    f162272(x::TypeVarRef) = Core.apply_type(Union, x)
+    fV62272(x::TypeVarRef) = Core.apply_type(Vector, x)
+    @test fU62272(Base.inferencebarrier(r)::TypeVarRef) === Core.apply_type(Union, r, Int)
+    @test f162272(Base.inferencebarrier(r)::TypeVarRef) === r
+    @test fV62272(Base.inferencebarrier(r)::TypeVarRef) === Core.apply_type(Vector, r)
+    # ...and for untyped operands
+    hU62272(x) = Core.apply_type(Union, x, Int)
+    @test hU62272(Base.inferencebarrier(r)) === Core.apply_type(Union, r, Int)
+
+    # the four-argument constructor validates its fields and normalizes like
+    # the translating constructor
+    @test_throws TypeError UnionAll(:T, 1, 2, 3)
+    @test UnionAll(:T, Union{}, Any, Int) === Int
+    @test UnionAll(:T, Union{}, Int, TypeVarRef(1)) === Int
+
+    # `typejoin` cannot compare a detached fragment structurally against an
+    # unrelated type; identity and subtyping still apply
+    b = Array.inner
+    @test typejoin(Vector, b) === Any
+    @test typejoin(b, Vector) === Any
+    @test typejoin(b, b) === b
+    @test typejoin(Vector.inner, Vector) === Vector
+
+    # For fragments, `Core.Typeof` and the runtime argument-slot key serve
+    # different masters and deliberately diverge: `Typeof`'s result must be a
+    # complete type usable as a type parameter (e.g. closure capture fields),
+    # while the dispatch key pins the value by egality so that an exact-key
+    # method is dispatchable and static parameters bind (#61242)
+    x = Vector.inner
+    te = Core.apply_type(Core.TypeEgal, x)
+    @test Core.Typeof(x) === typeof(x)
+    @test ccall(:jl_arg_slot_type, Any, (Any,), x) === te
+    @eval fdisp62272(::$te) = :egal_key
+    @test fdisp62272(x) === :egal_key
+end

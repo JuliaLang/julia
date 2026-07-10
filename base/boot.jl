@@ -54,7 +54,8 @@
 #    name::Symbol
 #    lb
 #    ub
-#    body
+#    inner # the wrapped type; refers to the binder by TypeVarRef position
+#    flags::UInt32
 #end
 
 #struct TypeVarRef
@@ -313,8 +314,14 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
               if has_free_typevars(x)
                   Type{x}
               elseif has_dangling_tvarrefs(x)
-                  # a detached subterm with bound-variable references cannot be
-                  # a (layoutable) type parameter; fall back to the kind
+                  # a `TypeEgal` of a detached subterm carries the subterm's
+                  # dangling references, so a type parameterized by it (e.g. a
+                  # closure capturing `x`, whose field type this becomes) would
+                  # be an incomplete fragment itself; fall back to the kind.
+                  # N.B. this deliberately diverges from the runtime dispatch
+                  # keys (`jl_inst_arg_tuple_type`), which do pin such values
+                  # by egality: that key binds static parameters (#61242) but
+                  # never parameterizes another type
                   typeof(x)
               else
                   TypeEgal{x}
