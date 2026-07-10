@@ -740,6 +740,10 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        if (jl_options.strip_ir)
+            record_field_change((jl_value_t**)&ci->edges, (jl_value_t*)jl_emptysvec);
+        if (jl_options.strip_metadata)
+            record_field_change((jl_value_t**)&ci->debuginfo, (jl_value_t*)jl_nulldebuginfo);
         if (s->incremental) {
             // make sure we don't serialize other reachable cache entries of foreign methods
             // Should this now be:
@@ -2563,10 +2567,8 @@ static void strip_specializations_(jl_method_instance_t *mi)
                 jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped);
             }
         }
-        if (jl_options.strip_ir)
-            record_field_change((jl_value_t**)&codeinst->edges, (jl_value_t*)jl_emptysvec);
-        if (jl_options.strip_metadata)
-            record_field_change((jl_value_t**)&codeinst->debuginfo, (jl_value_t*)jl_nulldebuginfo);
+        // n.b. `edges` and `debuginfo` are stripped in jl_insert_into_serialization_queue,
+        // which covers every serialized CodeInstance regardless of how it is reached
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     if (jl_options.trim || jl_options.strip_ir) {
@@ -2852,6 +2854,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             if (jl_nulldebuginfo == NULL)
                 jl_errorf("Core.NullDebugInfo required for --strip-metadata option");
         }
+        // FIXME: stripping should not rely on objects being installed in the
+        // (JIT) cache to be reached for stripping / pruning in this step
+        // the AOT-compiled CodeInstances etc. are (partially) provided up-front
+        // to the serializer and may not be in the cache at all in this process
         jl_strip_all_codeinfos(mod_array);
         jl_strip_all_docmeta(mod_array);
     }
