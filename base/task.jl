@@ -870,8 +870,6 @@ function task_done_hook(t::Task)
             backend isa Task && throwto(backend, result)
         end
     end
-    ref = last_idle_task()
-    ref[] === t && (ref[] = nothing)
     # Clear sigatomic before waiting
     sigatomic_end()
     try
@@ -988,8 +986,17 @@ function enq_work(t::Task)
         else
             # Otherwise, put the task in the multiqueue.
             Partr.multiq_insert(t, t.priority)
-            # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
-            ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+            tid = Threads.threadid(t)
+            if tid != 0 && tid != Threads.threadid()
+                # The task's tid is pinned to another thread: it is that thread's current
+                # task, parked hosting its thread-sleep logic in wait(), and can only be
+                # resumed by that thread. A pool wake could pick a thread that cannot run
+                # this task, leaving it stranded and its host asleep (#58689).
+                ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+            else
+                # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
+                ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+            end
             return t
         end
     end
@@ -1165,33 +1172,6 @@ function throwto(t::Task, @nospecialize exc)
     return try_yieldto(identity)
 end
 
-# The scheduler task on each thread remembers the last user task that went idle on it,
-# as the best victim for an InterruptException that would otherwise be delivered to
-# (and swallowed by) the scheduler task itself (issue #58689). To limit how long a
-# completed task can be kept from collection by this reference (see #57544), it is
-# cleared when the recorded task finishes on this same thread (task_done_hook); a task
-# that finishes elsewhere remains referenced until the next task goes idle here.
-const last_idle_task = OncePerThread{RefValue{Union{Task,Nothing}}}() do
-    RefValue{Union{Task,Nothing}}(nothing)
-end
-
-# Find a task that can meaningfully receive an InterruptException that was delivered
-# to a scheduler task. This is inherently best-effort (the victim may be racing to be
-# rescheduled concurrently); robust interrupt delivery requires cooperation from the
-# receiving code, which the runtime cannot guarantee here.
-function interrupt_victim()
-    backend = repl_backend_task()
-    backend isa Task && return backend
-    # an active REPL session that is not evaluating user code: drop the interrupt
-    @isdefined(active_repl_backend) && active_repl_backend !== nothing && return nothing
-    t = last_idle_task()[]
-    if t isa Task && !istaskdone(t) && t._state === task_state_runnable &&
-       (!t.sticky || Threads.threadid(t) == Threads.threadid())
-        return t
-    end
-    return istaskdone(roottask) ? nothing : roottask
-end
-
 function wait_forever()
     while true
         try
@@ -1199,25 +1179,28 @@ function wait_forever()
                 wait()
             end
         catch e
-            handled = false
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
-                # A Ctrl-C/SIGINT was delivered to this internal scheduler task because
-                # no user task was running on this thread. Redirect it to a task that
-                # can meaningfully handle it, or drop it (issue #58689).
-                try
-                    victim = interrupt_victim()
-                    victim isa Task && throwto(victim, e)
-                    handled = true
-                catch e2
-                    # throwto throws an ErrorException if the victim cannot be switched
-                    # to (e.g. it was concurrently rescheduled), and rethrows an
-                    # InterruptException delivered while this task was suspended in the
-                    # switch; drop the interrupt in both cases. Anything else is an
-                    # unexpected failure and is reported below.
-                    handled = e2 isa InterruptException || e2 isa ErrorException
+                # A Ctrl-C/SIGINT was delivered to this internal scheduler task while
+                # the thread was idle (it parked here after running a completed task).
+                # Forward it to a task that can observe it: the REPL backend if it is
+                # evaluating user code; nothing at an idle REPL prompt (drop it); the
+                # root task otherwise, e.g. a non-interactive script blocked in wait
+                # (#58689).
+                victim = repl_backend_task()
+                if !(victim isa Task)
+                    at_repl_prompt = @isdefined(active_repl_backend) && active_repl_backend !== nothing
+                    victim = (at_repl_prompt || istaskdone(roottask)) ? nothing : roottask
                 end
-            end
-            if !handled
+                if victim isa Task
+                    try
+                        throwto(victim, e)
+                    catch
+                        # delivery is best-effort: the victim may have been
+                        # rescheduled concurrently, or a second interrupt may arrive
+                        # while this task is suspended in the switch
+                    end
+                end
+            else
                 local errs = stderr
                 # try to display the failure atomically
                 errio = IOContext(PipeBuffer(), errs::IO)
@@ -1282,11 +1265,14 @@ function wait()
     W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
     if task === nothing
-        # No tasks to run; switch to the scheduler task to run the
-        # thread sleep logic.
+        # No tasks to run. If the current task is done, switch to the scheduler task
+        # to run the thread sleep logic, so that this task's stack can be freed
+        # promptly (#57544). Otherwise run the thread sleep logic in the context of
+        # the current task, so that an asynchronous InterruptException (Ctrl-C) is
+        # delivered to a task that can observe it, rather than swallowed by the
+        # internal scheduler task (#58689).
         sched_task = get_sched_task()
-        if ct !== sched_task
-            istaskdone(ct) || (last_idle_task()[] = ct)
+        if ct !== sched_task && istaskdone(ct)
             istaskdone(sched_task) && (sched_task = @task wait())
             return yieldto(sched_task)
         end
