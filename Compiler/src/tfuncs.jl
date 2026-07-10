@@ -335,6 +335,7 @@ add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF, llvmcall_tfunc, 10)
 end
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
+add_tfunc(Core.Intrinsics.assume_range, 3, 3, math_tfunc, 0)
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
 
 # builtin functions

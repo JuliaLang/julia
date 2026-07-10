@@ -104,6 +104,8 @@
     /*  c interface */ \
     ADD_I(cglobal, 2) \
     ALIAS(llvmcall, llvmcall) \
+    /*  compiler hints (keep before have_fma: Compiler sizes T_IFUNC as index(have_fma)+1, see N_IFUNC in Compiler/src/tfuncs.jl) */ \
+    ADD_I(assume_range, 3) \
     /*  cpu feature tests */ \
     ADD_I(have_fma, 1) \
     /*  hidden intrinsics */ \
