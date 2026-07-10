@@ -89,11 +89,13 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
-# as well get them all started early. JuliaLowering_stdlibs both takes a while and
-# uses a lot of memory at the beginning so try to run it early to keep total memory
-# use flatter.
-for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
+# Move LinearAlgebra, Pkg and SparseArrays tests to the front, because they take a
+# while, so we might as well get them all started early. SparseArrays in particular
+# runs as a single test set for close to an hour on slow platforms (e.g. i686) and
+# dominates the critical path if started late. JuliaLowering_stdlibs both takes a
+# while and uses a lot of memory at the beginning so try to run it early to keep
+# total memory use flatter.
+for prependme in ["LinearAlgebra", "Pkg", "SparseArrays", "JuliaLowering_stdlibs"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
