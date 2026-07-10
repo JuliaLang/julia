@@ -1273,3 +1273,57 @@ if Sys.isunix()
         wait(reader)
     end
 end
+
+@testset "cancelled condition waiter reacquiring a contended lock" begin
+    # A cancelled `wait(::Threads.Condition)` must rethrow the
+    # CancellationRequest after reacquiring the condition lock, even when
+    # the reacquire is contended: lock parking uses its own Task link set,
+    # so the waiter's stale (lazily collected) condition-queue entry must
+    # not corrupt the lock's queue ("val already in a list").
+    cond = Threads.Condition()
+    src = Base.CancellationTokenSource()
+    waiter_result = Channel{Any}(1)
+    waiter = Threads.@spawn begin
+        try
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.CancellationToken(src)) do
+                lock(cond)
+                try
+                    wait(cond)
+                finally
+                    unlock(cond)
+                end
+            end
+            put!(waiter_result, :completed)
+        catch e
+            put!(waiter_result, e)
+        end
+    end
+    # wait until the waiter is parked on the condition
+    @test timedwait(10) do
+        lock(cond)
+        parked = !isempty(cond)
+        unlock(cond)
+        parked
+    end === :ok
+    # a holder keeps the condition lock while the cancellation is delivered
+    held = Base.Event()
+    release = Base.Event()
+    holder = Threads.@spawn begin
+        lock(cond)
+        notify(held)
+        wait(release; cancel=nothing)
+        unlock(cond)
+    end
+    wait(held)
+    Base.cancel!(src)
+    # give the woken waiter time to reach the contended reacquire and park
+    sleep(0.5)
+    notify(release)
+    v = fetch(waiter)
+    result = take!(waiter_result)
+    @test result isa Base.CancellationRequest
+    # the condition lock must be intact and uncontended afterwards
+    @test trylock(cond.lock)
+    unlock(cond.lock)
+    wait(holder)
+end

@@ -410,6 +410,14 @@ typedef struct _jl_task_t {
     // WAITNODE_IDLE/WAITING/NOTIFIED/CANCELLED; whoever CASes WAITING ->
     // (NOTIFIED | CANCELLED) owns waking the task.
     _Atomic(uint8_t) wait_state;
+    // Lock-contention parking (ReentrantLock's internal queue): a *third*
+    // link set, disjoint from both the scheduler links and the
+    // condition-wait node above, so that reacquiring a lock can always park
+    // even while a cancelled condition wait's stale entry in the condition's
+    // queue awaits its lazy collection (no operation's parking may depend on
+    // another operation's registration).
+    jl_value_t *lock_queue;
+    jl_value_t *lock_next;
 // hidden state:
 
     // id of owning thread - does not need to be defined until the task runs

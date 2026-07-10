@@ -277,6 +277,97 @@ function _list_deletefirst!(q::WaitQueue, val::Task)
     return q
 end
 
+## The lock-contention flavor of the wait queue: parked acquirers of a
+## ReentrantLock, linked through the tasks' dedicated `lock_next`/`lock_queue`
+## fields. This is a *third* link set (after the scheduler's `next`/`queue`
+## and the condition-wait node's `wait_next`/`wait_queue`): a task whose
+## cancelled condition wait left a stale, lazily-collected entry in the
+## condition's queue must still be able to park to reacquire the lock, so
+## lock parking may not depend on the condition-wait links.
+
+mutable struct LockWaitQueue
+    head::Union{Task, Nothing}
+    tail::Union{Task, Nothing}
+    LockWaitQueue() = new(nothing, nothing)
+end
+
+struct LockQueueRef
+    list::LockWaitQueue
+    waitee::Any # Invariant: waitqueue(waitee).list === list
+end
+
+withwaitee(r::LockQueueRef, @nospecialize(waitee)) = LockQueueRef(r.list, waitee)
+
+eltype(::Type{LockWaitQueue}) = Task
+
+isempty(q::LockWaitQueue) = (q.head === nothing)
+isempty(qr::LockQueueRef) = isempty(qr.list)
+
+function length(q::LockWaitQueue)
+    i = 0
+    head = q.head
+    while head !== nothing
+        i += 1
+        head = (head::Task).lock_next
+    end
+    return i
+end
+length(qr::LockQueueRef) = length(qr.list)
+
+function push!(qr::LockQueueRef, val::Task)
+    val.lock_queue === nothing || error("val already in a list")
+    val.lock_queue = qr.waitee
+    q = qr.list
+    tail = q.tail
+    if tail === nothing
+        q.head = q.tail = val
+    else
+        tail.lock_next = val
+        q.tail = val
+    end
+    return q
+end
+
+function popfirst!(qr::LockQueueRef)
+    val = qr.list.head::Task
+    _list_deletefirst!(qr.list, val) # cheap
+    return val
+end
+
+# Delete `val` from the list, but only if it is actually in it; a no-op if
+# `val` was concurrently popped by a release.
+function list_deletefirst!(qr::LockQueueRef, val::Task)
+    val.lock_queue === qr.waitee || return qr.list
+    return _list_deletefirst!(qr.list, val)
+end
+
+# this function assumes `val` is found in `q`
+function _list_deletefirst!(q::LockWaitQueue, val::Task)
+    head = q.head::Task
+    if head === val
+        if q.tail::Task === val
+            q.head = q.tail = nothing
+        else
+            q.head = val.lock_next::Task
+        end
+    else
+        head_next = head.lock_next::Task
+        while head_next !== val
+            head = head_next
+            head_next = head.lock_next::Task
+        end
+        if q.tail::Task === val
+            head.lock_next = nothing
+            q.tail = head
+        else
+            head.lock_next = val.lock_next::Task
+        end
+    end
+    val.lock_next = nothing
+    val.lock_queue = nothing
+    return q
+end
+
 #function list_deletefirst!(q::Array{T}, val::T) where T
 #    i = findfirst(isequal(val), q)
 #    i === nothing || deleteat!(q, i)

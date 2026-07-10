@@ -1125,6 +1125,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->preempt_request, 0);
     t->wait_queue = jl_nothing;
     t->wait_next = jl_nothing;
+    t->lock_queue = jl_nothing;
+    t->lock_next = jl_nothing;
     t->wait_token = jl_nothing;
     t->wait_tnext = jl_nothing;
     t->wait_tprev = jl_nothing;
@@ -1606,6 +1608,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     jl_atomic_store_relaxed(&ct->preempt_request, 0);
     ct->wait_queue = jl_nothing;
     ct->wait_next = jl_nothing;
+    ct->lock_queue = jl_nothing;
+    ct->lock_next = jl_nothing;
     ct->wait_token = jl_nothing;
     ct->wait_tnext = jl_nothing;
     ct->wait_tprev = jl_nothing;

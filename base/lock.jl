@@ -45,6 +45,54 @@ end
 If [`!islocked(lck::ReentrantLock)`](@ref islocked) holds, [`trylock(lck)`](@ref trylock)
 succeeds unless there are other tasks attempting to hold the lock "at the same time."
 """
+# The lock's contention parking: a spinlock-protected queue of tasks waiting
+# to acquire a ReentrantLock, linked through the dedicated
+# `lock_next`/`lock_queue` Task fields (see LockWaitQueue). Deliberately not
+# a GenericCondition: its queue must stay disjoint from the condition-wait
+# node, so that a task whose condition wait was cancelled - leaving a stale
+# entry in the condition's queue for lazy collection - can still park here
+# to reacquire the lock.
+mutable struct LockParking
+    lock::Threads.SpinLock
+    waitq::LockWaitQueue
+    LockParking() = new(Threads.SpinLock(), LockWaitQueue())
+end
+
+waitqueue(c::LockParking) = LockQueueRef(c.waitq, c)
+lock(c::LockParking) = lock(c.lock)
+unlock(c::LockParking) = unlock(c.lock)
+assert_havelock(c::LockParking) = assert_havelock(c.lock)
+
+# Park the current task on `c` (caller holds `c.lock`); mirrors `_wait2`.
+function _lock_wait2(c::LockParking, w::Task)
+    ct = current_task()
+    assert_havelock(c)
+    @atomic :monotonic w.wait_state = WAITNODE_WAITING
+    push!(waitqueue(c), w)
+    # since this is similar to schedule, we should observe the sticky bit now
+    if w.sticky && Threads.threadid(w) == 0 && !GC.in_finalizer()
+        # Issue #41324: co-schedule with the parent task (see _wait2)
+        ct.sticky = true
+        tid = Threads.threadid()
+        ccall(:jl_set_task_tid, Cint, (Any, Cint), w, tid-1)
+    end
+    return w
+end
+
+# Wake one parked acquirer (caller holds `c.lock`); mirrors `notify` -
+# a node whose wake was already claimed by a canceller does not count as
+# woken (the cancelled task resumes via the exception the canceller
+# scheduled).
+function _lock_notify_one(c::LockParking)
+    while !isempty(waitqueue(c))
+        w = popfirst!(waitqueue(c))
+        (@atomicreplace w.wait_state WAITNODE_WAITING => WAITNODE_NOTIFIED).success || continue
+        schedule(w)
+        return 1
+    end
+    return 0
+end
+
 mutable struct ReentrantLock <: AbstractLock
     # offset = 16
     @atomic locked_by::Union{Task, Nothing}
@@ -74,7 +122,7 @@ mutable struct ReentrantLock <: AbstractLock
     #            |            | potentially never getting woken up).
     @atomic havelock::UInt8
     # offset32 = 28, offset64 = 32
-    cond_wait::ThreadSynchronizer # 2 words
+    cond_wait::LockParking # 2 words
     # offset32 = 36, offset64 = 48
     # sizeof32 = 20, sizeof64 = 32
     # now add padding to make this a full cache line to minimize false sharing between objects
@@ -82,7 +130,7 @@ mutable struct ReentrantLock <: AbstractLock
     # offset32 = 44, offset64 = 72 == sizeof+offset
     # sizeof32 = 28, sizeof64 = 56
 
-    ReentrantLock() = new(nothing, 0x0000_0000, 0x00, ThreadSynchronizer())
+    ReentrantLock() = new(nothing, 0x0000_0000, 0x00, LockParking())
 end
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
@@ -249,10 +297,10 @@ Each `lock` must be matched by an [`unlock`](@ref).
     return
 end
 
-function wait_no_relock(c::GenericCondition, tok::MaybeToken=default_cancel_token())
+function wait_no_relock(c::LockParking, tok::MaybeToken=default_cancel_token())
     ct = current_task()
     src = tok === nothing ? nothing : tok.source
-    w = _wait2(c, ct)
+    w = _lock_wait2(c, ct)
     if src !== nothing && !register_cancellation!(src, w)
         # The governing token is already cancelled (e.g. it was cancelled
         # while we were still spinning and thus not interruptibly waiting):
@@ -306,7 +354,7 @@ internal counter and return immediately.
                     cond_wait = rl.cond_wait
                     lock(cond_wait)
 
-                    notify(cond_wait, all=false)
+                    _lock_notify_one(cond_wait)
                     if !isempty(cond_wait.waitq)
                         @atomic :release rl.havelock = PARKED_BIT
                     else
@@ -332,7 +380,11 @@ function unlockall(rl::ReentrantLock)
 end
 
 function relockall(rl::ReentrantLock, n::UInt32)
-    lock(rl)
+    # The reacquire is the cleanup half of a wait whose outcome (including a
+    # cancellation) has already been delivered: it must not itself be
+    # cancellable, or a cancelled scope would throw out of here without the
+    # lock and the caller's queue cleanup would run unlocked.
+    lock(rl; cancel=nothing)
     old = @atomicswap :not_atomic rl.reentrancy_cnt = n
     old == 0x0000_0001 || concurrency_violation()
     return
