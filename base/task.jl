@@ -1486,8 +1486,10 @@ function freeze_task!(t::Task, creq::CancellationRequest,
             rescue = Task(() -> (while true; wait(); end))
             rescue.sticky = false
             t.result = creq
-            unsafe_abandon!(t, rescue)
-            t.state === :abandoned && return true
+            unsafe_abandon!(t, rescue) && return true
+            # Refused (the victim holds runtime state, migrated, or parked)
+            # or timed out: re-examine and retry, eventually falling through
+            # to freezing it in place.
             Libc.systemsleep(5e-5)
             continue
         end
@@ -1508,22 +1510,30 @@ function freeze_task!(t::Task, creq::CancellationRequest,
 end
 
 """
-    unsafe_abandon!(t::Task, next_task::Task)
+    unsafe_abandon!(t::Task, next_task::Task) -> Bool
 
-Forcibly abandon task `t` and switch it to `next_task`. This sends a signal to
-the thread running `t` that causes it to:
-1. Set its state to `abandoned`
-2. Clean up its stack and exception handlers
-3. Switch to `next_task`
+Forcibly abandon task `t` and switch its thread to `next_task`, discarding
+`t`'s execution. Returns `true` if the abandonment committed: `t`'s state is
+`:abandoned` and it will never run another instruction.
+
+Returns `false` - with `t` untouched and still running - when the abandonment
+could not be performed safely: `t` was not (or no longer) current on its
+thread, the delivery found it holding *runtime* state that must not be
+discarded (runtime locks, a running finalizer or inhibited finalizers - which
+includes holding a `ReentrantLock` - or a signal-deferral region), another
+abandonment was already in flight for that thread, or delivery timed out.
+The validation happens on the target thread at the point it is actually
+stopped, so a `false` return is authoritative, not a racy guess; callers
+retry or fall back to freezing the task in place.
 
 This is used to implement `CANCEL_REQUEST_ABANDON_ALL` where a task needs to be
 frozen without waiting for it to reach a safe cancellation point.
 
 !!! warning
-    This is a dangerous operation. The abandoned task may have acquired locks or
-    other resources that will be leaked, potentially causing deadlocks in future code.
-    It should only be used as a last-resort method to recover a system when tasks
-    are unable to process cancellation.
+    This is a dangerous operation. The abandoned task may have acquired *user*
+    locks or other resources that will be leaked, potentially causing
+    deadlocks in future code. It should only be used as a last-resort method
+    to recover a system when tasks are unable to process cancellation.
 
 !!! note
     The task must be currently running on a thread for this to have effect;
@@ -1531,8 +1541,8 @@ frozen without waiting for it to reach a safe cancellation point.
     parked or queued tasks.
 """
 function unsafe_abandon!(t::Task, next_task::Task)
-    ccall(:jl_abandon_task, Cvoid, (Any, Any), t, next_task)
-    if t.state === :abandoned
+    ok = ccall(:jl_abandon_task, Cint, (Any, Any), t, next_task) != 0
+    if ok
         # An abandoned task never goes through the regular task completion
         # path, so wake up anyone waiting on it. (The waiters observe the
         # already-stored abandoned state; they do not touch the task's stack.
@@ -1544,7 +1554,7 @@ function unsafe_abandon!(t::Task, next_task::Task)
             unlock(donenotify)
         end
     end
-    return nothing
+    return ok
 end
 
 # Teardown of a `@sync` block whose own scope was cancelled: the scope's

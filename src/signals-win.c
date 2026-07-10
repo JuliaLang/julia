@@ -236,11 +236,15 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             if (rescue_task != NULL) {
                 jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
                 if (ct != NULL && ct != rescue_task) {
-                    jl_safe_printf("\nWARNING: Abandoning current task and switching to rescue task.\n"
-                                     "         This may leave the process in an inconsistent state.\n");
-                    jl_abandon_task(ct, rescue_task);
-                    // Let the sigint listener task perform the Julia-side cleanup.
-                    deliver_sigint_notification();
+                    if (jl_abandon_task(ct, rescue_task)) {
+                        jl_safe_printf("\nWARNING: Abandoned the current task and switched to a rescue task.\n"
+                                         "         This may leave the process in an inconsistent state.\n");
+                        // Let the sigint listener task perform the Julia-side cleanup.
+                        deliver_sigint_notification();
+                    }
+                    else {
+                        jl_safe_printf("\nWARNING: Cannot abandon the current task (it holds runtime resources); still trying.\n");
+                    }
                     return 1;
                 }
             }
@@ -865,9 +869,10 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     HANDLE hThread = ptls2->system_id;
     if ((DWORD)-1 == SuspendThread(hThread))
         return;
-    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct2 != NULL && jl_atomic_load_relaxed(&ct2->_state) == JL_TASK_STATE_ABANDONED &&
-        ptls2->abandon_to != NULL) {
+    // The victim thread is suspended: validate the pending request against
+    // its frozen state and, on commit, redirect it into the abandon
+    // callback. On refusal the requester observes the verdict.
+    if (jl_abandon_try_commit(ptls2)) {
         CONTEXT ctxThread;
         memset(&ctxThread, 0, sizeof(CONTEXT));
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
@@ -892,11 +897,6 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
             ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
             SetThreadContext(hThread, &ctxThread);
         }
-    }
-    else {
-        // The thread switched tasks in the meantime; the marked victim
-        // already exited through ctx_switch's killed path.
-        ptls2->abandon_to = NULL;
     }
     ResumeThread(hThread);
 }

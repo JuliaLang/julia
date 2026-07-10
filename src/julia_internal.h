@@ -940,6 +940,7 @@ void jl_install_default_signal_handlers(void) JL_NOTSAFEPOINT;
 void restore_signals(void) JL_NOTSAFEPOINT;
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
+int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT;
 JL_NORETURN void jl_abandon_task_cb(void);
 JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
 extern _Atomic(int) jl_sigint_dispatch_pending;

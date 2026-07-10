@@ -704,9 +704,10 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
     kern_return_t ret = thread_suspend(thread);
     HANDLE_MACH_ERROR("thread_suspend", ret);
-    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct2 != NULL && jl_atomic_load_relaxed(&ct2->_state) == JL_TASK_STATE_ABANDONED &&
-        ptls2->abandon_to != NULL) {
+    // The victim thread is suspended: validate the pending request against
+    // its frozen state and, on commit, redirect it into the abandon
+    // callback. On refusal the requester observes the verdict.
+    if (jl_abandon_try_commit(ptls2)) {
         host_thread_state_t state;
         unsigned int count = MACH_THREAD_STATE_COUNT;
         memset(&state, 0, sizeof(state));
@@ -715,11 +716,6 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
         jl_noreturn_call_in_state(&state, (void (*)(void))&jl_abandon_task_cb, 0, 0);
         ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
         HANDLE_MACH_ERROR("thread_set_state", ret);
-    }
-    else {
-        // The thread switched tasks in the meantime; the marked victim
-        // already exited through ctx_switch's killed path.
-        ptls2->abandon_to = NULL;
     }
     ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);

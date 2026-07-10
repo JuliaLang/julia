@@ -1783,8 +1783,14 @@ JL_NORETURN void jl_abandon_task_cb(void)
     jl_ptls_t ptls = ct->ptls;
     jl_task_t *next_task = ptls->abandon_to;
 
-    // Clear abandon_to now that we have it
+    // Consume the request. The slot stays claimed (FINISHED, not IDLE)
+    // until the requester acknowledges: DONE is transient - this callback
+    // runs within microseconds of the commit - so the requester's verdict
+    // must be a state only it retires, or it would misread the settled
+    // slot as a refusal.
     ptls->abandon_to = NULL;
+    ptls->abandon_victim = NULL;
+    jl_atomic_store_release(&ptls->abandon_state, JL_ABANDON_FINISHED);
 
     // The victim may have been abandoned inside a GC-safe region (e.g. a
     // gc_safe foreign call); the rescue task runs managed code, so
@@ -1841,64 +1847,129 @@ JL_NORETURN void jl_abandon_task_cb(void)
     abort();
 }
 
-// Send an abandon signal to task t, causing it to switch to next_task.
-// This is used for CANCEL_REQUEST_ABANDON_ALL where we need to forcibly
-// abandon a task without waiting for it to reach a cancellation point.
-JL_DLLEXPORT void jl_abandon_task(jl_task_t *t, jl_task_t *next_task) JL_NOTSAFEPOINT
+// Validate and commit (or refuse) the pending abandon request for
+// `ptls2`'s current task. The victim thread must be quiescent: this runs
+// either in its signal handler (unix) or while it is suspended (mach,
+// windows), so the state inspected here cannot change under us - unlike a
+// pre-check on the requester's thread. On commit the task is marked
+// abandoned and 1 is returned; the caller then redirects the thread into
+// jl_abandon_task_cb, which consumes `abandon_to` and settles the slot. On
+// refusal (or no pending request) 0 is returned and the requester settles.
+// Async-signal-safe: loads, stores and CAS only.
+int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
 {
-    // Get the thread running the task
+    uint8_t st = JL_ABANDON_PENDING;
+    if (!jl_atomic_cmpswap(&ptls2->abandon_state, &st, JL_ABANDON_TAKEN))
+        return 0; // no pending request (withdrawn, already consumed, or none)
+    jl_task_t *t = ptls2->abandon_victim;
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+    // The refusal set: conditions under which discarding the current
+    // context would corrupt *runtime* state. Leaking user resources is the
+    // documented cost of an unsafe abandon; leaking runtime state is not:
+    //  - the thread already switched away (the request outlived its target);
+    //  - runtime (jl_mutex_t) locks are held - including the uv loop lock,
+    //    whose owner is checked explicitly since takeover paths acquire it
+    //    through trylock variants;
+    //  - a finalizer is running, or finalizers are inhibited (ReentrantLock
+    //    holders raise this; the counter would leak and permanently disable
+    //    finalizers on this thread);
+    //  - the victim is in a signal-deferral region (sigatomic; this also
+    //    covers the inference entry point).
+    if (ct != t ||
+        ptls2->locks.len != 0 ||
+        ptls2->in_finalizer ||
+        ptls2->finalizers_inhibited != 0 ||
+        ptls2->defer_signal != 0 ||
+        jl_atomic_load_relaxed(&jl_uv_mutex.owner) == ct) {
+        jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_REFUSED);
+        return 0;
+    }
+    // Commit. The result was pre-staged by the requester (the write barrier
+    // is not async-signal-safe); the exception flag and state are set here,
+    // with the victim stopped, which is what makes `:abandoned` mean "will
+    // never run another instruction".
+    jl_atomic_store_relaxed(&t->_isexception, 1);
+    jl_atomic_store_release(&t->_state, JL_TASK_STATE_ABANDONED);
+    jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_DONE);
+    return 1;
+}
+
+// Forcibly switch the thread running `t` from `t` to `next_task`,
+// discarding `t`'s execution (CANCEL_REQUEST_ABANDON_ALL's last resort for
+// code that cannot reach a cancellation point). Returns 1 if the
+// abandonment committed. Returns 0 - with every published effect withdrawn
+// and `t` untouched and still running - when the victim was not (or no
+// longer) current on its thread, was found holding runtime state that must
+// not be discarded (see jl_abandon_try_commit), an abandonment was already
+// in flight for that thread, or delivery could not be completed in time.
+JL_DLLEXPORT int jl_abandon_task(jl_task_t *t, jl_task_t *next_task)
+{
     int16_t tid = jl_atomic_load_relaxed(&t->tid);
     if (tid < 0)
-        return; // Task not assigned to a thread yet
-
+        return 0; // Task not assigned to a thread
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL)
-        return;
-
-    // Check that the task is actually the current task on that thread
-    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct != t)
-        return; // Task is not currently running
-
-    // Refuse to abandon a task whose thread holds runtime locks (e.g. it is
-    // parked in the event loop holding the uv lock, or mid-allocation):
-    // switching away would leave the lock held forever and trips
-    // ctx_switch's lock invariant. (Racy read - the caller retries or falls
-    // back to marking the task in place.)
-    if (ptls2->locks.len != 0)
-        return;
-
-    // Store the target task and set up the abandoned task's state
-    ptls2->abandon_to = next_task;
-
-    // Record the abandonment as the task's result. Julia-side callers
-    // (freeze_task!/unsafe_abandon!) set a proper CancellationRequest
-    // beforehand; the C direct-abandon path cannot allocate here (signal
-    // context), so fall back to the interned severity byte.
+        return 0;
+    if (jl_atomic_load_relaxed(&ptls2->current_task) != t)
+        return 0; // Task is not currently running
+    // Claim the request slot.
+    uint8_t st = JL_ABANDON_IDLE;
+    if (!jl_atomic_cmpswap(&ptls2->abandon_state, &st, JL_ABANDON_SETUP))
+        return 0; // another abandonment is in flight for this thread
+    // Pre-stage the abandonment as the task's result (off the delivery
+    // path: jl_gc_wb is not async-signal-safe). Julia-side callers set a
+    // proper CancellationRequest beforehand; the C direct-abandon path
+    // falls back to the interned severity byte. Stale on refusal is
+    // benign: normal completion overwrites result and _isexception.
     if (t->result == jl_nothing || t->result == NULL) {
         jl_value_t *creq = jl_box_uint8(0x4); // CANCEL_REQUEST_ABANDON_ALL
         t->result = creq;
         jl_gc_wb(t, creq);
     }
-    jl_atomic_store_relaxed(&t->_isexception, 1);
-
-    // Mark the task as abandoned - this must happen before the signal
-    // so that ctx_switch knows to do cleanup
-    jl_atomic_store_release(&t->_state, JL_TASK_STATE_ABANDONED);
-
-    // Send the abandon signal (request 6). The request slot is shared with
-    // best-effort cancellation/preemption signals and signal deliveries
-    // coalesce, so a single send can be lost (or skipped while another
-    // request holds the slot); re-send until the thread has observably
-    // switched away from the abandoned task.
+    // (N.B.: _isexception is set at commit, not here: normal completion
+    // overwrites a stale result, but does not clear a stale exception flag,
+    // so a refused victim would look failed.)
+    ptls2->abandon_victim = t;
+    ptls2->abandon_to = next_task;
+    jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_PENDING);
+    // Deliver with a timeout. The unix request slot is shared with
+    // best-effort cancellation/preemption signals and deliveries coalesce,
+    // so a single send can be lost - re-send until the request settles.
     for (int attempt = 0; attempt < 200; attempt++) {
         jl_send_abandon_signal(tid);
         for (int spin = 0; spin < 10; spin++) {
-            if (jl_atomic_load_acquire(&ptls2->current_task) != t)
-                return;
+            st = jl_atomic_load_acquire(&ptls2->abandon_state);
+            if (st != JL_ABANDON_PENDING)
+                goto settle;
             uv_sleep(1);
         }
     }
+    // Timed out: withdraw the request, arbitrating against a late delivery.
+    st = JL_ABANDON_PENDING;
+    if (jl_atomic_cmpswap(&ptls2->abandon_state, &st, JL_ABANDON_SETUP)) {
+        ptls2->abandon_victim = NULL;
+        ptls2->abandon_to = NULL;
+        jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_IDLE);
+        return 0;
+    }
+settle:
+    // A delivery took the request: wait out its (bounded) validation, and,
+    // on commit, the callback's consumption of the slot (DONE is a
+    // transient state on the way to FINISHED).
+    while ((st = jl_atomic_load_acquire(&ptls2->abandon_state)) == JL_ABANDON_TAKEN ||
+           st == JL_ABANDON_DONE)
+        uv_sleep(1);
+    if (st == JL_ABANDON_FINISHED) {
+        // Committed; the callback consumed abandon_victim/abandon_to.
+        // Retire the slot.
+        jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_IDLE);
+        return 1;
+    }
+    // Refused: withdraw our published state.
+    ptls2->abandon_victim = NULL;
+    ptls2->abandon_to = NULL;
+    jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_IDLE);
+    return 0;
 }
 
 #ifdef _OS_WINDOWS_

@@ -1059,18 +1059,14 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
 #endif
     }
     else if (request == 6) {
-        // Task abandonment - call the abandon callback (which must not
-        // return) to switch to ptls->abandon_to. The task state has already
-        // been set to ABANDONED by the caller. If this thread switched tasks
-        // between the abandon request and this signal, the marked victim
-        // already exited through ctx_switch's killed path and there is
-        // nothing left to do here.
-        if (jl_atomic_load_relaxed(&ct->_state) == JL_TASK_STATE_ABANDONED &&
-            ct->ptls->abandon_to != NULL) {
+        // Task abandonment: validate the pending request against this
+        // thread's actual state (we ARE the victim thread, stopped in this
+        // handler, so nothing can change under the check) and, on commit,
+        // redirect into the abandon callback (which must not return) to
+        // switch to ptls->abandon_to. On refusal the requester observes the
+        // verdict and withdraws; the current task continues untouched.
+        if (jl_abandon_try_commit(ct->ptls)) {
             jl_call_in_ctx(ct->ptls, jl_abandon_task_cb, sig, ctx);
-        }
-        else {
-            ct->ptls->abandon_to = NULL;
         }
     }
     errno = errno_save;
@@ -1507,13 +1503,18 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 if (rescue_task != NULL) {
                     jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
                     if (ct != NULL && ct != rescue_task) {
-                        jl_safe_printf("\nWARNING: Abandoning current task and switching to rescue task.\n"
-                                         "         This may leave the process in an inconsistent state.\n");
-                        jl_abandon_task(ct, rescue_task);
-                        // Let the sigint listener task perform the Julia-side
-                        // cleanup (waking the abandoned task's waiters and
-                        // re-initializing or shutting down the session).
-                        deliver_sigint_notification();
+                        if (jl_abandon_task(ct, rescue_task)) {
+                            jl_safe_printf("\nWARNING: Abandoned the current task and switched to a rescue task.\n"
+                                             "         This may leave the process in an inconsistent state.\n");
+                            // Let the sigint listener task perform the
+                            // Julia-side cleanup (waking the abandoned task's
+                            // waiters and re-initializing or shutting down
+                            // the session).
+                            deliver_sigint_notification();
+                        }
+                        else {
+                            jl_safe_printf("\nWARNING: Cannot abandon the current task (it holds runtime resources); still trying.\n");
+                        }
                         continue;
                     }
                 }
