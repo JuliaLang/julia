@@ -784,18 +784,40 @@ function serialize(s::AbstractSerializer, u::UnionAll)
         t = t.inner
         n += 1
     end
-    if isa(t, DataType) && t === unwrap_unionall(t.name.wrapper)
-        write(s.io, UInt8(1))
-        write(s.io, Int16(n))
-        serialize(s, t)
-    else
-        write(s.io, UInt8(0))
-        # ship the binder as a free TypeVar plus the opened body; the
-        # deserializer's `UnionAll(var, body)` re-binds it
-        v, body = Base.unionall_open(u)
-        serialize(s, v)
-        serialize(s, body)
+    if isa(t, DataType)
+        # if `u` is the canonical wrapper chain itself (or a suffix of it,
+        # obtained by peeling the wrapper), ship just the primary body and the
+        # depth, and re-derive the chain on the other side. The identity test
+        # is essential: custom chains over the primary body (renamed or
+        # re-bounded binders — egality is structural and name-sensitive) must
+        # take the general path below or their binders would be lost.
+        w = t.name.wrapper
+        k = 0
+        while isa(w, UnionAll)
+            w = w.inner
+            k += 1
+        end
+        if k >= n
+            w = t.name.wrapper
+            while k > n
+                w = (w::UnionAll).inner
+                k -= 1
+            end
+            if u === w
+                write(s.io, UInt8(1))
+                write(s.io, Int16(n))
+                serialize(s, t)
+                return
+            end
+        end
     end
+    write(s.io, UInt8(0))
+    # ship the binder as a free TypeVar plus the opened body; the
+    # deserializer's `UnionAll(var, body)` re-binds it
+    v, body = Base.unionall_open(u)
+    serialize(s, v)
+    serialize(s, body)
+    nothing
 end
 
 serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
