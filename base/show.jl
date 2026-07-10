@@ -649,7 +649,10 @@ function unbounded_typealias(@nospecialize(alias))
     if body === alias.inner && alias.lb === Union{} && alias.ub === Any
         return alias
     end
-    return UnionAll(alias.name, Union{}, Any, body)
+    # raw rebuild: a binder that occurred only in the (removed) bounds of a
+    # later binder must survive, so that the alias' arity is preserved for
+    # `typeintersect_env`'s environment
+    return unionall_raw(alias.name, Union{}, Any, body)
 end
 
 # Reconstruct the closed type that the (possibly open) `x` is a piece of, by

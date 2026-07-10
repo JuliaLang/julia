@@ -601,10 +601,15 @@ function unionall_open(u::UnionAll)
     return pair[1]::TypeVar, pair[2]
 end
 
-# The positional sibling of `UnionAll(var, body)`: construct the `where` node
-# directly from a binder's fields, around a body that references the binder by
-# position, translating nothing.
-function UnionAll(name::Symbol, @nospecialize(lb), @nospecialize(ub), @nospecialize(body))
+# The positional sibling of `UnionAll(var, body)` is the four-argument
+# `UnionAll(name, lb, ub, body)` constructor (defined in boot.jl): it builds
+# the `where` node directly from a binder's fields, around a body that
+# references the binder by position, validating the fields and normalizing
+# like the translating constructor (a vacuous binder is dropped, and
+# `T where T<:S` becomes `S`). The raw helper below performs the same
+# construction with no checks and no normalization, for internal structural
+# walks that rebuild an existing node and must preserve its exact shape.
+function unionall_raw(name::Symbol, @nospecialize(lb), @nospecialize(ub), @nospecialize(body))
     return ccall(:jl_new_unionall_raw, Any, (Any, Any, Any, Any), name, lb, ub, body)::UnionAll
 end
 
