@@ -801,7 +801,11 @@ JL_DLLEXPORT int jl_tier_method_interp_reasons(jl_method_t *m)
     int result = -1;
     jl_value_t *msrc = m->source;
     jl_code_info_t *src = NULL;
-    JL_GC_PUSH1(&src);
+    // Root msrc too: the interpreter's jl_code_or_ci_for_interpreter publishes
+    // an uncompressed CodeInfo over m->source, so a concurrent thread can
+    // unroot the compressed blob while jl_uncompress_ir below is still
+    // decoding it.
+    JL_GC_PUSH2(&src, &msrc);
     if (msrc != NULL && jl_is_code_info(msrc))
         src = (jl_code_info_t*)msrc;                       // rooted via the frame slot
     else if (msrc != NULL && jl_is_string(msrc))
