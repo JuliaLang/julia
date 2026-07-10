@@ -577,6 +577,13 @@ to_power_type(x) = oftype(x*x, x)
 
 # BEGIN 1.14 deprecations
 
+# These operators are new in 1.14, but these fallback methods are added for
+# compatibility while packages adjust to defining both operators, to allow
+# Base and other packages to start using these.
+*%(a::T, b::T) where {T} = *(a, b)
++%(a::T, b::T) where {T} = +(a, b)
+-%(a::T, b::T) where {T} = -(a, b)
+
 # Revise calls this
 function explicit_manifest_entry_path(args...)
     spec = explicit_manifest_entry_load_spec(args...)

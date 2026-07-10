@@ -503,7 +503,7 @@ macro elapsed(ex)
         Experimental.@force_compile
         local t0 = time_ns()
         $(esc(ex))
-        (time_ns() - t0) / 1e9
+        (time_ns() -% t0) / 1e9
     end
 end
 
@@ -739,9 +739,9 @@ macro timed(ex)
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
         local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
+            (elapsedtime = time_ns() -% elapsedtime;
             cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
+            compile_elapsedtimes = map(-%, cumulative_compile_time_ns(), compile_elapsedtimes);
             lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
             Threads.lock_profiling(false))
         )

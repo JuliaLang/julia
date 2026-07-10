@@ -1305,7 +1305,7 @@ end
 # update the `running_time_ns` field of `t` to include the time since it last started running.
 function record_running_time!(t::Task)
     if t.metrics_enabled && !istaskdone(t)
-        @atomic :monotonic t.running_time_ns += time_ns() - t.last_started_running_at
+        @atomic :monotonic t.running_time_ns +%= time_ns() -% t.last_started_running_at
     end
     return t
 end

@@ -380,7 +380,7 @@ function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
     isempty(r) && empty_collection_error()
     a = first(r)
     U = uint_sup(T)
-    s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
+    s = (last(r) -% first(r)) % unsigned(T) % U +% one(U) # overflow ok
     # mod(-s, s) could be put in the Sampler object for repeated calls, but
     # this would be an advantage only for very big s and number of calls
     SamplerRangeNDL(a, s)
@@ -398,7 +398,7 @@ end
 
 # similar to `randn_unlikely` : splitting this unlikely path out results in faster code
 @noinline function rand_unlikely(rng, s::U, m)::U where {U}
-    t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
+    t = mod(-%(s), s) # as s is unsigned, -s is equal to 2^L - s in the paper
     while (m % U) < t
         x = widen(rand(rng, U))
         m = x * s
