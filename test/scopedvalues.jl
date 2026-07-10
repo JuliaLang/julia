@@ -282,6 +282,10 @@ function run_53584()
     end
 end
 @testset "issue #53584" begin
+    # warm up with tier parking suspended so the measured call and its scoped
+    # machinery run fully compiled
+    ccall(:jl_tier_suspend_parking, Cvoid, ())
     run_53584() # warmup
     @test (@allocated run_53584()) < 10_000
+    ccall(:jl_tier_resume_parking, Cvoid, ())
 end
