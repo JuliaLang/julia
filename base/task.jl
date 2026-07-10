@@ -590,8 +590,10 @@ Wait for a [`Task`](@ref) to finish, then return its result value.
 If the task fails with an exception, a [`TaskFailedException`](@ref) (which wraps the failed task)
 is thrown.
 """
-function fetch(t::Task)
-    wait(t)
+function fetch(t::Task; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # `cancel` governs the *wait* for the task: a cancellation unwinds this
+    # fetch, the fetched task keeps running.
+    wait(t; cancel)
     return task_result(t)
 end
 

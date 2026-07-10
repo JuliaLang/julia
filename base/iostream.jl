@@ -469,7 +469,10 @@ end
 take!(s::IOStream) =
     @_lock_ios s ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Cvoid},), s.ios)
 
-function readuntil(s::IOStream, delim::UInt8; keep::Bool=false)
+function readuntil(s::IOStream, delim::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> readuntil(s, delim; keep), cancel)
+    # entry check only: the C-side read is not interruptible
+    @cancel_check
     @_lock_ios s ccall(:jl_readuntil, Vector{UInt8}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 0, !keep)
 end
 
@@ -477,11 +480,17 @@ end
 function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
-readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
-    isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
-    takestring!(copyuntil(IOBuffer(sizehint=70), s, delim; keep))
+function readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> readuntil(s, delim; keep), cancel)
+    @cancel_check
+    return isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
+        takestring!(copyuntil(IOBuffer(sizehint=70), s, delim; keep))
+end
 
-function readline(s::IOStream; keep::Bool=false)
+function readline(s::IOStream; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> readline(s; keep), cancel)
+    # entry check only: the C-side read is not interruptible
+    @cancel_check
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 

@@ -649,8 +649,9 @@ Logan
 "Logan"
 ```
 """
-readline(filename::AbstractString; keep::Bool=false) =
-    open(io -> readline(io; keep), filename)
+readline(filename::AbstractString; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    cancel === DEFAULT_CANCEL ? open(io -> readline(io; keep), filename) :
+        _with_cancel_arg(() -> open(io -> readline(io; keep), filename), cancel)
 readline(s::IO=stdin; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) =
     _with_cancel_arg(() -> takestring!(copyline(IOBuffer(sizehint=16), s; keep)), cancel)
 
@@ -693,7 +694,8 @@ copyline(out::IO, filename::AbstractString; keep::Bool=false) =
     open(io -> copyline(out, io; keep), filename)
 
 # fallback to optimized methods for IOBuffer in iobuffer.jl
-function copyline(out::IO, s::IO; keep::Bool=false)
+function copyline(out::IO, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> copyline(out, s; keep), cancel)
     if keep
         return copyuntil(out, s, 0x0a, keep=true)
     else
