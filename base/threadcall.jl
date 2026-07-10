@@ -28,21 +28,32 @@ macro threadcall(f, rettype, argtypes, argvals...)
     argtypes = map(esc, argtypes.args)
     argvals = map(esc, argvals)
 
-    # bind the argument values and a result cell to local variables so the
-    # wrapper closure below captures native Julia objects. Closing over them
-    # keeps everything the worker thread needs rooted for the duration of the
-    # call, without serializing into a raw buffer or any manual GC.@preserve.
-    args = [Symbol("arg", i) for i in 1:length(argvals)]
-    argbinds = [:($(args[i]) = $(argvals[i])) for i in 1:length(argvals)]
+    # `cconvert` and `unsafe_convert` each argument on the calling thread:
+    # cconvert may allocate or run arbitrary Julia code, and computing the
+    # unsafe_convert'd C representation here keeps all of that off the libuv
+    # worker thread, which only makes the raw call. The cconverted values are
+    # captured by the wrapper closure and GC.@preserve'd around the worker-thread
+    # ccall so their C representations (e.g. interior pointers) stay valid.
+    roots = [Symbol("root", i) for i in 1:length(argvals)]
+    args  = [Symbol("arg", i) for i in 1:length(argvals)]
+    rootbinds = [:($(roots[i]) = cconvert($(argtypes[i]), $(argvals[i]))) for i in 1:length(argvals)]
+    argbinds  = [:($(args[i]) = unsafe_convert($(argtypes[i]), $(roots[i]))) for i in 1:length(argvals)]
+    call = :(result[] = ccall(cfptr, $rettype, ($(argtypes...),), $(args...)))
+    # keep the cconverted values alive while their C representations are in use
+    body = isempty(roots) ? call : :(GC.@preserve $(roots...) $call)
 
     return quote
         # use cglobal to look up the function on the calling thread
         cfptr = cglobal($f)
+        $(rootbinds...)
         $(argbinds...)
         result = Ref{$rettype}()
         # closure that performs the actual call on the worker thread and stores
         # the result into the captured cell
-        wrapper = () -> (result[] = ccall(cfptr, $rettype, ($(argtypes...),), $(args...)); nothing)
+        wrapper = function ()
+            $body
+            return
+        end
         do_threadcall(wrapper, result)
     end
 end
