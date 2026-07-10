@@ -668,3 +668,23 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
 JL_DLLEXPORT void jl_membarrier(void) {
     FlushProcessWriteBuffers();
 }
+
+// Like jl_membarrier, but additionally forces every thread to execute a
+// core-serializing instruction, synchronizing its instruction stream with prior writes
+// to code (see jl_patch_retyped_binding_sites). FlushProcessWriteBuffers is not
+// documented to do that, so bounce each thread through a kernel suspension instead:
+// capturing the context of a running thread interrupts the core it runs on, and the
+// return to user code is core-serializing. Threads that are not currently running
+// synchronize when they are switched back in.
+JL_DLLEXPORT void jl_membarrier_sync_core(void) {
+    jl_task_t *ct = jl_get_current_task();
+    int16_t self_tid = ct == NULL ? -1 : jl_atomic_load_relaxed(&ct->tid);
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    for (int tid = 0; tid < nthreads; tid++) {
+        if (tid == self_tid)
+            continue; // the calling thread is synchronized by program order
+        bt_context_t ctx;
+        if (jl_thread_suspend_and_get_state(tid, 0, &ctx))
+            jl_thread_resume(tid);
+    }
+}

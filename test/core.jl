@@ -8784,10 +8784,11 @@ let M = @__MODULE__
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
     @test Core.eval(M, :(global a_typed_global::$(Union{Tuple{Integer},Tuple{Nothing}}))) === nothing
-    @test_throws(ErrorException("cannot set type for global $(nameof(M)).a_typed_global. It already has a value or is already set to a different type."),
-                 Core.eval(M, :(global a_typed_global::$(Union{Nothing,Tuple{Union{Integer,Nothing}}}))))
-    @test Core.eval(M, :(global a_typed_global)) === nothing
-    @test Core.get_binding_type(M, :a_typed_global) == Tuple{Union{Integer,Nothing}}
+    # #62154: re-typing a typed global to a different type is now permitted. Here the binding
+    # holds no value, so there is nothing that could fail to conform to the new type.
+    @test Core.eval(M, :(global a_typed_global::$(Union{Nothing,Tuple{Union{Integer,Nothing}}}))) === nothing
+    @Core.latestworld
+    @test Core.get_binding_type(M, :a_typed_global) === Union{Nothing,Tuple{Union{Integer,Nothing}}}
 end
 
 @test Base.unsafe_convert(Ptr{Int}, [1]) !== C_NULL

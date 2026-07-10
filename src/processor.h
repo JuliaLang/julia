@@ -53,6 +53,10 @@ struct _jl_image_t {
     uint32_t ngvars;
     jl_image_fptrs_t fptrs;
     void **jl_small_typeof;
+    // bounds of the image's `jl_bpatch` section (binding re-type patch site records,
+    // #62154), or NULL if it has none
+    const void *bpatch_start;
+    const void *bpatch_end;
 };
 
 // The header for each image
@@ -160,6 +164,11 @@ typedef struct {
     const void *target_data;
     // Original CPU target string used to build this sysimage
     const char *cpu_target_string;
+    // Bounds of the image's `jl_bpatch` section (binding re-type patch site records,
+    // #62154): the linker-provided `__start_jl_bpatch`/`__stop_jl_bpatch` symbols,
+    // referenced weakly so they are NULL when the image has no such section.
+    const void *bpatch_start;
+    const void *bpatch_end;
 } jl_image_pointers_t;
 
 /**

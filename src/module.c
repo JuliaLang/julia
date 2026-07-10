@@ -652,6 +652,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
     if (!b) {
         b = jl_get_module_binding(mod, var, 1);
     }
+    int was_global = 0;
     jl_binding_partition_t *new_bpart = NULL;
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     while (!new_bpart) {
@@ -671,8 +672,14 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
             jl_errorf("cannot declare %s.%s constant; it was already declared as an import",
                       jl_symbol_name(mod->name), jl_symbol_name(var));
         } else if (kind == PARTITION_KIND_GLOBAL) {
-            jl_errorf("cannot declare %s.%s constant; it was already declared global",
-                      jl_symbol_name(mod->name), jl_symbol_name(var));
+            // #62154: replacing a declared global by a constant is permitted when the
+            // declaration carries a value; it is treated as a re-type plus an
+            // assignment of that value to the binding (see below). A valueless
+            // constant declaration has no value to assign, so it stays an error.
+            if (!val)
+                jl_errorf("cannot declare %s.%s constant; it was already declared global",
+                          jl_symbol_name(mod->name), jl_symbol_name(var));
+            was_global = 1;
         }
         if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
             bpart->kind = constant_kind | (bpart->kind & PARTITION_MASK_FLAG);
@@ -724,6 +731,24 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
             }
             jl_gc_write_atomic(new_bpart, new_bpart->next, jl_binding_partition_t, new_prev_bpart, release);
         }
+    }
+    if (was_global) {
+        // #62154: this constant supersedes a global epoch, whose compiled code may
+        // still run (in frames already on the stack, or via `Base.invoke_in_world`)
+        // and reads the binding's (single, shared) value slot. Treat the transition
+        // as a re-type plus an assignment: activate the verification guards, then
+        // store the constant's value into the slot, so stale readers observe it
+        // verified against the type they were compiled for. The same write-side
+        // protocol as jl_declare_global applies (see the quiesce comment there):
+        // guards are activated and every thread is quiesced before the slot is
+        // written, and our caller publishes new_world only after we return.
+        assert(val);
+        jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
+        jl_patch_retyped_binding_sites(b);
+        jl_task_t *ct = jl_current_task;
+        jl_safepoint_suspend_all_threads(ct);
+        jl_safepoint_resume_all_threads(ct);
+        jl_gc_write_atomic(b, b->value, jl_value_t, val, release);
     }
     JL_GC_POP();
     return new_bpart;
@@ -897,6 +922,35 @@ static jl_module_t *jl_binding_dbgmodule(jl_binding_t *b) JL_GLOBALLY_ROOTED;
 
 // Checks that the binding in general is currently writable, but does not perform any checks on the
 // value to be written into the binding.
+static jl_module_t *jl_binding_dbgmodule(jl_binding_t *b);
+
+// Raise the error for a write to a binding that is not a writable global (of kind
+// `kind`, in whichever world the caller consulted).
+static void JL_NORETURN jl_binding_not_writable_error(jl_binding_t *b, jl_module_t *m, jl_sym_t *s, enum jl_partition_kind kind)
+{
+    assert(kind != PARTITION_KIND_GLOBAL && kind != PARTITION_KIND_DECLARED);
+    if (jl_bkind_is_some_guard(kind)) {
+        jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
+                    "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
+                    "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
+                    jl_symbol_name(m->name), jl_symbol_name(s),
+                    jl_symbol_name(s), jl_symbol_name(m->name));
+    }
+    else if (jl_bkind_is_some_constant(kind) && kind != PARTITION_KIND_IMPLICIT_CONST) {
+        jl_errorf("invalid assignment to constant %s.%s. This redefinition may be permitted using the `const` keyword.",
+                    jl_symbol_name(m->name), jl_symbol_name(s));
+    }
+    else {
+        jl_module_t *from = jl_binding_dbgmodule(b);
+        if (from == m || !from)
+            jl_errorf("cannot assign a value to imported variable %s.%s",
+                      jl_symbol_name(m->name), jl_symbol_name(s));
+        else
+            jl_errorf("cannot assign a value to imported variable %s.%s from module %s",
+                      jl_symbol_name(from->name), jl_symbol_name(s), jl_symbol_name(m->name));
+    }
+}
+
 JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module_t *m, jl_sym_t *s)
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
@@ -904,28 +958,8 @@ JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module
         jl_binding_deprecation_warning(b);
     }
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (kind != PARTITION_KIND_GLOBAL && kind != PARTITION_KIND_DECLARED) {
-        if (jl_bkind_is_some_guard(kind)) {
-            jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
-                        "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
-                        "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
-                        jl_symbol_name(m->name), jl_symbol_name(s),
-                        jl_symbol_name(s), jl_symbol_name(m->name));
-        }
-        else if (jl_bkind_is_some_constant(kind) && kind != PARTITION_KIND_IMPLICIT_CONST) {
-            jl_errorf("invalid assignment to constant %s.%s. This redefinition may be permitted using the `const` keyword.",
-                        jl_symbol_name(m->name), jl_symbol_name(s));
-        }
-        else {
-            jl_module_t *from = jl_binding_dbgmodule(b);
-            if (from == m || !from)
-                jl_errorf("cannot assign a value to imported variable %s.%s",
-                          jl_symbol_name(m->name), jl_symbol_name(s));
-            else
-                jl_errorf("cannot assign a value to imported variable %s.%s from module %s",
-                          jl_symbol_name(from->name), jl_symbol_name(s), jl_symbol_name(m->name));
-        }
-    }
+    if (kind != PARTITION_KIND_GLOBAL && kind != PARTITION_KIND_DECLARED)
+        jl_binding_not_writable_error(b, m, s, kind);
 }
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var)
@@ -1918,19 +1952,34 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
     if (!b)
         b = jl_get_module_binding(gr->mod, gr->name, 1);
 
-    for (;;) {
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_atomic_load_acquire(&jl_world_counter));
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
 
-        if (jl_binding_kind(bpart) == PARTITION_KIND_GUARD) {
-            // Already guard
-            return;
-        }
-
-        if (!jl_replace_binding(b, bpart, NULL, PARTITION_KIND_GUARD))
-            continue;
-
+    if (jl_binding_kind(bpart) == PARTITION_KIND_GUARD) {
+        // Already guard
+        JL_UNLOCK(&world_counter_lock);
         return;
     }
+
+    if (jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) {
+        // #62154: deleting a declared global ends its epoch: whatever the binding is
+        // re-established as next (a constant, an import, a global of another type) is
+        // not required to keep the value slot conforming to this epoch's type, so code
+        // compiled against it must verify its accesses from now on. Activate the
+        // guards before the deletion is published (the slot still holds the epoch's
+        // old, conforming value, so early activation is harmless).
+        jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
+        jl_patch_retyped_binding_sites(b);
+        jl_task_t *ct = jl_current_task;
+        jl_safepoint_suspend_all_threads(ct);
+        jl_safepoint_resume_all_threads(ct);
+    }
+
+    jl_binding_partition_t *new_bpart = jl_replace_binding_locked(b, bpart, NULL, PARTITION_KIND_GUARD, new_world);
+    if (new_bpart && jl_atomic_load_relaxed(&new_bpart->min_world) == new_world)
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    JL_UNLOCK(&world_counter_lock);
 }
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
@@ -2052,9 +2101,23 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
 jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg)
 {
     JL_GC_PUSH1(&rhs); // callee-rooted
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    // The store obeys "invokelatest" semantics: since the type of a global may be
+    // replaced (#62154) but there is only one value slot per binding, the value must
+    // conform to the type declared by the *latest*-world partition, which governs what
+    // latest-world readers are permitted to observe. In the common case the caller is
+    // already running in the latest world and this is the same partition it would see at
+    // its own world age.
+    size_t latest_world = jl_atomic_load_acquire(&jl_world_counter);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, latest_world);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    assert(kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_GLOBAL);
+    if (kind != PARTITION_KIND_GLOBAL && kind != PARTITION_KIND_DECLARED) {
+        // The latest partition is no longer a writable global (it was replaced by a
+        // constant or an import, or deleted): the write errors, even from code compiled
+        // against an older, writable epoch of the binding, rather than silently storing
+        // into the superseded value slot. (Any such transition activates the re-type
+        // guards of compiled code, so every stale write reaches this check.)
+        jl_binding_not_writable_error(b, mod, var, kind);
+    }
     jl_value_t *old_ty = kind == PARTITION_KIND_DECLARED ? (jl_value_t*)jl_any_type : bpart->restriction;
     JL_GC_PROMISE_ROOTED(old_ty);
     if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty && !jl_isa(rhs, old_ty)) {
@@ -2062,6 +2125,143 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
     }
     JL_GC_POP();
     return old_ty;
+}
+
+// #62154: the deoptimization sentinel that the GOT entries of statically compiled code
+// are repointed to when the declared type of their binding changes. It permanently
+// holds NULL, so a read through such an entry takes its (pre-existing) null path,
+// which re-evaluates the access with `invokelatest` semantics; a write checks that its
+// entry still points at the binding's value field before using its inline fast path.
+JL_DLLEXPORT _Atomic(jl_value_t*) jl_binding_deopt_slot;
+
+// The registry of not-yet-deoptimized GOT entries of loaded images: binding -> list of
+// entry cells. This lives in the runtime proper (not libjulia-codegen) because
+// statically compiled programs must register and deoptimize their images' entries even
+// when no compiler is loaded; the nop patch sites of JIT code have their own registry
+// in jitlayers.cpp. Guarded by bgot_lock. The binding keys are used purely as
+// identities and are never dereferenced through the table: a binding stays reachable
+// from its module at least as long as compiled code referencing it, so at worst an
+// entry belonging to unreachable code gets repointed, which is harmless.
+jl_mutex_t bgot_lock;
+static htable_t bgot_table; // jl_binding_t* -> arraylist_t* of entry cell addresses
+static int bgot_table_inited = 0;
+
+// A raw `jl_bpatch` section record (see emit_bpatch_slotmap and julia_binding_got_entry
+// in codegen.cpp, and BindingPatchRecord in jitlayers.cpp, which parses the records of
+// JIT-compiled objects). Image sections only contain the data kinds parsed here; the
+// nop patch sites (kinds 0/1) exist only in JIT objects.
+typedef struct {
+    uint64_t f0;
+    uint64_t f1;
+    uint64_t f2;
+    uint64_t kind; // 2 (slot map): f0 = index, f1 = address of the binding's slot
+                   // 3 (sentinel): ignored (guarantees the section exists on Mach-O)
+                   // 4 (GOT entry): f0 = address of the entry, f2 = index
+                   // additionally, all-zero records are skipped: COFF bounds the
+                   // section with zero marker records and its linker may insert
+                   // padding between grouped-section contributions
+} jl_bpatch_record_t;
+
+// Register the GOT entries of a loaded system or package image (the bounds of its
+// `jl_bpatch` section): point each entry at its binding's value field, so the image's
+// typed-global accesses use their inline fast paths -- or, if the binding has already
+// been re-typed, leave the entry at the deoptimization sentinel forever (this code was
+// compiled against *some* declared type of the binding, and the sticky flag cannot
+// tell whether it is still the current one). Must be called after the image's global
+// slots have been relocated and before its code can run.
+JL_DLLEXPORT void jl_register_binding_patch_sites(const void *start, const void *end)
+{
+    const jl_bpatch_record_t *recs = (const jl_bpatch_record_t*)start;
+    size_t n = ((const char*)end - (const char*)start) / sizeof(jl_bpatch_record_t);
+    size_t nslotmap = 0, ngot = 0, nregistered = 0, ndeopt = 0, nunresolved = 0;
+    if (n != 0) {
+    JL_LOCK(&bgot_lock);
+    if (!bgot_table_inited) {
+        htable_new(&bgot_table, 0);
+        bgot_table_inited = 1;
+    }
+    for (size_t i = 0; i < n; i++) {
+        const jl_bpatch_record_t *r = &recs[i];
+        if (r->kind == 2)
+            nslotmap++;
+        if (r->kind != 4 || r->f0 == 0)
+            continue; // slot map, sentinel, or zero marker/padding
+        ngot++;
+        // resolve the entry's binding through its slot-map record
+        jl_binding_t *b = NULL;
+        for (size_t j = 0; j < n; j++) {
+            if (recs[j].kind == 2 && recs[j].f0 == r->f2) {
+                b = *(jl_binding_t**)(uintptr_t)recs[j].f1;
+                break;
+            }
+        }
+        assert(b != NULL && "GOT entry record without a matching slot-map record");
+        if (b == NULL) {
+            nunresolved++;
+            continue;
+        }
+        _Atomic(void*) *entry = (_Atomic(void*)*)(uintptr_t)r->f0;
+        // The flag load is ordered after any concurrent re-type walk by the lock
+        // acquisition, so an entry can never be registered behind a completed walk.
+        if (jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_RETYPED) {
+            jl_atomic_store_relaxed(entry, (void*)&jl_binding_deopt_slot);
+            ndeopt++;
+        }
+        else {
+            jl_atomic_store_relaxed(entry, (void*)&b->value);
+            arraylist_t *entries = (arraylist_t*)ptrhash_get(&bgot_table, b);
+            if (entries == HT_NOTFOUND) {
+                entries = (arraylist_t*)malloc_s(sizeof(arraylist_t));
+                arraylist_new(entries, 0);
+                ptrhash_put(&bgot_table, b, entries);
+            }
+            arraylist_push(entries, (void*)entry);
+            nregistered++;
+        }
+    }
+    JL_UNLOCK(&bgot_lock);
+    }
+    // An unresolved GOT entry stays NULL and the code reading through it will crash:
+    // report it loudly instead of leaving only the eventual fault to debug.
+    if (nunresolved) {
+        jl_safe_printf("WARNING: jl_bpatch: %d of %d GOT entry records have no "
+                       "matching slot-map record (image records %p-%p)\n",
+                       (int)nunresolved, (int)ngot, start, end);
+        for (size_t i = 0; i < n && i < 8; i++)
+            jl_safe_printf("  record %d: {0x%" PRIx64 ", 0x%" PRIx64 ", 0x%" PRIx64 ", %d}\n",
+                           (int)i, recs[i].f0, recs[i].f1, recs[i].f2, (int)recs[i].kind);
+    }
+    if (getenv("JL_BPATCH_DEBUG"))
+        jl_safe_printf("jl_bpatch: image records %p-%p: %d records (%d slotmap, "
+                       "%d got), %d registered, %d deopt, %d unresolved\n",
+                       start, end, (int)n, (int)nslotmap, (int)ngot,
+                       (int)nregistered, (int)ndeopt, (int)nunresolved);
+}
+
+// Activate the re-type guards of code compiled against a previous declared type of
+// `b` (#62154): repoint the GOT entries of statically compiled code at the
+// deoptimization sentinel, and rewrite the nop patch sites of JIT code (a no-op
+// without libjulia-codegen, which is also the only way such sites can exist). Must be
+// called with the world counter lock held, after BINDING_FLAG_RETYPED is set and
+// before the new value is published; see the quiesce comment in jl_declare_global for
+// the write-side protocol.
+void jl_patch_retyped_binding_sites(jl_binding_t *b)
+{
+    JL_LOCK(&bgot_lock);
+    if (bgot_table_inited) {
+        arraylist_t *entries = (arraylist_t*)ptrhash_get(&bgot_table, b);
+        if (entries != HT_NOTFOUND) {
+            ptrhash_remove(&bgot_table, b);
+            for (size_t i = 0; i < entries->len; i++) {
+                _Atomic(void*) *entry = (_Atomic(void*)*)entries->items[i];
+                jl_atomic_store_release(entry, (void*)&jl_binding_deopt_slot);
+            }
+            arraylist_free(entries);
+            free(entries);
+        }
+    }
+    JL_UNLOCK(&bgot_lock);
+    jl_patch_retyped_binding_jit_sites(b);
 }
 
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
@@ -2095,6 +2295,17 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
     if (jl_bkind_is_some_constant(kind))
         jl_errorf("invalid assignment to constant %s.%s",
                   jl_symbol_name(mod->name), jl_symbol_name(var));
+    // #62154: like jl_check_binding_assign_value, the stored value must conform to the
+    // type declared by the *latest*-world partition, which governs what latest-world
+    // readers may observe in the single value slot (the caller may be running in an
+    // older world whose declared type differs).
+    size_t latest_world = jl_atomic_load_acquire(&jl_world_counter);
+    jl_binding_partition_t *latest_bpart = jl_get_binding_partition(b, latest_world);
+    enum jl_partition_kind latest_kind = jl_binding_kind(latest_bpart);
+    if (latest_kind != PARTITION_KIND_GLOBAL && latest_kind != PARTITION_KIND_DECLARED)
+        // see jl_check_binding_assign_value: no longer a writable global in the latest world
+        jl_binding_not_writable_error(b, mod, var, latest_kind);
+    bpart = latest_bpart;
     jl_value_t *ty = bpart->restriction;
     JL_GC_PROMISE_ROOTED(ty);
     return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, b, mod, var);

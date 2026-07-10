@@ -800,15 +800,60 @@ Stacktrace:
 The type does not need to be concrete, but annotations with abstract types typically have little
 performance benefit.
 
-Once a global has either been assigned to or its type has been set, the binding type is not allowed
-to change:
+!!! compat "Julia 1.14"
+    Before Julia 1.14, the type of a global could not be changed once it had been assigned to or
+    given a type; doing so raised an error.
 
-```jldoctest
+The declared type of a mutable global may be changed by a subsequent typed declaration. The most
+recent declaration governs every access to the binding, and a re-declaration is accepted as long as
+the value the binding currently holds (if any) still conforms to the new type:
+
+```jldoctest typedglobalretype
 julia> x = 1
 1
 
 julia> global x::Int
-ERROR: cannot set type for global x. It already has a value or is already set to a different type.
-Stacktrace:
-[...]
+
+julia> x::Float64 = 2.0
+2.0
+
+julia> Core.get_binding_type(@__MODULE__, :x)
+Float64
 ```
+
+A *bare* `global x::T` re-declaration (one without a value) is rejected when the value the binding
+currently holds is not an instance of `T`, so that the value is never silently dropped. To change to
+an incompatible type, use the value-carrying form `global x::T = v`, which installs the new type and
+value together as a single atomic step:
+
+```julia
+julia> w::Int = 1
+1
+
+julia> global w::String
+ERROR: cannot change the type of global Main.w: it currently holds a value that is not an instance of the new type. Assign a conforming value (e.g. `w = ...`) or otherwise reset the binding before re-declaring its type.
+
+julia> w::String = "hello"
+"hello"
+```
+
+Code compiled against the previous type is recompiled to observe the new one. Code that was compiled
+against an earlier type but still observes the value slot after the change — for example a read that
+runs after an on-the-stack redefinition, or an access replayed in an older world age via
+[`Base.invoke_in_world`](@ref) — verifies the value against the type it was compiled for and raises a
+[`TypeError`](@ref) rather than returning an ill-typed value. Similarly, a write from such code must
+satisfy both the type it was compiled against and the latest declared type (a re-declaration can
+narrow the set of accesses that succeed, but never expand it), and it raises an error outright if
+the binding is no longer a writable global in the latest world age (for example, after it was
+replaced by a constant or deleted). This verification is activated only
+once a binding's declared type is actually changed; accesses to globals whose declared type never
+changes are not affected by it.
+
+A declared global may also be replaced by a constant, provided the `const` declaration carries a
+value. The transition behaves like a re-declaration whose value is the constant's value: new code
+observes the constant, while reads from code compiled against the global epoch observe the
+constant's value through the same verification described above, and writes from such code raise an
+error. The reverse transition — re-declaring a constant as
+a global — remains an error. Deleting a declared global with `Base.delete_binding` likewise ends
+its epoch: accesses from code compiled against it verify from then on, and whatever the binding is
+re-established as afterwards is independent of the deleted global.
