@@ -20,7 +20,10 @@ entry:
 ; buffer is unpublished.
 ; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
 ; CHECK: call void @julia.safepoint(ptr %safepoint)
-; CHECK: %{{.*}} = call i32 @{{.*}}setjmp{{.*}}(ptr %cancel_ucontext, i32 0)
+; The sp discriminator word is stamped first; the jump buffer lives after it.
+; CHECK: store atomic i64 %{{.*}}, ptr %cancel_ucontext monotonic
+; CHECK-NEXT: %cancel_mctx = getelementptr i8, ptr %cancel_ucontext, i64 8
+; CHECK-NEXT: %{{.*}} = call i32 @{{.*}}setjmp{{.*}}(ptr %cancel_mctx, i32 0)
 ; CHECK-NEXT: store atomic ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 ; CHECK-NOT: call i32 @julia.cancellation_point()
 ; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
