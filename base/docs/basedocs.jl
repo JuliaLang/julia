@@ -1638,6 +1638,71 @@ See the manual section on [Mutually Recursive Types](@ref) for more details.
 kw"typegroup"
 
 """
+    match, case
+
+A `match` statement checks a value against a sequence of `case` patterns, running the body
+of the first arm whose pattern matches and evaluating to its value:
+
+```julia
+match x
+case 0
+    "zero"
+case (a, b) if a > b
+    "decreasing pair"
+case ::AbstractString
+    "string"
+case _
+    "something else"
+end
+```
+
+Identifiers in argument position of a pattern are captures, bound over the arm's guard and
+body; a bare identifier at the top level of a pattern is resolved and its value used as a
+matcher. Falling through the end of a match throws a [`MatchError`](@ref). The matched value
+can be named over the match with `match expr as name`, and an arm with an empty body evaluates
+to the matched value. Each arm runs in its own scope, like a `let` block. A `match`
+participates in the default `break` scope: `break` (or `break _ value`) exits the match, and
+unlabeled `continue` is not allowed inside an arm (label the enclosing loop with `@label` and
+use `continue label`). `case except pat` arms match declared exceptions of the scrutinee call
+(see [`except`](@ref)).
+
+`match pat = val` is an inline destructuring form using the same pattern language.
+
+`match` and `case` are contextual keywords: uses of `match` and `case` as identifiers, such as
+the [`match`](@ref) function, continue to work.
+
+!!! compat "Julia 1.14"
+    The `match` statement requires at least Julia 1.14.
+
+See the manual section on [Pattern Matching](@ref man-match) for more details.
+"""
+kw"match", kw"case"
+
+"""
+    except
+
+The `except` keyword declares the exceptions that are part of a method's API:
+
+```julia
+function read_setting(cfg, name)::String except KeyError
+    haskey(cfg, name) || throw(KeyError(name))?
+    return cfg[name]
+end
+```
+
+Declared exceptions do not unwind the stack; at any callsite that does not opt in, they are
+thrown as ordinary exceptions. A callsite propagates them with the postfix `?` operator, or
+selectively with the callsite filter `expr except E`. They are handled with `case except`
+arms of a [`match`](@ref match) statement.
+
+!!! compat "Julia 1.14"
+    Declared exceptions require at least Julia 1.14.
+
+See the manual section on [Declared Exceptions](@ref man-declared-exceptions) for more details.
+"""
+kw"except"
+
+"""
     new, or new{A,B,...}
 
 Special function available to inner constructors which creates a new object

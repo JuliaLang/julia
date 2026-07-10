@@ -489,12 +489,16 @@ end
 #
 # See the devdocs for further discussion.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
-    (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
-         [K"trycatchelse" t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
-         [K"trycatchelse" t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
-         [K"tryfinally" t f] -> (t, nothing, nothing, f, make_label(ctx, f), nothing)
-         [K"tryfinally" t f scope] -> (t, nothing, nothing, f, make_label(ctx, f), scope)
-     end
+    (try_block, catch_block, else_block, finally_block, catch_label, scope) = match ex
+    case K"trycatchelse"(t, c)
+        (t, c, nothing, nothing, make_label(ctx, c), nothing)
+    case K"trycatchelse"(t, c, e)
+        (t, c, e, nothing, make_label(ctx, c), nothing)
+    case K"tryfinally"(t, f)
+        (t, nothing, nothing, f, make_label(ctx, f), nothing)
+    case K"tryfinally"(t, f, scope)
+        (t, nothing, nothing, f, make_label(ctx, f), scope)
+    end
 
     has_finally_block = !isnothing(finally_block)
     end_label = !in_tail_pos || has_finally_block ? make_label(ctx, ex) : nothing

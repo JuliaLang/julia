@@ -265,6 +265,39 @@ function is_reserved_word(k)
     is_keyword(k) && !is_contextual_keyword(k)
 end
 
+# Determine whether `match` at the current position introduces a `match`
+# statement, as opposed to being used as a plain identifier (e.g. calling the
+# `Base.match` function). `match` is a contextual keyword: it only starts a
+# match statement when followed, after whitespace, by a token that could begin
+# a scrutinee expression but could not continue an expression in which `match`
+# is a leading identifier.
+function initiates_match_statement(ps::ParseState)
+    ps.stream.version >= (1, 14) || return false
+    t2 = peek_token(ps, 2, skip_newlines=false)
+    k2 = kind(t2)
+    if !preceding_whitespace(t2) && k2 in KSet"( [ { \" \"\"\" ` ``` ' ? ."
+        # match(x), match[i], match{T}, match"str", match', match?, match.f
+        # are call/index/macro/postfix uses of the identifier `match`
+        return false
+    end
+    if k2 in KSet"NewlineWs ; , EndMarker end ) ] } do else elseif catch finally"
+        # `match` as a standalone expression, argument, or before a block
+        # continuation keyword is an identifier
+        return false
+    end
+    if k2 == K"'"
+        # With preceding whitespace, ' starts a char literal scrutinee
+        return true
+    end
+    if is_operator(k2) && !(k2 in KSet"! ¬ √ ∛ ∜")
+        # `match == x`, `match => x`, `match in x`, `match = x`, `match - x`
+        # etc. use `match` as an identifier. Only operators that are
+        # exclusively unary prefix can start a scrutinee.
+        return false
+    end
+    return true
+end
+
 # Return true if the next word (or word pair) is reserved, introducing a
 # syntactic structure.
 function peek_initial_reserved_words(ps::ParseState)
@@ -275,7 +308,8 @@ function peek_initial_reserved_words(ps::ParseState)
         k2 = peek(ps, 2, skip_newlines=false)
         return (k == K"mutable"   && k2 == K"struct") ||
                (k == K"primitive" && k2 == K"type")   ||
-               (k == K"abstract"  && k2 == K"type")
+               (k == K"abstract"  && k2 == K"type")   ||
+               (k == K"match"     && initiates_match_statement(ps))
     elseif k == K"typegroup" && ps.stream.version < (1, 14)
         # On older versions, typegroup is an identifier. But if followed by
         # a type definition keyword (which would be a syntax error in old
@@ -330,7 +364,7 @@ function was_eventually_call(ps::ParseState)
         b = peek_behind(stream, p)
         if b.kind == K"call"
             return true
-        elseif b.kind == K"where" || b.kind == K"parens" ||
+        elseif b.kind == K"where" || b.kind == K"parens" || b.kind == K"except" ||
                 (b.kind == K"::" && has_flags(b.flags, INFIX_FLAG))
             if b.kind == K"::"
                 p_last = last_child_position(ps, p)
@@ -579,7 +613,27 @@ function parse_eq_star(ps::ParseState)
         # simple token followed by a common closing token
         bump(ps)
     else
-        parse_assignment(ps, parse_pair)
+        parse_assignment(ps, parse_with_except)
+    end
+end
+
+# Parse the infix contextual keyword `except` used for declared-exception
+# filtering (`expr except E`) and for exception declarations on method
+# signatures (`f(x)::T except E = rhs`). Binds tighter than assignment and
+# commas but looser than pairs:
+#
+# y = f() except E    ==>  (= y (except (call f) E))
+# k => v except E     ==>  (except (call-i k => v) E)
+#
+# `except` is only a keyword in Julia >= 1.14; before that (and in any other
+# position) it parses as an identifier.
+function parse_with_except(ps::ParseState)
+    mark = position(ps)
+    parse_pair(ps)
+    while peek(ps) == K"except" && ps.stream.version >= (1, 14)
+        bump(ps, TRIVIA_FLAG)
+        parse_pair(ps)
+        emit(ps, mark, K"except", INFIX_FLAG)
     end
 end
 
@@ -647,7 +701,7 @@ end
 function parse_comma(ps::ParseState, do_emit=true)
     mark = position(ps)
     n_commas = 0
-    parse_pair(ps)
+    parse_with_except(ps)
     while true
         if peek(ps) != K","
             if do_emit && n_commas >= 1
@@ -662,7 +716,7 @@ function parse_comma(ps::ParseState, do_emit=true)
             # x, = xs  ==>  (tuple x)
             continue
         end
-        parse_pair(ps)
+        parse_with_except(ps)
     end
 end
 
@@ -1458,7 +1512,15 @@ end
 # flisp: parse-call
 function parse_call(ps::ParseState)
     if peek_initial_reserved_words(ps)
+        mark = position(ps)
         parse_resword(ps)
+        t = peek_token(ps)
+        if kind(t) == K"?" && !preceding_whitespace(t) && ps.stream.version >= (1, 14)
+            # Postfix `?` on a block expression propagates declared exceptions
+            # match f() \n case except E(c) \n c \n end?
+            bump(ps, TRIVIA_FLAG)
+            emit(ps, mark, K"question")
+        end
     else
         mark = position(ps)
         # f(x)   ==>  (call f x)
@@ -1796,6 +1858,12 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # f'ᵀ ==> (call-post f 'ᵀ)
             bump(ps, remap_kind=K"Identifier")
             emit(ps, mark, K"call", POSTFIX_OP_FLAG)
+        elseif k == K"?" && !preceding_whitespace(t) && !is_macrocall &&
+                ps.stream.version >= (1, 14)
+            # Postfix `?` propagates declared exceptions
+            # f(x)?  ==>  (question (call f x))
+            bump(ps, TRIVIA_FLAG)
+            emit(ps, mark, K"question")
         elseif k == K"{"
             processing_macro_name = maybe_parsed_macro_name(
                 ps, processing_macro_name, last_identifier_orig_kind, mark)
@@ -2089,6 +2157,8 @@ function parse_resword(ps::ParseState)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"typegroup")
         min_supported_version(v"1.14", ps, mark, "typegroup")
+    elseif word == K"match"
+        parse_match(ps)
     elseif word == K"try"
         parse_try(ps)
     elseif word == K"return"
@@ -2411,6 +2481,14 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
         # function f() where T   end   ==>  (function (where (call f) T) (block))
         parse_where_chain(ps, mark)
     end
+    if is_function && peek(ps) == K"except" && ps.stream.version >= (1, 14)
+        # Declared exception type on the signature
+        # function f() except E end     ==>  (function (except (call f) E) (block))
+        # function f()::T except E end  ==>  (function (except (::-i (call f) T) E) (block))
+        bump(ps, TRIVIA_FLAG)
+        parse_pair(ps)
+        emit(ps, mark, K"except", INFIX_FLAG)
+    end
     # function f()::S where T end ==> (function (where (::-i (call f) S) T) (block))
     #
     # Ugly cases for compat where extra parentheses existed and we've
@@ -2513,6 +2591,117 @@ function parse_catch(ps::ParseState)
     end
     parse_block(ps)
     emit(ps, mark, K"catch")
+end
+
+# Parse a match statement
+#
+# match x
+# case 1
+#     "one"
+# case 2, 3
+#     "two or three"  # (comma is an error; patterns use parens for tuples)
+# end
+#
+# ==> (match x (case 1 (block "one")) ...)
+#
+# The scrutinee may be bound to a name over the match with `as`:
+#
+# match f() as v ... end  ==>  (match (as (call f) v) ...)
+#
+# Case arms support guards and declared-exception matching:
+#
+# case (a, b) if a > b   ==>  (case (guard (tuple-p a b) (call-i a > b)) (block))
+# case except IOError(c) ==>  (case-except (call IOError c) (block))
+#
+# There is also an inline match-destructuring form with no `case` arms:
+#
+# match (a, b) = val   ==>  (match_assign (tuple-p a b) val)
+function parse_match(ps::ParseState)
+    mark = position(ps)
+    bump(ps, TRIVIA_FLAG)  # `match`
+    scrut_mark = position(ps)
+    parse_with_except(ps)
+    if peek(ps) == K"="
+        # Inline match-destructuring: match pat = val
+        bump(ps, TRIVIA_FLAG)
+        parse_eq(ps)
+        emit(ps, mark, K"match_assign")
+        min_supported_version(v"1.14", ps, mark, "match destructuring")
+        return
+    end
+    if peek(ps) == K"as"
+        # match f() as v ... end binds the matched value to `v`
+        bump(ps, TRIVIA_FLAG)
+        k = peek(ps)
+        if k == K"Identifier" || is_contextual_keyword(k)
+            bump(ps, remap_kind=K"Identifier")
+        else
+            bump_invisible(ps, K"error", TRIVIA_FLAG,
+                           error="expected identifier after `as` in `match`")
+        end
+        emit(ps, scrut_mark, K"as")
+    end
+    k = peek(ps)
+    if k in KSet"NewlineWs ;"
+        bump(ps, TRIVIA_FLAG)
+    elseif !(k in KSet"case end EndMarker")
+        recover(is_closer_or_newline, ps, TRIVIA_FLAG,
+                error="expected newline or `;` after `match` scrutinee")
+    end
+    n_arms = 0
+    while true
+        bump_semicolon_trivia(ps)
+        bump_trivia(ps)
+        peek(ps) == K"case" || break
+        parse_match_case(ps)
+        n_arms += 1
+    end
+    if n_arms == 0
+        bump_invisible(ps, K"error", TRIVIA_FLAG,
+                       error="`match` requires at least one `case` arm")
+    end
+    bump_closing_token(ps, K"end")
+    emit(ps, mark, K"match")
+    min_supported_version(v"1.14", ps, mark, "match statement")
+end
+
+# Parse a single `case` arm of a match statement: the pattern with optional
+# `except` prefix and `if` guard, followed by the arm body, which extends
+# until the next `case` or the closing `end`. An empty body is allowed (the
+# arm then evaluates to the matched value).
+function parse_match_case(ps::ParseState)
+    mark = position(ps)
+    bump(ps, TRIVIA_FLAG)  # `case`
+    arm_flags = EMPTY_FLAGS
+    t = peek_token(ps)
+    if kind(t) == K"except" && preceding_whitespace(t) &&
+            !(peek(ps, 2) in KSet"NewlineWs ; if end EndMarker")
+        # case except PAT matches the declared-exception channel of the
+        # scrutinee call. (To match against a variable that happens to be
+        # named `except`, parenthesize it.)
+        bump(ps, TRIVIA_FLAG)
+        arm_flags = EXCEPT_ARM_FLAG
+    end
+    pat_mark = position(ps)
+    parse_with_except(ps)
+    if peek(ps) == K"if"
+        # case x if x > 0 ...
+        bump(ps, TRIVIA_FLAG)
+        parse_cond(ps)
+        emit(ps, pat_mark, K"guard")
+    end
+    k = peek(ps)
+    if !(k in KSet"NewlineWs ; case end EndMarker")
+        # case 1 "one"  ==>  juxtaposition is not allowed; body goes on the
+        # next line or after `;`
+        recover(is_closer_or_newline, ps, TRIVIA_FLAG,
+                error="expected newline or `;` after `case` pattern")
+    end
+    # Arm body: a block of statements until the next `case`/`end`
+    body_mark = position(ps)
+    parse_Nary(ps, parse_eq, KSet"NewlineWs ;", KSet"case end else elseif catch finally")
+    emit(ps, body_mark, K"block")
+    emit(ps, mark, K"case", arm_flags)
 end
 
 # flisp: parse-do

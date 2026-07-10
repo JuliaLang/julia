@@ -277,27 +277,28 @@ function annotatedstring(xs...)
     annotations = Vector{RegionAnnotation}()
     for x in xs
         size = filesize(s.io)
-        if x isa AnnotatedString
-            for annot in x.annotations
+        match x
+        case a::AnnotatedString
+            for annot in a.annotations
                 push!(annotations, @inline(setindex(annot, annot.region .+ size, :region)))
             end
-            print(s, x.string)
-        elseif x isa SubString{<:AnnotatedString}
-            for annot in x.string.annotations
+            print(s, a.string)
+        case ss::SubString{<:AnnotatedString}
+            for annot in ss.string.annotations
                 start, stop = first(annot.region), last(annot.region)
-                if start <= x.offset + x.ncodeunits && stop > x.offset
-                    rstart = size + max(0, start - x.offset - 1) + 1
-                    rstop = size + min(stop, x.offset + x.ncodeunits) - x.offset
+                if start <= ss.offset + ss.ncodeunits && stop > ss.offset
+                    rstart = size + max(0, start - ss.offset - 1) + 1
+                    rstop = size + min(stop, ss.offset + ss.ncodeunits) - ss.offset
                     push!(annotations, @inline(setindex(annot, rstart:rstop, :region)))
                 end
             end
-            print(s, unannotate(x))
-        elseif x isa AnnotatedChar
-            for annot in x.annotations
+            print(s, unannotate(ss))
+        case c::AnnotatedChar
+            for annot in c.annotations
                 push!(annotations, (region=1+size:1+size, annot...))
             end
-            print(s, x.char)
-        else
+            print(s, c.char)
+        case _
             print(s, x)
         end
     end

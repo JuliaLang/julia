@@ -178,6 +178,7 @@ export
     EOFError,
     InvalidStateException,
     KeyError,
+    MatchError,
     MissingException,
     ProcessFailedException,
     TaskFailedException,

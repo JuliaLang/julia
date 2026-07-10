@@ -927,3 +927,7 @@ RegexMatch("Test Test ")
 ```
 """
 ^(r::Regex, i::Integer) = Regex(string("(?:", r.pattern, "){$i}"), r.compile_options, r.match_options)
+
+# Regexes as `match` statement patterns: match any string the regex matches
+pattern_match(re::Regex, @nospecialize(v)) =
+    (v isa AbstractString && match(re, v) !== nothing) ? () : nothing

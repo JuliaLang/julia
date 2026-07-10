@@ -71,11 +71,11 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         push!(iter.todo, (ex, false, 1))
         return lower_step(iter, mod, world; soft_scope)
     elseif k == K"module"
-        (version, notbare, name, body) = @stm ex begin
-            [K"module" version nb_st name body] ->
-                (version.value, nb_st.value, name, body)
-            [K"module" nb_st name body] ->
-                (nothing, nb_st.value, name, body)
+        (version, notbare, name, body) = match ex
+        case K"module"(version, nb_st, name, body)
+            (version.value, nb_st.value, name, body)
+        case K"module"(nb_st, name, body)
+            (nothing, nb_st.value, name, body)
         end
         if kind(name) != K"Identifier"
             throw(LoweringError(name, "Expected module name"))
@@ -417,21 +417,28 @@ function compute_ssaflags(st::SyntaxTree)
     end
     for (i, stmt) in enumerate(stmts)
         is_flag_stmt = true
-        @stm stmt begin
-            [K"inbounds" [K"Value"]] -> stmt[1].value::Bool ?
+        match stmt
+        case K"inbounds"(K"Value"())
+            stmt[1].value::Bool ?
                 (inbounds_depth += 1) : # push
                 (inbounds_depth = 0)    # clear
-            [K"inbounds_pop"] -> (inbounds_depth = max(0, inbounds_depth-1))
-            [K"boundscheck" _...] -> nothing
-            [K"inline" [K"Value"]] -> stmt[1].value::Bool ?
+        case K"inbounds_pop"()
+            inbounds_depth = max(0, inbounds_depth-1)
+        case K"boundscheck"(_...)
+        case K"inline"(K"Value"())
+            stmt[1].value::Bool ?
                 push!(inline_flags, true) : checked_pop!(inline_flags)
-            [K"noinline" [K"Value"]] -> stmt[1].value::Bool ?
+        case K"noinline"(K"Value"())
+            stmt[1].value::Bool ?
                 push!(inline_flags, false) : checked_pop!(inline_flags)
-            [K"purity"] -> checked_pop!(purity_flags)
-            [K"purity" _ _...] -> push!(
+        case K"purity"()
+            checked_pop!(purity_flags)
+        case K"purity"(_, _...)
+            push!(
                 purity_flags,
                 UInt32(purity_expr_to_flags(stmt)) << Core.Compiler.NUM_IR_FLAGS)
-            _ -> is_flag_stmt = false
+        case _
+            is_flag_stmt = false
         end
         flag = UInt32(0)
         if !isempty(inline_flags)

@@ -1422,6 +1422,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         ret_k = K"macrocall"
         pushfirst!(cs, valleaf(source_location(LineNumberNode, st)))
         pushfirst!(cs, core_globalref("@doc"))
+    elseif k === K"case" && has_flags(st, EXCEPT_ARM_FLAG)
+        # (case-except pat body) => (case_except pat body)
+        ret_k = K"case_except"
     elseif k === K"dotcall" || k === K"call" && n_cs > 0
         if is_infix_op_call(st) || is_postfix_op_call(st)
             cs[2], cs[1] = cs[1], cs[2]
@@ -1772,4 +1775,64 @@ function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
         return ret_cs[1]
     end
     return mknode(st, ret_cs)
+end
+
+#-------------------------------------------------------------------------------
+# `match` statement integration (Julia >= 1.14)
+#
+# Kinds work as patterns in `match` statements: a bare `K"k"` pattern
+# matches any `SyntaxTree` of that kind, and a call pattern
+# `K"k"(p1, ps..., p2)` also destructures the children, with an optional
+# slurp anywhere in the argument list. These are the same patterns as
+# `@stm` (which they supersede on Julia versions with the `match`
+# statement).
+@static if isdefined(Base, :pattern_match)
+
+Base.pattern_match(k::Kind, @nospecialize(v)) =
+    v isa SyntaxTree && kind(v) == k ? () : nothing
+
+struct SyntaxTreeMatcher{PS<:Tuple}
+    k::Kind
+    pats::PS
+end
+
+Base.matcher(k::Kind, pats...) = SyntaxTreeMatcher(k, pats)
+
+function Base.pattern_match(m::SyntaxTreeMatcher, @nospecialize(v))
+    v isa SyntaxTree || return nothing
+    kind(v) == m.k || return nothing
+    pats = m.pats
+    n = length(pats)
+    si = findfirst(p -> p isa Base.MatchSlurp, pats)
+    nc = numchildren(v)
+    caps = ()
+    if si === nothing
+        nc == n || return nothing
+        for i in 1:n
+            r = Base.pattern_match(pats[i], v[i])
+            r === nothing && return nothing
+            caps = (caps..., r...)
+        end
+    else
+        nbefore = si - 1
+        nafter = n - si
+        nc >= nbefore + nafter || return nothing
+        for i in 1:nbefore
+            r = Base.pattern_match(pats[i], v[i])
+            r === nothing && return nothing
+            caps = (caps..., r...)
+        end
+        r = Base.pattern_match((pats[si]::Base.MatchSlurp).pat,
+                               v[nbefore+1:nc-nafter])
+        r === nothing && return nothing
+        caps = (caps..., r...)
+        for i in 1:nafter
+            r = Base.pattern_match(pats[si+i], v[nc-nafter+i])
+            r === nothing && return nothing
+            caps = (caps..., r...)
+        end
+    end
+    return caps
+end
+
 end

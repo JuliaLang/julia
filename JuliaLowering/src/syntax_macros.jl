@@ -112,43 +112,51 @@ function ccall_macro_parse(ctx, exs)
     opts = exs[1:end-1]
     ex = exs[end]
     for opt in opts
-        @stm opt begin
-            [K"=" [K"Identifier"] val] -> if opt[1].name_val != "gc_safe"
+        match opt
+        case K"="(K"Identifier"(), val)
+            if opt[1].name_val != "gc_safe"
                 throw(MacroExpansionError(opt[1], "unknown option name for ccall"))
             elseif !(kind(val) in KSet"Bool Value")
                 throw(MacroExpansionError(val, "gc_safe must be true or false"))
             else
                 gc_safe = val.value
             end
-            _ -> throw(MacroExpansionError(opt, "bad option to ccall"))
+        case _
+            throw(MacroExpansionError(opt, "bad option to ccall"))
         end
     end
     if length(opts) >= 2
         throw(MacroExpansionError(opts[2], "too many options provided to @ccall"))
     end
 
-    (func, argts, rettype) = @stm ex begin
-        [K"::" [K"call" f as...] r] -> let f_expanded = @stm f begin
-            [K"." lib sym] -> @ast ctx f [K"tuple" sym lib]
-            [K"inert" [K"Identifier"]] -> @ast ctx f [K"tuple" f]
-            [K"Identifier"] -> @ast ctx f [K"tuple" [K"inert" f]]
-            [K"$" x] -> let kx = kind(x)
-                if kx in KSet"tuple String string" ||
-                        (kx === K"Value" && x.value isa Tuple) ||
-                        kx == K"inert" && !(kind(x[1]) == K"Value" && x[1].value isa Ptr)
-                    throw(MacroExpansionError(
-                        f, "interpolated value should be a variable or expression, not a literal name or tuple"))
-                end
-                x
+    (func, argts, rettype) = match ex
+    case K"::"(K"call"(f, as...), r)
+        f_expanded = match f
+        case K"."(lib, sym)
+            @ast ctx f [K"tuple" sym lib]
+        case K"inert"(K"Identifier"())
+            @ast ctx f [K"tuple" f]
+        case K"Identifier"()
+            @ast ctx f [K"tuple" [K"inert" f]]
+        case K"$"(x)
+            kx = kind(x)
+            if kx in KSet"tuple String string" ||
+                    (kx === K"Value" && x.value isa Tuple) ||
+                    kx == K"inert" && !(kind(x[1]) == K"Value" && x[1].value isa Ptr)
+                throw(MacroExpansionError(
+                    f, "interpolated value should be a variable or expression, not a literal name or tuple"))
             end
-            _ -> throw(MacroExpansionError(
+            x
+        case _
+            throw(MacroExpansionError(
                 f, "@ccall function name must be a symbol, a `.` node (e.g. `libc.printf`) or an interpolated function pointer (with `\$`)"))
         end
-            (f_expanded, as, r)
-        end
-        [K"call" _...] -> throw(MacroExpansionError(
+        (f_expanded, as, r)
+    case K"call"(_...)
+        throw(MacroExpansionError(
             ex, "expected a return type annotation `::SomeType`", position=:end))
-        _ -> throw(MacroExpansionError(
+    case _
+        throw(MacroExpansionError(
             ex, "expected call expression with return type"))
     end
 
@@ -164,9 +172,12 @@ function ccall_macro_parse(ctx, exs)
     args = SyntaxList(ctx)
     types = SyntaxList(ctx)
     function pusharg!(at)
-        @stm at begin
-            [K"::" a t] -> (push!(args, a); push!(types, t))
-            _ -> throw(MacroExpansionError(
+        match at
+        case K"::"(a, t)
+            push!(args, a)
+            push!(types, t)
+        case _
+            throw(MacroExpansionError(
                 at, "argument needs a type annotation"))
         end
     end

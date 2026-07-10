@@ -313,7 +313,7 @@ elseif head === :call && length(x.args) >= 1 && isexpr(x.args[1], :(::))
         elseif isexpr(x, (:call, :macrocall, :function, :(=), :macro, :where, :curly,
                           :(::), :(<:), :(>:), :local, :global, :const, :atomic,
                           :copyast, :quote, :inert, :primitive, :abstract,
-                          :escape, :var"hygienic-scope"))
+                          :escape, :var"hygienic-scope", :except))
             # similar to is_function_def, but without -> and with various assignments, quoted statements, and miscellaneous that might be encountered in struct definitions also
             1
         else
@@ -608,7 +608,8 @@ isquotedmacrocall(@nospecialize x) =
     isexpr(x.args[1].value, :macrocall, 2)
 # Simple expressions / atoms the may be documented.
 isbasicdoc(@nospecialize x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
-is_signature(@nospecialize x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)
+is_signature(@nospecialize x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where) ||
+    (isexpr(x, :except, 2) && is_signature(x.args[1]))
 
 function _doc(binding::Binding, sig::Type = Union{})
     if defined(binding)
@@ -681,7 +682,7 @@ docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)
 # iscallexpr checks if an expression is a :call expression. The call expression may be
 # also part of a :where expression, so it unwraps the :where layers until it reaches the
 # "actual" expression
-iscallexpr(ex::Expr) = isexpr(ex, :where) ? iscallexpr(ex.args[1]) : isexpr(ex, :call)
+iscallexpr(ex::Expr) = isexpr(ex, :where) || isexpr(ex, :except) ? iscallexpr(ex.args[1]) : isexpr(ex, :call)
 iscallexpr(@nospecialize ex) = false
 
 function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true)

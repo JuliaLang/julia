@@ -1069,8 +1069,11 @@ const all_kws = Set([
     # Contextual keywords
     "abstract",
     "as",
+    "case",
     "doc",
+    "except",
     "goto",
+    "match",
     "mutable",
     "outer",
     "primitive",

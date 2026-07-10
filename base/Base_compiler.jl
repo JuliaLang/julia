@@ -178,6 +178,10 @@ end
 ## Load essential files and libraries
 include("essentials.jl")
 
+# match statement and declared exceptions runtime support
+include("match.jl")
+include("except.jl")
+
 # Because lowering inserts direct references, it is mandatory for this binding
 # to exist before we start inferring code.
 function string end

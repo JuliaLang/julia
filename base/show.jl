@@ -51,13 +51,14 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     get(io, :compact, false)::Bool && return show(io, f)
     ft = typeof(f)
     name = ft.name.singletonname
-    if isa(f, Core.IntrinsicFunction)
+    match f
+    case ::Core.IntrinsicFunction
         print(io, f)
         id = Core.Intrinsics.bitcast(Int32, f)
         print(io, " (intrinsic function #$id)")
-    elseif isa(f, Core.Builtin)
+    case ::Core.Builtin
         print(io, name, " (built-in function)")
-    else
+    case _
         n = length(methods(f))
         m = n==1 ? "method" : "methods"
         sname = string(name)
@@ -275,12 +276,14 @@ function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     fields = fieldnames(JLOptions)
     nfields = length(fields)
     for (i, f) in enumerate(fields)
-        v = getfield(opt, i)
-        if isa(v, Ptr{UInt8})
-            v = (v != C_NULL) ? unsafe_string(v) : ""
-        elseif isa(v, Ptr{Ptr{UInt8}})
-            v = unsafe_load_commands(v)
-        end
+        v = match getfield(opt, i) as v
+            case p::Ptr{UInt8}
+                p != C_NULL ? unsafe_string(p) : ""
+            case p::Ptr{Ptr{UInt8}}
+                unsafe_load_commands(p)
+            case _
+                v
+            end
         println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
     end
     print(io, ")")
@@ -602,15 +605,15 @@ modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
 modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
-    if x isa DataType
-        push!(s, parentmodule(x))
-    elseif x isa TypeEq
+    match x
+    case d::DataType
+        push!(s, parentmodule(d))
+    case ::TypeEq | ::Core.TypeEgal
         modulesof!(s, x)
-    elseif x isa Core.TypeEgal
-        modulesof!(s, x)
-    elseif x isa Union
-        modulesof!(s, x.a)
-        modulesof!(s, x.b)
+    case u::Union
+        modulesof!(s, u.a)
+        modulesof!(s, u.b)
+    case _
     end
     s
 end
@@ -1058,19 +1061,23 @@ function _show_type(io::IO, @nospecialize(x::Type))
     elseif x isa TypeEq
         show_typeeq(io, x)
         return
-    elseif x isa DataType
-        show_datatype(io, x)
+    end
+
+    match x
+    case d::DataType
+        show_datatype(io, d)
         return
-    elseif x isa Union
-        if get(io, :compact, true)::Bool && show_unionaliases(io, x)
+    case u::Union
+        if get(io, :compact, true)::Bool && show_unionaliases(io, u)
             return
         end
         print(io, "Union")
-        show_delim_array(io, uniontypes(x), '{', ',', '}', false)
+        show_delim_array(io, uniontypes(u), '{', ',', '}', false)
         return
-    elseif x === Union{}
+    case Union{}
         print(io, "Union{}")
         return
+    case ::UnionAll
     end
 
     x = x::UnionAll
@@ -1467,12 +1474,12 @@ end
 show(io::IO, mi::Core.MethodInstance) = show_mi(io, mi)
 function show(io::IO, codeinst::Core.CodeInstance)
     print(io, "CodeInstance for ")
-    def = codeinst.def
-    if isa(def, Core.ABIOverride)
-        show_mi(io, def.def)
+    match codeinst.def
+    case abi::Core.ABIOverride
+        show_mi(io, abi.def)
         print(io, " (ABI Overridden)")
-    else
-        show_mi(io, def::MethodInstance)
+    case def::MethodInstance
+        show_mi(io, def)
     end
     if codeinst.owner !== nothing
         print(io, " (foreign)")
@@ -1480,8 +1487,8 @@ function show(io::IO, codeinst::Core.CodeInstance)
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
-    def = mi.def
-    if isa(def, Method)
+    match mi.def as def
+    case ::Method
         if isdefined(def, :generator) && mi === def.generator
             print(io, "MethodInstance generator for ")
             show(io, def)
@@ -1489,7 +1496,7 @@ function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
             print(io, "MethodInstance for ")
             show_tuple_as_call(io, def.name, mi.specTypes; qualified=true)
         end
-    else
+    case _
         print(io, "Toplevel MethodInstance thunk")
         # `thunk` is not very much information to go on. If this
         # MethodInstance is part of a stacktrace, it gets location info
@@ -1859,18 +1866,19 @@ end
 
 function show_unquoted(io::IO, ex::SlotNumber, ::Int, ::Int)
     slotid = ex.id
-    slotnames = get(io, :SOURCE_SLOTNAMES, false)
-    if isa(slotnames, Vector{String}) && slotid ≤ length(slotnames)
+    match get(io, :SOURCE_SLOTNAMES, false)
+    case slotnames::Vector{String} if slotid ≤ length(slotnames)
         print(io, slotnames[slotid])
-    else
+    case _
         print(io, "_", slotid)
     end
 end
 
 function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
-    if isa(ex.value, Symbol)
-        show_unquoted_quote_expr(io, ex.value, indent, prec, 0)
-    else
+    match ex.value
+    case value::Symbol
+        show_unquoted_quote_expr(io, value, indent, prec, 0)
+    case _
         print(io, "\$(QuoteNode(")
         # QuoteNode does not allows for interpolation, so if ex.value is an
         # Expr it should be shown with quote_level equal to zero.
@@ -1881,27 +1889,22 @@ function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
 end
 
 function show_unquoted_quote_expr(io::IO, @nospecialize(value), indent::Int, prec::Int, quote_level::Int)
-    if isa(value, Symbol)
-        sym = value::Symbol
-        if value in quoted_syms
+    match value
+    case sym::Symbol
+        if sym in quoted_syms
             print(io, ":(", sym, ")")
+        elseif isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
+            print(io, ":", sym)
         else
-            if isidentifier(sym) || (_isoperator(sym) && sym !== Symbol("'"))
-                print(io, ":", sym)
-            else
-                print(io, "Symbol(", repr(String(sym)), ")")
-            end
+            print(io, "Symbol(", repr(String(sym)), ")")
         end
-    else
-        if isa(value,Expr) && value.head === :block
-            value = value::Expr
-            show_block(IOContext(io, beginsym=>false), "quote", value, indent, quote_level)
-            print(io, "end")
-        else
-            print(io, ":(")
-            show_unquoted(io, value, indent+2, -1, quote_level)  # +2 for `:(`
-            print(io, ")")
-        end
+    case ex::Expr if ex.head === :block
+        show_block(IOContext(io, beginsym=>false), "quote", ex, indent, quote_level)
+        print(io, "end")
+    case _
+        print(io, ":(")
+        show_unquoted(io, value, indent+2, -1, quote_level)  # +2 for `:(`
+        print(io, ")")
     end
 end
 
@@ -2961,9 +2964,10 @@ function dump(io::IOContext, @nospecialize(x), n::Int, indent)
         return
     end
     T = typeof(x)
-    if isa(x, Function)
+    match x
+    case ::Function
         print(io, x, " (function of type ", T, ")")
-    else
+    case _
         print(io, T)
     end
     nf = nfields(x)

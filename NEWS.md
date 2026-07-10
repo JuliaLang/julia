@@ -18,6 +18,26 @@ New language features
     `continue name` to continue a labeled loop ([#60481]).
   - `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
     field types. All types in the group are resolved atomically at the end of the block ([#60569]).
+  - New `match`/`case`/`end` statement for pattern matching. Patterns support destructuring
+    (tuples, arrays, pairs, properties, and struct fields), type tests, guards, alternatives, and an
+    extensible matcher protocol (`Base.matcher` / `Base.pattern_match`). The matched value can be
+    bound over the match with `match expr as name`. Each arm runs in its own scope like a `let`
+    block, and a `match` participates in the default `break` scope, so `break` (or
+    `break _ value`) exits the match while unlabeled `continue` is disallowed inside arms (use a
+    labeled loop). There is also an inline destructuring form `match pat = val`. `match` and
+    `case` are contextual keywords; existing uses of `match` as an identifier (such as
+    `Base.match`) continue to work.
+  - Functions can declare the exceptions that are part of their API with the new `except` keyword:
+    `function f(x)::T except E`. Declared exceptions do not unwind the stack; the internal entry
+    point (`Base.except_call`) returns a `Base.Except{T,E}` value, a single wrapper type carrying
+    either the ordinary result or a declared exception, and
+    declared exceptions are thrown as ordinary exceptions at any callsite that does not
+    participate. Callsites opt in
+    with the postfix `?` operator (propagate everything declared, filtered by the caller's own
+    declaration) or the callsite filter `expr except E`. Exceptional results can be matched with
+    `case except` arms in a `match` statement. In a function without a declaration, `?` implies
+    an inferred `except Any` declaration. `?` in the body of a literal comprehension propagates
+    from the comprehension itself.
 
 Language changes
 ----------------

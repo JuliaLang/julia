@@ -306,10 +306,18 @@ ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
 # N.B.: Should match definition in src/ast.c:jl_parse
 function parser_for_module(mod::Union{Module, Nothing})
-    mod === nothing && return Core._parse
-    isdefined(mod, Symbol("#_internal_julia_parse")) ?
-        getglobal(mod, Symbol("#_internal_julia_parse")) :
-        Core._parse
+    # Submodules inherit the parser of their enclosing module; in particular,
+    # a package's submodules and non-entry files inherit the package's syntax
+    # version during loading and precompilation.
+    while mod !== nothing
+        if isdefined(mod, Symbol("#_internal_julia_parse"))
+            return getglobal(mod, Symbol("#_internal_julia_parse"))
+        end
+        pmod = parentmodule(mod)
+        pmod === mod && break
+        mod = pmod
+    end
+    return Core._parse
 end
 
 function _parse_string(text::AbstractString, filename::AbstractString,
@@ -461,68 +469,59 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                             @nospecialize(type_signature), static_param_values::Vector{Any},
                             slot_offset::Int, statement_offset::Int,
                             boundscheck::Symbol)
-    if isa(x, Core.SSAValue)
-        return Core.SSAValue(x.id + statement_offset)
-    end
-    if isa(x, Core.GotoNode)
-        return Core.GotoNode(x.label + statement_offset)
-    end
-    if isa(x, Core.SlotNumber)
-        id = x.id
+    match x
+    case ssa::Core.SSAValue
+        return Core.SSAValue(ssa.id + statement_offset)
+    case goto::Core.GotoNode
+        return Core.GotoNode(goto.label + statement_offset)
+    case slot::Core.SlotNumber
+        id = slot.id
         if 1 <= id <= length(slot_replacements)
             return slot_replacements[id]
         end
         return Core.SlotNumber(id + slot_offset)
-    end
-    if isa(x, Core.NewvarNode)
-        return Core.NewvarNode(_partially_inline!(x.slot, slot_replacements, type_signature,
+    case nv::Core.NewvarNode
+        return Core.NewvarNode(_partially_inline!(nv.slot, slot_replacements, type_signature,
                                                   static_param_values, slot_offset,
                                                   statement_offset, boundscheck))
-    end
-    if isa(x, Core.PhiNode)
-        partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+    case phi::Core.PhiNode
+        partially_inline!(phi.values, slot_replacements, type_signature, static_param_values,
                           slot_offset, statement_offset, boundscheck)
-        x.edges .+= slot_offset
-        return x
-    end
-    if isa(x, Core.UpsilonNode)
-        if !isdefined(x, :val)
-            return x
+        phi.edges .+= slot_offset
+        return phi
+    case ups::Core.UpsilonNode
+        if !isdefined(ups, :val)
+            return ups
         end
         return Core.UpsilonNode(
-            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+            _partially_inline!(ups.val, slot_replacements, type_signature, static_param_values,
                                slot_offset, statement_offset, boundscheck),
         )
-    end
-    if isa(x, Core.PhiCNode)
-        _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+    case phic::Core.PhiCNode
+        _partially_inline!(phic.values, slot_replacements, type_signature, static_param_values,
                            slot_offset, statement_offset, boundscheck)
-    end
-    if isa(x, Core.ReturnNode)
+    case ret::Core.ReturnNode
        # Unreachable doesn't have val defined
-       if !isdefined(x, :val)
-          return x
+       if !isdefined(ret, :val)
+          return ret
        else
         return Core.ReturnNode(
-            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+            _partially_inline!(ret.val, slot_replacements, type_signature, static_param_values,
                                slot_offset, statement_offset, boundscheck),
         )
        end
-    end
-    if isa(x, Core.GotoIfNot)
+    case gin::Core.GotoIfNot
         return Core.GotoIfNot(
-            _partially_inline!(x.cond, slot_replacements, type_signature, static_param_values,
+            _partially_inline!(gin.cond, slot_replacements, type_signature, static_param_values,
                                slot_offset, statement_offset, boundscheck),
-            x.dest + statement_offset,
+            gin.dest + statement_offset,
         )
-    end
-    if isa(x, Core.EnterNode)
-        if x.catch_dest == 0
-            return x
+    case enter::Core.EnterNode
+        if enter.catch_dest == 0
+            return enter
         end
-        return Core.EnterNode(x, x.catch_dest + statement_offset)
-    end
-    if isa(x, Expr)
+        return Core.EnterNode(enter, enter.catch_dest + statement_offset)
+    case ::Expr
         head = x.head
         if head === :static_parameter
             if isassigned(static_param_values, x.args[1])
@@ -597,6 +596,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end
+    case _
     end
     return x
 end
