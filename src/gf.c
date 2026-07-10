@@ -3936,7 +3936,12 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
         compile_option == JL_OPTIONS_COMPILE_MIN) {
         jl_code_info_t *src = jl_code_for_interpreter(mi, world);
-        if (!jl_code_requires_compiler(src, 0)) {
+        // Root src explicitly: it is reachable as m->source only until a
+        // concurrent thread publishes its own uncompressed copy there.
+        JL_GC_PUSH1(&src);
+        int interpretable = !jl_code_requires_compiler(src, 0);
+        JL_GC_POP();
+        if (interpretable) {
             jl_debuginfo_t *di = NULL;
             jl_svec_t *edges = jl_emptysvec;
             jl_code_instance_t *codeinst = jl_new_codeinst(mi, jl_nothing,

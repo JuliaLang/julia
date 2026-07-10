@@ -775,11 +775,20 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world
             jl_method_t *m = mi->def.method;
             src = (jl_code_info_t*)m->source;
             if (!jl_is_code_info(src)) {
-                src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
+                // Root the compressed blob across the (allocating) decode:
+                // another thread interpreting the same method concurrently can
+                // win the publish below first, at which point m->source no
+                // longer keeps the blob alive while this thread is still
+                // reading it.
+                jl_value_t *compressed = (jl_value_t*)src;
+                JL_GC_PUSH1(&compressed);
+                src = jl_uncompress_ir(m, NULL, compressed);
+                JL_GC_POP();
                 // Replace the method source by the uncompressed version,
                 // under the assumption that the interpreter may need to
                 // access it frequently. TODO: Have some sort of usage-based
-                // cache here.
+                // cache here. (Concurrent publishes store equivalent copies;
+                // last one wins.)
                 jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)src);
             }
             ret = (jl_value_t*)src;
@@ -825,6 +834,9 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
     jl_code_info_t *src = NULL;
+    // NOTE: from here until `code`/`src` are stored into the GC frame below,
+    // they may be reachable only through these locals (a concurrent thread
+    // can republish m->source); this stretch must stay free of safepoints.
     jl_value_t *code = jl_code_or_ci_for_interpreter(mi, world);
     jl_code_instance_t *ci = NULL;
     if (jl_is_code_instance(code)) {
