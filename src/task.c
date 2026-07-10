@@ -663,16 +663,21 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     jl_task_t *t = ptls->next_task;
-    if (t == ct) {
+    if (t == ct && !ptls->in_finalizer && !ptls->in_pure_callback) {
+        // switching to self is a no-op, but only when a task switch would
+        // have been permitted at all: the forbidden-context errors below must
+        // not depend on whether the scheduler happened to have another
+        // runnable task (e.g. `yield()` on an otherwise idle thread pops the
+        // current task itself)
         return;
     }
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
-    if (t->ctx.started && t->ctx.stkbuf == NULL)
-        jl_error("attempt to switch to exited task");
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
     if (ptls->in_pure_callback)
         jl_error("task switch not allowed from inside staged nor pure functions");
+    if (t->ctx.started && t->ctx.stkbuf == NULL)
+        jl_error("attempt to switch to exited task");
     if (!jl_set_task_tid(t, jl_atomic_load_relaxed(&ct->tid))) // manually yielding to a task
         jl_error("cannot switch to task running on another thread");
 

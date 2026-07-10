@@ -2290,7 +2290,6 @@ JL_DLLEXPORT void jl_tier_resume(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_suspend_parking(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_resume_parking(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_tier_parking_suspended(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_tier_on_worker_thread(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_tier_promote(jl_method_instance_t *mi);
 JL_DLLEXPORT int jl_tier_in_promotion(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_tier_ci_avoid_interp(jl_code_instance_t *ci);

@@ -319,7 +319,6 @@ JL_DLLEXPORT void jl_tier_init(void) JL_NOTSAFEPOINT
 static uv_thread_t tier_worker_uvthread;
 static _Atomic(int) tier_worker_running = 0;
 static _Atomic(int) tier_worker_stop = 0;
-static _Atomic(int16_t) tier_worker_tid = -1;
 
 // Quiesce state (documented with the quiesce machinery below). Defined
 // here, not just forward-declared: a second tentative definition is valid
@@ -373,7 +372,6 @@ static void tier_worker_threadfun(void *arg)
     jl_adopt_thread();
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    jl_atomic_store_relaxed(&tier_worker_tid, jl_atomic_load_relaxed(&ct->tid));
     // The worker is an implementation detail: never run user finalizers here.
     // A finalizer that attempts a task switch behaves differently on this
     // thread (nothing to switch to, so e.g. `yield()` silently no-ops instead
@@ -504,18 +502,6 @@ JL_DLLEXPORT void jl_tier_resume_parking(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT int jl_tier_parking_suspended(void) JL_NOTSAFEPOINT
 {
     return jl_atomic_load_relaxed(&tier_parking_suspended) != 0;
-}
-
-// Whether the current thread is the tier promotion worker. Used by
-// jl_code_for_staged to refuse running user generators there: a generator can
-// observe its execution environment (`yield()` throws in a pure context only
-// when a runnable task exists, and the worker's run queue is always empty),
-// so an expansion on the worker could succeed — and be cached — where the
-// requesting thread's expansion errors.
-JL_DLLEXPORT int jl_tier_on_worker_thread(void) JL_NOTSAFEPOINT
-{
-    int16_t wtid = jl_atomic_load_relaxed(&tier_worker_tid);
-    return wtid >= 0 && jl_atomic_load_relaxed(&jl_current_task->tid) == wtid;
 }
 
 // Park the worker and wait for any in-flight promotion to finish.

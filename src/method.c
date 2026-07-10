@@ -782,15 +782,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROP
         return (jl_code_info_t*)jl_copy_ast((jl_value_t*)src);
     }
 
-    // Refuse to run user generators on the tier promotion worker: a generator
-    // can observe its execution environment (e.g. `yield()` throws in a pure
-    // context only when there is a runnable task, and the worker's run queue
-    // is always empty), so an expansion here could succeed — and be cached —
-    // where the requesting thread's expansion errors. Callers treat the error
-    // as "generator cannot be invoked" and fall back to a dynamic call.
-    if (jl_tier_on_worker_thread())
-        jl_error("generated function expansion is not available on the tier worker");
-
     JL_TIMING(STAGED_FUNCTION, STAGED_FUNCTION);
     jl_value_t *tt = mi->specTypes;
     jl_method_t *def = mi->def.method;
