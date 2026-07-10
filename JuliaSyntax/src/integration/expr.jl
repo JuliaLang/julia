@@ -244,8 +244,7 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
         elseif k == K"VERSION"
             return version_to_expr(nodehead)
         else
-            scoped_val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
-            val = @isexpr(scoped_val, :scope_layer) ? scoped_val.args[1] : scoped_val
+            val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
             if val isa Union{Int128,UInt128,BigInt}
                 # Ignore the values of large integers and convert them back to
                 # symbolic/textual form for compatibility with the Expr
@@ -256,11 +255,9 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
                         Symbol("@big_str")
                 return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
             elseif is_identifier(k)
-                val2 = lower_identifier_name(val, k)
-                return @isexpr(scoped_val, :scope_layer) ?
-                    Expr(:scope_layer, val2, scoped_val.args[2]) : val2
+                return lower_identifier_name(val, k)
             else
-                return scoped_val
+                return val
             end
         end
     end

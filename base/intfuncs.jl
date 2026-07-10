@@ -186,6 +186,9 @@ function gcd(abc::AbstractArray{<:Integer})
     return a
 end
 
+_gcdx_update(s0::T, q::T, s1::T) where {T<:Unsigned} = s0 -% q *% s1
+_gcdx_update(s0, q, s1) = s0 - q*s1
+
 # return (gcd(a, b), x, y) such that ax+by == gcd(a, b)
 """
     gcdx(a, b...)
@@ -245,8 +248,8 @@ Base.@assume_effects :terminates_locally function gcdx(a::T, b::T) where {T<:Int
     while !iszero(b)
         q, r = divrem(a, b)
         a, b = b, r
-        s0, s1 = s1, s0 - q*s1
-        t0, t1 = t1, t0 - q*t1
+        s0, s1 = s1, _gcdx_update(s0, q, s1)
+        t0, t1 = t1, _gcdx_update(t0, q, t1)
     end
     # for cases like abs(Int8(-128))
     if isnegative(a) && isnegative(abs(a))
@@ -274,7 +277,7 @@ function gcdx(a::Signed, b::Unsigned)
     R = promote_typeof(a, b)
     d, u, v = gcdx(promote(abs(a % signed(R)), b)...)
     flip_typemin = isnegative(a) & (R <: Signed)
-    d, flipsign(u, a - flip_typemin), v
+    d, flipsign(u, a -% oftype(a, flip_typemin)), v
 end
 function gcdx(a::Unsigned, b::Signed)
     d, v, u = gcdx(b, a)
@@ -368,11 +371,11 @@ invmod(n::Integer, ::Type{T}) where {T<:BitInteger} = invmod(n % T)
 
 function invmod(n::T) where {T<:BitInteger}
     isodd(n) || throw(DomainError(n, "Argument must be odd."))
-    x = (3*n ⊻ 2) % T
-    y = (1 - n*x) % T
+    x = (3 *% n ⊻ 2) % T
+    y = (one(T) -% n *% x) % T
     for _ = 1:trailing_zeros(2*sizeof(T))
-        x *= y + true
-        y *= y
+        x = x *% (y +% one(T))
+        y = y *% y
     end
     return x
 end
@@ -878,7 +881,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
         i = n
         while i >= 4
             b = UInt32((x % UInt8)::UInt8)
-            d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+            d = 0x30303030 +% ((b *% 0x08040201) >> 0x3) & 0x01010101
             unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
             unsafe_store!(p, (d >> 0x08) % UInt8, i-2)
             unsafe_store!(p, (d >> 0x10) % UInt8, i-1)
@@ -1140,7 +1143,7 @@ function bitstring(x::T) where {T}
         i = sz
         while i >= 4
             b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
-            d = 0x30303030 + ((b * 0x08040201) >> 0x3) & 0x01010101
+            d = 0x30303030 +% ((b *% 0x08040201) >> 0x3) & 0x01010101
             unsafe_store!(p, (d >> 0x00) % UInt8, i-3)
             unsafe_store!(p, (d >> 0x08) % UInt8, i-2)
             unsafe_store!(p, (d >> 0x10) % UInt8, i-1)

@@ -72,6 +72,8 @@ function _register_kinds()
             "locals"
             "thisfunction"
             "overlay"
+            "syntaxquote"
+            "syntaxunquote"
         "END_EXTENSION_KINDS"
 
         # The following kinds are internal to lowering
@@ -93,6 +95,10 @@ function _register_kinds()
             # [K"always_defined" x] is an assertion that variable `x` is assigned before use
             # ('local-def in flisp implementation is K"local" plus K"always_defined"
             "always_defined"
+            # `(relayered_global old::Identifier)` is used to tell scope
+            # resolution that any declaration conflicting with `(global old)`
+            # should fail, even though `old` was never actually declared
+            "relayered_global"
             "_while"
             "_do_while"
             # (_typevar name lb ub).  flisp usually uses 3-long lists for these,

@@ -556,8 +556,8 @@ function _log_ext(xu::UInt64)
     # x = 2^k z; where z is in range [0x1.69555p-1,0x1.69555p-0) and exact.
     # The range is split into N subintervals.
     # The ith subinterval contains z and c is near the center of the interval.
-    tmp = reinterpret(Int64, xu - 0x3fe6955500000000) #0x1.69555p-1
-    z = reinterpret(Float64, xu - (tmp & 0xfff0000000000000))
+    tmp = reinterpret(Int64, xu -% 0x3fe6955500000000) #0x1.69555p-1
+    z = reinterpret(Float64, xu -% (tmp & 0xfff0000000000000))
     k = Float64(tmp >> 52)
     # log(x) = k*Ln2 + log(c) + log1p(z/c-1).
     # N.B. :nothrow and :noub since `idx` is known to be `1 ≤ idx ≤ length(t_log_table_compact)`

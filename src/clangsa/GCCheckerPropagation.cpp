@@ -1520,22 +1520,30 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
   auto name = CE ? C.getCalleeName(CE) : "";
+
+  // Helper for the checker’s symbolic GC stack state: drop all frame roots
+  // and root-map entries from NewDepth up to OldDepth, then set GCDepth to
+  // NewDepth
+  auto PopGCFramesToDepth = [&](ProgramStateRef State, unsigned OldDepth,
+                                unsigned NewDepth) {
+    State = State->set<GCDepth>(NewDepth);
+    for (unsigned Depth = NewDepth; Depth < OldDepth; ++Depth) {
+      State = removeFrameRoots(State, Depth);
+      GCRootMapTy AMap = State->get<GCRootMap>();
+      for (auto I = AMap.begin(), E = AMap.end(); I != E; ++I) {
+        if (I.getData() == (int)Depth)
+          State = State->remove<GCRootMap>(I.getKey());
+      }
+    }
+    return State;
+  };
   if (name == "JL_GC_POP") {
     if (CurrentDepth == 0) {
       report_error(C, "JL_GC_POP without corresponding push");
       return true;
     }
-    CurrentDepth -= 1;
-    // Go through all roots, see which ones are no longer with us.
-    // Then go through the values and unroot those for which those were our
-    // roots.
-    ProgramStateRef State = C.getState()->set<GCDepth>(CurrentDepth);
-    State = removeFrameRoots(State, CurrentDepth);
-    GCRootMapTy AMap = State->get<GCRootMap>();
-    for (auto I = AMap.begin(), E = AMap.end(); I != E; ++I) {
-      if (I.getData() == (int)CurrentDepth)
-        State = State->remove<GCRootMap>(I.getKey());
-    }
+    ProgramStateRef State =
+        PopGCFramesToDepth(C.getState(), CurrentDepth, CurrentDepth - 1);
     C.addTransition(State);
     return true;
   } else if (name == "JL_GC_PUSH1" || name == "JL_GC_PUSH2" ||
@@ -1716,6 +1724,15 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   {
     auto *Decl = Call.getDecl();
     const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
+
+    if (FD && FD->isNoReturn() && CurrentDepth != 0) {
+      // Model noreturn calls as terminating the current symbolic GC frame stack
+      // so the synthetic end-of-function callback only diagnoses true fallthrough
+      // exits.
+      ProgramStateRef State = PopGCFramesToDepth(C.getState(), CurrentDepth, 0);
+      C.addTransition(State);
+      return true;
+    }
     if (isMutexLock(name) ||
         (FD && declHasAnnotation(FD, "julia_notsafepoint_enter"))) {
       ProgramStateRef State = C.getState();

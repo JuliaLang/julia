@@ -1,11 +1,6 @@
-test_mod = Module(:macro_test)
+test_mod = @newmod(macro_test)
+@eval test_mod import JuliaLowering
 Base.eval(test_mod, :(const var"@ast" = $(JuliaLowering.var"@ast")))
-Base.eval(test_mod, :(const var"@K_str" = $(JuliaLowering.var"@K_str")))
-
-# These libraries may either be packages or vendored into Base - need to pull
-# them in via relative paths in the `using` statements below.
-Base.eval(test_mod, :(const JuliaLowering = $(JuliaLowering)))
-Base.eval(test_mod, :(const JuliaSyntax = $(JuliaSyntax)))
 
 # Set up identity macros for use in this file
 # - `old_e`, escaping its whole output, should do nothing to an expression
@@ -17,7 +12,21 @@ fl_eval(test_mod, :(macro old_h(x); x; end))
 JuliaLowering.include_string(test_mod, "macro new_m(x); x; end")
 fl_eval(test_mod, :(global mvar = "global mvar"))
 
-@testset "basic hygiene and escaping: old macros" for run in [
+@testset "syntax versioning sanity-check" begin
+    @test JuliaLowering.include_string(
+        test_mod, "JuliaLowering.@syntax_version") ==
+        JuliaSyntax.JL_NEW_SYNTAX_VERSION
+    @test JuliaLowering.include_string(
+        test_mod, "JuliaLowering.@syntax_version"; expr_compat_mode=false) ==
+        JuliaSyntax.JL_NEW_SYNTAX_VERSION
+    @test JuliaLowering.include_string(
+        test_mod, "JuliaLowering.@syntax_version"; expr_compat_mode=true) ==
+        JuliaSyntax.JL_OLD_SYNTAX_VERSION
+end
+
+# Basic checks that arbitrary nesting of transparent macros (no new syntax in new
+# macros, escaped/unhygienic in old macros) doesn't introduce opaque layers
+@testset "basic transparent macros: old macros" for run in [
     (x::String)->Base.include_string(
         test_mod, "#=FLISP SANITY-CHECK=# "*x),
     (x::String)->JuliaLowering.include_string(
@@ -52,8 +61,7 @@ fl_eval(test_mod, :(global mvar = "global mvar"))
     @test run("@old_h @old_h let mvar = 0; @old_e(@old_e(mvar)); end") == 0
     @test run("@old_h @old_h let @old_e(@old_e(mvar) = 0); @old_e(mvar); end") == 0
 end
-
-@testset "basic hygiene and escaping: new macros only" for expr_compat_mode in [true, false]
+@testset "basic transparent macros: new macros only" for expr_compat_mode in [true, false]
     local run = (x::String)->JuliaLowering.include_string(test_mod, x; expr_compat_mode)
 
     @test run("@new_m let mvar = 0; mvar; end") == 0
@@ -65,8 +73,7 @@ end
     @test run("@new_m let mvar = 0; @new_m(@new_m(mvar)); end") == 0
     @test run("@new_m let @new_m(@new_m(mvar) = 0); @new_m(mvar); end") == 0
 end
-
-@testset "basic hygiene and escaping: new+old interop" for expr_compat_mode in [true, false],
+@testset "basic transparent macros: new+old interop" for expr_compat_mode in [true, false],
     mcall in ["@old_e ", "@new_m ", "@old_e @new_m ", "@new_m @old_e "],
     old_h in ["", "@old_h "]
 
@@ -84,14 +91,490 @@ end
     end
 end
 
+# More simple checks with no difference between macro module and macrocall module
+isdefined(test_mod, :x) && Base.delete_binding(test_mod, :x)
+fl_eval(test_mod, :(macro old_read_x(); :x; end))
+fl_eval(test_mod, :(macro old_suggest_x(arg)
+                        quote
+                            let x = "suggested (old)"
+                                $(esc(arg))
+                            end
+                        end
+                    end))
+JuliaLowering.include_string(test_mod, raw"""
+    macro new_read_x(); @legacy_quote_to_syntax :x; end
+""")
+JuliaLowering.include_string(test_mod, raw"""
+    macro new_suggest_x(arg)
+        @legacy_quote_to_syntax quote
+            let x = "suggested (new)"
+                $arg
+            end
+        end
+    end
+""")
+@testset "basic hygiene: check that name resolution fails where it should (flisp)"  for run in [
+    (x::String)->fl_eval(test_mod,JuliaSyntax.parsestmt(Expr, "#=FLISP SANITY-CHECK=# "*x)),
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+    @test_throws UndefVarError run("@old_read_x()")
+    @test_throws UndefVarError run("let x = 0; @old_read_x(); end")
+    @test_throws UndefVarError run("@old_suggest_x(x)")
+    @test_throws UndefVarError run("@old_suggest_x(@old_read_x())")
+    @test run("let x = 1; @old_suggest_x(x); end") == 1
+    @test run("@old_suggest_x(let x = 1; x; end)") == 1
+    @test_throws UndefVarError run("@old_suggest_x(let x = 1; @old_read_x(); end)") == 1
+end
+@testset "basic hygiene: check that name resolution fails where it should (new)" for run in [
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+
+    @test_throws UndefVarError run("@new_read_x()")
+    @test_throws UndefVarError run("let x = 0; @new_read_x(); end")
+    @test_throws UndefVarError run("@new_suggest_x(x)")
+    @test_throws UndefVarError run("@new_suggest_x(@new_read_x())")
+    @test run("let x = 1; @new_suggest_x(x); end") == 1
+    @test run("@new_suggest_x(let x = 1; x; end)") == 1
+    @test_throws UndefVarError run("@new_suggest_x(let x = 1; @new_read_x(); end)") == 1
+
+    @testset "old/new interop" begin
+        @testset for wrapper in ["", "@old_e ", "@old_h ", "@new_m "]
+            @test_throws UndefVarError run(wrapper*"@old_suggest_x(@new_read_x())")
+            @test_throws UndefVarError run(wrapper*"@new_suggest_x(@old_read_x())")
+            @test run(wrapper*"let x = 1; @old_suggest_x(x); end") == 1
+            @test run(wrapper*"let x = 1; @new_suggest_x(x); end") == 1
+            @test run(wrapper*"@old_suggest_x(let x = 1; x; end)") == 1
+            @test run(wrapper*"@new_suggest_x(let x = 1; x; end)") == 1
+        end
+    end
+end
+
+@eval test_mod (global test_mod_global = "test_mod_global")
+@newmod(EvalMod, test_mod)
+@testset "@eval" for run in [
+    (x::String)->fl_eval(test_mod,JuliaSyntax.parsestmt(Expr, "#=FLISP SANITY-CHECK=# "*x)),
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+
+    has_syntax = run(raw"@legacy_quote_to_syntax :x") isa SyntaxTree
+    treetype = has_syntax ? SyntaxTree : Expr
+    symtype = has_syntax ? SyntaxTree : Symbol
+    valtype = has_syntax ? SyntaxTree : Any
+
+    @test run(raw"@eval nothing") == nothing
+    @test run(raw"@eval :sym") == :sym
+    @test run(raw"@eval QuoteNode(:sym)") == QuoteNode(:sym)
+    @test run(raw"@eval Expr(:call, :identity, 1)") == Expr(:call, :identity, 1)
+    @test run(raw"@eval :(identity(1))") == Expr(:call, :identity, 1)
+    # syntax version of the caller should be propagated to JL.eval
+    @test run(raw"@eval @legacy_quote_to_syntax(:sym)") isa symtype
+    @test run(raw"@eval @legacy_quote_to_syntax(:(identity(1)))") isa treetype
+    @test run(raw"@eval @eval @legacy_quote_to_syntax(:(identity(1)))") isa treetype
+
+    # quoting behaves the same as outside of eval
+    @test run(raw"@eval(:(1 + 2))") == Expr(:call, :+, 1, 2)
+    @test run(raw"@eval(:true)") == true
+    @test run(raw"@eval(:x)") == :x
+
+    # interpolation
+    @test run(raw"let x = nothing; @eval $x; end") == nothing
+    @test run(raw"let x = :identity; @eval $x; end") == Base.identity
+    @test run(raw"let x = QuoteNode(:sym); @eval $x; end") == :sym
+    @test run(raw"let x = Expr(:call, :identity, 1); @eval $x; end") == 1
+    @test run(raw"let x = :(identity(1)); @eval $x; end") == 1
+    @test run(raw"let x = @legacy_quote_to_syntax(:identity); @eval $x; end") == Base.identity
+    @test run(raw"let x = @legacy_quote_to_syntax(:(identity(1))); @eval $x; end") == 1
+
+    # interpolate into quote
+    @test run(raw"let test_mod_global = 0xbad
+        @eval (@legacy_quote_to_syntax :($test_mod_global))
+    end") isa valtype
+    @test run(raw"let test_mod_global = 0xbad
+        @eval @legacy_quote_to_syntax(:(1,$test_mod_global))
+    end") isa treetype
+
+    # interpolate into quote, double-unquote (mixes of syntax and expr may not
+    # need to work)
+    @test run(raw"let x = @legacy_quote_to_syntax(:identity)
+        @eval (:($($x)))
+    end") == Base.identity
+    @test run(raw"let x = @legacy_quote_to_syntax(:identity)
+        @eval (@legacy_quote_to_syntax :($($x)))
+    end") isa valtype
+    @test run(raw"let x = @legacy_quote_to_syntax(:identity)
+        @eval @legacy_quote_to_syntax(:(1,$$x))
+    end") isa treetype
+    @test run(raw"let x = @legacy_quote_to_syntax(:identity)
+        @eval $(@eval (:(1,$$x)))
+    end") == (1, Base.identity)
+
+    # module eval-ed into
+    @test run(raw"@eval @__MODULE__") == test_mod
+    @test run(raw"@eval @eval @__MODULE__") == test_mod
+    # two-arg eval should not obey typical hygiene: decls go to specified module
+    @test run(raw"@eval EvalMod @__MODULE__") == test_mod.EvalMod
+    run(raw"@eval EvalMod global eval_mod_global = 1"); Core.@latestworld
+    @test test_mod.EvalMod.eval_mod_global == 1
+    run(raw"@eval EvalMod eval_mod_global_implicit = 1"); Core.@latestworld
+    @test test_mod.EvalMod.eval_mod_global_implicit == 1
+    # standard hygiene atop two-arg eval
+    fl_eval(test_mod, :(module MacroMod
+                        module MacroModInner; end
+                        macro m_setglobal(); esc(:(mmglobal0 = 0)); end
+                        macro m_eval_inner(x); :(@eval $MacroModInner $x) ; end
+                        end))
+    Core.@latestworld
+    @eval test_mod.EvalMod (const MacroMod2 = $(test_mod.MacroMod))
+    @eval test_mod.EvalMod (const var"@legacy_quote_to_syntax" =
+        $(test_mod.var"@legacy_quote_to_syntax"))
+    @test run(raw"@eval EvalMod @legacy_quote_to_syntax(:(1 + 1))") isa treetype
+    @test run(raw"@eval @eval EvalMod @legacy_quote_to_syntax(:(1 + 1))") isa treetype
+
+    @test run(raw"@eval EvalMod MacroMod2.@m_setglobal") == 0
+    Core.@latestworld
+    @test isdefined(test_mod.EvalMod, :mmglobal0)
+    @test !isdefined(test_mod, :mmglobal0)
+    @test !isdefined(test_mod.MacroMod, :mmglobal0)
+
+    @test run(raw"@eval EvalMod MacroMod2.@m_eval_inner(global mmglobal1 = 1)") == 1
+    Core.@latestworld
+    @test isdefined(test_mod.MacroMod.MacroModInner, :mmglobal1)
+    @test !isdefined(test_mod, :mmglobal1)
+    @test !isdefined(test_mod.MacroMod, :mmglobal1)
+    @test !isdefined(test_mod.EvalMod, :mmglobal1)
+
+    # interpolation into top-level: symbol declared in the new module
+    run(raw"let x = @legacy_quote_to_syntax(:sym)
+        @eval EvalMod module tmp; module inner_eval_mod; global $x = 123; end; end
+    end") isa Module
+    Core.@latestworld
+    @test test_mod.EvalMod.tmp.inner_eval_mod isa Module
+    @test test_mod.EvalMod.tmp.inner_eval_mod.sym == 123
+
+    # hygiene
+    run("let eval_result = 0; @eval 1+1; eval_result; end") == 0
+
+    @testset "(AI) single-arg @eval does not over-preserve hygiene" for expr_compat_mode in (true, false)
+        root = @newmod(root)
+        JuliaLowering.include_string(root, raw"""
+        module MacB
+            import JuliaLowering.@legacy_quote_to_syntax
+            macro do_eval()
+                @legacy_quote_to_syntax quote
+                    @eval (@__MODULE__)
+                end
+            end
+        end
+        module MacA
+            import JuliaLowering.@legacy_quote_to_syntax
+            import ..MacB
+            macro wrap()
+                @legacy_quote_to_syntax quote
+                    @eval (@__MODULE__)
+                end
+            end
+            macro via_b()
+                @legacy_quote_to_syntax quote
+                    MacB.@do_eval()
+                end
+            end
+            macro wrap_ee()
+                @legacy_quote_to_syntax quote
+                    @eval @eval (@__MODULE__)
+                end
+            end
+            macro wrap_two_arg()
+                # two-arg control: explicit target module; the payload's
+                # `@__MODULE__` must still see the *target* module
+                @legacy_quote_to_syntax quote
+                    @eval MacB (@__MODULE__)
+                end
+            end
+            macro wrap_arg(ex)
+                # caller-provided payload (caller's hygiene layer)
+                @legacy_quote_to_syntax quote
+                    @eval $ex
+                end
+            end
+            macro wrap_fn()
+                # `@eval` captures the module current when the enclosing function
+                # *definition* is expanded, like flisp
+                @legacy_quote_to_syntax quote
+                    () -> @eval (@__MODULE__)
+                end
+            end
+            macro mkmod()
+                mod = gensym("EvalMod")
+                @legacy_quote_to_syntax quote
+                    @eval module $mod
+                        const inside = (@__MODULE__)
+                    end
+                end
+            end
+            macro mkmod_payload(ex)
+                mod = gensym("EvalMod2")
+                @legacy_quote_to_syntax quote
+                    @eval module $mod
+                        $ex
+                    end
+                end
+            end
+        end
+        module Sub
+            import ..MacA
+        end
+        """; expr_compat_mode)
+        Core.@latestworld
+
+        run(str) = JuliaLowering.include_string(root, str; expr_compat_mode)
+
+        # `@eval` inside another macro's unescaped expansion evaluates in the
+        # caller's module, not the macro's
+        @test run("MacA.@wrap()") === root
+        # ... even when the `@eval`-ing macro is called by another macro's expansion
+        # (flisp: still the dynamic module, not either macro's module)
+        @test run("MacA.@via_b()") === root
+        # `@eval` nested in `@eval` re-expands against the outer target
+        @test run("MacA.@wrap_ee()") === root
+        # two-arg control: explicit module wins; payload `@__MODULE__` follows it
+        @test run("MacA.@wrap_two_arg()") === root.MacB
+        # macro-generated closure: `@eval` binds the definition-time module
+        @test Base.invokelatest(run("MacA.@wrap_fn()")) === root
+        # the same macro evaluated into a different module follows the live module
+        @test JuliaLowering.include_string(
+            root.Sub, "MacA.@wrap()"; expr_compat_mode) === root.Sub
+
+        # Caller-provided payloads evaluate in the caller's module
+        @test run("MacA.@wrap_arg(arg_marker = (@__MODULE__))") === root
+        if !expr_compat_mode
+            # With SyntaxTree-passed arguments the payload keeps the caller's
+            # hygiene: the global lands in `root` and is visible there. (In
+            # expr_compat_mode the old-style Expr round-trip re-layers the payload
+            # with the macro's hygiene and the assignment becomes a hygienic
+            # toplevel local -- a pre-existing divergence from flisp tracked by
+            # the "hygienic toplevel assignments" TODO in scope_analysis.jl.)
+            @test Base.invokelatest(isdefined, root, :arg_marker)
+            @test Base.invokelatest(getfield, root, :arg_marker) === root
+        end
+
+        # The SafeTestsets shape: a macro-generated `@eval module $mod ... end`
+        # creates the module under the dynamic (caller) module
+        m = run("MacA.@mkmod()")
+        @test m isa Module
+        @test parentmodule(m) === root
+        @test Base.invokelatest(getfield, m, :inside) === m
+        # ... and user payload interpolated into the module body sees the fresh
+        # module as its dynamic module (a user's own `@eval` inside a
+        # `@safetestset` acts on the anonymous test module)
+        m2 = run("MacA.@mkmod_payload(@eval user_marker = (@__MODULE__))")
+        @test m2 isa Module
+        @test parentmodule(m2) === root
+        @test Base.invokelatest(getfield, m2, :user_marker) === m2
+
+        if expr_compat_mode
+            # Escaped expansions (old-style macros only): same dynamic target
+            JuliaLowering.include_string(root, raw"""
+        module MacEsc
+            macro wrap_esc()
+                esc(quote
+                    @eval esc_marker = (@__MODULE__)
+                end)
+            end
+        end
+        """; expr_compat_mode)
+            Core.@latestworld
+            @test run("MacEsc.@wrap_esc()") === root
+            @test Base.invokelatest(isdefined, root, :esc_marker)
+            @test Base.invokelatest(getfield, root, :esc_marker) === root
+        end
+
+        # An old-style (flisp-defined and -lowered) macro whose expansion calls
+        # `@eval` gets the same treatment when invoked under JuliaLowering
+        fl_eval(root, :(module MacFl
+                        macro flwrap()
+                            quote
+                                @eval (@__MODULE__)
+                            end
+                        end
+                        end))
+        Core.@latestworld
+        @test run("MacFl.@flwrap()") === root
+    end
+
+    @testset "(AI) const shows up in caller mod" begin
+        Core.eval(test_mod, :(module MacHome2
+                       macro make_const()
+                           :( @eval const CMARKER = 42 )
+                       end
+                       end))
+        Core.eval(test_mod, :(MacHome2.@make_const()))
+        @test isdefined(test_mod, :CMARKER)
+
+        JuliaLowering.eval(test_mod, :(module MacHome2
+                       macro make_const()
+                           :( @eval const CMARKER = 42 )
+                       end
+                       end); expr_compat_mode=true)
+        JuliaLowering.eval(test_mod, :(MacHome2.@make_const()))
+        @test isdefined(test_mod, :CMARKER)
+    end
+end
+
+@eval test_mod module hscope_mod; global hscope_g = 123; end
+@eval test_mod module nothing_mod; end
+@eval test_mod global hscope_g = 234
+@testset "hygienic scope should be usable without macros" begin
+    @test JuliaLowering.eval(
+        test_mod, Expr(
+            Symbol("hygienic-scope"),
+            1, test_mod); expr_compat_mode=true) == 1
+    @test JuliaLowering.eval(
+        test_mod, Expr(
+            Symbol("hygienic-scope"),
+            :hscope_g,
+            test_mod.hscope_mod); expr_compat_mode=true) == 123
+    @test JuliaLowering.eval(
+        test_mod, Expr(
+            Symbol("hygienic-scope"),
+            Expr(:escape, :hscope_g),
+            test_mod.nothing_mod); expr_compat_mode=true) == 234
+    @test JuliaLowering.eval(
+        test_mod, Expr(
+            Symbol("hygienic-scope"), Expr(
+                Symbol("hygienic-scope"),
+                Expr(:escape, Expr(:escape, :hscope_g)),
+                test_mod.nothing_mod),
+            test_mod.nothing_mod); expr_compat_mode=true) == 234
+    @test JuliaLowering.eval(
+        test_mod, Expr(
+            Symbol("hygienic-scope"), Expr(
+                Symbol("hygienic-scope"),
+                Expr(:escape, :hscope_g),
+                test_mod.nothing_mod),
+            test_mod.hscope_mod); expr_compat_mode=true) == 123
+end
+
+Base.eval(test_mod, :(
+    test_hscope(x, mod=$test_mod) = Expr(Symbol("hygienic-scope"), x, mod)
+))
+Base.eval(test_mod, :(
+    # +3 new scopes and -4 escapes = normal unhygienic macro
+    macro oldstyle_silly_scopes(x, y)
+        stmt1 = test_hscope(test_hscope(test_hscope(esc(esc(esc(esc(:($x = 123))))))))
+        stmt2 = esc(test_hscope(esc(test_hscope(esc(test_hscope(esc(:($y = 456))))))))
+        Expr(:block, stmt1, stmt2)
+    end))
+@testset "escape and hygienic-scope forms" for run in [
+    (x::String)->Base.include_string(
+        test_mod, "#=FLISP SANITY-CHECK=# "*x),
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+
+    @test run(raw"""
+    let (x, y) = (0, 0); @oldstyle_silly_scopes(x, y); (x, y); end
+    """) === (123, 456)
+    @test run(raw"""begin
+    global_x, global_y = 0, 0
+    @oldstyle_silly_scopes(global_x, global_y)
+    global_x, global_y
+    end""") === (123, 456)
+end
+
+@testset "apply_expansion_layer mutation testing" begin
+    local test_mod = @newmod(apply_expansion_layer)
+    # recursion can't stop at module/toplevel/inert without tweaks, because a
+    # macro can pull random stuff out of it.  This also tests calling into macro
+    # expansion from macros, mostly because re-using macros I've already written
+    # is the easiest way to create non-surface-syntax SyntaxTree as of writing.
+    JuliaLowering.include_string(test_mod, raw"""
+    macro undo_inert(x)
+        x2 = JuliaLowering.macroexpand(x)
+        x2[1]
+    end
+    """)
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let foo = 1; @undo_inert(:foo); end
+    """) == 1
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let foo = 1; @undo_inert(@legacy_quote_to_syntax(:foo)); end
+    """) == 1
+
+    JuliaLowering.include_string(test_mod, raw"""
+    macro mk_toplevel(x, y, z)
+        JuliaSyntax.newnode(
+            x._graph, __context__.macrocall, K"toplevel",
+            JuliaSyntax.SyntaxList(x, y, z))
+    end
+    macro toplevel_first_child(x)
+        x2 = JuliaLowering.macroexpand(x)
+        x2[1]
+    end
+    """)
+    JuliaLowering.include_string(test_mod, raw"""
+    macro mk_module(x, y, z)
+        @legacy_quote_to_syntax :(module mk_module_mod; $x; $y; $z; end)
+    end
+    macro module_first_child(x)
+        x2 = JuliaLowering.macroexpand(x)
+        x2[end][1]
+    end
+    """)
+    # sanity
+    @test JuliaLowering.include_string(test_mod, """
+    @mk_toplevel(1, :y, "z")
+    """) == "z"
+    @test JuliaLowering.include_string(test_mod, """
+    @mk_module(1, :y, "z")
+    """) isa Module
+    @test JuliaLowering.include_string(test_mod, """
+    let (x, y, z) = (1, :y, "z")
+        @toplevel_first_child(@mk_toplevel(x, y, z))
+    end
+    """) == 1
+    @test JuliaLowering.include_string(test_mod, """
+    let (x, y, z) = (1, :y, "z")
+        @toplevel_first_child(@mk_toplevel(x, y, z))
+    end
+    """) == 1
+
+    # escape should obey quote/unquote
+    JuliaLowering.include_string(test_mod, raw"""
+    macro esc_in_quote(); Expr(:quote, Expr(:escape, :x)); end
+    """; expr_compat_mode=true)
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @esc_in_quote
+    """; expr_compat_mode=true) == Expr(:escape, :x)
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @esc_in_quote
+    """) == Expr(:escape, :x)
+
+    JuliaLowering.include_string(test_mod, raw"""
+    macro esc_in_unquote(); Expr(:quote, Expr(:$, Expr(:escape, :x))); end
+    """; expr_compat_mode=true)
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1; @esc_in_unquote(); end
+    """; expr_compat_mode=true) == 1
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1; @esc_in_unquote(); end
+    """) == 1
+end
+
 JuliaLowering.include_string(test_mod, raw"""
 module M
-    using ..JuliaLowering: JuliaLowering, adopt_scope
+    using ..JuliaLowering: JuliaLowering, adopt_scope, @legacy_quote_to_syntax
     using ..JuliaSyntax
 
     # Introspection
     macro __MODULE__()
-        __context__.scope_layer.mod
+        JuliaLowering.syntax_module(__context__.macrocall)
     end
 
     macro __FILE__()
@@ -106,7 +589,7 @@ module M
 
     # Macro with local variables
     macro foo(ex)
-        :(begin
+        @legacy_quote_to_syntax :(begin
             x = "`x` from @foo"
             (x, someglobal, $ex)
         end)
@@ -114,32 +597,32 @@ module M
 
     # Set `a_global` in M
     macro set_a_global(val)
-        :(begin
+        @legacy_quote_to_syntax :(begin
             global a_global = $val
         end)
     end
 
     macro set_other_global(ex, val)
-        :(begin
+        @legacy_quote_to_syntax :(begin
             global $ex = $val
         end)
     end
 
     macro set_global_in_parent(ex)
-        sym_ex = quote; sym_introduced_from_M; end
-        e1 = adopt_scope(sym_ex[1], __context__)
-        quote
+        sym_ex = @legacy_quote_to_syntax quote; sym_introduced_from_M; end
+        e1 = adopt_scope(__context__.macrocall, sym_ex[1])
+        @legacy_quote_to_syntax quote
             $e1 = $ex
             nothing
         end
     end
 
     macro inner()
-        :(y, z)
+        @legacy_quote_to_syntax :(y, z)
     end
 
     macro outer()
-        :((x, @inner))
+        @legacy_quote_to_syntax :((x, @inner))
     end
 
     macro recursive(N)
@@ -147,7 +630,7 @@ module M
         if Nval < 1
             return N
         end
-        quote
+        @legacy_quote_to_syntax quote
             x = $N
             (x, @recursive $(Nval-1))
         end
@@ -191,7 +674,7 @@ M.@recursive 3
 """) == (3, (2, (1, 0)))
 
 ex = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "M.@outer()", filename="foo.jl")
-ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world_counter())
+expanded = JuliaLowering.macroexpand(test_mod, ex)
 @test JuliaSyntax.sourcetext.(JuliaLowering.flattened_provenance(expanded[2])) == [
     "M.@outer()"
     "@inner"
@@ -201,7 +684,7 @@ ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world
 @testset "expansion special case: macrocall in do expression" for expr_compat_mode in [true, false]
     @test JuliaLowering.include_string(test_mod, raw"""
     macro mac_called_in_do_expression(dofunc, arg)
-        :($dofunc($arg))
+        @legacy_quote_to_syntax :($dofunc($arg))
     end
     """; expr_compat_mode) isa Function
     @test JuliaLowering.include_string(test_mod, raw"""
@@ -245,16 +728,11 @@ end
 """)
 world2 = Base.get_world_counter()
 
-call_world_arg_test = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_age_test()")
-    @test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world1)[2] ≈
+call_world_arg_test = JuliaLowering.rebase_layers(JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_age_test()"), test_mod, JuliaSyntax.JL_NEW_SYNTAX_VERSION)
+    @test JuliaLowering.expand_forms_1(call_world_arg_test, world1, true) ≈
         @ast_ 1::K"Value"
-    @test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world2)[2] ≈
+    @test JuliaLowering.expand_forms_1(call_world_arg_test, world2, true) ≈
         @ast_ 2::K"Value"
-
-# Layer parenting
-@test expanded[1].scope_layer == 2
-@test expanded[2][1].scope_layer == 3
-@test getfield.(ctx.scope_layers, :parent_id) == [0,1,2]
 
 JuliaLowering.include_string(test_mod, """
 f_throw(x) = throw(x)
@@ -310,17 +788,18 @@ end
 
 # Tests for interop between old and new-style macros
 
-# Hygiene interop
+# Hygiene interop:
+# call_oldstyle_macro -> oldstyle -> newstyle3
 JuliaLowering.include_string(test_mod, raw"""
     macro call_oldstyle_macro(a)
-        quote
+        @legacy_quote_to_syntax quote
             x = "x in call_oldstyle_macro"
             @oldstyle $a x
         end
     end
 
     macro newstyle3(a, b, c)
-        quote
+        @legacy_quote_to_syntax quote
             x = "x in @newstyle3"
             ($a, $b, $c, x)
         end
@@ -340,10 +819,15 @@ end
 let x = "x in outer scope"
     @call_oldstyle_macro x
 end
-""") == ("x in outer scope",
+""") == ("x in call_oldstyle_macro",
          "x in call_oldstyle_macro",
          "x in @oldstyle",
          "x in @newstyle3")
+# #  would be ideal, but we can't get hygiene through oldstyle
+# ("x in outer scope",
+#  "x in call_oldstyle_macro",
+#  "x in @oldstyle",
+#  "x in @newstyle3")
 
 # Old style unhygienic escaping with esc()
 Base.eval(test_mod, :(
@@ -375,13 +859,6 @@ MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
 └─────────────┘ ── Error expanding macro
 Caused by:
 Some error in old style macro"""
-
-@test sprint(
-    showerror,
-    JuliaLowering.MacroExpansionError(
-        JuliaLowering.expr_to_est(:(foo), LineNumberNode(1)),
-        "fake error")) ==
-            "MacroExpansionError:\n#= line 1 =# - fake error"
 
 # Old-style macros returning non-Expr values
 Base.eval(test_mod, :(
@@ -437,13 +914,13 @@ end
     MethodError: no method matching var"@sig_mismatch"(""")
 end
 
-@testset "old macros producing exotic expr heads" begin
+@testset "old macros producing exotic expr heads (or are otherwise complex)" for expr_compat_mode in [true, false]
     @test JuliaLowering.include_string(test_mod, """
     let # example from @preserve docstring
         x = Ref{Int}(101)
         p = Base.unsafe_convert(Ptr{Int}, x)
         GC.@preserve x unsafe_load(p)
-    end""") === 101 # Expr(:gc_preserve)
+    end"""; expr_compat_mode) === 101 # Expr(:gc_preserve)
 
     # JuliaLowering.jl/issues/121
     @test JuliaLowering.include_string(test_mod, """
@@ -451,7 +928,7 @@ end
     """) isa Module
     @test JuliaLowering.include_string(test_mod, """
     GC.@preserve @static if true v"1.14" else end
-    """) isa VersionNumber
+    """; expr_compat_mode) isa VersionNumber
 
     # JuliaLowering.jl/issues/144
     @test JuliaLowering.include_string(test_mod, """
@@ -460,7 +937,7 @@ end
         GC.@preserve val begin; end
     end
     f_preserve144()
-    """) == nothing
+    """; expr_compat_mode) == nothing
 
     # JuliaLowering.jl/issues/145
     @test JuliaLowering.include_string(test_mod, """
@@ -470,7 +947,7 @@ end
         GC.@preserve debug_buffer 1
     end
     f_preserve145()
-    """) == 1
+    """; expr_compat_mode) == 1
 
     # only invokelatest produces :isglobal now, so MWE here
     Base.eval(test_mod, :(macro isglobal(x); esc(Expr(:isglobal, x)); end))
@@ -481,7 +958,7 @@ end
        (@isglobal(some_undefined), @isglobal(some_global), @isglobal(some_arg), @isglobal(some_local))
     end
     isglobal_chk(1)
-    """) === (true, true, false, false)
+    """; expr_compat_mode) === (true, true, false, false)
     # with K"Placeholder"s
     @test JuliaLowering.include_string(test_mod, """
     __ = 1
@@ -490,21 +967,38 @@ end
        (@isglobal(_), @isglobal(__), @isglobal(___), @isglobal(____))
     end
     isglobal_chk(1)
-    """) === (false, false, false, false)
+    """; expr_compat_mode) === (false, false, false, false)
 
     # @test appears to be the only macro in base to use :inert
     test_result = JuliaLowering.include_string(test_mod, """
     using Test
     @test identity(123) === 123
-    """; expr_compat_mode=true)
+    """; expr_compat_mode)
     @test test_result.value === true
 
     # @enum produces Expr(:toplevel)
     JuliaLowering.include_string(test_mod, """
     @enum SOME_ENUM X1 X2 X3
-    """; expr_compat_mode=true)
+    """; expr_compat_mode)
+    Core.@latestworld
     @test test_mod.SOME_ENUM <: Enum
     @test test_mod.X1 isa Enum
+
+    # @deprecate also produces Expr(:toplevel), and :public with expression
+    # hygiene different from the contained names.
+    @testset "@deprecate" begin
+        @test JuliaLowering.include_string(test_mod, """
+        module DeprecateMod
+            d2(x) = x+1
+            @deprecate d1(x) d2(0)
+        end
+        """; expr_compat_mode) isa Module
+        Core.@latestworld
+        @test isdefined(test_mod.DeprecateMod, :d2)
+        @test isdefined(test_mod.DeprecateMod, :d1)
+        @test Base.isexported(test_mod.DeprecateMod, :d1)
+        @test !Base.isexported(test_mod, :d1)
+    end
 
     # @testset produces :tryfinally with secret third arg
     @eval test_mod :(using Test)
@@ -513,7 +1007,7 @@ end
     @testset begin
         @test true
     end
-    """; expr_compat_mode=true)
+    """; expr_compat_mode)
         @test jltestset isa Test.AbstractTestSet
         @test jltestset.n_passed == 1
     end
@@ -526,12 +1020,12 @@ end
                   A[I] = Base.Experimental.Const(B)[I]
               end
               return 0
-          end)) isa Function
+          end); expr_compat_mode) isa Function
     @test jl_eval(
         test_mod,
         :(let A = [1,2,3], B = [4,5,6]
               simple_aliasscope(A,B), A, B
-          end)) == (0, [4,5,6], [4,5,6])
+          end); expr_compat_mode) == (0, [4,5,6], [4,5,6])
 end
 
 @testset "empty meta" begin
@@ -825,8 +1319,8 @@ end
 @testset "scope layers for normally-inert ASTs" begin
     # Right hand side of `.`
     @test JuliaLowering.include_string(test_mod, raw"""
-    let x = :(hi)
-        :(A.$x)
+    let x = @legacy_quote_to_syntax :(hi)
+        @legacy_quote_to_syntax :(A.$x)
     end
     """) ≈ @ast_ [K"."
         "A"::K"Identifier"
@@ -834,10 +1328,8 @@ end
     ]
     # module
     @test JuliaLowering.include_string(test_mod, raw"""
-    let x = :(AA)
-        :(module $x
-        end
-        )
+    let x = @legacy_quote_to_syntax :(AA)
+        @legacy_quote_to_syntax :(module $x end)
     end
     """) ≈ @ast_ [K"module"
         v"1.14.0"::K"Value"
@@ -850,24 +1342,37 @@ end
     # *arguments* get the lexical scope of the calling context, even for the
     # `x` in `M.$x` where the right hand side of `.` is normally quoted.
     @test JuliaLowering.include_string(test_mod, raw"""
-        let x = :(someglobal)
+        let x = @legacy_quote_to_syntax :(someglobal)
             @eval M.$x
         end
-    """) == "global in module M"
+    """; expr_compat_mode=false) == "global in module M"
+    @test JuliaLowering.include_string(test_mod, raw"""
+        let x = @legacy_quote_to_syntax :(someglobal)
+            @eval M.$x
+        end
+    """; expr_compat_mode=true) == "global in module M"
 
-    JuliaLowering.include_string(test_mod, raw"""
-        let y = 101
+    # @eval quoting should embed the value, not the syntax
+    @test JuliaLowering.include_string(test_mod, raw"""
+        let some_local = 101
             @eval module AA
-                x = $y
+                x = $some_local
             end
         end
-    """)
+    """; expr_compat_mode=false) isa Module
+    @test test_mod.AA.x == 101
+    @test JuliaLowering.include_string(test_mod, raw"""
+        let some_local = 101
+            @eval module AA
+                x = $some_local
+            end
+        end
+    """; expr_compat_mode=true) isa Module
     @test test_mod.AA.x == 101
 
-    # "Deferred hygiene" in macros which emit quoted code currently doesn't
-    # work as might be expected.
+    # "Deferred hygiene" in macros which emit quoted code.  OK to break
     #
-    # The old macro system also doesn't handle this - here's the equivalent
+    # The old macro system doesn't handle this - here's the equivalent
     # implementation
     # macro make_quoted_code(init, y)
     #     QuoteNode(:(let
@@ -876,24 +1381,22 @@ end
     #         ($(esc(y)), x)
     #     end))
     # end
-    #
-    # TODO: The following should throw an error rather than producing a
-    # surprising value, or work "as expected" whatever that is!
     JuliaLowering.include_string(test_mod, raw"""
     macro make_quoted_code(init, y)
-        q = :(let
+        q = @legacy_quote_to_syntax :(let
             x = "inner x"
             $init
             ($y, x)
         end)
-        @ast q._graph q [K"inert_syntaxtree" q]
+        @ast q._graph q [K"syntaxinert" q]
     end
     """)
     code = JuliaLowering.include_string(test_mod, """@make_quoted_code(x="outer x", x)""")
-    @test_broken JuliaLowering.eval(test_mod, code) == ("outer x", "inner x")
+    @test JuliaLowering.eval(test_mod, code) == ("outer x", "inner x")
 end
 
-@testset "toplevel macro hygiene" begin
+@testset "toplevel macro hygiene" for run in [JuliaLowering.include_string,
+                                              Base.include_string]
     @eval test_mod global mod = $test_mod
     @eval test_mod module MacroMod
     global mod = MacroMod
@@ -907,9 +1410,37 @@ end
         Expr(:toplevel, :(mod))
     end
     end
-    @test JuliaLowering.include_string(test_mod, "MacroMod.@escaped_toplevel") === test_mod
-    @test JuliaLowering.include_string(test_mod, "MacroMod.@inner_escaped_toplevel") === test_mod
-    @test JuliaLowering.include_string(test_mod, "MacroMod.@unescaped_toplevel") === test_mod.MacroMod
+    Core.@latestworld
+    @test run(test_mod, "MacroMod.@escaped_toplevel") === test_mod
+    @test run(test_mod, "MacroMod.@inner_escaped_toplevel") === test_mod
+    @test run(test_mod, "MacroMod.@unescaped_toplevel") === test_mod.MacroMod
+
+    unrelated = @newmod(unrelated)
+    @eval unrelated const MacroMod = $(test_mod.MacroMod)
+    @eval unrelated global mod = 123
+
+    @test run(unrelated, "MacroMod.@escaped_toplevel") == 123
+    @test run(unrelated, "MacroMod.@inner_escaped_toplevel") == 123
+    @test run(unrelated, "MacroMod.@unescaped_toplevel") === test_mod.MacroMod
+end
+
+@testset "toplevel macro hygiene: @__MODULE__" for run in [JuliaLowering.include_string,
+                                                           Base.include_string]
+    @eval test_mod module MacroMod
+    macro atmodule_in_toplevel()
+        Expr(:toplevel, :(@__MODULE__))
+    end
+    macro atmodule_in_module()
+        Expr(:toplevel, Expr(:module, true, esc(:atmod_mod), Expr(
+            :block, :(global global_mod = @__MODULE__))))
+    end
+    end
+    Core.@latestworld
+    @test run(test_mod, "MacroMod.@atmodule_in_toplevel") === test_mod
+    @test run(test_mod, "MacroMod.@atmodule_in_module") isa Module
+    Core.@latestworld
+    @test isdefined(test_mod, :atmod_mod)
+    @test test_mod.atmod_mod.global_mod == test_mod.atmod_mod
 end
 
 # JuliaLang/JuliaLowering.jl#120
@@ -918,8 +1449,9 @@ end
 # code, not the module corresponding to the current hygienic scope
 JuliaLowering.include_string(test_mod, raw"""
 module Mod1
+import ..JuliaLowering.@legacy_quote_to_syntax
 macro indirect_MODULE()
-    return :(@__MODULE__())
+    return @legacy_quote_to_syntax :(@__MODULE__())
 end
 end
 """)
@@ -927,6 +1459,56 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
 @test JuliaLowering.eval(test_mod, code) === test_mod # !== test_mod.Mod1
 # the lowering/eval iterator needs to expand in the correct world age (currently
 # the only way to hit this from user code is macros producing toplevel)
+
+@testset "old macros defining modules" begin
+    # escaped module nested in tmpmod_1
+    jl_eval(test_mod, :(
+        module MacMod
+        macro makemod(name)
+            Expr(:toplevel,
+                 esc(Expr(:module, false, :tmpmod_1,
+                          Expr(:block,
+                               Expr(:module, false, name,
+                                    Expr(:block, Expr(:const, Expr(:(=), :c, 1))))))))
+        end
+        end); expr_compat_mode=true)
+
+    @testset for expr_compat_mode in [true, false]
+        @test JuliaLowering.include_string(
+            test_mod, "MacMod.@makemod(newmod)") isa Module
+        Core.@latestworld
+        # module name should escape macmod->test_mod
+        @test test_mod.tmpmod_1.newmod isa Module
+        @test !isdefined(test_mod.MacMod, :newmod)
+        @test !isdefined(test_mod.MacMod, :tmpmod_1)
+        # const in mod body should work
+        @test test_mod.tmpmod_1.newmod.c == 1
+    end
+
+    # escaped module name
+    jl_eval(test_mod, :(
+        module MacMod
+        macro makemod(name)
+            Expr(:toplevel,
+                 Expr(:module, false, esc(name),
+                      Expr(:block,
+                           # TODO: escape node in outer context
+                           # Expr(:const, Expr(:(=), esc(:c), 1))
+                           )))
+        end
+        end); expr_compat_mode=true)
+
+    @testset for expr_compat_mode in [true, false]
+        @test JuliaLowering.include_string(
+            test_mod, "MacMod.@makemod(newmod)") isa Module
+        Core.@latestworld
+        # module name should escape macmod->test_mod
+        @test test_mod.newmod isa Module
+        @test !isdefined(test_mod.MacMod, :newmod)
+        # const in mod body should
+        @test_broken test_mod.newmod.c == 1
+    end
+end
 
 @testset "macros defining macros" begin
     @eval test_mod macro make_and_use_macro_toplevel()
@@ -1253,4 +1835,29 @@ end
         @test _version isa NamedTuple
         @test _version.syntax == version
     end
+end
+
+# produces import/using in module that is `@eval`ed.
+@testset "safetestset" begin
+    macro_mod = @newmod(macro_mod, test_mod)
+    JuliaLowering.include_string(macro_mod, raw"""
+    macro safetestset(testname, expr)
+        quote
+            @eval module $(gensym("safetestset_mod"))
+            using Test
+            @testset $testname $expr
+            end
+            nothing
+        end
+    end
+    """; expr_compat_mode=true)
+
+    JuliaLowering.include_string(test_mod, """
+    macro_mod.@safetestset "Tests" begin
+        a = 1; b = 2; c = a + b; @test c == 3
+        @isdefined(a) == true
+    end
+    """; expr_compat_mode=true)
+    @test !isdefined(test_mod, :a)
+    @test !isdefined(macro_mod, :a)
 end

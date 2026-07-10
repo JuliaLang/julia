@@ -1,19 +1,80 @@
 # Non-incremental lowering API for non-toplevel non-module expressions.
 # May be removed?
 
-function lower(mod::Module, ex0::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter(),
+function lower(mod::Module, ex_in::SyntaxTree; expr_compat_mode::Bool=false,
                soft_scope::Union{Nothing,Bool}=nothing)
-     ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
-     ctx2, ex2 = expand_forms_2(  ctx1, ex1)
-     ctx3, ex3 = resolve_scopes(  ctx2, ex2; soft_scope)
-     ctx4, ex4 = convert_closures(ctx3, ex3)
-    _ctx5, ex5 = linearize_ir(    ctx4, ex4)
+    ver = expr_compat_mode ? JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION
+    ex0 = rebase_layers(ex_in, mod, ver)
+    world = Base.get_world_counter()
+    ex1 = expand_forms_1(ex0, world, true)
+    ctx2, ex2 = expand_forms_2(ex1, world)
+    ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
+    ctx4, ex4 = convert_closures(ctx3, ex3)
+    _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ex5
 end
 
-function macroexpand(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter())
-    _ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world)
-    ex1
+function macroexpand(mod::Module, ex_in::SyntaxTree;
+                     expr_compat_mode::Bool=false,
+                     ver::VersionNumber=expr_compat_mode ?
+                         JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION,
+                     recursive::Bool=true)
+    ex0 = rebase_layers(ex_in, mod, ver)
+    expand_forms_1(ex0, Base.get_world_counter(), recursive)
+end
+
+"May be used in macros or from any module"
+function macroexpand(st::SyntaxTree)
+    DEBUG && assert_expandable(st)
+    ctx = MacroExpansionContext(st, Base.get_world_counter(), true)
+    expand_forms_1(ctx, st)
+end
+
+# If a top-level thunk has existing context, we can assume all syntax has the
+# same base layer: either it was produced by a macro expansion and went through
+# `apply_expansion_layer`, or it was produced by parsing (which we assume either
+# adds zero or uniform context to the tree).
+
+# We ignore old the base layer's module, which should usually be the same as the
+# current lowering module.  (counterexample: macroexpand in mod A producing
+# escaped :toplevel st, then eval st in mod B, but flisp does the same thing by
+# spamming globalrefs to mod A throughout st).
+function rebase_layers(st, mod::Module, ver::VersionNumber)
+    out = if !hasattr(st, :context)
+        # assert zero context
+        sc = SyntaxContext(mod, ver)
+        fill_context!(st, sc)
+    else
+        base = base_layer(st.context::SyntaxContext)
+        newbase = ScopeLayer(mod, nothing)
+        _rebase_layers(
+            st, Dict{ScopeLayer, ScopeLayer}(base=>newbase),
+            Dict{SyntaxContext, SyntaxContext}())
+    end
+    DEBUG && assert_expandable(out)
+    out
+end
+
+function _rebase_layers(st, slmap, scmap)
+    sc = st.context::SyntaxContext
+    sc2 = get(scmap, sc, nothing)
+    if isnothing(sc2)
+        sl2 = _get_sl!(slmap, sc.layer)
+        sc2 = scmap[sc] = SyntaxContext(sl2, sc.unexpanded, sc.version, sc.internal)
+    end
+    if is_leaf(st) || numchildren(st) == 0
+        setattr(st, :context, sc2)
+    else
+        setattr!(mapchildren(c->_rebase_layers(c, slmap, scmap), st._graph, st),
+                 :context, sc2)
+    end
+end
+
+function _get_sl!(slmap, sl::ScopeLayer)
+    out = get(slmap, sl, nothing)
+    out isa ScopeLayer && return out
+    slmap[sl] = ScopeLayer(
+        sl.mod, isnothing(sl.escaped) ? nothing : _get_sl!(slmap, sl.escaped))
 end
 
 # Incremental lowering API which can manage toplevel and module expressions.
@@ -34,12 +95,12 @@ end
 # how we end up putting this into Base.
 
 struct LoweringIterator{Attrs}
-    expr_compat_mode::Bool # later stored in module?
+    ver::VersionNumber # later stored in module?
     todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
 end
 
-function lower_init(ex::SyntaxTree{T}; expr_compat_mode::Bool=false) where {T}
-    LoweringIterator{T}(expr_compat_mode, [(ex, false, 0)])
+function lower_init(ex::SyntaxTree{T}, ver) where {T}
+    LoweringIterator{T}(ver, [(ex, false, 0)])
 end
 
 function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
@@ -64,7 +125,8 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
 
     k = kind(ex)
     if !(k in KSet"toplevel module")
-        ctx1, ex = expand_forms_1(mod, ex, iter.expr_compat_mode, world)
+        ex = rebase_layers(ex, mod, iter.ver)
+        ex = expand_forms_1(ex, world, true)
         k = kind(ex)
     end
     if k == K"toplevel"
@@ -85,9 +147,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     else
-        # Non macro expansion parts of lowering
-        @assert @isdefined(ctx1) "Assertion to tell the compiler about the definedness of this variable"
-         ctx2, ex2 = expand_forms_2(ctx1, ex)
+         ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
@@ -312,10 +372,13 @@ function _di_pos(st::SyntaxTree)
 end
 
 # TODO sourcefile(::LNN) should return Symbol, not LNN
-_di_sourcefile(st) =
-    let x = JuliaSyntax.unexpanded_sourceref(st)
-        x isa LineNumberNode ? x.file : x.file[]::SourceFile
-    end
+function _di_sourcefile(st)
+    # if st.context.unexpanded isa SyntaxTree
+    #     @jl_assert st.context.unexpanded._graph === st._graph (st, "bad unexpanded: different graph") (st.context.unexpanded, "this is the unexpanded tree")
+    # end
+    x = JuliaSyntax.unexpanded_sourceref(st)
+    x isa LineNumberNode ? x.file : x.file[]::SourceFile
+end
 
 # A single pass over all IR to collect unique byte/line positions and CodeInfos
 function collect_locs!(node_sources, codeinfos, top_sf, st)
@@ -578,10 +641,12 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"SSAValue"
         Core.SSAValue(ex.var_id::IdTag)
     elseif k == K"return"
-        Core.ReturnNode(_to_lowered_expr(ex[1]))
+        v = _to_lowered_expr(ex[1])
+        @jl_assert Base.Compiler.is_valid_return(v) ex
+        Core.ReturnNode(v)
     elseif k == K"inert"
-        est_to_expr(remove_scope_layer!(ex))
-    elseif k == K"inert_syntaxtree"
+        est_to_expr(ex)
+    elseif k == K"syntaxinert"
         ex[1]
     elseif k == K"code_info"
         ir = to_code_info(ex, ex.slots, ex.meta)
@@ -591,10 +656,9 @@ function _to_lowered_expr(ex::SyntaxTree)
             ir
         end
     elseif k == K"Value"
-        # TODO: we still do this in some interpolation, genfunc situations
-        # @jl_assert !isa_lowering_ast_node(ex.value) (
-        #     ex, string("smuggling AST through Value is asking for trouble; ",
-        #                "find a SyntaxTree representation"))
+        @jl_assert !isa_lowering_ast_node(ex.value) (
+            ex, string("smuggling AST through Value is asking for trouble; ",
+                       "find a SyntaxTree representation"))
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
         Core.GotoNode(ex[1].id)
@@ -702,10 +766,10 @@ end
 #-------------------------------------------------------------------------------
 # Our version of eval - should be upstreamed though?
 @fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree;
-                                macro_world::UInt=Base.get_world_counter(),
                                 soft_scope::Union{Nothing,Bool}=nothing,
-                                opts...)
-    iter = lower_init(ex; opts...)
+                                expr_compat_mode::Bool=false)
+    ver = expr_compat_mode ? JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION
+    iter = lower_init(ex, ver)
     _eval(mod, iter; soft_scope)
 end
 
@@ -775,7 +839,7 @@ Like `include`, except reads code from the given string rather than from a file.
 """
 function include_string(mod::Module, code::AbstractString, filename::AbstractString="string";
                         expr_compat_mode=false, version::VersionNumber=VERSION)
-    eval(mod, parseall(SyntaxTree, code; filename=filename, version=version); expr_compat_mode)
+    eval(mod, parseall(SyntaxTree, code; filename, version); expr_compat_mode)
 end
 
 include(path::AbstractString) = include(JuliaLowering, path)

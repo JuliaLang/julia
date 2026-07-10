@@ -2427,7 +2427,7 @@ function report_precompile_results!(s::PrecompileSession)
     notify(s.first_started) # in cases of no-op or !fancyprint
 
     quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), s.tasks) || s.interrupted || s.canceled
-    seconds_elapsed = round(Int, (s.time_start > 0 ? (time_ns() - s.time_start) : 0) / 1e9)
+    seconds_elapsed = round(Int, (s.time_start > 0 ? (time_ns() -% s.time_start) : 0) / 1e9)
     ndeps = count(j -> is_recompiled(j), values(s.jobs))
 
     requested_errs = false
