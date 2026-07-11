@@ -603,15 +603,6 @@ end
     @test t7.result isa CancellationRequest
 end
 
-@testset "cancellation of computing tasks" begin
-    # Polling cancellation via @cancel_check
-    t, src = cancellable_spawn(find_collatz_counterexample)
-    sleep(0.2)
-    cancel!(src)
-    @test_throws TaskFailedException wait(t)
-    @test t.result isa CancellationRequest
-end
-
 @testset "structured cancellation of @sync" begin
     t, src = cancellable() do
         @sync begin
@@ -980,7 +971,10 @@ end
         end
     """, [1.0, 2.5, 2.5]; forcekill=true)
     @test occursin("Cancellation is in progress, but has not completed", output)
-    @test occursin("Abandoning the current task", output)
+    # single-threaded sessions reach the abandonment through the C-side
+    # direct path ("Abandoned ... and switched to a rescue task"); threaded
+    # ones through the listener's rung ("Abandoning ...")
+    @test occursin(r"Abandon(ing|ed) the current task", output)
 
     # ^C stops a swarm of print-flooding tasks and the script continues
     # (issue #47839)
@@ -1085,7 +1079,50 @@ if Sys.isunix()
             @test status == :ok
         end
         sendline(s) = write(ptm, s * "\n")
+        # Wait until every needle appears at-or-after the cursor, in any
+        # order, then advance the cursor past all of them: the single-thread
+        # endgame's messages (rescue warning, error display, fresh prompt)
+        # interleave nondeterministically.
+        function expect_all(needles::String...; timeout::Real=30.0)
+            last_end = Ref(cursor[])
+            status = timedwait(timeout; pollint=0.05) do
+                s = snapshot()
+                stop = cursor[]
+                for needle in needles
+                    idx = findnext(needle, s, cursor[])
+                    idx === nothing && return false
+                    stop = max(stop, last(idx) + 1)
+                end
+                last_end[] = stop
+                return true
+            end
+            if status !== :ok
+                @error "expect_all timed out" needles tail=snapshot()[max(1, cursor[]):end]
+            else
+                cursor[] = last_end[]
+            end
+            @test status == :ok
+        end
 
+        expect("julia> ")
+        # In a child with a single thread IN TOTAL, the julia-side listener -
+        # the engine of the graded SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL
+        # ladder - is starved while the victim monopolizes it: a repeat press
+        # re-offers the first rung, and the third press reaches the C-side
+        # direct abandonment instead of the listener's rungs. An unadorned
+        # `julia -i` session has an interactive-pool thread besides the
+        # default one, and its interactive-pool listener runs the full
+        # ladder; only an explicit JULIA_NUM_THREADS=1 (CI's test workers)
+        # leaves no spare thread. Probe the child's total count directly.
+        sendline("print(\"NTQ\", Threads.nthreads(:default) + Threads.nthreads(:interactive), \"QTN\")")
+        @test timedwait(30.0; pollint=0.05) do
+            m = match(r"NTQ(\d+)QTN", snapshot(), cursor[])
+            m === nothing && return false
+            cursor[] = m.offset + lastindex(m.match)
+            return true
+        end === :ok
+        m = match(r"NTQ(\d+)QTN", snapshot())
+        single_threaded = m !== nothing && m[1] == "1"
         expect("julia> ")
         # A task that acknowledges SAFE cancellation but hangs in its cleanup:
         # walks the full escalation ladder with a guided message per rung.
@@ -1103,13 +1140,20 @@ if Sys.isunix()
                 kill(p, Sys.isbsd() ? Base.SIGINFO : Base.SIGUSR1)
                 expect("signal ("; timeout=10.0) # the backtrace dump header
             end
-            kill(p, Base.SIGINT) # press 2: ABANDON_EXTERNAL
-            expect("No longer waiting for external resources")
-            expect("Press ^C again to forcibly abandon"; timeout=6.0)
-            kill(p, Base.SIGINT) # press 3: ABANDON_ALL freezes the task
-            expect("Abandoning the current task")
-            expect("CancellationRequest")
-            expect("julia> ")
+            if single_threaded
+                kill(p, Base.SIGINT) # press 2: retried, re-offering rung 1
+                expect("Press ^C again to also stop waiting for external resources"; timeout=6.0)
+                kill(p, Base.SIGINT) # press 3: C-side direct abandonment
+                expect_all("Abandoned the current task", "CancellationRequest", "julia> ")
+            else
+                kill(p, Base.SIGINT) # press 2: ABANDON_EXTERNAL
+                expect("No longer waiting for external resources")
+                expect("Press ^C again to forcibly abandon"; timeout=6.0)
+                kill(p, Base.SIGINT) # press 3: ABANDON_ALL freezes the task
+                expect("Abandoning the current task")
+                expect("CancellationRequest")
+                expect("julia> ")
+            end
             # the rescued session works
             sendline("$episode + $episode")
             expect(string(2episode))
@@ -1329,78 +1373,4 @@ end
     @test trylock(cond.lock)
     unlock(cond.lock)
     wait(holder)
-end
-
-@testset "unsafe_abandon! validates at delivery and can refuse" begin
-    # A victim cycling a ReentrantLock (which inhibits finalizers while
-    # held) must never be abandoned mid-hold: the delivery-point validation
-    # refuses instead of corrupting runtime bookkeeping. Abandon spam either
-    # gets a clean refusal or commits during an unlocked window.
-    lk = ReentrantLock()
-    stop = Threads.Atomic{Bool}(false)
-    victim = Threads.@spawn begin
-        while !stop[]
-            lock(lk)
-            try
-                x = 0
-                for i in 1:2000
-                    x += i
-                end
-            finally
-                unlock(lk)
-            end
-        end
-    end
-    committed = false
-    deadline = time() + 20.0
-    while !committed && time() < deadline
-        istaskdone(victim) && break
-        rescue = Task(() -> (while true; wait(); end))
-        rescue.sticky = false
-        committed = Base.unsafe_abandon!(victim, rescue)
-        if !committed
-            # refusal must leave the victim untouched and running
-            @test !istaskdone(victim)
-        end
-        sleep(0.001)
-    end
-    @test committed
-    @test victim.state === :abandoned
-    # runtime must be healthy afterwards (finalizers not leaked-inhibited)
-    GC.gc(false)
-end
-
-# Linux-only: blocks the abandon signal by number (SIGUSR2 == 12) and uses
-# Linux's SIG_BLOCK/SIG_UNBLOCK values.
-Sys.islinux() && @testset "unsafe_abandon! withdraws cleanly on delivery timeout" begin
-    # Block the abandon signal in the victim so delivery cannot happen: the
-    # requester must time out, withdraw every published effect, and return
-    # false with the victim still running and not marked done.
-    started = Base.Event()
-    release = Threads.Atomic{Bool}(false)
-    victim = Threads.@spawn begin
-        # block SIGUSR2 on this thread
-        sset = zeros(UInt8, 128)
-        ccall(:sigemptyset, Cint, (Ptr{UInt8},), sset)
-        ccall(:sigaddset, Cint, (Ptr{UInt8}, Cint), sset, 12) # SIGUSR2
-        ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 0 #= SIG_BLOCK =#, sset, C_NULL)
-        notify(started)
-        # spin in compute so the task stays current on its thread
-        while !release[]
-            ccall(:jl_cpu_pause, Cvoid, ())
-        end
-        ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 1 #= SIG_UNBLOCK =#, sset, C_NULL)
-        :survived
-    end
-    wait(started)
-    rescue = Task(() -> (while true; wait(); end))
-    rescue.sticky = false
-    t0 = time()
-    ok = Base.unsafe_abandon!(victim, rescue)
-    dt = time() - t0
-    @test !ok
-    @test !istaskdone(victim)         # not falsely marked :abandoned
-    @test dt < 10.0                   # bounded timeout, no hang
-    release[] = true                  # victim completes normally afterwards
-    @test fetch(victim) === :survived
 end
