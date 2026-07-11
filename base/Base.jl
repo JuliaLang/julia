@@ -515,11 +515,21 @@ function sigint_listener(cond::AsyncCondition)
             # The active severity was never observed by any task - a repeat
             # ^C within the grace period retries its delivery.
             sev = active
-        else
+        elseif !pending
             # The cancellation was acknowledged and is being handled; a
-            # repeat ^C within the grace period does nothing (once the grace
-            # period lapses, the rescue timer offers escalation).
+            # spurious wakeup without a fresh press does nothing (once the
+            # grace period lapses, the rescue timer offers escalation).
             continue
+        else
+            # Acknowledged, but this wakeup carries a real press. The press
+            # may also have been the FIRST one, delivered entirely by the
+            # C-side fast path (the episode source marked and the signal
+            # dispatch acknowledged by a polling task) with no walk ever
+            # run - parked waiters under the episode source still need
+            # their wake. Redeliver: level-triggered and idempotent, it
+            # wakes whoever is still parked and is a no-op for tasks
+            # already unwinding.
+            sev = active
         end
         # N.B.: these warnings must not park this task (the victim may be
         # hogging our only thread) - Core.print writes directly.
