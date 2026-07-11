@@ -653,3 +653,14 @@ struct W62022{T}; x::T; end
 @noinline foo62022(::W62022{W62022{W62022{W62022{Int}}}}) = false
 @test foo62022(W62022(1)) === false # test for invalidation
 @test foo62022(W62022(W62022(W62022(1)))) === false
+
+# a kind-typed slot admits type objects, whose canonical backedge keys come
+# from their payload class (a `Type{Int}` call site keys under `Number`); a
+# `(::DataType)(...)` insertion must widen to the `Type` umbrella to find
+# such missing-match edges rather than keying by the kind's supertype chain
+struct KindCtor67 end
+struct KindArg67 end  # private argument type so the pirate method stays inert
+callctor67(x) = KindCtor67(x)
+@test_throws MethodError callctor67(KindArg67())
+(t::DataType)(x::KindArg67) = t === KindCtor67 ? 67 : 0
+@test callctor67(KindArg67()) === 67
