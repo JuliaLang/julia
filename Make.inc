@@ -1512,14 +1512,6 @@ BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL 
 # build until a matching JLL exists.
 USE_BINARYBUILDER_LIBUV := 0
 
-# TEMPORARY: cancellation delivered inside GMP requires the interruption-safe
-# reallocation orderings from deps/patches/gmp-mpz_realloc.patch (_mpz_realloc
-# and mpz_mul); without them an unwound reallocation leaves an mpz pointing at
-# freed memory that mpz_clear later double-frees. The current GMP_jll does not
-# carry the patch, so force the source build until it is mirrored into
-# Yggdrasil.
-USE_BINARYBUILDER_GMP := 0
-
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
