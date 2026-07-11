@@ -69,8 +69,9 @@ Finally:
 `in` and `isa` are parsed as infix operators;
 `public` is parsed as a keyword when beginning a toplevel statement;
 `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop;
+`enum` is parsed as a keyword when it begins a statement and is followed by an identifier (in Julia 1.14 and later);
 and `as` is used as a keyword to rename an identifier brought into scope by `import` or `using`.
-Creation of variables named `where`, `in`, `isa`, `outer` and `as` is allowed, though.
+Creation of variables named `where`, `in`, `isa`, `outer`, `enum` and `as` is allowed, though.
 
 ```@docs
 module
@@ -104,6 +105,7 @@ mutable struct
 @kwdef
 abstract type
 primitive type
+enum
 where
 ...
 ;

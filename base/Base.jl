@@ -33,6 +33,10 @@ end
 # metaprogramming
 include("meta.jl")
 
+# enum types (before multimedia.jl and show.jl, whose generic show entry
+# points branch on isenumtype)
+include("enumtype.jl")
+
 # Strings
 include("multimedia.jl")
 using .Multimedia
