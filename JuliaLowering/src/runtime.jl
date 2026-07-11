@@ -7,15 +7,36 @@
 #-------------------------------------------------------------------------------
 # Functions/types used by code emitted from lowering, but not called by it directly
 
+@inline function _invoke_in_world(w::UInt, f::F, @nospecialize(args...)) where {F}
+    if ccall(:jl_is_in_pure_context, Int8, ()) != 0
+        # Similar to `Base.invoke_in_world` but also works inside generated-function
+        # expansion (see `jl_code_for_staged`)
+        return Core._call_in_world_total(w, f, args...)
+    end
+    return Base.invoke_in_world(w, f, args...)
+end
+
+# Re-dispatch `f(args...)` at the pinned lowering world (see `jl_lowering_world`)
+@inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
+    w = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
+    if w == 0
+        # Fallback when the Base lowering hook is not set up
+        w = Base.tls_world_age()
+        # FIXME: as a side effect, enabling the Base lowering hook now affects
+        #        JuliaLowering execution not passing through the hook
+    end
+    return _invoke_in_world(w, f, args...)
+end
+
 # Return the current exception. In JuliaLowering we use this rather than the
 # special form `K"the_exception"` to reduce the number of special forms.
 Base.@assume_effects :removable function current_exception()
     @ccall jl_current_exception(current_task()::Any)::Any
 end
 
-function _interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple), val_i)
+function __interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple), val_i)
     if ex isa QuoteNode
-        out = _interpolate_expr(Expr(:inert, ex.value), depth, vals, val_i)
+        out = __interpolate_expr(Expr(:inert, ex.value), depth, vals, val_i)
         QuoteNode(only(out.args))
     elseif !(ex isa Expr)
         ex
@@ -30,18 +51,21 @@ function _interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple),
                     push!(cs_out, v)
                 end
             else
-                push!(cs_out, _interpolate_expr(e, inner_depth, vals, val_i))
+                push!(cs_out, __interpolate_expr(e, inner_depth, vals, val_i))
             end
         end
         Expr(ex.head, cs_out...)
     end
 end
-function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
+function _interpolate_expr(@nospecialize(ex), @nospecialize(values::Tuple))
     @jl_assert !Meta.isexpr(ex, :$) (expr_to_est(ex), "expand_quote should handle this")
-    _interpolate_expr(ex, 0, values, Ref(0))
+    __interpolate_expr(ex, 0, values, Ref(0))
+end
+function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
+    return invoke_in_lowering_world(_interpolate_expr, ex, values)
 end
 
-function _interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
+function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
     is_leaf(st) && return mkleaf(st)
     k = kind(st)
     inner_depth = k == K"syntaxquote" ? depth + 1 :
@@ -58,18 +82,21 @@ function _interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
                 push!(cs_out, v2)
             end
         else
-            push!(cs_out, _interpolate_syntax(c, inner_depth, vals, val_i))
+            push!(cs_out, __interpolate_syntax(c, inner_depth, vals, val_i))
         end
     end
     mknode(st, cs_out)
 end
-function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     st = copy_ast(ensure_macro_attributes!(SyntaxGraph()), st)
     val_i = Ref(0)
-    out = _interpolate_syntax((@ast st._graph st [K"None" st]), 0, vals, val_i)
+    out = __interpolate_syntax((@ast st._graph st [K"None" st]), 0, vals, val_i)
     @jl_assert val_i[] == length(vals) st
     @jl_assert numchildren(out) == 1 st
     out[1]
+end
+function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+    return invoke_in_lowering_world(_interpolate_syntax, st, vals)
 end
 
 #--------------------------------------------------
@@ -246,6 +273,18 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     # Run code generator - this acts like a macro expander
     ex0 = g.gen(sc, args...)
+
+    # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
+    world = Base.tls_world_age()
+
+    # Lower the generated code in the lowering world
+    return invoke_in_lowering_world(_lower_generated_code, g, source, graph, sc,
+                                   __module__, world, ex0)
+end
+
+function _lower_generated_code(g::GeneratedFunctionStub, source::Method, graph,
+                               sc::SyntaxContext, __module__::Module,
+                               world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
         ex0 = expr_to_est(
             graph, ex0, source_location(LineNumberNode, g.srcref))
@@ -261,8 +300,6 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     end
 
     @jl_assert base_layer(sc).mod == __module__ ex0
-    # Note that we expand in `tls_world_age()` (see Core.GeneratedFunctionStub)
-    world = Base.tls_world_age()
     ex0 = JuliaSyntax.fill_context!(ex0, sc)
     ctx1 = MacroExpansionContext(ex0, world, true)
     ex1 = expand_forms_1(ctx1, ex0)
@@ -317,7 +354,7 @@ end
 #
 # (This should do what fl_defined_julia_global does for flisp lowering)
 function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_counter())
-    return Base.invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
+    return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
 # "Reserve" a binding: create the binding if it doesn't exist but do not assign

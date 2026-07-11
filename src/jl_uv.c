@@ -1197,17 +1197,19 @@ JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     return uv_tty_set_mode(handle, mode_enum);
 }
 
-typedef int (*work_cb_t)(void *, void *, void *);
-typedef void (*notify_cb_t)(int);
+// work_func is a call wrapper that is handed work_ctx, an opaque context that
+// carries everything needed to perform the call; notify_func wakes up the
+// waiting task once the work has finished.
+typedef void (*work_cb_t)(void *);
+typedef void (*notify_cb_t)(void *, void *);
 
 struct work_baton {
     uv_work_t req;
     work_cb_t work_func;
-    void      *ccall_fptr;
-    void      *work_args;
-    void      *work_retval;
+    void      *work_ctx;
     notify_cb_t notify_func;
-    int       notify_idx;
+    void      *notify_data1;
+    void      *notify_data2;
 };
 
 #ifdef _OS_LINUX_
@@ -1217,27 +1219,28 @@ struct work_baton {
 static void jl_work_wrapper(uv_work_t *req)
 {
     struct work_baton *baton = (struct work_baton*) req->data;
-    baton->work_func(baton->ccall_fptr, baton->work_args, baton->work_retval);
+    baton->work_func(baton->work_ctx);
 }
 
 static void jl_work_notifier(uv_work_t *req, int status)
 {
     struct work_baton *baton = (struct work_baton*) req->data;
-    baton->notify_func(baton->notify_idx);
+    baton->notify_func(baton->notify_data1, baton->notify_data2);
     free(baton);
 }
 
-JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *ccall_fptr, void *work_args, void *work_retval,
-                               notify_cb_t notify_func, int notify_idx)
+JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_ctx,
+                               notify_cb_t notify_func,
+                               void *notify_data1,
+                               void *notify_data2)
 {
     struct work_baton *baton = (struct work_baton*)malloc_s(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
     baton->work_func = work_func;
-    baton->ccall_fptr = ccall_fptr;
-    baton->work_args = work_args;
-    baton->work_retval = work_retval;
+    baton->work_ctx = work_ctx;
     baton->notify_func = notify_func;
-    baton->notify_idx = notify_idx;
+    baton->notify_data1 = notify_data1;
+    baton->notify_data2 = notify_data2;
 
     JL_UV_LOCK();
     uv_queue_work(jl_io_loop, &baton->req, jl_work_wrapper, jl_work_notifier);
