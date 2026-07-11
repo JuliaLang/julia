@@ -44,6 +44,11 @@ _include("runtime.jl")
 _include("syntax_macros.jl")
 
 _include("eval.jl")
+
+# The UnifiedIR direct-lowering backend (unifiedir-design.md §10.1): reuses
+# the front half above unchanged and emits structured region IR directly.
+# Pure definitions; nothing calls it during bootstrap.
+_include("unified/UnifiedBackend.jl")
 _include("compat.jl")
 _include("hooks.jl")
 
