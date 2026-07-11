@@ -117,12 +117,16 @@ function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
 end
 
 # TODO: Avoid producing redundant calls to declare_global
-function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing)
+# When `value` is supplied (the `x::T = v` form), the type declaration and the value are
+# installed together as a single atomic `declare_global` (#62154). `nothing` children are
+# dropped by `@ast`, so an absent `type`/`value` simply shortens the call.
+function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing, value=nothing)
     decl = @ast ctx src_ex [K"block"
         [K"call"
             "declare_global"::K"core"
             mod::K"Value" name::K"Symbol" strong::K"Bool"
             type
+            value
         ]
         (::K"latestworld")
         (::K"nothing")
@@ -374,10 +378,40 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"decl"
         @jl_assert kind(ex[1]) == K"BindingId" ex
         binfo = get_binding(ctx, ex[1])
+        # A three-child `[K"decl" x T v]` is the joint form of `x::T = v` (#62154).
+        has_value = numchildren(ex) == 3
         if binfo.kind == :global
             # flisp has this, but our K"assert" handling is in a previous pass
             # [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-            make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, _convert_closures(ctx, ex[2]))
+            # (The top-level-only requirement is enforced during scope analysis.)
+            type = _convert_closures(ctx, ex[2])
+            if has_value && !ctx.toplevel_pure
+                # `x::T = v`: install the type and value together as a single atomic
+                # `declare_global`, emitted in place so the value may reference surrounding
+                # locals. The block evaluates to the original right-hand side.
+                rhs0 = _convert_closures(ctx, ex[3])
+                stmts = SyntaxList(ctx)
+                rhs1 = if is_simple_atom(ctx, rhs0)
+                    rhs0
+                else
+                    tmp = ssavar(ctx, rhs0)
+                    push!(stmts, @ast ctx ex [K"=" tmp rhs0])
+                    tmp
+                end
+                conv = ssavar(ctx, ex, "conv")
+                push!(stmts, @ast ctx ex [K"=" conv convert_for_type_decl(ctx, ex, rhs1, type, false)])
+                push!(stmts, @ast ctx ex [K"call"
+                    "declare_global"::K"core"
+                    binfo.mod::K"Value" binfo.name::K"Symbol" true::K"Bool" type conv])
+                push!(stmts, @ast ctx ex (::K"latestworld"))
+                @ast ctx ex [K"block" stmts... rhs1]
+            else
+                make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, type)
+            end
+        elseif has_value
+            # `x::T = v` (local): an ordinary typed assignment. The declared type was
+            # recorded during scope analysis, so `convert_assignment` applies it.
+            convert_assignment(ctx, @ast ctx ex [K"=" ex[1] ex[3]])
         else
             newleaf(ctx, ex, K"TOMBSTONE")
         end

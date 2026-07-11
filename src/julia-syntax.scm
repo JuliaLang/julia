@@ -1632,7 +1632,18 @@
           ,.(reverse assigns)
           ,.(if (null? assigns) `((null)) '()))
         (let ((x (car b)))
-          (cond ((or (assignment-like? x) (function-def? x))
+          (cond ((and (pair? x) (eq? (car x) '=)
+                      (pair? (cadr x)) (eq? (car (cadr x)) '|::|) (symbol? (cadr (cadr x))))
+                 ;; `global x::T = v` (or `local x::T = v`): keep the typed assignment joint
+                 ;; instead of splitting off a separate type declaration, so that a typed
+                 ;; global lowers to a single atomic `declare_global` (type + value) (#62154).
+                 ;; Mark the variable's scope without stripping its type into a `decl`.
+                 ;; (Restricted to plain `=`; compound assignments like `+=` keep the split
+                 ;; form so the type declaration is not lost.)
+                 (loop (cdr b)
+                       (cons `(,what ,(cadr (cadr x))) decls)
+                       (cons x assigns)))
+                ((or (assignment-like? x) (function-def? x))
                  (let ((new-vars (lhs-decls (assigned-name (cadr x)))))
                   (loop (cdr b)
                        (append (map (lambda (x) `(,what ,x)) new-vars) decls)
@@ -1775,14 +1786,22 @@
                 `(const (= ,(car e) ,(if (underscore-symbol? (car e))
                                          rhs
                                          (convert-for-type-decl rhs T #t #f)))))
-               (expand-forms
-                `(block ,@(cdr e)
-                        ;; TODO: When x is a complex expression, this acts as a
-                        ;; typeassert rather than a declaration.
-                        ,.(if (underscore-symbol? (car e))
-                              '() ; Assignment to _ will ultimately be discarded---don't declare anything
-                              `((decl ,(car e) ,T)))
-                        ,(maybe-wrap-const `(= ,(car e) ,rhs))))))))
+               (if (and (symbol? (car e)) (not (underscore-symbol? (car e))))
+                   ;; Keep `x::T = rhs` as a single joint assignment rather than splitting it
+                   ;; into a separate type declaration and assignment. This lets a typed
+                   ;; global assignment lower to a single atomic `declare_global` that
+                   ;; installs the type and value together (#62154); for a local it is an
+                   ;; ordinary typed assignment. Closure conversion (`convert-assignment`)
+                   ;; distinguishes the two once scope resolution has run.
+                   `(= (|::| ,(car e) ,(expand-forms T)) ,(expand-forms rhs))
+                   (expand-forms
+                    `(block ,@(cdr e)
+                            ;; TODO: When x is a complex expression, this acts as a
+                            ;; typeassert rather than a declaration.
+                            ,.(if (underscore-symbol? (car e))
+                                  '() ; Assignment to _ will ultimately be discarded---don't declare anything
+                                  `((decl ,(car e) ,T)))
+                            ,(maybe-wrap-const `(= ,(car e) ,rhs)))))))))
       ((vcat ncat)
        ;; (= (vcat . args) rhs)
        (error "use \"(a, b) = ...\" to assign multiple values"))
@@ -3713,12 +3732,21 @@
          (let ((vi (get tab (cadr e) #f)))
               (vinfo:set-never-undef! vi #t)))
         ((= const)
-         (let ((vi (and (symbol? (cadr e)) (get tab (cadr e) #f))))
+         ;; the lhs of `x::T = rhs` is `(:: x T)`; record the declared type as a `decl`
+         ;; would, since the joint form is no longer split into a separate declaration.
+         (let* ((lhs   (cadr e))
+                (typed (and (pair? lhs) (eq? (car lhs) '|::|)))
+                (vname (decl-var lhs))
+                (vi (and (symbol? vname) (get tab vname #f))))
            (if vi ; if local or captured
                (begin (if (vinfo:asgn vi)
                           (vinfo:set-sa! vi #f)
                           (vinfo:set-sa! vi #t))
-                      (vinfo:set-asgn! vi #t))))
+                      (vinfo:set-asgn! vi #t)
+                      (when typed
+                        (if (not (equal? (vinfo:type vi) '(core Any)))
+                            (error (string "multiple type declarations for \"" vname "\"")))
+                        (vinfo:set-type! vi (caddr lhs))))))
          (unless (null? (cddr e))
            (analyze-vars (caddr e) env captvars sp tab)))
         ((call)
@@ -3958,6 +3986,34 @@ f(x) = yt(x)
      (else
        (error (string "invalid assignment location \"" (deparse var) "\"")))))
 
+;; `x::T = rhs` where the declared type `T` is known syntactically (#62154). For a global,
+;; the type declaration and the value are installed together by a single atomic
+;; `declare_global` call, so there is never an observable state in which the new type is
+;; visible with a stale value (or in which the binding is transiently undefined). For a
+;; local (or captured) variable this is an ordinary typed assignment: the declared type was
+;; recorded by `analyze-vars`, so `convert-assignment` applies it. `T` and `rhs0` have
+;; already been closure-converted.
+(define (convert-typed-assignment var T rhs0 fname lam interp opaq toplevel-pure parsed-method-stack globals locals)
+  (if (globalref? var)
+      (let* ((ref  var)
+             (rhs1 (if (or (simple-atom? rhs0) (equal? rhs0 '(the_exception)))
+                       rhs0
+                       (make-ssavalue)))
+             (conv (make-ssavalue)))
+        (put! globals ref #t) ;; declared here; a later plain assignment need not re-declare
+        ;; Install the type and value together with a single atomic `declare_global`,
+        ;; emitted in place (rather than hoisted) so the value may reference surrounding
+        ;; locals; the `toplevel-only` marker still enforces that a typed global declaration
+        ;; only appears at top level. The block evaluates to the original right-hand side.
+        `(block
+          ,.(if (eq? rhs1 rhs0) '() `((= ,rhs1 ,rhs0)))
+          (= ,conv ,(convert-for-type-decl rhs1 T #f lam))
+          (toplevel-only decl ,ref)
+          (call (core declare_global) ,(cadr ref) (inert ,(caddr ref)) (true) ,T ,conv)
+          (latestworld)
+          ,(if (eq? rhs1 rhs0) rhs0 rhs1)))
+      (convert-assignment var rhs0 fname lam interp opaq toplevel-pure parsed-method-stack globals locals)))
+
 (define (sig-type-expr namemap name expr)
   (let ((newname (get namemap name expr)))
     (if (symbol? newname)
@@ -4189,8 +4245,15 @@ f(x) = yt(x)
                     #t
                     (begin (restore prev) #f)))))
             ((eq? (car e) '=)
-             (begin0 (visit (caddr e))
-                     (assign! (cadr e))))
+             ;; the lhs of the joint typed assignment `x::T = rhs` is `(:: x T)`
+             ;; (#62154): the assigned variable sits behind the decl, and the declared
+             ;; type is an evaluated expression, so visit it like the rhs
+             (let ((lhs (cadr e)))
+               (if (and (pair? lhs) (eq? (car lhs) '|::|))
+                   (begin0 (eager-any visit (list (caddr e) (caddr lhs)))
+                           (assign! (cadr lhs)))
+                   (begin0 (visit (caddr e))
+                           (assign! lhs)))))
             ((eq? (car e) 'local)
              (declare! (cadr e))
              #f)
@@ -4330,9 +4393,16 @@ f(x) = yt(x)
                (put! defined (caddr e) #t))
            e)
           ((=)
-           (let ((var (cadr e))
-                 (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
-             (convert-assignment var rhs fname lam interp opaq toplevel-pure parsed-method-stack globals locals)))
+           (let ((lhs (cadr e)))
+             (if (and (pair? lhs) (eq? (car lhs) '|::|))
+                 ;; joint typed assignment `x::T = rhs` (#62154)
+                 (let ((var (cadr lhs))
+                       (T   (cl-convert (caddr lhs) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))
+                       (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
+                   (convert-typed-assignment var T rhs fname lam interp opaq toplevel-pure parsed-method-stack globals locals))
+                 (let ((var lhs)
+                       (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
+                   (convert-assignment var rhs fname lam interp opaq toplevel-pure parsed-method-stack globals locals)))))
           ((local-def) ;; make new Box for local declaration of defined variable
            (let ((vi (get locals (cadr e) #f)))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))

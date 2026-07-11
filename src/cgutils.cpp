@@ -782,14 +782,33 @@ static Value *julia_binding_pvalue(jl_codectx_t &ctx, Value *bv)
     return ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, bv, offset);
 }
 
+// the address slot (pgv) through which a jl_binding_t is referenced; the slot is filled
+// with the binding's address when the containing code is linked (JIT) or loaded
+// (system/package image)
+static Constant *julia_binding_pgv(jl_codectx_t &ctx, jl_binding_t *b)
+{
+    // binding->value are prefixed with *
+    jl_globalref_t *gr = b->globalref;
+    return gr ? julia_pgv(ctx.emission_context, jl_Module, "*", gr->name, gr->mod, b) : julia_pgv(ctx.emission_context, jl_Module, "*jl_bnd#", b);
+}
+
 static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 {
     // emit a literal_pointer_val to a jl_binding_t
-    // binding->value are prefixed with *
-    jl_globalref_t *gr = b->globalref;
-    Value *pgv = gr ? julia_pgv(ctx.emission_context, jl_Module, "*", gr->name, gr->mod, b) : julia_pgv(ctx.emission_context, jl_Module, "*jl_bnd#", b);
+    Constant *pgv = julia_binding_pgv(ctx, b);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+    // Emit the load in the entry block: the slot is a link-time constant, and an
+    // unconditionally executed load keeps its UB-implying metadata below when LICM
+    // moves instructions (hoisting a conditionally executed instruction strips it).
+    IRBuilderBase::InsertPointGuard IPG(ctx.builder);
+    if (ctx.topalloca)
+        ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
     auto load = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))));
+    // The binding is a GC object kept alive by its module, so the whole struct is
+    // dereferenceable; this lets loads off it (e.g. the re-type guard's flag load) be
+    // speculated, and hence hoisted out of loops even when control flow reaches them
+    // conditionally.
+    maybe_mark_load_dereferenceable(load, /*can_be_null*/false, sizeof(jl_binding_t), alignof(jl_binding_t));
     setName(ctx.emission_context, load, pgv->getName());
     return load;
 }
@@ -2541,6 +2560,34 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         MDNode *tbaa_dst, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false);
 
+// Re-load BINDING_FLAG_RETYPED, program-order after a preceding access of a binding's
+// value slot (#62154). Pairs with the write side of a re-declaration (see
+// jl_declare_global), which activates the guards, quiesces every thread at a
+// safepoint, and only then installs the new value: a thread whose access observed a
+// post-re-declaration slot must have parked inside the guarded region (there are no
+// polls between an access and its re-check), so it resumed after the flag was set and
+// this re-check observes it. The single-thread fence costs nothing at runtime; it only
+// keeps the compiler from hoisting the flag load above the access.
+static Value *emit_retype_recheck(jl_codectx_t &ctx, Value *bp)
+{
+    ctx.builder.CreateFence(AtomicOrdering::Acquire, SyncScope::SingleThread);
+    LoadInst *bflags = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()),
+            emit_ptrgep(ctx, bp, offsetof(jl_binding_t, flags)), Align(1));
+    // Monotonic (not Unordered) so the optimizer cannot merge this load with an
+    // earlier load of the flags (e.g. the guard itself on flag-guard targets), which
+    // would defeat the re-check
+    bflags->setOrdering(AtomicOrdering::Monotonic);
+    // The flags are never stored by compiled code, so this load cannot alias the
+    // binding value store it is ordered after; the Monotonic ordering (plus the fence
+    // above) is what keeps it in place, not the memory dependence.
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding_flags);
+    ai.decorateInst(bflags);
+    setName(ctx.emission_context, bflags, "retype_recheck");
+    return ctx.builder.CreateICmpNE(
+            ctx.builder.CreateAnd(bflags, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), BINDING_FLAG_RETYPED)),
+            ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
+}
+
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *ptr, jl_cgval_t rhs, jl_cgval_t cmpop,
         jl_value_t *jltype, MDNode *tbaa, MDNode *aliasscope,
@@ -2550,7 +2597,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         bool maybe_null_if_boxed, const jl_cgval_t *modifyop, const Twine &fname,
         jl_module_t *mod, jl_sym_t *var,
         // Union type support (set ptindex non-null for union stores)
-        Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr)
+        Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr,
+        // Re-type guard re-checking for global bindings (#62154, see emit_globalop):
+        // when set, Replace/Modify re-check `retype_bp`'s flags before each use of a
+        // value loaded from the slot and divert to `retype_deoptBB` once re-typed
+        Value *retype_bp = nullptr, BasicBlock *retype_deoptBB = nullptr)
 {
     auto newval = [&](const jl_cgval_t &lhs) { // for ismodifyfield
         const jl_cgval_t argv[3] = { cmpop, lhs, rhs };
@@ -2878,6 +2929,23 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 CmpPhi->addIncoming(Compare, From);
                 Compare = CmpPhi;
             }
+        }
+        if (retype_deoptBB && (op == StoreKind::Modify || op == StoreKind::Replace)) {
+            assert(isboxed && retype_bp && !is_union);
+            // Global bindings only (#62154): re-check the re-type guard at the top of
+            // every iteration, after the load that produced `Compare` and before that
+            // value is compared or passed to `op` typed as `jltype`. The thread may
+            // have parked at a safepoint inside `op` or an allocation while the
+            // binding was re-declared around it, after which a value reloaded from
+            // the slot is no longer known to be of the declared type
+            // this code was compiled against. Nothing has been committed at this
+            // point, so the whole operation can still divert to the runtime path.
+            Value *retyped = emit_retype_recheck(ctx, retype_bp);
+            BasicBlock *ContBB = BasicBlock::Create(ctx.builder.getContext(), "recheck_cont", ctx.f);
+            MDBuilder MDB(ctx.builder.getContext());
+            ctx.builder.CreateCondBr(retyped, retype_deoptBB, ContBB,
+                    MDB.createBranchWeights({1, 2000}));
+            ctx.builder.SetInsertPoint(ContBB);
         }
         if (op == StoreKind::Modify) {
             // Load old value for Modify

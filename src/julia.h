@@ -853,7 +853,15 @@ enum jl_binding_flags {
     BINDING_FLAG_PUBLICP                              = 0x4,
     // Set if any methods defined in this module implicitly reference
     // this binding. If not, invalidation is optimized.
-    BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x8
+    BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x8,
+    // Set (permanently) once the declared type of this global has been changed by a
+    // subsequent typed declaration (#62154). While clear, the single value slot is known
+    // to have only ever held values of the current declared type, so accesses may trust the
+    // type. Once set, generated code must verify the value against the type it was compiled
+    // for, because code compiled against an earlier type may still run (e.g. on the stack
+    // across the redefinition, or via `Base.invoke_in_world`) and observe a value written
+    // under a later, incompatible type.
+    BINDING_FLAG_RETYPED                              = 0x10
 };
 
 typedef struct _jl_binding_t {

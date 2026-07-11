@@ -223,11 +223,21 @@ function du_visit!(ctx, state::DefUseState, e)
 
     elseif k == K"decl"
         # Don't recurse into decl nodes - the BindingId is just a declaration,
-        # not a use. We only need to visit the type expression.
+        # not a use. We only need to visit the type expression. For the joint
+        # `[K"decl" x T v]` form (`x::T = v`), also visit the value (a use) and
+        # record the assignment to `x`, like a `K"="` node would (#62154).
+        has_label = false
         if numchildren(e) >= 2
-            return du_visit!(ctx, state, e[2])
+            has_label = du_visit!(ctx, state, e[2])
         end
-        return false
+        if numchildren(e) == 3
+            has_label |= du_visit!(ctx, state, e[3])
+            lhs = e[1]
+            if kind(lhs) == K"BindingId"
+                du_assign!(state, lhs.var_id)
+            end
+        end
+        return has_label
 
     elseif k == K"function_decl"
         # [function_decl] defines and instantiates the closure type and assigns

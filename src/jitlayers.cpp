@@ -68,6 +68,10 @@ using namespace llvm;
 #include "processor.h"
 #include "julia-task-dispatcher.h"
 
+#ifndef _OS_WINDOWS_
+#include <sys/mman.h> // mprotect, for the binding patch sites (#62154)
+#endif
+
 #if JL_LLVM_VERSION >= 180000
 # include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupportPlugin.h>
 #else
@@ -829,6 +833,7 @@ public:
         });
     }
 };
+
 } // namespace anonymous
 
 class JLMaterializationUnit : public orc::MaterializationUnit {

@@ -2799,7 +2799,11 @@ end
 @test Core.eval(Mod3, :(always_undef(x::Int) = x)) == invokelatest(getglobal, Mod3, :always_undef)
 @test Core.eval(Mod3, :(const always_undef = 3)) == invokelatest(getglobal, Mod3, :always_undef)
 @test_throws ErrorException("cannot declare Mod3.f constant; it was already declared as an import") Core.eval(Mod3, :(const f = 3))
-@test_throws ErrorException("cannot declare Mod.maybe_undef constant; it was already declared global") Core.eval(Mod, :(const maybe_undef = 3))
+# #62154: re-declaring an (assigned) global as a constant with a value is permitted
+# and behaves as a re-type plus an assignment of the constant's value
+@test Core.eval(Mod, :(const maybe_undef = 3)) == invokelatest(getglobal, Mod, :maybe_undef)
+@test invokelatest(getglobal, Mod, :maybe_undef) === 3
+@test isconst(Mod, :maybe_undef)
 
 z = 42
 import .z as also_z
@@ -3532,17 +3536,23 @@ end
         x::Float64 = 2.
     end
 
+    # #62154: value-carrying re-declarations of a typed global are now permitted
     m = Module()
-    @test_throws ErrorException @eval m begin
+    @eval m begin
         x::Int = 1
         x::Float64 = 2
     end
+    @test m.x === 2.0
+    @test Core.get_binding_type(m, :x) == Float64
 
+    # #62154: so is replacing a typed global by a constant with a value
     m = Module()
-    @test_throws ErrorException @eval m begin
+    @eval m begin
         x::Int = 1
         const x = 2
     end
+    @test m.x === 2
+    @test isconst(m, :x)
 
     m = Module()
     @test_throws ErrorException @eval m begin
@@ -3556,11 +3566,14 @@ end
         global x::Float64
     end
 
+    # #62154: a bare re-type is permitted when the current value conforms
     m = Module()
-    @test_throws ErrorException @eval m begin
+    @eval m begin
         x = 1
         global x::Int
     end
+    @test m.x === 1
+    @test Core.get_binding_type(m, :x) == Int
 
     m = Module()
     @eval m module Foo
