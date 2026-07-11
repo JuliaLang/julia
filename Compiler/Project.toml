@@ -2,6 +2,12 @@ name = "Compiler"
 uuid = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
 version = "0.1.1"
 
+[deps]
+UnifiedIR = "71d3db7a-7671-43e7-8290-11c08a22bffa"
+
+[sources]
+UnifiedIR = {path = "../UnifiedIR"}
+
 [syntax]
 julia_version = "1.14"
 

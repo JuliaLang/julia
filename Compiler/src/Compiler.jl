@@ -210,6 +210,29 @@ macro __SOURCE_FILE__()
     return QuoteNode(__source__.file::Symbol)
 end
 
+# Compiler.Unified — inference and optimization running natively on the
+# UnifiedIR substrate (unifiedir-design.md §8.3/§10) — is PACKAGE-MODE ONLY:
+# the sysimage bootstrap stage must never see it (UnifiedIR is bootstrapped
+# into Base later than the compiler), and the stdlib stub fast-path above
+# bypasses module evaluation entirely, so it is loaded on demand:
+function load_unified!()
+    if !Base.isdefined(@__MODULE__, :Unified)
+        # Evaluate the port in a Main-rooted carrier module: this baremodule
+        # rebinds `getproperty = Core.getfield` and `top`-resolution inside
+        # its nested tree targets it, which would compile every `x.f` in the
+        # port to raw getfield — breaking property-forwarding types
+        # (UnifiedIR.IRBody forwards its row properties to the substrate).
+        path = Base.joinpath(Base.Sys.BINDIR::Base.String, Base.DATAROOTDIR,
+                             "julia", "Compiler", "src", "unified", "Unified.jl")
+        carrier = Base.Module(:CompilerUnifiedCarrier)
+        Core.eval(carrier, Core.Expr(:const, Core.Expr(:(=), :CompilerModule, @__MODULE__)))
+        Base.include(carrier, path)
+        Core.eval(@__MODULE__, Core.Expr(:const, Core.Expr(:(=), :Unified,
+                  Base.invokelatest(Core.getglobal, carrier, :Unified))))
+    end
+    return Base.invokelatest(Core.getglobal, @__MODULE__, :Unified)
+end
+
 module IRShow end # relies on string and IO operations defined in Base
 baremodule TrimVerifier using Core end # relies on IRShow, so define this afterwards
 
