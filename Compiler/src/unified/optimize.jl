@@ -298,6 +298,7 @@ function optimize_ir!(ir::UnifiedIR.IR, argtypes::Vector{Any};
         # dominating stores — and each can expose new cases for the others.
         while true
             c = promote_arm_cells!(ir)
+            c += promote_island_cells!(ir)
             c += promote_loop_cells!(ir)
             c == 0 && break
             changed += c

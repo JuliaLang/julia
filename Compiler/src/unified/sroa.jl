@@ -322,6 +322,10 @@ body store take the carried arg, never the pre-loop store. Editable state.
 const PROMOTION_TRACE = Ref{Union{Nothing,Vector{Tuple{Symbol,Int,Int}}}}(nothing)
 @inline _trace!(kind::Symbol, anchor::StmtId, cell::StmtId) =
     (t = PROMOTION_TRACE[]; t === nothing || push!(t, (kind, Int(anchor.id), Int(cell.id))); nothing)
+# :island_phi anchors are REGION ids (the phi block), not stmt ids — the
+# harness back-translates them through RemapSet.region instead of .stmt
+@inline _trace!(kind::Symbol, anchor::UnifiedIR.RegionId, cell::StmtId) =
+    (t = PROMOTION_TRACE[]; t === nothing || push!(t, (kind, Int(anchor.id), Int(cell.id))); nothing)
 
 function promote_loop_cells!(ir::UnifiedIR.IR)
     UnifiedIR.check_state(ir, UnifiedIR.LAYOUT_EDITABLE, "promote_loop_cells!")
@@ -838,12 +842,12 @@ function _promote_arm_cells_at!(ir::UnifiedIR.IR, I::StmtId)
             end
         end
         ok || continue
-        # §6: throw-edge observability and islands keep memory form
+        # §6: throw-edge observability keeps memory form. (Island uses are
+        # fine: the analysis and transform are local to the if's region
+        # subtree, and the post-join store this pass creates is exactly what
+        # promote_island_cells!/promote_block_cells! consume next round.)
         any(u -> _in_handler(ir, u), gets) && continue
         any(u -> _in_handler(ir, u), isdefs) && continue
-        (UnifiedIR.inside_island(ir, cell) ||
-         any(u -> UnifiedIR.inside_island(ir, u),
-             Iterators.flatten((sets, gets, isdefs)))) && continue
         # cell_new in declaration position only
         all(nw -> all(st -> before(nw, st), sets), news) || continue
 
@@ -966,4 +970,480 @@ function _promote_arm_cells_at!(ir::UnifiedIR.IR, I::StmtId)
         end
     end
     return m
+end
+
+# ---------------------------------------------------------------------------
+# Island mem2reg (§6, the fourth join-point class: island phis)
+# ---------------------------------------------------------------------------
+
+"""
+    promote_island_cells!(ir) -> Int
+
+Pruned SSA construction for frame cells over cfg-op block graphs. A cell whose
+island stores are all DIRECT block members and whose island reads/queries are
+definitely assigned is rewritten to block args ("island phis", placed on the
+liveness-pruned iterated dominance frontier of the store blocks) plus
+straight-line reaching definitions. The incoming value is a `cell_get`
+inserted before the cfg op under definite assignment (a dominating outside
+store) — left for the dominating-store pass to fold, exactly like the arm
+pass's incoming values.
+
+v1 refusals (cells stay memory; the classifier keeps them `:island`):
+  - island stores nested below block level (the arm/loop passes sink what is
+    legal to sink; the rest is genuinely conditional at block granularity)
+  - uses after the cfg op (exit threading through island results)
+  - outside uses other than stores dominating the cfg op
+  - reads/queries not definitely assigned (§6: maybe-undef stays memory)
+  - uses under handler regions, escapes, `cell_new`, token values (§6)
+  - islands with cross-island edges (sealed exits, §5.5) or edges from
+    unreachable blocks into phi blocks
+Editable state.
+"""
+function promote_island_cells!(ir::UnifiedIR.IR)
+    UnifiedIR.check_state(ir, UnifiedIR.LAYOUT_EDITABLE, "promote_island_cells!")
+    UnifiedIR.flush_renames!(ir)
+    cfgs = StmtId[]
+    for s in UnifiedIR.each_stmt(ir)
+        UnifiedIR.is_tombstone(ir, s) && continue
+        UnifiedIR.stmt_kind(ir, s) === K"cfg" && push!(cfgs, s)
+    end
+    isempty(cfgs) && return 0
+    sort!(cfgs; by = s -> UnifiedIR.region_depth(ir, UnifiedIR.stmt_region(ir, s)), rev = true)
+    promoted = 0
+    for I in cfgs
+        UnifiedIR.is_tombstone(ir, I) && continue
+        promoted += _promote_island_cells_at!(ir, I)
+    end
+    return promoted
+end
+
+const _EDGE_KINDS = (K"goto", K"br_if", K"switch", K"await")
+
+# containing island block of s: (block index, direct member, crossed-handler?)
+# or nothing when s is not nested inside one of the island's blocks
+function _island_container(ir::UnifiedIR.IR, bidx::Dict{Int32,Int}, s::StmtId)
+    cur = s
+    hnd = false
+    while true
+        r = UnifiedIR.stmt_region(ir, cur)
+        UnifiedIR.isnull(r) && return nothing
+        haskey(bidx, r.id) && return (bidx[r.id], cur, hnd)
+        reg = UnifiedIR.getregion(ir, r)
+        reg.kind === UnifiedIR.REGION_HANDLER && (hnd = true)
+        UnifiedIR.isnull(reg.owner) && return nothing
+        cur = reg.owner
+    end
+end
+
+# rebuild terminator t, appending `val` to every bundle whose destination
+# region id is in `want` (bundle encoding as in edge_bundles, §5.5)
+function _extend_bundles!(ir::UnifiedIR.IR, t::StmtId, want::Set{Int32}, val::UnifiedIR.Operand)
+    k = UnifiedIR.stmt_kind(ir, t)
+    old = UnifiedIR.Operand[UnifiedIR.getop(ir, t, i) for i in 1:UnifiedIR.nops(ir, t)]
+    new = UnifiedIR.Operand[]
+    i = 1
+    function copybundle!()
+        dest = old[i]; i += 1
+        argc = Int(UnifiedIR.imm_value(old[i])::Int64); i += 1
+        hit = UnifiedIR.asregion(dest).id in want
+        push!(new, dest)
+        push!(new, UnifiedIR.op_inline(Int64(argc + (hit ? 1 : 0))))
+        for _ in 1:argc
+            push!(new, old[i]); i += 1
+        end
+        hit && push!(new, val)
+        nothing
+    end
+    if k === K"goto"
+        copybundle!()
+    elseif k === K"br_if"
+        push!(new, old[i]); i += 1               # condition
+        copybundle!(); copybundle!()
+    elseif k === K"switch"
+        push!(new, old[i]); i += 1               # scrutinee
+        nc = Int(UnifiedIR.imm_value(old[i])::Int64)
+        push!(new, old[i]); i += 1               # case count
+        for _ in 1:nc
+            push!(new, old[i]); i += 1           # case value
+            copybundle!()
+        end
+        copybundle!()                             # default
+    elseif k === K"await"
+        push!(new, old[i]); i += 1               # flags
+        copybundle!(); copybundle!()
+    else
+        return
+    end
+    UnifiedIR.store_ops!(ir, t, new)
+    nothing
+end
+
+function _promote_island_cells_at!(ir::UnifiedIR.IR, I::StmtId)
+    blocks = UnifiedIR.live_owned_regions(ir, I)
+    n = length(blocks)
+    n == 0 && return 0
+    bidx = Dict{Int32,Int}(r.id => i for (i, r) in enumerate(blocks))
+    # edges: (from, to, bundle-carrying stmt, direct member the edge leaves
+    # from — NULL for block terminators, the containing member for sealed
+    # exits of nested islands (§5.5) that land on our blocks mid-block).
+    # Bundles leaving the island (sealed exits of OUR blocks) are exits:
+    # they contribute no successor.
+    edges = Tuple{Int,Int,StmtId,StmtId}[]
+    terms = Vector{StmtId}(undef, n)
+    for (i, r) in enumerate(blocks)
+        ms = UnifiedIR.region_stmts(ir, r)
+        isempty(ms) && return 0
+        t = ms[end]
+        terms[i] = t
+        for (dest, _) in UnifiedIR.edge_bundles(ir, t)
+            j = get(bidx, dest.id, 0)
+            j == 0 && continue               # exit to an outer island
+            push!(edges, (i, j, t, UnifiedIR.NULL_STMT))
+        end
+    end
+    for s in UnifiedIR.each_stmt(ir)
+        UnifiedIR.is_tombstone(ir, s) && continue
+        UnifiedIR.stmt_kind(ir, s) in _EDGE_KINDS || continue
+        haskey(bidx, UnifiedIR.stmt_region(ir, s).id) && continue
+        for (dest, _) in UnifiedIR.edge_bundles(ir, s)
+            j = get(bidx, dest.id, 0)
+            j == 0 && continue
+            c = _island_container(ir, bidx, s)
+            # entries from wholly outside the island cannot be modeled
+            c === nothing && return 0
+            # NB. an edge from a handler nested under member m is fine for
+            # candidate cells: their island stores are all direct members, so
+            # none can execute mid-try — the reaching definition at the
+            # handler entry is exactly the one at m (the mid-edge formula);
+            # §6 protects handler READS of the cell, which refuse per-use
+            push!(edges, (c[1], j, s, c[2]))
+        end
+    end
+    succs = [Int[] for _ in 1:n]; preds = [Int[] for _ in 1:n]
+    for (i, j, _, _) in edges
+        j in succs[i] || push!(succs[i], j)
+        i in preds[j] || push!(preds[j], i)
+    end
+    # reachability + reverse postorder from the entry block (owned region 1)
+    seen = falses(n); post = Int[]
+    stk = Tuple{Int,Int}[(1, 1)]; seen[1] = true
+    while !isempty(stk)
+        (b, ci) = stk[end]
+        if ci <= length(succs[b])
+            stk[end] = (b, ci + 1)
+            c = succs[b][ci]
+            seen[c] || (seen[c] = true; push!(stk, (c, 1)))
+        else
+            push!(post, b); pop!(stk)
+        end
+    end
+    rpo = reverse(post)
+    rpon = zeros(Int, n)
+    for (i, b) in enumerate(rpo); rpon[b] = i; end
+    # iterative idoms (Cooper–Harvey–Kennedy)
+    idom = zeros(Int, n); idom[1] = 1
+    function inter(a::Int, b::Int)
+        while a != b
+            while rpon[a] > rpon[b]; a = idom[a]; end
+            while rpon[b] > rpon[a]; b = idom[b]; end
+        end
+        return a
+    end
+    changed = true
+    while changed
+        changed = false
+        for b in rpo
+            b == 1 && continue
+            ni = 0
+            for p in preds[b]
+                (seen[p] && idom[p] != 0) || continue
+                ni = ni == 0 ? p : inter(ni, p)
+            end
+            ni == 0 && continue
+            idom[b] != ni && (idom[b] = ni; changed = true)
+        end
+    end
+    # dominance frontiers
+    df = [Int[] for _ in 1:n]
+    for b in 1:n
+        (seen[b] && length(preds[b]) >= 2) || continue
+        for p in preds[b]
+            (seen[p] && idom[p] != 0) || continue
+            r = p
+            while r != idom[b]
+                b in df[r] || push!(df[r], b)
+                r == idom[r] && break
+                r = idom[r]
+            end
+        end
+    end
+    graph = (; blocks, bidx, succs, preds, edges, terms, seen, rpo, idom, df)
+    promoted = 0
+    for c in collect(UnifiedIR.each_stmt(ir))
+        UnifiedIR.is_tombstone(ir, c) && continue
+        UnifiedIR.stmt_kind(ir, c) === K"cell" || continue
+        promoted += _promote_one_island_cell!(ir, I, graph, c)
+    end
+    return promoted
+end
+
+function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::StmtId)
+    (; blocks, bidx, succs, preds, edges, terms, seen, rpo, idom, df) = graph
+    nb = length(blocks)
+    instores = [StmtId[] for _ in 1:nb]
+    reads = Tuple{Int,StmtId,StmtId}[]       # (block, direct member, get)
+    isdefs = Tuple{Int,StmtId,StmtId}[]
+    news = StmtId[]                          # entry-leading declaration news
+    outstores = StmtId[]
+    touched = false
+    ok = true
+    UnifiedIR.each_ssa_use(ir) do site, used
+        (ok && used == cell) || return
+        site isa UnifiedIR.StmtOperand || (ok = false; return)
+        u = site.user
+        UnifiedIR.is_tombstone(ir, u) && return
+        k = UnifiedIR.stmt_kind(ir, u)
+        c = _island_container(ir, bidx, u)
+        if c === nothing
+            # outside: stores dominating the cfg op feed the incoming value,
+            # and reads/queries dominating it never observe island stores;
+            # anything else (in particular any use AFTER the island, which
+            # would observe the stores this pass deletes) refuses
+            if k === K"cell_set" && site.opidx == 1 && _cell_dominates_ed(ir, u, I)
+                push!(outstores, u)
+            elseif (k === K"cell_get" || k === K"cell_isdefined") && site.opidx == 1 &&
+                   _cell_dominates_ed(ir, u, I)
+                # stays a memory read against the outside stores
+            else
+                ok = false
+            end
+            return
+        end
+        touched = true
+        (bi, m, hnd) = c
+        seen[bi] || (ok = false; return)     # use in unreachable island block
+        hnd && (ok = false; return)          # §6: handler uses stay memory
+        if k === K"cell_set" && site.opidx == 1
+            u == m || (ok = false; return)   # store below block level
+            v = UnifiedIR.getop(ir, u, 2)
+            if UnifiedIR.optag(v) === UnifiedIR.TAG_STMT &&
+               UnifiedIR.stmt_kind(ir, UnifiedIR.asstmt(v)) === K"gc_preserve_begin"
+                ok = false; return           # §6: tokens never promote
+            end
+            push!(instores[bi], u)
+        elseif k === K"cell_get" && site.opidx == 1
+            push!(reads, (bi, m, u))
+        elseif k === K"cell_isdefined" && site.opidx == 1
+            push!(isdefs, (bi, m, u))
+        elseif k === K"cell_new" && site.opidx == 1
+            # NewvarNode-equivalent: re-undefines the cell. Only the entry-
+            # leading declaration form is compatible (checked positionally
+            # below); it forces the incoming value invalid (vin_ok = false)
+            (u == m && bi == 1) || (ok = false; return)
+            push!(news, u)
+        else
+            ok = false                       # escape / value use
+        end
+        return
+    end
+    (ok && touched) || return 0
+    isempty(reads) && isempty(isdefs) && return 0   # store-only: dead-store side
+    # Backedge staleness: when a loop body lies strictly between the cfg op
+    # and the cell declaration, the cell memory is carried ACROSS iterations
+    # (island exits reach the loop backedge; the next iteration re-reads the
+    # cell before re-entering the island). Deleting the island stores would
+    # leave that read stale, so such cells only promote when the island is
+    # store-free for them. Iteration-local cells (declared inside the loop)
+    # are unaffected. Cross-iteration flow is loop-pass territory: it needs
+    # exit-store sinking through sealed island exits (documented v1 refusal).
+    if !all(isempty, instores)
+        declreg = UnifiedIR.stmt_region(ir, cell)
+        r = UnifiedIR.stmt_region(ir, I)
+        while r != declreg && !UnifiedIR.isnull(r)
+            reg = UnifiedIR.getregion(ir, r)
+            reg.kind === UnifiedIR.REGION_LOOP_BODY && return 0
+            r = UnifiedIR.isnull(reg.owner) ? UnifiedIR.NULL_REGION :
+                UnifiedIR.stmt_region(ir, reg.owner)
+        end
+    end
+    # member positions (region_stmts order; only relative order is used)
+    pos = Dict{Int32,Int}()
+    for r in blocks
+        for (p, m) in enumerate(UnifiedIR.region_stmts(ir, r))
+            pos[m.id] = p
+        end
+    end
+    for bi in 1:nb
+        sort!(instores[bi]; by = st -> pos[st.id])
+    end
+    hasst = [!isempty(instores[bi]) for bi in 1:nb]
+    firstpos(bi) = isempty(instores[bi]) ? typemax(Int) : pos[instores[bi][1].id]
+    # reaching value at a position within a block (nothing = flows in)
+    function storebefore(bi::Int, p::Int)
+        for st in Iterators.reverse(instores[bi])
+            pos[st.id] < p && return st
+        end
+        return UnifiedIR.NULL_STMT
+    end
+    inedges = [Tuple{Int,StmtId,StmtId}[] for _ in 1:nb]   # (from, stmt, mid)
+    for (f, t, st, mid) in edges
+        push!(inedges[t], (f, st, mid))
+    end
+    # entry news must lead every entry store/read/query (declaration form)
+    if !isempty(news)
+        lead = firstpos(1)
+        for (bi, m, _) in Iterators.flatten((reads, isdefs))
+            bi == 1 && (lead = min(lead, pos[m.id]))
+        end
+        all(nw -> pos[nw.id] < lead, news) || return 0
+    end
+    # block-level liveness (backward), for phi pruning
+    upx = falses(nb)
+    for (bi, m, _) in Iterators.flatten((reads, isdefs))
+        pos[m.id] < firstpos(bi) && (upx[bi] = true)
+    end
+    livein = falses(nb)
+    changed = true
+    while changed
+        changed = false
+        for bi in nb:-1:1
+            seen[bi] || continue
+            li = upx[bi]
+            if !li
+                for (f, t, _, mid) in edges
+                    f == bi || continue
+                    livein[t] || continue
+                    # terminator edges expose through the whole block; a
+                    # mid-block sealed exit exposes through positions < mid
+                    if UnifiedIR.isnull(mid) ? !hasst[bi] :
+                       UnifiedIR.isnull(storebefore(bi, pos[mid.id]))
+                        li = true
+                        break
+                    end
+                end
+            end
+            li != livein[bi] && (livein[bi] = li; changed = true)
+        end
+    end
+    # definite assignment (forward, optimistic init, AND meet); the virtual
+    # entry edge is defined iff a dominating outside store exists and no
+    # entry `cell_new` re-undefines the cell
+    vin_ok = !isempty(outstores) && isempty(news)
+    defin = trues(nb); defout = trues(nb)
+    changed = true
+    while changed
+        changed = false
+        for bi in rpo
+            di = bi == 1 ? vin_ok : true
+            for (f, st, mid) in inedges[bi]
+                seen[f] || continue
+                edgedef = UnifiedIR.isnull(mid) ? defout[f] :
+                    (!UnifiedIR.isnull(storebefore(f, pos[mid.id])) || defin[f])
+                edgedef || (di = false; break)
+            end
+            do_ = di || hasst[bi]
+            (di != defin[bi] || do_ != defout[bi]) &&
+                (defin[bi] = di; defout[bi] = do_; changed = true)
+        end
+    end
+    for (bi, m, _) in Iterators.flatten((reads, isdefs))
+        if pos[m.id] < firstpos(bi) && !defin[bi]
+            return 0                         # §6: maybe-undef read stays memory
+        end
+    end
+    # liveness-pruned iterated dominance frontier of the store blocks (the
+    # incoming def acts through the entry block when it exists)
+    inphi = falses(nb)
+    wl = Int[bi for bi in 1:nb if seen[bi] && hasst[bi]]
+    vin_ok && push!(wl, 1)
+    while !isempty(wl)
+        b = pop!(wl)
+        for f in df[b]
+            (livein[f] && !inphi[f]) || continue
+            inphi[f] = true
+            push!(wl, f)
+        end
+    end
+    want = Set{Int32}(blocks[bi].id for bi in 1:nb if inphi[bi])
+    if !isempty(want)
+        # every edge into a phi block must be extendable: edges from
+        # unreachable blocks have no reaching value — refuse (verify checks
+        # bundle arity on all edges, reachable or not)
+        for (f, t, _, _) in edges
+            !seen[f] && inphi[t] && return 0
+        end
+    end
+    # ---- rewrite (all refusals are behind us) --------------------------------
+    vin = Ref{Union{Nothing,UnifiedIR.Operand}}(nothing)
+    getvin() = begin
+        if vin[] === nothing
+            g = UnifiedIR.insert_before!(ir, I, K"cell_get", UnifiedIR.op_stmt(cell); type = Any)
+            vin[] = UnifiedIR.op_stmt(g)
+        end
+        vin[]::UnifiedIR.Operand
+    end
+    phiarg = Dict{Int,UnifiedIR.Operand}()
+    for bi in 1:nb
+        inphi[bi] || continue
+        _trace!(:island_phi, blocks[bi], cell)
+        reg = UnifiedIR.getregion(ir, blocks[bi])
+        ms = UnifiedIR.region_stmts(ir, blocks[bi])
+        at = ms[length(reg.args) + 1]        # first non-arg member
+        a = UnifiedIR.insert_before!(ir, at, K"region_arg"; type = Any)
+        push!(reg.args, a)
+        phiarg[bi] = UnifiedIR.op_stmt(a)
+    end
+    function inval(bi::Int)
+        haskey(phiarg, bi) && return phiarg[bi]
+        bi == 1 && return getvin()
+        return outval(idom[bi])
+    end
+    function outval(bi::Int)
+        hasst[bi] && return UnifiedIR.getop(ir, instores[bi][end], 2)
+        return inval(bi)
+    end
+    done = Set{Int32}()                       # extend edges into phi blocks
+    for (f, t, st, mid) in edges
+        inphi[t] || continue
+        st.id in done && continue
+        push!(done, st.id)
+        v = if UnifiedIR.isnull(mid)
+            outval(f)
+        else
+            rst = storebefore(f, pos[mid.id])
+            UnifiedIR.isnull(rst) ? inval(f) : UnifiedIR.getop(ir, rst, 2)
+        end
+        _extend_bundles!(ir, st, want, v)
+    end
+    if inphi[1]                               # the island's own entry edge
+        ops = UnifiedIR.Operand[UnifiedIR.getop(ir, I, i) for i in 1:UnifiedIR.nops(ir, I)]
+        push!(ops, getvin())
+        UnifiedIR.store_ops!(ir, I, ops)
+    end
+    for (bi, m, g) in reads
+        v = nothing
+        for st in Iterators.reverse(instores[bi])
+            if pos[st.id] < pos[m.id]
+                v = UnifiedIR.getop(ir, st, 2)
+                break
+            end
+        end
+        v === nothing && (v = inval(bi))
+        UnifiedIR.replace_uses_where!(_ -> true, ir, g => v)
+        UnifiedIR.delete_stmt!(ir, g)
+    end
+    for (_, _, d) in isdefs
+        UnifiedIR.replace_uses_where!(_ -> true, ir, d => UnifiedIR.op_inline(true))
+        UnifiedIR.delete_stmt!(ir, d)
+    end
+    for bi in 1:nb, st in instores[bi]
+        UnifiedIR.delete_stmt!(ir, st)
+    end
+    for nw in news
+        UnifiedIR.delete_stmt!(ir, nw)
+    end
+    # the cell and its dominating outside stores remain; when the incoming
+    # `cell_get` was materialized the dominating-store pass folds it (and the
+    # dead-store sweep then drops the cell), same as the arm pass's incoming
+    return 1
 end
