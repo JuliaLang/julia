@@ -256,7 +256,7 @@ function exec_plain!(ir::IR, env::Vector{Any}, s::StmtId, io::IO)
         c.defined = true
     elseif k === K"cell_get"
         c = env[payload(getop(ir, s, 1))]::CellBox
-        c.defined || error("interpret: read of undefined cell")
+        c.defined || error("interpret: read of undefined cell (%$(s.id))")
         env[s.id] = c.value
     elseif k === K"cell_new"
         c = env[payload(getop(ir, s, 1))]::CellBox

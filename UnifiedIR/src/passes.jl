@@ -146,10 +146,14 @@ function promote_cells!(ir::IR)
         # declaration pattern) are harmless; anything else keeps memory form
         firststore = minimum(s -> s.id, stores)
         all(nw -> nw.id < firststore, news) || continue
-        # refuse cells touched inside cfg islands (await frame boundaries, §6)
-        anyisland = any(s -> inside_island(ir, s), Iterators.flatten((stores, gets, isdefs))) ||
-                    inside_island(ir, cell)
-        anyisland && continue
+        # Island uses are fine for the DOMINATING case: `dominates_for_cell`
+        # only walks region nesting, so a store proves dominance either from
+        # outside the island (executes before the whole cfg) or from the same
+        # block subtree (blocks execute their members in order, and re-entry
+        # re-executes from the top, so the store re-executes before the get
+        # on every iteration). Cross-block flow never establishes dominance.
+        # The one island hazard is handled below: a LATER store can reach an
+        # earlier get through island back edges (`shares_island`).
         # all stores must dominate all gets uniformly: every store's region is
         # ancestor-or-self of every get's region, with no handler boundary
         # between (throw-edge rule), and stores precede gets they reach.
@@ -172,8 +176,9 @@ function promote_cells!(ir::IR)
                     ok = false; break
                 end
                 # backedge reach: a store at-or-after the get inside a shared
-                # loop reaches the get on the next iteration
-                if st.id > g.id && shares_loop(ir, st, g)
+                # loop — or anywhere in the same cfg island, whose edges may
+                # loop — reaches the get on the next iteration
+                if st.id > g.id && (shares_loop(ir, st, g) || shares_island(ir, st, g))
                     ok = false; break
                 end
             end
@@ -228,6 +233,27 @@ function shares_loop(ir::IR, a::StmtId, b::StmtId)
         reg = getregion(ir, r)
         if reg.kind === REGION_LOOP_BODY && is_ancestor(ir, r, stmt_region(ir, b))
             return true
+        end
+        r = reg.parent
+    end
+    return false
+end
+
+"Do `a` and `b` live under blocks of the same cfg island? (Island edges may
+loop, so a positionally-later store can reach an earlier get across
+iterations — the conservative backedge-reach test for goto-land.)"
+function shares_island(ir::IR, a::StmtId, b::StmtId)
+    r = stmt_region(ir, a)
+    while !isnull(r)
+        reg = getregion(ir, r)
+        if reg.kind === REGION_BLOCK
+            own = reg.owner
+            rb = stmt_region(ir, b)
+            while !isnull(rb)
+                regb = getregion(ir, rb)
+                regb.kind === REGION_BLOCK && regb.owner == own && return true
+                rb = regb.parent
+            end
         end
         r = reg.parent
     end
