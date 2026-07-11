@@ -77,6 +77,26 @@ export SyntaxNode
 @_public GreenNode, RedTreeCursor, GreenTreeCursor,
     span
 
+# The generic tree porcelain lives in UnifiedIR (unifiedir-design.md §3.7
+# Level 1): SyntaxTree/SyntaxList are aliases of UnifiedIR.Tree/NodeList and
+# the tree functions below are UnifiedIR generics (JuliaSyntax adds methods
+# for its own types — SyntaxNode, GreenNode, tree cursors — and the
+# genuinely syntax-specific conventions: the Kind registry, SourceRef text
+# machinery, and the leaf payload convention).
+if parentmodule(@__MODULE__) === Base
+    # bootstrapped into Base (base/Base.jl includes UnifiedIR just before us)
+    import ..UnifiedIR
+else
+    import UnifiedIR
+end
+import .UnifiedIR: Tree, NodeList, children, numchildren, is_leaf, child,
+    mapchildren, mknode, mkleaf, mktree, newnode, newleaf, copy_ast, copy_attrs!,
+    provenance, prov, prov_end, provenance_terminal, reparent, syntax_graph,
+    tree_ids, mapsyntax, mapindex, setattr!, setattr, deleteattr!, hasattr,
+    getattr, attrnames, node_string, new_id!, setchildren!,
+    check_same_graph, check_compatible_graph, is_compatible_graph,
+    foldtree, print_tree
+
 # Helper utilities
 include("utils.jl")
 
@@ -102,11 +122,20 @@ include("porcelain/green_node.jl")
 include("porcelain/syntax_node.jl")
 include("integration/expr.jl")
 if VERSION >= v"1.12"
+    # SyntaxGraph runs on the UnifiedIR AttrGraph substrate (§3.7 Level 1)
     include("porcelain/syntax_graph.jl")
 end
 
 # Hooks to integrate the parser with Base
 include("integration/hooks.jl")
+
+function __init__()
+    # Kinds live in the shared UnifiedIR registry (session state, not part of
+    # this pkgimage): re-register at load. Deterministic numbering (reserved
+    # dialect id, fixed list order) keeps precompiled K"..." constants valid.
+    _register_syntax_kinds()
+end
+
 include("precompile.jl")
 
 end

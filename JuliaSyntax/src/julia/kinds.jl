@@ -1,134 +1,48 @@
-# Definition of Kind type - mapping from token string identifiers to
-# enumeration values as used in @K_str
+# Definition of Kind - now an alias of the ONE shared UnifiedIR.Kind
+# (unifiedir-design.md §3.4 / §3.7 Level 2 step 1): syntax kinds and IR kinds
+# are dialects of a single registry and numbering space. The historical
+# JuliaSyntax mechanism (module ids, BEGIN_/END_ range markers, sequential
+# opcode allocation) is preserved as a shim over the shared registry: each
+# kind module becomes a dialect claiming a contiguous opcode block, so every
+# range predicate keeps working. The bootstrap stack (JuliaSyntax,
+# JuliaLowering, JuliaSyntaxFormatter) claims STATICALLY RESERVED dialect ids
+# so its K"..." literals stay compile-time constants (pkgimage-safe); other
+# kind modules get session-local dialect ids.
+#
+# Kind(::Integer), Kind(::AbstractString) [qualified, or unqualified searched
+# core-first], Base.string/print/show/isless, symbolic Base.write/read, and
+# Base.parentmodule now live in UnifiedIR. NOTE: `Kind("call")` resolves the
+# CORE dialect's kind; use `K"call"` (this module's search path) for the
+# syntax kind.
 
-"""
-    K"name"
-    Kind(namestr)
+const Kind = UnifiedIR.Kind
 
-`Kind` is a type tag for specifying the type of tokens and interior nodes of
-a syntax tree. Abstractly, this tag is used to define our own *sum types* for
-syntax tree nodes. We do this explicitly outside the Julia type system because
-(a) Julia doesn't have sum types and (b) we want concrete data structures which
-are unityped from the Julia compiler's point of view, for efficiency.
-
-Naming rules:
-* Kinds which correspond to exactly one textual form are represented with that
-  text. This includes keywords like K"for" and operators like K"*".
-* Kinds which represent many textual forms have UpperCamelCase names. This
-  includes kinds like K"Identifier" and K"Comment".
-* Kinds which exist merely as delimiters are all uppercase
-"""
-primitive type Kind 16 end
-
-# The implementation of Kind here is basically similar to @enum. However we use
-# the K_str macro to self-name these kinds with their literal representation,
-# rather than needing to invent a new name for each.
-
-const _kind_str_to_int = Dict{String,UInt16}()
-const _kind_int_to_str = Dict{UInt16,String}()
-const _kind_modules = Dict{Int,Union{Symbol,Module}}(
-    0=>nameof(@__MODULE__),
-    1=>:JuliaLowering,
-    2=>:JuliaSyntaxFormatter
-)
-# Number of bits reserved for kind id's belonging to a single module
+# kind arithmetic parameters (must agree with the shared registry's split)
 const _kind_nbits = 10
 const _kind_module_id_max = typemax(UInt16) >> _kind_nbits
 
-function Kind(x::Integer)
-    if x < 0 || x > typemax(UInt16)
-        throw(ArgumentError("Kind out of range: $x"))
-    end
-    return Base.bitcast(Kind, convert(UInt16, x))
+# module_id -> dialect mapping. Bootstrap-stack module ids map to reserved
+# dialect ids; anything else registers a session-local dialect named after
+# the module.
+const _reserved_syntax_dialects = Dict{Int,Tuple{Symbol,Int}}(
+    0 => (:JuliaSyntax, 1),
+    1 => (:JuliaLowering, 2),
+    2 => (:JuliaSyntaxFormatter, 3),
+)
+const _kind_module_dialects = Dict{Int,UInt16}()   # module_id -> dialect id
+const _syntax_search_path = Symbol[]               # dialect names, registration order
+
+"Resolve an unqualified kind name along the syntax-stack search path."
+_resolve_syntax_kind(s::AbstractString) = UnifiedIR.resolve_kind(s, _syntax_search_path)
+
+function _syntax_kind(s::AbstractString)
+    k = _resolve_syntax_kind(s)
+    k === nothing && error("unknown Kind name $(repr(s))")
+    return k
 end
 
-function Kind(s::AbstractString)
-    i = get(_kind_str_to_int, s) do
-        error("unknown Kind name $(repr(s))")
-    end
-    Kind(i)
-end
-
-Base.string(x::Kind) = get(_kind_int_to_str, reinterpret(UInt16, x), "<error: unknown kind>")
-Base.print(io::IO, x::Kind) = print(io, string(x))
-
-Base.isless(x::Kind, y::Kind) = reinterpret(UInt16, x) < reinterpret(UInt16, y)
-
-function Base.show(io::IO, k::Kind)
-    print(io, "K\"", k, "\"")
-end
-
-# Save the string representation rather than the bit pattern so that kinds
-# can be serialized and deserialized across different JuliaSyntax versions.
-function Base.write(io::IO, k::Kind)
-    str = string(k)
-    write(io, UInt8(sizeof(str))) + write(io, str)
-end
-function Base.read(io::IO, ::Type{Kind})
-    len = read(io, UInt8)
-    str = String(read(io, len))
-    Kind(str)
-end
-
-function Base.parentmodule(k::Kind)
-    mod_id = reinterpret(UInt16, k) >> _kind_nbits
-    _kind_modules[mod_id]::Module
-end
-
-function _register_kinds!(kind_modules, int_to_kindstr, kind_str_to_int, mod, module_id, names)
-    if module_id > _kind_module_id_max
-        error("Kind module id $module_id is out of range")
-    elseif length(names) >= 1 << _kind_nbits
-        error("Too many kind names")
-    elseif !haskey(kind_modules, module_id)
-        kind_modules[module_id] = mod
-    else
-        m = kind_modules[module_id]
-        if m == nameof(mod)
-            # Ok: known kind module, but not loaded until now
-            kind_modules[module_id] = mod
-        elseif m == mod
-            existing_kinds = Union{Nothing, Kind}[(i = get(kind_str_to_int, n, nothing);
-                               isnothing(i) ? nothing : Kind(i)) for n in names]
-            if any(isnothing, existing_kinds) ||
-                    !issorted(existing_kinds) ||
-                    any(k->parentmodule(k) != mod, existing_kinds)
-                error("Error registering kinds for module $mod (register_kinds() called more than once inconsistently, or conflict with existing module kinds?)")
-            else
-                # Assume we're re-registering kinds as in top level vs `__init__`
-                return
-            end
-        else
-            error("Kind module ID $module_id already claimed by module $m")
-        end
-    end
-    _register_kinds_names!(int_to_kindstr, kind_str_to_int, module_id, names)
-end
-
-# This function is separated from `_register_kinds!` to prevent sharing of the variable `i`
-# here and in the closure in `_register_kinds!`, which causes boxing and bad inference.
-function _register_kinds_names!(int_to_kindstr, kind_str_to_int, module_id, names)
-    # Process names to conflate category BEGIN/END markers with the first/last
-    # in the category.
-    i = 0
-    for name in names
-        normal_kind = false
-        if startswith(name, "BEGIN_")
-            j = i
-        elseif startswith(name, "END_")
-            j = i - 1
-        else
-            normal_kind = true
-            j = i
-            i += 1
-        end
-        kind_int = (module_id << _kind_nbits) | j
-        push!(kind_str_to_int, name=>kind_int)
-        if normal_kind
-            push!(int_to_kindstr, kind_int=>name)
-        end
-    end
-end
+const _inconsistent_registration_msg =
+    "register_kinds() called more than once inconsistently, or conflict with existing module kinds?"
 
 """
     register_kinds!(mod, module_id, names)
@@ -147,9 +61,78 @@ To allow ranges of kinds to be delimited and quickly tested for, some special
 names are allowed: `BEGIN_section` and `END_section` pairs are detected, and
 alias the next and previous kind id's respectively so that kinds in `section`
 can be tested with `BEGIN_section <= k <= END_section`.
+
+(The registration lands in the shared UnifiedIR kind registry: `mod` becomes
+a dialect claiming a contiguous opcode block, allocated sequentially in list
+order; syntax kinds register name-only, with no operand schema or effects.)
 """
 function register_kinds!(mod, module_id, names)
-    _register_kinds!(_kind_modules, _kind_int_to_str, _kind_str_to_int, mod, module_id, names)
+    if module_id > _kind_module_id_max
+        error("Kind module id $module_id is out of range")
+    elseif length(names) >= 1 << _kind_nbits
+        error("Too many kind names")
+    end
+    d = nothing
+    if haskey(_kind_module_dialects, module_id)
+        # NOTE: this mapping is OUR global (baked into this pkgimage), while
+        # the registry is UnifiedIR session state — after loading from a
+        # pkgimage the mapping is populated but the registry slot is empty;
+        # fall through and re-register (deterministic numbering).
+        slot = _kind_module_dialects[module_id] + 1
+        existing = slot <= length(UnifiedIR.REGISTRY.dialects) ?
+                   UnifiedIR.REGISTRY.dialects[slot] : nothing
+        if existing !== nothing
+            d = existing::UnifiedIR.Dialect
+            m = d.mod
+            if m == nameof(mod)
+                # Ok: known kind module, but not loaded until now
+                d.mod = mod
+            elseif m == mod
+                # Re-registration (as in top level vs `__init__`): verify the
+                # names resolve consistently, then return (idempotent).
+                prev = nothing
+                for n in names
+                    sym = Symbol(n)
+                    oc = get(d.byname, sym, nothing)
+                    oc === nothing && (oc = get(d.aliases, sym, nothing))
+                    oc === nothing &&
+                        error("Error registering kinds for module $mod ($_inconsistent_registration_msg)")
+                    prev !== nothing && oc < prev &&
+                        error("Error registering kinds for module $mod ($_inconsistent_registration_msg)")
+                    prev = oc
+                end
+                return
+            else
+                error("Kind module ID $module_id already claimed by module $m")
+            end
+        end
+    end
+    if d === nothing
+        if haskey(_reserved_syntax_dialects, module_id)
+            dname, did = _reserved_syntax_dialects[module_id]
+            d = UnifiedIR.register_dialect!(dname; id = did, mod = mod)
+        else
+            d = UnifiedIR.register_dialect!(nameof(mod); mod = mod)
+        end
+        _kind_module_dialects[module_id] = d.id
+        d.name in _syntax_search_path || push!(_syntax_search_path, d.name)
+    end
+    _register_kind_names!(d, names)
+    nothing
+end
+
+function _register_kind_names!(d::UnifiedIR.Dialect, names)
+    for name in names
+        if startswith(name, "BEGIN_")
+            UnifiedIR.alias_kind!(d, Symbol(name), length(d.kinds))      # aliases the NEXT kind
+        elseif startswith(name, "END_")
+            UnifiedIR.alias_kind!(d, Symbol(name), length(d.kinds) - 1) # aliases the PREVIOUS kind
+        else
+            # Syntax kinds are NAME-ONLY registrations (§3.7 Level 2): no
+            # operand schema, no effects, permissive arity.
+            UnifiedIR.register_kind!(d, Symbol(name); result = 1, minops = 0, varargs = true)
+        end
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -162,9 +145,13 @@ The kind of a token or AST internal node with string "s".
 For example
 * K")" is the kind of the right parenthesis token
 * K"block" is the kind of a block of code (eg, statements within a begin-end).
+
+Resolves through the shared UnifiedIR registry along this module's dialect
+search path (JuliaSyntax, JuliaLowering, ... in registration order), at macro
+expansion time — a compile-time constant.
 """
 macro K_str(s)
-    Kind(s)
+    _syntax_kind(s)
 end
 
 """
@@ -173,7 +160,7 @@ A set of kinds which can be used with the `in` operator.  For example
     k in KSet"+ - *"
 """
 macro KSet_str(str)
-    kinds = [Kind(s) for s in split(str)]
+    kinds = [_syntax_kind(s) for s in split(str)]
 
     quote
         ($(kinds...),)
@@ -187,9 +174,29 @@ Return the `Kind` of `x`.
 """
 kind(k::Kind) = k
 
+# Compatibility view of the historical flat name -> kind-bits table
+# (JuliaLowering's `find_kind` in compat.jl reads `JS._kind_str_to_int`
+# directly): resolves along the syntax search path of the shared registry.
+struct _KindStrToInt end
+const _kind_str_to_int = _KindStrToInt()
+function Base.get(::_KindStrToInt, s::AbstractString, default)
+    k = _resolve_syntax_kind(s)
+    return k === nothing ? default : UnifiedIR.kind_uint(k)
+end
+Base.haskey(::_KindStrToInt, s::AbstractString) = _resolve_syntax_kind(s) !== nothing
+function Base.getindex(::_KindStrToInt, s::AbstractString)
+    k = _resolve_syntax_kind(s)
+    k === nothing && throw(KeyError(s))
+    return UnifiedIR.kind_uint(k)
+end
+
 #-------------------------------------------------------------------------------
-# Kinds used by JuliaSyntax
-register_kinds!(JuliaSyntax, 0, [
+# Kinds used by JuliaSyntax. Wrapped in a function: registrations land in the
+# shared UnifiedIR registry, whose state is NOT part of this package's
+# pkgimage — __init__ re-registers them at load (numbering is deterministic:
+# reserved dialect id + sequential opcodes in this fixed list order, so the
+# K"..." constants baked at precompile stay valid).
+_register_syntax_kinds() = register_kinds!(JuliaSyntax, 0, [
     # Whitespace
     "Comment"
     "Whitespace"
@@ -431,6 +438,8 @@ register_kinds!(JuliaSyntax, 0, [
         "error"
     "END_ERRORS"
 ])
+
+_register_syntax_kinds()
 
 @enum PrecedenceLevel begin
     PREC_NONE
