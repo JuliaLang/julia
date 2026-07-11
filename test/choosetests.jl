@@ -49,6 +49,7 @@ const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
 
 const TOP_LEVEL_PKGS = [
     "Compiler",
+    "UnifiedIR",
     "JuliaSyntax",
     "JuliaLowering",
 ]
@@ -67,6 +68,9 @@ function test_path(test)
         return joinpath(@__DIR__, "..", t[1], t[2], t[3], "test", testpath...)
     elseif t[1] == "Compiler"
         testpath = length(t) >= 2 ? t[2:end] : ("runtests",)
+        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+    elseif t[1] == "UnifiedIR"
+        testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)
         return joinpath(@__DIR__, "..", t[1], "test", testpath...)
     elseif t[1] == "JuliaSyntax"
         testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)

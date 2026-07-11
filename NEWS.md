@@ -33,6 +33,20 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* New top-level package `UnifiedIR`: one IR data structure intended to span the
+  compiler pipeline and external compilers (design in `UnifiedIR/docs/design.md`).
+  As a first integration step, `JuliaSyntax`'s `SyntaxGraph` now runs on the
+  UnifiedIR substrate — one storage core, one generic tree porcelain
+  (`SyntaxTree` is an alias of `UnifiedIR.Tree`), and one namespaced kind
+  registry shared between syntax kinds and IR statement kinds. `JuliaLowering`
+  gains an additive direct-lowering backend (`JuliaLowering.UnifiedBackend`)
+  emitting structured region IR with graph-qualified provenance (IR statements
+  carry `:source` cursors into the syntax graph, so IR diagnostics can
+  highlight the exact surface text), and the `Compiler` stdlib gains an
+  optional, package-mode-only port of inference and optimization running
+  natively on UnifiedIR (`Compiler.load_unified!()`). See
+  `UnifiedIR/demo/provenance_demo.jl` for the end-to-end arc ([#TBD]).
+
   - Type inference now refines field types through conditional checks and call signatures.
     For example, after `if !isnothing(x.field)`, inference knows `x.field` is not `nothing`
     within the branch. Similarly, after a call like `func(x.field)` where `func(::Int)` is
