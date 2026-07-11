@@ -2372,11 +2372,28 @@ function analyze_invoke_split_effects_synthesis(ir::IRCode, idx::Int, stmt::Expr
     isa(else_todo, InliningTodo) || return nothing
     # If the callee is already nothrow, there is nothing to split
     is_nothrow(else_todo.effects) && return nothing
+    assumed_effects = Effects(else_todo.effects; nothrow=true)
+    # Prefer the shadow pair derived from the callee's untransformed IR (see
+    # ssair/shadow.jl), falling back to the post-optimization synthesis below
+    world = get_inference_world(state.interp)
+    check_ci = lookup_shadow(NothrowCheckOwner(), else_todo.mi, world)
+    assume_ci = lookup_shadow(NothrowAssumeOwner(), else_todo.mi, world)
+    if check_ci !== nothing && assume_ci !== nothing
+        et = InliningEdgeTracker(state)
+        add_inlining_edge!(et, check_ci)
+        add_inlining_edge!(et, assume_ci)
+        check_case = InliningTodo(else_todo.mi, shadow_ir(check_ci),
+            else_todo.spec_info, else_todo.di, assumed_effects)
+        assume_case = InliningTodo(else_todo.mi, shadow_ir(assume_ci),
+            else_todo.spec_info, else_todo.di, assumed_effects)
+        else_case = outline_case(else_todo, info, state)
+        else_case === nothing && (else_case = else_todo)
+        return EffectSplit(nothing, check_case, assume_case, else_case)
+    end
     regions = split_guard_regions(else_todo.ir)
     scan_nothrow_split_ir(else_todo.ir, regions) || return nothing
     plan = shadow_branch_plan(else_todo.ir, regions)
     plan === nothing && return nothing
-    assumed_effects = Effects(else_todo.effects; nothrow=true)
     check_case = InliningTodo(else_todo.mi, synthesize_nothrow_check_ir(else_todo.ir, plan, regions),
         else_todo.spec_info, else_todo.di, assumed_effects)
     assume_case = InliningTodo(else_todo.mi, assume_nothrow_ir(else_todo.ir, regions),
@@ -2416,9 +2433,26 @@ function handle_invoke_split_effects_call!(todo::Vector{Pair{Int,Any}},
 end
 
 # the special resolver for :invoke-d call
+# An `:invoke` of a nothrow-shadow `CodeInstance` (emitted by shadow
+# derivation, see ssair/shadow.jl): inline it directly from its stored source;
+# the generic resolution below would resolve the REAL method instead.
+function handle_shadow_invoke!(todo::Vector{Pair{Int,Any}}, idx::Int, ci::CodeInstance, state::InliningState)
+    src = (@atomic :monotonic ci.inferred)
+    src isa CodeInfo || return nothing
+    add_inlining_edge!(InliningEdgeTracker(state), ci)
+    sir = inflate_ir(src, get_ci_mi(ci))
+    item = InliningTodo(get_ci_mi(ci), sir, SpecInfo(src), src.debuginfo,
+                        decode_effects(ci.ipo_purity_bits))
+    push!(todo, idx => item)
+    return nothing
+end
+
 function handle_invoke_expr!(todo::Vector{Pair{Int,Any}}, ir::IRCode,
     idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32, sig::Signature, state::InliningState)
     edge = stmt.args[1]
+    if edge isa CodeInstance && (edge.owner isa NothrowCheckOwner || edge.owner isa NothrowAssumeOwner)
+        return handle_shadow_invoke!(todo, idx, edge, state)
+    end
     mi = isa(edge, MethodInstance) ? edge : get_ci_mi(edge::CodeInstance)
     call_result = nothing
     let info = info
