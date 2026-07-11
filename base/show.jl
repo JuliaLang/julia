@@ -533,7 +533,7 @@ function _show_default(io::IO, @nospecialize(x))
                 byte = unsafe_load(convert(Ptr{UInt8}, p + i))
                 if i == nbytes - 1 && nbits % 8 != 0
                     byte &= (UInt8(1) << (nbits % 8)) - UInt8(1)
-                    print(io, string(byte, base = 16))
+                    print(io, string(byte, base = 16, pad = cld(nbits % 8, 4)))
                 else
                     print(io, string(byte, base = 16, pad = 2))
                 end

@@ -193,6 +193,16 @@ end
     primitive type TestBits63 63 end
     bits63 = Core.Intrinsics.trunc_int(TestBits63, UInt64(0xffff_ffff_ffff_ffff))
     @test repr(bits63) == "$(curmod_prefix)TestBits63(0x7fffffffffffffff)"
+
+    primitive type TestBits5 5 end
+    primitive type TestBits6 6 end
+    primitive type TestBits7 7 end
+    @test repr(Core.Intrinsics.trunc_int(TestBits5, UInt8(1))) ==
+        "$(curmod_prefix)TestBits5(0x01)"
+    @test repr(Core.Intrinsics.trunc_int(TestBits6, UInt8(1))) ==
+        "$(curmod_prefix)TestBits6(0x01)"
+    @test repr(Core.Intrinsics.trunc_int(TestBits7, UInt8(1))) ==
+        "$(curmod_prefix)TestBits7(0x01)"
 end
 
 # odd-bit primitive integers keep byte-rounded storage but logical bit widths
