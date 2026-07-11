@@ -6,6 +6,9 @@
 #include "julia_gcext.h"
 #include "julia_assert.h"
 #include "threading.h"
+#if defined(__GLIBC__)
+#include <execinfo.h> // debug memlog return-address capture
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -615,6 +618,52 @@ STATIC_INLINE void jl_gmp_guard_leave(jl_task_t *ct, volatile sig_atomic_t *defe
     }
 }
 
+// Debug ring for hunting GMP-hook memory corruption: JL_GMP_MEMLOG=1
+// records every hook event (never enabled in production; dumped from gdb).
+typedef struct {
+    void *p;
+    void *oldp;      // realloc only
+    size_t sz;
+    void *ret[6];    // return-address chain into GMP
+    uint16_t tid;
+    uint8_t op;      // 1=malloc 2=realloc 3=free
+    uint8_t in_fin;
+} jl_gmp_memlog_ent_t;
+#define JL_GMP_MEMLOG_LEN (1u << 24)
+static jl_gmp_memlog_ent_t *jl_gmp_memlog = NULL;
+static _Atomic(uint32_t) jl_gmp_memlog_i = 0;
+static int jl_gmp_memlog_on = -1;
+
+static void jl_gmp_memlog_rec(uint8_t op, void *p, void *oldp, size_t sz) JL_NOTSAFEPOINT
+{
+    if (jl_gmp_memlog_on == -1) {
+        char *env = getenv("JL_GMP_MEMLOG");
+        jl_gmp_memlog_on = (env && env[0] == '1') ? 1 : 0;
+        if (jl_gmp_memlog_on)
+            jl_gmp_memlog = (jl_gmp_memlog_ent_t*)calloc(JL_GMP_MEMLOG_LEN, sizeof(jl_gmp_memlog_ent_t));
+    }
+    if (!jl_gmp_memlog_on || jl_gmp_memlog == NULL)
+        return;
+    uint32_t i = jl_atomic_fetch_add_relaxed(&jl_gmp_memlog_i, 1) & (JL_GMP_MEMLOG_LEN - 1);
+    jl_gmp_memlog_ent_t *e = &jl_gmp_memlog[i];
+    e->op = 0; // mark in-progress
+    e->p = p;
+    e->oldp = oldp;
+    e->sz = sz;
+    jl_task_t *ct = jl_get_current_task();
+    e->tid = (ct && ct->ptls) ? (uint16_t)ct->ptls->tid : 0xffff;
+    e->in_fin = (ct && ct->ptls) ? (uint8_t)ct->ptls->in_finalizer : 0xff;
+    memset(e->ret, 0, sizeof(e->ret));
+#if defined(__GLIBC__)
+    // capture a short return-address chain (skip this frame + the hook)
+    void *bt[8];
+    int n = backtrace(bt, 8);
+    for (int k = 2; k < n && k - 2 < 6; k++)
+        e->ret[k - 2] = bt[k];
+#endif
+    e->op = op;
+}
+
 JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
 {
     jl_task_t *ct = jl_get_current_task();
@@ -624,6 +673,7 @@ JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
     jl_reset_ctx_t hctx;
     jl_reset_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
     void *data = jl_gc_counted_malloc(sz);
+    jl_gmp_memlog_rec(1, data, NULL, sz);
     // may longjmp; `data` then leaks, like the aborted operation's other
     // in-flight temporaries (its output is discarded by the unwind anyway)
     jl_gmp_guard_leave(ct, &deferred, prev);
@@ -639,6 +689,7 @@ JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, siz
     jl_reset_ctx_t hctx;
     jl_reset_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
     void *data = jl_gc_counted_realloc_with_old_size(p, old, sz);
+    jl_gmp_memlog_rec(2, data, p, sz);
     jl_gmp_guard_leave(ct, &deferred, prev);
     return data;
 }
@@ -653,6 +704,7 @@ JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz)
     volatile sig_atomic_t deferred = 0;
     jl_reset_ctx_t hctx;
     jl_reset_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    jl_gmp_memlog_rec(3, p, NULL, sz);
     jl_gc_counted_free_with_size(p, sz);
     jl_gmp_guard_leave(ct, &deferred, prev);
 }
