@@ -1404,6 +1404,141 @@ Since spurious-PhiC cases like #34229 (empty try/catch forcing a PhiC in a
 function with no SSA values) simply have no cells to insert, they cost nothing
 here.
 
+### 6.x Join-point completeness (mem2reg over the region tree)
+
+**The claim.** For slot-class (frame, non-escaping) cells, the hybrid IR's
+join vocabulary — `if` results, loop region args, loop break-values, and
+island block-args — is jointly COMPLETE: the promotion pipeline places a
+join value at exactly the region points that project onto the iterated
+dominance frontier (IDF) of the cell's store set in the flattened CFG, and
+therefore reaches the same SSA form classical slot2ssa reaches through
+dominance frontiers, up to the documented exception classes below.
+
+**The passes and the projection.** Promotion is a joint fixpoint of five
+passes (`optimize_ir!` interleaves them; `promotion_fixpoint!` in
+`Compiler/src/unified/completeness.jl` runs them in isolation):
+
+- `promote_cells!` — the dominating case: every read reached by one
+  unconditional dominating store; no join value needed (empty IDF after
+  liveness pruning).
+- `promote_block_cells!` — the single-region case: all uses direct members
+  of one region with reads store-preceded in region order; sequential
+  execution makes the last preceding store the reaching definition on every
+  path (empty pruned IDF).
+- `promote_arm_cells!` — the if-join case, by STORE SINKING: conditional
+  sibling-arm stores become per-arm `result` values plus ONE unconditional
+  `cell_set` of the `if`'s (possibly tupled) result immediately after the
+  join. An arm that does not store contributes the incoming value (a
+  `cell_get` materialized before the `if`, inserted only under definite
+  assignment); arms that exit (break/continue/return/unreachable) contribute
+  nothing, and their stores legitimately flow out through memory. The
+  placement projects onto the IDF block of the diamond's merge point.
+- `promote_island_cells!` — the island case: full liveness-pruned
+  IDF-placed SSA construction over one cfg op's block graph. Phis are block
+  region-args; incoming values ride the edge bundles of the block
+  terminators AND of sealed exits of nested islands that land on our blocks
+  mid-block (§5.5) — a mid-block edge exports the reaching definition at
+  the sealed sub-op's member position (well-defined even when the exit
+  leaves from a nested handler, because candidate stores are all direct
+  block members and so cannot execute mid-`try`). Placement here IS the
+  classical algorithm, so the projection is the identity.
+- `promote_loop_cells!` — the loop case: body stores become carried region
+  args (the IDF block of the loop header — the backedge join) and
+  break-values (the IDF block of the loop exit when distinct definitions
+  merge there).
+
+The composition argument is local: arm sinking strictly simplifies the store
+structure (conditional → unconditional at the join) without touching reads,
+which is precisely the input shape the dominating, island, and loop cases
+consume (an if fully inside one island block sinks to a block-level store
+that the island pass then routes); inside-out processing over nested ifs
+makes an inner join's post-join store a direct arm store of the enclosing
+arm. Each pass preserves the §6 inviolables — cells observable across throw
+edges stay memory-form (the sink also may not move a store past a
+potentially-throwing point that a handler could observe, hence the
+handler-read refusal), maybe-undef-at-read cells keep their `isdefined`
+vocabulary, escaping/token cells never promote.
+
+**The backedge-staleness rule** (island soundness): when a loop body lies
+strictly between a cfg op and a cell's declaration, the cell's memory is
+carried ACROSS iterations through the island's sealed exits (`continue`/
+`break` terminators leave the island directly; the next iteration re-reads
+the cell before re-entering it). Deleting the island stores would leave that
+read stale, so such cells only promote when the island is store-free for
+them. Dissolving this class needs exit-value threading through sealed island
+exits (the loop pass consuming island-boundary values) — deferred, and the
+dominant source of remaining stock-oracle violations.
+
+**Exception classes** (machine-checkable; `classify_residual_cells`): every
+cell remaining after the fixpoint carries a reason —
+
+| reason | meaning | stock counterpart |
+|---|---|---|
+| `:escape_or_token` | value-used/escaping cell, `cell_shared`, gc-preserve token | `Core.Box` / token slots |
+| `:throw_edge_handler` | read or queried in a handler, or used across a `try` boundary | PhiC/Upsilon exception SSA |
+| `:maybe_undef_read` | some read/query no store dominates (definite assignment fails) | slots with undef tracking (`throw_undef_if_not`) |
+| `:island` | island cells the exit-threading boundary refuses: loop-carried through sealed exits (backedge staleness), lifetimes spanning multiple islands, stores nested under loops/exist-carrying ifs inside blocks | goto-land phis |
+| `:refused_multilevel_exit` | loop-boundary refusals: values through multi-level exits / ambiguous body reaching | phis stock places via IDF in goto-land |
+| `:UNCLASSIFIED` | none of the above — a completeness BUG | — |
+
+**The harness** (`Compiler/src/unified/completeness.jl`, tests in
+`Compiler/test/unified/completeness.jl` + `cellfuzz.jl`, full-scale runs in
+`Compiler/bench/unified_completeness.jl`):
+
+1. residual classifier + STOCK ORACLE over real Base/stdlib bodies: where
+   stock `code_typed` of the same instance fully mem2reg'd — slot-free,
+   Box-free, and free of runtime undef guards (`throw_undef_if_not`, stock's
+   own admission of a maybe-undef slot) — our residual set must be empty
+   apart from exception-SSA classes;
+2. structured fuzzing (random nested if/loop/try with random cell
+   placement, the gcd swap shape, multi-level exits, guarded maybe-undef
+   reads, handler interactions) with a semantic differential — identical
+   values AND identical thrown errors before/after promotion — and residual
+   classification totality;
+3. DF correspondence: flatten the pre-promotion body through the exit
+   converter, compute STOCK slot2ssa's liveness-pruned IDF
+   (`Compiler.iterated_dominance_frontier`) per cell, and check our
+   placements land exactly on those blocks (if-join → merge block, carried
+   args → header block, break values → exit block, island phi → its block
+   label). Statically dead code (flattened as unreachable blocks, where
+   dominance is undefined) is excluded on both sides. Extra placements
+   beyond pruned IDF occur (arm sinking is unpruned, and the region form
+   must thread values out through enclosing arms — `:if_thread` in the
+   trace — where flat SSA reads a dominating phi directly); they are
+   harmless-but-suboptimal and reported. MISSING placements are completeness
+   bugs; the acceptance target (and measured result) is zero.
+
+---|---|---|
+| `:escape_or_token` | value-used/escaping cell, `cell_shared`, gc-preserve token | `Core.Box` / token slots |
+| `:throw_edge_handler` | read or queried in a handler, or used across a `try` boundary | PhiC/Upsilon exception SSA |
+| `:maybe_undef_read` | some read/query no store dominates (definite assignment fails) | slots with undef tracking |
+| `:island` | uses inside a residual cfg island (irreducible control flow) | goto-land phis |
+| `:refused_multilevel_exit` | loop-boundary refusals: values through multi-level exits / ambiguous body reaching | phis stock places via IDF in goto-land |
+| `:UNCLASSIFIED` | none of the above — a completeness BUG | — |
+
+**The harness** (`Compiler/src/unified/completeness.jl`, tests in
+`Compiler/test/unified/completeness.jl` + `cellfuzz.jl`, full-scale runs in
+`Compiler/bench/unified_completeness.jl`):
+
+1. residual classifier + STOCK ORACLE over real Base/stdlib bodies: where
+   stock `code_typed` of the same instance is slot-free and Box-free, our
+   residual set must be empty apart from exception-SSA classes;
+2. structured fuzzing (random nested if/loop/try with random cell
+   placement, the gcd swap shape, multi-level exits, guarded maybe-undef
+   reads, handler interactions) with a semantic differential — identical
+   values AND identical thrown errors before/after promotion — and residual
+   classification totality;
+3. DF correspondence: flatten the pre-promotion body through the exit
+   converter, compute STOCK slot2ssa's liveness-pruned IDF
+   (`Compiler.iterated_dominance_frontier`) per cell, and check our
+   placements land exactly on those blocks (if-join → merge block, carried
+   args → header block, break values → exit block). Extra placements beyond
+   pruned IDF occur (arm sinking is unpruned, and the region form must
+   thread values out through enclosing arms — `:if_thread` in the trace —
+   where flat SSA reads a dominating phi directly); they are
+   harmless-but-suboptimal and reported. MISSING placements are completeness
+   bugs; the acceptance target (and measured result) is zero.
+
 ---
 
 ## 7. The dataflow dialect (SynchJulia / DAECompiler)
