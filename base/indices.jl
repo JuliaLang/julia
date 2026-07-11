@@ -203,7 +203,7 @@ end
 
 function throw_setindex_mismatch(X, I)
     @noinline
-    pI = filter(!isnegative, I)
+    pI = Int[i for i in I if !isnegative(i)]
     if length(pI) == 1
         throw(DimensionMismatch("tried to assign $(length(X)) elements to $(pI[1]) destinations"))
     else
