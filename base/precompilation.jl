@@ -1124,6 +1124,10 @@ precompiles only the given packages and their dependencies (unless
   [`Base.Precompilation.monitor_background_precompile`](@ref). Pkg.jl passes
   `detachable=true` in interactive sessions.
 
+- `background::Bool`: When `true` (not default), enqueue precompilation and
+  return immediately without attaching a monitor. This is used by the package
+  loader for `--compiled-modules=background`.
+
 # Keyboard Controls
 
 When running interactively in a TTY, the following keys are available during
@@ -1170,16 +1174,17 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         fancyprint::Bool = can_fancyprint(io) && !timing && !verbose,
                         manifest::Bool=false,
                         ignore_loaded::Bool=true,
-                        detachable::Bool=false)
+                        detachable::Bool=false,
+                        background::Bool=false)
     # verbose timing mode requires timing to be enabled (per-package breakdown
     # is only shown alongside timing lines in non-fancy mode)
     verbose && (timing = true)
-    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable
+    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable background
     verbose && (@lock BG BG.verbose = true)
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                    configs isa Vector{Config} ? configs : [configs],
-                   io isa IOContext ? io : IOContext(io), fancyprint, manifest, ignore_loaded, detachable)
+                   io isa IOContext ? io : IOContext(io), fancyprint, manifest, ignore_loaded, detachable, background)
 end
 
 ## Background lifecycle
@@ -1660,7 +1665,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          fancyprint′::Bool,
                          manifest::Bool,
                          ignore_loaded::Bool,
-                         detachable::Bool)
+                         detachable::Bool,
+                         background::Bool)
     # Try to inject into a running background task
     local req = nothing
     injected = @lock BG begin
@@ -1686,6 +1692,11 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     else
         launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                                      configs, io, fancyprint′, manifest, ignore_loaded, detachable)
+    end
+
+    if background
+        injected || @lock BG BG.monitoring = false
+        return nothing
     end
 
     if req !== nothing

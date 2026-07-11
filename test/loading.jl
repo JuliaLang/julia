@@ -1871,6 +1871,43 @@ end
         @test occursin(r"Generating cache file for Parent", log)
         @test occursin(r"Loading cache file .+ for Parent", log)
 
+        # --compiled-modules=background loads source without waiting for the
+        # cache being generated, then uses that cache in the next process.
+        source_marker = joinpath(dir, "background-source-loaded")
+        precompile_marker = joinpath(dir, "background-precompile-started")
+        open(joinpath(dir, "Background.jl"), "w") do io
+            println(io, """
+                module Background
+                if Base.generating_output()
+                    deadline = time() + 30
+                    while !isfile($(repr(source_marker))) && time() < deadline
+                        sleep(0.01)
+                    end
+                    isfile($(repr(source_marker))) || error("source loading remained blocked")
+                    write($(repr(precompile_marker)), "started")
+                else
+                    write($(repr(source_marker)), "loaded")
+                end
+                end""")
+        end
+        code = """
+            using Background
+            @assert isfile($(repr(source_marker)))
+            Base.Precompilation.monitor_background_precompile(devnull, false; key_controls=false)
+            @assert isfile($(repr(precompile_marker)))
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --compiled-modules=background --pkgimages=no -e $code`,
+                     "JULIA_LOAD_PATH" => dir,
+                     "JULIA_DEPOT_PATH" => depot_path)
+        @test success(run(ignorestatus(cmd)))
+
+        rm(source_marker)
+        rm(precompile_marker)
+        log = load_package("Background", `--compiled-modules=background --pkgimages=no`)
+        @test !isfile(source_marker)
+        @test !isfile(precompile_marker)
+        @test occursin(r"Loading cache file .+ for Background", log)
+
 
         ## tests for `--pkgimages`, which generates object cache files
 

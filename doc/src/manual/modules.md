@@ -683,7 +683,7 @@ A few other points to be aware of:
    of these and to create a single unique instance of others.
 
 It is sometimes helpful during module development to turn off incremental precompilation.
-The command line flag `--compiled-modules={yes|no|existing}` enables you to toggle module
+The command line flag `--compiled-modules={yes|no|existing|strict|background}` enables you to toggle module
 precompilation on and off. When Julia is started with `--compiled-modules=no` the serialized
 modules in the compile cache are ignored when loading modules and module dependencies. In
 some cases, you may want to load existing precompiled modules, but not create new ones. This
@@ -692,6 +692,14 @@ is available with `--pkgimages={yes|no|existing}`, which only affects native-cod
 during precompilation. `Base.compilecache` can still be called manually. The state of this
 command line flag is passed to `Pkg.build` to disable automatic precompilation triggering
 when installing, updating, and explicitly building packages.
+
+With `--compiled-modules=background`, existing precompile files are used when
+available. If a precompile file is missing or stale, Julia loads the package from
+source immediately and creates the precompile file in the background for a future
+session. This avoids blocking package loading at the cost of compiling some code
+twice: once through JIT compilation in the current process and once for the cache.
+Background precompilation is canceled when the Julia process exits, so a short
+script may exit before its cache is complete.
 
 You can also debug some precompilation failures with environment variables. Setting
 `JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of

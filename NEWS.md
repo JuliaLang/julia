@@ -59,6 +59,9 @@ Command-line option changes
 ---------------------------
 
   - `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
+  - `--compiled-modules=background` uses existing package caches, but loads source
+    without waiting when a cache is missing or stale while creating the cache in
+    the background for a future session.
 
 Multi-threading changes
 -----------------------
