@@ -524,6 +524,7 @@ function sizeof_nothrow(@nospecialize(x))
     return true
 end
 
+# f shall be Core.sizeof or Core.bitsizeof
 function _const_sizeof(@nospecialize(f), @nospecialize(x))
     # Constant GenericMemory does not have constant size
     isa(x, GenericMemory) && return Int
@@ -548,8 +549,8 @@ end
         return tmerge(size_tfunc(𝕃, rewrap_unionall(xu.a, x), f),
                       size_tfunc(𝕃, rewrap_unionall(xu.b, x), f))
     end
-    # The size builtins operate on either a type or a value. First check which
-    # case we're in.
+    # Core.sizeof or Core.bitsizeof operate on either a type or a value.
+    # First check which case we're in.
     t, exact = instanceof_tfunc(x, false)
     if t !== Bottom
         # The value corresponding to `x` at runtime could be a type.
