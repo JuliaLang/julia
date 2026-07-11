@@ -653,3 +653,30 @@ struct W62022{T}; x::T; end
 @noinline foo62022(::W62022{W62022{W62022{W62022{Int}}}}) = false
 @test foo62022(W62022(1)) === false # test for invalidation
 @test foo62022(W62022(W62022(W62022(1)))) === false
+
+# the typename facts scan must account for a bound-variable reference at the
+# scanned slot by walking the binder's declared bound: inserting a
+# constructor-style method with a bounded `Type` argument has to invalidate
+# missing-match backedges keyed under the bound's typename
+abstract type AbsCtor65 end
+struct ConcCtor65 <: AbsCtor65 end
+callctor65(x) = AbsCtor65(x)
+@test_throws MethodError callctor65(1)
+(::Type{T})(x) where {T<:AbsCtor65} = ConcCtor65()
+@test callctor65(1) === ConcCtor65()
+# a dependent bound resolves through the parent binder chain
+abstract type AbsCtor66{T} end
+struct ConcCtor66 <: AbsCtor66{Int} end
+callctor66(x) = AbsCtor66{Int}(x)
+@test_throws MethodError callctor66(1)
+(::Type{T})(x::S) where {S, T<:AbsCtor66{S}} = ConcCtor66()
+@test callctor66(1) === ConcCtor66()
+# a kind-typed slot admits type objects, whose canonical backedge keys come
+# from their payload class; the insertion must widen to the `Type` umbrella
+# to find edges like this one (key stability, see jl_foreach_top_typename_for)
+struct KindCtor67 end
+struct KindArg67 end  # private argument type so the pirate method stays inert
+callctor67(x) = KindCtor67(x)
+@test_throws MethodError callctor67(KindArg67())
+(t::DataType)(x::KindArg67) = t === KindCtor67 ? 67 : 0
+@test callctor67(KindArg67()) === 67
