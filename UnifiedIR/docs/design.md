@@ -1460,15 +1460,28 @@ potentially-throwing point that a handler could observe, hence the
 handler-read refusal), maybe-undef-at-read cells keep their `isdefined`
 vocabulary, escaping/token cells never promote.
 
-**The backedge-staleness rule** (island soundness): when a loop body lies
-strictly between a cfg op and a cell's declaration, the cell's memory is
-carried ACROSS iterations through the island's sealed exits (`continue`/
-`break` terminators leave the island directly; the next iteration re-reads
-the cell before re-entering it). Deleting the island stores would leave that
-read stale, so such cells only promote when the island is store-free for
-them. Dissolving this class needs exit-value threading through sealed island
-exits (the loop pass consuming island-boundary values) — deferred, and the
-dominant source of remaining stock-oracle violations.
+**Sealed-exit threading and the backedge-staleness rule** (island
+soundness): when a loop body lies strictly between a cfg op and a cell's
+declaration, the cell's memory is carried ACROSS iterations through the
+island's sealed exits (`continue` terminators leave the island directly; the
+next iteration re-reads the cell before re-entering it). When the entry
+value is OBSERVED, the value THREADS: the loop grows a carried arg (init =
+the store reaching the loop, refused unless it re-executes per enclosing
+iteration or no other store shares an enclosing backedge — the init
+backedge hazard), every `continue` targeting the loop appends the reaching
+definition at its exit point (the island dataflow's per-block values, also
+through mid-block sealed exits), island reads take the arg, and post-loop
+reads keep memory fed by one unconditional store of the loop's exit value.
+An UNOBSERVED entry value needs no threading at all — every read is
+iteration-local and deleting the stores is already sound. The loop pass
+composes the same way at structured level: post-loop reads that cannot
+anchor for direct exit threading SINK one unconditional store of the exit
+value right after the loop (pre-loop stores are then kept for the paths
+that skip it), which the next fixpoint round consumes at the enclosing
+level. Cases that cannot legally thread keep the refusal — the staleness
+sentinel: in particular DOUBLY-carried cells (the value crosses two
+backedge levels, so the inner carried init would need the outer carried
+value) stay classified memory.
 
 **Exception classes** (machine-checkable; `classify_residual_cells`): every
 cell remaining after the fixpoint carries a reason —
@@ -1478,8 +1491,8 @@ cell remaining after the fixpoint carries a reason —
 | `:escape_or_token` | value-used/escaping cell, `cell_shared`, gc-preserve token | `Core.Box` / token slots |
 | `:throw_edge_handler` | read or queried in a handler, or used across a `try` boundary | PhiC/Upsilon exception SSA |
 | `:maybe_undef_read` | some read/query no store dominates (definite assignment fails) | slots with undef tracking (`throw_undef_if_not`) |
-| `:island` | island cells the exit-threading boundary refuses: loop-carried through sealed exits (backedge staleness), lifetimes spanning multiple islands, stores nested under loops/exist-carrying ifs inside blocks | goto-land phis |
-| `:refused_multilevel_exit` | loop-boundary refusals: values through multi-level exits / ambiguous body reaching | phis stock places via IDF in goto-land |
+| `:island` | island cells whose definite assignment is only provable path-sensitively (stock proves it during inference constant propagation; §6 promotion is syntactic) | phis with pruned undef legs |
+| `:refused_multilevel_exit` | doubly-carried cells: the value crosses two backedge levels, so the inner carried init would need the outer carried value (the init backedge hazard) | nested-loop phi chains |
 | `:UNCLASSIFIED` | none of the above — a completeness BUG | — |
 
 **The harness** (`Compiler/src/unified/completeness.jl`, tests in
