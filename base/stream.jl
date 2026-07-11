@@ -1934,6 +1934,14 @@ start_reading(s::BufferStream) = Int32(0)
 stop_reading(s::BufferStream) = nothing
 
 write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
+# BufferStream writes are in-memory: no uv request can outlive the caller, so
+# the LibuvStream method's detached-owner bookkeeping does not apply here.
+function write(s::BufferStream, a::Vector{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> write(s, a), cancel)
+    GC.@preserve a begin
+        return Int(unsafe_write(s, pointer(a), UInt(sizeof(a))))
+    end
+end
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
     nwrite = lock(s.cond) do
         check_open(s)
