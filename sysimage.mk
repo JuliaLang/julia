@@ -84,7 +84,8 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/tuple.jl)
 COMPILER_SRCS += $(shell find $(JULIAHOME)/Compiler/src -name \*.jl -and -not -name verifytrim.jl -and -not -name show.jl)
 # Julia-based compiler frontend is bootstrapped into Base for now
-COMPILER_FRONTEND_SRCS = $(shell find $(JULIAHOME)/JuliaSyntax/src -name \*.jl)
+# (UnifiedIR is the substrate JuliaSyntax runs on, bootstrapped just before it)
+COMPILER_FRONTEND_SRCS = $(shell find $(JULIAHOME)/UnifiedIR/src $(JULIAHOME)/JuliaSyntax/src -name \*.jl)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl)) \

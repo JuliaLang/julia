@@ -332,6 +332,11 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 @eval Compiler const fl_parse = $Base.fl_parse
 
 # Compiler frontend
+# UnifiedIR is the shared substrate under JuliaSyntax's SyntaxGraph (storage
+# core, tree porcelain, kind registry) and under the compiler IR; it must be
+# available before JuliaSyntax is bootstrapped.
+Core.println("UnifiedIR/src/UnifiedIR.jl")
+include(@__MODULE__, string(DATAROOT, "julia/UnifiedIR/src/UnifiedIR.jl"))
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 # May be replaced in incremental sysimage build after-the-fact
