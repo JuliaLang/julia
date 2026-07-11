@@ -765,17 +765,22 @@ end
 
 #-------------------------------------------------------------------------------
 # Our version of eval - should be upstreamed though?
-@fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree;
+@fzone "JL: eval" function eval(mod::Module, @nospecialize(ex);
                                 soft_scope::Union{Nothing,Bool}=nothing,
                                 expr_compat_mode::Bool=false)
+    # Run the `eval` driver in the lowering world. Any internal operations
+    # are required to `invokelatest` before executing any code that dispatches
+    # on user code / types.
     ver = expr_compat_mode ? JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION
-    iter = lower_init(ex, ver)
-    _eval(mod, iter; soft_scope)
+    return invoke_in_lowering_world(_lower_and_eval, mod, ex, ver, soft_scope)
 end
 
-# Version of eval() taking `Expr` (or Expr tree leaves of any type)
-function eval(mod::Module, @nospecialize(ex); opts...)
-    eval(mod, expr_to_est(ex); opts...)
+# `ex` may be a `SyntaxTree` or an `Expr` (or `Expr` tree leaves of any type).
+function _lower_and_eval(mod::Module, @nospecialize(ex), ver::VersionNumber,
+                         soft_scope::Union{Nothing,Bool})
+    st = ex isa SyntaxTree ? ex : expr_to_est(ex)
+    iter = lower_init(st, ver)
+    return _eval(mod, iter; soft_scope)
 end
 
 function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bool}=nothing)
@@ -797,7 +802,7 @@ function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bo
             result = pop!(modules)
         else
             @assert type == :thunk
-            result = Core.eval(modules[end], thunk[2])
+            result = Base.invokelatest(Core.eval, modules[end], thunk[2])
         end
     end
     @assert length(modules) === 1

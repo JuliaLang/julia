@@ -155,7 +155,7 @@ function _eval_dot(world::UInt, mod, ex::SyntaxTree)
         ex = ex[1]
     end
     kind(ex) in KSet"Identifier Symbol" && mod isa Module ?
-        Base.invoke_in_world(world, getproperty, mod, Symbol(ex.name_val)) :
+        _invoke_in_world(world, getproperty, mod, Symbol(ex.name_val)) :
         nothing
 end
 
@@ -171,8 +171,8 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
         if kind(st) === K"Value"
             st.value
         elseif kind(st) === K"Identifier"
-            Base.invoke_in_world(ctx.world, getproperty,
-                                 syntax_module(st), Symbol(st.name_val))
+            _invoke_in_world(ctx.world, getproperty,
+                             syntax_module(st), Symbol(st.name_val))
         elseif kind(st) === K"." &&
                 # TODO: correct mod?
                 (ed = _eval_dot(ctx.world, mod, st); !isnothing(ed))
@@ -223,16 +223,15 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     macfunc = eval_macro_name(ctx, mctx, macname)
     raw_args = st[3:end]
 
-    # TODO: hasmethod always returns false for our `typemax(UInt)` meaning
-    # "latest world," which we shouldn't be using.
-    has_new_macro = ctx.world === typemax(UInt) ?
-        hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}) :
-        hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=ctx.world)
+    # `ctx.world === typemax(UInt)` is our sentinel for "latest world"
+    macro_world = ctx.world === typemax(UInt) ? Base.get_world_counter() : ctx.world
+    has_new_macro = hasmethod(macfunc, Tuple{typeof(mctx), typeof.(raw_args)...}; world=macro_world)
 
     if has_new_macro
         macro_args = [mctx, raw_args...]
+        macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
         expanded = try
-            Base.invoke_in_world(ctx.world, macfunc, macro_args...)
+            _invoke_in_world(ctx.world, macfunc, macro_args...)
         catch exc
             newexc = exc isa MacroExpansionError ?
                 MacroExpansionError(mctx, exc.ex, exc.msg, exc.position, exc.err) :
@@ -253,8 +252,9 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
             @jl_assert kind(arg) !== K"VERSION" arg # handled in EST conversion
             push!(macro_args, est_to_expr(arg))
         end
+        macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
         st_out = try
-            Base.invoke_in_world(ctx.world, macfunc, macro_args...)
+            _invoke_in_world(ctx.world, macfunc, macro_args...)
         catch exc
             if exc isa MethodError && exc.f === macfunc && !isempty(
                 methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, ctx.world, st))
@@ -270,7 +270,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     end
     # Module scope for the returned AST is the module where this particular
     # method was defined (may be different from `parentmodule(macfunc)`)
-    mod_for_ast = lookup_method_instance(macfunc, macro_args, ctx.world).def.module
+    mod_for_ast = macro_mi !== nothing ? macro_mi.def.module : parentmodule(macfunc)
     sc2 = SyntaxContext(
         ScopeLayer(mod_for_ast, sc_in.layer), st,
         (has_new_macro ? JL_NEW_SYNTAX_VERSION : JL_OLD_SYNTAX_VERSION), false)
