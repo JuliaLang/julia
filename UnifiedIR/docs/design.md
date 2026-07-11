@@ -790,7 +790,7 @@ Additional operations:
   (surgery builds and verifies its delta before publishing, so a failure
   cannot leave mixed state). `wrap_in_if!`'s precondition: defs escaping the
   wrapped run require either a diverging `else_arm` or caller-supplied
-  else-values — otherwise there is nothing sound to yield (see §6 on undef).
+  else-values — otherwise there is nothing sound to produce (see §6 on undef).
 - `splice_body!(eir, at, callee::IR; argmap)` — the library-owned inlining
   primitive: bulk-copies the callee in one remap pass; relocates constants,
   globals, and static parameters; **intersects world-validity ranges**;
@@ -899,7 +899,7 @@ Everything is local: no terminator bookkeeping, no phi repair, no renumbering
 visible to the pass. `wrap_in_if!` rewrites the region column for the wrapped
 run, adds two region-table rows, and — per its contract — rewires visibility:
 any value defined in the wrapped run and used *after* the `if` becomes an
-if-result (a `yield` in the then-arm, uses rewritten to the result). Here the
+if-result (a `result` terminator in the then-arm, uses rewritten to the result). Here the
 else-arm terminates in `unreachable`, so the precondition is met and the join
 is trivial. Today this operation is effectively impossible mid-pass.
 
@@ -917,7 +917,7 @@ is trivial. Today this operation is effectively impossible mid-pass.
 3. **`%s` does not lie within any region owned by `%a`.** A region-owning
    op's value does not exist until its regions have completed; without this
    clause, preorder layout would make an `if`'s result visible inside its own
-   arms — admitting an arm that yields the enclosing `if`'s result, a loop
+   arms — admitting an arm that produces the enclosing `if`'s result, a loop
    body that bypasses its carried arguments by reading the loop result, and
    accidental closure recursion. (This was the sharpest soundness hole found
    in review.) Self-reference exists only through explicit binders: loop
@@ -941,7 +941,7 @@ diverging arms, recovered by canonicalization.
   resumption args, closure params, `cfg` block args, function parameters
   (region 1's args).
 - **Out**: the owning op's results only, fed by exit terminators that are
-  themselves *inside* the region — `yield` (if-arms, try, cfg), `break` and
+  themselves *inside* the region — `result` (if-arms, try, cfg), `break` and
   fall-out (`continue` with false condition) for loops, `return` (function and
   closure bodies).
 - **Neither**: cells — the deliberate memory-shaped path for values that
@@ -950,7 +950,7 @@ diverging arms, recovered by canonicalization.
 
 No value is ever referenced outside the region that defines it. This is what
 dissolves predicated.md's "special ω visibility": the ω *is* the op result and
-its inputs are yield operands in ordinary dominance position. It is also why
+its inputs are `result` operands in ordinary dominance position. It is also why
 loop-closed SSA is structural — code after a loop can only name the loop's
 results.
 
@@ -961,7 +961,7 @@ Precise rules (verified at L1):
    (`return`, multi-level `break`, cross-island `goto` — running the
    structural leave/pop actions of every `try` crossed).
 2. **Typing is a recomputed join** of what the feeding terminators actually
-   yield — never a declared type (the #50285 lesson as a rule). Arms ending in
+   produce — never a declared type (the #50285 lesson as a rule). Arms ending in
    `break`/`return`/`unreachable` contribute nothing to the join. Loop
    carried-argument types are the (widened) join of the init values and the
    backedge (`continue`) values — computed separately from the loop's
@@ -969,7 +969,7 @@ Precise rules (verified at L1):
 3. **Statements have zero or one result** (declared per kind: terminators,
    `cell_set`, and friends have zero; references to zero-result statements are
    rejected). An op with multiple exit values produces *one* value of tuple
-   type: feeding terminators yield a tuple, consumers destructure via the
+   type: feeding terminators produce a tuple, consumers destructure via the
    explicit core kind `extract(value, index)` with a constant `INLINE` index —
    a kind check, not call-pattern matching (there will be a lot of these,
    which is why `extract` uses the inline operand encoding of §3.2 and costs
@@ -979,8 +979,8 @@ Precise rules (verified at L1):
    pre-SROA form — an acknowledged cost, §13.1), a future representational
    variant can add native multi-result transparently behind the accessor API.
 4. **Surgery owns the rewiring**: `wrap_in_if!` threads outward-used defs
-   through fresh yields (§4.5); region inlining (folded conditions,
-   restructuring) replaces result uses with the unique feeding yield's
+   through fresh `result` terminators (§4.5); region inlining (folded conditions,
+   restructuring) replaces result uses with the unique feeding `result` terminator's
    operands; `splice_body!` maps callee `return`s onto splice-point results.
 5. **DCE**: unused results do not keep an op alive; an op survives only on the
    `REMOVABLE`-relevant properties of itself and its immediate-mode regions —
@@ -995,17 +995,17 @@ Precise rules (verified at L1):
 ### 5.2 `if`: ω as a region result
 
 predicated.md's ω-node survives as the result of an `if` op whose arms end in
-`yield` — the "special visibility into previous predication" rule made
-structural (each `yield` sits inside its arm, in ordinary dominance position),
+`result` — the "special visibility into previous predication" rule made
+structural (each `result` terminator sits inside its arm, in ordinary dominance position),
 and #31603's move-phi-uses-into-predecessors done one level up:
 
 ```
 %c = call >(%a, 0.0)
 %z = if %c :: Int64 {
-    yield 1
+    result 1
 } else {
     %y = call g(%a)
-    yield %y
+    result %y
 }
 ```
 
@@ -1048,14 +1048,14 @@ fixes each structurally:
   uses at body end. **The use-def graph is acyclic everywhere** (including
   clause 3 of §5.1: the body cannot read `%r`).
 - `break (vals…)` / `continue cond (vals…)` are ordinary terminator ops; all
-  exits yield the same arity, and the loop's results are the op's results — so
+  exits produce the same arity, and the loop's results are the op's results — so
   loop-closed SSA is a structural fact, not a maintained invariant.
 - Cross-iteration flow *must* go through the owning loop's args; inner regions
   see outer values by ordinary ancestor visibility. Nested-loop binding is
   explicit, not by-convention.
 - Side-effect contiguity is region membership — insertion by id cannot violate
   it.
-- (The parenthesized exit-value lists are grammar for tuple yields; a printer
+- (The parenthesized exit-value lists are grammar for tuple results; a printer
   sugar `%sum, %i = loop …` may render the result-plus-extracts form.)
 
 ### 5.4 `try`: see §6.
@@ -1073,7 +1073,7 @@ one destination, no edge arguments):
 - `goto (^bb, args…)`
 - `br_if %cond (^bb_true, args…) (^bb_false, args…)`
 - `switch %val [case c₁ → (^bb₁, args…), …, default → (^bbₙ, args…)]`
-- `yield vals…` — exit the `cfg` op with values
+- `result vals…` — exit the `cfg` op with values
 - `unreachable`
 
 L1 verifies edge arity/types against destination block args. Rules:
@@ -1236,7 +1236,7 @@ hand.
 |---|---|
 | values/structure | `region_arg`, `extract` (const-index tuple extraction — `getfield` in Julia semantics; §5.1), `refine` (Pi successor: an ordinary, canonicalizable statement — fixes the #54762 accumulation class), `value` (escape hatch; reference-free leaves only, §3.2) |
 | computation | `call`, `invoke`, `intrinsic`, `foreigncall`, `new`, `splatnew`, `globalref` |
-| structured CF | `if`, `loop`, `try`, `select`; terminators (0-result) `yield`, `continue`, `break`, `return`, `unreachable` (`break`/`continue`/`return` carry a `REGION` target for multi-level exit within the activation) |
+| structured CF | `if`, `loop`, `try`, `select`; terminators (0-result) `result`, `continue`, `break`, `return`, `unreachable` (`break`/`continue`/`return` carry a `REGION` target for multi-level exit within the activation) |
 | suspension/capture | `await` (§5.6; v1 in `cfg` form), `closure` (§5.7; enters the core at P3) |
 | unstructured island | `cfg`; block terminators (0-result) `goto`, `br_if`, `switch` with edge bundles (§5.5) |
 | memory cells | `cell` (frame-class), `cell_shared` (heap-class), `cell_get`, `cell_set` (0), `cell_new` (0; re-undefines — the `NewvarNode` successor), `cell_isdefined`, `throw_undef_if_not` (0) — §6 |
@@ -1337,13 +1337,13 @@ never-stored cell is a checked error.
     %b = call open_buffer(%a)        # may throw BEFORE %buf is stored
     cell_set %buf, %b
     %s = call may_throw(%b)          # may throw AFTER %buf is stored
-    yield %s
+    result %s
 } catch (%exc) {
     %d  = cell_isdefined %buf
     throw_undef_if_not %d, :buf
     %b′ = cell_get %buf
     %m  = call recover(%exc, %b′)
-    yield %m
+    result %m
 }
 ```
 
@@ -1476,7 +1476,7 @@ cells have become ordinary mutable-struct fields, exactly as SynchCompiler's
 ```
 func @counter.step(%reset::Bool, %state::CounterState) -> Int64 {
   %old = call getfield(%state, :prev)                          :: Int64
-  %p0  = if %reset :: Int64 { yield const 0 } else { yield %old }
+  %p0  = if %reset :: Int64 { result const 0 } else { result %old }
   %out = call +(%p0, 1)
   call setfield!(%state, :prev, %out)
   return %out
@@ -1671,10 +1671,10 @@ with no portable textual form (mutable identity-bearing constants, modules,
 func @f(%a::Int64) -> Int64 {
   %c = test.icmp sgt, %a, const 0        :: Bool     !dbg(f.jl:3)
   %z = if %c :: Int64 {
-    yield const 1
+    result const 1
   } else {
     %y = test.mul %a, %a                 :: Int64
-    yield %y
+    result %y
   }
   return %z
 }
@@ -1823,7 +1823,7 @@ generation (checked on deref) and perturb order keys at `compact!`.
   every `ssa_use`-role reference, including `GuardCondition` use sites (§3.2);
   activation-boundary rules (no exits or handler-attachment across `deferred`/
   `resume` activations, including edge-defined resume subgraphs, §5.6);
-  region-arg counts match `continue`/`break`/`yield` arities and `cfg` edge
+  region-arg counts match `continue`/`break`/`result` arities and `cfg` edge
   bundles match destination block args; no uses of tombstoned defs;
   `gc_preserve_begin`/`end` pairing not split across region boundaries by
   surgery; floating: acyclicity modulo the delayed edge.
@@ -1894,7 +1894,7 @@ a stabilization milestone (§8.4).
 
 1. **(OPEN — gated)** **Hot-path performance.** Dense-scan parity of the
    *access pattern* is by construction, but net cost depends on statement-
-   count deltas (yields/extracts from diverging-arm threading, §2.1; tuple
+   count deltas (result-terminator/extract insertions from diverging-arm threading, §2.1; tuple
    types in the pre-SROA form inference walks), type-erased registry callbacks
    (§8.1), and `type::Vector{Any}` boxing. Concrete gate at P3: (a) ported
    SROA within ~5% of `IncrementalCompact` wall-clock and allocations on a

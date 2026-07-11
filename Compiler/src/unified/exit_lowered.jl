@@ -4,7 +4,7 @@
 # stock runtime pipeline consumes — the runtime-interaction boundary.
 #
 # v1 feature matrix: if / loop / cfg / cells / all plain kinds. `try` regions
-# are synthesized to :enter/:leave form. Escaping tuple yields are
+# are synthesized to :enter/:leave form. Escaping tuple results are
 # materialized via Core.tuple (§10.5).
 
 const CI_FIELDS = fieldnames(Core.CodeInfo)
@@ -194,16 +194,16 @@ function emit_stmt!(cx::ExitCtx, s::StmtId, k::UnifiedIR.Kind, loopctxs)
     if k === K"if"
         cond = exit_value(cx, UnifiedIR.getop(ir, s, 1))
         rs = UnifiedIR.live_owned_regions(ir, s)
-        # result slot(s): one slot; tuple yields materialize a tuple value
+        # result slot(s): one slot; tuple results materialize a tuple value
         rslot = newslot!(cx, :ifres)
         cx.slotof[s.id] = rslot
         elsekey = (:else, s.id)
         joinkey = (:join, s.id)
         emitgotoifnot!(cx, cond, length(rs) >= 2 ? elsekey : joinkey)
-        emit_region_with_yield!(cx, rs[1], rslot, joinkey, loopctxs)
+        emit_region_with_result!(cx, rs[1], rslot, joinkey, loopctxs)
         if length(rs) >= 2
             marklabel!(cx, elsekey)
-            emit_region_with_yield!(cx, rs[2], rslot, joinkey, loopctxs)
+            emit_region_with_result!(cx, rs[2], rslot, joinkey, loopctxs)
         end
         marklabel!(cx, joinkey)
     elseif k === K"loop"
@@ -258,8 +258,8 @@ function emit_stmt!(cx::ExitCtx, s::StmtId, k::UnifiedIR.Kind, loopctxs)
         emitstmt!(cx, Core.ReturnNode(isempty(vals) ? nothing : vals[1]))
     elseif k === K"unreachable"
         emitstmt!(cx, Core.ReturnNode())
-    elseif k === K"yield"
-        error("exit converter: yield outside an owned region context")
+    elseif k === K"result"
+        error("exit converter: result terminator outside an owned region context")
     elseif k === K"try"
         emit_try!(cx, s, loopctxs)
     elseif k === K"cfg"
@@ -353,13 +353,13 @@ function bind_loop_result!(cx::ExitCtx, rslot::Int, vals::Vector{Any})
     emitstmt!(cx, Expr(:(=), Core.SlotNumber(rslot), v))
 end
 
-# Emit an owned region whose yields feed `rslot`, then jump to `joinkey`.
-function emit_region_with_yield!(cx::ExitCtx, r::RegionId, rslot::Int, joinkey, loopctxs)
+# Emit an owned region whose result terminators feed `rslot`, then jump to `joinkey`.
+function emit_region_with_result!(cx::ExitCtx, r::RegionId, rslot::Int, joinkey, loopctxs)
     ir = cx.ir
     for s in UnifiedIR.region_stmts(ir, r)
         k = UnifiedIR.stmt_kind(ir, s)
         k === K"region_arg" && continue
-        if k === K"yield"
+        if k === K"result"
             vals = exit_values(cx, s, 1)
             v = length(vals) == 1 ? vals[1] :
                 isempty(vals) ? nothing :
@@ -384,11 +384,11 @@ function emit_try!(cx::ExitCtx, s::StmtId, loopctxs)
     push!(cx.code, Core.EnterNode(0))
     push!(cx.pending_gotos, (enteridx, :enter, catchkey))
     push!(cx.trystack, Core.SSAValue(enteridx))
-    # body: yields leave the handler scope then store + jump
+    # body: result terminators leave the handler scope then store + jump
     for st in UnifiedIR.region_stmts(ir, rs[1])
         k = UnifiedIR.stmt_kind(ir, st)
         k === K"region_arg" && continue
-        if k === K"yield"
+        if k === K"result"
             vals = exit_values(cx, st, 1)
             v = length(vals) == 1 ? vals[1] :
                 isempty(vals) ? nothing :
@@ -414,7 +414,7 @@ function emit_try!(cx::ExitCtx, s::StmtId, loopctxs)
         for st in UnifiedIR.region_stmts(ir, rs[2])
             k = UnifiedIR.stmt_kind(ir, st)
             k === K"region_arg" && continue
-            if k === K"yield"
+            if k === K"result"
                 vals = exit_values(cx, st, 1)
                 v = length(vals) == 1 ? vals[1] :
                     isempty(vals) ? nothing :
@@ -464,7 +464,7 @@ function emit_cfg!(cx::ExitCtx, s::StmtId, loopctxs)
             k === K"region_arg" && continue
             if k === K"goto" || k === K"br_if" || k === K"switch"
                 emit_cfg_terminator!(cx, st, k)
-            elseif k === K"yield"
+            elseif k === K"result"
                 vals = exit_values(cx, st, 1)
                 v = length(vals) == 1 ? vals[1] :
                     isempty(vals) ? nothing :

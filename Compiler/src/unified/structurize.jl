@@ -6,12 +6,12 @@
 #     region-owning statements are fine) into its predecessor.
 #   * `collapse_branches!`    — a `br_if` whose successors are single-
 #     predecessor blocks becomes a structured `K"if"`:
-#       - diamond: both sides rejoin at one block J → arms yield the edge
+#       - diamond: both sides rejoin at one block J → arms produce the edge
 #         arguments, the branch becomes `goto ^J (ifresults…)`;
 #       - triangle: one side jumps straight to J → one/two-armed if;
-#       - exit arms: sides that terminate in yield/return/unreachable/
-#         break/continue move wholesale into the arms (a yielding arm makes
-#         the branch `yield %if`; all-diverging arms leave `unreachable`).
+#       - exit arms: sides that terminate in result/return/unreachable/
+#         break/continue move wholesale into the arms (a value-producing arm makes
+#         the branch `result %if`; all-diverging arms leave `unreachable`).
 #   * `collapse_loops!`       — a natural loop (single back-edge target H
 #     dominating its sources, single outside exit target) becomes a
 #     `K"loop"` region; the loop's blocks move into a nested island whose
@@ -25,7 +25,7 @@
 #   * `dissolve_diverging_islands!` — a single-block island whose terminator
 #     diverges (return/unreachable/break/continue/cross-island goto) splices
 #     into the parent region; the dynamically-unreachable tail after it dies.
-#   * `selectify!`            — an `if` with two tiny, speculatable, yielding
+#   * `selectify!`            — an `if` with two tiny, speculatable, value-producing
 #     arms becomes `K"select"` with the arm bodies hoisted.
 #
 # Irreducible or unrecognized shapes stay as (smaller) cfg islands —
@@ -237,26 +237,26 @@ function _collapse_diamond!(ir, tgt, t, owner, areg, cond, Tr, aT, Fr, aF)
         aJF2 = UnifiedIR.edge_bundles(ir, tF)[1][2]
         UnifiedIR.kill_stmt!(ir, tT)
         UnifiedIR.kill_stmt!(ir, tF)
-        UnifiedIR.push_stmt!(ir, armT, K"yield", aJT2...)
-        UnifiedIR.push_stmt!(ir, armF, K"yield", aJF2...)
+        UnifiedIR.push_stmt!(ir, armT, K"result", aJT2...)
+        UnifiedIR.push_stmt!(ir, armF, K"result", aJF2...)
         _join_goto!(ir, t, ifop, J, k)
         structural_epoch!(ir)
         return true
     end
-    exitlike(k) = k === K"yield" || is_diverge_kind(k)
+    exitlike(k) = k === K"result" || is_diverge_kind(k)
     if exitlike(kT) && exitlike(kF)
-        # arms keep their exit terminators: a yield in the arm yields the if
-        ny = (kT === K"yield" ? 1 : 0) + (kF === K"yield" ? 1 : 0)
+        # arms keep their exit terminators: a `result` in the arm becomes the `if`'s value
+        ny = (kT === K"result" ? 1 : 0) + (kF === K"result" ? 1 : 0)
         yar = -1
-        if kT === K"yield"
+        if kT === K"result"
             yar = UnifiedIR.nops(ir, tT)
         end
-        if kF === K"yield"
+        if kF === K"result"
             yf = UnifiedIR.nops(ir, tF)
             yar >= 0 && yf != yar && return false
             yar = yf
         end
-        (ny > 0 && yar > 1) && return false      # multi-value island yields: keep cfg
+        (ny > 0 && yar > 1) && return false      # multi-value island results: keep cfg
         ifop = UnifiedIR.insert_before!(ir, t, K"if", cond; type = Any)
         _build_arm!(ir, ifop, Tr, aT)
         _build_arm!(ir, ifop, Fr, aF)
@@ -264,9 +264,9 @@ function _collapse_diamond!(ir, tgt, t, owner, areg, cond, Tr, aT, Fr, aF)
             UnifiedIR.replace_stmt!(ir, t, K"unreachable")
         elseif yar == 1
             UnifiedIR.set_type!(ir, ifop, Any)
-            UnifiedIR.replace_stmt!(ir, t, K"yield", UnifiedIR.op_stmt(ifop))
+            UnifiedIR.replace_stmt!(ir, t, K"result", UnifiedIR.op_stmt(ifop))
         else
-            UnifiedIR.replace_stmt!(ir, t, K"yield")
+            UnifiedIR.replace_stmt!(ir, t, K"result")
         end
         structural_epoch!(ir)
         return true
@@ -304,19 +304,19 @@ function _collapse_triangle!(ir, tgt, t, owner, areg, cond, Tr, aT, Fr, aF)
         arm = _build_arm!(ir, ifop, side, aside)
         aJS2 = UnifiedIR.edge_bundles(ir, st)[1][2]
         UnifiedIR.kill_stmt!(ir, st)
-        UnifiedIR.push_stmt!(ir, arm, K"yield", aJS2...)
+        UnifiedIR.push_stmt!(ir, arm, K"result", aJS2...)
         if k > 0
             er = UnifiedIR.new_region!(ir, ifop, UnifiedIR.REGION_ARM)
-            UnifiedIR.push_stmt!(ir, er, K"yield", aJ...)
+            UnifiedIR.push_stmt!(ir, er, K"result", aJ...)
         end
     else
         # side is the false successor: then-arm carries the direct-edge values
         tr = UnifiedIR.new_region!(ir, ifop, UnifiedIR.REGION_ARM)
-        UnifiedIR.push_stmt!(ir, tr, K"yield", aJ...)
+        UnifiedIR.push_stmt!(ir, tr, K"result", aJ...)
         arm = _build_arm!(ir, ifop, side, aside)
         aJS2 = UnifiedIR.edge_bundles(ir, st)[1][2]
         UnifiedIR.kill_stmt!(ir, st)
-        UnifiedIR.push_stmt!(ir, arm, K"yield", aJS2...)
+        UnifiedIR.push_stmt!(ir, arm, K"result", aJS2...)
     end
     _join_goto!(ir, t, ifop, J, k)
     structural_epoch!(ir)
@@ -654,13 +654,13 @@ function dissolve_diverging_islands!(ir::UnifiedIR.IR)
         term = UnifiedIR.region_terminator(ir, blk)
         term === nothing && continue
         tk = UnifiedIR.stmt_kind(ir, term)
-        # yield-terminated islands are dissolve_islands!'s case; goto-terminated
+        # result-terminated islands are dissolve_islands!'s case; goto-terminated
         # ones must keep their island (the exit converter only lowers `goto`
         # inside island blocks — absorb_exit_gotos! resolves the absorbable
         # cases at block level before this can fire)
         is_diverge_kind(tk) || continue
         parent = UnifiedIR.stmt_region(ir, c)
-        # the island never yields: any use of its (Union{}) result must sit in
+        # the island never produces a result: any use of its (Union{}) result must sit in
         # the dynamically-unreachable tail we are about to remove
         ok = true
         UnifiedIR.each_ssa_use(ir) do site, used
@@ -705,7 +705,7 @@ end
     selectify!(ir) -> Int
 
 `if` ops with two tiny, fully speculatable arms (all members EFFECT_FREE |
-NOTHROW | TERMINATES, no region owners) that each yield one value become
+NOTHROW | TERMINATES, no region owners) that each produce one value become
 `K"select"` with the arm bodies hoisted before it. Editable state.
 """
 function selectify!(ir::UnifiedIR.IR)
@@ -724,7 +724,7 @@ function selectify!(ir::UnifiedIR.IR)
             ms = UnifiedIR.region_stmts(ir, r)
             isempty(ms) && (ok = false; break)
             term = ms[end]
-            (UnifiedIR.stmt_kind(ir, term) === K"yield" && UnifiedIR.nops(ir, term) == 1) ||
+            (UnifiedIR.stmt_kind(ir, term) === K"result" && UnifiedIR.nops(ir, term) == 1) ||
                 (ok = false; break)
             for m in ms[1:end-1]
                 mk = UnifiedIR.stmt_kind(ir, m)

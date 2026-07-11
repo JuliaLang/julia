@@ -55,7 +55,7 @@ function exit_index(ir::IR)
                 tgt = asregion(getop(ir, s, 1))
                 owner = getregion(ir, tgt).owner
                 isnull(owner) || push!(get!(() -> StmtId[], idx, owner), s)
-            elseif k === K"yield"
+            elseif k === K"result"
                 reg = getregion(ir, stmt_region(ir, s))
                 isnull(reg.owner) || push!(get!(() -> StmtId[], idx, reg.owner), s)
             end

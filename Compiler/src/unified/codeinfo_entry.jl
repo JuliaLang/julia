@@ -122,7 +122,7 @@ function codeinfo_to_ir(ci::Core.CodeInfo; nargs::Int, name::Symbol = :f)
             if single
                 append_stmt!(b, K"return", v)
             else
-                append_stmt!(b, K"yield", v)
+                append_stmt!(b, K"result", v)
             end
             returns += 1
         elseif st isa Core.GotoNode

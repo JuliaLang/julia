@@ -22,11 +22,11 @@ end
     a = append_stmt!(b, K"region_arg"; type = Int64)
     c = append_stmt!(b, K"call", GlobalRef(Base, :slt_int), 0, a; type = Bool)
     z = build_if!(b, c; type = Int64) do b
-        append_stmt!(b, K"yield", 1)
+        append_stmt!(b, K"result", 1)
     end
     UnifiedIR.open_region!(b, z)
     y = append_stmt!(b, K"call", GlobalRef(Base, :mul_int), a, a; type = Int64)
-    append_stmt!(b, K"yield", y)
+    append_stmt!(b, K"result", y)
     UnifiedIR.close_region!(b)
     append_stmt!(b, K"return", z)
     ir = finish!(b)
@@ -102,9 +102,9 @@ end
         %6 = call global Base.slt_int, %5, %3 :: Bool
         br_if %6 (^bb3: %3) (^bb4: %5)
       ^bb3(%8::Int64):
-        yield %8
+        result %8
       ^bb4(%10::Int64):
-        yield %10
+        result %10
       }
       return %4
     }

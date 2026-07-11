@@ -275,10 +275,10 @@ function verify_l1(ir::IR)
             ar = activation_root(ir, stmt_region(ir, s))
             ar == root_region(ir) || getregion(ir, ar).activation !== ACT_IMMEDIATE ||
                 verr("%$i: return outside function/closure body")
-        elseif k === K"yield" && !floating
+        elseif k === K"result" && !floating
             reg = getregion(ir, stmt_region(ir, s))
             isnull(reg.owner) && stmt_region(ir, s) != root_region(ir) &&
-                verr("%$i: yield in ownerless region")
+                verr("%$i: `result` terminator in ownerless region")
         elseif k === K"goto" || k === K"br_if" || k === K"switch" || k === K"await"
             # every BLOCK operand must target a block region of the same (or
             # ancestor, for goto) cfg island; edge arity checked below

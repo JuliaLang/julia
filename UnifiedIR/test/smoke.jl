@@ -3,17 +3,17 @@ using UnifiedIR: op_stmt, op_inline, op_region, TEST_KINDS
 using Test
 
 @testset "builder + if + interpret" begin
-    # func @f(%a::Int64) -> Int64 { %c = icmp sgt %a, 0; %z = if %c { yield 1 } else { yield a*a }; return %z }
+    # func @f(%a::Int64) -> Int64 { %c = icmp sgt %a, 0; %z = if %c { result 1 } else { result a*a }; return %z }
     b = Builder(name = :f)
     a = append_stmt!(b, K"region_arg"; type = Int64)
     c = append_stmt!(b, K"test.icmp", :sgt, a, 0; type = Bool)
     z = build_if!(b, c; type = Int64) do b
-        append_stmt!(b, K"yield", 1)
+        append_stmt!(b, K"result", 1)
     end
     # build_if! with else via explicit API
     UnifiedIR.open_region!(b, z)
     y = append_stmt!(b, K"test.mul", a, a; type = Int64)
-    append_stmt!(b, K"yield", y)
+    append_stmt!(b, K"result", y)
     UnifiedIR.close_region!(b)
     append_stmt!(b, K"return", z)
     ir = finish!(b)
@@ -96,7 +96,7 @@ end
     ir = finish!(b)
     editable(ir)
     ifop = wrap_in_if!(ir, x, x, c; else_arm = (ir, er) -> begin
-        push_stmt!(ir, er, K"yield", 0)
+        push_stmt!(ir, er, K"result", 0)
     end)
     ir, _ = compact!(ir)
     @test verify_ir(ir; level = 1)
@@ -139,7 +139,7 @@ end
     a = append_stmt!(b, K"region_arg"; type = Bool)
     z = append_stmt!(b, K"if", a; type = Int64)
     UnifiedIR.open_region!(b, z)
-    append_stmt!(b, K"yield", z)      # illegal: arm yields the if's own result
+    append_stmt!(b, K"result", z)      # illegal: arm produces the if's own result
     UnifiedIR.close_region!(b)
     append_stmt!(b, K"return", z)
     ir = finish!(b; verify = false)

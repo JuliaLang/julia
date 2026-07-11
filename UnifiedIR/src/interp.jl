@@ -10,7 +10,7 @@ mutable struct CellBox
 end
 
 struct InterpResult
-    kind::Symbol           # :return | :yield | :break | :continue | :fallout
+    kind::Symbol           # :return | :result | :break | :continue | :fallout
     target::RegionId       # for :break/:continue
     values::Vector{Any}
 end
@@ -77,7 +77,7 @@ function exec_control!(ir::IR, env::Vector{Any}, s::StmtId, io::IO)::Union{Nothi
         else
             InterpResult(:fallout, NULL_REGION, Any[])
         end
-        if res.kind === :yield
+        if res.kind === :result
             bind_result!(env, s, res.values)
             return nothing
         elseif res.kind === :fallout
@@ -125,7 +125,7 @@ function exec_control!(ir::IR, env::Vector{Any}, s::StmtId, io::IO)::Union{Nothi
             isempty(h.args) || (env[h.args[1].id] = exc)
             run_region!(ir, env, rs[2], io)
         end
-        if res.kind === :yield
+        if res.kind === :result
             bind_result!(env, s, res.values)
             return nothing
         elseif res.kind === :fallout
@@ -150,7 +150,7 @@ function exec_control!(ir::IR, env::Vector{Any}, s::StmtId, io::IO)::Union{Nothi
                 end
                 cur = res.target
                 curargs = res.values
-            elseif res.kind === :yield
+            elseif res.kind === :result
                 bind_result!(env, s, res.values)
                 return nothing
             elseif res.kind === :fallout
@@ -159,8 +159,8 @@ function exec_control!(ir::IR, env::Vector{Any}, s::StmtId, io::IO)::Union{Nothi
                 return res
             end
         end
-    elseif k === K"yield"
-        return InterpResult(:yield, NULL_REGION, vals(ir, env, s, 1))
+    elseif k === K"result"
+        return InterpResult(:result, NULL_REGION, vals(ir, env, s, 1))
     elseif k === K"return"
         return InterpResult(:return, NULL_REGION, vals(ir, env, s, 1))
     elseif k === K"break"

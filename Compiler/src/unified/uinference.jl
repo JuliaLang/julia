@@ -369,18 +369,18 @@ joinvals(fr::Frame, vals::Vector{Any}) =
     length(vals) == 1 ? widenucond(vals[1]) :
     CC.builtin_tfunction(fr.st.cfg.interp, Core.tuple, Any[widenucond(v) for v in vals], nothing)
 
-# Region inference: returns the join of `yield` values reaching the owner
-# (nothing if no yield), accumulating return/continue/break joins on `fr`.
+# Region inference: returns the join of `result` values reaching the owner
+# (nothing if no result terminator), accumulating return/continue/break joins on `fr`.
 function infer_region!(fr::Frame, r::RegionId)
     ir = fr.ir
-    yields = nothing
+    results = nothing
     npush = 0
     for s in UnifiedIR.region_stmts(ir, r)
         k = UnifiedIR.stmt_kind(ir, s)
         if k === K"region_arg"
             continue
-        elseif k === K"yield"
-            yields = ⊔(fr.st, yields, joinvals(fr, opls(fr, s, 1)))
+        elseif k === K"result"
+            results = ⊔(fr.st, results, joinvals(fr, opls(fr, s, 1)))
         elseif k === K"return"
             note_return!(fr, s)
         elseif k === K"continue"
@@ -440,14 +440,14 @@ function infer_region!(fr::Frame, r::RegionId)
     for _ in 1:npush
         pop!(fr.refinements)
     end
-    return yields
+    return results
 end
 
 "Does control ever reach the join after this region (false = diverges)?"
 function region_falls_through(ir::UnifiedIR.IR, r::RegionId)
     t = UnifiedIR.region_terminator(ir, r)
     t === nothing && return true
-    return UnifiedIR.stmt_kind(ir, t) === K"yield"
+    return UnifiedIR.stmt_kind(ir, t) === K"result"
 end
 
 function infer_if!(fr::Frame, s::StmtId)::Union{Nothing,RefMap}
@@ -507,7 +507,7 @@ function infer_if!(fr::Frame, s::StmtId)::Union{Nothing,RefMap}
     else
         r1 = infer_region!(fr, rs[1])
         r2 = length(rs) >= 2 ? infer_region!(fr, rs[2]) : CC.Const(nothing)
-        # §10.3(a): diverging arms (no yield reached) contribute nothing
+        # §10.3(a): diverging arms (no result reached) contribute nothing
         res = ⊔(fr.st, r1, r2)
     end
     fr.env[s.id] = res === nothing ? Union{} : res
@@ -657,7 +657,7 @@ function infer_cfg!(fr::Frame, s::StmtId)
             for st in UnifiedIR.region_stmts(ir, rid)
                 k = UnifiedIR.stmt_kind(ir, st)
                 k === K"region_arg" && continue
-                if k === K"yield"
+                if k === K"result"
                     result = ⊔(fr.st, result, joinvals(fr, opls(fr, st, 1)))
                 elseif k === K"return"
                     note_return!(fr, st)

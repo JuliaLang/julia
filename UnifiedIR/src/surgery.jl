@@ -100,10 +100,10 @@ end
     wrap_in_if!(ir, first, last, cond; else_arm=nothing) -> StmtId
 
 Move the contiguous run `first..last` (in one region's list) into the then-arm
-of a fresh `if cond`. Defs escaping the run are threaded through fresh yields
+of a fresh `if cond`. Defs escaping the run are threaded through fresh `result` terminators
 and their outside uses rewritten to the if's result (§5.1 rule 4). Escaping
 defs require an `else_arm` builder `(ir, region) -> ()` that terminates the
-arm (diverging, or yielding matching arity).
+arm (diverging, or producing matching result arity).
 """
 function wrap_in_if!(ir::IR, first::StmtId, last::StmtId, cond::Value;
                      else_arm = nothing)
@@ -166,7 +166,7 @@ function wrap_in_if!(ir::IR, first::StmtId, last::StmtId, cond::Value;
         counts[s.id] > 0 && push!(escaping, s)
     end
     # terminate the then-arm
-    push_stmt!(ir, arm, K"yield", escaping...)
+    push_stmt!(ir, arm, K"result", escaping...)
     if isempty(escaping)
         set_type!(ir, ifop, Nothing)
         if else_arm !== nothing
@@ -176,7 +176,7 @@ function wrap_in_if!(ir::IR, first::StmtId, last::StmtId, cond::Value;
         end
     else
         else_arm === nothing &&
-            error("wrap_in_if!: $(length(escaping)) defs escape the run; supply an else_arm (diverging or yielding matching arity) — §4.2 precondition")
+            error("wrap_in_if!: $(length(escaping)) defs escape the run; supply an else_arm (diverging or producing matching result arity) — §4.2 precondition")
         er = new_region!(ir, ifop, REGION_ARM)
         else_arm(ir, er)
         region_terminator(ir, er) === nothing && error("wrap_in_if!: else_arm did not terminate")
@@ -250,8 +250,8 @@ end
 
 Dissolve region-owning op `owner`, splicing the contents of its region `keep`
 into the parent at the owner's position and killing the other regions. Result
-uses are rewritten to the kept region's yield operands (single value directly;
-tuple results through their `extract`s). The yield and the owner are removed.
+uses are rewritten to the kept region's result operands (single value directly;
+tuple results through their `extract`s). The result terminator and the owner are removed.
 """
 function inline_region!(ir::IR, owner::StmtId, keep::RegionId)
     check_state(ir, LAYOUT_EDITABLE, "inline_region!")
@@ -260,11 +260,11 @@ function inline_region!(ir::IR, owner::StmtId, keep::RegionId)
     isempty(keepreg.args) || error("inline_region!: cannot inline a region with region args")
     term = region_terminator(ir, keep)
     parent = stmt_region(ir, owner)
-    # move stmts (except a yield terminator) into parent before owner's successor
+    # move stmts (except a result terminator) into parent before owner's successor
     members = region_stmts(ir, keep)
-    yieldvals = Operand[]
-    if term !== nothing && stmt_kind(ir, term) === K"yield"
-        yieldvals = operands(ir, term)
+    resultvals = Operand[]
+    if term !== nothing && stmt_kind(ir, term) === K"result"
+        resultvals = operands(ir, term)
         kill_stmt!(ir, term)
         members = members[1:end-1]
     end
@@ -284,9 +284,9 @@ function inline_region!(ir::IR, owner::StmtId, keep::RegionId)
     keepreg.last = NULL_STMT
     keepreg.dead = true
     # rewrite result uses
-    if length(yieldvals) == 1
-        replace_uses_where!(_ -> true, ir, owner => yieldvals[1])
-    elseif length(yieldvals) > 1
+    if length(resultvals) == 1
+        replace_uses_where!(_ -> true, ir, owner => resultvals[1])
+    elseif length(resultvals) > 1
         # tuple result: rewrite extract users; other users are an error (v1)
         for i in 1:Int(ir.body.len)
             ir.body.kind[i] === K"extract" || continue
@@ -294,7 +294,7 @@ function inline_region!(ir::IR, owner::StmtId, keep::RegionId)
             v = getop(ir, s, 1)
             optag(v) == TAG_STMT && asstmt(v) == owner || continue
             idx = Int(imm_value(getop(ir, s, 2))::Int64)
-            replace_stmt!(ir, s, K"refine", yieldvals[idx + 1]; type = stmt_type(ir, s))
+            replace_stmt!(ir, s, K"refine", resultvals[idx + 1]; type = stmt_type(ir, s))
         end
         counts = use_counts(ir)
         counts[owner.id] == 0 ||

@@ -647,7 +647,7 @@ end
 
 """
 `if` becomes the K"if" region op (§5.2). In value position each arm ends in
-`yield <val>`; unused ifs get the 0-result form with bare `yield`s. Arms that
+`result <val>`; unused ifs get the 0-result form with bare `result`s. Arms that
 diverge (return/break/continue inside) keep their own exit terminator and
 contribute nothing to the join.
 """
@@ -659,7 +659,7 @@ function emit_if(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing}
     open_arm!(ctx, s)
     v1 = compile(ctx, ex[2], needs_value)
     if alive(ctx)
-        needs_value ? stmt!(ctx, UnifiedIR.K"yield", v1) : stmt!(ctx, UnifiedIR.K"yield")
+        needs_value ? stmt!(ctx, UnifiedIR.K"result", v1) : stmt!(ctx, UnifiedIR.K"result")
     end
     close_arm!(ctx)
     has_else = numchildren(ex) > 2
@@ -667,7 +667,7 @@ function emit_if(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing}
         open_arm!(ctx, s)
         v2 = has_else ? compile(ctx, ex[3], needs_value) : nothing_op(ctx)
         if alive(ctx)
-            needs_value ? stmt!(ctx, UnifiedIR.K"yield", v2) : stmt!(ctx, UnifiedIR.K"yield")
+            needs_value ? stmt!(ctx, UnifiedIR.K"result", v2) : stmt!(ctx, UnifiedIR.K"result")
         end
         close_arm!(ctx)
     end
@@ -677,7 +677,7 @@ end
 """
 Conditions: post-desugar, `&&`/`||` survive in condition position (linear_ir
 lowers them to short-circuit gotos; here they become nested value `if`s whose
-arms yield Bools). Block-wrapped conditions evaluate their prefix first.
+arms produce Bools). Block-wrapped conditions evaluate their prefix first.
 """
 function emit_condition(ctx::EmitCtx, ex)::Union{Operand,Nothing}
     k = kind(ex)
@@ -704,17 +704,17 @@ function emit_shortcircuit(ctx::EmitCtx, ex, is_and::Bool, i::Int)::Union{Operan
     open_arm!(ctx, s)
     if is_and
         v = emit_shortcircuit(ctx, ex, is_and, i + 1)
-        alive(ctx) && stmt!(ctx, UnifiedIR.K"yield", v)
+        alive(ctx) && stmt!(ctx, UnifiedIR.K"result", v)
     else
-        stmt!(ctx, UnifiedIR.K"yield", true)
+        stmt!(ctx, UnifiedIR.K"result", true)
     end
     close_arm!(ctx)
     open_arm!(ctx, s)
     if is_and
-        stmt!(ctx, UnifiedIR.K"yield", false)
+        stmt!(ctx, UnifiedIR.K"result", false)
     else
         v = emit_shortcircuit(ctx, ex, is_and, i + 1)
-        alive(ctx) && stmt!(ctx, UnifiedIR.K"yield", v)
+        alive(ctx) && stmt!(ctx, UnifiedIR.K"result", v)
     end
     close_arm!(ctx)
     return op_stmt(s)
@@ -724,7 +724,7 @@ end
 `symbolicblock` — JuliaLowering's break-block:
   * the `while` pattern `symbolicblock(loop-exit, _while(cond,
     symbolicblock(loop-cont, body)))` collapses into ONE K"loop":
-    `loop { c = cond; if c {yield} else {break ^body}; body; continue ^body true }`
+    `loop { c = cond; if c {result} else {break ^body}; body; continue ^body true }`
     with source `break`→`break ^body` and `continue`→`continue ^body true`.
   * any other labelled block becomes the §5.9 single-iteration loop
     (WebAssembly-block pattern): `loop { body; break ^self (val?) }` with
@@ -756,7 +756,7 @@ variables live in cells. Do-while shape with a body-initial condition test:
 
     %r = loop {
         %c = <cond>
-        if %c { yield } else { break ^body }
+        if %c { result } else { break ^body }
         <body>
         continue ^body true
     }
@@ -773,7 +773,7 @@ function emit_while(ctx::EmitCtx, cond, body, needs_value::Bool, srcex,
         if c !== nothing
             ifs = stmt!(ctx, UnifiedIR.K"if", c; src = srcex)
             open_arm!(ctx, ifs)
-            stmt!(ctx, UnifiedIR.K"yield")
+            stmt!(ctx, UnifiedIR.K"result")
             close_arm!(ctx)
             open_arm!(ctx, ifs)
             stmt!(ctx, UnifiedIR.K"break", op_region(r))
@@ -864,7 +864,7 @@ function emit_try(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing}
         open_arm!(ctx, s)
         v = compile(ctx, ex[1], needs_value)
         if alive(ctx)
-            needs_value ? stmt!(ctx, UnifiedIR.K"yield", v) : stmt!(ctx, UnifiedIR.K"yield")
+            needs_value ? stmt!(ctx, UnifiedIR.K"result", v) : stmt!(ctx, UnifiedIR.K"result")
         end
         close_arm!(ctx)
         open_arm!(ctx, s; kind = REGION_HANDLER)
@@ -874,8 +874,8 @@ function emit_try(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing}
         try
             cv = compile(ctx, ex[2], needs_value)
             if alive(ctx)
-                needs_value ? stmt!(ctx, UnifiedIR.K"yield", cv) :
-                              stmt!(ctx, UnifiedIR.K"yield")
+                needs_value ? stmt!(ctx, UnifiedIR.K"result", cv) :
+                              stmt!(ctx, UnifiedIR.K"result")
             end
         finally
             pop!(ctx.handler_exc)
@@ -892,7 +892,7 @@ function emit_try(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing}
         open_arm!(ctx, s)
         v = compile(ctx, ex[1], needs_value)
         if alive(ctx)
-            needs_value ? stmt!(ctx, UnifiedIR.K"yield", v) : stmt!(ctx, UnifiedIR.K"yield")
+            needs_value ? stmt!(ctx, UnifiedIR.K"result", v) : stmt!(ctx, UnifiedIR.K"result")
         end
         close_arm!(ctx)
         open_arm!(ctx, s; kind = REGION_HANDLER)

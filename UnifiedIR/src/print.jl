@@ -175,7 +175,7 @@ function print_stmt(io::IO, ir::IR, s::StmtId, depth::Int)
         print(io, ") (resume ")
         print_edge(io, ir, bs[2])
         print(io, ")\n")
-    elseif k === K"yield" || k === K"return" || k === K"unreachable"
+    elseif k === K"result" || k === K"return" || k === K"unreachable"
         print(io, kindname(k))
         if nops(ir, s) > 0
             print(io, " ", join((operand_str(ir, getop(ir, s, i)) for i in 1:nops(ir, s)), ", "))

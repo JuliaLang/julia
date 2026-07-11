@@ -425,7 +425,7 @@ register_kind!(CORE_DIALECT, :select; result=1, effects=FLAG_PURE,
                schema=P[:cond=>OC_VALUE, :iftrue=>OC_VALUE, :iffalse=>OC_VALUE])
 
 # structured terminators (0-result)
-register_kind!(CORE_DIALECT, :yield;    result=0, terminator=true, varargs=true, minops=0)
+register_kind!(CORE_DIALECT, :result;    result=0, terminator=true, varargs=true, minops=0)
 register_kind!(CORE_DIALECT, :continue; result=0, terminator=true,
                schema=P[:target=>OC_REGION, :cond=>OC_VALUE], varargs=true, minops=2)
 register_kind!(CORE_DIALECT, :break;    result=0, terminator=true,

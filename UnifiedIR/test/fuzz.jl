@@ -37,7 +37,7 @@ UnifiedIR.col_clear!(c::FzFailCol) = UnifiedIR.col_clear!(c.inner)
 
 # ---------------------------------------------------------------------------
 # Random IR generation: pure test-dialect ops, nested if/loop 0-3 deep, with
-# correct yields/continues. Loops carry (acc, i) and run at most `bound` <= 4
+# correct results/continues. Loops carry (acc, i) and run at most `bound` <= 4
 # iterations, so interpretation always terminates.
 # ---------------------------------------------------------------------------
 
@@ -81,7 +81,7 @@ function fz_if!(b, rng, ints, depth)
         open_region!(b, s; kind = REGION_ARM)
         arm_ints = copy(ints)
         fz_body!(b, rng, arm_ints, depth + 1)
-        append_stmt!(b, K"yield", fz_pick(rng, arm_ints))
+        append_stmt!(b, K"result", fz_pick(rng, arm_ints))
         close_region!(b)
     end
     push!(ints, s)
@@ -164,7 +164,7 @@ function fz_mutate_editable!(ir, rng)
     end
     # region surgery: wrap a used pure statement in `if (0 == 0)` — the else
     # arm never runs, so semantics are preserved while the region table,
-    # yield threading, and use rewriting all get exercised
+    # result threading, and use rewriting all get exercised
     if rand(rng) < 0.4
         counts = use_counts(ir)
         wrapc = [s for s in collect(each_stmt(ir))
@@ -175,7 +175,7 @@ function fz_mutate_editable!(ir, rng)
             c = insert_before!(ir, x, K"test.icmp", :eq,
                                op_inline(Int64(0)), op_inline(Int64(0)); type = Bool)
             wrap_in_if!(ir, x, x, c; else_arm = (ir, er) -> begin
-                push_stmt!(ir, er, K"yield", op_inline(Int64(0)))
+                push_stmt!(ir, er, K"result", op_inline(Int64(0)))
             end)
         end
     end

@@ -97,7 +97,7 @@ end
     ifop = UnifiedIR.append_stmt!(b, K"if", UnifiedIR.op_stmt(c); type = Nothing)
     arm = UnifiedIR.open_region!(b, ifop; kind = UnifiedIR.REGION_ARM)
     st2 = UnifiedIR.append_stmt!(b, K"cell_set", UnifiedIR.op_stmt(cell), 2)
-    UnifiedIR.append_stmt!(b, K"yield")
+    UnifiedIR.append_stmt!(b, K"result")
     UnifiedIR.close_region!(b)
     g = UnifiedIR.append_stmt!(b, K"cell_get", UnifiedIR.op_stmt(cell); type = Int64)
     UnifiedIR.append_stmt!(b, K"return", g)

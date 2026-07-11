@@ -6,7 +6,7 @@
 #      the field value, following `refine` chains; legality of the forwarded
 #      operand at the use site is checked with `UnifiedIR.visible`.
 #      (Extension of `forward_extracts!`, which lives in optimize.jl.)
-#   2. If-result forwarding: an `if` whose live arms all yield the same
+#   2. If-result forwarding: an `if` whose live arms all produce the same
 #      operand forwards that operand to the result's uses (the phi-of-one-
 #      value case of stock SROA lifting).
 #   3. Mutable-struct SROA: a `new` of a mutable struct that never escapes
@@ -54,8 +54,8 @@ end
 """
     forward_if_results!(ir) -> Int
 
-`if` ops (two live arms) whose arms each yield exactly one operand and all
-yield the *same* operand forward it to the result's uses. Statement operands
+`if` ops (two live arms) whose arms each produce exactly one result operand and all
+produce the *same* operand forward it to the result's uses. Statement operands
 must be visible at the `if` itself (hence at every use of the result). The
 `if` op remains for its arm effects; `adce_region_ops!` removes it when pure.
 Dense state.
@@ -73,7 +73,7 @@ function forward_if_results!(ir::UnifiedIR.IR)
         ok = true
         for r in rs
             t = UnifiedIR.region_terminator(ir, r)
-            (t !== nothing && UnifiedIR.stmt_kind(ir, t) === K"yield" &&
+            (t !== nothing && UnifiedIR.stmt_kind(ir, t) === K"result" &&
              UnifiedIR.nops(ir, t) == 1) || (ok = false; break)
             o = UnifiedIR.getop(ir, t, 1)
             if yop === nothing
@@ -304,7 +304,7 @@ becomes a carried region arg — pre-store value → loop init operand, body
 reads → the region arg (or the dominating body store's value), body values at
 each exit → the `continue`/`break` carried operands, post-loop reads → the
 loop's result (threaded out through enclosing `if` arms when the loop sits
-under a guard, with the pre value yielded on the not-taken arms).
+under a guard, with the pre value produced on the not-taken arms).
 
 Soundness gates (§6): every access is classified pre / body / post relative
 to ONE loop; body stores cross only `if` arms; no handler, island, or
@@ -459,15 +459,15 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
             carm = findfirst(a -> UnifiedIR.is_ancestor(ir, a, UnifiedIR.stmt_region(ir, L)), arms)
             carm === nothing && (chainok = false; break)
             ct = UnifiedIR.region_terminator(ir, arms[carm])
-            (ct !== nothing && UnifiedIR.stmt_kind(ir, ct) === K"yield" &&
+            (ct !== nothing && UnifiedIR.stmt_kind(ir, ct) === K"result" &&
              UnifiedIR.nops(ir, ct) == 0) || (chainok = false; break)
             for (ai, arm) in enumerate(arms)
                 ai == carm && continue
                 ot = UnifiedIR.region_terminator(ir, arm)
                 ot === nothing && (chainok = false; break)
                 otk = UnifiedIR.stmt_kind(ir, ot)
-                (otk === K"yield" && UnifiedIR.nops(ir, ot) != 0) && (chainok = false; break)
-                (otk === K"yield" || is_diverge_kind(otk)) || (chainok = false; break)
+                (otk === K"result" && UnifiedIR.nops(ir, ot) != 0) && (chainok = false; break)
+                (otk === K"result" || is_diverge_kind(otk)) || (chainok = false; break)
             end
             chainok || break
         end
@@ -478,7 +478,7 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
             R = Int[]
         end
         isempty(plans) && return 0
-        # also: the not-taken value at every chain yield must resolve
+        # also: the not-taken value at every chain result must resolve
         if !isempty(R)
             anycontexit && (R = collect(1:length(plans)))
             for ifop in chain, p in plans[R]
@@ -541,7 +541,7 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
             arms = UnifiedIR.live_owned_regions(ir, ifop)
             carm = findfirst(a -> UnifiedIR.is_ancestor(ir, a, UnifiedIR.stmt_region(ir, L)), arms)
             ct = UnifiedIR.region_terminator(ir, arms[carm])
-            UnifiedIR.replace_stmt!(ir, ct, K"yield", curvals...)
+            UnifiedIR.replace_stmt!(ir, ct, K"result", curvals...)
             prevals = UnifiedIR.Operand[]
             for i in R
                 _, pst = _reach_ed(ir, plans[i].prestores, ifop)
@@ -551,14 +551,14 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
             for (ai, arm) in enumerate(arms)
                 ai == carm && continue
                 ot = UnifiedIR.region_terminator(ir, arm)
-                if UnifiedIR.stmt_kind(ir, ot) === K"yield"
-                    UnifiedIR.replace_stmt!(ir, ot, K"yield", prevals...)
+                if UnifiedIR.stmt_kind(ir, ot) === K"result"
+                    UnifiedIR.replace_stmt!(ir, ot, K"result", prevals...)
                 end
                 handled_else = true
             end
             if !handled_else && length(arms) == 1
                 er = UnifiedIR.new_region!(ir, ifop, UnifiedIR.REGION_ARM)
-                UnifiedIR.push_stmt!(ir, er, K"yield", prevals...)
+                UnifiedIR.push_stmt!(ir, er, K"result", prevals...)
             end
             UnifiedIR.set_type!(ir, ifop, Any)
             newvals = UnifiedIR.Operand[]
@@ -653,7 +653,7 @@ function sroa_mutables!(ir::UnifiedIR.IR)
                     ok = false
                 end
             else
-                ok = false   # cell_set, return, yield, phi-ish, nested call arg, …
+                ok = false   # cell_set, return, result, phi-ish, nested call arg, …
             end
         end
         ok || continue

@@ -11,7 +11,7 @@
 #   * `merge_goto_chains!` — a block whose sole global predecessor edge is an
 #     unconditional `goto` is merged into its predecessor (jump threading for
 #     the plain-statement case).
-#   * `dissolve_islands!` — a `cfg` op reduced to a single yield-terminated
+#   * `dissolve_islands!` — a `cfg` op reduced to a single result-terminated
 #     block is dissolved into its parent region (`inline_region!`).
 #   * `adce_region_ops!` — an `if`/`try`/acyclic `cfg`/single-trip `loop`
 #     whose result is unused and whose regions contain only REMOVABLE
@@ -175,9 +175,9 @@ end
 """
     dissolve_islands!(ir) -> Int
 
-A `cfg` op with exactly one live block whose terminator is `yield` dissolves
+A `cfg` op with exactly one live block whose terminator is `result` dissolves
 into the parent region: entry block args are rewritten to the op's operands,
-then `inline_region!` splices the contents and forwards the yield value to the
+then `inline_region!` splices the contents and forwards the result value to the
 result's uses. Editable state.
 """
 function dissolve_islands!(ir::UnifiedIR.IR)
@@ -191,7 +191,7 @@ function dissolve_islands!(ir::UnifiedIR.IR)
         blk = rs[1]
         term = UnifiedIR.region_terminator(ir, blk)
         term === nothing && continue
-        UnifiedIR.stmt_kind(ir, term) === K"yield" || continue
+        UnifiedIR.stmt_kind(ir, term) === K"result" || continue
         breg = UnifiedIR.getregion(ir, blk)
         if !isempty(breg.args)
             UnifiedIR.nops(ir, s) >= length(breg.args) || continue
@@ -230,7 +230,7 @@ function removable_subtree(ir::UnifiedIR.IR, op::StmtId)
         reg.activation === UnifiedIR.ACT_IMMEDIATE || return false  # deferred: §3.3
         for st in UnifiedIR.region_stmts(ir, r)
             sk = UnifiedIR.stmt_kind(ir, st)
-            if sk === K"region_arg" || sk === K"yield"
+            if sk === K"region_arg" || sk === K"result"
                 continue
             elseif sk === K"cell_set" || sk === K"cell_new"
                 # cell stores carry pure-ish flags (§6: cells are IR-internal

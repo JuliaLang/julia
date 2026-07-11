@@ -72,9 +72,9 @@ end
             s, j = args
             c = append_stmt!(b, K"test.icmp", :sgt, j, 2; type = Bool)
             w = build_if!(b, c; type = Int64,
-                          f_else = b -> append_stmt!(b, K"yield", j)) do b
+                          f_else = b -> append_stmt!(b, K"result", j)) do b
                 d = append_stmt!(b, K"test.mul", j, 2; type = Int64)
-                append_stmt!(b, K"yield", d)
+                append_stmt!(b, K"result", d)
             end
             s2 = append_stmt!(b, K"test.add", s, w; type = Int64)
             j2 = append_stmt!(b, K"test.add", j, 1; type = Int64)
@@ -224,7 +224,7 @@ end
     tworet = let
         b = Builder(name = :er)
         x = append_stmt!(b, K"region_arg"; type = Bool)
-        s = build_if!(b, x; type = Int64, f_else = b -> append_stmt!(b, K"yield", 0)) do b
+        s = build_if!(b, x; type = Int64, f_else = b -> append_stmt!(b, K"result", 0)) do b
             append_stmt!(b, K"return", 1)
         end
         append_stmt!(b, K"return", s)
@@ -235,7 +235,7 @@ end
     earlyret = let
         b = Builder(name = :er2)
         x = append_stmt!(b, K"region_arg"; type = Bool)
-        s = build_if!(b, x; type = Int64, f_else = b -> append_stmt!(b, K"yield", 0)) do b
+        s = build_if!(b, x; type = Int64, f_else = b -> append_stmt!(b, K"result", 0)) do b
             append_stmt!(b, K"return", 1)
         end
         append_stmt!(b, K"unreachable")

@@ -96,12 +96,12 @@ acc_throwit(x) = error("acc boom")
 # Visibility clause 3: a body cannot use its owner's result (§5.1)
 # ---------------------------------------------------------------------------
 
-@testset "clause 3: if arm yields its own if's result" begin
+@testset "clause 3: if arm produces its own if's result" begin
     b = Builder(name = :badif)
     a = append_stmt!(b, K"region_arg"; type = Bool)
     z = append_stmt!(b, K"if", a; type = Int64)
     open_region!(b, z)
-    append_stmt!(b, K"yield", z)          # illegal self-use
+    append_stmt!(b, K"result", z)          # illegal self-use
     close_region!(b)
     append_stmt!(b, K"return", z)
     ir = finish!(b; verify = false)
@@ -202,8 +202,8 @@ end
 @testset "dense delete_stmt! refuses non-plain statements" begin
     b = Builder(name = :del)
     a = append_stmt!(b, K"region_arg"; type = Bool)
-    z = build_if!(b, a; type = Int64, f_else = b -> append_stmt!(b, K"yield", 2)) do b
-        append_stmt!(b, K"yield", 1)
+    z = build_if!(b, a; type = Int64, f_else = b -> append_stmt!(b, K"result", 2)) do b
+        append_stmt!(b, K"result", 1)
     end
     x = append_stmt!(b, K"test.add", z, 1; type = Int64)
     t = append_stmt!(b, K"return", x)
@@ -240,12 +240,12 @@ end
     open_region!(b, cfg; kind = REGION_BLOCK)             # ^bb3 (then)
     y = append_stmt!(b, K"region_arg"; type = Int64)
     y1 = append_stmt!(b, K"test.add", y, 1; type = Int64)
-    append_stmt!(b, K"yield", y1)
+    append_stmt!(b, K"result", y1)
     close_region!(b)
     open_region!(b, cfg; kind = REGION_BLOCK)             # ^bb4 (else)
     z = append_stmt!(b, K"region_arg"; type = Int64)
     z1 = append_stmt!(b, K"test.mul", z, 2; type = Int64)
-    append_stmt!(b, K"yield", z1)
+    append_stmt!(b, K"result", z1)
     close_region!(b)
     append_stmt!(b, K"return", cfg)
     ir = finish!(b)
@@ -278,15 +278,15 @@ end
     open_region!(b, cfg; kind = REGION_BLOCK)             # ^bb3: case 0
     y = append_stmt!(b, K"region_arg"; type = Int64)
     y1 = append_stmt!(b, K"test.add", y, 100; type = Int64)
-    append_stmt!(b, K"yield", y1)
+    append_stmt!(b, K"result", y1)
     close_region!(b)
     open_region!(b, cfg; kind = REGION_BLOCK)             # ^bb4: case 1 (no args)
-    append_stmt!(b, K"yield", 111)
+    append_stmt!(b, K"result", 111)
     close_region!(b)
     open_region!(b, cfg; kind = REGION_BLOCK)             # ^bb5: default
     z = append_stmt!(b, K"region_arg"; type = Int64)
     z1 = append_stmt!(b, K"test.mul", z, -1; type = Int64)
-    append_stmt!(b, K"yield", z1)
+    append_stmt!(b, K"result", z1)
     close_region!(b)
     append_stmt!(b, K"return", cfg)
     ir = finish!(b)
@@ -317,10 +317,10 @@ end
                       op_block(RegionId(4)), op_inline(0))
     close_region!(b)
     open_region!(b, cfg; kind = REGION_BLOCK)             # ^bb3: normal
-    append_stmt!(b, K"yield", 1)
+    append_stmt!(b, K"result", 1)
     close_region!(b)
     open_region!(b, cfg; kind = REGION_BLOCK)             # ^bb4: resume
-    append_stmt!(b, K"yield", 2)
+    append_stmt!(b, K"result", 2)
     close_region!(b)
     append_stmt!(b, K"return", cfg)
     ir = finish!(b)
@@ -582,12 +582,12 @@ function acc_mktry(; store_first::Bool)
         append_stmt!(b, K"call", acc_throwit, a; type = Any)
         append_stmt!(b, K"cell_set", cell, a)
     end
-    append_stmt!(b, K"yield", 0)
+    append_stmt!(b, K"result", 0)
     close_region!(b)
     open_region!(b, t; kind = REGION_HANDLER)
     exc = append_stmt!(b, K"region_arg"; type = Any)
     d = append_stmt!(b, K"cell_isdefined", op_stmt(cell); type = Bool)
-    append_stmt!(b, K"yield", d)
+    append_stmt!(b, K"result", d)
     close_region!(b)
     append_stmt!(b, K"return", t)
     finish!(b)

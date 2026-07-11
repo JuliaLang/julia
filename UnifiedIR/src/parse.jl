@@ -474,9 +474,9 @@ function parse_stmt!(lx::Lexer, ctx::PCtx)
             end
         end
         append_stmt!(b, w == "break" ? K"break" : K"continue", ops...; type = Nothing)
-    elseif w == "yield" || w == "return"
+    elseif w == "result" || w == "return"
         ops = parse_operand_list!(lx, ctx)
-        append_stmt!(b, w == "yield" ? K"yield" : K"return", ops...; type = Nothing)
+        append_stmt!(b, w == "result" ? K"result" : K"return", ops...; type = Nothing)
     elseif w == "unreachable"
         append_stmt!(b, K"unreachable"; type = Nothing)
     elseif w == "goto"

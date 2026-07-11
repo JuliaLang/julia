@@ -7,7 +7,7 @@
 # the error lists survivors) and no `try` regions (exceptional values keep
 # memory form by design, so try-bearing bodies stay on the CodeInfo exit
 # path). `if`/`loop`/`cfg` islands and all plain kinds are covered; tuple
-# yields de-tuple for extract-only uses and materialize otherwise.
+# result values de-tuple for extract-only uses and materialize otherwise.
 #
 # Layout discipline: blocks are objects, placed explicitly in final order;
 # `GotoIfNot` fallthrough adjacency is guaranteed either by placing the
@@ -128,16 +128,16 @@ function result_used(ir::UnifiedIR.IR, s::StmtId)
     return used
 end
 
-"Max value arity of the exits feeding owner `s` (yields, breaks, continues)."
+"Max value arity of the exits feeding owner `s` (results, breaks, continues)."
 function owner_nvals(ir::UnifiedIR.IR, s::StmtId)
     rs = UnifiedIR.live_owned_regions(ir, s)
     rset = Set{Int32}(r.id for r in rs)
     n = 0
     for st in UnifiedIR.each_stmt(ir)
         k = UnifiedIR.stmt_kind(ir, st)
-        if k === K"yield"
+        if k === K"result"
             reg = UnifiedIR.stmt_region(ir, st)
-            # a yield feeds its own region's owner
+            # a result terminator feeds its own region's owner
             UnifiedIR.getregion(ir, reg).owner == s && (n = max(n, UnifiedIR.nops(ir, st)))
         elseif k === K"break"
             tgt = UnifiedIR.asregion(UnifiedIR.getop(ir, st, 1))
@@ -209,8 +209,8 @@ function emit_tregion!(cx::TCtx, r::RegionId, jctx::Union{Nothing,JoinCtx})
             emit_tloop!(cx, s)
         elseif k === K"cfg"
             emit_tcfg!(cx, s)
-        elseif k === K"yield"
-            jctx === nothing && throw(UnsupportedIR("yield at root in typed exit"))
+        elseif k === K"result"
+            jctx === nothing && throw(UnsupportedIR("result terminator at root in typed exit"))
             feed_join!(cx, jctx, Any[UnifiedIR.getop(ir, s, i) for i in 1:UnifiedIR.nops(ir, s)])
         elseif k === K"return"
             setterm!(cx.cur, (:return, UnifiedIR.nops(ir, s) >= 1 ? UnifiedIR.getop(ir, s, 1) : nothing))
@@ -375,7 +375,7 @@ function emit_tcfg!(cx::TCtx, s::StmtId)
                 setterm!(tramp, (:goto, bbof[bs[1][1].id]))
                 srcbb.term = (:brifnot, cond, bbof[bs[2][1].id], tramp)
                 cx.cur = tramp   # walk continues on the next region anyway
-            elseif k === K"yield"
+            elseif k === K"result"
                 feed_join!(cx, j, Any[UnifiedIR.getop(ir, st, i) for i in 1:UnifiedIR.nops(ir, st)])
             elseif k === K"return"
                 setterm!(cx.cur, (:return, UnifiedIR.nops(ir, st) >= 1 ? UnifiedIR.getop(ir, st, 1) : nothing))

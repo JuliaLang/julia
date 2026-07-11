@@ -251,8 +251,8 @@ For a `call` with a Union-typed SSA argument where inference leaves ≤
 component), emit an isa-dispatch step via `wrap_in_if!`:
 
     %c = isa(x, T1)
-    %r = if %c { <call with x refined to T1> ; yield }        # then-arm
-         else  { <call with x refined to T2|…> ; yield }      # residual
+    %r = if %c { <call with x refined to T1> ; result }        # then-arm
+         else  { <call with x refined to T2|…> ; result }      # residual
 
 with the result threaded through the if-result by `wrap_in_if!`. `refine`
 statements carry the component types, so inference (whose `UCond` machinery
@@ -312,9 +312,9 @@ function union_split_calls!(ir::UnifiedIR.IR, state::UInferState;
             cops[j] = UnifiedIR.op_stmt(rx)
             cc = UnifiedIR.push_stmt!(ir2, er, K"call", cops...; type = rt)
             if resused
-                UnifiedIR.push_stmt!(ir2, er, K"yield", UnifiedIR.op_stmt(cc))
+                UnifiedIR.push_stmt!(ir2, er, K"result", UnifiedIR.op_stmt(cc))
             else
-                UnifiedIR.push_stmt!(ir2, er, K"yield")
+                UnifiedIR.push_stmt!(ir2, er, K"result")
             end
         end)
         # narrow the guarded call's argument inside the then-arm
