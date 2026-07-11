@@ -7283,7 +7283,7 @@ static int might_intersect_concrete(jl_value_t *a) JL_NOTSAFEPOINT
 {
     if (jl_is_unionall(a))
         a = jl_unwrap_unionall(a);
-    if (jl_is_typevar(a))
+    if (jl_is_typevar(a) || jl_is_tvarref(a))
         return 1; // (maybe)
     if (jl_is_uniontype(a))
         return might_intersect_concrete(((jl_uniontype_t*)a)->a) ||
@@ -7297,7 +7297,7 @@ static int might_intersect_concrete(jl_value_t *a) JL_NOTSAFEPOINT
         int i, n = jl_nparams(a);
         for (i = 0; i < n; i++) {
             jl_value_t *p = jl_tparam(a, i);
-            if (jl_is_typevar(p))
+            if (jl_is_typevar(p) || jl_is_tvarref(p))
                 return 1;
             if (tpl && p == jl_bottom_type)
                 return 1;

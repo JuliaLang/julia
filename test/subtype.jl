@@ -3416,6 +3416,13 @@ end
         @test u isa UnionAll
         @test Type{Tuple{Int}} <: Union{DataType,UnionAll}
     end
+    # a bounded typevar slot must stay intersectable with a kind class: the
+    # entry gate treats a bound-variable reference like a typevar (a concrete
+    # `Tuple{DataType}` may well meet `Tuple{T} where T<:Type{Int}` — the
+    # member `Tuple{Int}` lies in both)
+    @test typeintersect(Tuple{T} where T<:Type{Int}, Tuple{DataType}) != Union{}
+    @test typeintersect(Tuple{DataType}, Tuple{T} where T<:Type{Int}) != Union{}
+    @test typeintersect(Tuple{T} where T<:Union{Type{Int},Type{Float64}}, Tuple{DataType}) != Union{}
     # `Union{UnionAll, DataType}` is the smallest kind cover for `Type{Int}`
     @test !(Type{Int} <: DataType)
     @test !(Type{Int} <: UnionAll)
