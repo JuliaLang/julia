@@ -124,6 +124,15 @@ end
 edgeless62272c_bump() = 1
 @test code_typed(edgeless62272c_root, (Int,)) isa Vector
 
+# the `.super` branch of `getfield_tfunc` on a kind (`Type{X{T}} where T`)
+# must widen when the wrapper's supertype depends on the parameter: returning
+# the raw template fragment leaks dangling bound-variable references into the
+# lattice, and the ill-formed type then matches no methods (observed in
+# PkgEval as spurious `Union{}` inference and runtime "Unreachable reached"
+# through ColorTypes' trait dispatch)
+@test Base.infer_return_type(supertype, (Type{Vector{A}} where A,)) == DataType
+@test Base.infer_return_type(supertype, (Type{Complex{A}} where A,)) == Type{Number}
+
 # detached bound-variable references are valid lattice elements through the
 # extended (wrapper) lattices, not only through `JLTypeLattice`
 let r = Core.TypeVarRef(1), 𝕃 = Compiler.fallback_lattice

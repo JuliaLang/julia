@@ -1315,9 +1315,12 @@ end
             sv = type_parameter(s)
             if isa(sv, DataType) && isa(name, Const) &&
                _getfield_fieldindex(DataType, name) == DATATYPE_SUPER_FIELDINDEX &&
-               !has_free_typevars(sv.super)
+               !has_free_typevars(sv.super) && !has_dangling_typevar_refs(sv.super)
                 # only `DataType` reps reach `.super` without throwing, and the
-                # `.super`s of `==`-equal `DataType`s are `==`-equal (if not egal)
+                # `.super`s of `==`-equal `DataType`s are `==`-equal (if not egal);
+                # a parameter-dependent supertype (free typevars on the wrapper's
+                # body under the legacy representation, dangling references on a
+                # fragment here) must widen instead of leaking an unbound piece
                 return Type{sv.super}
             end
             if isTypeDataType(sv) && isa(name, Const)
