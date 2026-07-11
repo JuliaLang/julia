@@ -34,7 +34,7 @@ if Base.get_bool_env("JULIA_LOWERING_PRECOMPILE", true)
     end
 
     macro _precompile_plus1(ex)
-        :($ex + 1)
+        :($(esc(ex)) + 1)
     end
     _precompile_usemac(x) = @_precompile_plus1(x)
 
@@ -48,5 +48,5 @@ if Base.get_bool_env("JULIA_LOWERING_PRECOMPILE", true)
     _precompile_usemac(3)
     _precompile_genf(1.0)
     """
-    include_string(@__MODULE__, workload, @__FILE__)
+    include_string(@__MODULE__, workload, @__FILE__; expr_compat_mode=true)
 end
