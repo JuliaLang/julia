@@ -4,7 +4,7 @@
 # exercising the default parse/lowering pipeline via modules whose syntax
 # version is set to 1.14.
 
-using Test
+using Test, Serialization
 
 module EnumTypeTestMod end
 Base.set_syntax_version(EnumTypeTestMod, v"1.14")
@@ -227,4 +227,47 @@ end
     d = Dict(red => 1, EnumTypeExtA.Blue => 2)
     @test d[reinterpret(T, 0x00)] == 1
     @test d[EnumTypeExtA.Blue] == 2
+end
+
+struct EnumHolderForSer
+    a::EnumTypeTestMod.Color
+    b::Int16
+end
+
+@testset "Serialization by identity" begin
+    T = EnumTypeTestMod.Color
+    red = EnumTypeTestMod.Red
+    green = EnumTypeTestMod.Green
+    function roundtrip(x)
+        buf = IOBuffer()
+        serialize(buf, x)
+        seekstart(buf)
+        return deserialize(buf)
+    end
+    # scalars
+    @test roundtrip(red) === red
+    @test roundtrip(EnumTypeExtA.Blue) === EnumTypeExtA.Blue
+    # bit patterns without a member round-trip as raw bits
+    stray = reinterpret(T, 0x99)
+    @test roundtrip(stray) === stray
+    # isbits arrays keep their raw data block plus an identity table
+    v = T[red, green, EnumTypeExtA.Blue, stray]
+    v2 = roundtrip(v)
+    @test typeof(v2) == typeof(v)
+    @test all(v2[i] === v[i] for i in eachindex(v))
+    # Memory
+    m = Memory{T}(undef, 2)
+    m[1] = red; m[2] = green
+    m2 = roundtrip(m)
+    @test m2[1] === red && m2[2] === green
+    # isbits structs containing enums, standalone and as array elements
+    h = EnumHolderForSer(green, Int16(7))
+    h2 = roundtrip(h)
+    @test h2.a === green && h2.b == 7
+    hv = [EnumHolderForSer(red, Int16(1)), EnumHolderForSer(EnumTypeExtB.Blue, Int16(2))]
+    hv2 = roundtrip(hv)
+    @test hv2[1].a === red && hv2[2].a === EnumTypeExtB.Blue
+    # containers
+    @test roundtrip(Dict(red => 1, EnumTypeExtA.Blue => 2))[EnumTypeExtA.Blue] == 2
+    @test roundtrip((red, green)) === (red, green)
 end

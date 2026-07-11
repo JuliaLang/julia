@@ -122,6 +122,7 @@
     XX(jl_enum_isopen) \
     XX(jl_enum_lookup_value) \
     XX(jl_enum_members) \
+    XX(jl_enum_resolve_member) \
     XX(jl_enum_storagetype) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_pop) \

@@ -531,6 +531,9 @@ JL_DLLEXPORT jl_svec_t *jl_enum_members(jl_datatype_t *et);
 JL_DLLEXPORT jl_value_t *jl_enum_storagetype(jl_datatype_t *et);
 JL_DLLEXPORT int jl_enum_isopen(jl_datatype_t *et);
 JL_DLLEXPORT jl_value_t *jl_enum_lookup_value(jl_value_t *x);
+JL_DLLEXPORT jl_value_t *jl_enum_resolve_member(jl_datatype_t *et, jl_module_t *mod,
+                                                jl_sym_t *name, uint64_t hint,
+                                                int isexplicit);
 JL_DLLEXPORT int jl_enum_const_is_stable(jl_value_t *v) JL_NOTSAFEPOINT;
 void jl_enum_write_raw_bits(void *p, uint64_t bits, size_t nbytes) JL_NOTSAFEPOINT;
 jl_value_t *jl_enum_lookup_auto_member(jl_datatype_t *et, const void *p) JL_NOTSAFEPOINT;

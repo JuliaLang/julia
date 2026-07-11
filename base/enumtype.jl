@@ -31,14 +31,33 @@ function instances(@nospecialize(t::Type))
     return ntuple(i -> tab[5 * i + 1], n)
 end
 
-# the (name::Symbol, owning module::Module) of the member with the same bits
-# as `x`, or nothing if the bit pattern has no registered member
+# the (name::Symbol, owning module::Module, isexplicit::Bool) of the member
+# with the same bits as `x`, or nothing if the bit pattern has no registered
+# member
 function enum_member_info(@nospecialize(x))
     m = ccall(:jl_enum_lookup_value, Any, (Any,), x)
     m === nothing && return nothing
     m = m::Core.SimpleVector
-    return (m[1]::Symbol, m[2]::Module)
+    return (m[1]::Symbol, m[2]::Module, m[4]::Bool)
 end
+
+# whether inline data of type `t` can contain enum-typed bits
+function type_contains_enum(@nospecialize t)
+    isenumtype(t) && return true
+    isa(t, DataType) || return false
+    for ft in fieldtypes(t)
+        type_contains_enum(ft) && return true
+    end
+    return false
+end
+
+# The member (mod, name) of the enum type `t`, registered in the member table
+# (without a constant binding) if not present: deserialization uses this to
+# resolve members whose declaring package is not loaded. A later registration
+# by the package unifies with the entry created here.
+enum_resolve_member(t::DataType, mod::Module, name::Symbol, hint::UInt64, isexplicit::Bool) =
+    ccall(:jl_enum_resolve_member, Any, (Any, Any, Any, UInt64, Cint),
+          t, mod, name, hint, isexplicit)
 
 function show_enum_value(io::IO, @nospecialize(x))
     info = enum_member_info(x)
@@ -51,7 +70,7 @@ function show_enum_value(io::IO, @nospecialize(x))
         show(io, reinterpret(enumstoragetype(t)::Type, x))
         print(io, ")")
     else
-        sym, def = info
+        sym, def = info[1], info[2]
         if !(get(io, :compact, false)::Bool)
             from = get(io, :module, Main)
             if from === nothing || !isvisible(sym, def, from)

@@ -27,7 +27,9 @@ New language features
     Enum values that escape into non-enum storage (for example integers obtained from `reinterpret`)
     do not participate in this rebasing. The `hash` of an enum value is derived from the identity
     of its member (owning module and name) rather than its bit pattern, so hash-based containers
-    keyed by enum values are unaffected.
+    keyed by enum values are unaffected, and the `Serialization` standard library serializes enum
+    values together with their member identity, so they deserialize to the correct members in any
+    session.
 
 Language changes
 ----------------

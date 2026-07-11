@@ -144,6 +144,86 @@ mktempdir() do dir
         @test occursin("REBASE_OK", out)
     end
 
+    @testset "serialization resolves by member identity" begin
+        datafile = joinpath(dir, "enumdata.jls")
+        # serialize in compile order (ExtA before ExtB)
+        ser_code = """
+            using Serialization, EnumDef, ExtA, ExtB
+            open("$(escape_string(datafile))", "w") do io
+                serialize(io, (ExtA.MA, ExtB.MB, EnumDef.A, EnumDef.B,
+                               EnumDef.Foo[ExtA.MA, ExtB.MB],
+                               Dict(ExtA.MA => 1, ExtB.MB => 2)))
+            end
+            println("SERIALIZED")
+            """
+        ok, out, err = run_sub(load_path, depot, ser_code)
+        if !ok
+            @info "serialize failed" out err
+        end
+        @test ok && occursin("SERIALIZED", out)
+
+        # deserialize under the adversarial load order: raw bit patterns differ,
+        # but everything must resolve to the right members
+        deser_code = """
+            using Serialization, EnumDef, ExtB, ExtA
+            t = open(deserialize, "$(escape_string(datafile))")
+            @assert t[1] === ExtA.MA
+            @assert t[2] === ExtB.MB
+            @assert t[3] === EnumDef.A
+            @assert t[4] === EnumDef.B
+            @assert t[5][1] === ExtA.MA
+            @assert t[5][2] === ExtB.MB
+            @assert t[6][ExtA.MA] == 1
+            @assert t[6][ExtB.MB] == 2
+            println("DESERIALIZE_OK")
+            """
+        ok, out, err = run_sub(load_path, depot, deser_code)
+        if !ok || !occursin("DESERIALIZE_OK", out)
+            @info "deserialize run failed" out err
+        end
+        @test ok
+        @test occursin("DESERIALIZE_OK", out)
+
+        # deserializing a member that is not registered in the reading session
+        # (but whose owning module exists) registers it in the member table
+        # without a constant binding; a later real registration unifies with it
+        maindatafile = joinpath(dir, "enummain.jls")
+        ser_main_code = """
+            using Serialization, EnumDef
+            Core._enum_extend(EnumDef.Foo, Main, Int16)
+            Core._enum_add_member(EnumDef.Foo, Main, :MMain, nothing)
+            open("$(escape_string(maindatafile))", "w") do io
+                serialize(io, (MMain, EnumDef.Foo[MMain, EnumDef.A]))
+            end
+            println("SERIALIZED_MAIN")
+            """
+        ok, out, err = run_sub(load_path, depot, ser_main_code)
+        if !ok
+            @info "main serialize failed" out err
+        end
+        @test ok && occursin("SERIALIZED_MAIN", out)
+
+        late_code = """
+            using Serialization, EnumDef
+            t = open(deserialize, "$(escape_string(maindatafile))")
+            @assert t[1] isa EnumDef.Foo
+            @assert t[2][1] === t[1]
+            @assert t[2][2] === EnumDef.A
+            @assert !isdefined(Main, :MMain)  # no constant binding was created
+            # registering the member for real unifies with the resolved entry
+            m = Core._enum_add_member(EnumDef.Foo, Main, :MMain, nothing)
+            @assert m === t[1]
+            @assert MMain === t[1]
+            println("LATE_REGISTER_OK")
+            """
+        ok, out, err = run_sub(load_path, depot, late_code)
+        if !ok || !occursin("LATE_REGISTER_OK", out)
+            @info "late-register run failed" out err
+        end
+        @test ok
+        @test occursin("LATE_REGISTER_OK", out)
+    end
+
     @testset "explicit value conflict errors catchably" begin
         code = """
             using ExtC

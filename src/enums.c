@@ -269,40 +269,41 @@ JL_DLLEXPORT jl_value_t *jl_enum_add_member(jl_datatype_t *et, jl_module_t *mod,
     tab = jl_atomic_load_relaxed(&et->name->enumtab);
     size_t k = enum_find_member(tab, mod, name);
     if (k != (size_t)-1) {
-        // idempotent re-registration
+        // idempotent re-registration: fall through to (re)declare the
+        // constant binding, which may not exist yet if the member was first
+        // created by deserialization (which registers table-only)
         instance = jl_svecref(tab, k + 2);
         if (value != NULL && explicit_bits != enum_read_bits(instance, nbytes))
             jl_errorf("enum member %s.%s of %s already has value %llu",
                       jl_symbol_name(mod->name), jl_symbol_name(name),
                       jl_symbol_name(et->name->name),
                       (unsigned long long)enum_read_bits(instance, nbytes));
-        JL_UNLOCK(&world_counter_lock);
-        JL_GC_POP();
-        return instance;
-    }
-    if (mod != et->name->module && !enum_tab_isopen(tab))
-        jl_errorf("cannot add member %s to enum type %s: it is not extensible",
-                  jl_symbol_name(name), jl_symbol_name(et->name->name));
-    uint64_t bits;
-    if (value != NULL) {
-        bits = explicit_bits;
-        size_t taken = enum_find_value(tab, bits, nbytes);
-        if (taken != (size_t)-1) {
-            jl_module_t *othermod = (jl_module_t*)jl_svecref(tab, taken + 1);
-            jl_errorf("enum value %llu for member %s of %s is already taken by %s.%s",
-                      (unsigned long long)bits, jl_symbol_name(name),
-                      jl_symbol_name(et->name->name), jl_symbol_name(othermod->name),
-                      jl_symbol_name((jl_sym_t*)jl_svecref(tab, taken)));
-        }
     }
     else {
-        bits = enum_next_free(tab, et, nbytes);
-    }
-    instance = enum_box_bits(et, bits, nbytes);
-    enum_tab_append(et, tab, mod, name, instance, /*isexplicit*/value != NULL,
-                    /*newhint*/value == NULL ? bits + 1 : 0);
+        if (mod != et->name->module && !enum_tab_isopen(tab))
+            jl_errorf("cannot add member %s to enum type %s: it is not extensible",
+                      jl_symbol_name(name), jl_symbol_name(et->name->name));
+        uint64_t bits;
+        if (value != NULL) {
+            bits = explicit_bits;
+            size_t taken = enum_find_value(tab, bits, nbytes);
+            if (taken != (size_t)-1) {
+                jl_module_t *othermod = (jl_module_t*)jl_svecref(tab, taken + 1);
+                jl_errorf("enum value %llu for member %s of %s is already taken by %s.%s",
+                          (unsigned long long)bits, jl_symbol_name(name),
+                          jl_symbol_name(et->name->name), jl_symbol_name(othermod->name),
+                          jl_symbol_name((jl_sym_t*)jl_svecref(tab, taken)));
+            }
+        }
+        else {
+            bits = enum_next_free(tab, et, nbytes);
+        }
+        instance = enum_box_bits(et, bits, nbytes);
+        enum_tab_append(et, tab, mod, name, instance, /*isexplicit*/value != NULL,
+                        /*newhint*/value == NULL ? bits + 1 : 0);
 
-    enum_log_member(et, mod, name, instance, value != NULL);
+        enum_log_member(et, mod, name, instance, value != NULL);
+    }
 
     // declare `const name = instance` in the owning module (same pattern as
     // jl_declare_constant_val2)
@@ -311,6 +312,57 @@ JL_DLLEXPORT jl_value_t *jl_enum_add_member(jl_datatype_t *et, jl_module_t *mod,
         jl_declare_constant_val3(NULL, mod, name, instance, PARTITION_KIND_CONST, new_world);
     if (jl_atomic_load_relaxed(&bpart->min_world) == new_world)
         jl_atomic_store_release(&jl_world_counter, new_world);
+    JL_UNLOCK(&world_counter_lock);
+    JL_GC_POP();
+    return instance;
+}
+
+// Find the member (mod, name) of `et`, registering it in the member table if
+// missing (without declaring a constant binding). Used when deserializing an
+// enum value whose member is not (yet) registered in this session, e.g.
+// because the package that declares it is not loaded; a later registration of
+// the same member by its package unifies with the entry created here. `hint`
+// is the bit pattern the member had in the serializing session: explicit
+// members must be placed exactly there (or error, matching registration
+// semantics), auto members are given a fresh value if it is taken.
+JL_DLLEXPORT jl_value_t *jl_enum_resolve_member(jl_datatype_t *et, jl_module_t *mod,
+                                                jl_sym_t *name, uint64_t hint,
+                                                int isexplicit)
+{
+    jl_svec_t *tab = enum_tab(et);
+    size_t nbytes = jl_datatype_size(enum_tab_storagetype(tab));
+    jl_value_t *instance = NULL;
+    JL_GC_PUSH2(&tab, &instance);
+    JL_LOCK(&world_counter_lock);
+    tab = jl_atomic_load_relaxed(&et->name->enumtab);
+    size_t k = enum_find_member(tab, mod, name);
+    if (k != (size_t)-1) {
+        instance = jl_svecref(tab, k + 2);
+        JL_UNLOCK(&world_counter_lock);
+        JL_GC_POP();
+        return instance;
+    }
+    if (mod != et->name->module && !enum_tab_isopen(tab))
+        jl_errorf("cannot add member %s to enum type %s: it is not extensible",
+                  jl_symbol_name(name), jl_symbol_name(et->name->name));
+    uint64_t bits = hint;
+    if (nbytes < 8)
+        bits &= (((uint64_t)1 << (8 * nbytes)) - 1);
+    size_t taken = enum_find_value(tab, bits, nbytes);
+    if (taken != (size_t)-1) {
+        if (isexplicit) {
+            jl_module_t *othermod = (jl_module_t*)jl_svecref(tab, taken + 1);
+            jl_errorf("enum value %llu for member %s of %s is already taken by %s.%s",
+                      (unsigned long long)bits, jl_symbol_name(name),
+                      jl_symbol_name(et->name->name), jl_symbol_name(othermod->name),
+                      jl_symbol_name((jl_sym_t*)jl_svecref(tab, taken)));
+        }
+        bits = enum_next_free(tab, et, nbytes);
+    }
+    instance = enum_box_bits(et, bits, nbytes);
+    enum_tab_append(et, tab, mod, name, instance, isexplicit,
+                    isexplicit ? 0 : bits + 1);
+    enum_log_member(et, mod, name, instance, isexplicit);
     JL_UNLOCK(&world_counter_lock);
     JL_GC_POP();
     return instance;
