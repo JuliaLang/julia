@@ -214,18 +214,19 @@ end
 const IntegerOrTuple = Union{Integer, Tuple{Vararg{Integer}}}
 
 _nnprod() = 1
-_nnprod(i::Integer, I::Integer...) =
+_nnprod(i::Integer, I::Vararg{Integer,N}) where N =
     (i == -1) ? _nnprod(I...) : i * _nnprod(I...)
 
 _trailing_dropped() = true
-_trailing_dropped(i::Integer, I::Integer...)  = (i == -1) && _trailing_dropped(I...)
+_trailing_dropped(i::Integer, I::Vararg{Integer,N}) where N =
+    (i == -1) && _trailing_dropped(I...)
 
 _shapes_match(::Bool, ::Tuple{}) = true
 _shapes_match(isfirstdim::Bool, sz) = _shapes_match(isfirstdim, (), sz...)
-_shapes_match(isfirstdim::Bool, sz::Tuple{}, i::Integer, I::Integer...) =
+_shapes_match(isfirstdim::Bool, sz::Tuple{}, i::Integer, I::Vararg{Integer,N}) where N =
     isone(abs(i)) && _shapes_match(isfirstdim, sz, I...)
 
-function _shapes_match(isfirstdim, sz, i::Integer, I::Integer...)
+function _shapes_match(isfirstdim, sz, i::Integer, I::Vararg{Integer,N}) where N
     if i == -1
         return _shapes_match(isfirstdim, sz, I...)
     else
@@ -244,16 +245,16 @@ setindex_shape_check(X::AbstractArray) =
 setindex_shape_check(X::AbstractArray, i::Integer) =
     (length(X) == i || throw_setindex_mismatch(X, (i,)))
 
-setindex_shape_check(X::AbstractArray{<:Any,0}, I::Integer...) =
+setindex_shape_check(X::AbstractArray{<:Any,0}, I::Vararg{Integer,N}) where N =
     (length(X) == _nnprod(I...) || throw_setindex_mismatch(X, I))
 
-setindex_shape_check(X::AbstractArray{<:Any,1}, I::Integer...) =
+setindex_shape_check(X::AbstractArray{<:Any,1}, I::Vararg{Integer,N}) where N =
     (length(X) == _nnprod(I...) || throw_setindex_mismatch(X, I))
 
-setindex_shape_check(X::AbstractArray, I::IntegerOrTuple...) =
+setindex_shape_check(X::AbstractArray, I::Vararg{IntegerOrTuple,N}) where N =
     setindex_shape_check(X, flatten(I)...)
 
-setindex_shape_check(X::AbstractArray, I::Integer...) =
+setindex_shape_check(X::AbstractArray, I::Vararg{Integer,N}) where N =
     _shapes_match(true, size(X), I...) || throw_setindex_mismatch(X, I)
 
 setindex_shape_check(::Any...) =
