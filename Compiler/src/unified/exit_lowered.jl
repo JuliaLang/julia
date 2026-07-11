@@ -144,7 +144,13 @@ exit_values(cx, s, from) =
 
 Lower a dense, sealed UnifiedIR body to slot-form goto-form CodeInfo.
 """
-function ir_to_codeinfo(ir::UnifiedIR.IR; name::Symbol = :f)
+ir_to_codeinfo(ir::UnifiedIR.IR; name::Symbol = :f) = ir_to_codeinfo_ctx(ir; name)[1]
+
+"As `ir_to_codeinfo`, but also returns the emission context (stmt→SSA map
+`ssaof`, cell→slot map `slotof`, structure labels `(:join/:head/:brk, id)`
+→ pc) — the completeness harness's bridge from region joins to flattened
+basic blocks (completeness.jl)."
+function ir_to_codeinfo_ctx(ir::UnifiedIR.IR; name::Symbol = :f)
     UnifiedIR.check_state(ir, UnifiedIR.LAYOUT_DENSE, "ir_to_codeinfo")
     root = UnifiedIR.getregion(ir, UnifiedIR.root_region(ir))
     nargs = length(root.args)
@@ -167,7 +173,7 @@ function ir_to_codeinfo(ir::UnifiedIR.IR; name::Symbol = :f)
     fields[:ssaflags] = zeros(UInt32, length(cx.code))
     fields[:ssavaluetypes] = length(cx.code)
     fields[:has_fcall] = any(st -> Meta.isexpr(st, :foreigncall), cx.code)
-    return make_codeinfo(; fields...)
+    return make_codeinfo(; fields...), cx
 end
 
 # Emit one region's direct statements. `loopctx` = (bodyregion, headkey,

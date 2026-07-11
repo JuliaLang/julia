@@ -40,6 +40,7 @@ include("adce.jl")
 include("structurize.jl")
 include("inline2.jl")
 include("optimize.jl")
+include("completeness.jl")
 include("queries.jl")
 include("activate.jl")
 
