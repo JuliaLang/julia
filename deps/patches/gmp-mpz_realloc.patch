@@ -50,3 +50,53 @@
 +    }
    return (void *) mp;
  }
+diff --git a/mpz/mul.c b/mpz/mul.c
+--- a/mpz/mul.c
++++ b/mpz/mul.c
+@@ -103,20 +103,37 @@
+   wsize = usize + vsize;
+   if (ALLOC (w) < wsize)
+     {
+-      if (ALLOC (w) != 0)
++      /* Allocate-install-free-last (mirroring _mpz_realloc), so W stays
++	 structurally valid at every interruptible point: an asynchronous
++	 unwind (e.g. Julia task cancellation delivered inside the
++	 allocation hook) between any two statements leaves PTR/ALLOC/SIZ
++	 mutually consistent, at worst leaking the just-allocated block.
++	 The previous order freed the old limbs and raised ALLOC before the
++	 new block was installed, so an unwind there left W pointing at
++	 freed memory with an overstated capacity, which a later mpz_clear
++	 double-freed.  */
++      mp_ptr old_wp = wp;
++      mp_size_t old_alloc = ALLOC (w);
++      wp = __GMP_ALLOCATE_FUNC_LIMBS (wsize);
++      PTR (w) = wp;
++      /* The old value is not copied; don't let SIZ describe uninitialized
++	 limbs if the operation is unwound before the final SIZ store.
++	 (usize/vsize were captured above - clearing SIZ is safe even when
++	 W aliases an input.)  */
++      SIZ (w) = 0;
++      ALLOC (w) = wsize;
++      if (old_alloc != 0)
+ 	{
+-	  if (wp == up || wp == vp)
++	  if (old_wp == up || old_wp == vp)
+ 	    {
+-	      free_me = wp;
+-	      free_me_size = ALLOC (w);
++	      /* W is also an input: its old limbs are still read by the
++		 multiplication below - free them only afterwards.  */
++	      free_me = old_wp;
++	      free_me_size = old_alloc;
+ 	    }
+ 	  else
+-	    (*__gmp_free_func) (wp, (size_t) ALLOC (w) * GMP_LIMB_BYTES);
++	    (*__gmp_free_func) (old_wp, (size_t) old_alloc * GMP_LIMB_BYTES);
+ 	}
+-
+-      ALLOC (w) = wsize;
+-      wp = __GMP_ALLOCATE_FUNC_LIMBS (wsize);
+-      PTR (w) = wp;
+     }
+   else
+     {
