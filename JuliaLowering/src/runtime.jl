@@ -18,14 +18,18 @@ end
 
 # Re-dispatch `f(args...)` at the pinned lowering world (see `jl_lowering_world`)
 @inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
-    w = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
-    if w == 0
-        # Fallback when the Base lowering hook is not set up
-        w = Base.tls_world_age()
-        # FIXME: as a side effect, enabling the Base lowering hook now affects
-        #        JuliaLowering execution not passing through the hook
+    @static if VERSION >= v"1.14.0-DEV.2635"
+        w = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
+        if w == 0
+            # Fallback when the Base lowering hook is not set up
+            w = Base.tls_world_age()
+            # FIXME: as a side effect, enabling the Base lowering hook now affects
+            #        JuliaLowering execution not passing through the hook
+        end
+        return _invoke_in_world(w, f, args...)
+    else
+        f(args...)
     end
-    return _invoke_in_world(w, f, args...)
 end
 
 # Return the current exception. In JuliaLowering we use this rather than the
