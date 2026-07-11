@@ -801,9 +801,20 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     if (ptls2 == NULL)
         return;
     jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct2 == NULL || (jl_atomic_load_acquire(&ct2->reset_ctx) == NULL &&
-                        jl_atomic_load_acquire(&ct2->cancel_handler_ctx) == NULL))
+    if (ct2 == NULL)
         return;
+    // Only send if the task has an interruptible-region context published -
+    // unless a ^C dispatch is pending and the task carries a token binding:
+    // the delivery's episode-propagation step (see
+    // jl_sigint_propagate_to_bound) needs no published region, and a purely
+    // polling victim between cancellation points never has one.
+    if (jl_atomic_load_acquire(&ct2->reset_ctx) == NULL &&
+        jl_atomic_load_acquire(&ct2->cancel_handler_ctx) == NULL) {
+        jl_value_t *bound0 = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+        if (bound0 == NULL || bound0 == jl_nothing ||
+            !jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+            return;
+    }
     HANDLE hThread = ptls2->system_id;
     if ((DWORD)-1 == SuspendThread(hThread))
         return;
@@ -823,6 +834,12 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
         jl_atomic_load_relaxed(&ct2->bound_cancel_token);
     int bound_cancelled = bound != NULL && bound != jl_nothing &&
         (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80);
+    // A pending ^C episode reaches scoped descendant sources through the
+    // julia-side listener's walk; when the listener is starved (e.g. a
+    // single-threaded process spinning in this task), carry it into the
+    // task's own bound source here so the next cancellation point sees it.
+    if (!bound_cancelled)
+        bound_cancelled = jl_sigint_propagate_to_bound(bound);
     jl_reset_ctx_t *hctx = ct2 == NULL ? NULL : jl_atomic_load_acquire(&ct2->cancel_handler_ctx);
     if (hctx != NULL) {
 #ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY

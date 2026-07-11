@@ -851,10 +851,17 @@ static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
         // a running task's binding, or the task's next cancellation point
         // observes the state write above.
         jl_fence();
+        // Mark the dispatch pending BEFORE the per-thread sends: their
+        // delivery handlers propagate the episode into descendant-bound
+        // tasks only while the julia-side listener has not claimed the
+        // dispatch (see jl_sigint_propagate_to_bound), and a handler can
+        // run the moment its signal lands.
+        jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
         // Interrupt asynchronously-interruptible regions right away, on
-        // every thread: the request-5 dispatch delivers only to a task
-        // whose own bound token is cancelled, so this is a no-op for
-        // threads running unrelated (or no) work.
+        // every thread: the request-5 dispatch delivers to tasks whose own
+        // bound token is cancelled (directly or via the episode
+        // propagation), and is a no-op for threads running unrelated (or
+        // no) work.
         int nthreads = jl_atomic_load_acquire(&jl_n_threads);
         for (int16_t tid = 0; tid < (int16_t)nthreads; tid++)
             jl_send_cancellation_signal(tid);
@@ -909,6 +916,43 @@ static int jl_sigint_direct_abandon_allowed(void) JL_NOTSAFEPOINT
     if (est >= 2 && est <= 4 && jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
         return 1;
     return 0;
+}
+
+// Propagate a pending ^C episode to the interrupted task's own bound
+// cancellation source. The julia-side sigint listener normally performs the
+// tree walk that carries the episode's cancellation down to scoped child
+// sources (e.g. the source a @sync installs) - but the listener may be
+// starved: in a single-threaded process whose only thread runs a
+// compute-bound task, nothing ever schedules it, and a task polling
+// cancellation points against its *own* (descendant) source would never
+// observe the ^C. Called from the per-thread cancellation-delivery paths
+// (which every ^C already triggers on every thread) while the listener has
+// not yet claimed the dispatch: if the task's bound source is governed by
+// the episode source, CAS-max the episode's state byte into it directly -
+// a single async-signal-safe byte write; the listener's eventual walk
+// redoes the remaining bookkeeping (waiter wakes, delivered bits)
+// level-triggered. Returns 1 if the bound source is (now) cancelled.
+static int jl_sigint_propagate_to_bound(jl_value_t *bound) JL_NOTSAFEPOINT
+{
+    if (bound == NULL || bound == jl_nothing)
+        return 0;
+    if (!jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+        return 0;
+    jl_cancel_source_t *sigsrc = jl_atomic_load_acquire(&jl_sigint_source);
+    if (sigsrc == NULL || (jl_value_t*)sigsrc == bound)
+        return 0;
+    uint8_t sst = jl_atomic_load_relaxed(&sigsrc->state);
+    if (!(sst & 0x80))
+        return 0;
+    if (!jl_cancel_source_subtree_member(bound, (jl_value_t*)sigsrc))
+        return 0;
+    jl_cancel_source_t *bsrc = (jl_cancel_source_t*)bound;
+    uint8_t bst = jl_atomic_load_relaxed(&bsrc->state);
+    while (bst < sst) { // CAS-max: cancelled-at-severity orders the raw byte
+        if (jl_atomic_cmpswap(&bsrc->state, &bst, sst))
+            break;
+    }
+    return 1;
 }
 
 static void stack_overflow_warning(void)
