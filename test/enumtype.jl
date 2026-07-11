@@ -216,3 +216,15 @@ end
     @test_throws MethodError red + 1
     @test_throws MethodError isless(red, EnumTypeTestMod.Green)
 end
+
+@testset "identity-based hashing" begin
+    T = EnumTypeTestMod.Color
+    red = EnumTypeTestMod.Red
+    @test hash(red) == hash(reinterpret(T, 0x00))
+    @test hash(red) != hash(EnumTypeTestMod.Green)
+    # same-named members of different modules have distinct identities
+    @test hash(EnumTypeExtA.Blue) != hash(EnumTypeExtB.Blue)
+    d = Dict(red => 1, EnumTypeExtA.Blue => 2)
+    @test d[reinterpret(T, 0x00)] == 1
+    @test d[EnumTypeExtA.Blue] == 2
+end

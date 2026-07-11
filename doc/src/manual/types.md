@@ -610,11 +610,15 @@ reinterpret(Color, 0x05)   # Green
     precompilation. Data containing enum values is rewritten to the current
     session's values when a package image is loaded, but values that escaped
     into non-enum storage — for example integers obtained from `reinterpret`,
-    data serialized with the `Serialization` standard library, or the slot
-    order of hash containers keyed by enum values that were stored in a
-    package image — are not. Never persist or transmit `reinterpret`-ed enum
-    values; when durable identification is needed, use the member's name (and
-    owning module) or pin explicit values, which are stable.
+    or data serialized with the `Serialization` standard library — are not.
+    Never persist or transmit `reinterpret`-ed enum values; when durable
+    identification is needed, use the member's name (and owning module) or pin
+    explicit values, which are stable.
+
+The [`hash`](@ref) of an enum value is derived from the identity of its member
+(the owning module and name), not from its bit pattern, so hashes — and
+therefore hash-based containers such as `Dict` keyed by enum values, including
+ones serialized into package images — are unaffected by rebasing.
 
 Unlike the [`@enum`](@ref Base.Enums.@enum) macro, which fixes the full member
 list at definition time, `enum` types support extension by other packages and

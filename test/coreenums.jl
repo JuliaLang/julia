@@ -124,21 +124,24 @@ const ceintro_b = Core._enum_add_member(CEIntro, @__MODULE__, :CEIntroB, UInt8(9
     # 3-slot header: storage type, isopen, next-auto hint
     @test tab[1] == UInt8
     @test tab[2] === true
-    nmembers = (length(tab) - 3) ÷ 4
+    nmembers = (length(tab) - 3) ÷ 5
     @test nmembers == 2
-    names = [tab[3 + 4*(i-1) + 1] for i in 1:nmembers]
-    mods  = [tab[3 + 4*(i-1) + 2] for i in 1:nmembers]
-    insts = [tab[3 + 4*(i-1) + 3] for i in 1:nmembers]
-    expls = [tab[3 + 4*(i-1) + 4] for i in 1:nmembers]
+    names  = [tab[3 + 5*(i-1) + 1] for i in 1:nmembers]
+    mods   = [tab[3 + 5*(i-1) + 2] for i in 1:nmembers]
+    insts  = [tab[3 + 5*(i-1) + 3] for i in 1:nmembers]
+    expls  = [tab[3 + 5*(i-1) + 4] for i in 1:nmembers]
+    hashes = [tab[3 + 5*(i-1) + 5] for i in 1:nmembers]
     @test names == [:CEIntroA, :CEIntroB]
     @test all(==(@__MODULE__), mods)
     @test insts[1] === ceintro_a && insts[2] === ceintro_b
     @test insts[1] === CEIntroA && insts[2] === CEIntroB
     @test expls == [false, true]
+    @test all(h -> h isa UInt64, hashes)
+    @test allunique(hashes)
     # the table is a snapshot: adding a member does not mutate it
     Core._enum_add_member(CEIntro, @__MODULE__, :CEIntroC, nothing)
-    @test length(tab) == 3 + 2*4
-    @test length(Core._enum_members(CEIntro)) == 3 + 3*4
+    @test length(tab) == 3 + 2*5
+    @test length(Core._enum_members(CEIntro)) == 3 + 3*5
 
     # non-enum types have no member table
     @test_throws ErrorException Core._enum_members(Int32)
@@ -180,6 +183,15 @@ const CEEgal = Core._enumtype(@__MODULE__, :CEEgal, Any, Int64, false)
     @test objectid(a) == objectid(reinterpret(T, Int64(0)))
     d = Dict{Any,Int}(a => 1, b => 2)
     @test d[reinterpret(T, Int64(0))] == 1
+    # hash is derived from the member identity (module, name), not the bit
+    # pattern, so it matches for reinterpret-equal values and does not equal
+    # the bits-based fallback hash
+    @test hash(a) == hash(reinterpret(T, Int64(0)))
+    @test hash(a) != hash(b)
+    @test hash(a, UInt(7)) == hash(reinterpret(T, Int64(0)), UInt(7))
+    # unregistered bit patterns fall back to the bits-based hash
+    stray = reinterpret(T, Int64(1234))
+    @test hash(stray, UInt(3)) == hash(objectid(stray), UInt(3))
 end
 
 const CEGC = Core._enumtype(@__MODULE__, :CEGC, Any, Int32, false)
@@ -193,7 +205,7 @@ const CEGC = Core._enumtype(@__MODULE__, :CEGC, Any, Int32, false)
     end
     GC.gc()
     tab = Core._enum_members(T)
-    @test (length(tab) - 3) ÷ 4 == 100
+    @test (length(tab) - 3) ÷ 5 == 100
     for i in 1:100
         @test reinterpret(Int32, insts[i]::T) == i - 1
     end

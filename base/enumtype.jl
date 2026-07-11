@@ -26,9 +26,9 @@ isopenenum(@nospecialize(t::DataType)) = ccall(:jl_enum_isopen, Cint, (Any,), t)
 function instances(@nospecialize(t::Type))
     isenumtype(t) || throw(MethodError(instances, (t,)))
     tab = Core._enum_members(t)
-    n = (length(tab) - 3) ÷ 4
-    # member instances are at table slots 3 + 4*(i-1) + 3
-    return ntuple(i -> tab[4 * i + 2], n)
+    n = (length(tab) - 3) ÷ 5
+    # member instances are at table slots 3 + 5*(i-1) + 3
+    return ntuple(i -> tab[5 * i + 1], n)
 end
 
 # the (name::Symbol, owning module::Module) of the member with the same bits
@@ -71,4 +71,18 @@ function show_enum_value_plain(io::IO, @nospecialize(x))
     print(io, " = ")
     show(io, reinterpret(enumstoragetype(typeof(x))::Type, x))
     return nothing
+end
+
+# `hash` for enum values uses the member's identity hash stored in the member
+# table, which is derived from the owning module and member name. This keeps
+# hashes independent of the member's (rebasable) bit pattern, so they are
+# stable across sessions and hash containers keyed by enum values survive
+# serialization into package images.
+function hash_enum_value(@nospecialize(x), h::UInt)
+    m = ccall(:jl_enum_lookup_value, Any, (Any,), x)
+    if m === nothing
+        # a bit pattern with no registered member
+        return hash(objectid(x), h)
+    end
+    return hash((m::Core.SimpleVector)[5]::UInt64, h)
 end

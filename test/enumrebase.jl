@@ -42,6 +42,8 @@ function write_pkgs(load_path)
         const H = Holder(ExtA.MA, 42)
         const U1 = UHolder(ExtB.MB)
         const U2 = UHolder(Int32(7))
+        const D = Dict(ExtA.MA => 1, ExtB.MB => 2, EnumDef.A => 3)
+        const HASHES = (hash(ExtA.MA), hash(ExtB.MB))
         getmb() = CV
         precompile(getmb, ())
         end
@@ -96,8 +98,15 @@ const ASSERTION_CODE = """
     @assert EnumApp.getmb() === ExtB.MB
     # the member registry agrees with the bindings
     tab = Core._enum_members(EnumDef.Foo)
-    insts = [tab[3 + 4*(i-1) + 3] for i in 1:(length(tab) - 3) ÷ 4]
+    insts = [tab[3 + 5*(i-1) + 3] for i in 1:(length(tab) - 3) ÷ 5]
     @assert ExtA.MA in insts && ExtB.MB in insts
+    # hashes are identity-based, so they match the values recorded at
+    # precompile time even though the bit patterns were rebased, and hash
+    # containers serialized in the image keep working
+    @assert EnumApp.HASHES == (hash(ExtA.MA), hash(ExtB.MB))
+    @assert EnumApp.D[ExtA.MA] == 1
+    @assert EnumApp.D[ExtB.MB] == 2
+    @assert EnumApp.D[EnumDef.A] == 3
     println("REBASE_OK")
     """
 

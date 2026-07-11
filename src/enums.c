@@ -7,8 +7,11 @@
   bitcast/reinterpret/unbox work unchanged) whose typename carries a member
   table `enumtab` and has the `isenumtype` flag set. The table is an svec with
   a 3-slot header (storage type, isopen::Bool, next-auto-value hint::UInt64)
-  followed by 4 slots per member: (name::Symbol, owning module::Module,
-  canonical boxed instance, isexplicit::Bool).
+  followed by 5 slots per member: (name::Symbol, owning module::Module,
+  canonical boxed instance, isexplicit::Bool, identity hash::UInt64). The
+  identity hash is computed from the owning module's name chain and the member
+  name, making `hash` of enum values independent of their (rebasable) bit
+  patterns and therefore stable across sessions.
 
   Member identity is (enum type, owning module, member name). The table is
   copy-on-write: readers take an acquire-load snapshot; writers hold
@@ -36,7 +39,7 @@ extern "C" {
 jl_array_t *jl_enum_member_log JL_GLOBALLY_ROOTED = NULL;
 
 #define ENUM_TAB_HEADER 3
-#define ENUM_TAB_STRIDE 4
+#define ENUM_TAB_STRIDE 5
 
 static jl_svec_t *enum_tab(jl_datatype_t *et)
 {
@@ -137,6 +140,24 @@ static uint64_t enum_next_free(jl_svec_t *tab, jl_datatype_t *et, size_t nbytes)
     }
 }
 
+// Deterministic, session-independent hash of the member identity
+// (owning module, name): combines the symbol hashes of the member name and
+// the owning module's name chain. Symbol hashes depend only on the symbol's
+// string, so this is stable across sessions, unlike the member's (rebasable)
+// bit pattern.
+static uint64_t enum_member_hash(jl_module_t *mod, jl_sym_t *name) JL_NOTSAFEPOINT
+{
+    uintptr_t h = name->hash;
+    jl_module_t *m = mod;
+    while (1) {
+        h = bitmix(h, m->name->hash);
+        if (m->parent == m || m->parent == NULL)
+            break;
+        m = m->parent;
+    }
+    return (uint64_t)inthash(h);
+}
+
 // copy-on-write append of a member (and, for auto assignment, the updated
 // next-auto hint `newhint`) to et's member table; caller holds
 // world_counter_lock and keeps `tab` (the current table) and `instance` rooted
@@ -145,10 +166,12 @@ static void enum_tab_append(jl_datatype_t *et, jl_svec_t *tab, jl_module_t *mod,
                             uint64_t newhint)
 {
     jl_value_t *hintbox = NULL;
+    jl_value_t *hashbox = NULL;
     jl_svec_t *newtab = NULL;
-    JL_GC_PUSH2(&hintbox, &newtab);
+    JL_GC_PUSH3(&hintbox, &hashbox, &newtab);
     if (newhint != 0)
         hintbox = jl_box_uint64(newhint);
+    hashbox = jl_box_uint64(enum_member_hash(mod, name));
     // no allocations may happen while the new table is partially initialized
     size_t oldlen = jl_svec_len(tab);
     newtab = jl_alloc_svec_uninit(oldlen + ENUM_TAB_STRIDE);
@@ -160,6 +183,7 @@ static void enum_tab_append(jl_datatype_t *et, jl_svec_t *tab, jl_module_t *mod,
     jl_svecset(newtab, oldlen + 1, (jl_value_t*)mod);
     jl_svecset(newtab, oldlen + 2, instance);
     jl_svecset(newtab, oldlen + 3, isexplicit ? jl_true : jl_false);
+    jl_svecset(newtab, oldlen + 4, hashbox);
     jl_atomic_store_release(&et->name->enumtab, newtab);
     jl_gc_wb(et->name, newtab);
     JL_GC_POP();
@@ -327,8 +351,8 @@ JL_DLLEXPORT int jl_enum_isopen(jl_datatype_t *et)
 }
 
 // member holding the same bits as the enum instance `x`, as
-// svec(name, module, instance, isexplicit), or nothing if the bit pattern
-// does not correspond to a registered member
+// svec(name, module, instance, isexplicit, identityhash), or nothing if the
+// bit pattern does not correspond to a registered member
 JL_DLLEXPORT jl_value_t *jl_enum_lookup_value(jl_value_t *x)
 {
     jl_datatype_t *et = (jl_datatype_t*)jl_typeof(x);
@@ -338,8 +362,9 @@ JL_DLLEXPORT jl_value_t *jl_enum_lookup_value(jl_value_t *x)
     if (k == (size_t)-1)
         return jl_nothing;
     JL_GC_PUSH1(&tab);
-    jl_value_t *r = (jl_value_t*)jl_svec(4, jl_svecref(tab, k), jl_svecref(tab, k + 1),
-                                         jl_svecref(tab, k + 2), jl_svecref(tab, k + 3));
+    jl_value_t *r = (jl_value_t*)jl_svec(5, jl_svecref(tab, k), jl_svecref(tab, k + 1),
+                                         jl_svecref(tab, k + 2), jl_svecref(tab, k + 3),
+                                         jl_svecref(tab, k + 4));
     JL_GC_POP();
     return r;
 }

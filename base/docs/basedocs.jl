@@ -1689,6 +1689,10 @@ reinterpret(Color, 0x05)   # Green
     Never persist or transmit `reinterpret`-ed enum values, and never compare
     them across processes. Only explicitly assigned values are stable.
 
+The [`hash`](@ref) of an enum value is derived from its member's identity (the
+owning module and name) rather than its bit pattern, so hashes and hash-based
+containers keyed by enum values are unaffected by rebasing.
+
 Use [`instances`](@ref) to obtain the currently registered members of an enum
 type. For open enums this grows as extensions are loaded.
 

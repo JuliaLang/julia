@@ -576,7 +576,8 @@ typedef struct {
     _Atomic(jl_svec_t*) linearcache;  // unsorted array
     jl_array_t *partial;     // incomplete instantiations of this type
     // for enum types: member table svec (storage type, isopen, next_auto hint,
-    // then (name, module, instance, isexplicit) per member); NULL otherwise
+    // then (name, module, instance, isexplicit, identityhash) per member);
+    // NULL otherwise
     _Atomic(jl_svec_t*) enumtab;
     intptr_t hash;
     _Atomic(int32_t) max_args;  // max # of non-vararg arguments in a signature with this type as the function
