@@ -291,7 +291,17 @@ function optimize_ir!(ir::UnifiedIR.IR, argtypes::Vector{Any};
         changed += merge_goto_chains!(ir)
         changed += structurize!(ir)
         changed += dissolve_islands!(ir)
-        changed += promote_loop_cells!(ir)
+        # joint cell-promotion fixpoint (§6 join completeness, docs
+        # "Join-point completeness"): arm-join sinking turns conditional arm
+        # stores into unconditional post-join stores, which loop promotion
+        # consumes as carried values and (next round) promote_cells! as
+        # dominating stores — and each can expose new cases for the others.
+        while true
+            c = promote_arm_cells!(ir)
+            c += promote_loop_cells!(ir)
+            c == 0 && break
+            changed += c
+        end
         changed += selectify!(ir)
         changed += sroa_mutables!(ir)
         changed += adce_region_ops!(ir)

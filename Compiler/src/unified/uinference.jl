@@ -754,4 +754,3 @@ function infer_cfg!(fr::Frame, s::StmtId)
     fr.env[s.id] = result === nothing ? Union{} : result
     return nothing
 end
-

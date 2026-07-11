@@ -313,6 +313,16 @@ deferred region on any access path; reaching definitions are unambiguous
 rule is satisfied by construction — body reads before the first dominating
 body store take the carried arg, never the pre-loop store. Editable state.
 """
+# Optional placement trace for the completeness harness (completeness.jl):
+# when set, the promotion passes record every join-value placement as
+# (kind, anchor stmt id, cell stmt id) with kind ∈ (:if_join, :loop_header,
+# :loop_break, :if_thread) — :if_thread marks structural value threading
+# through enclosing arms (region-form plumbing with no classical-phi
+# counterpart; expected to be "extra" relative to iterated-DF placement).
+const PROMOTION_TRACE = Ref{Union{Nothing,Vector{Tuple{Symbol,Int,Int}}}}(nothing)
+@inline _trace!(kind::Symbol, anchor::StmtId, cell::StmtId) =
+    (t = PROMOTION_TRACE[]; t === nothing || push!(t, (kind, Int(anchor.id), Int(cell.id))); nothing)
+
 function promote_loop_cells!(ir::UnifiedIR.IR)
     UnifiedIR.check_state(ir, UnifiedIR.LAYOUT_EDITABLE, "promote_loop_cells!")
     UnifiedIR.flush_renames!(ir)
@@ -490,6 +500,12 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
     k = length(plans)
     # --- rewrite --------------------------------------------------------------
     bodyreg = UnifiedIR.getregion(ir, bodyr)
+    for p in plans
+        _trace!(:loop_header, L, p.cell)
+    end
+    for i in R
+        _trace!(:loop_break, L, plans[i].cell)
+    end
     firstm = StmtId(bodyreg.first.id)
     args = StmtId[]
     for _ in 1:k
@@ -538,6 +554,9 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
             end
         end
         for ifop in chain
+            for i in R
+                _trace!(:if_thread, ifop, plans[i].cell)
+            end
             arms = UnifiedIR.live_owned_regions(ir, ifop)
             carm = findfirst(a -> UnifiedIR.is_ancestor(ir, a, UnifiedIR.stmt_region(ir, L)), arms)
             ct = UnifiedIR.region_terminator(ir, arms[carm])
@@ -680,4 +699,271 @@ function sroa_mutables!(ir::UnifiedIR.IR)
         promoted += 1
     end
     return promoted
+end
+
+# ---------------------------------------------------------------------------
+# Arm-join cell promotion (§6 / docs "Join completeness"): the if-join case
+# of mem2reg. A frame cell stored in sibling arms of an `if` has its
+# CONDITIONAL arm stores replaced by ONE UNCONDITIONAL `cell_set` right
+# after the join: every joining arm's `result` carries the arm's outgoing
+# value — its last direct store's value, or the cell's incoming value
+# (materialized as a `cell_get` just before the `if`) for joining arms that
+# do not store — and the post-join store takes the `if`'s (possibly tupled;
+# extract-indexed) result. This is store SINKING, not full promotion: reads
+# are left as `cell_get`s, and the now-unconditional store is exactly what
+# `promote_cells!` (dominating case) and `promote_loop_cells!` (carried
+# case) consume, so the joint fixpoint composes these into complete mem2reg
+# over nested joins (`a, b = b, a` under `if` — the gcd shape).
+#
+# Soundness rules (§6 inviolable):
+#   - frame-class `K"cell"` only; escaped/value-used cells refused;
+#   - cells with any get/isdefined inside a handler region stay memory-form
+#     (throw-edge observability — and the sink moves stores later, which a
+#     handler could otherwise observe);
+#   - cells touched inside cfg islands refused (island mem2reg's domain);
+#   - the incoming `cell_get` is only inserted under definite assignment
+#     (some store dominates the `if`); otherwise the cell keeps memory form
+#     (maybe-undef: the get could observe undef on a path where the original
+#     program read nothing);
+#   - stores in EXITING arms (break/continue/return/unreachable) are left
+#     untouched: those paths never reach the join, and their effect
+#     legitimately flows out through memory (multi-level exits need no
+#     refusal under the sinking formulation);
+#   - stores nested DEEPER than the arm itself (under an inner if/loop/try)
+#     are not "the arm's outgoing value": the cell is skipped at this `if`
+#     until inner promotion (inside-out order + the fixpoint) flattens them;
+#   - in-arm gets/isdefineds reached by a direct arm store are rewritten to
+#     the store's value / `true` (the store is about to be deleted);
+#   - `cell_new` only in declaration position (before every store), as in
+#     `promote_cells!`.
+
+"Is `s` (or any region on its ancestry) inside a handler region?"
+function _in_handler(ir::UnifiedIR.IR, s::StmtId)
+    r = UnifiedIR.stmt_region(ir, s)
+    while !UnifiedIR.isnull(r)
+        reg = UnifiedIR.getregion(ir, r)
+        reg.kind === UnifiedIR.REGION_HANDLER && return true
+        r = reg.parent
+    end
+    return false
+end
+
+"""
+    promote_arm_cells!(ir) -> Int
+
+Sink conditional sibling-arm `cell_set`s to a single unconditional post-join
+store carried through the `if`'s results (see the block comment above).
+Processes `if`s inside-out; run in the joint promotion fixpoint with
+`promote_cells!` and `promote_loop_cells!`. Editable state. Returns the
+number of (cell, if) sinkings performed.
+"""
+function promote_arm_cells!(ir::UnifiedIR.IR)
+    UnifiedIR.check_state(ir, UnifiedIR.LAYOUT_EDITABLE, "promote_arm_cells!")
+    UnifiedIR.flush_renames!(ir)
+    ifs = StmtId[]
+    for s in UnifiedIR.each_stmt(ir)
+        UnifiedIR.is_tombstone(ir, s) && continue
+        UnifiedIR.stmt_kind(ir, s) === K"if" || continue
+        push!(ifs, s)
+    end
+    # inside-out: deepest region first, so an inner if's post-join store is a
+    # direct arm store by the time its enclosing if is processed
+    sort!(ifs; by = s -> UnifiedIR.region_depth(ir, UnifiedIR.stmt_region(ir, s)), rev = true)
+    total = 0
+    for I in ifs
+        total += _promote_arm_cells_at!(ir, I)
+    end
+    UnifiedIR.flush_renames!(ir)
+    return total
+end
+
+function _promote_arm_cells_at!(ir::UnifiedIR.IR, I::StmtId)
+    arms = UnifiedIR.live_owned_regions(ir, I)
+    (1 <= length(arms) <= 2) || return 0
+    joins = RegionId[]
+    for a in arms
+        t = UnifiedIR.region_terminator(ir, a)
+        t === nothing && return 0
+        tk = UnifiedIR.stmt_kind(ir, t)
+        if tk === K"result"
+            push!(joins, a)
+        elseif !is_diverge_kind(tk)
+            return 0
+        end
+    end
+    isempty(joins) && return 0            # no arm reaches the join
+    exist_arity = UnifiedIR.nops(ir, UnifiedIR.region_terminator(ir, joins[1]))
+    all(a -> UnifiedIR.nops(ir, UnifiedIR.region_terminator(ir, a)) == exist_arity, joins) ||
+        return 0
+    onearmed = length(arms) == 1
+    counts = UnifiedIR.use_counts(ir)
+    # synthesizing an else arm (or re-tupling an in-use single result) only
+    # supported for the common shapes; a one-armed if with existing results
+    # has not-taken-value semantics we must not disturb
+    onearmed && (exist_arity != 0 || counts[I.id] != 0) && return 0
+    exist_arity == 0 && counts[I.id] != 0 && return 0
+
+    before(a, b) = UnifiedIR.comes_before(ir, a, b)
+    injoinarm(s) = any(a -> UnifiedIR.is_ancestor(ir, a, UnifiedIR.stmt_region(ir, s)), joins)
+
+    # ---- candidate cells ----------------------------------------------------
+    plans = Vector{Tuple{StmtId,                 # cell
+                         Vector{StmtId},          # direct arm stores (to delete)
+                         Dict{RegionId,StmtId},   # joining arm -> last direct store (or absent)
+                         Vector{Pair{StmtId,StmtId}},  # in-arm get -> reaching store
+                         Vector{StmtId},          # in-arm isdefined -> true rewrites
+                         Bool}}()                 # needs incoming value
+    for c in UnifiedIR.each_stmt(ir)
+        UnifiedIR.is_tombstone(ir, c) && continue
+        UnifiedIR.stmt_kind(ir, c) === K"cell" || continue
+        cell = c
+        sets = StmtId[]; gets = StmtId[]; isdefs = StmtId[]; news = StmtId[]
+        ok = true
+        UnifiedIR.each_ssa_use(ir) do site, used
+            (ok && used == cell) || return
+            site isa UnifiedIR.StmtOperand || (ok = false; return)
+            u = site.user
+            UnifiedIR.is_tombstone(ir, u) && return
+            k = UnifiedIR.stmt_kind(ir, u)
+            if k === K"cell_set" && site.opidx == 1
+                push!(sets, u)
+            elseif k === K"cell_get"
+                push!(gets, u)
+            elseif k === K"cell_isdefined"
+                push!(isdefs, u)
+            elseif k === K"cell_new"
+                push!(news, u)
+            else
+                ok = false                        # escape / value use / token pairing
+            end
+        end
+        ok || continue
+        # §6: throw-edge observability and islands keep memory form
+        any(u -> _in_handler(ir, u), gets) && continue
+        any(u -> _in_handler(ir, u), isdefs) && continue
+        (UnifiedIR.inside_island(ir, cell) ||
+         any(u -> UnifiedIR.inside_island(ir, u),
+             Iterators.flatten((sets, gets, isdefs)))) && continue
+        # cell_new in declaration position only
+        all(nw -> all(st -> before(nw, st), sets), news) || continue
+
+        armlast = Dict{RegionId,StmtId}()
+        direct = StmtId[]
+        deeper = false
+        for st in sets
+            sr = UnifiedIR.stmt_region(ir, st)
+            ai = findfirst(==(sr), joins)
+            if ai !== nothing
+                push!(direct, st)
+                prev = get(armlast, sr, UnifiedIR.NULL_STMT)
+                (UnifiedIR.isnull(prev) || before(prev, st)) && (armlast[sr] = st)
+            elseif injoinarm(st)
+                deeper = true; break              # not flattened yet: wait for fixpoint
+            end
+            # stores in exiting arms / elsewhere: untouched, irrelevant here
+        end
+        (deeper || isempty(direct)) && continue
+
+        # in-arm gets/isdefineds: rewrite those the direct arm stores reach.
+        # Record the REACHING STORE, not its value: another cell's plan may
+        # rewrite-and-delete the get this store's value currently names; the
+        # value is re-read fresh at rewrite time (store operands are updated
+        # by the earlier rewrites), which makes the transform order-invariant.
+        getrw = Pair{StmtId,StmtId}[]
+        isdefrw = StmtId[]
+        for g in gets
+            injoinarm(g) || continue
+            rk, rst = _reach_ed(ir, direct, g)
+            rk === :ambig && (ok = false; break)
+            rk === :store && push!(getrw, g => rst)
+        end
+        ok || continue
+        for d in isdefs
+            injoinarm(d) || continue
+            rk, _ = _reach_ed(ir, direct, d)
+            rk === :ambig && (ok = false; break)
+            rk === :store && push!(isdefrw, d)
+        end
+        ok || continue
+
+        needs_in = onearmed || any(a -> !haskey(armlast, a), joins)
+        if needs_in
+            # definite assignment at the if: some store outside I dominates it
+            outside = [st for st in sets if !any(a -> UnifiedIR.is_ancestor(ir, a, UnifiedIR.stmt_region(ir, st)), arms)]
+            any(st -> before(st, I) && _cell_dominates_ed(ir, st, I), outside) || continue
+        end
+        push!(plans, (cell, direct, armlast, getrw, isdefrw, needs_in))
+    end
+    isempty(plans) && return 0
+
+    # ---- transform ----------------------------------------------------------
+    m = length(plans)
+    for (cell, _, _, _, _, _) in plans
+        _trace!(:if_join, I, cell)
+    end
+    # (1) in-arm reads/queries the (about to be deleted) arm stores reached —
+    # FIRST, with values read fresh per rewrite (see the plan comment)
+    for (_, _, _, getrw, isdefrw, _) in plans
+        for (g, rst) in getrw
+            v = UnifiedIR.getop(ir, rst, 2)
+            UnifiedIR.replace_uses_where!(_ -> true, ir, g => v)
+            UnifiedIR.delete_stmt!(ir, g)
+        end
+        for d in isdefrw
+            UnifiedIR.replace_uses_where!(_ -> true, ir, d => UnifiedIR.op_inline(true))
+            UnifiedIR.delete_stmt!(ir, d)
+        end
+    end
+    # incoming values: one cell_get per needs-incoming cell, just before I
+    incoming = Dict{Int,UnifiedIR.Operand}()
+    for (i, (cell, _, _, _, _, needs_in)) in enumerate(plans)
+        needs_in || continue
+        g = UnifiedIR.insert_before!(ir, I, K"cell_get", UnifiedIR.op_stmt(cell); type = Any)
+        incoming[i] = UnifiedIR.op_stmt(g)
+    end
+    # per-arm outgoing values appended to each joining result
+    for a in joins
+        t = UnifiedIR.region_terminator(ir, a)
+        outs = UnifiedIR.Operand[]
+        for (i, (_, _, armlast, _, _, _)) in enumerate(plans)
+            st = get(armlast, a, UnifiedIR.NULL_STMT)
+            push!(outs, UnifiedIR.isnull(st) ? incoming[i] : UnifiedIR.getop(ir, st, 2))
+        end
+        old = UnifiedIR.operands(ir, t)
+        UnifiedIR.replace_stmt!(ir, t, K"result", old..., outs...)
+    end
+    if onearmed
+        er = UnifiedIR.new_region!(ir, I, UnifiedIR.REGION_ARM)
+        outs = UnifiedIR.Operand[incoming[i] for i in 1:m]   # needs_in guaranteed for all
+        UnifiedIR.push_stmt!(ir, er, K"result", outs...)
+    end
+    UnifiedIR.set_type!(ir, I, Any)
+    # post-join: extracts (when tupled) + the unconditional stores
+    total_vals = exist_arity + m
+    anchor = I
+    if exist_arity == 1 && counts[I.id] != 0
+        e0 = UnifiedIR.insert_after!(ir, anchor, K"extract", UnifiedIR.op_stmt(I),
+                                     UnifiedIR.op_inline(0); type = Any)
+        UnifiedIR.replace_uses_where!(u -> u != e0, ir, I => UnifiedIR.op_stmt(e0))
+        anchor = e0
+    end
+    for (i, (cell, _, _, _, _, _)) in enumerate(plans)
+        v = if total_vals == 1
+            UnifiedIR.op_stmt(I)
+        else
+            e = UnifiedIR.insert_after!(ir, anchor, K"extract", UnifiedIR.op_stmt(I),
+                                        UnifiedIR.op_inline(exist_arity + i - 1); type = Any)
+            anchor = e
+            UnifiedIR.op_stmt(e)
+        end
+        anchor = UnifiedIR.insert_after!(ir, anchor, K"cell_set",
+                                         UnifiedIR.op_stmt(cell), v; type = Nothing)
+    end
+    # delete the (now sunk) conditional arm stores
+    for (_, direct, _, _, _, _) in plans
+        for st in direct
+            UnifiedIR.delete_stmt!(ir, st)
+        end
+    end
+    return m
 end
