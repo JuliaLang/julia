@@ -281,3 +281,125 @@ end
     @test UnifiedIR.interpret(irb, _cmpl_stale, 4, false) == _cmpl_stale(4, false) == 14
     @test UnifiedIR.interpret(irb, _cmpl_stale, 4, true) == _cmpl_stale(4, true) == 10
 end
+
+@testset "island exit threading: loop-carried cells through sealed continues" begin
+    # the escape_string shape: a loop whose body is one island; the state
+    # cell's backedge is the island's sealed continue, carrying no values
+    # until promotion threads them (loop arg + continue value + island reads
+    # from the arg)
+    src = """
+    func @thr(%1::Any, %2::Int64) -> Int64 {
+      %3 = cell const type Int64 :: Any
+      cell_set %3, %2
+      %5 = loop () :: Any {
+        %6 = cfg () :: Union{} {
+        ^bb2():
+          %7 = cell_get %3 :: Int64
+          %8 = call global Base.slt_int, %7, const 100 :: Bool
+          br_if %8 (^bb3) (^bb4)
+        ^bb3():
+          %10 = cell_get %3 :: Int64
+          %11 = call global Base.mul_int, %10, const 2 :: Int64
+          cell_set %3, %11
+          %13 = call global Base.slt_int, %11, const 50 :: Bool
+          continue %5 if %13
+        ^bb4():
+          %15 = cell_get %3 :: Int64
+          %16 = call global Base.add_int, %15, const 1 :: Int64
+          cell_set %3, %16
+          continue %5 if const false
+        }
+        unreachable
+      }
+      %19 = cell_get %3 :: Int64
+      return %19
+    }
+    """
+    pre = [UnifiedIR.interpret(UnifiedIR.parse_ir(src), nothing, x) for x in (3, 200)]
+    @test pre == [96, 201]      # 3→6→12→24→48→96 exits; 200: +1 exits
+    ir = UC.promotion_fixpoint!(UnifiedIR.parse_ir(src))
+    @test UnifiedIR.verify_ir(ir; level = 1)
+    @test count_cellops(ir) == 0
+    @test [UnifiedIR.interpret(ir, nothing, x) for x in (3, 200)] == pre
+    r = UC.df_correspondence(UnifiedIR.parse_ir(src))
+    @test r.ok
+    @test all(x -> x.status === :match, r.results)
+
+    # single-internal-backedge island: the entry block's implicit in-edge
+    # (the cfg entry) joins with ONE internal backedge — the entry phi must
+    # still be placed (regression: the counter read below collapsed to the
+    # pre-island constant and the island spun forever)
+    src2 = """
+    func @spin(%1::Any, %2::Int64) -> Int64 {
+      %3 = cell const type Int64 :: Any
+      cell_set %3, const 0
+      %5 = cfg () :: Int64 {
+      ^bb2():
+        %6 = call global Base.add_int, %2, const 0 :: Int64
+        goto (^bb3)
+      ^bb3():
+        %8 = cell_get %3 :: Int64
+        %9 = call global Base.add_int, %8, const 1 :: Int64
+        cell_set %3, %9
+        %11 = call global Base.slt_int, %9, const 3 :: Bool
+        br_if %11 (^bb2) (^bb4)
+      ^bb4():
+        %13 = cell_get %3 :: Int64
+        result %13
+      }
+      return %5
+    }
+    """
+    @test UnifiedIR.interpret(UnifiedIR.parse_ir(src2), nothing, 7) == 3
+    ir2 = UC.promotion_fixpoint!(UnifiedIR.parse_ir(src2))
+    @test UnifiedIR.verify_ir(ir2; level = 1)
+    @test count_cellops(ir2) == 0
+    @test UnifiedIR.interpret(ir2, nothing, 7) == 3
+
+    # doubly-carried cell (the countlines shape): the value crosses TWO
+    # backedge levels. The inner loop cannot take the outer store as its
+    # carried init — it goes stale across the OUTER backedge (the init
+    # backedge hazard; a naive init miscompiled exactly this shape, caught
+    # by the fuzzer differential) — so the cell stays classified memory,
+    # and execution stays CORRECT
+    function _cmpl_2level(n)
+        total = 0
+        i = 0
+        while i < n
+            i += 1
+            j = 0
+            while j < i
+                j += 1
+                total = total + j
+            end
+        end
+        return total
+    end
+    W = Base.get_world_counter()
+    ir3 = UC.promotion_fixpoint!(UC.structure_prep!(UC.lowered_ir(_cmpl_2level, Any[Int]; world = W)))
+    @test UnifiedIR.verify_ir(ir3; level = 1)
+    res3 = UC.classify_residual_cells(ir3)
+    @test all(p -> p.second === :refused_multilevel_exit, res3)
+    @test UnifiedIR.interpret(ir3, _cmpl_2level, 4) == _cmpl_2level(4) == 20
+end
+
+@testset "promotion miscompile regressions (seeded)" begin
+    # each of these seeds once produced a miscompile (wrong value, undef
+    # read, or non-termination) caught by the fuzzer differential:
+    #   - single-internal-backedge island entry phi missed
+    #   - carried-arg init stale across an enclosing backedge (doubly
+    #     carried counter reset; multi-level continue variant)
+    #   - store sinking across a swallowed-exception boundary (post-try
+    #     reads observed mid-try memory)
+    #   - joining arms leaking mid-arm through nested sealed exits
+    inputs = [(1, 2), (7, 7), (-2, 9)]
+    for (seed, case) in [(31337, 5), (31337, 116), (20260711, 66),
+                         (24242, 838), (24242, 5203), (24242, 6844), (24242, 8458)]
+        ir = CellFuzz.randir(CellFuzz.Random.Xoshiro(seed + case))
+        pre = [outcome(ir, a...) for a in inputs]
+        ir2 = UC.promotion_fixpoint!(CellFuzz.randir(CellFuzz.Random.Xoshiro(seed + case)))
+        @test UnifiedIR.verify_ir(ir2; level = 1)
+        post = [outcome(ir2, a...) for a in inputs]
+        @test post == pre
+    end
+end

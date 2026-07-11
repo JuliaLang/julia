@@ -85,16 +85,103 @@ function body!(cx, ints, depth; allow_exit::Bool = true)
             genloop!(cx, ints, depth)
         elseif depth < MAXDEPTH && roll < 0.42
             gentry!(cx, ints, depth)
-        elseif roll < 0.58
+        elseif depth < MAXDEPTH && roll < 0.46
+            genisland!(cx, ints, depth)
+        elseif roll < 0.60
             store!(cx, ints)
-        elseif roll < 0.70
+        elseif roll < 0.71
             read!(cx, ints)
-        elseif roll < 0.74
+        elseif roll < 0.75
             guarded_read!(cx, ints, depth)
         else
             plain!(cx, ints)
         end
     end
+end
+
+"""
+A cfg island: 2–4 blocks with cell traffic, forward `br_if`/`goto` edges, an
+optional bounded internal backedge, `result` joins — and, under an enclosing
+loop, sealed `continue` exits straight out of a block (the escape_string
+shape: the loop's backedge originates inside the island, carrying no values
+until promotion threads them). Blocks may also contain structured ifs/loops
+(and further islands through them). Cross-block SSA references are illegal,
+so each block computes from `ints` (outer values) plus its own locals.
+"""
+function genisland!(cx, ints, depth)
+    b = cx.b
+    # a bounded counter for the internal backedge (private, like loop ctrs)
+    ictr = append_stmt!(b, K"cell", Any; type = Any)
+    append_stmt!(b, K"cell_set", ictr, op_inline(Int64(0)))
+    s = append_stmt!(b, K"cfg"; type = Any)
+    nb = rand(cx.rng, 2:3)
+    rs = UnifiedIR.RegionId[]
+    for _ in 1:nb
+        r = UnifiedIR.Region(UnifiedIR.REGION_BLOCK, s, UnifiedIR.stmt_region(b.ir, s))
+        push!(b.ir.regions, r)
+        push!(rs, UnifiedIR.RegionId(Int32(length(b.ir.regions))))
+    end
+    ibound = rand(cx.rng, 2:3)
+    # a backedge block needs a FORWARD false edge to exit once the counter
+    # is exhausted, so the last block never takes one
+    backat = (nb >= 3 && rand(cx.rng) < 0.5) ? rand(cx.rng, 2:nb-1) : 0
+    ncells = length(cx.cells)
+    for bi in 1:nb
+        rid = rs[bi]
+        reg = UnifiedIR.getregion(b.ir, rid)
+        reg.first = StmtId(Int32(Int(b.ir.body.len) + 1))
+        push!(b.open, rid)
+        blocals = copy(ints)
+        for _ in 1:rand(cx.rng, 1:3)
+            roll = rand(cx.rng)
+            if roll < 0.30
+                store!(cx, blocals)
+            elseif roll < 0.55
+                read!(cx, blocals)
+            elseif depth < MAXDEPTH && roll < 0.68
+                genif!(cx, blocals, depth + 1; allow_exit = false)
+            elseif depth < MAXDEPTH && roll < 0.76
+                genloop!(cx, blocals, depth + 1)
+            else
+                plain!(cx, blocals)
+            end
+        end
+        cont = !isempty(cx.loopstack) && rand(cx.rng) < 0.35
+        if bi == nb && !cont
+            append_stmt!(b, K"result", pick(cx, blocals))
+        elseif cont
+            # sealed exit: the enclosing loop's backedge leaves the island
+            # from inside this block (advance its counter for termination)
+            L = rand(cx.rng, cx.loopstack)
+            rand(cx.rng) < 0.6 && store!(cx, blocals)
+            i = append_stmt!(b, K"cell_get", op_stmt(L.ctr); type = Any)
+            i2 = append_stmt!(b, K"call", GlobalRef(Base, :+), i, op_inline(Int64(1)); type = Any)
+            append_stmt!(b, K"cell_set", L.ctr, i2)
+            cnd = append_stmt!(b, K"call", GlobalRef(Base, :<), i2,
+                               op_inline(Int64(L.bound)); type = Any)
+            append_stmt!(b, K"continue", op_region(L.r), cnd)
+        elseif bi == backat
+            # bounded internal backedge: retake block 1 while under ibound
+            i = append_stmt!(b, K"cell_get", op_stmt(ictr); type = Any)
+            i2 = append_stmt!(b, K"call", GlobalRef(Base, :+), i, op_inline(Int64(1)); type = Any)
+            append_stmt!(b, K"cell_set", ictr, i2)
+            cnd = append_stmt!(b, K"call", GlobalRef(Base, :<), i2, op_inline(Int64(ibound)); type = Any)
+            append_stmt!(b, K"br_if", cnd, UnifiedIR.op_block(rs[1]), op_inline(Int64(0)),
+                         UnifiedIR.op_block(rs[bi + 1]), op_inline(Int64(0)))
+        elseif rand(cx.rng) < 0.5 && bi + 2 <= nb
+            v = pick(cx, blocals)
+            cnd = append_stmt!(b, K"call", GlobalRef(Base, :(==)), v, op_inline(Int64(7)); type = Any)
+            append_stmt!(b, K"br_if", cnd, UnifiedIR.op_block(rs[bi + 2]), op_inline(Int64(0)),
+                         UnifiedIR.op_block(rs[bi + 1]), op_inline(Int64(0)))
+        else
+            append_stmt!(b, K"goto", UnifiedIR.op_block(rs[bi + 1]), op_inline(Int64(0)))
+        end
+        reg.last = StmtId(Int32(Int(b.ir.body.len)))
+        pop!(b.open)
+    end
+    resize!(cx.cells, ncells)
+    push!(ints, s)
+    nothing
 end
 
 "An arm's ending: join (`result`), or an exit through the loop stack."
@@ -223,12 +310,13 @@ function randir(rng::AbstractRNG)
     return finish!(b)
 end
 
-"Interpret, capturing thrown errors as comparable outcomes."
+"Interpret, capturing thrown errors as comparable outcomes. Statement ids
+in interpreter diagnostics are stripped: they differ across promotion."
 function outcome(ir, args...)
     try
         (:ok, UnifiedIR.interpret(ir, args...))
     catch e
-        (:err, sprint(showerror, e))
+        (:err, replace(sprint(showerror, e), r" \(%\d+\)" => ""))
     end
 end
 
