@@ -970,7 +970,8 @@ Precise rules (verified at L1):
    `cell_set`, and friends have zero; references to zero-result statements are
    rejected). An op with multiple exit values produces *one* value of tuple
    type: feeding terminators produce a tuple, consumers destructure via the
-   explicit core kind `extract(value, index)` with a constant `INLINE` index —
+   explicit core kind `extract(value, index)` with a constant `INLINE` index
+   (**1-based** — this is Julia; the index is exactly `getfield`'s) —
    a kind check, not call-pattern matching (there will be a lot of these,
    which is why `extract` uses the inline operand encoding of §3.2 and costs
    zero pool words; in Julia semantics `extract` maps to `getfield`, and SROA
@@ -1039,8 +1040,8 @@ fixes each structurally:
     %c  = call <=(%j2, %n)
     continue %c (%s2, %j2)                  # repeat if %c, else results = (%s2,%j2)
 }
-%sum = extract %r, 0
-%i   = extract %r, 1
+%sum = extract %r, 1
+%i   = extract %r, 2
 ```
 
 - Carried values are region args: defs at body entry, the parallel move

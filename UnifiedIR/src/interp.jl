@@ -237,7 +237,7 @@ function exec_plain!(ir::IR, env::Vector{Any}, s::StmtId, io::IO)
     elseif k === K"extract"
         v = opval(ir, env, getop(ir, s, 1))
         i = Int(imm_value(getop(ir, s, 2))::Int64)
-        env[s.id] = v[i + 1]
+        env[s.id] = v[i]
     elseif k === K"select"
         c = opval(ir, env, getop(ir, s, 1))::Bool
         env[s.id] = c ? opval(ir, env, getop(ir, s, 2)) : opval(ir, env, getop(ir, s, 3))

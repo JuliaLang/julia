@@ -203,7 +203,7 @@ function _join_goto!(ir::UnifiedIR.IR, t::StmtId, ifop::StmtId, J::RegionId, k::
         exts = UnifiedIR.Operand[]
         for i in 1:k
             e = UnifiedIR.insert_before!(ir, t, K"extract", UnifiedIR.op_stmt(ifop),
-                                         UnifiedIR.op_inline(i - 1); type = Any)
+                                         UnifiedIR.op_inline(i); type = Any)
             push!(exts, UnifiedIR.op_stmt(e))
         end
         UnifiedIR.replace_stmt!(ir, t, K"goto", UnifiedIR.op_block(J), UnifiedIR.op_inline(k), exts...)

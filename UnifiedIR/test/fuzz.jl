@@ -102,7 +102,7 @@ function fz_loop!(b, rng, ints, depth)
     cnd = append_stmt!(b, K"test.icmp", :slt, op_stmt(i2), op_inline(Int64(bound)); type = Bool)
     append_stmt!(b, K"continue", op_region(body), op_stmt(cnd), op_stmt(acc2), op_stmt(i2))
     close_region!(b)
-    ex = append_stmt!(b, K"extract", op_stmt(s), op_inline(0); type = Int64)
+    ex = append_stmt!(b, K"extract", op_stmt(s), op_inline(1); type = Int64)
     push!(ints, ex)
     return ex
 end

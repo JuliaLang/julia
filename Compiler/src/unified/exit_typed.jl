@@ -168,8 +168,8 @@ function make_joinctx!(cx::TCtx, owner::StmtId, joinbb::TBB)
         append!(joinbb.phis, phis)
         for ex in extracts
             idx = Int(UnifiedIR.imm_value(UnifiedIR.getop(ir, ex, 2))::Int64)
-            0 <= idx < nvals || throw(UnsupportedIR("extract index out of range in typed exit"))
-            cx.phi_of[ex.id] = phis[idx + 1]
+            1 <= idx <= nvals || throw(UnsupportedIR("extract index out of range in typed exit"))
+            cx.phi_of[ex.id] = phis[idx]
         end
         return JoinCtx(joinbb, phis, false)
     end
@@ -467,7 +467,7 @@ function assemble_ircode(cx::TCtx, ir::UnifiedIR.IR, argmap::Dict{Int32,Int}, na
         k === K"cfunction" && return Expr(:cfunction, ops...)
         if k === K"extract"
             return Expr(:call, GlobalRef(Core, :getfield), ops[1],
-                        Int(UnifiedIR.imm_value(UnifiedIR.getop(ir, s, 2))) + 1)
+                        Int(UnifiedIR.imm_value(UnifiedIR.getop(ir, s, 2))))
         end
         if k === K"refine"
             t = UnifiedIR.stmt_type(ir, s)

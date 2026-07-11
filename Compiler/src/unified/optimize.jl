@@ -200,8 +200,8 @@ function canonicalize_getfields!(ir::UnifiedIR.IR)
         end
         idx isa Int || continue
         idx >= 1 || continue
-        idx - 1 < (1 << 23) || continue
-        UnifiedIR.replace_stmt!(ir, s, K"extract", vo, UnifiedIR.op_inline(idx - 1);
+        idx < (1 << 23) || continue
+        UnifiedIR.replace_stmt!(ir, s, K"extract", vo, UnifiedIR.op_inline(idx);
                                 type = UnifiedIR.stmt_type(ir, s))
         n += 1
     end
@@ -230,13 +230,13 @@ function forward_extracts!(ir::UnifiedIR.IR)
         if dk === K"call"
             callee = static_operand_value(ir, UnifiedIR.getop(ir, def, 1))
             callee === Core.tuple || continue
-            1 + idx + 1 <= UnifiedIR.nops(ir, def) || continue
-            el = UnifiedIR.getop(ir, def, idx + 2)
+            1 + idx <= UnifiedIR.nops(ir, def) || continue
+            el = UnifiedIR.getop(ir, def, idx + 1)
         elseif dk === K"new"
             T = concrete_datatype(stmt_lattice(ir, UnifiedIR.getop(ir, def, 1)))
             (T isa DataType && !ismutabletype(T)) || continue
-            idx + 1 <= UnifiedIR.nops(ir, def) - 1 || continue  # field must be supplied
-            el = UnifiedIR.getop(ir, def, idx + 2)
+            idx <= UnifiedIR.nops(ir, def) - 1 || continue  # field must be supplied
+            el = UnifiedIR.getop(ir, def, idx + 1)
         else
             continue
         end

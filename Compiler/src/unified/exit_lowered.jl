@@ -297,7 +297,7 @@ function emit_stmt!(cx::ExitCtx, s::StmtId, k::UnifiedIR.Kind, loopctxs)
     elseif k === K"extract"
         v = exit_value(cx, UnifiedIR.getop(ir, s, 1))
         idx = UnifiedIR.imm_value(UnifiedIR.getop(ir, s, 2))::Int64
-        cx.ssaof[s.id] = emitstmt!(cx, Expr(:call, GlobalRef(Core, :getfield), v, Int(idx) + 1))
+        cx.ssaof[s.id] = emitstmt!(cx, Expr(:call, GlobalRef(Core, :getfield), v, Int(idx)))
     elseif k === K"call"
         cx.ssaof[s.id] = emitstmt!(cx, Expr(:call, exit_values(cx, s, 1)...))
     elseif k === K"invoke"

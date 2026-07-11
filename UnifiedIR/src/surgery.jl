@@ -188,7 +188,7 @@ function wrap_in_if!(ir::IR, first::StmtId, last::StmtId, cond::Value;
         else
             set_type!(ir, ifop, Tuple{Any[stmt_type(ir, s) for s in escaping]...})
             for (idx, s) in enumerate(escaping)
-                ex = insert_after!(ir, ifop, K"extract", op_stmt(ifop), op_inline(idx - 1);
+                ex = insert_after!(ir, ifop, K"extract", op_stmt(ifop), op_inline(idx);
                                    type = stmt_type(ir, s))
                 replace_uses_where!(u -> !in_subtree(u) && u != ifop && u != ex, ir,
                                     s => op_stmt(ex))
@@ -294,7 +294,7 @@ function inline_region!(ir::IR, owner::StmtId, keep::RegionId)
             v = getop(ir, s, 1)
             optag(v) == TAG_STMT && asstmt(v) == owner || continue
             idx = Int(imm_value(getop(ir, s, 2))::Int64)
-            replace_stmt!(ir, s, K"refine", resultvals[idx + 1]; type = stmt_type(ir, s))
+            replace_stmt!(ir, s, K"refine", resultvals[idx]; type = stmt_type(ir, s))
         end
         counts = use_counts(ir)
         counts[owner.id] == 0 ||

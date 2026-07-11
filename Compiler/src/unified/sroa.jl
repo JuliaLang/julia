@@ -552,7 +552,7 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
             anchor = L
             for j in 1:length(R)
                 e = UnifiedIR.insert_after!(ir, anchor, K"extract", UnifiedIR.op_stmt(L),
-                                            UnifiedIR.op_inline(j - 1); type = Any)
+                                            UnifiedIR.op_inline(j); type = Any)
                 push!(curvals, UnifiedIR.op_stmt(e))
                 anchor = e
             end
@@ -591,7 +591,7 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
                 anchor = ifop
                 for j in 1:length(R)
                     e = UnifiedIR.insert_after!(ir, anchor, K"extract", UnifiedIR.op_stmt(ifop),
-                                                UnifiedIR.op_inline(j - 1); type = Any)
+                                                UnifiedIR.op_inline(j); type = Any)
                     push!(newvals, UnifiedIR.op_stmt(e))
                     anchor = e
                 end
@@ -659,7 +659,7 @@ function sroa_mutables!(ir::UnifiedIR.IR)
             UnifiedIR.is_tombstone(ir, u) && return
             uk = UnifiedIR.stmt_kind(ir, u)
             if uk === K"extract" && site.opidx == 1
-                idx = Int(UnifiedIR.imm_value(UnifiedIR.getop(ir, u, 2))::Int64) + 1
+                idx = Int(UnifiedIR.imm_value(UnifiedIR.getop(ir, u, 2))::Int64)
                 1 <= idx <= nf ? push!(loads, (u, idx)) : (ok = false)
             elseif uk === K"call"
                 callee = static_operand_value(ir, UnifiedIR.getop(ir, u, 1))
@@ -947,7 +947,7 @@ function _promote_arm_cells_at!(ir::UnifiedIR.IR, I::StmtId)
     anchor = I
     if exist_arity == 1 && counts[I.id] != 0
         e0 = UnifiedIR.insert_after!(ir, anchor, K"extract", UnifiedIR.op_stmt(I),
-                                     UnifiedIR.op_inline(0); type = Any)
+                                     UnifiedIR.op_inline(1); type = Any)
         UnifiedIR.replace_uses_where!(u -> u != e0, ir, I => UnifiedIR.op_stmt(e0))
         anchor = e0
     end
@@ -956,7 +956,7 @@ function _promote_arm_cells_at!(ir::UnifiedIR.IR, I::StmtId)
             UnifiedIR.op_stmt(I)
         else
             e = UnifiedIR.insert_after!(ir, anchor, K"extract", UnifiedIR.op_stmt(I),
-                                        UnifiedIR.op_inline(exist_arity + i - 1); type = Any)
+                                        UnifiedIR.op_inline(exist_arity + i); type = Any)
             anchor = e
             UnifiedIR.op_stmt(e)
         end

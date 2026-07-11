@@ -64,7 +64,7 @@ end
 end
 
 @testset "splice: structured callee (loop + nested if), region remapping" begin
-    # g(n) = loop(s=0, j=1) { s2 = s + (j>2 ? 2j : j); continue j<=n }, extract 0
+    # g(n) = loop(s=0, j=1) { s2 = s + (j>2 ? 2j : j); continue j<=n }, extract 1
     callee = let
         b = Builder(name = :structured)
         n = append_stmt!(b, K"region_arg"; type = Int64)
@@ -82,7 +82,7 @@ end
             body = UnifiedIR.current_region(b)
             append_stmt!(b, K"continue", op_region(body), op_stmt(cnd), op_stmt(s2), op_stmt(j2))
         end
-        s = append_stmt!(b, K"extract", op_stmt(r), op_inline(0); type = Int64)
+        s = append_stmt!(b, K"extract", op_stmt(r), op_inline(1); type = Int64)
         append_stmt!(b, K"return", s)
         finish!(b)
     end

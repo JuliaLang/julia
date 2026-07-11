@@ -161,7 +161,7 @@ function _transfer(fr::Frame, s::StmtId, k::UnifiedIR.Kind)
     elseif k === K"extract"
         vl = widenucond(opl(fr, UnifiedIR.getop(ir, s, 1)))
         idx = Int(UnifiedIR.imm_value(UnifiedIR.getop(ir, s, 2))::Int64)
-        argl = Any[vl, CC.Const(idx + 1)]
+        argl = Any[vl, CC.Const(idx)]
         rt = CC.builtin_tfunction(fr.st.cfg.interp, Core.getfield, argl, nothing)
         return (rt, builtin_effects_mask(Core.getfield, argl, rt))
     elseif k === K"select"

@@ -45,8 +45,8 @@ end
         body = UnifiedIR.current_region(b)
         append_stmt!(b, K"continue", op_region(body), op_stmt(cnd), op_stmt(s2), op_stmt(j2))
     end
-    tot = append_stmt!(b, K"extract", op_stmt(r), op_inline(0); type = Int64)
-    lst = append_stmt!(b, K"extract", op_stmt(r), op_inline(1); type = Int64)
+    tot = append_stmt!(b, K"extract", op_stmt(r), op_inline(1); type = Int64)
+    lst = append_stmt!(b, K"extract", op_stmt(r), op_inline(2); type = Int64)
     fin = append_stmt!(b, K"call", GlobalRef(Base, :add_int), tot, lst; type = Int64)
     append_stmt!(b, K"return", fin)
     ir = finish!(b)

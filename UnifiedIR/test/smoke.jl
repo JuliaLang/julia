@@ -41,7 +41,7 @@ end
         body = UnifiedIR.current_region(b)
         append_stmt!(b, K"continue", op_region(body), op_stmt(cnd), op_stmt(s2), op_stmt(j2))
     end
-    sum_ = append_stmt!(b, K"extract", op_stmt(r), op_inline(0); type = Int64)
+    sum_ = append_stmt!(b, K"extract", op_stmt(r), op_inline(1); type = Int64)
     append_stmt!(b, K"return", sum_)
     ir = finish!(b)
     @test verify_ir(ir; level = 1)
