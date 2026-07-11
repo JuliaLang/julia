@@ -264,6 +264,11 @@ end
 
 function type_str(@nospecialize(t))
     t === nothing && return "?"
+    if t isa Core.Const
+        v = sprint(show, t.val; context = :limit => true)
+        length(v) > 40 && (v = first(v, 39) * "\u2026")
+        return "Const(" * v * ")"
+    end
     if t isa Type
         if t === Union{}
             return "Union{}"
@@ -343,4 +348,45 @@ function opeq(a::IR, oa::Operand, b::IR, ob::Operand)
         return a.body.globals[payload(oa)] == b.body.globals[payload(ob)]
     end
     return payload(oa) == payload(ob)
+end
+
+# REPL display: the full listing by default. Truncation is opt-in: set a
+# line budget globally with `display_maxlines!(n)` or per-stream with
+# `IOContext(io, :ir_maxlines => n)`. (The compact one-liner via 2-arg
+# `show` stays for embedded contexts.)
+
+"Global REPL display line budget for IR listings; 0 = unlimited (default)."
+const DISPLAY_MAXLINES = Ref{Int}(0)
+
+"""
+    display_maxlines!(n::Union{Integer,Nothing})
+
+Opt into truncated REPL display of IR listings: at most `n` lines, then a
+tail note. `nothing` or `0` restores the default full listing. A per-stream
+`IOContext(io, :ir_maxlines => n)` overrides the global setting.
+"""
+function display_maxlines!(n::Union{Integer,Nothing})
+    DISPLAY_MAXLINES[] = n === nothing ? 0 : Int(n)
+    return nothing
+end
+
+function Base.show(io::IO, ::MIME"text/plain", ir::IR)
+    s = sprint(print_ir, ir)
+    maxl = get(io, :ir_maxlines, DISPLAY_MAXLINES[])
+    maxl = maxl isa Integer ? Int(maxl) : 0
+    if maxl > 0
+        lines = split(s, '\n')
+        isempty(lines[end]) && pop!(lines)
+        if length(lines) > maxl
+            for l in @view lines[1:maxl]
+                println(io, l)
+            end
+            print(io, "  \u22ee (", length(lines) - maxl, " more lines \u2014 ",
+                  nstmts(ir), " stmts, ", nregions(ir),
+                  " regions; `print_ir(stdout, ir)` for the full listing)")
+            return nothing
+        end
+    end
+    print(io, s)
+    return nothing
 end

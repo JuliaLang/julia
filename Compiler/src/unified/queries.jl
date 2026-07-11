@@ -98,3 +98,41 @@ function effects_of(@nospecialize(f), argtypes::Vector{Any};
     end
     return (; consistent, effect_free, nothrow, terminates)
 end
+
+"""
+    @code_unified [optimize=false] f(args...)
+
+`@code_typed` for the unified pipeline: infer (and by default optimize) `f`
+for the argument types of the given call and return the UnifiedIR `IR`
+object. Arguments may be values (their types are taken, without calling `f`)
+or bare `::T` type annotations.
+
+    @code_unified sum([1, 2, 3])
+    @code_unified optimize=false sort(::Vector{Int})
+"""
+macro code_unified(exs...)
+    isempty(exs) && error("@code_unified: expected a function call")
+    call = exs[end]
+    opt = true
+    for kw in exs[1:end-1]
+        if Meta.isexpr(kw, :(=), 2) && kw.args[1] === :optimize
+            opt = kw.args[2]
+        else
+            error("@code_unified: unsupported option `$kw` (supported: optimize=true/false)")
+        end
+    end
+    Meta.isexpr(call, :call) || error("@code_unified: expected a function call, got `$call`")
+    if any(a -> Meta.isexpr(a, :parameters) || Meta.isexpr(a, :kw), call.args)
+        error("@code_unified: keyword arguments are not supported yet")
+    end
+    f = call.args[1]
+    atypes = map(call.args[2:end]) do a
+        Meta.isexpr(a, :(::)) ? esc(a.args[end]) : :(Core.Typeof($(esc(a))))
+    end
+    quote
+        let opt = $(esc(opt))
+            typed_ir($(esc(f)), Any[$(atypes...)];
+                     optimize_until = opt === false ? "inference" : nothing)
+        end
+    end
+end

@@ -49,7 +49,7 @@ export Kind, StmtId, RegionId, Value, Operand, IR, Builder, RemapSet,
     # passes
     dce!, promote_cells!, fold_constant_branches!,
     # text
-    print_ir, parse_ir, struct_eq,
+    print_ir, parse_ir, struct_eq, display_maxlines!,
     # test dialect interpreter
     interpret
 

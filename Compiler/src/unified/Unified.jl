@@ -26,7 +26,7 @@ export codeinfo_to_ir, ir_to_codeinfo, UnsupportedIR,
     lowered_ir, define_ir_method!, roundtrip_codeinfo,
     infer_ir!, UInferConfig, optimize_ir!,
     infer_return, typed_ir, effects_of, InferenceConfig,
-    with_unified_compiler, UnifiedCacheOwner
+    with_unified_compiler, UnifiedCacheOwner, @code_unified
 
 include("codeinfo_entry.jl")
 include("eh_entry.jl")
