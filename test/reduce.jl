@@ -750,3 +750,17 @@ end
         Val(any(in((:one,:two,:three)),(:four,:three)))
     end |> only == Val{true}
 end
+
+# issue #61805
+@testset "foldr interaction with flatten" begin
+    @test foldr(*, Iterators.flatten([["a", "b"], ["c", "d"]])) == "abcd"
+
+    # Ideally, foldr would always get the right answer, but that currently requires that the iterator supports Iterators.reverse
+    # This tests a stateful iterator that cannot implement Iterators.reverse, ensuring it either errors or gets the right answer
+    res = try
+        foldr(tuple, Iterators.flatten((Iterators.Stateful(1:2), (3,))))
+    catch e
+        e
+    end
+    @test (res isa Exception) || res == (1, (2, 3))
+end

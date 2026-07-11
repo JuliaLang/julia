@@ -1346,16 +1346,21 @@ STATIC_INLINE jl_value_t *jl_svecset(
   2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the String object that owns the data pointer (m must be isbits)
 */
+#define JL_GENERICMEMORY_INLINED     0
+#define JL_GENERICMEMORY_GCMANAGED   1
+#define JL_GENERICMEMORY_MALLOCD     2
+#define JL_GENERICMEMORY_STRINGOWNED 3
+
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
     if (m->ptr == (void*)((char*)m + 16)) // JL_SMALL_BYTE_ALIGNMENT (from julia_internal.h)
-        return 0;
+        return JL_GENERICMEMORY_INLINED;
     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
     if (owner == (jl_value_t*)m)
-        return 1;
+        return JL_GENERICMEMORY_GCMANAGED;
     if (owner == NULL)
-        return 2;
-    return 3;
+        return JL_GENERICMEMORY_MALLOCD;
+    return JL_GENERICMEMORY_STRINGOWNED;
 }
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
@@ -2271,7 +2276,8 @@ JL_DLLEXPORT void jl_task_wait_empty(void);
 JL_DLLEXPORT void jl_postoutput_hook(void);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
 JL_DLLEXPORT void JL_NORETURN jl_raise(int signo);
-JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
+JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
@@ -2505,8 +2511,11 @@ void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp_name "sigsetjmp"
 #endif
 #define jl_setjmp(a,b) sigsetjmp(a,b)
-#if defined(_COMPILER_ASAN_ENABLED_) && defined(__GLIBC__)
-extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
+#if defined(__GLIBC__)
+// Route jl_longjmp through a function pointer so we can bypass the sanitizers' longjmp
+// interceptor (which mishandles Julia's task stacks) when a sanitizer is active.
+typedef void (*siglongjmp_func_t)(jmp_buf _Buf, int _Value) JL_NOTSAFEPOINT;
+extern siglongjmp_func_t real_siglongjmp;
 #define jl_longjmp(a,b) real_siglongjmp(a,b)
 #else
 #define jl_longjmp(a,b) siglongjmp(a,b)

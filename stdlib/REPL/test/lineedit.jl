@@ -940,3 +940,22 @@ end
     strings3 = ["abcdef", "123456\nijklmn"]
     @test getcompletion(strings3) == "\033[0B\nabcdef\n123456\nijklmn\n"
 end
+
+@testset "Conflicting definitions for keyseq" begin
+    @testset "string" begin
+        keymap = Dict{Char, Any}()
+        REPL.LineEdit.add_nested_key!(keymap, "a", "abc")
+        @test keymap == Dict('a' => "abc")
+        expected_msg = "Conflicting definitions for keyseq a within one keymap"
+        @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, "a", "abdef")
+        @test keymap == Dict('a' => "abc")
+    end
+    @testset "char" begin
+        keymap = Dict{Char, Any}()
+        REPL.LineEdit.add_nested_key!(keymap, 'a', "abc")
+        @test keymap == Dict('a' => "abc")
+        expected_msg = "Conflicting definitions for keyseq a within one keymap"
+        @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, 'a', "abdef")
+        @test keymap == Dict('a' => "abc")
+    end
+end

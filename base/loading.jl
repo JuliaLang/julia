@@ -1876,9 +1876,8 @@ function compilecache_path(pkg::PkgId;
         try
             # update timestamp of precompilation file so that it is the first to be tried by code loading
             touch(path_to_try)
-        catch ex
+        catch
             # file might be read-only and then we fail to update timestamp, which is fine
-            ex isa IOError || rethrow()
         end
         path = path_to_try
         break
@@ -2090,8 +2089,8 @@ end
                 if stalecheck
                     try
                         touch(path_to_try) # update timestamp of precompilation file
-                    catch ex # file might be read-only and then we fail to update timestamp, which is fine
-                        ex isa IOError || rethrow()
+                    catch
+                        # file might be read-only and then we fail to update timestamp, which is fine
                     end
                 end
                 # finish loading module graph into staledeps

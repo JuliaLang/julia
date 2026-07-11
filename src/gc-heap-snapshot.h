@@ -27,7 +27,7 @@ void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_value_t 
 void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT;
 // Used for objects manually allocated in C (outside julia GC), to still tell the heap snapshot about the
 // size of the object, even though we're never going to mark that object.
-void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT;
+void _gc_heap_snapshot_record_foreign_memory_edge(jl_value_t *from, void* to, size_t bytes) JL_NOTSAFEPOINT;
 // Used for objects that are reachable from the GC roots
 void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEPOINT;
 // Used for objects that are reachable from the finalizer list
@@ -106,10 +106,10 @@ static inline void gc_heap_snapshot_record_binding_partition_edge(jl_value_t *fr
     }
 }
 
-static inline void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
+static inline void gc_heap_snapshot_record_foreign_memory_edge(jl_value_t *from, void* to, size_t bytes) JL_NOTSAFEPOINT
 {
     if (__unlikely(gc_heap_snapshot_enabled && prev_sweep_full)) {
-        _gc_heap_snapshot_record_hidden_edge(from, to, bytes, alloc_type);
+        _gc_heap_snapshot_record_foreign_memory_edge(from, to, bytes);
     }
 }
 

@@ -26,7 +26,7 @@ int jl_unw_get(void *context) { return -1; }
 extern "C" {
 #endif
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler) JL_NOTSAFEPOINT;
 static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
 
 static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintptr_t sp) JL_NOTSAFEPOINT
@@ -200,7 +200,7 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
                                   bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, context))
+    if (!jl_unw_init(&cursor, context, 1))
         return 0;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
@@ -220,7 +220,7 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     if (r < 0)
         return 0;
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, &context) || maxsize == 0)
+    if (!jl_unw_init(&cursor, &context, 0) || maxsize == 0)
         return 0;
     jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
@@ -273,7 +273,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     memset(&context, 0, sizeof(context));
     int r = jl_unw_get(&context);
     jl_gcframe_t *pgcstack = jl_pgcstack;
-    if (r == 0 && jl_unw_init(&cursor, &context)) {
+    if (r == 0 && jl_unw_init(&cursor, &context, 0)) {
         // Skip frame for jl_backtrace_from_here itself
         skip += 1;
         size_t offset = 0;
@@ -463,9 +463,10 @@ JL_DLLEXPORT void jl_refresh_dbg_module_list(void)
         needsSymRefreshModuleList = 0;
     }
 }
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_signal_handler)
 {
     int result;
+    (void)from_signal_handler;
     uv_mutex_lock(&jl_in_stackwalk);
     jl_refresh_dbg_module_list();
 #if !defined(_CPU_X86_64_)
@@ -560,8 +561,14 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // stacktrace using libunwind
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler)
 {
+#if !defined(LLVMLIBUNWIND)
+    if (from_signal_handler)
+        return unw_init_local2(cursor, context, UNW_INIT_SIGNAL_FRAME) == 0;
+#else
+    (void)from_signal_handler;
+#endif
     return unw_init_local(cursor, context) == 0;
 }
 
@@ -593,7 +600,7 @@ NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize
 
 #else
 // stacktraces are disabled
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler)
 {
     return 0;
 }

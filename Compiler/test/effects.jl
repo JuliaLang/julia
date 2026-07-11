@@ -1006,6 +1006,19 @@ end
     @isdefined($(gensym("some_undef_symbol")))
 end |> !Compiler.is_consistent
 
+# `@isdefined`-guarded read of a slot whose value is a `MustAlias` must still refine
+# the slot's `undef` info
+function isdefined_alias_loop(t::Tuple)
+    local prev
+    s = ""
+    for x in t
+        @isdefined(prev) && (s = prev)
+        prev = x
+    end
+    return s
+end
+@test Compiler.is_nothrow(Base.infer_effects(isdefined_alias_loop, (Tuple{String,String},)))
+
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
 f50198() = (hf50198(Ref(:x)[]); nothing)

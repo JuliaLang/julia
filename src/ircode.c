@@ -794,6 +794,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s)
         tag = read_uint8(s->s);
         return jl_deser_tag(tag);
     case TAG_RELOC_METHODROOT:
+    {
         key = read_uint64(s->s);
         tag = read_uint8(s->s);
         assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
@@ -804,6 +805,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s)
             index = read_uint32(s->s);
         assert(index >= 0);
         return lookup_root(s->method, key, index);
+    }
     case TAG_METHODROOT:
         return lookup_root(s->method, 0, read_uint8(s->s));
     case TAG_LONG_METHODROOT:

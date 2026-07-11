@@ -1911,6 +1911,7 @@ public:
     jl_tbaacache_t tbaa_cache;
     jl_noaliascache_t aliasscope_cache;
     jl_method_instance_t *linfo = NULL;
+    jl_code_instance_t *codeinst = NULL;
     jl_value_t *rettype = NULL;
     jl_code_info_t *source = NULL;
     jl_array_t *code = NULL;
@@ -1951,7 +1952,9 @@ public:
     }
 
     jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params, jl_code_instance_t *ci) :
-        jl_codectx_t(llvmctx, params, jl_atomic_load_relaxed(&ci->min_world), jl_atomic_load_relaxed(&ci->max_world)) {}
+        jl_codectx_t(llvmctx, params, jl_atomic_load_relaxed(&ci->min_world), jl_atomic_load_relaxed(&ci->max_world)) {
+        codeinst = ci;
+    }
 
     jl_typecache_t &types() {
         type_cache.initialize(builder.getContext(), emission_context.DL);
@@ -3217,13 +3220,48 @@ static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, j
     return mark_julia_type(ctx, v, true, jl_any_type);
 }
 
-static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
+// Resolving a `getglobal(::Module, ::Symbol)`-style call to a constant binding
+// load is only safe if the `CodeInstance` we are emitting has a forward edge to
+// the binding, since otherwise nothing will invalidate this code when the
+// binding partition changes (e.g. on `const` redefinition). Inference records
+// such edges via `GlobalAccessInfo` for accesses it sees directly, but accesses
+// that only appear after inlining (where a `Module`-typed slot was substituted
+// with a literal `Module`) may not have a corresponding edge. In that case fall
+// back to the runtime path so the new value is observed correctly.
+static bool ci_has_binding_edge(jl_code_instance_t *ci, jl_binding_t *bnd)
+{
+    if (!ci)
+        return false;
+    jl_svec_t *edges = jl_atomic_load_relaxed(&ci->edges);
+    if (!edges || !jl_is_svec((jl_value_t*)edges))
+        return false;
+    size_t l = jl_svec_len(edges);
+    for (size_t i = 0; i < l; i++) {
+        jl_value_t *e = jl_svecref(edges, i);
+        if (e == (jl_value_t*)bnd)
+            return true;
+    }
+    return false;
+}
+
+static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order, bool from_literal_globalref = true)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
     struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
     if (!jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
+    // Literal `GlobalRef` accesses in the method's source are tracked by the
+    // method-level source scan (see `jl_scan_method_source_now`), which
+    // registers the binding as a backedge of the method itself. For *dynamic*
+    // accesses (`getglobal`/`getfield` on a `Const(::Module)`/`Const(::Symbol)`)
+    // there is no equivalent registration: such calls may have been
+    // synthesized by inlining substitution, and the only place an edge could
+    // exist is on the `CodeInstance` itself. Without such an edge, baking the
+    // binding's value into the generated code would be unsafe under
+    // redefinition, so defer to the runtime path.
+    if (!from_literal_globalref && ctx.codeinst != NULL && !ci_has_binding_edge(ctx.codeinst, bnd))
+        return emit_globalref_runtime(ctx, bnd, mod, name);
     if (jl_bkind_is_real_constant(rkp.kind) || rkp.kind == PARTITION_KIND_UNDEF_CONST) {
         if (rkp.maybe_depwarn) {
             Value *bp = julia_binding_gv(ctx, bnd);
@@ -4018,7 +4056,8 @@ static jl_llvm_functions_t
         jl_code_info_t *src,
         jl_value_t *abi,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params);
+        jl_codegen_params_t &params,
+        jl_code_instance_t *codeinst = nullptr);
 
 static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_datatype_t *type, jl_cgval_t name);
 
@@ -4487,7 +4526,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (fld.constant && jl_is_symbol(fld.constant)) {
             jl_sym_t *name = (jl_sym_t*)fld.constant;
             if (obj.constant && jl_is_module(obj.constant)) {
-                *ret = emit_globalref(ctx, (jl_module_t*)obj.constant, name, order == jl_memory_order_unspecified ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
+                *ret = emit_globalref(ctx, (jl_module_t*)obj.constant, name, order == jl_memory_order_unspecified ? AtomicOrdering::Unordered : get_llvm_atomic_order(order), /*from_literal_globalref*/false);
                 return true;
             }
 
@@ -4632,7 +4671,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (sym.constant && jl_is_symbol(sym.constant)) {
             jl_sym_t *name = (jl_sym_t*)sym.constant;
             if (mod.constant && jl_is_module(mod.constant)) {
-                *ret = emit_globalref(ctx, (jl_module_t*)mod.constant, name, get_llvm_atomic_order(order));
+                *ret = emit_globalref(ctx, (jl_module_t*)mod.constant, name, get_llvm_atomic_order(order), /*from_literal_globalref*/false);
                 return true;
             }
         }
@@ -8089,7 +8128,8 @@ static jl_llvm_functions_t
         jl_code_info_t *src,
         jl_value_t *abi,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params)
+        jl_codegen_params_t &params,
+        jl_code_instance_t *codeinst)
 {
     ++EmittedFunctions;
     // step 1. unpack AST and allocate codegen context for this function
@@ -8097,6 +8137,7 @@ static jl_llvm_functions_t
     size_t max_world = src->max_world;
     jl_llvm_functions_t declarations;
     jl_codectx_t ctx(*params.tsctx.getContext(), params, min_world, max_world);
+    ctx.codeinst = codeinst;
     jl_datatype_t *vatyp = NULL;
     JL_GC_PUSH2(&ctx.code, &vatyp);
     ctx.code = src->code;
@@ -9738,7 +9779,8 @@ jl_llvm_functions_t jl_emit_code(
         jl_code_info_t *src,
         jl_value_t *abi_at,
         jl_value_t *abi_rt,
-        jl_codegen_params_t &params)
+        jl_codegen_params_t &params,
+        jl_code_instance_t *codeinst)
 {
     JL_TIMING(CODEGEN, CODEGEN_LLVM);
     jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_DEFAULT_BLOCK);
@@ -9747,7 +9789,7 @@ jl_llvm_functions_t jl_emit_code(
         compare_cgparams(params.params, &jl_default_cgparams)) &&
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
-        decls = emit_function(m, li, src, abi_at, abi_rt, params);
+        decls = emit_function(m, li, src, abi_at, abi_rt, params, codeinst);
         auto stream = *jl_ExecutionEngine->get_dump_emitted_mi_name_stream();
         if (stream) {
             jl_printf(stream, "%s\t", decls.specFunctionObject.c_str());
@@ -9818,7 +9860,7 @@ jl_llvm_functions_t jl_emit_codeinst(
         return jl_llvm_functions_t(); // user error
     }
     //assert(jl_egal((jl_value_t*)jl_atomic_load_relaxed(&codeinst->debuginfo), (jl_value_t*)src->debuginfo) && "trying to generate code for a codeinst for an incompatible src");
-    jl_llvm_functions_t decls = jl_emit_code(m, mi, src, get_ci_abi(codeinst), codeinst->rettype, params);
+    jl_llvm_functions_t decls = jl_emit_code(m, mi, src, get_ci_abi(codeinst), codeinst->rettype, params, codeinst);
     return decls;
 }
 

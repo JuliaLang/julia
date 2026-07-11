@@ -10,7 +10,12 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test filesize(hello_exe) < 1_900_000
 
     trimmability_exe = joinpath(bindir, "trimmability" * exe_suffix)
-    @test readchomp(`$trimmability_exe arg1 arg2`) == "Hello, world!\n$trimmability_exe\narg1\narg2"
+    lines = split(readchomp(`$trimmability_exe arg1 arg2`), "\n")
+    @test lines[1] == "Hello, world!"
+    @test lines[2] == trimmability_exe
+    @test lines[3] == "arg1"
+    @test lines[4] == "arg2"
+    @test parse(Float64, lines[5]) isa Float64
 
     basic_jll_exe = joinpath(bindir, "basic_jll" * exe_suffix)
     lines = split(readchomp(`$basic_jll_exe`), "\n")

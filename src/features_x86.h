@@ -85,7 +85,7 @@ JL_FEATURE_DEF(uintr, 32 * 4 + 5, 140000)
 JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 0)
 JL_FEATURE_DEF(serialize, 32 * 4 + 14, 110000)
 JL_FEATURE_DEF(tsxldtrk, 32 * 4 + 16, 110000)
-JL_FEATURE_DEF(pconfig, 32 * 4 + 18, 0)
+// JL_FEATURE_DEF(pconfig, 32 * 4 + 18, 0) // Privileged instruction
 // JL_FEATURE_DEF(ibt, 32 * 4 + 20, 0)
 JL_FEATURE_DEF_NAME(amx_bf16, 32 * 4 + 22, 110000, "amx-bf16")
 JL_FEATURE_DEF(avx512fp16, 32 * 4 + 23, 140000)
@@ -115,7 +115,7 @@ JL_FEATURE_DEF(xsaves, 32 * 7 + 3, 0)
 
 // EAX=0x80000008: EBX
 JL_FEATURE_DEF(clzero, 32 * 8 + 0, 0)
-JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0)
+// JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0) // Privileged instruction
 
 // EAX=7,ECX=1: EAX
 JL_FEATURE_DEF(sha512, 32 * 9 + 0, 170000)
@@ -126,7 +126,7 @@ JL_FEATURE_DEF(avxvnni, 32 * 9 + 4, 120000)
 JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 0)
 JL_FEATURE_DEF(cmpccxadd, 32 * 9 + 7, 160000)
 JL_FEATURE_DEF_NAME(amx_fp16, 32 * 9 + 21, 160000, "amx-fp16")
-JL_FEATURE_DEF(hreset, 32 * 9 + 22, 160000)
+// JL_FEATURE_DEF(hreset, 32 * 9 + 22, 160000) // Privileged instruction
 JL_FEATURE_DEF(avxifma, 32 * 9 + 23, 160000)
 
 // EAX=7,ECX=1: EBX

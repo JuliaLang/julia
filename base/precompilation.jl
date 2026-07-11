@@ -350,8 +350,8 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     end
     termwidth = @something termwidth (displaysize(io)::Tuple{Int,Int})[2]
     max_progress_width = max(0, min(termwidth - textwidth(p.header) - textwidth(progress_text) - 10 , p.width))
-    n_filled = floor(Int, max_progress_width * perc / 100)
-    partial_filled = (max_progress_width * perc / 100) - n_filled
+    filled = max_progress_width * clamp(perc / 100, 0.0, 1.0)
+    (partial_filled, n_filled::Int64) = modf(filled) # get fractional / integer part
     n_left = max_progress_width - n_filled
     headers = split(p.header, ' ')
     to_print = sprint(; context=io) do io
@@ -850,6 +850,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     n_done = Ref(0)
     n_already_precomp = Ref(0)
     n_loaded = Ref(0)
+    loaded_pkgs = Base.PkgId[]
     interrupted = Ref(false)
 
     function handle_interrupt(err, in_printloop::Bool)
@@ -940,8 +941,11 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         if i > 1
                             print(iostr, ansi_cleartoend)
                         end
-                        bar.current = n_done[] - n_already_precomp[]
-                        bar.max = n_total - n_already_precomp[]
+                        # max(0,...) guards against a race where the print loop runs after
+                        # n_already_precomp is incremented but before n_done is incremented,
+                        # which would otherwise produce a negative value and crash repeat().
+                        bar.current = max(0, n_done[] - n_already_precomp[])
+                        bar.max = max(0, n_total - n_already_precomp[])
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
                         termwidth = (displaysize(io)::Tuple{Int,Int})[2] - 4
@@ -1083,7 +1087,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                 end
                                 was_recompiled[pkg_config] = true
                             end
-                            loaded && (n_loaded[] += 1)
+                            if loaded
+                                n_loaded[] += 1
+                                @lock print_lock push!(loaded_pkgs, pkg)
+                            end
                         catch err
                             # @show err
                             close(std_pipe.in) # close pipe to end the std output monitor
@@ -1104,7 +1111,13 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             Base.release(parallel_limiter)
                         end
                     else
-                        is_stale || (n_already_precomp[] += 1)
+                        if !is_stale
+                            n_already_precomp[] += 1
+                            if loaded
+                                n_loaded[] += 1
+                                @lock print_lock push!(loaded_pkgs, pkg)
+                            end
+                        end
                     end
                     n_done[] += 1
                     notify(was_processed[pkg_config])
@@ -1154,14 +1167,44 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     local plural1 = length(configs) > 1 ? "dependency configurations" : n_loaded[] == 1 ? "dependency" : "dependencies"
                     local plural2 = n_loaded[] == 1 ? "a different version is" : "different versions are"
                     local plural3 = n_loaded[] == 1 ? "" : "s"
-                    local plural4 = n_loaded[] == 1 ? "this package" : "these packages"
+                    local loaded_names = join(sort!([full_name(ext_to_parent, p) for p in loaded_pkgs]), ", ", " and ")
+                    # compute how many precompiled packages transitively depend on the loaded packages
+                    local n_affected = 0
+                    local loaded_set = Set{Base.PkgId}(loaded_pkgs)
+                    let reverse_deps = Dict{Base.PkgId, Vector{Base.PkgId}}()
+                        for (p, deps) in direct_deps
+                            for d in deps
+                                push!(get!(Vector{Base.PkgId}, reverse_deps, d), p)
+                            end
+                        end
+                        affected = Set{Base.PkgId}()
+                        frontier = Base.PkgId[p for p in loaded_set]
+                        while !isempty(frontier)
+                            p = pop!(frontier)
+                            for rdep in get(reverse_deps, p, Base.PkgId[])
+                                if rdep ∉ affected && rdep ∉ loaded_set
+                                    push!(affected, rdep)
+                                    push!(frontier, rdep)
+                                end
+                            end
+                        end
+                        n_affected = length(affected)
+                    end
                     print(iostr, "\n  ",
                         color_string(string(n_loaded[]), Base.warn_color()),
                         " $(plural1) precompiled but ",
                         color_string("$(plural2) currently loaded", Base.warn_color()),
-                        ". Restart julia to access the new version$(plural3). \
-                        Otherwise, loading dependents of $(plural4) may trigger further precompilation to work with the unexpected version$(plural3)."
+                        " (", loaded_names, ")",
+                        ". Restart julia to access the new version$(plural3)."
                     )
+                    if n_affected > 0
+                        local affected_plural = length(configs) > 1 ? "dependency configurations" : n_affected == 1 ? "dependent" : "dependents"
+                        print(iostr,
+                            " Otherwise, $(n_affected) $(affected_plural) of ",
+                            n_loaded[] == 1 ? "this package" : "these packages",
+                            " may trigger further precompilation to work with the unexpected version$(plural3)."
+                        )
+                    end
                 end
                 if !isempty(precomperr_deps)
                     pluralpc = length(configs) > 1 ? "dependency configurations" : precomperr_deps == 1 ? "dependency" : "dependencies"
@@ -1251,6 +1294,11 @@ function _color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
 end
 
 # Can be merged with `maybe_cachefile_lock` in loading?
+# Wraps the precompilation function `f` with cachefile lock handling.
+# Returns the result from `f()`, which can be:
+#   - `nothing`: cache already existed
+#   - `Tuple{String, Union{Nothing, String}}`: this process just compiled
+#   - `Exception`: compilation failed
 function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore, ignore_loaded::Bool, fullname)
     if !(isdefined(Base, :mkpidlock_hook) && isdefined(Base, :trymkpidlock_hook) && Base.isdefined(Base, :parse_pidfile_hook))
         return f()
@@ -1277,7 +1325,7 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
         Base.release(parallel_limiter) # release so other work can be done while waiting
         try
             # wait until the lock is available
-            @invokelatest Base.mkpidlock_hook(() -> begin
+            cachefile = @invokelatest Base.mkpidlock_hook(() -> begin
                     # double-check in case the other process crashed or the lock expired
                     if Base.isprecompiled(pkg; ignore_loaded, flags=cacheflags) # don't use caches for this as the env state will have changed
                         return nothing # returning nothing indicates a process waited for another

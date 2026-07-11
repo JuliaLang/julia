@@ -303,6 +303,7 @@ static htable_t nullptrs;
 static arraylist_t serialization_queue;
 static arraylist_t layout_table;     // cache of `position(s)` for each `id` in `serialization_order`
 static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_reachable
+static arraylist_t deferred_supers;  // deferred datatype super fields, handled by jl_serialize_reachable once the pre-order recursion has unwound
 
 // Permanent list of void* (begin, end+1) pairs of system/package images we've loaded previously
 // together with their module build_ids (used for external linkage)
@@ -992,7 +993,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     else if (jl_is_genericmemory(v)) {
         jl_genericmemory_t *m = (jl_genericmemory_t*)v;
         const char *data = (const char*)m->ptr;
-        if (jl_genericmemory_how(m) == 3) {
+        if (jl_genericmemory_how(m) == JL_GENERICMEMORY_STRINGOWNED) {
             assert(jl_is_string(jl_genericmemory_data_owner_field(m)));
         }
         else if (layout->flags.arrayelem_isboxed) {
@@ -1079,12 +1080,13 @@ done_fields: ;
     // try to promote itself to be immediate)
     if (s->incremental && jl_is_datatype(v) && immediate && recursive) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
-        void **bp = ptrhash_bp(&serialization_order, (void*)dt->super);
-        if (*bp != (void*)-2) {
-            // if super is already on the stack of things to handle when this returns, do
-            // not try to handle it now
-            jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, immediate);
-        }
+        // do not handle the super field now: the supertype's parameters can reach back to
+        // objects that are still on the recursion stack (e.g. `struct Baz{T} <: Bar{Foo{Baz{T}}} end`),
+        // which would order the supertype before its own parameters in the queue. Defer it
+        // until the recursion unwinds; any forward reference this creates in the image is
+        // handled at load time by the uniquing_super/delay_list machinery.
+        if (jl_needs_serialization(s, (jl_value_t*)dt->super))
+            arraylist_push(&deferred_supers, (void*)dt->super);
         immediate = 0;
         char *data = (char*)jl_data_ptr(v);
         size_t i, np = layout->npointers;
@@ -1150,7 +1152,15 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
 static void jl_serialize_reachable(jl_serializer_state *s) JL_GC_DISABLED
 {
     size_t i, prevlen = 0;
-    while (object_worklist.len) {
+    while (1) {
+        // handle deferred super fields now: the recursion stack is unwound here, so
+        // everything reachable through their parameters is already validly ordered
+        while (deferred_supers.len) {
+            jl_value_t *super = (jl_value_t*)deferred_supers.items[--deferred_supers.len];
+            jl_queue_for_serialization_(s, super, 1, 1);
+        }
+        if (object_worklist.len == 0)
+            break;
         // reverse!(object_worklist.items, prevlen:end);
         // prevlen is the index of the first new object
         for (i = prevlen; i < object_worklist.len; i++) {
@@ -1539,9 +1549,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     continue;
                 }
                 else if (jl_is_datatype(v)) {
-                    for (size_t i = 0; i < s->uniquing_super.len; i++) {
-                        if (s->uniquing_super.items[i] == (void*)v) {
-                            s->uniquing_super.items[i] = arraylist_pop(&s->uniquing_super);
+                    // iterate in reverse, so that the element swapped in from the back upon
+                    // removal is always one we have already examined
+                    for (size_t i = s->uniquing_super.len; i > 0; i--) {
+                        if (s->uniquing_super.items[i - 1] == (void*)v) {
+                            s->uniquing_super.items[i - 1] = arraylist_pop(&s->uniquing_super);
                             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(reloc_offset|3));
                         }
                     }
@@ -1577,7 +1589,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             jl_genericmemory_t *m = (jl_genericmemory_t*)v;
             const jl_datatype_layout_t *layout = t->layout;
             size_t len = m->length;
-            // if (jl_genericmemory_how(m) == 3) {
+            // if (jl_genericmemory_how(m) == JL_GENERICMEMORY_STRINGOWNED) {
             //     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
             //     write_uint(f, len);
             //     write_pointerfield(s, owner);
@@ -1637,7 +1649,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     if (len == 0) { // TODO: should we have a zero-page, instead of writing each type's fragment separately?
                         write_padding(s->const_data, layout->size ? layout->size : isbitsunion);
                     }
-                    else if (jl_genericmemory_how(m) == 3) {
+                    else if (jl_genericmemory_how(m) == JL_GENERICMEMORY_STRINGOWNED) {
                         assert(jl_is_string(jl_genericmemory_data_owner_field(m)));
                         write_padding(s->const_data, 1);
                     }
@@ -3147,6 +3159,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_new(&serialization_order, 25000);
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
+    arraylist_new(&deferred_supers, 0);
     arraylist_new(&serialization_queue, 0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
     ios_mem(&sysimg, 0);
@@ -3436,6 +3449,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 
     assert(object_worklist.len == 0);
     arraylist_free(&object_worklist);
+    assert(deferred_supers.len == 0);
+    arraylist_free(&deferred_supers);
     arraylist_free(&serialization_queue);
     arraylist_free(&layout_table);
     arraylist_free(&s.uniquing_types);
@@ -3735,29 +3750,31 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
         if (jl_atomic_load_relaxed(&bpart->min_world) > jl_require_world)
             goto invalidated;
     }
-    if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
-        return 1;
-    jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
-    if (no_replacement)
-        goto add_backedge;
-    jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
-    if (!latest_imported_bpart)
-        return 1;
-    if (jl_atomic_load_relaxed(&latest_imported_bpart->min_world) <=
-        jl_atomic_load_relaxed(&bpart->min_world)) {
-add_backedge:
-        // Imported binding is still valid
-        if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
-                external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
-            jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
+    {
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
+            return 1;
+        jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
+        jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
+        if (no_replacement)
+            goto add_backedge;
+        if (!latest_imported_bpart)
+            return 1;
+        if (jl_atomic_load_relaxed(&latest_imported_bpart->min_world) <=
+            jl_atomic_load_relaxed(&bpart->min_world)) {
+    add_backedge:
+            // Imported binding is still valid
+            if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
+                    external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
+                jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
+            }
+            return 1;
         }
-        return 1;
-    }
-    else {
-        // Binding partition was invalidated
-        assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
-        jl_atomic_store_relaxed(&bpart->min_world,
-            jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+        else {
+            // Binding partition was invalidated
+            assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
+            jl_atomic_store_relaxed(&bpart->min_world,
+                jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
+        }
     }
 invalidated:
     // We need to go through and re-validate any bindings in the same image that
@@ -4045,8 +4062,18 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                 assert(tag == 0);
                 arraylist_push(&delay_list, obj);
                 arraylist_push(&delay_list, pfld);
-                ptrhash_put(&new_dt_objs, (void*)obj, obj); // mark obj as invalid
-                *pfld = (uintptr_t)NULL;
+                // FIXME: leaving the `super` field populated here and then performing
+                // type canonicalization is unsound since it intentionally exposes sub-
+                // typing to non-canonicalized types (c.f. `jl_type_equality_is_identity`)
+                //
+                // Type canonicalization requires that any queried types are already
+                // canonicalized or that `super` is not needed to decide type-equality.
+                // The latter is essentially never true in general (proof is left to the
+                // reader) and the former is not possible in the presence of circular types.
+                //
+                // For now we blindly hope that subtyping rarely inspects `super` and, if
+                // it does, that it doesn't compare it against any equal-but-not-yet-
+                // canonicalized-to types so that the result is unaffected.
                 continue;
             }
         }
