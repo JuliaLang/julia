@@ -9287,3 +9287,38 @@ pinned_gci_62001(::Type{<:PinnedSA62001{<:PinnedPL62001}}, ::Type{<:Type{Val{S}}
     @eval fdisp62272(::$te) = :egal_key
     @test fdisp62272(x) === :egal_key
 end
+
+# a `jl_shift_dangling_refs` over a typename's own primary body must re-frame
+# the supertype (and field types) for the shifted parameters: the interned
+# fragment it creates is shared, and a verbatim-copied super poisons every
+# later instantiation whose template super hits the same cache key. The method
+# pair below makes specificity comparison shift `ShiftFragVP{ref(1)}` (the
+# primary body) by two binders while resolving the alias-nested bounds; the
+# struct definition then reuses the cached `ShiftFragVP{ref(3)}` fragment as
+# its template supertype. (Found via PkgEval: Polyhedra's supertype chain
+# collapsed to the wrong type parameter.)
+abstract type ShiftFragRep{T} end
+abstract type ShiftFragHRep{T} <: ShiftFragRep{T} end
+abstract type ShiftFragVRep{T} <: ShiftFragRep{T} end
+abstract type ShiftFragHA{T} <: ShiftFragHRep{T} end
+abstract type ShiftFragVP{T} <: ShiftFragVRep{T} end
+struct ShiftFragHS{T, AT<:AbstractVector{T}} end
+struct ShiftFragLN{T, AT<:AbstractVector{T}} end
+struct ShiftFragIdx{T, ElemT, RepT<:ShiftFragRep{T}} end
+const ShiftFragHSI{T, RepT} = ShiftFragIdx{T, <:ShiftFragHS{T, <:AbstractVector{T}}, RepT}
+const ShiftFragLNI{T, RepT} = ShiftFragIdx{T, <:ShiftFragLN{T, <:AbstractVector{T}}, RepT}
+fshiftfrag(::ShiftFragHSI{T, <:ShiftFragHA{T}}) where {T} = 1
+fshiftfrag(::ShiftFragLNI{T, <:ShiftFragVP{T}}) where {T} = 2
+mutable struct ShiftFragPH{T, AT, D<:Union{Int,Ref}} <: ShiftFragVP{T} end
+let P = ShiftFragPH{Float64, Vector{Float64}, Int64}
+    @test supertype(P) === ShiftFragVP{Float64}
+    @test supertype(supertype(P)) === ShiftFragVRep{Float64}
+    @test supertype(supertype(supertype(P))) === ShiftFragRep{Float64}
+    @test P <: ShiftFragRep{Float64}
+    @test !(P <: ShiftFragVRep{Int64})
+    # the interned fragment itself carries a consistently framed supertype
+    tpl = Base.unwrap_unionall(ShiftFragPH)
+    frag = getfield(tpl, :super)
+    @test frag === ShiftFragVP{Core.TypeVarRef(3)}
+    @test getfield(frag, :super) === ShiftFragVRep{Core.TypeVarRef(3)}
+end

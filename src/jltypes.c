@@ -2249,7 +2249,7 @@ static jl_value_t *shift_refs_(jl_value_t *t, ssize_t inc, size_t depth)
             jl_datatype_t *primary = NULL;
             if (tn->wrapper != NULL)
                 primary = (jl_datatype_t*)jl_unwrap_unionall(tn->wrapper);
-            if (primary != NULL && primary != dt && tn != jl_tuple_typename &&
+            if (primary != NULL && tn != jl_tuple_typename &&
                 tn != jl_namedtuple_typename && ntp > 0) {
                 jl_typeenv_t *penv = (jl_typeenv_t*)alloca(ntp * sizeof(jl_typeenv_t));
                 for (i = 0; i < ntp; i++) {
