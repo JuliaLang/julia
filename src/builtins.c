@@ -2221,6 +2221,48 @@ JL_CALLABLE(jl_f__primitivetype)
     return dt->name->wrapper;
 }
 
+JL_CALLABLE(jl_f__enumtype)
+{
+    JL_NARGS(_enumtype, 5, 5);
+    JL_TYPECHK(_enumtype, module, args[0]);
+    JL_TYPECHK(_enumtype, symbol, args[1]);
+    JL_TYPECHK(_enumtype, datatype, args[3]);
+    JL_TYPECHK(_enumtype, bool, args[4]);
+    jl_datatype_t *dt = jl_new_enumtype((jl_sym_t*)args[1], (jl_module_t*)args[0],
+                                        args[2], (jl_datatype_t*)args[3],
+                                        args[4] == jl_true);
+    return dt->name->wrapper;
+}
+
+JL_CALLABLE(jl_f__enum_add_member)
+{
+    JL_NARGS(_enum_add_member, 4, 4);
+    JL_TYPECHK(_enum_add_member, datatype, args[0]);
+    JL_TYPECHK(_enum_add_member, module, args[1]);
+    JL_TYPECHK(_enum_add_member, symbol, args[2]);
+    jl_value_t *value = args[3] == jl_nothing ? NULL : args[3];
+    return jl_enum_add_member((jl_datatype_t*)args[0], (jl_module_t*)args[1],
+                              (jl_sym_t*)args[2], value);
+}
+
+JL_CALLABLE(jl_f__enum_extend)
+{
+    JL_NARGS(_enum_extend, 3, 3);
+    JL_TYPECHK(_enum_extend, datatype, args[0]);
+    JL_TYPECHK(_enum_extend, module, args[1]);
+    JL_TYPECHK(_enum_extend, datatype, args[2]);
+    jl_enum_extend_check((jl_datatype_t*)args[0], (jl_module_t*)args[1],
+                         (jl_datatype_t*)args[2]);
+    return jl_nothing;
+}
+
+JL_CALLABLE(jl_f__enum_members)
+{
+    JL_NARGS(_enum_members, 1, 1);
+    JL_TYPECHK(_enum_members, datatype, args[0]);
+    return (jl_value_t*)jl_enum_members((jl_datatype_t*)args[0]);
+}
+
 static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     // Check context-specific conditions first, before jl_check_valid_supertype

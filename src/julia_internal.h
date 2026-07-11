@@ -521,6 +521,22 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 
+// enums.c
+extern jl_array_t *jl_enum_member_log JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_value_t *jl_enum_add_member(jl_datatype_t *et, jl_module_t *mod,
+                                            jl_sym_t *name, jl_value_t *value);
+JL_DLLEXPORT void jl_enum_extend_check(jl_datatype_t *et, jl_module_t *mod,
+                                       jl_datatype_t *storagetype);
+JL_DLLEXPORT jl_svec_t *jl_enum_members(jl_datatype_t *et);
+JL_DLLEXPORT jl_value_t *jl_enum_storagetype(jl_datatype_t *et);
+JL_DLLEXPORT int jl_enum_isopen(jl_datatype_t *et);
+JL_DLLEXPORT jl_value_t *jl_enum_lookup_value(jl_value_t *x);
+JL_DLLEXPORT int jl_enum_const_is_stable(jl_value_t *v) JL_NOTSAFEPOINT;
+void jl_enum_write_raw_bits(void *p, uint64_t bits, size_t nbytes) JL_NOTSAFEPOINT;
+jl_value_t *jl_enum_lookup_auto_member(jl_datatype_t *et, const void *p) JL_NOTSAFEPOINT;
+jl_array_t *jl_enum_collect_save_list(void);
+void jl_enum_restore_members(jl_array_t *list, uint64_t *newvals);
+
 extern JL_DLLEXPORT size_t jl_page_size;
 extern JL_DLLEXPORT size_t jl_hugepage_size;
 extern JL_DLLEXPORT jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
