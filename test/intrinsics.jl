@@ -220,8 +220,8 @@ let x = UInt63(0xc000_ba98_8765_4321), y = Int63(-1)
     @test Core.bitsizeof(Int64) == 64
     @test Core.bitsizeof(1.0) == 64
     @test UInt64(x) === 0x4000_ba98_8765_4321
-    @test Int64(y) === -1
-    @test Int64(Int63(Int32(-1))) === -1
+    @test Int64(y) === Int64(-1)
+    @test Int64(Int63(Int32(-1))) === Int64(-1)
     # Under Revise`, this `code_llvm` query can fail in InteractiveUtils'
     # reflective inference path before it reaches the actual odd-bit lowering.
     if !isdefined(Main, :Revise)
