@@ -541,10 +541,15 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
+# NOTE: the type walkers here (and their siblings elsewhere in Base) read
+# UnionAll fields with `getfield`: property syntax would dispatch to the
+# deprecated `getproperty(::UnionAll, ::Symbol)` compat method, whose
+# `:var`/`:body` branches would pull the TypeVar-minting cache (a locked
+# WeakIdDict) into the inference graph of everything that walks types.
 function unwrap_unionall(@nospecialize(a))
     @_foldable_meta
     while isa(a,UnionAll)
-        a = a.inner
+        a = getfield(a, :inner)
     end
     return a
 end
@@ -559,7 +564,7 @@ end
 # (drops a vacuous binder, `T where T<:S` => `S`)
 function rewrap_unionall_one(@nospecialize(t), u::UnionAll)
     @_foldable_meta
-    t === u.inner && return u
+    t === getfield(u, :inner) && return u
     return ccall(:jl_rewrap_unionall_one, Any, (Any, Any), t, u)
 end
 
@@ -583,7 +588,7 @@ function unionall_depth(@nospecialize(u))
     n = 0
     while u isa UnionAll
         n += 1
-        u = u.inner
+        u = getfield(u, :inner)
     end
     return n
 end
@@ -1312,7 +1317,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
     ua = ty
     while isa(ua, UnionAll)
         nparams = nparams + 1
-        ua = ua.inner
+        ua = getfield(ua, :inner)
     end
     dt = ua::DataType
     # n.b. the materialized TypeVars carry the raw (de Bruijn) bounds; they only
@@ -1325,8 +1330,9 @@ function _defaultctors(@nospecialize(ty), functionloc)
     i = 1
     while i !== nparams + 1
         u = ua::UnionAll
-        @inbounds tvars[i] = ccall(:jl_new_typevar_raw, Any, (Any, Any, Any), u.name, u.lb, u.ub)
-        ua = u.inner
+        @inbounds tvars[i] = ccall(:jl_new_typevar_raw, Any, (Any, Any, Any),
+                                   getfield(u, :name), getfield(u, :lb), getfield(u, :ub))
+        ua = getfield(u, :inner)
         i = i + 1
     end
 

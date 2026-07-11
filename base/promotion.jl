@@ -80,9 +80,9 @@ function _typejoin(@nospecialize(a), @nospecialize(b))
     elseif isa(a, UnionAll)
         # the join preserves the body's binder references (a reference leaf
         # joins to `Any`); re-close the binder over the result
-        return rewrap_unionall_one(_typejoin(a.inner, b), a)
+        return rewrap_unionall_one(_typejoin(getfield(a, :inner), b), a)
     elseif isa(b, UnionAll)
-        return rewrap_unionall_one(_typejoin(a, b.inner), b)
+        return rewrap_unionall_one(_typejoin(a, getfield(b, :inner)), b)
     elseif isa(a, Union)
         return _typejoin(_typejoin(a.a, a.b), b)
     elseif isa(b, Union)
@@ -191,8 +191,8 @@ function typejoin_apply_params(@nospecialize(t), ap::Core.SimpleVector, bp::Core
     if agree
         return typejoin_apply_params(t{ai}, ap, bp, i+1)
     end
-    body = typejoin_apply_params(t.inner, ap, bp, i+1)
-    return UnionAll(t.name, t.lb, t.ub, body)
+    body = typejoin_apply_params(getfield(t, :inner), ap, bp, i+1)
+    return UnionAll(getfield(t, :name), getfield(t, :lb), getfield(t, :ub), body)
 end
 
 # return an upper-bound on type `a` with type `b` removed

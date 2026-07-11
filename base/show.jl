@@ -645,14 +645,15 @@ end
 # the body and in other bounds) are untouched, so each node rebuilds in place.
 function unbounded_typealias(@nospecialize(alias))
     alias isa UnionAll || return alias
-    body = unbounded_typealias(alias.inner)
-    if body === alias.inner && alias.lb === Union{} && alias.ub === Any
+    body = unbounded_typealias(getfield(alias, :inner))
+    if body === getfield(alias, :inner) &&
+       getfield(alias, :lb) === Union{} && getfield(alias, :ub) === Any
         return alias
     end
     # raw rebuild: a binder that occurred only in the (removed) bounds of a
     # later binder must survive, so that the alias' arity is preserved for
     # `typeintersect_env`'s environment
-    return unionall_raw(alias.name, Union{}, Any, body)
+    return unionall_raw(getfield(alias, :name), Union{}, Any, body)
 end
 
 # Reconstruct the closed type that the (possibly open) `x` is a piece of, by

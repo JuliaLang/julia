@@ -1558,7 +1558,8 @@ function has_bottom_parameter(@nospecialize(t::Core.AnyType))
         # occurrences of the binder are inert references; account for their
         # bound once, at the binder, when any exist (bit 0 of `flags` is the memoized occurs bit)
         u = t::UnionAll
-        return (u.flags % Bool && has_bottom_parameter(u.ub)) || has_bottom_parameter(u.inner)
+        return (getfield(u, :flags) % Bool && has_bottom_parameter(getfield(u, :ub))) ||
+            has_bottom_parameter(getfield(u, :inner))
     elseif ty === Union
         return has_bottom_parameter(getfield(t, :a)) & has_bottom_parameter(getfield(t, :b))
     end
@@ -1906,10 +1907,10 @@ function subst_trivial_bounds(@nospecialize(atype))
     if !isa(atype, UnionAll)
         return atype
     end
-    ub = atype.ub
+    ub = getfield(atype, :ub)
     # a bound that references an outer binder cannot be substituted in this
     # frame; keep the binder in that (rare) case
-    if (isconcretetype(ub) || atype.lb === ub) && !has_dangling_typevarrefs(ub)
+    if (isconcretetype(ub) || getfield(atype, :lb) === ub) && !has_dangling_typevarrefs(ub)
         subst = try
             atype{ub}
         catch
@@ -1920,8 +1921,8 @@ function subst_trivial_bounds(@nospecialize(atype))
             return subst_trivial_bounds(subst)
         end
     end
-    body′ = subst_trivial_bounds(atype.inner)
-    body′ === atype.inner && return atype
+    body′ = subst_trivial_bounds(getfield(atype, :inner))
+    body′ === getfield(atype, :inner) && return atype
     return rewrap_unionall_one(body′, atype)
 end
 
