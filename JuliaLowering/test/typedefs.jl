@@ -798,3 +798,76 @@ end
           end
           (struct_eq_assigns_test(5).x, struct_eq_assigns_test().x)
       end)) == (5, 1)
+
+#-------------------------------------------------------------------------------
+# enum declarations
+
+# closed enum with default (Int32) storage
+@test JuliaLowering.include_string(test_mod, """
+enum EN_Closed
+    EN_A
+    EN_B = 5
+end
+"""; version=v"1.14") === nothing
+@test test_mod.EN_Closed isa DataType
+@test isprimitivetype(test_mod.EN_Closed)
+@test sizeof(test_mod.EN_Closed) == 4
+@test reinterpret(Int32, test_mod.EN_A) == 0
+@test reinterpret(Int32, test_mod.EN_B) == 5
+
+# open enum with storage type and supertype; later members may reference
+# earlier ones in value expressions
+abstract type EN_Super end
+Base.eval(test_mod, :(const EN_Super = $EN_Super))
+@test JuliaLowering.include_string(test_mod, """
+enum EN_Open::UInt8 <: EN_Super
+    EN_X
+    EN_Y = reinterpret(UInt8, EN_X) + 0x10
+    ...
+end
+"""; version=v"1.14") === nothing
+@test supertype(test_mod.EN_Open) == EN_Super
+@test reinterpret(UInt8, test_mod.EN_Y) == 0x10
+
+# extension by qualified name
+@test JuliaLowering.include_string(test_mod, """
+enum $(nameof(test_mod)).EN_Open::UInt8
+    ...
+    EN_Z
+end
+"""; version=v"1.14") === nothing
+@test reinterpret(UInt8, test_mod.EN_Z) == 0x01
+
+# a sole `...` declares an empty open enum
+@test JuliaLowering.include_string(test_mod, """
+enum EN_Registry
+    ...
+end
+"""; version=v"1.14") === nothing
+@test Core._enum_members(test_mod.EN_Registry)[2] === true
+
+# lowering errors
+@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+enum Base.EN_Nope::Int32
+    EN_W
+end
+"""; version=v"1.14")  # qualified name without leading `...`
+@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+enum $(nameof(test_mod)).EN_Open
+    ...
+    EN_W
+end
+"""; version=v"1.14")  # extension without storage type
+@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+enum $(nameof(test_mod)).EN_Open::UInt8 <: EN_Super
+    ...
+    EN_W
+end
+"""; version=v"1.14")  # extension with supertype
+@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+enum EN_Bad
+    ...
+    EN_W
+    ...
+end
+"""; version=v"1.14")  # extension declaring openness

@@ -1778,6 +1778,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     elseif k === K"struct"
         is_mutable = valleaf(has_flags(st, MUTABLE_FLAG))
         pushfirst!(cs, is_mutable)
+    elseif k === K"enum"
+        pushfirst!(cs, valleaf(has_flags(st, ENUM_EXTEND_FLAG)))
+        pushfirst!(cs, valleaf(has_flags(st, ENUM_OPEN_FLAG)))
     elseif k === K"importpath"
         ret_k = K"."
         for i in eachindex(cs)

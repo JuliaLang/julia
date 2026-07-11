@@ -787,6 +787,21 @@
                 Expr(:struct, false, :A, Expr(:block, LineNumberNode(2)))))
     end
 
+    @testset "enum" begin
+        @test parsestmt("enum E\nA\nB = 5\nend", version=v"1.14") ==
+            Expr(:enum, false, false, :E,
+                 Expr(:block, LineNumberNode(2), :A,
+                      LineNumberNode(3), Expr(:(=), :B, 5)))
+        @test parsestmt("enum E::Int8\nA\n...\nend", version=v"1.14") ==
+            Expr(:enum, true, false, Expr(:(::), :E, :Int8),
+                 Expr(:block, LineNumberNode(2), :A))
+        @test parsestmt("enum M.E::Int8\n...\nC\nend", version=v"1.14") ==
+            Expr(:enum, false, true, Expr(:(::), Expr(:., :M, QuoteNode(:E)), :Int8),
+                 Expr(:block, LineNumberNode(3), :C))
+        @test parsestmt("enum E\n...\nend", version=v"1.14") ==
+            Expr(:enum, true, true, :E, Expr(:block, LineNumberNode(1)))
+    end
+
     @testset "export" begin
         @test parsestmt("export a") == Expr(:export, :a)
         @test parsestmt("export @a") == Expr(:export, Symbol("@a"))

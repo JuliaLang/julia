@@ -585,6 +585,21 @@ tests = [
         ((v=v"1.14",), "typegroup\nstruct A\na::Int\nend\nend")  =>  "(typegroup (block (struct A (block (::-i a Int)))))"
         ((v=v"1.14",), "typegroup\nstruct A end\nstruct B end\nend")  =>  "(typegroup (block (struct A (block)) (struct B (block))))"
         ((v=v"1.13",), "typegroup struct A end end")  =>  "(error (typegroup (block (struct A (block)))))"
+        # enum (1.14+)
+        ((v=v"1.14",), "enum E\nA\nB = 5\nend")  =>  "(enum E (block A (= B 5)))"
+        ((v=v"1.14",), "enum E::Int8\nA\nend")  =>  "(enum (::-i E Int8) (block A))"
+        ((v=v"1.14",), "enum E <: S\nA\nend")  =>  "(enum (<: E S) (block A))"
+        ((v=v"1.14",), "enum E::Int8 <: S\nA\nend")  =>  "(enum (<: (::-i E Int8) S) (block A))"
+        ((v=v"1.14",), "enum E end")  =>  "(enum E (block))"
+        ((v=v"1.14",), "enum E; A; B; end")  =>  "(enum E (block A B))"
+        ((v=v"1.14",), "enum E\nA\n...\nend")  =>  "(enum-open E (block A))"
+        ((v=v"1.14",), "enum M.E::Int8\n...\nC\nend")  =>  "(enum-extend (::-i (. M E) Int8) (block C))"
+        ((v=v"1.14",), "enum E\n...\nend")  =>  "(enum-open-extend E (block))"
+        # misplaced `...` produces errors but keeps parsing
+        ((v=v"1.14",), "enum E\nA\n...\nB\nend")  =>  "(enum-open E (block A (error B)))"
+        ((v=v"1.14",), "enum E\nA\n...\n...\nend")  =>  "(enum-open E (block A (error)))"
+        # version gating: error node wraps the whole declaration
+        ((v=v"1.13",), "enum E\nA\nend")  =>  "(error (enum E (block A)))"
         # module/baremodule
         "module A end"      =>  "(module A (block))"
         "baremodule A end"  =>  "(module-bare A (block))"
@@ -1245,6 +1260,15 @@ parsestmt_test_specs = [
     ((v=v"1.12",), "let typegroup = 3 end")  =>  "(let (block (= typegroup 3)) (block))"
     # typegroup error recovery on older versions (would be a syntax error anyway)
     ((v=v"1.12",), "typegroup struct A end end")  =>  "(error (typegroup (block (struct A (block)))))"
+
+    # enum stays an identifier (on all versions when not followed by an identifier)
+    ((v=v"1.13",), "enum = 3")  =>  "(= enum 3)"
+    ((v=v"1.14",), "enum = 3")  =>  "(= enum 3)"
+    ((v=v"1.14",), "x = enum")  =>  "(= x enum)"
+    ((v=v"1.14",), "f(enum)")  =>  "(call f enum)"
+    ((v=v"1.14",), "enum.x")  =>  "(. enum x)"
+    ((v=v"1.13",), "@enum Color a b")  =>  "(macrocall (macro_name enum) Color a b)"
+    ((v=v"1.14",), "@enum Color a b")  =>  "(macrocall (macro_name enum) Color a b)"
 ]
 
 @testset "Parsestmt tests" begin

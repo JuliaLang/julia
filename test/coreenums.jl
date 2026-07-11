@@ -80,8 +80,14 @@ const ceidem_x = Core._enum_add_member(CEIdem, @__MODULE__, :CEIdemX, UInt16(100
     # aliasing (a second name for a taken value) errors
     @test_throws ErrorException Core._enum_add_member(CEIdem, @__MODULE__, :CEIdemY, UInt16(100))
     @test_throws ErrorException Core._enum_add_member(CEIdem, @__MODULE__, :CEIdemZ, UInt16(0)) # taken by auto CEIdemA
-    # wrong value type errors
-    @test_throws ErrorException Core._enum_add_member(CEIdem, @__MODULE__, :CEIdemW, Int16(7))
+    # explicit values convert from any primitive integer type
+    v = Core._enum_add_member(CEIdem, @__MODULE__, :CEIdemV, Int8(33))
+    @test v isa CEIdem && reinterpret(UInt16, v) == 33
+    @test Core._enum_add_member(CEIdem, @__MODULE__, :CEIdemV, UInt64(33)) === v
+    # non-integer or unrepresentable values error
+    @test_throws ErrorException Core._enum_add_member(CEIdem, @__MODULE__, :CEIdemW, 1.5)
+    @test_throws ErrorException Core._enum_add_member(CEIdem, @__MODULE__, :CEIdemW, Int16(-1))  # negative, storage UInt16
+    @test_throws ErrorException Core._enum_add_member(CEIdem, @__MODULE__, :CEIdemW, 100000)     # too large for UInt16
 end
 
 const CEClosed = Core._enumtype(@__MODULE__, :CEClosed, Any, Int32, false)

@@ -3570,6 +3570,109 @@ struct TypeGroupEntry
     field_docs      # field documentation
 end
 
+# Expand [K"enum" isopen::Bool isextend::Bool sig [K"block" items...]]
+# `sig` is name, name::storage, name <: super or name::storage <: super, where
+# name may be dotted (M.E) for extensions of an existing enum. A leading `...`
+# in the source body sets isextend; a trailing one sets isopen; a sole `...`
+# sets both and is disambiguated here by the shape of the name.
+function expand_enum_def(ctx, ex)
+    @jl_assert numchildren(ex) == 4 ex
+    isopen = ex[1].value::Bool
+    isextend = ex[2].value::Bool
+    sig = ex[3]
+    body = ex[4]
+    if kind(body) != K"block"
+        throw(LoweringError(body, "expected block for `enum` body"))
+    end
+    supertype = nothing
+    if kind(sig) == K"<:" && numchildren(sig) == 2
+        supertype = sig[2]
+        sig = sig[1]
+    end
+    storage = nothing
+    if kind(sig) == K"::" && numchildren(sig) == 2
+        storage = sig[2]
+        sig = sig[1]
+    end
+    name = sig
+    dotted = kind(name) == K"."
+    if !dotted && kind(name) != K"Identifier"
+        throw(LoweringError(name, "invalid enum name"))
+    end
+    items = SyntaxList(ctx)
+    for item in children(body)
+        kind(item) == K"error" && throw(LoweringError(item, "invalid enum member"))
+        push!(items, item)
+    end
+    extension = dotted || (isextend && !isempty(items))
+    stmts = SyntaxList(ctx)
+    enumtype_var = ssavar(ctx, ex, "enum_type")
+    push!(stmts, @ast ctx ex [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]])
+    if extension
+        if !isextend
+            throw(LoweringError(ex, "cannot declare a new enum with a qualified name; extending an enum requires a leading `...`"))
+        end
+        if isopen && !isempty(items)
+            throw(LoweringError(ex, "an enum extension cannot contain `...` at the end; an enum is declared extensible at its original definition"))
+        end
+        if isnothing(storage)
+            throw(LoweringError(ex, "extending an enum requires repeating its storage type"))
+        end
+        if !isnothing(supertype)
+            throw(LoweringError(supertype, "an enum extension cannot declare a supertype"))
+        end
+        push!(stmts, @ast ctx ex [K"=" enumtype_var name])
+        push!(stmts, @ast ctx ex [K"call"
+            "_enum_extend"::K"core"
+            enumtype_var
+            syntax_module(ex)::K"Value"
+            storage
+        ])
+    else
+        gname, _ = relayer_global_if_unhygienic(ctx, name)
+        push!(stmts, @ast ctx ex [K"="
+            enumtype_var
+            [K"call"
+                "_enumtype"::K"core"
+                syntax_module(gname)::K"Value"
+                gname=>K"Symbol"
+                (isnothing(supertype) ? (@ast ctx ex "Any"::K"core") : supertype)
+                (isnothing(storage) ? (@ast ctx ex "Int32"::K"core") : storage)
+                isopen::K"Bool"
+            ]
+        ])
+        push!(stmts, @ast ctx ex [K"constdecl" gname enumtype_var])
+        push!(stmts, @ast ctx ex (::K"latestworld"))
+    end
+    for item in items
+        k = kind(item)
+        if k == K"doc"
+            throw(LoweringError(item, "docstrings on enum members are not currently supported"))
+        end
+        local mname, mval
+        if k == K"Identifier"
+            mname = item
+            mval = nothing
+        elseif k == K"=" && numchildren(item) == 2 && kind(item[1]) == K"Identifier"
+            mname = item[1]
+            mval = item[2]
+        else
+            throw(LoweringError(item, "invalid enum member"))
+        end
+        gmname, _ = relayer_global_if_unhygienic(ctx, mname)
+        push!(stmts, @ast ctx item [K"call"
+            "_enum_add_member"::K"core"
+            enumtype_var
+            syntax_module(gmname)::K"Value"
+            gmname=>K"Symbol"
+            (isnothing(mval) ? nothing_(ctx, item) : mval)
+        ])
+        push!(stmts, @ast ctx item (::K"latestworld"))
+    end
+    push!(stmts, nothing_(ctx, ex))
+    @ast ctx ex [K"block" stmts...]
+end
+
 function expand_typegroup_def(ctx, ex)
     @jl_assert numchildren(ex) == 1 ex
     body = flatten_blocks(ex[1])
@@ -4366,6 +4469,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_struct_def(ctx, ex, docs))
     elseif k == K"typegroup"
         expand_typegroup_def(ctx, ex)
+    elseif k == K"enum"
+        expand_forms_2(ctx, expand_enum_def(ctx, ex))
     elseif k == K"ref"
         sctx = with_stmts(ctx)
         (arr, idxs) = expand_ref_components(sctx, ex)

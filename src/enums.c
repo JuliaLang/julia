@@ -165,6 +165,49 @@ static void enum_tab_append(jl_datatype_t *et, jl_svec_t *tab, jl_module_t *mod,
     JL_GC_POP();
 }
 
+// Convert an explicit member value to the storage type's bit pattern: any
+// primitive Integer value is accepted as long as it is representable.
+static uint64_t enum_convert_value(jl_datatype_t *et, jl_datatype_t *storagetype,
+                                   size_t nbytes, jl_sym_t *name, jl_value_t *value)
+{
+    jl_value_t *vt = jl_typeof(value);
+    if (vt == (jl_value_t*)storagetype)
+        return enum_read_bits(value, nbytes);
+    jl_value_t *integer_type = jl_get_global(jl_core_module, jl_symbol("Integer"));
+    if (!jl_is_primitivetype(vt) || jl_is_enumtype(vt) || jl_datatype_size(vt) > 8 ||
+        integer_type == NULL || !jl_subtype(vt, integer_type))
+        jl_errorf("invalid value for member %s of enum type %s: expected an integer of at most 8 bytes",
+                  jl_symbol_name(name), jl_symbol_name(et->name->name));
+    size_t vnb = jl_datatype_size(vt);
+    uint64_t raw = enum_read_bits(value, vnb);
+    jl_value_t *signed_type = jl_get_global(jl_core_module, jl_symbol("Signed"));
+    int src_signed = signed_type != NULL && jl_subtype(vt, signed_type);
+    int dst_signed = signed_type != NULL && jl_subtype((jl_value_t*)storagetype, signed_type);
+    uint64_t uval = raw; // source value, sign-extended to 64 bits if signed
+    if (src_signed && vnb < 8) {
+        uint64_t signbit = (uint64_t)1 << (8 * vnb - 1);
+        if (raw & signbit)
+            uval = raw | ~((((uint64_t)1 << (8 * vnb)) - 1));
+    }
+    int64_t sval = (int64_t)uval;
+    int src_negative = src_signed && sval < 0;
+    int fits;
+    if (dst_signed) {
+        int64_t dmin = nbytes == 8 ? INT64_MIN : -((int64_t)1 << (8 * nbytes - 1));
+        int64_t dmax = nbytes == 8 ? INT64_MAX : ((int64_t)1 << (8 * nbytes - 1)) - 1;
+        fits = src_negative ? sval >= dmin : uval <= (uint64_t)dmax;
+    }
+    else {
+        uint64_t dmax = nbytes == 8 ? UINT64_MAX : (((uint64_t)1 << (8 * nbytes)) - 1);
+        fits = !src_negative && uval <= dmax;
+    }
+    if (!fits)
+        jl_errorf("invalid value for member %s of enum type %s: value is not representable in storage type %s",
+                  jl_symbol_name(name), jl_symbol_name(et->name->name),
+                  jl_symbol_name(storagetype->name->name));
+    return nbytes == 8 ? uval : (uval & ((((uint64_t)1 << (8 * nbytes)) - 1)));
+}
+
 static void enum_log_member(jl_datatype_t *et, jl_module_t *mod, jl_sym_t *name,
                             jl_value_t *instance, int isexplicit)
 {
@@ -191,10 +234,9 @@ JL_DLLEXPORT jl_value_t *jl_enum_add_member(jl_datatype_t *et, jl_module_t *mod,
     jl_svec_t *tab = enum_tab(et);
     jl_datatype_t *storagetype = enum_tab_storagetype(tab);
     size_t nbytes = jl_datatype_size(storagetype);
-    if (value != NULL && jl_typeof(value) != (jl_value_t*)storagetype)
-        jl_errorf("invalid value for member %s of enum type %s: expected an instance of storage type %s",
-                  jl_symbol_name(name), jl_symbol_name(et->name->name),
-                  jl_symbol_name(storagetype->name->name));
+    uint64_t explicit_bits = 0;
+    if (value != NULL)
+        explicit_bits = enum_convert_value(et, storagetype, nbytes, name, value);
 
     jl_value_t *instance = NULL;
     JL_GC_PUSH2(&tab, &instance);
@@ -205,7 +247,7 @@ JL_DLLEXPORT jl_value_t *jl_enum_add_member(jl_datatype_t *et, jl_module_t *mod,
     if (k != (size_t)-1) {
         // idempotent re-registration
         instance = jl_svecref(tab, k + 2);
-        if (value != NULL && enum_read_bits(value, nbytes) != enum_read_bits(instance, nbytes))
+        if (value != NULL && explicit_bits != enum_read_bits(instance, nbytes))
             jl_errorf("enum member %s.%s of %s already has value %llu",
                       jl_symbol_name(mod->name), jl_symbol_name(name),
                       jl_symbol_name(et->name->name),
@@ -219,7 +261,7 @@ JL_DLLEXPORT jl_value_t *jl_enum_add_member(jl_datatype_t *et, jl_module_t *mod,
                   jl_symbol_name(name), jl_symbol_name(et->name->name));
     uint64_t bits;
     if (value != NULL) {
-        bits = enum_read_bits(value, nbytes);
+        bits = explicit_bits;
         size_t taken = enum_find_value(tab, bits, nbytes);
         if (taken != (size_t)-1) {
             jl_module_t *othermod = (jl_module_t*)jl_svecref(tab, taken + 1);
