@@ -200,7 +200,7 @@ end
 
 # Can store `t` execute on some path that then reaches `site`? False only
 # when t and site sit in sibling arms of one `if` (mutually exclusive).
-function _may_reach(ir::UnifiedIR.IR, t::StmtId, site::StmtId)
+function _may_reach(ir::UnifiedIR.IR, t::StmtId, site::StmtId; iteration_local::Bool = false)
     A = RegionId[]
     r = UnifiedIR.stmt_region(ir, t)
     while !UnifiedIR.isnull(r)
@@ -213,7 +213,21 @@ function _may_reach(ir::UnifiedIR.IR, t::StmtId, site::StmtId)
     while !UnifiedIR.isnull(r)
         if haskey(idxof, r.id)
             i = idxof[r.id]
-            (i == 1 || UnifiedIR.isnull(prev)) && return true
+            i == 1 && return true
+            # PER-ITERATION reach only (the loop pass, where the carried arg
+            # covers backedge flow): a diverging terminator on the store's
+            # side of the chain cuts fall-through — the value cannot reach a
+            # later `site` within this activation of the common region.
+            # MEMORY reach (everyone else) must keep the store visible: the
+            # diverged store persists in the cell across backedges.
+            if iteration_local
+                for j in 1:i-1
+                    tt = UnifiedIR.region_terminator(ir, A[j])
+                    tt === nothing && continue
+                    is_diverge_kind(UnifiedIR.stmt_kind(ir, tt)) && return false
+                end
+            end
+            UnifiedIR.isnull(prev) && return true
             tchild = A[i - 1]
             tc = UnifiedIR.getregion(ir, tchild)
             pc = UnifiedIR.getregion(ir, prev)
@@ -233,7 +247,8 @@ end
 # (:store, st) — unambiguous dominating reaching definition;
 # (:none, _)   — no store can reach (value is the incoming one);
 # (:ambig, _)  — a non-dominating store may reach: refuse promotion.
-function _reach_ed(ir::UnifiedIR.IR, stores::Vector{StmtId}, site::StmtId)
+function _reach_ed(ir::UnifiedIR.IR, stores::Vector{StmtId}, site::StmtId;
+                   iteration_local::Bool = false)
     best = NULL_STMT
     for st in stores
         UnifiedIR.comes_before(ir, st, site) || continue
@@ -244,9 +259,48 @@ function _reach_ed(ir::UnifiedIR.IR, stores::Vector{StmtId}, site::StmtId)
         t == best && continue
         UnifiedIR.comes_before(ir, t, site) || continue
         (UnifiedIR.isnull(best) || UnifiedIR.comes_before(ir, best, t)) || continue
-        _may_reach(ir, t, site) && return (:ambig, NULL_STMT)
+        _may_reach(ir, t, site; iteration_local) && return (:ambig, NULL_STMT)
     end
     return UnifiedIR.isnull(best) ? (:none, NULL_STMT) : (:store, best)
+end
+
+# §6 throw-edge rule for store motion: when `anchor` (the region being
+# rewritten — an if, loop, or cfg op) lies inside a `try` body while the cell
+# has uses outside that try, a swallowed exception exposes the cell's
+# mid-try memory to those outside readers — deleting or moving the stores
+# would change what they observe. Refuse such cells wholesale.
+function _sink_crosses_try(ir::UnifiedIR.IR, anchor::StmtId, uses)
+    r = UnifiedIR.stmt_region(ir, anchor)
+    while !UnifiedIR.isnull(r)
+        reg = UnifiedIR.getregion(ir, r)
+        own = reg.owner
+        if !UnifiedIR.isnull(own) && UnifiedIR.stmt_kind(ir, own) === K"try" &&
+           reg.kind !== UnifiedIR.REGION_HANDLER
+            for u in uses
+                UnifiedIR.is_ancestor(ir, r, UnifiedIR.stmt_region(ir, u)) ||
+                    return true
+            end
+        end
+        r = UnifiedIR.isnull(own) ? UnifiedIR.NULL_REGION :
+            UnifiedIR.stmt_region(ir, own)
+    end
+    return false
+end
+
+# The innermost loop body on `t`'s region chain that contains `site` — the
+# tightest backedge that can carry t's stored value around to `site` on a
+# later iteration. NULL when they share no loop.
+function _innermost_shared_body(ir::UnifiedIR.IR, t::StmtId, site::StmtId)
+    r = UnifiedIR.stmt_region(ir, t)
+    while !UnifiedIR.isnull(r)
+        reg = UnifiedIR.getregion(ir, r)
+        if reg.kind === UnifiedIR.REGION_LOOP_BODY &&
+           UnifiedIR.is_ancestor(ir, r, UnifiedIR.stmt_region(ir, site))
+            return r
+        end
+        r = reg.parent
+    end
+    return UnifiedIR.NULL_REGION
 end
 
 # Path from a body-site's region up to the loop body region: stores may cross
@@ -293,6 +347,16 @@ struct LoopCellPlan
     postgets::Vector{StmtId}
     news::Vector{StmtId}
     init::UnifiedIR.Operand
+    # STORE-SINKING mode: instead of rewriting post-loop reads to threaded
+    # exit values, one unconditional `cell_set` of the exit value lands right
+    # after the loop; post-loop uses stay memory ops. This is the
+    # compositional half of multi-level exit threading: the next fixpoint
+    # round sees an ordinary store at the enclosing level (arm stores sink
+    # the same way). Chosen when post-loop reads cannot anchor for direct
+    # threading or post-loop stores exist; pre-loop stores are then KEPT
+    # (paths that skip the loop must still find the incoming value in
+    # memory).
+    sink::Bool
 end
 
 """
@@ -334,19 +398,20 @@ function promote_loop_cells!(ir::UnifiedIR.IR)
     for L in collect(UnifiedIR.each_stmt(ir))
         UnifiedIR.is_tombstone(ir, L) && continue
         UnifiedIR.stmt_kind(ir, L) === K"loop" || continue
-        UnifiedIR.nops(ir, L) == 0 || continue          # no existing carried values
         rs = UnifiedIR.live_owned_regions(ir, L)
         length(rs) == 1 || continue
-        bodyr = rs[1]
-        bodyreg = UnifiedIR.getregion(ir, bodyr)
-        isempty(bodyreg.args) || continue
-        promoted += _promote_cells_of_loop!(ir, L, bodyr)
+        # loops that already carry values (from an earlier round of this pass
+        # or from island exit threading) compose: new args/inits/continue
+        # values APPEND after the existing ones
+        UnifiedIR.nops(ir, L) == length(UnifiedIR.getregion(ir, rs[1]).args) || continue
+        promoted += _promote_cells_of_loop!(ir, L, rs[1])
     end
     return promoted
 end
 
 function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
     before(a, b) = UnifiedIR.comes_before(ir, a, b)
+    bodyreg0 = UnifiedIR.getregion(ir, bodyr)
     # --- the loop's chain up to the region holding post reads ---------------
     chain = StmtId[]                       # enclosing `if` ops, inner → outer
     rtop = UnifiedIR.stmt_region(ir, L)
@@ -369,8 +434,12 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
         _body_path_ok(ir, x, bodyr; reads = false) || return 0
         k === K"continue" ? push!(conts, x) : push!(brks, x)
     end
-    all(c -> UnifiedIR.nops(ir, c) == 2, conts) || return 0
-    all(b -> UnifiedIR.nops(ir, b) == 1, brks) || return 0
+    # continues carry cond + one value per existing arg; breaks carry the
+    # loop's existing result. With existing args only pure carried promotion
+    # runs (no break rewriting), so the break arity is unconstrained then.
+    nexist0 = length(bodyreg0.args)
+    all(c -> UnifiedIR.nops(ir, c) == 2 + nexist0, conts) || return 0
+    (nexist0 > 0 || all(b -> UnifiedIR.nops(ir, b) == 1, brks)) || return 0
     anycontexit = any(c -> static_operand_value(ir, UnifiedIR.getop(ir, c, 2)) !== true,
                       conts)
     exits = vcat(conts, brks)
@@ -399,8 +468,10 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
             end
         end
         ok || continue
+        _sink_crosses_try(ir, L, Iterators.flatten((sets, gets, news))) && continue
         inbody(u) = UnifiedIR.is_ancestor(ir, bodyr, UnifiedIR.stmt_region(ir, u))
         prestores = StmtId[]; bodystores = StmtId[]
+        sink = false
         for st in sets
             if inbody(st)
                 _body_path_ok(ir, st, bodyr; reads = false) || (ok = false; break)
@@ -408,8 +479,10 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
             elseif UnifiedIR.is_ancestor(ir, UnifiedIR.stmt_region(ir, st),
                                          UnifiedIR.stmt_region(ir, L)) && before(st, L)
                 push!(prestores, st)
+            elseif before(L, st)
+                sink = true                      # post store: sink the exit value
             else
-                ok = false; break                # post/aside store: refuse
+                ok = false; break                # aside store (may reach L): refuse
             end
         end
         (ok && !isempty(bodystores) && !isempty(prestores)) || continue
@@ -419,24 +492,44 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
         # init must be a clean reaching pre store at the loop
         kind0, init_st = _reach_ed(ir, prestores, L)
         kind0 === :store || continue
+        # init backedge hazard (site = the loop op): a store sharing an
+        # enclosing loop with L reaches L across that backedge, making the
+        # region-static init stale from iteration 2 on — unless the init
+        # re-executes inside the INNERMOST loop that store shares with L
+        # (then every such backedge re-runs the init before L; an init
+        # inside the innermost is inside every outer one too)
+        hz = false
+        for t in sets
+            t == init_st && continue
+            X = _innermost_shared_body(ir, t, L)
+            UnifiedIR.isnull(X) && continue
+            UnifiedIR.is_ancestor(ir, X, UnifiedIR.stmt_region(ir, init_st)) ||
+                (hz = true; break)
+        end
+        hz && continue
         pregets = Pair{StmtId,StmtId}[]
         bodygets = Pair{StmtId,StmtId}[]
         postgets = StmtId[]
         for g in gets
             if inbody(g)
                 _body_path_ok(ir, g, bodyr; reads = true) || (ok = false; break)
-                rk, rst = _reach_ed(ir, bodystores, g)
+                rk, rst = _reach_ed(ir, bodystores, g; iteration_local = true)
                 rk === :ambig && (ok = false; break)
                 push!(bodygets, g => rst)          # NULL ⇒ carried arg
             elseif before(g, L)
                 rk, rst = _reach_ed(ir, prestores, g)
                 rk === :store || (ok = false; break)
                 # backedge hazard: a later store sharing an enclosing loop
-                # reaches this read on the next iteration
+                # reaches this read on the next iteration — unless the
+                # reaching store re-executes inside the INNERMOST loop that
+                # store shares with the read (then every such backedge
+                # re-runs it before the read, shadowing the carried value)
                 for t in sets
-                    if before(g, t) && UnifiedIR.shares_loop(ir, t, g)
-                        ok = false; break
-                    end
+                    before(g, t) || continue
+                    X = _innermost_shared_body(ir, t, g)
+                    UnifiedIR.isnull(X) && continue
+                    UnifiedIR.is_ancestor(ir, X, UnifiedIR.stmt_region(ir, rst)) ||
+                        (ok = false; break)
                 end
                 ok || break
                 push!(pregets, g => rst)
@@ -444,26 +537,50 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
                 anchor = _post_anchor(ir, g, rtop)
                 if UnifiedIR.isnull(anchor) || anchor == L || any(==(anchor), chain) ||
                    !before(top, anchor)
-                    ok = false
-                    break
+                    sink = true                  # cannot thread directly: sink
+                else
+                    push!(postgets, g)
                 end
-                push!(postgets, g)
             end
         end
         ok || continue
-        # exit-site values must be resolvable
+        sink && empty!(postgets)                 # sink mode: post reads stay memory
+        # exit-site values must be resolvable (per-iteration: the carried
+        # arg covers the paths no body store falls through to)
         for x in exits
-            rk, _ = _reach_ed(ir, bodystores, x)
+            rk, _ = _reach_ed(ir, bodystores, x; iteration_local = true)
             rk === :ambig && (ok = false; break)
         end
         ok || continue
         push!(plans, LoopCellPlan(cell, prestores, bodystores, pregets, bodygets,
                                   postgets, news,
-                                  UnifiedIR.getop(ir, init_st, 2)))
+                                  UnifiedIR.getop(ir, init_st, 2), sink))
     end
     isempty(plans) && return 0
+    # loops already carrying values (earlier rounds / island threading) only
+    # take pure carried cells: exit values would have to renumber the
+    # existing result tuple
+    # sinking composes with chain nesting by NOT threading through the chain
+    # (the sunk store is ordinary memory there); mixing chain threading and
+    # sinking in one tuple would need not-taken values for sunk slots, so a
+    # chain demotes everything to sinking
+    if !isempty(chain) && any(p -> p.sink, plans) &&
+       any(p -> !isempty(p.postgets), plans)
+        plans = [p.sink ? p :
+                 LoopCellPlan(p.cell, p.prestores, p.bodystores, p.pregets,
+                              p.bodygets, StmtId[], p.news, p.init,
+                              !isempty(p.postgets)) for p in plans]
+    end
     # --- result set and chain validation -------------------------------------
-    R = [i for (i, p) in enumerate(plans) if !isempty(p.postgets)]
+    R = [i for (i, p) in enumerate(plans) if !isempty(p.postgets) || p.sink]
+    # exit-value threading repurposes the loop's result; a result some user
+    # already consumes must keep its shape (carried-only promotion is fine:
+    # only the continues change, and their exit binding was never read)
+    if !isempty(R) && counts[L.id] != 0
+        plans = [p for p in plans if isempty(p.postgets) && !p.sink]
+        isempty(plans) && return 0
+        R = Int[]
+    end
     if !isempty(R)
         chainok = true
         for ifop in chain
@@ -486,18 +603,23 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
             chainok || break
         end
         if !chainok
-            # cannot thread results out: drop the post-reading cells
-            keep = [p for (i, p) in enumerate(plans) if !(i in R)]
-            plans = keep
-            R = Int[]
+            # cannot thread results through the chain: sink instead
+            plans = [LoopCellPlan(p.cell, p.prestores, p.bodystores, p.pregets,
+                                  p.bodygets, StmtId[], p.news, p.init,
+                                  p.sink || !isempty(p.postgets)) for p in plans]
+            R = [i for (i, p) in enumerate(plans) if p.sink]
         end
         isempty(plans) && return 0
-        # also: the not-taken value at every chain result must resolve
         if !isempty(R)
             anycontexit && (R = collect(1:length(plans)))
-            for ifop in chain, p in plans[R]
-                rk, _ = _reach_ed(ir, p.prestores, ifop)
-                rk === :store || return 0
+            # chain threading (direct plans only) needs the not-taken value
+            # at every chain result; sunk cells keep their pre stores in
+            # memory instead
+            if any(i -> !isempty(plans[i].postgets), R)
+                for ifop in chain, p in plans[R]
+                    rk, _ = _reach_ed(ir, p.prestores, ifop)
+                    rk === :store || return 0
+                end
             end
         end
     end
@@ -510,16 +632,19 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
     for i in R
         _trace!(:loop_break, L, plans[i].cell)
     end
-    firstm = StmtId(bodyreg.first.id)
+    bms = UnifiedIR.region_stmts(ir, bodyr)
+    firstm = bms[length(bodyreg.args) + 1]     # first non-arg member
     args = StmtId[]
     for _ in 1:k
         a = UnifiedIR.insert_before!(ir, firstm, K"region_arg"; type = Any)
         push!(args, a)
         push!(bodyreg.args, a)
     end
-    UnifiedIR.store_ops!(ir, L, UnifiedIR.Operand[p.init for p in plans])
+    newops = UnifiedIR.Operand[UnifiedIR.getop(ir, L, i) for i in 1:UnifiedIR.nops(ir, L)]
+    append!(newops, UnifiedIR.Operand[p.init for p in plans])
+    UnifiedIR.store_ops!(ir, L, newops)
     valat(p, i, site) = begin
-        rk, rst = _reach_ed(ir, p.bodystores, site)
+        rk, rst = _reach_ed(ir, p.bodystores, site; iteration_local = true)
         rk === :store ? UnifiedIR.getop(ir, rst, 2) : UnifiedIR.op_stmt(args[i])
     end
     for (i, p) in enumerate(plans)
@@ -535,29 +660,52 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
     end
     for c in conts
         vals = UnifiedIR.Operand[valat(p, i, c) for (i, p) in enumerate(plans)]
-        UnifiedIR.replace_stmt!(ir, c, K"continue", UnifiedIR.getop(ir, c, 1),
-                                UnifiedIR.getop(ir, c, 2), vals...)
+        keep = UnifiedIR.Operand[UnifiedIR.getop(ir, c, i) for i in 1:UnifiedIR.nops(ir, c)]
+        UnifiedIR.replace_stmt!(ir, c, K"continue", keep..., vals...)
     end
     if !isempty(R)
+        # exit-tuple base: result slots already claimed by an earlier
+        # promotion of this loop. On continue-exits the result is the FULL
+        # carried tuple (existing args lead), so new values index past them;
+        # breaks keep their existing values, padded up to the base with
+        # `nothing` (nothing consumes the pure-carried lead slots)
+        base = anycontexit ? nexist0 :
+               (isempty(brks) ? nexist0 : UnifiedIR.nops(ir, first(brks)) - 1)
+        all(b -> UnifiedIR.nops(ir, b) == 1 + base,
+            (anycontexit || isempty(brks)) ? StmtId[] : brks) || return 0
         for b in brks
             vals = UnifiedIR.Operand[valat(plans[i], i, b) for i in R]
-            UnifiedIR.replace_stmt!(ir, b, K"break", UnifiedIR.getop(ir, b, 1), vals...)
+            keep = UnifiedIR.Operand[UnifiedIR.getop(ir, b, i)
+                                     for i in 1:UnifiedIR.nops(ir, b)]
+            npad = 1 + base - length(keep)
+            npad >= 0 || return 0
+            pad = UnifiedIR.Operand[UnifiedIR.vop(ir, nothing) for _ in 1:npad]
+            UnifiedIR.replace_stmt!(ir, b, K"break", keep..., pad..., vals...)
         end
-        # thread the exit values out through the chain
+        # materialize the exit values right after the loop
         UnifiedIR.set_type!(ir, L, Any)
         curvals = UnifiedIR.Operand[]
-        if length(R) == 1
+        anchor = L
+        if base == 0 && length(R) == 1
             push!(curvals, UnifiedIR.op_stmt(L))
         else
-            anchor = L
             for j in 1:length(R)
                 e = UnifiedIR.insert_after!(ir, anchor, K"extract", UnifiedIR.op_stmt(L),
-                                            UnifiedIR.op_inline(j); type = Any)
+                                            UnifiedIR.op_inline(base + j); type = Any)
                 push!(curvals, UnifiedIR.op_stmt(e))
                 anchor = e
             end
         end
-        for ifop in chain
+        # sunk cells: one unconditional store of the exit value, in program
+        # order right after the loop (post uses keep reading memory)
+        for (ridx, i) in enumerate(R)
+            plans[i].sink || continue
+            anchor = UnifiedIR.insert_after!(ir, anchor, K"cell_set",
+                                             UnifiedIR.op_stmt(plans[i].cell),
+                                             curvals[ridx]; type = Nothing)
+        end
+        dodirect = any(i -> !isempty(plans[i].postgets), R)
+        for ifop in (dodirect ? chain : StmtId[])
             for i in R
                 _trace!(:if_thread, ifop, plans[i].cell)
             end
@@ -606,8 +754,10 @@ function _promote_cells_of_loop!(ir::UnifiedIR.IR, L::StmtId, bodyr::RegionId)
         end
     end
     for p in plans
-        for st in p.prestores
-            UnifiedIR.delete_stmt!(ir, st)
+        if !p.sink
+            for st in p.prestores
+                UnifiedIR.delete_stmt!(ir, st)
+            end
         end
         for st in p.bodystores
             UnifiedIR.delete_stmt!(ir, st)
@@ -796,6 +946,29 @@ function _promote_arm_cells_at!(ir::UnifiedIR.IR, I::StmtId)
         end
     end
     isempty(joins) && return 0            # no arm reaches the join
+    # a joining arm can still LEAK mid-arm through a nested sealed exit
+    # (continue/break/return under a nested if): executions taking that path
+    # ran the arm's stores but never reach the join, so the sunk post-join
+    # store would not fire for them — such arms keep their stores in memory
+    # (the post-join store then merely re-stores the same value on the join
+    # path)
+    leaky = Set{Int32}()
+    for s in UnifiedIR.each_stmt(ir)
+        UnifiedIR.is_tombstone(ir, s) && continue
+        k = UnifiedIR.stmt_kind(ir, s)
+        # only exits that leave the arm while staying in the frame leak:
+        # a continue/break to a loop INSIDE the arm is arm-internal, and a
+        # return/unreachable ends the frame (no later observer of the cell)
+        (k === K"continue" || k === K"break") || continue
+        tgt = UnifiedIR.asregion(UnifiedIR.getop(ir, s, 1))
+        for a in joins
+            if UnifiedIR.stmt_region(ir, s) != a &&
+               UnifiedIR.is_ancestor(ir, a, UnifiedIR.stmt_region(ir, s)) &&
+               !UnifiedIR.is_ancestor(ir, a, tgt)
+                push!(leaky, a.id)
+            end
+        end
+    end
     exist_arity = UnifiedIR.nops(ir, UnifiedIR.region_terminator(ir, joins[1]))
     all(a -> UnifiedIR.nops(ir, UnifiedIR.region_terminator(ir, a)) == exist_arity, joins) ||
         return 0
@@ -848,17 +1021,23 @@ function _promote_arm_cells_at!(ir::UnifiedIR.IR, I::StmtId)
         # promote_island_cells!/promote_block_cells! consume next round.)
         any(u -> _in_handler(ir, u), gets) && continue
         any(u -> _in_handler(ir, u), isdefs) && continue
+        _sink_crosses_try(ir, I, Iterators.flatten((sets, gets, isdefs))) && continue
         # cell_new in declaration position only
         all(nw -> all(st -> before(nw, st), sets), news) || continue
 
         armlast = Dict{RegionId,StmtId}()
-        direct = StmtId[]
+        direct = StmtId[]                     # sinkable (non-leaky) arm stores
+        allarm = StmtId[]                     # every direct arm store (reach)
         deeper = false
         for st in sets
             sr = UnifiedIR.stmt_region(ir, st)
             ai = findfirst(==(sr), joins)
             if ai !== nothing
-                push!(direct, st)
+                push!(allarm, st)
+                # leaky arms keep their stores (mid-arm sealed exits observe
+                # memory); the post-join store re-stores the same value on
+                # the join path, so the arm still contributes its out below
+                sr.id in leaky || push!(direct, st)
                 prev = get(armlast, sr, UnifiedIR.NULL_STMT)
                 (UnifiedIR.isnull(prev) || before(prev, st)) && (armlast[sr] = st)
             elseif injoinarm(st)
@@ -877,14 +1056,14 @@ function _promote_arm_cells_at!(ir::UnifiedIR.IR, I::StmtId)
         isdefrw = StmtId[]
         for g in gets
             injoinarm(g) || continue
-            rk, rst = _reach_ed(ir, direct, g)
+            rk, rst = _reach_ed(ir, allarm, g)
             rk === :ambig && (ok = false; break)
             rk === :store && push!(getrw, g => rst)
         end
         ok || continue
         for d in isdefs
             injoinarm(d) || continue
-            rk, _ = _reach_ed(ir, direct, d)
+            rk, _ = _reach_ed(ir, allarm, d)
             rk === :ambig && (ok = false; break)
             rk === :store && push!(isdefrw, d)
         end
@@ -963,7 +1142,8 @@ function _promote_arm_cells_at!(ir::UnifiedIR.IR, I::StmtId)
         anchor = UnifiedIR.insert_after!(ir, anchor, K"cell_set",
                                          UnifiedIR.op_stmt(cell), v; type = Nothing)
     end
-    # delete the (now sunk) conditional arm stores
+    # delete the (now sunk) conditional arm stores (leaky-arm stores are
+    # never in `direct`: mid-arm sealed exits still observe their memory)
     for (_, direct, _, _, _, _) in plans
         for st in direct
             UnifiedIR.delete_stmt!(ir, st)
@@ -1163,10 +1343,12 @@ function _promote_island_cells_at!(ir::UnifiedIR.IR, I::StmtId)
             idom[b] != ni && (idom[b] = ni; changed = true)
         end
     end
-    # dominance frontiers
+    # dominance frontiers. NB. the entry block always has one IMPLICIT
+    # in-edge (the cfg op's entry), so a single internal pred already makes
+    # it a join — the merge of the incoming value with the backedge
     df = [Int[] for _ in 1:n]
     for b in 1:n
-        (seen[b] && length(preds[b]) >= 2) || continue
+        (seen[b] && length(preds[b]) + (b == 1 ? 1 : 0) >= 2) || continue
         for p in preds[b]
             (seen[p] && idom[p] != 0) || continue
             r = p
@@ -1191,10 +1373,13 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
     (; blocks, bidx, succs, preds, edges, terms, seen, rpo, idom, df) = graph
     nb = length(blocks)
     instores = [StmtId[] for _ in 1:nb]
+    newsin = [StmtId[] for _ in 1:nb]
     reads = Tuple{Int,StmtId,StmtId}[]       # (block, direct member, get)
     isdefs = Tuple{Int,StmtId,StmtId}[]
-    news = StmtId[]                          # entry-leading declaration news
     outstores = StmtId[]
+    outother = StmtId[]                      # dominating outside reads/queries
+    outnews = StmtId[]                       # dominating outside cell_news
+    outnd = StmtId[]                         # non-dominating outside uses
     touched = false
     ok = true
     UnifiedIR.each_ssa_use(ir) do site, used
@@ -1209,11 +1394,17 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
             # and reads/queries dominating it never observe island stores;
             # anything else (in particular any use AFTER the island, which
             # would observe the stores this pass deletes) refuses
-            if k === K"cell_set" && site.opidx == 1 && _cell_dominates_ed(ir, u, I)
+            if site.opidx != 1
+                ok = false                   # value use of the cell: escape
+            elseif k === K"cell_set" && _cell_dominates_ed(ir, u, I)
                 push!(outstores, u)
-            elseif (k === K"cell_get" || k === K"cell_isdefined") && site.opidx == 1 &&
+            elseif (k === K"cell_get" || k === K"cell_isdefined") &&
                    _cell_dominates_ed(ir, u, I)
-                # stays a memory read against the outside stores
+                push!(outother, u)           # stays a memory read (outside)
+            elseif k === K"cell_new" && _cell_dominates_ed(ir, u, I)
+                push!(outnews, u)            # declaration pattern checked below
+            elseif k === K"cell_set" || k === K"cell_get" || k === K"cell_isdefined"
+                push!(outnd, u)              # position checked against the loop
             else
                 ok = false
             end
@@ -1236,11 +1427,11 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
         elseif k === K"cell_isdefined" && site.opidx == 1
             push!(isdefs, (bi, m, u))
         elseif k === K"cell_new" && site.opidx == 1
-            # NewvarNode-equivalent: re-undefines the cell. Only the entry-
-            # leading declaration form is compatible (checked positionally
-            # below); it forces the incoming value invalid (vin_ok = false)
-            (u == m && bi == 1) || (ok = false; return)
-            push!(news, u)
+            # NewvarNode-equivalent: re-undefines the cell at this island
+            # point. Direct members only; the dataflow treats them as KILL
+            # events (reads/queries/exit values resolving through one refuse)
+            u == m || (ok = false; return)
+            push!(newsin[bi], u)
         else
             ok = false                       # escape / value use
         end
@@ -1248,24 +1439,98 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
     end
     (ok && touched) || return 0
     isempty(reads) && isempty(isdefs) && return 0   # store-only: dead-store side
-    # Backedge staleness: when a loop body lies strictly between the cfg op
-    # and the cell declaration, the cell memory is carried ACROSS iterations
-    # (island exits reach the loop backedge; the next iteration re-reads the
-    # cell before re-entering the island). Deleting the island stores would
-    # leave that read stale, so such cells only promote when the island is
-    # store-free for them. Iteration-local cells (declared inside the loop)
-    # are unaffected. Cross-iteration flow is loop-pass territory: it needs
-    # exit-store sinking through sealed island exits (documented v1 refusal).
+    # outside news only in the declaration pattern (before every dominating
+    # store): the incoming state at the cfg op is then store-defined
+    all(nw -> all(st -> nw.id < st.id, outstores), outnews) || return 0
+    if _sink_crosses_try(ir, I,
+            Iterators.flatten((outstores, outother, outnews, outnd,
+                               (u for (_, _, u) in reads), (u for (_, _, u) in isdefs))))
+        return 0
+    end
+    # Backedge staleness / exit-value threading: when a loop body lies
+    # strictly between the cfg op and the cell declaration, the cell memory
+    # is carried ACROSS iterations (island exits reach the loop backedge; the
+    # next iteration re-reads the cell before re-entering the island), so the
+    # island stores may only be deleted if the carried value THREADS: the
+    # loop grows a carried arg (init = the store reaching the loop), every
+    # `continue` targeting it appends the reaching value at its exit point,
+    # and the island's incoming value becomes the arg. Threading conditions
+    # (each failure keeps the staleness refusal — the soundness sentinel):
+    #   - exactly ONE loop body between (multi-loop lifetimes stay memory)
+    #   - no outside use inside that loop body (a read there would observe
+    #     the deleted stores on iterations >= 2; a store would break the
+    #     arg's iteration-start invariant)
+    #   - a store reaches the loop op definitively (the carried init)
+    #   - every continue targeting the loop leaves from inside this island
+    #     (its reaching value is this pass's per-block dataflow)
+    thloop = UnifiedIR.NULL_STMT
+    thbody = UnifiedIR.NULL_REGION
+    thinit = UnifiedIR.NULL_STMT
+    thconts = StmtId[]
     if !all(isempty, instores)
         declreg = UnifiedIR.stmt_region(ir, cell)
         r = UnifiedIR.stmt_region(ir, I)
+        nloops = 0
         while r != declreg && !UnifiedIR.isnull(r)
             reg = UnifiedIR.getregion(ir, r)
-            reg.kind === UnifiedIR.REGION_LOOP_BODY && return 0
+            if reg.kind === UnifiedIR.REGION_LOOP_BODY
+                nloops += 1
+                thbody = r
+                thloop = reg.owner
+            end
             r = UnifiedIR.isnull(reg.owner) ? UnifiedIR.NULL_REGION :
                 UnifiedIR.stmt_region(ir, reg.owner)
         end
+        nloops > 1 && return 0
+        if nloops == 1
+            for u in Iterators.flatten((outstores, outother))
+                UnifiedIR.is_ancestor(ir, thbody, UnifiedIR.stmt_region(ir, u)) &&
+                    return 0
+            end
+            rk, rst = _reach_ed(ir, outstores, thloop)
+            rk === :store && (thinit = rst)
+            contsok = true
+            for cs in UnifiedIR.each_stmt(ir)
+                UnifiedIR.is_tombstone(ir, cs) && continue
+                UnifiedIR.stmt_kind(ir, cs) === K"continue" || continue
+                UnifiedIR.asregion(UnifiedIR.getop(ir, cs, 1)) == thbody || continue
+                _island_container(ir, bidx, cs) === nothing && (contsok = false; break)
+                push!(thconts, cs)
+            end
+            contsok || (thconts = StmtId[]; nothing)
+            thcontsok = contsok
+        else
+            thcontsok = true
+        end
+    else
+        thcontsok = true
     end
+    loopbetween = !UnifiedIR.isnull(thloop)
+    # non-dominating outside uses: only reads/queries/stores POSITIONED AFTER
+    # a threaded loop are compatible — reads there stay memory, fed by one
+    # unconditional store of the loop's exit value (the post-set below);
+    # anything else would observe deleted stores
+    needpost = false
+    if !isempty(outnd)
+        loopbetween || return 0
+        for u in outnd
+            UnifiedIR.comes_before(ir, thloop, u) || return 0
+            UnifiedIR.stmt_kind(ir, u) === K"cell_set" || (needpost = true)
+        end
+    end
+    if needpost
+        # the post-set consumes the loop's exit result: the result must be
+        # otherwise unconsumed, and no break may bind a different shape
+        UnifiedIR.use_counts(ir)[thloop.id] == 0 || return 0
+        for bs in UnifiedIR.each_stmt(ir)
+            UnifiedIR.is_tombstone(ir, bs) && continue
+            UnifiedIR.stmt_kind(ir, bs) === K"break" || continue
+            UnifiedIR.asregion(UnifiedIR.getop(ir, bs, 1)) == thbody && return 0
+        end
+    end
+    # whether threading is REQUIRED (the entry value is observed) is decided
+    # after phi placement; these are the raw facts
+    thinitok = !UnifiedIR.isnull(thinit)
     # member positions (region_stmts order; only relative order is used)
     pos = Dict{Int32,Int}()
     for r in blocks
@@ -1275,6 +1540,7 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
     end
     for bi in 1:nb
         sort!(instores[bi]; by = st -> pos[st.id])
+        sort!(newsin[bi]; by = nw -> pos[nw.id])
     end
     hasst = [!isempty(instores[bi]) for bi in 1:nb]
     firstpos(bi) = isempty(instores[bi]) ? typemax(Int) : pos[instores[bi][1].id]
@@ -1289,13 +1555,17 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
     for (f, t, st, mid) in edges
         push!(inedges[t], (f, st, mid))
     end
-    # entry news must lead every entry store/read/query (declaration form)
-    if !isempty(news)
-        lead = firstpos(1)
-        for (bi, m, _) in Iterators.flatten((reads, isdefs))
-            bi == 1 && (lead = min(lead, pos[m.id]))
+    # last event strictly before position p: :store, :new (killed), or :none
+    function lastevent(bi::Int, p::Int)
+        st = storebefore(bi, p)
+        sp = UnifiedIR.isnull(st) ? 0 : pos[st.id]
+        np = 0
+        for nw in Iterators.reverse(newsin[bi])
+            pos[nw.id] < p && (np = pos[nw.id]; break)
         end
-        all(nw -> pos[nw.id] < lead, news) || return 0
+        np > sp && return :new
+        sp > 0 && return :store
+        return :none
     end
     # block-level liveness (backward), for phi pruning
     upx = falses(nb)
@@ -1326,9 +1596,11 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
         end
     end
     # definite assignment (forward, optimistic init, AND meet); the virtual
-    # entry edge is defined iff a dominating outside store exists and no
-    # entry `cell_new` re-undefines the cell
-    vin_ok = !isempty(outstores) && isempty(news)
+    # entry edge is defined iff its would-be source is definite — a store
+    # reaching the loop op when a loop lies between (the carried init), a
+    # dominating outside store otherwise — and no entry `cell_new`
+    # re-undefines the cell
+    vin_ok = loopbetween ? thinitok : !isempty(outstores)
     defin = trues(nb); defout = trues(nb)
     changed = true
     while changed
@@ -1341,15 +1613,17 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
                     (!UnifiedIR.isnull(storebefore(f, pos[mid.id])) || defin[f])
                 edgedef || (di = false; break)
             end
-            do_ = di || hasst[bi]
+            ev = lastevent(bi, typemax(Int))
+            do_ = ev === :store ? true : ev === :new ? false : di
             (di != defin[bi] || do_ != defout[bi]) &&
                 (defin[bi] = di; defout[bi] = do_; changed = true)
         end
     end
     for (bi, m, _) in Iterators.flatten((reads, isdefs))
-        if pos[m.id] < firstpos(bi) && !defin[bi]
-            return 0                         # §6: maybe-undef read stays memory
-        end
+        ev = lastevent(bi, pos[m.id])
+        # §6: maybe-undef reads/queries stay memory — killed by a preceding
+        # cell_new, or upward-exposed without a definite incoming value
+        (ev === :new || (ev === :none && !defin[bi])) && return 0
     end
     # liveness-pruned iterated dominance frontier of the store blocks (the
     # incoming def acts through the entry block when it exists)
@@ -1364,6 +1638,56 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
             push!(wl, f)
         end
     end
+    # does anything observe the island-entry value? (symbolic resolution:
+    # 1 = a concrete island value, 2 = the entry value)
+    invsym = zeros(Int, nb); outsym = zeros(Int, nb)
+    function outsym_of(bi::Int)
+        outsym[bi] != 0 && return outsym[bi]
+        outsym[bi] = hasst[bi] ? 1 : invsym_of(bi)
+    end
+    function invsym_of(bi::Int)
+        invsym[bi] != 0 && return invsym[bi]
+        invsym[bi] = inphi[bi] ? 1 : (bi == 1 ? 2 : outsym_of(idom[bi]))
+    end
+    needvin = inphi[1]                # an entry phi consumes the entry edge
+    if !needvin
+        for (bi, m, _) in reads
+            UnifiedIR.isnull(storebefore(bi, pos[m.id])) || continue
+            invsym_of(bi) == 2 && (needvin = true; break)
+        end
+    end
+    if !needvin
+        for (f, t, _, mid) in edges
+            inphi[t] || continue
+            sym = UnifiedIR.isnull(mid) ? outsym_of(f) :
+                  (UnifiedIR.isnull(storebefore(f, pos[mid.id])) ? invsym_of(f) : 1)
+            sym == 2 && (needvin = true; break)
+        end
+    end
+    # a killed (post-`cell_new`) state may not flow out along any CONSUMED
+    # edge: live phi edges and threaded backedges must carry real values
+    for (f, t, _, mid) in edges
+        inphi[t] || continue
+        ev = UnifiedIR.isnull(mid) ? lastevent(f, typemax(Int)) : lastevent(f, pos[mid.id])
+        ev === :new && return 0
+    end
+    if loopbetween
+        for cont in thconts
+            cc = _island_container(ir, bidx, cont)::Tuple{Int,StmtId,Bool}
+            ev = cc[2] == cont ? lastevent(cc[1], typemax(Int)) :
+                                 lastevent(cc[1], pos[cc[2].id])
+            ev === :new && return 0
+        end
+    end
+    # threading decision: with a loop between, an OBSERVED entry value must
+    # thread (carried arg + init + every backedge carries its exit value);
+    # an unobserved one needs nothing — every read is iteration-local, so
+    # deleting the stores is already sound
+    threading = false
+    if loopbetween && (needvin || needpost)
+        (thinitok && thcontsok) || return 0    # the staleness sentinel
+        threading = true
+    end
     want = Set{Int32}(blocks[bi].id for bi in 1:nb if inphi[bi])
     if !isempty(want)
         # every edge into a phi block must be extendable: edges from
@@ -1375,6 +1699,39 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
     end
     # ---- rewrite (all refusals are behind us) --------------------------------
     vin = Ref{Union{Nothing,UnifiedIR.Operand}}(nothing)
+    if threading
+        # the loop grows a carried arg; its init is the reaching store value
+        breg = UnifiedIR.getregion(ir, thbody)
+        bms = UnifiedIR.region_stmts(ir, thbody)
+        ba = UnifiedIR.insert_before!(ir, bms[length(breg.args) + 1],
+                                      K"region_arg"; type = Any)
+        push!(breg.args, ba)
+        lops = UnifiedIR.Operand[UnifiedIR.getop(ir, thloop, i)
+                                 for i in 1:UnifiedIR.nops(ir, thloop)]
+        push!(lops, UnifiedIR.getop(ir, thinit, 2))
+        UnifiedIR.store_ops!(ir, thloop, lops)
+        vin[] = UnifiedIR.op_stmt(ba)
+        _trace!(:loop_header, thloop, cell)
+        if needpost
+            # one unconditional store of the exit value right after the
+            # loop; post-loop reads keep reading memory (the loop's result
+            # on a continue-exit is the full carried tuple, our slot last)
+            UnifiedIR.set_type!(ir, thloop, Any)
+            total = length(breg.args)
+            v = if total == 1
+                UnifiedIR.op_stmt(thloop)
+            else
+                e = UnifiedIR.insert_after!(ir, thloop, K"extract",
+                                            UnifiedIR.op_stmt(thloop),
+                                            UnifiedIR.op_inline(Int64(total)); type = Any)
+                UnifiedIR.op_stmt(e)
+            end
+            at = total == 1 ? thloop : UnifiedIR.asstmt(v)
+            UnifiedIR.insert_after!(ir, at, K"cell_set",
+                                    UnifiedIR.op_stmt(cell), v; type = Nothing)
+            _trace!(:loop_break, thloop, cell)
+        end
+    end
     getvin() = begin
         if vin[] === nothing
             g = UnifiedIR.insert_before!(ir, I, K"cell_get", UnifiedIR.op_stmt(cell); type = Any)
@@ -1415,6 +1772,20 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
         end
         _extend_bundles!(ir, st, want, v)
     end
+    for cont in (threading ? thconts : StmtId[])  # backedges carry the exit value
+        c = _island_container(ir, bidx, cont)::Tuple{Int,StmtId,Bool}
+        v = if c[2] == cont
+            outval(c[1])
+        else
+            # sealed exit nested below block level (inner island, if, or a
+            # handler): the reaching value at its containing member position
+            rst = storebefore(c[1], pos[c[2].id])
+            UnifiedIR.isnull(rst) ? inval(c[1]) : UnifiedIR.getop(ir, rst, 2)
+        end
+        keep = UnifiedIR.Operand[UnifiedIR.getop(ir, cont, i)
+                                 for i in 1:UnifiedIR.nops(ir, cont)]
+        UnifiedIR.replace_stmt!(ir, cont, K"continue", keep..., v)
+    end
     if inphi[1]                               # the island's own entry edge
         ops = UnifiedIR.Operand[UnifiedIR.getop(ir, I, i) for i in 1:UnifiedIR.nops(ir, I)]
         push!(ops, getvin())
@@ -1439,7 +1810,7 @@ function _promote_one_island_cell!(ir::UnifiedIR.IR, I::StmtId, graph, cell::Stm
     for bi in 1:nb, st in instores[bi]
         UnifiedIR.delete_stmt!(ir, st)
     end
-    for nw in news
+    for bi in 1:nb, nw in newsin[bi]
         UnifiedIR.delete_stmt!(ir, nw)
     end
     # the cell and its dominating outside stores remain; when the incoming
