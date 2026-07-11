@@ -39,6 +39,91 @@ let t = Type{Vector{T}} where T
     @test Compiler.limit_type_size(t, Any, Any, 1, 4) === t
 end
 
+# The local-cache overlay must not serve an `InferenceResult` whose requesting
+# future was never resolved: such an entry has a filled `CodeInstance` but no
+# recorded call edge, and the inliner requires the edge (`ci_as_edge`). The
+# lookup falls through to the global cache instead.
+overlay_edgeless62272(x::Int) = x + 1
+let
+    precompile(overlay_edgeless62272, (Int,))
+    interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    mi = Base.method_instance(overlay_edgeless62272, (Int,))
+    ci = get(Compiler.code_cache(interp), mi, nothing)
+    @test ci isa Core.CodeInstance
+    result = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
+    result.ci = ci
+    push!(Compiler.get_inference_cache(interp), result)
+    got = get(Compiler.code_cache(interp), mi, nothing)
+    @test got isa Core.CodeInstance
+end
+
+# End-to-end reproducer for the same bug: a `@generated` function body
+# publishes a global CodeInstance for an in-progress cycle member by
+# precompiling a wrapper of the cycle mid-inference (the wrapper's edge takes
+# the engine's same-thread self-cycle path, so the nested session re-infers
+# the cycle for itself and caches it). At the outer cycle's `promotecache!`,
+# `is_already_cached` then sees that fresh global entry and demotes the
+# member's result to the local cache — but its consuming edge task already
+# drained mid-cycle without recording `ci_as_edge`, so the demoted entry is
+# edge-less. The second call edge below must not be served that entry.
+edgeless62272_bump() = 0
+edgeless62272_a(x::Int) = x <= 0 ? edgeless62272_bump() : edgeless62272_req(x - 1)
+edgeless62272_req(x::Int) = x <= 0 ? 1 : edgeless62272_v(x - 1) + 1
+edgeless62272_v(x::Int) = x <= 0 ? 2 : edgeless62272_w(x - 1) + 2
+edgeless62272_trigger(x::Int) = edgeless62272_v(x)
+@generated function edgeless62272_gencache(x)
+    # Precompiling the wrapper (not `edgeless62272_v` itself, which
+    # `jl_type_infer` refuses to re-enter while the outer session holds its
+    # engine reservation) publishes a global CodeInstance for the cycle member
+    # mid-inference. `precompile`'s world argument defaults to the latest
+    # world even in this pure-callback context; the nested compile must run
+    # after the `edgeless62272_bump` redefinition below or its result is born
+    # invalidated (a direct call would stay pinned to the generator's
+    # definition world and only publish a stale entry).
+    precompile(edgeless62272_trigger, (Int,))
+    return :(x)
+end
+# the generated call sits after the cycle-closing `edgeless62272_a` call so
+# the nested publication happens only once the outer cycle is fully formed
+edgeless62272_w(x::Int) = x <= 0 ? 3 : (r = edgeless62272_a(x - 1); edgeless62272_gencache(x); r + 3)
+function edgeless62272_root(x::Int)
+    y = edgeless62272_a(x)
+    z = edgeless62272_v(x)
+    return y + z
+end
+# invalidate so all cycle frames' valid_worlds start at the current world,
+# matching the validity range of the mid-inference publication
+edgeless62272_bump() = 1
+@test code_typed(edgeless62272_root, (Int,)) isa Vector
+
+# The same bug through the shape of the originally-observed failure: no
+# generated function; instead a constant `@assume_effects :foldable` call is
+# concretely evaluated mid-inference. Its execution hits a dynamic dispatch
+# that inference could not analyze, compiling the wrapper `..._trigger`,
+# whose nested inference session re-infers the in-progress cycle (the
+# reserved members take the engine's same-thread self-cycle path) and
+# publishes a global CodeInstance for the cycle member `..._v` — the same
+# demotion setup as above through purely ordinary calls.
+edgeless62272c_bump() = 0
+edgeless62272c_a(x::Int) = x <= 0 ? edgeless62272c_bump() : edgeless62272c_req(x - 1)
+edgeless62272c_req(x::Int) = x <= 0 ? 1 : edgeless62272c_v(x - 1) + 1
+edgeless62272c_v(x::Int) = x <= 0 ? 2 : edgeless62272c_w(x - 1) + 2
+edgeless62272c_trigger(x::Int) = edgeless62272c_v(x)
+const edgeless62272c_hookref = Ref{Any}(edgeless62272c_trigger)
+Base.@assume_effects :foldable edgeless62272c_hook(x::Int) = (edgeless62272c_hookref[](x); x)
+# the hook call sits after the cycle-closing call so the nested publication
+# happens only once the outer cycle is fully formed
+edgeless62272c_w(x::Int) = x <= 0 ? 3 : (r = edgeless62272c_a(x - 1); edgeless62272c_hook(1); r + 3)
+function edgeless62272c_root(x::Int)
+    y = edgeless62272c_a(x)
+    z = edgeless62272c_v(x)
+    return y + z
+end
+# invalidate so all cycle frames' valid_worlds start at the current world,
+# matching the validity range of the mid-inference publication
+edgeless62272c_bump() = 1
+@test code_typed(edgeless62272c_root, (Int,)) isa Vector
+
 # detached bound-variable references are valid lattice elements through the
 # extended (wrapper) lattices, not only through `JLTypeLattice`
 let r = Core.TypeVarRef(1), 𝕃 = Compiler.fallback_lattice
