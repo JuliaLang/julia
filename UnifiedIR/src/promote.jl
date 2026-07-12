@@ -1957,6 +1957,209 @@ function promote_undef_cells!(ir::IR)
 end
 
 
+# ---------------------------------------------------------------------------
+# Try-join cell promotion (§6, the exception-join slice of PhiC/Upsilon):
+# a frame cell stored in a `try`'s body and/or handler gains ONE additional
+# unconditional post-try store of the try's threaded result. Nothing is
+# deleted or moved: on every path that reaches the join, the threaded value
+# equals the cell's memory at that point (the last direct arm store executed
+# — or the incoming value when the joining BODY never stores), so the new
+# store is a semantic no-op whose only effect is giving `promote_cells!` a
+# dominating definition below the throw edge. The §6 "never promote across a
+# throw edge" rule is preserved: reads inside handlers keep observing memory,
+# and the arm stores stay exactly where they were.
+#
+# Refusals (cell skipped at this try):
+#   - non-2-region try, or handler region not REGION_HANDLER;
+#   - escapes / value uses (as everywhere);
+#   - any store inside the try NOT a direct member of body/handler (deeper
+#     conditional stores wait for the inner passes to flatten them — the
+#     joint fixpoint composes, exactly like the arm pass);
+#   - `cell_new` inside the try, or non-declaration news outside;
+#   - a JOINING handler without a direct store while the body stores: an
+#     exception between body stores and the body terminator would reach the
+#     join with mid-body memory the thread cannot name;
+#   - a joining storeless BODY without a store dominating the try (the
+#     incoming `cell_get` requires definite assignment, as in the arm pass);
+#   - no post-try read/query that lacks a post-try dominating store (the
+#     idempotence trigger: firing would change no reaching relation).
+# ---------------------------------------------------------------------------
+
+"""
+    promote_try_cells!(ir) -> Int
+
+Thread try-body/handler stores of frame cells into the `try`'s results and
+add one unconditional post-try store (see the block comment: a provable
+no-op store that unlocks the dominating-store pass below the throw edge).
+Editable state; returns the number of (cell, try) threadings.
+"""
+function promote_try_cells!(ir::IR)
+    check_state(ir, LAYOUT_EDITABLE, "promote_try_cells!")
+    flush_renames!(ir)
+    trys = StmtId[]
+    for s in each_stmt(ir)
+        is_tombstone(ir, s) && continue
+        stmt_kind(ir, s) === K"try" || continue
+        push!(trys, s)
+    end
+    sort!(trys; by = s -> region_depth(ir, stmt_region(ir, s)), rev = true)
+    total = 0
+    for T in trys
+        total += _promote_try_cells_at!(ir, T)
+    end
+    flush_renames!(ir)
+    return total
+end
+
+function _promote_try_cells_at!(ir::IR, T::StmtId)
+    rs = live_owned_regions(ir, T)
+    length(rs) == 2 || return 0
+    B, H = rs[1], rs[2]
+    getregion(ir, H).kind === REGION_HANDLER || return 0
+    tB = region_terminator(ir, B)
+    tH = region_terminator(ir, H)
+    (tB === nothing || tH === nothing) && return 0
+    kB = stmt_kind(ir, tB)
+    kH = stmt_kind(ir, tH)
+    joinB = kB === K"result"
+    joinH = kH === K"result"
+    (joinB || is_diverge_kind(kB)) || return 0
+    (joinH || is_diverge_kind(kH)) || return 0
+    (joinB || joinH) || return 0                    # join unreachable
+    exist_arity = joinB ? nops(ir, tB) : nops(ir, tH)
+    (joinB && joinH && nops(ir, tB) != nops(ir, tH)) && return 0
+    counts = use_counts(ir)
+    # result-appending only supported for the common shapes (as the arm pass)
+    exist_arity == 0 && counts[T.id] != 0 && return 0
+    before(a, b) = comes_before(ir, a, b)
+    intry(u) = is_ancestor(ir, B, stmt_region(ir, u)) ||
+               is_ancestor(ir, H, stmt_region(ir, u))
+
+    # ---- candidate cells ----------------------------------------------------
+    # plan: (cell, lastB, lastH, needs_in) — NULL_STMT marks "no direct store"
+    plans = Vector{Tuple{StmtId,StmtId,StmtId,Bool}}()
+    for c in each_stmt(ir)
+        is_tombstone(ir, c) && continue
+        stmt_kind(ir, c) === K"cell" || continue
+        cell = c
+        sets = StmtId[]; gets = StmtId[]; isdefs = StmtId[]; news = StmtId[]
+        ok = true
+        each_ssa_use(ir) do site, used
+            (ok && used == cell) || return
+            site isa StmtOperand || (ok = false; return)
+            u = site.user
+            is_tombstone(ir, u) && return
+            k = stmt_kind(ir, u)
+            if k === K"cell_set" && site.opidx == 1
+                push!(sets, u)
+            elseif k === K"cell_get"
+                push!(gets, u)
+            elseif k === K"cell_isdefined"
+                push!(isdefs, u)
+            elseif k === K"cell_new"
+                push!(news, u)
+            else
+                ok = false                        # escape / value use / token
+            end
+        end
+        ok || continue
+        # news: declaration position only, none inside the try
+        any(nw -> intry(nw), news) && continue
+        all(nw -> all(st -> before(nw, st), sets), news) || continue
+        # in-try stores must be DIRECT members of body/handler
+        lastB = NULL_STMT
+        lastH = NULL_STMT
+        deeper = false
+        for st in sets
+            sr = stmt_region(ir, st)
+            if sr == B
+                (isnull(lastB) || before(lastB, st)) && (lastB = st)
+            elseif sr == H
+                (isnull(lastH) || before(lastH, st)) && (lastH = st)
+            elseif intry(st)
+                deeper = true
+                break
+            end
+        end
+        deeper && continue
+        (isnull(lastB) && isnull(lastH)) && continue      # no in-try stores
+        # a joining handler without a direct store cannot name mid-body memory
+        joinH && isnull(lastH) && !isnull(lastB) && continue
+        # storeless joining body threads the incoming value: definite
+        # assignment at the try required
+        needs_in = joinB && isnull(lastB)
+        if needs_in
+            any(st -> !intry(st) && before(st, T) && _cell_dominates_ed(ir, st, T),
+                sets) || continue
+        end
+        # idempotence trigger: some post-try read/query that the inserted
+        # store WOULD dominate (`T` stands in for it: same region, just
+        # before) and that no existing post-try store already dominates.
+        # Requiring dominance-by-the-new-store guarantees one firing per
+        # (try, cell): reads the new store cannot dominate (e.g. inside a
+        # later handler) must never re-arm the trigger.
+        fired = false
+        for u in Iterators.flatten((gets, isdefs))
+            (before(T, u) && !intry(u)) || continue
+            _cell_dominates_ed(ir, T, u) || continue
+            any(st -> !intry(st) && before(T, st) &&
+                      _cell_dominates_ed(ir, st, u), sets) && continue
+            fired = true
+            break
+        end
+        fired || continue
+        push!(plans, (cell, lastB, lastH, needs_in))
+    end
+    isempty(plans) && return 0
+
+    # ---- transform ----------------------------------------------------------
+    m = length(plans)
+    for (cell, _, _, _) in plans
+        _trace!(:try_join, T, cell)
+    end
+    # incoming values (storeless joining body): one cell_get just before T
+    incoming = Dict{Int,Operand}()
+    for (i, (cell, _, _, needs_in)) in enumerate(plans)
+        needs_in || continue
+        g = insert_before!(ir, T, K"cell_get", op_stmt(cell); type = Any)
+        incoming[i] = op_stmt(g)
+    end
+    # append each plan's outgoing value to the joining terminators
+    for (arm_t, isjoin, lastof) in ((tB, joinB, 2), (tH, joinH, 3))
+        isjoin || continue
+        outs = Operand[]
+        for (i, plan) in enumerate(plans)
+            st = plan[lastof]
+            push!(outs, isnull(st) ? incoming[i] : getop(ir, st, 2))
+        end
+        old = operands(ir, arm_t)
+        replace_stmt!(ir, arm_t, K"result", old..., outs...)
+    end
+    set_type!(ir, T, Any)
+    # post-try: extracts (when tupled) + the unconditional no-op stores
+    total_vals = exist_arity + m
+    anchor = T
+    if exist_arity == 1 && counts[T.id] != 0
+        e0 = insert_after!(ir, anchor, K"extract", op_stmt(T), op_inline(1);
+                           type = Any)
+        replace_uses_where!(u -> u != e0, ir, T => op_stmt(e0))
+        anchor = e0
+    end
+    for (i, (cell, _, _, _)) in enumerate(plans)
+        v = if total_vals == 1
+            op_stmt(T)
+        else
+            e = insert_after!(ir, anchor, K"extract", op_stmt(T),
+                              op_inline(exist_arity + i); type = Any)
+            anchor = e
+            op_stmt(e)
+        end
+        anchor = insert_after!(ir, anchor, K"cell_set", op_stmt(cell), v;
+                               type = Nothing)
+    end
+    return m
+end
+
 """
     promote_fixpoint!(ir; stmt_value = nothing, include_undef = true) -> Int
 
@@ -1980,6 +2183,7 @@ function promote_fixpoint!(ir::IR; stmt_value = nothing, include_undef::Bool = t
         editable(ir)
         include_undef && (c += promote_undef_cells!(ir))
         c += promote_arm_cells!(ir)
+        c += promote_try_cells!(ir)
         c += promote_island_cells!(ir)
         c += promote_loop_cells!(ir; stmt_value)
         compact!(ir)

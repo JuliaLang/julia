@@ -299,6 +299,7 @@ function optimize_ir!(ir::UnifiedIR.IR, argtypes::Vector{Any};
         while true
             c = promote_undef_cells!(ir)
             c += promote_arm_cells!(ir)
+            c += UnifiedIR.promote_try_cells!(ir)
             c += promote_island_cells!(ir)
             c += promote_loop_cells!(ir)
             c == 0 && break
