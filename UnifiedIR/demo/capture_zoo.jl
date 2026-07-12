@@ -160,11 +160,13 @@ println(ndiff == 0 ? "SEMANTICS: all cases match" :
 
 # ---- the analysis IR itself --------------------------------------------------
 # What the decision machinery actually sees: the enclosing body lowered to
-# UnifiedIR in capture-analysis mode (candidates as frame cells; each
-# closure-creation site a `call const CaptureSiteMarker() ...` whose trailing
-# operands are one `cell_get` per captured variable), BEFORE and AFTER the
-# shared mem2reg fixpoint. A marker operand that resolves to a plain value is
-# a legal VALUE capture; one still reading a cell keeps the shared container.
+# UnifiedIR in capture-analysis mode -- candidates as `cell_shared` cells and
+# each closure-creation site a REAL `closure` region op whose deferred body
+# is the capture footprint (one `cell_get` per captured variable) -- BEFORE
+# and AFTER the shared mem2reg fixpoint. `promote_capture_cells!` decides
+# value capture structurally: a candidate whose in-deferred reads were
+# rewritten to values (the cell demoted and dissolved) is a legal VALUE
+# capture; a surviving `cell_shared` keeps the shared container.
 
 using UnifiedIR
 
@@ -179,14 +181,14 @@ function show_analysis_ir(title, src)
     finally
         JuliaLowering.ACP_TRACE[] = nothing
     end
-    println("== analysis IR as emitted (before mem2reg):")
+    println("== analysis IR as emitted (closure regions, before mem2reg):")
     print(get(phase_ir, :before, "(no analysis ran)\n"))
     println("== after UnifiedIR.promote_fixpoint! (the shared machinery):")
     print(get(phase_ir, :after, "(no analysis ran)\n"))
 end
 
 println("\n== the analysis IR, before/after the shared mem2reg fixpoint ==")
-show_analysis_ir("zoo1: if-arm join -> the marker operand RESOLVES (value capture)", raw"""
+show_analysis_ir("zoo1: if-arm join -> the capture read RESOLVES (value capture)", raw"""
 function t1(c)
     local x
     if c; x = 1; else; x = 2; end
@@ -194,10 +196,10 @@ function t1(c)
     return cl()
 end
 """)
-show_analysis_ir("""zoo3: mutation after capture -> stays shared. NB. the marker operand
-     still resolves (nothing in THIS frame reads x later), but criterion (b)
-     runs on the BEFORE IR: the `cell_set` AFTER the marker is observable by
-     the closure, vetoing value capture""", raw"""
+show_analysis_ir("""zoo3: mutation after capture -> stays shared: criterion (b) inside
+     promote_capture_cells! sees the `cell_set` AFTER the closure op (a
+     store the deferred reads can observe at call time) and refuses the
+     value rewrite""", raw"""
 function t3()
     x = 1
     f = () -> x

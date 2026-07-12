@@ -4,25 +4,22 @@
 #
 # `analyze_def_and_use!` (binding_analysis.jl, flisp parity) runs first and
 # keeps its verdicts; this pass runs after it and only WIDENS `unboxed` — a
-# monotone improvement over stock, never a regression. For each lambda, per
-# captured native variable v and closure-creation site C, value capture is
-# legal iff
-#   (a) no store to v inside ANY lambda capturing v (tree fact),
-#   (b) no store to v can execute after C — same-activation forward order
-#       (`comes_before` + `_may_reach`, sibling-if-arms exclusive) and
-#       multi-shot loop backedges (`_innermost_shared_body`), where a
-#       re-declaration of v inside the shared loop (fresh binding per
-#       iteration) cancels the backedge hazard,
-#   (c) a single defined value reaches C — joins are fine: this is exactly
-#       cell promotion, so the verdict is "the shared fixpoint
-#       (`UnifiedIR.promote_fixpoint!`, the same passes `Compiler.Unified`
-#       runs) resolved the site's `cell_get` to a reaching definition".
+# monotone improvement over stock, never a regression. The enclosing body is
+# lowered to throwaway analysis IR with REAL `closure` region ops (each
+# creation site's deferred body is its capture footprint: candidate reads,
+# plus synthetic stores for lambda-written candidates), candidates as
+# `cell_shared` cells, and the shared fixpoint
+# (`UnifiedIR.promote_fixpoint!`, the same passes `Compiler.Unified` runs)
+# decides captures STRUCTURALLY through `promote_capture_cells!` — the
+# criterion (a)/(b)/(c) machinery lives inside that pass now, not in a
+# sidecar pre-check. The per-variable verdict is read off the promoted IR:
+# a candidate whose `cell_shared` survives with in-deferred uses must stay
+# shared; a resolved candidate's reads were rewritten to value captures.
 # Maybe-undef variables keep the shared container (the fixpoint runs WITHOUT
 # definedness-as-data), preserving use-time UndefVarError semantics.
 #
-# The lambda body is lowered to throwaway analysis IR by the UnifiedBackend
-# emitter in capture-analysis mode (unified/emit.jl); any unsupported form
-# bails to the stock verdicts (`UnsupportedForm` — fidelity first).
+# Any unsupported form bails to the stock verdicts (`UnsupportedForm` —
+# fidelity first).
 
 "Rethrow analysis-internal errors instead of falling back (test/debug hook)."
 const ACP_STRICT = Ref(false)
@@ -125,20 +122,6 @@ function _acp_closure_stores!(ctx, ex, cand::Set{Int}, inlambda::Bool)
     return nothing
 end
 
-# criterion (b), on the pristine (pre-fixpoint) dense IR, via the SHARED
-# reachability helpers the promotion machinery itself uses
-function _acp_store_observable_after(ir, C, st, declr)
-    # multi-shot backedge: a store sharing a loop with the creation site
-    # executes again after it — observable unless the variable is re-declared
-    # per iteration inside that same (innermost shared) loop
-    X = UIR._innermost_shared_body(ir, st, C)
-    if !UIR.isnull(X) && !UIR.is_ancestor(ir, X, declr)
-        return true
-    end
-    # same-activation forward order (sibling if-arms are mutually exclusive)
-    return UIR.comes_before(ir, C, st) && UIR._may_reach(ir, C, st)
-end
-
 function _acp_analyze!(ctx, lam)
     body = lam[3]
     lb = lam.lambda_bindings
@@ -161,9 +144,11 @@ function _acp_analyze!(ctx, lam)
         end
     end
     isempty(cand) && return nothing
-    # criterion (a): variables stored by some capturing lambda must stay
-    # shared, but they remain in the analysis as cells — the same IR decides
-    # their TYPED-container eligibility below
+    # criterion (a) is a tree fact that feeds the EMISSION: candidates some
+    # capturing lambda stores to get a synthetic in-deferred store in their
+    # sites' footprint bodies, which promote_capture_cells! refuses
+    # structurally. They remain in the analysis as cells — the same IR
+    # decides their TYPED-container eligibility below.
     writable = copy(cand)
     _acp_closure_stores!(ctx, body, writable, false)   # removes survivors
     closure_written = setdiff(cand, writable)
@@ -179,91 +164,105 @@ function _acp_analyze!(ctx, lam)
         capture_sets[sid] = sort!(unique!(s))
     end
     foreign = Set{Int}(Int(id) for (id, capt) in lb.locals_capt if capt)
-    ana = UnifiedBackend.AnalysisState(cand, foreign, capture_sets)
+    ana = UnifiedBackend.AnalysisState(cand, foreign, capture_sets, closure_written)
     ir, _, _, ectx = UnifiedBackend.emit_lambda(ctx, lam, :capture_analysis;
                                                 analysis = ana)
 
-    # criterion (b) per (site, variable), before any promotion runs
+    # undef-safety for typed containers, on the pristine (pre-fixpoint) IR:
+    # v may use a container whose empty state is unobservable iff no read
+    # can see undef — every home read/query is store-dominated (the §6 dense
+    # checker `dominates_for_cell`, shared again), every capture is
+    # store-dominated AT ITS CREATION SITE (in-deferred reads execute after
+    # the site, and home stores never un-define), and every `cell_new` is in
+    # declaration position. Only home-side stores count (the synthetic
+    # in-deferred stores model criterion (a), not definedness).
     cellstmt2var = Dict{Int,Int}(Int(c.id) => v for (v, c) in ectx.cellmap
                                  if v in cand)
+    cellhome = Dict{Int,UnifiedBackend.RegionId}(
+        Int(c.id) => UIR.activation_root(ir, UIR.stmt_region(ir, c))
+        for (v, c) in ectx.cellmap if v in cand)
+    athome(u, cid) = UIR.activation_root(ir, UIR.stmt_region(ir, u)) == cellhome[cid]
     sets = Dict{Int,Vector{UnifiedBackend.StmtId}}(v => UnifiedBackend.StmtId[]
                                                    for v in cand)
-    for s in UIR.each_stmt(ir)
-        UIR.stmt_kind(ir, s) === UIR.K"cell_set" || continue
-        o = UIR.getop(ir, s, 1)
-        UIR.optag(o) == UIR.TAG_STMT || continue
-        v = get(cellstmt2var, Int(UIR.asstmt(o).id), nothing)
-        v === nothing || push!(sets[v], s)
-    end
-    unsafe_after = Set{Tuple{Int,Int}}()
-    for (si, caps) in enumerate(ana.site_caps)
-        C = ana.site_stmts[si]
-        for v in caps
-            declr = get(ana.decl_regions, v, UnifiedBackend.RegionId(1))
-            for st in sets[v]
-                if _acp_store_observable_after(ir, C, st, declr)
-                    push!(unsafe_after, (si, v))
-                    break
-                end
-            end
-        end
-    end
-
-    # undef-safety for typed containers, on the same pristine IR: v may use a
-    # container whose empty state is unobservable iff no read can see undef —
-    # every home read/query and every capture-site read is store-dominated
-    # (the §6 dense checker `dominates_for_cell`, shared again) and every
-    # `cell_new` is in declaration position. Definedness is monotone from
-    # there: closure-internal reads happen after some dominated capture.
     reads = Dict{Int,Vector{UnifiedBackend.StmtId}}(v => UnifiedBackend.StmtId[]
                                                     for v in cand)
     news = Dict{Int,Vector{UnifiedBackend.StmtId}}(v => UnifiedBackend.StmtId[]
                                                    for v in cand)
+    sitereads = Dict{Int,Vector{UnifiedBackend.StmtId}}(v => UnifiedBackend.StmtId[]
+                                                        for v in cand)
     for s in UIR.each_stmt(ir)
         k = UIR.stmt_kind(ir, s)
-        (k === UIR.K"cell_get" || k === UIR.K"cell_isdefined" ||
-         k === UIR.K"cell_new") || continue
+        (k === UIR.K"cell_set" || k === UIR.K"cell_get" ||
+         k === UIR.K"cell_isdefined" || k === UIR.K"cell_new") || continue
         o = UIR.getop(ir, s, 1)
         UIR.optag(o) == UIR.TAG_STMT || continue
-        v = get(cellstmt2var, Int(UIR.asstmt(o).id), nothing)
+        cid = Int(UIR.asstmt(o).id)
+        v = get(cellstmt2var, cid, nothing)
         v === nothing && continue
-        push!(k === UIR.K"cell_new" ? news[v] : reads[v], s)
+        if k === UIR.K"cell_set"
+            athome(s, cid) && push!(sets[v], s)
+        elseif k === UIR.K"cell_new"
+            push!(news[v], s)
+        else
+            athome(s, cid) ? push!(reads[v], s) : push!(sitereads[v], s)
+        end
+    end
+    # in-deferred reads are dominated iff a home store dominates the SITE
+    # closure op containing them
+    site_of = Dict{Int,UnifiedBackend.StmtId}()
+    for (si, caps) in enumerate(ana.site_caps)
+        C = ana.site_stmts[si]
+        rs = UIR.owned_regions(ir, C)
+        for r in rs
+            for m in UIR.region_stmts(ir, r)
+                site_of[Int(m.id)] = C
+            end
+        end
+        _ = caps
     end
     undef_safe = Dict{Int,Bool}()
     for v in cand
         dominated(u) = any(st -> UIR.dominates_for_cell(ir, st, u), sets[v])
-        undef_safe[v] = all(dominated, reads[v]) &&
-            all(nw -> all(st -> nw.id < st.id, sets[v]), news[v])
+        ok = all(dominated, reads[v]) &&
+             all(nw -> all(st -> nw.id < st.id, sets[v]), news[v])
+        if ok
+            for g in sitereads[v]
+                C = get(site_of, Int(g.id), nothing)
+                (C !== nothing && dominated(C)) || (ok = false; break)
+            end
+        end
+        undef_safe[v] = ok
     end
 
     tr = ACP_TRACE[]
     tr === nothing || tr(:before, lam, ir)
 
-    # criterion (c): the shared fixpoint (same machinery as Compiler.Unified),
-    # without definedness-as-data — maybe-undef captures must stay memory
+    # criterion (c): the shared fixpoint (same machinery as Compiler.Unified)
+    # runs promote_capture_cells! on the real closure regions, without
+    # definedness-as-data — maybe-undef captures must stay memory
     UIR.promote_fixpoint!(ir; include_undef = false)
 
     tr === nothing || tr(:after, lam, ir)
 
-    # verdicts: a site operand still reading a cell keeps the variable shared.
-    # (Markers folded away with dead arms impose no constraint: that closure
-    # is never created.)
+    # verdicts, structurally: a candidate stays shared iff its cell_shared
+    # SURVIVED the fixpoint with an in-deferred use (an unresolved capture
+    # read/query). Resolved candidates were demoted and their in-deferred
+    # reads rewritten to value captures; sites folded away with dead arms
+    # impose no constraint (that closure is never created).
+    cellcol = UIR.getattr(ir, :cellbind)
     value_ok = Dict{Int,Bool}(v => true for v in cand)
     for s in UIR.each_stmt(ir)
-        UIR.stmt_kind(ir, s) === UIR.K"call" || continue
-        UIR.nops(ir, s) >= 2 || continue
-        o1 = UIR.getop(ir, s, 1)
-        UIR.optag(o1) == UIR.TAG_CONST || continue
-        ir.body.constants[UIR.payload(o1)] === UnifiedBackend.CAPTURE_SITE || continue
-        si = UIR.operand_static_value(ir, UIR.getop(ir, s, 2))::Int
-        caps = ana.site_caps[si]
-        for (j, v) in enumerate(caps)
-            o = UIR.getop(ir, s, j + 2)
-            resolved = !(UIR.optag(o) == UIR.TAG_STMT &&
-                         UIR.stmt_kind(ir, UIR.asstmt(o)) === UIR.K"cell_get")
-            if !resolved || (si, v) in unsafe_after
+        UIR.stmt_kind(ir, s) === UIR.K"cell_shared" || continue
+        v = cellcol[s]
+        (v isa Int && v in cand) || continue
+        home = UIR.activation_root(ir, UIR.stmt_region(ir, s))
+        UIR.each_ssa_use(ir) do site, used
+            used == s || return
+            site isa UIR.StmtOperand || return
+            if UIR.activation_root(ir, UIR.stmt_region(ir, site.user)) != home
                 value_ok[v] = false
             end
+            return
         end
     end
     for v in cand

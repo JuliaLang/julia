@@ -172,8 +172,7 @@ function scan!(s::ScanState, ex, path::Vector{Int})
         return nothing
     # pre-closure-conversion forms (capture-analysis mode; absent afterwards)
     elseif k == K"local" || k == K"global"
-        if s.region && k == K"local" && numchildren(ex) >= 1 &&
-           kind(ex[1]) == K"BindingId"
+        if k == K"local" && numchildren(ex) >= 1 && kind(ex[1]) == K"BindingId"
             getvar!(s, ex[1].var_id).has_decl = true
         end
         return nothing                       # declarations are not reads
@@ -257,24 +256,26 @@ end
 # Capture-analysis mode (§5.7 precise capture, julia#15276): the same emitter
 # driven over the PRE-closure-conversion tree, producing the throwaway IR the
 # shared mem2reg fixpoint judges. Differences from normal emission:
-#   * candidate captured variables are FORCED to frame cells (no undef guard
-#     at reads — the promotion machinery itself is the definite-assignment
-#     judge);
+#   * candidate captured variables become `cell_shared` cells — created at
+#     their K"local" site when one exists (fresh shared box per execution:
+#     the per-iteration-rebinding cancellation of the capture-promotion
+#     backedge rule, structurally) — with no undef guard at reads: the
+#     promotion machinery itself is the definite-assignment judge;
 #   * variables captured from further out (`foreign`) become opaque values;
-#   * closure-creation sites (`function_decl` / `_opaque_closure`) emit a
-#     marker call `CAPTURE_SITE, site-index, cell_get(v)...` — one `cell_get`
-#     per captured candidate — whose operands the fixpoint either resolves to
-#     reaching definitions (value capture is legal) or leaves as memory reads
-#     (the variable must stay shared);
-#   * nested lambda BODIES are skipped (they run at call time, not here);
+#   * closure-creation sites (`function_decl` / `_opaque_closure`) emit REAL
+#     `closure` region ops whose deferred bodies are the capture FOOTPRINT:
+#     one `cell_get` per captured candidate, plus one synthetic `cell_set`
+#     per candidate some capturing lambda stores to (criterion (a) as a
+#     structural fact). `promote_capture_cells!` inside the shared fixpoint
+#     then decides value capture exactly as it does on real lowering IR; the
+#     verdict is read off whether the candidate's cell_shared survived with
+#     in-deferred uses. Actual nested lambda BODIES are still not emitted
+#     (they run at call time; the footprint is all the analysis needs, and
+#     it keeps coverage independent of inner-body forms);
 #   * unknown forms become opaque calls after a subtree check that they hide
 #     no candidate stores and no closure-creation sites.
 # Driver: ../capture_analysis.jl (JuliaLowering.analyze_captures_precise!).
 # ---------------------------------------------------------------------------
-
-"Marker callee identifying closure-creation sites in capture-analysis IR."
-struct CaptureSiteMarker end
-const CAPTURE_SITE = CaptureSiteMarker()
 
 "Marker callee for opaque values/effects (unknown forms, foreign variables)."
 struct OpaqueMarker end
@@ -284,14 +285,14 @@ mutable struct AnalysisState
     candidates::Set{Int}                 # native captured ids under analysis
     foreign::Set{Int}                    # captured-from-outer ids (opaque)
     capture_sets::Dict{Int,Vector{Int}}  # closure binding id -> candidates it captures
+    written::Set{Int}                    # candidates stored by a capturing lambda
     site_caps::Vector{Vector{Int}}       # site index -> captured candidate ids
-    site_stmts::Vector{StmtId}           # site index -> marker stmt (pre-compaction)
-    decl_regions::Dict{Int,RegionId}     # candidate -> region of its K"local" decl
+    site_stmts::Vector{StmtId}           # site index -> closure op (pre-compaction)
     created::Set{Int}                    # closure bindings already instantiated
 end
-AnalysisState(candidates, foreign, capture_sets) =
+AnalysisState(candidates, foreign, capture_sets, written = Set{Int}()) =
     AnalysisState(Set{Int}(candidates), Set{Int}(foreign), capture_sets,
-                  Vector{Int}[], StmtId[], Dict{Int,RegionId}(), Set{Int}())
+                  Set{Int}(written), Vector{Int}[], StmtId[], Set{Int}())
 
 # ---------------------------------------------------------------------------
 # Closure-region mode (§5.7): the same emitter driven over the
@@ -486,7 +487,9 @@ end
 Lower one (non-toplevel) `K"lambda"` to UnifiedIR. Mirrors what linear_ir.jl's
 `compile_lambda` receives, but emits regions instead of gotos. With
 `analysis::AnalysisState` the emitter runs in capture-analysis mode (see the
-block comment above `CaptureSiteMarker`) over a pre-closure-conversion tree.
+block comment above `AnalysisState`); with `region = true` it runs in
+closure-region mode (see the block comment above `RegionState`). Both
+consume a pre-closure-conversion tree.
 """
 function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing, region::Bool = false)
     kind(lam) == K"lambda" || unsupported(lam, "expected a lambda")
@@ -533,11 +536,12 @@ function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing, region::Bool 
     end
     if analysis !== nothing
         ana = analysis::AnalysisState
-        # candidates are the machinery's problem: frame cells, no guards.
+        # candidates are the machinery's problem: shared cells, no guards.
         # (Candidates untouched by the body itself — e.g. only ever captured —
         # get their plan created here.)
         for id in ana.candidates
-            plans[id] = VarPlan(:cell, false)
+            v = get(sc.vars, id, nothing)
+            plans[id] = VarPlan(:shared, false, v === nothing ? false : v.has_decl)
         end
         # captured-from-outer variables are not this frame's storage
         for id in ana.foreign
@@ -550,7 +554,7 @@ function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing, region::Bool 
     # a :source cursor into the lowering syntax graph; region mode adds the
     # cell/closure -> binding columns materialization reads (they survive
     # compaction, unlike the pre-fixpoint cellmap)
-    cols = region ?
+    cols = (region || analysis !== nothing) ?
         (source = UnifiedIR.ProvenanceCol(), cellbind = BindCol(), clbind = BindCol()) :
         (source = UnifiedIR.ProvenanceCol(),)
     b = Builder(name = name, cols = cols)
@@ -785,11 +789,17 @@ function emit_analysis_form(ctx::EmitCtx, ex, k, needs_value::Bool)::Union{Opera
         if kind(c) == K"BindingId"
             id = Int(c.var_id)
             p = get(ctx.plans, id, nothing)
-            if p !== nothing && p.mode === :cell
-                # the declaration point: records per-iteration freshness for
-                # the backedge rule, and re-undefines (stock re-boxes here)
-                haskey(ana.decl_regions, id) ||
-                    (ana.decl_regions[id] = current_region(ctx.b))
+            if p !== nothing && p.mode === :shared
+                # the declaration point: a FRESH shared cell per execution —
+                # per-iteration rebinding in its structural form (this is
+                # what cancels the capture-promotion backedge hazard; stock
+                # re-boxes here)
+                if !haskey(ctx.cellmap, id)
+                    cell = stmt!(ctx, UnifiedIR.K"cell_shared", Any; type = Any, src = ex)
+                    setbind!(ctx, :cellbind, cell, id)
+                    ctx.cellmap[id] = cell
+                end
+            elseif p !== nothing && p.mode === :cell
                 stmt!(ctx, UnifiedIR.K"cell_new", ctx.cellmap[id]; src = ex)
             end
         end
@@ -855,19 +865,34 @@ function emit_analysis_form(ctx::EmitCtx, ex, k, needs_value::Bool)::Union{Opera
     end
 end
 
-"Emit the capture-site marker: `call CAPTURE_SITE, site-index, cell_get(v)...`."
+"""
+Emit a closure-creation site as a REAL `closure` op whose deferred body is
+the capture footprint: one `cell_get` per captured candidate (what the
+closure reads at call time) and one synthetic `cell_set` per candidate a
+capturing lambda stores to (criterion (a) as a structural fact the
+capture-promotion pass refuses). The actual lambda bodies are not emitted —
+the footprint is all the verdict needs, keeping coverage independent of
+unsupported forms inside them.
+"""
 function emit_capture_site(ctx::EmitCtx, ex, id::Int)
     ana = ctx.ana::AnalysisState
     caps = ana.capture_sets[id]
-    ops = Operand[vop(ctx.b.ir, CAPTURE_SITE), vop(ctx.b.ir, length(ana.site_caps) + 1)]
+    f = stmt!(ctx, UnifiedIR.K"closure"; type = Any, src = ex)
+    open_arm!(ctx, f; kind = UnifiedIR.REGION_BODY,
+              activation = UnifiedIR.ACT_DEFERRED)
     for v in caps
-        g = stmt!(ctx, UnifiedIR.K"cell_get", ctx.cellmap[v]; src = ex)
-        push!(ops, op_stmt(g))
+        stmt!(ctx, UnifiedIR.K"cell_get", ctx.cellmap[v]; src = ex)
     end
-    m = stmt!(ctx, UnifiedIR.K"call", ops...; src = ex)
+    for v in caps
+        v in ana.written || continue
+        w = stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE); src = ex)
+        stmt!(ctx, UnifiedIR.K"cell_set", ctx.cellmap[v], w; src = ex)
+    end
+    stmt!(ctx, UnifiedIR.K"return"; src = ex)
+    close_arm!(ctx)
     push!(ana.site_caps, caps)
-    push!(ana.site_stmts, m)
-    return m
+    push!(ana.site_stmts, f)
+    return f
 end
 
 "Mirror `emit_assign`'s binding store for analysis-synthesized values."
@@ -882,7 +907,7 @@ function assign_binding!(ctx::EmitCtx, ex, id::Int, v::Operand)
     p === nothing && return nothing         # never read: no storage planned
     if p.mode === :ssa
         ctx.ssamap[id] = v
-    elseif p.mode === :cell
+    elseif p.mode === :cell || p.mode === :shared
         stmt!(ctx, UnifiedIR.K"cell_set", ctx.cellmap[id], v; src = ex)
     elseif p.mode === :foreign
         stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE), v; src = ex)
@@ -946,6 +971,8 @@ function emit_frame_storage!(ctx::EmitCtx, lam, argstmts::Dict{Int,StmtId};
                              frameid::Int = 0)
     ids = Int[]
     if ctx.region === nothing
+        # single-frame emission (post-conversion / analysis mode): every
+        # planned cell belongs to this frame
         append!(ids, keys(ctx.plans))
     else
         # ownership: arguments and locals through the lambda's locals_capt

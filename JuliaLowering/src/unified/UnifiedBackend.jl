@@ -7,8 +7,7 @@ goto-based linear IR detour.
 
 The pipeline reuses JuliaLowering's own front half unchanged — macro expansion
 (`expand_forms_1`), desugaring (`expand_forms_2`), scope analysis
-(`resolve_scopes`), binding analysis and closure conversion
-(`convert_closures`) — and replaces the final linearization pass
+(`resolve_scopes`) — and replaces the final linearization pass
 (`linearize_ir` / `compile_lambda` in `linear_ir.jl`) with a tree→region
 emitter (`src/emit.jl`) producing `UnifiedIR.IR`:
 
@@ -22,6 +21,13 @@ emitter (`src/emit.jl`) producing `UnifiedIR.IR`:
     (the WebAssembly-block pattern of §5.9)
   - `try`/`catch` → `try` op with a `REGION_HANDLER` region whose leading
     region arg is the exception
+  - supported local functions → REAL `closure` region ops (§5.7): the
+    deferred body holds the lambda, captured locals become `cell_shared`
+    cells, the shared promotion fixpoint (`promote_capture_cells!`) decides
+    value-vs-shared capture structurally, and `materialize.jl` turns
+    residual closure regions back into runtime closure types (value fields
+    type-parameterized; shared cells `Core.Box`/typed `RefValue{T}`) plus
+    extracted method IRs
 
 # Covered forms (post-desugar kinds, mirroring linear_ir.jl's `compile`)
 
@@ -51,17 +57,20 @@ static parameters (SPARAM operands); method extraction from top-level thunks.
   - `opaque_closure_method` / `new_opaque_closure` (opaque closures stay
     inline in the method body), and `captured_local` (locals captured into
     global methods)
-  - shared captures stay plain container calls (`Core.Box`, or the typed
-    `Base.RefValue{T}` the capture analysis proves) rather than being
-    recognized as `cell_shared`
 
-Ordinary closures ARE covered: closure conversion lifts closure types and
-method definitions to the enclosing toplevel thunk, so enclosing bodies (with
-their capture decisions — value captures, shared containers) and closure
-bodies both lower as plain methods (see test/unified_backend.jl). The
-emitter additionally has a capture-analysis mode over PRE-closure-conversion
-trees (emit.jl `AnalysisState`, driven by ../capture_analysis.jl) — the
-mem2reg-precise boxing decision runs on this backend's IR.
+Closure-region v1 bails (the statement falls back to the EAGER path through
+`convert_closures`, which lowers these exactly as before): multi-method
+local functions and kwargs closures, local methods with `where` static
+parameters, varargs local functions, declared return types on local
+functions, closure signatures referencing locals, and closures capturing an
+enclosing frame's static parameter.
+
+The emitter additionally has a capture-analysis mode over
+PRE-closure-conversion trees (emit.jl `AnalysisState`, driven by
+../capture_analysis.jl): throwaway IR with closure-region capture
+FOOTPRINTS, from which `analyze_captures_precise!` reads the
+mem2reg-precise boxing verdicts that the eager path's `convert_closures`
+then applies.
 
 Public API: [`lower_to_ir`](@ref), [`LoweredMethod`](@ref),
 [`UnsupportedForm`](@ref).
@@ -76,7 +85,7 @@ const JuliaSyntax = JuliaLowering.JuliaSyntax
 const UnifiedIR = JuliaSyntax.UnifiedIR
 
 using .UnifiedIR: Builder, append_stmt!, open_region!, close_region!, finish!,
-    current_region, verify_ir, StmtId, RegionId, Operand, op_stmt, op_region,
+    verify_ir, StmtId, RegionId, Operand, op_stmt, op_region,
     op_inline, vop, REGION_ARM, REGION_HANDLER, REGION_LOOP_BODY
 
 using .JuliaSyntax: SyntaxTree, kind, children, numchildren, is_leaf, @K_str
@@ -125,6 +134,13 @@ Base.show(io::IO, m::LoweredMethod) =
 include("emit.jl")
 include("materialize.jl")
 
+# Diagnostic path counters: top-level statements lowered through the
+# closure-region path vs the eager `convert_closures` fallback. Tests read
+# them to assert coverage; `reset_path_counts!()` zeroes both.
+const REGION_STMTS = Ref(0)
+const EAGER_STMTS = Ref(0)
+reset_path_counts!() = (REGION_STMTS[] = 0; EAGER_STMTS[] = 0; nothing)
+
 """
     lower_to_ir(mod::Module, src::String; filename="none") -> Vector{LoweredMethod}
 
@@ -142,13 +158,6 @@ falls back — loudly, per the fidelity rule — to the eager path through
 `convert_closures`, which lowers exactly as before. Every produced IR is
 checked with `UnifiedIR.verify_ir(ir; level=1)` before being returned.
 """
-# Diagnostic path counters: top-level statements lowered through the
-# closure-region path vs the eager `convert_closures` fallback. Tests read
-# them to assert coverage; `reset_path_counts!()` zeroes both.
-const REGION_STMTS = Ref(0)
-const EAGER_STMTS = Ref(0)
-reset_path_counts!() = (REGION_STMTS[] = 0; EAGER_STMTS[] = 0; nothing)
-
 function lower_to_ir(mod::Module, src::String; filename::AbstractString = "none")
     out = LoweredMethod[]
     st0 = JuliaSyntax.parseall(SyntaxTree, src; filename = String(filename))
