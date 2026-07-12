@@ -208,7 +208,15 @@ function bind_result!(env::Vector{Any}, s::StmtId, values::Vector{Any})
         length(values) == 1 ? values[1] : Tuple(values)
 end
 
+# Optional execution budget: when set (> 0), interpretation errors out after
+# that many statements instead of spinning — differential harnesses set it
+# per run so a non-terminating miscompile becomes a diagnosable failure
+# (naming the statement) rather than a hung batch.
+const _FUEL = Ref{Int}(0)
 function exec_plain!(ir::IR, env::Vector{Any}, s::StmtId, io::IO)
+    if _FUEL[] > 0
+        (_FUEL[] -= 1) <= 0 && error("interpret: fuel exhausted at %$(s.id)")
+    end
     k = stmt_kind(ir, s)
     q = kindname(k)
     if q === Symbol("test.iconst")
@@ -256,7 +264,7 @@ function exec_plain!(ir::IR, env::Vector{Any}, s::StmtId, io::IO)
         c.defined = true
     elseif k === K"cell_get"
         c = env[payload(getop(ir, s, 1))]::CellBox
-        c.defined || error("interpret: read of undefined cell (%$(s.id))")
+        c.defined || throw(UndefVarError(:cell))
         env[s.id] = c.value
     elseif k === K"cell_new"
         c = env[payload(getop(ir, s, 1))]::CellBox

@@ -89,6 +89,15 @@ function fold_constant_branches!(ir::IR)
                 end
                 kill_stmt!(ir, s)
             else
+                # NB. only join (result-terminated) arms may inline: splicing
+                # a DIVERGING arm mid-region would leave two terminators, and
+                # deleting the tail behind it silences the verifier exactly
+                # when the fold acted on unstable mid-round inference — keep
+                # such folds for the round where the diverge is structural
+                term = region_terminator(ir, keep)
+                if term !== nothing && stmt_kind(ir, term) !== K"result"
+                    continue
+                end
                 inline_region!(ir, s, keep)
             end
             folded += 1
@@ -177,9 +186,26 @@ function promote_cells!(ir::IR)
                 end
                 # backedge reach: a store at-or-after the get inside a shared
                 # loop — or anywhere in the same cfg island, whose edges may
-                # loop — reaches the get on the next iteration
-                if st.id > g.id && (shares_loop(ir, st, g) || shares_island(ir, st, g))
-                    ok = false; break
+                # loop — reaches the get on the next iteration. Both hazards
+                # are SHADOWED when the reaching store re-executes before the
+                # get on every such re-entry: for loops, when it sits inside
+                # the innermost loop the interfering store shares with the
+                # get; for islands, when it lives in the island (dominance
+                # already put it in the get's own block subtree).
+                if st.id > g.id
+                    X = _innermost_shared_loop(ir, st, g)
+                    if !isnull(X) && !is_ancestor(ir, X, stmt_region(ir, reaching))
+                        ok = false; break
+                    end
+                    # innermost-ISLAND rule, exactly like the loop one: the
+                    # backedge that carries st's value to g belongs to the
+                    # innermost cfg they share — the reaching store shadows
+                    # it only from inside that same cfg (dominance then puts
+                    # it in g's own block subtree, re-executed on re-entry)
+                    own = _innermost_shared_island(ir, st, g)
+                    if !isnull(own) && !_inside_cfg(ir, reaching, own)
+                        ok = false; break
+                    end
                 end
             end
             ok || break
@@ -234,6 +260,52 @@ function shares_loop(ir::IR, a::StmtId, b::StmtId)
         if reg.kind === REGION_LOOP_BODY && is_ancestor(ir, r, stmt_region(ir, b))
             return true
         end
+        r = reg.parent
+    end
+    return false
+end
+
+"The innermost loop body on `a`'s region chain that contains `b` — the
+tightest backedge able to carry `a`'s stored value around to `b`."
+function _innermost_shared_loop(ir::IR, a::StmtId, b::StmtId)
+    r = stmt_region(ir, a)
+    while !isnull(r)
+        reg = getregion(ir, r)
+        if reg.kind === REGION_LOOP_BODY && is_ancestor(ir, r, stmt_region(ir, b))
+            return r
+        end
+        r = reg.parent
+    end
+    return NULL_REGION
+end
+
+"The INNERMOST cfg op whose blocks contain both `a` and `b` — its edges
+form the tightest re-entry able to carry `a`'s stored value around to `b`.
+NULL when they share no island."
+function _innermost_shared_island(ir::IR, a::StmtId, b::StmtId)
+    r = stmt_region(ir, a)
+    while !isnull(r)
+        reg = getregion(ir, r)
+        if reg.kind === REGION_BLOCK
+            own = reg.owner
+            rb = stmt_region(ir, b)
+            while !isnull(rb)
+                regb = getregion(ir, rb)
+                regb.kind === REGION_BLOCK && regb.owner == own && return own
+                rb = regb.parent
+            end
+        end
+        r = reg.parent
+    end
+    return NULL_STMT
+end
+
+"Does `s` live under some block of cfg op `own`?"
+function _inside_cfg(ir::IR, s::StmtId, own::StmtId)
+    r = stmt_region(ir, s)
+    while !isnull(r)
+        reg = getregion(ir, r)
+        reg.kind === REGION_BLOCK && reg.owner == own && return true
         r = reg.parent
     end
     return false
