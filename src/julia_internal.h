@@ -16,6 +16,7 @@
 #include "support/rle.h"
 #include <ctype.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <uv.h>
 #include <llvm-c/Types.h>
 #include <llvm-c/Orc.h>
