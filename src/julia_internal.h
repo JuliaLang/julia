@@ -1051,16 +1051,6 @@ void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_va
 void jl_retype_flag_partitions(jl_binding_t *b, jl_value_t *slot_ty,
                                jl_value_t *store_ty); // requires world_counter_lock
 
-// Atomic access to a partition's re-type guard flags. The `kind` field is not
-// declared _Atomic (its kind nibble and inheritable flags are only mutated on
-// unpublished partitions), but the RETYPE bits are set concurrently with readers, so
-// they are accessed through atomic operations on the word.
-STATIC_INLINE size_t jl_partition_retype_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT
-{
-    return jl_atomic_load_relaxed((_Atomic(size_t)*)&bpart->kind) &
-           (PARTITION_FLAG_RETYPE_READ | PARTITION_FLAG_RETYPE_WRITE);
-}
-
 // Open a commit window for a store to a binding's value slot whose value was
 // validated against `bpart`'s restriction (the latest partition at validation time).
 // Returns 1 if the fast-path commit may proceed, in which case the caller must

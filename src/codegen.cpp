@@ -3648,22 +3648,19 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     Value *bpval = julia_binding_pvalue(ctx, bp);
     jl_cgval_t v = emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
     // As long as no later declaration invalidates this partition's restriction the
-    // verification is dead: it sits behind a test of the partition's read guard.
+    // verification is dead: it sits behind a runtime test of the partition's read
+    // guard. The guard is always emitted -- codegen must not specialize on the
+    // current flag state, since a partition that reads clear now can be re-type
+    // flagged later while this code is still live (and a set bit can never be
+    // observed to clear, so the flagged form would gain nothing).
     if (ty != (jl_value_t*)jl_any_type) {
         jl_binding_partition_t *bpart = rkp.leaf_partition;
-        if (jl_partition_retype_flags(bpart) & PARTITION_FLAG_RETYPE_READ) {
-            // Already invalidated: a later declaration allowed slot values outside
-            // `ty`, so always verify.
-            emit_typecheck(ctx, v, ty, "getglobal");
-        }
-        else {
-            BasicBlock *coldBB = emit_retype_guard(ctx, bpart, PARTITION_FLAG_RETYPE_READ);
-            BasicBlock *fastBB = ctx.builder.GetInsertBlock();
-            ctx.builder.SetInsertPoint(coldBB);
-            emit_typecheck(ctx, v, ty, "getglobal");
-            ctx.builder.CreateBr(fastBB);
-            ctx.builder.SetInsertPoint(fastBB);
-        }
+        BasicBlock *coldBB = emit_retype_guard(ctx, bpart, PARTITION_FLAG_RETYPE_READ);
+        BasicBlock *fastBB = ctx.builder.GetInsertBlock();
+        ctx.builder.SetInsertPoint(coldBB);
+        emit_typecheck(ctx, v, ty, "getglobal");
+        ctx.builder.CreateBr(fastBB);
+        ctx.builder.SetInsertPoint(fastBB);
     }
     return update_julia_type(ctx, v, ty);
 }
@@ -3768,87 +3765,77 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
         size_t guard_mask = op == StoreKind::Set
                 ? PARTITION_FLAG_RETYPE_WRITE
                 : (PARTITION_FLAG_RETYPE_READ | PARTITION_FLAG_RETYPE_WRITE);
-        int retyped = (jl_partition_retype_flags(bpart) & guard_mask) != 0;
-        if (!retyped) {
-            bool isboxed = true;
-            bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
-            if (bpart->kind & PARTITION_FLAG_DEPWARN) {
-                ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
-            }
-            // #62154: the declared type may still change after this code is compiled, at
-            // which point the inline store below would bypass validation against the (new)
-            // latest type, and the values the inline RMW kinds observe in the slot could
-            // no longer be trusted to be of type `ty`. Guard the whole operation so that
-            // it diverts to the runtime path once a later declaration flags this
-            // partition.
-            BasicBlock *coldBB = emit_retype_guard(ctx, bpart, guard_mask);
-            jl_cgval_t res = typed_store(ctx,
-                            julia_binding_pvalue(ctx, bp),
-                            rval, cmp, ty,
-                            ctx.tbaa().tbaa_binding,
-                            nullptr,
-                            bp,
-                            isboxed,
-                            Order,
-                            FailOrder,
-                            0,
-                            nullptr,
-                            op,
-                            maybe_null,
-                            modifyop,
-                            fname,
-                            mod,
-                            sym,
-                            nullptr,
-                            nullptr,
-                            /*retype_flagp*/julia_bpart_flagp(ctx, bpart),
-                            /*retype_mask*/guard_mask,
-                            /*retype_deoptBB*/coldBB);
-            if (res.typ == jl_bottom_type) {
-                // The inline operation cannot complete -- the modify `op` is inferred
-                // to never return -- so only the deoptimized runtime path (which
-                // reaches the same `op` through a dynamic call) can produce a result;
-                // emit it as the sole continuation.
-                assert(op == StoreKind::Modify);
-                ctx.builder.CreateUnreachable();
-                ctx.builder.SetInsertPoint(coldBB);
-                Value *coldV = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
-                return mark_verified_globalop_result(ctx, op, coldV, global_op_rettyp(op, ty), fname);
-            }
-            // Merge with the deoptimized path. Set returns `rval` itself, which dominates
-            // both paths, so it needs no merge; the other kinds merge the boxed results.
-            // No post-commit re-check is needed for any kind: every commit runs inside
-            // a commit window (see typed_store) whose flag check either diverted the
-            // not-yet-committed operation to the runtime path or entitled it to trust
-            // the slot at the compiled-against declared type.
-            jl_value_t *rettyp = op == StoreKind::Set ? NULL : global_op_rettyp(op, ty);
-            Value *fastV = op == StoreKind::Set ? nullptr : boxed(ctx, res);
-            BasicBlock *fastEnd = ctx.builder.GetInsertBlock();
-            BasicBlock *doneBB = BasicBlock::Create(ctx.builder.getContext(), "retype_done", ctx.f);
-            ctx.builder.CreateBr(doneBB);
+        bool isboxed = true;
+        bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
+        if (bpart->kind & PARTITION_FLAG_DEPWARN) {
+            ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
+        }
+        // #62154: the declared type may still change after this code is compiled, at
+        // which point the inline store below would bypass validation against the (new)
+        // latest type, and the values the inline RMW kinds observe in the slot could
+        // no longer be trusted to be of type `ty`. Guard the whole operation so that
+        // it diverts to the runtime path once a later declaration flags this
+        // partition. The guard is always emitted -- codegen must not specialize on
+        // the current flag state, since the partition can be re-type flagged after
+        // this code is compiled while it is still live.
+        BasicBlock *coldBB = emit_retype_guard(ctx, bpart, guard_mask);
+        jl_cgval_t res = typed_store(ctx,
+                        julia_binding_pvalue(ctx, bp),
+                        rval, cmp, ty,
+                        ctx.tbaa().tbaa_binding,
+                        nullptr,
+                        bp,
+                        isboxed,
+                        Order,
+                        FailOrder,
+                        0,
+                        nullptr,
+                        op,
+                        maybe_null,
+                        modifyop,
+                        fname,
+                        mod,
+                        sym,
+                        nullptr,
+                        nullptr,
+                        /*retype_flagp*/julia_bpart_flagp(ctx, bpart),
+                        /*retype_mask*/guard_mask,
+                        /*retype_deoptBB*/coldBB);
+        if (res.typ == jl_bottom_type) {
+            // The inline operation cannot complete -- the modify `op` is inferred
+            // to never return -- so only the deoptimized runtime path (which
+            // reaches the same `op` through a dynamic call) can produce a result;
+            // emit it as the sole continuation.
+            assert(op == StoreKind::Modify);
+            ctx.builder.CreateUnreachable();
             ctx.builder.SetInsertPoint(coldBB);
             Value *coldV = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
-            if (op != StoreKind::Set)
-                mark_verified_globalop_result(ctx, op, coldV, rettyp, fname); // for the typecheck
-            BasicBlock *coldEnd = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateBr(doneBB);
-            ctx.builder.SetInsertPoint(doneBB);
-            if (op == StoreKind::Set)
-                return res;
-            PHINode *phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
-            phi->addIncoming(fastV, fastEnd);
-            phi->addIncoming(coldV, coldEnd);
-            return mark_julia_type(ctx, phi, true, rettyp);
+            return mark_verified_globalop_result(ctx, op, coldV, global_op_rettyp(op, ty), fname);
         }
-        // This partition's guards are already flagged: a later declaration made the
-        // slot untrustworthy at `ty` (read guard) or made `ty`-validated stores
-        // unsafe (write guard), so always use the runtime store (which validates
-        // against the latest declared type), and verify its result against the
-        // compile-time expectation, mirroring the read side.
-        Value *r = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
+        // Merge with the deoptimized path. Set returns `rval` itself, which dominates
+        // both paths, so it needs no merge; the other kinds merge the boxed results.
+        // No post-commit re-check is needed for any kind: every commit runs inside
+        // a commit window (see typed_store) whose flag check either diverted the
+        // not-yet-committed operation to the runtime path or entitled it to trust
+        // the slot at the compiled-against declared type.
+        jl_value_t *rettyp = op == StoreKind::Set ? NULL : global_op_rettyp(op, ty);
+        Value *fastV = op == StoreKind::Set ? nullptr : boxed(ctx, res);
+        BasicBlock *fastEnd = ctx.builder.GetInsertBlock();
+        BasicBlock *doneBB = BasicBlock::Create(ctx.builder.getContext(), "retype_done", ctx.f);
+        ctx.builder.CreateBr(doneBB);
+        ctx.builder.SetInsertPoint(coldBB);
+        Value *coldV = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
+        if (op != StoreKind::Set)
+            mark_verified_globalop_result(ctx, op, coldV, rettyp, fname); // for the typecheck
+        BasicBlock *coldEnd = ctx.builder.GetInsertBlock();
+        ctx.builder.CreateBr(doneBB);
+        ctx.builder.SetInsertPoint(doneBB);
         if (op == StoreKind::Set)
-            return rval;
-        return mark_verified_globalop_result(ctx, op, r, global_op_rettyp(op, ty), fname);
+            return res;
+        PHINode *phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+        phi->addIncoming(fastV, fastEnd);
+        phi->addIncoming(coldV, coldEnd);
+        return mark_julia_type(ctx, phi, true, rettyp);
     }
     Value *r = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
     switch (op) {
