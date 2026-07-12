@@ -318,18 +318,9 @@ function optimize_ir!(ir::UnifiedIR.IR, argtypes::Vector{Any};
     # the round budget is shared with inlining, so callee cells spliced by a
     # late round may never have seen the promotion passes: give promotion its
     # own fixpoint (cheap when there is nothing left to do), then one DCE for
-    # the stores it strands
-    while true
-        c = UnifiedIR.promote_cells!(ir)
-        c += promote_block_cells!(ir)
-        UnifiedIR.editable(ir)
-        c += promote_undef_cells!(ir)
-        c += promote_arm_cells!(ir)
-        c += promote_island_cells!(ir)
-        c += promote_loop_cells!(ir)
-        ir, _ = UnifiedIR.compact!(ir)
-        c == 0 && break
-    end
+    # the stores it strands. This is the substrate's shared driver — the same
+    # entry lowering's closure-capture analysis runs.
+    UnifiedIR.promote_fixpoint!(ir; stmt_value = _stmt_const_value)
     UnifiedIR.dce!(ir)
     ir, _ = UnifiedIR.compact!(ir)
     infer_ir!(ir, argtypes; state)

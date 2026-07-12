@@ -32,8 +32,8 @@
 # correctness first, opportunistic recovery. All passes run in one editable
 # session; every rewrite is followed by a global order-key relabel.
 
-is_diverge_kind(k::UnifiedIR.Kind) =
-    k === K"return" || k === K"unreachable" || k === K"break" || k === K"continue"
+# is_diverge_kind moved to the substrate (UnifiedIR/src/promote.jl); bound in
+# sroa.jl alongside the promotion-suite aliases.
 
 # ---------------------------------------------------------------------------
 # Editable-state move primitives

@@ -48,6 +48,10 @@ export Kind, StmtId, RegionId, Value, Operand, IR, Builder, RemapSet,
     verify_ir, VerifyError, use_counts, AnalysisCache,
     # passes
     dce!, promote_cells!, fold_constant_branches!,
+    # cell promotion (the mem2reg suite, promote.jl). The individual join
+    # passes stay unexported (qualified access) so providers may bind
+    # same-named lattice-aware wrappers; the driver is the public entry.
+    promote_fixpoint!,
     # text
     print_ir, parse_ir, struct_eq, display_maxlines!,
     # test dialect interpreter
@@ -70,6 +74,7 @@ include("compact.jl")
 include("floating.jl")
 include("analysis.jl")
 include("passes.jl")
+include("promote.jl")
 include("testdialect.jl")
 include("print.jl")
 include("parse.jl")
