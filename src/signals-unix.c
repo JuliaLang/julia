@@ -1511,10 +1511,24 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 // in GC-safe state is parked in the scheduler or a foreign
                 // call (possibly holding the uv loop lock!) - not the victim;
                 // and an idle thread 0 means the julia-side listener can act.
-                if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
-                    ptls2->locks.len == 0 && // e.g. parked in the event loop holding the uv lock
-                    jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed())
-                    rescue_task = jl_check_sigint_rescue_abandon(); // consumes the expiry
+                if (jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed()) {
+                    // The victim may transiently be inside the allocator or
+                    // the GC (runtime locks held / not in managed compute)
+                    // when the press lands - especially with an allocating
+                    // interpreted loop. Give it a brief window to return to
+                    // an abandonable state rather than consuming the press
+                    // and losing the escalation rung.
+                    for (int tries = 0; tries < 100; tries++) {
+                        if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
+                            ptls2->locks.len == 0) {
+                            // consumes the expiry; returns NULL if the episode
+                            // completed (or was reset) while we waited
+                            rescue_task = jl_check_sigint_rescue_abandon();
+                            break;
+                        }
+                        uv_sleep(1);
+                    }
+                }
                 if (rescue_task != NULL) {
                     jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
                     jl_value_t *bound = ct == NULL ? NULL :
@@ -1522,16 +1536,21 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                     jl_value_t *sigsrc = (jl_value_t*)jl_atomic_load_acquire(&jl_sigint_source);
                 // Only a task actually governed by the ^C source may be
                 // ripped away: thread 0 can be running unrelated work while
-                // the real victim is stalled elsewhere, and a no-op rung
-                // beats destroying a bystander. Unbound work (no published
-                // token, e.g. an uninstrumented foreground loop) remains
-                // abandonable - it is indistinguishable from the victim.
-                    int governed = bound == NULL || bound == jl_nothing ||
-                        (sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc));
+                // the real victim is stalled elsewhere - including runtime
+                // infrastructure like the sigint listener itself, whose
+                // token binding is empty - and a no-op rung beats
+                // destroying a bystander.
+                    int governed = bound != NULL && bound != jl_nothing &&
+                        sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc);
                     if (ct != NULL && ct != rescue_task && governed) {
+                        // Announce BEFORE abandoning: the moment the victim
+                        // thread switches to the rescue task, session cleanup
+                        // can conclude (in a script it exits the process) -
+                        // on a busy or single-CPU machine that exit wins the
+                        // race against a message printed afterwards.
+                        jl_safe_printf("\nWARNING: Abandoning the current task and switching to a rescue task.\n"
+                                         "         This may leave the process in an inconsistent state.\n");
                         if (jl_abandon_task(ct, rescue_task)) {
-                            jl_safe_printf("\nWARNING: Abandoned the current task and switched to a rescue task.\n"
-                                             "         This may leave the process in an inconsistent state.\n");
                             // Let the sigint listener task perform the
                             // Julia-side cleanup (waking the abandoned task's
                             // waiters and re-initializing or shutting down
@@ -1539,7 +1558,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                             deliver_sigint_notification();
                         }
                         else {
-                            jl_safe_printf("\nWARNING: Cannot abandon the current task (it holds runtime resources); still trying.\n");
+                            jl_safe_printf("\nWARNING: Could not abandon the current task (it holds runtime resources); still trying.\n");
                         }
                         continue;
                     }

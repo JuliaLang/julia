@@ -910,10 +910,15 @@ static int jl_sigint_direct_abandon_allowed(void) JL_NOTSAFEPOINT
     if (est == 1)
         return 1; // the initial request was never even delivered
     // For delivered episodes the julia-side listener drives the graded
-    // escalation - unless it is starved (its previous notification is still
-    // undispatched, e.g. a single-threaded session whose only thread is
-    // stuck in compute during cancellation cleanup).
-    if (est >= 2 && est <= 4 && jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+    // escalation - unless it CANNOT run because the session's only worker
+    // thread is monopolized by the stuck victim (its notification still
+    // undispatched). With more worker threads an unclaimed dispatch only
+    // means the listener has not run *yet* - a delayed but graded
+    // escalation beats ripping away whatever thread 0 happens to be
+    // running at that moment.
+    if (est >= 2 && est <= 4 && jl_atomic_load_relaxed(&jl_sigint_dispatch_pending) &&
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] +
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] == 1)
         return 1;
     return 0;
 }

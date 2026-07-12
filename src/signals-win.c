@@ -228,29 +228,43 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             jl_task_t *rescue_task = NULL;
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
             // See signals-unix.c: only abandon a thread busy in managed
-            // compute - a GC-safe thread is parked, not the stuck victim.
-            if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
-                ptls2->locks.len == 0 && // e.g. parked in the event loop holding the uv lock
-                jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed())
-                rescue_task = jl_check_sigint_rescue_abandon(); // consumes the expiry
+            // compute - a GC-safe thread is parked, not the stuck victim -
+            // but give a thread transiently inside the allocator or GC a
+            // brief window rather than consuming the press.
+            if (jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed()) {
+                for (int tries = 0; tries < 100; tries++) {
+                    if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
+                        ptls2->locks.len == 0) {
+                        // consumes the expiry; NULL if the episode completed
+                        // (or was reset) while we waited
+                        rescue_task = jl_check_sigint_rescue_abandon();
+                        break;
+                    }
+                    uv_sleep(1);
+                }
+            }
             if (rescue_task != NULL) {
                 jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
                 jl_value_t *bound = ct == NULL ? NULL :
                     jl_atomic_load_acquire(&ct->bound_cancel_token);
                 jl_value_t *sigsrc = (jl_value_t*)jl_atomic_load_acquire(&jl_sigint_source);
-                // See signals-unix.c: only abandon work governed by (or not
-                // bound under) the ^C source.
-                int governed = bound == NULL || bound == jl_nothing ||
-                    (sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc));
+                // See signals-unix.c: only abandon work governed by the ^C
+                // source - an unbound task may be runtime infrastructure.
+                int governed = bound != NULL && bound != jl_nothing &&
+                    sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc);
                 if (ct != NULL && ct != rescue_task && governed) {
+                    // Announce BEFORE abandoning (see signals-unix.c): the
+                    // session cleanup that follows the switch can exit the
+                    // process before a message printed afterwards makes it
+                    // out.
+                    jl_safe_printf("\nWARNING: Abandoning the current task and switching to a rescue task.\n"
+                                     "         This may leave the process in an inconsistent state.\n");
                     if (jl_abandon_task(ct, rescue_task)) {
-                        jl_safe_printf("\nWARNING: Abandoned the current task and switched to a rescue task.\n"
-                                         "         This may leave the process in an inconsistent state.\n");
                         // Let the sigint listener task perform the Julia-side cleanup.
                         deliver_sigint_notification();
                     }
                     else {
-                        jl_safe_printf("\nWARNING: Cannot abandon the current task (it holds runtime resources); still trying.\n");
+                        jl_safe_printf("\nWARNING: Could not abandon the current task (it holds runtime resources); still trying.\n");
                     }
                     return 1;
                 }
