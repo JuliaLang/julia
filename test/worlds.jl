@@ -680,3 +680,9 @@ callctor67(x) = KindCtor67(x)
 @test_throws MethodError callctor67(KindArg67())
 (t::DataType)(x::KindArg67) = t === KindCtor67 ? 67 : 0
 @test callctor67(KindArg67()) === 67
+# delete the pirate so it cannot leak into other suites on this worker (it
+# makes any DataType-constructor call with a KindArg67 argument ambiguous,
+# e.g. Core.Const(::KindArg67) in the compiler itself); deletion must
+# invalidate through the same widened umbrella key as the insertion did
+Base.delete_method(which(Tuple{DataType, KindArg67}))
+@test_throws MethodError callctor67(KindArg67())
