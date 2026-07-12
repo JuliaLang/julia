@@ -49,6 +49,10 @@ _include("eval.jl")
 # the front half above unchanged and emits structured region IR directly.
 # Pure definitions; nothing calls it during bootstrap.
 _include("unified/UnifiedBackend.jl")
+# Precise closure-capture analysis on top of the backend's emitter: called at
+# runtime from resolve_scopes (scope_analysis.jl), so the include order only
+# needs to precede first use, not the definition of resolve_scopes.
+_include("unified/capture_analysis.jl")
 _include("compat.jl")
 _include("hooks.jl")
 

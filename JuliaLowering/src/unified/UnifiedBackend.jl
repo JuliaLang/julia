@@ -67,8 +67,8 @@ const JuliaSyntax = JuliaLowering.JuliaSyntax
 const UnifiedIR = JuliaSyntax.UnifiedIR
 
 using .UnifiedIR: Builder, append_stmt!, open_region!, close_region!, finish!,
-    verify_ir, StmtId, RegionId, Operand, op_stmt, op_region, op_inline, vop,
-    REGION_ARM, REGION_HANDLER, REGION_LOOP_BODY
+    current_region, verify_ir, StmtId, RegionId, Operand, op_stmt, op_region,
+    op_inline, vop, REGION_ARM, REGION_HANDLER, REGION_LOOP_BODY
 
 using .JuliaSyntax: SyntaxTree, kind, children, numchildren, is_leaf, @K_str
 

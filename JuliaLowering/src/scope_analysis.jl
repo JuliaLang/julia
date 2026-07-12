@@ -832,5 +832,8 @@ enclosing lambda form and information about variables captured by closures.
                                    Dict{IdTag,ClosureBindings}())
     analyze_variables!(ctx3, ex2)
     analyze_def_and_use!(ctx3, ex2)
+    # widen `unboxed` with the mem2reg-precise capture verdicts (julia#15276;
+    # unified/capture_analysis.jl — monotone over the syntactic pass above)
+    analyze_captures_precise!(ctx3, ex2)
     ctx3, ex2
 end

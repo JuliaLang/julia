@@ -137,6 +137,22 @@ function scan!(s::ScanState, ex, path::Vector{Int})
             kind(c) == K"lambda" || scan!(s, c, path)
         end
         return nothing
+    # pre-closure-conversion forms (capture-analysis mode; absent afterwards)
+    elseif k == K"local" || k == K"global"
+        return nothing                       # declarations are not reads
+    elseif k == K"decl"
+        numchildren(ex) >= 2 && scan!(s, ex[2], path)   # type expr only
+        return nothing
+    elseif k == K"function_decl"
+        kind(ex[1]) == K"BindingId" && scan_assign!(s, ex[1].var_id, path)
+        return nothing
+    elseif k == K"function_type"
+        return nothing                       # names the TYPE, not the instance
+    elseif k == K"_opaque_closure"
+        for i in 2:numchildren(ex)
+            kind(ex[i]) == K"lambda" || scan!(s, ex[i], path)
+        end
+        return nothing
     else
         for c in children(ex)
             scan!(s, c, path)
@@ -146,9 +162,49 @@ function scan!(s::ScanState, ex, path::Vector{Int})
 end
 
 struct VarPlan
-    mode::Symbol      # :arg | :ssa | :cell
+    mode::Symbol      # :arg | :ssa | :cell | :foreign (analysis mode only)
     checked::Bool     # cell reads need the §6 undef guard
 end
+
+# ---------------------------------------------------------------------------
+# Capture-analysis mode (§5.7 precise capture, julia#15276): the same emitter
+# driven over the PRE-closure-conversion tree, producing the throwaway IR the
+# shared mem2reg fixpoint judges. Differences from normal emission:
+#   * candidate captured variables are FORCED to frame cells (no undef guard
+#     at reads — the promotion machinery itself is the definite-assignment
+#     judge);
+#   * variables captured from further out (`foreign`) become opaque values;
+#   * closure-creation sites (`function_decl` / `_opaque_closure`) emit a
+#     marker call `CAPTURE_SITE, site-index, cell_get(v)...` — one `cell_get`
+#     per captured candidate — whose operands the fixpoint either resolves to
+#     reaching definitions (value capture is legal) or leaves as memory reads
+#     (the variable must stay shared);
+#   * nested lambda BODIES are skipped (they run at call time, not here);
+#   * unknown forms become opaque calls after a subtree check that they hide
+#     no candidate stores and no closure-creation sites.
+# Driver: ../capture_analysis.jl (JuliaLowering.analyze_captures_precise!).
+# ---------------------------------------------------------------------------
+
+"Marker callee identifying closure-creation sites in capture-analysis IR."
+struct CaptureSiteMarker end
+const CAPTURE_SITE = CaptureSiteMarker()
+
+"Marker callee for opaque values/effects (unknown forms, foreign variables)."
+struct OpaqueMarker end
+const OPAQUE = OpaqueMarker()
+
+mutable struct AnalysisState
+    candidates::Set{Int}                 # native captured ids under analysis
+    foreign::Set{Int}                    # captured-from-outer ids (opaque)
+    capture_sets::Dict{Int,Vector{Int}}  # closure binding id -> candidates it captures
+    site_caps::Vector{Vector{Int}}       # site index -> captured candidate ids
+    site_stmts::Vector{StmtId}           # site index -> marker stmt (pre-compaction)
+    decl_regions::Dict{Int,RegionId}     # candidate -> region of its K"local" decl
+    created::Set{Int}                    # closure bindings already instantiated
+end
+AnalysisState(candidates, foreign, capture_sets) =
+    AnalysisState(Set{Int}(candidates), Set{Int}(foreign), capture_sets,
+                  Vector{Int}[], StmtId[], Dict{Int,RegionId}(), Set{Int}())
 
 # ---------------------------------------------------------------------------
 # Emitter context
@@ -180,6 +236,7 @@ mutable struct EmitCtx{JC}
     cursrc::Any                         # innermost expression being compiled —
                                         #   provenance fallback for statements
                                         #   emitted without an explicit `src`
+    ana::Union{Nothing,AnalysisState}   # capture-analysis mode (see above)
 end
 
 cur(ctx::EmitCtx) = ctx.states[end]
@@ -254,7 +311,7 @@ unsupported(ex, detail::String = "") =
 
 function emit_method(jlctx, mex)::LoweredMethod
     name = method_name(jlctx, mex[1])
-    ir, nargs, slotnames = emit_lambda(jlctx, mex[3], name)
+    ir, nargs, slotnames, _ = emit_lambda(jlctx, mex[3], name)
     return LoweredMethod(name, nargs, slotnames, ir)
 end
 
@@ -272,12 +329,14 @@ function method_name(jlctx, fname)::Symbol
 end
 
 """
-    emit_lambda(jlctx, lam, name) -> (ir, nargs, slotnames)
+    emit_lambda(jlctx, lam, name; analysis = nothing) -> (ir, nargs, slotnames, ctx)
 
 Lower one (non-toplevel) `K"lambda"` to UnifiedIR. Mirrors what linear_ir.jl's
-`compile_lambda` receives, but emits regions instead of gotos.
+`compile_lambda` receives, but emits regions instead of gotos. With
+`analysis::AnalysisState` the emitter runs in capture-analysis mode (see the
+block comment above `CaptureSiteMarker`) over a pre-closure-conversion tree.
 """
-function emit_lambda(jlctx, lam, name::Symbol)
+function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing)
     kind(lam) == K"lambda" || unsupported(lam, "expected a lambda")
     lam.is_toplevel_thunk && unsupported(lam, "toplevel thunk bodies are not lowered (methods are extracted instead)")
     args = collect(children(lam[1]))
@@ -312,6 +371,19 @@ function emit_lambda(jlctx, lam, name::Symbol)
     for id in argids
         haskey(plans, id) || (plans[id] = VarPlan(:arg, false))
     end
+    if analysis !== nothing
+        ana = analysis::AnalysisState
+        # candidates are the machinery's problem: frame cells, no guards.
+        # (Candidates untouched by the body itself — e.g. only ever captured —
+        # get their plan created here.)
+        for id in ana.candidates
+            plans[id] = VarPlan(:cell, false)
+        end
+        # captured-from-outer variables are not this frame's storage
+        for id in ana.foreign
+            plans[id] = VarPlan(:foreign, false)
+        end
+    end
 
     # ---- builder setup ------------------------------------------------
     # the provenance universe (§3.7 Level 2): every emitted statement carries
@@ -320,7 +392,7 @@ function emit_lambda(jlctx, lam, name::Symbol)
     ctx = EmitCtx(b, jlctx, bindings, plans, Dict{Int,Operand}(),
                   Dict{Int,StmtId}(), Dict{Int,Int}(), StmtId[],
                   Dict{String,BreakTarget}(), [RegionSt(false)],
-                  nothing, jlctx.mod::Module, lam)
+                  nothing, jlctx.mod::Module, lam, analysis)
 
     slotnames = Symbol[]
     argstmts = Dict{Int,StmtId}()
@@ -366,7 +438,7 @@ function emit_lambda(jlctx, lam, name::Symbol)
         error("UnifiedBackend internal error: function body did not terminate")
 
     ir = finish!(b)
-    return ir, length(args), slotnames
+    return ir, length(args), slotnames, ctx
 end
 
 function emit_return!(ctx::EmitCtx, v::Operand, srcex)
@@ -506,12 +578,17 @@ function _compile(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing}
         return compile(ctx, ex[1], needs_value)
     elseif k == K"static_parameter"
         return UnifiedIR.op_sparam(Int(ex.var_id))
+    elseif ctx.ana !== nothing && (k == K"local" || k == K"global" || k == K"decl" ||
+           k == K"function_decl" || k == K"function_type" || k == K"method_defs" ||
+           k == K"method" || k == K"_opaque_closure" || k == K"lambda")
+        return emit_analysis_form(ctx, ex, k, needs_value)
     elseif k == K"method"
         unsupported(ex, "method definition inside a method body (closures define methods at top level)")
     elseif k == K"lambda" || k == K"opaque_closure_method" || k == K"new_opaque_closure"
         unsupported(ex, "nested lambda / opaque closure")
     elseif k == K"foreigncall" || k == K"cfunction" || k == K"static_eval" ||
            k == K"foreignsymbol"
+        ctx.ana !== nothing && return _ana_opaque(ctx, ex)
         unsupported(ex, "foreign calls are not supported in v1")
     elseif k == K"symboliclabel" || k == K"symbolicgoto" || k == K"oldsymbolicgoto"
         unsupported(ex, "@label/@goto requires the cfg island form (not emitted in v1)")
@@ -522,7 +599,160 @@ function _compile(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing}
         v === nothing && return nothing
         return op_stmt(stmt!(ctx, UnifiedIR.K"copyast", v; src = ex))
     else
+        ctx.ana !== nothing && return _ana_opaque(ctx, ex)
         unsupported(ex)
+    end
+end
+
+# ---------------------------------------------------------------------------
+# Capture-analysis forms (pre-closure-conversion tree; `ctx.ana` set)
+# ---------------------------------------------------------------------------
+
+function emit_analysis_form(ctx::EmitCtx, ex, k, needs_value::Bool)::Union{Operand,Nothing}
+    ana = ctx.ana::AnalysisState
+    if k == K"local"
+        c = ex[1]
+        if kind(c) == K"BindingId"
+            id = Int(c.var_id)
+            p = get(ctx.plans, id, nothing)
+            if p !== nothing && p.mode === :cell
+                # the declaration point: records per-iteration freshness for
+                # the backedge rule, and re-undefines (stock re-boxes here)
+                haskey(ana.decl_regions, id) ||
+                    (ana.decl_regions[id] = current_region(ctx.b))
+                stmt!(ctx, UnifiedIR.K"cell_new", ctx.cellmap[id]; src = ex)
+            end
+        end
+        return nothing_op(ctx)
+    elseif k == K"global"
+        return nothing_op(ctx)
+    elseif k == K"decl"
+        # typed-local declaration [K"decl" var Texpr]: the type expression is
+        # evaluated (it may read locals / throw); the decl itself is no store
+        if numchildren(ex) >= 2
+            v = emit_value(ctx, ex[2])
+            v === nothing && return nothing
+        end
+        return nothing_op(ctx)
+    elseif k == K"function_decl"
+        f = ex[1]
+        kind(f) == K"BindingId" || return _ana_opaque(ctx, ex)
+        id = Int(f.var_id)
+        if !haskey(ana.capture_sets, id)
+            # global method declaration: a binding-table effect, no capture
+            return nothing_op(ctx)
+        end
+        # the instance is created once per binding (later decls are no-ops)
+        id in ana.created && return nothing_op(ctx)
+        push!(ana.created, id)
+        m = emit_capture_site(ctx, ex, id)
+        assign_binding!(ctx, ex, id, op_stmt(m))
+        return nothing_op(ctx)
+    elseif k == K"function_type"
+        # names the closure TYPE; reads no instance
+        return op_stmt(stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE); src = ex))
+    elseif k == K"method_defs"
+        # ex[1] is the closure name binding (no runtime read); method bodies
+        # run at call time — the signature svec evaluation happens here
+        for i in 2:numchildren(ex)
+            compile(ctx, ex[i], false) === nothing && return nothing
+        end
+        return nothing_op(ctx)
+    elseif k == K"method"
+        if numchildren(ex) == 3
+            # [method name sig lambda]: sig svec evaluates now; body deferred
+            v = emit_value(ctx, ex[2])
+            v === nothing && return nothing
+            if kind(ex[3]) != K"lambda"
+                emit_effect(ctx, ex[3]) === nothing && return nothing
+            end
+            return op_stmt(stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE), v; src = ex))
+        end
+        return nothing_op(ctx)   # 1-arg form: global binding side effect
+    elseif k == K"_opaque_closure"
+        # [oc key argt rt_lb rt_ub allow_partial nargs is_va functionloc lambda]
+        for i in 2:4
+            v = emit_value(ctx, ex[i])
+            v === nothing && return nothing
+        end
+        key = ex[1]
+        if kind(key) == K"BindingId" && haskey(ana.capture_sets, Int(key.var_id))
+            return op_stmt(emit_capture_site(ctx, ex, Int(key.var_id)))
+        end
+        return _ana_opaque(ctx, ex)
+    else # k == K"lambda": bare lambda (global method capturing locals by value)
+        return _ana_opaque(ctx, ex)
+    end
+end
+
+"Emit the capture-site marker: `call CAPTURE_SITE, site-index, cell_get(v)...`."
+function emit_capture_site(ctx::EmitCtx, ex, id::Int)
+    ana = ctx.ana::AnalysisState
+    caps = ana.capture_sets[id]
+    ops = Operand[vop(ctx.b.ir, CAPTURE_SITE), vop(ctx.b.ir, length(ana.site_caps) + 1)]
+    for v in caps
+        g = stmt!(ctx, UnifiedIR.K"cell_get", ctx.cellmap[v]; src = ex)
+        push!(ops, op_stmt(g))
+    end
+    m = stmt!(ctx, UnifiedIR.K"call", ops...; src = ex)
+    push!(ana.site_caps, caps)
+    push!(ana.site_stmts, m)
+    return m
+end
+
+"Mirror `emit_assign`'s binding store for analysis-synthesized values."
+function assign_binding!(ctx::EmitCtx, ex, id::Int, v::Operand)
+    binfo = ctx.bindings.info[id]
+    if binfo.kind === :global
+        stmt!(ctx, UnifiedIR.K"call", GlobalRef(Core, :setglobal!),
+              binfo.mod::Module, Symbol(binfo.name), v; src = ex)
+        return nothing
+    end
+    p = get(ctx.plans, id, nothing)
+    p === nothing && return nothing         # never read: no storage planned
+    if p.mode === :ssa
+        ctx.ssamap[id] = v
+    elseif p.mode === :cell
+        stmt!(ctx, UnifiedIR.K"cell_set", ctx.cellmap[id], v; src = ex)
+    elseif p.mode === :foreign
+        stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE), v; src = ex)
+    end
+    return nothing
+end
+
+"""
+Opaque stand-in for a form the analysis does not model: verify the subtree
+hides no store to a candidate and no closure-creation site (either would
+invalidate verdicts — bail to the syntactic fallback), then emit one
+unknown-effect, unknown-value call.
+"""
+function _ana_opaque(ctx::EmitCtx, ex)
+    _ana_check_opaque(ctx.ana::AnalysisState, ex)
+    return op_stmt(stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE); src = ex))
+end
+
+function _ana_check_opaque(ana::AnalysisState, ex)
+    k = kind(ex)
+    if k == K"inert" || k == K"inert_syntaxtree" || k == K"quote"
+        return nothing
+    elseif k == K"=" && numchildren(ex) == 2
+        lhs = ex[1]
+        if kind(lhs) == K"BindingId" && Int(lhs.var_id) in ana.candidates
+            throw(UnsupportedForm("capture-analysis",
+                "store to a captured variable in an unmodeled form"))
+        end
+        _ana_check_opaque(ana, ex[2])
+        return nothing
+    elseif k == K"function_decl" || k == K"_opaque_closure" || k == K"method"
+        throw(UnsupportedForm("capture-analysis",
+            "closure creation in an unmodeled form"))
+    elseif is_leaf(ex)
+        return nothing
+    else
+        for c in children(ex)
+            _ana_check_opaque(ana, c)
+        end
+        return nothing
     end
 end
 
@@ -545,7 +775,10 @@ function read_binding(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothin
     p = get(ctx.plans, id, nothing)
     p === nothing &&
         error("UnifiedBackend internal error: unplanned binding $(binfo.name)")
-    if p.mode === :cell
+    if p.mode === :foreign
+        # captured from an enclosing frame: an unknown (but defined) value
+        return op_stmt(stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE); src = ex))
+    elseif p.mode === :cell
         c = ctx.cellmap[id]
         if p.checked
             d = stmt!(ctx, UnifiedIR.K"cell_isdefined", c; type = Bool, src = ex)
@@ -597,6 +830,8 @@ function emit_assign(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing
                 ctx.ssamap[id] = v
             elseif p.mode === :cell
                 stmt!(ctx, UnifiedIR.K"cell_set", ctx.cellmap[id], v; src = ex)
+            elseif p.mode === :foreign
+                stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE), v; src = ex)
             else
                 error("UnifiedBackend internal error: assignment to unassigned argument plan")
             end
@@ -947,6 +1182,10 @@ function emit_isdefined(ctx::EmitCtx, ex)::Union{Operand,Nothing}
         p = get(ctx.plans, id, nothing)
         if p !== nothing && p.mode === :cell
             return op_stmt(stmt!(ctx, UnifiedIR.K"cell_isdefined", ctx.cellmap[id];
+                                 type = Bool, src = ex))
+        elseif p !== nothing && p.mode === :foreign
+            # foreign definedness is unknown: an opaque Bool keeps both arms
+            return op_stmt(stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE);
                                  type = Bool, src = ex))
         end
         return vop(ctx.b.ir, true)   # args and dominating SSA defs are always defined
