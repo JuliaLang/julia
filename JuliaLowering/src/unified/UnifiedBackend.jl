@@ -48,11 +48,20 @@ static parameters (SPARAM operands); method extraction from top-level thunks.
     finally lowering is not ported; simple finally works), `tryfinally` with
     a dynamic-scope operand (`@with`), and `try`/`catch`/`else`
   - `foreigncall` / `cfunction` / `static_eval` (ccall and friends)
-  - nested `lambda` in a method body, `opaque_closure_method` /
-    `new_opaque_closure`, `K"method"` inside a method body, and
-    `captured_local` (locals captured into global methods)
-  - `Core.Box`-based captures are kept as plain `Core.Box` calls
-    (correctness first) rather than being recognized as `cell_shared`
+  - `opaque_closure_method` / `new_opaque_closure` (opaque closures stay
+    inline in the method body), and `captured_local` (locals captured into
+    global methods)
+  - shared captures stay plain container calls (`Core.Box`, or the typed
+    `Base.RefValue{T}` the capture analysis proves) rather than being
+    recognized as `cell_shared`
+
+Ordinary closures ARE covered: closure conversion lifts closure types and
+method definitions to the enclosing toplevel thunk, so enclosing bodies (with
+their capture decisions — value captures, shared containers) and closure
+bodies both lower as plain methods (see test/unified_backend.jl). The
+emitter additionally has a capture-analysis mode over PRE-closure-conversion
+trees (emit.jl `AnalysisState`, driven by ../capture_analysis.jl) — the
+mem2reg-precise boxing decision runs on this backend's IR.
 
 Public API: [`lower_to_ir`](@ref), [`LoweredMethod`](@ref),
 [`UnsupportedForm`](@ref).
