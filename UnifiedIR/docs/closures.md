@@ -35,6 +35,24 @@ iff:
   from `promote_arm_cells!`, loop-carried values from `promote_loop_cells!`,
   exception joins from `promote_try_cells!`.
 
+**Why a marker call and not a `closure` region op?** The §5.7 `closure`
+kind exists (a deferred-region owner), but in that representation the
+captured reads live *inside* the deferred body — behind an activation
+boundary that every §6 dominance/path rule in the promotion suite refuses by
+design (`ACT_IMMEDIATE` gates: a deferred read has no dominating store
+"within the same activation"). Making decisions fall out structurally there
+requires the late-capture visibility machinery (deferred-mode reaching
+definitions, environment-as-free-values), which is P3 scope. The marker call
+is the degenerate *immediate* form of the same semantics: value capture is a
+snapshot at creation, so the marker holds the snapshot reads
+(`cell_get` per captured variable) at the creation point, where the v1
+fixpoint can already judge them. It is an ordinary unknown-effect `call`
+with a recognizable pool-constant callee — every pass conservatively
+preserves it and rewrites its operands, no special cases. When `closure`
+ops enter the core, the sidecar IR, the marker, and the separate
+store-after-site pre-check all collapse into the fixpoint running on the
+real IR.
+
 Maybe-undef captures never become values: the analysis runs the fixpoint
 **without** `promote_undef_cells!` (definedness-as-data would manufacture a
 value where the program has undefined memory), so an unresolved read keeps
