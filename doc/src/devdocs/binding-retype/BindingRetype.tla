@@ -12,7 +12,7 @@
 (*   - src/module.c: jl_retype_flag_partitions, jl_checked_assignment (and   *)
 (*     the other jl_checked_* storers)                                       *)
 (*   - src/toplevel.c: jl_declare_global (guard flagging, retained-value     *)
-(*     validation, value swap, world publication)                            *)
+(*     validation, value swap, world publication)                           *)
 (*   - src/cgutils.cpp: emit_retype_recheck, emit_binding_commit_begin/end   *)
 (*   - src/codegen.cpp: emit_retype_guard, emit_globalref                    *)
 (*                                                                          *)
@@ -47,7 +47,8 @@
 (*       published epoch V (one atomic step; the thread may stall            *)
 (*       arbitrarily long afterwards)                                        *)
 (*   s3  open the commit window (ptls->bnd_commit_window := 1)               *)
-(*   s4  read V.w (possibly stale, see the fence abstraction): set ->        *)
+(*   s4  light fence; read V.w (possibly stale, see the fence abstraction):  *)
+(*       set ->                                                              *)
 (*       close the window and take the LOCKED path (re-validate against      *)
 (*       the *latest* published restriction under world_counter_lock,        *)
 (*       then store); clear -> proceed                                       *)
@@ -60,50 +61,72 @@
 (*                                                                          *)
 (* Reader (compiled against epoch R):                                        *)
 (*   r1  v := slot                                                           *)
-(*   r2  light fence; read R.r (possibly stale)                              *)
+(*   r2  light fence; read R.r (possibly stale)                             *)
 (*   r3  clear: TRUST v at R.ty (ReaderSoundness is the theorem)             *)
 (*       set:   verify typeof(v) <: R.ty, error on mismatch (always safe)    *)
 (*                                                                          *)
 (* -------------------- Abstraction of memory ordering -------------------- *)
 (*                                                                          *)
 (* The protocol's correctness rests on the asymmetric fence, modeled          *)
-(* explicitly:                                                               *)
+(* explicitly. Two shared bits are read across threads -- the guard flags    *)
+(* (retyper writes, storers/readers read) and the commit-window announcement *)
+(* (storer writes, retyper's drain reads) -- and NEITHER is assumed          *)
+(* instantaneously visible: in both directions a read may return the stale   *)
+(* value until the asymmetric fence, which is exactly what makes it visible. *)
+(* The two are modeled the same way, a "pending" set drained by the fence,   *)
+(* and a buggy variant that drops either flush shows TLC catches it.         *)
 (*                                                                          *)
-(*  1. STALE FLAG READS. Flags set by the in-progress declaration are        *)
-(*     collected in `pendR`/`pendW` until its membarrier: a read of a        *)
-(*     pending flag may nondeterministically return the stale (clear)        *)
-(*     value; after RT_Fence every read is accurate. Flags set by earlier    *)
-(*     (already fenced) declarations are always read accurately. This        *)
-(*     captures "a flag check that executed before the IPI may miss the      *)
-(*     flag; one that executed after it cannot". The flags are monotone --   *)
-(*     there is no transient clearing in this design -- so no                *)
+(*  1. STALE FLAG READS (flag: retyper -> storer). Flags set by the          *)
+(*     in-progress declaration are collected in `pendR`/`pendW` until its    *)
+(*     membarrier: a read of a pending flag may nondeterministically return  *)
+(*     the stale (clear) value; after RT_Fence every read is accurate.       *)
+(*     Flags set by earlier (already fenced) declarations are always read    *)
+(*     accurately. This captures "a flag check that executed before the IPI  *)
+(*     may miss the flag; one that executed after it cannot". The flags are  *)
+(*     monotone -- there is no transient clearing in this design -- so no    *)
 (*     release/acquire pairing on the flag itself is needed (the world       *)
 (*     check of the previous design is gone: a stale storer that validated   *)
 (*     against a superseded epoch is diverted by that epoch's sticky write   *)
 (*     flag, forever).                                                       *)
 (*                                                                          *)
-(*  2. WINDOW ANNOUNCEMENTS ARE IMMEDIATELY VISIBLE. `window` is a plain     *)
-(*     shared variable. Justification: the announcement (s3) precedes the    *)
-(*     flag read (s4) in program order with a compiler barrier; retirement   *)
-(*     is in order and the IPI is taken at a retirement boundary, so if the  *)
-(*     flag read retired before the IPI the announcement is at worst in the  *)
-(*     store buffer, which the IPI's barrier flushes before the drain        *)
-(*     begins; a flag read that had not retired re-executes after the IPI    *)
-(*     and reads accurately.                                                 *)
+(*  2. STALE WINDOW READS (window: storer -> retyper). Symmetric to rule 1.  *)
+(*     A storer's window OPEN (s3) is a plain store behind only a light      *)
+(*     compiler fence -- it orders s3 before s4, nothing more -- so until a  *)
+(*     barrier flushes it the retyper's drain may read the window either     *)
+(*     way. Opens not yet forced globally visible are collected in           *)
+(*     `pendWin`; the drain's read ReadWindow(s) of such a storer returns    *)
+(*     the stale (closed) value OR the open one, exactly as ReadW does for a *)
+(*     pending flag -- so a store buffer that happens to have drained early  *)
+(*     is covered by the same nondeterminism, no separate step needed. The   *)
+(*     heavy fence (RT_Fence, FenceFlushesWindows) empties pendWin, its IPI  *)
+(*     draining each storer's store buffer, after which the drain reads      *)
+(*     every open accurately. This is why the fence is required and why it   *)
+(*     suffices: a storer that will commit read its write flag clear (s4),   *)
+(*     so by rule 1 that read preceded this declaration's fence; s3 is       *)
+(*     program-order before s4 and cannot sink past the light fence, so at   *)
+(*     fence time its open is still pending and the flush forces the drain   *)
+(*     to see it. The CLOSE (s6) is a release the drain acquires             *)
+(*     (jl_atomic_store_release, not the light-fenced open), so it is        *)
+(*     modeled as promptly visible: clearing window[s] and dropping it from  *)
+(*     pendWin makes ReadWindow return just {closed}; see rule 3. Setting    *)
+(*     FenceFlushesWindows = FALSE keeps opens pending forever, letting the  *)
+(*     drain read an in-flight open as closed and proceed past it            *)
+(*     (MCBuggyUnflushedWindow).                                             *)
 (*                                                                          *)
 (*  3. DRAIN ACQUIRE / CLOSE RELEASE. Window close (s6) is a release store   *)
 (*     paired with the drain's acquire loads: everything inside the window   *)
 (*     (the commit) is visible to the re-declaration once the drain          *)
 (*     observes the window closed. Accordingly the commit takes effect on    *)
 (*     the shared `slot` strictly before the window closes, and the drain    *)
-(*     action is enabled only when every window is closed.                   *)
+(*     proceeds only from an observation (ReadWindow) in which every window  *)
+(*     is closed.                                                            *)
 (*                                                                          *)
 (*  4. MERGED INSTALL + VALUE SWAP + PUBLICATION. As in the C code the swap  *)
 (*     precedes the world bump; they are modeled as one atomic action        *)
 (*     because every observer that could distinguish them is either          *)
-(*     verifying (safe) or diverted to the lock the re-typer holds: a swap   *)
+(*     verifying (safe) or diverted to the lock the re-typer holds: a swap  *)
 (*     of a value outside some epoch's restriction implies that epoch's      *)
-(*     read flag was set and fenced beforehand.                              *)
+(*     read flag was set and fenced beforehand.                             *)
 (*                                                                          *)
 (* Other simplifications (honesty section):                                  *)
 (*   - One binding; one storer of each kind; one reader; a fixed             *)
@@ -113,7 +136,10 @@
 (*     reordering, only on the flag/window orderings above).                 *)
 (*   - Stale reads of a *set* flag as clear after the fence, or spurious     *)
 (*     sets, are not modeled (the former cannot happen, the latter only      *)
-(*     sends threads to the safe slow path).                                 *)
+(*     sends threads to the safe slow path). Likewise a stale read of a      *)
+(*     *closed* window as open is not modeled: it is the safe direction (it  *)
+(*     would only make the drain spin longer), and the close is a release    *)
+(*     the drain acquires.                                                   *)
 (*   - The locked store path is one atomic action: the lock excludes the     *)
 (*     only writers of the epoch sequence, and interleaved fast-path         *)
 (*     commits of concurrently-validated values commute with it w.r.t. our   *)
@@ -121,20 +147,33 @@
 (*   - A failed bare re-declaration publishes nothing; the flags it set      *)
 (*     remain (deliberately: they are conservative, and only pessimize       *)
 (*     superseded epochs).                                                   *)
-(*   - delete_binding / const-over-global are jl_retype_flag_partitions      *)
-(*     calls with store_ty = NULL (write-flag everything) and slot_ty the    *)
-(*     constant's type; they are strictly less permissive instances of the   *)
+(*   - delete_binding and const-over-global are jl_retype_flag_partitions    *)
+(*     calls with store_ty = NULL (write-flag every epoch): delete passes    *)
+(*     slot_ty = NULL too (so it sets no read flags), const-over-global the  *)
+(*     constant's type. Both are strictly less permissive instances of the   *)
 (*     modeled transitions and are omitted.                                  *)
+(*   - The compiled storer models the Set commit (one write-guard check).    *)
+(*     The RMW kinds (swap/replace/modify) additionally re-check the READ    *)
+(*     guard -- they trust values they load from the slot, the obligation    *)
+(*     the Reader already models -- and the outer early-out guard before the *)
+(*     window is a pure optimization over the authoritative in-window        *)
+(*     recheck; neither adds behavior the invariants do not already cover.   *)
 (*   - The undefined (NULL) slot state is not modeled.                       *)
 (*                                                                          *)
-(* Two constants inject known-shape bugs so the model can demonstrate it     *)
-(* has teeth (see MCBuggySwappedFlags / MCBuggyEarlyValidation):             *)
+(* Three constants inject known-shape bugs so the model can demonstrate it   *)
+(* has teeth (MCBuggySwappedFlags / MCBuggyEarlyValidation /                 *)
+(* MCBuggyUnflushedWindow):                                                  *)
 (*   - SwappedFlagConditions = TRUE computes each flag with the converse     *)
 (*     subtype test (reads flagged when ~(P.ty <: Tnew), writes when         *)
 (*     ~(Tnew <: P.ty)), which looks plausible and is exactly wrong.         *)
 (*   - EarlyBareValidation = TRUE performs the bare re-declaration's         *)
 (*     retained-value validation BEFORE the flagging and drain (the          *)
 (*     ordering bug found during review of the PR), instead of after.        *)
+(*   - FenceFlushesWindows = FALSE makes the heavy fence NOT drain the       *)
+(*     pending window opens, so the drain can read an in-flight open as      *)
+(*     closed and proceed past the commit -- i.e. it treats the             *)
+(*     announcement as visible without the barrier, the assumption this      *)
+(*     model deliberately does not make.                                     *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences, FiniteSets
 
@@ -143,7 +182,8 @@ CONSTANTS
     StoreAttempts,        \* store attempts per storer thread
     ReadAttempts,         \* reads performed by the compiled reader
     SwappedFlagConditions, \* FALSE: faithful model. TRUE: converse subtype tests (bug)
-    EarlyBareValidation   \* FALSE: faithful model. TRUE: t3 validates before t2 (bug)
+    EarlyBareValidation,  \* FALSE: faithful model. TRUE: t3 validates before t2 (bug)
+    FenceFlushesWindows   \* TRUE: faithful model. FALSE: fence omits the window flush (bug)
 
 (* A tiny type lattice: Int and Float are disjoint subtypes of Any. Value    *)
 (* "i" has runtime type Int, value "f" has runtime type Float.               *)
@@ -158,6 +198,7 @@ StorerIds == {"rs", "cc"}   \* runtime-path storer, compiled-path storer
 
 ASSUME /\ StoreAttempts \in Nat /\ ReadAttempts \in Nat
        /\ SwappedFlagConditions \in BOOLEAN /\ EarlyBareValidation \in BOOLEAN
+       /\ FenceFlushesWindows \in BOOLEAN
        /\ \A i \in 1..Len(Script) :
             /\ Script[i].ty \in Types
             /\ Script[i].val \in Values \cup {NoVal}
@@ -174,7 +215,9 @@ VARIABLES
                 \* not-yet-fenced declaration (stale-readable, rule 1)
     pendW,      \* likewise for w flags
     lockHeld,   \* world_counter_lock (held only by the re-typer)
-    window,     \* window[s]: storer s's ptls->bnd_commit_window
+    window,     \* window[s]: storer s's ptls->bnd_commit_window (its LOCAL bit)
+    pendWin,    \* storers whose window OPEN is not yet forced visible to the drain
+                \* (stale-readable as closed until the fence flushes it, rule 2)
     badStore,   \* history flag: some fast-path commit stored a value that did not
                 \* conform to the restriction published at commit time
     rs,         \* runtime-path storer:  [pc, left, val, vep]
@@ -182,7 +225,8 @@ VARIABLES
     rd,         \* compiled reader:      [pc, left, val, flg, cep]
     rt          \* re-typer:             [pc, idx, tnew, nval, bare, drain, earlyOK]
 
-vars == <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore, rs, cc, rd, rt>>
+vars == <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin, badStore,
+          rs, cc, rd, rt>>
 
 (* Rule 1: a flag read is accurate except while the setting declaration has  *)
 (* not yet fenced, where it may also return the stale (clear) value.         *)
@@ -190,6 +234,13 @@ ReadR(i) == IF eps[i].r THEN (IF i \in pendR THEN {TRUE, FALSE} ELSE {TRUE})
             ELSE {FALSE}
 ReadW(i) == IF eps[i].w THEN (IF i \in pendW THEN {TRUE, FALSE} ELSE {TRUE})
             ELSE {FALSE}
+
+(* Rule 2: the drain's read of a storer's window. An open (window[s]) that    *)
+(* has not been forced visible (s \in pendWin) may still read closed; once    *)
+(* the fence has flushed it, or it was never pending, it reads accurately.    *)
+(* A closed window always reads closed (the close is a release, rule 3).      *)
+ReadWindow(s) == IF window[s] THEN (IF s \in pendWin THEN {TRUE, FALSE} ELSE {TRUE})
+                 ELSE {FALSE}
 
 (* The faithful (and, under SwappedFlagConditions, the buggy) flag calculus. *)
 NeedR(pty, tnew) == IF SwappedFlagConditions THEN ~Subtype(pty, tnew)
@@ -205,6 +256,7 @@ TypeOK ==
     /\ pendR \subseteq 1..Len(eps) /\ pendW \subseteq 1..Len(eps)
     /\ lockHeld \in BOOLEAN /\ badStore \in BOOLEAN
     /\ window \in [StorerIds -> BOOLEAN]
+    /\ pendWin \subseteq StorerIds
     /\ rs \in [pc: {"idle", "ready", "open", "commit", "close", "locked"},
                left: 0..StoreAttempts, val: Values \cup {NoVal}, vep: 1..MaxEp]
     /\ cc \in [pc: {"idle", "ready", "open", "commit", "close", "locked"},
@@ -224,6 +276,7 @@ Init ==
     /\ pendR = {} /\ pendW = {}
     /\ lockHeld = FALSE /\ badStore = FALSE
     /\ window = [s \in StorerIds |-> FALSE]
+    /\ pendWin = {}
     /\ rs = [pc |-> "idle", left |-> StoreAttempts, val |-> NoVal, vep |-> 1]
     /\ cc = [pc |-> "idle", left |-> StoreAttempts, val |-> NoVal, cep |-> 0]
     /\ rd = [pc |-> "idle", left |-> ReadAttempts, val |-> NoVal,
@@ -243,26 +296,30 @@ RS_Validate ==
          rs' = IF Conforms(v, eps[pub].ty)
                THEN [rs EXCEPT !.pc = "ready", !.val = v, !.vep = pub]
                ELSE [rs EXCEPT !.left = @ - 1]    \* type error at s1
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
-                   cc, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
+                   badStore, cc, rd, rt>>
 
-(* s3: announce the commit window (rule 2: immediately visible).             *)
+(* s3: open the commit window. Rule 2: the open is buffered -- the storer's   *)
+(* local bit is set and the storer is added to pendWin, so the drain may     *)
+(* still read the window closed until a fence flushes it.                     *)
 RS_Open ==
     /\ rs.pc = "ready"
     /\ window' = [window EXCEPT !["rs"] = TRUE]
+    /\ pendWin' = pendWin \cup {"rs"}
     /\ rs' = [rs EXCEPT !.pc = "open"]
     /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, cc, rd, rt>>
 
 (* s4: re-check the validated epoch's write flag (possibly stale, rule 1):   *)
-(* divert to the locked path (window closed) or proceed to the commit.       *)
+(* divert to the locked path (window closed, visibly) or proceed to commit.  *)
 RS_Check ==
     /\ rs.pc = "open"
     /\ \E fr \in ReadW(rs.vep) :
          IF fr
          THEN /\ window' = [window EXCEPT !["rs"] = FALSE]
+              /\ pendWin' = pendWin \ {"rs"}
               /\ rs' = [rs EXCEPT !.pc = "locked"]
          ELSE /\ rs' = [rs EXCEPT !.pc = "commit"]
-              /\ UNCHANGED window
+              /\ UNCHANGED <<window, pendWin>>
     /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, cc, rd, rt>>
 
 (* s5: the commit, inside the still-open window (rule 3).                    *)
@@ -271,12 +328,13 @@ RS_Commit ==
     /\ slot' = rs.val
     /\ badStore' = (badStore \/ ~Conforms(rs.val, eps[pub].ty))
     /\ rs' = [rs EXCEPT !.pc = "close"]
-    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, cc, rd, rt>>
+    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, pendWin, cc, rd, rt>>
 
-(* s6: close the window (release, rule 3).                                   *)
+(* s6: close the window (release, rules 2/3): the close is visible at once.   *)
 RS_Close ==
     /\ rs.pc = "close"
     /\ window' = [window EXCEPT !["rs"] = FALSE]
+    /\ pendWin' = pendWin \ {"rs"}
     /\ rs' = [rs EXCEPT !.pc = "idle", !.left = @ - 1]
     /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, cc, rd, rt>>
 
@@ -286,30 +344,32 @@ RS_Locked ==
     /\ rs.pc = "locked" /\ ~lockHeld
     /\ slot' = IF Conforms(rs.val, eps[pub].ty) THEN rs.val ELSE slot
     /\ rs' = [rs EXCEPT !.pc = "idle", !.left = @ - 1]
-    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, badStore, cc, rd, rt>>
+    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, pendWin, badStore,
+                   cc, rd, rt>>
 
 -----------------------------------------------------------------------------
-(* Compiled fast-path storer (typed_store's commit window). Compiled code    *)
-(* exists only for typed-GLOBAL epochs (index >= 2                           *)
-(* here: epoch 1 is the weak Declared epoch), and its stored value conforms  *)
-(* to the epoch's declared type by the compiled-in typecheck.                *)
+(* Compiled fast-path storer (typed_store's commit window). Compiled code     *)
+(* exists only for typed-GLOBAL epochs (index >= 2 here: epoch 1 is the weak *)
+(* Declared epoch), and its stored value conforms to the epoch's declared    *)
+(* type by the compiled-in typecheck.                                        *)
 
 CC_Compile ==
     /\ cc.cep = 0 /\ pub >= 2
     /\ cc' = [cc EXCEPT !.cep = pub]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
-                   rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
+                   badStore, rs, rd, rt>>
 
 CC_Prepare ==
     /\ cc.pc = "idle" /\ cc.left > 0 /\ cc.cep # 0
     /\ \E v \in {w \in Values : Conforms(w, eps[cc.cep].ty)} :
          cc' = [cc EXCEPT !.pc = "ready", !.val = v]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
-                   rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
+                   badStore, rs, rd, rt>>
 
 CC_Open ==
     /\ cc.pc = "ready"
     /\ window' = [window EXCEPT !["cc"] = TRUE]
+    /\ pendWin' = pendWin \cup {"cc"}
     /\ cc' = [cc EXCEPT !.pc = "open"]
     /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, rs, rd, rt>>
 
@@ -318,9 +378,10 @@ CC_Check ==
     /\ \E fr \in ReadW(cc.cep) :
          IF fr
          THEN /\ window' = [window EXCEPT !["cc"] = FALSE]
+              /\ pendWin' = pendWin \ {"cc"}
               /\ cc' = [cc EXCEPT !.pc = "locked"]
          ELSE /\ cc' = [cc EXCEPT !.pc = "commit"]
-              /\ UNCHANGED window
+              /\ UNCHANGED <<window, pendWin>>
     /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, rs, rd, rt>>
 
 CC_Commit ==
@@ -328,11 +389,12 @@ CC_Commit ==
     /\ slot' = cc.val
     /\ badStore' = (badStore \/ ~Conforms(cc.val, eps[pub].ty))
     /\ cc' = [cc EXCEPT !.pc = "close"]
-    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, pendWin, rs, rd, rt>>
 
 CC_Close ==
     /\ cc.pc = "close"
     /\ window' = [window EXCEPT !["cc"] = FALSE]
+    /\ pendWin' = pendWin \ {"cc"}
     /\ cc' = [cc EXCEPT !.pc = "idle", !.left = @ - 1]
     /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, rs, rd, rt>>
 
@@ -342,7 +404,8 @@ CC_Locked ==
     /\ cc.pc = "locked" /\ ~lockHeld
     /\ slot' = IF Conforms(cc.val, eps[pub].ty) THEN cc.val ELSE slot
     /\ cc' = [cc EXCEPT !.pc = "idle", !.left = @ - 1]
-    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, badStore, rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, pendWin, badStore,
+                   rs, rd, rt>>
 
 -----------------------------------------------------------------------------
 (* Compiled reader (emit_globalref): r1 loads the slot, r2 reads its         *)
@@ -352,20 +415,20 @@ CC_Locked ==
 RD_Compile ==
     /\ rd.cep = 0 /\ pub >= 2
     /\ rd' = [rd EXCEPT !.cep = pub]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
-                   rs, cc, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
+                   badStore, rs, cc, rt>>
 
 RD_Read1 ==
     /\ rd.pc = "idle" /\ rd.left > 0 /\ rd.cep # 0
     /\ rd' = [rd EXCEPT !.pc = "r2", !.val = slot]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
-                   rs, cc, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
+                   badStore, rs, cc, rt>>
 
 RD_Read2 ==
     /\ rd.pc = "r2"
     /\ \E fr \in ReadR(rd.cep) : rd' = [rd EXCEPT !.pc = "r3", !.flg = fr]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
-                   rs, cc, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
+                   badStore, rs, cc, rt>>
 
 (* r3: with a clear flag observation the value is TRUSTED at the compiled    *)
 (* epoch's type (ReaderSoundness is checked in this state); with a set flag  *)
@@ -373,8 +436,8 @@ RD_Read2 ==
 RD_Resolve ==
     /\ rd.pc = "r3"
     /\ rd' = [rd EXCEPT !.pc = "idle", !.left = @ - 1]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
-                   rs, cc, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
+                   badStore, rs, cc, rt>>
 
 -----------------------------------------------------------------------------
 (* Re-typer: jl_declare_global, one declaration per Script entry, holding    *)
@@ -390,7 +453,8 @@ RT_Begin ==
                      !.earlyOK = IF EarlyBareValidation /\ d.val = NoVal /\ d.ty # "Any"
                                  THEN Conforms(slot, d.ty)
                                  ELSE TRUE]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, window, badStore, rs, cc, rd>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, window, pendWin, badStore,
+                   rs, cc, rd>>
 
 (* jl_retype_flag_partitions: flag every epoch the new declared type          *)
 (* invalidates. Flags transitioned here are stale-readable (rule 1) until    *)
@@ -407,24 +471,30 @@ RT_Flag ==
           /\ rt' = [rt EXCEPT !.pc = IF newR \cup newW = {} THEN "validate"
                                                             ELSE "fence",
                               !.drain = newW # {}]
-    /\ UNCHANGED <<pub, slot, lockHeld, window, badStore, rs, cc, rd>>
+    /\ UNCHANGED <<pub, slot, lockHeld, window, pendWin, badStore, rs, cc, rd>>
 
 (* The asymmetric heavy fence (jl_membarrier): after this step every flag    *)
-(* read is accurate (rule 1).                                                *)
+(* read is accurate (rule 1, pend sets emptied) and every buffered window    *)
+(* open has been forced visible to the drain (rule 2, pendWin emptied -- the *)
+(* IPI flushing each storer's store buffer). FenceFlushesWindows = FALSE     *)
+(* drops the latter, modeling the mistaken belief the open needs no barrier. *)
 RT_Fence ==
     /\ rt.pc = "fence"
     /\ pendR' = {} /\ pendW' = {}
+    /\ pendWin' = IF FenceFlushesWindows THEN {} ELSE pendWin
     /\ rt' = [rt EXCEPT !.pc = IF rt.drain THEN "drain" ELSE "validate"]
     /\ UNCHANGED <<eps, pub, slot, lockHeld, window, badStore, rs, cc, rd>>
 
-(* Drain: wait until every commit window is closed; only needed when a       *)
-(* write flag transitioned. Windows never block, so this terminates.         *)
+(* Drain: proceed only from an observation in which every commit window reads *)
+(* closed (ReadWindow); only needed when a write flag transitioned. Once the  *)
+(* fence has emptied pendWin these reads are accurate, so this waits out      *)
+(* every genuinely-open window; windows never block, so it terminates.       *)
 RT_Drain ==
     /\ rt.pc = "drain"
-    /\ \A s \in StorerIds : ~window[s]
+    /\ \A s \in StorerIds : FALSE \in ReadWindow(s)
     /\ rt' = [rt EXCEPT !.pc = "validate"]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
-                   rs, cc, rd>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
+                   badStore, rs, cc, rd>>
 
 (* Bare re-declarations validate the retained slot value against Tnew --     *)
 (* after the drain (the faithful model reads `slot` HERE; the                *)
@@ -438,8 +508,8 @@ RT_Validate ==
             THEN rt' = [rt EXCEPT !.pc = "publish"]
             ELSE rt' = [rt EXCEPT !.pc = "failed"]
        ELSE rt' = [rt EXCEPT !.pc = "publish"]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
-                   rs, cc, rd>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
+                   badStore, rs, cc, rd>>
 
 (* Install the new epoch (its flags start clear: they live outside            *)
 (* PARTITION_MASK_FLAG and are never inherited), swap in a carried value,    *)
@@ -450,19 +520,21 @@ RT_Publish ==
     /\ pub' = Len(eps) + 1
     /\ slot' = IF rt.bare THEN slot ELSE rt.nval
     /\ rt' = [rt EXCEPT !.pc = "finish"]
-    /\ UNCHANGED <<pendR, pendW, lockHeld, window, badStore, rs, cc, rd>>
+    /\ UNCHANGED <<pendR, pendW, lockHeld, window, pendWin, badStore, rs, cc, rd>>
 
 RT_Finish ==
     /\ rt.pc = "finish"
     /\ lockHeld' = FALSE
     /\ rt' = [rt EXCEPT !.pc = "idle", !.idx = @ + 1]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, window, badStore, rs, cc, rd>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, window, pendWin, badStore,
+                   rs, cc, rd>>
 
 RT_Fail ==
     /\ rt.pc = "failed"
     /\ lockHeld' = FALSE
     /\ rt' = [rt EXCEPT !.pc = "idle", !.idx = @ + 1]
-    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, window, badStore, rs, cc, rd>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, window, pendWin, badStore,
+                   rs, cc, rd>>
 
 -----------------------------------------------------------------------------
 
@@ -515,7 +587,7 @@ ReaderSoundness == (rd.pc = "r3" /\ ~rd.flg) => Conforms(rd.val, eps[rd.cep].ty)
 StoreValidation == ~badStore
 
 (* Liveness sanity check (with WF): every fair behavior finishes all         *)
-(* scripts, in particular every drain terminates.                            *)
+(* scripts, in particular every drain terminates.                           *)
 Termination == <>[]Done
 
 =============================================================================

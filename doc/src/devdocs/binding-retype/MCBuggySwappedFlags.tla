@@ -15,8 +15,9 @@ StoreAttempts == 2
 ReadAttempts == 2
 SwappedFlagConditions == TRUE
 EarlyBareValidation == FALSE
+FenceFlushesWindows == TRUE
 
-VARIABLES eps, pub, slot, pendR, pendW, lockHeld, window, badStore, rs, cc, rd, rt
+VARIABLES eps, pub, slot, pendR, pendW, lockHeld, window, pendWin, badStore, rs, cc, rd, rt
 
 INSTANCE BindingRetype
 =============================================================================
