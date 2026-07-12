@@ -5,10 +5,10 @@
 
 test_mod = Module()
 
-# Count shared-container mentions in the closure-converted tree for `src`:
-# `Core.Box` core refs plus typed containers (Base.RefValue{T} Value nodes).
-# `acp_count_boxes` counts only the untyped Core.Box.
-function acp_count_shared(src::AbstractString; boxes_only::Bool = false)
+# Count shared-container evidence (`Core.Box` core refs — the only shared
+# container lowering emits, exactly as flisp) in the closure-converted tree
+# for `src`.
+function acp_count_shared(src::AbstractString)
     st0 = JuliaSyntax.parseall(JuliaSyntax.SyntaxTree, src; filename = "acp_test.jl")
     st = JuliaSyntax.kind(st0) == JuliaSyntax.K"toplevel" ? st0[1] : st0
     world = Base.get_world_counter()
@@ -21,9 +21,6 @@ function acp_count_shared(src::AbstractString; boxes_only::Bool = false)
         k = JuliaSyntax.kind(e)
         if k == JuliaSyntax.K"core" && e.name_val == "Box"
             n[] += 1
-        elseif !boxes_only && k == JuliaSyntax.K"Value" &&
-               (v = e.value; v isa Type && v <: Base.RefValue)
-            n[] += 1
         elseif !JuliaSyntax.is_leaf(e)
             foreach(walk, JuliaSyntax.children(e))
         end
@@ -32,7 +29,7 @@ function acp_count_shared(src::AbstractString; boxes_only::Bool = false)
     walk(ex4)
     return n[]
 end
-acp_count_boxes(src::AbstractString) = acp_count_shared(src; boxes_only = true)
+acp_count_boxes(src::AbstractString) = acp_count_shared(src)
 
 # NB. no enclosing top-level `try` block here: everything below must run as
 # separate top-level expressions so `include_string`-created bindings are
@@ -303,28 +300,16 @@ end
 """) == 42
 
 # ---------------------------------------------------------------------------
-# Typed shared containers: when sharing is unavoidable but the value type is
-# provable at lowering time (and undef impossible), the container is
-# Base.RefValue{T} instead of Core.Box.
+# Declared-type shares: the declared type constrains the VALUES (stores stay
+# funneled through convert) but never the container — lowering may not type
+# a shared container (that would need binding-table reads / inference, the
+# compiler pipeline's job). Semantics must match stock exactly.
 # ---------------------------------------------------------------------------
-
-closure_field_types(m::Module) = Dict(
-    string(name) => collect(zip(fieldnames(getglobal(m, name)),
-                                fieldtypes(getglobal(m, name))))
-    for name in names(m; all = true)
-    if isdefined(m, name) && getglobal(m, name) isa Type &&
-       getglobal(m, name) <: Function && occursin("#", string(name)))
 
 tc_mod = Module()
 @test JuliaLowering.include_string(tc_mod, """
 begin
-    function tc_join()          # literal join -> RefValue{Int}
-        x = 1
-        f = () -> x
-        x = 2
-        f()
-    end
-    function tc_decl()          # declared type -> RefValue{Int}, closure writes
+    function tc_decl()          # declared type, closure writes its capture
         local x::Int = 0
         inc = () -> (x = x + 1)
         inc(); inc(); inc()
@@ -339,27 +324,25 @@ begin
         end
         Any[f() for f in fs]
     end
-    function tc_undef(c)        # maybe-undef: MUST keep Core.Box
-        local x
-        if c; x = 1; end
-        f = () -> x
-        f
+    function tc_conv()          # the convert funnel operates through the share
+        local x::Int = 0
+        setx = v -> (x = v)
+        setx(2.0)
+        x
     end
-    (tc_join(), tc_decl(), tc_loop(3))
+    (tc_decl(), tc_loop(3), tc_conv())
 end
-""") == (2, 3, Any[3, 3, 3])
-@test_throws UndefVarError JuliaLowering.include_string(tc_mod, "tc_undef(false)()")
-
-let fts = closure_field_types(tc_mod)
-    # match the closure TYPE (has capture fields), not the named function type
-    fieldof(pat) = only([v for (k, v) in fts if occursin(pat, k) && !isempty(v)])
-    @test fieldof("tc_join") == [(:x, Base.RefValue{Int})]
-    @test fieldof("tc_decl") == [(:x, Base.RefValue{Int})]
-    @test fieldof("tc_loop") == [(:x, Base.RefValue{Int})]
-    @test fieldof("tc_undef") == [(:x, Core.Box)]
+""") == (3, Any[3, 3, 3], 2)
+@test JuliaLowering.include_string(tc_mod, """
+begin
+    function tc_conv2()
+        local x::Int = 0
+        setx = v -> (x = v)
+        setx(1.5)               # inexact through the shared store: must throw
+        x
+    end
+    try; tc_conv2(); "no throw"; catch e; typeof(e); end
 end
-
-# the typed counter is now fully inferable (the #15276 payoff)
-@test Base.return_types(getglobal(tc_mod, :tc_decl), ())[1] === Int
+""") === InexactError
 
 JuliaLowering.ACP_STRICT[] = strict_was

@@ -26,8 +26,7 @@ emitter (`src/emit.jl`) producing `UnifiedIR.IR`:
     cells, the shared promotion fixpoint (`promote_capture_cells!`) decides
     value-vs-shared capture structurally, and `materialize.jl` turns
     residual closure regions back into runtime closure types (value fields
-    type-parameterized; shared cells `Core.Box`/typed `RefValue{T}`) plus
-    extracted method IRs
+    type-parameterized; shared cells `Core.Box`) plus extracted method IRs
 
 # Covered forms (post-desugar kinds, mirroring linear_ir.jl's `compile`)
 

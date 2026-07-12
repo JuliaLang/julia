@@ -32,7 +32,8 @@ function zoo2(a)
     cl = () -> x
     return cl()
 end
-# 3. mutation AFTER capture: must stay shared (typed: join of literals = Int)
+# 3. mutation AFTER capture: must stay shared (untyped Core.Box, as stock --
+#    lowering may not type the container)
 function zoo3()
     x = 1
     f = () -> x
@@ -40,7 +41,7 @@ function zoo3()
     return f()
 end
 # 4. closure created in a loop, var stored later in the body: multi-shot
-#    backedge, must stay shared (typed variant via the declared type)
+#    backedge, must stay shared
 function zoo4(n)
     fs = Any[]
     local x::Int = 0
@@ -50,23 +51,23 @@ function zoo4(n)
     end
     return Any[f() for f in fs]
 end
-# 5. closure writing its capture: must stay shared (typed via declared type)
+# 5. closure writing its capture: must stay shared (declared-type variant --
+#    the declaration constrains the stored VALUES, never the container)
 function zoo5()
     local x::Int = 0
     inc = () -> (x = x + 1)
     inc(); inc(); inc()
     return x
 end
-# 5b. same, without a declared type: the write's RHS is not a literal, so the
-#     container type is not provable at lowering time -> stays Core.Box
+# 5b. same, without a declared type
 function zoo5b()
     x = 0
     inc = () -> (x = x + 1)
     inc(); inc(); inc()
     return x
 end
-# 6. maybe-undef capture: must stay Core.Box (UndefVarError at USE, not at
-#    capture -- a typed container could not represent the undef state)
+# 6. maybe-undef capture: must stay shared (UndefVarError at USE, not at
+#    capture)
 function zoo6(c)
     local x
     if c; x = 1; end
@@ -233,7 +234,7 @@ function bench_join(n)          # zoo1 shape in a hot loop (escaping closure)
     end
     s
 end
-function bench_counter(n)       # zoo5 shape (typed container vs Core.Box)
+function bench_counter(n)       # zoo5 shape (shared-capture counter)
     local c::Int = 0
     acc = i -> (c = c ⊻ (c + i))   # not reducible to closed form
     call_n(acc, n)

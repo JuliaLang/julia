@@ -1270,10 +1270,12 @@ UnifiedBackend's default lowering path (`lower_to_ir`) emits full closure
 regions and MATERIALIZES the residuals (`unified/materialize.jl`): capture
 set := `closure_environment`, closure types via the existing
 `eval_closure_type` machinery — value fields type-parameterized, surviving
-shares `Core.Box` or the lowering-provable typed `Base.RefValue{T}` — and
-the deferred region extracted as a standalone method IR. The worked
-examples (the julia#15276 zoo) are in `docs/closures.md`;
-`demo/capture_zoo.jl` is the runnable differential.
+shares untyped `Core.Box` (lowering does no typed materialization: typing a
+container needs binding-table reads or inference, which lowering may not
+do; the typed-cell form above is the compiler pipeline's) — and the
+deferred region extracted as a standalone method IR. The worked examples
+(the julia#15276 zoo) are in `docs/closures.md`; `demo/capture_zoo.jl` is
+the runnable differential.
 
 Still eager/fallback in v1 (per-construct, to `convert_closures`):
 recursive self-capture keeps the shared-cell fallback (matching stock's

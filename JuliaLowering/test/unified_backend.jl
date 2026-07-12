@@ -2,8 +2,8 @@
 # (lower_to_ir), verify L1, and differentially execute the reference
 # interpreter against natively-defined behavior. Closure-containing bodies
 # are first-class corpus members: the enclosing methods embed the
-# closure-conversion decisions (value captures, Core.Box, typed RefValue
-# containers) and the closure methods themselves lower as ordinary methods.
+# closure-conversion decisions (value captures, Core.Box shares) and the
+# closure methods themselves lower as ordinary methods.
 
 using JuliaSyntax: UnifiedIR
 const UB = JuliaLowering.UnifiedBackend
@@ -77,7 +77,7 @@ UB_CORPUS = [
     (:cl3, """
         function cl3()
             local x::Int = 0
-            inc = () -> (x = x + 1)   # typed container (RefValue{Int})
+            inc = () -> (x = x + 1)   # shared: closure writes its capture
             inc(); inc()
             x
         end""", [()]),
@@ -281,9 +281,7 @@ RG_CORPUS = [
                 @test count_boxes(m.ir) == 0
                 @test count_globals(m.ir, Core, :setfield!) == 0
             elseif expect === :shared
-                @test count_boxes(m.ir) +
-                      count(c -> c isa Type && c <: Base.RefValue,
-                            m.ir.body.constants) > 0
+                @test count_boxes(m.ir) > 0
             end
             f = Base.invokelatest(getglobal, ub_mod, name)
             for args in execs

@@ -8,8 +8,7 @@
 #     ordered SSA values + shared cells);
 #   * the closure type is created with the EXISTING runtime machinery
 #     (`eval_closure_type`): value captures are type-parameterized fields,
-#     surviving shared cells are `Core.Box` fields — or the typed
-#     `Base.RefValue{T}` container when the binding's `box_type` proves it;
+#     surviving shared cells are `Core.Box` fields;
 #   * the deferred region is EXTRACTED into a standalone method IR whose
 #     region 1 is `#self#` + the params; capture references become
 #     `getfield(#self#, name)` (values) or field-box get/set sequences
@@ -22,20 +21,11 @@
 #     sides of the call boundary — no aliasing to natively-created types.
 #
 # Surviving shared cells in the enclosing frame are lowered to the same
-# runtime containers (`Core.Box()` / `RefValue{T}()` + getfield/setfield!
-# with the #20016-style guards the emitter already placed as
+# runtime containers (`Core.Box()` + getfield/setfield! with the
+# #20016-style guards the emitter already placed as
 # cell_isdefined/throw_undef_if_not), so `new` receives real boxes.
 
 const _UIR = UnifiedIR   # local alias (this file is included into UnifiedBackend)
-
-_box_payload(boxt) = boxt === Core.Box ? :contents : :x
-
-function _cell_box_type(jlctx, cellcol, c)
-    bid = cellcol[c]
-    bid isa Int || return Core.Box
-    bt = jlctx.bindings.info[bid].box_type
-    return bt === nothing ? Core.Box : bt
-end
 
 _cell_bind_name(jlctx, cellcol, c) = begin
     bid = cellcol[c]
@@ -105,17 +95,15 @@ function _materialize_one!(jlctx, ir::_UIR.IR, s::StmtId,
     for i in eachindex(env.values)
         push!(fsyms, uniq("v#$i"))
     end
-    boxts = Any[]
     for c in env.cells
         push!(fsyms, uniq(_cell_bind_name(jlctx, cellcol, c)))
-        push!(boxts, _cell_box_type(jlctx, cellcol, c))
     end
-    flags = Any[]
+    flags = Bool[]
     for _ in env.values
         push!(flags, false)                  # type-parameterized value field
     end
-    for bt in boxts
-        push!(flags, bt === Core.Box ? true : bt)
+    for _ in env.cells
+        push!(flags, true)                   # Core.Box shared field
     end
 
     # ---- the closure type + extracted method IR ----------------------------
@@ -146,7 +134,7 @@ function _materialize_one!(jlctx, ir::_UIR.IR, s::StmtId,
         fi = length(env.values) + j
         g = append_stmt!(mb, _UIR.K"call", GlobalRef(Core, :getfield),
                          op_stmt(selfarg), fsyms[fi]; type = Any)
-        boxmap[c.id] = (op_stmt(g), _box_payload(boxts[j]))
+        boxmap[c.id] = (op_stmt(g), :contents)
     end
     _copy_region!(mb, ir, rs[1], stmtmap, regmap, boxmap)
     mir = _UIR.finish!(mb)
@@ -284,12 +272,10 @@ end
 # guards (cell_isdefined + throw_undef_if_not) become the #20016 pattern
 # with the right variable name.
 function _lower_shared_cells!(jlctx, ir::_UIR.IR)
-    cellcol = _UIR.getattr(ir, :cellbind)
     for c in collect(_UIR.each_stmt(ir))
         _UIR.is_tombstone(ir, c) && continue
         _UIR.stmt_kind(ir, c) === _UIR.K"cell_shared" || continue
-        boxt = _cell_box_type(jlctx, cellcol, c)
-        fsym = _box_payload(boxt)
+        fsym = :contents
         uses = Tuple{StmtId,Int}[]
         _UIR.each_ssa_use(ir) do site, used
             used == c || return
@@ -321,8 +307,8 @@ function _lower_shared_cells!(jlctx, ir::_UIR.IR)
             # other uses (the `new` capture argument) keep referencing the
             # statement, which becomes the container constructor below
         end
-        callee = boxt === Core.Box ? GlobalRef(Core, :Box) : boxt
-        _UIR.replace_stmt!(ir, c, _UIR.K"call", vop(ir, callee); type = Any)
+        _UIR.replace_stmt!(ir, c, _UIR.K"call", vop(ir, GlobalRef(Core, :Box));
+                           type = Any)
     end
     return nothing
 end

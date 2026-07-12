@@ -65,14 +65,22 @@ Maybe-undef captures never become values: the analysis runs the fixpoint
 value where the program has undefined memory), so an unresolved read keeps
 the shared cell and `UndefVarError` stays a *use-time* error.
 
-When sharing is required, the container is **typed** where lowering can
-prove the value type: a declared type that resolves to a constant (stores
-are already funneled through `convert`), or all store right-hand sides are
-literals of one concrete type. The variable must additionally be
-*undef-safe* (every read and every capture store-dominated — the shared
-`dominates_for_cell` checker — since e.g. `RefValue{Int}`'s empty state is
-unobservable). Then the closure field is `Base.RefValue{T}` instead of
-`Core.Box`.
+**The envelope: what lowering may optimize.** Keno's rule, verbatim:
+
+> Here's the optimizations lowering is allowed to do: isdefined->Bool,
+> sinking closure definitions (as long as they haven't been used yet), and
+> anything else that's visible structurally. It's not allowed to do
+> anything that would need to do inference (because it's not allowed to
+> read the method or binding table).
+
+The capture criterion above is squarely inside that envelope — it is
+structural mem2reg on positions and joins, never on types. When sharing is
+required, the container is the untyped `Core.Box`, exactly as stock:
+lowering never types a container (resolving a declared type reads the
+binding table; joining store types is inference). Typed-cell
+materialization for unavoidable shares belongs to the compiler's
+late-materialization pipeline (the §5.7 definition/specialization split),
+after inference.
 
 ## The zoo
 
@@ -83,9 +91,9 @@ execution differential, and microbenchmarks. Decisions:
 |---|-------|-------|------|-----|
 | 1 | `if c; x=1 else x=2 end; ()->x` | Box | **value** | (c) arm join; no store after the site |
 | 2 | `try x=f() catch; x=g() end; ()->x` | Box | **value** | (c) try join (`promote_try_cells!`); defined on both paths |
-| 3 | `x=1; f=()->x; x=2` | Box | **shared, `RefValue{Int}`** | (b) fails — `f()` must see `2`; literal join types the container |
-| 4 | closure in loop, `x=i` later in body | Box | **shared**, `RefValue{Int}` with `local x::Int` | (b) fails via the backedge — multi-shot closures see later iterations |
-| 5 | counter `()->(x+=1)` | Box | **shared**; `RefValue{Int}` when declared `local x::Int` | (a) fails; `x+1` is not a literal, so only a declared type can type the container |
+| 3 | `x=1; f=()->x; x=2` | Box | **shared, `Core.Box`** | (b) fails — `f()` must see `2` |
+| 4 | closure in loop, `x=i` later in body | Box | **shared, `Core.Box`** | (b) fails via the backedge — multi-shot closures see later iterations |
+| 5 | counter `()->(x+=1)` | Box | **shared, `Core.Box`** | (a) fails — the closure writes its capture |
 | 6 | `local x; if c; x=1 end; ()->x` | Box | **shared, `Core.Box`** | (c) fails (maybe-undef); Box preserves use-time `UndefVarError` |
 | 7 | conditional assignment feeding a comprehension | Box | **value** | same as 1 through the generator closure |
 
@@ -95,17 +103,16 @@ is a silent miscompile, so they assert both the decision *and* the observable
 semantics (mutation visibility, multi-shot reads, undef errors).
 
 The payoff shows in inference: case 1's return type goes `Any → Int64`,
-case 2 `Any → Float64`, case 7 `Vector → Vector{Int64}`; a declared-type
-counter (case 5) infers `Int` end to end. Escaping-closure microbenchmarks
-run ~14–30× faster (see the demo).
+case 2 `Any → Float64`, case 7 `Vector → Vector{Int64}`. Escaping-closure
+microbenchmarks run ~14–30× faster (see the demo).
 
 ## Honest limits (what still boxes, and why)
 
-- **Stores with non-literal types on undeclared variables** (`x = x + 1`,
-  `x = f(y)`): no type is provable at lowering time, so the container stays
-  `Core.Box`. Typing these needs inference-time materialization — the §5.7
+- **Unavoidable shares are untyped** (`Core.Box`), whatever the stores look
+  like: typing the cell is inference-time materialization — the §5.7
   `closure`-op plan, where the capture set is fixed at definition but the
-  layout stays type-parameterized.
+  layout stays type-parameterized. Lowering only picks the SET of shares
+  precisely; the compiler pipeline types them.
 - **Maybe-undef shares** stay `Core.Box` by design (undef must be
   observable).
 - **Captures read inside `catch` blocks** and other handler-observed cells
@@ -113,8 +120,6 @@ run ~14–30× faster (see the demo).
 - **Recursive/mutually-recursive local functions** self-capture before their
   own definition completes: shared by construction (the future `rec` binder,
   §5.7 design question #5).
-- **Arguments** never get typed containers (their entry value's type is not
-  a lowering-time fact); precision (value capture) still applies.
 - Forms the analysis emitter does not model (`@goto`, crossing-`finally`
   bodies, …) bail per-lambda to the stock syntactic verdicts —
   `UnsupportedForm` is a legitimate exit, never a mis-lowering.
