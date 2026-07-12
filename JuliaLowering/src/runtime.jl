@@ -155,12 +155,16 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, 
     type_params = Core.TypeVar[]
     field_types = []
     for (name, isbox) in zip(field_names, field_is_box)
-        if !isbox
+        if isbox === false
             T = Core.TypeVar(Symbol(name, "_type"))
             push!(type_params, T)
             push!(field_types, T)
-        else
+        elseif isbox === true
             push!(field_types, Core.Box)
+        else
+            # typed shared container (capture_analysis.jl): a concrete
+            # container type such as Base.RefValue{Int}
+            push!(field_types, isbox::Type)
         end
     end
     type = Core._structtype(mod, closure_type_name,

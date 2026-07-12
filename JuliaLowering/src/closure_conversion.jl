@@ -52,9 +52,16 @@ function captured_var_access(ctx, ex)
     end
 end
 
+# Field holding the shared value inside a binding\'s container: `Core.Box`
+# uses `:contents`; a typed container (`BindingInfo.box_type`, e.g.
+# `Base.RefValue{T}` — see unified/capture_analysis.jl) uses `:x`.
+box_field_name(binfo::BindingInfo) = binfo.box_type === nothing ? "contents" : "x"
+
 function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
-    undef_var = new_local_binding(ctx, var, get_binding(ctx, var.var_id).name;
+    binfo = get_binding(ctx, var.var_id)
+    undef_var = new_local_binding(ctx, var, binfo.name;
                                   is_used_undef=true)
+    fname = box_field_name(binfo)
     @ast ctx var [K"block"
         box := box_ex
         # Lower in an UndefVar check to a similarly named variable
@@ -67,7 +74,7 @@ function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
         [K"if" [K"call"
                 "isdefined"::K"core"
                 box
-                "contents"::K"Symbol"
+                fname::K"Symbol"
             ]
             ::K"TOMBSTONE"
             [K"block"
@@ -78,7 +85,7 @@ function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
         [K"call"
             "getfield"::K"core"
             box
-            "contents"::K"Symbol"
+            fname::K"Symbol"
         ]
     ]
 end
@@ -207,7 +214,7 @@ function convert_assignment(ctx, ex)
                 @ast ctx ex [K"call"
                     "setfield!"::K"core"
                     is_self_captured(ctx, var) ? captured_var_access(ctx, var) : var
-                    "contents"::K"Symbol"
+                    box_field_name(binfo)::K"Symbol"
                     rhs
                 ]
             else
@@ -264,9 +271,13 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
         end
     end
     field_inds = Dict{IdTag,Int}()
-    field_is_box = Vector{Bool}()
+    # entries: `false` (value capture, type-parameterized field), `true`
+    # (Core.Box), or a container Type (typed shared capture)
+    field_is_box = Vector{Any}()
     for (i,id) in enumerate(field_orig_bindings)
-        push!(field_is_box, is_boxed(ctx, id))
+        binfo = get_binding(ctx, id)
+        push!(field_is_box, !is_boxed(binfo) ? false :
+                            binfo.box_type === nothing ? true : binfo.box_type)
         field_inds[id] = i
     end
 
@@ -281,13 +292,18 @@ function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_sym
     # need to be serialized there during precompile.
     mod = ctx.mod
     type_binding = new_global_binding(ctx, srcref, name_str, mod)
+    boxflags = SyntaxList(ctx)
+    for f in field_is_box
+        push!(boxflags, f isa Bool ? (@ast ctx srcref f::K"Bool") :
+                                     (@ast ctx srcref f::K"Value"))
+    end
     type_ex = @ast ctx srcref [K"call"
         #"_call_latest"::K"core"
         eval_closure_type::K"Value"
         ctx.mod::K"Value"
         name_str::K"Symbol"
         [K"call" "svec"::K"core" field_syms...]
-        [K"call" "svec"::K"core" [f::K"Bool" for f in field_is_box]...]
+        [K"call" "svec"::K"core" boxflags...]
     ]
     type_ex, type_binding
 end
@@ -356,7 +372,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             @ast ctx ex [K"call"
                 "isdefined"::K"core"
                 access
-                "contents"::K"Symbol"
+                box_field_name(binfo)::K"Symbol"
             ]
         elseif binfo.is_always_defined || is_self_captured(ctx, var)
             # Captured but unboxed vars are always defined
@@ -397,7 +413,12 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         var = ex[1]
         binfo = get_binding(ctx, var)
         if is_boxed(binfo)
-            @ast ctx ex [K"=" var [K"call" "Box"::K"core"]]
+            if binfo.box_type === nothing
+                @ast ctx ex [K"=" var [K"call" "Box"::K"core"]]
+            else
+                # typed shared container: fresh per declaration, like the Box
+                @ast ctx ex [K"=" var [K"call" binfo.box_type::K"Value"]]
+            end
         elseif !binfo.is_always_defined
             @ast ctx ex [K"newvar" var]
         else
@@ -438,7 +459,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                         field_val = captured_var_access(ctx, field_val)
                     end
                     push!(init_closure_args, field_val)
-                    if !boxed
+                    if boxed === false
                         push!(type_params, @ast ctx ex [K"call"
                               "_typeof_captured_variable"::K"core"
                               field_val])

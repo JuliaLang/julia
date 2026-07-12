@@ -152,8 +152,12 @@ function _acp_analyze!(ctx, lam)
         end
     end
     isempty(cand) && return nothing
-    _acp_closure_stores!(ctx, body, cand, false)                  # criterion (a)
-    isempty(cand) && return nothing
+    # criterion (a): variables stored by some capturing lambda must stay
+    # shared, but they remain in the analysis as cells — the same IR decides
+    # their TYPED-container eligibility below
+    writable = copy(cand)
+    _acp_closure_stores!(ctx, body, writable, false)   # removes survivors
+    closure_written = setdiff(cand, writable)
 
     capture_sets = Dict{Int,Vector{Int}}()
     for sid in siteids
@@ -196,6 +200,33 @@ function _acp_analyze!(ctx, lam)
         end
     end
 
+    # undef-safety for typed containers, on the same pristine IR: v may use a
+    # container whose empty state is unobservable iff no read can see undef —
+    # every home read/query and every capture-site read is store-dominated
+    # (the §6 dense checker `dominates_for_cell`, shared again) and every
+    # `cell_new` is in declaration position. Definedness is monotone from
+    # there: closure-internal reads happen after some dominated capture.
+    reads = Dict{Int,Vector{UnifiedBackend.StmtId}}(v => UnifiedBackend.StmtId[]
+                                                    for v in cand)
+    news = Dict{Int,Vector{UnifiedBackend.StmtId}}(v => UnifiedBackend.StmtId[]
+                                                   for v in cand)
+    for s in UIR.each_stmt(ir)
+        k = UIR.stmt_kind(ir, s)
+        (k === UIR.K"cell_get" || k === UIR.K"cell_isdefined" ||
+         k === UIR.K"cell_new") || continue
+        o = UIR.getop(ir, s, 1)
+        UIR.optag(o) == UIR.TAG_STMT || continue
+        v = get(cellstmt2var, Int(UIR.asstmt(o).id), nothing)
+        v === nothing && continue
+        push!(k === UIR.K"cell_new" ? news[v] : reads[v], s)
+    end
+    undef_safe = Dict{Int,Bool}()
+    for v in cand
+        dominated(u) = any(st -> UIR.dominates_for_cell(ir, st, u), sets[v])
+        undef_safe[v] = all(dominated, reads[v]) &&
+            all(nw -> all(st -> nw.id < st.id, sets[v]), news[v])
+    end
+
     # criterion (c): the shared fixpoint (same machinery as Compiler.Unified),
     # without definedness-as-data — maybe-undef captures must stay memory
     UIR.promote_fixpoint!(ir; include_undef = false)
@@ -222,8 +253,108 @@ function _acp_analyze!(ctx, lam)
         end
     end
     for v in cand
-        value_ok[v] || continue
-        get_binding(ctx, v).unboxed = true
+        binfo = get_binding(ctx, v)
+        if value_ok[v] && !(v in closure_written)
+            binfo.unboxed = true
+            continue
+        end
+        # stays shared: try to TYPE the unavoidable container. Requirements:
+        # a lowering-time-provable value type (declared type resolving to a
+        # constant, or the join of all store RHS literal types) and
+        # undef-safety (a typed container's empty state can be unobservable —
+        # e.g. isbits RefValue — so no read may ever see undef).
+        binfo.kind === :local || continue      # argument entry types unknown
+        undef_safe[v] || continue
+        isdefined(Base, :RefValue) || continue # bootstrap-stage guard
+        T = _acp_container_eltype(ctx, lam, v, binfo)
+        T === nothing && continue
+        binfo.box_type = Base.RefValue{T}
     end
     return nothing
+end
+
+# ---------------------------------------------------------------------------
+# Typed-container value types (lowering-time provable only)
+# ---------------------------------------------------------------------------
+
+"Resolve a (post-scope-analysis) type expression to a constant Type, or nothing."
+function _acp_resolve_type(ctx, ex)
+    k = kind(ex)
+    if k == K"Value"
+        t = ex.value
+        return t isa Type ? t : nothing
+    elseif k == K"core" || k == K"top"
+        m = k == K"core" ? Core : Base
+        n = Symbol(ex.name_val::String)
+        (isconst(m, n) && isdefined(m, n)) || return nothing
+        t = getglobal(m, n)
+        return t isa Type ? t : nothing
+    elseif k == K"globalref"
+        m = ex.mod::Module
+        n = Symbol(ex.name_val::String)
+        (isconst(m, n) && isdefined(m, n)) || return nothing
+        t = getglobal(m, n)
+        return t isa Type ? t : nothing
+    elseif k == K"BindingId"
+        b = get_binding(ctx, ex.var_id)
+        b.kind === :global || return nothing
+        m = b.mod::Module
+        n = Symbol(b.name)
+        (isconst(m, n) && isdefined(m, n)) || return nothing
+        t = getglobal(m, n)
+        return t isa Type ? t : nothing
+    end
+    return nothing
+end
+
+"""
+Value type for v's shared container: the declared type when it resolves to a
+constant (declared-type stores are converted before the write, so the
+container invariant holds), else the join of ALL store RHS types when every
+one is a literal (then the container invariant holds because the stored
+values ARE those literals). One concrete type or nothing.
+"""
+function _acp_container_eltype(ctx, lam, v::Int, binfo)
+    if binfo.type !== nothing
+        t = _acp_resolve_type(ctx, binding_type_ex(ctx, binfo))
+        return (t isa Type && t !== Any && isconcretetype(t)) ? t : nothing
+    end
+    ts = Set{Type}()
+    ok = _acp_store_types!(ctx, lam[3], v, ts)
+    (ok && length(ts) == 1) || return nothing
+    T = first(ts)
+    return isconcretetype(T) ? T : nothing
+end
+
+# collect RHS literal types of every store to v under `ex` (INCLUDING nested
+# lambda bodies — a miss would be a container-type unsoundness); false when
+# any store's type is not syntactically known
+function _acp_store_types!(ctx, ex, v::Int, ts::Set{Type})
+    k = kind(ex)
+    if k == K"=" && numchildren(ex) == 2
+        lhs = ex[1]
+        if kind(lhs) == K"BindingId" && Int(lhs.var_id) == v
+            rhs = ex[2]
+            rk = kind(rhs)
+            if JuliaSyntax.is_literal(rk) || rk == K"Value"
+                push!(ts, typeof(rhs.value))
+            else
+                return false
+            end
+        end
+        return _acp_store_types!(ctx, ex[2], v, ts)
+    elseif k == K"function_decl" || k == K"_opaque_closure"
+        kind(ex[1]) == K"BindingId" && Int(ex[1].var_id) == v && return false
+        for i in 2:numchildren(ex)
+            _acp_store_types!(ctx, ex[i], v, ts) || return false
+        end
+        return true
+    elseif is_leaf(ex) || k == K"inert" || k == K"inert_syntaxtree" || k == K"quote"
+        return true
+    else
+        for c in children(ex)
+            _acp_store_types!(ctx, c, v, ts) || return false
+        end
+        return true
+    end
 end
