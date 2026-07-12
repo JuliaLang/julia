@@ -59,6 +59,21 @@ function read!(cx, ints)
     return g
 end
 
+"Declare a cell WITHOUT an initial store (maybe-undef until some branch
+stores): the definedness-as-data shapes. Occasionally re-undefine live ones."
+function undef_cell!(cx, ints)
+    if !isempty(cx.cells) && rand(cx.rng) < 0.25
+        append_stmt!(cx.b, K"cell_new", rand(cx.rng, cx.cells))
+        return
+    end
+    c = append_stmt!(cx.b, K"cell", Any; type = Any)
+    push!(cx.cells, c)
+    nothing
+end
+
+"An isdefined-guarded USE plus an occasional UNGUARDED read of a random cell
+(the read may legitimately throw UndefVarError — the differential compares
+thrown errors too)."
 function guarded_read!(cx, ints, depth)
     # isdefined-guarded maybe-undef read: if isdefined(c); use get; end
     isempty(cx.cells) && return
@@ -89,10 +104,12 @@ function body!(cx, ints, depth; allow_exit::Bool = true)
             genisland!(cx, ints, depth)
         elseif roll < 0.60
             store!(cx, ints)
-        elseif roll < 0.71
+        elseif roll < 0.70
             read!(cx, ints)
-        elseif roll < 0.75
+        elseif roll < 0.74
             guarded_read!(cx, ints, depth)
+        elseif roll < 0.78
+            undef_cell!(cx, ints)
         else
             plain!(cx, ints)
         end
@@ -313,10 +330,13 @@ end
 "Interpret, capturing thrown errors as comparable outcomes. Statement ids
 in interpreter diagnostics are stripped: they differ across promotion."
 function outcome(ir, args...)
+    UnifiedIR._FUEL[] = 10_000_000      # hangs become diagnosable failures
     try
         (:ok, UnifiedIR.interpret(ir, args...))
     catch e
-        (:err, replace(sprint(showerror, e), r" \(%\d+\)" => ""))
+        (:err, replace(sprint(showerror, e), r"( \(%\d+\)| at %\d+)" => ""))
+    finally
+        UnifiedIR._FUEL[] = 0
     end
 end
 
@@ -335,7 +355,8 @@ regenerated copy. Returns counters + the failing (seed, case) list.
 """
 function run_cases(U, n::Int; seed::Int = 0x5eed, dfevery::Int = 0)
     stats = (; cases = Ref(0), diffs = Ref(0), verifyfails = Ref(0),
-             unclassified = Ref(0), dfmissing = Ref(0), dfcells = Ref(0),
+             unclassified = Ref(0), openresiduals = Ref(0),
+             dfmissing = Ref(0), dfcells = Ref(0),
              dfmatch = Ref(0), dfextra = Ref(0), residuals = Dict{Symbol,Int}(),
              cells_pre = Ref(0), cells_post = Ref(0),
              failures = Tuple{Int,Int,Symbol}[])
@@ -366,9 +387,16 @@ function run_cases(U, n::Int; seed::Int = 0x5eed, dfevery::Int = 0)
         end
         for (_, r) in U.classify_residual_cells(ir2)
             stats.residuals[r] = get(stats.residuals, r, 0) + 1
-            if r === :UNCLASSIFIED
+            if r in (:maybe_undef_read, :escape, :UNCLASSIFIED)
+                # classes the machinery eliminates BY DESIGN must stay gone
                 stats.unclassified[] += 1
                 push!(stats.failures, (seed, case, :unclassified))
+            elseif !(r in U.RESIDUAL_OK)
+                # :island / :refused_multilevel_exit — the two OPEN bug
+                # classes on adversarial fuzz shapes (multi-level exit
+                # values, cross-island lifetimes); zero corpus-wide, counted
+                # here so the battery reports the frontier without failing
+                stats.openresiduals[] += 1
             end
         end
         if dfevery > 0 && case % dfevery == 0

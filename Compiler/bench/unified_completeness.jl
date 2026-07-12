@@ -81,27 +81,38 @@ for mi in mis
         hist[r] = get(hist, r, 0) + 1
         push!(reasons, r)
     end
-    # THE ORACLE: where stock code_typed fully mem2reg'd (slot-free, Box-free,
-    # and no runtime undef guards — `throw_undef_if_not` is stock's admission
-    # of a maybe-undef slot), our residual set must be empty apart from
-    # exception-SSA classes (stock expresses those via PhiC/Upsilon)
+    # THE ORACLE (sharpened): on Box-free stock bodies our residual set must
+    # be exactly the v1 representation choices, and their stock counterpart
+    # is machine-checked:
+    #   :handler_crossing residuals require stock PhiC/Upsilon (or stock
+    #                     undef guards) in the SAME body — exception SSA
+    #   :gc_token         allowed outright (stock's token slots promote; we
+    #                     keep the pair for the gc-preserve pairing verifier)
+    #   :box_capture      requires stock Box
+    # Any other reason — bug classes included — is a violation.
     if !isempty(reasons)
-        allowed = (:throw_edge_handler, :escape_or_token)
-        stray = [r for r in reasons if !(r in allowed)]
-        if !isempty(stray)
-            ct = try
-                only(Base.code_typed_by_type(mi.specTypes; optimize = true))[1]
-            catch
-                nothing
+        ct = try
+            only(Base.code_typed_by_type(mi.specTypes; optimize = true))[1]
+        catch
+            nothing
+        end
+        if ct !== nothing
+            hasbox = any(x -> x isa Expr && any(a -> a isa GlobalRef && a.name === :Box, x.args),
+                         ct.code)
+            hasphic = any(x -> x isa Core.PhiCNode || x isa Core.UpsilonNode, ct.code)
+            hasundef = any(x -> x isa Expr && x.head === :throw_undef_if_not, ct.code)
+            stray = Symbol[]
+            for r in reasons
+                if r === :gc_token
+                elseif r === :handler_crossing
+                    (hasphic || hasundef) || push!(stray, r)
+                elseif r === :box_capture
+                    hasbox || push!(stray, r)
+                else
+                    push!(stray, r)
+                end
             end
-            if ct !== nothing
-                slotfree = !any(x -> x isa Core.SlotNumber || x isa Core.NewvarNode,
-                                ct.code) &&
-                           !any(x -> x isa Expr && (x.head === :throw_undef_if_not ||
-                                any(a -> a isa GlobalRef && a.name === :Box, x.args)),
-                                ct.code)
-                slotfree && push!(violations, (mi, stray))
-            end
+            !hasbox && !isempty(stray) && push!(violations, (mi, stray))
         end
     end
 end
@@ -121,7 +132,8 @@ println("\n=== (b) structured fuzzer: ", nfuzz, " cases (df every 50th) ===")
 t0 = time_ns()
 s = CellFuzz.run_cases(U, nfuzz; seed = Int(seed), dfevery = 50)
 println("cases=", s.cases[], " differential-failures=", s.diffs[],
-        " verify-failures=", s.verifyfails[], " unclassified=", s.unclassified[])
+        " verify-failures=", s.verifyfails[], " unclassified=", s.unclassified[],
+        " open-class=", s.openresiduals[])
 println("residual histogram: ", sort!(collect(s.residuals); by = last, rev = true))
 println("cell ops pre=", s.cells_pre[], " post=", s.cells_post[], " (",
         round(100 * (1 - s.cells_post[] / max(s.cells_pre[], 1)); digits = 1), "% eliminated)")

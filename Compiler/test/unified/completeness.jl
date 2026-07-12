@@ -110,8 +110,10 @@ end
     ref = [outcome(ir, a) for a in (-1, 1)]
     ir = UC.promotion_fixpoint!(ir)
     @test verify_ir(ir; level = 1)
-    res = UC.classify_residual_cells(ir)
-    @test length(res) == 1 && res[1][2] === :maybe_undef_read
+    # definedness-as-data: the cell dissolves; `isdefined` became the Bool
+    # riding the same join as the value
+    @test isempty(UC.classify_residual_cells(ir))
+    @test count_cellops(ir) == 0
     @test [outcome(ir, a) for a in (-1, 1)] == ref
 
     # throw-edge: store in try body observed by the handler MUST refuse
@@ -136,7 +138,7 @@ end
     ir2 = UC.promotion_fixpoint!(ir2)
     @test verify_ir(ir2; level = 1)
     res2 = UC.classify_residual_cells(ir2)
-    @test length(res2) == 1 && res2[1][2] === :throw_edge_handler
+    @test length(res2) == 1 && res2[1][2] === :handler_crossing
     @test [outcome(ir2, a) for a in (1, 7)] == ref2
 end
 
@@ -161,7 +163,8 @@ end
     @test s.unclassified[] == 0
     @test s.dfmissing[] == 0
     @test isempty(s.failures)
-    println("fuzz battery: ", s.cases[], " cases; residuals ", s.residuals,
+    println("fuzz battery: ", s.cases[], " cases; open-class residuals ",
+            s.openresiduals[], "; residuals ", s.residuals,
             "; cells ", s.cells_pre[], " -> ", s.cells_post[],
             "; df cells=", s.dfcells[], " match=", s.dfmatch[], " extras=", s.dfextra[])
 end
@@ -275,9 +278,12 @@ end
               UnifiedIR.each_stmt(irb))
     irb = UC.promotion_fixpoint!(irb)
     @test UnifiedIR.verify_ir(irb; level = 1)
-    res = UC.classify_residual_cells(irb)
-    @test !isempty(res)
-    @test all(p -> p.second === :island, res)
+    # severity policy: classes the machinery eliminates by design must be
+    # gone; :island/:refused_multilevel_exit are the OPEN classes (multi-
+    # level exit values on adversarial shapes) — allowed, and execution
+    # stays exact either way
+    @test all(p -> !(p.second in (:maybe_undef_read, :escape, :UNCLASSIFIED)),
+              UC.classify_residual_cells(irb))
     @test UnifiedIR.interpret(irb, _cmpl_stale, 4, false) == _cmpl_stale(4, false) == 14
     @test UnifiedIR.interpret(irb, _cmpl_stale, 4, true) == _cmpl_stale(4, true) == 10
 end
@@ -378,8 +384,9 @@ end
     W = Base.get_world_counter()
     ir3 = UC.promotion_fixpoint!(UC.structure_prep!(UC.lowered_ir(_cmpl_2level, Any[Int]; world = W)))
     @test UnifiedIR.verify_ir(ir3; level = 1)
-    res3 = UC.classify_residual_cells(ir3)
-    @test all(p -> p.second === :refused_multilevel_exit, res3)
+    # nested carried args (memory-init + exit store): fully dissolves now
+    @test isempty(UC.classify_residual_cells(ir3))
+    @test count_cellops(ir3) == 0
     @test UnifiedIR.interpret(ir3, _cmpl_2level, 4) == _cmpl_2level(4) == 20
 end
 
@@ -394,7 +401,8 @@ end
     #   - joining arms leaking mid-arm through nested sealed exits
     inputs = [(1, 2), (7, 7), (-2, 9)]
     for (seed, case) in [(31337, 5), (31337, 116), (20260711, 66),
-                         (24242, 838), (24242, 5203), (24242, 6844), (24242, 8458)]
+                         (24242, 838), (24242, 5203), (24242, 6844), (24242, 8458),
+                         (24242, 153), (20260711, 720)]
         ir = CellFuzz.randir(CellFuzz.Random.Xoshiro(seed + case))
         pre = [outcome(ir, a...) for a in inputs]
         ir2 = UC.promotion_fixpoint!(CellFuzz.randir(CellFuzz.Random.Xoshiro(seed + case)))
