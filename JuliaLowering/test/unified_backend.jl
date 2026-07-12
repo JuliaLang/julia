@@ -122,6 +122,7 @@ end
 @testset "corpus: lower + verify + interpret differential" begin
     nlowered = 0
     nexecuted = 0
+    UB.reset_path_counts!()
     for (name, src, exec) in UB_CORPUS
         @testset "$name" begin
             # native definition first: creates closure types/methods the
@@ -145,8 +146,235 @@ end
             end
         end
     end
-    @info "UnifiedBackend corpus" nlowered nexecuted
+    @info "UnifiedBackend corpus" nlowered nexecuted UB.REGION_STMTS[] UB.EAGER_STMTS[]
     @test nlowered >= 20     # closure bodies lower too (methods per source)
+    # the whole corpus (closures included) lowers through the region path
+    @test UB.EAGER_STMTS[] == 0
+end
+
+# ---------------------------------------------------------------------------
+# The closure-REGION path: sources lower with real `closure` ops, the
+# fixpoint decides captures structurally, and materialization produces
+# self-contained closure types whose instances interpret the extracted
+# method IR (a trampoline method), so the differential crosses the call
+# boundary inside UnifiedIR on both frames.
+# ---------------------------------------------------------------------------
+
+count_globals(ir, mod, name) = count(g -> g.mod === mod && g.name === name,
+                                     ir.body.globals)
+count_boxes(ir) = count_globals(ir, Core, :Box)
+
+RG_CORPUS = [
+    # (name, src, execs, expect: :value = no shared container in the
+    #  enclosing IR, :shared = at least one, nothing = don't check)
+    (:rg_join, """
+        function rg_join(c)
+            local x
+            if c; x = 1; else; x = 2; end
+            g = () -> x + 1
+            g()
+        end""", [(true,), (false,)], :value),
+    (:rg_try, """
+        function rg_try(a)
+            local x
+            try
+                x = sqrt(a)
+            catch
+                x = -1.0
+            end
+            cl = () -> x
+            cl()
+        end""", [(4.0,), (-4.0,)], :value),
+    (:rg_after, """
+        function rg_after()
+            x = 1
+            f = () -> x
+            x = 2
+            f()
+        end""", [()], :shared),
+    (:rg_counter, """
+        function rg_counter()
+            x = 0
+            inc = () -> (x = x + 1)
+            inc(); inc(); inc()
+            x
+        end""", [()], :shared),
+    (:rg_typed, """
+        function rg_typed()
+            local x::Int = 0
+            inc = () -> (x = x + 1)
+            inc(); inc()
+            x
+        end""", [()], :shared),
+    (:rg_loopfresh, """
+        function rg_loopfresh(n)
+            s = 0
+            for i in 1:n
+                x = i
+                g = () -> x * 10
+                s += g()
+            end
+            s
+        end""", [(3,), (0,)], :value),
+    (:rg_multishot, """
+        function rg_multishot(n)
+            fs = Any[]
+            x = 0
+            for i in 1:n
+                push!(fs, () -> x)
+                x = i
+            end
+            sum(Int[f() for f in fs]; init = 0)
+        end""", [(3,)], :shared),
+    (:rg_nested, """
+        function rg_nested(a)
+            g = () -> (() -> a + 1)
+            h = g()
+            h()
+        end""", [(41,)], :value),
+    (:rg_rec, """
+        function rg_rec(n)
+            fact(k) = k <= 1 ? 1 : k * fact(k - 1)
+            fact(n)
+        end""", [(5,), (1,)], :shared),
+    (:rg_arg, """
+        function rg_arg(x)
+            x = x + 1
+            g = () -> x
+            g()
+        end""", [(41,)], :value),
+    (:rg_arg2, """
+        function rg_arg2(x)
+            g = () -> x
+            x = x + 1
+            g()
+        end""", [(41,)], :shared),
+    (:rg_manyfields, """
+        function rg_manyfields(a, b)
+            u = a + 1
+            v = b * 2
+            w = 0
+            f = () -> (w = u + v; w + 1)
+            r = f()
+            r + w
+        end""", [(1, 2)], nothing),
+]
+
+@testset "closure-region path corpus" begin
+    UB.reset_path_counts!()
+    for (name, src, execs, expect) in RG_CORPUS
+        @testset "$name" begin
+            JuliaLowering.include_string(ub_mod, src)
+            ms = UB.lower_to_ir(ub_mod, src)
+            i = findfirst(m -> m.name == name, ms)
+            @test i !== nothing
+            m = ms[i]
+            @test length(ms) >= 2         # the closure method was extracted
+            @test UnifiedIR.verify_ir(m.ir; level = 1)
+            # no residual closure ops or cells of either class survive
+            # materialization in the enclosing method
+            for s in UnifiedIR.each_stmt(m.ir)
+                @test UnifiedIR.stmt_kind(m.ir, s) !== UnifiedIR.K"closure"
+                @test UnifiedIR.stmt_kind(m.ir, s) !== UnifiedIR.K"cell_shared"
+            end
+            if expect === :value
+                @test count_boxes(m.ir) == 0
+                @test count_globals(m.ir, Core, :setfield!) == 0
+            elseif expect === :shared
+                @test count_boxes(m.ir) +
+                      count(c -> c isa Type && c <: Base.RefValue,
+                            m.ir.body.constants) > 0
+            end
+            f = Base.invokelatest(getglobal, ub_mod, name)
+            for args in execs
+                expected = Base.invokelatest(f, args...)
+                got = Base.invokelatest(UnifiedIR.interpret, m.ir, f, args...)
+                @test isequal(got, expected)
+            end
+        end
+    end
+    @test UB.EAGER_STMTS[] == 0           # every case took the region path
+end
+
+@testset "region-path undef semantics (zoo6)" begin
+    src = """
+        function rg_undef(c)
+            local x
+            if c; x = 1; end
+            f = () -> x
+            f
+        end"""
+    JuliaLowering.include_string(ub_mod, src)
+    UB.reset_path_counts!()
+    ms = UB.lower_to_ir(ub_mod, src)
+    @test UB.EAGER_STMTS[] == 0
+    m = ms[findfirst(m -> m.name == :rg_undef, ms)]
+    @test count_boxes(m.ir) > 0           # maybe-undef MUST keep Core.Box
+    f = Base.invokelatest(getglobal, ub_mod, :rg_undef)
+    # creating the closure never throws; the UndefVarError is use-time, with
+    # the right variable name
+    cl = Base.invokelatest(UnifiedIR.interpret, m.ir, f, false)
+    err = try
+        Base.invokelatest(cl)
+        nothing
+    catch e
+        e
+    end
+    @test err isa UndefVarError && err.var === :x
+    cl2 = Base.invokelatest(UnifiedIR.interpret, m.ir, f, true)
+    @test Base.invokelatest(cl2) == 1
+end
+
+@testset "v1 bails take the eager path (fidelity, not mis-lowering)" begin
+    for (name, src, execs) in [
+        # bl_kw: no execution differential — the kw BODY function name embeds
+        # its own reservation counter, which the fresh-name aliasing cannot
+        # match to the natively-created type (a pre-existing limitation of
+        # the eager-path harness, not of the lowering)
+        (:bl_kw, """
+            function bl_kw()
+                g(x; k = 2) = x + k
+                g(1)
+            end""", Tuple{}[]),
+        (:bl_mm, """
+            function bl_mm()
+                g(x::Int) = 1
+                g(x::String) = 2
+                g(3) + g("s")
+            end""", [()]),
+        (:bl_sp, """
+            function bl_sp()
+                g(x::T) where {T} = T
+                g(1)
+            end""", [()]),
+        (:bl_va, """
+            function bl_va()
+                g(xs...) = length(xs)
+                g(1, 2, 3)
+            end""", [()]),
+        (:bl_rt, """
+            function bl_rt()
+                g()::Int = 41.0 + 1
+                g()
+            end""", [()]),
+    ]
+        @testset "$name" begin
+            JuliaLowering.include_string(ub_mod, src)
+            UB.reset_path_counts!()
+            ms = alias_closure_types!(ub_mod, UB.lower_to_ir(ub_mod, src))
+            @test UB.EAGER_STMTS[] == 1 && UB.REGION_STMTS[] == 0
+            i = findfirst(m -> m.name == name, ms)
+            @test i !== nothing
+            m = ms[i]
+            @test UnifiedIR.verify_ir(m.ir; level = 1)
+            f = Base.invokelatest(getglobal, ub_mod, name)
+            for args in execs
+                expected = Base.invokelatest(f, args...)
+                got = Base.invokelatest(UnifiedIR.interpret, m.ir, f, args...)
+                @test isequal(got, expected)
+            end
+        end
+    end
 end
 
 @testset "undef semantics through the backend" begin

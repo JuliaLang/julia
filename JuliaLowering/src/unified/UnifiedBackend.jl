@@ -82,7 +82,8 @@ using .UnifiedIR: Builder, append_stmt!, open_region!, close_region!, finish!,
 using .JuliaSyntax: SyntaxTree, kind, children, numchildren, is_leaf, @K_str
 
 using .JuliaLowering: expand_forms_1, expand_forms_2, resolve_scopes,
-    convert_closures, Bindings, BindingInfo
+    convert_closures, Bindings, BindingInfo,
+    eval_closure_type, reserve_module_binding_i
 
 export lower_to_ir, LoweredMethod, UnsupportedForm
 
@@ -122,16 +123,32 @@ Base.show(io::IO, m::LoweredMethod) =
           UnifiedIR.nstmts(m.ir), " stmts)")
 
 include("emit.jl")
+include("materialize.jl")
 
 """
     lower_to_ir(mod::Module, src::String; filename="none") -> Vector{LoweredMethod}
 
-Parse `src`, drive JuliaLowering's pipeline (macro expansion → desugaring →
-scope analysis → closure conversion) unchanged, then lower each method lambda
-found in the resulting top-level thunks directly to `UnifiedIR.IR` (structured
-region form, no goto detour). Every produced IR is checked with
-`UnifiedIR.verify_ir(ir; level=1)` before being returned.
+Parse `src`, drive JuliaLowering's front half (macro expansion → desugaring →
+scope analysis) unchanged, then lower each method lambda directly to
+`UnifiedIR.IR` (structured region form, no goto detour).
+
+The DEFAULT path consumes the PRE-closure-conversion tree: supported local
+functions become real `closure` region ops, captured locals become
+`cell_shared` plans, the shared promotion fixpoint decides captures
+structurally, and residual closure regions are materialized back to runtime
+closure types + extracted method IRs (materialize.jl). A top-level statement
+containing any v1-bailed construct (see emit.jl's region-mode block comment)
+falls back — loudly, per the fidelity rule — to the eager path through
+`convert_closures`, which lowers exactly as before. Every produced IR is
+checked with `UnifiedIR.verify_ir(ir; level=1)` before being returned.
 """
+# Diagnostic path counters: top-level statements lowered through the
+# closure-region path vs the eager `convert_closures` fallback. Tests read
+# them to assert coverage; `reset_path_counts!()` zeroes both.
+const REGION_STMTS = Ref(0)
+const EAGER_STMTS = Ref(0)
+reset_path_counts!() = (REGION_STMTS[] = 0; EAGER_STMTS[] = 0; nothing)
+
 function lower_to_ir(mod::Module, src::String; filename::AbstractString = "none")
     out = LoweredMethod[]
     st0 = JuliaSyntax.parseall(SyntaxTree, src; filename = String(filename))
@@ -141,8 +158,19 @@ function lower_to_ir(mod::Module, src::String; filename::AbstractString = "none"
         ctx1, ex1 = expand_forms_1(mod, st, false, world)
         ctx2, ex2 = expand_forms_2(ctx1, ex1)
         ctx3, ex3 = resolve_scopes(ctx2, ex2)
-        ctx4, ex4 = convert_closures(ctx3, ex3)
-        collect_methods!(out, ctx4, ex4)
+        ms = LoweredMethod[]
+        try
+            collect_methods_region!(ms, ctx3, ex3)
+            REGION_STMTS[] += 1
+        catch err
+            err isa UnsupportedForm || rethrow()
+            # per-statement fallback to the eager (convert_closures) path
+            empty!(ms)
+            ctx4, ex4 = convert_closures(ctx3, ex3)
+            collect_methods!(ms, ctx4, ex4)
+            EAGER_STMTS[] += 1
+        end
+        append!(out, ms)
     end
     for m in out
         verify_ir(m.ir; level = 1)
@@ -173,6 +201,29 @@ function collect_methods!(out::Vector{LoweredMethod}, jlctx, ex)
     (k == K"inert" || k == K"inert_syntaxtree" || k == K"quote") && return nothing
     for c in children(ex)
         collect_methods!(out, jlctx, c)
+    end
+    return nothing
+end
+
+# The region-path collector walks the PRE-conversion thunk: top-frame method
+# forms lower through the closure-region path (nested closures are handled
+# inside emit_method_region!, not lifted to toplevel yet).
+function collect_methods_region!(out::Vector{LoweredMethod}, jlctx, ex)
+    k = kind(ex)
+    if k == K"method" && numchildren(ex) == 3 && kind(ex[3]) == K"lambda"
+        emit_method_region!(out, jlctx, ex)
+        return nothing
+    end
+    if k == K"lambda"
+        if ex.is_toplevel_thunk
+            collect_methods_region!(out, jlctx, ex[3])
+        end
+        return nothing
+    end
+    is_leaf(ex) && return nothing
+    (k == K"inert" || k == K"inert_syntaxtree" || k == K"quote") && return nothing
+    for c in children(ex)
+        collect_methods_region!(out, jlctx, c)
     end
     return nothing
 end

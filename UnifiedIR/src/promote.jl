@@ -2241,6 +2241,7 @@ struct CapturePlan
     cell::StmtId
     sites::Vector{StmtId}                       # home-frame closure ops
     indef::Vector{Pair{StmtId,Int}}             # in-deferred get => site index
+    indefdefs::Vector{StmtId}                   # in-deferred cell_isdefined
 end
 
 # Scratch copy for the (c) judgment: same statement/region/constant ids, no
@@ -2295,6 +2296,8 @@ function promote_capture_cells!(ir::IR; boundary::Symbol = :deferred)
         home = activation_root(ir, stmt_region(ir, c))
         writes = StmtId[]                  # home cell_set / cell_new
         indefgets = StmtId[]
+        indefdefs = StmtId[]               # in-deferred cell_isdefined (the
+                                           #   emitter's checked-read guards)
         ok = true
         each_ssa_use(ir) do site, used
             (ok && used == c) || return
@@ -2309,7 +2312,12 @@ function promote_capture_cells!(ir::IR; boundary::Symbol = :deferred)
             elseif k === K"cell_get"
                 crossing ? push!(indefgets, u) : nothing
             elseif k === K"cell_isdefined"
-                crossing && (ok = false)   # call-time definedness observation
+                # a call-time definedness observation: under (a)+(b) the
+                # definedness at call time equals the definedness at the
+                # creation site, and (c)'s resolution PROVES definite
+                # assignment there — so on commit these rewrite to `true`
+                # (the guard can never fire); unresolved cells keep them
+                crossing && push!(indefdefs, u)
             else # cell_set / cell_new
                 crossing && (ok = false)   # criterion (a)
                 push!(writes, u)
@@ -2327,6 +2335,12 @@ function promote_capture_cells!(ir::IR; boundary::Symbol = :deferred)
             si === nothing && (push!(sites, C); si = length(sites))
             push!(indef, g => si)
         end
+        # every in-deferred isdefined must also sit under a known site (its
+        # truth is proven per creation site)
+        for d in indefdefs
+            C = _home_site(ir, d, home)
+            (isnull(C) || findfirst(==(C), sites) === nothing) && (ok = false; break)
+        end
         ok || continue
         # criterion (b) at every site, against every home write
         declr = stmt_region(ir, c)
@@ -2343,7 +2357,7 @@ function promote_capture_cells!(ir::IR; boundary::Symbol = :deferred)
             ok || break
         end
         ok || continue
-        push!(plans, CapturePlan(c, sites, indef))
+        push!(plans, CapturePlan(c, sites, indef, indefdefs))
     end
     isempty(plans) && return 0
 
@@ -2353,6 +2367,10 @@ function promote_capture_cells!(ir::IR; boundary::Symbol = :deferred)
         for (g, _) in p.indef
             replace_uses_where!(_ -> true, work, g => vop(work, nothing))
             delete_stmt!(work, g)
+        end
+        for d in p.indefdefs
+            replace_uses_where!(_ -> true, work, d => op_inline(true))
+            delete_stmt!(work, d)
         end
         replace_stmt!(work, p.cell, K"cell", operands(work, p.cell)...)
         for (si, C) in enumerate(p.sites)
@@ -2384,6 +2402,11 @@ function promote_capture_cells!(ir::IR; boundary::Symbol = :deferred)
         for (g, si) in p.indef
             replace_uses_where!(_ -> true, ir, g => op_stmt(probes[si]))
             delete_stmt!(ir, g)
+        end
+        for d in p.indefdefs
+            # proven definitely assigned at the site; no write can intervene
+            replace_uses_where!(_ -> true, ir, d => op_inline(true))
+            delete_stmt!(ir, d)
         end
         replace_stmt!(ir, p.cell, K"cell", operands(ir, p.cell)...)
         _trace!(:capture_value, p.cell, p.cell)

@@ -36,17 +36,33 @@ mutable struct VarScan
     reads_dominated::Bool   # every read dominated by the first assignment
     has_isdefined::Bool
     read::Bool
+    has_decl::Bool          # a lexical K"local" declaration exists (region mode)
+    frame::Int              # lambda frame of every event (-1 unset, -2 mixed):
+                            #   ownership for bindings scope analysis keeps out
+                            #   of locals_capt (is_ssa temps; region mode)
 end
-VarScan() = VarScan(0, nothing, 0, true, false, false)
+VarScan() = VarScan(0, nothing, 0, true, false, false, false, -1)
 
 mutable struct ScanState
     vars::Dict{Int,VarScan}
     seq::Int
     tok::Int
+    region::Bool            # pre-conversion (closure-region) mode: descend
+                            #   into method lambdas as conditional subpaths
+    curframe::Int           # current lambda frame (0 = the method being
+                            #   emitted; nested = the lambda's node id)
 end
-ScanState() = ScanState(Dict{Int,VarScan}(), 0, 0)
+ScanState(; region::Bool = false) = ScanState(Dict{Int,VarScan}(), 0, 0, region, 0)
 
-getvar!(s::ScanState, id::Integer) = get!(VarScan, s.vars, Int(id))
+function getvar!(s::ScanState, id::Integer)
+    v = get!(VarScan, s.vars, Int(id))
+    if v.frame == -1
+        v.frame = s.curframe
+    elseif v.frame != s.curframe
+        v.frame = -2
+    end
+    return v
+end
 
 function subpath(s::ScanState, path::Vector{Int})
     s.tok += 1
@@ -132,13 +148,34 @@ function scan!(s::ScanState, ex, path::Vector{Int})
     elseif k == K"lambda" || k == K"inert" || k == K"inert_syntaxtree" ||
            k == K"quote" || k == K"meta" || k == K"loopinfo"
         return nothing
+    elseif k == K"method_defs" && s.region
+        # region mode: sig svecs are skipped at emission (they run at
+        # definition toplevel, as in convert_closures' lifting); only the
+        # method lambda BODIES contribute — as conditional, deferred subpaths
+        for c in children(ex)
+            _scan_method_lambdas!(s, c, path)
+        end
+        return nothing
     elseif k == K"method" || k == K"opaque_closure_method"
         for c in children(ex)
-            kind(c) == K"lambda" || scan!(s, c, path)
+            if kind(c) == K"lambda"
+                if s.region
+                    prev = s.curframe
+                    s.curframe = Int(getfield(c, :_id))
+                    scan!(s, c[3], subpath(s, path))
+                    s.curframe = prev
+                end
+            else
+                scan!(s, c, path)
+            end
         end
         return nothing
     # pre-closure-conversion forms (capture-analysis mode; absent afterwards)
     elseif k == K"local" || k == K"global"
+        if s.region && k == K"local" && numchildren(ex) >= 1 &&
+           kind(ex[1]) == K"BindingId"
+            getvar!(s, ex[1].var_id).has_decl = true
+        end
         return nothing                       # declarations are not reads
     elseif k == K"decl"
         numchildren(ex) >= 2 && scan!(s, ex[2], path)   # type expr only
@@ -161,9 +198,59 @@ function scan!(s::ScanState, ex, path::Vector{Int})
     end
 end
 
+function _scan_method_lambdas!(s::ScanState, ex, path::Vector{Int})
+    k = kind(ex)
+    if k == K"lambda"
+        prev = s.curframe
+        s.curframe = Int(getfield(ex, :_id))
+        scan!(s, ex[3], subpath(s, path))
+        s.curframe = prev
+    elseif !is_leaf(ex) && !(k == K"inert" || k == K"inert_syntaxtree" || k == K"quote")
+        for c in children(ex)
+            _scan_method_lambdas!(s, c, path)
+        end
+    end
+    return nothing
+end
+
 struct VarPlan
-    mode::Symbol      # :arg | :ssa | :cell | :foreign (analysis mode only)
+    mode::Symbol      # :arg | :ssa | :cell | :shared (captured, region mode)
+                      #   | :foreign (analysis mode only)
     checked::Bool     # cell reads need the §6 undef guard
+    decl::Bool        # region mode: a lexical K"local" exists — shared cells
+                      #   are created THERE (fresh box per execution)
+    frame::Int        # region mode: owning lambda frame for bindings scope
+                      #   analysis keeps out of locals_capt (is_ssa temps)
+end
+VarPlan(mode::Symbol, checked::Bool) = VarPlan(mode, checked, false, 0)
+VarPlan(mode::Symbol, checked::Bool, decl::Bool) = VarPlan(mode, checked, decl, 0)
+
+"""
+Region-mode plan for a captured binding (§5.7). The emitter does not decide
+captures: a mutable captured local becomes a `cell_shared` plan and the
+promotion fixpoint decides what may be by-value. Two structural cases skip
+the cell entirely: an unassigned captured argument (the region_arg value is
+the capture) and an assigned-once, read-dominated captured local (the SSA
+value is referenced from inside the deferred region by visibility — a
+structural value capture). A closure binding captured by its OWN lambdas
+(recursion) always takes the shared cell: §5.1 clause 3 makes the closure
+value invisible inside its own region, so self-reference needs the Box'd
+fallback until the `rec` binder exists.
+"""
+function plan_captured(jlctx, binfo, id::Int, v::VarScan)
+    selfrec = false
+    cb = get(jlctx.closure_bindings, id, nothing)
+    if cb !== nothing
+        selfrec = any(lb -> get(lb.locals_capt, id, false), cb.lambdas)
+    end
+    if !selfrec && binfo.kind === :local && v.nassign == 1 && v.reads_dominated &&
+       !v.has_isdefined
+        return VarPlan(:ssa, false)
+    elseif !selfrec && binfo.kind === :argument && v.nassign == 0
+        return VarPlan(:arg, false)
+    else
+        return VarPlan(:shared, !v.reads_dominated, v.has_decl)
+    end
 end
 
 # ---------------------------------------------------------------------------
@@ -207,6 +294,52 @@ AnalysisState(candidates, foreign, capture_sets) =
                   Vector{Int}[], StmtId[], Dict{Int,RegionId}(), Set{Int}())
 
 # ---------------------------------------------------------------------------
+# Closure-region mode (§5.7): the same emitter driven over the
+# PRE-closure-conversion tree, emitting REAL `closure` ops for supported
+# local-function forms. Captured locals get `cell_shared` plans (the emitter
+# does NOT decide captures — `UnifiedIR.promote_fixpoint!` incl.
+# `promote_capture_cells!` decides what may be by-value, the same way
+# ordinary locals already work); assigned-once/dominating captured locals
+# stay plain SSA values, which in-deferred reads reference by visibility (a
+# structural value capture). Residual closure ops and shared cells are
+# turned back into runtime closure types by `materialize_closures!`
+# (materialize.jl).
+#
+# v1 bails (per-construct, loudly, to the eager convert_closures path —
+# fidelity rule: never mis-lower): multi-method local functions and kwargs
+# closures (closure bindings with more than one lambda), local methods with
+# static parameters (`where`), varargs local functions, declared return
+# types on local functions, opaque closures, `captured_local`, closures
+# whose signatures reference locals, and closures capturing an enclosing
+# frame's static parameter.
+# ---------------------------------------------------------------------------
+
+mutable struct RegionState{JC}
+    jlctx::JC                                # post-resolve_scopes context
+    methodtab::Dict{Int,Vector{Any}}         # FRAME-local: binding id -> [(sig, lambda)]
+    created::Set{Int}                        # closure bindings already instantiated
+end
+RegionState(jlctx) = RegionState(jlctx, Dict{Int,Vector{Any}}(), Set{Int}())
+
+"""
+Annotation-class sparse statement -> binding-id column (region mode):
+`cellbind` tags cells, `clbind` tags closure ops. Annotation class survives
+compaction (rekeyed) and semantic events, unlike the pre-fixpoint cellmap,
+so materialization can read binding identities off the promoted IR.
+"""
+struct BindCol
+    inner::UnifiedIR.SparseCol{Int}
+end
+BindCol() = BindCol(UnifiedIR.SparseCol{Int}())
+UnifiedIR.semclass(::Type{BindCol}) = UnifiedIR.Annotation()
+UnifiedIR.col_grow!(::BindCol, n::Integer, oldlen::Integer) = nothing
+UnifiedIR.col_compact!(c::BindCol, old_of_new::Vector{Int32}) =
+    (UnifiedIR.col_compact!(c.inner, old_of_new); c)
+UnifiedIR.col_clear!(c::BindCol) = UnifiedIR.col_clear!(c.inner)
+Base.getindex(c::BindCol, s) = c.inner[s]     # nothing when absent
+Base.setindex!(c::BindCol, v, s) = (c.inner[s] = v)
+
+# ---------------------------------------------------------------------------
 # Emitter context
 # ---------------------------------------------------------------------------
 
@@ -237,6 +370,7 @@ mutable struct EmitCtx{JC}
                                         #   provenance fallback for statements
                                         #   emitted without an explicit `src`
     ana::Union{Nothing,AnalysisState}   # capture-analysis mode (see above)
+    region::Union{Nothing,RegionState}  # closure-region mode (see above)
 end
 
 cur(ctx::EmitCtx) = ctx.states[end]
@@ -278,8 +412,9 @@ function stmt!(ctx::EmitCtx, k, args...; type = Any, src = nothing)
     return s
 end
 
-function open_arm!(ctx::EmitCtx, owner::StmtId; kind = REGION_ARM)
-    r = open_region!(ctx.b, owner; kind)
+function open_arm!(ctx::EmitCtx, owner::StmtId; kind = REGION_ARM,
+                   activation = UnifiedIR.ACT_IMMEDIATE)
+    r = open_region!(ctx.b, owner; kind, activation)
     push!(ctx.states, RegionSt(false))
     return r
 end
@@ -315,6 +450,23 @@ function emit_method(jlctx, mex)::LoweredMethod
     return LoweredMethod(name, nargs, slotnames, ir)
 end
 
+"""
+Region-path method emission (pre-conversion input): emit with real closure
+ops, run the shared promotion fixpoint (lowering configuration — maybe-undef
+stays memory), then materialize residual closure regions back to runtime
+closure types + extracted method IRs (appended to `out` after the enclosing
+method, mirroring convert_closures' output order).
+"""
+function emit_method_region!(out::Vector{LoweredMethod}, jlctx, mex)
+    name = method_name(jlctx, mex[1])
+    ir, nargs, slotnames, ectx = emit_lambda(jlctx, mex[3], name; region = true)
+    UnifiedIR.promote_fixpoint!(ir; include_undef = false)
+    extras = materialize_closures!(jlctx, ir, name)
+    push!(out, LoweredMethod(name, nargs, slotnames, ir))
+    append!(out, extras)
+    return nothing
+end
+
 function method_name(jlctx, fname)::Symbol
     k = kind(fname)
     if k == K"BindingId"
@@ -336,7 +488,7 @@ Lower one (non-toplevel) `K"lambda"` to UnifiedIR. Mirrors what linear_ir.jl's
 `analysis::AnalysisState` the emitter runs in capture-analysis mode (see the
 block comment above `CaptureSiteMarker`) over a pre-closure-conversion tree.
 """
-function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing)
+function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing, region::Bool = false)
     kind(lam) == K"lambda" || unsupported(lam, "expected a lambda")
     lam.is_toplevel_thunk && unsupported(lam, "toplevel thunk bodies are not lowered (methods are extracted instead)")
     args = collect(children(lam[1]))
@@ -346,7 +498,11 @@ function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing)
     bindings = jlctx.bindings::Bindings
 
     # ---- pre-pass -----------------------------------------------------
-    sc = ScanState()
+    # In region mode the scan covers nested method-lambda bodies (as
+    # conditional subpaths), so the flat maps hold plans for EVERY frame —
+    # binding ids are globally unique. Storage is still created per frame
+    # (cells at each frame's entry / declaration points).
+    sc = ScanState(; region)
     scan!(sc, body, Int[])
     rett_ex !== nothing && scan!(sc, rett_ex, Int[])
 
@@ -357,13 +513,17 @@ function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing)
     plans = Dict{Int,VarPlan}()
     for (id, v) in sc.vars
         binfo = bindings.info[id]
-        if binfo.kind === :argument
-            plans[id] = v.nassign > 0 ? VarPlan(:cell, false) : VarPlan(:arg, false)
-        elseif binfo.kind === :local
+        binfo.kind in (:argument, :local) || continue
+        if region && binfo.is_captured
+            plans[id] = plan_captured(jlctx, binfo, id, v)
+        elseif binfo.kind === :argument
+            plans[id] = v.nassign > 0 ? VarPlan(:cell, false, false, v.frame) :
+                                        VarPlan(:arg, false)
+        else # :local
             if v.nassign == 1 && v.reads_dominated && !v.has_isdefined
                 plans[id] = VarPlan(:ssa, false)
             else
-                plans[id] = VarPlan(:cell, !v.reads_dominated)
+                plans[id] = VarPlan(:cell, !v.reads_dominated, v.has_decl, v.frame)
             end
         end
         # :global / :static_parameter bindings are not frame storage
@@ -387,12 +547,18 @@ function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing)
 
     # ---- builder setup ------------------------------------------------
     # the provenance universe (§3.7 Level 2): every emitted statement carries
-    # a :source cursor into the lowering syntax graph
-    b = Builder(name = name, cols = (source = UnifiedIR.ProvenanceCol(),))
+    # a :source cursor into the lowering syntax graph; region mode adds the
+    # cell/closure -> binding columns materialization reads (they survive
+    # compaction, unlike the pre-fixpoint cellmap)
+    cols = region ?
+        (source = UnifiedIR.ProvenanceCol(), cellbind = BindCol(), clbind = BindCol()) :
+        (source = UnifiedIR.ProvenanceCol(),)
+    b = Builder(name = name, cols = cols)
     ctx = EmitCtx(b, jlctx, bindings, plans, Dict{Int,Operand}(),
                   Dict{Int,StmtId}(), Dict{Int,Int}(), StmtId[],
                   Dict{String,BreakTarget}(), [RegionSt(false)],
-                  nothing, jlctx.mod::Module, lam, analysis)
+                  nothing, jlctx.mod::Module, lam, analysis,
+                  region ? RegionState(jlctx) : nothing)
 
     slotnames = Symbol[]
     argstmts = Dict{Int,StmtId}()
@@ -409,21 +575,19 @@ function emit_lambda(jlctx, lam, name::Symbol; analysis = nothing)
         end
     end
 
-    # frame cells for :cell-planned bindings, created at entry (region 1)
-    for id in sort!(collect(keys(plans)))
-        p = plans[id]
-        p.mode === :cell || continue
-        c = stmt!(ctx, UnifiedIR.K"cell", Any; type = Any)
-        ctx.cellmap[id] = c
-        if haskey(argstmts, id)   # assigned argument: initialize from the arg
-            stmt!(ctx, UnifiedIR.K"cell_set", c, argstmts[id])
-        end
-    end
+    # frame storage for THIS frame's bindings, created at entry (region 1);
+    # nested frames create their own at their body entries. Shared cells
+    # with a lexical declaration are created AT the declaration instead — a
+    # fresh shared box per execution (per-iteration rebinding, the
+    # cancellation shape of promote_capture_cells!'s backedge rule).
+    emit_frame_storage!(ctx, lam, argstmts)
 
     for (i, sp) in enumerate(sparams)
         kind(sp) == K"BindingId" || continue
         ctx.sparams[Int(sp.var_id)] = i
     end
+
+    region && region_prescan!(ctx, body)
 
     if rett_ex !== nothing
         rt = emit_value(ctx, rett_ex)
@@ -578,6 +742,12 @@ function _compile(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing}
         return compile(ctx, ex[1], needs_value)
     elseif k == K"static_parameter"
         return UnifiedIR.op_sparam(Int(ex.var_id))
+    elseif ctx.region !== nothing && (k == K"local" || k == K"global" || k == K"decl" ||
+           k == K"function_decl" || k == K"function_type" || k == K"method_defs" ||
+           k == K"method" || k == K"_opaque_closure" || k == K"lambda" ||
+           k == K"opaque_closure_method" || k == K"new_opaque_closure" ||
+           k == K"captured_local")
+        return emit_region_form(ctx, ex, k, needs_value)
     elseif ctx.ana !== nothing && (k == K"local" || k == K"global" || k == K"decl" ||
            k == K"function_decl" || k == K"function_type" || k == K"method_defs" ||
            k == K"method" || k == K"_opaque_closure" || k == K"lambda")
@@ -757,6 +927,336 @@ function _ana_check_opaque(ana::AnalysisState, ex)
 end
 
 # ---------------------------------------------------------------------------
+# Closure-region forms (pre-conversion tree; `ctx.region` set)
+# ---------------------------------------------------------------------------
+
+setbind!(ctx::EmitCtx, col::Symbol, s::StmtId, id::Int) =
+    (UnifiedIR.getattr(ctx.b.ir, col)[s] = id; nothing)
+
+"""
+Create this frame's storage at its entry: frame cells for `:cell` plans,
+shared cells for `:shared` plans — except declared shared locals, whose
+cell_shared is emitted AT the `K"local"` site (a fresh shared box per
+execution: per-iteration rebinding in its structural form). Assigned
+arguments initialize their cell from the region_arg. Nested frames call
+this again at their own body entries (region mode); outside region mode all
+planned cells belong to the one frame being emitted.
+"""
+function emit_frame_storage!(ctx::EmitCtx, lam, argstmts::Dict{Int,StmtId};
+                             frameid::Int = 0)
+    ids = Int[]
+    if ctx.region === nothing
+        append!(ids, keys(ctx.plans))
+    else
+        # ownership: arguments and locals through the lambda's locals_capt
+        # (capt == false means native here); bindings scope analysis keeps
+        # OUT of locals_capt (is_ssa desugaring temps — never capturable)
+        # belong to the single frame the scan saw their events in
+        lc = lam.lambda_bindings.locals_capt
+        for id in keys(ctx.plans)
+            native = haskey(argstmts, id) ? true :
+                     haskey(lc, id)       ? (lc[id] == false) :
+                                            (ctx.plans[id].frame == frameid)
+            native && push!(ids, id)
+        end
+    end
+    for id in sort!(ids)
+        p = get(ctx.plans, id, nothing)
+        p === nothing && continue
+        haskey(ctx.cellmap, id) && continue   # already created (outer frame)
+        if p.mode === :cell
+            c = stmt!(ctx, UnifiedIR.K"cell", Any; type = Any)
+            ctx.region === nothing || setbind!(ctx, :cellbind, c, id)
+            ctx.cellmap[id] = c
+            haskey(argstmts, id) &&   # assigned argument: initialize from the arg
+                stmt!(ctx, UnifiedIR.K"cell_set", c, argstmts[id])
+        elseif p.mode === :shared
+            (p.decl && !haskey(argstmts, id)) && continue   # created at K"local"
+            c = stmt!(ctx, UnifiedIR.K"cell_shared", Any; type = Any)
+            setbind!(ctx, :cellbind, c, id)
+            ctx.cellmap[id] = c
+            haskey(argstmts, id) &&
+                stmt!(ctx, UnifiedIR.K"cell_set", c, argstmts[id])
+        end
+    end
+    return nothing
+end
+
+"""
+Pre-scan one frame's body (not descending into nested lambdas) registering
+closure method lambdas: `method_defs` for a closure binding contributes
+(signature expr, lambda) to the frame's method table, consumed at the
+binding's `function_decl`. The signature svecs are NOT emitted in the frame
+(convert_closures lifts them to definition toplevel); their legality is
+checked at the creation site.
+"""
+function region_prescan!(ctx::EmitCtx, ex)
+    st = ctx.region::RegionState
+    k = kind(ex)
+    if k == K"method_defs"
+        nm = ex[1]
+        kind(nm) == K"BindingId" || unsupported(ex, "method_defs on a non-binding")
+        id = Int(nm.var_id)
+        haskey(st.jlctx.closure_bindings, id) ||
+            unsupported(ex, "method definition for a non-closure binding inside a method body")
+        entry = get!(() -> Any[], st.methodtab, id)
+        for mb in children(ex[2])
+            _region_register_method!(ctx, entry, mb)
+        end
+        return nothing
+    elseif k == K"lambda" || is_leaf(ex) || k == K"inert" ||
+           k == K"inert_syntaxtree" || k == K"quote"
+        return nothing
+    else
+        for c in children(ex)
+            region_prescan!(ctx, c)
+        end
+        return nothing
+    end
+end
+
+function _region_register_method!(ctx::EmitCtx, entry::Vector{Any}, mb)
+    kind(mb) == K"block" || unsupported(mb, "unrecognized method_defs entry")
+    sigex = nothing
+    lam = nothing
+    for c in children(mb)
+        ck = kind(c)
+        if ck == K"=" && numchildren(c) == 2
+            sigex = c[2]
+        elseif ck == K"method" && numchildren(c) == 3
+            lam === nothing || unsupported(c, "multiple methods in one method_defs entry")
+            lam = c[3]
+            kind(lam) == K"lambda" || unsupported(c, "method body is not a lambda")
+        elseif ck == K"removable" || ck == K"TOMBSTONE"
+            # sig ssa keep-alive; no effect here
+        else
+            unsupported(c, "unrecognized method_defs entry")
+        end
+    end
+    lam === nothing && unsupported(mb, "method_defs entry without a method")
+    push!(entry, (sigex, lam))
+    return nothing
+end
+
+# The signature svec runs at definition toplevel in the eager path; skipping
+# it here is only sound when it cannot observe the frame. Varargs methods
+# additionally change the calling convention the closure op does not model
+# in v1.
+function _region_check_sig(ctx::EmitCtx, ex)
+    ex === nothing && return nothing
+    k = kind(ex)
+    if k == K"function_type"
+        return nothing                       # names the closure TYPE
+    elseif k == K"BindingId"
+        bi = ctx.bindings.info[ex.var_id]
+        bi.kind in (:local, :argument) &&
+            unsupported(ex, "closure signature references a local")
+        bi.kind === :static_parameter &&
+            unsupported(ex, "closure signature references a static parameter")
+        return nothing
+    elseif (k == K"core" || k == K"top") && ex.name_val == "Vararg"
+        unsupported(ex, "varargs local function")
+    elseif is_leaf(ex) || k == K"inert" || k == K"inert_syntaxtree" || k == K"quote"
+        return nothing
+    else
+        for c in children(ex)
+            _region_check_sig(ctx, c)
+        end
+        return nothing
+    end
+end
+
+struct FrameSave
+    handler_exc::Vector{StmtId}
+    break_targets::Dict{String,BreakTarget}
+    sparams::Dict{Int,Int}
+    rettype::Union{Nothing,Operand}
+    methodtab::Dict{Int,Vector{Any}}
+end
+
+# Deferred bodies execute in their own activation: handlers, break targets,
+# static parameters, and the declared return type of the ENCLOSING frame
+# must not be visible inside (reads of an enclosing static parameter bail
+# via the emptied map — an UnsupportedForm, not a mis-lowering).
+function enter_frame!(ctx::EmitCtx)
+    st = ctx.region::RegionState
+    save = FrameSave(ctx.handler_exc, ctx.break_targets, ctx.sparams,
+                     ctx.rettype, st.methodtab)
+    ctx.handler_exc = StmtId[]
+    ctx.break_targets = Dict{String,BreakTarget}()
+    ctx.sparams = Dict{Int,Int}()
+    ctx.rettype = nothing
+    st.methodtab = Dict{Int,Vector{Any}}()
+    return save
+end
+
+function exit_frame!(ctx::EmitCtx, save::FrameSave)
+    st = ctx.region::RegionState
+    ctx.handler_exc = save.handler_exc
+    ctx.break_targets = save.break_targets
+    ctx.sparams = save.sparams
+    ctx.rettype = save.rettype
+    st.methodtab = save.methodtab
+    return nothing
+end
+
+"Emit a real `closure` op for a supported single-method local function."
+function emit_closure_decl!(ctx::EmitCtx, ex, id::Int)::Union{Operand,Nothing}
+    st = ctx.region::RegionState
+    id in st.created && return nothing_op(ctx)   # later decls are no-ops
+    cb = get(st.jlctx.closure_bindings, id, nothing)
+    cb === nothing &&
+        unsupported(ex, "function_decl for a global method inside a method body")
+    length(cb.lambdas) == 1 ||
+        unsupported(ex, "multi-method local function (or keyword-argument closure)")
+    entry = get(st.methodtab, id, nothing)
+    (entry === nothing || isempty(entry)) &&
+        unsupported(ex, "closure declaration without a registered method")
+    length(entry) == 1 || unsupported(ex, "multi-method local function")
+    sigex, lam = entry[1]
+    numchildren(lam[2]) == 0 || unsupported(ex, "local method with static parameters")
+    numchildren(lam) >= 4 && unsupported(ex, "declared return type on a local function")
+    _region_check_sig(ctx, sigex)
+    push!(st.created, id)
+
+    args = collect(children(lam[1]))
+    isempty(args) && unsupported(ex, "closure lambda without #self#")
+    selfarg = args[1]
+    if kind(selfarg) == K"BindingId"
+        Int(selfarg.var_id) == Int(lam.lambda_bindings.self) ||
+            unsupported(ex, "closure lambda whose first argument is not #self#")
+        # self-reference goes through the captured binding (shared-cell
+        # fallback); a direct #self# use has no region representation in v1
+        haskey(ctx.plans, Int(selfarg.var_id)) &&
+            unsupported(ex, "closure lambda references #self# directly")
+    elseif kind(selfarg) != K"Placeholder"
+        unsupported(ex, "closure lambda whose first argument is not #self#")
+    end
+
+    f = stmt!(ctx, UnifiedIR.K"closure"; type = Any, src = ex)
+    setbind!(ctx, :clbind, f, id)
+    open_arm!(ctx, f; kind = UnifiedIR.REGION_BODY,
+              activation = UnifiedIR.ACT_DEFERRED)
+    save = enter_frame!(ctx)
+    try
+        argstmts = Dict{Int,StmtId}()
+        for a in args[2:end]
+            s = append_stmt!(ctx.b, UnifiedIR.K"region_arg"; type = Any,
+                             debug = srcloc(a))
+            record_source!(ctx, s, a)
+            if kind(a) == K"BindingId"
+                pid = Int(a.var_id)
+                argstmts[pid] = s
+                p = get(ctx.plans, pid, nothing)
+                if p === nothing
+                    ctx.plans[pid] = VarPlan(:arg, false)
+                    ctx.ssamap[pid] = op_stmt(s)
+                elseif p.mode === :arg
+                    ctx.ssamap[pid] = op_stmt(s)
+                end
+            end
+        end
+        emit_frame_storage!(ctx, lam, argstmts;
+                            frameid = Int(getfield(lam, :_id)))
+        region_prescan!(ctx, lam[3])
+        v = emit_value(ctx, lam[3])
+        v === nothing || emit_return!(ctx, v, lam[3])
+    finally
+        exit_frame!(ctx, save)
+    end
+    close_arm!(ctx)
+    assign_binding_region!(ctx, ex, id, op_stmt(f))
+    return nothing_op(ctx)
+end
+
+function assign_binding_region!(ctx::EmitCtx, ex, id::Int, v::Operand)
+    p = get(ctx.plans, id, nothing)
+    p === nothing && return nothing            # never read: no storage planned
+    if p.mode === :ssa
+        ctx.ssamap[id] = v
+    elseif p.mode === :cell || p.mode === :shared
+        stmt!(ctx, UnifiedIR.K"cell_set", ctx.cellmap[id], v; src = ex)
+    else
+        unsupported(ex, "closure bound to an argument slot")
+    end
+    return nothing
+end
+
+"""
+Typed-local assignment conversion (region mode replicates
+`convert_for_type_decl`, which the eager path performs in convert_closures):
+store `isa(v, T) ? v : typeassert(convert(T, v), T)`; the expression's value
+stays the ORIGINAL rhs (`a = b` returns exactly `b`).
+"""
+function emit_typed_store(ctx::EmitCtx, ex, binfo, v::Operand)::Union{Operand,Nothing}
+    tex = JuliaLowering.binding_type_ex(ctx.jl, binfo)
+    t = emit_value(ctx, tex)
+    t === nothing && return nothing
+    c = stmt!(ctx, UnifiedIR.K"call", GlobalRef(Core, :isa), v, t; src = ex)
+    s = stmt!(ctx, UnifiedIR.K"if", c; src = ex)
+    open_arm!(ctx, s)
+    stmt!(ctx, UnifiedIR.K"result", v)
+    close_arm!(ctx)
+    open_arm!(ctx, s)
+    cv = stmt!(ctx, UnifiedIR.K"call", GlobalRef(Base, :convert), t, v; src = ex)
+    ta = stmt!(ctx, UnifiedIR.K"call", GlobalRef(Core, :typeassert), cv, t; src = ex)
+    stmt!(ctx, UnifiedIR.K"result", ta)
+    close_arm!(ctx)
+    return op_stmt(s)
+end
+
+function emit_region_form(ctx::EmitCtx, ex, k, needs_value::Bool)::Union{Operand,Nothing}
+    if k == K"local"
+        c1 = ex[1]
+        if kind(c1) == K"BindingId"
+            id = Int(c1.var_id)
+            p = get(ctx.plans, id, nothing)
+            if p !== nothing && p.mode === :shared
+                if !haskey(ctx.cellmap, id)
+                    cell = stmt!(ctx, UnifiedIR.K"cell_shared", Any; type = Any, src = ex)
+                    setbind!(ctx, :cellbind, cell, id)
+                    ctx.cellmap[id] = cell
+                end
+                # re-execution of this statement yields a fresh shared box —
+                # the per-iteration rebinding closures rely on
+            elseif p !== nothing && p.mode === :cell
+                haskey(ctx.cellmap, id) &&
+                    stmt!(ctx, UnifiedIR.K"cell_new", ctx.cellmap[id]; src = ex)
+            end
+        end
+        return nothing_op(ctx)
+    elseif k == K"global"
+        unsupported(ex, "global declaration inside a method body")
+    elseif k == K"decl"
+        # typed-local declaration: binding type recorded by scope analysis;
+        # the type is (re)evaluated per assignment (as in convert_closures —
+        # the decl itself has no runtime effect for locals)
+        c1 = ex[1]
+        kind(c1) == K"BindingId" || unsupported(ex, "decl target")
+        ctx.bindings.info[c1.var_id].kind in (:local, :argument) ||
+            unsupported(ex, "non-local decl inside a method body")
+        return nothing_op(ctx)
+    elseif k == K"function_decl"
+        f = ex[1]
+        kind(f) == K"BindingId" || unsupported(ex, "function_decl target")
+        return emit_closure_decl!(ctx, ex, Int(f.var_id))
+    elseif k == K"method_defs"
+        nm = ex[1]
+        st = ctx.region::RegionState
+        (kind(nm) == K"BindingId" &&
+         haskey(st.jlctx.closure_bindings, Int(nm.var_id))) ||
+            unsupported(ex, "method_defs for a non-closure binding")
+        return nothing_op(ctx)   # bodies deferred; sigs lifted to toplevel
+    elseif k == K"method"
+        unsupported(ex, "method form inside a method body")
+    elseif k == K"function_type"
+        unsupported(ex, "function_type outside a lifted signature")
+    else  # _opaque_closure / bare lambda / captured_local / opaque_closure_method
+        unsupported(ex)
+    end
+end
+
+# ---------------------------------------------------------------------------
 # Variables
 # ---------------------------------------------------------------------------
 
@@ -778,8 +1278,9 @@ function read_binding(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothin
     if p.mode === :foreign
         # captured from an enclosing frame: an unknown (but defined) value
         return op_stmt(stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE); src = ex))
-    elseif p.mode === :cell
-        c = ctx.cellmap[id]
+    elseif p.mode === :cell || p.mode === :shared
+        c = get(ctx.cellmap, id, nothing)
+        c === nothing && unsupported(ex, "read of $(binfo.name) before its declaration")
         if p.checked
             d = stmt!(ctx, UnifiedIR.K"cell_isdefined", c; type = Bool, src = ex)
             stmt!(ctx, UnifiedIR.K"throw_undef_if_not", d, Symbol(binfo.name); src = ex)
@@ -826,10 +1327,20 @@ function emit_assign(ctx::EmitCtx, ex, needs_value::Bool)::Union{Operand,Nothing
             p = get(ctx.plans, id, nothing)
             p === nothing &&
                 error("UnifiedBackend internal error: unplanned assignment to $(binfo.name)")
+            sv = v
+            if ctx.region !== nothing && binfo.type !== nothing &&
+               (p.mode === :cell || p.mode === :shared || p.mode === :ssa)
+                # typed local: the store takes the converted value; the
+                # expression's value stays the original rhs
+                sv = emit_typed_store(ctx, ex, binfo, v)
+                sv === nothing && return nothing
+            end
             if p.mode === :ssa
-                ctx.ssamap[id] = v
-            elseif p.mode === :cell
-                stmt!(ctx, UnifiedIR.K"cell_set", ctx.cellmap[id], v; src = ex)
+                ctx.ssamap[id] = sv
+            elseif p.mode === :cell || p.mode === :shared
+                c = get(ctx.cellmap, id, nothing)
+                c === nothing && unsupported(ex, "store to $(binfo.name) before its declaration")
+                stmt!(ctx, UnifiedIR.K"cell_set", c, sv; src = ex)
             elseif p.mode === :foreign
                 stmt!(ctx, UnifiedIR.K"call", vop(ctx.b.ir, OPAQUE), v; src = ex)
             else
@@ -1180,7 +1691,7 @@ function emit_isdefined(ctx::EmitCtx, ex)::Union{Operand,Nothing}
                                  type = Bool, src = ex))
         end
         p = get(ctx.plans, id, nothing)
-        if p !== nothing && p.mode === :cell
+        if p !== nothing && (p.mode === :cell || p.mode === :shared)
             return op_stmt(stmt!(ctx, UnifiedIR.K"cell_isdefined", ctx.cellmap[id];
                                  type = Bool, src = ex))
         elseif p !== nothing && p.mode === :foreign
