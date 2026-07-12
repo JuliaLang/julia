@@ -6,15 +6,36 @@
 
 Dense-state DCE: delete unused plain statements whose flags satisfy the
 REMOVABLE mask (§8.2). Region-owning ops are handled by
-`fold_constant_branches!`/editable surgery, not here. Returns count removed.
+`fold_constant_branches!`/editable surgery, not here — with one exception:
+an unused `closure` is removable on its CREATION-site flags alone, because
+effect composition is activation-mode-aware (§3.3): the deferred body's
+effects do not count at the creation site (they surface at call sites), and
+no exit can escape the boundary (L1). Its subtree is tombstoned and the dead
+regions are dropped at the next `compact!`. Returns count removed.
 """
 function dce!(ir::IR)
     check_state(ir, LAYOUT_DENSE, "dce!")
     flush_renames!(ir)
     body = ir.body
     n = Int(body.len)
-    counts = use_counts(ir)
     removed = 0
+    # unused closures first (killing a subtree frees uses of captured values,
+    # which the plain worklist below then collects)
+    changed = true
+    while changed
+        changed = false
+        counts0 = use_counts(ir)
+        for i in 1:n
+            body.kind[i] === K"closure" || continue
+            s = StmtId(i)
+            counts0[s.id] == 0 || continue
+            stmt_flag(ir, s) & FLAG_REMOVABLE == FLAG_REMOVABLE || continue
+            kill_stmt!(ir, s)
+            removed += 1
+            changed = true
+        end
+    end
+    counts = use_counts(ir)
     work = StmtId[]
     for i in n:-1:1
         body.kind[i] === KIND_DELETED && continue

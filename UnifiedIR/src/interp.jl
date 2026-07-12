@@ -16,6 +16,65 @@ struct InterpResult
 end
 
 """
+    UClosure
+
+A first-class closure value produced by executing a `K"closure"` statement
+(§5.7): the deferred body region plus a creation-time snapshot of the free
+slots (`closure_environment`). SSA values are captured by value — multi-shot
+loop correctness falls out of re-snapshotting per creation — and `CellBox`
+objects by reference, so `cell_shared` mutation is visible in both
+directions (the L1 boundary rule bans frame cells from crossing, making the
+snapshot storage-class-correct by construction). Callable: `call %f, args…`
+needs no interpreter changes. `isva` packs the trailing arguments into a
+tuple bound to the last region arg. Exceptions thrown by the body unwind out
+of the call into the CALL site's dynamically enclosing handler (§3.3 —
+a deferred body never attaches to the creation-site `try`).
+"""
+struct UClosure
+    ir::IR
+    body::RegionId
+    captured::Vector{Pair{Int32,Any}}   # env slot id => snapshot
+    isva::Bool
+    io::IO
+end
+
+function Base.show(io::IO, uc::UClosure)
+    print(io, "UClosure(^r", uc.body.id, ", ", length(uc.captured), " captured",
+          uc.isva ? ", isva" : "", ")")
+end
+
+function (uc::UClosure)(args...)
+    ir = uc.ir
+    env = Vector{Any}(undef, Int(ir.body.len))
+    for (slot, v) in uc.captured
+        env[slot] = v
+    end
+    breg = getregion(ir, uc.body)
+    params = breg.args
+    np = length(params)
+    if uc.isva
+        np >= 1 || error("interpret: isva closure body has no region args")
+        length(args) >= np - 1 ||
+            error("interpret: closure expects at least $(np - 1) arguments, got $(length(args))")
+        for i in 1:np-1
+            env[params[i].id] = args[i]
+        end
+        env[params[np].id] = Tuple(args[np:end])
+    else
+        length(args) == np ||
+            error("interpret: closure expects $np arguments, got $(length(args))")
+        for (i, a) in enumerate(params)
+            env[a.id] = args[i]
+        end
+    end
+    res = run_region!(ir, env, uc.body, uc.io)
+    res.kind === :return && return isempty(res.values) ? nothing :
+        length(res.values) == 1 ? res.values[1] : Tuple(res.values)
+    res.kind === :fallout && return nothing
+    error("interpret: closure body escaped with $(res.kind)")
+end
+
+"""
     interpret(ir, args...; io=stdout) -> value
 
 Execute a dense, sealed function body with the given arguments.
@@ -197,7 +256,26 @@ function exec_control!(ir::IR, env::Vector{Any}, s::StmtId, io::IO)::Union{Nothi
     elseif k === K"await"
         error("interpret: await requires a task runtime (not in the v1 interpreter)")
     elseif k === K"closure"
-        error("interpret: closure execution enters at P3")
+        isva = false
+        if nops(ir, s) >= 1
+            flags = imm_value(getop(ir, s, 1))::Int64
+            isva = (flags & CLOSURE_FLAG_ISVA) != 0
+        end
+        rs = live_owned_regions(ir, s)
+        envspec = closure_environment(ir, s)
+        captured = Pair{Int32,Any}[]
+        for d in envspec.values
+            isassigned(env, Int(d.id)) ||
+                error("interpret: closure captures unassigned slot %$(d.id)")
+            push!(captured, d.id => env[d.id])           # by value (snapshot)
+        end
+        for d in envspec.cells
+            isassigned(env, Int(d.id)) ||
+                error("interpret: closure captures unassigned cell %$(d.id)")
+            push!(captured, d.id => env[d.id])           # CellBox by reference
+        end
+        env[s.id] = UClosure(ir, rs[1], captured, isva, io)
+        return nothing
     else
         error("interpret: unhandled control kind $(kindname(k))")
     end

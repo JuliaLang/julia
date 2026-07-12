@@ -18,6 +18,7 @@ export Kind, StmtId, RegionId, Value, Operand, IR, Builder, RemapSet,
     OC_VALUE, OC_STMT, OC_REGION, OC_BLOCK, OC_CONST, OC_IMM, OC_ANY,
     FLAG_CONSISTENT, FLAG_EFFECT_FREE, FLAG_NOTHROW, FLAG_TERMINATES,
     FLAG_REMOVABLE, FLAG_PURE, FLAG_INLINE, FLAG_NOINLINE,
+    CLOSURE_FLAG_ISVA,
     # operands
     op_stmt, op_block, op_region, op_inline, vop, optag, op_value,
     # regions
@@ -45,7 +46,7 @@ export Kind, StmtId, RegionId, Value, Operand, IR, Builder, RemapSet,
     # AttrGraph substrate + generic tree porcelain (§3.7 Level 1)
     AttrGraph, compact_graph!, collect_syntax!, Tree, NodeList,
     # verification / analyses
-    verify_ir, VerifyError, use_counts, AnalysisCache,
+    verify_ir, VerifyError, use_counts, AnalysisCache, closure_environment,
     # passes
     dce!, promote_cells!, fold_constant_branches!,
     # cell promotion (the mem2reg suite, promote.jl). The individual join
@@ -55,7 +56,7 @@ export Kind, StmtId, RegionId, Value, Operand, IR, Builder, RemapSet,
     # text
     print_ir, parse_ir, struct_eq, display_maxlines!,
     # test dialect interpreter
-    interpret
+    interpret, UClosure
 
 include("kinds.jl")
 include("operands.jl")

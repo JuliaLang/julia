@@ -68,6 +68,21 @@ assertion about the condition or the init tuple:
 `loop`'s parenthesized list pairs each carried `region_arg` with its init
 operand. An unused-result owner prints without `%n = `.
 
+`closure` (§5.7) owns one deferred region whose leading `region_arg`s are
+the parameters; the parenthesized list declares them. `...` after the last
+parameter marks a varargs closure (the trailing arg packs a tuple) and
+round-trips to the op's INLINE flags operand — a flags word without set
+bits prints (and parses) as no operand at all. The body exits via `return`
+(feeding the call, not the owner) or `unreachable`; captures are ordinary
+references to enclosing values (no capture list — the environment is
+derived, `closure_environment`):
+
+```
+%4 = closure (%5::Int64, %6::Any...) {
+  ...body; return %v...
+} :: Any
+```
+
 ## Terminators
 
 ```

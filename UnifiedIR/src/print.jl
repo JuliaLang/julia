@@ -124,10 +124,19 @@ function print_stmt(io::IO, ir::IR, s::StmtId, depth::Int)
         end
         indent(io, depth); print(io, "} :: ", type_str(stmt_type(ir, s)), "\n")
     elseif k === K"closure"
+        # params are the deferred region's leading region_args; the optional
+        # INLINE flags operand prints as `...` on the last param when isva
+        isva = false
+        if nops(ir, s) >= 1
+            fo = getop(ir, s, 1)
+            optag(fo) == TAG_INLINE &&
+                (isva = (imm_value(fo)::Int64 & CLOSURE_FLAG_ISVA) != 0)
+        end
         print(io, "%", s.id, " = closure (")
         rs = live_owned_regions(ir, s)
         body = getregion(ir, rs[1])
         join(io, ("%$(a.id)::$(type_str(stmt_type(ir, a)))" for a in body.args), ", ")
+        isva && print(io, " ...")   # space: `Any...` would lex as one identifier
         print(io, ") {\n")
         print_region_body(io, ir, rs[1], depth + 1; skipargs = true)
         indent(io, depth); print(io, "} :: ", type_str(stmt_type(ir, s)), "\n")

@@ -409,6 +409,37 @@ function parse_stmt!(lx::Lexer, ctx::PCtx)
         end
         expect!(lx, "::")
         set_type!(b.ir, s, parse_type!(lx))
+    elseif w == "closure"
+        expect!(lx, "(")
+        argdecls = Tuple{Int,Any}[]
+        isva = false
+        if !matchtok!(lx, ")")
+            while true
+                n = pct_id!(lx)
+                expect!(lx, "::")
+                t = parse_type!(lx)
+                push!(argdecls, (n, t))
+                if match_raw!(lx, "...")
+                    isva = true
+                    break
+                end
+                matchtok!(lx, ",") || break
+            end
+            expect!(lx, ")")
+        end
+        s = isva ? append_stmt!(b, K"closure", op_inline(CLOSURE_FLAG_ISVA); type = Any) :
+                   append_stmt!(b, K"closure"; type = Any)
+        textid != 0 && (ctx.idmap[textid] = s)
+        expect!(lx, "{")
+        open_region!(b, s; kind = REGION_BODY, activation = ACT_DEFERRED)
+        for (n, at) in argdecls
+            a = append_stmt!(b, K"region_arg"; type = at)
+            ctx.idmap[n] = a
+        end
+        parse_stmts!(lx, ctx); close_region!(b)
+        expect!(lx, "}")
+        expect!(lx, "::")
+        set_type!(b.ir, s, parse_type!(lx))
     elseif w == "cfg"
         expect!(lx, "(")
         entryops = Operand[]

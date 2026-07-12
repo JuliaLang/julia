@@ -78,6 +78,7 @@ function verify_l0(ir::IR)
     nr = length(ir.regions)
     nr >= 1 || verr("no root region")
     for (ri, reg) in enumerate(ir.regions)
+        reg.dead && continue    # killed by surgery; dropped at compact!
         # parent links acyclic and in-range
         if ri == 1
             isnull(reg.parent) || verr("root region has a parent")
@@ -131,7 +132,7 @@ function verify_l0_dense(ir::IR)
     # spans contiguous, properly nested; region_args leading; owned regions
     # immediately follow their owner; one terminator ends each ordered region.
     for (ri, reg) in enumerate(ir.regions)
-        is_guard(reg) && continue
+        (is_guard(reg) || reg.dead) && continue
         lo, hi = reg.first.id, reg.last.id
         if hi < lo
             # empty region: illegal for ordered regions in sealed dense state
@@ -279,11 +280,78 @@ function verify_l1(ir::IR)
             reg = getregion(ir, stmt_region(ir, s))
             isnull(reg.owner) && stmt_region(ir, s) != root_region(ir) &&
                 verr("%$i: `result` terminator in ownerless region")
+            # result-feeding class (§5.7): a closure body never feeds its
+            # owner — the closure's value is the closure itself; body exits
+            # are `return`/`unreachable` only
+            !isnull(reg.owner) && stmt_kind(ir, reg.owner) === K"closure" &&
+                verr("%$i: `result` in a closure body (closure bodies exit via return/unreachable)")
         elseif k === K"goto" || k === K"br_if" || k === K"switch" || k === K"await"
             # every BLOCK operand must target a block region of the same (or
-            # ancestor, for goto) cfg island; edge arity checked below
+            # ancestor, for goto) cfg island; edge arity checked below.
+            # Exit terminators never cross an activation boundary (§3.3) —
+            # in particular a `goto` inside a deferred body cannot target a
+            # block of an enclosing island.
             verify_edges(ir, s)
+            for (dest, _) in edge_bundles(ir, s)
+                activation_root(ir, stmt_region(ir, s)) == activation_root(ir, dest) ||
+                    verr("%$i: $(kindname(k)) edge crosses an activation boundary")
+            end
+        elseif k === K"closure"
+            # §5.7 closure-op discipline: exactly one live owned region, a
+            # REGION_BODY in ACT_DEFERRED mode; operands are at most one
+            # INLINE flags word (bit 1 = isva)
+            rs = [r for r in owned_regions(ir, s) if !getregion(ir, r).dead]
+            length(rs) == 1 ||
+                verr("%$i: closure owns $(length(rs)) live regions (want exactly 1)")
+            breg = getregion(ir, rs[1])
+            breg.kind === REGION_BODY ||
+                verr("%$i: closure region ^r$(rs[1].id) is not a body region")
+            breg.activation === ACT_DEFERRED ||
+                verr("%$i: closure region ^r$(rs[1].id) is not ACT_DEFERRED")
+            nops(ir, s) <= 1 ||
+                verr("%$i: closure takes at most one (flags) operand, got $(nops(ir, s))")
+            if nops(ir, s) == 1
+                o = getop(ir, s, 1)
+                (optag(o) == TAG_INLINE && imm_value(o) isa Int64) ||
+                    verr("%$i: closure operand must be an INLINE integer flags word")
+                (imm_value(o)::Int64 & CLOSURE_FLAG_ISVA) != 0 && isempty(breg.args) &&
+                    verr("%$i: isva closure has no region args to pack into")
+            end
         end
+        # cell-class boundary rule (§3.3/§6): a cell op reaching a frame
+        # `cell` across an ACT_DEFERRED activation boundary is an error —
+        # per-activation storage cannot be shared with a deferred body; use
+        # `cell_shared`. (An ACT_RESUME boundary is edge-defined for cfg
+        # `await` — frame cells are COPIED into resume snapshots — so the
+        # rule is keyed to ACT_DEFERRED only.)
+        if (k === K"cell_get" || k === K"cell_set" || k === K"cell_new" ||
+            k === K"cell_isdefined") && nops(ir, s) >= 1
+            o = getop(ir, s, 1)
+            if optag(o) == TAG_STMT
+                cell = asstmt(o)
+                ck = stmt_kind(ir, cell)
+                (ck === K"cell" || ck === K"cell_shared") ||
+                    verr("%$i: $(kindname(k)) cell operand %$(cell.id) is not a cell")
+                if ck === K"cell"
+                    ur = activation_root(ir, stmt_region(ir, s))
+                    ur == activation_root(ir, stmt_region(ir, cell)) ||
+                        getregion(ir, ur).activation !== ACT_DEFERRED ||
+                        verr("%$i: frame cell %$(cell.id) referenced across an ",
+                             "activation boundary (frame cells are activation-local; ",
+                             "use cell_shared)")
+                end
+            end
+        end
+    end
+
+    # activation discipline (§3.3): in v1 only `closure` owns deferred-mode
+    # regions (cfg-form await defines resume activation on the EDGE, not as a
+    # lexical region)
+    for (ri, reg) in enumerate(ir.regions)
+        (reg.dead || is_guard(reg)) && continue
+        reg.activation === ACT_DEFERRED || continue
+        (!isnull(reg.owner) && stmt_kind(ir, reg.owner) === K"closure") ||
+            verr("region ^r$ri: ACT_DEFERRED region not owned by a closure")
     end
 
     # cfg edge bundles match destination block args (§5.5)

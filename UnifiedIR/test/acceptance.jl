@@ -18,9 +18,6 @@
 #    synthesis": needs the exit converter. The interpreter-level half (throw
 #    before vs after a cell store, `cell_isdefined` in handlers, promotion
 #    refusal) is covered below.
-#  * Deferred closure EFFECT composition for DCE (unused closure with
-#    effectful body is deletable): v1 `dce!` does not process region-owning
-#    ops at all; the activation-boundary EXIT rules are covered below.
 #  * The differential end-to-end benchmark (P0 harness): needs the boundary
 #    converters and a function corpus.
 #  * Provenance-graph tier relocation through inlining: only the debug tier

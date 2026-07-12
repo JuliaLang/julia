@@ -227,7 +227,15 @@ function removable_subtree(ir::UnifiedIR.IR, op::StmtId)
     while !isempty(work)
         r = pop!(work)
         reg = UnifiedIR.getregion(ir, r)
-        reg.activation === UnifiedIR.ACT_IMMEDIATE || return false  # deferred: §3.3
+        # Effect composition is activation-mode-aware (§3.3): a deferred
+        # region's effects do not count at the creation site — they surface
+        # at call sites — and no exit can escape the boundary (L1), so the
+        # subtree is skipped entirely, not refused. Resume regions stay
+        # refused (edge-defined semantics, not modeled here).
+        if reg.activation === UnifiedIR.ACT_DEFERRED
+            continue
+        end
+        reg.activation === UnifiedIR.ACT_IMMEDIATE || return false  # resume: §3.3
         for st in UnifiedIR.region_stmts(ir, r)
             sk = UnifiedIR.stmt_kind(ir, st)
             if sk === K"region_arg" || sk === K"result"
@@ -315,10 +323,13 @@ end
 """
     adce_region_ops!(ir) -> Int
 
-Kill region-owning ops (`if`/`try`/`cfg`/`loop`) whose result is unused and
-whose region subtree contains only REMOVABLE statements with no exits
-escaping the op and termination evidence (single-trip loops, acyclic
-islands). Covers empty arms as the degenerate case. Editable state.
+Kill region-owning ops (`if`/`try`/`cfg`/`loop`/`closure`) whose result is
+unused and whose immediate-mode region subtree contains only REMOVABLE
+statements with no exits escaping the op and termination evidence
+(single-trip loops, acyclic islands). Covers empty arms as the degenerate
+case; an unused `closure` is removable on its creation-site flags alone
+(its whole subtree is deferred — §3.3 mode-aware composition). Editable
+state.
 """
 function adce_region_ops!(ir::UnifiedIR.IR)
     UnifiedIR.check_state(ir, UnifiedIR.LAYOUT_EDITABLE, "adce_region_ops!")
@@ -330,8 +341,13 @@ function adce_region_ops!(ir::UnifiedIR.IR)
         for s in collect(UnifiedIR.each_stmt(ir))
             UnifiedIR.is_tombstone(ir, s) && continue
             k = UnifiedIR.stmt_kind(ir, s)
-            (k === K"if" || k === K"try" || k === K"cfg" || k === K"loop") || continue
+            (k === K"if" || k === K"try" || k === K"cfg" || k === K"loop" ||
+             k === K"closure") || continue
             counts[s.id] == 0 || continue
+            if k === K"closure"
+                flg = UnifiedIR.stmt_flag(ir, s)
+                flg & UnifiedIR.FLAG_REMOVABLE == UnifiedIR.FLAG_REMOVABLE || continue
+            end
             removable_subtree(ir, s) || continue
             UnifiedIR.kill_stmt!(ir, s)
             removed += 1

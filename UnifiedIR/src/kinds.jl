@@ -50,6 +50,9 @@ const FLAG_UNUSED       = UInt32(1) << 9   # scratch bit for passes
 const FLAG_REMOVABLE = FLAG_EFFECT_FREE | FLAG_NOTHROW | FLAG_TERMINATES
 const FLAG_PURE      = FLAG_CONSISTENT | FLAG_REMOVABLE | FLAG_NOUB
 
+# `closure` op INLINE flags word (the optional single operand, §5.7)
+const CLOSURE_FLAG_ISVA = Int64(1)   # bit 1: trailing region_arg packs varargs
+
 # ---------------------------------------------------------------------------
 # Operand schema (arity checks, printing, accessors)
 # ---------------------------------------------------------------------------
@@ -420,7 +423,12 @@ register_kind!(CORE_DIALECT, :if;   result=-1, owns_regions=true, schema=P[:cond
 register_kind!(CORE_DIALECT, :loop; result=-1, owns_regions=true, varargs=true, minops=0)  # ops = init values
 register_kind!(CORE_DIALECT, Symbol("try"); result=-1, owns_regions=true, varargs=true, minops=0) # optional dynscope operand
 register_kind!(CORE_DIALECT, :cfg;  result=-1, owns_regions=true, varargs=true, minops=0)  # ops = entry block args
-register_kind!(CORE_DIALECT, :closure; result=1, owns_regions=true, varargs=true, minops=0)
+# closure (§5.7): one ACT_DEFERRED REGION_BODY region; ops = optional INLINE
+# flags word (bit 1 = isva). Creation is REMOVABLE — the deferred body's
+# effects do not count at the creation site (§3.3 mode-aware composition);
+# they surface at call sites.
+register_kind!(CORE_DIALECT, :closure; result=1, owns_regions=true, varargs=true, minops=0,
+               effects=FLAG_REMOVABLE)
 register_kind!(CORE_DIALECT, :select; result=1, effects=FLAG_PURE,
                schema=P[:cond=>OC_VALUE, :iftrue=>OC_VALUE, :iffalse=>OC_VALUE])
 
