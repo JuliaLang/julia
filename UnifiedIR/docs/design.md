@@ -1231,6 +1231,34 @@ modes have been exercised. Net effect on lowering, then:
 conversion itself becomes an optimizer pass running with inference results in
 hand.
 
+**Implemented today (the pre-`closure`-op slice): precise capture decisions
+from the shared mem2reg machinery.** Lowering need not wait for the P3
+`closure` op to stop deciding captures syntactically. The exact criterion —
+for a variable `v` and closure-creation site `C`, **value capture is legal
+iff (a)** no lambda capturing `v` stores to it, **(b)** no store to `v` can
+execute after `C` (same-activation forward order with sibling-`if`-arm
+exclusivity, plus multi-shot loop backedges, where a re-declaration of `v`
+inside the shared loop — a fresh binding per iteration — cancels the
+hazard), **and (c)** a single defined value reaches `C`, joins included — is
+computed by `JuliaLowering.analyze_captures_precise!`
+(`JuliaLowering/src/unified/capture_analysis.jl`): the enclosing body is
+lowered to throwaway UnifiedIR by the UnifiedBackend emitter (candidates as
+frame cells, creation sites as marker calls holding one `cell_get` per
+captured variable), and criterion (c) IS cell promotion — the verdict is
+whether `promote_fixpoint!` (§6; the same passes `Compiler.Unified` runs,
+including the try-join pass) resolved the site's read to a reaching
+definition. Maybe-undef captures keep the shared cell (the fixpoint runs
+without definedness-as-data), preserving use-time `UndefVarError`. Shares
+that survive are **typed** when the value type is provable at lowering time
+(declared type, or the join of literal store types) and undef is impossible:
+`Base.RefValue{T}` fields replace untyped `Core.Box` — the typed-cell
+materialization above, done eagerly for the provable subset. The worked
+examples (the julia#15276 zoo) are in `docs/closures.md`;
+`demo/capture_zoo.jl` is the runnable differential. When `closure` ops land,
+this analysis collapses into the fixpoint running structurally on the real
+IR instead of a sidecar — the decision procedure and the machinery are
+already one and the same.
+
 ### 5.8 Core dialect inventory
 
 | Group | Kinds (result arity noted where 0) |

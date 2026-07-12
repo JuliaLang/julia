@@ -21,6 +21,9 @@ practical documentation:
   statement.
 - [**Writing passes**](passes.md) — mutation APIs per layout state, the
   stale-id discipline, verification, and a pass checklist.
+- [**Closure captures**](closures.md) — the precise boxed-vs-value decision
+  from the shared mem2reg machinery (julia#15276), the worked zoo, and what
+  still boxes.
 
 Planned pages (not yet written): trees and provenance (the generic porcelain
 that `SyntaxTree` is an alias of), registering dialects (worked example:
