@@ -288,7 +288,8 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
             }
             else if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) {
                 assert(specptr != nullptr);
-                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
+                bool callee_gcstack_arg = true;
+                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt) && (from_abi.gcstack_arg == callee_gcstack_arg))
                     return specptr; // no adapter required
 
                 target = specptr;
@@ -299,8 +300,11 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
 
     orc::ThreadSafeModule result_m;
     std::string gf_thunk_name;
+    jl_cgparams_t local_params = jl_default_cgparams;
+    local_params.gcstack_arg = from_abi.gcstack_arg;
     {
         jl_codegen_params_t params(std::make_unique<LLVMContext>(), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
+        params.params = &local_params;
         params.getContext().setDiscardValueNames(true);
         params.cache = true;
         params.imaging_mode = 0;
@@ -308,7 +312,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
         Module *M = result_m.getModuleUnlocked();
         if (target) {
             Value *llvmtarget = literal_static_pointer_val((void*)target, PointerType::get(M->getContext(), 0));
-            gf_thunk_name = emit_abi_converter(M, params, from_abi, codeinst, llvmtarget, target_specsig);
+            gf_thunk_name = emit_abi_converter(M, params, from_abi, codeinst, llvmtarget, target_specsig, true);
         }
         else if (invoke == jl_fptr_const_return_addr) {
             gf_thunk_name = emit_abi_constreturn(M, params, from_abi, codeinst->rettype_const);

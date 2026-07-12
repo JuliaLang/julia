@@ -5062,7 +5062,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
-    bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
+    bool gcstack_arg = returninfo.gcstack_arg;
     size_t nfargs = returninfo.decl.getFunctionType()->getNumParams();
     SmallVector<Value *, 0> argvals(nfargs);
     unsigned idx = 0;
@@ -7154,7 +7154,7 @@ static void emit_specsig_to_specsig(
     emit_specsig_to_specsig(gf_thunk, returninfo.cc, returninfo.return_roots, calltype, rettype, is_for_opaque_closure, nargs, params, target, targetsig, targetrt, targetspec, rettype_const);
 }
 
-std::string emit_abi_converter(Module *M, jl_codegen_params_t &params, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *target, bool target_specsig)
+std::string emit_abi_converter(Module *M, jl_codegen_params_t &params, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *target, bool target_specsig, bool target_gcstack_arg)
 {
     // this builds a method that calls a method with the same arguments but a different specsig
     // build a specsig -> specsig converter thunk
@@ -7168,7 +7168,12 @@ std::string emit_abi_converter(Module *M, jl_codegen_params_t &params, jl_abi_t 
     gf_thunk_name += "_gfthunk";
     if (target_specsig) {
         jl_value_t *abi = get_ci_abi(codeinst);
+        jl_cgparams_t local_params = *params.params;
+        local_params.gcstack_arg = target_gcstack_arg;
+        const jl_cgparams_t *old_params = params.params;
+        params.params = &local_params;
         jl_returninfo_t targetspec = get_specsig_function(params, M, target, "", abi, codeinst->rettype, target_is_opaque_closure);
+        params.params = old_params;
         if (from_abi.specsig)
             emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, from_abi.nargs, params,
                     target, mi->specTypes, codeinst->rettype, &targetspec, nullptr);
@@ -7264,6 +7269,8 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         Module *M = jl_Module;
         ArrayType *T_cfuncdata = ArrayType::get(T_ptr, 8);
         size_t flags = specsig;
+        if (ctx.params->gcstack_arg)
+            flags |= 2;
         GlobalVariable *cfuncdata = new GlobalVariable(*M, T_cfuncdata, false,
                 GlobalVariable::PrivateLinkage,
                 ConstantArray::get(T_cfuncdata, {
@@ -7952,6 +7959,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
 {
     bool gcstack_arg = params.params->gcstack_arg;
     jl_returninfo_t props = {};
+    props.gcstack_arg = gcstack_arg;
     SmallVector<Type*,8> fsig;
     SmallVector<std::string,4> argnames;
     Type *rt = NULL;
