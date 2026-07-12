@@ -27,6 +27,15 @@
 "Rethrow analysis-internal errors instead of falling back (test/debug hook)."
 const ACP_STRICT = Ref(false)
 
+"""
+Observation hook for the analysis IR (demo/debug; `nothing` = off). When set
+to a callable it receives `(phase, lam, ir)` with `phase in (:before,
+:after)` — the capture-analysis UnifiedIR of `lam` as emitted, and again
+after the shared mem2reg fixpoint has run (site markers resolved or left as
+`cell_get`s). See UnifiedIR/demo/capture_zoo.jl.
+"""
+const ACP_TRACE = Ref{Any}(nothing)
+
 # the UnifiedIR instance the backend emits into (module constant: the
 # `UIR.K"..."` kind literals below resolve at macro-expansion time)
 const UIR = UnifiedBackend.UnifiedIR
@@ -227,9 +236,14 @@ function _acp_analyze!(ctx, lam)
             all(nw -> all(st -> nw.id < st.id, sets[v]), news[v])
     end
 
+    tr = ACP_TRACE[]
+    tr === nothing || tr(:before, lam, ir)
+
     # criterion (c): the shared fixpoint (same machinery as Compiler.Unified),
     # without definedness-as-data — maybe-undef captures must stay memory
     UIR.promote_fixpoint!(ir; include_undef = false)
+
+    tr === nothing || tr(:after, lam, ir)
 
     # verdicts: a site operand still reading a cell keeps the variable shared.
     # (Markers folded away with dead arms impose no constraint: that closure

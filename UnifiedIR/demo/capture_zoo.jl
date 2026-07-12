@@ -158,6 +158,64 @@ end
 println(ndiff == 0 ? "SEMANTICS: all cases match" :
         "SEMANTICS: $ndiff DIFFERENTIAL FAILURES")
 
+# ---- the analysis IR itself --------------------------------------------------
+# What the decision machinery actually sees: the enclosing body lowered to
+# UnifiedIR in capture-analysis mode (candidates as frame cells; each
+# closure-creation site a `call const CaptureSiteMarker() ...` whose trailing
+# operands are one `cell_get` per captured variable), BEFORE and AFTER the
+# shared mem2reg fixpoint. A marker operand that resolves to a plain value is
+# a legal VALUE capture; one still reading a cell keeps the shared container.
+
+using UnifiedIR
+
+function show_analysis_ir(title, src)
+    println("\n---- $title ----")
+    phase_ir = Dict{Symbol,String}()
+    JuliaLowering.ACP_TRACE[] = (phase, lam, ir) ->
+        (phase_ir[phase] = sprint(UnifiedIR.print_ir, ir))
+    try
+        m = Module()
+        JuliaLowering.include_string(m, src, "trace.jl")
+    finally
+        JuliaLowering.ACP_TRACE[] = nothing
+    end
+    println("== analysis IR as emitted (before mem2reg):")
+    print(get(phase_ir, :before, "(no analysis ran)\n"))
+    println("== after UnifiedIR.promote_fixpoint! (the shared machinery):")
+    print(get(phase_ir, :after, "(no analysis ran)\n"))
+end
+
+println("\n== the analysis IR, before/after the shared mem2reg fixpoint ==")
+show_analysis_ir("zoo1: if-arm join -> the marker operand RESOLVES (value capture)", raw"""
+function t1(c)
+    local x
+    if c; x = 1; else; x = 2; end
+    cl = () -> x
+    return cl()
+end
+""")
+show_analysis_ir("""zoo3: mutation after capture -> stays shared. NB. the marker operand
+     still resolves (nothing in THIS frame reads x later), but criterion (b)
+     runs on the BEFORE IR: the `cell_set` AFTER the marker is observable by
+     the closure, vetoing value capture""", raw"""
+function t3()
+    x = 1
+    f = () -> x
+    x = 2
+    return f()
+end
+""")
+show_analysis_ir("""zoo6: maybe-undef capture -> the cell SURVIVES the fixpoint (no
+     definedness-as-data in analysis mode), so the read stays memory and the
+     variable keeps the shared container with use-time UndefVarError""", raw"""
+function t6(c)
+    local x
+    if c; x = 1; end
+    f = () -> x
+    return f
+end
+""")
+
 # ---- microbenchmarks --------------------------------------------------------
 
 const BENCH = raw"""
