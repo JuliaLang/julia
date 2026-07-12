@@ -297,7 +297,8 @@ function optimize_ir!(ir::UnifiedIR.IR, argtypes::Vector{Any};
         # consumes as carried values and (next round) promote_cells! as
         # dominating stores — and each can expose new cases for the others.
         while true
-            c = promote_arm_cells!(ir)
+            c = promote_undef_cells!(ir)
+            c += promote_arm_cells!(ir)
             c += promote_island_cells!(ir)
             c += promote_loop_cells!(ir)
             c == 0 && break
@@ -314,6 +315,23 @@ function optimize_ir!(ir::UnifiedIR.IR, argtypes::Vector{Any};
         UnifiedIR.verify_ir(ir; level = 1)
         changed == 0 && break
     end
+    # the round budget is shared with inlining, so callee cells spliced by a
+    # late round may never have seen the promotion passes: give promotion its
+    # own fixpoint (cheap when there is nothing left to do), then one DCE for
+    # the stores it strands
+    while true
+        c = UnifiedIR.promote_cells!(ir)
+        c += promote_block_cells!(ir)
+        UnifiedIR.editable(ir)
+        c += promote_undef_cells!(ir)
+        c += promote_arm_cells!(ir)
+        c += promote_island_cells!(ir)
+        c += promote_loop_cells!(ir)
+        ir, _ = UnifiedIR.compact!(ir)
+        c == 0 && break
+    end
+    UnifiedIR.dce!(ir)
+    ir, _ = UnifiedIR.compact!(ir)
     infer_ir!(ir, argtypes; state)
     UnifiedIR.verify_ir(ir; level = 1)
     return ir

@@ -52,6 +52,7 @@ function promotion_fixpoint!(ir::UnifiedIR.IR)
         c += promote_block_cells!(ir)
         c += drop_dead_cells!(ir)
         UnifiedIR.editable(ir)
+        c += promote_undef_cells!(ir)
         c += promote_arm_cells!(ir)
         c += promote_island_cells!(ir)
         c += promote_loop_cells!(ir)
@@ -111,8 +112,20 @@ end
 # (a) Residual classifier
 # ---------------------------------------------------------------------------
 
-const RESIDUAL_REASONS = (:escape_or_token, :throw_edge_handler,
-                          :maybe_undef_read, :island,
+# Two-category residual taxonomy (§6). RESIDUAL_OK are the v1
+# REPRESENTATION choices — each names its successor mechanism:
+#   :handler_crossing  cells observed across throw edges (the stand-in for
+#                      exception-SSA PhiC/Upsilon)
+#   :gc_token          gc_preserve token cells (kept to serve the pairing
+#                      verifier; promote once the pairing rule tracks values)
+#   :box_capture       shared/boxed captures (cell_shared; no producer in
+#                      the current pipeline)
+# EVERYTHING else that survives promotion is a bug: the harness treats any
+# reason outside RESIDUAL_OK — including converter-path "escapes" and the
+# diagnostic bug classes below — with UNCLASSIFIED severity.
+const RESIDUAL_OK = (:handler_crossing, :gc_token, :box_capture)
+const RESIDUAL_REASONS = (:handler_crossing, :gc_token, :box_capture,
+                          :escape, :maybe_undef_read, :island,
                           :refused_multilevel_exit, :UNCLASSIFIED)
 
 "Does the region ancestry of `s` cross a `try`-owned region that does not
@@ -152,7 +165,7 @@ function classify_residual_cells(ir::UnifiedIR.IR)
 end
 
 function _classify_cell(ir::UnifiedIR.IR, cell::StmtId)
-    UnifiedIR.stmt_kind(ir, cell) === K"cell_shared" && return :escape_or_token
+    UnifiedIR.stmt_kind(ir, cell) === K"cell_shared" && return :box_capture
     sets = StmtId[]; gets = StmtId[]; isdefs = StmtId[]; news = StmtId[]
     escaped = false
     UnifiedIR.each_ssa_use(ir) do site, used
@@ -173,21 +186,21 @@ function _classify_cell(ir::UnifiedIR.IR, cell::StmtId)
             escaped = true
         end
     end
-    escaped && return :escape_or_token
+    escaped && return :escape          # bug severity: converter-path escape
     # gc_preserve token cells: the stored value is a preserve token
     for st in sets
         v = UnifiedIR.getop(ir, st, 2)
         if UnifiedIR.optag(v) == UnifiedIR.TAG_STMT &&
            UnifiedIR.stmt_kind(ir, UnifiedIR.asstmt(v)) === K"gc_preserve_begin"
-            return :escape_or_token
+            return :gc_token
         end
     end
     # throw-edge observability: reads/queries in handlers, or any use across
     # a try boundary relative to the cell
     (any(u -> _in_handler(ir, u), gets) || any(u -> _in_handler(ir, u), isdefs)) &&
-        return :throw_edge_handler
+        return :handler_crossing
     any(u -> _crosses_try(ir, u, cell), Iterators.flatten((sets, gets, isdefs))) &&
-        return :throw_edge_handler
+        return :handler_crossing
     # island-resident uses (cfg form: island mem2reg's domain; residual =
     # cross-block case it refused)
     (UnifiedIR.inside_island(ir, cell) ||
@@ -272,6 +285,11 @@ function df_correspondence(ir0::UnifiedIR.IR)
             reachable(blockof(pc)) || continue
             if st isa Expr && st.head === :(=) && st.args[1] == Core.SlotNumber(slot)
                 push!(defs, pc)
+            elseif st isa Core.NewvarNode && st.slot == Core.SlotNumber(slot)
+                # stock slot2ssa counts the kill as a def (SlotInfo.defs
+                # includes NewvarNodes): it bounds liveness upward, so an
+                # always-undef read demands no value phi above it
+                push!(defs, pc)
             end
             _uses_slot(st, slot) && push!(uses, pc)
         end
@@ -289,6 +307,7 @@ function df_correspondence(ir0::UnifiedIR.IR)
     ir = ir0
     inv = collect(1:UnifiedIR.nstmts(ir))          # current id -> original id
     rinv = collect(1:UnifiedIR.nregions(ir))       # current region -> original
+    alias = Dict{Int,Int}()                        # def-cell (current) -> original
     getinv(i::Int) = 1 <= i <= length(inv) ? inv[i] : 0
     getrinv(i::Int) = 1 <= i <= length(rinv) ? rinv[i] : 0
     while true
@@ -300,6 +319,7 @@ function df_correspondence(ir0::UnifiedIR.IR)
             c += promote_block_cells!(ir)
             c += drop_dead_cells!(ir)
             UnifiedIR.editable(ir)
+            c += promote_undef_cells!(ir)
             c += promote_arm_cells!(ir)
             c += promote_island_cells!(ir)
             c += promote_loop_cells!(ir)
@@ -309,9 +329,18 @@ function df_correspondence(ir0::UnifiedIR.IR)
             PROMOTION_TRACE[] = nothing
         end
         for (k, a, cid) in tr
+            if k === :undef_split
+                # definedness-as-data: `a` is the freshly inserted Bool cell
+                # (no pre-promotion identity); its future placements credit
+                # the ORIGINAL cell — record the alias under the CURRENT id
+                # and carry it forward through the compactions below
+                orig = get(alias, cid, getinv(cid))
+                orig == 0 || (alias[a] = orig)
+                continue
+            end
             # :island_phi anchors are region ids; all others are stmt ids
             oa = k === :island_phi ? getrinv(a) : getinv(a)
-            ocid = getinv(cid)
+            ocid = get(alias, cid, getinv(cid))
             (oa == 0 || ocid == 0) || push!(trace, (k, oa, ocid))
         end
         newinv = zeros(Int, UnifiedIR.nstmts(ir))
@@ -320,6 +349,13 @@ function df_correspondence(ir0::UnifiedIR.IR)
             n != 0 && (newinv[n] = getinv(o))
         end
         inv = newinv
+        newalias = Dict{Int,Int}()
+        for (o, orig) in alias
+            1 <= o <= length(rs.stmt) || continue
+            n = Int(rs.stmt[o])
+            n != 0 && (newalias[n] = orig)
+        end
+        alias = newalias
         newrinv = zeros(Int, UnifiedIR.nregions(ir))
         for o in 1:length(rs.region)
             n = Int(rs.region[o])
