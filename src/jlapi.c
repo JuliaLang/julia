@@ -26,6 +26,20 @@ extern "C" {
 #include <fenv.h>
 #endif
 
+#if defined(__MINGW32__) && !defined(_UCRT) && FE_TOWARDZERO != 0xc00
+// Julia currently links msvcrt-os, whose MinGW fenv ABI uses the x87 control
+// word values. Newer MinGW headers use the UCRT/MSVC-compatible values.
+#pragma message "Using MSVCRT-compatible MinGW fenv ABI with UCRT/MSVC fenv.h rounding constants; redefining FE_* rounding constants."
+#undef FE_TONEAREST
+#undef FE_UPWARD
+#undef FE_DOWNWARD
+#undef FE_TOWARDZERO
+#define FE_TONEAREST 0x000
+#define FE_UPWARD 0x800
+#define FE_DOWNWARD 0x400
+#define FE_TOWARDZERO 0xc00
+#endif
+
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir);
 
 /**
