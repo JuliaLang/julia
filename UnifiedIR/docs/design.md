@@ -1483,17 +1483,39 @@ sentinel: in particular DOUBLY-carried cells (the value crosses two
 backedge levels, so the inner carried init would need the outer carried
 value) stay classified memory.
 
-**Exception classes** (machine-checkable; `classify_residual_cells`): every
-cell remaining after the fixpoint carries a reason —
+**Residual classes** (machine-checkable; `classify_residual_cells`): the
+taxonomy is TWO-CATEGORY. Cells surviving promotion must carry one of the
+v1 REPRESENTATION choices, each naming its successor mechanism:
 
-| reason | meaning | stock counterpart |
+| reason | meaning | successor |
 |---|---|---|
-| `:escape_or_token` | value-used/escaping cell, `cell_shared`, gc-preserve token | `Core.Box` / token slots |
-| `:throw_edge_handler` | read or queried in a handler, or used across a `try` boundary | PhiC/Upsilon exception SSA |
-| `:maybe_undef_read` | some read/query no store dominates (definite assignment fails) | slots with undef tracking (`throw_undef_if_not`) |
-| `:island` | island cells whose definite assignment is only provable path-sensitively (stock proves it during inference constant propagation; §6 promotion is syntactic) | phis with pruned undef legs |
-| `:refused_multilevel_exit` | doubly-carried cells: the value crosses two backedge levels, so the inner carried init would need the outer carried value (the init backedge hazard) | nested-loop phi chains |
-| `:UNCLASSIFIED` | none of the above — a completeness BUG | — |
+| `:handler_crossing` | observed across a throw edge (handler reads/queries; try-crossing uses with a joining handler) | exception SSA (PhiC/Upsilon equivalent) |
+| `:gc_token` | gc_preserve token cells | pairing verifier tracks values |
+| `:box_capture` | shared/boxed captures (`cell_shared`) | closure conversion (no producer today) |
+
+EVERYTHING else is a bug, verified at UNCLASSIFIED severity by the harness:
+the diagnostic classes `:escape` (converter-path escape), `:island`,
+`:refused_multilevel_exit`, and `:maybe_undef_read` exist to aid debugging
+but any occurrence fails the acceptance run. Ordinary slot residuals are
+ZERO corpus-wide.
+
+**Definedness as data** (`promote_undef_cells!`): maybe-undef cells rewrite
+into a definitely-assigned value cell (dummy-initialized at declaration)
+plus a parallel `Bool` definedness cell — stores set it, `cell_new` clears
+it, `cell_isdefined` reads it, and undominated reads acquire a guard
+(`if !def; throw(UndefVarError); unreachable; end`). Both cells then
+dissolve through the ordinary join machinery: the Bool joins land on
+exactly the same dominance-frontier points as the value joins, and guards
+constant-fold wherever definedness is provable. This is stock slot2ssa's
+maybe-undef handling expressed in region vocabulary — no cell is left
+behind for being possibly-undefined.
+
+**Nested carried args**: when a carried init is stale across an enclosing
+backedge (the init hazard), the plan switches to MEMORY-INIT — the init
+becomes a `cell_get` immediately before the loop and the exit store keeps
+that memory current — so the enclosing loop's next fixpoint round consumes
+the get/store pair as ordinary body traffic. Doubly-carried cells
+(countlines' line counter) dissolve one nesting level per round.
 
 **The harness** (`Compiler/src/unified/completeness.jl`, tests in
 `Compiler/test/unified/completeness.jl` + `cellfuzz.jl`, full-scale runs in
