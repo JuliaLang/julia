@@ -363,6 +363,7 @@ struct jl_returninfo_t {
     unsigned return_roots;
     bool all_roots;
     uint32_t effects = 0;  // ipo_purity_bits, applied to CallInst and Function
+    bool gcstack_arg;
 };
 
 struct jl_codegen_call_target_t {
@@ -543,7 +544,7 @@ Function *jl_cfunction_object(jl_value_t *f, jl_value_t *rt, jl_tupletype_t *arg
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_jit_abi_convert(jl_task_t *ct, jl_abi_t from_abi, _Atomic(void*) *fptr, _Atomic(size_t) *last_world, void *data);
 std::string emit_abi_dispatcher(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *invoke);
-std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *target, bool target_specsig);
+std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *target, bool target_specsig, bool target_gcstack_arg);
 std::string emit_abi_constreturn(jl_codegen_output_t &out, jl_abi_t from_abi, jl_value_t *rettype_const);
 std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code_instance_t *codeinst);
 

@@ -344,7 +344,8 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
             }
             else if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) {
                 assert(specptr != nullptr);
-                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
+                bool callee_gcstack_arg = true;
+                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt) && (from_abi.gcstack_arg == callee_gcstack_arg))
                     return specptr; // no adapter required
 
                 target = specptr;
@@ -358,7 +359,10 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
     auto ctx = std::make_unique<LLVMContext>();
     auto mod = jl_create_llvm_module("gfthunk", *ctx, jl_ExecutionEngine->getDataLayout(),
                                      jl_ExecutionEngine->getTargetTriple());
+    jl_cgparams_t local_params = jl_default_cgparams;
+    local_params.gcstack_arg = from_abi.gcstack_arg;
     jl_codegen_output_t out{*mod};
+    out.params = &local_params;
     // root the wrapper types that `mark_julia_const` mints for egality-pinned
     // (`TypeEgal`) argument slots while the thunk is emitted
     out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
@@ -368,7 +372,7 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
         out.imaging_mode = 0;
         if (target) {
             Value *llvmtarget = literal_static_pointer_val((void*)target, PointerType::get(*ctx, 0));
-            gf_thunk_name = emit_abi_converter(out, from_abi, codeinst, llvmtarget, target_specsig);
+            gf_thunk_name = emit_abi_converter(out, from_abi, codeinst, llvmtarget, target_specsig, true);
         }
         else if (invoke == jl_fptr_const_return_addr) {
             assert(codeinst);   // Convince the static analyzer
