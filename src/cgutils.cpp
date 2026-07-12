@@ -2613,6 +2613,61 @@ static void emit_binding_commit_end(jl_codectx_t &ctx)
     close->setOrdering(AtomicOrdering::Release);
 }
 
+// #62154 + rseq (see src/rseq.h): whether guarded Set commits should be emitted with
+// a restartable-sequence fast path in addition to the commit window. Requires the
+// host to have critical-section support (the inline-asm template and the ptls field
+// offset below are host-specific) and the module to target the host's OS/arch (JIT
+// always does; AOT cross-compilation from a different host falls back to windows).
+static bool binding_commit_rseq_target(jl_codectx_t &ctx)
+{
+#ifdef JL_HAVE_RSEQ_CS
+    Triple TT(jl_Module->getTargetTriple());
+    if (!TT.isOSLinux())
+        return false;
+#if defined(_CPU_X86_64_)
+    return TT.getArch() == Triple::x86_64;
+#elif defined(_CPU_AARCH64_)
+    return TT.getArch() == Triple::aarch64;
+#else
+    return false;
+#endif
+#else
+    return false;
+#endif
+}
+
+#ifdef JL_HAVE_RSEQ_CS
+// The compiled counterpart of jl_rseq_guarded_store (rseq.h), for the guarded Set
+// commit: a restartable sequence that re-checks the validated partition's
+// PARTITION_FLAG_RETYPE_WRITE and performs the (release) committing store of `val`
+// into `slot`. Codegen keeps no target assembly of its own -- it emits an opaque
+// `julia.rseq_guarded_set` placeholder call, which LowerPTLS expands into the
+// architecture-specific critical section (the `__rseq_cs` descriptor, the
+// signature-guarded abort pad, the write-guard re-check and the committing store; see
+// lower_rseq_guarded_set in llvm-ptls.cpp). The whole sequence stays a single
+// inline-asm blob there because that is the only construct that holds its
+// branch-containing instruction range contiguous with resolvable local labels -- an
+// MI-level pass cannot, since the flag re-check must branch out of the abortable
+// range yet stay inside it, which no MI bundle admits. Returns the i1 "committed"
+// condition; on false the caller diverts to the runtime path (nothing was executed).
+static Value *emit_rseq_guarded_set(jl_codectx_t &ctx, Value *rs, Value *flagp,
+                                    Value *slot, Value *val)
+{
+    LLVMContext &C = ctx.builder.getContext();
+    Value *rseq_cs_p = emit_ptrgep(ctx, rs, offsetof(jl_rseq_t, rseq_cs));
+    // The placeholder's type is taken from the operands (a single call site), so it
+    // needs no fixed signature; LowerPTLS reuses this same type for the inline asm.
+    FunctionType *ft = FunctionType::get(getInt64Ty(C),
+            { rseq_cs_p->getType(), flagp->getType(), slot->getType(), val->getType() },
+            false);
+    FunctionCallee callee = jl_Module->getOrInsertFunction("julia.rseq_guarded_set", ft);
+    cast<Function>(callee.getCallee())->addFnAttr(Attribute::NoUnwind);
+    CallInst *commit = ctx.builder.CreateCall(callee, { rseq_cs_p, flagp, slot, val });
+    setName(ctx.emission_context, commit, "rseq_commit");
+    return ctx.builder.CreateICmpNE(commit, ConstantInt::get(getInt64Ty(C), 0));
+}
+#endif // JL_HAVE_RSEQ_CS
+
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *ptr, jl_cgval_t rhs, jl_cgval_t cmpop,
         jl_value_t *jltype, MDNode *tbaa, MDNode *aliasscope,
@@ -2824,6 +2879,42 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     };
     // TODO: we should do Release ordering for anything with CountTrackedPointers(elty).count > 0, instead of just isboxed
     if (op == StoreKind::Set || (Order == AtomicOrdering::NotAtomic && op == StoreKind::Swap)) {
+#ifdef JL_HAVE_RSEQ_CS
+        // Guarded Set commits get a restartable-sequence fast path (see rseq.h and
+        // emit_rseq_guarded_set) with a runtime dispatch on this thread's rseq
+        // registration; threads without one (and the safepoint-containing RMW
+        // paths, whose loads must also be covered) use the commit window. The rseq
+        // commit is a release store, so orderings stronger than Release stay on
+        // the window path.
+        if (retype_flagp && op == StoreKind::Set && !isStrongerThan(Order, AtomicOrdering::Release) &&
+            binding_commit_rseq_target(ctx)) {
+            assert(isboxed && r && !is_union);
+            LLVMContext &C = ctx.builder.getContext();
+            AtomicOrdering storeOrder = Order == AtomicOrdering::NotAtomic ? AtomicOrdering::Release : Order;
+            Value *rsp = emit_ptrgep(ctx, get_current_ptls(ctx),
+                    offsetof(jl_tls_states_t, rseq));
+            LoadInst *rs = ctx.builder.CreateAlignedLoad(ctx.builder.getPtrTy(), rsp,
+                    Align(sizeof(void*)));
+            setName(ctx.emission_context, rs, "rseq_area");
+            BasicBlock *rseqBB = BasicBlock::Create(C, "rseq_commit", ctx.f);
+            BasicBlock *windowBB = BasicBlock::Create(C, "window_commit", ctx.f);
+            BasicBlock *contBB = BasicBlock::Create(C, "commit_cont", ctx.f);
+            ctx.builder.CreateCondBr(ctx.builder.CreateIsNotNull(rs), rseqBB, windowBB);
+            ctx.builder.SetInsertPoint(rseqBB);
+            Value *committed = emit_rseq_guarded_set(ctx, rs, retype_flagp, ptr, r);
+            MDBuilder MDB(C);
+            assert(retype_deoptBB);
+            ctx.builder.CreateCondBr(committed, contBB, retype_deoptBB,
+                    MDB.createBranchWeights({2000, 1}));
+            ctx.builder.SetInsertPoint(windowBB);
+            commit_begin();
+            emit_aliased_store(ctx, r, ptr, Align(alignment), tbaa, aliasscope, storeOrder);
+            emit_binding_commit_end(ctx);
+            ctx.builder.CreateBr(contBB);
+            ctx.builder.SetInsertPoint(contBB);
+            return rhs; // Set returns the stored value; nothing below applies
+        }
+#endif
         if (retype_flagp)
             commit_begin();
         if (op == StoreKind::Swap) {

@@ -60,6 +60,7 @@ private:
     template<typename T> T *add_comdat(T *G) const;
     GlobalVariable *create_hidden_global(Type *T, StringRef name) const;
     void fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, bool or_new, bool *CFGModified);
+    bool lower_rseq_guarded_set();
 };
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
@@ -293,6 +294,113 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
     }
 }
 
+// Expand the `julia.rseq_guarded_set` placeholder emitted by emit_rseq_guarded_set
+// (cgutils.cpp) into the architecture-specific restartable-sequence critical section
+// for a guarded binding Set commit. The sequence is ($0 = a scratch register that also
+// carries the returned "committed" flag; the restart semantics have no C expression):
+//
+//     entry:                                             // label 0
+//         rs->rseq_cs = &descriptor;                     // $1 = &rs->rseq_cs
+//     start:                                             // label 1 (abortable range
+//                                                        //  begins)
+//         if (bpart->kind & PARTITION_FLAG_RETYPE_WRITE) // $2 = &bpart->kind
+//             goto divert;
+//         *slot = val;                                   // $3 = slot, $4 = val;
+//                                                        //  the commit (release)
+//     post_commit:                                       // label 2 (abortable range
+//         return 1;                                      //  ends)
+//
+//     signature; abort: goto entry;                      // label 4: a preemption,
+//                                                        //  migration, signal, or
+//                                                        //  rseq-membarrier inside
+//                                                        //  [start, post_commit) lands
+//                                                        //  here
+//     divert:                                            // label 5
+//         return 0;
+//
+// where `descriptor` is the 32-byte struct rseq_cs in section __rseq_cs (label 3):
+//     { .version = 0, .flags = 0, .start_ip = &&start,
+//       .post_commit_offset = &&post_commit - &&start, .abort_ip = &&abort }
+//
+// Kept as one inline-asm blob so the branch-containing range stays contiguous with the
+// assembler resolving its local labels; the descriptor and signature ride the same
+// blob, so no LLVM global appears and module partitioning is unaffected.
+bool LowerPTLS::lower_rseq_guarded_set()
+{
+    Function *F = M->getFunction("julia.rseq_guarded_set");
+    if (!F)
+        return false;
+    std::string asmtxt;
+    raw_string_ostream OS(asmtxt);
+    if (TargetTriple.getArch() == Triple::x86_64) {
+        OS << ".pushsection __rseq_cs, \"aw\"\n"
+              ".balign 32\n"
+              "3:\n"
+              ".long 0, 0\n"                        // version, flags
+              ".quad 1f, (2f - 1f), 4f\n"           // start_ip, post_commit_offset, abort_ip
+              ".popsection\n"
+              "0:\n"
+              "leaq 3b(%rip), $0\n"
+              "movq $0, ($1)\n"                     // publish the descriptor
+              "1:\n"
+              "movq ($2), $0\n"
+           << "testq $$" << (unsigned)PARTITION_FLAG_RETYPE_WRITE << ", $0\n" // write guard
+           << "jnz 5f\n"
+              "movq $4, ($3)\n"                     // the commit (release on x86)
+              "2:\n"
+              "movl $$1, ${0:k}\n"
+              "jmp 6f\n"
+              ".long 0x53053053\n"                  // JL_RSEQ_SIG (x86)
+              "4:\n"
+              "jmp 0b\n"
+              "5:\n"
+              "xorl ${0:k}, ${0:k}\n"
+              "6:";
+    }
+    else if (TargetTriple.getArch() == Triple::aarch64) {
+        OS << ".pushsection __rseq_cs, \"aw\"\n"
+              ".balign 32\n"
+              "3:\n"
+              ".long 0, 0\n"                        // version, flags
+              ".quad 1f, (2f - 1f), 4f\n"           // start_ip, post_commit_offset, abort_ip
+              ".popsection\n"
+              "0:\n"
+              "adrp $0, 3b\n"
+              "add $0, $0, :lo12:3b\n"
+              "str $0, [$1]\n"                      // publish the descriptor
+              "1:\n"
+              "ldr $0, [$2]\n"
+           << "tst $0, #" << (unsigned)PARTITION_FLAG_RETYPE_WRITE << "\n" // write guard
+           << "b.ne 5f\n"
+              "stlr $4, [$3]\n"                     // the commit (release)
+              "2:\n"
+              "mov $0, #1\n"
+              "b 6f\n"
+              ".inst 0xd428bc00\n"                  // JL_RSEQ_SIG (aarch64)
+              "4:\n"
+              "b 0b\n"
+              "5:\n"
+              "mov $0, #0\n"
+              "6:";
+    }
+    else {
+        llvm_unreachable("rseq critical section not implemented for this architecture");
+    }
+    OS.flush();
+    for (auto it = F->user_begin(); it != F->user_end(); ) {
+        auto call = cast<CallInst>(*it);
+        ++it;
+        // The placeholder's type was built from the call operands, so it is exactly the
+        // inline asm's type: 1 output/scratch register ($0) and 4 inputs ($1..$4).
+        InlineAsm *ia = InlineAsm::get(call->getFunctionType(), asmtxt,
+                                       "=&r,r,r,r,r,~{memory},~{cc}", /*hasSideEffects*/true);
+        call->setCalledFunction(call->getFunctionType(), ia);
+    }
+    assert(F->use_empty());
+    F->eraseFromParent();
+    return true;
+}
+
 bool LowerPTLS::run(bool *CFGModified)
 {
     bool need_init = true;
@@ -346,7 +454,10 @@ bool LowerPTLS::run(bool *CFGModified)
         pgcstack_getter->eraseFromParent();
         return true;
     };
-    return runOnGetter(false) + runOnGetter(true);
+    bool changed = runOnGetter(false);
+    changed |= runOnGetter(true);
+    changed |= lower_rseq_guarded_set();
+    return changed;
 }
 } // anonymous namespace
 
