@@ -763,9 +763,14 @@ to assign a value to a variable that is declared constant the following scenario
 !!! compat "Julia 1.8"
     Support for typed globals was added in Julia 1.8
 
-Similar to being declared as constants, global bindings can also be declared to always be of a
-constant type. This can either be done without assigning an actual value using the syntax
-`global x::T` or upon assignment as `x::T = 123`.
+Similar to being declared as constants, global bindings can also be given a declared type, which
+every value assigned to the binding must be an instance of. This can either be done without
+assigning an actual value using the syntax `global x::T` or upon assignment as `x::T = 123`. The
+declared type of a global is not necessarily permanent: it can be changed by re-declaring the
+binding with a new type (and, if the current value does not conform to the new type, a new value)
+using `global x::T = v`. Each declared type governs the accesses in its own range of world ages;
+accesses from code compiled against an older declared type remain safe — they verify the value
+against the type they were compiled for and raise an error rather than misbehave (see below).
 
 ```jldoctest
 julia> x::Float64 = 2.718

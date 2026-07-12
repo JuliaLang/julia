@@ -384,13 +384,24 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             # flisp has this, but our K"assert" handling is in a previous pass
             # [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
             # (The top-level-only requirement is enforced during scope analysis.)
-            type = _convert_closures(ctx, ex[2])
+            type0 = _convert_closures(ctx, ex[2])
             if has_value && !ctx.toplevel_pure
                 # `x::T = v`: install the type and value together as a single atomic
                 # `declare_global`, emitted in place so the value may reference surrounding
-                # locals. The block evaluates to the original right-hand side.
-                rhs0 = _convert_closures(ctx, ex[3])
+                # locals. The type is evaluated exactly once, *before* the value (matching
+                # the evaluation order of the old split `decl` + assignment form and the
+                # visit order in `du_visit!`), and the same result is used both for the
+                # conversion and the declaration. The block evaluates to the original
+                # right-hand side.
                 stmts = SyntaxList(ctx)
+                type = if is_simple_atom(ctx, type0)
+                    type0
+                else
+                    ttmp = ssavar(ctx, type0, "T")
+                    push!(stmts, @ast ctx ex [K"=" ttmp type0])
+                    ttmp
+                end
+                rhs0 = _convert_closures(ctx, ex[3])
                 rhs1 = if is_simple_atom(ctx, rhs0)
                     rhs0
                 else
@@ -406,7 +417,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 push!(stmts, @ast ctx ex (::K"latestworld"))
                 @ast ctx ex [K"block" stmts... rhs1]
             else
-                make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, type)
+                make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, type0)
             end
         elseif has_value
             # `x::T = v` (local): an ordinary typed assignment. The declared type was

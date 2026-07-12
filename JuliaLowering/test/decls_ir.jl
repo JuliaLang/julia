@@ -171,10 +171,9 @@ global xx::T = 10
 7   (goto label₉)
 8   (= slot₁/tmp (call top.convert %₃ slot₁/tmp))
 9   slot₁/tmp
-10  TestMod.T
-11  (call core.declare_global TestMod :xx true %₁₀ %₉)
-12  latestworld
-13  (return 10)
+10  (call core.declare_global TestMod :xx true %₃ %₉)
+11  latestworld
+12  (return 10)
 
 ########################################
 # Error: local with two type declarations
@@ -223,10 +222,9 @@ end
 10  (goto label₁₂)
 11  (= slot₁/tmp (call top.convert %₆ slot₁/tmp))
 12  slot₁/tmp
-13  TestMod.Int
-14  (call core.declare_global TestMod :x true %₁₃ %₁₂)
-15  latestworld
-16  (return 1)
+13  (call core.declare_global TestMod :x true %₆ %₁₂)
+14  latestworld
+15  (return 1)
 
 ########################################
 # Error: const ref
