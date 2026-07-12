@@ -782,5 +782,9 @@ function structurize!(ir::UnifiedIR.IR)
         total += changed
         changed == 0 && break
     end
+    # the structural rebuilds move statements wholesale; their order keys can
+    # end up inconsistent with the (correct) edit lists, silently corrupting
+    # every comes_before-based analysis downstream — relabel from the lists
+    total > 0 && UnifiedIR.relabel_okeys!(ir)
     return total
 end
