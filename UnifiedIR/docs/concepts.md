@@ -100,5 +100,7 @@ correspondence check) document why those join points are jointly complete.
 A residual cell can exist for exactly the machine-verified v1
 representation choices — handler-crossing state (pending the
 PhiC/Upsilon-equivalent), gc-preserve tokens (pending the pairing-rule
-extension), and closure captures (`cell_shared`, pending closure
-optimization) — anything else is, by definition, a bug.
+extension), and closure captures that genuinely must share
+(`cell_shared` cells `promote_capture_cells!` refuses: written inside a
+lambda, written after a creation site, multi-shot backedge hazards,
+maybe-undef) — anything else is, by definition, a bug.

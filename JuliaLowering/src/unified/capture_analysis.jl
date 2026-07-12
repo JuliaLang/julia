@@ -27,9 +27,10 @@ const ACP_STRICT = Ref(false)
 """
 Observation hook for the analysis IR (demo/debug; `nothing` = off). When set
 to a callable it receives `(phase, lam, ir)` with `phase in (:before,
-:after)` — the capture-analysis UnifiedIR of `lam` as emitted, and again
-after the shared mem2reg fixpoint has run (site markers resolved or left as
-`cell_get`s). See UnifiedIR/demo/capture_zoo.jl.
+:after)` — the capture-analysis UnifiedIR of `lam` as emitted (closure
+regions holding the capture footprints), and again after the shared mem2reg
+fixpoint has run (capture reads rewritten to values, or the `cell_shared`
+left standing). See UnifiedIR/demo/capture_zoo.jl.
 """
 const ACP_TRACE = Ref{Any}(nothing)
 

@@ -431,7 +431,7 @@ with these rules (verified at L1):
   *captures*, not ordinary uses (§5.1).
 
 **v1 seals region ownership**: only core kinds (`if`, `loop`, `try`, `cfg`,
-and — entering at P3 — `closure`) own regions. (`await` is *not* a region
+and — the implemented v1 slice, §5.7 — `closure`) own regions. (`await` is *not* a region
 owner: its cfg form is a block terminator, §5.6.) External dialects
 may declare `guard`-kind regions via registration — which is all SynchJulia's
 `:clocked` needs — but may not introduce new region-owning ops with novel
@@ -1223,41 +1223,68 @@ UnifiedIR, a closure is a region op (the RVSDG lambda analog), owning a
   impossible, so recursion is opt-in by construction) or an eager fallback —
   design question #5.
 
-**Scoping note: `closure` is specified here but is not part of the v1
-semantic core.** The test dialect, boundary converters, and the P0–P2
-work need none of it; it enters with the P3 lowering port, after execution
-modes have been exercised. Net effect on lowering, then:
-`closure_conversion.jl` shrinks to "emit `closure` ops and cells"; the
-conversion itself becomes an optimizer pass running with inference results in
-hand.
+**Scoping note: the v1 `closure`-op slice is IMPLEMENTED; the full P3
+lowering port keeps its frame.** The op carries no capture list (the
+environment is `closure_environment(ir, s)`'s derived free values — ordered
+SSA values and cells referenced from the deferred subtree but defined
+outside it, shared by the interpreter and the materializer), owns exactly
+one `ACT_DEFERRED` `REGION_BODY` region whose leading `region_arg`s are the
+parameters, and takes at most one INLINE flags operand (bit 1 = isva; the
+trailing arg packs a varargs tuple). The L1 activation rules, implemented:
 
-**Implemented today (the pre-`closure`-op slice): precise capture decisions
-from the shared mem2reg machinery.** Lowering need not wait for the P3
-`closure` op to stop deciding captures syntactically. The exact criterion —
-for a variable `v` and closure-creation site `C`, **value capture is legal
-iff (a)** no lambda capturing `v` stores to it, **(b)** no store to `v` can
-execute after `C` (same-activation forward order with sibling-`if`-arm
-exclusivity, plus multi-shot loop backedges, where a re-declaration of `v`
-inside the shared loop — a fresh binding per iteration — cancels the
-hazard), **and (c)** a single defined value reaches `C`, joins included — is
-computed by `JuliaLowering.analyze_captures_precise!`
-(`JuliaLowering/src/unified/capture_analysis.jl`): the enclosing body is
-lowered to throwaway UnifiedIR by the UnifiedBackend emitter (candidates as
-frame cells, creation sites as marker calls holding one `cell_get` per
-captured variable), and criterion (c) IS cell promotion — the verdict is
-whether `promote_fixpoint!` (§6; the same passes `Compiler.Unified` runs,
-including the try-join pass) resolved the site's read to a reaching
-definition. Maybe-undef captures keep the shared cell (the fixpoint runs
-without definedness-as-data), preserving use-time `UndefVarError`. Shares
-that survive are **typed** when the value type is provable at lowering time
-(declared type, or the join of literal store types) and undef is impossible:
-`Base.RefValue{T}` fields replace untyped `Core.Box` — the typed-cell
-materialization above, done eagerly for the provable subset. The worked
+- **Result-feeding class per owner kind**: a `result` whose region is owned
+  by a `closure` is an error — the body never feeds its owner (the closure
+  IS the op's value); body exits are `return`/`unreachable`.
+- **Cell-class boundary rule**: a cell op reaching a frame `cell` across an
+  `ACT_DEFERRED` boundary is an error — `cell_shared` is the crossing class
+  (§6). Keyed to `ACT_DEFERRED`: an `ACT_RESUME` boundary COPIES frame
+  cells into resume snapshots, edge-defined for cfg `await` (§5.6).
+- Exit terminators and cfg edge bundles never cross an activation boundary,
+  and only `closure` owns deferred regions in v1.
+- **Mode-aware effect composition** for DCE: an unused closure is removable
+  on its creation-site flags alone — deferred-region effects surface at
+  call sites (`dce!`; `adce_region_ops!` skips deferred regions).
+- Throw edges bind to the executing activation's handler; the reference
+  interpreter gets this free (a `UClosure` call unwinds to the CALL site's
+  `try`), and executes closures as creation-time snapshots — values by
+  value, `CellBox` cells by reference, so `cell_shared` sharing and
+  multi-shot loop snapshots fall out.
+
+**Capture decisions are structural.** `promote_capture_cells!`
+(`UnifiedIR/src/promote.jl`, inside `promote_fixpoint!`) implements the
+exact criterion — for a variable `v` and closure-creation site `C`, **value
+capture is legal iff (a)** no write to `v`'s cell inside any deferred
+region, **(b)** no write can execute after any home-frame site whose
+subtree reads it (same-activation forward order with sibling-`if`-arm
+exclusivity, plus multi-shot loop backedges, where the backedge hazard is
+cancelled only when the CELL ITSELF is declared inside the shared loop — a
+fresh shared box per iteration, the structural form of per-iteration
+rebinding), **and (c)** a single defined value reaches each `C`, joins
+included — judged by the standard fixpoint itself on a scratch copy,
+without definedness-as-data. Maybe-undef captures keep the shared cell,
+preserving use-time `UndefVarError`. `JuliaLowering.analyze_captures_precise!`
+(`JuliaLowering/src/unified/capture_analysis.jl`) emits throwaway IR whose
+creation sites are real closure regions holding the capture FOOTPRINT and
+reads the per-variable verdict off which `cell_shared` cells survive; the
+UnifiedBackend's default lowering path (`lower_to_ir`) emits full closure
+regions and MATERIALIZES the residuals (`unified/materialize.jl`): capture
+set := `closure_environment`, closure types via the existing
+`eval_closure_type` machinery — value fields type-parameterized, surviving
+shares `Core.Box` or the lowering-provable typed `Base.RefValue{T}` — and
+the deferred region extracted as a standalone method IR. The worked
 examples (the julia#15276 zoo) are in `docs/closures.md`;
-`demo/capture_zoo.jl` is the runnable differential. When `closure` ops land,
-this analysis collapses into the fixpoint running structurally on the real
-IR instead of a sidecar — the decision procedure and the machinery are
-already one and the same.
+`demo/capture_zoo.jl` is the runnable differential.
+
+Still eager/fallback in v1 (per-construct, to `convert_closures`):
+recursive self-capture keeps the shared-cell fallback (matching stock's
+Box'd self-reference; the `rec` binder is design question #5), multi-method
+local functions, kwargs closures, sparam'd (`where`) local methods, varargs
+local functions, declared return types on local functions, and opaque
+closures. `await` shares the activation-generic pieces when its cfg form
+lands: `closure_environment` and the boundary-aware promotion rule are
+keyed by a `boundary` parameter whose `:resume` variant replaces the
+temporal no-write-after-creation criterion (b) with the live-at-suspension
+frame snapshot (§5.6).
 
 ### 5.8 Core dialect inventory
 
@@ -1266,7 +1293,7 @@ already one and the same.
 | values/structure | `region_arg`, `extract` (const-index tuple extraction — `getfield` in Julia semantics; §5.1), `refine` (Pi successor: an ordinary, canonicalizable statement — fixes the #54762 accumulation class), `value` (escape hatch; reference-free leaves only, §3.2) |
 | computation | `call`, `invoke`, `intrinsic`, `foreigncall`, `new`, `splatnew`, `globalref` |
 | structured CF | `if`, `loop`, `try`, `select`; terminators (0-result) `result`, `continue`, `break`, `return`, `unreachable` (`break`/`continue`/`return` carry a `REGION` target for multi-level exit within the activation) |
-| suspension/capture | `await` (§5.6; v1 in `cfg` form), `closure` (§5.7; enters the core at P3) |
+| suspension/capture | `await` (§5.6; v1 in `cfg` form), `closure` (§5.7; v1 slice implemented — one ACT_DEFERRED body region, optional INLINE isva flags) |
 | unstructured island | `cfg`; block terminators (0-result) `goto`, `br_if`, `switch` with edge bundles (§5.5) |
 | memory cells | `cell` (frame-class), `cell_shared` (heap-class), `cell_get`, `cell_set` (0), `cell_new` (0; re-undefines — the `NewvarNode` successor), `cell_isdefined`, `throw_undef_if_not` (0) — §6 |
 | lowering/runtime vocabulary | `gc_preserve_begin`/`gc_preserve_end` (0; pairing is an L1 rule; a preserve-*region* variant that makes pairing structural is under consideration), `boundscheck`, `latestworld` (0; world barrier — inference must split states across it), `meta` payloads as flags/columns (`:inline`/`:noinline`), coverage effect (0; effectful-inert, position-pinned), `loopinfo` as an *op-attached column* on `loop` (not an adjacency-encoded statement — surgery preserves columns, not adjacency), `copyast`, `cfunction`, `:method`/top-level forms (P3 lowering-port appendix will enumerate exhaustively) |

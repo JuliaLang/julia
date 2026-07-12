@@ -10,11 +10,12 @@ JuliaLowering now computes the precise answer with the **same mem2reg
 machinery** the UnifiedIR optimizer uses (`UnifiedIR/src/promote.jl`, §6 of
 the design): `analyze_captures_precise!`
 (`JuliaLowering/src/unified/capture_analysis.jl`) lowers each enclosing body
-to throwaway UnifiedIR — captured variables as frame cells, each
-closure-creation site as a marker call holding one `cell_get` per captured
-variable — and runs `UnifiedIR.promote_fixpoint!`, the identical pass
-pipeline `Compiler.Unified` runs inside `optimize_ir!`. Shared functions,
-not parallel logic.
+to throwaway UnifiedIR — captured variables as `cell_shared` cells, each
+closure-creation site as a real §5.7 `closure` region op whose deferred
+body is the site's capture footprint — and runs
+`UnifiedIR.promote_fixpoint!`, the identical pass pipeline
+`Compiler.Unified` runs inside `optimize_ir!` (now including
+`promote_capture_cells!`). Shared functions, not parallel logic.
 
 ## The criterion
 
@@ -28,30 +29,36 @@ iff:
   `if` are mutually exclusive with `C` and don't count), **plus** the
   multi-shot rule — a store sharing a loop with `C` executes again on the
   next iteration and *is* observable, unless `v` is re-declared inside that
-  loop (a fresh binding per iteration, `local x` in the loop body);
+  loop (a fresh binding per iteration, `local x` in the loop body — at the
+  IR level, the `cell_shared` statement itself sits inside the loop, so
+  each iteration works a fresh shared box);
 - **(c)** a single defined value reaches `C` — *joins are fine; that is the
   point*. This is exactly cell promotion: the verdict is "did the fixpoint
   resolve the site's `cell_get` to a reaching definition". Arm joins come
   from `promote_arm_cells!`, loop-carried values from `promote_loop_cells!`,
   exception joins from `promote_try_cells!`.
 
-**Why a marker call and not a `closure` region op?** The §5.7 `closure`
-kind exists (a deferred-region owner), but in that representation the
-captured reads live *inside* the deferred body — behind an activation
-boundary that every §6 dominance/path rule in the promotion suite refuses by
-design (`ACT_IMMEDIATE` gates: a deferred read has no dominating store
-"within the same activation"). Making decisions fall out structurally there
-requires the late-capture visibility machinery (deferred-mode reaching
-definitions, environment-as-free-values), which is P3 scope. The marker call
-is the degenerate *immediate* form of the same semantics: value capture is a
-snapshot at creation, so the marker holds the snapshot reads
-(`cell_get` per captured variable) at the creation point, where the v1
-fixpoint can already judge them. It is an ordinary unknown-effect `call`
-with a recognizable pool-constant callee — every pass conservatively
-preserves it and rewrites its operands, no special cases. When `closure`
-ops enter the core, the sidecar IR, the marker, and the separate
-store-after-site pre-check all collapse into the fixpoint running on the
-real IR.
+**The representation: real `closure` regions, decided by
+`promote_capture_cells!`.** Creation sites are §5.7 `closure` ops — the
+captured reads live *inside* the deferred body, behind the activation
+boundary — and the capture-promotion pass (`UnifiedIR/src/promote.jl`,
+part of `promote_fixpoint!`) implements the criterion directly on that
+form: (a) and (b) are checked on IR positions (the backedge cancellation
+is the cell's own declaration sitting inside the shared loop — a fresh
+shared box per iteration, which is also how the emitter renders
+per-iteration `local`), and (c) is judged by the standard fixpoint on a
+scratch copy: the candidate is speculatively demoted to a frame cell with
+one probe `cell_get` per creation site, and a probe the join passes
+resolve proves definite assignment and names the reaching value. The
+commit rewrites the in-deferred reads to the (home-frame) probe — a legal
+by-visibility capture — and the cell dissolves through ordinary
+promotion. In `analyze_captures_precise!`'s throwaway IR the closure
+bodies are the capture FOOTPRINT (one `cell_get` per captured variable,
+plus a synthetic store for lambda-written ones, making criterion (a)
+structural); the per-variable verdict is whether the `cell_shared`
+survived with an in-deferred use. The UnifiedBackend's default lowering
+path emits full closure regions the same way and MATERIALIZES the
+residuals back to runtime closure types (`unified/materialize.jl`).
 
 Maybe-undef captures never become values: the analysis runs the fixpoint
 **without** `promote_undef_cells!` (definedness-as-data would manufacture a
