@@ -815,6 +815,28 @@ static const uint8_t PARTITION_FLAG_DEPWARN        = 0x40;
 // this flag is set during implicit resolution and can be removed if the resolution changes.
 static const uint8_t PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80;
 
+// #62154 re-type guard flags. Unlike the flags above these live *outside*
+// PARTITION_MASK_FLAG, so a replacement partition never inherits them: they describe
+// how *later* declarations relate to this partition's restriction, and a fresh
+// partition has no later declarations yet. Both are monotone (set once, under
+// world_counter_lock, by jl_retype_flag_partitions; never cleared) and are read
+// concurrently -- with atomic operations on the `kind` word -- by compiled guard code
+// and the store commit windows.
+//
+// _RETYPE_READ: some later declaration allows the (single, shared) value slot to hold
+// a value that is not an instance of this partition's restriction. Reads compiled
+// against this partition must verify the values they load; while clear, a value
+// loaded from the slot (fenced before the flag check, see emit_retype_recheck) is
+// known to conform.
+static const size_t PARTITION_FLAG_RETYPE_READ     = 0x100;
+// _RETYPE_WRITE: a value conforming to this partition's restriction is not
+// necessarily storable under some later declaration's restriction. Stores validated
+// against this partition must divert to a path that re-validates against the latest
+// declared type under world_counter_lock; while clear, such a store may commit
+// directly (inside a commit window that re-checks this flag, see
+// jl_binding_begin_commit).
+static const size_t PARTITION_FLAG_RETYPE_WRITE    = 0x200;
+
 #if defined(_COMPILER_MICROSOFT_)
 #define JL_ALIGNED_ATTR(alignment) \
     __declspec(align(alignment))
@@ -853,15 +875,7 @@ enum jl_binding_flags {
     BINDING_FLAG_PUBLICP                              = 0x4,
     // Set if any methods defined in this module implicitly reference
     // this binding. If not, invalidation is optimized.
-    BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x8,
-    // Set (permanently) once the declared type of this global has been changed by a
-    // subsequent typed declaration (#62154). While clear, the single value slot is known
-    // to have only ever held values of the current declared type, so accesses may trust the
-    // type. Once set, generated code must verify the value against the type it was compiled
-    // for, because code compiled against an earlier type may still run (e.g. on the stack
-    // across the redefinition, or via `Base.invoke_in_world`) and observe a value written
-    // under a later, incompatible type.
-    BINDING_FLAG_RETYPED                              = 0x10
+    BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x8
 };
 
 typedef struct _jl_binding_t {

@@ -3409,12 +3409,14 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     else
         print(io, max_world)
     end
-    if (partition.kind & PARTITION_MASK_FLAG) != 0
+    if (partition.kind & (PARTITION_MASK_FLAG | PARTITION_FLAG_RETYPE_READ | PARTITION_FLAG_RETYPE_WRITE)) != 0
         flags = String[]
         (partition.kind & PARTITION_FLAG_EXPORTED)            != 0 && push!(flags, "exported")
         (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0 && push!(flags, "re-exported")
         (partition.kind & PARTITION_FLAG_DEPRECATED)          != 0 && push!(flags, "deprecated")
         (partition.kind & PARTITION_FLAG_DEPWARN)             != 0 && push!(flags, "depwarn")
+        (partition.kind & PARTITION_FLAG_RETYPE_READ)         != 0 && push!(flags, "retype-read-guarded")
+        (partition.kind & PARTITION_FLAG_RETYPE_WRITE)        != 0 && push!(flags, "retype-write-guarded")
         print(io, " [", join(flags, ","), "]")
     end
     print(io, " - ")

@@ -1040,7 +1040,8 @@ end
     @test_throws ErrorException Core.eval(GTC1, :(global x::Int))
     @test_throws ErrorException Core.eval(GTC1, :(x = 3))
 
-    # delete_binding of a declared global activates the re-type guards
+    # delete_binding of a declared global flags the epoch's write guard (nothing may
+    # be stored anymore), but not its read guard (the slot keeps the conforming value)
     @eval module GTC4
         global d::Int = 1
         readd() = d
@@ -1049,27 +1050,33 @@ end
     @test GTC4.readd() === 1
     @test GTC4.writed(1) === 1
     let b = convert(Core.Binding, GlobalRef(GTC4, :d))
-        @test (b.flags & 0x10) == 0x00
+        p = b.partitions # the GLOBAL(Int) epoch
+        @test (p.kind & (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) == 0
         w = Base.get_world_counter()
         Base.delete_binding(GTC4, :d)
-        @test (b.flags & 0x10) == 0x10
-        # the slot still holds the old, conforming value: stale reads verify and pass
+        @test (p.kind & Base.PARTITION_FLAG_RETYPE_WRITE) != 0
+        @test (p.kind & Base.PARTITION_FLAG_RETYPE_READ) == 0
+        # the slot still holds the old, conforming value: stale reads still pass
         @test Base.invoke_in_world(w, GTC4.readd) === 1
         # but stale writes error: the binding is not writable in the latest world
         @test_throws ErrorException Base.invoke_in_world(w, GTC4.writed, 2)
-        # a subsequent const does not assign to the severed global epoch's slot
+        # a subsequent const on the (now severed, GUARD) binding does not assign to
+        # the old global epoch's slot, so its read guard stays clear and stale reads
+        # keep seeing the retained value
         Core.eval(GTC4, :(const d = "fresh"))
+        @test (p.kind & Base.PARTITION_FLAG_RETYPE_READ) == 0
         @test invokelatest(() -> GTC4.d) == "fresh"
         @test Base.invoke_in_world(w, GTC4.readd) === 1
     end
 
-    # deleting an undeclared or constant binding does not set the flag
+    # deleting an undeclared or constant binding flags nothing
     @eval module GTC5
         const c = 1
     end
     let b = convert(Core.Binding, GlobalRef(GTC5, :c))
+        p = b.partitions
         Base.delete_binding(GTC5, :c)
-        @test (b.flags & 0x10) == 0x00
+        @test (p.kind & (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) == 0
     end
 end
 
@@ -1095,14 +1102,14 @@ end
     invokelatest(setglobal!, GRDS2, :w, 2)
     @test invokelatest(modifyglobal!, GRDS2, :w, +, 3) == (2 => 5)
 
-    # the common `global x` + typed declaration sequence must not leave the re-type
-    # guards permanently active (the activation is transient: no divergent typed
-    # epoch ever existed)
+    # the common `global x` + typed declaration sequence must not guard the new
+    # typed epoch: only the superseded weak (Any) epoch's write guard is flagged
     @eval module GRDS3
         global t::Int = 1
     end
     let b = convert(Core.Binding, GlobalRef(GRDS3, :t))
-        @test (b.flags & 0x10) == 0x00
+        p = b.partitions # the GLOBAL(Int) epoch, newest first
+        @test (p.kind & (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) == 0
     end
 
     # stale reads of a re-typed binding may throw TypeError: inference must model
@@ -1189,6 +1196,51 @@ exit(bad == 0 ? 0 : 1)
         @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
     end
 
+    # compiled guarded-Set commits (which run inside a commit window) racing with
+    # re-declarations: whenever the declared type is `Int`, the slot holds an `Int`,
+    # and a stale compiled setter's store is either diverted (TypeError) or conforming
+    let script = raw"""
+using Base.Threads
+module CS
+    global s::Int = 1
+end
+@eval CS setter(v::Int, n::Int) = (for i in 1:n
+    global s = v
+end; nothing)
+function stress(iters)
+    done = Atomic{Bool}(false)
+    setters = [Threads.@spawn begin
+        while !done[]
+            try
+                invokelatest(CS.setter, 7, 1000)
+            catch e
+                e isa TypeError || rethrow()
+            end
+        end
+    end for _ in 1:3]
+    bad = 0
+    for i in 1:iters
+        Core.eval(CS, :(global s::Float64 = 2.5))
+        for _ in 1:20
+            invokelatest(getglobal, CS, :s) isa Float64 || (bad += 1)
+        end
+        Core.eval(CS, :(global s::Int = 1))
+        for _ in 1:20
+            invokelatest(getglobal, CS, :s) isa Int || (bad += 1)
+        end
+    end
+    done[] = true
+    foreach(wait, setters)
+    return bad
+end
+bad = stress(300)
+println(bad == 0 ? "STRESS OK" : "STRESS FAIL")
+exit(bad == 0 ? 0 : 1)
+"""
+        cmd = `$(Base.julia_cmd()) --startup-file=no -t4 -e $script`
+        @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
+    end
+
     # threaded: a hot loop of guarded typed reads with a runtime store call of an
     # unrelated binding in the loop body (the shape that a hoisted guard would
     # miscompile), racing with re-typing: reads either return genuine values of the
@@ -1239,4 +1291,66 @@ exit(bad == 0 ? 0 : 1)
         cmd = `$(Base.julia_cmd()) --startup-file=no -t4 -e $script`
         @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
     end
+end
+
+@testset "per-partition re-type guards (#62154)" begin
+    RETYPE_READ = Base.PARTITION_FLAG_RETYPE_READ
+    RETYPE_WRITE = Base.PARTITION_FLAG_RETYPE_WRITE
+    RETYPE_BOTH = RETYPE_READ | RETYPE_WRITE
+    @eval module PPG
+        global a::Int = 1
+    end
+    b = convert(Core.Binding, GlobalRef(PPG, :a))
+    p1 = b.partitions
+    @test (p1.kind & RETYPE_BOTH) == 0
+
+    # disjoint re-type: the old epoch's reads must verify and its writes must divert
+    Core.eval(PPG, :(global a::Float64 = 2.5))
+    p2 = b.partitions
+    @test p2 !== p1
+    @test (p1.kind & RETYPE_BOTH) == RETYPE_BOTH
+    # ... but the *new* epoch is entirely unguarded: code compiled against it runs
+    # at full speed
+    @test (p2.kind & RETYPE_BOTH) == 0
+
+    # widening: the narrower epoch's reads must verify (the slot may now hold any
+    # Real), but its writes stay direct -- a Float64 still conforms to Real
+    Core.eval(PPG, :(global a::Real = 1.5))
+    p3 = b.partitions
+    @test (p2.kind & RETYPE_BOTH) == RETYPE_READ
+    @test (p3.kind & RETYPE_BOTH) == 0
+
+    # narrowing back: the wider epoch's writes must divert (a Real is not
+    # necessarily a Float64), but its reads stay trusted (every Float64 is a Real);
+    # the Float64 epoch is entirely unaffected (Float64 <: Float64)
+    Core.eval(PPG, :(global a::Float64 = 1.0))
+    @test (p3.kind & RETYPE_BOTH) == RETYPE_WRITE
+    @test (p2.kind & RETYPE_BOTH) == RETYPE_READ
+    p4 = b.partitions
+    @test (p4.kind & RETYPE_BOTH) == 0
+
+    # behavioral check of the widening case: a stale writer compiled against the
+    # Int epoch may keep storing (its values conform to every later restriction it
+    # was widened to), while a stale reader compiled against it must verify
+    @eval module PPG2
+        global g::Int = 1
+        readg() = g
+        writeg(v) = setglobal!(@__MODULE__, :g, v)
+    end
+    @test PPG2.readg() === 1
+    @test PPG2.writeg(2) === 2
+    w = Base.get_world_counter()
+    Core.eval(PPG2, :(global g::Number = 3))
+    bg = convert(Core.Binding, GlobalRef(PPG2, :g))
+    pold = @atomic(bg.partitions.next) # the Int epoch
+    @test (pold.kind & (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) ==
+          Base.PARTITION_FLAG_RETYPE_READ
+    # stale write of an Int: still legal under Number, commits (fast path)
+    @test Base.invoke_in_world(w, PPG2.writeg, 4) === 4
+    @test invokelatest(getglobal, PPG2, :g) === 4
+    # stale read: verifies; passes while the slot holds an Int...
+    @test Base.invoke_in_world(w, PPG2.readg) === 4
+    # ... and errors once it does not
+    invokelatest(setglobal!, PPG2, :g, 2.5)
+    @test_throws TypeError Base.invoke_in_world(w, PPG2.readg)
 end

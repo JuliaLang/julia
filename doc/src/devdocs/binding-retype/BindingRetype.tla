@@ -7,174 +7,143 @@
 (* declared type while such accesses are in flight.                         *)
 (*                                                                          *)
 (* The code being modeled:                                                  *)
+(*   - src/julia.h: PARTITION_FLAG_RETYPE_READ / PARTITION_FLAG_RETYPE_WRITE *)
 (*   - src/julia_internal.h: jl_binding_begin_commit / jl_binding_end_commit *)
-(*   - src/module.c: jl_activate_retype_guards, jl_deactivate_retype_guards, *)
-(*     jl_checked_assignment (and the other jl_checked_* storers)            *)
-(*   - src/toplevel.c: jl_declare_global (divergence scan, `transition`,     *)
-(*     guard activation + drain, retained-value validation, value swap,      *)
-(*     world publication, transient deactivation)                            *)
-(*   - src/cgutils.cpp: emit_retype_recheck, emit_binding_commit_begin/end;  *)
-(*     src/codegen.cpp: emit_retype_guard, emit_globalref                    *)
+(*   - src/module.c: jl_retype_flag_partitions, jl_checked_assignment (and   *)
+(*     the other jl_checked_* storers)                                       *)
+(*   - src/toplevel.c: jl_declare_global (guard flagging, retained-value     *)
+(*     validation, value swap, world publication)                            *)
+(*   - src/cgutils.cpp: emit_retype_recheck, emit_binding_commit_begin/end   *)
+(*   - src/codegen.cpp: emit_retype_guard, emit_globalref                    *)
 (*                                                                          *)
 (* Shared state per binding: a value `slot` (each value has a runtime       *)
-(* type), the BINDING_FLAG_RETYPED flag, and a *published* declared type    *)
-(* ("restriction") governed by the monotonically increasing world counter.  *)
-(* world_counter_lock serializes re-declarations and the "locked" store     *)
-(* path. The invariant maintained: the slot's value always conforms to the  *)
-(* currently published restriction (TypeSlotOK below).                      *)
+(* type) and a sequence of *epochs* (binding partitions), each carrying its  *)
+(* declared type ("restriction") and two monotone guard flags:              *)
 (*                                                                          *)
-(* The threads:                                                             *)
+(*   r (RETYPE_READ):  some later declaration allows the slot to hold a     *)
+(*                     value outside this epoch's restriction; reads         *)
+(*                     compiled against the epoch must verify what they      *)
+(*                     load.                                                 *)
+(*   w (RETYPE_WRITE): a value conforming to this epoch's restriction is    *)
+(*                     not necessarily storable under some later declared    *)
+(*                     type; stores validated against the epoch must divert  *)
+(*                     to the locked path.                                   *)
 (*                                                                          *)
-(* Storer (runtime path, jl_checked_assignment):                            *)
-(*   s1  vw := world; validate v against the restriction published at vw    *)
-(*       (error if non-conforming). Modeled as one atomic step: in the C     *)
-(*       code the world capture and the validation's own world load are      *)
-(*       distinct, but a store only commits if world still equals vw at s4,  *)
-(*       so any interleaving in which the world moved between the two loads  *)
-(*       diverts to the locked path anyway; collapsing them loses no          *)
-(*       distinguishable committed behavior. The thread may stall arbitrarily *)
-(*       long between s1 and s3 (TLC interleaving covers this).              *)
-(*   s3  open the commit window: ptls->bnd_commit_window := 1                *)
-(*   s4  read flag and world: if flag set OR world # vw, close the window    *)
-(*       and take the LOCKED path (re-validate against the *latest*          *)
-(*       restriction under world_counter_lock, then store)                   *)
-(*   s5  commit: slot := v          (while the window is still open)         *)
+(* A re-declaration to type Tnew sets, on every prior epoch P (under         *)
+(* world_counter_lock, before anything is published):                        *)
+(*     P.r  when  ~(Tnew <: P.ty)      (new values may not conform to P)     *)
+(*     P.w  when  ~(P.ty <: Tnew)      (P-validated values may violate Tnew) *)
+(* then issues the asymmetric heavy fence if any flag transitioned, drains   *)
+(* the per-thread commit windows if any *write* flag transitioned,           *)
+(* validates the retained value (bare form), and only then swaps in the new  *)
+(* value and publishes the new epoch -- whose own flags start clear, so code *)
+(* compiled against the new declared type runs unguarded. A pure widening    *)
+(* sets no write flags: stale stores keep committing directly, soundly.      *)
+(*                                                                          *)
+(* The threads:                                                              *)
+(*                                                                          *)
+(* Runtime storer (jl_checked_assignment):                                   *)
+(*   s1  validate a value v against the restriction of the currently         *)
+(*       published epoch V (one atomic step; the thread may stall            *)
+(*       arbitrarily long afterwards)                                        *)
+(*   s3  open the commit window (ptls->bnd_commit_window := 1)               *)
+(*   s4  read V.w (possibly stale, see the fence abstraction): set ->        *)
+(*       close the window and take the LOCKED path (re-validate against      *)
+(*       the *latest* published restriction under world_counter_lock,        *)
+(*       then store); clear -> proceed                                       *)
+(*   s5  commit: slot := v            (window still open)                    *)
 (*   s6  close the window (release; pairs with the drain's acquire)          *)
 (*                                                                          *)
-(* Compiled fast-path storer: same shape but s4 checks the flag ONLY (no    *)
-(* world check), and its validation is against the declared type Tc its     *)
-(* code was compiled for. Compiled fast paths exist only for epochs whose   *)
-(* partition kind is a typed GLOBAL (PARTITION_KIND_GLOBAL) -- this is what  *)
-(* makes the transient deactivation below sound for compiled code.          *)
+(* Compiled fast-path storer: same shape; its validation is the typecheck    *)
+(* against the declared type Tc of the epoch C it was compiled for (only     *)
+(* typed-GLOBAL epochs have compiled fast paths), and s4 checks C.w.         *)
 (*                                                                          *)
-(* Reader (compiled against the declared type Tc published when compiled):  *)
-(*   r1  v := slot                                                          *)
-(*   r2  light fence; read flag                                             *)
-(*   r3  flag clear:  TRUST v at type Tc  (ReaderSoundness is the theorem)   *)
-(*       flag set:    verify typeof(v) <: Tc, error on mismatch (safe)       *)
-(*                                                                          *)
-(* Re-typer (jl_declare_global, holding world_counter_lock throughout):     *)
-(*   t1  decide Tnew; diverged := a *different* typed-GLOBAL epoch exists    *)
-(*       in the partition history; transition := the currently published    *)
-(*       restriction is writable and differs from Tnew (and Tnew # Any)      *)
-(*   t2  if diverged \/ transition: activated := (flag was clear);           *)
-(*       flag := 1; if activated: heavy fence (membarrier), then DRAIN:      *)
-(*       wait until every thread's commit window is closed                   *)
-(*   t3  bare form (`global x::T`, no value): validate that the retained     *)
-(*       slot value conforms to Tnew; if not, roll back (clear the flag iff  *)
-(*       this call activated it) and error -- nothing is published           *)
-(*   t4  install the new restriction (unpublished); if value-carrying,       *)
-(*       slot := newval (newval conforms to Tnew)                            *)
-(*   t5  publish: world := world + 1                                         *)
-(*   t6  transient deactivation: if activated /\ ~diverged /\ published:     *)
-(*       clear the flag (release)                                            *)
+(* Reader (compiled against epoch R):                                        *)
+(*   r1  v := slot                                                           *)
+(*   r2  light fence; read R.r (possibly stale)                              *)
+(*   r3  clear: TRUST v at R.ty (ReaderSoundness is the theorem)             *)
+(*       set:   verify typeof(v) <: R.ty, error on mismatch (always safe)    *)
 (*                                                                          *)
 (* -------------------- Abstraction of memory ordering -------------------- *)
 (*                                                                          *)
-(* Unlike the sibling spec SchedulerWake.tla, this protocol's correctness   *)
-(* DOES rest on memory ordering, so we do not assume full sequential        *)
-(* consistency for the flag. The membarrier's asymmetric-fence guarantee is *)
-(* modeled explicitly:                                                      *)
+(* The protocol's correctness rests on the asymmetric fence, modeled          *)
+(* explicitly:                                                               *)
 (*                                                                          *)
-(*  1. STALE FLAG READS. The activation is split into phases: after         *)
-(*     flag := 1 but before the membarrier completes (`fenced` = FALSE), a  *)
-(*     storer's s4 / reader's r2 flag read may nondeterministically return  *)
-(*     the stale value (clear). After the membarrier action (`fenced` =     *)
-(*     TRUE), all flag reads return the true value. This captures "a flag   *)
-(*     check that executed before the IPI may miss the flag; one that       *)
-(*     executed after it cannot".                                           *)
+(*  1. STALE FLAG READS. Flags set by the in-progress declaration are        *)
+(*     collected in `pendR`/`pendW` until its membarrier: a read of a        *)
+(*     pending flag may nondeterministically return the stale (clear)        *)
+(*     value; after RT_Fence every read is accurate. Flags set by earlier    *)
+(*     (already fenced) declarations are always read accurately. This        *)
+(*     captures "a flag check that executed before the IPI may miss the      *)
+(*     flag; one that executed after it cannot". The flags are monotone --   *)
+(*     there is no transient clearing in this design -- so no                *)
+(*     release/acquire pairing on the flag itself is needed (the world       *)
+(*     check of the previous design is gone: a stale storer that validated   *)
+(*     against a superseded epoch is diverted by that epoch's sticky write   *)
+(*     flag, forever).                                                       *)
 (*                                                                          *)
-(*  2. WINDOW ANNOUNCEMENTS ARE IMMEDIATELY VISIBLE. `window` is a plain    *)
-(*     shared variable here. Justification: the announcement (s3) precedes  *)
-(*     the flag read (s4) in program order, separated by a compiler-only    *)
-(*     fence (jl_signal_fence / the Monotonic store + fenced load pair in   *)
-(*     emit_binding_commit_begin). If the flag read executed before the     *)
-(*     IPI -- the only case in which the storer proceeds despite an          *)
-(*     in-progress activation -- the IPI's full barrier flushes the          *)
-(*     announcement before jl_membarrier returns, hence before the drain    *)
-(*     begins. A storer whose flag read happens after the IPI reads the     *)
-(*     true flag and diverts, so its window state is irrelevant.            *)
+(*  2. WINDOW ANNOUNCEMENTS ARE IMMEDIATELY VISIBLE. `window` is a plain     *)
+(*     shared variable. Justification: the announcement (s3) precedes the    *)
+(*     flag read (s4) in program order with a compiler barrier; retirement   *)
+(*     is in order and the IPI is taken at a retirement boundary, so if the  *)
+(*     flag read retired before the IPI the announcement is at worst in the  *)
+(*     store buffer, which the IPI's barrier flushes before the drain        *)
+(*     begins; a flag read that had not retired re-executes after the IPI    *)
+(*     and reads accurately.                                                 *)
 (*                                                                          *)
-(*  3. DRAIN ACQUIRE / CLOSE RELEASE. Window close (s6) is a release store  *)
-(*     paired with the drain's acquire loads: everything inside the window  *)
-(*     (the commit) is visible to the re-typer once the drain observes the  *)
-(*     window closed. Accordingly the commit (s5) takes effect on the       *)
-(*     shared `slot` strictly before the window closes, and the drain       *)
-(*     action is enabled only when every window is closed.                  *)
+(*  3. DRAIN ACQUIRE / CLOSE RELEASE. Window close (s6) is a release store   *)
+(*     paired with the drain's acquire loads: everything inside the window   *)
+(*     (the commit) is visible to the re-declaration once the drain          *)
+(*     observes the window closed. Accordingly the commit takes effect on    *)
+(*     the shared `slot` strictly before the window closes, and the drain    *)
+(*     action is enabled only when every window is closed.                   *)
 (*                                                                          *)
-(*  4. TRANSIENT CLEAR RELEASE / s4 ACQUIRE. The t6 clear is a release; the *)
-(*     s4 flag load is an acquire. If s4 observes the CLEARED flag it also  *)
-(*     observes the world published at t5. In this model t5 precedes t6     *)
-(*     atomically under the lock and TLC state is global, so this pairing   *)
-(*     is automatic -- but note that the stale-read nondeterminism of rule   *)
-(*     1 applies only to the FLAG, never to the world value read in s4: a   *)
-(*     stale-clear flag read can only occur between an activation and its   *)
-(*     membarrier, during which the activating re-declaration has not yet   *)
-(*     published anything, so the world a racing s4 needs to compare        *)
-(*     against is not concurrently moving in a way the staleness could      *)
-(*     hide. The dangerous direction -- flag reads clear because it was      *)
-(*     transiently CLEARED (t6) while the world already moved (t5) -- is     *)
-(*     exactly what the release/acquire pairing (and this model) makes       *)
-(*     accurate.                                                            *)
+(*  4. MERGED INSTALL + VALUE SWAP + PUBLICATION. As in the C code the swap  *)
+(*     precedes the world bump; they are modeled as one atomic action        *)
+(*     because every observer that could distinguish them is either          *)
+(*     verifying (safe) or diverted to the lock the re-typer holds: a swap   *)
+(*     of a value outside some epoch's restriction implies that epoch's      *)
+(*     read flag was set and fenced beforehand.                              *)
 (*                                                                          *)
-(*  5. MERGED INSTALL + VALUE SWAP + PUBLICATION (t4 + t5). In the C code   *)
-(*     the value store and the world bump are two release stores. We model  *)
-(*     them as one atomic action. Justification: the installed-but-         *)
-(*     unpublished partition is invisible to other threads (they resolve    *)
-(*     restrictions through the published world); the pre-publication slot  *)
-(*     swap IS observable through the slot, but only by threads whose       *)
-(*     trust in the slot's type is gated by the flag -- which is set and    *)
-(*     fenced throughout (a value-carrying swap of a *different* type       *)
-(*     implies diverged \/ transition, hence guards active and drained      *)
-(*     before t4; a same-type swap cannot violate any restriction). Every   *)
-(*     observer therefore either verifies (safe either way) or diverts to   *)
-(*     the lock we hold, so no trusted access can distinguish the merged    *)
-(*     step from the two-store original. Merging also makes TypeSlotOK      *)
-(*     expressible in its strong, unconditional form.                       *)
+(* Other simplifications (honesty section):                                  *)
+(*   - One binding; one storer of each kind; one reader; a fixed             *)
+(*     declaration script bounds the state space.                            *)
+(*   - Slot loads/stores are atomic (they are release/seq_cst atomics in     *)
+(*     the C code; the correctness argument never relies on slot-store       *)
+(*     reordering, only on the flag/window orderings above).                 *)
+(*   - Stale reads of a *set* flag as clear after the fence, or spurious     *)
+(*     sets, are not modeled (the former cannot happen, the latter only      *)
+(*     sends threads to the safe slow path).                                 *)
+(*   - The locked store path is one atomic action: the lock excludes the     *)
+(*     only writers of the epoch sequence, and interleaved fast-path         *)
+(*     commits of concurrently-validated values commute with it w.r.t. our   *)
+(*     invariants.                                                           *)
+(*   - A failed bare re-declaration publishes nothing; the flags it set      *)
+(*     remain (deliberately: they are conservative, and only pessimize       *)
+(*     superseded epochs).                                                   *)
+(*   - delete_binding / const-over-global are jl_retype_flag_partitions      *)
+(*     calls with store_ty = NULL (write-flag everything) and slot_ty the    *)
+(*     constant's type; they are strictly less permissive instances of the   *)
+(*     modeled transitions and are omitted.                                  *)
+(*   - The undefined (NULL) slot state is not modeled.                       *)
 (*                                                                          *)
-(* Other simplifications (honesty section):                                 *)
-(*   - One binding, one storer of each kind, one reader; scripts bound the  *)
-(*     state space. The re-typer performs a fixed script of declarations.   *)
-(*   - Store buffering of the slot itself is not modeled: slot loads/stores *)
-(*     are atomic (they are seq_cst/release atomics in the C code, and the  *)
-(*     protocol's correctness argument never relies on slot-store           *)
-(*     reordering, only on the flag/window/world orderings modeled above).  *)
-(*   - Stale reads of a *cleared* flag as still-set are not modeled: that   *)
-(*     direction only sends a storer/reader to the locked/verify path,      *)
-(*     which is always safe (it can delay, never unsound).                  *)
-(*   - The locked store path (revalidate against latest + store under       *)
-(*     world_counter_lock) is one atomic action: the lock excludes the only *)
-(*     writers of the restriction, and interleaved fast-path commits of     *)
-(*     concurrently-validated values commute with it w.r.t. our invariants. *)
-(*   - A failed bare re-declaration leaves its installed partition          *)
-(*     unpublished; the real code reuses/overwrites it in place on the next *)
-(*     declaration (min_world == new_world under the still-held pattern of  *)
-(*     world usage here), so the model simply discards it. Keeping it would *)
-(*     only ever make `diverged` spuriously TRUE, which is conservative.    *)
-(*   - jl_delete_binding and const-over-global re-declarations are omitted: *)
-(*     they are t2 with a sticky flag (plus, for const, a slot store before *)
-(*     publication) and no transient deactivation, i.e. strictly less racy  *)
-(*     than the diverged value-carrying declaration modeled here.           *)
-(*   - The undefined (NULL) slot state is not modeled; the slot always      *)
-(*     holds a value. Undef-ness is orthogonal to the type-safety protocol. *)
-(*                                                                          *)
-(* Two constants inject known bugs so the model can demonstrate it has      *)
-(* teeth (see MCBuggyNoWorldCheck / MCBuggyEarlyValidation):                *)
-(*   - StorerWorldCheck = FALSE removes the world comparison from the       *)
-(*     runtime storer's s4, re-creating the unsoundness that the transient  *)
-(*     deactivation (t6) would otherwise cause.                             *)
-(*   - EarlyBareValidation = TRUE performs the bare re-declaration's        *)
-(*     retained-value validation BEFORE guard activation and the drain      *)
-(*     (the ordering bug found during review of the PR), instead of after.  *)
+(* Two constants inject known-shape bugs so the model can demonstrate it     *)
+(* has teeth (see MCBuggySwappedFlags / MCBuggyEarlyValidation):             *)
+(*   - SwappedFlagConditions = TRUE computes each flag with the converse     *)
+(*     subtype test (reads flagged when ~(P.ty <: Tnew), writes when         *)
+(*     ~(Tnew <: P.ty)), which looks plausible and is exactly wrong.         *)
+(*   - EarlyBareValidation = TRUE performs the bare re-declaration's         *)
+(*     retained-value validation BEFORE the flagging and drain (the          *)
+(*     ordering bug found during review of the PR), instead of after.        *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences, FiniteSets
 
 CONSTANTS
-    Script,              \* sequence of declarations [ty |-> Type, val |-> Value or "none"]
-    StoreAttempts,       \* store attempts per storer thread
-    ReadAttempts,        \* reads performed by the compiled reader
-    StorerWorldCheck,    \* TRUE: faithful model. FALSE: drop s4's world check (bug)
-    EarlyBareValidation  \* FALSE: faithful model. TRUE: t3 validates before t2 (bug)
+    Script,               \* sequence of declarations [ty |-> Type, val |-> Value or "none"]
+    StoreAttempts,        \* store attempts per storer thread
+    ReadAttempts,         \* reads performed by the compiled reader
+    SwappedFlagConditions, \* FALSE: faithful model. TRUE: converse subtype tests (bug)
+    EarlyBareValidation   \* FALSE: faithful model. TRUE: t3 validates before t2 (bug)
 
 (* A tiny type lattice: Int and Float are disjoint subtypes of Any. Value    *)
 (* "i" has runtime type Int, value "f" has runtime type Float.               *)
@@ -183,367 +152,317 @@ Values     == {"i", "f"}
 NoVal      == "none"
 TypeofVal(v)  == IF v = "i" THEN "Int" ELSE "Float"
 Conforms(v, T) == T = "Any" \/ TypeofVal(v) = T
+Subtype(S, T)  == S = T \/ T = "Any"
 
 StorerIds == {"rs", "cc"}   \* runtime-path storer, compiled-path storer
 
 ASSUME /\ StoreAttempts \in Nat /\ ReadAttempts \in Nat
-       /\ StorerWorldCheck \in BOOLEAN /\ EarlyBareValidation \in BOOLEAN
+       /\ SwappedFlagConditions \in BOOLEAN /\ EarlyBareValidation \in BOOLEAN
        /\ \A i \in 1..Len(Script) :
             /\ Script[i].ty \in Types
             /\ Script[i].val \in Values \cup {NoVal}
             \* a carried value conforms to the carried type by construction
-            \* (jl_declare_global validates it before touching any state)
             /\ Script[i].val # NoVal => Conforms(Script[i].val, Script[i].ty)
 
+MaxEp == Len(Script) + 1   \* epoch 1 is the initial weak (`global x`, Any) epoch
+
 VARIABLES
-    world,      \* published world counter
-    pubKind,    \* "Declared" (weak `global x`, restriction Any) or "Global" (typed)
-    pubTy,      \* the published restriction (meaningful when pubKind = "Global")
+    eps,        \* Seq of epochs [ty, r, w]; eps[pub] is the published one
+    pub,        \* index of the currently published epoch
     slot,       \* the binding's single value slot
-    flag,       \* BINDING_FLAG_RETYPED (architecturally true value)
-    fenced,     \* FALSE only between an activation's flag := 1 and its membarrier
-    ghist,      \* set of restrictions of all typed-GLOBAL epochs ever published
-    lockHeld,   \* world_counter_lock (held only by the re-typer; locked stores are atomic)
+    pendR,      \* epoch indices whose r flag was set by the in-progress,
+                \* not-yet-fenced declaration (stale-readable, rule 1)
+    pendW,      \* likewise for w flags
+    lockHeld,   \* world_counter_lock (held only by the re-typer)
     window,     \* window[s]: storer s's ptls->bnd_commit_window
-    badStore,   \* history flag: some commit stored a value not conforming to the
-                \* restriction published at commit time (StoreValidation's witness)
-    rs,         \* runtime-path storer:  [pc, left, val, vw]
-    cc,         \* compiled-path storer: [pc, left, val, tc]
-    rd,         \* compiled reader:      [pc, left, val, flg, tc]
-    rt          \* re-typer:             [pc, idx, tnew, nval, bare, div, trans,
-                \*                        act, repl, savedW, savedF, earlyOK]
+    badStore,   \* history flag: some fast-path commit stored a value that did not
+                \* conform to the restriction published at commit time
+    rs,         \* runtime-path storer:  [pc, left, val, vep]
+    cc,         \* compiled-path storer: [pc, left, val, cep]
+    rd,         \* compiled reader:      [pc, left, val, flg, cep]
+    rt          \* re-typer:             [pc, idx, tnew, nval, bare, drain, earlyOK]
 
-vars == <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld, window,
-          badStore, rs, cc, rd, rt>>
+vars == <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore, rs, cc, rd, rt>>
 
-(* The restriction that governs stores in the currently published world.    *)
-Eff == IF pubKind = "Declared" THEN "Any" ELSE pubTy
+(* Rule 1: a flag read is accurate except while the setting declaration has  *)
+(* not yet fenced, where it may also return the stale (clear) value.         *)
+ReadR(i) == IF eps[i].r THEN (IF i \in pendR THEN {TRUE, FALSE} ELSE {TRUE})
+            ELSE {FALSE}
+ReadW(i) == IF eps[i].w THEN (IF i \in pendW THEN {TRUE, FALSE} ELSE {TRUE})
+            ELSE {FALSE}
 
-(* Rule 1: a flag read is accurate except between an activation and its     *)
-(* membarrier, where it may also return the stale (clear) value.            *)
-FlagReads == IF flag /\ ~fenced THEN {TRUE, FALSE} ELSE {flag}
+(* The faithful (and, under SwappedFlagConditions, the buggy) flag calculus. *)
+NeedR(pty, tnew) == IF SwappedFlagConditions THEN ~Subtype(pty, tnew)
+                                             ELSE ~Subtype(tnew, pty)
+NeedW(pty, tnew) == IF SwappedFlagConditions THEN ~Subtype(tnew, pty)
+                                             ELSE ~Subtype(pty, tnew)
 
 TypeOK ==
-    /\ world \in 0..Len(Script)
-    /\ pubKind \in {"Declared", "Global"}
-    /\ pubTy \in Types
+    /\ eps \in Seq([ty: Types, r: BOOLEAN, w: BOOLEAN])
+    /\ Len(eps) \in 1..MaxEp
+    /\ pub \in 1..Len(eps)
     /\ slot \in Values
-    /\ flag \in BOOLEAN /\ fenced \in BOOLEAN
-    /\ ghist \subseteq Types
+    /\ pendR \subseteq 1..Len(eps) /\ pendW \subseteq 1..Len(eps)
     /\ lockHeld \in BOOLEAN /\ badStore \in BOOLEAN
     /\ window \in [StorerIds -> BOOLEAN]
     /\ rs \in [pc: {"idle", "ready", "open", "commit", "close", "locked"},
-               left: 0..StoreAttempts, val: Values \cup {NoVal},
-               vw: 0..Len(Script)]
+               left: 0..StoreAttempts, val: Values \cup {NoVal}, vep: 1..MaxEp]
     /\ cc \in [pc: {"idle", "ready", "open", "commit", "close", "locked"},
-               left: 0..StoreAttempts, val: Values \cup {NoVal},
-               tc: Types \cup {NoVal}]
+               left: 0..StoreAttempts, val: Values \cup {NoVal}, cep: 0..MaxEp]
     /\ rd \in [pc: {"idle", "r2", "r3"}, left: 0..ReadAttempts,
-               val: Values \cup {NoVal}, flg: BOOLEAN, tc: Types \cup {NoVal}]
-    /\ rt \in [pc: {"idle", "activate", "fence", "drain", "validate",
+               val: Values \cup {NoVal}, flg: BOOLEAN, cep: 0..MaxEp]
+    /\ rt \in [pc: {"idle", "flag", "fence", "drain", "validate",
                     "publish", "finish", "failed"},
                idx: 1..(Len(Script) + 1), tnew: Types \cup {NoVal},
-               nval: Values \cup {NoVal}, bare: BOOLEAN, div: BOOLEAN,
-               trans: BOOLEAN, act: BOOLEAN, repl: BOOLEAN,
-               savedW: 0..Len(Script), savedF: BOOLEAN, earlyOK: BOOLEAN]
+               nval: Values \cup {NoVal}, bare: BOOLEAN, drain: BOOLEAN,
+               earlyOK: BOOLEAN]
 
 Init ==
-    /\ world = 0
-    /\ pubKind = "Declared"        \* weak `global x`: stores validate against Any
-    /\ pubTy = "Any"
+    /\ eps = << [ty |-> "Any", r |-> FALSE, w |-> FALSE] >>  \* weak `global x`
+    /\ pub = 1
     /\ slot = "i"
-    /\ flag = FALSE /\ fenced = TRUE
-    /\ ghist = {}
+    /\ pendR = {} /\ pendW = {}
     /\ lockHeld = FALSE /\ badStore = FALSE
     /\ window = [s \in StorerIds |-> FALSE]
-    /\ rs = [pc |-> "idle", left |-> StoreAttempts, val |-> NoVal, vw |-> 0]
-    /\ cc = [pc |-> "idle", left |-> StoreAttempts, val |-> NoVal, tc |-> NoVal]
+    /\ rs = [pc |-> "idle", left |-> StoreAttempts, val |-> NoVal, vep |-> 1]
+    /\ cc = [pc |-> "idle", left |-> StoreAttempts, val |-> NoVal, cep |-> 0]
     /\ rd = [pc |-> "idle", left |-> ReadAttempts, val |-> NoVal,
-             flg |-> FALSE, tc |-> NoVal]
+             flg |-> FALSE, cep |-> 0]
     /\ rt = [pc |-> "idle", idx |-> 1, tnew |-> NoVal, nval |-> NoVal,
-             bare |-> FALSE, div |-> FALSE, trans |-> FALSE, act |-> FALSE,
-             repl |-> FALSE, savedW |-> 0, savedF |-> FALSE, earlyOK |-> TRUE]
+             bare |-> FALSE, drain |-> FALSE, earlyOK |-> TRUE]
 
 -----------------------------------------------------------------------------
 (* Runtime-path storer (jl_checked_assignment).                              *)
 
-(* s1 + s2: capture the validated world and validate a nondeterministically  *)
-(* chosen value against the restriction it publishes. A non-conforming value *)
-(* raises a type error: the attempt is abandoned. (See the header for why    *)
-(* folding the two world loads of the C code into one step is faithful.)     *)
+(* s1: validate a nondeterministically chosen value against the currently    *)
+(* published epoch's restriction, remembering that epoch; a non-conforming   *)
+(* value raises a type error (the attempt is abandoned).                     *)
 RS_Validate ==
     /\ rs.pc = "idle" /\ rs.left > 0
     /\ \E v \in Values :
-         rs' = IF Conforms(v, Eff)
-               THEN [rs EXCEPT !.pc = "ready", !.val = v, !.vw = world]
-               ELSE [rs EXCEPT !.left = @ - 1]    \* type error at s2
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   window, badStore, cc, rd, rt>>
+         rs' = IF Conforms(v, eps[pub].ty)
+               THEN [rs EXCEPT !.pc = "ready", !.val = v, !.vep = pub]
+               ELSE [rs EXCEPT !.left = @ - 1]    \* type error at s1
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
+                   cc, rd, rt>>
 
 (* s3: announce the commit window (rule 2: immediately visible).             *)
 RS_Open ==
     /\ rs.pc = "ready"
     /\ window' = [window EXCEPT !["rs"] = TRUE]
     /\ rs' = [rs EXCEPT !.pc = "open"]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   badStore, cc, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, cc, rd, rt>>
 
-(* s4: re-check the flag (possibly stale, rule 1) and -- on the faithful      *)
-(* path -- the world. Either divert to the locked path (window closed) or     *)
-(* proceed to the commit with the window still open.                         *)
+(* s4: re-check the validated epoch's write flag (possibly stale, rule 1):   *)
+(* divert to the locked path (window closed) or proceed to the commit.       *)
 RS_Check ==
     /\ rs.pc = "open"
-    /\ \E fr \in FlagReads :
-         IF fr \/ (StorerWorldCheck /\ world # rs.vw)
+    /\ \E fr \in ReadW(rs.vep) :
+         IF fr
          THEN /\ window' = [window EXCEPT !["rs"] = FALSE]
               /\ rs' = [rs EXCEPT !.pc = "locked"]
          ELSE /\ rs' = [rs EXCEPT !.pc = "commit"]
               /\ UNCHANGED window
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   badStore, cc, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, cc, rd, rt>>
 
-(* s5: the commit, inside the still-open window (rule 3). Record for         *)
-(* StoreValidation whether the committed value conforms to the restriction   *)
-(* published *now*.                                                          *)
+(* s5: the commit, inside the still-open window (rule 3).                    *)
 RS_Commit ==
     /\ rs.pc = "commit"
     /\ slot' = rs.val
-    /\ badStore' = (badStore \/ ~Conforms(rs.val, Eff))
+    /\ badStore' = (badStore \/ ~Conforms(rs.val, eps[pub].ty))
     /\ rs' = [rs EXCEPT !.pc = "close"]
-    /\ UNCHANGED <<world, pubKind, pubTy, flag, fenced, ghist, lockHeld,
-                   window, cc, rd, rt>>
+    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, cc, rd, rt>>
 
 (* s6: close the window (release, rule 3).                                   *)
 RS_Close ==
     /\ rs.pc = "close"
     /\ window' = [window EXCEPT !["rs"] = FALSE]
     /\ rs' = [rs EXCEPT !.pc = "idle", !.left = @ - 1]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   badStore, cc, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, cc, rd, rt>>
 
 (* The locked path: under world_counter_lock, re-validate against the        *)
 (* latest published restriction and store; a non-conforming value errors.    *)
-(* One atomic action -- see the header's honesty section.                     *)
 RS_Locked ==
     /\ rs.pc = "locked" /\ ~lockHeld
-    /\ slot' = IF Conforms(rs.val, Eff) THEN rs.val ELSE slot
+    /\ slot' = IF Conforms(rs.val, eps[pub].ty) THEN rs.val ELSE slot
     /\ rs' = [rs EXCEPT !.pc = "idle", !.left = @ - 1]
-    /\ UNCHANGED <<world, pubKind, pubTy, flag, fenced, ghist, lockHeld,
-                   window, badStore, cc, rd, rt>>
+    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, badStore, cc, rd, rt>>
 
 -----------------------------------------------------------------------------
-(* Compiled fast-path storer (typed_store's commit window in cgutils.cpp).   *)
-(* Compiled code exists only for typed-GLOBAL epochs, and its stored value   *)
-(* conforms to the declared type Tc it was compiled against (the typecheck   *)
-(* is compiled ahead of the window). Its s4 checks the FLAG ONLY.            *)
+(* Compiled fast-path storer (typed_store's commit window). Compiled code    *)
+(* exists only for typed-GLOBAL epochs (index >= 2                           *)
+(* here: epoch 1 is the weak Declared epoch), and its stored value conforms  *)
+(* to the epoch's declared type by the compiled-in typecheck.                *)
 
 CC_Compile ==
-    /\ cc.tc = NoVal /\ pubKind = "Global"
-    /\ cc' = [cc EXCEPT !.tc = pubTy]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   window, badStore, rs, rd, rt>>
+    /\ cc.cep = 0 /\ pub >= 2
+    /\ cc' = [cc EXCEPT !.cep = pub]
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
+                   rs, rd, rt>>
 
 CC_Prepare ==
-    /\ cc.pc = "idle" /\ cc.left > 0 /\ cc.tc # NoVal
-    /\ \E v \in {w \in Values : Conforms(w, cc.tc)} :
+    /\ cc.pc = "idle" /\ cc.left > 0 /\ cc.cep # 0
+    /\ \E v \in {w \in Values : Conforms(w, eps[cc.cep].ty)} :
          cc' = [cc EXCEPT !.pc = "ready", !.val = v]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   window, badStore, rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
+                   rs, rd, rt>>
 
 CC_Open ==
     /\ cc.pc = "ready"
     /\ window' = [window EXCEPT !["cc"] = TRUE]
     /\ cc' = [cc EXCEPT !.pc = "open"]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   badStore, rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, rs, rd, rt>>
 
-(* Flag-only re-check: sound because compiled fast paths exist only for      *)
-(* typed-GLOBAL epochs, and a transient deactivation (t6) only happens when  *)
-(* no divergent typed-GLOBAL epoch exists -- i.e. every compiled fast path    *)
-(* that exists was compiled against the very type still published.           *)
 CC_Check ==
     /\ cc.pc = "open"
-    /\ \E fr \in FlagReads :
+    /\ \E fr \in ReadW(cc.cep) :
          IF fr
          THEN /\ window' = [window EXCEPT !["cc"] = FALSE]
               /\ cc' = [cc EXCEPT !.pc = "locked"]
          ELSE /\ cc' = [cc EXCEPT !.pc = "commit"]
               /\ UNCHANGED window
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   badStore, rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, rs, rd, rt>>
 
 CC_Commit ==
     /\ cc.pc = "commit"
     /\ slot' = cc.val
-    /\ badStore' = (badStore \/ ~Conforms(cc.val, Eff))
+    /\ badStore' = (badStore \/ ~Conforms(cc.val, eps[pub].ty))
     /\ cc' = [cc EXCEPT !.pc = "close"]
-    /\ UNCHANGED <<world, pubKind, pubTy, flag, fenced, ghist, lockHeld,
-                   window, rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, rs, rd, rt>>
 
 CC_Close ==
     /\ cc.pc = "close"
     /\ window' = [window EXCEPT !["cc"] = FALSE]
     /\ cc' = [cc EXCEPT !.pc = "idle", !.left = @ - 1]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   badStore, rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, badStore, rs, rd, rt>>
 
 (* The compiled deopt path re-enters the runtime storer, whose worst-case    *)
 (* (and, for our invariants, representative) execution is the locked path.   *)
 CC_Locked ==
     /\ cc.pc = "locked" /\ ~lockHeld
-    /\ slot' = IF Conforms(cc.val, Eff) THEN cc.val ELSE slot
+    /\ slot' = IF Conforms(cc.val, eps[pub].ty) THEN cc.val ELSE slot
     /\ cc' = [cc EXCEPT !.pc = "idle", !.left = @ - 1]
-    /\ UNCHANGED <<world, pubKind, pubTy, flag, fenced, ghist, lockHeld,
-                   window, badStore, rs, rd, rt>>
+    /\ UNCHANGED <<eps, pub, pendR, pendW, lockHeld, window, badStore, rs, rd, rt>>
 
 -----------------------------------------------------------------------------
-(* Compiled reader (emit_globalref): r1 loads the slot, r2 reads the flag    *)
-(* program-order later (the light fence keeps them ordered; they are two     *)
-(* separate steps here so a re-declaration can interleave), r3 decides.      *)
+(* Compiled reader (emit_globalref): r1 loads the slot, r2 reads its         *)
+(* epoch's read flag program-order later (the light fence keeps them         *)
+(* ordered; two separate steps so a re-declaration can interleave).          *)
 
 RD_Compile ==
-    /\ rd.tc = NoVal /\ pubKind = "Global"
-    /\ rd' = [rd EXCEPT !.tc = pubTy]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   window, badStore, rs, cc, rt>>
+    /\ rd.cep = 0 /\ pub >= 2
+    /\ rd' = [rd EXCEPT !.cep = pub]
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
+                   rs, cc, rt>>
 
 RD_Read1 ==
-    /\ rd.pc = "idle" /\ rd.left > 0 /\ rd.tc # NoVal
+    /\ rd.pc = "idle" /\ rd.left > 0 /\ rd.cep # 0
     /\ rd' = [rd EXCEPT !.pc = "r2", !.val = slot]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   window, badStore, rs, cc, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
+                   rs, cc, rt>>
 
 RD_Read2 ==
     /\ rd.pc = "r2"
-    /\ \E fr \in FlagReads : rd' = [rd EXCEPT !.pc = "r3", !.flg = fr]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   window, badStore, rs, cc, rt>>
+    /\ \E fr \in ReadR(rd.cep) : rd' = [rd EXCEPT !.pc = "r3", !.flg = fr]
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
+                   rs, cc, rt>>
 
-(* r3: with a clear flag observation the value is TRUSTED at type Tc         *)
-(* (ReaderSoundness is checked in this state); with a set flag it is         *)
-(* verified, which either passes or errors -- safe either way.               *)
+(* r3: with a clear flag observation the value is TRUSTED at the compiled    *)
+(* epoch's type (ReaderSoundness is checked in this state); with a set flag  *)
+(* it is verified, which either passes or errors -- safe either way.         *)
 RD_Resolve ==
     /\ rd.pc = "r3"
     /\ rd' = [rd EXCEPT !.pc = "idle", !.left = @ - 1]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   window, badStore, rs, cc, rt>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
+                   rs, cc, rt>>
 
 -----------------------------------------------------------------------------
 (* Re-typer: jl_declare_global, one declaration per Script entry, holding    *)
 (* world_counter_lock from RT_Begin until RT_Finish / RT_Fail.               *)
 
-(* t1: take the lock; compute `diverged` (a different typed-GLOBAL epoch in  *)
-(* history), `transition` (published restriction writable -- always, here --  *)
-(* and different from Tnew # Any) and `replaced` (a new partition must be    *)
-(* installed and published). Under EarlyBareValidation the retained-value    *)
-(* verdict is -- wrongly -- frozen here, before activation and drain.          *)
 RT_Begin ==
     /\ rt.pc = "idle" /\ rt.idx <= Len(Script) /\ ~lockHeld
-    /\ LET d     == Script[rt.idx]
-           tnew  == d.ty
-           bare  == d.val = NoVal
-           div   == \E T \in ghist : T # tnew
-           trans == tnew # "Any" /\ Eff # tnew
-           repl  == pubKind = "Declared" \/ pubTy # tnew
+    /\ LET d == Script[rt.idx]
        IN /\ lockHeld' = TRUE
           /\ rt' = [rt EXCEPT
-                     !.pc     = IF div \/ trans THEN "activate" ELSE "publish",
-                     !.tnew   = tnew, !.nval = d.val, !.bare = bare,
-                     !.div    = div,  !.trans = trans, !.repl = repl,
-                     !.act    = FALSE, !.savedW = world, !.savedF = flag,
-                     !.earlyOK = IF EarlyBareValidation /\ bare /\ tnew # "Any"
-                                 THEN Conforms(slot, tnew)
+                     !.pc = "flag", !.tnew = d.ty, !.nval = d.val,
+                     !.bare = (d.val = NoVal), !.drain = FALSE,
+                     !.earlyOK = IF EarlyBareValidation /\ d.val = NoVal /\ d.ty # "Any"
+                                 THEN Conforms(slot, d.ty)
                                  ELSE TRUE]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, window,
-                   badStore, rs, cc, rd>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, window, badStore, rs, cc, rd>>
 
-(* t2 (first half): set the flag. On the 0 -> 1 transition the staleness     *)
-(* window opens (fenced := FALSE) until the membarrier below; when the flag  *)
-(* was already set, the earlier activation's membarrier and drain still      *)
-(* cover us (the flag was never cleared since), so both are skipped --        *)
-(* exactly as jl_activate_retype_guards returns 0 without fencing.           *)
-RT_Activate ==
-    /\ rt.pc = "activate"
-    /\ LET act == ~flag
-       IN /\ flag' = TRUE
-          /\ fenced' = IF act THEN FALSE ELSE fenced
-          /\ rt' = [rt EXCEPT !.pc = IF act THEN "fence" ELSE "validate",
-                              !.act = act]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, ghist, lockHeld, window,
-                   badStore, rs, cc, rd>>
+(* jl_retype_flag_partitions: flag every epoch the new declared type          *)
+(* invalidates. Flags transitioned here are stale-readable (rule 1) until    *)
+(* RT_Fence. No fence/drain is needed when nothing transitions.              *)
+RT_Flag ==
+    /\ rt.pc = "flag"
+    /\ LET newR == {i \in 1..Len(eps) : ~eps[i].r /\ NeedR(eps[i].ty, rt.tnew)}
+           newW == {i \in 1..Len(eps) : ~eps[i].w /\ NeedW(eps[i].ty, rt.tnew)}
+       IN /\ eps' = [i \in 1..Len(eps) |->
+                       [eps[i] EXCEPT !.r = @ \/ i \in newR,
+                                      !.w = @ \/ i \in newW]]
+          /\ pendR' = newR
+          /\ pendW' = newW
+          /\ rt' = [rt EXCEPT !.pc = IF newR \cup newW = {} THEN "validate"
+                                                            ELSE "fence",
+                              !.drain = newW # {}]
+    /\ UNCHANGED <<pub, slot, lockHeld, window, badStore, rs, cc, rd>>
 
-(* t2 (membarrier): after this step every flag read is accurate (rule 1).    *)
+(* The asymmetric heavy fence (jl_membarrier): after this step every flag    *)
+(* read is accurate (rule 1).                                                *)
 RT_Fence ==
     /\ rt.pc = "fence"
-    /\ fenced' = TRUE
-    /\ rt' = [rt EXCEPT !.pc = "drain"]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, ghist, lockHeld, window,
-                   badStore, rs, cc, rd>>
+    /\ pendR' = {} /\ pendW' = {}
+    /\ rt' = [rt EXCEPT !.pc = IF rt.drain THEN "drain" ELSE "validate"]
+    /\ UNCHANGED <<eps, pub, slot, lockHeld, window, badStore, rs, cc, rd>>
 
-(* t2 (drain): wait until every commit window is closed. Windows are         *)
-(* straight-line, safepoint-free and never block, so this always terminates  *)
-(* (checked via deadlock freedom / Termination).                             *)
+(* Drain: wait until every commit window is closed; only needed when a       *)
+(* write flag transitioned. Windows never block, so this terminates.         *)
 RT_Drain ==
     /\ rt.pc = "drain"
     /\ \A s \in StorerIds : ~window[s]
     /\ rt' = [rt EXCEPT !.pc = "validate"]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, lockHeld,
-                   window, badStore, rs, cc, rd>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
+                   rs, cc, rd>>
 
-(* t3: bare re-declarations validate the retained slot value against Tnew    *)
-(* -- after the drain, so no store validated against the superseded           *)
-(* restriction can still land (the faithful model reads `slot` HERE; the     *)
-(* EarlyBareValidation bug uses the verdict frozen at RT_Begin). On failure, *)
-(* roll back: clear the flag iff this declaration activated it, publish      *)
-(* nothing (BareRetypeSound checks the rollback in the "failed" state).      *)
+(* Bare re-declarations validate the retained slot value against Tnew --     *)
+(* after the drain (the faithful model reads `slot` HERE; the                *)
+(* EarlyBareValidation bug uses the verdict frozen at RT_Begin). On failure  *)
+(* nothing is published; the flags set above remain, conservatively.         *)
 RT_Validate ==
     /\ rt.pc = "validate"
     /\ IF rt.bare /\ rt.tnew # "Any"
        THEN IF (IF EarlyBareValidation THEN rt.earlyOK
                                        ELSE Conforms(slot, rt.tnew))
-            THEN /\ rt' = [rt EXCEPT !.pc = "publish"]
-                 /\ UNCHANGED flag
-            ELSE /\ flag' = IF rt.act THEN FALSE ELSE flag
-                 /\ rt' = [rt EXCEPT !.pc = "failed"]
-       ELSE /\ rt' = [rt EXCEPT !.pc = "publish"]
-            /\ UNCHANGED flag
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, fenced, ghist, lockHeld,
-                   window, badStore, rs, cc, rd>>
+            THEN rt' = [rt EXCEPT !.pc = "publish"]
+            ELSE rt' = [rt EXCEPT !.pc = "failed"]
+       ELSE rt' = [rt EXCEPT !.pc = "publish"]
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, badStore,
+                   rs, cc, rd>>
 
-(* t4 + t5, merged (see header rule 5): install the new restriction, swap in *)
-(* a carried value, and publish the new world as one visible event.          *)
+(* Install the new epoch (its flags start clear: they live outside            *)
+(* PARTITION_MASK_FLAG and are never inherited), swap in a carried value,    *)
+(* and publish, as one visible event (abstraction rule 4).                   *)
 RT_Publish ==
     /\ rt.pc = "publish"
-    /\ IF rt.repl
-       THEN /\ pubKind' = "Global"
-            /\ pubTy' = rt.tnew
-            /\ ghist' = ghist \cup {rt.tnew}
-            /\ world' = world + 1
-       ELSE UNCHANGED <<pubKind, pubTy, ghist, world>>
+    /\ eps' = Append(eps, [ty |-> rt.tnew, r |-> FALSE, w |-> FALSE])
+    /\ pub' = Len(eps) + 1
     /\ slot' = IF rt.bare THEN slot ELSE rt.nval
     /\ rt' = [rt EXCEPT !.pc = "finish"]
-    /\ UNCHANGED <<flag, fenced, lockHeld, window, badStore, rs, cc, rd>>
+    /\ UNCHANGED <<pendR, pendW, lockHeld, window, badStore, rs, cc, rd>>
 
-(* t6: transient deactivation -- only when this declaration activated the    *)
-(* guards, no divergent typed-GLOBAL epoch exists, and a new world was       *)
-(* published (whose world check diverts any straggler that validated         *)
-(* against the superseded restriction). Then release the lock.               *)
 RT_Finish ==
     /\ rt.pc = "finish"
-    /\ flag' = IF rt.act /\ ~rt.div /\ rt.repl THEN FALSE ELSE flag
     /\ lockHeld' = FALSE
     /\ rt' = [rt EXCEPT !.pc = "idle", !.idx = @ + 1]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, fenced, ghist, window,
-                   badStore, rs, cc, rd>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, window, badStore, rs, cc, rd>>
 
-(* Error return of a failed bare re-declaration: release the lock and move   *)
-(* on (the enclosing program is assumed to catch the error).                 *)
 RT_Fail ==
     /\ rt.pc = "failed"
     /\ lockHeld' = FALSE
     /\ rt' = [rt EXCEPT !.pc = "idle", !.idx = @ + 1]
-    /\ UNCHANGED <<world, pubKind, pubTy, slot, flag, fenced, ghist, window,
-                   badStore, rs, cc, rd>>
+    /\ UNCHANGED <<eps, pub, slot, pendR, pendW, window, badStore, rs, cc, rd>>
 
 -----------------------------------------------------------------------------
 
@@ -558,7 +477,7 @@ Next ==
     \/ CC_Compile \/ CC_Prepare \/ CC_Open \/ CC_Check \/ CC_Commit
     \/ CC_Close \/ CC_Locked
     \/ RD_Compile \/ RD_Read1 \/ RD_Read2 \/ RD_Resolve
-    \/ RT_Begin \/ RT_Activate \/ RT_Fence \/ RT_Drain \/ RT_Validate
+    \/ RT_Begin \/ RT_Flag \/ RT_Fence \/ RT_Drain \/ RT_Validate
     \/ RT_Publish \/ RT_Finish \/ RT_Fail
     \* Once every thread has run out of script the system is legitimately
     \* quiescent; allow a stutter step there so TLC's deadlock detector only
@@ -571,28 +490,29 @@ Spec == Init /\ [][Next]_vars /\ WF_vars(Next)
 (* Properties.                                                               *)
 
 (* 1. The slot's value always conforms to the currently published            *)
-(*    restriction. (Expressible unconditionally thanks to the merged         *)
-(*    swap+publish step -- see header rule 5.)                                *)
-TypeSlotOK == Conforms(slot, Eff)
+(*    restriction.                                                           *)
+TypeSlotOK == Conforms(slot, eps[pub].ty)
 
-(* 2. Whenever the reader reaches r3 having observed a CLEAR flag, the value *)
+(* 2. THE per-partition theorem: an epoch whose read flag is clear can       *)
+(*    trust the slot -- for *every* epoch, at *every* moment (the flag        *)
+(*    calculus and the fence/drain ordering conspire to keep this true even  *)
+(*    while a re-declaration is mid-flight).                                 *)
+ClearReadFlagsSound ==
+    \A i \in 1..Len(eps) : ~eps[i].r => Conforms(slot, eps[i].ty)
+
+(* 3. Its write-side counterpart: an epoch whose write flag is clear has a   *)
+(*    restriction the published one still accepts, so values it validated    *)
+(*    remain storable.                                                       *)
+ClearWriteFlagsSound ==
+    \A i \in 1..Len(eps) : ~eps[i].w => Subtype(eps[i].ty, eps[pub].ty)
+
+(* 4. Whenever the reader reaches r3 having observed a CLEAR flag, the value *)
 (*    it read at r1 conforms to the declared type it was compiled against.   *)
-ReaderSoundness == (rd.pc = "r3" /\ ~rd.flg) => Conforms(rd.val, rd.tc)
+ReaderSoundness == (rd.pc = "r3" /\ ~rd.flg) => Conforms(rd.val, eps[rd.cep].ty)
 
-(* 3. No fast-path commit ever stored a value that did not conform, at       *)
-(*    commit time, to the then-published restriction (equivalently: no store *)
-(*    validated against a superseded restriction lands after the superseding *)
-(*    publication). The locked path re-validates in the same atomic step, so *)
-(*    only fast-path commits can set the witness.                            *)
+(* 5. No fast-path commit ever stored a value that did not conform, at       *)
+(*    commit time, to the then-published restriction.                        *)
 StoreValidation == ~badStore
-
-(* 4. A failed bare re-declaration publishes nothing and restores the flag   *)
-(*    to its pre-declaration state; a successful one leaves a conforming     *)
-(*    retained value published (the second conjunct is subsumed by           *)
-(*    TypeSlotOK, but stated here as the named theorem).                     *)
-BareRetypeSound ==
-    /\ rt.pc = "failed" => (world = rt.savedW /\ flag = rt.savedF)
-    /\ (rt.pc = "finish" /\ rt.bare /\ rt.repl) => Conforms(slot, pubTy)
 
 (* Liveness sanity check (with WF): every fair behavior finishes all         *)
 (* scripts, in particular every drain terminates.                            *)

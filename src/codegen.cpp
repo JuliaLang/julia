@@ -341,8 +341,9 @@ struct jl_tbaacache_t {
     MDNode *tbaa_unionselbyte;   // a selector byte in isbits Union struct fields
     MDNode *tbaa_data;       // Any user data that `pointerset/ref` are allowed to alias
     MDNode *tbaa_binding;        // jl_binding_t::value
-    MDNode *tbaa_binding_flags;  // jl_binding_t::flags (never stored by compiled code,
-                                 // so re-type guard loads cannot alias binding stores)
+    MDNode *tbaa_binding_flags;  // jl_binding_partition_t::kind re-type guard bits (never
+                                 // stored by compiled code, so guard loads cannot alias
+                                 // binding value stores)
     MDNode *tbaa_value;          // jl_value_t, that is not jl_array_t or jl_genericmemory_t
     MDNode *tbaa_mutab;              // mutable type
     MDNode *tbaa_datatype;               // datatype
@@ -3524,25 +3525,36 @@ static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
 
 // --- generating function calls ---
 
-// Emit a guard that diverts to a cold block once the declared type of `bnd` is changed
-// (i.e. once BINDING_FLAG_RETYPED, which is clear at compile time here, becomes set;
-// see #62154): a fenced re-load of the binding's flags (see emit_retype_recheck),
-// emitted program-order *after* the access it guards. As long as the flag reads clear,
-// a value loaded from the slot before the fence is known to conform to the declared
-// type this code was compiled against: the write side of a re-declaration
-// (jl_activate_retype_guards) sets the flag before its asymmetric heavy fence and only
-// installs a value of the new type after it. As long as the binding is never re-typed
-// the deopt arm is never taken, so the guard costs one cheap, well-predicted test.
-// Returns the (empty, unterminated) cold block; the builder is left at the start of
-// the fast-path continuation block.
-static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, bool is_write)
+// The address of `bpart`'s kind word, whose PARTITION_FLAG_RETYPE_READ/WRITE bits
+// the emitted guards test (#62154). The partition is embedded as a literal (it is a
+// GC object kept alive by its binding, and rooted for pruned outputs below), so the
+// guard is a load at a link-time-constant address.
+static Value *julia_bpart_flagp(jl_codectx_t &ctx, jl_binding_partition_t *bpart)
 {
-    (void)bnd;
-    (void)is_write;
+    if (jl_generating_output())
+        jl_temporary_root(ctx, (jl_value_t*)bpart);
+    Value *bpartv = literal_pointer_val(ctx, (jl_value_t*)bpart);
+    return emit_ptrgep(ctx, bpartv, offsetof(jl_binding_partition_t, kind));
+}
+
+// Emit a guard that diverts to a cold block once a later declaration invalidates
+// what this code is compiled to assume about `bpart` (i.e. once the `mask` bits of
+// its kind word -- clear at compile time here -- become set; see #62154): a fenced
+// re-load of the partition's guard bits (see emit_retype_recheck), emitted
+// program-order *after* the access it guards. As long as the bits read clear, a
+// value loaded from the slot before the fence is known to conform to the declared
+// type this code was compiled against: the write side of a re-declaration
+// (jl_retype_flag_partitions) flags every partition it invalidates before its
+// asymmetric heavy fence and only installs a value of the new type after it. As long
+// as no incompatible re-declaration appears, the deopt arm is never taken, so the
+// guard costs one cheap, well-predicted test. Returns the (empty, unterminated) cold
+// block; the builder is left at the start of the fast-path continuation block.
+static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_partition_t *bpart, size_t mask)
+{
     LLVMContext &C = ctx.builder.getContext();
     BasicBlock *fastBB = BasicBlock::Create(C, "retype_fast", ctx.f);
     BasicBlock *coldBB = BasicBlock::Create(C, "retype_deopt", ctx.f);
-    Value *retyped = emit_retype_recheck(ctx, bp);
+    Value *retyped = emit_retype_recheck(ctx, julia_bpart_flagp(ctx, bpart), mask);
     MDBuilder MDB(C);
     ctx.builder.CreateCondBr(retyped, coldBB, fastBB,
             MDB.createBranchWeights({1, 2000}));
@@ -3585,7 +3597,7 @@ static bool ci_has_binding_edge(jl_code_instance_t *ci, jl_binding_t *bnd)
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order, bool from_literal_globalref = true)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
+    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0, NULL };
     if (!jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
@@ -3628,23 +3640,24 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     jl_value_t *ty = rkp.restriction;
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
-    jl_binding_t *holder = rkp.binding_if_global;
-    // #62154: if the declared type of this global is changed, the (single, shared) value
-    // slot may hold a value of a type other than `ty` -- either written by code compiled
-    // against a later type, or observed by this code after a redefinition that happened
-    // on the stack. Such an access must error rather than return an ill-typed value.
+    // #62154: if a later declaration changes the declared type incompatibly, the
+    // (single, shared) value slot may hold a value of a type other than `ty` --
+    // either written by code compiled against a later type, or observed by this code
+    // after a redefinition that happened on the stack. Such an access must error
+    // rather than return an ill-typed value.
     Value *bpval = julia_binding_pvalue(ctx, bp);
     jl_cgval_t v = emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
-    // As long as the binding has never been re-typed the verification is dead:
-    // it sits behind a test of the binding's flags.
+    // As long as no later declaration invalidates this partition's restriction the
+    // verification is dead: it sits behind a test of the partition's read guard.
     if (ty != (jl_value_t*)jl_any_type) {
-        if (jl_atomic_load_relaxed(&holder->flags) & BINDING_FLAG_RETYPED) {
-            // Already re-typed: this code may be compiled for an older world range whose
-            // declared type differs from the latest one, so always verify.
+        jl_binding_partition_t *bpart = rkp.leaf_partition;
+        if (jl_partition_retype_flags(bpart) & PARTITION_FLAG_RETYPE_READ) {
+            // Already invalidated: a later declaration allowed slot values outside
+            // `ty`, so always verify.
             emit_typecheck(ctx, v, ty, "getglobal");
         }
         else {
-            BasicBlock *coldBB = emit_retype_guard(ctx, holder, bp, /*is_write*/false);
+            BasicBlock *coldBB = emit_retype_guard(ctx, bpart, PARTITION_FLAG_RETYPE_READ);
             BasicBlock *fastBB = ctx.builder.GetInsertBlock();
             ctx.builder.SetInsertPoint(coldBB);
             emit_typecheck(ctx, v, ty, "getglobal");
@@ -3748,7 +3761,14 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
             if (rval.typ == jl_bottom_type)
                 return jl_cgval_t();
         }
-        int retyped = jl_atomic_load_relaxed(&bnd->flags) & BINDING_FLAG_RETYPED;
+        // Which of the partition's re-type guard bits gate this operation: a plain
+        // store only needs the write guard (its value was validated against `ty`),
+        // while the RMW kinds additionally trust values they load from the slot at
+        // type `ty`, so they must also divert once the read guard is set.
+        size_t guard_mask = op == StoreKind::Set
+                ? PARTITION_FLAG_RETYPE_WRITE
+                : (PARTITION_FLAG_RETYPE_READ | PARTITION_FLAG_RETYPE_WRITE);
+        int retyped = (jl_partition_retype_flags(bpart) & guard_mask) != 0;
         if (!retyped) {
             bool isboxed = true;
             bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
@@ -3759,8 +3779,9 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
             // which point the inline store below would bypass validation against the (new)
             // latest type, and the values the inline RMW kinds observe in the slot could
             // no longer be trusted to be of type `ty`. Guard the whole operation so that
-            // it diverts to the runtime path once the binding is re-typed.
-            BasicBlock *coldBB = emit_retype_guard(ctx, bnd, bp, /*is_write*/true);
+            // it diverts to the runtime path once a later declaration flags this
+            // partition.
+            BasicBlock *coldBB = emit_retype_guard(ctx, bpart, guard_mask);
             jl_cgval_t res = typed_store(ctx,
                             julia_binding_pvalue(ctx, bp),
                             rval, cmp, ty,
@@ -3780,7 +3801,8 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                             sym,
                             nullptr,
                             nullptr,
-                            /*retype_bp*/bp,
+                            /*retype_flagp*/julia_bpart_flagp(ctx, bpart),
+                            /*retype_mask*/guard_mask,
                             /*retype_deoptBB*/coldBB);
             if (res.typ == jl_bottom_type) {
                 // The inline operation cannot complete -- the modify `op` is inferred
@@ -3818,11 +3840,11 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
             phi->addIncoming(coldV, coldEnd);
             return mark_julia_type(ctx, phi, true, rettyp);
         }
-        // The binding has already been re-typed: this code may be compiled for an older
-        // world range whose declared type is not the one governing the value slot, so
-        // always use the runtime store (which validates against the latest declared
-        // type), and verify its result against the compile-time expectation, mirroring
-        // the read side.
+        // This partition's guards are already flagged: a later declaration made the
+        // slot untrustworthy at `ty` (read guard) or made `ty`-validated stores
+        // unsafe (write guard), so always use the runtime store (which validates
+        // against the latest declared type), and verify its result against the
+        // compile-time expectation, mirroring the read side.
         Value *r = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
         if (op == StoreKind::Set)
             return rval;
@@ -4328,7 +4350,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_sym_t *name, int allow_import, enum jl_memory_order order)
 {
     jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
+    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0, NULL };
     if (allow_import && jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
         if (jl_bkind_is_real_constant(rkp.kind))
             return mark_julia_const(ctx, jl_true);

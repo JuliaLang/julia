@@ -263,6 +263,10 @@ const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
 const PARTITION_FLAG_DEPWARN      = 0x40
 const PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80
+# Re-type guard flags (#62154): live outside PARTITION_MASK_FLAG so replacement
+# partitions never inherit them; see the C definitions in julia.h.
+const PARTITION_FLAG_RETYPE_READ  = 0x100
+const PARTITION_FLAG_RETYPE_WRITE = 0x200
 
 const PARTITION_MASK_KIND         = 0x0f
 const PARTITION_MASK_FLAG         = 0xf0

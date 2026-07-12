@@ -1029,52 +1029,59 @@ jl_array_t *jl_get_loaded_modules(void);
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
-jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_ROOTS_TEMPORARILY JL_MAYBE_UNROOTED, const char *msg);
+jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_ROOTS_TEMPORARILY JL_MAYBE_UNROOTED, const char *msg,
+                                          jl_binding_partition_t **validated_bpart);
 void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
 
-// #62154 re-type write-side protocol (see the comment on jl_activate_retype_guards in
+// #62154 re-type write-side protocol (see the comment on jl_retype_flag_partitions in
 // module.c for the full picture). A store to a global binding's value slot is
 // validated against the restriction of the binding's *latest* partition, which a
 // concurrent re-declaration can replace. The commit itself therefore runs inside a
 // per-thread "commit window": a short, safepoint-free instruction sequence that
-// re-checks BINDING_FLAG_RETYPED after announcing itself in ptls->bnd_commit_window.
-// The re-declaration (which holds world_counter_lock) sets the flag, issues the heavy
-// side of an asymmetric fence, and drains the windows of every thread; a commit whose
-// flag check read clear is thereby ordered (and made visible) before the
-// re-declaration validates the slot, and a commit that observed the flag diverts to a
-// path that takes world_counter_lock, serializing it against the re-declaration.
-int jl_activate_retype_guards(jl_binding_t *b); // requires world_counter_lock
-void jl_deactivate_retype_guards(jl_binding_t *b); // requires world_counter_lock
+// re-checks the validated partition's PARTITION_FLAG_RETYPE_WRITE after announcing
+// itself in ptls->bnd_commit_window. A re-declaration (which holds
+// world_counter_lock) sets that flag on every partition whose restriction is not a
+// subtype of the new declared type, issues the heavy side of an asymmetric fence,
+// and drains the windows of every thread; a commit whose flag check read clear is
+// thereby either ordered (and made visible) before the re-declaration validates the
+// slot, or its value conforms to the new restriction anyway (the flag stayed clear
+// because the validated restriction is a subtype of it). A commit that observed the
+// flag diverts to a path that takes world_counter_lock, serializing it against the
+// re-declaration.
+void jl_retype_flag_partitions(jl_binding_t *b, jl_value_t *slot_ty,
+                               jl_value_t *store_ty); // requires world_counter_lock
 
-// Open a commit window for a store to `b`'s value slot whose value was validated
-// against the declared type governing world `validated_world` (load the world counter
-// *before* validating). Returns 1 if the fast-path commit may proceed, in which case
-// the caller must execute nothing but the commit's (safepoint-free) store
-// instruction(s) before closing the window with jl_binding_end_commit. Returns 0 --
-// with the window already closed -- if `b`'s re-type guards are active, or if the
-// world moved since the validation (so the declared type may have been replaced); the
-// caller must then perform the operation under world_counter_lock instead,
-// re-validating against the latest declared type.
-//
-// The world check is what makes *transient* activations sound (see jl_declare_global):
-// a re-declaration with no divergent history clears the flag again after publishing
-// the new declared type, so a store that validated against the superseded type and
-// stalled before this window would no longer observe the flag; but it does observe
-// that the world moved. The acquire on the flag load pairs with the release in
-// jl_deactivate_retype_guards: observing the cleared flag implies observing the world
-// publication that preceded the clearing.
-STATIC_INLINE int jl_binding_begin_commit(jl_binding_t *b, size_t validated_world)
+// Atomic access to a partition's re-type guard flags. The `kind` field is not
+// declared _Atomic (its kind nibble and inheritable flags are only mutated on
+// unpublished partitions), but the RETYPE bits are set concurrently with readers, so
+// they are accessed through atomic operations on the word.
+STATIC_INLINE size_t jl_partition_retype_flags(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed((_Atomic(size_t)*)&bpart->kind) &
+           (PARTITION_FLAG_RETYPE_READ | PARTITION_FLAG_RETYPE_WRITE);
+}
+
+// Open a commit window for a store to a binding's value slot whose value was
+// validated against `bpart`'s restriction (the latest partition at validation time).
+// Returns 1 if the fast-path commit may proceed, in which case the caller must
+// execute nothing but the commit's (safepoint-free) store instruction(s) before
+// closing the window with jl_binding_end_commit. Returns 0 -- with the window already
+// closed -- if `bpart`'s write guard is active (a later declaration's restriction may
+// not accept values validated against `bpart`'s); the caller must then perform the
+// operation under world_counter_lock instead, re-validating against the latest
+// declared type.
+STATIC_INLINE int jl_binding_begin_commit(jl_binding_partition_t *bpart)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_atomic_store_relaxed(&ptls->bnd_commit_window, 1);
-    // Compiler-only fence: the window store must precede the loads below in program
+    // Compiler-only fence: the window store must precede the load below in program
     // order. The hardware ordering that makes an open window visible to the draining
     // thread is supplied by that thread's asymmetric heavy fence (its IPI executes a
     // full barrier on this CPU, flushing the window store before the drain begins
     // whenever the flag load below executed before the barrier).
     jl_signal_fence();
-    if (__unlikely((jl_atomic_load_acquire(&b->flags) & BINDING_FLAG_RETYPED) ||
-                   jl_atomic_load_relaxed(&jl_world_counter) != validated_world)) {
+    if (__unlikely(jl_atomic_load_relaxed((_Atomic(size_t)*)&bpart->kind) &
+                   PARTITION_FLAG_RETYPE_WRITE)) {
         jl_atomic_store_relaxed(&ptls->bnd_commit_window, 0);
         return 0;
     }
@@ -1089,6 +1096,43 @@ STATIC_INLINE void jl_binding_end_commit(void)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_atomic_store_release(&ptls->bnd_commit_window, 0);
+}
+
+// The commit entry points used by the runtime store paths (jl_checked_assignment and
+// friends): the guarded commit runs inside the ptls->bnd_commit_window protocol above.
+// Each returns 1 when the commit was performed and 0 when the guard checks diverted
+// (the caller must take the locked path, re-validating against the latest declared
+// type).
+
+STATIC_INLINE int jl_binding_try_assign(jl_binding_t *b, jl_binding_partition_t *bpart,
+                                        jl_value_t *rhs)
+{
+    if (!jl_binding_begin_commit(bpart))
+        return 0;
+    jl_atomic_store_release(&b->value, rhs);
+    jl_binding_end_commit();
+    return 1;
+}
+
+STATIC_INLINE int jl_binding_try_swap(jl_binding_t *b, jl_binding_partition_t *bpart,
+                                      jl_value_t *rhs, jl_value_t **oldp)
+{
+    if (!jl_binding_begin_commit(bpart))
+        return 0;
+    *oldp = jl_atomic_exchange(&b->value, rhs);
+    jl_binding_end_commit();
+    return 1;
+}
+
+STATIC_INLINE int jl_binding_try_cmpswap(jl_binding_t *b, jl_binding_partition_t *bpart,
+                                         jl_value_t **expectedp, jl_value_t *rhs,
+                                         int *successp)
+{
+    if (!jl_binding_begin_commit(bpart))
+        return 0;
+    *successp = jl_atomic_cmpswap(&b->value, expectedp, rhs);
+    jl_binding_end_commit();
+    return 1;
 }
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong, jl_value_t *newval JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_GLOBALLY_ROOTED;
@@ -1240,6 +1284,9 @@ struct restriction_kind_pair {
     jl_value_t *restriction;
     enum jl_partition_kind kind;
     int maybe_depwarn;
+    // the newest leaf partition of the queried range: the one whose re-type guard
+    // flags (#62154) code compiled for that range must consult
+    jl_binding_partition_t *leaf_partition;
 };
 JL_DLLEXPORT int jl_get_binding_leaf_partitions_restriction_kind(jl_binding_t *b JL_PROPAGATES_ROOT, struct restriction_kind_pair *rkp, size_t min_world, size_t max_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT, int *maybe_depwarn, size_t min_world, size_t max_world);

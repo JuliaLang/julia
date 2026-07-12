@@ -149,7 +149,7 @@ typedef struct _jl_tls_states_t {
     _Atomic(int8_t) gc_state; // read from foreign threads
     // Nonzero while this thread is inside the short, safepoint-free instruction window
     // that commits a store to a global binding's value slot (#62154). Read from foreign
-    // threads by jl_activate_retype_guards, whose asymmetric heavy fence pairs with the
+    // threads by jl_retype_flag_partitions, whose asymmetric heavy fence pairs with the
     // compiler-only light fence in the window (see jl_binding_begin_commit).
     _Atomic(int8_t) bnd_commit_window; // read from foreign threads
     // execution of certain impure
