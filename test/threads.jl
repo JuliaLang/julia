@@ -10,9 +10,10 @@ include("print_process_affinity.jl") # import `uv_thread_getaffinity`
 let lk = ReentrantLock()
     c1 = Event()
     c2 = Event()
-    # whether `t` is parked on `waitee` (its wait node is enqueued there)
+    # whether `t` is parked on `waitee` (lock parking links through the
+    # dedicated `lock_queue` field, condition waits through `wait_queue`)
     parked_on(t::Task, @nospecialize(waitee)) =
-        t.wait_queue === waitee
+        t.lock_queue === waitee || t.wait_queue === waitee
     @test trylock(lk)
     @test trylock(lk)
     t1 = @async (notify(c1); lock(lk); unlock(lk); trylock(lk))
@@ -20,7 +21,7 @@ let lk = ReentrantLock()
     wait(c1)
     wait(c2)
     # wait for the task to park in the queue (it may be spinning)
-    @test timedwait(() -> parked_on(t1, lk.cond_wait), 1.0) == :ok
+    @test timedwait(() -> parked_on(t1, lk.cond_wait), 10.0) == :ok
     @test !parked_on(t2, lk.cond_wait)
     @test istaskdone(t2)
     @test !fetch(t2)

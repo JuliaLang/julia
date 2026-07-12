@@ -1806,8 +1806,10 @@ if !Sys.iswindows() && !running_under_rr()
             wait(reader) # wait for iob to reach EOF
             err = read(iob, String)
             # ^C is delivered as a cancellation request (InterruptException is
-            # what packages may still rethrow it as)
-            @test occursin(r"InterruptException|CancellationRequest", err)
+            # what packages may still rethrow it as). A repeat press may land
+            # while the first one's error report is being displayed, cancelling
+            # the report itself - the fallback note is an acceptable outcome.
+            @test occursin(r"InterruptException|CancellationRequest|displaying the error report failed", err)
             @test !has_internal_err(err)
         finally
             process_running(p) && kill(p, Base.SIGKILL)

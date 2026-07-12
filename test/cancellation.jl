@@ -464,15 +464,17 @@ end
 
     # FileWatching: fd polling and file watching
     FileWatching = Base.require(Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching"))
-    p = Pipe()
-    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
-    fd = Base._fd(p.out)
-    t, src = cancellable(() -> FileWatching.wait(fd; readable=true)) # nothing is ever written
-    spin()
-    cancel!(src)
-    @test_throws TaskFailedException wait(t)
-    @test t.result isa CancellationRequest
-    close(p)
+    if !Sys.iswindows() # fd polling requires a socket on Windows (ENOTSOCK)
+        p = Pipe()
+        Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+        fd = Base._fd(p.out)
+        t, src = cancellable(() -> FileWatching.wait(fd; readable=true)) # nothing is ever written
+        spin()
+        cancel!(src)
+        @test_throws TaskFailedException wait(t)
+        @test t.result isa CancellationRequest
+        close(p)
+    end
 
     path = tempname()
     touch(path)
@@ -826,17 +828,26 @@ end
     # A cancellation-delivery regression can wedge the child completely (a
     # surviving spin loop blocks GC's stop-the-world, which also blocks all
     # signal processing), in which case not even SIGTERM gets through.
-    # SIGKILL it rather than hanging the test suite.
-    if timedwait(() -> process_exited(p), 240.0) !== :ok
+    # SIGKILL it rather than hanging the test suite. The budget is generous:
+    # on an oversubscribed CI box the child's compute-heavy testsets alone
+    # can take several minutes.
+    if timedwait(() -> process_exited(p), 600.0) !== :ok
         kill(p, Base.SIGKILL)
     end
     wait(p)
     @test success(p)
 end
 
-@testset "^C" begin
+# On Windows uv_kill(SIGINT) terminates the child outright instead of
+# delivering a console ^C, so none of these scenarios can run there.
+Sys.isunix() && @testset "^C" begin
     function run_with_sigint(code::String, delays; forcekill::Bool=false,
                              open_stdin::Bool=false, threads::Int=0)
+        # A readiness marker printed from user code proves the runtime is up
+        # (signal handling armed, the script started) before any SIGINT is
+        # sent - on a loaded machine startup alone can outlast the first delay
+        # and an early SIGINT kills the child with no output at all.
+        code = "println(\"CHILD-READY\")\n" * code
         out = Pipe()
         cmd = threads > 0 ?
             `$(Base.julia_cmd()) --startup-file=no --threads=$threads -e $code` :
@@ -845,6 +856,7 @@ end
         p = run(pipeline(cmd, stdin=inpipe, stdout=out, stderr=out), wait=false)
         close(out.in)
         open_stdin && close(inpipe.out)
+        readuntil(out, "CHILD-READY\n") # returns early (at EOF) if the child dies
         reader = @async read(out, String)
         killer = @async begin
             for d in delays
@@ -913,7 +925,7 @@ end
         end
         """, [1.0, 2.5]; forcekill=true)
     @test occursin("failed to acknowledge SIGINT", output)
-    @test occursin("Abandoned the current task", output)
+    @test occursin("Abandoning the current task", output)
     @test p.exitcode == 128 + 2
 
     # ^C with a stray @async task pending is catchable and the script exits
@@ -972,9 +984,9 @@ end
     """, [1.0, 2.5, 2.5]; forcekill=true)
     @test occursin("Cancellation is in progress, but has not completed", output)
     # single-threaded sessions reach the abandonment through the C-side
-    # direct path ("Abandoned ... and switched to a rescue task"); threaded
-    # ones through the listener's rung ("Abandoning ...")
-    @test occursin(r"Abandon(ing|ed) the current task", output)
+    # direct path; threaded ones through the listener's rung - both announce
+    # with "Abandoning the current task"
+    @test occursin("Abandoning the current task", output)
 
     # ^C stops a swarm of print-flooding tasks and the script continues
     # (issue #47839)
@@ -1144,7 +1156,7 @@ if Sys.isunix()
                 kill(p, Base.SIGINT) # press 2: retried, re-offering rung 1
                 expect("Press ^C again to also stop waiting for external resources"; timeout=6.0)
                 kill(p, Base.SIGINT) # press 3: C-side direct abandonment
-                expect_all("Abandoned the current task", "CancellationRequest", "julia> ")
+                expect_all("Abandoning the current task", "CancellationRequest", "julia> ")
             else
                 kill(p, Base.SIGINT) # press 2: ABANDON_EXTERNAL
                 expect("No longer waiting for external resources")
@@ -1242,7 +1254,7 @@ if Sys.isunix()
         kill(p, Base.SIGINT)
         expect("failed to acknowledge SIGINT"; timeout=15.0)
         kill(p, Base.SIGINT)
-        expect("Abandoned the current task")
+        expect("Abandoning the current task")
         expect("julia> ")
 
         # the rescued REPL still evaluates

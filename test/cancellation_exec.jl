@@ -344,14 +344,22 @@ end
             return C
         end
 
-        # correctness sanity + timing baseline
-        n = 12000
+        # correctness sanity + timing baseline; grow the problem until the
+        # baseline is long enough to cancel mid-flight. A large fixed size
+        # (12000 formerly) burns minutes on an oversubscribed CI box - long
+        # enough to blow through the parent's subprocess watchdog.
+        n = 3000
         A = rand(n, n); B = rand(n, n); C = zeros(n, n)
         gemm!(C, A, B) # warm up the thread pool
         tbase = @elapsed gemm!(C, A, B)
+        while tbase < 1.0 && n < 12000
+            n *= 2
+            A = rand(n, n); B = rand(n, n); C = zeros(n, n)
+            tbase = @elapsed gemm!(C, A, B)
+        end
 
         # A bystander BLAS operation with no binding must be unaffected.
-        nb = 4000
+        nb = 2000
         A2 = rand(nb, nb); B2 = rand(nb, nb); C2 = zeros(nb, nb)
         bystander_started = Base.Event()
         bystander = Threads.@spawn (notify(bystander_started); gemm!(C2, A2, B2))
