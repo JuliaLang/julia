@@ -891,31 +891,32 @@ end
     @test invokelatest(() -> GRMW1.x) === 3.5 # the runtime path applied op at the latest type
     @test Core.get_binding_type(GRMW1, :x) === Float64
 
-    # op widens with a bare re-declaration: the slot is untouched, so the
-    # compare-exchange succeeds -- the modify linearizes before the re-declaration
+    # op widens with a bare re-declaration: the slot is untouched, but the commit
+    # observes the activated guards and diverts to the runtime path, which commits the
+    # (conforming) result at the latest declared type -- the modify linearizes after
+    # the re-declaration, so the result container (built at the new type) fails
+    # verification against the type this code was compiled for, erring on the side of
+    # throwing after the store took effect
     @eval module GRMW2
         global y::Int = 1
         const did = Ref(false)
         widen_op(old, v) = (did[] || (did[] = true; Core.eval(GRMW2, :(global y::Integer))); old + v)
         domod(v) = modifyglobal!(@__MODULE__, :y, widen_op, v)
     end
-    let r = GRMW2.domod(1)
-        @test r == (1 => 2)
-    end
+    @test_throws TypeError GRMW2.domod(1)
     @test invokelatest(() -> GRMW2.y) === 2
     @test Core.get_binding_type(GRMW2, :y) === Integer
 
-    # op deletes the binding: the slot is untouched, so the modify likewise linearizes
-    # before the deletion
+    # op deletes the binding: the commit likewise observes the activated guards and
+    # diverts to the runtime path, which linearizes the modify after the deletion --
+    # the binding is no longer a writable global, so nothing is committed
     @eval module GRMW3
         global z::Int = 1
         const did = Ref(false)
         del_op(old, v) = (did[] || (did[] = true; Base.delete_binding(GRMW3, :z)); old + v)
         domod(v) = modifyglobal!(@__MODULE__, :z, del_op, v)
     end
-    let r = GRMW3.domod(1)
-        @test r == (1 => 2)
-    end
+    @test_throws ErrorException GRMW3.domod(1)
     @test Base.binding_kind(GRMW3, :z) == Base.PARTITION_KIND_GUARD
 
     # op re-declares the binding as a constant: the constant's value lands in the slot,
@@ -1069,5 +1070,173 @@ end
     let b = convert(Core.Binding, GlobalRef(GTC5, :c))
         Base.delete_binding(GTC5, :c)
         @test (b.flags & 0x10) == 0x00
+    end
+end
+
+@testset "re-declaration serializes against concurrent accesses (#62154)" begin
+    # a modify op that re-types the binding mid-callback: the result must be
+    # re-validated against the *latest* declared type after the callback returns,
+    # and an incompatible result must not be committed
+    @eval module GRDS1
+        global z::Number = 1
+    end
+    let op = (old, arg) -> (Core.eval(GRDS1, :(global z::Int = 1)); 1.5)
+        @test_throws TypeError invokelatest(modifyglobal!, GRDS1, :z, op, nothing)
+        @test invokelatest(getglobal, GRDS1, :z) isa Int
+    end
+
+    # a stale modifyglobal! of a binding that was deleted and re-declared as a weak
+    # global validates against Any (not against a NULL restriction)
+    @eval module GRDS2
+        global w::Int = 1
+    end
+    Base.delete_binding(GRDS2, :w)
+    Core.eval(GRDS2, :(global w))
+    invokelatest(setglobal!, GRDS2, :w, 2)
+    @test invokelatest(modifyglobal!, GRDS2, :w, +, 3) == (2 => 5)
+
+    # the common `global x` + typed declaration sequence must not leave the re-type
+    # guards permanently active (the activation is transient: no divergent typed
+    # epoch ever existed)
+    @eval module GRDS3
+        global t::Int = 1
+    end
+    let b = convert(Core.Binding, GlobalRef(GRDS3, :t))
+        @test (b.flags & 0x10) == 0x00
+    end
+
+    # stale reads of a re-typed binding may throw TypeError: inference must model
+    # that (a stale frame's catch-block tests on the exception would otherwise be
+    # constant-folded incorrectly)
+    @eval module GRDS4
+        global v::Int = 1
+    end
+    let excts = Base.infer_exception_type(() -> getglobal(GRDS4, :v))
+        @test TypeError <: excts
+    end
+
+    # threaded: stores racing with re-declarations must serialize -- whenever the
+    # declared type is `Int`, the slot holds an `Int`, and after a bare narrowing
+    # succeeds, no store validated against the old, wider type can land
+    let script = raw"""
+using Base.Threads
+function stress_stores(iters)
+    m = Module()
+    Core.eval(m, :(global s::Number = 1.5))
+    done = Atomic{Bool}(false)
+    writers = [Threads.@spawn begin
+        while !done[]
+            try
+                invokelatest(setglobal!, m, :s, 2.5)
+            catch e
+                e isa TypeError || rethrow()
+            end
+        end
+    end for _ in 1:2]
+    bad = 0
+    for i in 1:iters
+        Core.eval(m, :(global s::Int = 1))
+        for _ in 1:20
+            v = invokelatest(getglobal, m, :s)
+            v isa Int || (bad += 1)
+        end
+        Core.eval(m, :(global s::Number = 1.5))
+    end
+    done[] = true
+    foreach(wait, writers)
+    return bad
+end
+function stress_bare(iters)
+    m = Module()
+    Core.eval(m, :(global r::Number = 1.5))
+    done = Atomic{Bool}(false)
+    writers = [Threads.@spawn begin
+        while !done[]
+            try
+                invokelatest(setglobal!, m, :r, isodd(hash(time_ns())) ? 1 : 2.5)
+            catch e
+                e isa TypeError || rethrow()
+            end
+        end
+    end for _ in 1:2]
+    ok = false
+    for i in 1:iters
+        try
+            Core.eval(m, :(global r::Float64))
+            ok = true
+            break
+        catch e
+            e isa ErrorException && occursin("cannot change the type", e.msg) || rethrow()
+        end
+    end
+    bad_after = 0
+    if ok
+        for _ in 1:10_000
+            v = invokelatest(getglobal, m, :r)
+            v isa Float64 || (bad_after += 1)
+        end
+    end
+    done[] = true
+    foreach(wait, writers)
+    return bad_after
+end
+bad = stress_stores(500)
+bad += stress_bare(100_000)
+println(bad == 0 ? "STRESS OK" : "STRESS FAIL")
+exit(bad == 0 ? 0 : 1)
+"""
+        cmd = `$(Base.julia_cmd()) --startup-file=no -t4 -e $script`
+        @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
+    end
+
+    # threaded: a hot loop of guarded typed reads with a runtime store call of an
+    # unrelated binding in the loop body (the shape that a hoisted guard would
+    # miscompile), racing with re-typing: reads either return genuine values of the
+    # compiled-against type or throw TypeError -- never a reinterpreted value
+    let script = raw"""
+using Base.Threads
+module StressReads
+    global a::Int = 1
+    global b::Int = 1
+end
+function reader(iters)
+    bad = 0
+    i = 0
+    while i < iters
+        i += 1
+        v = try
+            getglobal(StressReads, :a)
+        catch e
+            e isa TypeError || rethrow()
+            continue
+        end
+        v === 1 || v === 4 || (bad += 1)
+        try
+            replaceglobal!(StressReads, :b, 1, 1)
+        catch e
+            e isa TypeError || rethrow()
+        end
+    end
+    return bad
+end
+function stress_reads(iters)
+    done = Atomic{Bool}(false)
+    retyper = Threads.@spawn begin
+        while !done[]
+            Core.eval(StressReads, :(global a::Float64 = 2.5))
+            Core.eval(StressReads, :(global a::Int = 4))
+        end
+    end
+    bad = reader(iters)
+    done[] = true
+    wait(retyper)
+    return bad
+end
+bad = stress_reads(500_000)
+println(bad == 0 ? "STRESS OK" : "STRESS FAIL")
+exit(bad == 0 ? 0 : 1)
+"""
+        cmd = `$(Base.julia_cmd()) --startup-file=no -t4 -e $script`
+        @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
     end
 end

@@ -53,7 +53,6 @@
 #include <llvm/Support/SourceMgr.h> // for llvmcall
 #include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/Transforms/Utils/ModuleUtils.h> // for appendToCompilerUsed
 #include <llvm/IR/Verifier.h> // for llvmcall validation
 #include <llvm/IR/PassTimingInfo.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -427,11 +426,8 @@ struct jl_noaliascache_t {
         MDNode *data;           // Any user data that `pointerset/ref` are allowed to alias
         MDNode *type_metadata;  // Non-user-accessible type metadata incl. union selectors, etc.
         MDNode *constant;       // Memory that is immutable by the time LLVM can see it
-        MDNode *binding_flags;  // jl_binding_t::flags: written only by the runtime under the
-                                // world counter lock, never by compiled code or through any
-                                // binding operation that compiled code can call inline
 
-        jl_regions_t(): gcframe(nullptr), stack(nullptr), data(nullptr), type_metadata(nullptr), constant(nullptr), binding_flags(nullptr) {}
+        jl_regions_t(): gcframe(nullptr), stack(nullptr), data(nullptr), type_metadata(nullptr), constant(nullptr) {}
 
         void initialize(llvm::LLVMContext &context) {
             MDBuilder mbuilder(context);
@@ -442,7 +438,6 @@ struct jl_noaliascache_t {
             this->data = mbuilder.createAliasScope("jnoalias_data", domain);
             this->type_metadata = mbuilder.createAliasScope("jnoalias_typemd", domain);
             this->constant = mbuilder.createAliasScope("jnoalias_const", domain);
-            this->binding_flags = mbuilder.createAliasScope("jnoalias_bindingflags", domain);
         }
     } regions;
 
@@ -1721,7 +1716,7 @@ struct jl_aliasinfo_t {
                                      //                    => inst_a, inst_b do not alias.
     MDNode *noalias = nullptr;       // '!noalias': See '!alias.scope' above.
 
-    enum class Region { unknown, gcframe, stack, data, constant, type_metadata, binding_flags }; // See jl_regions_t
+    enum class Region { unknown, gcframe, stack, data, constant, type_metadata }; // See jl_regions_t
 
     explicit jl_aliasinfo_t() = default;
     explicit jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa);
@@ -2169,19 +2164,16 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
         case Region::type_metadata:
             alias_scope = regions.type_metadata;
             break;
-        case Region::binding_flags:
-            alias_scope = regions.binding_flags;
-            break;
     }
 
-    MDNode *all_scopes[6] = { regions.gcframe, regions.stack, regions.data, regions.type_metadata, regions.constant, regions.binding_flags };
+    MDNode *all_scopes[5] = { regions.gcframe, regions.stack, regions.data, regions.type_metadata, regions.constant };
     if (alias_scope) {
         // The matching region is added to !alias.scope
         // All other regions are added to !noalias
 
         int i = 0;
         Metadata *scopes[1] = { alias_scope };
-        Metadata *noaliases[5];
+        Metadata *noaliases[4];
         for (auto const &scope: all_scopes) {
             if (scope == alias_scope) continue;
             noaliases[i++] = scope;
@@ -2202,11 +2194,6 @@ jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
     if (tbaa != nullptr) {
         MDNode *node = cast<MDNode>(tbaa->getOperand(1));
         if (cast<MDString>(node->getOperand(0))->getString() != "jtbaa") {
-            // The binding-flags branch gets its own scope region (it is a child of
-            // jtbaa_data, but is disjoint from every access the data region models)
-            if (cast<MDString>(node->getOperand(0))->getString() == "jtbaa_binding_flags")
-                return jl_aliasinfo_t(ctx, Region::binding_flags, tbaa);
-
             // Climb up to node just before root
             MDNode *parent_node = cast<MDNode>(node->getOperand(1));
             while (cast<MDString>(parent_node->getOperand(0))->getString() != "jtbaa") {
@@ -3539,12 +3526,15 @@ static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
 
 // Emit a guard that diverts to a cold block once the declared type of `bnd` is changed
 // (i.e. once BINDING_FLAG_RETYPED, which is clear at compile time here, becomes set;
-// see #62154): a runtime test of the binding's flags. As long as the binding is never
-// re-typed the deopt arm is never taken; the flag load carries its own TBAA branch and
-// alias scope, so on top of being cheap and well-predicted the test is loop-invariant
-// wherever the write side's quiesce could not complete anyway (see
-// emit_retype_recheck). Returns the (empty, unterminated) cold block; the builder is
-// left at the start of the fast-path continuation block.
+// see #62154): a fenced re-load of the binding's flags (see emit_retype_recheck),
+// emitted program-order *after* the access it guards. As long as the flag reads clear,
+// a value loaded from the slot before the fence is known to conform to the declared
+// type this code was compiled against: the write side of a re-declaration
+// (jl_activate_retype_guards) sets the flag before its asymmetric heavy fence and only
+// installs a value of the new type after it. As long as the binding is never re-typed
+// the deopt arm is never taken, so the guard costs one cheap, well-predicted test.
+// Returns the (empty, unterminated) cold block; the builder is left at the start of
+// the fast-path continuation block.
 static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, bool is_write)
 {
     (void)bnd;
@@ -3552,17 +3542,7 @@ static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value
     LLVMContext &C = ctx.builder.getContext();
     BasicBlock *fastBB = BasicBlock::Create(C, "retype_fast", ctx.f);
     BasicBlock *coldBB = BasicBlock::Create(C, "retype_deopt", ctx.f);
-    LoadInst *bflags = ctx.builder.CreateAlignedLoad(getInt8Ty(C),
-            emit_ptrgep(ctx, bp, offsetof(jl_binding_t, flags)), Align(1));
-    bflags->setOrdering(AtomicOrdering::Unordered);
-    // Compiled code never stores the flags, so the guard load cannot alias binding
-    // value stores: with its own TBAA branch, LICM may hoist the guard out of a
-    // (safepoint-free) loop over the access instead of re-testing every iteration.
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding_flags);
-    ai.decorateInst(bflags);
-    Value *retyped = ctx.builder.CreateICmpNE(
-            ctx.builder.CreateAnd(bflags, ConstantInt::get(getInt8Ty(C), BINDING_FLAG_RETYPED)),
-            ConstantInt::get(getInt8Ty(C), 0));
+    Value *retyped = emit_retype_recheck(ctx, bp);
     MDBuilder MDB(C);
     ctx.builder.CreateCondBr(retyped, coldBB, fastBB,
             MDB.createBranchWeights({1, 2000}));
@@ -3685,37 +3665,25 @@ static Value *emit_globalop_runtime_call(jl_codectx_t &ctx, StoreKind op, Value 
 {
     Value *m = literal_pointer_val(ctx, (jl_value_t*)mod);
     Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
-    // These runtime operations never write any binding's flags (only a
-    // re-declaration under the world counter lock does), so mark them noalias
-    // with the binding-flags scope: a re-type guard's flag load then stays
-    // hoistable out of a loop even though this (cold, rejoining) path is in it.
-    // StoreKind::Modify is excluded below: it calls back into arbitrary user
-    // code, which can re-declare a binding.
-    MDNode *na = MDNode::get(ctx.builder.getContext(),
-            { ctx.noalias().regions.binding_flags });
-    auto mark = [&] (CallInst *call) -> Value * {
-        call->setMetadata(LLVMContext::MD_noalias, na);
-        return call;
-    };
-    mark(ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
-        { bp, m, s }));
+    ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
+        { bp, m, s });
     switch (op) {
     case StoreKind::Set:
-        mark(ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
-                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) }));
+        ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
+                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
         return nullptr;
     case StoreKind::Replace:
-        return mark(ctx.builder.CreateCall(prepare_call(jlcheckreplace_func),
-                { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) }));
+        return ctx.builder.CreateCall(prepare_call(jlcheckreplace_func),
+                { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
     case StoreKind::Swap:
-        return mark(ctx.builder.CreateCall(prepare_call(jlcheckswap_func),
-                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) }));
+        return ctx.builder.CreateCall(prepare_call(jlcheckswap_func),
+                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
     case StoreKind::Modify:
         return ctx.builder.CreateCall(prepare_call(jlcheckmodify_func),
                 { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
     case StoreKind::SetOnce:
-        return mark(ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
-                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) }));
+        return ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
+                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
     case StoreKind::Unset:
         break; // Unset is not a valid operation for globals
     }
@@ -3827,37 +3795,12 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
             }
             // Merge with the deoptimized path. Set returns `rval` itself, which dominates
             // both paths, so it needs no merge; the other kinds merge the boxed results.
+            // No post-commit re-check is needed for any kind: every commit runs inside
+            // a commit window (see typed_store) whose flag check either diverted the
+            // not-yet-committed operation to the runtime path or entitled it to trust
+            // the slot at the compiled-against declared type.
             jl_value_t *rettyp = op == StoreKind::Set ? NULL : global_op_rettyp(op, ty);
             Value *fastV = op == StoreKind::Set ? nullptr : boxed(ctx, res);
-            if (op == StoreKind::Swap) {
-                // Re-check the guard after the swap commits: the boxing of `rval`
-                // inside the guarded region can allocate, so the thread can park at a
-                // safepoint there while the binding is re-declared around it, and the
-                // unconditional exchange then commits against the post-re-declaration
-                // slot, whose value is no longer known to be of the compiled-against
-                // type. This re-check is emitted after the exchange with no safepoint
-                // in between, so it reliably observes the sticky flag; the returned
-                // value is verified on that (cold) path. The swap's effect on the
-                // slot is benign either way: the stored value was validated against
-                // the compiled-against type, and every access of the slot after a
-                // re-type verifies what it loads. The other kinds need no re-check
-                // here: Set and SetOnce return no slot value, and Replace/Modify
-                // commit through a compare-exchange whose compared value was
-                // re-checked at the top of the iteration (see typed_store) -- a
-                // re-declaration that swaps the slot in between makes the
-                // compare-exchange fail into a re-checked retry.
-                LLVMContext &C = ctx.builder.getContext();
-                Value *retyped2 = emit_retype_recheck(ctx, bp);
-                BasicBlock *verifyBB = BasicBlock::Create(C, "recheck_verify", ctx.f);
-                BasicBlock *okBB = BasicBlock::Create(C, "recheck_ok", ctx.f);
-                MDBuilder MDB(C);
-                ctx.builder.CreateCondBr(retyped2, verifyBB, okBB,
-                        MDB.createBranchWeights({1, 2000}));
-                ctx.builder.SetInsertPoint(verifyBB);
-                mark_verified_globalop_result(ctx, op, fastV, rettyp, fname);
-                ctx.builder.CreateBr(okBB);
-                ctx.builder.SetInsertPoint(okBB);
-            }
             BasicBlock *fastEnd = ctx.builder.GetInsertBlock();
             BasicBlock *doneBB = BasicBlock::Create(ctx.builder.getContext(), "retype_done", ctx.f);
             ctx.builder.CreateBr(doneBB);

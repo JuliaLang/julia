@@ -7,6 +7,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "threading.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -736,17 +737,15 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
         // #62154: this constant supersedes a global epoch, whose compiled code may
         // still run (in frames already on the stack, or via `Base.invoke_in_world`)
         // and reads the binding's (single, shared) value slot. Treat the transition
-        // as a re-type plus an assignment: activate the verification guards, then
-        // store the constant's value into the slot, so stale readers observe it
-        // verified against the type they were compiled for. The same write-side
-        // protocol as jl_declare_global applies (see the quiesce comment there):
-        // guards are activated and every thread is quiesced before the slot is
-        // written, and our caller publishes new_world only after we return.
+        // as a re-type plus an assignment: activate the verification guards (which
+        // also drains any in-flight store commit against the superseded epoch, see
+        // jl_activate_retype_guards), then store the constant's value into the slot,
+        // so stale readers observe it verified against the type they were compiled
+        // for. Stale stores that arrive later serialize behind world_counter_lock
+        // (which we hold) and error against the latest, non-writable partition; our
+        // caller publishes new_world only after we return.
         assert(val);
-        jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
-        jl_task_t *ct = jl_current_task;
-        jl_safepoint_suspend_all_threads(ct);
-        jl_safepoint_resume_all_threads(ct);
+        jl_activate_retype_guards(b);
         jl_gc_write_atomic(b, b->value, jl_value_t, val, release);
     }
     JL_GC_POP();
@@ -1967,11 +1966,10 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
         // not required to keep the value slot conforming to this epoch's type, so code
         // compiled against it must verify its accesses from now on. Activate the
         // guards before the deletion is published (the slot still holds the epoch's
-        // old, conforming value, so early activation is harmless).
-        jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
-        jl_task_t *ct = jl_current_task;
-        jl_safepoint_suspend_all_threads(ct);
-        jl_safepoint_resume_all_threads(ct);
+        // old, conforming value, so early activation is harmless); the activation also
+        // drains in-flight store commits, and later stale stores serialize behind
+        // world_counter_lock and error against the deleted partition.
+        jl_activate_retype_guards(b);
     }
 
     jl_binding_partition_t *new_bpart = jl_replace_binding_locked(b, bpart, NULL, PARTITION_KIND_GUARD, new_world);
@@ -2094,6 +2092,70 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
     }
 }
 
+// Activate the re-type guards of `b` (#62154): set the sticky BINDING_FLAG_RETYPED,
+// after which every compiled fast-path read verifies the values it loads and every
+// store -- compiled or runtime -- diverts to a path that takes world_counter_lock,
+// serializing it against the re-declaration that is changing the binding's declared
+// type (our caller). On the 0->1 transition this returns only once no thread can still
+// commit a store validated against the superseded declared type:
+//
+//  - Every store commit runs inside a per-thread commit window (see
+//    jl_binding_begin_commit): a short, safepoint-free instruction sequence that
+//    announces itself in ptls->bnd_commit_window and then re-checks the flag.
+//  - The asymmetric heavy fence (jl_membarrier) forces every thread through a full
+//    barrier after the flag is set. A commit whose flag check executed before that
+//    barrier has its window announcement visible to the drain below (the window store
+//    precedes the flag check in program order, and the barrier flushes it); a commit
+//    whose flag check executed after the barrier observes the flag and diverts.
+//  - The drain loop then waits out every announced window. Windows contain no
+//    safepoint and acquire no locks, so their owners cannot be parked in GC or block
+//    on us; we keep processing safepoints ourselves so a concurrent collection can
+//    proceed while we spin.
+//
+// After this returns, every store either already happened (and is visible to a
+// subsequent load of the value slot, so the caller's validation of the retained value
+// accounts for it), or serializes behind world_counter_lock, which the caller holds.
+//
+// Returns 1 if this call performed the 0->1 transition (so the caller may undo a
+// speculative activation with jl_deactivate_retype_guards if the re-declaration
+// aborts), 0 if the guards were already active.
+int jl_activate_retype_guards(jl_binding_t *b)
+{
+    if (jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED) & BINDING_FLAG_RETYPED)
+        return 0;
+    jl_membarrier();
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    for (int tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = allstates[tid];
+        if (ptls2 == NULL)
+            continue;
+        while (jl_atomic_load_acquire(&ptls2->bnd_commit_window)) {
+            jl_gc_safepoint();
+            jl_cpu_pause();
+        }
+    }
+    return 1;
+}
+
+// Undo an activation performed by jl_activate_retype_guards (only valid for the call
+// that made the 0->1 transition, under the same world_counter_lock critical section).
+// This is sound in exactly two situations (see jl_declare_global):
+//  - the re-declaration aborts, so the set of published declared types is unchanged:
+//    a store that diverted to the locked path in the interim merely revalidated
+//    against the same declared type, and a read that verified its value merely
+//    performed a typecheck that must pass; or
+//  - the re-declaration published a new world *before* clearing and no compiled code
+//    ever trusted a divergent declared type: runtime stores that validated against
+//    the superseded type are diverted by the world check in their commit windows (the
+//    release here pairs with that check's acquire flag load), and compiled fast paths
+//    exist only for PARTITION_KIND_GLOBAL epochs, all of which carry the same type.
+void jl_deactivate_retype_guards(jl_binding_t *b)
+{
+    // seq_cst (there is no release fetch_and wrapper); release is what is required
+    jl_atomic_fetch_and(&b->flags, (uint8_t)~BINDING_FLAG_RETYPED);
+}
+
 // For a generally writable binding (checked using jl_check_binding_currently_writable in this world age), check whether
 // we can actually write the value `rhs` to it.
 jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg)
@@ -2127,16 +2189,46 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
 
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
+    JL_GC_PUSH1(&rhs); // callee-rooted
+    size_t vw = jl_atomic_load_acquire(&jl_world_counter);
     if (jl_check_binding_assign_value(b, mod, var, rhs, "setglobal!") != NULL) {
-        jl_gc_write_atomic(b, b->value, jl_value_t, rhs, release);
+        jl_gc_wb(b, rhs);
+        if (__likely(jl_binding_begin_commit(b, vw))) {
+            jl_atomic_store_release(&b->value, rhs);
+            jl_binding_end_commit();
+        }
+        else {
+            // Guards active: serialize against a concurrent re-declaration,
+            // re-validating against the (possibly changed) latest declared type
+            // under the lock.
+            JL_LOCK(&world_counter_lock);
+            jl_check_binding_assign_value(b, mod, var, rhs, "setglobal!");
+            jl_gc_write_atomic(b, b->value, jl_value_t, rhs, release);
+            JL_UNLOCK(&world_counter_lock);
+        }
     }
+    JL_GC_POP();
 }
 
 JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
+    JL_GC_PUSH1(&rhs); // callee-rooted
+    size_t vw = jl_atomic_load_acquire(&jl_world_counter);
     jl_check_binding_assign_value(b, mod, var, rhs, "swapglobal!");
     jl_gc_wb(b, rhs);
-    jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
+    jl_value_t *old;
+    if (__likely(jl_binding_begin_commit(b, vw))) {
+        old = jl_atomic_exchange(&b->value, rhs);
+        jl_binding_end_commit();
+    }
+    else {
+        JL_LOCK(&world_counter_lock);
+        jl_check_binding_assign_value(b, mod, var, rhs, "swapglobal!");
+        jl_gc_wb(b, rhs);
+        old = jl_atomic_exchange(&b->value, rhs);
+        JL_UNLOCK(&world_counter_lock);
+    }
+    JL_GC_POP();
     if (__unlikely(old == NULL))
         jl_undefined_var_error(var, (jl_value_t*)mod);
     return old;
@@ -2144,8 +2236,37 @@ JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_s
 
 JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs)
 {
+    // The result container reflects the latest declared type at entry (see
+    // jl_check_binding_assign_value); a caller compiled against an older declared
+    // type verifies the result it receives.
+    size_t vw = jl_atomic_load_acquire(&jl_world_counter);
     jl_value_t *ty = jl_check_binding_assign_value(b, mod, var, rhs, "replaceglobal!");
-    return replace_value(ty, &b->value, (jl_value_t*)b, expected, rhs, 1, mod, var);
+    jl_datatype_t *rettyp = jl_apply_cmpswap_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    jl_value_t *r = expected;
+    JL_GC_PUSH1(&r);
+    int success;
+    while (1) {
+        jl_gc_wb(b, rhs);
+        if (__likely(jl_binding_begin_commit(b, vw))) {
+            success = jl_atomic_cmpswap(&b->value, &r, rhs);
+            jl_binding_end_commit();
+        }
+        else {
+            JL_LOCK(&world_counter_lock);
+            jl_check_binding_assign_value(b, mod, var, rhs, "replaceglobal!");
+            jl_gc_wb(b, rhs);
+            success = jl_atomic_cmpswap(&b->value, &r, rhs);
+            JL_UNLOCK(&world_counter_lock);
+        }
+        if (__unlikely(r == NULL))
+            jl_undefined_var_error(var, (jl_value_t*)mod);
+        if (success || !jl_egal(r, expected))
+            break;
+    }
+    r = jl_new_struct(rettyp, r, success ? jl_true : jl_false);
+    JL_GC_POP();
+    return r;
 }
 
 JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs)
@@ -2166,18 +2287,70 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
     if (latest_kind != PARTITION_KIND_GLOBAL && latest_kind != PARTITION_KIND_DECLARED)
         // see jl_check_binding_assign_value: no longer a writable global in the latest world
         jl_binding_not_writable_error(b, mod, var, latest_kind);
-    bpart = latest_bpart;
-    jl_value_t *ty = bpart->restriction;
+    // The result container reflects the latest declared type at entry (a weak global
+    // declares no restriction, i.e. Any).
+    jl_value_t *ty = latest_kind == PARTITION_KIND_DECLARED ? (jl_value_t*)jl_any_type
+                                                            : latest_bpart->restriction;
     JL_GC_PROMISE_ROOTED(ty);
-    return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, b, mod, var);
+    jl_value_t *r = jl_atomic_load(&b->value);
+    if (__unlikely(r == NULL))
+        jl_undefined_var_error(var, (jl_value_t*)mod);
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2);
+    args[0] = r;
+    while (1) {
+        args[1] = rhs;
+        jl_value_t *y = jl_apply_generic(op, args, 2);
+        args[1] = y;
+        // Validate the result against the latest declared type only now, *after* the
+        // callback: `op` runs arbitrary code, which may itself re-declare the binding.
+        size_t vw = jl_atomic_load_acquire(&jl_world_counter);
+        jl_check_binding_assign_value(b, mod, var, y, "modifyglobal!");
+        jl_gc_wb(b, y);
+        int success;
+        if (__likely(jl_binding_begin_commit(b, vw))) {
+            success = jl_atomic_cmpswap(&b->value, &r, y);
+            jl_binding_end_commit();
+        }
+        else {
+            JL_LOCK(&world_counter_lock);
+            jl_check_binding_assign_value(b, mod, var, y, "modifyglobal!");
+            jl_gc_wb(b, y);
+            success = jl_atomic_cmpswap(&b->value, &r, y);
+            JL_UNLOCK(&world_counter_lock);
+        }
+        if (success)
+            break;
+        args[0] = r;
+        jl_gc_safepoint();
+    }
+    // args[0] == r (old), args[1] == y (new)
+    jl_datatype_t *rettyp = jl_apply_modify_type(ty);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    args[0] = jl_new_struct(rettyp, args[0], args[1]);
+    JL_GC_POP();
+    return args[0];
 }
 
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs )
 {
+    JL_GC_PUSH1(&rhs); // callee-rooted
+    size_t vw = jl_atomic_load_acquire(&jl_world_counter);
     jl_check_binding_assign_value(b, mod, var, rhs, "setglobalonce!");
     jl_value_t *old = NULL;
     jl_gc_wb(b, rhs);
-    jl_atomic_cmpswap(&b->value, &old, rhs);
+    if (__likely(jl_binding_begin_commit(b, vw))) {
+        jl_atomic_cmpswap(&b->value, &old, rhs);
+        jl_binding_end_commit();
+    }
+    else {
+        JL_LOCK(&world_counter_lock);
+        jl_check_binding_assign_value(b, mod, var, rhs, "setglobalonce!");
+        jl_gc_wb(b, rhs);
+        jl_atomic_cmpswap(&b->value, &old, rhs);
+        JL_UNLOCK(&world_counter_lock);
+    }
+    JL_GC_POP();
     return old;
 }
 

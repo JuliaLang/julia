@@ -797,18 +797,7 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
     // emit a literal_pointer_val to a jl_binding_t
     Constant *pgv = julia_binding_pgv(ctx, b);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-    // Emit the load in the entry block: the slot is a link-time constant, and an
-    // unconditionally executed load keeps its UB-implying metadata below when LICM
-    // moves instructions (hoisting a conditionally executed instruction strips it).
-    IRBuilderBase::InsertPointGuard IPG(ctx.builder);
-    if (ctx.topalloca)
-        ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
     auto load = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))));
-    // The binding is a GC object kept alive by its module, so the whole struct is
-    // dereferenceable; this lets loads off it (e.g. the re-type guard's flag load) be
-    // speculated, and hence hoisted out of loops even when control flow reaches them
-    // conditionally.
-    maybe_mark_load_dereferenceable(load, /*can_be_null*/false, sizeof(jl_binding_t), alignof(jl_binding_t));
     setName(ctx.emission_context, load, pgv->getName());
     return load;
 }
@@ -2560,25 +2549,24 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         MDNode *tbaa_dst, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false);
 
-// Re-load BINDING_FLAG_RETYPED, program-order after a preceding access of a binding's
-// value slot (#62154). Pairs with the write side of a re-declaration (see
-// jl_declare_global), which activates the guards, quiesces every thread at a
-// safepoint, and only then installs the new value: a thread whose access observed a
-// post-re-declaration slot must have parked inside the guarded region (there are no
-// polls between an access and its re-check), so it resumed after the flag was set and
-// this re-check observes it. The single-thread fence costs nothing at runtime; it only
-// keeps the compiler from hoisting the flag load above the access.
+// Load BINDING_FLAG_RETYPED, program-order after a preceding access of a binding's
+// value slot (#62154): the light side of the asymmetric fence protocol. Pairs with the
+// write side of a re-declaration (see jl_activate_retype_guards), which sets the flag,
+// issues the heavy fence, and only then installs a value of the new declared type: as
+// long as the flag here reads clear, a value loaded from the slot before the fence
+// conforms to the declared type this code was compiled against. The single-thread
+// fence compiles to no instruction (the heavy side supplies the hardware ordering);
+// together with the Monotonic (not Unordered) ordering of the flag load it keeps the
+// compiler from hoisting the flag load above the access it must follow, or merging it
+// with an earlier load of the flags.
 static Value *emit_retype_recheck(jl_codectx_t &ctx, Value *bp)
 {
-    ctx.builder.CreateFence(AtomicOrdering::Acquire, SyncScope::SingleThread);
+    ctx.builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
     LoadInst *bflags = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()),
             emit_ptrgep(ctx, bp, offsetof(jl_binding_t, flags)), Align(1));
-    // Monotonic (not Unordered) so the optimizer cannot merge this load with an
-    // earlier load of the flags (e.g. the guard itself on flag-guard targets), which
-    // would defeat the re-check
     bflags->setOrdering(AtomicOrdering::Monotonic);
     // The flags are never stored by compiled code, so this load cannot alias the
-    // binding value store it is ordered after; the Monotonic ordering (plus the fence
+    // binding value access it is ordered after; the Monotonic ordering (plus the fence
     // above) is what keeps it in place, not the memory dependence.
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding_flags);
     ai.decorateInst(bflags);
@@ -2586,6 +2574,42 @@ static Value *emit_retype_recheck(jl_codectx_t &ctx, Value *bp)
     return ctx.builder.CreateICmpNE(
             ctx.builder.CreateAnd(bflags, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), BINDING_FLAG_RETYPED)),
             ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
+}
+
+// #62154: the compiled counterpart of jl_binding_begin_commit (julia_internal.h). Open
+// a commit window around a store to a global binding's value slot: announce this
+// thread in ptls->bnd_commit_window, then re-check the binding's re-type flag.
+// Returns the "retyped" condition; the caller must branch on it to a block that closes
+// the window with emit_binding_commit_end and diverts to the runtime path (a
+// re-declaration may be concurrently replacing the declared type the stored value was
+// validated against), and on the fast arm emit nothing but the commit's (safepoint
+// free) access instructions before closing the window with emit_binding_commit_end.
+// The window store must stay an atomic (Monotonic)
+// store and the flag re-check must stay fenced after it so that the draining side
+// (jl_activate_retype_guards) observes every window whose flag check preceded its
+// heavy fence.
+static Value *emit_binding_commit_begin(jl_codectx_t &ctx, Value *bp)
+{
+    Value *window = emit_ptrgep(ctx, get_current_ptls(ctx),
+            offsetof(jl_tls_states_t, bnd_commit_window));
+    StoreInst *open = ctx.builder.CreateAlignedStore(
+            ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), window, Align(1));
+    open->setOrdering(AtomicOrdering::Monotonic);
+    // the fence inside the re-check orders the window store before the flag load
+    return emit_retype_recheck(ctx, bp);
+}
+
+// Close the commit window. The Release ordering pairs with the drain's acquire loads:
+// once the drain observes the window closed, every access inside the window is
+// complete -- a committed store is visible to the re-declaration's validation of the
+// slot, and a trusted load can no longer bind a post-re-declaration value.
+static void emit_binding_commit_end(jl_codectx_t &ctx)
+{
+    Value *window = emit_ptrgep(ctx, get_current_ptls(ctx),
+            offsetof(jl_tls_states_t, bnd_commit_window));
+    StoreInst *close = ctx.builder.CreateAlignedStore(
+            ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), window, Align(1));
+    close->setOrdering(AtomicOrdering::Release);
 }
 
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
@@ -2770,8 +2794,33 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     Value *Success = nullptr;
     BasicBlock *DoneBB = nullptr;
     jl_cgval_t oldval = rhs;
+    // #62154, global bindings only: open a commit window (see
+    // emit_binding_commit_begin) around the instruction(s) that commit to (and, for
+    // Swap, read the displaced value from) the binding's value slot, diverting to the
+    // runtime path when the binding was re-typed. Everything the window covers is
+    // thereby ordered before the re-declaration's validation of the slot, which is
+    // what entitles this code to store a value validated against, and to type the
+    // displaced value as, the declared type it was compiled against. The window must
+    // contain no safepoint: `rhs` is boxed and the write barrier is emitted before it
+    // opens.
+    auto commit_begin = [&] () {
+        assert(isboxed && !is_union && !needlock && !intcast && elty == realelty);
+        Value *retyped = emit_binding_commit_begin(ctx, retype_bp);
+        BasicBlock *commitBB = BasicBlock::Create(ctx.builder.getContext(), "commit", ctx.f);
+        BasicBlock *abortBB = BasicBlock::Create(ctx.builder.getContext(), "commit_abort", ctx.f);
+        MDBuilder MDB(ctx.builder.getContext());
+        ctx.builder.CreateCondBr(retyped, abortBB, commitBB,
+                MDB.createBranchWeights({1, 2000}));
+        ctx.builder.SetInsertPoint(abortBB);
+        emit_binding_commit_end(ctx);
+        assert(retype_deoptBB);
+        ctx.builder.CreateBr(retype_deoptBB);
+        ctx.builder.SetInsertPoint(commitBB);
+    };
     // TODO: we should do Release ordering for anything with CountTrackedPointers(elty).count > 0, instead of just isboxed
     if (op == StoreKind::Set || (Order == AtomicOrdering::NotAtomic && op == StoreKind::Swap)) {
+        if (retype_bp)
+            commit_begin();
         if (op == StoreKind::Swap) {
             if (is_union) {
                 oldval = load_union();
@@ -2792,18 +2841,24 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             assert(Order == AtomicOrdering::NotAtomic && !isboxed && rhs.typ == jltype);
             emit_unbox_store(ctx, rhs, ptr, tbaa, MaybeAlign(), Align(alignment));
         }
+        if (retype_bp)
+            emit_binding_commit_end(ctx);
     }
     else if (op == StoreKind::Swap) {
         assert(!is_union); // union swap handled above in NotAtomic branch
         if (Order == AtomicOrdering::Unordered)
             Order = AtomicOrdering::Monotonic;
         assert(Order != AtomicOrdering::NotAtomic && r);
+        if (retype_bp)
+            commit_begin();
         auto *store = ctx.builder.CreateAtomicRMW(AtomicRMWInst::Xchg, ptr, r, Align(alignment), Order);
         setName(ctx.emission_context, store, "swap_atomicrmw");
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
         ai.decorateInst(store);
         instr = store;
+        if (retype_bp)
+            emit_binding_commit_end(ctx);
     }
     else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype)) {
         // emit this only if we have a possibility of optimizing it
@@ -2934,12 +2989,12 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             assert(isboxed && retype_bp && !is_union);
             // Global bindings only (#62154): re-check the re-type guard at the top of
             // every iteration, after the load that produced `Compare` and before that
-            // value is compared or passed to `op` typed as `jltype`. The thread may
-            // have parked at a safepoint inside `op` or an allocation while the
-            // binding was re-declared around it, after which a value reloaded from
-            // the slot is no longer known to be of the declared type
-            // this code was compiled against. Nothing has been committed at this
-            // point, so the whole operation can still divert to the runtime path.
+            // value is compared or passed to `op` typed as `jltype`: the binding may
+            // be re-declared at any point around this (safepoint-containing) loop, and
+            // only a flag load fenced after the slot load makes the loaded value
+            // trustworthy at the compiled-against type (see emit_retype_recheck).
+            // Nothing has been committed at this point, so the whole operation can
+            // still divert to the runtime path.
             Value *retyped = emit_retype_recheck(ctx, retype_bp);
             BasicBlock *ContBB = BasicBlock::Create(ctx.builder.getContext(), "recheck_cont", ctx.f);
             MDBuilder MDB(ctx.builder.getContext());
@@ -3014,6 +3069,13 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *Done;
         if (Order == AtomicOrdering::NotAtomic) {
             // Union Replace/Modify or non-atomic Replace/Modify/SetOnce
+            if (retype_bp) {
+                // the comparison below must not allocate inside the window: box the
+                // compared value up front (Modify's cmpop is a boxed slot value)
+                if (op == StoreKind::Replace && !cmpop.isboxed && !cmpop.constant)
+                    cmpop = mark_julia_type(ctx, boxed(ctx, cmpop), true, cmpop.typ);
+                commit_begin(); // window covers the load, compare and store below
+            }
             // Load current value
             if (is_union) {
                 oldval = load_union();
@@ -3025,7 +3087,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 instr = load;
                 oldval = mark_julia_type(ctx, load, isboxed, jltype);
             }
-            // Compare
+            // Compare (no safepoint: pointer tests and bits/egal comparisons only, so
+            // it may run inside the commit window)
             Value *first_ptr = nullptr;
             if (!is_union && maybe_null_if_boxed && op != StoreKind::Modify)
                 first_ptr = isboxed ? instr : extract_first_ptr(ctx, instr);
@@ -3034,12 +3097,24 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 Success = ctx.builder.CreateIsNull(first_ptr);
             else
                 Success = emit_f_is(ctx, oldval, cmpop, first_ptr, nullptr);
-            if (!is_union && needloop && op == StoreKind::Modify)
-                CmpPhi->addIncoming(instr, ctx.builder.GetInsertBlock());
             assert(Succ == nullptr);
             // Branch to XchgBB or loop/DoneBB
             BasicBlock *XchgBB = BasicBlock::Create(ctx.builder.getContext(), "xchg", ctx.f);
-            ctx.builder.CreateCondBr(Success, XchgBB, needloop && op == StoreKind::Modify ? BB : DoneBB);
+            BasicBlock *FailBB = nullptr;
+            if (retype_bp) {
+                // the window must also close on the no-store path
+                FailBB = BasicBlock::Create(ctx.builder.getContext(), "commit_fail", ctx.f);
+                ctx.builder.CreateCondBr(Success, XchgBB, FailBB);
+                ctx.builder.SetInsertPoint(FailBB);
+                emit_binding_commit_end(ctx);
+            }
+            else {
+                ctx.builder.CreateCondBr(Success, XchgBB, needloop && op == StoreKind::Modify ? BB : DoneBB);
+            }
+            if (!is_union && needloop && op == StoreKind::Modify)
+                CmpPhi->addIncoming(instr, ctx.builder.GetInsertBlock());
+            if (retype_bp)
+                ctx.builder.CreateBr(needloop && op == StoreKind::Modify ? BB : DoneBB);
             ctx.builder.SetInsertPoint(XchgBB);
             // Store new value
             if (is_union) {
@@ -3052,6 +3127,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 assert(!isboxed && rhs.typ == jltype);
                 emit_unbox_store(ctx, rhs, ptr, tbaa, MaybeAlign(), Align(alignment));
             }
+            if (retype_bp)
+                emit_binding_commit_end(ctx);
             ctx.builder.CreateBr(DoneBB);
         }
         else { // something atomic
@@ -3064,10 +3141,14 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 FailOrder = AtomicOrdering::Monotonic;
             else if (FailOrder == AtomicOrdering::Unordered)
                 FailOrder = AtomicOrdering::Monotonic;
+            if (retype_bp)
+                commit_begin(); // window covers the compare-exchange
             auto *store = ctx.builder.CreateAtomicCmpXchg(ptr, Compare, r, Align(alignment), Order, FailOrder);
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
             ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
             ai.decorateInst(store);
+            if (retype_bp)
+                emit_binding_commit_end(ctx);
             instr = ctx.builder.Insert(ExtractValueInst::Create(store, 0));
             Success = ctx.builder.Insert(ExtractValueInst::Create(store, 1));
             Done = Success;
