@@ -557,7 +557,7 @@ static Function *aot_abi_converter(jl_codegen_params_t &params, Module *M, jl_va
     std::string gf_thunk_name;
     if (!specfunc.empty()) {
         Value *llvmtarget = IRLinker_copyFunctionProto(M, defM->getFunction(specfunc));
-        gf_thunk_name = emit_abi_converter(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget, target_specsig);
+        gf_thunk_name = emit_abi_converter(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget, target_specsig, params.params->gcstack_arg);
     }
     else {
         Value *llvmtarget = func.empty() ? nullptr : IRLinker_copyFunctionProto(M, defM->getFunction(func));

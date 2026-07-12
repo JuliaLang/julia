@@ -1634,7 +1634,7 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     void *(*init_trampoline)(void *tramp, void **nval),
     jl_unionall_t *env, jl_value_t **vals);
 JL_DLLEXPORT void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) *last_world, void *data);
-JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
+JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, bool gcstack_arg,
     jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig);
 
 

@@ -336,7 +336,7 @@ struct cfuncdata_t {
 };
 
 extern "C" JL_DLLEXPORT
-void *jl_jit_abi_converter_fallback(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
+void *jl_jit_abi_converter_fallback(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, bool gcstack_arg,
                                     jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
 {
     if (unspecialized)
@@ -366,6 +366,7 @@ void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) 
     jl_value_t *declrt = *cfuncdata->declrt;
     JL_GC_PROMISE_ROOTED(declrt);
     bool specsig = cfuncdata->flags & 1;
+    bool caller_gcstack_arg = (cfuncdata->flags & 2) != 0;
     size_t nargs = jl_nparams(sigt);
     jl_method_instance_t *mi;
     jl_code_instance_t *codeinst;
@@ -434,23 +435,24 @@ void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) 
         jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &f, 1);
         if (invoke != nullptr) {
             if (invoke == jl_fptr_const_return_addr) {
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, nullptr, false));
+                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, caller_gcstack_arg, codeinst, invoke, nullptr, false));
             }
             else if (invoke == jl_fptr_args_addr) {
                 assert(f);
                 if (!specsig && jl_subtype(astrt, declrt))
                     return assign_fptr(f);
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, f, false));
+                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, caller_gcstack_arg, codeinst, invoke, f, false));
             }
             else if (specsigflags & 0b1) {
                 assert(f);
-                if (specsig && jl_egal(mi->specTypes, sigt) && jl_egal(declrt, astrt))
+                bool callee_gcstack_arg = true;
+                if (specsig && jl_egal(mi->specTypes, sigt) && jl_egal(declrt, astrt) && (caller_gcstack_arg == callee_gcstack_arg))
                     return assign_fptr(f);
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, f, true));
+                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, caller_gcstack_arg, codeinst, invoke, f, true));
             }
         }
     }
-    f = jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, nullptr, false);
+    f = jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, caller_gcstack_arg, codeinst, invoke, nullptr, false);
     if (codeinst == nullptr)
         cfuncdata->unspecialized = f;
     return assign_fptr(f);
