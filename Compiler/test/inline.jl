@@ -641,7 +641,6 @@ function getcacheci(mi::Core.MethodInstance)
     cache = Compiler.code_cache(Compiler.NativeInterpreter())
     codeinst = Compiler.get(cache, mi, nothing)
     codeinst === nothing && return nothing
-    codeinst isa Compiler.InferenceResult && (codeinst = codeinst.ci)
     return codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
