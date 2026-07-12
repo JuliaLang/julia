@@ -2125,13 +2125,14 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
 // when any *write* flag transitions the in-flight store commits are drained:
 //
 //  - Every store commit runs inside a per-thread commit window (see
-//    jl_binding_begin_commit): a short, safepoint-free instruction sequence that
-//    re-checks the write flag of the partition the stored value was validated
-//    against.
+//    jl_binding_begin_commit) or an rseq critical section (see rseq.h): short,
+//    safepoint-free instruction sequences that re-check the write flag of the
+//    partition the stored value was validated against.
 //  - The heavy fence forces every thread through a full barrier after the flags are
-//    set. A commit whose flag check executed before that barrier has its window
-//    announcement visible to the drain below; one whose check executed after it
-//    observes the flag and diverts.
+//    set (the RSEQ flavor additionally aborts in-flight critical sections, whose
+//    restart re-reads the flag). A commit whose flag check executed before that
+//    barrier has its window announcement visible to the drain below; one whose
+//    check executed after it observes the flag and diverts.
 //  - The drain loop waits out every announced window. Windows contain no safepoint
 //    and acquire no locks, so their owners cannot be parked in GC or block on us;
 //    we keep processing safepoints ourselves so a concurrent collection can proceed
@@ -2174,7 +2175,14 @@ void jl_retype_flag_partitions(jl_binding_t *b, jl_value_t *slot_ty, jl_value_t 
     }
     if (!fence)
         return;
-    jl_membarrier();
+#if defined(_OS_LINUX_)
+    // Prefer the RSEQ-flavored membarrier: it issues the same expedited barrier and
+    // additionally aborts every thread's in-progress rseq critical section (see
+    // rseq.h) -- an aborted commit restarts and re-reads the just-set flag, so the
+    // drain below never has to wait out a descheduled rseq-path storer.
+    if (jl_membarrier_rseq() != 0)
+#endif
+        jl_membarrier();
     if (!drain)
         return;
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);

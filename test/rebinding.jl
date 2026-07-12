@@ -1194,11 +1194,16 @@ exit(bad == 0 ? 0 : 1)
 """
         cmd = `$(Base.julia_cmd()) --startup-file=no -t4 -e $script`
         @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
+        # the commit paths have two implementations on Linux (rseq critical sections
+        # and the portable window/drain protocol, see src/rseq.h); the run above uses
+        # whatever the platform provides, so also exercise the fallback explicitly
+        @test success(pipeline(addenv(cmd, "JULIA_RSEQ" => "0"); stdout=devnull, stderr=stderr))
     end
 
-    # compiled guarded-Set commits (which run inside a commit window) racing with
-    # re-declarations: whenever the declared type is `Int`, the slot holds an `Int`,
-    # and a stale compiled setter's store is either diverted (TypeError) or conforming
+    # compiled guarded-Set commits (JIT rseq critical sections where available, the
+    # commit window elsewhere) racing with re-declarations: whenever the declared
+    # type is `Int`, the slot holds an `Int`, and a stale compiled setter's store is
+    # either diverted (TypeError) or conforming
     let script = raw"""
 using Base.Threads
 module CS
@@ -1239,6 +1244,11 @@ exit(bad == 0 ? 0 : 1)
 """
         cmd = `$(Base.julia_cmd()) --startup-file=no -t4 -e $script`
         @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
+        @static if Sys.islinux()
+            disabled = addenv(`$(Base.julia_cmd()) --startup-file=no -e 'print(ccall(:jl_rseq_available, Cint, ()))'`,
+                              "JULIA_RSEQ" => "0")
+            @test read(disabled, String) == "0"
+        end
     end
 
     # threaded: a hot loop of guarded typed reads with a runtime store call of an

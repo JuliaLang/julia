@@ -1088,15 +1088,26 @@ STATIC_INLINE void jl_binding_end_commit(void)
     jl_atomic_store_release(&ptls->bnd_commit_window, 0);
 }
 
+#include "rseq.h"
+
 // The commit entry points used by the runtime store paths (jl_checked_assignment and
-// friends): the guarded commit runs inside the ptls->bnd_commit_window protocol above.
-// Each returns 1 when the commit was performed and 0 when the guard checks diverted
-// (the caller must take the locked path, re-validating against the latest declared
-// type).
+// friends): on threads with a registered rseq area the guarded commit runs as a real
+// restartable sequence (see rseq.h) -- the re-declaration's RSEQ-flavored membarrier
+// aborts it in flight instead of the drain having to wait it out -- and elsewhere it
+// runs inside the ptls->bnd_commit_window protocol above. Each returns 1 when the
+// commit was performed and 0 when the guard checks diverted (the caller must take
+// the locked path, re-validating against the latest declared type).
 
 STATIC_INLINE int jl_binding_try_assign(jl_binding_t *b, jl_binding_partition_t *bpart,
                                         jl_value_t *rhs)
 {
+#ifdef JL_HAVE_RSEQ_CS
+    jl_rseq_t *rs = jl_current_task->ptls->rseq;
+    if (__likely(rs != NULL))
+        return jl_rseq_guarded_store(rs, (_Atomic(size_t)*)&bpart->kind,
+                                     PARTITION_FLAG_RETYPE_WRITE,
+                                     (_Atomic(void*)*)&b->value, (void*)rhs);
+#endif
     if (!jl_binding_begin_commit(bpart))
         return 0;
     jl_atomic_store_release(&b->value, rhs);
@@ -1107,6 +1118,18 @@ STATIC_INLINE int jl_binding_try_assign(jl_binding_t *b, jl_binding_partition_t 
 STATIC_INLINE int jl_binding_try_swap(jl_binding_t *b, jl_binding_partition_t *bpart,
                                       jl_value_t *rhs, jl_value_t **oldp)
 {
+#ifdef JL_HAVE_RSEQ_CS
+    jl_rseq_t *rs = jl_current_task->ptls->rseq;
+    if (__likely(rs != NULL) && jl_rseq_have_rmw()) {
+        void *v = (void*)rhs;
+        if (!jl_rseq_guarded_xchg(rs, (_Atomic(size_t)*)&bpart->kind,
+                                  PARTITION_FLAG_RETYPE_WRITE,
+                                  (_Atomic(void*)*)&b->value, &v))
+            return 0;
+        *oldp = (jl_value_t*)v;
+        return 1;
+    }
+#endif
     if (!jl_binding_begin_commit(bpart))
         return 0;
     *oldp = jl_atomic_exchange(&b->value, rhs);
@@ -1118,6 +1141,14 @@ STATIC_INLINE int jl_binding_try_cmpswap(jl_binding_t *b, jl_binding_partition_t
                                          jl_value_t **expectedp, jl_value_t *rhs,
                                          int *successp)
 {
+#ifdef JL_HAVE_RSEQ_CS
+    jl_rseq_t *rs = jl_current_task->ptls->rseq;
+    if (__likely(rs != NULL) && jl_rseq_have_rmw())
+        return jl_rseq_guarded_cmpxchg(rs, (_Atomic(size_t)*)&bpart->kind,
+                                       PARTITION_FLAG_RETYPE_WRITE,
+                                       (_Atomic(void*)*)&b->value,
+                                       (void**)expectedp, (void*)rhs, successp);
+#endif
     if (!jl_binding_begin_commit(bpart))
         return 0;
     *successp = jl_atomic_cmpswap(&b->value, expectedp, rhs);

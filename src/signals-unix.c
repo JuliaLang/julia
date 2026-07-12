@@ -1501,12 +1501,15 @@ static _Atomic(enum membarrier_implementation) membarrier_impl = MEMBARRIER_IMPL
 #   include <sys/syscall.h>
 #   if defined(__NR_membarrier)
 enum membarrier_cmd {
-    MEMBARRIER_CMD_QUERY                        = 0,
-    MEMBARRIER_CMD_PRIVATE_EXPEDITED            = (1 << 3),
-    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED   = (1 << 4),
+    MEMBARRIER_CMD_QUERY                             = 0,
+    MEMBARRIER_CMD_PRIVATE_EXPEDITED                 = (1 << 3),
+    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED        = (1 << 4),
+    MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ            = (1 << 7),
+    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_RSEQ   = (1 << 8),
 };
 #    define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
 #    define HAVE_MEMBARRIER_SYSCALL
+#    define HAVE_MEMBARRIER_RSEQ_CMDS
 #  else
 #    warning "Missing linux kernel headers for membarrier syscall, support disabled"
 #  endif
@@ -1518,6 +1521,14 @@ enum membarrier_cmd {
 #  endif
 #endif
 
+#ifdef HAVE_MEMBARRIER_RSEQ_CMDS
+// Whether the membarrier syscall additionally supports (and we have registered for)
+// the RSEQ flavor, which issues the expedited barrier *and* aborts the in-progress
+// restartable sequence of every thread of the process (see src/rseq.h and
+// jl_membarrier_rseq below).
+static _Atomic(int) membarrier_rseq_available = 0;
+#endif
+
 static enum membarrier_implementation jl_init_membarrier(void) {
 #ifdef HAVE_MEMBARRIER_SYSCALL
     int ret = membarrier(MEMBARRIER_CMD_QUERY, 0, 0);
@@ -1526,6 +1537,14 @@ static enum membarrier_implementation jl_init_membarrier(void) {
         // supported
         if (membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0, 0) == 0) {
             // working
+#ifdef HAVE_MEMBARRIER_RSEQ_CMDS
+            int needed_rseq = MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ |
+                              MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_RSEQ;
+            if ((ret & needed_rseq) == needed_rseq &&
+                membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_RSEQ, 0, 0) == 0) {
+                jl_atomic_store_relaxed(&membarrier_rseq_available, 1);
+            }
+#endif
             jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER);
             return MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER;
         }
@@ -1569,5 +1588,28 @@ JL_DLLEXPORT void jl_membarrier(void) {
         abort();
     }
 }
+
+#if defined(_OS_LINUX_)
+// The heavy side of the restartable-sequence fence (see src/rseq.h): the expedited
+// membarrier plus an abort of every thread's in-progress rseq critical section.
+// Returns 0 on success and -1 when the kernel lacks the RSEQ flavor (the caller
+// must fall back to jl_membarrier and a protocol that does not rely on aborts).
+int jl_membarrier_rseq(void)
+{
+    enum membarrier_implementation impl = jl_atomic_load_relaxed(&membarrier_impl);
+    if (impl == MEMBARRIER_IMPLEMENTATION_UNKNOWN)
+        impl = jl_init_membarrier();
+    (void)impl;
+#ifdef HAVE_MEMBARRIER_RSEQ_CMDS
+    if (jl_atomic_load_relaxed(&membarrier_rseq_available)) {
+        int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ, 0, 0);
+        assert(ret == 0);
+        (void)ret;
+        return 0;
+    }
+#endif
+    return -1;
+}
+#endif // _OS_LINUX_
 
 #endif // !_OS_DARWIN_

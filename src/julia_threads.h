@@ -123,6 +123,23 @@ typedef struct {
 
 struct _jl_bt_element_t;
 
+#if defined(_OS_LINUX_)
+// Mirrors the kernel's `struct rseq` ABI (restartable sequences, rseq(2)): the base
+// fields plus the 6.3 extensions that live inside the originally-registered 32-byte
+// area. Defined here so the thread state can embed the backing storage for
+// self-registration without depending on <linux/rseq.h>, which older build
+// environments lack. See src/rseq.h for the protocol built on top.
+typedef struct _jl_rseq_t {
+    uint32_t cpu_id_start;
+    uint32_t cpu_id;
+    uint64_t rseq_cs;
+    uint32_t flags;
+    uint32_t node_id;
+    uint32_t mm_cid;
+    uint32_t padding_end[1];
+} __attribute__((aligned(32))) jl_rseq_t;
+#endif
+
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
@@ -152,6 +169,17 @@ typedef struct _jl_tls_states_t {
     // threads by jl_retype_flag_partitions, whose asymmetric heavy fence pairs with the
     // compiler-only light fence in the window (see jl_binding_begin_commit).
     _Atomic(int8_t) bnd_commit_window; // read from foreign threads
+#if defined(_OS_LINUX_)
+    // This thread's registered rseq area (see src/rseq.h): glibc's when it registered
+    // one, else `&rseq_storage` after successful self-registration, else NULL (rseq
+    // unavailable or disabled -- users must fall back, e.g. to bnd_commit_window).
+    jl_rseq_t *rseq;
+    // Backing storage for self-registration (unused when glibc registered the thread).
+    // The kernel writes into the registered area on every context switch, so it must
+    // stay valid for the OS thread's entire lifetime: ptls is never freed before
+    // thread death (jl_delete_thread retires but does not free it).
+    jl_rseq_t rseq_storage;
+#endif
     // execution of certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)

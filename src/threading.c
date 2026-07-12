@@ -339,6 +339,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #endif
     ptls->system_id = uv_thread_self();
     ptls->rngseed = jl_rand();
+    jl_rseq_init_thread(ptls);
     if (tid == 0) {
         ptls->disable_gc = 1;
 #ifdef _OS_WINDOWS_

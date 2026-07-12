@@ -833,8 +833,8 @@ static const size_t PARTITION_FLAG_RETYPE_READ     = 0x100;
 // necessarily storable under some later declaration's restriction. Stores validated
 // against this partition must divert to a path that re-validates against the latest
 // declared type under world_counter_lock; while clear, such a store may commit
-// directly (inside a commit window that re-checks this flag, see
-// jl_binding_begin_commit).
+// directly (inside a commit window / rseq critical section that re-checks this flag,
+// see jl_binding_begin_commit).
 static const size_t PARTITION_FLAG_RETYPE_WRITE    = 0x200;
 
 #if defined(_COMPILER_MICROSOFT_)
