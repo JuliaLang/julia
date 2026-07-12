@@ -3992,6 +3992,14 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter,Nothing}
         # We do not assume in general that assigned global bindings remain assigned.
         # The existence of pkgimages allows them to revert in practice.
         exct = UndefVarError
+        if kind == PARTITION_KIND_GLOBAL && rt !== Any
+            # The declared type of a typed global can later be changed by a
+            # re-declaration (#62154). This code may keep running in frames whose
+            # world age predates that change, where every read verifies the loaded
+            # value against the type it was compiled for and throws a TypeError on
+            # mismatch.
+            exct = Union{UndefVarError, TypeError}
+        end
     end
     return RTEffects(rt, exct, effects)
 end
@@ -4097,7 +4105,12 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
         retty = tmeet(typeinf_lattice(interp), newty, ty)
         return Pair{Any,Any}(retty, TypeError)
     end
-    return Pair{Any,Any}(newty, Bottom)
+    # A store validates against the type declared by the *latest* world's partition
+    # (#62154), not the one this code is compiled against, and the binding may also
+    # stop being a writable global altogether: even a store that conforms to the
+    # compiled-against declared type can therefore throw once the binding is
+    # re-declared while this code is still running in an older world age.
+    return Pair{Any,Any}(newty, Union{TypeError, ErrorException})
 end
 
 abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.ssavaluetypes)

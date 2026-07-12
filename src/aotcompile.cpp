@@ -671,10 +671,6 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
         }
         for (GlobalObject &G : M.global_objects()) {
             if (!G.isDeclaration()) {
-                // Internalizing or renaming globals in the reserved `llvm.` namespace
-                // (e.g. `llvm.compiler.used`) would destroy their special semantics.
-                if (G.getName().starts_with("llvm."))
-                    continue;
                 G.setLinkage(GlobalValue::InternalLinkage);
                 G.setDSOLocal(true);
                 makeSafeName(G);
@@ -1249,10 +1245,6 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
                 dbgs() << "Global " << GV.getName() << " is a declaration but is in partition " << GVNames[GV.getName()] << "\n";
             }
         } else {
-            // `llvm.` specials (such as llvm.compiler.used) are exempt from
-            // partitioning; materializePreserved keeps them whole in every partition
-            if (GV.getName().starts_with("llvm."))
-                continue;
             // Local global values are not partitioned
             if (!GVNames.count(GV.getName())) {
                 bad = true;
@@ -1260,8 +1252,6 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             }
             for (ConstantUses<GlobalValue> uses(const_cast<GlobalValue*>(&GV), const_cast<Module&>(M)); !uses.done(); uses.next()) {
                 auto val = uses.get_info().val;
-                if (val->getName().starts_with("llvm."))
-                    continue;
                 if (!GVNames.count(val->getName())) {
                     bad = true;
                     dbgs() << "Global " << val->getName() << " used by " << GV.getName() << ", which is not in any partition\n";
@@ -1344,11 +1334,6 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
-        // Globals in the reserved `llvm.` namespace (e.g. `llvm.compiler.used`) have
-        // special semantics tied to their name and linkage and are not partitioned;
-        // materializePreserved keeps them, whole, in every partition.
-        if (G.getName().starts_with("llvm."))
-            continue;
         // Currently ccallable global aliases have extern linkage, we only want to make the
         // internally linked functions/global variables extern+hidden
         if (G.hasLocalLinkage()) {
@@ -1368,13 +1353,9 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         for (ConstantUses<GlobalValue> uses(partitioner.nodes[i].GV, M); !uses.done(); uses.next()) {
             auto val = uses.get_info().val;
             auto idx = partitioner.node_map.find(val);
-            if (idx == partitioner.node_map.end()) {
-                // Users that are not themselves partitioned (`llvm.` specials such as
-                // llvm.compiler.used, which are kept in every partition) impose no
-                // clustering constraints.
-                assert(val->getName().starts_with("llvm."));
-                continue;
-            }
+            // This can fail if we can't partition a global, but it uses something we can partition
+            // This should be fixed by altering canPartition to not permit partitioning this global
+            assert(idx != partitioner.node_map.end());
             partitioner.merge(i, idx->second);
         }
     }
@@ -1749,11 +1730,6 @@ static void materializePreserved(Module &M, Partition &partition) {
         if (Preserve.contains(&GV))
             continue;
         if (GV.hasLocalLinkage())
-            continue;
-        // Keep `llvm.` specials (e.g. llvm.compiler.used) whole in every partition:
-        // stripping one to a declaration (or changing its linkage) is invalid, and
-        // entries that point to another partition's declarations are harmless.
-        if (GV.getName().starts_with("llvm."))
             continue;
         GV.setInitializer(nullptr);
         GV.setLinkage(GlobalValue::ExternalLinkage);
