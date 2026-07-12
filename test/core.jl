@@ -29,7 +29,7 @@ for (T, c) in (
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
         (Task, [:metrics_enabled]),
-        (Core.BindingPartition, [:restriction, :kind]),
+        (Core.BindingPartition, [:restriction]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
 end
