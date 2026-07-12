@@ -340,9 +340,7 @@ function parse_stmt!(lx::Lexer, ctx::PCtx)
     w = String(ident!(lx))
     if w == "if"
         cond = value_operand!(lx, ctx)
-        expect!(lx, "::")
-        t = parse_type!(lx)
-        s = append_stmt!(b, K"if", cond; type = t)
+        s = append_stmt!(b, K"if", cond; type = Any)
         textid != 0 && (ctx.idmap[textid] = s)
         expect!(lx, "{")
         open_region!(b, s; kind = REGION_ARM)
@@ -354,6 +352,8 @@ function parse_stmt!(lx::Lexer, ctx::PCtx)
             parse_stmts!(lx, ctx); close_region!(b)
             expect!(lx, "}")
         end
+        expect!(lx, "::")
+        set_type!(b.ir, s, parse_type!(lx))
     elseif w == "loop"
         expect!(lx, "(")
         argdecls = Tuple{Int,Any,Operand}[]
@@ -370,9 +370,7 @@ function parse_stmt!(lx::Lexer, ctx::PCtx)
             end
             expect!(lx, ")")
         end
-        expect!(lx, "::")
-        t = parse_type!(lx)
-        s = append_stmt!(b, K"loop", (d[3] for d in argdecls)...; type = t)
+        s = append_stmt!(b, K"loop", (d[3] for d in argdecls)...; type = Any)
         textid != 0 && (ctx.idmap[textid] = s)
         expect!(lx, "{")
         open_region!(b, s; kind = REGION_LOOP_BODY)
@@ -382,10 +380,10 @@ function parse_stmt!(lx::Lexer, ctx::PCtx)
         end
         parse_stmts!(lx, ctx); close_region!(b)
         expect!(lx, "}")
-    elseif w == "try"
         expect!(lx, "::")
-        t = parse_type!(lx)
-        s = append_stmt!(b, K"try"; type = t)
+        set_type!(b.ir, s, parse_type!(lx))
+    elseif w == "try"
+        s = append_stmt!(b, K"try"; type = Any)
         textid != 0 && (ctx.idmap[textid] = s)
         expect!(lx, "{")
         open_region!(b, s; kind = REGION_BODY)
@@ -409,6 +407,8 @@ function parse_stmt!(lx::Lexer, ctx::PCtx)
             parse_stmts!(lx, ctx); close_region!(b)
             expect!(lx, "}")
         end
+        expect!(lx, "::")
+        set_type!(b.ir, s, parse_type!(lx))
     elseif w == "cfg"
         expect!(lx, "(")
         entryops = Operand[]
@@ -419,9 +419,7 @@ function parse_stmt!(lx::Lexer, ctx::PCtx)
             end
             expect!(lx, ")")
         end
-        expect!(lx, "::")
-        t = parse_type!(lx)
-        s = append_stmt!(b, K"cfg", entryops...; type = t)
+        s = append_stmt!(b, K"cfg", entryops...; type = Any)
         textid != 0 && (ctx.idmap[textid] = s)
         expect!(lx, "{")
         oldblocks = copy(ctx.blockmap)
@@ -448,6 +446,8 @@ function parse_stmt!(lx::Lexer, ctx::PCtx)
             close_region!(b)
         end
         expect!(lx, "}")
+        expect!(lx, "::")
+        set_type!(b.ir, s, parse_type!(lx))
         resolve_blockfix!(ctx)
         empty!(ctx.blockmap)
         merge!(ctx.blockmap, oldblocks)

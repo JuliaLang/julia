@@ -97,7 +97,7 @@ end
 @testset "typed exit: cfg island with block args" begin
     src = """
     func @absmax(%1::Any, %2::Int64, %3::Int64) -> Int64 {
-      %4 = cfg (%2) :: Int64 {
+      %4 = cfg (%2) {
       ^bb2(%5::Int64):
         %6 = call global Base.slt_int, %5, %3 :: Bool
         br_if %6 (^bb3: %3) (^bb4: %5)
@@ -105,7 +105,7 @@ end
         result %8
       ^bb4(%10::Int64):
         result %10
-      }
+      } :: Int64
       return %4
     }
     """

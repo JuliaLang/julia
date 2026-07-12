@@ -1002,12 +1002,12 @@ and #31603's move-phi-uses-into-predecessors done one level up:
 
 ```
 %c = call >(%a, 0.0)
-%z = if %c :: Int64 {
+%z = if %c {
     result 1
 } else {
     %y = call g(%a)
     result %y
-}
+} :: Int64
 ```
 
 The **predicated view** — a bijective pretty-print for structured code, and the
@@ -1032,14 +1032,14 @@ non-local contiguity rule, and break-as-whole-loop-rewrite — the region form
 fixes each structurally:
 
 ```
-%r = loop (init %s = 0, %j = 1) :: Tuple{Int64, Int64} {
+%r = loop (init %s = 0, %j = 1) {
     %f = call getindex(%found, %j)
     if %f { break (%s, %j) }                # local edit
     %s2 = call +(%s, %j)
     %j2 = call +(%j, 1)
     %c  = call <=(%j2, %n)
     continue %c (%s2, %j2)                  # repeat if %c, else results = (%s2,%j2)
-}
+} :: Tuple{Int64, Int64}
 %sum = extract %r, 1
 %i   = extract %r, 2
 ```
@@ -1334,7 +1334,7 @@ never-stored cell is a checked error.
 
 ```
 %buf = cell IOBuffer
-%r = try :: String {
+%r = try {
     %b = call open_buffer(%a)        # may throw BEFORE %buf is stored
     cell_set %buf, %b
     %s = call may_throw(%b)          # may throw AFTER %buf is stored
@@ -1345,7 +1345,7 @@ never-stored cell is a checked error.
     %b′ = cell_get %buf
     %m  = call recover(%exc, %b′)
     result %m
-}
+} :: String
 ```
 
 - **The invisible catch edge becomes a region property**: "any **may-throw**
@@ -1647,7 +1647,7 @@ cells have become ordinary mutable-struct fields, exactly as SynchCompiler's
 ```
 func @counter.step(%reset::Bool, %state::CounterState) -> Int64 {
   %old = call getfield(%state, :prev)                          :: Int64
-  %p0  = if %reset :: Int64 { result const 0 } else { result %old }
+  %p0  = if %reset { result const 0 } else { result %old } :: Int64
   %out = call +(%p0, 1)
   call setfield!(%state, :prev, %out)
   return %out
@@ -1841,12 +1841,12 @@ with no portable textual form (mutable identity-bearing constants, modules,
 ```
 func @f(%a::Int64) -> Int64 {
   %c = test.icmp sgt, %a, const 0        :: Bool     !dbg(f.jl:3)
-  %z = if %c :: Int64 {
+  %z = if %c {
     result const 1
   } else {
     %y = test.mul %a, %a                 :: Int64
     result %y
-  }
+  } :: Int64
   return %z
 }
 

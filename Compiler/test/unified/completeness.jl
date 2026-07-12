@@ -218,7 +218,7 @@ end
     func @isl(%1::Any, %2::Int64) -> Int64 {
       %3 = cell const type Int64 :: Any
       cell_set %3, %2
-      %5 = cfg () :: Int64 {
+      %5 = cfg () {
       ^bb2():
         %6 = cell_get %3 :: Int64
         %7 = call global Base.slt_int, %6, const 10 :: Bool
@@ -236,7 +236,7 @@ end
       ^bb5():
         %17 = cell_get %3 :: Int64
         result %17
-      }
+      } :: Int64
       return %5
     }
     """
@@ -297,8 +297,8 @@ end
     func @thr(%1::Any, %2::Int64) -> Int64 {
       %3 = cell const type Int64 :: Any
       cell_set %3, %2
-      %5 = loop () :: Any {
-        %6 = cfg () :: Union{} {
+      %5 = loop () {
+        %6 = cfg () {
         ^bb2():
           %7 = cell_get %3 :: Int64
           %8 = call global Base.slt_int, %7, const 100 :: Bool
@@ -314,9 +314,9 @@ end
           %16 = call global Base.add_int, %15, const 1 :: Int64
           cell_set %3, %16
           continue %5 if const false
-        }
+        } :: Union{}
         unreachable
-      }
+      } :: Any
       %19 = cell_get %3 :: Int64
       return %19
     }
@@ -339,7 +339,7 @@ end
     func @spin(%1::Any, %2::Int64) -> Int64 {
       %3 = cell const type Int64 :: Any
       cell_set %3, const 0
-      %5 = cfg () :: Int64 {
+      %5 = cfg () {
       ^bb2():
         %6 = call global Base.add_int, %2, const 0 :: Int64
         goto (^bb3)
@@ -352,7 +352,7 @@ end
       ^bb4():
         %13 = cell_get %3 :: Int64
         result %13
-      }
+      } :: Int64
       return %5
     }
     """
