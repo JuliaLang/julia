@@ -6,6 +6,7 @@ using UnifiedIR
     include("attrgraph.jl")
     include("acceptance.jl")
     include("closures.jl")
+    include("capture.jl")
     include("fuzz.jl")
     include("splice.jl")
     include("regression.jl")

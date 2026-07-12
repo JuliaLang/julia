@@ -438,8 +438,13 @@ function _promote_cells_of_loop!(ir::IR, L::StmtId, bodyr::RegionId; stmt_value 
     rtop = stmt_region(ir, L)
     while true
         reg = getregion(ir, rtop)
-        reg.activation === ACT_IMMEDIATE || return 0
         reg.kind === REGION_ARM || break
+        # the gate applies to regions the chain CROSSES, not to the loop's
+        # own altitude: a loop directly inside a deferred body promotes its
+        # activation-LOCAL cells normally (§5.1 audit; arms are immediate in
+        # valid IR — only closures own deferred regions — so this is
+        # defensive)
+        reg.activation === ACT_IMMEDIATE || return 0
         ow = reg.owner
         stmt_kind(ir, ow) === K"if" || return 0
         push!(chain, ow)
@@ -2160,13 +2165,242 @@ function _promote_try_cells_at!(ir::IR, T::StmtId)
     return m
 end
 
+# ---------------------------------------------------------------------------
+# Capture promotion (§5.7): shared cells read inside deferred regions.
+#
+# A `cell_shared` cell whose reads cross a deferred activation boundary is a
+# CAPTURE of the variable; value-capture (rewriting the in-deferred reads to
+# the value the cell holds at each closure-creation site) is legal iff
+#
+#   (a) no write (`cell_set`/`cell_new`) to the cell inside ANY deferred
+#       region — a lambda storing to its capture needs the shared container;
+#   (b) for EACH home-frame closure site C whose subtree reads the cell: no
+#       write can execute after C — same-activation forward order
+#       (`comes_before` + `_may_reach`, sibling-if-arms exclusive) plus the
+#       multi-shot backedge rule (a write sharing a loop with C executes
+#       again on the next iteration and IS observable) — cancelled only when
+#       the CELL ITSELF is declared inside that shared loop (a fresh cell —
+#       hence a fresh shared box — per iteration; this is the structural
+#       form of the sidecar's "re-declared inside the loop" rule. A
+#       `cell_new` does NOT cancel: on a shared cell it re-undefines the ONE
+#       box every extant closure aliases, so it is itself an observable
+#       write and is treated as one);
+#   (c) a single defined value reaches each C — joins included — judged by
+#       the STANDARD fixpoint itself: the candidate is speculatively demoted
+#       to a frame cell on a throwaway copy of the IR, one probe `cell_get`
+#       per site is planted at the creation point (held by a recognizable
+#       marker call, exactly the sidecar's device relocated onto real IR),
+#       and the fixpoint runs WITHOUT definedness-as-data. A probe the
+#       passes resolve to a reaching definition proves definite assignment
+#       at C and names the value; an unresolved probe means maybe-undef or
+#       an ambiguous reaching store — the cell keeps the shared container
+#       and `UndefVarError` stays a use-time error.
+#
+# The commit then mirrors the judged copy on the real IR: one `cell_get`
+# probe before each site, every in-deferred read rewritten to its site's
+# probe (a legal by-visibility capture — the interpreter/materializer
+# snapshot the probe's value), and the cell demoted to frame class. The
+# NEXT fixpoint rounds resolve the probes through the identical machinery
+# that judged them, and a fully-resolved cell disappears. Residual
+# `cell_shared` cells are true shared captures.
+#
+# `boundary` is the await seam: `:resume` capture legality is a LIVENESS
+# question (the frame snapshot at the suspension point — values live across
+# the resume edge — instead of the temporal no-store-after-creation rule
+# above); it shares (c)'s judge but replaces (b). Documented, not
+# implemented.
+# ---------------------------------------------------------------------------
+
+"Marker callee holding capture probes in the judgment copy (never emitted
+into committed IR; unknown effects, so no pass deletes or reorders it)."
+struct CaptureProbe end
+const CAPTURE_PROBE = CaptureProbe()
+
+# The home-frame closure site containing in-deferred use `g` of a cell whose
+# activation root is `home`: the owner of the OUTERMOST deferred region on
+# g's region ancestry strictly below `home`. NULL when the walk meets a
+# non-deferred activation boundary or never reaches `home`.
+function _home_site(ir::IR, g::StmtId, home::RegionId)
+    r = stmt_region(ir, g)
+    site = NULL_STMT
+    while !isnull(r)
+        r == home && return site
+        reg = getregion(ir, r)
+        if reg.activation === ACT_DEFERRED
+            site = reg.owner
+        elseif reg.activation !== ACT_IMMEDIATE
+            return NULL_STMT             # resume boundary: not this pass's domain
+        end
+        isnull(reg.parent) && return NULL_STMT
+        r = reg.parent
+    end
+    return NULL_STMT
+end
+
+struct CapturePlan
+    cell::StmtId
+    sites::Vector{StmtId}                       # home-frame closure ops
+    indef::Vector{Pair{StmtId,Int}}             # in-deferred get => site index
+end
+
+# Scratch copy for the (c) judgment: same statement/region/constant ids, no
+# extension columns (the judge needs none, and provenance-class columns can
+# reference foreign graphs a deep copy must not drag along).
+function _capture_scratch(ir::IR)
+    b = ir.body
+    nb = IRBody(NOCOLS)
+    nb.len = Int(b.len)
+    nb.kind = copy(b.kind); nb.ops = copy(b.ops); nb.operands = copy(b.operands)
+    nb.type = copy(b.type); nb.flag = copy(b.flag); nb.debug = copy(b.debug)
+    nb.region = copy(b.region)
+    nb.constants = copy(b.constants); nb.constmap = copy(b.constmap)
+    nb.globals = copy(b.globals); nb.globalmap = copy(b.globalmap)
+    regs = Region[Region(r.kind, r.activation, r.owner, r.parent, copy(r.args),
+                         r.cond, r.negated, r.first, r.last, r.dead)
+                  for r in ir.regions]
+    e = ir.edit
+    return IR{typeof(NOCOLS)}(BodyOwner(layout(ir), 0), nb, regs,
+                              copy(ir.argtypes), copy(ir.sptypes), ir.valid_worlds,
+                              e === nothing ? nothing :
+                                  EditState(copy(e.next), copy(e.prev), copy(e.okey)),
+                              Pair{StmtId,Operand}[], AnalysisCache(),
+                              Dict{Symbol,Any}(:name => get(ir.meta, :name, :capture_judge)))
+end
+
 """
-    promote_fixpoint!(ir; stmt_value = nothing, include_undef = true) -> Int
+    promote_capture_cells!(ir; boundary = :deferred) -> Int
+
+Value-capture promotion for `cell_shared` cells read inside deferred regions
+(see the block comment above: criteria (a)/(b) checked structurally, (c)
+judged by the standard fixpoint on a scratch copy without
+definedness-as-data). Commits by planting one probe `cell_get` before each
+closure site, rewriting the in-deferred reads to it, and demoting the cell
+to frame class; later fixpoint rounds finish the home promotion. Editable
+state. Returns the number of cells demoted.
+"""
+function promote_capture_cells!(ir::IR; boundary::Symbol = :deferred)
+    check_state(ir, LAYOUT_EDITABLE, "promote_capture_cells!")
+    boundary === :deferred ||
+        error("promote_capture_cells!: only the :deferred boundary is implemented ",
+              "(:resume = live-at-suspension snapshot, the await seam)")
+    flush_renames!(ir)
+    # fast no-op on closure-free IR: no deferred region, no candidates
+    any(r -> !r.dead && r.activation === ACT_DEFERRED, ir.regions) || return 0
+
+    # ---- candidates: (a), site mapping, (b) ---------------------------------
+    plans = CapturePlan[]
+    for c in collect(each_stmt(ir))
+        is_tombstone(ir, c) && continue
+        stmt_kind(ir, c) === K"cell_shared" || continue
+        home = activation_root(ir, stmt_region(ir, c))
+        writes = StmtId[]                  # home cell_set / cell_new
+        indefgets = StmtId[]
+        ok = true
+        each_ssa_use(ir) do site, used
+            (ok && used == c) || return
+            site isa StmtOperand || (ok = false; return)
+            u = site.user
+            is_tombstone(ir, u) && return
+            k = stmt_kind(ir, u)
+            crossing = activation_root(ir, stmt_region(ir, u)) != home
+            if !(k === K"cell_set" || k === K"cell_get" ||
+                 k === K"cell_new" || k === K"cell_isdefined") || site.opidx != 1
+                ok = false                 # escape / value use
+            elseif k === K"cell_get"
+                crossing ? push!(indefgets, u) : nothing
+            elseif k === K"cell_isdefined"
+                crossing && (ok = false)   # call-time definedness observation
+            else # cell_set / cell_new
+                crossing && (ok = false)   # criterion (a)
+                push!(writes, u)
+            end
+            return
+        end
+        (ok && !isempty(indefgets)) || continue
+        # site per in-deferred read; refuse on non-deferred boundaries
+        sites = StmtId[]
+        indef = Pair{StmtId,Int}[]
+        for g in indefgets
+            C = _home_site(ir, g, home)
+            isnull(C) && (ok = false; break)
+            si = findfirst(==(C), sites)
+            si === nothing && (push!(sites, C); si = length(sites))
+            push!(indef, g => si)
+        end
+        ok || continue
+        # criterion (b) at every site, against every home write
+        declr = stmt_region(ir, c)
+        for C in sites
+            for st in writes
+                X = _innermost_shared_body(ir, st, C)
+                if !isnull(X) && !is_ancestor(ir, X, declr)
+                    ok = false; break      # backedge hazard, no fresh cell in X
+                end
+                if comes_before(ir, C, st) && _may_reach(ir, C, st)
+                    ok = false; break      # a write can execute after C
+                end
+            end
+            ok || break
+        end
+        ok || continue
+        push!(plans, CapturePlan(c, sites, indef))
+    end
+    isempty(plans) && return 0
+
+    # ---- criterion (c): the fixpoint judges a scratch copy ------------------
+    work = _capture_scratch(ir)
+    for (ci, p) in enumerate(plans)
+        for (g, _) in p.indef
+            replace_uses_where!(_ -> true, work, g => vop(work, nothing))
+            delete_stmt!(work, g)
+        end
+        replace_stmt!(work, p.cell, K"cell", operands(work, p.cell)...)
+        for (si, C) in enumerate(p.sites)
+            pg = insert_before!(work, C, K"cell_get", op_stmt(p.cell); type = Any)
+            insert_before!(work, C, K"call", vop(work, CAPTURE_PROBE),
+                           vop(work, (ci, si)), op_stmt(pg); type = Any)
+        end
+    end
+    compact!(work)
+    promote_fixpoint!(work; include_undef = false, capture = false)
+    unresolved = Set{Tuple{Int,Int}}()     # probes deleted with dead arms are vacuous
+    for s in each_stmt(work)
+        stmt_kind(work, s) === K"call" || continue
+        nops(work, s) == 3 || continue
+        operand_static_value(work, getop(work, s, 1)) === CAPTURE_PROBE || continue
+        key = operand_static_value(work, getop(work, s, 2))::Tuple{Int,Int}
+        o = getop(work, s, 3)
+        if optag(o) == TAG_STMT && stmt_kind(work, asstmt(o)) === K"cell_get"
+            push!(unresolved, key)
+        end
+    end
+
+    # ---- commit --------------------------------------------------------------
+    promoted = 0
+    for (ci, p) in enumerate(plans)
+        any(si -> (ci, si) in unresolved, 1:length(p.sites)) && continue
+        probes = StmtId[insert_before!(ir, C, K"cell_get", op_stmt(p.cell); type = Any)
+                        for C in p.sites]
+        for (g, si) in p.indef
+            replace_uses_where!(_ -> true, ir, g => op_stmt(probes[si]))
+            delete_stmt!(ir, g)
+        end
+        replace_stmt!(ir, p.cell, K"cell", operands(ir, p.cell)...)
+        _trace!(:capture_value, p.cell, p.cell)
+        promoted += 1
+    end
+    return promoted
+end
+
+"""
+    promote_fixpoint!(ir; stmt_value = nothing, include_undef = true,
+                      capture = true) -> Int
 
 The joint cell-promotion fixpoint (§6 join completeness): dominating-store
 promotion, single-region promotion, then the editable join passes
-(definedness-as-data, arm-join sinking, island phis, loop carrying) with a
-`compact!` per round, iterated to quiescence. Returns total promotions.
+(definedness-as-data, arm-join sinking, island phis, loop carrying, capture
+promotion) with a `compact!` per round, iterated to quiescence. Returns
+total promotions.
 
 `include_undef = false` skips `promote_undef_cells!`: consumers for whom
 maybe-undef memory must stay OBSERVABLY memory (lowering's closure-capture
@@ -2174,8 +2408,13 @@ analysis — a capture of a maybe-undef variable must keep the shared cell so
 UndefVarError surfaces at use time) run the fixpoint without the
 definedness-as-data split; every remaining pass only ever rewrites reads
 covered by stores on all paths.
+
+`capture = false` skips `promote_capture_cells!` — used by that pass's own
+scratch-copy judgment (whose candidates are already demoted, so the nested
+run would find none; the flag makes the non-recursion explicit).
 """
-function promote_fixpoint!(ir::IR; stmt_value = nothing, include_undef::Bool = true)
+function promote_fixpoint!(ir::IR; stmt_value = nothing, include_undef::Bool = true,
+                           capture::Bool = true)
     total = 0
     while true
         c = promote_cells!(ir)
@@ -2186,6 +2425,7 @@ function promote_fixpoint!(ir::IR; stmt_value = nothing, include_undef::Bool = t
         c += promote_try_cells!(ir)
         c += promote_island_cells!(ir)
         c += promote_loop_cells!(ir; stmt_value)
+        capture && (c += promote_capture_cells!(ir))
         compact!(ir)
         total += c
         c == 0 && break
