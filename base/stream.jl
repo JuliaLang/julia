@@ -1305,6 +1305,13 @@ end
 
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL,
                   owner=nothing)
+    return _uv_write_owned(s, p, n, cancel, owner)
+end
+
+# Positional core of uv_write: an `owner::Any` keyword call is not statically
+# resolvable (the NamedTuple type is abstract), which breaks trimmed builds.
+function _uv_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, cancel::CancelTokenArg,
+                         @nospecialize(owner))
     tok = resolve_cancel_token(cancel)
     nb = uv_write_noncancel(s, p, n, tok, owner)
     @cancel_check(tok)
@@ -1402,7 +1409,7 @@ function _unsafe_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, @nospeciali
         uv_write(s, arr)
     end
     # perform the output to the kernel
-    return uv_write(s, p, n; owner)
+    return _uv_write_owned(s, p, n, DEFAULT_CANCEL, owner)
 end
 
 function flush(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
