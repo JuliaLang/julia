@@ -81,9 +81,8 @@ Base.@kwdef struct Validation1Context <: ValidationContext
                             # syntax TODO: no return in finally? type decls?
     # assign_ok::Bool=true    # no in vect, curly, [typed_]h/v/ncat
 
-    # fixme: flisp happens to allow reading of underscore vars if they are
-    # introduced like `(function (where (call f (:: arg T)...) _) body)`, and
-    # the underscore is used in T.  See #60626.
+    # fixme: flisp happens to allow reading of underscore sparam names if they
+    # are used in function signature types or other sparam bounds.  See #60626.
     #
     # Mod._ is also readable
     readable_underscore::Bool=false
@@ -541,7 +540,8 @@ vst1_ident(vcx, st; lhs=false) = @stm st begin
     _ -> @fail(st, "expected identifier")
 end
 function _ident_str(vcx, st, s::String; lhs=false)
-    if !lhs && !vcx.readable_underscore && is_writeonly_est_name(s)
+    if !lhs && (!vcx.readable_underscore || !is_flisp_compat(st)) &&
+        is_writeonly_est_name(s)
         @fail(st, "all-underscore identifiers are write-only and their values cannot be used in expressions")
     elseif lhs && s in ("ccall", "cglobal")
         @fail(st, string(s, " is a reserved identifier"))
@@ -617,7 +617,8 @@ vst1_lam_lhs(vcx, st) = @stm st begin
     [K"tuple" ps...] ->
         _calldecl_positionals(vcx, ps, true)
     [K"where" ps tds...] ->
-        vst1_lam_lhs(vcx, ps) & all(vst1_typevar_decl, vcx, tds)
+        vst1_lam_lhs(vcx, ps) &
+        all(vst1_typevar_decl, with(vcx; readable_underscore=true), tds)
     # syntax TODO: This is handled badly in the parser
     [K"block"] -> pass()
     [K"block" x] -> _calldecl_positionals(vcx, SyntaxList(x), true)
@@ -659,10 +660,10 @@ end
 
 vst1_function_calldecl(vcx, st) = @stm st begin
     [K"where" callex tds...] ->
-        vst1_function_calldecl(vcx, callex) & all(vst1_typevar_decl, vcx, tds)
+        vst1_function_calldecl(vcx, callex) &
+        all(vst1_typevar_decl, with(vcx; readable_underscore=true), tds)
     [K"::" callex rt] ->
-        vst1_simple_calldecl(vcx, callex) &
-        vst1(with(vcx, readable_underscore=true), rt)
+        vst1_simple_calldecl(vcx, callex) & vst1(vcx, rt)
     _ -> vst1_simple_calldecl(vcx, st)
 end
 
@@ -711,7 +712,8 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
         vst1_calldecl_name(vcx, t) & all(vst1, vcx, tvs)
     [K"Value"] ->
         pass() # GlobalRef works. Function? Type?
-    # callable type
+    # ([K"::" _...], when=!vcx.toplevel) ->
+        # @fail(st, "adding methods to callable type only allowed at top level")
     [K"::" t] -> vst1(vcx, t)
     [K"::" x t] -> vst1_pparam_simple_tuple(vcx, x) & vst1(vcx, t)
     # TODO: @overlay broken in many cases, should be stricter
@@ -1271,13 +1273,14 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"lambda" _...] -> vst2_lam(vcx, st)
     [K"function_decl" x] -> vst2_ident(vcx, x)
     [K"function_type" x] -> vst2(vcx, x)
-    [K"method" name meta lam] -> !vcx.in_method_defs ?
+    # TODO: check that mtable is equal to the method_defs arg 1?
+    [K"method" mtable argtypes lam] -> !vcx.in_method_defs ?
         @fail(st, "method outside of method_defs") :
-        (kind(name) === K"nothing" ? pass() : vst2_ident_val(vcx, name)) &
-        vst2(vcx, meta) & vst2_lam(vcx, lam)
-    [K"method_defs" id body] ->
+        (kind(mtable) === K"nothing" ? pass() : vst2_ident_val(vcx, mtable)) &
+        vst2(vcx, argtypes) & vst2_lam(vcx, lam)
+    [K"method_defs" id [K"block" sps...] body] ->
         (kind(id) === K"nothing" ? pass() : vst2_ident_val(vcx, id)) &
-        vst2(with(vcx; in_method_defs=true), body)
+        all(vst2_typevar, vcx, sps) & vst2(with(vcx; in_method_defs=true), body)
     [K"new" t args...] -> vst2(vcx, t) & all(vst2, vcx, args)
     [K"splatnew" t arg] -> vst2(vcx, t) & vst2(vcx, arg)
     [K"softscope"] -> pass()
@@ -1363,4 +1366,9 @@ vst2_else(vcx, st) = @stm st begin
     [K"elseif" cond t] -> vst2(vcx, cond) & vst2(vcx, t)
     [K"elseif" cond t f] -> vst2(vcx, cond) & vst2(vcx, t) & vst2_else(vcx, f)
     _ -> vst2(vcx, st)
+end
+
+vst2_typevar(vcx, st) = @stm st begin
+    [K"typevar" tv val] -> vst2_ident_lhs(vcx, tv) & vst2(vcx, val)
+    _ -> @fail(st, "malformed sparam")
 end

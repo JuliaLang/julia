@@ -105,9 +105,13 @@ end
 
 #--------------------------------------------------
 # Functions called by closure conversion
-function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, field_is_box)
+function eval_closure_type(mod::Module, closure_type_name::Symbol,
+                           capt_sp, field_names, field_is_box)
     type_params = Core.TypeVar[]
     field_types = []
+    for name in capt_sp
+        push!(type_params, Core.TypeVar(name))
+    end
     for (name, isbox) in zip(field_names, field_is_box)
         if !isbox
             T = Core.TypeVar(Symbol(name, "_type"))

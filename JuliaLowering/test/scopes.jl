@@ -240,6 +240,16 @@ distraction_scope_end === "resolve me!"
 
 end
 
+@test JuliaLowering.include_string(test_mod, """
+global g_shadow_sp_bound = Number
+function f_g_shadow_sp_bound(x::g_shadow_sp_bound) where {
+        g_shadow_sp_bound<:g_shadow_sp_bound
+    }
+    (x, g_shadow_sp_bound)
+end
+f_g_shadow_sp_bound(1)
+""") == (1, Int)
+
 # For each distinct outer scope, declaration scope, and assignment scope, and
 # each kind of variable (lhs_names) in the declaration scope, set the same name
 # to true from the inner scope

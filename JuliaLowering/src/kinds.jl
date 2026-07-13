@@ -124,9 +124,18 @@ function _register_kinds()
             # [K"function_type" name]
             # Evaluates to the type of the function or closure with given `name`
             "function_type"
-            # [K"method_defs" name block]
-            # The code in `block` defines methods for generic function `name`
+            # [K"method_defs" name [K"block" typevars...] [K"block" body...]]
+            # The code in `body` defines methods for generic function `name`.
+            # If non-toplevel, all contained methods share a closure type.
+            # `typevars` are assigned-once top-level locals only referenced
+            # inside `K"method"`, but outside of `K"lambda"`, since any
+            # reference inside a lambda should resolve to the lambda's sparam
+            # shadowing it.
             "method_defs"
+            # [K"typevar" name rhs] appears only in method_defs and gets special
+            # scope resolution: a sequence of K"sparam"s are similar to nested
+            # let-blocks, but without introducing a local scope.
+            "typevar"
             "_opaque_closure"
             # The enclosed statements must be executed at top level
             "toplevel_butfirst"

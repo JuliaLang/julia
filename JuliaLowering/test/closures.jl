@@ -640,7 +640,7 @@ begin
 end
 """) == (1, Int)
 
-@test_broken JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 begin
     function f_argcapt_sp(x::T) where T
         (inner_x::T)->(x, inner_x, T)
@@ -649,10 +649,10 @@ begin
 end
 """) == (1, 2, Int)
 
-# Inner method typevar `U` depending on a static parameter `T` so hoisting the
-# method def for `inner` out to top level would require detecting this and
-# making `inner` parametric on `T`.  Note this doesn't work in flisp either.
-@test_broken JuliaLowering.include_string(test_mod, """
+# Inner method typevar `U` depending on a static parameter `T`: the hoisted
+# method def for `inner` captures `T` as a closure type parameter, making
+# `inner` parametric on `T`.  This doesn't work in flisp (UndefVarError).
+@test JuliaLowering.include_string(test_mod, """
 begin
     function f_typevarcapt_sp(x::T) where T
         function inner(y::U) where {U<:T}
@@ -747,3 +747,18 @@ let (g, x) = test_mod.f_arg_reassign_with_label(42)
     @test g() == 1
     @test x == 1
 end
+
+@test JuliaLowering.include_string(test_mod, """
+func_in_own_sig(x::typeof(func_in_own_sig)) = (x, 1)
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+func_in_own_sig(func_in_own_sig)
+""") == (test_mod.func_in_own_sig, 1)
+@test JuliaLowering.include_string(test_mod, """
+function func_in_own_sp(x::T) where {T<:typeof(func_in_own_sp)}
+(x, T)
+end
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+func_in_own_sp(func_in_own_sp)
+""") == (test_mod.func_in_own_sp, typeof(test_mod.func_in_own_sp))

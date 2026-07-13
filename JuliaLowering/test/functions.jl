@@ -425,7 +425,7 @@ end
     end
     """) == (Complex(1), Complex(2))
 
-    # Both JL and flisp will evaluate the sparam bound multiple times
+    # flisp will evaluate the sparam bound multiple times
     let res = JuliaLowering.include_string(test_mod, """
         let eval_spbounds_counter = 0
             global function f_optarg_eval_spbounds_counter(
@@ -436,8 +436,7 @@ end
             f_optarg_eval_spbounds_counter(Complex(1))
         end
         """)
-        @test res == (Complex(1), 4)
-        @test_broken res == (Complex(1), 1)
+        @test res == (Complex(1), 1)
     end
 end
 

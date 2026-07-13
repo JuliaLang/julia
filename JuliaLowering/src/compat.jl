@@ -375,6 +375,58 @@ function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol
     end
 end
 
+# flisp bug; underscore sparams are sometimes readable (see #60626).  Should
+# return `st` unchanged 99% of the time.
+function force_readable_sparams(st)
+    kind(st) === K"where" && is_flisp_compat(st) || return st
+    sig, wheres = let (sig0, wheres0) = flatten_wheres(st)
+        sig0, mapsyntax(typevar_bounds, wheres0)
+    end
+    any(w->is_flisp_compat(w) && is_writeonly_est_name(w[1].name_val::String),
+        wheres) || return st
+
+    g = st._graph
+    seen = Set{String}()
+    lt = @ast g st "<:"::K"Identifier"
+    for i in eachindex(wheres)
+        n = wheres[i][1]
+        n_str = n.name_val::String
+        lb = _mangle_writeonly(wheres[i][2], seen)
+        ub = _mangle_writeonly(wheres[i][3], seen)
+        is_flisp_compat(n) && is_writeonly_est_name(n_str) && push!(seen, n_str)
+        wheres[i] = @ast g st [K"comparison" lb lt _mangle_writeonly(n, seen) lt ub]
+    end
+    mangle = args->mapsyntax(a->_mangle_writeonly_argt(a, seen), args)
+    sig2 = @stm sig begin
+        [K"::" [K"call" as...] t] -> @ast g sig [K"::" [K"call" mangle(as)...] t]
+        [K"call" as...] -> @ast g sig [K"call" mangle(as)...]
+        [K"tuple" as...] -> @ast g sig [K"tuple" mangle(as)...]
+    end
+    @ast g st [K"where" sig2 wheres...]
+end
+_mangle_writeonly_argt(st, seen) = let g = st._graph; @stm st begin
+    [K"parameters" _...] -> mapchildren(c->_mangle_writeonly_argt(c, seen), g, st)
+    [K"kw" x v] -> @ast g st [K"kw" _mangle_writeonly_argt(x, seen) v]
+    [K"=" x v] -> @ast g st [K"=" _mangle_writeonly_argt(x, seen) v]
+    [K"..." x] -> @ast g st [K"..." _mangle_writeonly_argt(x, seen)]
+    [K"::" x t] -> @ast g st [K"::" x _mangle_writeonly(t, seen)]
+    [K"::" t] -> @ast g st [K"::" _mangle_writeonly(t, seen)]
+    [K"overlay" mt x] -> @ast g st [K"overlay" mt _mangle_writeonly(x, seen)]
+    _ -> st
+end; end
+function _mangle_writeonly(st, seen)
+    g = st._graph
+    k = kind(st)
+    if k === K"Identifier" && !hasattr(st, :mod) && is_flisp_compat(st)
+        n = st.name_val::String
+        !(n in seen) ? st : @ast g st (string(n, "FIXME#60626")::K"Identifier")
+    elseif is_leaf(st) || is_quoted(st) || k === K"->" || k === K"function"
+        st
+    else
+        mapchildren(c->_mangle_writeonly(c, seen), g, st)
+    end
+end
+
 # nothing if not found, or symbol if 0-arg [no]specialize, or dict arg->meta
 function collect_body_arg_meta(st)
     out = nothing
@@ -513,6 +565,7 @@ function est_to_dst(st::SyntaxTree)
         ([K"=" l r], when=(is_eventually_call(l))) -> let
             # no fix_arglist needed, since this func can't be anonymous
             l = apply_arglist_meta(l, collect_body_arg_meta(r))
+            l = force_readable_sparams(l)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
@@ -523,6 +576,7 @@ function est_to_dst(st::SyntaxTree)
         end
         [K"function" l r] -> let
             l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
+            l = force_readable_sparams(l)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
@@ -533,6 +587,7 @@ function est_to_dst(st::SyntaxTree)
         end
         [K"->" l r] -> let
             l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
+            l = force_readable_sparams(l)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
