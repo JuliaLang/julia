@@ -3,8 +3,7 @@
 #ifndef JL_OBJCACHE_H
 #define JL_OBJCACHE_H
 
-#include <atomic>
-#include <condition_variable>
+#include <memory>
 
 #include <llvm/ADT/FunctionExtras.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -26,43 +25,34 @@
  *                      available.
  */
 
-using CompileFn = llvm::unique_function<std::unique_ptr<llvm::MemoryBuffer>()>;
+// The argument is true if the result may be stored in the cache, in which case
+// the compiled object must not depend on the state of this process.
+using CompileFn = llvm::unique_function<std::unique_ptr<llvm::MemoryBuffer>(bool)>;
 
-class MDBTxn;
+struct ObjCacheState;
 
 class ObjCache {
 public:
-    ObjCache() = default;
+    ObjCache();
     ~ObjCache() JL_NOTSAFEPOINT;
     std::unique_ptr<llvm::MemoryBuffer>
     get(llvm::Module &M, CompileFn Compile) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
-    bool isEnabled() const JL_NOTSAFEPOINT;
+    // Whether the cache can possibly be used by this process.  Unlike the
+    // asynchronous database initialization, this is known at construction
+    // time, so it can be used to configure the optimization pipeline.
+    bool isGloballyEnabled() const JL_NOTSAFEPOINT { return GloballyEnabled; }
     void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;
 
 protected:
-    void writerThread();
     void initDB() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
-    bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
-    bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
-    size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
 
 private:
-    std::atomic<bool> Initialized = false;
-    MDB_env *Env = nullptr;
-    MDB_dbi ObjCacheDbi;
-    MDB_dbi ObjMetaDbi;
-    size_t PageSize;
-    uv_thread_t WriterThread;
-    bool Started = false;
-    bool Exiting = false;
-    // Non-null MemoryBuffer -> cache miss, want to write new entry
-    // Null MemoryBuffer     -> cache hit, want to update atime
-    std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
-    std::mutex Mutex;
-    std::mutex LogMutex;
-    std::condition_variable QueueCond;
+    const bool GloballyEnabled;
+    // Shared with the detached writer thread and any outstanding cache-hit
+    // buffers, both of which may outlive this object.
+    std::shared_ptr<ObjCacheState> State;
 };
 
 #endif // JL_OBJCACHE_H

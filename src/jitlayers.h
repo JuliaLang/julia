@@ -916,7 +916,7 @@ protected:
     // returning a pointer into CISymbols or NULL if the CI is not compiled.
     CISymbolPtr *linkCISymbol(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
-    void optimizeModule(Module &M) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    void optimizeModule(Module &M, bool Cacheable) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
     std::unique_ptr<MemoryBuffer> compileModule(Module &M) JL_NOTSAFEPOINT;
 
 private:

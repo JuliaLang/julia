@@ -1,6 +1,11 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 #include "objcache.h"
 
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <vector>
+
 #include <llvm/Support/Endian.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/SHA1.h>
@@ -17,6 +22,12 @@ static constexpr int OBJCACHE_SCHEMA = 1;
 // Skip atime refreshes when the existing access time is within this many
 // nanoseconds of the new one, to avoid excessive LRU bookkeeping writes.
 static constexpr int64_t OBJCACHE_ATIME_GRANULARITY = 300;
+
+// Cache writes are opportunistic: if the writer thread cannot keep up (e.g.
+// because it is blocked on a lock held by a misbehaving process), drop writes
+// rather than queueing them without bound.
+static constexpr size_t OBJCACHE_MAX_QUEUE_ENTRIES = 1024;
+static constexpr size_t OBJCACHE_MAX_QUEUE_BYTES = 64 << 20;
 
 static uint64_t parseEnvU64(const char *Name, uint64_t Default)
 {
@@ -72,10 +83,32 @@ static std::optional<std::string> getCachePath()
     if (!jl_is_string(DepotStr))
         return {};
 
+    // LMDB 1.0 cannot open 0.9 data files, so keep their cache directories
+    // distinct even within the same Julia minor-version depot.
     return (llvm::Twine(jl_string_ptr(DepotStr)) + "/cache/v" +
             llvm::Twine(JULIA_VERSION_MAJOR) + "." + llvm::Twine(JULIA_VERSION_MINOR) +
-            "/objcache")
+            "/objcache-lmdb1")
         .str();
+}
+
+// A process-wide switch, decided before the first module is compiled: modules
+// compiled while this is true must never embed process-specific state (see
+// optimizeModule), even if cache initialization subsequently fails.
+static bool objCacheGloballyEnabled() JL_NOTSAFEPOINT
+{
+    const char *Enable = getenv("JULIA_OBJCACHE");
+    if (Enable && !strcmp(Enable, "0"))
+        return false;
+#ifdef __HAIKU__
+    // LMDB has no robust lock support on Haiku, so a process dying at the
+    // wrong moment (which the detached writer thread makes more likely) could
+    // leave the cache permanently locked.
+    return false;
+#else
+    // Exiting processes with no live tasks can have mmap()ped files, which
+    // triggers an assertion in rr if another process does a writev() to the fd.
+    return !jl_running_under_rr(0);
+#endif
 }
 
 #define checkMDB(Err) (checkMDB_(Err, __LINE__))
@@ -88,6 +121,17 @@ static int checkMDB_(int Err, int Line) JL_NOTSAFEPOINT
     return Err;
 }
 
+#define checkUV(Err) (checkUV_(Err, __LINE__))
+
+static int checkUV_(int Err, int Line) JL_NOTSAFEPOINT
+{
+    if (Err == 0)
+        return Err;
+    jl_safe_printf("objcache thread error (%d): %s\n", Line, uv_strerror(Err));
+    return Err;
+}
+
+namespace {
 class MDBTxn {
 public:
     MDBTxn(MDB_env *Env, unsigned Flags = 0) JL_NOTSAFEPOINT
@@ -108,11 +152,6 @@ public:
         std::swap(Txn, RHS.Txn);
         return *this;
     }
-    void abort() JL_NOTSAFEPOINT
-    {
-        mdb_txn_abort(Txn);
-        Txn = nullptr;
-    }
     int commit() JL_NOTSAFEPOINT
     {
         int Ret = mdb_txn_commit(Txn);
@@ -121,6 +160,7 @@ public:
     }
     MDB_txn *Txn{};
 };
+} // anonymous namespace
 
 template<typename T>
 MDB_val mdbVal(T &x) JL_NOTSAFEPOINT
@@ -128,105 +168,103 @@ MDB_val mdbVal(T &x) JL_NOTSAFEPOINT
     return {sizeof x, (void *)&x};
 }
 
-namespace {
-class MDBMemoryBuffer : public llvm::MemoryBuffer {
-public:
-    MDBMemoryBuffer(MDBTxn Txn, llvm::StringRef Data) JL_NOTSAFEPOINT : Txn(std::move(Txn))
-    {
-        init(Data.begin(), Data.end(), false);
-    }
-    BufferKind getBufferKind() const override { return MemoryBuffer_MMap; }
-
-private:
-    MDBTxn Txn;
+enum class ObjCachePhase : uint8_t {
+    Uninitialized,
+    Initializing, // the writer thread is opening the database
+    Ready,
+    Failed,
+    Exiting,
 };
-} // anonymous namespace
 
-void ObjCache::initDB()
-{
-    // Read DEPOT_PATH before taking ObjCache::Lock so we can enter a GC-unsafe
-    // region to read the global.
-    jl_task_t *ct = jl_current_task;
-    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
-    const char *Enable = getenv("JULIA_OBJCACHE");
-    auto CachePath = getCachePath();
-    jl_gc_unsafe_leave(ct->ptls, gc_state);
-
-    std::unique_lock<std::mutex> Lock{Mutex};
-
-    if (Initialized.load(memory_order_acquire))
-        return;
-
-    if (!CachePath || (Enable && !strcmp(Enable, "0")))
-        goto done;
-
-    // Exiting processes with no live tasks can have mmap()ped files, which
-    // triggers an assertion in rr if another process does a writev() to the fd.
-    if (jl_running_under_rr(0))
-        goto done;
-
-    if (checkMDB(mdb_env_create(&Env))) {
-        Env = nullptr;
-        goto done;
-    }
-    checkMDB(mdb_env_set_maxreaders(Env, 510));
-    checkMDB(mdb_env_set_maxdbs(Env, 128));
-    checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
-    llvm::sys::fs::create_directories(*CachePath);
-    if (int Err = mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640)) {
-        if (Err != ENOENT)
-            checkMDB(Err);
-        mdb_env_close(Env);
-        goto cleanup;
-    }
-
+// All cache state is shared with the writer thread, which is detached (it may
+// block indefinitely on locks shared with other, possibly misbehaving,
+// processes, so it must never be joined) and can therefore outlive the JIT.
+struct ObjCacheState {
+    ~ObjCacheState() JL_NOTSAFEPOINT
     {
-        MDBTxn Txn{Env};
-        if (!Txn.Txn)
-            goto cleanup_env;
-        if (checkMDB(mdb_dbi_open(Txn.Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
-            goto cleanup_env;
-        if (checkMDB(mdb_dbi_open(Txn.Txn, "objmeta", MDB_CREATE, &ObjMetaDbi)))
-            goto cleanup_env;
-
-        MDB_stat Stat;
-        checkMDB(mdb_stat(Txn.Txn, ObjCacheDbi, &Stat));
-        PageSize = Stat.ms_psize;
-
-        int Version = OBJCACHE_SCHEMA;
-        MDB_val Key = mdbVal("schema");
-        MDB_val Ver = mdbVal(Version);
-        int Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &Ver, MDB_NOOVERWRITE);
-        if (Err == MDB_KEYEXIST && *static_cast<int *>(Ver.mv_data) != OBJCACHE_SCHEMA)
-            goto cleanup_env;
-
-        checkMDB(Txn.commit());
+        if (ReadTxn)
+            mdb_txn_abort(ReadTxn);
+        if (Env)
+            mdb_env_close(Env);
     }
 
+    std::atomic<ObjCachePhase> Phase{ObjCachePhase::Uninitialized};
+    std::string CachePath;
 
-#ifndef __clang_gcanalyzer__
-    uv_thread_create(
-        &WriterThread, [](void *arg) { static_cast<ObjCache *>(arg)->writerThread(); },
-        this);
-#endif
-    Started = true;
-    goto done;
+    // Written by the writer thread before Phase becomes Ready, constant after.
+    MDB_env *Env = nullptr;
+    MDB_dbi ObjCacheDbi{};
+    MDB_dbi ObjMetaDbi{};
+    size_t PageSize{};
 
-cleanup_env:
-    mdb_env_close(Env);
-cleanup:
-    Env = nullptr;
-done:
-    Initialized.store(true, memory_order_release);
+    // A single pre-reserved read transaction, renewed and reset on each use so
+    // that lookups never have to take LMDB's reader-table lock.  ReadInUse is
+    // its lease.
+    MDB_txn *ReadTxn = nullptr;
+    std::atomic_flag ReadInUse = ATOMIC_FLAG_INIT;
+
+    // Non-null MemoryBuffer -> cache miss, want to write new entry
+    // Null MemoryBuffer     -> cache hit, want to update atime
+    std::vector<std::pair<ObjCache::Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
+    size_t QueuedBytes = 0;
+    std::mutex Mutex;
+    std::mutex LogMutex;
+    std::condition_variable QueueCond;
+};
+
+static void writerThreadEntry(void *Opaque) JL_NOTSAFEPOINT;
+
+ObjCache::ObjCache()
+    : GloballyEnabled(objCacheGloballyEnabled()), State(std::make_shared<ObjCacheState>())
+{
 }
 
 ObjCache::~ObjCache()
 {
-    if (!Env)
+    shutdown();
+}
+
+void ObjCache::initDB()
+{
+    // Read DEPOT_PATH before taking the mutex so we can enter a GC-unsafe
+    // region to read the global.
+    std::optional<std::string> CachePath;
+    if (GloballyEnabled) {
+        jl_task_t *ct = jl_current_task;
+        int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+        CachePath = getCachePath();
+        jl_gc_unsafe_leave(ct->ptls, gc_state);
+    }
+
+    std::unique_lock<std::mutex> Lock{State->Mutex};
+
+    if (State->Phase.load(memory_order_acquire) != ObjCachePhase::Uninitialized)
         return;
-    mdb_dbi_close(Env, ObjCacheDbi);
-    mdb_dbi_close(Env, ObjMetaDbi);
-    mdb_env_close(Env);
+
+    // All LMDB calls that can block on locks happen on the writer thread, so
+    // that another (possibly misbehaving or dead) process sharing the cache
+    // can never wedge this one.
+    bool ThreadStarted = false;
+#ifndef __clang_gcanalyzer__
+    if (GloballyEnabled && CachePath) {
+        State->CachePath = std::move(*CachePath);
+        auto *Arg = new std::shared_ptr<ObjCacheState>(State);
+        uv_thread_t WriterThread;
+        if (checkUV(uv_thread_create(&WriterThread, writerThreadEntry, Arg)) == 0) {
+            // Never joined: shutdown() must not block behind a writer that is
+            // itself blocked on another process.  The thread holds a reference
+            // to State and exits on its own once it observes Exiting.
+            checkUV(uv_thread_detach(&WriterThread));
+            ThreadStarted = true;
+        }
+        else {
+            delete Arg;
+        }
+    }
+#endif
+    State->Phase.store(ThreadStarted ? ObjCachePhase::Initializing :
+                                       ObjCachePhase::Failed,
+                       memory_order_release);
 }
 
 static std::atomic<size_t> NWrite = 0, NRead = 0, NMiss = 0, NHit = 0, NEvicted = 0;
@@ -307,22 +345,48 @@ static std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key) JL_NOTSAF
     return {Time, Hash};
 }
 
+static void enqueue(ObjCacheState &State, const ObjCache::Hash &Hash,
+                    std::unique_ptr<llvm::MemoryBuffer> Obj) JL_NOTSAFEPOINT
+{
+    size_t Bytes = Obj ? Obj->getBufferSize() : 0;
+    {
+        std::unique_lock<std::mutex> Lock{State.Mutex};
+        ObjCachePhase Phase = State.Phase.load(memory_order_relaxed);
+        if (Phase != ObjCachePhase::Initializing && Phase != ObjCachePhase::Ready)
+            return;
+        // An empty queue always accepts, so that objects larger than the byte
+        // limit can still be cached (one at a time).
+        if (!State.ObjQueue.empty() &&
+            (State.ObjQueue.size() >= OBJCACHE_MAX_QUEUE_ENTRIES ||
+             State.QueuedBytes + Bytes > OBJCACHE_MAX_QUEUE_BYTES))
+            return;
+        State.QueuedBytes += Bytes;
+        State.ObjQueue.push_back({Hash, std::move(Obj)});
+    }
+    State.QueueCond.notify_one();
+}
+
 std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
 {
-    auto doCompile = [&]() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE
+    auto doCompile = [&](bool Cacheable) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE
         -> std::unique_ptr<llvm::MemoryBuffer> {
 #ifndef __clang_gcanalyzer__
-        return Compile();
+        return Compile(Cacheable);
 #else
         return nullptr;
 #endif
     };
 
-    if (!Initialized.load(memory_order_acquire))
+    if (State->Phase.load(memory_order_acquire) == ObjCachePhase::Uninitialized)
         initDB();
 
-    if (!Env)
-        return doCompile();
+    // Freeze the cacheability decision for this materialization: if the writer
+    // thread finishes initializing concurrently, the module must not end up
+    // mixing cache-portable and process-specific transforms.
+    ObjCachePhase Phase = State->Phase.load(memory_order_acquire);
+    bool Cacheable = Phase == ObjCachePhase::Initializing || Phase == ObjCachePhase::Ready;
+    if (!Cacheable)
+        return doCompile(false);
 
     size_t Weight = 0;
     if (LogFile) {
@@ -336,59 +400,60 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     auto Hash = hashModule(M);
     auto ObjKey = toObjKey(Hash);
 
-    MDBTxn Txn{Env, MDB_RDONLY};
-    if (!Txn.Txn)
-        return doCompile();
-
-    MDB_val Data;
-    MDB_val Key = mdbVal(ObjKey);
-    if (int Err = mdb_get(Txn.Txn, ObjCacheDbi, &Key, &Data)) {
-        if (Err != MDB_NOTFOUND) {
-            checkMDB(Err);
-            return doCompile();
+    // While Initializing, lookups always miss; the compiled objects are queued
+    // and written in case the writer thread comes up successfully.
+    std::unique_ptr<llvm::MemoryBuffer> Buf;
+    if (Phase == ObjCachePhase::Ready &&
+        !State->ReadInUse.test_and_set(memory_order_acquire)) {
+        if (checkMDB(mdb_txn_renew(State->ReadTxn))) {
+            // A transaction whose renewal failed may not be used again; leave
+            // the lease taken so that no lookup ever touches it (it is aborted
+            // by ~ObjCacheState).
+            return doCompile(true);
         }
-        Txn.abort();
+        MDB_val Data;
+        MDB_val Key = mdbVal(ObjKey);
+        int Err = mdb_get(State->ReadTxn, State->ObjCacheDbi, &Key, &Data);
+        if (Err == 0)
+            // Copy the object out so the lease is only ever held briefly.
+            Buf = llvm::MemoryBuffer::getMemBufferCopy(
+                llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
+        else if (Err != MDB_NOTFOUND)
+            checkMDB(Err);
+        mdb_txn_reset(State->ReadTxn);
+        State->ReadInUse.clear(memory_order_release);
+    }
 
+    if (!Buf) {
         double LookupMs = (jl_hrtime() - LookupStart) / 1.0e6;
 
         NMiss.fetch_add(1, memory_order_relaxed);
         uint64_t CompileStart = jl_hrtime();
-        auto Obj = doCompile();
+        auto Obj = doCompile(true);
         double CompileMs = (jl_hrtime() - CompileStart) / 1.0e6;
         if (!Obj)
             return nullptr;
 
         if (LogFile) {
-            std::unique_lock<std::mutex> Lock{LogMutex};
+            std::unique_lock<std::mutex> Lock{State->LogMutex};
             fprintf(LogFile, "lookup,%s,%.3f,miss,%.3f,%zu,%zu\n",
                     llvm::toHex(Hash, true).c_str(), LookupMs, CompileMs,
                     Obj->getBufferSize(), Weight);
         }
 
-        auto ObjCopy = llvm::MemoryBuffer::getMemBufferCopy(Obj->getBuffer());
-        {
-            std::unique_lock<std::mutex> Lock{Mutex};
-            ObjQueue.push_back({Hash, std::move(ObjCopy)});
-        }
-        QueueCond.notify_one();
+        enqueue(*State, Hash, llvm::MemoryBuffer::getMemBufferCopy(Obj->getBuffer()));
 
         return Obj;
     }
 
-    {
-        std::unique_lock<std::mutex> Lock{Mutex};
-        ObjQueue.push_back({Hash, nullptr});
-    }
-    QueueCond.notify_one();
+    enqueue(*State, Hash, nullptr);
 
-    auto Buf = std::make_unique<MDBMemoryBuffer>(
-        std::move(Txn), llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
     NHit.fetch_add(1, memory_order_relaxed);
     NRead.fetch_add(Buf->getBufferSize(), memory_order_relaxed);
 
     double LookupMs = (jl_hrtime() - LookupStart) / 1.0e6;
     if (LogFile) {
-        std::unique_lock<std::mutex> Lock{LogMutex};
+        std::unique_lock<std::mutex> Lock{State->LogMutex};
         fprintf(LogFile, "lookup,%s,%.3f,hit,%zu,%zu\n", llvm::toHex(Hash, true).c_str(),
                 LookupMs, Buf->getBufferSize(), Weight);
     }
@@ -396,24 +461,22 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     return Buf;
 }
 
-bool ObjCache::isEnabled() const
-{
-    return Env;
-}
-
 void ObjCache::shutdown()
 {
-    if (Started) {
-        {
-            std::unique_lock<std::mutex> Lock{Mutex};
-            Exiting = true;
-        }
-        QueueCond.notify_one();
-        uv_thread_join(&WriterThread);
+    ObjCachePhase OldPhase;
+    {
+        std::unique_lock<std::mutex> Lock{State->Mutex};
+        OldPhase = State->Phase.exchange(ObjCachePhase::Exiting, memory_order_acq_rel);
+        // Pending writes are abandoned; the writer thread exits once it
+        // observes the phase change (or immediately, if it was wedged and
+        // is unblocked later).
+        State->ObjQueue.clear();
+        State->QueuedBytes = 0;
     }
+    State->QueueCond.notify_all();
 
-    if (LogFile) {
-        std::unique_lock<std::mutex> Lock{LogMutex};
+    if (LogFile && OldPhase != ObjCachePhase::Exiting) {
+        std::unique_lock<std::mutex> Lock{State->LogMutex};
         jl_safe_printf(
             "cache read:  %zu\ncache write: %zu\ncache hit:   %zu\ncache miss:  %zu\ncache evict: %zu\n",
             NRead.load(memory_order_relaxed), NWrite.load(memory_order_relaxed),
@@ -422,70 +485,207 @@ void ObjCache::shutdown()
     }
 }
 
-void ObjCache::writerThread()
+static bool updateATime(ObjCacheState &State, MDBTxn &Txn, const ObjCache::Hash &Hash,
+                        int64_t Time, bool Fresh) JL_NOTSAFEPOINT;
+static bool maybeEvictLRU(ObjCacheState &State, MDBTxn &Txn,
+                          size_t RoomFor) JL_NOTSAFEPOINT;
+
+enum class OpenResult {
+    Ready,
+    Missing,
+    Failed,
+};
+
+// Opens (Create == false) or creates (Create == true) the databases and, on
+// success, publishes the handles and the reserved read transaction, moving
+// Phase to Ready.
+static OpenResult openDB(ObjCacheState &State, bool Create) JL_NOTSAFEPOINT
 {
-    std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> LocalQueue;
+    MDBTxn Txn{State.Env, Create ? 0 : unsigned(MDB_RDONLY)};
+    if (!Txn.Txn)
+        return OpenResult::Failed;
+
+    unsigned Flags = Create ? MDB_CREATE : 0;
+    MDB_dbi ObjCacheDbi, ObjMetaDbi;
+    int Err = mdb_dbi_open(Txn.Txn, "objcache", Flags, &ObjCacheDbi);
+    if (Err == MDB_NOTFOUND)
+        return OpenResult::Missing;
+    if (checkMDB(Err))
+        return OpenResult::Failed;
+    Err = mdb_dbi_open(Txn.Txn, "objmeta", Flags, &ObjMetaDbi);
+    if (Err == MDB_NOTFOUND)
+        return OpenResult::Missing;
+    if (checkMDB(Err))
+        return OpenResult::Failed;
+
+    int Version = OBJCACHE_SCHEMA;
+    MDB_val Key = mdbVal("schema");
+    MDB_val Ver = mdbVal(Version);
+    if (Create) {
+        Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &Ver, MDB_NOOVERWRITE);
+        if (Err != MDB_KEYEXIST && checkMDB(Err))
+            return OpenResult::Failed;
+    }
+    else {
+        Err = mdb_get(Txn.Txn, ObjMetaDbi, &Key, &Ver);
+        if (Err == MDB_NOTFOUND)
+            return OpenResult::Missing;
+        if (checkMDB(Err))
+            return OpenResult::Failed;
+    }
+    if (Ver.mv_size != sizeof Version ||
+        memcmp(Ver.mv_data, &Version, sizeof Version) != 0)
+        return OpenResult::Failed;
+
+    MDB_stat Stat;
+    if (checkMDB(mdb_stat(Txn.Txn, ObjCacheDbi, &Stat)))
+        return OpenResult::Failed;
+    if (checkMDB(Txn.commit()))
+        return OpenResult::Failed;
+
+    // Reserve one MDB_NOTLS reader slot up front; renewing a reset read
+    // transaction reuses the slot without taking LMDB's reader-table lock, so
+    // the lookup path in ObjCache::get never blocks on other processes.
+    MDB_txn *ReadTxn;
+    if (checkMDB(mdb_txn_begin(State.Env, nullptr, MDB_RDONLY, &ReadTxn)))
+        return OpenResult::Failed;
+    mdb_txn_reset(ReadTxn);
+
+    {
+        std::unique_lock<std::mutex> Lock{State.Mutex};
+        if (State.Phase.load(memory_order_relaxed) != ObjCachePhase::Initializing) {
+            // shutdown() got there first
+            mdb_txn_abort(ReadTxn);
+            return OpenResult::Failed;
+        }
+        State.ObjCacheDbi = ObjCacheDbi;
+        State.ObjMetaDbi = ObjMetaDbi;
+        State.PageSize = Stat.ms_psize;
+        State.ReadTxn = ReadTxn;
+        State.Phase.store(ObjCachePhase::Ready, memory_order_release);
+    }
+    return OpenResult::Ready;
+}
+
+static void writerThread(ObjCacheState &State) JL_NOTSAFEPOINT
+{
+    OpenResult Result = OpenResult::Failed;
+    if (!checkMDB(mdb_env_create(&State.Env))) {
+        checkMDB(mdb_env_set_maxreaders(State.Env, 510));
+        checkMDB(mdb_env_set_maxdbs(State.Env, 128));
+        checkMDB(mdb_env_set_mapsize(State.Env, OBJCACHE_CAPACITY * 2));
+        llvm::sys::fs::create_directories(State.CachePath);
+        int Err = mdb_env_open(State.Env, State.CachePath.c_str(),
+                               MDB_NOSYNC | MDB_NOTLS, 0640);
+        if (Err) {
+            if (Err != ENOENT)
+                checkMDB(Err);
+        }
+        else {
+            // Recover locks held by processes that died holding them.
+            int Dead;
+            checkMDB(mdb_reader_check(State.Env, &Dead));
+            // Prefer opening the databases read-only: if another process is
+            // wedged holding the write lock, existing cache contents remain
+            // usable (only the queued writes will never be committed).
+            Result = openDB(State, false);
+            if (Result == OpenResult::Missing)
+                Result = openDB(State, true);
+        }
+    }
+    if (Result != OpenResult::Ready) {
+        if (State.Env) {
+            mdb_env_close(State.Env);
+            State.Env = nullptr;
+        }
+        std::unique_lock<std::mutex> Lock{State.Mutex};
+        ObjCachePhase Expected = ObjCachePhase::Initializing;
+        State.Phase.compare_exchange_strong(Expected, ObjCachePhase::Failed,
+                                            memory_order_acq_rel);
+        State.ObjQueue.clear();
+        State.QueuedBytes = 0;
+        return;
+    }
+
+    std::vector<std::pair<ObjCache::Hash, std::unique_ptr<llvm::MemoryBuffer>>> LocalQueue;
     while (1) {
         LocalQueue.clear();
         {
-            std::unique_lock Lock{Mutex};
-            QueueCond.wait(Lock, [this]() { return Exiting || !ObjQueue.empty(); });
-            std::swap(LocalQueue, ObjQueue);
+            std::unique_lock Lock{State.Mutex};
+            State.QueueCond.wait(Lock, [&]() {
+                return State.Phase.load(memory_order_relaxed) == ObjCachePhase::Exiting ||
+                       !State.ObjQueue.empty();
+            });
+            if (State.Phase.load(memory_order_relaxed) == ObjCachePhase::Exiting)
+                return;
+            std::swap(LocalQueue, State.ObjQueue);
+            State.QueuedBytes = 0;
         }
-        if (LocalQueue.empty())
-            return;
 
-        MDBTxn Txn{Env};
+        MDBTxn Txn{State.Env};
         if (!Txn.Txn)
             continue;
 
         uv_timeval_t Tv;
         uv_gettimeofday(&Tv);
-        auto I = LocalQueue.begin();
-        for (; I < LocalQueue.end(); ++I) {
-            auto &[H, Obj] = *I;
+        bool OK = true, Exiting = false;
+        for (auto &[H, Obj] : LocalQueue) {
+            if ((Exiting = State.Phase.load(memory_order_relaxed) ==
+                           ObjCachePhase::Exiting))
+                break;
             auto ObjKey = toObjKey(H);
             MDB_val Key = mdbVal(ObjKey);
             if (Obj) {
                 // Cache miss - write object
-                if (!maybeEvictLRU(Txn, Obj->getBufferSize()))
-                    goto abort;
+                if (!(OK = maybeEvictLRU(State, Txn, Obj->getBufferSize())))
+                    break;
                 MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
-                if (int Err = mdb_put(Txn.Txn, ObjCacheDbi, &Key, &Data, 0)) {
+                if (int Err = mdb_put(Txn.Txn, State.ObjCacheDbi, &Key, &Data, 0)) {
                     // If this fails because of MDB_MAP_FULL, we can't find
                     // enough contiguous pages in the database.  Skip it.
                     if (Err != MDB_MAP_FULL)
                         checkMDB(Err);
-                    goto abort;
+                    OK = false;
+                    break;
                 }
                 NWrite.fetch_add(Obj->getBufferSize(), memory_order_relaxed);
                 auto _ = std::move(Obj);
-                if (!updateATime(Txn, H, Tv.tv_sec, true))
-                    goto abort;
+                if (!(OK = updateATime(State, Txn, H, Tv.tv_sec, true)))
+                    break;
             }
             else {
                 // Cache hit - update use time.  We set bit 62 to sort entries
                 // that have been hit at least once after entries that have only
                 // been written, so never-read entries will always be evicted
                 // first.
-                if (!updateATime(Txn, H, Tv.tv_sec | (1LL << 62), false))
-                    goto abort;
+                if (!(OK = updateATime(State, Txn, H, Tv.tv_sec | (1LL << 62), false)))
+                    break;
             }
         }
-        Txn.commit();
-        continue;
-abort:;
-        std::unique_lock Lock{Mutex};
-        std::move(++I, LocalQueue.end(), std::back_inserter(ObjQueue));
+        // On failure the transaction is aborted (by ~MDBTxn) and the remaining
+        // entries are dropped; cache writes are only ever best-effort.
+        if (OK)
+            checkMDB(Txn.commit());
+        if (Exiting)
+            return;
     }
 }
 
-bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fresh)
+static void writerThreadEntry(void *Opaque)
+{
+    auto *Arg = static_cast<std::shared_ptr<ObjCacheState> *>(Opaque);
+    std::shared_ptr<ObjCacheState> State = std::move(*Arg);
+    delete Arg;
+    writerThread(*State);
+}
+
+static bool updateATime(ObjCacheState &State, MDBTxn &Txn, const ObjCache::Hash &Hash,
+                        int64_t Time, bool Fresh)
 {
     auto ObjKey = toObjKey(Hash);
     MDB_val Key = mdbVal(ObjKey);
     MDB_val OldData;
-    if (int Err = mdb_get(Txn.Txn, ObjMetaDbi, &Key, &OldData)) {
+    if (int Err = mdb_get(Txn.Txn, State.ObjMetaDbi, &Key, &OldData)) {
         if (Err != MDB_NOTFOUND) {
             checkMDB(Err);
             return false;
@@ -496,8 +696,11 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
         if (!Fresh)
             return true;
     }
+    else if (OldData.mv_size != sizeof(int64_t)) {
+        // Corrupt entry: overwrite it below.  Its metakey, which we can no
+        // longer identify, is eventually cleaned up by eviction.
+    }
     else {
-        assert(OldData.mv_size == sizeof(int64_t));
         int64_t OldTime;
         memcpy(&OldTime, OldData.mv_data, sizeof OldTime);
         if (Time < OldTime + OBJCACHE_ATIME_GRANULARITY)
@@ -505,7 +708,7 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
 
         auto MetaKey = toMetaKey(OldTime, Hash);
         MDB_val Key2 = mdbVal(MetaKey);
-        if (int Err = mdb_del(Txn.Txn, ObjMetaDbi, &Key2, nullptr)) {
+        if (int Err = mdb_del(Txn.Txn, State.ObjMetaDbi, &Key2, nullptr)) {
             if (Err != MDB_MAP_FULL)
                 checkMDB(Err);
             return false;
@@ -513,7 +716,7 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
     }
 
     MDB_val TimeData{sizeof Time, &Time};
-    if (int Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &TimeData, 0)) {
+    if (int Err = mdb_put(Txn.Txn, State.ObjMetaDbi, &Key, &TimeData, 0)) {
         if (Err != MDB_MAP_FULL)
             checkMDB(Err);
         return false;
@@ -522,7 +725,7 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
     auto MetaKey = toMetaKey(Time, Hash);
     MDB_val Key2 = mdbVal(MetaKey);
     MDB_val EmptyData{0, nullptr};
-    if (int Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key2, &EmptyData, 0)) {
+    if (int Err = mdb_put(Txn.Txn, State.ObjMetaDbi, &Key2, &EmptyData, 0)) {
         if (Err != MDB_MAP_FULL)
             checkMDB(Err);
         return false;
@@ -530,13 +733,21 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
     return true;
 }
 
-bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor)
+static size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi) JL_NOTSAFEPOINT
 {
-    RoomFor = LLT_ALIGN(RoomFor, PageSize);
-    auto Used = [&]() {
-        return dbiSize(Txn, ObjCacheDbi) + dbiSize(Txn, ObjMetaDbi) + RoomFor;
+    MDB_stat Stat;
+    mdb_stat(Txn.Txn, Dbi, &Stat);
+    return (Stat.ms_leaf_pages + Stat.ms_branch_pages + Stat.ms_overflow_pages) *
+           Stat.ms_psize;
+}
+
+static bool maybeEvictLRU(ObjCacheState &State, MDBTxn &Txn, size_t RoomFor)
+{
+    RoomFor = LLT_ALIGN(RoomFor, State.PageSize);
+    auto Used = [&]() JL_NOTSAFEPOINT {
+        return dbiSize(Txn, State.ObjCacheDbi) + dbiSize(Txn, State.ObjMetaDbi) + RoomFor;
     };
-    auto ShouldEvict = [&]() {
+    auto ShouldEvict = [&]() JL_NOTSAFEPOINT {
         size_t Threshold = OBJCACHE_CAPACITY * 3 / 4;
         return Used() > Threshold;
     };
@@ -545,25 +756,24 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor)
         return true;
 
     MDB_cursor *MetaCur;
-    if (checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur)))
+    if (checkMDB(mdb_cursor_open(Txn.Txn, State.ObjMetaDbi, &MetaCur)))
         return false;
 
     auto LowMeta = toMetaKey(0, {});
     MDB_val MetaKey = mdbVal(LowMeta);
     int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
-    while (!Ret && ShouldEvict() && ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
+    while (!Ret && ShouldEvict() && MetaKey.mv_size == METAKEY_SIZE &&
+           ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
         auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
+        // (Not logged to LogFile: the detached writer could race stdio
+        // teardown when the process exits.)
         NEvicted.fetch_add(1, memory_order_relaxed);
-        if (LogFile) {
-            std::unique_lock<std::mutex> Lock{LogMutex};
-            fprintf(LogFile, "evict,%s,,,,,\n", llvm::toHex(Hash, true).c_str());
-        }
 
         auto ObjKey = toObjKey(Hash);
         MDB_val Key = mdbVal(ObjKey);
-        checkMDB(mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr));
+        checkMDB(mdb_del(Txn.Txn, State.ObjCacheDbi, &Key, nullptr));
         Key = mdbVal(ObjKey);
-        checkMDB(mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr));
+        checkMDB(mdb_del(Txn.Txn, State.ObjMetaDbi, &Key, nullptr));
         checkMDB(mdb_cursor_del(MetaCur, 0));
         Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
         if (Ret != MDB_NOTFOUND)
@@ -572,16 +782,8 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor)
 
     // Start a new transaction to release our lock on all the pages that
     // are now free.
-    Txn.commit();
-    Txn = MDBTxn{Env};
+    checkMDB(Txn.commit());
+    Txn = MDBTxn{State.Env};
 
-    return true;
-}
-
-size_t ObjCache::dbiSize(MDBTxn &Txn, MDB_dbi Dbi)
-{
-    MDB_stat Stat;
-    mdb_stat(Txn.Txn, Dbi, &Stat);
-    return (Stat.ms_leaf_pages + Stat.ms_branch_pages + Stat.ms_overflow_pages) *
-           Stat.ms_psize;
+    return Txn.Txn != nullptr;
 }

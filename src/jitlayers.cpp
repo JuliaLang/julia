@@ -899,8 +899,8 @@ public:
                                       MDString::get(*Out.ctx,
                                                     JIT.getTargetFeatureString()));
             Obj = JIT.OCache.get(*Out.module,
-                                 [this]() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
-                                     JIT.optimizeModule(*Out.module);
+                                 [this](bool Cacheable) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
+                                     JIT.optimizeModule(*Out.module, Cacheable);
                                      return JIT.compileModule(*Out.module);
                                  });
             if (!Obj) {
@@ -1724,7 +1724,9 @@ JuliaOJIT::JuliaOJIT()
     CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT<N_optlevels>>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM)),
     JITPointers(std::make_unique<JITPointersT>(SharedBytes, SharedBytesMutex)),
     JITPointersLayer(ES, CompileLayer, IRTransformRef(*JITPointers)),
-    Optimizers(std::make_unique<OptimizerT>(*TM, PrintLLVMTimers, llvm_printing_mutex, OCache.isEnabled())),
+    // Cacheable objects must not embed process-specific TLS offsets.  The
+    // cache initializes asynchronously, so use the process-wide decision here.
+    Optimizers(std::make_unique<OptimizerT>(*TM, PrintLLVMTimers, llvm_printing_mutex, OCache.isGloballyEnabled())),
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
@@ -2493,12 +2495,14 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     return &CISym;
 }
 
-void JuliaOJIT::optimizeModule(Module &M)
+void JuliaOJIT::optimizeModule(Module &M, bool Cacheable)
 {
-    if (!OCache.isEnabled())
+    // Cacheable is decided per materialization by ObjCache::get, since the
+    // cache initializes asynchronously and may become ready at any point.
+    if (!Cacheable)
         optimizeDLSyms(M);
     (*Optimizers)(M);
-    if (!OCache.isEnabled())
+    if (!Cacheable)
         (*JITPointers)(M);
     // Windows needs some inline asm to help
     // build unwind tables, if they have any functions to decorate
