@@ -434,7 +434,9 @@ is_ptr_storable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_storable(
 is_vec_strided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_vec_strided_layout(P)
 is_contiguous(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_contiguous_layout(P)
 
-_checkcontiguous(::Type{Bool}, A::AbstractArray) = has_contiguous_layout(typeof(A))
+# Contiguous with the exact byte layout of the equivalent Array and matching elsize
+_checkcontiguous(::Type{Bool}, A::AbstractArray{T}) where {T} =
+    has_contiguous_layout(typeof(A)) && elsize(typeof(A)) == elsize(Array{T})
 # TODO remove this. DenseArray being contiguous was not part of the DenseArray requirements. See CodeUnits.
 _checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))

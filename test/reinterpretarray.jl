@@ -291,6 +291,26 @@ end
     end
 end
 
+# a primitive type with alignment padding: sizeof(Int24) = 3 < elsize(Array{Int24}) = 4
+primitive type Int24 24 end
+
+# a reinterpret array packs elements at sizeof(T) spacing, so it must not claim
+# Array layout when T has alignment padding
+@testset "is_contiguous with padded primitive eltype" begin
+    v = reinterpret(Int24, collect(UInt8, 1:12))
+    T = typeof(v)
+    @test !Base.is_contiguous(T)
+    @test !Base.has_contiguous_layout(T)
+    @test Base.is_strided(T)
+    @test is_ptr_loadable(T)
+    @test Base.elsize(T)*strides(v)[1] == 3
+    check_strided_traits(v)
+    # views and reshapes take the packed-spacing pointer/stride paths
+    check_strided_get(view(v, 2:4))
+    @test strides(reshape(v, 2, 2)) == (1, 2)
+    check_strided_get(reshape(v, 2, 2))
+end
+
 # IndexStyle
 test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     a = deepcopy(a_)

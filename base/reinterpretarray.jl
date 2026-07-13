@@ -219,7 +219,10 @@ function is_strided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S
     # Unknown if parent is contiguous in the 1st dimension.
     return false
 end
-is_contiguous(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P} = has_contiguous_layout(P)
+# A reinterpret array stores elements packed at `sizeof(T)` spacing, which only
+# matches the `Array{T}` layout if `T` has no alignment padding.
+is_contiguous(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P} =
+    has_contiguous_layout(P) && sizeof(T) == elsize(Array{T})
 
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
@@ -242,8 +245,6 @@ end
         throw(ArgumentError("Parent's strides could not be exactly divided!"))
     map(first, drs)
 end
-
-_checkcontiguous(::Type{Bool}, A::ReinterpretArray) = _checkcontiguous(Bool, parent(A))
 
 similar(a::ReinterpretArray, T::Type, d::Dims) = similar(a.parent, T, d)
 similar(::Type{TA}, dims::Dims) where {T,N,O,P,TA<:ReinterpretArray{T,N,O,P}} = similar(P, dims)
