@@ -241,15 +241,36 @@ JL_DLLEXPORT uint64_t jl_gc_get_hard_heap_limit(void)
 JL_DLLEXPORT void jl_gc_disable_no_ptls_no_safepoint(void)
 {
     mmtk_disable_collection();
-    // Make sure a collection that is already pending or in progress (including the
-    // concurrent marking phase of a concurrent GC) has fully finished before returning,
-    // so the caller can rely on no collection touching memory from this point on.
-    mmtk_wait_for_no_collection_in_progress();
 }
 
 JL_DLLEXPORT void jl_gc_enable_no_ptls_no_safepoint(void)
 {
     mmtk_enable_collection();
+}
+
+JL_DLLEXPORT int jl_gc_enable(int on)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        int was_enabled = mmtk_is_collection_enabled();
+        mmtk_enable_collection();
+        if (!was_enabled && mmtk_is_collection_enabled()) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
+        }
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        mmtk_disable_collection();
+        // Make sure a collection that is already pending or in progress (including the
+        // concurrent marking phase of a concurrent GC) has fully finished before returning,
+        // so the caller can rely on no collection touching memory from this point on.
+        mmtk_wait_for_no_collection_in_progress();
+    }
+    return prev;
 }
 
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
