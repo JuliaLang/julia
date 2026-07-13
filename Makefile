@@ -430,10 +430,10 @@ endif
 	done
 
 # Copy over C runtime files used by Base.Linking
-ifeq ($(OS),Darwin)
-	$(INSTALL_M) $(build_libdir)/libclang_rt.osx.a $(DESTDIR)$(private_libdir)/
-	$(INSTALL_M) $(build_libdir)/libSystem.tbd $(DESTDIR)$(private_libdir)/
-else
+# (nothing to copy on Darwin: unlike master, release-1.13 does not ship
+# libSystem.tbd/libclang_rt.osx.a and instead resolves those symbols from the
+# host at load time via `-undefined dynamic_lookup`)
+ifneq ($(OS),Darwin)
 	$(INSTALL_M) $(build_libdir)/libgcc.a $(DESTDIR)$(private_libdir)/
 	$(INSTALL_M) $(build_libdir)/crti.o $(DESTDIR)$(private_libdir)/
 	$(INSTALL_M) $(build_libdir)/crtn.o $(DESTDIR)$(private_libdir)/
