@@ -2028,6 +2028,15 @@ cglobal_non_static2() = cglobal(the_sym)
 @test_throws TypeError cglobal_non_static1()
 @test_throws TypeError cglobal_non_static2()
 
+# a ccall pointer argument whose unsafe_convert returns a small union must
+# extract and convert the Ptr and typecheck the other options
+struct UnionConvertPtr; flag::Cint; end
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, w::UnionConvertPtr) = w.flag == 1 ? C_NULL : (w.flag == 2 ? Ptr{Cint}(1) : (:x,))
+union_convert_ptr(w) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Ptr{Cvoid},), w)
+@test union_convert_ptr(UnionConvertPtr(1)) == C_NULL
+@test union_convert_ptr(UnionConvertPtr(2)) == Ptr{Cvoid}(1)
+@test_throws TypeError union_convert_ptr(UnionConvertPtr(3))
+
 @generated function generated_world_counter()
     return :($(Base.get_world_counter()))
 end

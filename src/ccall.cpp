@@ -1602,7 +1602,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             retval = emit_pointer_from_objref(ctx, retval /*T_prjlvalue*/);
         }
         else if (tti == (jl_value_t*)jl_voidpointer_type) {
-            retval = emit_unbox(ctx, largty, argv[0]);
+            retval = emit_unbox(ctx, largty, voidpointer_update(ctx, argv[0], make_errmsg("ccall", 1, "")));
         }
         else {
             retval = emit_unbox(ctx, largty, update_julia_type(ctx, argv[0], tti));
