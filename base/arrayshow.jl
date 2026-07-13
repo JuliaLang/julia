@@ -172,14 +172,17 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     _print_matrix(io, inferencebarrier(X), pre, sep, post, hdots, vdots, ddots, hmod, vmod, unitrange(axes(X,1)), unitrange(axes(X,2)))
 end
 
-"function to be display(io, X::array)"
-function myshow(io, X)
+
+"function to be pointed to by `show_repl(io::IO, mime::MIME\"text/plain\", x::AbstractArray)`"
+show_array(io::IO, X::AbstractArray{<:Any, 0}) = show(io, MIME"text/plain"(), X)
+
+function show_array(io::IO, X::AbstractArray)
     sz = displaysize(io)::Tuple{Int,Int}
     sh, sw = sz[1] - 4, sz[2] + 1
 
     print(io, summary(X))
-    dims = length(axes(X))
-    X = X[:, :, :, :, :, :, ones(Int, size(axes(X)[7:end], 1))...]
+    dims = ndims(X)
+    X = view(X, ntuple(i -> axes(X, i), 6)..., firstindex.(axes(X, i) for i in 7:dims)...)
     h0, v0, h1, v1, h2, v2 = ax = axes(X)
 
     if !haskey(io, :compact) && any(length(axes(X, i)) > 1 for i=(2,4,6))
@@ -208,14 +211,14 @@ function myshow(io, X)
             print(io, ", 1"^(dims-6))
         end
         println(io, "]):")
-    elseif length(h0) > 2 && length(v0) > 2
+    elseif (length(h0) > 2 || all(!isnothing, h0)) && (length(v0) > 2 || all(!isnothing, v0))
         print(io, " (eliding ")
         h0 != ax[1] && print(io, "$(length(ax[1])-length(h0)+1) rows")
         h0 != ax[1] && v0 != ax[2] && print(io, " and ")
         v0 != ax[2] && print(io, "$(length(ax[2])-length(v0)+1) cols")
         println(io, "):")
     else
-        println(io, ": …")
+        _show_oneline_truncated(io, X)
         return
     end
 
@@ -232,7 +235,7 @@ function _trim_axes(sh, sw, h0, v0, h1, v1, h2, v2)
     else
         v2 = v2[1:1]
         v1 = v1[1:1]
-        if sw < length(h0)
+        if sw < length(v0)
             v0 = [v0[1:~-sw÷3÷2 - (~-sw÷3-1)%2]; nothing; v0[end - ~-sw÷3÷2 + 1:end]]
             h1, h2 = h1[1:1], h2[1:1]
         end
@@ -255,8 +258,8 @@ function _trim_axes(sh, sw, h0, v0, h1, v1, h2, v2)
 end
 
 _alignment(io::IO, X, h0, v0, h1, v1, h2, v2) = Dict(
-    col => max.((
-        _display_alignment(io, X[row[1], col[1], row[2], col[2], row[3], col[3]])
+    col => max.((0, 0, 0), (
+        _display_alignment(io, X, row, col)
         for row in Iterators.product(h0, h1, h2)
         if !isnothing(row[1])
     )...)
@@ -266,7 +269,8 @@ _alignment(io::IO, X, h0, v0, h1, v1, h2, v2) = Dict(
 
 function _trim_cols(align, sw, h0, v0, h1, v1, h2, v2)
     elided = any(isnothing, v0)
-    width = sum(ali[3]+2 for ali in values(align)) + length(v1)*length(v2) + 2length(v2) - 2 + 3elided
+    width = sum(ali[3]+2 for ali in values(align); init=0) +
+        length(v1)*length(v2) + 2length(v2) - 2 + 3elided
 
     while width > sw
         if length(v2) > 1
@@ -277,7 +281,8 @@ function _trim_cols(align, sw, h0, v0, h1, v1, h2, v2)
             v0 = [v0[1:-~end÷2-end%2-1]; nothing; v0[-~end÷2-~end%2+1:end]]
             elided || ((h1, h2, elided) = (h1[1:1], h2[1:1], true))
         end
-        width = sum(align[ind][3]+2 for ind in Iterators.product(v0, v1, v2) if !isnothing(ind[1])) + length(v1)*length(v2) + 2length(v2) - 2 + 3elided
+        width = sum(align[ind][3]+2 for ind in Iterators.product(v0, v1, v2) if !isnothing(ind[1]); init=0) +
+            length(v1)*length(v2) + 2length(v2) - 2 + 3elided
     end
 
     h0, v0, h1, v1, h2, v2
@@ -291,8 +296,9 @@ function _print_matrix(io::IO, X, align, h0, v0, h1, v1, h2, v2)
                 if !isnothing(hi)
                     _print_matrix_row(io, X, align, hk, hj, hi, v0, v1, v2)
                 else
-                    _print_elipsis_row(io, align, v0, v1, v2)
+                    _print_ellipsis_row(io, align, v0, v1, v2)
                 end
+                hi == h0[end] && hj == h1[end] && hk == h2[end] || println(io)
             end
             if hj != h1[end]
                 _print_matrix_floor(io, align, v0, v1, v2, "─", "─┼─", "─┨ ┠─")
@@ -311,9 +317,9 @@ function _print_matrix_row(io::IO, X, align, hk, hj, hi, v0, v1, v2)
         for vj in v1
             for vi in v0
                 if !isnothing(vi)
-                    offset = _offsets(io, X[hi, vi, hj, vj, hk, vk], align[vi, vj, vk])
+                    offset = _offsets(io, X, (hi, hj, hk), (vi, vj, vk), align[vi, vj, vk])
                     print(io, " " ^ offset[1])
-                    _show_capped(io, X[hi, vi, hj, vj, hk, vk])
+                    _show_capped(io, X, (hi, vi, hj, vj, hk, vk))
                     print(io, " " ^ offset[2])
                 else
                     print(io, " ⋯ ")
@@ -327,10 +333,9 @@ function _print_matrix_row(io::IO, X, align, hk, hj, hi, v0, v1, v2)
             printstyled(io, "┃ ┃", color=:yellow)
         end
     end
-    println(io, "")
 end
 
-"print out a divider to seperate the higher dimensions"
+"print out a divider to separate the higher dimensions"
 function _print_matrix_floor(io::IO, align, v0, v1, v2, line, inter1, inter2)
     print(io, ' ')
     for vk in v2
@@ -347,11 +352,11 @@ function _print_matrix_floor(io::IO, align, v0, v1, v2, line, inter1, inter2)
             printstyled(io, inter2, color=:yellow)
         end
     end
-    println(io, "")
+    println(io)
 end
 
 "print horizontal row of ellipsis"
-function _print_elipsis_row(io::IO, align, v0, v1, v2)
+function _print_ellipsis_row(io::IO, align, v0, v1, v2)
     for vi in v0
         if !isnothing(vi)
             buff = " "^(2+align[vi, v1[], v2[]][3])
@@ -360,12 +365,11 @@ function _print_elipsis_row(io::IO, align, v0, v1, v2)
             print(io, " ⋱ ")
         end
     end
-    println(io, "")
 end
 
 "calculate buffer needed on each side for proper alignment"
-function _offsets(io::IO, elm, align)
-    ali = _display_alignment(io, elm)
+function _offsets(io::IO, X, row, col, align)
+    ali = _display_alignment(io, X, row, col)
     offset = (align .- ali) .+ (1, 1, 2+ali[3])
     if ali[1] == 0
         offset = 1, offset[3] - ali[2] - 1
@@ -374,37 +378,47 @@ function _offsets(io::IO, elm, align)
     end
 end
 
-"element print function that promises to stay witvin a limit"
-function _show_capped(io::IO, elm, limit=0)
+"element print function that promises to stay within a limit"
+function _show_capped(io::IO, X, inds, limit=0)
     if limit == 0  # set default limit based on screen size and :compact
-        width = displaysize(io)[2] - 1
-        limit = get(io, :compact, false)::Bool ? min(40, round(Int, width//2)) : width
+        width = displaysize(io)[2]
+        limit = get(io, :compact, false)::Bool ? min(40, width÷2) : width
     end
-    x = sprint(show, "text/plain", elm, context=io, sizehint=0)
-    if occursin('\n', x) || length(x) > limit
-        x = sprint(show, elm, context=io, sizehint=0)
-    end
-    if occursin('\n', x) || length(x) > limit
-        x = '<' * summary(elm) * '>'
-    end
-    if occursin('\n', x) || length(x) > limit
-        x = split(x, '\n')[1]
-        length(x) > limit && (x = x[1:limit - 4] * "...>")
+    if isassigned(X, inds...)
+        elm = X[inds...]
+        x = sprint(show, "text/plain", elm, context=io, sizehint=0)
+        if occursin('\n', x) || length(x) > limit
+            x = sprint(show, elm, context=io, sizehint=0)
+        end
+        if occursin('\n', x) || length(x) > limit
+            x = '<' * summary(elm) * '>'
+        end
+        if occursin('\n', x) || length(x) > limit
+            x = split(x, '\n')[1]
+            length(x) > limit && (x = x[1:limit - 4] * "...>")
+        end
+    else
+        x = undef_ref_str
     end
     print(io, x)
 end
 
-function _display_alignment(io::IO, x, limit=0)
+function _display_alignment(io::IO, X, row, col, limit=0)
     if limit == 0  # set default limit based on screen size and :compact
-        width = displaysize(io)[2] - 1
-        limit = get(io, :compact, false)::Bool ? min(40, round(Int, width//2)) : width
+        width = displaysize(io)[2] - 2
+        limit = get(io, :compact, false)::Bool ? min(40, width÷2) : width
     end
-    align = alignment(io, x)
+    inds = Iterators.flatten(zip(row, col))
+    if isassigned(X, inds...)
+        align = alignment(io, X[inds...])
+    else
+        align = (0, 6)
+    end
     if sum(align) < limit
         (align..., sum(align))
     else
-        rep = min(limit, length(summary(x))+2)
-        0, rep, rep
+        width = textwidth(sprint(_show_capped, X, (inds...,), limit, context=io))
+        0, width, width
     end
 end
 
@@ -614,27 +628,12 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     isempty(X) && return
     print(io, ":")
     show_circular(io, X) && return
+    println(io)
 
     # 2) compute new IOContext
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
-    if get(io, :limit, false)::Bool && eltype(X) === Method
-        # override usual show method for Vector{Method}: don't abbreviate long lists
-        io = IOContext(io, :limit => false)
-    end
-
-    if get(io, :limit, false)::Bool
-        # when there is no vertical room to show even one row of entries
-        # plus a vertical ellipsis, show as many entries as fit on a single
-        # line, truncated to the terminal width (#58323)
-        screenheight = displaysize(io)[1] - 4
-        if screenheight <= 0 || (screenheight == 1 && (ndims(X) > 2 || size(X, 1) > 1))
-            print(io, ' ')
-            return _show_oneline_truncated(io, X)
-        end
-    end
-    println(io)
 
     # 3) update typeinfo
     #
