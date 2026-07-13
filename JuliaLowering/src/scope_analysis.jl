@@ -222,6 +222,17 @@ function resolve_name(ctx, ex; exclude_toplevel_globals=false)
     return nothing
 end
 
+# Collect typevar bindings referenced in `ex` (a resolved typevar bound)
+function _typevar_refs!(out, ctx, ex)
+    k = kind(ex)
+    if k == K"BindingId"
+        b = get_binding(ctx, ex)
+        b.kind === :typevar && !(b.id in out) && push!(out, b.id)
+    elseif !is_leaf(ex) && needs_resolution(ex)
+        foreach(e->_typevar_refs!(out, ctx, e), children(ex))
+    end
+end
+
 function _record_layer!(ctx, ex)
     !hasattr(ex, :context) && return
     sl = (ex.context::SyntaxContext).layer
@@ -498,6 +509,9 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             else
                 bid = declare_in_scope!(ctx, newscope, tv[1], :typevar)
                 get_binding(ctx, bid).is_always_defined = true
+                deps = Vector{IdTag}()
+                _typevar_refs!(deps, ctx, rhs)
+                isempty(deps) || (ctx.tv_deps[bid] = deps)
                 push!(tvs, @ast ctx tv [K"=" binding_ex(ctx, bid) rhs])
             end
         end
@@ -706,6 +720,37 @@ function add_assign!(b::BindingInfo)
     b.is_assigned = true
 end
 
+# When a closure captures `T` and `T`'s typevar bound references `S`, it must
+# capture `S` too
+function expand_captured_sp_deps!(ctx, cb::ClosureBindings, scope)
+    sps = copy(cb.capt_sp)
+    for lb in cb.lambdas, (id, is_capt) in lb.locals_capt
+        is_capt && get_binding(ctx, id).kind === :static_parameter && push!(sps, id)
+    end
+    todo = collect(sps)
+    while !isempty(todo)
+        sp = pop!(todo)
+        owner = ctx.scopes[get_binding(ctx, sp).lambda_id]
+        for dep_tv in get(ctx.tv_deps, ctx.sp_typevars[sp], ())
+            # The sparam for dep_tv in the same lambda that owns `sp`
+            dep_sp = nothing
+            for id in keys(owner.locals_capt)
+                b = get_binding(ctx, id)
+                if b.kind === :static_parameter &&
+                        get(ctx.sp_typevars, b.id, IdTag(0)) == dep_tv
+                    dep_sp = id
+                    break
+                end
+            end
+            (isnothing(dep_sp) || dep_sp in sps) && continue
+            push!(sps, dep_sp)
+            push!(cb.capt_sp, dep_sp)
+            ensure_captured!(ctx, scope, get_binding(ctx, dep_sp))
+            push!(todo, dep_sp)
+        end
+    end
+end
+
 function current_closure_bindings(ctx)
     isempty(ctx.method_def_stack) && return nothing
     mdef = ctx.method_def_stack[end]
@@ -797,8 +842,16 @@ function analyze_variables!(ctx, ex)
             ctx.graph, ctx.layer, ctx.bindings, ctx.scopes,
             ctx.lambda_bindings, true, ctx.method_def_stack,
             ctx.closure_bindings, ctx.sp_typevars, ctx.tv_deps)
+        if is_closure
+            cb = init_closure_bindings!(ctx2, ex[1])
+            scope = ctx.scopes[ctx2.lambda_bindings.scope_id]
+        end
         analyze_variables!(ctx2, ex[2])
         analyze_variables!(ctx2, ex[3])
+        if is_closure
+            # All captures are known now; close them over typevar-bound deps
+            expand_captured_sp_deps!(ctx, cb, scope)
+        end
         pop!(ctx.method_def_stack)
     elseif k == K"_opaque_closure"
         name = ex[1]
