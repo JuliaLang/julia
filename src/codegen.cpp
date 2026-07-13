@@ -43,6 +43,7 @@
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
+#include <llvm/IR/ValueHandle.h>
 #include <llvm/Analysis/InstructionSimplify.h>
 
 // support
@@ -2102,6 +2103,9 @@ public:
     Instruction *topalloca = NULL;
     Value *world_age_at_entry = NULL;
 
+    // `AllocaInst *` used as stack temporaries. This opts in to optimization via LLVM's StackColoring pass.
+    SmallVector<WeakVH, 0> stack_temporaries;
+
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
@@ -2312,19 +2316,22 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_output_t &emission_con
     return gv;
 }
 
-static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty, Align align)
+static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty, Align align, bool mark_lifetime = true)
 {
     ++EmittedAllocas;
-    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "",
+    AllocaInst *AI = new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "",
 #if JL_LLVM_VERSION >= 200000
                 /*InsertBefore=*/ctx.topalloca->getIterator()
 #else
                 /*InsertBefore=*/ctx.topalloca
 #endif
     );
+    if (mark_lifetime)
+        ctx.stack_temporaries.push_back(AI);
+    return AI;
 }
 
-static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align align)
+static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align align, bool mark_lifetime = true)
 {
     // Stupid hack: SROA takes hints from the element type, and will happily split this allocation into lots of unaligned bits
     // if it cannot find something better to do, which is terrible for performance.
@@ -2333,13 +2340,16 @@ static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align alig
     // Cap element size at 64 bits since not all backends support larger integers.
     unsigned elsize = std::min(align.value(), (uint64_t)8);
     if (alignTo(nb, elsize) == elsize) // don't bother with making an array of length 1
-        return emit_static_alloca(ctx, ctx.builder.getIntNTy(elsize * 8), align);
-    return emit_static_alloca(ctx, ArrayType::get(ctx.builder.getIntNTy(elsize * 8), alignTo(nb, elsize) / elsize), align);
+        return emit_static_alloca(ctx, ctx.builder.getIntNTy(elsize * 8), align, mark_lifetime);
+    return emit_static_alloca(ctx, ArrayType::get(ctx.builder.getIntNTy(elsize * 8), alignTo(nb, elsize) / elsize), align, mark_lifetime);
 }
 
 static AllocaInst *emit_static_roots(jl_codectx_t &ctx, unsigned nroots)
 {
-    AllocaInst *staticroots = emit_static_alloca(ctx, ctx.types().T_prjlvalue, Align(sizeof(void*)));
+    // GC frames are not valid to optimize with LLVM's StackColoring pass, which has `undef`
+    // semantics when slots are dead, rather than NULL / frozen semantics the GC requires.
+    bool _mark_lifetime = false;
+    AllocaInst *staticroots = emit_static_alloca(ctx, ctx.types().T_prjlvalue, Align(sizeof(void*)), _mark_lifetime);
     staticroots->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), nroots));
     IRBuilder<> builder(ctx.topalloca);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
@@ -2456,12 +2466,13 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
         loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), align, "_j_const", *jl_Module);
     }
     else {
-        loc = emit_static_alloca(ctx, v->getType(), align);
-        setName(ctx.emission_context, loc, [&]() {
+        AllocaInst *slot = emit_static_alloca(ctx, v->getType(), align);
+        setName(ctx.emission_context, slot, [&]() {
             std::string type_str = jl_is_datatype(typ) ? jl_symbol_name(((jl_datatype_t*)typ)->name->name) : "<unknown type>";
             return "slot::" + type_str;
         });
-        ctx.builder.CreateAlignedStore(v, loc, align);
+        ctx.builder.CreateAlignedStore(v, slot, align);
+        loc = slot;
     }
     return mark_julia_slot(loc, typ, tindex, ctx.tbaa().tbaa_stack);
 }
@@ -2472,7 +2483,8 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
             return mark_julia_slot(v.inline_roots.get_ptr(ctx), v.typ, v.TIndex, ctx.tbaa().tbaa_gcframe);
         Align align(julia_alignment(v.typ));
         Type *ty = julia_type_to_llvm(ctx, v.typ);
-        AllocaInst *loc = emit_static_alloca(ctx, ty, align);
+        // Rooted through the TrackedStores shadow machinery: no markers.
+        AllocaInst *loc = emit_static_alloca(ctx, ty, align, /*mark_lifetime*/false);
         setName(ctx.emission_context, loc, [&]() {
             std::string type_str = jl_is_datatype(v.typ) ? jl_symbol_name(((jl_datatype_t*)v.typ)->name->name) : "<unknown type>";
             return "slot::" + type_str;
@@ -6262,7 +6274,8 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         if (!tracked.all) {
             Align align(julia_alignment(phiType));
             unsigned nb = jl_datatype_size(phiType);
-            dest = emit_static_alloca(ctx, nb, align);
+            bool _mark_lifetime = false; // per-edge markers placed below
+            dest = emit_static_alloca(ctx, nb, align, _mark_lifetime);
             setName(ctx.emission_context, dest, [&]() {
                 std::string type_str = jl_is_datatype(phiType) ? jl_symbol_name(((jl_datatype_t*)phiType)->name->name) : "<unknown type>";
                 return "phi::" + type_str;
@@ -6277,6 +6290,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
                 std::string type_str = jl_is_datatype(phiType) ? jl_symbol_name(((jl_datatype_t*)phiType)->name->name) : "<unknown type>";
                 return "phi_result::" + type_str;
             });
+            ctx.stack_temporaries.push_back(phi);
             ctx.builder.CreateMemCpy(phi, align, dest, align, nb, false);
             ctx.builder.CreateLifetimeEnd(dest);
         }
@@ -9886,7 +9900,8 @@ static jl_llvm_functions_t
                 ctx.ssavalue_assigned[cursor] = true;
                 // Actually enter the exception frame
                 auto ct = get_current_task(ctx);
-                AllocaInst* ehbuff = emit_static_alloca(ctx, sizeof(jl_handler_t), Align(16));
+                bool _mark_lifetime = false; // lifetime markers emitted below
+                AllocaInst* ehbuff = emit_static_alloca(ctx, sizeof(jl_handler_t), Align(16), _mark_lifetime);
                 setName(ctx.emission_context, ehbuff, "exception_handler");
                 ctx.eh_buffers[stmt] = ehbuff;
                 ctx.builder.CreateLifetimeStart(ehbuff);
@@ -10179,6 +10194,23 @@ static jl_llvm_functions_t
     }
 
     // step 12. Perform any delayed instantiations
+
+    // Lifetime markers must be emitted late so that SSA promotion has happened
+    // already, which deletes the `AllocaInst *` and does an RAUW on all users.
+    SmallPtrSet<AllocaInst *, 32> lifetime_seen;
+    for (auto &VH : ctx.stack_temporaries) {
+        if (auto *AI = dyn_cast_or_null<AllocaInst>(VH)) {
+            // Surprisingly, marking an `alloca` as immediately live and never dead is
+            // enough to opt-in to significant stack size optimization, since LLVM's
+            // StackColoring will infer a more precise lifetime from the actual uses.
+            // (see "Implementation Notes" in StackColoring.cpp)
+            if (!lifetime_seen.insert(AI).second)
+                continue;
+            IRBuilder<> lifetime_builder(AI->getParent(), std::next(AI->getIterator()));
+            lifetime_builder.CreateLifetimeStart(AI);
+        }
+    }
+
     bool in_prologue = true;
     for (auto &BB : *ctx.f) {
         for (auto &I : BB) {
