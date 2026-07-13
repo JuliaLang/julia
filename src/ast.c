@@ -330,6 +330,7 @@ void jl_init_common_symbols(void)
     jl_sequentially_consistent_sym = jl_symbol("sequentially_consistent");
     jl_uninferred_sym = jl_symbol("uninferred");
     jl_latestworld_sym = jl_symbol("latestworld");
+    jl_trim_sym = jl_symbol("trim");
 }
 
 void jl_lisp_prompt(void)
@@ -1267,7 +1268,8 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     args[6] = warn ? jl_true : jl_false;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
-    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    size_t lowering_world = jl_lowering_world;
+    ct->world_age = lowering_world ? lowering_world : jl_atomic_load_acquire(&jl_world_counter);
     jl_value_t *result = jl_apply(args, 7);
     ct->world_age = last_age;
     args[0] = result; // root during error check below

@@ -124,7 +124,7 @@ end
     # before the final error is larger than 0.667 ulps.
 
     u = reinterpret(UInt64, t)
-    u = (u + 0x8000_0000) & UInt64(0xffff_ffff_c000_0000)
+    u = (u +% 0x8000_0000) & UInt64(0xffff_ffff_c000_0000)
     t = reinterpret(Float64, u)
 
     # one step Newton iteration solving

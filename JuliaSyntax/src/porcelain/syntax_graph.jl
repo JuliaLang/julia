@@ -77,6 +77,7 @@ ensure_required_attributes!(g::SyntaxGraph) = ensure_attributes!(
     g,
     kind=Kind,
     source=SourceAttrType,
+    context=SyntaxContext,
     syntax_flags=UInt16,
     value=Any,
     name_val=String,
@@ -294,6 +295,7 @@ setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
 
 function deleteattr!(ex::SyntaxTree, name::Symbol)
     deleteattr!(ex._graph, ex._id, name)
+    ex
 end
 
 # JuliaSyntax tree API
@@ -322,6 +324,114 @@ function flags(ex::SyntaxTree)
     get(ex, :syntax_flags, 0x0000)::UInt16
 end
 
+mutable struct ScopeLayer
+    const mod::Module
+    const escaped::Union{Nothing, ScopeLayer}
+end
+Base.var"=="(si1::ScopeLayer, si2::ScopeLayer) = si1 === si2
+
+"""
+Each node has a SyntaxContext describing its macro expansion and syntax version.
+`SyntaxContext` is shared between all nodes of a single macro expansion, and is
+one-to-one with ScopeLayer, with a few exceptions (contexts sharing same layer):
+- `escape` and adopt_scope
+- Desugaring creates internal contexts in its better version of `gensym`
+
+We may want to move layer out of this struct for easier adopt_scope and
+rebase_layer operations, but assuming mostly hygienic macros and few
+scope-changing functions, this is most compact.
+
+(TODO) GlobalRef (attr :mod) could probably also go through this system
+"""
+mutable struct SyntaxContext
+    const layer::ScopeLayer
+    # For provenance; is not affected by escaping
+    const unexpanded::Union{SyntaxTree, Nothing}
+    const version::VersionNumber
+    const internal::Bool
+end
+
+# A default context corresponding to no expansion
+function SyntaxContext(mod::Module, version::VersionNumber)
+    SyntaxContext(ScopeLayer(mod, nothing), nothing, version, false)
+end
+
+# TODO: switch from bool-based `expr_compat_mode` to `version`
+const JL_NEW_SYNTAX_VERSION = v"1.14"
+const JL_OLD_SYNTAX_VERSION = v"1.13"
+
+is_base_layer(sc::SyntaxContext) = sc.layer.escaped === nothing
+
+# The scope corresponding to no macro expansion.  Use with caution: macros may
+# expand to top-level forms, so "base layer" !== "this top-level thunk's
+# pre-expansion context" (usually ctx.syntax_context)
+function base_layer(sc::SyntaxContext)
+    l = sc.layer
+    while l.escaped !== nothing
+        l = l.escaped
+    end
+    return l
+end
+
+function escape_layer(sc::SyntaxContext, recursive)
+    l2 = recursive ? base_layer(sc) : sc.layer.escaped
+    SyntaxContext(l2, sc.unexpanded, sc.version, sc.internal)
+end
+
+syntax_module(sc::SyntaxContext) = sc.layer.mod
+function syntax_module(st::SyntaxTree)
+    st_mod = get(st, :mod, nothing)
+    st_mod === nothing || return st_mod::Module
+    syntax_module(st.context::SyntaxContext)
+end
+
+is_flisp_compat(sc::SyntaxContext) = sc.version < JL_NEW_SYNTAX_VERSION
+is_flisp_compat(st::SyntaxTree) = is_flisp_compat(st.context)
+
+# Unconditional; tramples existing scope, and includes quoted forms.  Only
+# changes layer where it needs changing.
+function adopt_scope(sc_in::SyntaxContext, st::SyntaxTree, scmap)
+    st_sc = get(st, :context, nothing)
+    sc2 = st_sc isa SyntaxContext ? get(scmap, st_sc, nothing) : nothing
+    if isnothing(sc2) && st_sc isa SyntaxContext
+        sc2 = scmap[st_sc] = st_sc.layer === sc_in.layer ? st_sc :
+            SyntaxContext(
+                sc_in.layer, st_sc.unexpanded, st_sc.version, st_sc.internal)
+    elseif isnothing(sc2)
+        sc2 = sc_in
+    end
+    if is_leaf(st) || numchildren(st) == 0
+        sc2 === st_sc ? st : setattr(st, :context, sc2)
+    else
+        out = mapchildren(c->adopt_scope(sc_in, c, scmap), st._graph, st)
+        sc2 === st_sc ? out :
+            out !== st ? setattr!(out, :context, sc2) :
+            setattr(out, :context, sc2)
+    end
+end
+function adopt_scope(reference::SyntaxTree, st::SyntaxTree)
+    adopt_scope(reference.context::SyntaxContext, st,
+                Dict{SyntaxContext, SyntaxContext}())
+end
+
+function fill_context!(st::SyntaxTree, sc::SyntaxContext)
+    setattr!(st, :context, sc)
+    for c in children(st)
+        fill_context!(c, sc)
+    end
+    st
+end
+fill_context(st, sc) = fill_context!(mktree(st), sc)
+
+function remove_context!(st::SyntaxTree)
+    sc = get(st, :context, nothing)
+    isnothing(sc) || JuliaSyntax.deleteattr!(st, :context)
+    for c in children(st)
+        remove_context!(c)
+    end
+    st
+end
+remove_context(st) = remove_context!(mktree(st))
 
 # Reference to bytes within a source file
 struct SourceRef
@@ -329,6 +439,38 @@ struct SourceRef
     first_byte::UInt32
     last_byte::UInt32
 end
+
+function Base.show(io::IO, ::MIME"text/plain", sl::ScopeLayer)
+    color = isnothing(sl.escaped) ? :normal : :cyan
+    printstyled(io, "SL("; color)
+    print(io, string(sl.mod))
+    print(io, ",")
+    !isnothing(sl.escaped) && print(io, sl.escaped)
+    print(io, ",")
+    printstyled(io, string(objectid(sl);base=62); color)
+    printstyled(io, ")"; color)
+end
+Base.show(io::IO, sl::ScopeLayer) = Base.show(io::IO, MIME"text/plain"(), sl)
+
+function Base.show(io::IO, ::MIME"text/plain", sc::SyntaxContext)
+    color = sc.internal ? :light_black :
+        sc.version == JL_NEW_SYNTAX_VERSION ? :normal : :blue
+    printstyled(io, "["; color)
+    if sc.version != JL_NEW_SYNTAX_VERSION
+        printstyled(io, "old,"; color)
+    end
+    if sc.internal
+        printstyled(io, "internal,"; color)
+    end
+    print(io, sc.layer)
+    print(io, ",")
+    if sc.unexpanded isa SyntaxTree
+        k = kind(sc.unexpanded)
+        k === K"macrocall" ? print(io, sc.unexpanded[1]) : print(io, k)
+    end
+    printstyled(io, "]"; color)
+end
+Base.show(io::IO, sc::SyntaxContext) = Base.show(io::IO, MIME"text/plain"(), sc)
 
 sourcefile(src::SourceRef) = src.file[]
 first_byte(src::SourceRef) = Int(src.first_byte)
@@ -370,9 +512,6 @@ Provenance notes: A SyntaxTree `st` has `.source` equal to one of:
 Let "textref" refer to a SyntaxTree with non-NodeId `.source`.  Every SyntaxTree
 is either a textref or has one at the end of its `.source` chain.
 
-`st` may also have `.macro_source`, which is the NodeId of a macrocall if `st`
-was returned from its expansion.
-
 All invariants noted in this section are awaiting the design of the "new macro"
 API.  As of writing this, the user has more freedom than they should have.
 """
@@ -405,18 +544,17 @@ function prov_end(st::SyntaxTree)
     return out
 end
 
-"`st`'s textref's `.source`, ignoring all `.macro_source`"
+"`st`'s textref's `.source`, ignoring all expansions"
 function sourceref(st::SyntaxTree)
     prov_end(st).source::Union{LineNumberNode, SourceRef}
 end
 
 "The last macro expansion `st` was involved in, or nothing"
 function macro_prov(st::SyntaxTree)
-    while !hasattr(st, :macro_source) && st.source isa NodeId
-        st = prov(st)
-    end
-    hasattr(st, :macro_source) && return SyntaxTree(st._graph, st.macro_source)
-    return nothing
+    sc = get(st, :context, nothing)
+    isnothing(sc) && return nothing
+    msrc = sc.unexpanded
+    isnothing(msrc) ? nothing : msrc::SyntaxTree
 end
 
 "The first macro expansion `st` was involved in (chronologically), or nothing"
@@ -453,11 +591,11 @@ function flattened_provenance(st::SyntaxTree)
     _flattened_provenance(st, SyntaxList(st._graph))
 end
 
-# Only recurse on the first .macro_source in any source chain
+# Only recurse on the first macro source in any source chain
 function _flattened_provenance(st::SyntaxTree, out)
     msrc = macro_prov(st)
-    # macro_source === source means `st` is from the `msrc` macro body
-    !isnothing(msrc) && msrc._id !== st.source &&
+    # macro source === source means `st` is from the `msrc` macro body
+    !isnothing(msrc) && msrc != prov(st) &&
         _flattened_provenance(msrc, out)
     push!(out, prov_end(st))
     out
@@ -665,6 +803,10 @@ end
 function newleaf(graph::SyntaxGraph, prov::SourceAttrType, k::Kind)
     st = SyntaxTree(graph, new_id!(graph))
     setattr!(st, :kind, k)
+    let prov_st = prov isa NodeId ? SyntaxTree(graph, prov) : nothing
+        !isnothing(prov_st) && hasattr(prov_st, :context) &&
+            setattr!(st, :context, prov_st.context)
+    end
     setattr!(st, :source, prov)
 end
 
@@ -690,6 +832,7 @@ function mkleaf(old::SyntaxTree)
     graph = syntax_graph(old)
     st = SyntaxTree(graph, new_id!(graph))
     copy_attrs!(st, old)
+    hasattr(old, :context) && setattr!(st, :context, old.context)
     setattr!(st, :source, old._id)
 end
 function mktree(old::SyntaxTree)
@@ -706,7 +849,7 @@ end
 function copy_attrs!(dest, src)
     # TODO: Make this faster?
     for (name, attr) in pairs(src._graph.attributes)
-        if (name !== :source && name !== :macro_source) && haskey(attr, src._id)
+        if (name !== :source) && haskey(attr, src._id)
             setattr!(dest, name, attr[src._id])
         end
     end
@@ -765,14 +908,12 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph, id1::NodeId, seen)
         end
         setchildren!(graph2, id2, cs)
     end
-    for src_attr in (:source, :macro_source)
-        src1 = get(SyntaxTree(graph1, id1), src_attr, nothing)
-        if src1 isa NodeId
-            src2 =  _copy_ast(graph2, graph1, src1, seen)
-            setattr!(graph2, id2, src_attr, src2)
-        elseif src_attr == :source
-            setattr!(graph2, id2, src_attr, src1)
-        end
+    src1 = get(SyntaxTree(graph1, id1), :source, nothing)
+    if src1 isa NodeId
+        src2 =  _copy_ast(graph2, graph1, src1, seen)
+        setattr!(graph2, id2, :source, src2)
+    else
+        setattr!(graph2, id2, :source, src1)
     end
     copy_attrs!(SyntaxTree(graph2, id2), SyntaxTree(graph1, id1))
     return id2
@@ -811,7 +952,6 @@ function _unalias_copy_tree(old::SyntaxTree)
         mknode(old, cs)
     end
     # difference from mktree: don't add to provenance chain
-    hasattr(old, :macro_source) && setattr!(out, :macro_source, old.macro_source)
     setattr!(out, :source, old.source)
 end
 
@@ -885,7 +1025,7 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
     append!(graph2.edges, 1:length(nodes1)) # our reward for unaliasing
 
     for attr in attrnames(graph1)
-        (attr === :source || attr === :macro_source) && continue
+        (attr === :source) && continue
         for (n2, n1) in enumerate(nodes1)
             if haskey(graph1.attributes[attr], n1)
                 graph2.attributes[attr][n2] = graph1.attributes[attr][n1]
@@ -899,12 +1039,6 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
     for (n2, n1) in enumerate(nodes1)
         graph2.source[n2] =
             _prune_get_resolved!(n1, graph1, map12, resolved_sources, :source)
-        if hasattr(graph1, :macro_source) && haskey(graph1.macro_source, n1)
-            msrc1 = graph1.macro_source[n1]
-            if haskey(map12, msrc1)
-                graph2.macro_source[n2] = map12[msrc1]
-            end
-        end
     end
 
     # The first n entries in nodes1 were our entrypoints, unique from unaliasing

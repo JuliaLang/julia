@@ -28,6 +28,16 @@ _colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
 
+const _RangeWrappingInteger = Union{
+    Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}
+
+_range_wrapping_add(x::_RangeWrappingInteger, y::_RangeWrappingInteger) = x +% y
+_range_wrapping_add(x, y) = x + y
+_range_wrapping_sub(x::_RangeWrappingInteger, y::_RangeWrappingInteger) = x -% y
+_range_wrapping_sub(x, y) = x - y
+_range_wrapping_mul(x::_RangeWrappingInteger, y::_RangeWrappingInteger) = x *% y
+_range_wrapping_mul(x, y) = x * y
+
 """
     (:)(start, [step], stop)
 
@@ -187,7 +197,7 @@ range_stop(stop) = range_start_stop(oftype(stop, 1), stop)
 range_stop(stop::Integer) = range_length(stop)
 
 function range_step_stop_length(step, a, len::Integer)
-    start = a - step * (len - oneunit(len))
+    start = _range_wrapping_sub(a, _range_wrapping_mul(step, len - oneunit(len)))
     if start isa Signed
         # overflow in recomputing length from stop is okay
         return StepRange{typeof(start),typeof(step)}(start, step, convert(typeof(start), a))
@@ -198,7 +208,7 @@ end
 # Stop and length as the only argument
 function range_stop_length(a, len::Integer)
     step = oftype(a - a, 1) # assert that step is representable
-    start = a - (len - oneunit(len))
+    start = _range_wrapping_sub(a, len - oneunit(len))
     if start isa Signed
         # overflow in recomputing length from stop is okay
         return UnitRange(start, oftype(start, a))
@@ -209,7 +219,7 @@ end
 # Start and length as the only argument
 function range_start_length(a, len::Integer)
     step = oftype(a - a, 1) # assert that step is representable
-    stop = a + (len - oneunit(len))
+    stop = _range_wrapping_add(a, len - oneunit(len))
     if stop isa Signed
         # overflow in recomputing length from stop is okay
         return UnitRange(oftype(stop, a), stop)
@@ -220,7 +230,7 @@ end
 range_start_stop(start, stop) = start:stop
 
 function range_start_step_length(a, step, len::Integer)
-    stop = a + step * (len - oneunit(len))
+    stop = _range_wrapping_add(a, _range_wrapping_mul(step, len - oneunit(len)))
     if stop isa Signed
         # overflow in recomputing length from stop is okay
         return StepRange{typeof(stop),typeof(step)}(convert(typeof(stop), a), step, stop)
@@ -358,7 +368,8 @@ function steprange_last(start, step, stop)::typeof(stop)
         else
             # Compute absolute value of difference between `start` and `stop`
             # (to simplify handling both signed and unsigned T and checking for signed overflow):
-            absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
+            absdiff, absstep = stop > start ? (_range_wrapping_sub(stop, start), step) :
+                                                (_range_wrapping_sub(start, stop), -step)
 
             # Compute remainder as a non-negative number:
             if absdiff isa Signed && absdiff < zero(absdiff)
@@ -379,9 +390,9 @@ function steprange_last_empty(start::Integer, step, stop)::typeof(stop)
     # empty range has a special representation where stop = start-1,
     # which simplifies arithmetic for Signed numbers
     if step > zero(step)
-        last = start - oneunit(step)
+        last = _range_wrapping_sub(start, oneunit(step))
     else
-        last = start + oneunit(step)
+        last = _range_wrapping_add(start, oneunit(step))
     end
     return last
 end
@@ -426,7 +437,8 @@ end
 
 # if stop and start are integral, we know that their difference is a multiple of 1
 unitrange_last(start::Integer, stop::Integer) =
-    stop >= start ? stop : convert(typeof(stop), start - oneunit(start - stop))
+    stop >= start ? stop : convert(typeof(stop),
+        _range_wrapping_sub(start, oneunit(_range_wrapping_sub(start, stop))))
 # otherwise, use `floor` as a more efficient way to compute modulus with step=1
 unitrange_last(start, stop) =
     stop >= start ? convert(typeof(stop), start + floor(stop - start)) :
@@ -808,7 +820,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
     # (near typemax) for types with known `unsigned` functions
     function length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
-        diff = last(r) - first(r)
+        diff = last(r) -% first(r)
         isempty(r) && return zero(diff)
         # Compute `(diff ÷ s) + 1` in a manner robust to signed overflow
         # by using the absolute values as unsigneds for non-empty ranges.
@@ -824,10 +836,10 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
         isempty(r) && return zero(ET)
         # n.b. !(s isa T)
         if s > 1
-            diff = stop - start
+            diff = stop -% start
             a = convert(ET, div(unsigned(diff), s))
         elseif s < -1
-            diff = start - stop
+            diff = start -% stop
             a = convert(ET, div(unsigned(diff), -s))
         elseif s > 0
             a = convert(ET, div(checked_sub(stop, start), s))
@@ -998,7 +1010,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         f = first(r)
         start = oftype(f, f + first(s) - firstindex(r))
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)))
+        stop = oftype(f, _range_wrapping_add(start, len - oneunit(len)))
         return range(start, stop)
     end
 end

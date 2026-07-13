@@ -137,12 +137,17 @@ ispositive(x::Bool) = x # could use fallback once #21712 is resolved
 
 ## do arithmetic as Int ##
 
-+(x::Bool) =  Int(x)
--(x::Bool) = -Int(x)
++(x::Bool)  =    Int(x)
++%(x::Bool) =    Int(x)
+-(x::Bool)  = -%(Int(x))
+-%(x::Bool) = -%(Int(x))
 
-+(x::Bool, y::Bool) = Int(x) + Int(y)
--(x::Bool, y::Bool) = Int(x) - Int(y)
++(x::Bool, y::Bool) = Int(x) +% Int(y)
+-(x::Bool, y::Bool) = Int(x) -% Int(y)
++%(x::Bool, y::Bool) = Int(x) +% Int(y)
+-%(x::Bool, y::Bool) = Int(x) -% Int(y)
 *(x::Bool, y::Bool) = x & y
+*%(x::Bool, y::Bool) = x & y
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 

@@ -923,7 +923,7 @@ end
 ConsiderCountingSort(next) = ConsiderCountingSort(CountingSort(), next)
 function _sort!(v::AbstractVector{<:Integer}, a::ConsiderCountingSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx
-    range = maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
+    range = maybe_unsigned(o === Reverse ? mn -% mx : mx -% mn)
 
     if range < (sizeof(eltype(v)) > 8 ? 5(hi-lo)-100 : div(hi-lo, 2))
         _sort!(v, a.counting, o, kw)
@@ -948,18 +948,18 @@ maybe_reverse(o::ForwardOrdering, x) = x
 maybe_reverse(o::ReverseOrdering, x) = reverse(x)
 function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx scratch
-    range = maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
-    offs = 1 - (o === Reverse ? mx : mn)
+    range = maybe_unsigned(o === Reverse ? mn -% mx : mx -% mn)
+    offs = 1 -% (o === Reverse ? mx : mn)
 
     counts = fill(0, range+1) # TODO use scratch (but be aware of type stability)
     @inbounds for i = lo:hi
-        counts[v[i] + offs] += 1
+        counts[v[i] +% offs] += 1
     end
 
     idx = lo
     @inbounds for i = maybe_reverse(o, 1:range+1)
         lastidx = idx + counts[i] - 1
-        val = i-offs
+        val = i -% offs
         for j = idx:lastidx
             v[j] = val isa Unsigned && eltype(v) <: Signed ? signed(val) : val
         end
@@ -2057,13 +2057,13 @@ end
 
 # sortperm for vectors of few unique integers
 function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
-    offs = 1 - minval
+    offs = 1 -% minval
     n = length(x)
 
     counts = fill(0, rangelen+1)
     counts[1] = 1
     @inbounds for i = 1:n
-        counts[x[i] + offs + 1] += 1
+        counts[x[i] +% offs +% 1] += 1
     end
 
     #cumsum!(counts, counts)
@@ -2073,7 +2073,7 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
 
     P = Vector{Int}(undef, n)
     @inbounds for i = 1:n
-        label = x[i] + offs
+        label = x[i] +% offs
         P[counts[label]] = i
         counts[label] += 1
     end

@@ -39,7 +39,7 @@ let
         "macrocall",
         "quote",
         "inert",
-        "inert_syntaxtree",
+        "syntaxinert",
         "top",
         "opaque_closure",
         "symboliclabel",
