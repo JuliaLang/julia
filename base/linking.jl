@@ -100,10 +100,6 @@ function ld()
         flavor = "darwin"
         arch = Sys.ARCH == :aarch64 ? :arm64 : Sys.ARCH
         default_args = `-arch $arch -undefined dynamic_lookup -platform_version macos $(Base.MACOS_PRODUCT_VERSION) $(Base.MACOS_PLATFORM_VERSION)`
-        # due to an lld bug: https://github.com/llvm/llvm-project/issues/193646
-        # we must make sure the syslibroot does not point to the system or else
-        # it will not respect the provided `libSystem.tbd` file
-        default_args = `$default_args -syslibroot $(private_libdir())`
     else
         flavor = "gnu"
         # From `gcc -shared -Wl,--verbose`; `-z defs` added to enforce that all symbols
@@ -195,8 +191,10 @@ function link_image_cmd(path, out)
         isdebugbuild() && push!(LIBS, "-lssp")
         append!(LIBS,     String["-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os"])
     elseif Sys.isapple()
-        # From `clang -dynamiclib -Wl,-v`
-        append!(LIBS,     String[_find_static("libclang_rt.osx.a"), _find_static("libSystem.tbd")])
+        # Unlike Windows -- where the host mingw libraries are wrong, so we ship
+        # and link our own -- macOS resolves libSystem and the compiler-rt
+        # builtins from the host SDK at load time, via `-undefined
+        # dynamic_lookup` above. So we neither ship nor link a C runtime here.
     else
         # From `gcc -shared -Wl,--verbose`
         # but without repeated libraries (lld auto-resolves circular library references)
