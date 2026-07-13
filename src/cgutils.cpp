@@ -2549,22 +2549,23 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         MDNode *tbaa_dst, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false);
 
-// Load the re-type guard bits `mask` from the `kind` word a binding partition
-// (`flagp` points at it; #62154), program-order after a preceding access of the
-// binding's value slot: the light side of the asymmetric fence protocol. Pairs with
-// the write side of a re-declaration (see jl_retype_flag_partitions), which flags
-// every partition it invalidates, issues the heavy fence, and only then installs a
-// value of the new declared type: as long as the flags here read clear, a value
-// loaded from the slot before the fence conforms to the declared type this code was
-// compiled against. The single-thread fence compiles to no instruction (the heavy
-// side supplies the hardware ordering); together with the Monotonic (not Unordered)
-// ordering of the flag load it keeps the compiler from hoisting the flag load above
-// the access it must follow, or merging it with an earlier load of the flags.
-static Value *emit_retype_recheck(jl_codectx_t &ctx, Value *flagp, size_t mask)
+// Load the re-type guard bits `mask` from the `retype_flags` word of a binding
+// partition (`flagp` points at it; #62154), program-order after a preceding access
+// of the binding's value slot: the light side of the asymmetric fence protocol.
+// Pairs with the write side of a re-declaration (see jl_retype_flag_partitions),
+// which flags every partition it invalidates, issues the heavy fence, and only then
+// installs a value of the new declared type: as long as the flags here read clear,
+// a value loaded from the slot before the fence conforms to the declared type this
+// code was compiled against. The single-thread fence compiles to no instruction
+// (the heavy side supplies the hardware ordering); together with the Monotonic (not
+// Unordered) ordering of the flag load it keeps the compiler from hoisting the flag
+// load above the access it must follow, or merging it with an earlier load.
+static Value *emit_retype_recheck(jl_codectx_t &ctx, Value *flagp, uint16_t mask)
 {
     ctx.builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
-    LoadInst *bflags = ctx.builder.CreateAlignedLoad(ctx.types().T_size, flagp,
-            Align(sizeof(size_t)));
+    Type *flagty = getInt16Ty(ctx.builder.getContext());
+    LoadInst *bflags = ctx.builder.CreateAlignedLoad(flagty, flagp,
+            Align(alignof(uint16_t)));
     bflags->setOrdering(AtomicOrdering::Monotonic);
     // The guard bits are never stored by compiled code, so this load cannot alias the
     // binding value access it is ordered after; the Monotonic ordering (plus the fence
@@ -2573,8 +2574,8 @@ static Value *emit_retype_recheck(jl_codectx_t &ctx, Value *flagp, size_t mask)
     ai.decorateInst(bflags);
     setName(ctx.emission_context, bflags, "retype_recheck");
     return ctx.builder.CreateICmpNE(
-            ctx.builder.CreateAnd(bflags, ConstantInt::get(ctx.types().T_size, mask)),
-            ConstantInt::get(ctx.types().T_size, 0));
+            ctx.builder.CreateAnd(bflags, ConstantInt::get(flagty, mask)),
+            ConstantInt::get(flagty, 0));
 }
 
 // #62154: the compiled counterpart of jl_binding_begin_commit (julia_internal.h). Open
@@ -2589,7 +2590,7 @@ static Value *emit_retype_recheck(jl_codectx_t &ctx, Value *flagp, size_t mask)
 // store and the flag re-check must stay fenced after it so that the draining side
 // (jl_retype_flag_partitions) observes every window whose flag check preceded its
 // heavy fence.
-static Value *emit_binding_commit_begin(jl_codectx_t &ctx, Value *flagp, size_t mask)
+static Value *emit_binding_commit_begin(jl_codectx_t &ctx, Value *flagp, uint16_t mask)
 {
     Value *window = emit_ptrgep(ctx, get_current_ptls(ctx),
             offsetof(jl_tls_states_t, bnd_commit_window));
@@ -2629,7 +2630,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         // guard bits the operation must re-check (RETYPE_WRITE, plus RETYPE_READ
         // for the kinds that trust values loaded from the slot); accesses divert
         // to `retype_deoptBB` once a guard bit is set
-        Value *retype_flagp = nullptr, size_t retype_mask = 0,
+        Value *retype_flagp = nullptr, uint16_t retype_mask = 0,
         BasicBlock *retype_deoptBB = nullptr)
 {
     auto newval = [&](const jl_cgval_t &lhs) { // for ismodifyfield

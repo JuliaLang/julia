@@ -1062,7 +1062,7 @@ void jl_retype_flag_partitions(jl_binding_t *b, jl_value_t *slot_ty,
 // restriction and therefore check both the read and write guards. The caller must
 // then perform the operation under world_counter_lock instead, re-validating against
 // the latest declared type.
-STATIC_INLINE int jl_binding_begin_commit(jl_binding_partition_t *bpart, size_t mask)
+STATIC_INLINE int jl_binding_begin_commit(jl_binding_partition_t *bpart, uint16_t mask)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_atomic_store_relaxed(&ptls->bnd_commit_window, 1);
@@ -1118,7 +1118,7 @@ STATIC_INLINE int jl_binding_try_swap(jl_binding_t *b, jl_binding_partition_t *b
 
 STATIC_INLINE int jl_binding_try_cmpswap(jl_binding_t *b, jl_binding_partition_t *bpart,
                                          jl_value_t **expectedp, jl_value_t *rhs,
-                                         int *successp, size_t guard_mask)
+                                         int *successp, uint16_t guard_mask)
 {
     if (!jl_binding_begin_commit(bpart, guard_mask))
         return 0;
@@ -1216,7 +1216,7 @@ JL_DLLEXPORT void jl_binding_deprecation_warning(jl_binding_t *b);
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
-    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world) JL_GLOBALLY_ROOTED;
+    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, uint16_t kind, size_t new_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t *bpart);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;

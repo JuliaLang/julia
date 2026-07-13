@@ -55,9 +55,14 @@ for (T, c) in (
 end
 
 # Binding partition kinds are immutable metadata, while the separate re-type guard
-# word requires explicit atomic access.
+# word requires explicit atomic access. Both narrow fields fit into existing padding.
 let p = convert(Core.Binding, GlobalRef(@__MODULE__, :Bottom)).partitions
     flags = @atomic :monotonic p.retype_flags
+    @test fieldtype(Core.BindingPartition, :kind) === UInt16
+    @test fieldtype(Core.BindingPartition, :retype_flags) === UInt16
+    @test fieldoffset(Core.BindingPartition, 6) ==
+          fieldoffset(Core.BindingPartition, 5) + sizeof(UInt16)
+    @test sizeof(Core.BindingPartition) == 5 * sizeof(UInt)
     @test_throws(
         ErrorException("setfield!: const field .kind of type BindingPartition cannot be changed"),
         setfield!(p, :kind, p.kind))

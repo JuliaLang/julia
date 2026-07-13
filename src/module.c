@@ -17,7 +17,7 @@ static jl_binding_partition_t *new_binding_partition(void)
 {
     jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_gc_alloc(jl_current_task->ptls, sizeof(jl_binding_partition_t), jl_binding_partition_type);
     bpart->restriction = NULL;
-    bpart->kind = (size_t)PARTITION_KIND_GUARD;
+    bpart->kind = (uint16_t)PARTITION_KIND_GUARD;
     jl_atomic_store_relaxed(&bpart->retype_flags, 0);
     jl_atomic_store_relaxed(&bpart->min_world, 0);
     jl_atomic_store_relaxed(&bpart->max_world, (size_t)-1);
@@ -129,7 +129,7 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
 
 static jl_binding_partition_t *jl_implicit_import_resolved(jl_binding_t *b, struct implicit_search_gap gap, struct implicit_search_resolution resolution)
 {
-    size_t new_kind = resolution.ultimate_kind | gap.inherited_flags;
+    uint16_t new_kind = resolution.ultimate_kind | gap.inherited_flags;
     // If the resolution indicates this should be reexported, add the implicit export flag
     if (resolution.should_be_reexported) {
         new_kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
@@ -721,7 +721,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
             jl_binding_partition_t *backdate_bpart = new_binding_partition();
             new_prev_bpart = backdate_bpart;
             while (1) {
-                backdate_bpart->kind = (size_t)PARTITION_KIND_BACKDATED_CONST | (prev_bpart->kind & 0xf0);
+                backdate_bpart->kind = (uint16_t)PARTITION_KIND_BACKDATED_CONST | (prev_bpart->kind & 0xf0);
                 jl_gc_wb_fresh(backdate_bpart, val);
                 backdate_bpart->restriction = val;
                 jl_atomic_store_relaxed(&backdate_bpart->min_world,
@@ -1772,7 +1772,7 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val J
 void jl_set_initial_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0), int exported)
 {
     // this function is only valid during initialization, so there is no risk of data races
-    int kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
+    uint16_t kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
     // jl_declare_constant_val3(NULL, m, var, (jl_value_t*)jl_any_type, kind, 0);
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(bp, 0);
@@ -1853,13 +1853,13 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world)
 {
     // Copy flags from old bpart
-    return jl_replace_binding_locked2(b, old_bpart, restriction_val, (size_t)kind | (size_t)(old_bpart->kind & PARTITION_MASK_FLAG),
+    return jl_replace_binding_locked2(b, old_bpart, restriction_val, (uint16_t)kind | (old_bpart->kind & PARTITION_MASK_FLAG),
         new_world);
 }
 
 extern JL_DLLEXPORT _Atomic(size_t) jl_first_image_replacement_world;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
-    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world)
+    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, uint16_t kind, size_t new_world)
 {
     check_safe_newbinding(b->globalref->mod, b->globalref->name);
 
@@ -1996,13 +1996,13 @@ JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 
 // set the deprecated flag for a binding:
 //   0=not deprecated, 1=renamed, 2=moved to another package
-static const size_t DEPWARN_FLAGS = PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN;
+static const uint16_t DEPWARN_FLAGS = PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN;
 JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
 {
     jl_binding_t *b = jl_get_binding(m, var);
-    size_t new_flags = flag == 1 ? PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN :
-                       flag == 2 ? PARTITION_FLAG_DEPRECATED :
-                                   0;
+    uint16_t new_flags = flag == 1 ? PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN :
+                         flag == 2 ? PARTITION_FLAG_DEPRECATED :
+                                     0;
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
     jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
@@ -2011,7 +2011,7 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
         return;
     }
     jl_replace_binding_locked2(b, old_bpart, old_bpart->restriction,
-        (old_bpart->kind & ~DEPWARN_FLAGS) | new_flags, new_world);
+        (old_bpart->kind & (uint16_t)~DEPWARN_FLAGS) | new_flags, new_world);
     jl_atomic_store_release(&jl_world_counter, new_world);
     JL_UNLOCK(&world_counter_lock);
 }
@@ -2034,8 +2034,8 @@ JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int st
     jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     int was_exported = (old_bpart->kind & PARTITION_FLAG_EXPORTED) != 0;
     if (was_exported != want_exported) {
-        size_t new_kind = want_exported ? (old_bpart->kind | PARTITION_FLAG_EXPORTED) :
-                                          (old_bpart->kind & ~(size_t)PARTITION_FLAG_EXPORTED);
+        uint16_t new_kind = want_exported ? (old_bpart->kind | PARTITION_FLAG_EXPORTED) :
+                                            (old_bpart->kind & (uint16_t)~PARTITION_FLAG_EXPORTED);
         jl_replace_binding_locked2(b, old_bpart, old_bpart->restriction, new_kind, new_world);
         jl_atomic_store_release(&jl_world_counter, new_world);
     }
@@ -2161,8 +2161,8 @@ void jl_retype_flag_partitions(jl_binding_t *b, jl_value_t *slot_ty, jl_value_t 
         else
             continue; // no code trusts (or writes through) other partition kinds
         JL_GC_PROMISE_ROOTED(p_ty);
-        size_t cur = jl_atomic_load_relaxed(&p->retype_flags);
-        size_t add = 0;
+        uint16_t cur = jl_atomic_load_relaxed(&p->retype_flags);
+        uint16_t add = 0;
         if (slot_ty != NULL && !(cur & PARTITION_FLAG_RETYPE_READ) &&
             !jl_subtype(slot_ty, p_ty))
             add |= PARTITION_FLAG_RETYPE_READ;

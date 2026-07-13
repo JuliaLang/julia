@@ -3550,7 +3550,7 @@ static Value *julia_bpart_flagp(jl_codectx_t &ctx, jl_binding_partition_t *bpart
 // as no incompatible re-declaration appears, the deopt arm is never taken, so the
 // guard costs one cheap, well-predicted test. Returns the (empty, unterminated) cold
 // block; the builder is left at the start of the fast-path continuation block.
-static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_partition_t *bpart, size_t mask)
+static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_partition_t *bpart, uint16_t mask)
 {
     LLVMContext &C = ctx.builder.getContext();
     BasicBlock *fastBB = BasicBlock::Create(C, "retype_fast", ctx.f);
@@ -3771,7 +3771,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
         // store only needs the write guard (its value was validated against `ty`),
         // while the RMW kinds additionally trust values they load from the slot at
         // type `ty`, so they must also divert once the read guard is set.
-        size_t guard_mask = op == StoreKind::Set
+        uint16_t guard_mask = op == StoreKind::Set
                 ? PARTITION_FLAG_RETYPE_WRITE
                 : (PARTITION_FLAG_RETYPE_READ | PARTITION_FLAG_RETYPE_WRITE);
         bool isboxed = true;

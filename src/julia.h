@@ -828,14 +828,14 @@ static const uint8_t PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80;
 // against this partition must verify the values they load; while clear, a value
 // loaded from the slot (fenced before the flag check, see emit_retype_recheck) is
 // known to conform.
-static const size_t PARTITION_FLAG_RETYPE_READ     = 0x100;
+static const uint16_t PARTITION_FLAG_RETYPE_READ     = 0x100;
 // _RETYPE_WRITE: a value conforming to this partition's restriction is not
 // necessarily storable under some later declaration's restriction. Stores validated
 // against this partition must divert to a path that re-validates against the latest
 // declared type under world_counter_lock; while clear, such a store may commit
 // directly (inside a commit window that re-checks this flag, see
 // jl_binding_begin_commit).
-static const size_t PARTITION_FLAG_RETYPE_WRITE    = 0x200;
+static const uint16_t PARTITION_FLAG_RETYPE_WRITE    = 0x200;
 
 #if defined(_COMPILER_MICROSOFT_)
 #define JL_ALIGNED_ATTR(alignment) \
@@ -860,9 +860,15 @@ typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
     _Atomic(size_t) min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t *) next;
-    size_t kind;
-    _Atomic(size_t) retype_flags;
+    uint16_t kind;
+    _Atomic(uint16_t) retype_flags;
 } jl_binding_partition_t;
+
+static_assert(sizeof(_Atomic(uint16_t)) == sizeof(uint16_t),
+    "16-bit atomic binding flags must not add storage overhead");
+static_assert(offsetof(jl_binding_partition_t, retype_flags) ==
+              offsetof(jl_binding_partition_t, kind) + sizeof(uint16_t),
+    "binding kind and re-type flags must remain packed");
 
 STATIC_INLINE enum jl_partition_kind jl_binding_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT
 {
