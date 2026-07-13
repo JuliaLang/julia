@@ -336,7 +336,7 @@ struct cfuncdata_t {
 };
 
 extern "C" JL_DLLEXPORT
-void *jl_jit_abi_converter_fallback(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, bool gcstack_arg,
+void *jl_jit_abi_converter_fallback(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig, int gcstack_arg,
                                     jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
 {
     if (unspecialized)
