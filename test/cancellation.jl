@@ -1180,6 +1180,10 @@ if Sys.isunix()
         # ... and the session exits cleanly on ^D
         write(ptm, "\x04") # ^D (EOF)
         @test timedwait(() -> process_exited(p), 15.0) == :ok
+        # A wedged session (e.g. an uninterrupted spin victim after ladder
+        # failures) never exits: kill it rather than letting success(p) below
+        # hang the whole suite.
+        process_exited(p) || kill(p, Base.SIGKILL)
         @test success(p)
         close(ptm)
         wait(reader)
@@ -1327,6 +1331,11 @@ if Sys.isunix()
         expect("julia> ")
 
         sendline("exit()")
+        # Never let success(p) hang the suite on a wedged session (see the
+        # ladder testset's cleanup).
+        if timedwait(() -> process_exited(p), 60.0) !== :ok
+            kill(p, Base.SIGKILL)
+        end
         @test success(p)
         close(ptm)
         wait(reader)

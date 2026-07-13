@@ -820,6 +820,19 @@ JL_DLLEXPORT int jl_consume_sigint_pending(void) JL_NOTSAFEPOINT
     return jl_atomic_exchange_relaxed(&sigint_pending, 0);
 }
 
+// Whether this platform delivers foreign-call cancellation handlers
+// asynchronously (JL_HAVE_CANCEL_HANDLER_DELIVERY, julia_threads.h);
+// elsewhere a pending cancellation is only recovered level-triggered at the
+// task's next cancellation point.
+JL_DLLEXPORT int jl_have_cancel_handler_delivery(void) JL_NOTSAFEPOINT
+{
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 // Shared entry point for a user-initiated interrupt (^C): mark the episode
 // source cancelled, mark the interrupt as pending, arm the escalation timer,
 // and notify the sigint listener task, which drives the rest of the

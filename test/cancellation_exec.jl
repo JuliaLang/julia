@@ -35,6 +35,15 @@ end
 
 const libccalltest = "libccalltest"
 
+# Asynchronous delivery of foreign-call cancellation handlers is
+# platform-gated (JL_HAVE_CANCEL_HANDLER_DELIVERY in julia_threads.h). On the
+# other platforms a pending cancellation is only recovered level-triggered at
+# the task's next cancellation point, so a foreign spin that terminates only
+# when its handler runs would spin forever - and an unstoppable victim pins
+# its worker thread for the rest of the process.
+const HAVE_CANCEL_HANDLER_DELIVERY =
+    ccall(:jl_have_cancel_handler_delivery, Cint, ()) != 0
+
 # A Julia foreign-call cancellation handler, C-callable via @cfunction. It
 # runs like a signal handler on the thread executing the annotated call:
 # no allocation, locks, yields or I/O - and integer-only code, satisfying
@@ -257,6 +266,10 @@ end
     lib = Libdl.dlopen(libccalltest)
     c_handler = Libdl.dlsym(lib, :cancelspin_handler)
 
+    # The handler-stopped spins run only where the handler is actually
+    # delivered asynchronously; elsewhere they would spin forever (see
+    # HAVE_CANCEL_HANDLER_DELIVERY above).
+    if HAVE_CANCEL_HANDLER_DELIVERY
     # The handler runs on the thread blocked inside the annotated call: it
     # stops the foreign spin, the call returns, and the pending cancellation
     # is thrown by the annotated call's own post-call cancellation point (so
@@ -287,6 +300,7 @@ end
     @test t2.result isa CancellationRequest
     @test cell2[][1] == 1
     @test cell2[][2] == Int64(Base.CANCEL_REQUEST_ABANDON_EXTERNAL.request) + 1
+    end # HAVE_CANCEL_HANDLER_DELIVERY
 
     # An already-pending cancellation throws before the call begins: the
     # foreign function is never entered and the handler never runs.
@@ -307,11 +321,15 @@ end
 end
 
 @testset "BLAS cancellation via the cancel_handler annotation" begin
-    # Requires an OpenBLAS with the cancellation patch (source build); the
-    # BinaryBuilder library does not have it, so skip gracefully.
+    # Requires an OpenBLAS with the cancellation patch (source build; the
+    # BinaryBuilder library does not have it) and asynchronous handler
+    # delivery - without the latter the dgemm cannot be stopped mid-flight
+    # and the cancellation-latency checks below cannot hold.
     blas = Libdl.dlopen_e("libopenblas64_")
     tok_f = blas == C_NULL ? C_NULL : Libdl.dlsym_e(blas, :openblas_cancel_token)
-    if tok_f == C_NULL
+    if !HAVE_CANCEL_HANDLER_DELIVERY
+        @warn "no asynchronous cancel-handler delivery on this platform; skipping BLAS cancellation tests"
+    elseif tok_f == C_NULL
         @warn "patched OpenBLAS not available; skipping BLAS cancellation tests"
     else
         BLAS_TOK_F[] = tok_f
