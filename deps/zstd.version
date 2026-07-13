@@ -1,0 +1,8 @@
+# -*- makefile -*-
+## jll artifact
+ZSTD_JLL_NAME := Zstd
+
+## source build
+ZSTD_VER := 1.5.7
+ZSTD_BRANCH=v1.5.7
+ZSTD_SHA1=f8745da6ff1ad1e7bab384bd1f9d742439278e99
