@@ -1934,8 +1934,13 @@ JL_DLLEXPORT int jl_abandon_task(jl_task_t *t, jl_task_t *next_task)
     jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_PENDING);
     // Deliver with a timeout. The unix request slot is shared with
     // best-effort cancellation/preemption signals and deliveries coalesce,
-    // so a single send can be lost - re-send until the request settles.
-    for (int attempt = 0; attempt < 200; attempt++) {
+    // so a single send can be lost - re-send until the request settles. The
+    // deadline is wall-clock, not iteration-count: on an oversubscribed or
+    // serialized machine (CI under load, rr) every uv_sleep(1) costs a
+    // reschedule and an iteration-counted loop stretches from its nominal
+    // bound to minutes.
+    uint64_t abandon_deadline = uv_hrtime() + 2000000000ull; // 2s
+    for (;;) {
         jl_send_abandon_signal(tid);
         for (int spin = 0; spin < 10; spin++) {
             st = jl_atomic_load_acquire(&ptls2->abandon_state);
@@ -1943,6 +1948,8 @@ JL_DLLEXPORT int jl_abandon_task(jl_task_t *t, jl_task_t *next_task)
                 goto settle;
             uv_sleep(1);
         }
+        if (uv_hrtime() >= abandon_deadline)
+            break;
     }
     // Timed out: withdraw the request, arbitrating against a late delivery.
     st = JL_ABANDON_PENDING;

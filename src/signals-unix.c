@@ -41,6 +41,16 @@
 #include <sys/event.h>
 #endif
 
+// sigwaitinfo (and the siginfo_t it fills) lets the signal listener
+// distinguish timer-raised signals from user-sent ones (SI_TIMER + sigev
+// value). glibc advertises it via _POSIX_C_SOURCE (defined through
+// _GNU_SOURCE); FreeBSD supports it without defining that macro, and
+// without the discrimination a rescue-timer SIGINT is indistinguishable
+// from a user press (breaking the whole ^C escalation ladder there).
+#if (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L) || defined(__FreeBSD__)
+#define HAVE_SIGWAITINFO
+#endif
+
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
 
@@ -804,7 +814,13 @@ static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *c
     }
     signals_inflight++;
     sig_atomic_t request = jl_atomic_exchange(&ptls2->signal_request, 1);
-    assert(request == 0 || request == -1);
+    // A parked best-effort cancellation (5) or abandon (6) request may
+    // occupy the slot indefinitely - its victim may never consume it (e.g.
+    // a thread with SIGUSR2 blocked) - and both senders tolerate a lost
+    // delivery (they re-send or time out and withdraw), so the suspend
+    // handshake may displace them. The handshake states 1-4/-1 cannot
+    // appear here: those settle under in_signal_lock, which we hold.
+    assert(request == 0 || request == -1 || request == 5 || request == 6);
     request = 1;
     err = pthread_kill(ptls2->system_id, SIGUSR2);
     if (err == 0) {
@@ -1367,7 +1383,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
     sigset_t sset;
     int sig, critical, profile, doexit = 0, rescue_bt = 0;
     jl_sigsetset(&sset);
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
     siginfo_t info;
 #endif
 #ifdef HAVE_KEVENT
@@ -1422,7 +1438,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         }
         else
 #endif
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
         sig = sigwaitinfo(&sset, &info);
 #else
         if (sigwait(&sset, &sig))
@@ -1437,7 +1453,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
         profile = (sig == SIGUSR1);
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
         if (profile && !(info.si_code == SI_TIMER &&
                 info.si_value.sival_ptr == &timerprof))
             profile = 0;
@@ -1446,7 +1462,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 
         if (sig == SIGINT) {
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L && !defined(HAVE_KEVENT)
+#if defined(HAVE_SIGWAITINFO) && !defined(HAVE_KEVENT)
             // Check if this SIGINT came from our rescue timer (si_code == SI_TIMER
             // and sival_int == 1). This means the process failed to respond to
             // the cancellation request in time.
@@ -1603,7 +1619,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         }
 #else
         if (sig == SIGUSR1) {
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
             if (jl_sigint_episode_state() != 0) {
                 // On-demand thread backtraces during a ^C episode.
                 critical = 1;
@@ -1642,7 +1658,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
         }
 
-#if defined(SIGINFO) || (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L) || defined(HAVE_KEVENT)
+#if defined(SIGINFO) || defined(HAVE_SIGWAITINFO) || defined(HAVE_KEVENT)
 noexit_critical:
 #endif
         signal_bt_size = 0;
