@@ -119,6 +119,9 @@ function multiq_size(tpid::Int8)
     end
 
     @lock heaps_lock[tp] begin
+        # Re-read under the lock; growing from a stale copy would replace the
+        # current heaps and orphan tasks concurrently inserted into them (#62144).
+        tpheaps = heaps[tp]
         heap_p = UInt32(length(tpheaps))
         nt = UInt32(Threads._nthreads_in_pool(tpid))
         if heap_c * nt <= heap_p
