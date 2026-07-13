@@ -550,7 +550,7 @@ const f(x::Int)::Int = x+1
 5   TestMod.Int
 6   (call core.svec %₄ %₅)
 7   (call core.svec)
-8   SourceLocation::1:7
+8   SourceLocation::1:6
 9   (call core.svec %₆ %₇ %₈)
 10  --- method TestMod.f %₉
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read)]
