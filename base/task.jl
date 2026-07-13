@@ -1006,7 +1006,7 @@ function enq_work(t::Task)
             return t
         end
     end
-    ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    ccall(:jl_wakeup_thread, Cint, (Int16,), (tid - 1) % Int16)
     return t
 end
 
