@@ -119,7 +119,9 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
     assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array_any(_newly_inferred));
     if (_newly_inferred == jl_nothing)
         _newly_inferred = NULL;
+    JL_LOCK(&newly_inferred_mutex);
     newly_inferred = (jl_array_t*) _newly_inferred;
+    JL_UNLOCK(&newly_inferred_mutex);
 }
 
 // Null `CodeInstance.inferred` for native-owned CIs where it is still a raw
@@ -178,9 +180,14 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
         }
     }
     JL_LOCK(&newly_inferred_mutex);
-    size_t end = jl_array_nrows(newly_inferred);
-    jl_array_grow_end(newly_inferred, 1);
-    jl_array_ptr_set(newly_inferred, end, ci);
+    // re-check under the lock: a concurrent jl_set_newly_inferred may have
+    // cleared or replaced the array since the unlocked fast-path check above
+    jl_array_t *arr = newly_inferred;
+    if (arr != NULL) {
+        size_t end = jl_array_nrows(arr);
+        jl_array_grow_end(arr, 1);
+        jl_array_ptr_set(arr, end, ci);
+    }
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
