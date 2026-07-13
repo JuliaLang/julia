@@ -2,6 +2,8 @@
 
 using Test, Distributed, SharedArrays, Random
 include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testenv.jl"))
+isdefined(Main, :StridedArrays) || @eval Main include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "StridedArrays.jl"))
+using .Main.StridedArrays
 
 @test isempty(Test.detect_closure_boxes(SharedArrays))
 
@@ -326,6 +328,16 @@ end
 @test SharedMatrix([0.1 0.2; 0.3 0.4]) == [0.1 0.2; 0.3 0.4]
 @test_throws MethodError SharedVector(rand(4,4))
 @test_throws MethodError SharedMatrix(rand(4))
+
+# SharedArray implements the strided array interface with Array layout
+@testset "strided array traits" begin
+    S = SharedArray{Float64,2}(rand(3, 4))
+    T = typeof(S)
+    @test Base.has_contiguous_layout(T)
+    @test is_ptr_loadable(T)
+    @test is_ptr_storable(T)
+    check_strided_traits(S)
+end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(SharedArrays))
