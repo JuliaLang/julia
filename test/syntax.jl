@@ -3616,6 +3616,33 @@ end
     @test m.order == [:T, :rhs]
     @test Core.get_binding_type(m, :g1) == Int
 
+    # A mutable local used as the declared type is snapshotted before the RHS,
+    # so mutating that local while computing the value cannot change the type
+    # used for conversion or declaration.
+    m = Module()
+    @eval m let T = Int
+        global snapshotted_type::T = (T = Float64; 1)
+    end
+    @test m.snapshotted_type === 1
+    @test Core.get_binding_type(m, :snapshotted_type) == Int
+
+    # The declared type is validated before the RHS is evaluated.
+    m = Module()
+    @eval m invalid_type_rhs_ran = false
+    @test_throws TypeError @eval m global invalid_type_global::1 = (invalid_type_rhs_ran = true; 2)
+    @test !m.invalid_type_rhs_ran
+    @test !Base.isdefinedglobal(m, :invalid_type_global)
+
+    # An explicit `global` around a chained assignment still evaluates the
+    # outer declaration's type before any assignment on the RHS.
+    m = Module()
+    @eval m explicit_global_order = Symbol[]
+    @eval m global chain_outer::(push!(explicit_global_order, :T); Int) =
+        chain_inner = (push!(explicit_global_order, :rhs); 1)
+    @test m.explicit_global_order == [:T, :rhs]
+    @test m.chain_outer === m.chain_inner === 1
+    @test Core.get_binding_type(m, :chain_outer) == Int
+
     # if evaluating the declared type throws, the binding is left untouched and
     # the right-hand side is never evaluated
     m = Module()

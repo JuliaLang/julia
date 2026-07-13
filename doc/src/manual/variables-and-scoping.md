@@ -846,19 +846,20 @@ Code compiled against the previous type is recompiled to observe the new one. Co
 against an earlier type but still observes the value slot after the change — for example a read that
 runs after an on-the-stack redefinition, or an access replayed in an older world age via
 [`Base.invoke_in_world`](@ref) — verifies the value against the type it was compiled for and raises a
-[`TypeError`](@ref) rather than returning an ill-typed value. Similarly, a write from such code must
-satisfy both the type it was compiled against and the latest declared type (a re-declaration can
-narrow the set of accesses that succeed, but never expand it), and it raises an error outright if
-the binding is no longer a writable global in the latest world age (for example, after it was
-replaced by a constant or deleted). This verification is activated only
-once a binding's declared type is actually changed; accesses to globals whose declared type never
-changes are not affected by it.
+[`TypeError`](@ref) rather than returning an ill-typed value. Reads need this verification only when
+the shared value slot may subsequently hold a value that does not satisfy the earlier type. A write
+from older code must satisfy both the type it was compiled against and the latest declared type (a
+re-declaration can narrow the set of accesses that succeed, but never expand it), and it raises an
+error outright if the binding is no longer a writable global in the latest world age. Read and write
+verification are activated independently for each earlier declaration: compatible transitions keep
+the corresponding accesses on their usual unguarded paths.
 
 A declared global may also be replaced by a constant, provided the `const` declaration carries a
 value. The transition behaves like a re-declaration whose value is the constant's value: new code
 observes the constant, while reads from code compiled against the global epoch observe the
-constant's value through the same verification described above, and writes from such code raise an
-error. The reverse transition — re-declaring a constant as
-a global — remains an error. Deleting a declared global with `Base.delete_binding` likewise ends
-its epoch: accesses from code compiled against it verify from then on, and whatever the binding is
-re-established as afterwards is independent of the deleted global.
+constant's value (verifying it when it may not satisfy their earlier type), and writes from such code
+raise an error. The reverse transition — re-declaring a constant as a global — remains an error.
+Deleting a declared global with `Base.delete_binding` likewise ends its writable epoch, but retains
+that epoch's old value slot: stale reads can continue to observe the retained, conforming value
+without added read verification, while stale writes raise an error. Whatever binding is established
+under the same name afterwards is independent of the deleted global epoch.

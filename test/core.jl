@@ -29,7 +29,7 @@ for (T, c) in (
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
         (Task, [:metrics_enabled]),
-        (Core.BindingPartition, [:restriction]),
+        (Core.BindingPartition, [:restriction, :kind]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
 end
@@ -49,9 +49,21 @@ for (T, c) in (
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
         (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
-        (Core.BindingPartition, [:min_world, :max_world, :next]),
+        (Core.BindingPartition, [:min_world, :max_world, :next, :retype_flags]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
+end
+
+# Binding partition kinds are immutable metadata, while the separate re-type guard
+# word requires explicit atomic access.
+let p = convert(Core.Binding, GlobalRef(@__MODULE__, :Bottom)).partitions
+    flags = @atomic :monotonic p.retype_flags
+    @test_throws(
+        ErrorException("setfield!: const field .kind of type BindingPartition cannot be changed"),
+        setfield!(p, :kind, p.kind))
+    @test_throws(
+        ConcurrencyViolationError("setfield!: atomic field cannot be written non-atomically"),
+        setfield!(p, :retype_flags, flags))
 end
 
 @test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),

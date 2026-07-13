@@ -2624,11 +2624,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         // Union type support (set ptindex non-null for union stores)
         Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr,
         // Re-type guard re-checking for global bindings (#62154, see emit_globalop):
-        // when set, `retype_flagp` points at the kind word of the binding partition
-        // this code is compiled against and `retype_mask` selects the guard bits the
-        // operation must re-check (RETYPE_WRITE, plus RETYPE_READ for the kinds that
-        // trust values loaded from the slot); accesses divert to `retype_deoptBB`
-        // once a guard bit is set
+        // when set, `retype_flagp` points at the retype_flags word of the binding
+        // partition this code is compiled against and `retype_mask` selects the
+        // guard bits the operation must re-check (RETYPE_WRITE, plus RETYPE_READ
+        // for the kinds that trust values loaded from the slot); accesses divert
+        // to `retype_deoptBB` once a guard bit is set
         Value *retype_flagp = nullptr, size_t retype_mask = 0,
         BasicBlock *retype_deoptBB = nullptr)
 {

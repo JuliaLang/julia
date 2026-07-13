@@ -301,10 +301,12 @@ static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x
 //
 // If `newval` is NULL (a bare `global x::T` declaration), the existing value is retained
 // when it still conforms to the new type, and an error is raised otherwise. That
-// compatibility check is performed only after the re-type guards are flagged and the
-// in-flight store commits they gate are drained (see jl_retype_flag_partitions), so a
+// compatibility check is performed after the old partitions' re-type guards are
+// flagged and the in-flight store commits they gate are drained (see
+// jl_retype_flag_partitions), but before a replacement partition is installed. Thus a
 // store validated against a superseded declared type can neither invalidate the answer
-// nor land after the new declared type is published.
+// nor land after the new declared type is published, and a failed declaration leaves
+// no future partition that could be published by a later world-counter increment.
 void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong, jl_value_t *newval) {
     // create uninitialized mutable binding for "global x" decl sometimes or probably
     jl_module_t *gm;
@@ -337,102 +339,72 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
     if (newval != NULL && !jl_isa(newval, global_type))
         jl_type_error_global("setglobal!", gm, gs, global_type, newval);
     int replaced = 0; // whether a new partition was installed (so the world must be bumped)
-    while (1) {
-        bpart = jl_get_binding_partition(b, new_world);
-        enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (kind != PARTITION_KIND_GLOBAL) {
-            if (jl_bkind_is_some_implicit(kind) || kind == PARTITION_KIND_DECLARED) {
-                if (kind == new_kind) {
-                    if (!set_type)
-                        break;
-                    goto check_type;
-                }
+    int update_partition = 0;
+    int update_in_place = 0;
+    bpart = jl_get_binding_partition(b, new_world);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (kind != PARTITION_KIND_GLOBAL) {
+        if (jl_bkind_is_some_implicit(kind) || kind == PARTITION_KIND_DECLARED) {
+            if (kind != new_kind) {
                 check_safe_newbinding(gm, gs);
-                // (For a bare re-declaration, a retained value that no longer conforms
-                // errors below, after the re-type guards are flagged.)
-                if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
-                    bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
-                    jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
-                    continue;
-                } else {
-                    jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
-                    replaced = 1;
-                }
-                break;
-            } else if (set_type) {
-                if (jl_bkind_is_some_constant(kind)) {
-                    jl_errorf("cannot set type for constant %s.%s.",
-                            jl_symbol_name(gm->name), jl_symbol_name(gs));
-                } else {
-                    jl_errorf("cannot set type for imported binding %s.%s.",
-                            jl_symbol_name(gm->name), jl_symbol_name(gs));
-                }
+                update_partition = 1;
+                update_in_place = jl_atomic_load_relaxed(&bpart->min_world) == new_world;
             }
         }
-        if (set_type)
-        {
-check_type: ;
-            jl_value_t *old_ty = bpart->restriction;
-            JL_GC_PROMISE_ROOTED(old_ty);
-            if (!jl_types_equal(set_type, old_ty)) {
-                // Replacing a typed global by a typed global of a different type (#62154).
-                // This is only permitted for strong globals; the type of a constant or
-                // imported binding still cannot be changed this way.
-                if (jl_binding_kind(bpart) != PARTITION_KIND_GLOBAL) {
-                    jl_errorf("cannot set type for global %s.%s. It is already set to a different type.",
-                            jl_symbol_name(gm->name), jl_symbol_name(gs));
-                }
-                check_safe_newbinding(gm, gs);
-                // Retire the old partition and install a new one carrying the new type
-                // restriction. This caps the old partition and invalidates code compiled
-                // against the old type. The world counter is bumped below, after the value
-                // is swapped in, so the retype and the new value become visible together.
-                // (For a bare re-declaration, a retained value that no longer conforms
-                // errors below, after the re-type guards are flagged; the world counter
-                // is never bumped in that case, so the new partition, while installed,
-                // is never published.)
-                jl_replace_binding_locked(b, bpart, set_type, PARTITION_KIND_GLOBAL, new_world);
-                replaced = 1;
-                break;
+        else if (set_type) {
+            if (jl_bkind_is_some_constant(kind)) {
+                jl_errorf("cannot set type for constant %s.%s.",
+                        jl_symbol_name(gm->name), jl_symbol_name(gs));
+            }
+            else {
+                jl_errorf("cannot set type for imported binding %s.%s.",
+                        jl_symbol_name(gm->name), jl_symbol_name(gs));
             }
         }
-        break;
     }
-    // #62154: flag the re-type guards of superseded partitions before the retained
-    // value is validated, before the new value is swapped in, and before the new
-    // partition is published: reads compiled against a partition whose restriction
-    // the new declared type does not conform to must verify what they load from now
-    // on, and stores validated against a partition whose restriction the new declared
-    // type does not accept must divert to the locked path. The flagging drains every
-    // in-flight store commit its write flags gate (see jl_retype_flag_partitions), so
-    // the retained-value check below cannot be invalidated concurrently: any store
-    // that can still land afterwards conforms to the new declared type. It is a no-op
-    // (in particular: no fence) when every partition is compatible -- fresh bindings,
-    // same-typed re-declarations -- and partitions installed by this declaration
-    // start unflagged, so code compiled against the new declared type runs unguarded.
-    if (strong) {
-        jl_binding_partition_t *cur = jl_get_binding_partition(b, new_world);
-        if (jl_binding_kind(cur) == PARTITION_KIND_GLOBAL) {
-            jl_value_t *cur_ty = cur->restriction;
-            JL_GC_PROMISE_ROOTED(cur_ty);
-            jl_retype_flag_partitions(b, cur_ty, cur_ty);
-            if (newval == NULL && cur_ty != (jl_value_t*)jl_any_type) {
-                // A bare re-declaration retains the existing value, which therefore
-                // must conform to the new type ("one value per binding"): with the
-                // incompatible partitions flagged and their in-flight commits
-                // drained, the slot can no longer change out from under this check.
-                jl_value_t *oldval = jl_atomic_load_relaxed(&b->value);
-                if (oldval != NULL && !jl_isa(oldval, cur_ty)) {
-                    // The world counter is not bumped on this path, so a partition
-                    // installed above is never published and the previously published
-                    // declared type remains in effect; superseded partitions keep
-                    // their (conservative, benign) guard flags.
-                    jl_errorf("cannot change the type of global %s.%s: it currently holds a value that is not an "
-                              "instance of the new type. Assign a conforming value (e.g. `%s = ...`) or otherwise "
-                              "reset the binding before re-declaring its type.",
-                              jl_symbol_name(gm->name), jl_symbol_name(gs), jl_symbol_name(gs));
-                }
+    else if (set_type) {
+        jl_value_t *old_ty = bpart->restriction;
+        JL_GC_PROMISE_ROOTED(old_ty);
+        if (!jl_types_equal(set_type, old_ty)) {
+            // Replacing a typed global by a typed global of a different type (#62154).
+            check_safe_newbinding(gm, gs);
+            update_partition = 1;
+        }
+    }
+
+    if (strong && update_partition) {
+        // Flag the old partitions before validating a retained value and before
+        // installing the replacement. Reads whose restriction the requested type
+        // does not conform to must verify, and stores whose validated restriction is
+        // not accepted by the requested type must divert to the locked path. Draining
+        // the latter's commit windows makes the retained-value check stable.
+        jl_retype_flag_partitions(b, global_type, global_type);
+        if (newval == NULL && global_type != (jl_value_t*)jl_any_type) {
+            jl_value_t *oldval = jl_atomic_load_relaxed(&b->value);
+            if (oldval != NULL && !jl_isa(oldval, global_type)) {
+                // No partition has been changed yet. The old partitions retain their
+                // conservative guard flags, but a later world bump cannot publish the
+                // rejected declaration.
+                jl_errorf("cannot change the type of global %s.%s: it currently holds a value that is not an "
+                          "instance of the new type. Assign a conforming value (e.g. `%s = ...`) or otherwise "
+                          "reset the binding before re-declaring its type.",
+                          jl_symbol_name(gm->name), jl_symbol_name(gs), jl_symbol_name(gs));
             }
+        }
+    }
+
+    // Install the new semantic partition only after every operation that can reject
+    // the declaration has succeeded. A fresh partition starts with clear re-type
+    // flags, so code compiled against the new declared type runs unguarded.
+    if (update_partition) {
+        if (update_in_place) {
+            bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
+            jl_atomic_store_relaxed(&bpart->retype_flags, 0);
+            jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
+        }
+        else {
+            jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
+            replaced = 1;
         }
     }
     // Atomically swap in the carried value *before* publishing the new partition (by bumping

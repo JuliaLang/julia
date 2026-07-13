@@ -341,9 +341,9 @@ struct jl_tbaacache_t {
     MDNode *tbaa_unionselbyte;   // a selector byte in isbits Union struct fields
     MDNode *tbaa_data;       // Any user data that `pointerset/ref` are allowed to alias
     MDNode *tbaa_binding;        // jl_binding_t::value
-    MDNode *tbaa_binding_flags;  // jl_binding_partition_t::kind re-type guard bits (never
-                                 // stored by compiled code, so guard loads cannot alias
-                                 // binding value stores)
+    MDNode *tbaa_binding_flags;  // jl_binding_partition_t::retype_flags (never stored by
+                                 // compiled code, so guard loads cannot alias binding
+                                 // value stores)
     MDNode *tbaa_value;          // jl_value_t, that is not jl_array_t or jl_genericmemory_t
     MDNode *tbaa_mutab;              // mutable type
     MDNode *tbaa_datatype;               // datatype
@@ -3525,21 +3525,22 @@ static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
 
 // --- generating function calls ---
 
-// The address of `bpart`'s kind word, whose PARTITION_FLAG_RETYPE_READ/WRITE bits
-// the emitted guards test (#62154). The partition is embedded as a literal (it is a
-// GC object kept alive by its binding, and rooted for pruned outputs below), so the
-// guard is a load at a link-time-constant address.
+// The address of `bpart`'s re-type guard word, whose
+// PARTITION_FLAG_RETYPE_READ/WRITE bits the emitted guards test (#62154). The
+// partition is embedded as a literal (it is a GC object kept alive by its binding,
+// and rooted for pruned outputs below), so the guard is a load at a
+// link-time-constant address.
 static Value *julia_bpart_flagp(jl_codectx_t &ctx, jl_binding_partition_t *bpart)
 {
     if (jl_generating_output())
         jl_temporary_root(ctx, (jl_value_t*)bpart);
     Value *bpartv = literal_pointer_val(ctx, (jl_value_t*)bpart);
-    return emit_ptrgep(ctx, bpartv, offsetof(jl_binding_partition_t, kind));
+    return emit_ptrgep(ctx, bpartv, offsetof(jl_binding_partition_t, retype_flags));
 }
 
 // Emit a guard that diverts to a cold block once a later declaration invalidates
 // what this code is compiled to assume about `bpart` (i.e. once the `mask` bits of
-// its kind word -- clear at compile time here -- become set; see #62154): a fenced
+// its guard word -- clear at compile time here -- become set; see #62154): a fenced
 // re-load of the partition's guard bits (see emit_retype_recheck), emitted
 // program-order *after* the access it guards. As long as the bits read clear, a
 // value loaded from the slot before the fence is known to conform to the declared
@@ -3667,8 +3668,9 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
 
 // Emit the out-of-line store path for a global: check that the binding is currently
 // writable and perform `op` with full runtime semantics, validating the stored value
-// against the binding's *latest* declared type. Returns the operation's raw (boxed)
-// result, or NULL for StoreKind::Set.
+// against the binding's *latest* declared type. Returns the operation's boxed
+// language-level result (converting runtime protocols as needed), or NULL for
+// StoreKind::Set.
 static Value *emit_globalop_runtime_call(jl_codectx_t &ctx, StoreKind op, Value *bp,
                                          jl_module_t *mod, jl_sym_t *sym,
                                          const jl_cgval_t &rval, const jl_cgval_t &cmp)
@@ -3691,9 +3693,15 @@ static Value *emit_globalop_runtime_call(jl_codectx_t &ctx, StoreKind op, Value 
     case StoreKind::Modify:
         return ctx.builder.CreateCall(prepare_call(jlcheckmodify_func),
                 { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
-    case StoreKind::SetOnce:
-        return ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
+    case StoreKind::SetOnce: {
+        Value *old = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
+        // jl_checked_assignonce returns the previous value, or NULL when the store
+        // succeeds. The builtin wrapper converts that protocol result to Bool too;
+        // do so here before downstream code marks or merges it as a boxed Bool.
+        return ctx.builder.CreateSelect(ctx.builder.CreateIsNull(old),
+                literal_pointer_val(ctx, jl_true), literal_pointer_val(ctx, jl_false));
+    }
     case StoreKind::Unset:
         break; // Unset is not a valid operation for globals
     }
@@ -3719,8 +3727,9 @@ static jl_value_t *global_op_rettyp(StoreKind op, jl_value_t *ty)
     abort(); // unreachable
 }
 
-// Mark the raw runtime result `r` of `op`, first verifying (for value-carrying results)
-// that it conforms to the result type this code was compiled to expect. #62154: the
+// Mark the boxed runtime-path result `r` of `op`, first verifying (for
+// value-carrying results) that it conforms to the result type this code was compiled
+// to expect. #62154: the
 // runtime store validates and reflects the *latest* declared type, so when the binding
 // has been re-typed the result may not conform to the compile-time type; erroring here
 // keeps the old-world typing of the result sound. For Swap this checks the returned

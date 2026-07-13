@@ -816,12 +816,12 @@ static const uint8_t PARTITION_FLAG_DEPWARN        = 0x40;
 static const uint8_t PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80;
 
 // #62154 re-type guard flags. Unlike the flags above these live *outside*
-// PARTITION_MASK_FLAG, so a replacement partition never inherits them: they describe
-// how *later* declarations relate to this partition's restriction, and a fresh
-// partition has no later declarations yet. Both are monotone (set once, under
-// world_counter_lock, by jl_retype_flag_partitions; never cleared) and are read
-// concurrently -- with atomic operations on the `kind` word -- by compiled guard code
-// and the store commit windows.
+// PARTITION_MASK_FLAG, and are stored in a separate `retype_flags` word, so a
+// replacement partition never inherits them: they describe how *later* declarations
+// relate to this partition's restriction, and a fresh partition has no later
+// declarations yet. Once a partition is published, both are monotone (set under
+// world_counter_lock by jl_retype_flag_partitions and never cleared) and are read
+// concurrently by compiled guard code and the store commit windows.
 //
 // _RETYPE_READ: some later declaration allows the (single, shared) value slot to hold
 // a value that is not an instance of this partition's restriction. Reads compiled
@@ -861,6 +861,7 @@ typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t *) next;
     size_t kind;
+    _Atomic(size_t) retype_flags;
 } jl_binding_partition_t;
 
 STATIC_INLINE enum jl_partition_kind jl_binding_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT

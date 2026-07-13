@@ -1642,9 +1642,24 @@
                  ;; Mark the variable's scope without stripping its type into a `decl`.
                  ;; (Restricted to plain `=`; compound assignments like `+=` keep the split
                  ;; form so the type declaration is not lost.)
-                 (loop (cdr b)
-                       (cons `(,what ,(cadr (cadr x))) decls)
-                       (cons x assigns)))
+                 (let* ((v  (cadr (cadr x)))
+                        (T  (caddr (cadr x)))
+                        ;; An explicit `global` declaration is emitted before all
+                        ;; assignments in this block. Capture its declared type there as
+                        ;; well, so an assignment chain in the RHS cannot run before the
+                        ;; type expression. The joint assignment validates this captured
+                        ;; type before it evaluates the RHS.
+                        (T1 (if (eq? what 'global) (make-ssavalue) T))
+                        (x1 (if (eq? T1 T)
+                                x
+                                `(= (|::| ,v ,T1) ,(caddr x))))
+                        (new-decls (if (eq? T1 T)
+                                       (cons `(,what ,v) decls)
+                                       (cons `(= ,T1 ,T)
+                                             (cons `(,what ,v) decls)))))
+                   (loop (cdr b)
+                         new-decls
+                         (cons x1 assigns))))
                 ((or (assignment-like? x) (function-def? x))
                  (let ((new-vars (lhs-decls (assigned-name (cadr x)))))
                   (loop (cdr b)
@@ -4021,7 +4036,7 @@ f(x) = yt(x)
              ;; side (matching the evaluation order of the old split
              ;; `decl` + assignment form), and reuse the result for both the
              ;; conversion and the declaration.
-             (T1   (if (or (atom? T) (ssavalue? T)
+             (T1   (if (or (and (atom? T) (not (symbol? T))) (ssavalue? T)
                            (and (pair? T) (memq (car T) '(core top))))
                        T
                        (make-ssavalue)))
@@ -4037,6 +4052,7 @@ f(x) = yt(x)
         `(block
           (toplevel-only decl ,ref)
           ,.(if (eq? T1 T) '() `((= ,T1 ,T)))
+          (call (core isa) (null) ,T1)
           ,.(if (eq? rhs1 rhs0) '() `((= ,rhs1 ,rhs0)))
           (= ,conv ,(convert-for-type-decl rhs1 T1 #f lam))
           (call (core declare_global) ,(cadr ref) (inert ,(caddr ref)) (true) ,T1 ,conv)

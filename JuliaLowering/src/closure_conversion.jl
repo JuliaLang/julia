@@ -401,6 +401,11 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                     push!(stmts, @ast ctx ex [K"=" ttmp type0])
                     ttmp
                 end
+                # Validate the captured declaration type before evaluating the RHS.
+                # Core.isa performs the required Type check without publishing or
+                # otherwise mutating the binding.
+                push!(stmts, @ast ctx ex [K"call"
+                    "isa"::K"core" (::K"nothing") type])
                 rhs0 = _convert_closures(ctx, ex[3])
                 rhs1 = if is_simple_atom(ctx, rhs0)
                     rhs0

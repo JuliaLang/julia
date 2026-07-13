@@ -1038,9 +1038,9 @@ void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_va
 // validated against the restriction of the binding's *latest* partition, which a
 // concurrent re-declaration can replace. The commit itself therefore runs inside a
 // per-thread "commit window": a short, safepoint-free instruction sequence that
-// re-checks the validated partition's PARTITION_FLAG_RETYPE_WRITE after announcing
+// re-checks the validated partition's applicable re-type flags after announcing
 // itself in ptls->bnd_commit_window. A re-declaration (which holds
-// world_counter_lock) sets that flag on every partition whose restriction is not a
+// world_counter_lock) sets those flags on every partition whose restriction is not a
 // subtype of the new declared type, issues the heavy side of an asymmetric fence,
 // and drains the windows of every thread; a commit whose flag check read clear is
 // thereby either ordered (and made visible) before the re-declaration validates the
@@ -1056,11 +1056,13 @@ void jl_retype_flag_partitions(jl_binding_t *b, jl_value_t *slot_ty,
 // Returns 1 if the fast-path commit may proceed, in which case the caller must
 // execute nothing but the commit's (safepoint-free) store instruction(s) before
 // closing the window with jl_binding_end_commit. Returns 0 -- with the window already
-// closed -- if `bpart`'s write guard is active (a later declaration's restriction may
-// not accept values validated against `bpart`'s); the caller must then perform the
-// operation under world_counter_lock instead, re-validating against the latest
-// declared type.
-STATIC_INLINE int jl_binding_begin_commit(jl_binding_partition_t *bpart)
+// closed -- if any guard in `mask` is active. Plain stores and set-once only validate
+// their value against the partition, so they check the write guard. Read-modify-write
+// operations additionally trust a value loaded from the slot at the partition's
+// restriction and therefore check both the read and write guards. The caller must
+// then perform the operation under world_counter_lock instead, re-validating against
+// the latest declared type.
+STATIC_INLINE int jl_binding_begin_commit(jl_binding_partition_t *bpart, size_t mask)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_atomic_store_relaxed(&ptls->bnd_commit_window, 1);
@@ -1070,8 +1072,7 @@ STATIC_INLINE int jl_binding_begin_commit(jl_binding_partition_t *bpart)
     // full barrier on this CPU, flushing the window store before the drain begins
     // whenever the flag load below executed before the barrier).
     jl_signal_fence();
-    if (__unlikely(jl_atomic_load_relaxed((_Atomic(size_t)*)&bpart->kind) &
-                   PARTITION_FLAG_RETYPE_WRITE)) {
+    if (__unlikely(jl_atomic_load_relaxed(&bpart->retype_flags) & mask)) {
         jl_atomic_store_relaxed(&ptls->bnd_commit_window, 0);
         return 0;
     }
@@ -1097,7 +1098,7 @@ STATIC_INLINE void jl_binding_end_commit(void)
 STATIC_INLINE int jl_binding_try_assign(jl_binding_t *b, jl_binding_partition_t *bpart,
                                         jl_value_t *rhs)
 {
-    if (!jl_binding_begin_commit(bpart))
+    if (!jl_binding_begin_commit(bpart, PARTITION_FLAG_RETYPE_WRITE))
         return 0;
     jl_atomic_store_release(&b->value, rhs);
     jl_binding_end_commit();
@@ -1107,7 +1108,8 @@ STATIC_INLINE int jl_binding_try_assign(jl_binding_t *b, jl_binding_partition_t 
 STATIC_INLINE int jl_binding_try_swap(jl_binding_t *b, jl_binding_partition_t *bpart,
                                       jl_value_t *rhs, jl_value_t **oldp)
 {
-    if (!jl_binding_begin_commit(bpart))
+    if (!jl_binding_begin_commit(bpart,
+            PARTITION_FLAG_RETYPE_READ | PARTITION_FLAG_RETYPE_WRITE))
         return 0;
     *oldp = jl_atomic_exchange(&b->value, rhs);
     jl_binding_end_commit();
@@ -1116,9 +1118,9 @@ STATIC_INLINE int jl_binding_try_swap(jl_binding_t *b, jl_binding_partition_t *b
 
 STATIC_INLINE int jl_binding_try_cmpswap(jl_binding_t *b, jl_binding_partition_t *bpart,
                                          jl_value_t **expectedp, jl_value_t *rhs,
-                                         int *successp)
+                                         int *successp, size_t guard_mask)
 {
-    if (!jl_binding_begin_commit(bpart))
+    if (!jl_binding_begin_commit(bpart, guard_mask))
         return 0;
     *successp = jl_atomic_cmpswap(&b->value, expectedp, rhs);
     jl_binding_end_commit();

@@ -3689,15 +3689,14 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_binding_partition_type =
         jl_new_datatype(jl_symbol("BindingPartition"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(5, "restriction", "min_world", "max_world", "next", "kind"),
-                        jl_svec(5, jl_any_type,
-                        jl_ulong_type, jl_ulong_type, jl_any_type/*jl_binding_partition_type*/, jl_ulong_type),
+                        jl_perm_symsvec(6, "restriction", "min_world", "max_world", "next", "kind", "retype_flags"),
+                        jl_svec(6, jl_any_type,
+                        jl_ulong_type, jl_ulong_type, jl_any_type/*jl_binding_partition_type*/, jl_ulong_type,
+                        jl_ulong_type),
                         jl_emptysvec, 0, 1, 0);
-    const static uint32_t binding_partition_atomicfields[] = { 0b01110 }; // Set fields 2, 3, 4 as atomic
+    const static uint32_t binding_partition_atomicfields[] = { 0b101110 }; // Set fields 2, 3, 4, 6 as atomic
     jl_binding_partition_type->name->atomicfields = binding_partition_atomicfields;
-    // `kind` (field 5) is *not* const: its PARTITION_FLAG_RETYPE_READ/WRITE bits are
-    // set at runtime when a later declaration invalidates the partition (#62154)
-    const static uint32_t binding_partition_constfields[]  = { 0b00001 }; // Set field 1 as constant
+    const static uint32_t binding_partition_constfields[]  = { 0b010001 }; // Set fields 1, 5 as constant
     jl_binding_partition_type->name->constfields = binding_partition_constfields;
 
     jl_binding_type =

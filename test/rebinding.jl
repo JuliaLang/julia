@@ -669,6 +669,18 @@ end
     @test_throws ErrorException Core.eval(TGR2, :(global y::String))
     @test TGR2.y === 5
     @test Core.get_binding_type(TGR2, :y) === Int
+
+    # A failed bare re-type must not leave a future partition that an unrelated
+    # world-age increment can later publish.
+    @eval module TGR2Failed end
+    Core.eval(TGR2Failed, :(global y::Number = 1.5))
+    @test_throws ErrorException Core.eval(TGR2Failed, :(global y::Int))
+    @test Core.get_binding_type(TGR2Failed, :y) === Number
+    @test TGR2Failed.y === 1.5
+    Core.eval(TGR2Failed, :(unrelated_world_bump() = nothing))
+    @test Core.get_binding_type(TGR2Failed, :y) === Number
+    @test TGR2Failed.y === 1.5
+
     # bare re-type: a value that still conforms (widening) is retained
     @test Core.eval(TGR2, :(global y::Integer)) === nothing
     @test TGR2.y === 5
@@ -869,6 +881,36 @@ end
     Core.eval(TGRW7, :(global r::Int = 7))
     @test_throws TypeError Base.invoke_in_world(w7, TGRW7.repl, 7, 8)
     @test TGRW7.r === 8
+
+    # The guarded runtime fallback for setglobalonce! returns its old-value/NULL
+    # protocol internally; compiled code must convert that result to a boxed Bool.
+    @eval module TGRW8
+        global once::Integer = 1
+        setonce(v) = setglobalonce!(@__MODULE__, :once, v)
+    end
+    @test TGRW8.setonce(2) === false                    # compile the fast path
+    w8 = Base.get_world_counter()
+    Core.eval(TGRW8, :(global once::Int = 1))           # activate its write guard
+    @test Base.invoke_in_world(w8, TGRW8.setonce, 3) === false
+    @test TGRW8.once === 1
+
+    # Exercise the successful side of the same cold path without defining the slot
+    # while compiling it. Keep this in a subprocess because the unfixed NULL result
+    # reaches a boxed-return ABI boundary and can crash the caller.
+    let script = raw"""
+module TGRW9
+    global once::Integer
+    setonce(v) = setglobalonce!(@__MODULE__, :once, v)
+end
+precompile(TGRW9.setonce, (Int,)) || exit(1)
+w = Base.get_world_counter()
+Core.eval(TGRW9, :(global once::Int))
+ok = Base.invoke_in_world(w, TGRW9.setonce, 4) === true && TGRW9.once === 4
+exit(ok ? 0 : 1)
+"""
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
+    end
 end
 
 @testset "re-type during an in-flight RMW (#62154)" begin
@@ -1051,11 +1093,12 @@ end
     @test GTC4.writed(1) === 1
     let b = convert(Core.Binding, GlobalRef(GTC4, :d))
         p = b.partitions # the GLOBAL(Int) epoch
-        @test (p.kind & (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) == 0
+        @test ((@atomic :monotonic p.retype_flags) &
+               (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) == 0
         w = Base.get_world_counter()
         Base.delete_binding(GTC4, :d)
-        @test (p.kind & Base.PARTITION_FLAG_RETYPE_WRITE) != 0
-        @test (p.kind & Base.PARTITION_FLAG_RETYPE_READ) == 0
+        @test ((@atomic :monotonic p.retype_flags) & Base.PARTITION_FLAG_RETYPE_WRITE) != 0
+        @test ((@atomic :monotonic p.retype_flags) & Base.PARTITION_FLAG_RETYPE_READ) == 0
         # the slot still holds the old, conforming value: stale reads still pass
         @test Base.invoke_in_world(w, GTC4.readd) === 1
         # but stale writes error: the binding is not writable in the latest world
@@ -1064,7 +1107,7 @@ end
         # the old global epoch's slot, so its read guard stays clear and stale reads
         # keep seeing the retained value
         Core.eval(GTC4, :(const d = "fresh"))
-        @test (p.kind & Base.PARTITION_FLAG_RETYPE_READ) == 0
+        @test ((@atomic :monotonic p.retype_flags) & Base.PARTITION_FLAG_RETYPE_READ) == 0
         @test invokelatest(() -> GTC4.d) == "fresh"
         @test Base.invoke_in_world(w, GTC4.readd) === 1
     end
@@ -1076,7 +1119,8 @@ end
     let b = convert(Core.Binding, GlobalRef(GTC5, :c))
         p = b.partitions
         Base.delete_binding(GTC5, :c)
-        @test (p.kind & (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) == 0
+        @test ((@atomic :monotonic p.retype_flags) &
+               (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) == 0
     end
 end
 
@@ -1090,6 +1134,21 @@ end
     let op = (old, arg) -> (Core.eval(GRDS1, :(global z::Int = 1)); 1.5)
         @test_throws TypeError invokelatest(modifyglobal!, GRDS1, :z, op, nothing)
         @test invokelatest(getglobal, GRDS1, :z) isa Int
+    end
+
+    # A compatible widening from inside the callback succeeds, and the returned
+    # Pair must use the latest type rather than interpreting the new value through
+    # the stale pre-callback layout.
+    @eval module GRDS1Result
+        global z::Int = 1
+    end
+    let op = (old, arg) -> (Core.eval(GRDS1Result, :(global z::Any)); 1.5)
+        res = invokelatest(modifyglobal!, GRDS1Result, :z, op, nothing)
+        @test typeof(res) === Pair{Any,Any}
+        @test res.first === 1
+        @test res.second === 1.5
+        @test invokelatest(getglobal, GRDS1Result, :z) === 1.5
+        @test invokelatest(Core.get_binding_type, GRDS1Result, :z) === Any
     end
 
     # a stale modifyglobal! of a binding that was deleted and re-declared as a weak
@@ -1109,7 +1168,8 @@ end
     end
     let b = convert(Core.Binding, GlobalRef(GRDS3, :t))
         p = b.partitions # the GLOBAL(Int) epoch, newest first
-        @test (p.kind & (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) == 0
+        @test ((@atomic :monotonic p.retype_flags) &
+               (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) == 0
     end
 
     # stale reads of a re-typed binding may throw TypeError: inference must model
@@ -1302,32 +1362,32 @@ end
     end
     b = convert(Core.Binding, GlobalRef(PPG, :a))
     p1 = b.partitions
-    @test (p1.kind & RETYPE_BOTH) == 0
+    @test ((@atomic :monotonic p1.retype_flags) & RETYPE_BOTH) == 0
 
     # disjoint re-type: the old epoch's reads must verify and its writes must divert
     Core.eval(PPG, :(global a::Float64 = 2.5))
     p2 = b.partitions
     @test p2 !== p1
-    @test (p1.kind & RETYPE_BOTH) == RETYPE_BOTH
+    @test ((@atomic :monotonic p1.retype_flags) & RETYPE_BOTH) == RETYPE_BOTH
     # ... but the *new* epoch is entirely unguarded: code compiled against it runs
     # at full speed
-    @test (p2.kind & RETYPE_BOTH) == 0
+    @test ((@atomic :monotonic p2.retype_flags) & RETYPE_BOTH) == 0
 
     # widening: the narrower epoch's reads must verify (the slot may now hold any
     # Real), but its writes stay direct -- a Float64 still conforms to Real
     Core.eval(PPG, :(global a::Real = 1.5))
     p3 = b.partitions
-    @test (p2.kind & RETYPE_BOTH) == RETYPE_READ
-    @test (p3.kind & RETYPE_BOTH) == 0
+    @test ((@atomic :monotonic p2.retype_flags) & RETYPE_BOTH) == RETYPE_READ
+    @test ((@atomic :monotonic p3.retype_flags) & RETYPE_BOTH) == 0
 
     # narrowing back: the wider epoch's writes must divert (a Real is not
     # necessarily a Float64), but its reads stay trusted (every Float64 is a Real);
     # the Float64 epoch is entirely unaffected (Float64 <: Float64)
     Core.eval(PPG, :(global a::Float64 = 1.0))
-    @test (p3.kind & RETYPE_BOTH) == RETYPE_WRITE
-    @test (p2.kind & RETYPE_BOTH) == RETYPE_READ
+    @test ((@atomic :monotonic p3.retype_flags) & RETYPE_BOTH) == RETYPE_WRITE
+    @test ((@atomic :monotonic p2.retype_flags) & RETYPE_BOTH) == RETYPE_READ
     p4 = b.partitions
-    @test (p4.kind & RETYPE_BOTH) == 0
+    @test ((@atomic :monotonic p4.retype_flags) & RETYPE_BOTH) == 0
 
     # behavioral check of the widening case: a stale writer compiled against the
     # Int epoch may keep storing (its values conform to every later restriction it
@@ -1343,7 +1403,8 @@ end
     Core.eval(PPG2, :(global g::Number = 3))
     bg = convert(Core.Binding, GlobalRef(PPG2, :g))
     pold = @atomic(bg.partitions.next) # the Int epoch
-    @test (pold.kind & (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) ==
+    @test ((@atomic :monotonic pold.retype_flags) &
+           (Base.PARTITION_FLAG_RETYPE_READ | Base.PARTITION_FLAG_RETYPE_WRITE)) ==
           Base.PARTITION_FLAG_RETYPE_READ
     # stale write of an Int: still legal under Number, commits (fast path)
     @test Base.invoke_in_world(w, PPG2.writeg, 4) === 4

@@ -165,15 +165,16 @@ global xx::T = 10
 1   (call core.declare_global TestMod :xx false)
 2   latestworld
 3   TestMod.T
-4   (= slot₁/tmp 10)
-5   (call core.isa slot₁/tmp %₃)
-6   (gotoifnot %₅ label₈)
-7   (goto label₉)
-8   (= slot₁/tmp (call top.convert %₃ slot₁/tmp))
-9   slot₁/tmp
-10  (call core.declare_global TestMod :xx true %₃ %₉)
-11  latestworld
-12  (return 10)
+4   (call core.isa core.nothing %₃)
+5   (= slot₁/tmp 10)
+6   (call core.isa slot₁/tmp %₃)
+7   (gotoifnot %₆ label₉)
+8   (goto label₁₀)
+9   (= slot₁/tmp (call top.convert %₃ slot₁/tmp))
+10  slot₁/tmp
+11  (call core.declare_global TestMod :xx true %₃ %₁₀)
+12  latestworld
+13  (return 10)
 
 ########################################
 # Error: local with two type declarations
@@ -216,15 +217,16 @@ end
 4   (call core.declare_global TestMod :x false)
 5   latestworld
 6   TestMod.Int
-7   (= slot₁/tmp 1)
-8   (call core.isa slot₁/tmp %₆)
-9   (gotoifnot %₈ label₁₁)
-10  (goto label₁₂)
-11  (= slot₁/tmp (call top.convert %₆ slot₁/tmp))
-12  slot₁/tmp
-13  (call core.declare_global TestMod :x true %₆ %₁₂)
-14  latestworld
-15  (return 1)
+7   (call core.isa core.nothing %₆)
+8   (= slot₁/tmp 1)
+9   (call core.isa slot₁/tmp %₆)
+10  (gotoifnot %₉ label₁₂)
+11  (goto label₁₃)
+12  (= slot₁/tmp (call top.convert %₆ slot₁/tmp))
+13  slot₁/tmp
+14  (call core.declare_global TestMod :x true %₆ %₁₃)
+15  latestworld
+16  (return 1)
 
 ########################################
 # Error: const ref

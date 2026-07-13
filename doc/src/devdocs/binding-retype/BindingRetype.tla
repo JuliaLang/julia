@@ -33,12 +33,14 @@
 (* world_counter_lock, before anything is published):                        *)
 (*     P.r  when  ~(Tnew <: P.ty)      (new values may not conform to P)     *)
 (*     P.w  when  ~(P.ty <: Tnew)      (P-validated values may violate Tnew) *)
-(* then issues the asymmetric heavy fence if any flag transitioned, drains   *)
-(* the per-thread commit windows if any *write* flag transitioned,           *)
+(* then issues the asymmetric heavy fence if any flag transitioned and       *)
+(* drains the per-thread commit windows. Read-only transitions require the   *)
+(* drain too because RMW operations gate loaded slot values with P.r. It     *)
 (* validates the retained value (bare form), and only then swaps in the new  *)
 (* value and publishes the new epoch -- whose own flags start clear, so code *)
 (* compiled against the new declared type runs unguarded. A pure widening    *)
-(* sets no write flags: stale stores keep committing directly, soundly.      *)
+(* sets no write flags: stale plain stores keep committing directly, while  *)
+(* stale RMW operations divert on the read flag.                             *)
 (*                                                                          *)
 (* The threads:                                                              *)
 (*                                                                          *)
@@ -101,8 +103,9 @@
 (*     heavy fence (RT_Fence, FenceFlushesWindows) empties pendWin, its IPI  *)
 (*     draining each storer's store buffer, after which the drain reads      *)
 (*     every open accurately. This is why the fence is required and why it   *)
-(*     suffices: a storer that will commit read its write flag clear (s4),   *)
-(*     so by rule 1 that read preceded this declaration's fence; s3 is       *)
+(*     suffices: an operation that will commit read its applicable guards    *)
+(*     clear (s4), so by rule 1 that read preceded this declaration's fence; *)
+(*     s3 is                                                                *)
 (*     program-order before s4 and cannot sink past the light fence, so at   *)
 (*     fence time its open is still pending and the flush forces the drain   *)
 (*     to see it. The CLOSE (s6) is a release the drain acquires             *)
@@ -144,9 +147,9 @@
 (*     only writers of the epoch sequence, and interleaved fast-path         *)
 (*     commits of concurrently-validated values commute with it w.r.t. our   *)
 (*     invariants.                                                           *)
-(*   - A failed bare re-declaration publishes nothing; the flags it set      *)
-(*     remain (deliberately: they are conservative, and only pessimize       *)
-(*     superseded epochs).                                                   *)
+(*   - A failed bare re-declaration installs and publishes no epoch; the     *)
+(*     flags it set remain (deliberately: they are conservative, and only    *)
+(*     pessimize superseded epochs).                                         *)
 (*   - delete_binding and const-over-global are jl_retype_flag_partitions    *)
 (*     calls with store_ty = NULL (write-flag every epoch): delete passes    *)
 (*     slot_ty = NULL too (so it sets no read flags), const-over-global the  *)
@@ -155,9 +158,10 @@
 (*   - The compiled storer models the Set commit (one write-guard check).    *)
 (*     The RMW kinds (swap/replace/modify) additionally re-check the READ    *)
 (*     guard -- they trust values they load from the slot, the obligation    *)
-(*     the Reader already models -- and the outer early-out guard before the *)
-(*     window is a pure optimization over the authoritative in-window        *)
-(*     recheck; neither adds behavior the invariants do not already cover.   *)
+(*     the Reader already models. A read-flag transition therefore drains   *)
+(*     the shared windows even though the representative Set storer modeled *)
+(*     here checks only WRITE. The outer early-out guard before the window   *)
+(*     is a pure optimization over the authoritative in-window recheck.      *)
 (*   - The undefined (NULL) slot state is not modeled.                       *)
 (*                                                                          *)
 (* Three constants inject known-shape bugs so the model can demonstrate it   *)
@@ -470,7 +474,7 @@ RT_Flag ==
           /\ pendW' = newW
           /\ rt' = [rt EXCEPT !.pc = IF newR \cup newW = {} THEN "validate"
                                                             ELSE "fence",
-                              !.drain = newW # {}]
+                              !.drain = newR \cup newW # {}]
     /\ UNCHANGED <<pub, slot, lockHeld, window, pendWin, badStore, rs, cc, rd>>
 
 (* The asymmetric heavy fence (jl_membarrier): after this step every flag    *)
@@ -486,9 +490,10 @@ RT_Fence ==
     /\ UNCHANGED <<eps, pub, slot, lockHeld, window, badStore, rs, cc, rd>>
 
 (* Drain: proceed only from an observation in which every commit window reads *)
-(* closed (ReadWindow); only needed when a write flag transitioned. Once the  *)
-(* fence has emptied pendWin these reads are accurate, so this waits out      *)
-(* every genuinely-open window; windows never block, so it terminates.       *)
+(* closed (ReadWindow); needed when either guard transitions because RMW      *)
+(* operations also check READ. Once the fence has emptied pendWin these reads *)
+(* are accurate, so this waits out every genuinely-open window; windows never *)
+(* block, so it terminates.                                                    *)
 RT_Drain ==
     /\ rt.pc = "drain"
     /\ \A s \in StorerIds : FALSE \in ReadWindow(s)
@@ -511,8 +516,8 @@ RT_Validate ==
     /\ UNCHANGED <<eps, pub, slot, pendR, pendW, lockHeld, window, pendWin,
                    badStore, rs, cc, rd>>
 
-(* Install the new epoch (its flags start clear: they live outside            *)
-(* PARTITION_MASK_FLAG and are never inherited), swap in a carried value,    *)
+(* Install the new epoch (its separate atomic guard word starts clear and is  *)
+(* never inherited), swap in a carried value,                                *)
 (* and publish, as one visible event (abstraction rule 4).                   *)
 RT_Publish ==
     /\ rt.pc = "publish"
