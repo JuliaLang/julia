@@ -3699,8 +3699,7 @@ static Value *emit_globalop_runtime_call(jl_codectx_t &ctx, StoreKind op, Value 
         // jl_checked_assignonce returns the previous value, or NULL when the store
         // succeeds. The builtin wrapper converts that protocol result to Bool too;
         // do so here before downstream code marks or merges it as a boxed Bool.
-        return ctx.builder.CreateSelect(ctx.builder.CreateIsNull(old),
-                literal_pointer_val(ctx, jl_true), literal_pointer_val(ctx, jl_false));
+        return track_pjlvalue(ctx, julia_bool(ctx, ctx.builder.CreateIsNull(old)));
     }
     case StoreKind::Unset:
         break; // Unset is not a valid operation for globals
