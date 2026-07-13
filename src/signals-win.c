@@ -832,6 +832,20 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     HANDLE hThread = ptls2->system_id;
     if ((DWORD)-1 == SuspendThread(hThread))
         return;
+    // SuspendThread is asynchronous: the victim can execute past it until a
+    // GetThreadContext forces the suspension to complete. Freeze it first -
+    // validating (or consuming) the published region context while the
+    // victim still runs races with it re-executing the establishing
+    // cancellation point (rewriting the buffer) or leaving the frame
+    // entirely, and a SetThreadContext computed from such a buffer redirects
+    // the thread into garbage.
+    CONTEXT ctxThread;
+    memset(&ctxThread, 0, sizeof(CONTEXT));
+    ctxThread.ContextFlags = CONTEXT_FULL; // control + integer + floating point
+    if (!GetThreadContext(hThread, &ctxThread)) {
+        ResumeThread(hThread);
+        return;
+    }
     // Re-check now that the thread cannot run. A published handler region
     // takes priority over (and suppresses) the reset: its span (e.g. a
     // protected allocator) is exactly where a longjmp must not land, and
@@ -861,37 +875,27 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
         // its own stack - at most one delivery at a time per thread (the
         // save area holds one; skips recover level-triggered).
         if (hctx->sp == 0 && !ptls2->cancel_handler_armed && bound_cancelled) {
-            CONTEXT ctxThread;
-            memset(&ctxThread, 0, sizeof(CONTEXT));
-            ctxThread.ContextFlags = CONTEXT_FULL; // control + integer + floating point
-            if (GetThreadContext(hThread, &ctxThread)) {
-                jl_cancel_handler_save_t *save = &ptls2->cancel_handler_save;
-                save->fn = hctx->handler.fn;
-                save->state = hctx->handler.state;
-                save->sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x3f;
-                ptls2->cancel_handler_armed = 1;
-                jl_win_call_in_context(&ctxThread, (void (*)(void))&jl_win_cancel_handler_trampoline,
-                                       (uintptr_t)ptls2);
-                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-                SetThreadContext(hThread, &ctxThread);
-            }
+            jl_cancel_handler_save_t *save = &ptls2->cancel_handler_save;
+            save->fn = hctx->handler.fn;
+            save->state = hctx->handler.state;
+            save->sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x3f;
+            ptls2->cancel_handler_armed = 1;
+            jl_win_call_in_context(&ctxThread, (void (*)(void))&jl_win_cancel_handler_trampoline,
+                                   (uintptr_t)ptls2);
+            ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+            SetThreadContext(hThread, &ctxThread);
         }
 #endif
     }
     else {
         jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : jl_atomic_load_acquire(&ct2->reset_ctx);
         if (reset_ctx != NULL && reset_ctx->sp != 0 && bound_cancelled) {
-            CONTEXT ctxThread;
-            memset(&ctxThread, 0, sizeof(CONTEXT));
-            ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-            if (GetThreadContext(hThread, &ctxThread)) {
-                // Reset flavor: consume the reset point (prevents a double
-                // reset) and longjmp there.
-                jl_atomic_store_release(&ct2->reset_ctx, NULL);
-                if (jl_simulate_longjmp(reset_ctx->ctx.uc_mcontext, &ctxThread)) {
-                    ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-                    SetThreadContext(hThread, &ctxThread);
-                }
+            // Reset flavor: consume the reset point (prevents a double
+            // reset) and longjmp there.
+            jl_atomic_store_release(&ct2->reset_ctx, NULL);
+            if (jl_simulate_longjmp(reset_ctx->ctx.uc_mcontext, &ctxThread)) {
+                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+                SetThreadContext(hThread, &ctxThread);
             }
         }
     }
@@ -908,34 +912,40 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     HANDLE hThread = ptls2->system_id;
     if ((DWORD)-1 == SuspendThread(hThread))
         return;
+    // SuspendThread is asynchronous; the GetThreadContext is what actually
+    // completes the suspension. Only then is the victim's state frozen and
+    // the commit check below meaningful (a pre-freeze commit would race with
+    // the victim entering GC or taking a runtime lock before it stops).
+    CONTEXT ctxThread;
+    memset(&ctxThread, 0, sizeof(CONTEXT));
+    ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+    if (!GetThreadContext(hThread, &ctxThread)) {
+        ResumeThread(hThread);
+        return;
+    }
     // The victim thread is suspended: validate the pending request against
     // its frozen state and, on commit, redirect it into the abandon
     // callback. On refusal the requester observes the verdict.
     if (jl_abandon_try_commit(ptls2)) {
-        CONTEXT ctxThread;
-        memset(&ctxThread, 0, sizeof(CONTEXT));
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-        if (GetThreadContext(hThread, &ctxThread)) {
-            // Redirect the thread to call jl_abandon_task_cb (which never
-            // returns) on a minimal fake frame.
+        // Redirect the thread to call jl_abandon_task_cb (which never
+        // returns) on a minimal fake frame.
 #if defined(_CPU_X86_64_)
-            uintptr_t sp = (uintptr_t)ctxThread.Rsp;
-            sp = (sp - 256) & ~(uintptr_t)15; // skip resume data, realign
-            sp -= sizeof(uintptr_t); // fake return address slot
-            *(uintptr_t*)sp = 0;
-            ctxThread.Rsp = (DWORD64)sp;
-            ctxThread.Rip = (DWORD64)&jl_abandon_task_cb;
+        uintptr_t sp = (uintptr_t)ctxThread.Rsp;
+        sp = (sp - 256) & ~(uintptr_t)15; // skip resume data, realign
+        sp -= sizeof(uintptr_t); // fake return address slot
+        *(uintptr_t*)sp = 0;
+        ctxThread.Rsp = (DWORD64)sp;
+        ctxThread.Rip = (DWORD64)&jl_abandon_task_cb;
 #elif defined(_CPU_X86_)
-            uintptr_t sp = (uintptr_t)ctxThread.Esp;
-            sp = (sp - 64) & ~(uintptr_t)15;
-            sp -= sizeof(uintptr_t); // fake return address slot
-            *(uintptr_t*)sp = 0;
-            ctxThread.Esp = (DWORD)sp;
-            ctxThread.Eip = (DWORD)&jl_abandon_task_cb;
+        uintptr_t sp = (uintptr_t)ctxThread.Esp;
+        sp = (sp - 64) & ~(uintptr_t)15;
+        sp -= sizeof(uintptr_t); // fake return address slot
+        *(uintptr_t*)sp = 0;
+        ctxThread.Esp = (DWORD)sp;
+        ctxThread.Eip = (DWORD)&jl_abandon_task_cb;
 #endif
-            ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-            SetThreadContext(hThread, &ctxThread);
-        }
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        SetThreadContext(hThread, &ctxThread);
     }
     ResumeThread(hThread);
 }
