@@ -156,7 +156,7 @@ JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
 
 static jl_array_t *queue_used(jl_array_t *list, jl_query_cache *query_cache) JL_CANSAFEPOINT;
 
-JL_DLLEXPORT jl_array_t* jl_compute_new_used_ci(void)
+JL_DLLEXPORT jl_array_t* jl_compute_new_used_ci(void) JL_CANSAFEPOINT
 {
     if (newly_inferred == NULL)
         return jl_alloc_vec_any(0);

@@ -4,9 +4,7 @@
 
 The analyzer plugin that drives the analysis ships with julia. Its
 source code can be found in `src/clangsa`. Running it uses the
-the clang dependency option from deps.
-
-Alternatively (or if these do not suffice), try
+the optional clang dependency from `deps`. This can be installed by running:
 
 ```sh
 make -C src install-analysis-deps
@@ -15,7 +13,8 @@ make -C src install-analysis-deps
 from Julia's toplevel directory.
 
 
-Afterwards, running the analysis over the source tree is as simple as running `make -C src analyzegc`.
+Afterwards, running the analysis over the source tree is as simple as running
+`make -C src analyzegc`.
 
 ## General Overview
 
