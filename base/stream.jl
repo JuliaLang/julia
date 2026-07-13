@@ -1138,9 +1138,16 @@ end
 uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)); owner=p)
 
 # caller must have acquired the iolock (which is released before returning)
+# N.B.: the optional-argument forwarders are written out by hand: a default
+# value on a @nospecialize parameter drops the @nospecialize from the
+# generated full-arity method, so callers passing an untyped `owner` compile
+# a generic (trim-unresolvable) call instead of an invoke.
+uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt) =
+    uv_write_noncancel(s, p, n, default_cancel_token(), nothing)
+uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt, tok::MaybeToken) =
+    uv_write_noncancel(s, p, n, tok, nothing)
 function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
-                            tok::MaybeToken=default_cancel_token(),
-                            @nospecialize(owner)=nothing)
+                            tok::MaybeToken, @nospecialize(owner))
     ct = current_task()
     src = tok === nothing ? nothing : tok.source
     if src !== nothing && iscancelled(src)
@@ -1233,7 +1240,7 @@ end
 # still access it). Runs on the waiter's stack; the caller rethrows.
 function _uv_write_cancelled_teardown!(s::LibuvStream, w::Task, uvw::Ptr{Cvoid},
                                        @nospecialize(err), src, ct::Task,
-                                       @nospecialize(owner)=nothing)
+                                       @nospecialize(owner))
     iolock_begin()
     d = uv_req_data(uvw)
     if d == C_NULL
@@ -1313,7 +1320,11 @@ end
 function _uv_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, cancel::CancelTokenArg,
                          @nospecialize(owner))
     tok = resolve_cancel_token(cancel)
-    nb = uv_write_noncancel(s, p, n, tok, owner)
+    # branch on the token explicitly: a Union-typed `tok` alongside the
+    # deliberately unspecialized `owner` leaves the callee unresolvable
+    # for trimmed builds
+    nb = tok === nothing ? uv_write_noncancel(s, p, n, nothing, owner) :
+                           uv_write_noncancel(s, p, n, tok, owner)
     @cancel_check(tok)
     @assert nb == n
     return nb
@@ -1428,7 +1439,7 @@ function flush(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     # errors to their writers, and the peer closing the stream after a
     # completed exchange must not make flush throw
     try
-        uv_write_noncancel(s, Ptr{UInt8}(Base.eventloop()), UInt(0))
+        uv_write(s, Ptr{UInt8}(Base.eventloop()), UInt(0))
     catch ex
         ex isa IOError || rethrow()
     end
