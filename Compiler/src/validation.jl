@@ -36,6 +36,8 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :export => 1:typemax(Int),
     :public => 1:typemax(Int),
     :latestworld => 0:0,
+    :getglobal_partition => 2:2, # partition, order (partition recovers its own binding)
+    :setglobal_partition => 6:6, # partition, op, order, failorder, value, extra(cmp|nothing) (partition recovers its own binding)
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
@@ -174,6 +176,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
         elseif isa(x, SlotNumber)
         elseif isa(x, Argument)
         elseif isa(x, GlobalRef)
+        elseif isa(x, Core.BindingPartition)
         elseif isa(x, LineNumberNode)
         elseif isa(x, PiNode)
         elseif isa(x, PhiCNode)
@@ -234,11 +237,11 @@ end
 
 validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 
-is_valid_lvalue(@nospecialize(x)) = isa(x, SlotNumber) || isa(x, GlobalRef)
+is_valid_lvalue(@nospecialize(x)) = isa(x, SlotNumber) || isa(x, GlobalRef) || isa(x, Core.BindingPartition)
 
 function is_valid_argument(@nospecialize(x))
     if isa(x, SlotNumber) || isa(x, Argument) || isa(x, SSAValue) ||
-       isa(x, GlobalRef) || isa(x, QuoteNode) ||
+       isa(x, GlobalRef) || isa(x, Core.BindingPartition) || isa(x, QuoteNode) ||
        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
        isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true

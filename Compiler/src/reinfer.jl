@@ -3,7 +3,8 @@
 using ..Compiler.Base
 using ..Compiler: _findsup, store_backedges, JLOptions, get_world_counter,
     _methods_by_ftype, get_methodtable, get_ci_mi, should_instrument,
-    morespecific, RefValue, get_require_world, Vector, IdDict
+    morespecific, RefValue, get_require_world, Vector, IdDict,
+    binding_access_range, WorldWithRange, WorldRange, min_world, max_world
 using .Core: CodeInstance, MethodInstance
 
 const CI_FLAGS_NATIVE_CACHE_VALID = 0b1000
@@ -44,9 +45,17 @@ struct VerifyMethodWorkspace
     stack::Vector{CodeInstance}
     visiting::IdDict{CodeInstance,Int}
 
+    # Memoizes `binding_access_range` per `Core.Binding` for the current `validation_world`
+    # (a binding edge is otherwise re-scanned per CodeInstance). `binding_ranges_world`
+    # guards against `validation_world` advancing across the workspace's lifetime: the cache
+    # is flushed when the world changes so the range always matches the accessing world.
+    binding_ranges::IdDict{Core.Binding,WorldRange}
+    binding_ranges_world::RefValue{UInt}
+
     function VerifyMethodWorkspace()
         new(VerifyMethodInitialState[], VerifyMethodWorkState[], VerifyMethodResultState[],
-            CodeInstance[], IdDict{CodeInstance,Int}())
+            CodeInstance[], IdDict{CodeInstance,Int}(),
+            IdDict{Core.Binding,WorldRange}(), RefValue{UInt}(UInt(0)))
     end
 end
 
@@ -245,8 +254,22 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         max_valid2 = maxworld
                         if !binding_was_invalidated(edge)
                             if isdefined(edge, :partitions)
-                                min_valid2 = edge.partitions.min_world
-                                max_valid2 = edge.partitions.max_world
+                                # A binding edge constrains validity to the shared access
+                                # range (`binding_access_range`), which spans lookup-irrelevant
+                                # flag flips (`export`/`public`) exactly as inference and
+                                # invalidation do, so a flag-only change does not discard the
+                                # code. Memoized per binding for this `validation_world`.
+                                if workspace.binding_ranges_world[] != validation_world
+                                    empty!(workspace.binding_ranges)
+                                    workspace.binding_ranges_world[] = validation_world
+                                end
+                                wr = get(workspace.binding_ranges, edge, nothing)
+                                if wr === nothing
+                                    wr, _ = binding_access_range(edge.globalref, WorldWithRange(validation_world, WorldRange(UInt(1), typemax(UInt))); write=false)
+                                    workspace.binding_ranges[edge] = wr
+                                end
+                                min_valid2 = min_world(wr)
+                                max_valid2 = max_world(wr)
                             end
                         else
                             min_valid2 = 1

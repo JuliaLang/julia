@@ -22,6 +22,11 @@ parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (
 
 is_root_module(m::Module) = parentmodule(m) === m || m === Compiler || (isdefined(Main, :Base) && m === Main.Base)
 
+# Whether `m` is a "top" module, i.e. the module that lowering's `(top ...)` forms resolve
+# to for code compiled within it (`Base`, `Core`, and the standalone `Compiler`). This is the
+# frontend notion set by `jl_set_istopmod`, distinct from `is_root_module`.
+istopmod(m::Module) = (@_total_meta; ccall(:jl_istopmod, UInt8, (Any,), m) != 0)
+
 """
     moduleroot(m::Module)::Module
 
@@ -301,6 +306,17 @@ function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
 end
 
 partition_restriction(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_restriction_value, Any, (Any,), bpart)
+
+# Recover the `Core.Binding` that owns `bpart` by walking the chain to its end: the
+# last (oldest) partition's `next` is a backreference to the owning binding, so the
+# list can be traversed circularly.
+function partition_owner(bpart::Core.BindingPartition)
+    next = bpart.next
+    while next isa Core.BindingPartition
+        next = next.next
+    end
+    return next::Core.Binding
+end
 
 binding_kind(bpart::Core.BindingPartition) = UInt8(bpart.kind & PARTITION_MASK_KIND)
 binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))

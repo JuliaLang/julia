@@ -196,6 +196,11 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             return false
         elseif head === :leave
             return false
+        elseif head === :getglobal_partition ||
+               head === :setglobal_partition ||
+               head === :(=)
+            # reformulated global accesses are not refinable
+            return false
         else
             Core.println(stmt)
             error("reprocess_instruction!: unhandled expression found")

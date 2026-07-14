@@ -664,7 +664,7 @@ function is_relevant_expr(e::Expr)
                       :foreigncall, :foreignglobal, :isdefined, :copyast,
                       :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
-                      :leave,
+                      :leave, :getglobal_partition, :setglobal_partition,
                       :new_opaque_closure)
 end
 
@@ -1556,6 +1556,27 @@ struct Refined
     Refined(@nospecialize(val)) = new(val)
 end
 
+# Whether a bare `GlobalRef` is allowed to stay in value position (folded into its uses).
+# Only reads of a top module (`istopmod`: Base/Core/Compiler, where lowering's `(top ...)`/
+# `(core ...)` forms resolve) or of the intrinsics module qualify -- these are the frontend
+# primitives lowering emits inline, so the verifier accepts them here (before
+# `reformulate_globals_pass!` runs). Used by both the compaction fold below and `verify.jl`.
+valid_value_position_globalref(gr::GlobalRef) = istopmod(gr.mod) || gr.mod === Core.Intrinsics
+
+# Whether `gr`'s binding is a constant at world 1: a primordial, immutable constant (builtin,
+# intrinsic, core type) whose value never changes (`jl_replace_binding_locked2` rejects
+# replacing or deleting it), so `reformulate_globals_pass!` leaves the read as a bare
+# `GlobalRef` (no `Core.BindingPartition`, no invalidation edge) and codegen embeds it
+# directly (`binding_const_world1`). `BACKDATED_CONST` is deliberately excluded --
+# a definition that only retroactively made an earlier world appear constant is not immutable.
+# This can flip transiently during bootstrap, which is why the verifier accepts the broader
+# `valid_value_position_globalref` rather than this.
+function world1_const(gr::GlobalRef)
+    b = convert(Core.Binding, gr)
+    isdefined(b, :partitions) || return false
+    return binding_kind(lookup_binding_partition(UInt(1), b)) === PARTITION_KIND_CONST
+end
+
 function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instruction, idx::Int, processed_idx::Int, active_bb::Int, do_rename_ssa::Bool)
     stmt = inst[:stmt]
     (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
@@ -1574,6 +1595,26 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result[result_idx][:stmt] = GotoNode(label)
         result_idx += 1
     elseif isa(stmt, GlobalRef)
+        # Fold a pure (const, `nothrow`) read into value position only when it names a top
+        # module or the intrinsics module (`valid_value_position_globalref`); those are the
+        # only bare `GlobalRef`s permitted there. Any other read -- and any effectful/undefined
+        # one -- keeps its own statement so it carries no disallowed bare `GlobalRef` operand,
+        # and `reformulate_globals_pass!` rewrites it to a `Core.BindingPartition`.
+        total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        flag = result[result_idx][:flag]
+        if has_flag(flag, total_flags) && valid_value_position_globalref(stmt)
+            ssa_rename[idx] = stmt
+        else
+            ssa_rename[idx] = SSAValue(result_idx)
+            result[result_idx][:stmt] = stmt
+            result_idx += 1
+        end
+    elseif isa(stmt, Core.BindingPartition)
+        # The resolved form of a global read (produced by `reformulate_globals_pass!`, and
+        # reaching compaction via an inlined body). Unlike a bare `GlobalRef` it is valid in
+        # value position for any binding kind, so it may be folded into its uses -- but only
+        # when the read is pure (const, `nothrow`); a mutable/effectful global read keeps its
+        # own statement so it is loaded exactly once.
         total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
         flag = result[result_idx][:flag]
         if has_flag(flag, total_flags)
@@ -1682,7 +1723,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 ssa_rename[idx] = pi_val
                 return result_idx
             end
-        elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef)
+        elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef) && !isa(pi_val, Core.BindingPartition)
             pi_val′ = isa(pi_val, QuoteNode) ? pi_val.value : pi_val
             stmttyp = stmt.typ
             if isa(stmttyp, Const) ? pi_val′ === stmttyp.val : typeof(pi_val′) === stmttyp

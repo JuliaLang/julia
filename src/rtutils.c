@@ -1030,6 +1030,30 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_printf(out, " (foreign)");
         }
     }
+    else if (vt == jl_binding_type && ctx.verbosity < JL_STATIC_SHOW_VERBOSITY_FULL) {
+        jl_binding_t *b = (jl_binding_t*)v;
+        n += jl_printf(out, "Binding(");
+        n += jl_static_show_x(out, (jl_value_t*)b->globalref, depth, ctx);
+        n += jl_printf(out, ", value=");
+        n += jl_static_show_x(out, jl_atomic_load_relaxed(&b->value), depth, ctx);
+        n += jl_printf(out, ")");
+        // drops partitions and backedges fields
+    }
+    else if (vt == jl_binding_partition_type && ctx.verbosity < JL_STATIC_SHOW_VERBOSITY_FULL) {
+        jl_binding_partition_t *bp = (jl_binding_partition_t*)v;
+        n += jl_printf(
+            out, "BindingPartition(min_world=0x%zx, max_world=0x%zx, kind=%zx, restriction=",
+            jl_atomic_load_relaxed(&bp->min_world),
+            jl_atomic_load_relaxed(&bp->max_world),
+            bp->kind);
+        n += jl_static_show_x(out, bp->restriction, depth, ctx);
+        // The chain terminates in a backreference to the owning binding; report it.
+        jl_binding_t *owner = jl_binding_partition_owner(bp);
+        n += jl_printf(out, ", for=");
+        n += jl_static_show_x(out, owner ? (jl_value_t*)owner->globalref : NULL, depth, ctx);
+        n += jl_printf(out, ")");
+        // drops next field
+    }
     else if (vt == jl_typename_type) {
         n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth, ctx);
         n += jl_printf(out, ".name");

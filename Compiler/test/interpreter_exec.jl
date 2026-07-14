@@ -112,3 +112,29 @@ let m = Meta.@lower 1 + 1
     @test :b === @eval $m
     @test isempty(current_exceptions())
 end
+
+# The interpreter must enforce the same memory-order rules as codegen on the
+# reformulated global-access nodes (`:getglobal_partition`/`:setglobal_partition`
+# produced by `reformulate_globals_pass!`): an invalid or `:not_atomic` order
+# throws `ConcurrencyViolationError`, and a valid explicit order keeps the
+# builtin's semantics (return value, fences).
+global exec_gp_g::Int = 1
+exec_gp_badread() = getglobal(@__MODULE__, :exec_gp_g, :not_atomic)
+exec_gp_badwrite() = setglobal!(@__MODULE__, :exec_gp_g, 5, :not_atomic)
+exec_gp_goodswap() = swapglobal!(@__MODULE__, :exec_gp_g, 7, :sequentially_consistent)
+let ci = code_typed(exec_gp_badread, ())[1][1]
+    @assert any(x -> Meta.isexpr(x, :getglobal_partition), ci.code)
+    @test_throws ConcurrencyViolationError exec_gp_badread() # compiled
+    @test_throws ConcurrencyViolationError Core.eval(@__MODULE__, Expr(:thunk, ci)) # interpreted
+end
+let ci = code_typed(exec_gp_badwrite, ())[1][1]
+    @assert any(x -> Meta.isexpr(x, :setglobal_partition), ci.code)
+    @test_throws ConcurrencyViolationError exec_gp_badwrite() # compiled
+    @test_throws ConcurrencyViolationError Core.eval(@__MODULE__, Expr(:thunk, ci)) # interpreted
+    @test exec_gp_g === 1 # the failed store must not have written
+end
+let ci = code_typed(exec_gp_goodswap, ())[1][1]
+    @assert any(x -> Meta.isexpr(x, :setglobal_partition), ci.code)
+    @test Core.eval(@__MODULE__, Expr(:thunk, ci)) === 1 # interpreted swap returns the old value
+    @test exec_gp_g === 7
+end

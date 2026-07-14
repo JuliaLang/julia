@@ -381,6 +381,14 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
         # GlobalRef was moved to statement position, it is probably not `const`,
         # so we can't say much about it anyway.
         return (false, false, false)
+    elseif isa(stmt, Core.BindingPartition)
+        # A resolved global read produced by `reformulate_globals_pass!`: its effects come
+        # from the partition kind (a mutable typed-global read may throw and is neither
+        # consistent nor removable; a defined const is total). With `interp === nothing`,
+        # `abstract_eval_partition_load` never reads the owner binding, so the
+        # `partition_owner` walk only supplies a placeholder here.
+        (; effects) = abstract_eval_partition_load(nothing, partition_owner(stmt), stmt)
+        return (is_consistent(effects), is_removable_if_unused(effects), is_nothrow(effects))
     elseif isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
@@ -519,6 +527,10 @@ function argextype(
         return Const(x.value)
     elseif isa(x, GlobalRef)
         return globalref_rt(x, src)
+    elseif isa(x, Core.BindingPartition)
+        # A resolved global read frozen by `reformulate_globals_pass!`; it reads
+        # exactly like the GlobalRef whose partition it pins.
+        return partition_rt(x)
     elseif isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
         return Any
     elseif isa(x, PiNode)
@@ -532,6 +544,7 @@ end
 @inline function argextype_widened(@nospecialize(x),
         src::Union{IRCode,IncrementalCompact,CodeInfo}, sptypes::Vector{VarState})
     isa(x, GlobalRef) && return globalref_rt_widened(x, src)
+    isa(x, Core.BindingPartition) && return partition_rt_widened(x)
     return widenconst(argextype(x, src, sptypes))
 end
 @inline argextype_widened(@nospecialize(x), ir::IRCode) = argextype_widened(x, ir, ir.sptypes)
@@ -1076,6 +1089,13 @@ function run_passes_ipo_safe(
     # @zone "CC: VERIFY 2" verify_ir(ir)
     @pass "CC: COMPACT_2" ir = compact!(ir)
     @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
+    # Rewrite resolved global reads to their `Core.BindingPartition` form now, as a normal
+    # pass: the following compaction folds those (each initially its own statement, since
+    # lowering hoists the read) back into their uses, and the verifier then sees the resolved
+    # IR. Inference computed effects on the reads in their pre-rewrite form; the effect-driven
+    # passes above ran before this, and later effect queries handle `BindingPartition`
+    # directly (see `stmt_effect_flags`).
+    @pass "CC: REFORMULATE" ir = reformulate_globals_pass!(ir, sv)
     @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
     if made_changes
         @pass "CC: COMPACT_3" ir = compact!(ir, true)
@@ -1087,6 +1107,246 @@ function run_passes_ipo_safe(
         end
     end
     @label __done__  # used by @pass
+    return ir
+end
+
+_global_const_arg(@nospecialize(t)) = isa(t, Const) ? t.val : nothing
+
+# Resolve a `:call` statement's callee to its singleton function once (mirrors
+# `is_known_call`), so the recognizers below dispatch by identity rather than re-resolving
+# the callee for each builtin they test against.
+function _global_call_singleton(@nospecialize(callee), ir::IRCode)
+    isa(callee, GlobalRef) && return globalref_singleton(callee, ir)
+    isa(callee, Core.BindingPartition) && return partition_singleton(callee)
+    return singleton_type(argextype(callee, ir))
+end
+
+# Recognize a statement that reads a global binding: a bare `GlobalRef`, a
+# `getglobal(::Module, ::Symbol)` call, or a `getfield(::Module, ::Symbol)` call
+# (the lowering of `getproperty` on a module). Returns the `GlobalRef` being read
+# and the memory-ordering symbol, or `nothing`.
+function recognize_global_read(@nospecialize(stmt), ir::IRCode)
+    if isa(stmt, GlobalRef)
+        return Pair{GlobalRef,Symbol}(stmt, :unordered)
+    end
+    isa(stmt, Expr) && stmt.head === :call || return nothing
+    na = length(stmt.args)
+    # Cheap arity gate before resolving the callee singleton.
+    (na == 3 || na == 4) || return nothing
+    f = _global_call_singleton(stmt.args[1], ir)
+    if f === Core.getglobal
+        M = _global_const_arg(argextype(stmt.args[2], ir))
+        s = _global_const_arg(argextype(stmt.args[3], ir))
+        if isa(M, Module) && isa(s, Symbol)
+            order = na == 4 ? _global_const_arg(argextype(stmt.args[4], ir)) : :monotonic
+            # The order need not be validated here: both backends reject an invalid or
+            # non-atomic order on the `:getglobal_partition` node (codegen inline, the
+            # interpreter by dispatching to the `getglobal` builtin).
+            isa(order, Symbol) && return Pair{GlobalRef,Symbol}(GlobalRef(M, s), order)
+        end
+    elseif f === Core.getfield && na == 3
+        M = _global_const_arg(argextype(stmt.args[2], ir))
+        s = _global_const_arg(argextype(stmt.args[3], ir))
+        if isa(M, Module) && isa(s, Symbol)
+            return Pair{GlobalRef,Symbol}(GlobalRef(M, s), :unordered)
+        end
+    end
+    return nothing
+end
+
+# Read an optional atomic-order argument at position `i`. Returns `(true, nothing)`
+# if the argument is absent (use the default), `(true, ordsym)` if present and a
+# constant Symbol, or `(false, nothing)` if present but not a constant (in which
+# case the caller must not reformulate and should leave the runtime call in place).
+function _opt_order(stmt::Expr, i::Int, ir::IRCode)
+    i > length(stmt.args) && return (true, nothing)
+    o = _global_const_arg(argextype(stmt.args[i], ir))
+    isa(o, Symbol) ? (true, o) : (false, nothing)
+end
+
+function _global_write_target(stmt::Expr, ir::IRCode)
+    M = _global_const_arg(argextype(stmt.args[2], ir))
+    s = _global_const_arg(argextype(stmt.args[3], ir))
+    (isa(M, Module) && isa(s, Symbol)) ? GlobalRef(M, s) : nothing
+end
+
+# A recognized store to a global binding. `op` is the store builtin (compared by
+# identity and re-embedded in the reformulated node); `value`/`cmp` are the stored value
+# and (for `replaceglobal!`) the compare operand. Fixed field types keep this a single
+# concrete return type across the store kinds below.
+struct GlobalWriteInfo
+    g::GlobalRef
+    op::Any
+    order::Union{Symbol,Nothing}
+    failorder::Union{Symbol,Nothing}
+    value::Any
+    cmp::Any
+end
+
+# Recognize a statement that writes a global binding through one of the store
+# builtins with a constant module+symbol: `setglobal!` (global `x = v` also lowers
+# to this), `swapglobal!`, `replaceglobal!`, `setglobalonce!`. `modifyglobal!` is
+# deliberately excluded (it flows through `:invoke_modify` carrying a separate
+# reduce-function code instance, and stays correct on the runtime path). Returns a
+# `GlobalWriteInfo`, or nothing.
+function recognize_global_write(@nospecialize(stmt), ir::IRCode)
+    isa(stmt, Expr) && stmt.head === :call || return nothing
+    na = length(stmt.args)
+    # Cheap arity gate (the widest store is `replaceglobal!`, 5..7) before resolving the callee.
+    4 <= na <= 7 || return nothing
+    f = _global_call_singleton(stmt.args[1], ir)
+    if f === Core.setglobal! && (na == 4 || na == 5)
+        g = _global_write_target(stmt, ir); g === nothing && return nothing
+        ok, order = _opt_order(stmt, 5, ir); ok || return nothing
+        return GlobalWriteInfo(g, Core.setglobal!, order, nothing, stmt.args[4], nothing)
+    elseif f === Core.swapglobal! && (na == 4 || na == 5)
+        g = _global_write_target(stmt, ir); g === nothing && return nothing
+        ok, order = _opt_order(stmt, 5, ir); ok || return nothing
+        return GlobalWriteInfo(g, Core.swapglobal!, order, nothing, stmt.args[4], nothing)
+    elseif f === Core.replaceglobal! && (5 <= na <= 7)
+        g = _global_write_target(stmt, ir); g === nothing && return nothing
+        ok, order = _opt_order(stmt, 6, ir); ok || return nothing
+        ok, failorder = _opt_order(stmt, 7, ir); ok || return nothing
+        return GlobalWriteInfo(g, Core.replaceglobal!, order, failorder, stmt.args[5], stmt.args[4])
+    elseif f === Core.setglobalonce! && (4 <= na <= 6)
+        g = _global_write_target(stmt, ir); g === nothing && return nothing
+        ok, order = _opt_order(stmt, 5, ir); ok || return nothing
+        ok, failorder = _opt_order(stmt, 6, ir); ok || return nothing
+        return GlobalWriteInfo(g, Core.setglobalonce!, order, failorder, stmt.args[4], nothing)
+    end
+    return nothing
+end
+
+# Resolve a read of `g` to the leaf `Core.BindingPartition` codegen can freeze -- a defined
+# constant or a typed global -- record the invalidation edge, and return that partition (it
+# recovers its own binding and value via the circular chain); `nothing` otherwise. The leaf
+# is resolved at the inference `world`, exactly as inference resolved the access
+# (`binding_world_hints`): resolving at a later world could freeze a partition from outside
+# this code's own validity range if another thread redefined the binding in the meantime.
+# This pass does NOT itself narrow `valid_worlds`; it only records the edge. Range narrowing
+# still flows through that edge and `compute_recursive_worlds` (which calls
+# `binding_access_range`), keeping this consistent with inference, revalidation, and
+# invalidation. The recorded edge is what makes freezing sound -- it is the only thing
+# that discards this code when the binding is redefined (#61745) -- and, via
+# `compute_recursive_worlds`, it narrows this code's `valid_worlds` to the binding's access
+# range, so a late-discovered access (e.g. a constant inlined from a callee) can be frozen
+# even though inference never saw it here.
+#
+# Results are memoized per function in `cache` (`nothing` => "leave as a runtime read"), so a
+# binding is resolved once and its edge pushed once regardless of how many times it is read.
+function _reformulate_read(g::GlobalRef, world::UInt, edges::Vector{Any},
+                           cache::IdDict{Core.Binding,Union{Core.BindingPartition,Nothing}})
+    binding = convert(Core.Binding, g)
+    haskey(cache, binding) && return cache[binding]
+    p = _resolve_read(g, binding, world)
+    p !== nothing && push!(edges, binding)
+    cache[binding] = p
+    return p
+end
+
+function _resolve_read(g::GlobalRef, binding::Core.Binding, world::UInt)
+    # A world-1 constant (builtin/intrinsic/core type) is immutable: leave it as a bare
+    # `GlobalRef` for codegen to embed directly, with no `BindingPartition` and no edge.
+    world1_const(g) && return nothing
+    partition = lookup_binding_partition(world, binding)
+    _, leaf = walk_to_leaf_partition(binding, partition, world)
+    kind = binding_kind(leaf)
+    (is_defined_const_binding(kind) || kind === PARTITION_KIND_GLOBAL) || return nothing
+    return leaf
+end
+
+# The store counterpart of `_reformulate_read`: resolve `g`'s own binding at the inference
+# `world` without walking imports (assigning to an imported binding throws rather than
+# storing), reformulating only an owned typed global (`PARTITION_KIND_GLOBAL`). Memoized in
+# its own `cache` for the same reasons as the read path.
+function _reformulate_write(g::GlobalRef, world::UInt, edges::Vector{Any},
+                            cache::IdDict{Core.Binding,Union{Core.BindingPartition,Nothing}})
+    binding = convert(Core.Binding, g)
+    haskey(cache, binding) && return cache[binding]
+    partition = lookup_binding_partition(world, binding)
+    p = binding_kind(partition) === PARTITION_KIND_GLOBAL ? partition : nothing
+    p !== nothing && push!(edges, binding)
+    cache[binding] = p
+    return p
+end
+
+# Rewrite resolved global reads/writes to their `Core.BindingPartition` forms, recording
+# an invalidation edge so a later redefinition reaches this code. A `BindingPartition` is
+# the resolved form of a `GlobalRef`, supported in every position a `GlobalRef` is: it
+# recovers its own binding and value from the circular partition chain, so codegen and the
+# interpreter read/store it directly. Both whole-statement reads (`recognize_global_read`)
+# and reads nested as operands are rewritten uniformly; only `:method` is skipped, whose
+# name operand is a definition target rather than a read (`:(=)` left-hand sides are
+# likewise not exposed by `userefs`).
+function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
+    # Resolve accesses at the inference world, as inference did (`binding_world_hints`), so a
+    # concurrent redefinition cannot make the pass freeze a partition from a future world.
+    world = get_inference_world(opt.inlining.interp)
+    edges = opt.inlining.edges
+    read_cache = IdDict{Core.Binding,Union{Core.BindingPartition,Nothing}}()
+    write_cache = IdDict{Core.Binding,Union{Core.BindingPartition,Nothing}}()
+    for idx = 1:length(ir.stmts)
+        inst = ir[SSAValue(idx)]
+        stmt = inst[:stmt]
+        # A method definition establishes its name binding; the name is not a read.
+        if isa(stmt, Expr) && stmt.head === :method
+            continue
+        end
+        r = recognize_global_read(stmt, ir)
+        if r !== nothing
+            p = _reformulate_read(r.first, world, edges, read_cache)
+            if p !== nothing
+                # A read with a non-default order keeps the order via a
+                # `:getglobal_partition` node, so the backends apply the requested load
+                # ordering and reject an invalid/non-atomic order. A default
+                # (`:unordered`) read is a bare partition, read unordered.
+                inst[:stmt] = r.second !== :unordered ?
+                    Expr(:getglobal_partition, p, r.second) : p
+                continue
+            end
+            # fall through: a read left on the runtime path may still contain
+            # nested `GlobalRef` operands worth rewriting.
+        end
+        # Recognize a store on the *original* statement, before the nested rewrite below
+        # rewrites its callee/operands (which would defeat callee recognition). The store
+        # resolves `g`'s own binding without walking imports: assigning to a binding imported
+        # from another module is a runtime error, not a store to the import's target, so only
+        # an owned typed global (`PARTITION_KIND_GLOBAL`) reformulates. Imports, constants, and
+        # guards keep the runtime store path, matching the effects inference assigned them; the
+        # value operand is still rewritten by the fallthrough below.
+        w = recognize_global_write(stmt, ir)
+        if w !== nothing
+            part = _reformulate_write(w.g, world, edges, write_cache)
+            if part !== nothing
+                # A default-order `setglobal!` mirrors a bare `Core.BindingPartition` read:
+                # emit `BindingPartition = value` (which prints as `Mod.name = value`). A
+                # stronger order, or swap/replace/setglobalonce (which return values /
+                # compare), keeps the explicit `:setglobal_partition` node.
+                inst[:stmt] = (w.op === Core.setglobal! && w.order === nothing) ?
+                    Expr(:(=), part, w.value) :
+                    Expr(:setglobal_partition, part, w.op, w.order, w.failorder, w.value, w.cmp)
+                continue
+            end
+        end
+        # Rewrite `GlobalRef` operands nested inside this statement (call/`:new` arguments,
+        # branch conditions, return values, ...). `userefs` exposes exactly the value-read
+        # operand positions, so no per-head allowlist is needed.
+        urs = userefs(stmt)
+        changed = false
+        for ur in urs
+            use = ur[]
+            if isa(use, GlobalRef)
+                p = _reformulate_read(use, world, edges, read_cache)
+                if p !== nothing
+                    ur[] = p
+                    changed = true
+                end
+            end
+        end
+        if changed
+            inst[:stmt] = urs[]
+        end
+    end
     return ir
 end
 
@@ -1363,6 +1623,9 @@ isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetyp
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
                         params::OptimizationParams)
     #=const=# UNKNOWN_CALL_COST = 20
+    # Matches the `add_tfunc` cost registered for the global-store builtins (`setglobal!`,
+    # `swapglobal!`, `replaceglobal!`, `setglobalonce!`), which is `3` (see `tfuncs.jl`).
+    #=const=# GLOBAL_STORE_COST = 3
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -1465,7 +1728,24 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
         return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
     elseif head === :(=)
-        return statement_cost(ex.args[2], -1, src, sptypes, params)
+        # A store to a global (`GlobalRef`/`BindingPartition` LHS, produced by
+        # `reformulate_globals_pass!`) costs like the `setglobal!` builtin it encodes (whose
+        # tfunc cost is `GLOBAL_STORE_COST`); a store to a local slot is free. Add the RHS cost only
+        # when the RHS is itself an expression (it may be a bare value such as an `Argument` or
+        # `BindingPartition`).
+        lhs = ex.args[1]
+        cost = (isa(lhs, GlobalRef) || isa(lhs, Core.BindingPartition)) ? GLOBAL_STORE_COST : 0
+        rhs = ex.args[2]
+        isa(rhs, Expr) && (cost += statement_cost(rhs, -1, src, sptypes, params))
+        return cost
+    elseif head === :getglobal_partition
+        # The reformulated `getglobal` read (see `reformulate_globals_pass!`); a plain
+        # `getglobal` call costs 0 above, so match that.
+        return 0
+    elseif head === :setglobal_partition
+        # The reformulated `setglobal!`/`swapglobal!`/`replaceglobal!`/`setglobalonce!` store;
+        # all of those builtins register the same tfunc cost (`GLOBAL_STORE_COST`).
+        return GLOBAL_STORE_COST
     elseif head === :copyast
         return 100
     end

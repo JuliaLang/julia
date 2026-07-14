@@ -1430,6 +1430,9 @@ function find_call(code::Core.CodeInfo, @nospecialize(func), narg)
                 end
             elseif isa(farg, Core.SSAValue)
                 farg = Compiler.widenconst(code.ssavaluetypes[farg.id])
+            elseif isa(farg, Core.BindingPartition)
+                # a resolved constant global read folded inline by the optimizer
+                farg = typeof(Base.partition_restriction(farg))
             else
                 farg = typeof(farg)
             end
@@ -4200,7 +4203,9 @@ end
 for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     local badf
     local code = code_typed(badf, Tuple{})[1].first.code
-    @test Meta.isexpr(code[1], :call)
+    # the invalid `getfield` is not constant-folded away: a throwing call remains (the
+    # `getfield` read itself may precede it as a resolved `Core.BindingPartition` statement)
+    @test any(x -> Meta.isexpr(x, :call), code)
     @test code[end] === Core.ReturnNode()
     @test_throws TypeError badf()
 end
@@ -4858,9 +4863,11 @@ function call_func_itr(func, itr)
 end
 
 global inline_checker = c -> c # untyped global, a call of this func will prevent inlining
-# if `f` is inlined, `GlobalRef(m, :inline_checker)` should appear within the body of `invokef`
+# if `f` is inlined, a read of `inline_checker` should appear within the body of `invokef`
+# (as a bare `GlobalRef` or, once resolved by the optimizer, a `Core.BindingPartition`)
 function is_inline_checker(@nospecialize stmt)
-    isa(stmt, GlobalRef) && stmt.name === :inline_checker
+    (isa(stmt, GlobalRef) && stmt.name === :inline_checker) ||
+        (isa(stmt, Core.BindingPartition) && Base.partition_owner(stmt).globalref.name === :inline_checker)
 end
 
 function func_nospecialized(@nospecialize a)
@@ -7055,6 +7062,75 @@ A58257.get!      # Creates binding partition in A, N+1:∞
 A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
 Base.invoke_in_world(A58257.B58257.age, getglobal, A58257, :get!) # Expands binding partition in A through <N
 @test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
+
+# `reformulate_globals_pass!` rewrites resolved global reads/writes to their
+# binding-partition IR forms: a read becomes a bare `Core.BindingPartition` and a
+# default `setglobal!` store becomes `Expr(:(=), ::Core.BindingPartition, value)`.
+module ReformGlobals
+    global g::Int = 0
+    getg() = g
+    setg!(v) = setglobal!(ReformGlobals, :g, v)
+end
+let readcode = code_typed(ReformGlobals.getg, ())[1][1].code,
+    writecode = code_typed(ReformGlobals.setg!, (Int,))[1][1].code
+    # the read is reformulated to a bare partition, with no `GlobalRef` left over
+    @test any(x -> isa(x, Core.BindingPartition), readcode)
+    @test !any(x -> isa(x, GlobalRef), readcode)
+    # the store reformulates to `BindingPartition = value`, even though `global g::Int`
+    # creates a one-world `PARTITION_KIND_DECLARED` partition just before the `= 0`
+    # assignment: the write resolves the typed-global partition at the inference world
+    # and must not be perturbed by that adjacent declared partition.
+    @test any(x -> Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition), writecode)
+end
+# The `load_consistent` bound must still span flag-only (`public`/`export`) partition
+# changes, so adding an `export` does not needlessly invalidate the store.
+module ReformGlobalsExport
+    global g::Int = 0
+    getg() = g
+    setg!(v) = setglobal!(ReformGlobalsExport, :g, v)
+    export g
+end
+let setg! = ReformGlobalsExport.setg!
+    b = convert(Core.Binding, GlobalRef(ReformGlobalsExport, :g))
+    exported_min = Base.lookup_binding_partition(Base.get_world_counter(), b).min_world
+    writeci = code_typed(setg!, (Int,))[1][1]
+    # store still reformulates
+    @test any(x -> Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition), writeci.code)
+    # and its validity spans back across the `export` flag-only partition boundary
+    @test writeci.min_world < exported_min
+end
+# A value-position `Core.BindingPartition` (e.g. spliced into hand-built or `@generated`
+# code) must be typed and scored like the read it represents, not as `EFFECTS_TOTAL`: a
+# mutable typed-global read can throw `UndefVarError` and is not `:consistent`.
+module ReformGlobalsSplice
+    global gdecl::Int # declared but unassigned: reading it throws UndefVarError
+end
+let b = convert(Core.Binding, GlobalRef(ReformGlobalsSplice, :gdecl)),
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b),
+    # keep the partition in statement position (operands are assumed effect-free)
+    readpart = @eval function ()
+        v = $(part)
+        return v
+    end
+    effects = Base.infer_effects(readpart, ())
+    @test !Compiler.is_consistent(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Base.infer_return_type(readpart, ()) == Int
+    @test Base.infer_exception_type(readpart, ()) == UndefVarError
+    @test_throws UndefVarError readpart()
+end
+# `reformulate_globals_pass!` records exactly one invalidation edge per binding,
+# no matter how many reads of that binding the function contains.
+module ReformGlobalsEdges
+    global g::Int = 0
+    getgg() = g + g
+end
+let f = ReformGlobalsEdges.getgg
+    @test f() === 0
+    ci = Base.method_instance(f, ()).cache
+    b = convert(Core.Binding, GlobalRef(ReformGlobalsEdges, :g))
+    @test count(==(b), collect(ci.edges)) == 1
+end
 
 function tt57873(a::Vector{String}, pref)
     ret = String[]
