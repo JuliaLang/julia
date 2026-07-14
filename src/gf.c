@@ -1089,7 +1089,8 @@ JL_DLLEXPORT void jl_set_compile_and_emit_func(jl_value_t *f)
 
 static int very_general_type(jl_value_t *t)
 {
-    return (t == (jl_value_t*)jl_any_type || jl_types_equal(t, (jl_value_t*)jl_type_type));
+    // accepts every type object: `Any`, `Type`, `Union{Type, Missing}`, ...
+    return jl_subtype((jl_value_t*)jl_type_type, t);
 }
 
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i) JL_NOTSAFEPOINT
@@ -1121,6 +1122,35 @@ jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i) JL_NOTSAFEPOINT
 //    }
 //    return 1;
 //}
+
+// the value bound to method typevar `tv` in `sparams` (ordered as the
+// unionall binders of `decl`), or NULL
+static jl_value_t *env_lookup_tvar(jl_value_t *decl, jl_svec_t *sparams JL_PROPAGATES_ROOT, jl_tvar_t *tv) JL_NOTSAFEPOINT
+{
+    size_t i = 0;
+    for (jl_value_t *ua = decl; jl_is_unionall(ua); ua = ((jl_unionall_t*)ua)->body, i++) {
+        if (((jl_unionall_t*)ua)->var == tv) {
+            if (sparams && i < jl_svec_len(sparams))
+                return jl_svecref(sparams, i);
+            return NULL;
+        }
+    }
+    return NULL;
+}
+
+// whether a slot declared as the bare method typevar `tv` binds only the kind
+// of a type-valued argument: true unless the environment pins `tv` to a
+// Type-structured type (e.g. `K == Type{Int}` via another argument), in which
+// case the slot does dispatch on type identity. `kind <: binding` also keeps
+// the widened signature inside the method signature.
+static int typevar_slot_binds_kind(jl_value_t *decl, jl_svec_t *sparams, jl_tvar_t *tv, jl_value_t *kind)
+{
+    if (tv->lb != jl_bottom_type)
+        return 0;
+    jl_value_t *sp = env_lookup_tvar(decl, sparams, tv);
+    return sp != NULL && !jl_is_svec(sp) && !jl_is_typevar(sp) && jl_is_type(sp) &&
+           !jl_has_free_typevars(sp) && jl_subtype(kind, sp);
+}
 
 static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
 {
@@ -1268,16 +1298,30 @@ static void jl_compilation_sig(
             elt = type_i;
             jl_svecset(*newparams, i, elt);
         }
-        else if (jl_is_some_Type(elt)) {
-            // if the declared type was not Any or Union{Type, ...},
-            // then the match must been with the kind (e.g. UnionAll or DataType)
-            // and the result of matching the type signature
-            // needs to be restricted to the concrete type 'kind'
+        else if (jl_is_typeegal(elt) ||
+                 (jl_is_typeeq(elt) && jl_typeeq_T(elt) == jl_bottom_type)) {
+            // only an egality-keyed slot pins the argument's kind: a `Type{X}`
+            // matches every `==`-equal spelling of X, whose kinds may differ
+            // (except `Type{Union{}}`, which is alone in its `==` class)
             jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
             if (!jl_has_free_typevars(decl_i) &&
-                    jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
-                // if we can prove the match was against the kind (not a Type)
-                // it's simpler (and thus better) to put that cache instead
+                    jl_subtype(kind, type_i) && !very_general_type(type_i)) {
+                // the declared type does not accept all type objects (that case
+                // takes the `Type`-widening path below), so the match must have been
+                // with the kind (e.g. UnionAll or DataType) and it's simpler (and
+                // thus better) to put that in the cache instead
+                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                elt = kind;
+                jl_svecset(*newparams, i, elt);
+            }
+            else if (jl_is_typevar(decl_i) &&
+                     typevar_slot_binds_kind(decl, sparams, (jl_tvar_t*)decl_i, kind) &&
+                     !(i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1))))) {
+                // a slot declared as a bare method typevar (e.g. the `key::K` of
+                // `setindex!(h::Dict{K,V}, v0, key::K)`) binds only the kind of a
+                // type-valued argument, so cache the kind rather than specializing
+                // on every distinct type value passed (unless the argument is
+                // called, as for the heuristic below, issue #36783)
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 elt = kind;
                 jl_svecset(*newparams, i, elt);
@@ -1291,7 +1335,7 @@ static void jl_compilation_sig(
                 // Preserve the singleton `Type{Union{}}` dispatch key. Widening it to
                 // `Type` loses static parameters for compiled calls to `::Type{T}`.
             }
-            else if (!(jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))) {
+            else if (!(jl_subtype(elt, type_i) && !very_general_type(type_i))) {
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 elt = (jl_value_t*)jl_type_type;
                 jl_svecset(*newparams, i, elt);
@@ -1552,11 +1596,17 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             if (elt == (jl_value_t*)jl_typeofbottom_type && jl_subtype(elt, type_i))
                 continue;
             // kind slots always get guard entries (checking for subtypes of Type)
-            if (jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))
+            if (jl_subtype(elt, type_i) && !very_general_type(type_i))
                 continue;
             // jl_compilation_sig keeps a slot declared as a concrete kind (e.g.
             // `::DataType`) equal to that kind, making it the canonical form
             if (jl_is_kind(type_i) && jl_egal(elt, type_i))
+                continue;
+            // a bare-typevar slot matches type-valued arguments against the
+            // kind (see the matching heuristic in jl_compilation_sig)
+            if (jl_is_typevar(decl_i) &&
+                    typevar_slot_binds_kind(decl, sparams, (jl_tvar_t*)decl_i, elt) &&
+                    !(i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)))))
                 continue;
             // TODO: other code paths that could reach here?
             JL_GC_POP();
@@ -1600,7 +1650,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 return 0; // Type{Union{}} gets normalized to typeof(Union{})
             }
             if (!jl_has_free_typevars(decl_i) &&
-                    jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
+                    jl_subtype(kind, type_i) && !very_general_type(type_i)) {
                 JL_GC_POP();
                 return 0; // gets turned into a kind
             }
