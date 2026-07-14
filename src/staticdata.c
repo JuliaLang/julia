@@ -2679,7 +2679,9 @@ static int strip_module(jl_module_t *m, jl_sym_t *docmeta_sym) JL_CANSAFEPOINT
                 record_field_change((jl_value_t**)&b->value, jl_nothing);
             // TODO: this is a pretty stupidly unsound way to do this, but it is way to late here to do this correctly (by calling delete_binding and getting an updated world age then dropping all partitions from older worlds)
             jl_binding_partition_t *bp = jl_atomic_load_relaxed(&b->partitions);
-            while (bp) {
+            // The last partition's `next` holds a backreference to `b`, so stop
+            // when we reach something that is no longer a partition.
+            while (bp && jl_is_binding_partition((jl_value_t*)bp)) {
                 if (jl_bkind_is_defined_constant(jl_binding_kind(bp))) {
                     // XXX: bp->kind = PARTITION_KIND_UNDEF_CONST;
                     record_field_change((jl_value_t**)&bp->restriction, NULL);

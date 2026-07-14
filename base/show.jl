@@ -1152,8 +1152,10 @@ function check_world_bounded(tn::Core.TypeName)
                 return Int(partition.min_world):Int(max_world)
             end
         end
-        isdefined(partition, :next) || return nothing
-        partition = @atomic partition.next
+        next = @atomic partition.next
+        # The last partition's `next` is a backreference to the owning Binding.
+        next isa Core.BindingPartition || return nothing
+        partition = next
     end
 end
 
@@ -3457,6 +3459,15 @@ end
 
 function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
     print(io, "BindingPartition ")
+    # The chain terminates in a backreference to the owning binding, so follow
+    # `next` until we reach it to report which binding this partition belongs to.
+    owner = @atomic partition.next
+    while owner isa Core.BindingPartition
+        owner = @atomic owner.next
+    end
+    if owner isa Core.Binding
+        print(io, "for ", owner.globalref, "\n   ")
+    end
     print_partition(io, partition)
 end
 
@@ -3471,8 +3482,10 @@ function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
             println(io)
             print(io, "   ")
             print_partition(io, partition)
-            isdefined(partition, :next) || break
-            partition = @atomic partition.next
+            next = @atomic partition.next
+            # The last partition's `next` is a backreference to the owning Binding.
+            next isa Core.BindingPartition || break
+            partition = next
         end
     end
 end

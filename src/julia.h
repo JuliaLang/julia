@@ -899,7 +899,10 @@ typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
     jl_value_t *restriction;
     _Atomic(size_t) min_world;
     _Atomic(size_t) max_world;
-    _Atomic(struct _jl_binding_partition_t *) next;
+    // The next (older) partition in the chain. The last (oldest) partition in
+    // the chain instead stores a backreference to the owning `jl_binding_t`, so
+    // the chain can be walked circularly.
+    _Atomic(struct _jl_binding_partition_t *) next; // more precisely, _Atomic( union { jl_binding_partition_t *pb; jl_binding_t *b; } )
     size_t kind;
 } jl_binding_partition_t;
 
