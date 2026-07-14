@@ -268,6 +268,14 @@ StringRef jl_codegen_output_t::get_call_target(jl_code_instance_t *ci, bool spec
     }
     std::string protoname = make_name(JL_SYMBOL_SPECPTR_PROTO, api,
                                       name_from_method_instance(jl_get_ci_mi(ci)));
+    // The linking metadata holds this CodeInstance until the module is
+    // materialized, and linkCallTarget dereferences it on the dispatcher
+    // thread at that point. CIs in their MI's cache are rooted through the
+    // method table, but inference-local edge CIs have no other root once
+    // inference drops its results, and the pending window is arbitrarily
+    // long. Pin those. TODO: scope this root to the pending materialization.
+    if (!jl_mi_cache_has_ci(jl_get_ci_mi(ci), ci) && !jl_is_globally_rooted((jl_value_t*)ci))
+        jl_as_global_root((jl_value_t*)ci, 1);
     jl_codegen_call_target_t &target = call_targets[{ci, api}];
     target.external_linkage = !always_inline;
     target.private_linkage = always_inline;
