@@ -6,7 +6,7 @@ Low level module for mmap (memory mapping of files).
 module Mmap
 
 import Base: OS_HANDLE, INVALID_OS_HANDLE, IOError
-import Base.Filesystem: JL_O_CREAT, JL_O_RDONLY, JL_O_RDWR, JL_O_EXCL, S_IRUSR, S_IWUSR
+import Base.Filesystem: JL_O_CREAT, JL_O_RDONLY, JL_O_RDWR, JL_O_EXCL, JL_O_CLOEXEC, S_IRUSR, S_IWUSR
 using Base.Sys: PAGESIZE
 
 export mmap
@@ -79,7 +79,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     validate_sharedmemory_args(name, size, readonly, create)
     io = SharedMemory(name, readonly, create, size)
     if !isempty(name)
-        oflag = (readonly ? JL_O_RDONLY : JL_O_RDWR)
+        oflag = (readonly ? JL_O_RDONLY : JL_O_RDWR) | JL_O_CLOEXEC
         if create
             oflag |= JL_O_CREAT | JL_O_EXCL
         end
@@ -204,15 +204,6 @@ function gethandle(io::IO)
     return handle
 end
 
-mutable struct SECURITY_ATTRIBUTES
-    nLength::DWORD
-    lpSecurityDescriptor::Ptr{Cvoid}
-    bInheritHandle::BOOL
-
-    SECURITY_ATTRIBUTES(inherit_handle::Bool) = new(sizeof(SECURITY_ATTRIBUTES), C_NULL, inherit_handle)
-end
-default_security_attrs() = Ref(SECURITY_ATTRIBUTES(true))
-
 # Split 64-bit size into high and low 32-bit parts for Windows API
 split_high_bits(size::Integer) = UInt32(size >> 32)
 split_low_bits(size::Integer) = UInt32(size & typemax(UInt32))
@@ -226,9 +217,9 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     if create
         try
             page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
-            handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
+            handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                 INVALID_OS_HANDLE,                                 # Backed by system paging file
-                default_security_attrs(),                          # Default security, can be inherited
+                C_NULL,                                            # Cannot be inherited
                 page_prot,                                         # Requested access mode
                 split_high_bits(io.size), split_low_bits(io.size), # High-order and low-order bits of size
                 name                                               # Object name
@@ -255,7 +246,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
             map_access = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
             handle = ccall(:OpenFileMappingW, stdcall, OS_HANDLE, (DWORD, Cint, Cwstring),
                 map_access, # Requested access mode
-                true,       # Can be inherited
+                false,      # Cannot be inherited
                 name        # Object name
             )
             Base.windowserror(:OpenFileMappingW, handle == NULL_OS_HANDLE)
