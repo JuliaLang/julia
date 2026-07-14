@@ -1246,31 +1246,56 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             return false
         end
         if !ambiguous_bottom
-            # since we're intentionally ignoring certain ambiguities (via the
-            # filter call above), see if we can now declare the intersection fully
-            # covered even though it is partially ambiguous over Union{} as a type
-            # parameter somewhere
-            minmax = nothing
+            # Since we're intentionally ignoring certain ambiguities (via the
+            # filter call above), see if the intersection is nevertheless fully
+            # resolved by other methods. There need not be a single method that
+            # covers all of `ti`: several methods may each be more specific than
+            # both `m1` and `m2`, and together cover the whole intersection, in
+            # which case dispatch is never actually ambiguous between `m1` and
+            # `m2`.
+            #
+            # `morespecific` is not transitive, so being more specific than both
+            # `m1` and `m2` does not by itself guarantee that a method actually
+            # wins dispatch over its portion of the intersection: a specificity
+            # cycle may lead back to `m1` or `m2` (e.g. some `m4` more specific
+            # than the candidate resolver `m3`, while `m1` is more specific than
+            # `m4`), keeping the ambiguity real over the part of the
+            # intersection shared with `m4`. So first (transitively) reject
+            # every method that loses to `m1` or `m2` through such a chain, then
+            # check whether the union of the signatures of the remaining methods
+            # that are more specific than both `m1` and `m2` covers the whole
+            # intersection.
+            losers = IdSet{Method}()
+            worklist = Method[]
             for match in ms
                 m = match.method
-                match.fully_covers || continue
-                if minmax === nothing || morespecific(m, minmax)
-                    minmax = m
+                (m === m1 || m === m2) && continue
+                if morespecific(m1, m) || morespecific(m2, m)
+                    push!(losers, m)
+                    push!(worklist, m)
                 end
             end
-            if minmax === nothing || minmax == m1 || minmax == m2
-                return true
-            end
-            for match in ms
-                m = match.method
-                m === minmax && continue
-                if !morespecific(minmax, m)
-                    if match.fully_covers || !morespecific(m, minmax)
-                        return true
+            while !isempty(worklist)
+                u = pop!(worklist)
+                for match in ms
+                    m = match.method
+                    (m === m1 || m === m2 || m in losers) && continue
+                    if morespecific(u, m)
+                        push!(losers, m)
+                        push!(worklist, m)
                     end
                 end
             end
-            return false
+            resolvers = nothing
+            for match in ms
+                m = match.method
+                (m === m1 || m === m2 || m in losers) && continue
+                if morespecific(m, m1) && morespecific(m, m2)
+                    resolvers = resolvers === nothing ? match.spec_types : Union{resolvers, match.spec_types}
+                end
+            end
+            resolvers === nothing && return true
+            return !(ti <: resolvers)
         end
         return true
     end

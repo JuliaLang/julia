@@ -480,4 +480,94 @@ let ambig = Ref{Int32}(0)
     @test ms[4].method === which(ambig10, (Vararg{Number},))
 end
 
+# issue #62262: an ambiguity can be resolved by the *union* of several more
+# specific methods, without any single method covering the intersection
+module Ambig62262
+abstract type MyAbstractMat end
+struct MatA <: MyAbstractMat end
+struct MatB <: MyAbstractMat end
+struct SpecialMat <: MyAbstractMat end
+h(::MyAbstractMat, ::SpecialMat) = 1
+h(::Union{MatA,MatB}, ::MyAbstractMat) = 2
+h(::MatA, ::SpecialMat) = 3
+h(::MatB, ::SpecialMat) = 4
+end
+@test Ambig62262.h(Ambig62262.MatA(), Ambig62262.SpecialMat()) == 3
+@test Ambig62262.h(Ambig62262.MatB(), Ambig62262.SpecialMat()) == 4
+@test isempty(detect_ambiguities(Ambig62262))
+
+# ... but since `morespecific` is not transitive, a method that is more specific
+# than both ambiguous methods does not resolve them if it loses back to one of
+# them through a specificity cycle (here two steps long)
+module AmbigUnionCycle
+abstract type LikeSigned end
+struct LikeInt <: LikeSigned end
+abstract type LikeString end
+struct LikeStr <: LikeString end
+struct LikeMissing end
+s(x::Union{LikeSigned,LikeMissing}, y::LikeInt...) = 1            # m1
+s(x::Union{LikeInt,LikeString,LikeMissing}, y::LikeSigned...) = 2 # m2
+s(x::T, y::T...) where {T<:Union{LikeInt,LikeString}} = 3         # covers the LikeInt part, but loses to method 5 (below)
+s(x::LikeMissing, y::LikeInt...) = 4                              # genuinely covers the LikeMissing part
+s(x::Union{LikeSigned,LikeStr}, y::LikeStr...) = 5               # more specific than method 3
+s(x::LikeSigned, y::LikeStr...) = 6                              # more specific than 5; method 2 is more specific than this
+end
+let ms = collect(methods(AmbigUnionCycle.s)),
+    m1 = only(filter(m -> m.sig == Tuple{typeof(AmbigUnionCycle.s), Union{AmbigUnionCycle.LikeSigned,AmbigUnionCycle.LikeMissing}, Vararg{AmbigUnionCycle.LikeInt}}, ms)),
+    m2 = only(filter(m -> m.sig == Tuple{typeof(AmbigUnionCycle.s), Union{AmbigUnionCycle.LikeInt,AmbigUnionCycle.LikeString,AmbigUnionCycle.LikeMissing}, Vararg{AmbigUnionCycle.LikeSigned}}, ms))
+    # method 3 "covers" the LikeInt part but is in a specificity cycle (2 ≻ 6 ≻ 5 ≻ 3 ≻ 2)
+    @test Base.isambiguous(m1, m2)
+end
+@test_throws MethodError AmbigUnionCycle.s(AmbigUnionCycle.LikeInt()) # genuinely ambiguous
+@test AmbigUnionCycle.s(AmbigUnionCycle.LikeMissing()) == 4
+@test AmbigUnionCycle.s(AmbigUnionCycle.LikeInt(), AmbigUnionCycle.LikeInt()) == 3
+
+# complement of #62262: if the more specific methods only cover *part* of the
+# intersection, the uncovered part is still a genuine ambiguity (so the union
+# check must not over-resolve)
+module Ambig62262Partial
+abstract type MyAbstractMat end
+struct MatA <: MyAbstractMat end
+struct MatB <: MyAbstractMat end
+struct SpecialMat <: MyAbstractMat end
+h(::MyAbstractMat, ::SpecialMat) = 1
+h(::Union{MatA,MatB}, ::MyAbstractMat) = 2
+h(::MatA, ::SpecialMat) = 3  # covers only the MatA part of the intersection
+end
+@test length(detect_ambiguities(Ambig62262Partial)) == 1
+@test Ambig62262Partial.h(Ambig62262Partial.MatA(), Ambig62262Partial.SpecialMat()) == 3          # covered -> resolved
+@test_throws MethodError Ambig62262Partial.h(Ambig62262Partial.MatB(), Ambig62262Partial.SpecialMat()) # uncovered -> ambiguous
+
+# a 3-way (non-transitive) specificity cycle is a real dispatch ambiguity that
+# `_methods_by_ftype` reports via `has_ambig`, even though every *pair* of the
+# three methods has a clear winner
+module AmbigCycle3
+f(::T, ::Vararg{T}) where {T<:Integer} = 1    # mT
+f(::Integer, ::Vararg{String}) = 2            # mStr
+f(::Integer, ::Vararg{Union{Int,String}}) = 3 # mU
+end
+let tf = typeof(AmbigCycle3.f),
+    ms = collect(methods(AmbigCycle3.f)),
+    bysig = s -> only(filter(m -> m.sig == s, ms)),
+    mT   = bysig(Tuple{tf, T, Vararg{T}} where T<:Integer),
+    mStr = bysig(Tuple{tf, Integer, Vararg{String}}),
+    mU   = bysig(Tuple{tf, Integer, Vararg{Union{Int,String}}})
+    # specificity cycle mT ≻ mStr ≻ mU ≻ mT: no unique most specific method
+    @test Base.morespecific(mT, mStr) && Base.morespecific(mStr, mU) && Base.morespecific(mU, mT)
+    @test !(Base.morespecific(mStr, mT) || Base.morespecific(mU, mStr) || Base.morespecific(mT, mU))
+    # `isambiguous` still detects the ambiguity present in the mT/mStr region
+    @test Base.isambiguous(mT, mStr)
+    @test !Base.isambiguous(mStr, mU)
+    @test !Base.isambiguous(mU, mT)
+end
+@test_throws MethodError AmbigCycle3.f(3) # genuinely ambiguous in dispatch
+let ambig = Ref{Int32}(0)
+    Base._methods_by_ftype(Tuple{typeof(AmbigCycle3.f), Int}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ambig[] == 1
+end
+# `detect_ambiguities` queries each method signature on its own, where the cycle
+# does not surface (`has_ambig == 0` for each), so pairwise detection misses the
+# 3-way ambiguity entirely
+@test_broken !isempty(detect_ambiguities(AmbigCycle3))
+
 nothing
