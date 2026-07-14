@@ -218,7 +218,7 @@ function multiq_deletemin()
         task_tid = ccall(:jl_get_task_tid, Int16, (Any,), task)
         unlock(heap.lock)
         if task_tid != Int16(-1)
-            ccall(:jl_wakeup_thread, Cvoid, (Int16,), task_tid)
+            ccall(:jl_wakeup_thread, Cint, (Int16,), task_tid)
         end
         @goto retry
     end

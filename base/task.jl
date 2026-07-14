@@ -988,11 +988,17 @@ function enq_work(t::Task)
             Partr.multiq_insert(t, t.priority)
             tid = Threads.threadid(t)
             if tid != 0 && tid != Threads.threadid()
-                # The task's tid is pinned to another thread: it is that thread's current
-                # task, parked hosting its thread-sleep logic in wait(), and can only be
-                # resumed by that thread. A pool wake could pick a thread that cannot run
-                # this task, leaving it stranded and its host asleep (#58689).
-                ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+                # The task's tid is pinned to another thread: typically it is that
+                # thread's current task, parked hosting its thread-sleep logic in
+                # wait(), and only that thread can resume it, so wake it directly
+                # (#58689). If that thread was already awake (busy with other work),
+                # this wake added no running thread; wake a pool thread too so the
+                # number of running threads still scales with enqueued work — the
+                # task is not sticky, so its tid may be cleared later, making it
+                # runnable by any pool thread.
+                if ccall(:jl_wakeup_thread, Cint, (Int16,), (tid - 1) % Int16) == 0
+                    ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+                end
             else
                 # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
                 ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
@@ -1000,7 +1006,7 @@ function enq_work(t::Task)
             return t
         end
     end
-    ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    ccall(:jl_wakeup_thread, Cint, (Int16,), (tid - 1) % Int16)
     return t
 end
 
