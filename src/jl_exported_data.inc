@@ -56,6 +56,7 @@
     XX(gotoifnot_type, jl_datatype_t*) \
     XX(enternode_type, jl_datatype_t*) \
     XX(gotonode_type, jl_datatype_t*) \
+    XX(imageloadblockederror_type, jl_datatype_t*) \
     XX(initerror_type, jl_datatype_t*) \
     XX(int16_type, jl_datatype_t*) \
     XX(int32_type, jl_datatype_t*) \

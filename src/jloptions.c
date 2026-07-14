@@ -421,6 +421,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_gc_sweep_always_full,
            opt_gc_threads,
            opt_permalloc_pkgimg,
+           opt_probe_image_load,
            opt_trim,
            opt_trace_eval,
            opt_experimental_features,
@@ -492,6 +493,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-metadata",  no_argument,       0, opt_strip_metadata },
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
+        { "probe-image-load",required_argument, 0, opt_probe_image_load },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
         { "hard-heap-limit", required_argument, 0, opt_hard_heap_limit },
         { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
@@ -1058,6 +1060,22 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
             break;
+        case opt_probe_image_load:
+        {
+#if defined(_OS_WINDOWS_)
+            // This is used as a quick test to check whether `LoadLibrary`
+            // will allow us to load an image file or if Smart App Control,
+            // etc. are conspiring against us.
+            //
+            // Perform the load and exit immediately with the result.
+            SetLastError(0);
+            void *probed = jl_dlopen(optarg, JL_RTLD_LAZY);
+            exit(probed != NULL ? 0 : (int)GetLastError());
+#else
+            jl_errorf("julia: --probe-image-load is only supported on Windows");
+#endif
+            break;
+        }
         case opt_timeout_for_safepoint_straggler:
         {
             errno = 0;
