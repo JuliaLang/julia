@@ -764,9 +764,9 @@ func_in_own_sp(func_in_own_sp)
 """) == (test_mod.func_in_own_sp, typeof(test_mod.func_in_own_sp))
 
 @testset "(AI) Captured static parameters" begin
-    # Captured static parameter used in a closure signature: dispatch must pin `T`
-    # to the value captured in the closure's type parameter, not re-derive it from
-    # the argument.
+    # Captured static parameter used in a closure signature: dispatch must pin
+    # `T` to the value captured in the closure's type parameter, not re-derive
+    # it from the argument.
     JuliaLowering.include_string(test_mod, """
     function f_sigcapt_sp(x::T) where T
         g_sigcapt(y::T) = (y, T)
@@ -776,8 +776,8 @@ func_in_own_sp(func_in_own_sp)
     @test test_mod.f_sigcapt_sp(1)(2) == (2, Int)
     @test_throws MethodError test_mod.f_sigcapt_sp(1)(2.5)
 
-    # All methods of a closure share its captured static parameters, even methods
-    # that don't reference them.
+    # All methods of a closure share its captured static parameters, even
+    # methods that don't reference them.
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_multimeth_sp(x::T) where T
@@ -789,8 +789,8 @@ func_in_own_sp(func_in_own_sp)
     end
     """) == (Float64, (2, Float64))
 
-    # (broken in flisp) Static parameter captured by an opaque closure (as a
-    # field, since opaque closures have no closure type to parameterize)
+    # Static parameter captured by an opaque closure (as a field, since opaque
+    # closures have no closure type to parameterize)
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_oc_sp(x::T) where T
@@ -835,7 +835,8 @@ func_in_own_sp(func_in_own_sp)
     """)
     @test test_mod.f_captsp_lb_dep(1, Any[1.0])("anything") == ("anything", Any)
 
-    # Typevar bound referencing a static parameter two closure levels up: `g` must
+    # (broken in flisp, JL may or may not have the desired behaviour) Typevar
+    # bound referencing a static parameter two closure levels up: `g` must
     # capture `T` in passing so its value reaches `h`'s creation site.
     @test JuliaLowering.include_string(test_mod, """
     begin
