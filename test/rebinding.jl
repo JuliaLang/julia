@@ -402,8 +402,10 @@ end
 for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),)
     # Test that these both only have two partitions
     @test isdefined(binding, :partitions)
-    @test isdefined(binding.partitions, :next)
-    @test !isdefined(binding.partitions.next, :next)
+    @test binding.partitions.next isa Core.BindingPartition
+    @test !(binding.partitions.next.next isa Core.BindingPartition)
+    # The last partition's `next` is a backreference to the owning binding
+    @test binding.partitions.next.next === binding
 end
 
 # Test various scenarios for implicit partition merging
@@ -434,8 +436,9 @@ function count_partitions(b::Core.Binding)
     bpart = b.partitions
     while true
         n += 1
-        isdefined(bpart, :next) || break
-        bpart = bpart.next
+        next = bpart.next
+        next isa Core.BindingPartition || break
+        bpart = next
     end
     return n
 end
