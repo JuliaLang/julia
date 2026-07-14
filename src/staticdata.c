@@ -2855,6 +2855,23 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
     return val;
 }
 
+// Companion to jl_collect_methtable_from_mod: method tables owned by the worklist
+// are serialized without their contents, since all of their (currently valid)
+// methods were collected as extext methods, to be re-added and re-activated on
+// load by jl_add_methods / jl_activate_methods, which also restores their
+// dispatch status.
+static int jl_prune_internal_mtable(jl_methtable_t *mt, void *env)
+{
+    (void)env;
+    if (jl_object_in_image((jl_value_t*)mt))
+        return 1;
+    record_field_change((jl_value_t**)&mt->defs, jl_nothing);
+    jl_methcache_t *mc = mt->cache;
+    record_field_change((jl_value_t**)&mc->cache, jl_nothing);
+    record_field_change((jl_value_t**)&mc->leafcache, jl_an_empty_memory_any);
+    return 1;
+}
+
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *module_init_order, jl_array_t *worklist, jl_array_t *extext_methods,
@@ -2862,6 +2879,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 {
     htable_new(&field_replace, 0);
     htable_new(&bits_replace, 0);
+    if (worklist)
+        jl_foreach_reachable_mtable(jl_prune_internal_mtable, mod_array, NULL);
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir) {
         if (jl_options.strip_metadata) {
