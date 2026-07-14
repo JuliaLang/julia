@@ -1177,7 +1177,6 @@ function flush(s::LibuvStream)
     try
         uvw = uv_write_async(s, Ptr{UInt8}(Base.eventloop()), UInt(0))
     catch ex
-        # uv_write_async throws before it releases the iolock
         ex isa IOError || rethrow()
         iolock_end()
         return
