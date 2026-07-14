@@ -589,7 +589,7 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
 
 // Collect every currently-valid method of a worklist-owned method table, whose
 // contents are dropped from the image (see jl_prune_internal_mtable)
-static int jl_collect_methcache_internal(jl_typemap_entry_t *ml, void *closure)
+static int jl_collect_methcache_internal(jl_typemap_entry_t *ml, void *closure) JL_CANSAFEPOINT
 {
     jl_array_t *s = (jl_array_t*)closure;
     if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0)
