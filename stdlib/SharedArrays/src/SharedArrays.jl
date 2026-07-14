@@ -626,8 +626,8 @@ function unshare!(S::SharedArray)
     if !isempty(S.pids)
         @sync begin
             for i in eachindex(S.pids)
-                @async remotecall_wait(S.pids[i], fetch(S.refs[i])) do A
-                    Mmap.munmap!(A)
+                @async remotecall_wait(S.pids[i], S.refs[i]) do r
+                    Mmap.munmap!(local_array_by_id(r))
                 end
             end
         end
