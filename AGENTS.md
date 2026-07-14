@@ -53,6 +53,12 @@ make sure to take them into account.
 - Do not `ccall` runtime C functions directly if there are existing wrappers for the function.
 - Do not explicitly add a module prefix if the code you're adding is in the same module. E.g. do not use `Base.` for code in Base unless required.
 
+## Tests
+
+- Do not coordinate with fixed `sleep`s — loaded CI machines break any fixed
+  delay. Synchronize on observable state (readiness markers, round-trips), or
+  retry.
+
 ## Task-specific skills
 
 Detailed, situational procedures are provided as Agent Skills following the
