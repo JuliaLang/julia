@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import .Base: setindex!, getindex, unsafe_convert
+import .Base: getindex_atomic, setindex_atomic!, swapindex_atomic!, modifyindex_atomic!,
+    replaceindex_atomic!, setindexonce_atomic!
 import .Base.Sys: ARCH, WORD_SIZE
 
 export
@@ -21,22 +23,46 @@ accessed atomically, i.e. in a thread-safe manner.
 New atomic objects can be created from a non-atomic values; if none is
 specified, the atomic object is initialized with zero.
 
-Atomic objects can be accessed using the `[]` notation:
+`Atomic` is a standalone, [`Ref`](@ref)-like atomic cell. Like `Ref`, it is a
+useful building block and is not going away, but an `@atomic` field of a mutable
+struct is usually preferable when you have the choice, since it avoids the extra
+indirection.
+
+The value can be loaded with the `[]` notation (`x[]`) and stored with the
+reference form of the [`@atomic`](@ref), [`@atomicswap`](@ref),
+[`@atomicreplace`](@ref), and [`@atomiconce`](@ref) macros, which also allow the
+memory ordering to be specified explicitly:
 
 # Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
 
-julia> x[] = 1
-1
+julia> @atomic x[] = 4
+4
+
+julia> @atomic :monotonic x[]
+4
+
+julia> @atomicswap x[] = 5
+4
 
 julia> x[]
-1
+5
 ```
 
 Atomic operations use an `atomic_` prefix, such as [`atomic_add!`](@ref),
 [`atomic_xchg!`](@ref), etc.
+
+!!! warning
+    Storing with the plain `x[] = value` form is deprecated: read-modify-write
+    expressions such as `x[] += 1` look atomic but expand to a separate,
+    non-atomic load and store. Use `@atomic x[] = value` (and, for an atomic
+    read-modify-write, `@atomic x[] += 1` or [`atomic_add!`](@ref)) instead.
+
+!!! compat "Julia 1.14"
+    The `@atomic` reference form (`@atomic x[]`) on `Threads.Atomic` requires
+    at least Julia 1.14.
 """
 mutable struct Atomic{T}
     @atomic value::T
@@ -302,7 +328,28 @@ function atomic_min! end
 nand(x, y) = ~(x & y)
 
 getindex(x::Atomic) = @atomic :acquire x.value
-setindex!(x::Atomic, v) = (@atomic :release x.value = v; x)
+# NOTE: `setindex!(x::Atomic, v)` (the `x[] = v` form) is deprecated in favor of
+# `@atomic x[] = v`; see `base/deprecated.jl`. Reads via `x[]` remain a plain
+# atomic (acquire) load.
+
+# Support the reference form of the `@atomic` family of macros (`@atomic x[]`,
+# `@atomicswap x[] = v`, `@atomicreplace x[] o => n`, ...) so that an `Atomic`
+# can be used as a single atomic memory location with an explicit memory order.
+@inline getindex_atomic(x::Atomic, order::Symbol) = getfield(x, :value, order)
+@inline function setindex_atomic!(x::Atomic{T}, order::Symbol, v) where {T}
+    return setfield!(x, :value, v isa T ? v : convert(T, v)::T, order)
+end
+@inline function swapindex_atomic!(x::Atomic{T}, order::Symbol, v) where {T}
+    return swapfield!(x, :value, v isa T ? v : convert(T, v)::T, order)
+end
+@inline modifyindex_atomic!(x::Atomic, order::Symbol, op, v) =
+    modifyfield!(x, :value, op, v, order)
+@inline function replaceindex_atomic!(x::Atomic{T}, success_order::Symbol, fail_order::Symbol, expected, desired) where {T}
+    return replacefield!(x, :value, expected, desired isa T ? desired : convert(T, desired)::T, success_order, fail_order)
+end
+@inline function setindexonce_atomic!(x::Atomic{T}, success_order::Symbol, fail_order::Symbol, v) where {T}
+    return setfieldonce!(x, :value, v isa T ? v : convert(T, v)::T, success_order, fail_order)
+end
 atomic_cas!(x::Atomic, cmp, new) = (@atomicreplace :acquire_release :acquire x.value cmp => new).old
 atomic_add!(x::Atomic, v) = (@atomic :acquire_release x.value + v).first
 atomic_sub!(x::Atomic, v) = (@atomic :acquire_release x.value - v).first

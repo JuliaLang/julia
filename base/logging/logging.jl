@@ -558,7 +558,7 @@ Logging.disable_logging(Logging.Info) # Disable debug and info
 ```
 """
 function disable_logging(level::LogLevel)
-    _min_enabled_level[] = level + 1
+    @atomic _min_enabled_level[] = level + 1
 end
 
 let _debug_groups_include::Vector{Symbol} = Symbol[],

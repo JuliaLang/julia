@@ -320,7 +320,7 @@ close(proc.in)
         try
             wait(proc)
         finally
-            done[] = true
+            @atomic done[] = true
             close(timer)
         end
         if !success(proc) || timeout

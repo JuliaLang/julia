@@ -688,7 +688,7 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         res = wait()
         if timer !== nothing
             close(timer)
-            waiter_left[] = true
+            @atomic waiter_left[] = true
         end
         return res
     catch
