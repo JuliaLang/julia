@@ -1192,10 +1192,10 @@ it is considered ambiguous, when `false` it is not.
 
 # Examples
 ```jldoctest
-julia> foo(x::Complex{<:Integer}) = 1
+julia> foo(x::Complex{T}) where {T<:Integer} = 1
 foo (generic function with 1 method)
 
-julia> foo(x::Complex{<:Rational}) = 2
+julia> foo(x::Complex{T}) where {T<:Rational} = 2
 foo (generic function with 2 methods)
 
 julia> m1, m2 = collect(methods(foo));

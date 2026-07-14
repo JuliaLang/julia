@@ -269,7 +269,9 @@ hash(x::Char, h::UInt) =
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x)::Char, Char(y)::Char)
 ==(x::AbstractChar, y::AbstractChar) = Char(x)::Char == Char(y)::Char
 hash(x::AbstractChar, h::UInt) = hash(Char(x)::Char, h)
-widen(::Type{T}) where {T<:AbstractChar} = T
+# strict lower bound so this does not overlap other abstract-bounded `widen`
+# methods at the uninhabited `Type{Union{}}` (handled by the catch-all)
+widen(::Type{T}) where {Core.Epsilon<:T<:AbstractChar} = T
 
 @inline -%(x::AbstractChar, y::AbstractChar) = Int(x) -% Int(y)
 @inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)

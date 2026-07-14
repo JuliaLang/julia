@@ -547,7 +547,12 @@ typedef struct {
     jl_sym_t *JL_NONNULL name;
     jl_value_t *JL_NONNULL lb;   // lower bound
     jl_value_t *JL_NONNULL ub;   // upper bound
+    uint8_t flags;               // JL_TVAR_* flags
 } jl_tvar_t;
+
+// The lower bound is exclusive: the variable ranges over types X with
+// lb <: X <: ub but not X <: lb (for lb == Union{}, this excludes Union{}).
+#define JL_TVAR_STRICT_LB 0x01
 
 // UnionAll type (iterated union over all values of a variable in certain bounds)
 // written `body where lb<:var<:ub`

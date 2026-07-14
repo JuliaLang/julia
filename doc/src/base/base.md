@@ -256,6 +256,7 @@ Core.Any
 Core.Union
 Union{}
 Core.TypeofBottom
+Core.Epsilon
 Core.UnionAll
 Core.Tuple
 Core.NTuple

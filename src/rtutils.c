@@ -1168,6 +1168,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (v == jl_nothing || (jl_nothing && (jl_value_t*)vt == jl_typeof(jl_nothing))) {
         n += jl_printf(out, "nothing");
     }
+    else if (v == jl_epsilon) {
+        n += jl_printf(out, "Core.Epsilon");
+    }
     else if (v == (jl_value_t*)jl_method_table) {
         n += jl_printf(out, "Core.methodtable");
     }
@@ -1233,18 +1236,25 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             }
         }
         jl_value_t *lb = var->lb, *ub = var->ub;
-        if (showbounds && lb != jl_bottom_type) {
+        int strict = (var->flags & JL_TVAR_STRICT_LB) != 0;
+        if (showbounds && (lb != jl_bottom_type || strict)) {
             // show type-var lower bound if it is defined
-            int ua = jl_is_unionall(lb);
-            if (ua)
-                n += jl_printf(out, "(");
-            n += jl_static_show_x(out, lb, depth, ctx);
-            if (ua)
-                n += jl_printf(out, ")");
+            if (strict && lb == jl_bottom_type) {
+                // qualified so the output stays eval-able
+                n += jl_printf(out, "Core.Epsilon");
+            }
+            else {
+                int ua = jl_is_unionall(lb);
+                if (ua)
+                    n += jl_printf(out, "(");
+                n += jl_static_show_x(out, lb, depth, ctx);
+                if (ua)
+                    n += jl_printf(out, ")");
+            }
             n += jl_printf(out, "<:");
         }
         n += jl_static_show_symbol(out, var->name);
-        if (showbounds && (ub != (jl_value_t*)jl_any_type || lb != jl_bottom_type)) {
+        if (showbounds && (ub != (jl_value_t*)jl_any_type || lb != jl_bottom_type || strict)) {
             // show type-var upper bound if it is defined, or if we showed the lower bound
             int ua = jl_is_unionall(ub);
             n += jl_printf(out, "<:");

@@ -331,7 +331,7 @@ const ArrayInitializer = Union{UndefInitializer, Missing, Nothing}
 struct OffsetArray{T,N,AA<:AbstractArray{T,N}} <: AbstractArray{T,N}
     parent::AA
     offsets::NTuple{N,Int}
-    @inline function OffsetArray{T, N, AA}(parent::AA, offsets::NTuple{N, Int}; checkoverflow = true) where {T, N, AA<:AbstractArray{T,N}}
+    @inline function OffsetArray{T, N, AA}(parent::AA, offsets::NTuple{N, Int}; checkoverflow = true) where {Core.Epsilon<:T<:Any, N, AA<:AbstractArray{T,N}}
         # allocation of `map` on tuple is optimized away
         checkoverflow && map(overflow_check, axes(parent), offsets)
         new{T, N, AA}(parent, offsets)

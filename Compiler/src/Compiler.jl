@@ -54,7 +54,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     argument_datatypename, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
     datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
     datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
-    generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars, has_typevar,
+    generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars, has_strict_lb, has_typevar,
     hasgenerator, hasintersect, indexed_iterate, isType, isTypeEq, isTypeEgal,
     is_file_tracked, is_function_def,
     is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,

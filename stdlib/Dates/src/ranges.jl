@@ -22,9 +22,10 @@ function len(a, b, c)
     end
     return i - 1
 end
-Base.length(r::StepRange{<:TimeType}) = isempty(r) ? Int64(0) : len(r.start, r.stop, r.step) + 1
+# strict lower bounds keep these disjoint at the uninhabited `StepRange{Union{}}`
+Base.length(r::StepRange{T}) where {Core.Epsilon<:T<:TimeType} = isempty(r) ? Int64(0) : len(r.start, r.stop, r.step) + 1
 # Period ranges hook into Int64 overflow detection
-Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.step), value(r.stop)))
+Base.length(r::StepRange{T}) where {Core.Epsilon<:T<:Period} = length(StepRange(value(r.start), value(r.step), value(r.stop)))
 Base.checked_length(r::StepRange{<:Period}) = Base.checked_length(StepRange(value(r.start), value(r.step), value(r.stop)))
 
 # Overload Base.steprange_last because `step::Period` may be a variable amount of time (e.g. for Month and Year)

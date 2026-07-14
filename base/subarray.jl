@@ -219,23 +219,23 @@ function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
 end
 
 # Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
-function view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
+function view(r1::AbstractUnitRange, r2::AbstractUnitRange{T}) where {T<:Integer}
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::AbstractUnitRange, r2::StepRange{<:Integer})
+function view(r1::AbstractUnitRange, r2::StepRange{T}) where {T<:Integer}
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::StepRange, r2::AbstractRange{<:Integer})
+function view(r1::StepRange, r2::AbstractRange{T}) where {T<:Integer}
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::StepRangeLen, r2::OrdinalRange{<:Integer})
+function view(r1::StepRangeLen, r2::OrdinalRange{T}) where {T<:Integer}
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::LinRange, r2::OrdinalRange{<:Integer})
+function view(r1::LinRange, r2::OrdinalRange{T}) where {T<:Integer}
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end

@@ -39,9 +39,13 @@ Base.eval(test_mod, :(struct XX{S,T,U,W} end))
     """) == Vector{T} where {Int<:U<:Number, U<:T<:U}
 
     @testset "implicit whereparams" begin
-        @test JuliaLowering.include_string(test_mod, """
+        U = JuliaLowering.include_string(test_mod, """
         Vector{<:Number}
-        """) == Vector{<:Number}
+        """)
+        @test U == Vector{<:Number}
+        @test Base.has_strict_lb((U::UnionAll).var)
+        @test !(Vector{Union{}} <: U)
+        @test Vector{Union{}} <: (Vector{T} where T<:Number)
         @test JuliaLowering.include_string(test_mod, """
         Vector{>:Number}
         """) == Vector{>:Number}
@@ -53,7 +57,7 @@ end
 
 @test JuliaLowering.include_string(test_mod, """
 XX{Int, <:Integer, Float64, >:AbstractChar}
-""") == (test_mod.XX{Int, T, Float64, S} where {T <: Integer, S >: AbstractChar})
+""") == (test_mod.XX{Int, T, Float64, S} where {Core.Epsilon <: T <: Integer, S >: AbstractChar})
 
 @test JuliaLowering.include_string(test_mod, """
 abstract type A end

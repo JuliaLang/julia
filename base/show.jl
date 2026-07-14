@@ -739,7 +739,7 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     n = length(env)
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
-        return o isa TypeVar &&
+        return o isa TypeVar && p.flags === o.flags &&
             ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o.ub) != 0 &&
             ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o.lb) != 0
     end
@@ -749,7 +749,7 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
             if i == n && egal_var(p, orig[i]) && show_can_elide(p, wheres, elide, env, i)
                 n -= 1
                 elide -= 1
-            elseif p.lb === Union{} && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
+            elseif p.lb === Union{} && has_strict_lb(p) && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
                 elide -= 1
             elseif p.ub === Any && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
                 elide -= 1
@@ -761,12 +761,12 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
         for i = 1:n
             p = env[i]
             if p isa TypeVar
-                if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
+                if p.lb === Union{} && has_strict_lb(p) && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
                     print(io, "<:")
                     show(io, p.ub)
                 elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
                     print(io, ">:")
-                    show(io, p.lb)
+                    show(io, typevar_lb(p))
                 else
                     show(io, p)
                 end
@@ -1083,7 +1083,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
                 while true
                     newname = Symbol(var.name, counter)
                     if !io_has_tvar_name(io, newname, x)
-                        var = TypeVar(newname, var.lb, var.ub)
+                        var = TypeVar(newname, typevar_lb(var), var.ub)
                         x = x{var}
                         break
                     end
@@ -2811,21 +2811,25 @@ function ismodulecall(ex::Expr)
            isa(resolvebinding(ex.args[2]), Module)
 end
 
+show(io::IO, ::Core.TypeofEpsilon) = print(io, "Core.Epsilon")
+
 function show(io::IO, tv::TypeVar)
     # If we are in the `unionall_env`, the type-variable is bound
     # and the type constraints are already printed.
     # We don't need to print it again.
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
+    # A strict lower bound is spelled (and printed) as `Core.Epsilon`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, @nospecialize(b)) # b::Union{Core.AnyType,TypeVar}
+    function show_bound(io::IO, @nospecialize(b)) # b::Union{Core.AnyType,TypeVar,Core.TypeofEpsilon}
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
-        b isa TypeVar ? show(io, b) : show(io, b::Core.AnyType)
+        b isa TypeVar ? show(io, b) :
+            b isa Core.TypeofEpsilon ? show(io, b) : show(io, b::Core.AnyType)
         parens && print(io, ")")
         nothing
     end
-    lb, ub = tv.lb, tv.ub
+    lb, ub = typevar_lb(tv), tv.ub
     if !in_env && lb !== Bottom
         if ub === Any
             show_unquoted(io, tv.name)

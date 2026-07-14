@@ -621,7 +621,7 @@ end
     return Any
 end
 add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
-@nospecs function typevar_tfunc(::AbstractLattice, n, lb_arg, ub_arg)
+@nospecs function typevar_tfunc(𝕃::AbstractLattice, n, lb_arg, ub_arg)
     lb = Union{}
     ub = Any
     ub_certain = lb_certain = true
@@ -630,6 +630,13 @@ add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
         isa(nval, Symbol) || return Union{}
         if isa(lb_arg, Const)
             lb = lb_arg.val
+            if lb === Core.Epsilon
+                # an `Epsilon` lower bound builds a var whose lb is Union{} plus a
+                # strict (exclusive) flag that `PartialTypeVar` does not track; stay
+                # imprecise, but keep the exactness of the error cases
+                pT = typevar_tfunc(𝕃, n, Const(Union{}), ub_arg)
+                return pT === Union{} ? pT : TypeVar
+            end
         else
             lb_arg = widenslotwrapper(lb_arg)
             if isTypeEgal(lb_arg)
@@ -679,7 +686,8 @@ end
 @nospecs function typevar_nothrow(𝕃::AbstractLattice, n, lb, ub)
     ⊑ = partialorder(𝕃)
     n ⊑ Symbol || return false
-    typebound_nothrow(𝕃, lb) || return false
+    # `Epsilon` is additionally accepted as a lower bound (strict Union{} bound)
+    typebound_nothrow(𝕃, lb) || widenconst(lb) === Core.TypeofEpsilon || return false
     typebound_nothrow(𝕃, ub) || return false
     return true
 end
@@ -1853,6 +1861,10 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
             if !(u.var.lb <: ai <: u.var.ub)
                 return false
             end
+            if has_strict_lb(u.var) && ai <: u.var.lb
+                # an exclusive (Epsilon) lower bound also rejects values at or below it
+                return false
+            end
         else
             T, exact, _, istype = instanceof_tfunc(ai, false)
             if T === Bottom
@@ -1874,7 +1886,10 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 if !(Tub <: u.var.ub)
                     return false
                 end
-                if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
+                strict = has_strict_lb(u.var)
+                # for an inexact argument, any subtype of T (including Union{})
+                # may show up, which an exclusive (Epsilon) lower bound rejects
+                if exact ? (!(u.var.lb <: T) || (strict && T <: u.var.lb)) : (!(u.var.lb === Bottom) || strict)
                     return false
                 end
             end

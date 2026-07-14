@@ -570,6 +570,13 @@ function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
     return Vararg{T, t.N}
 end
 
+# whether `v` carries the strict (exclusive) lower-bound flag, i.e. was
+# constructed with `Core.Epsilon` as its lower bound (JL_TVAR_STRICT_LB)
+has_strict_lb(v::TypeVar) = (v.flags & 0x01) !== 0x00
+
+# the lower bound of `v` as it must be re-spelled to construct an equivalent var
+typevar_lb(v::TypeVar) = (has_strict_lb(v) && v.lb === Union{}) ? Core.Epsilon : v.lb
+
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
 function rename_unionall(@nospecialize(u))
     if !isa(u, UnionAll)
@@ -577,7 +584,7 @@ function rename_unionall(@nospecialize(u))
     end
     var = u.var::TypeVar
     body = UnionAll(var, rename_unionall(u.body))
-    nv = TypeVar(var.name, var.lb, var.ub)
+    nv = TypeVar(var.name, typevar_lb(var), var.ub)
     return UnionAll(nv, body{nv})
 end
 

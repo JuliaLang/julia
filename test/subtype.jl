@@ -1320,8 +1320,10 @@ f12721(::T) where {T<:Type{Int}} = true
 
 # implicit "covariant" type parameters:
 mutable struct TwoParams{S,T}; x::S; y::T; end
-@test TwoParams{<:Real,<:Number} == (TwoParams{S,T} where S<:Real where T<:Number) ==
-      (TwoParams{S,<:Number} where S<:Real) == (TwoParams{<:Real,T} where T<:Number)
+@test TwoParams{<:Real,<:Number} ==
+      (TwoParams{S,T} where Core.Epsilon<:S<:Real where Core.Epsilon<:T<:Number) ==
+      (TwoParams{S,<:Number} where Core.Epsilon<:S<:Real) ==
+      (TwoParams{<:Real,T} where Core.Epsilon<:T<:Number)
 @test TwoParams(3,0im) isa TwoParams{<:Real,<:Number}
 @test TwoParams(3,"foo") isa TwoParams{<:Real}
 @test !(TwoParams(3im,0im) isa TwoParams{<:Real,<:Number})
@@ -1338,8 +1340,10 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 @test [TwoParams(3,4)] isa (Vector{TwoParams{T,T}} where T<:Real)
 
 # implicit "contravariant" type parameters:
-@test TwoParams{>:Int,<:Number} == (TwoParams{S,T} where S>:Int where T<:Number) ==
-      (TwoParams{S,<:Number} where S>:Int) == (TwoParams{>:Int,T} where T<:Number)
+@test TwoParams{>:Int,<:Number} ==
+      (TwoParams{S,T} where S>:Int where Core.Epsilon<:T<:Number) ==
+      (TwoParams{S,<:Number} where S>:Int) ==
+      (TwoParams{>:Int,T} where Core.Epsilon<:T<:Number)
 @test TwoParams(3,0im) isa TwoParams{>:Int,<:Number}
 @test TwoParams{Real,Complex}(3,0im) isa TwoParams{>:Int,<:Number}
 @test !(TwoParams(3.0,0im) isa TwoParams{>:Int,<:Number})
@@ -1852,7 +1856,7 @@ CovType{T} = Union{AbstractMatrix{T},
                    Vector{UpperTriangular{T,Matrix{T}}}}
 @testintersect(Pair{<:Any, <:AbstractMatrix},
                Pair{T,     <:CovType{T}} where T<:AbstractFloat,
-               Pair{T,S} where S<:AbstractMatrix{T} where T<:AbstractFloat)
+               Pair{T,S} where Core.Epsilon<:S<:AbstractMatrix{T} where Core.Epsilon<:T<:AbstractFloat)
 
 # issue #31703
 @testintersect(Pair{<:Any, Ref{Tuple{Ref{Ref{Tuple{Int}}},Ref{Float64}}}},
@@ -2088,7 +2092,7 @@ end
 # issue #38279
 t = typeintersect(Tuple{<:Array{T, N}, Val{T}} where {T<:Real, N},
                   Tuple{<:Array{T, N}, Val{<:AbstractString}}  where {T<:Real, N})
-@test t == Tuple{<:Array{Union{}, N}, Val{Union{}}} where N
+@test t === Union{}
 
 # issue #36951
 @testintersect(Type{T} where T>:Missing,
@@ -2495,7 +2499,8 @@ for T in (B46871{Int, N} where {N}, B46871{Int}) # intentional duplication
 end
 abstract type C38497{e,g<:Tuple,i} end
 struct Q38497{o,e<:NTuple{o},g} <: C38497{e,g,Array{o}} end
-@testintersect(Q38497{<:Any, Tuple{Int}}, C38497, Q38497{<:Any, Tuple{Int}, <:Tuple})
+@testintersect(Q38497{<:Any, Tuple{Int}}, C38497,
+               Q38497{<:Any, Tuple{Int}, g} where g<:Tuple)
 # n.b. the only concrete instance of this type is Q38497{1, Tuple{Int}, <:Tuple} (since NTuple{o} also adds an ::Int constraint)
 # but this abstract type is also part of the intersection abstractly
 
@@ -2591,7 +2596,8 @@ end
 
 #issue 55206
 struct T55206{A,B<:Complex{A},C<:Union{Dict{Nothing},Dict{A}}} end
-@testintersect(T55206, T55206{<:Any,<:Any,<:Dict{Nothing}}, T55206{A,<:Complex{A},<:Dict{Nothing}} where {A})
+@testintersect(T55206, T55206{<:Any,<:Any,<:Dict{Nothing}},
+               T55206{A,<:Complex{A},<:Dict{Nothing}} where {Core.Epsilon<:A<:Any})
 @testintersect(
     Tuple{Dict{Int8, Int16}, Val{S1}} where {F1, S1<:AbstractSet{F1}},
     Tuple{Dict{T1, T2}, Val{S2}} where {T1, T2, S2<:Union{Set{T1},Set{T2}}},
@@ -3524,5 +3530,101 @@ end
                         Type{Int}, Type, env, 1) == 1
             @test env[1] !== nothing
         end
+    end
+end
+
+# strict (`Core.Epsilon`) lower bounds (#62265)
+abstract type EpsA62265 end
+abstract type EpsB62265 end
+struct EpsStruct62265{Core.Epsilon<:T<:Any}
+    x::T
+end
+f62265(::Type{T}) where {T>:Core.Epsilon} = T
+f62265amb(::Type{T}, x::Int) where {Core.Epsilon<:T<:EpsA62265} = 1
+f62265amb(::Type{S}, x) where {Core.Epsilon<:S<:EpsB62265} = 2
+f62265diag(x::T, ::Type{T}) where {T<:Integer} = 1
+f62265diag(x::Integer, ::Type{<:Integer}) = 2
+mkstrict62265() = TypeVar(:T, Core.Epsilon, Integer)
+@testset "Core.Epsilon strict lower bounds" begin
+    # construction: the var's lb is Union{}, plus the strict flag
+    let tv = TypeVar(:T, Core.Epsilon, Integer)
+        @test tv isa TypeVar
+        @test tv.lb === Union{}
+        @test tv.ub === Integer
+        @test Base.has_strict_lb(tv)
+    end
+    @test !Base.has_strict_lb(TypeVar(:T, Union{}, Integer))
+    @test Base.has_strict_lb(Core._typevar(:T, Core.Epsilon, Any))
+    # `Epsilon` is only meaningful as a lower bound
+    @test_throws TypeError TypeVar(:T, Core.Epsilon)
+    @test_throws TypeError TypeVar(:T, Int, Core.Epsilon)
+
+    # egal and hashing distinguish the strict flag
+    @test (Type{T} where T>:Core.Epsilon) === (Type{T} where T>:Core.Epsilon)
+    @test (Type{T} where T>:Core.Epsilon) !== (Type{T} where T)
+    @test objectid(Type{T} where T>:Core.Epsilon) == objectid(Type{T} where T>:Core.Epsilon)
+    @test objectid(Type{T} where T>:Core.Epsilon) != objectid(Type{T} where T)
+
+    # subtyping: a strict var ranges over every type except Union{}
+    @test (Type{T} where T>:Core.Epsilon) <: (Type{T} where T)
+    @test !((Type{T} where T) <: (Type{T} where T>:Core.Epsilon))
+    @test Type{Int} <: (Type{T} where T>:Core.Epsilon)
+    @test Type{Union{Int,String}} <: (Type{T} where T>:Core.Epsilon)
+    @test !(Type{Union{}} <: (Type{T} where T>:Core.Epsilon))
+    @test Tuple{Type{Int}, Int} <: (Tuple{Type{T}, Any} where T>:Core.Epsilon)
+    @test !(Tuple{Type{Union{}}, Int} <: (Tuple{Type{T}, Any} where T>:Core.Epsilon))
+
+    # intersection
+    @test typeintersect(Type{Union{}}, Type{T} where T>:Core.Epsilon) === Union{}
+    @test typeintersect(Tuple{Type{Union{}}, Int}, Tuple{Type{T}, Any} where T>:Core.Epsilon) === Union{}
+    @test typeintersect(Type{Int}, Type{T} where T>:Core.Epsilon) == Type{Int}
+    # constructor-style signatures of unrelated families are disjoint with
+    # strict bounds; without them they collide over Type{Union{}}
+    @test typeintersect(Tuple{Type{T}, Any} where {Core.Epsilon<:T<:EpsA62265},
+                        Tuple{Type{S}, Any} where {Core.Epsilon<:S<:EpsB62265}) === Union{}
+    @test typeintersect(Tuple{Type{T}, Any} where {T<:EpsA62265},
+                        Tuple{Type{S}, Any} where {S<:EpsB62265}) !== Union{}
+    let ms = collect(methods(f62265amb))
+        @test length(ms) == 2
+        @test !Base.isambiguous(ms[1], ms[2]; ambiguous_bottom=true)
+    end
+
+    # type application enforces the exclusive bound
+    @test (Type{T} where T>:Core.Epsilon){Int} === Type{Int}
+    @test_throws TypeError (Type{T} where T>:Core.Epsilon){Union{}}
+    @test (Vector{T} where T>:Core.Epsilon){Int} === Vector{Int}
+    @test_throws TypeError (Vector{T} where T>:Core.Epsilon){Union{}}
+    @test EpsStruct62265{Int} isa DataType
+    @test_throws TypeError EpsStruct62265{Union{}}
+    @test EpsStruct62265(1) isa EpsStruct62265{Int}
+
+    # dispatch: methods with a strict-bound Type var are not applicable to Type{Union{}}
+    @test f62265(Int) === Int
+    @test f62265(Union{Int,String}) === Union{Int,String}
+    @test_throws MethodError f62265(Union{})
+    # The excluded Bottom instantiation contributes no values when a correlated
+    # universal variable also has a required covariant occurrence.
+    @test f62265diag(1, Int) == 1
+    let ms = collect(methods(f62265diag))
+        @test length(ms) == 2
+        @test !Base.isambiguous(ms[1], ms[2]; ambiguous_bottom=true)
+    end
+
+    # a strict var built at runtime, and inference of code that builds one
+    let tv = mkstrict62265()
+        @test tv isa TypeVar && tv.lb === Union{} && Base.has_strict_lb(tv)
+        U = UnionAll(tv, Vector{tv})
+        @test Vector{Int} <: U
+        @test !(Vector{Union{}} <: U)
+    end
+    @test only(Base.return_types(mkstrict62265)) == TypeVar
+
+    # instantiation and substitution preserve the flag
+    let U = Vector{T} where T>:Core.Epsilon
+        @test Base.rename_unionall(U) === U
+        # substituting into the var's bounds rebuilds the var; the flag must survive
+        VS = (Vector{T} where {Core.Epsilon<:T<:S}) where {S}
+        @test VS{Integer} === (Vector{T} where {Core.Epsilon<:T<:Integer})
+        @test !(Vector{Union{}} <: VS{Integer})
     end
 end

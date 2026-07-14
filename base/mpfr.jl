@@ -464,7 +464,7 @@ function round(::Type{BigInt}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingM
 end
 
 round(::Type{T}, x::BigFloat, r::RoundingMode) where T<:Union{Signed, Unsigned} =
-    invoke(round, Tuple{Type{<:Union{Signed, Unsigned}}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, T, x, r)
+    invoke(round, Tuple{Type{S} where S<:Union{Signed, Unsigned}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, T, x, r)
 round(::Type{BigInt}, x::BigFloat, r::RoundingMode) =
     invoke(round, Tuple{Type{BigInt}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, BigInt, x, r)
 

@@ -1761,6 +1761,34 @@ The singleton type containing only the value `Union{}` (which represents the emp
 Core.TypeofBottom
 
 """
+    Core.Epsilon
+
+A marker singleton usable as the lower bound of a `TypeVar` (i.e. after `>:` in
+a `where` clause). The resulting variable's lower bound is `Union{}`, but
+`Union{}` itself is excluded from the admissible values, so the variable ranges
+only over non-empty types.
+
+For example, a method
+
+```julia
+f(::Type{T}) where {T>:Core.Epsilon} = T
+```
+
+is applicable to every type except `Type{Union{}}`, whereas the corresponding
+method written without the bound would also be applicable to (and thus, e.g.,
+ambiguous with other such methods for) `Type{Union{}}`.
+
+Anonymous upper-bounded type parameters use this lower bound implicitly. Thus,
+`Type{<:Foo}` is equivalent to
+`Type{T} where {Core.Epsilon<:T<:Foo}`, and does not include
+`Type{Union{}}`.
+
+!!! compat "Julia 1.14"
+    `Core.Epsilon` requires Julia 1.14 or later.
+"""
+Core.Epsilon
+
+"""
     Core.Type{T}
 
 `Core.Type` is an abstract type which has all type objects as its instances.

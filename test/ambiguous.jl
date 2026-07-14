@@ -314,8 +314,8 @@ for f in (Ambig8.f, Ambig8.g)
 end
 
 module Ambig9
-f(x::Complex{<:Integer}) = 1
-f(x::Complex{<:Rational}) = 2
+f(x::Complex{T}) where {T<:Integer} = 1
+f(x::Complex{T}) where {T<:Rational} = 2
 end
 @test !Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=false)
 @test Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=true)
@@ -436,10 +436,11 @@ cc46601(::Type{T}, x::T) where {T<:Number} = 4
 cc46601(::Type{T}, arg) where {T<:VecElement} = 5
 cc46601(::Type{T}, x::Number) where {T<:Number} = 6
 @test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
-@test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 6
+# Strict anonymous bounds do not add Bottom-only ambiguous candidates.
+@test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
 cc46601(::Type{T}, x::Int) where {T<:AbstractString} = 7
 @test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
-@test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 7
+@test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
 
 # Issue #55231
 struct U55231{P} end

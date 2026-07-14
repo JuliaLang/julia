@@ -2262,8 +2262,9 @@
       (expand-where (expand-wheres body (cdr vars)) (car vars))))
 
 ; given e = (curly T params...), return (newparams . whereparams) where any <:X expression
-; in params is converted to T and T<:X is added to whereparams; similarly for >:X.
-; (This implements the syntactic sugar Foo{<:Bar} --> Foo{T} where T<:Bar.)
+; in params is converted to T and Epsilon<:T<:X is added to whereparams; similarly for >:X.
+; (This implements the syntactic sugar Foo{<:Bar} -->
+; Foo{T} where Epsilon<:T<:Bar.)
 (define (extract-implicit-whereparams e)
   (define (extract params newparams whereparams)
     (if (null? params)
@@ -2271,7 +2272,11 @@
         (let ((p (car params)))
           (if (and (length= p 2) (or (eq? (car p) '|<:|) (eq? (car p) '|>:|)))
               (let ((T (gensy)))
-                (extract (cdr params) (cons T newparams) (cons (list (car p) T (cadr p)) whereparams)))
+                (extract (cdr params) (cons T newparams)
+                         (cons (if (eq? (car p) '|<:|)
+                                   (list 'var-bounds T '(core Epsilon) (cadr p))
+                                   (list (car p) T (cadr p)))
+                               whereparams)))
               (extract (cdr params) (cons p newparams) whereparams)))))
   (extract (cddr e) '() '()))
 

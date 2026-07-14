@@ -134,6 +134,7 @@
     XX(typemap_level_type, jl_datatype_t*) \
     XX(typename_type, jl_datatype_t*) \
     XX(typeofbottom_type, jl_datatype_t*) \
+    XX(typeofepsilon_type, jl_datatype_t*) \
     XX(type_type, jl_unionall_t*) \
     XX(type_typename, jl_typename_t*) \
     XX(uint16_type, jl_datatype_t*) \
@@ -157,6 +158,7 @@
     YY(nothing, jl_value_t*) \
     YY(false, jl_value_t*) \
     YY(true, jl_value_t*) \
+    YY(epsilon, jl_value_t*) \
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(ZZ) \

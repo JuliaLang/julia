@@ -362,6 +362,8 @@ macro nospecializeinfer() Expr(:meta, :nospecializeinfer) end
 macro _boundscheck() Expr(:boundscheck) end
 
 # n.b. the effects and model of these is refined in inference abstractinterpretation.jl
+# n.b. passing `Epsilon` as the lower bound gives a var whose lb is Union{}, but
+# which excludes Union{} itself from the admissible values (see jl_new_typevar)
 TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
 TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
 TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)

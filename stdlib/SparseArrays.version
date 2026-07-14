@@ -1,4 +1,4 @@
-SPARSEARRAYS_BRANCH = main
-SPARSEARRAYS_SHA1 = ce5909e900a288aa0e601a8052335c57208a6a09
-SPARSEARRAYS_GIT_URL := https://github.com/JuliaSparse/SparseArrays.jl.git
-SPARSEARRAYS_TAR_URL = https://api.github.com/repos/JuliaSparse/SparseArrays.jl/tarball/$1
+SPARSEARRAYS_BRANCH = sparsearrays-epsilon-docs
+SPARSEARRAYS_SHA1 = 10242172c2f4e2c9b0543314dd8c30db180fd440
+SPARSEARRAYS_GIT_URL := https://github.com/KenoAIStaging/julia.git
+SPARSEARRAYS_TAR_URL = https://api.github.com/repos/KenoAIStaging/julia/tarball/$1

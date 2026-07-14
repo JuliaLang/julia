@@ -612,6 +612,10 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test convert(Matrix, Y) == Y
     @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
     @test_throws MethodError convert(Matrix, X)
+
+    # AbstractArray conversions retain the identity conversion without ambiguity.
+    @test convert(AbstractVector{Int}, X) === X
+    @test convert(AbstractMatrix{Int}, Y) === Y
 end
 
 mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end

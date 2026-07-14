@@ -202,7 +202,7 @@ isone(::AbstractIrrational) = false
 
 hash(x::Irrational, h::UInt) = 3 *% h -% objectid(x)
 
-widen(::Type{T}) where {T<:Irrational} = T
+widen(::Type{T}) where {Core.Epsilon<:T<:Irrational} = T  # strict lower bound, see char.jl
 
 zero(::AbstractIrrational) = false
 zero(::Type{<:AbstractIrrational}) = false

@@ -1476,7 +1476,7 @@ int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT
 
 // type instantiation
 
-static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub)
+static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub, int strict_lb)
 {
     jl_value_t *lb = t, *ub = t;
     if (jl_is_typevar(t) || jl_has_free_typevars(t)) {
@@ -1489,6 +1489,9 @@ static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub)
     else if (!jl_is_type(t)) {
         return vlb == jl_bottom_type && vub == (jl_value_t*)jl_any_type;
     }
+    if (strict_lb && !jl_has_free_typevars(vlb) &&
+        (vlb == jl_bottom_type ? t == jl_bottom_type : jl_subtype(ub, vlb)))
+        return 0; // an exclusive (Epsilon) lower bound rejects values at or below it
     return ((jl_has_free_typevars(vlb) || jl_subtype(vlb, lb)) &&
             (jl_has_free_typevars(vub) || jl_subtype(ub, vub)));
 }
@@ -1566,7 +1569,7 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
 
         jl_unionall_t *ua = (jl_unionall_t*)tc;
         if (!jl_has_free_typevars(ua->var->lb) && !jl_has_free_typevars(ua->var->ub) &&
-            !within_typevar(pi, ua->var->lb, ua->var->ub)) {
+            !within_typevar(pi, ua->var->lb, ua->var->ub, (ua->var->flags & JL_TVAR_STRICT_LB) != 0)) {
             jl_datatype_t *inner = (jl_datatype_t*)jl_unwrap_unionall(tc);
             int iswrapper = 0;
             if (jl_is_datatype(inner)) {
@@ -1657,6 +1660,7 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p
 jl_unionall_t *jl_rename_unionall(jl_unionall_t *u)
 {
     jl_tvar_t *v = jl_new_typevar(u->var->name, u->var->lb, u->var->ub);
+    v->flags = u->var->flags;
     jl_value_t *t = NULL;
     JL_GC_PUSH2(&v, &t);
     jl_typeenv_t env = { u->var, (jl_value_t *)v, NULL };
@@ -1797,6 +1801,7 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
         body = jl_substitute_datatype(ut->body, x, y);
         if (lb != ut->var->lb || ub != ut->var->ub) {
             jl_tvar_t *newtvar = jl_new_typevar(ut->var->name, lb, ub);
+            newtvar->flags = ut->var->flags;
             JL_GC_PUSH1(&newtvar);
             body = jl_substitute_var(body, ut->var, (jl_value_t*)newtvar);
             t = jl_new_struct(jl_unionall_type, newtvar, body);
@@ -2148,7 +2153,7 @@ static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, siz
     for (i = 0; i < np; i++) {
         assert(jl_is_unionall(wrapper));
         jl_tvar_t *tv = ((jl_unionall_t*)wrapper)->var;
-        if (!within_typevar(params[i], bounds[2*i], bounds[2*i+1])) {
+        if (!within_typevar(params[i], bounds[2*i], bounds[2*i+1], (tv->flags & JL_TVAR_STRICT_LB) != 0)) {
             if (nothrow) {
                 JL_GC_POP();
                 return 1;
@@ -2910,6 +2915,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             }
             else if (lb != ua->var->lb || var != ua->var->ub) {
                 var = (jl_value_t*)jl_new_typevar(ua->var->name, lb, var);
+                ((jl_tvar_t*)var)->flags = ua->var->flags;
             }
             else {
                 var = (jl_value_t*)ua->var;
@@ -3473,12 +3479,25 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(nothing);
     jl_nothing_type->instance = jl_nothing;
 
+    // `Epsilon` is a marker singleton: passed as a TypeVar lower bound it spells
+    // lb == Union{}, with Union{} itself excluded from the admissible values
+    // (JL_TVAR_STRICT_LB; see jl_new_typevar)
+    jl_typeofepsilon_type = jl_new_datatype(jl_symbol("TypeofEpsilon"), core, jl_any_type, jl_emptysvec,
+                                            jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
+    jl_epsilon = jl_gc_permobj(ct->ptls, 0, jl_typeofepsilon_type, 0);
+    jl_typeofepsilon_type->instance = jl_epsilon;
+
+    // created early because TypeVar's flags field needs it
+    jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
+                                         jl_any_type, jl_emptysvec, 8);
+    XX(uint8);
+
     jl_tvar_type = jl_new_datatype(jl_symbol("TypeVar"), core, jl_any_type, jl_emptysvec,
-                                   jl_perm_symsvec(3, "name", "lb", "ub"),
-                                   jl_svec(3, jl_symbol_type, jl_any_type, jl_any_type),
-                                   jl_emptysvec, 0, 1, 3);
+                                   jl_perm_symsvec(4, "name", "lb", "ub", "flags"),
+                                   jl_svec(4, jl_symbol_type, jl_any_type, jl_any_type, jl_uint8_type),
+                                   jl_emptysvec, 0, 1, 4);
     XX(tvar);
-    const static uint32_t tvar_constfields[1] = { 0x00000007 }; // all fields are constant, even though TypeVar itself has identity
+    const static uint32_t tvar_constfields[1] = { 0x0000000f }; // all fields are constant, even though TypeVar itself has identity
     jl_tvar_type->name->constfields = tvar_constfields;
 
     jl_typeofbottom_type = jl_new_datatype(jl_symbol("TypeofBottom"), core, jl_anytype_type, jl_emptysvec,
@@ -3582,9 +3601,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_uint64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt64"), core,
                                           jl_any_type, jl_emptysvec, 64);
     XX(uint64);
-    jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
-                                         jl_any_type, jl_emptysvec, 8);
-    XX(uint8);
+    // n.b. jl_uint8_type was created earlier, before jl_tvar_type
     jl_uint16_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt16"), core,
                                           jl_any_type, jl_emptysvec, 16);
     XX(uint16);

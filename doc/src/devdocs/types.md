@@ -94,11 +94,13 @@ UnionAll
     name: Symbol T
     lb: Union{}
     ub: abstract type Any
+    flags: UInt8 0x00
   body: UnionAll
     var: TypeVar
       name: Symbol N
       lb: Union{}
       ub: abstract type Any
+      flags: UInt8 0x00
     body: mutable struct Array{T, N} <: DenseArray{T, N}
       ref::MemoryRef{T}
       size::NTuple{N, Int64}
@@ -187,11 +189,13 @@ TypeName
       name: Symbol T
       lb: Union{}
       ub: abstract type Any
+      flags: UInt8 0x00
     body: UnionAll
       var: TypeVar
         name: Symbol N
         lb: Union{}
         ub: abstract type Any
+        flags: UInt8 0x00
       body: mutable struct Array{T, N} <: DenseArray{T, N}
   Typeofwrapper: abstract type Type{Array} <: Any
   cache: SimpleVector

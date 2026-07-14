@@ -62,7 +62,7 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
     @test isequal(map(tuple, [1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
     @test Core.Compiler.return_type(map, Tuple{typeof(tuple), Vector{Int},
                                                Vector{Union{Float64, Missing}}}) ==
-        Vector{<:Tuple{Int, Any}}
+        (Vector{T} where {T<:Tuple{Int, Any}})
     # Check that corner cases do not throw an error
     @test isequal(map(x -> x === 1 ? nothing : x, [1, 2, missing]),
                   [nothing, 2, missing])

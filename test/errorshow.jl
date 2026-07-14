@@ -549,7 +549,7 @@ let err_str,
                      "var\"@doc\"(__source__::LineNumberNode, __module__::Module, x...) @ Core boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() @ $curmod_str $sp:$(method_defs_lineno + 7)")
-    @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
+    @test startswith(sprint(show, which((StructWithUnionAllMethodDefs{T} where T<:Integer), (Any,))),
                      "($(curmod_prefix)StructWithUnionAllMethodDefs{T} where T<:Integer)(x)")
     @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
     @test repr("text/plain", Core.getfield) == "getfield (built-in function)"

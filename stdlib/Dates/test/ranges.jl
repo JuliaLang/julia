@@ -603,6 +603,18 @@ end
     @test length(r) == 366
 end
 
+@testset "length StepRange methods carry strict lower bounds" begin
+    # the length methods use strict `>:Core.Epsilon` lower bounds
+    daterange = Date(2000):Day(1):Date(2000, 1, 10)
+    periodrange = Day(1):Day(1):Day(5)
+    @test length(daterange) == 10
+    @test length(periodrange) == 5
+    for r in (daterange, periodrange)
+        m = which(length, Tuple{typeof(r)})
+        @test Base.has_strict_lb((m.sig::UnionAll).var)
+    end
+end
+
 # Issue #48209
 @testset "steprange_last overflow" begin
     epoch = Date(Date(1) - Day(1))

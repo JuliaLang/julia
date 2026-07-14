@@ -18,6 +18,12 @@ New language features
     `continue name` to continue a labeled loop ([#60481]).
   - `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
     field types. All types in the group are resolved atomically at the end of the block ([#60569]).
+  - The new marker singleton `Core.Epsilon` may be used as the lower bound of a type variable
+    (e.g. `f(::Type{T}) where {T>:Core.Epsilon}`) to exclude `Union{}` from the variable's admissible
+    values while keeping the lower bound `Union{}` otherwise. In particular, such a constructor-style
+    method is not applicable to `Type{Union{}}` and therefore cannot be ambiguous with other methods
+    over it. Anonymous upper-bounded type parameters such as the one in `Type{<:Foo}` now use this
+    lower bound implicitly, so that spelling no longer includes `Type{Union{}}` ([#62265]).
 
 Language changes
 ----------------

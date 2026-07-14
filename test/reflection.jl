@@ -754,9 +754,8 @@ fLargeTable(::Union, ::Union) = "b"
 @test length(methods(fLargeTable)) == 205
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
-# issue #58479 (updated for #33136: a type value `v` matches `::Type{<:DataType}`
-# only if `v <: DataType`, and a `Type{X}` is no longer a subtype of any single
-# kind -- except wrapper-like classes like `Vector`, whose whole cover is `UnionAll`)
+# issue #58479 (updated for #33136 and strict anonymous bounds: a type value `v`
+# matches `::Type{<:DataType}` only if `v <: DataType` and `v !== Union{}`)
 fLargeTable(::Type) = "Type"
 fLargeTable(::Type{<:DataType}) = "DataType"
 @test fLargeTable(Type) == "Type"
@@ -767,7 +766,7 @@ fLargeTable(::Type{<:DataType}) = "DataType"
 @test fLargeTable(Type{Vector}) == "Type"
 @test fLargeTable(Type{Type{Union{}}}) == "Type"
 @test fLargeTable(Type{Union{}}) == "Type"
-@test fLargeTable(Union{}) == "DataType"
+@test fLargeTable(Union{}) == "Type"
 @test fLargeTable(Type{<:DataType}) == "Type"
 fLargeTable(::Type{<:UnionAll}) = "UnionAll"
 @test fLargeTable(UnionAll) == "UnionAll"
@@ -775,7 +774,7 @@ fLargeTable(::Type{<:UnionAll}) = "UnionAll"
 @test fLargeTable(Type{Int}) == "Type"
 @test fLargeTable(Type{Type{Union{}}}) == "Type"
 @test fLargeTable(Type{Union{}}) == "Type"
-@test_throws MethodError fLargeTable(Union{})
+@test fLargeTable(Union{}) == "UnionAll"
 @test fLargeTable(Type{<:DataType}) == "Type"
 @test fLargeTable(Type{Vector{T}} where T) == "Type"
 @test fLargeTable(Union{DataType,Type{Vector{T}} where T}) == "Type"

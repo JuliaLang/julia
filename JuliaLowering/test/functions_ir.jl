@@ -317,7 +317,7 @@ end
     slots: [slot₁/#self#(!read) slot₂/c(!read) slot₃/b1 slot₄/b2 slot₅/tmp(!read) slot₆/tmp(!read) slot₇/tmp(!read)]
     1   TestMod.Union
     2   TestMod.Integer
-    3   (call core.TypeVar :#T1 %₂)
+    3   (call core.TypeVar :#T1 core.Epsilon %₂)
     4   TestMod.Vector
     5   (call core.apply_type %₄ %₃)
     6   (call core.UnionAll %₃ %₅)
