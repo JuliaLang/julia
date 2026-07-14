@@ -123,9 +123,14 @@ end
     s1 = reshape(view(rand(UInt8, 16), 1:16), 2, 2, 2, 2)
     s2 = view(s1, 1:2, 1:2, 1:2, 1:2)
     s3 = view(s1, 1:2, 1:2, 1, 1:2)
+    s4 = view(s1, 2, 1:2, 1:2, 1:2)
+    v = rand(UInt8, 16)
+    s5 = view(v, 16:-1:1)
+    s6 = view(v, 1:2:15)
     mktemp() do path, io
         b = Vector{UInt8}(undef, 17)
-        for s::StridedArray in (s3, s1, s2)
+        for s in (s1, s2, s3, s4, s5, s6)
+            truncate(io, 0)
             @test write(io, s) == length(s)
             seek(io, 0)
             @test readbytes!(io, b) == length(s)
@@ -134,6 +139,16 @@ end
             @test read!(io, fill!(deepcopy(s), 0)) == s
             seek(io, 0)
         end
+    end
+end
+
+@testset "read! into immutable CodeUnits throws" begin
+    mktemp() do path, io
+        write(io, "abc")
+        seek(io, 0)
+        b = codeunits("def")
+        @test_throws CanonicalIndexError read!(io, b)
+        @test b == codeunits("def")
     end
 end
 
