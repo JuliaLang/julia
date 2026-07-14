@@ -987,19 +987,11 @@ function pi_on_argument(x)
     end
     return -2
 end
-let code = code_typed(pi_on_argument, Tuple{Any})[1].first.code,
-    nisa = 0, found_pi = false
-    for stmt in code
-        if Meta.isexpr(stmt, :call)
-            callee = stmt.args[1]
-            if (callee === isa || callee === :isa || (isa(callee, GlobalRef) &&
-                                                      callee.name === :isa))
-                nisa += 1
-            end
-        elseif stmt === Core.PiNode(Core.Argument(2), Core.Argument)
-            found_pi = true
-        end
-    end
+let src = code_typed(pi_on_argument, Tuple{Any})[1].first
+    # `iscall` resolves the callee through `argextype`, so it matches whether the `isa`
+    # read is a bare `GlobalRef` or a reformulated `Core.BindingPartition`.
+    nisa = count(iscall((src, isa)), src.code)
+    found_pi = any(==(Core.PiNode(Core.Argument(2), Core.Argument)), src.code)
     @test nisa == 1
     @test found_pi
 end

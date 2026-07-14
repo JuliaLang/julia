@@ -3249,6 +3249,13 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, GlobalRef)
         # No need for an edge since an explicit GlobalRef will be picked up by the source scan
         return abstract_eval_globalref(interp, e, sstate.saw_latestworld, sv)
+    elseif isa(e, Core.BindingPartition)
+        # A resolved global read frozen by `reformulate_globals_pass!` (with an
+        # invalidation edge already recorded, so no new edge is needed here). Its
+        # rt/exct/effects reflect the partition kind, exactly as the read it encodes:
+        # a mutable typed-global read can throw `UndefVarError` and is not consistent,
+        # while a defined const reads as total/`Const`.
+        return abstract_eval_partition_load(interp, partition_owner(e), e)
     end
     if isa(e, QuoteNode)
         e = e.value
@@ -3863,11 +3870,30 @@ world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
 # Like `walk_binding_partition` but drops the WorldRange tracking — IR-only callers
 # don't use it.
-@inline function walk_to_leaf_partition(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
-    while is_some_binding_imported(binding_kind(partition))
+# Walk imports to the leaf partition, also reporting whether `getglobal` would
+# deprecation-warn for the access: the deprecation flag is ORed across the walk but
+# suppressed once an explicit import is passed (the `import`/`using: x` site warns
+# instead). Mirrors the runtime `jl_walk_binding_inplace_depwarn`, and returns the same
+# leaf `(binding, partition)` as `walk_to_leaf_partition` (the identical stop condition)
+# so the emitted `depwarn_partition` names the same leaf `getglobal` would.
+@inline function walk_to_leaf_partition_depwarn(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
+    passed_explicit = false
+    depwarn = false
+    while true
+        kind = binding_kind(partition)
+        if !passed_explicit
+            depwarn |= (partition.kind & PARTITION_FLAG_DEPWARN) != 0
+        end
+        is_some_binding_imported(kind) || break
+        is_some_explicit_imported(kind) && (passed_explicit = true)
         binding = partition_restriction(partition)::Core.Binding
         partition = lookup_binding_partition(world, binding)
     end
+    return (binding, partition, depwarn)
+end
+
+@inline function walk_to_leaf_partition(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
+    binding, partition, _ = walk_to_leaf_partition_depwarn(binding, partition, world)
     return (binding, partition)
 end
 
@@ -3910,8 +3936,8 @@ globalref_rt_widened(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompa
 
 # `singleton_type`-compatible variant — skips the `Const(...)` box on defined-const
 # bindings, and (like `singleton_type`) also unwraps `Type{T}` / singleton restrictions.
-function globalref_singleton(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
-    partition = globalref_leaf_partition(g, src)
+# `partition` must already be a leaf partition (see `walk_to_leaf_partition`).
+function partition_singleton(partition::Core.BindingPartition)
     kind = binding_kind(partition)
     (is_some_guard(kind) || kind == PARTITION_KIND_DECLARED) && return nothing
     if is_defined_const_binding(kind)
@@ -3920,6 +3946,9 @@ function globalref_singleton(g::GlobalRef, src::Union{CodeInfo, IRCode, Incremen
     end
     return singleton_type(partition_restriction(partition))
 end
+
+globalref_singleton(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact}) =
+    partition_singleton(globalref_leaf_partition(g, src))
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::Union{GlobalRef, Core.Binding}, sv::AbsIntState)
     world = get_inference_world(interp)
@@ -4050,6 +4079,62 @@ function scan_partitions(query::F, interp::AbstractInterpreter, g::GlobalRef, ww
     return scan_specified_partitions(query, walk_binding_partition, interp, g, wwr)
 end
 
+# The equivalence key for a binding partition under a global access: two partitions are
+# interchangeable for the access iff their keys are egal. It pairs `abstract_eval_partition_load`
+# -- the maximum information inference/codegen reads from a partition -- with the binding
+# identity for a typed global (`PARTITION_KIND_GLOBAL`), since codegen freezes that specific
+# slot (a constant embeds its value and is slot-agnostic; its key drops the identity as
+# `nothing`). This is the single rule shared by the merge in `binding_access_range` and by
+# `invalidate_code_for_globalref!` (via `bindinginvalidations.jl`) to decide whether a change
+# invalidates code, so live invalidation and revalidation cannot disagree. It consistently
+# ignores lookup-irrelevant flag flips (`export`/`public`), which never change the loaded value.
+# The returned `Pair{Any,Any}` is immutable, so `===` compares its fields recursively by egal.
+binding_access_key(b::Core.Binding, p::Core.BindingPartition) =
+    Pair{Any,Any}(abstract_eval_partition_load(nothing, b, p),
+                  binding_kind(p) === PARTITION_KIND_GLOBAL ? b : nothing)
+
+# The single source of truth for "which world range is a global access to `g` valid over,
+# and which partition does it resolve to." Shared by inference (both to narrow `valid_worlds`
+# and to type the access), edge-based world narrowing (`compute_recursive_worlds`), and
+# revalidation (`reinfer.jl`), so every consumer agrees; the optimizer's reformulation
+# resolves only the leaf (at the same accessing world -- see `_reformulate_read`) and relies
+# on the binding edge it records to feed this range to `compute_recursive_worlds`. The merge
+# spans neighboring partitions whose `binding_access_key` is egal -- exactly the rule
+# `invalidate_code_for_globalref!` uses to decide whether a change invalidates code.
+#
+# `write=false` (read) walks through imports to the leaf: a `using` and an `import` that
+# resolve to the same value are equivalent. `write=true` (store) does NOT walk imports -- a
+# store to an imported binding throws rather than storing -- so it stays on `g`'s own binding
+# and an owned global is never merged with an import.
+#
+# N.B. the scan extends backward as well as forward. A load is naturally lower-bounded at the
+# world it is performed, so the backward reach is currently only exercised when validity is
+# queried for an earlier world (e.g. `invoke_in_world`); it is kept so this matches the
+# forward-merging scan inference performs and so all consumers share one range.
+function binding_access_range(g::GlobalRef, wwr::WorldWithRange; write::Bool)
+    query = function (::Nothing, b::Core.Binding, p::Core.BindingPartition)
+        binding_access_key(b, p)
+    end
+    # The leaf must be resolved at `wwr.this` (the accessing world, always within the returned
+    # range), NOT at the scan's initial lookup world (`max_world(wwr.valid_worlds)`): the scan
+    # walks backward from there to the partition covering `wwr.this`, so the initial partition
+    # can be a different, newer binding (e.g. a type redefined in a later world).
+    binding = convert(Core.Binding, g)
+    this_partition = lookup_binding_partition(wwr.this, binding)
+    if write
+        own_walk = function (b::Core.Binding, p::Core.BindingPartition, ::UInt)
+            Pair{WorldRange, Pair{Core.Binding, Core.BindingPartition}}(
+                WorldRange(p.min_world, p.max_world), b=>p)
+        end
+        valid_worlds, _ = scan_specified_partitions(query, own_walk, nothing, g, wwr)
+        _, leaf = own_walk(binding, this_partition, wwr.this)
+    else
+        valid_worlds, _ = scan_specified_partitions(query, walk_binding_partition, nothing, g, wwr)
+        _, leaf = walk_binding_partition(binding, this_partition, wwr.this)
+    end
+    return Pair{WorldRange, Pair{Core.Binding, Core.BindingPartition}}(valid_worlds, leaf)
+end
+
 abstract_load_all_consistent_leaf_partitions(interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange) =
     scan_leaf_partitions(abstract_eval_partition_load, interp, g, wwr)
 abstract_load_all_consistent_leaf_partitions(::Nothing, g::GlobalRef, wwr::WorldWithRange) =
@@ -4059,26 +4144,27 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_
     if saw_latestworld
         return RTEffects(Any, Any, generic_getglobal_effects)
     end
-    # For inference purposes, we don't particularly care which global binding we end up loading, we only
-    # care about its type. However, we would still like to terminate the world range for the particular
-    # binding we end up reaching such that codegen can emit a simpler pointer load.
+    # For inference purposes, we don't particularly care which global binding we end up loading, we
+    # only care about its type, but we still narrow `valid_worlds` to the binding's access range.
+    # For an access the optimizer later resolves, the binding edge it records recomputes this same
+    # range at finish (`compute_recursive_worlds`); for one left on the runtime path (e.g. a guard
+    # partition), this narrowing is what bounds the code's validity.
     world = get_inference_world(interp::I)
-    (valid_worlds, ret) = scan_leaf_partitions(abstract_eval_partition_load, interp, g, binding_world_hints(world, sv))
+    valid_worlds, (leaf_b, leaf_p) = binding_access_range(g, binding_world_hints(world, sv); write=false)
     update_valid_age!(sv, world, valid_worlds)
-    return ret
+    return abstract_eval_partition_load(interp, leaf_b, leaf_p)
 end
 
 function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
     if saw_latestworld
         return Pair{Any,Any}(newty, Union{TypeError, ErrorException})
     end
-    newty′ = RefValue{Any}(newty)
     world = get_inference_world(interp)
-    (valid_worlds, ret) = scan_partitions(interp, g, binding_world_hints(world, sv)) do interp::AbstractInterpreter, ::Core.Binding, partition::Core.BindingPartition
-        global_assignment_binding_rt_exct(interp, partition, newty′[])
-    end
+    # The store targets `g`'s own binding (`write=true`, no import walk); the resulting
+    # rt/exct is uniform over the range, so compute it once on the resolved partition.
+    valid_worlds, (_, partition) = binding_access_range(g, binding_world_hints(world, sv); write=true)
     update_valid_age!(sv, world, valid_worlds)
-    return ret
+    return global_assignment_binding_rt_exct(interp, partition, newty)
 end
 
 function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partition::Core.BindingPartition, @nospecialize(newty))

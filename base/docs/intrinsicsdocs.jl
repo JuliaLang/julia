@@ -216,3 +216,52 @@ Core.Intrinsics.atomic_pointermodify
 See [`unsafe_replace!`](@ref Base.unsafe_replace!).
 """
 Core.Intrinsics.atomic_pointerreplace
+
+"""
+    Core.getglobal_partition(partition::Core.BindingPartition, order::Symbol)
+
+Read the global binding named by a resolved binding `partition`, using the memory `order`
+(which must be a valid atomic order; a non-atomic order throws `ConcurrencyViolationError`).
+Compiler-internal: the optimizer's `reformulate_globals_pass!` emits this in place of a
+`getglobal(mod, name, order)` call once inference has resolved the binding, so codegen can read
+the frozen partition's slot directly. A default-order read is emitted as a bare
+`Core.BindingPartition` instead. The owning binding (and thus its `mod`/`name`) is recovered
+from the partition chain; an undefined binding throws an `UndefVarError`.
+"""
+Core.getglobal_partition
+
+"""
+    Core.setglobal_partition(partition::Core.BindingPartition, op, order, failorder, value, cmp)
+
+Store to the global binding named by a resolved binding `partition` via the store builtin `op`
+(one of [`setglobal!`](@ref), [`swapglobal!`](@ref), [`replaceglobal!`](@ref),
+[`setglobalonce!`](@ref)), returning what that builtin returns. `order`/`failorder` are each a
+`Symbol` or `nothing` (use the builtin default); `value` is the value to store and `cmp` the
+expected value (for `replaceglobal!`; unused otherwise). Compiler-internal: the optimizer's
+`reformulate_globals_pass!` emits this in place of a resolved store on an owned typed global. A
+default-order `setglobal!` is emitted as `Expr(:(=), partition, value)` instead.
+"""
+Core.setglobal_partition
+
+"""
+    Core.isdefinedglobal_partition(partition::Core.BindingPartition, order::Symbol)
+
+Return whether the global binding named by a resolved binding `partition` is defined, using the
+memory `order` (which must be a valid atomic order). Compiler-internal: the optimizer's
+`reformulate_globals_pass!` emits this in place of a resolved [`isdefinedglobal`](@ref) so codegen
+can check the frozen partition's slot inline (a defined constant is always defined). The owning
+binding is recovered from the partition chain.
+"""
+Core.isdefinedglobal_partition
+
+"""
+    Core.depwarn_partition(partition::Core.BindingPartition)
+
+Emit the deprecation warning (if any) for the binding owning a resolved binding `partition`,
+gated at runtime by `--depwarn` (and throwing under `--depwarn=error`). Compiler-internal: since
+the reformulated read (`Core.getglobal_partition` / a bare `Core.BindingPartition`) is
+side-effect free, the optimizer's `reformulate_globals_pass!` emits this as a separate statement
+before a read of a deprecated binding so the warning still fires. The owning binding is recovered
+from the partition chain.
+"""
+Core.depwarn_partition

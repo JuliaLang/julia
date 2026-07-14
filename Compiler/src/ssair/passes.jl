@@ -4,6 +4,7 @@ function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,I
     isexpr(x, :call) || return false
     arg = x.args[1]
     isa(arg, GlobalRef) && return globalref_singleton(arg, ir) === func
+    isa(arg, Core.BindingPartition) && return partition_singleton(arg) === func
     return singleton_type(argextype(arg, ir)) === func
 end
 
@@ -14,6 +15,7 @@ function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Unio
     length(x.args) < narg && return false
     arg = x.args[narg]
     isa(arg, GlobalRef) && return globalref_singleton(arg, ir) === func
+    isa(arg, Core.BindingPartition) && return partition_singleton(arg) === func
     return singleton_type(argextype(arg, ir)) === func
 end
 
@@ -230,7 +232,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa::AnySSAVa
                 is_old(compact, defssa) && (def = OldSSAValue(def.id))
             end
             defssa = def
-        elseif isa(def, Union{PhiNode, PhiCNode, GlobalRef})
+        elseif isa(def, Union{PhiNode, PhiCNode, GlobalRef, Core.BindingPartition})
             return defssa
         else
             new_def = walker_callback(def, defssa)
@@ -482,7 +484,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
             end
         elseif isa(leaf, QuoteNode)
             leaf = leaf.value
-        elseif isa(leaf, GlobalRef)
+        elseif isa(leaf, GlobalRef) || isa(leaf, Core.BindingPartition)
             typ = argextype(leaf, compact)
             if isa(typ, Const)
                 leaf = typ.val

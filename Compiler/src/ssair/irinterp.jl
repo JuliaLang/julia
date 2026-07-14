@@ -196,6 +196,9 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             return false
         elseif head === :leave
             return false
+        elseif head === :(=)
+            # a reformulated default global store is not refinable
+            return false
         else
             Core.println(stmt)
             error("reprocess_instruction!: unhandled expression found")

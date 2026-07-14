@@ -295,7 +295,27 @@ types exist in lowered form:
 
   * `GlobalRef`
 
-    Refers to global variable `name` in module `mod`.
+    Refers to global variable `name` in module `mod`. A `GlobalRef` appears in the IR as a
+    *symbolic* reference to a binding that has not (yet) been resolved to a particular binding
+    partition; the optimizer may rewrite it to a `Core.BindingPartition` (see below) once
+    inference has resolved which partition the read observes.
+
+  * `Core.BindingPartition`
+
+    The resolved form of a `GlobalRef`, valid in every position a `GlobalRef` value read is.
+    It names one *binding partition* — a contiguous range of world ages over which a binding's
+    meaning (constant value, declared type, import target, ...) is fixed — rather than just a
+    module and name. During optimization, `reformulate_globals_pass!` rewrites resolved global
+    reads to this form and records an invalidation edge, so that a later redefinition of the
+    binding reaches and invalidates this code. Because the partition is frozen at inference
+    time, codegen and the interpreter can read (or store to) the owning binding directly,
+    without scanning partitions across a world range at run time. A `BindingPartition` recovers
+    its owning `Core.Binding` (and thus its `name`/`mod` and current value) by walking the
+    circular partition chain to its end. In IR position it prints as the owning `GlobalRef`,
+    matching the read it replaced. A read that must preserve a non-default memory order, and any
+    store other than a default-order `setglobal!`, are instead emitted as calls to the
+    `Core.getglobal_partition` / `Core.setglobal_partition` builtins (see the `Core` builtins
+    devdocs), which carry the `Core.BindingPartition` as an argument.
 
   * `SSAValue`
 
@@ -327,7 +347,12 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `=`
 
-    Assignment. In the IR, the first argument is always a `SlotNumber` or a `GlobalRef`.
+    Assignment. In the IR, the first argument is always a `SlotNumber`, a `GlobalRef`, or a
+    `Core.BindingPartition`. A `Core.BindingPartition` left-hand side is the reformulated form
+    of a default-order `setglobal!` (see `Core.BindingPartition` above): the optimizer rewrites
+    `setglobal!(mod, name, value)` on a resolved, owned typed global to
+    `Expr(:(=), partition, value)`, which prints as `mod.name = value`. A store with a stronger
+    order, or a swap/replace/setglobalonce, uses the `Core.setglobal_partition` builtin instead.
 
   * `method`
 

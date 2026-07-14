@@ -271,7 +271,7 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState{I}, t
     if opt isa OptimizationState # implies `may_optimize(interp) === true`
         optimize(interp::I, opt::OptimizationState{I}, frame.result)
         # check the valid_worlds hasn't been narrowed by added :invoke edges
-        valid_worlds = intersect(frame.valid_worlds, compute_recursive_worlds(opt.inlining.edges))
+        valid_worlds = intersect(frame.valid_worlds, compute_recursive_worlds(opt.inlining.edges, get_inference_world(interp::I)))
         update_valid_age!(frame, get_inference_world(interp::I), valid_worlds)
     end
     empty!(opt_cache)
@@ -322,7 +322,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState{I}
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
             optimize(caller.interp::I, opt::OptimizationState{I}, caller.result)
-            cycle_valid_worlds = intersect(cycle_valid_worlds, compute_recursive_worlds(opt.inlining.edges))
+            cycle_valid_worlds = intersect(cycle_valid_worlds, compute_recursive_worlds(opt.inlining.edges, world))
             time_now = _time_ns()
             caller.time_self_ns += (time_now - time_before)
             time_before = time_now
@@ -830,12 +830,21 @@ function compute_edges!(sv::InferenceState)
     nothing
 end
 
-function compute_recursive_worlds(edges::Vector{Any})
+function compute_recursive_worlds(edges::Vector{Any}, world::UInt)
     range = WorldRange(typemin(UInt), typemax(UInt))
     for edge in edges
         if edge isa CodeInstance
             wr = WorldRange(edge.min_world, edge.max_world)
             iszero(last(wr.max_world)) && continue # part of the current cycle, not yet valid
+            range = intersect(range, wr)
+        elseif edge isa Core.Binding
+            # A binding edge (from a resolved global access) constrains validity to the
+            # binding's access range at `world`. Using `binding_access_range` here -- the
+            # same helper inference and revalidation use -- narrows validity even for an
+            # access the optimizer discovered on its own (e.g. a constant inlined from a
+            # callee), and keeps this consistent with revalidation and invalidation.
+            isdefined(edge, :partitions) || continue
+            wr, _ = binding_access_range(edge.globalref, WorldWithRange(world, WorldRange(UInt(1), typemax(UInt))); write=false)
             range = intersect(range, wr)
         end
     end

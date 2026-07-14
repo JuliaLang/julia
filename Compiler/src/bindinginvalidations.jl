@@ -3,7 +3,7 @@
 using ..Compiler: _uncompressed_ir, specializations, get_ci_mi, convert, unsafe_load, cglobal, generating_output, has_image_globalref,
     PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
     BINDING_FLAG_ANY_IMPLICIT_EDGES, binding_kind, partition_restriction, is_some_imported,
-    is_some_binding_imported, is_some_implicit, SizeUnknown, maybe_add_binding_backedge!, walk_binding_partition, abstract_eval_partition_load, userefs,
+    is_some_binding_imported, is_some_implicit, SizeUnknown, maybe_add_binding_backedge!, walk_binding_partition, binding_access_key, userefs,
     MaybeCompressed
 using .Core: SimpleVector, CodeInfo
 
@@ -94,12 +94,13 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
     (_, (ib, ibpart)) = walk_binding_partition(b, invalidated_bpart, new_max_world)
     (_, (nb, nbpart)) = walk_binding_partition(b, new_bpart, new_max_world+1)
 
-    # `abstract_eval_partition_load` is the maximum amount of information that inference
-    # reads from a binding partition. If this information does not change - we do not need to
-    # invalidate any code that inference created, because we know that the result will not change.
-    need_to_invalidate_code =
-        abstract_eval_partition_load(nothing, ib, ibpart) !==
-        abstract_eval_partition_load(nothing, nb, nbpart)
+    # `binding_access_key` captures everything inference/codegen reads from a binding partition
+    # (`abstract_eval_partition_load` plus, for a typed global, the frozen binding identity). If
+    # this key does not change we need not invalidate any code, because the access result cannot
+    # change. Using the same key here as `binding_access_range`'s merge keeps live invalidation
+    # and revalidation from disagreeing when an import redirects to a different but identically
+    # typed global slot.
+    need_to_invalidate_code = binding_access_key(ib, ibpart) !== binding_access_key(nb, nbpart)
 
     need_to_invalidate_export = export_affecting_partition_flags(invalidated_bpart) !==
                                 export_affecting_partition_flags(new_bpart)
