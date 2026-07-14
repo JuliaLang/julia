@@ -353,11 +353,27 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     return 1;
 }
 
+// Collect every currently-valid method of a worklist-owned method table, whose
+// contents are dropped from the image (see jl_prune_internal_mtable)
+static int jl_collect_methcache_internal(jl_typemap_entry_t *ml, void *closure)
+{
+    jl_array_t *s = (jl_array_t*)closure;
+    if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0) {
+        jl_array_ptr_1d_push(internal_methods, (jl_value_t*)ml->func.method);
+        jl_array_ptr_1d_push(s, (jl_value_t*)ml->func.method); // extext
+    }
+    return 1;
+}
+
 static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
 {
-    if (!jl_object_in_image((jl_value_t*)mt))
-        env = NULL; // mark internal, not extext
-    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), jl_collect_methcache_from_mod, env);
+    // Custom method tables owned by the worklist are serialized without their
+    // contents (jl_prune_internal_mtable), so all of their methods are treated
+    // as extending an "external" table, to be re-added and re-activated on load.
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs),
+                       jl_object_in_image((jl_value_t*)mt) ? jl_collect_methcache_from_mod
+                                                           : jl_collect_methcache_internal,
+                       env);
     return 1;
 }
 
