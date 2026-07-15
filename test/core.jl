@@ -49,9 +49,26 @@ for (T, c) in (
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
         (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
-        (Core.BindingPartition, [:min_world, :max_world, :next]),
+        (Core.BindingPartition, [:min_world, :max_world, :next, :retype_flags]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
+end
+
+# Binding partition kinds are immutable metadata, while the separate re-type guard
+# word requires explicit atomic access. Both narrow fields fit into existing padding.
+let p = convert(Core.Binding, GlobalRef(@__MODULE__, :Bottom)).partitions
+    flags = @atomic :monotonic p.retype_flags
+    @test fieldtype(Core.BindingPartition, :kind) === UInt16
+    @test fieldtype(Core.BindingPartition, :retype_flags) === UInt16
+    @test fieldoffset(Core.BindingPartition, 6) ==
+          fieldoffset(Core.BindingPartition, 5) + sizeof(UInt16)
+    @test sizeof(Core.BindingPartition) == 5 * sizeof(UInt)
+    @test_throws(
+        ErrorException("setfield!: const field .kind of type BindingPartition cannot be changed"),
+        setfield!(p, :kind, p.kind))
+    @test_throws(
+        ConcurrencyViolationError("setfield!: atomic field cannot be written non-atomically"),
+        setfield!(p, :retype_flags, flags))
 end
 
 @test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
@@ -8784,10 +8801,11 @@ let M = @__MODULE__
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
     @test Core.eval(M, :(global a_typed_global::$(Union{Tuple{Integer},Tuple{Nothing}}))) === nothing
-    @test_throws(ErrorException("cannot set type for global $(nameof(M)).a_typed_global. It already has a value or is already set to a different type."),
-                 Core.eval(M, :(global a_typed_global::$(Union{Nothing,Tuple{Union{Integer,Nothing}}}))))
-    @test Core.eval(M, :(global a_typed_global)) === nothing
-    @test Core.get_binding_type(M, :a_typed_global) == Tuple{Union{Integer,Nothing}}
+    # #62154: re-typing a typed global to a different type is now permitted. Here the binding
+    # holds no value, so there is nothing that could fail to conform to the new type.
+    @test Core.eval(M, :(global a_typed_global::$(Union{Nothing,Tuple{Union{Integer,Nothing}}}))) === nothing
+    @Core.latestworld
+    @test Core.get_binding_type(M, :a_typed_global) === Union{Nothing,Tuple{Union{Integer,Nothing}}}
 end
 
 @test Base.unsafe_convert(Ptr{Int}, [1]) !== C_NULL

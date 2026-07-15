@@ -2106,15 +2106,18 @@ end
     Ref.body.name
 end
 
-# Regression for finalizer inlining with more complex control flow
-global finalizer_escape::Int = 0
+# Regression for finalizer inlining with more complex control flow.
+# `finalizer_escape` is a const `Ref` rather than a typed global: under #62154 a store
+# to a typed global is no longer `nothrow` (a later re-declaration can make it throw in
+# still-running code), which would correctly block finalizer inlining. Writing the Ref
+# field stays nothrow, so this keeps exercising the inlining path.
+const finalizer_escape = Ref(0)
 mutable struct FinalizerEscapeTest
     x::Int
     function FinalizerEscapeTest()
         this = new(0)
         finalizer(this) do this
-            global finalizer_escape
-            finalizer_escape = this.x
+            finalizer_escape[] = this.x
         end
         return this
     end
@@ -2144,15 +2147,15 @@ function run_finalizer_escape_test2(b1, b2)
 end
 
 for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_escape_test2)
-    global finalizer_escape::Int = 0
+    finalizer_escape[] = 0
 
     let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
-        @test any(iscall((src, Core.setglobal!)), src.code)
+        @test any(iscall((src, setfield!)), src.code)
     end
 
     let
         run_finalizer_escape_test(true, true)
-        @test finalizer_escape == 3
+        @test finalizer_escape[] == 3
     end
 end
 

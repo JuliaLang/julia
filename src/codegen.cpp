@@ -342,6 +342,9 @@ struct jl_tbaacache_t {
     MDNode *tbaa_unionselbyte;   // a selector byte in isbits Union struct fields
     MDNode *tbaa_data;       // Any user data that `pointerset/ref` are allowed to alias
     MDNode *tbaa_binding;        // jl_binding_t::value
+    MDNode *tbaa_binding_flags;  // jl_binding_partition_t::retype_flags (never stored by
+                                 // compiled code, so guard loads cannot alias binding
+                                 // value stores)
     MDNode *tbaa_value;          // jl_value_t, that is not jl_array_t or jl_genericmemory_t
     MDNode *tbaa_mutab;              // mutable type
     MDNode *tbaa_datatype;               // datatype
@@ -360,6 +363,7 @@ struct jl_tbaacache_t {
 
     jl_tbaacache_t(): tbaa_root(nullptr), tbaa_gcframe(nullptr), tbaa_stack(nullptr),
                     tbaa_unionselbyte(nullptr), tbaa_data(nullptr), tbaa_binding(nullptr),
+                    tbaa_binding_flags(nullptr),
                     tbaa_value(nullptr), tbaa_mutab(nullptr), tbaa_datatype(nullptr),
                     tbaa_immut(nullptr), tbaa_ptrarraybuf(nullptr), tbaa_arraybuf(nullptr),
                     tbaa_array(nullptr), tbaa_arrayptr(nullptr), tbaa_arraysize(nullptr),
@@ -388,6 +392,7 @@ struct jl_tbaacache_t {
         MDNode *tbaa_data_scalar;
         std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child(mbuilder, "jtbaa_data");
         tbaa_binding = tbaa_make_child(mbuilder, "jtbaa_binding", tbaa_data_scalar).first;
+        tbaa_binding_flags = tbaa_make_child(mbuilder, "jtbaa_binding_flags", tbaa_data_scalar).first;
         MDNode *tbaa_value_scalar;
         std::tie(tbaa_value, tbaa_value_scalar) =
             tbaa_make_child(mbuilder, "jtbaa_value", tbaa_data_scalar);
@@ -2194,7 +2199,6 @@ jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
     if (tbaa != nullptr) {
         MDNode *node = cast<MDNode>(tbaa->getOperand(1));
         if (cast<MDString>(node->getOperand(0))->getString() != "jtbaa") {
-
             // Climb up to node just before root
             MDNode *parent_node = cast<MDNode>(node->getOperand(1));
             while (cast<MDString>(parent_node->getOperand(0))->getString() != "jtbaa") {
@@ -3533,6 +3537,44 @@ static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
 
 // --- generating function calls ---
 
+// The address of `bpart`'s re-type guard word, whose
+// PARTITION_FLAG_RETYPE_READ/WRITE bits the emitted guards test (#62154). The
+// partition is embedded as a literal (it is a GC object kept alive by its binding,
+// and rooted for pruned outputs below), so the guard is a load at a
+// link-time-constant address.
+static Value *julia_bpart_flagp(jl_codectx_t &ctx, jl_binding_partition_t *bpart)
+{
+    if (jl_generating_output())
+        jl_temporary_root(ctx, (jl_value_t*)bpart);
+    Value *bpartv = literal_pointer_val(ctx, (jl_value_t*)bpart);
+    return emit_ptrgep(ctx, bpartv, offsetof(jl_binding_partition_t, retype_flags));
+}
+
+// Emit a guard that diverts to a cold block once a later declaration invalidates
+// what this code is compiled to assume about `bpart` (i.e. once the `mask` bits of
+// its guard word -- clear at compile time here -- become set; see #62154): a fenced
+// re-load of the partition's guard bits (see emit_retype_recheck), emitted
+// program-order *after* the access it guards. As long as the bits read clear, a
+// value loaded from the slot before the fence is known to conform to the declared
+// type this code was compiled against: the write side of a re-declaration
+// (jl_retype_flag_partitions) flags every partition it invalidates before its
+// asymmetric heavy fence and only installs a value of the new type after it. As long
+// as no incompatible re-declaration appears, the deopt arm is never taken, so the
+// guard costs one cheap, well-predicted test. Returns the (empty, unterminated) cold
+// block; the builder is left at the start of the fast-path continuation block.
+static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_partition_t *bpart, uint16_t mask)
+{
+    LLVMContext &C = ctx.builder.getContext();
+    BasicBlock *fastBB = BasicBlock::Create(C, "retype_fast", ctx.f);
+    BasicBlock *coldBB = BasicBlock::Create(C, "retype_deopt", ctx.f);
+    Value *retyped = emit_retype_recheck(ctx, julia_bpart_flagp(ctx, bpart), mask);
+    MDBuilder MDB(C);
+    ctx.builder.CreateCondBr(retyped, coldBB, fastBB,
+            MDB.createBranchWeights({1, 2000}));
+    ctx.builder.SetInsertPoint(fastBB);
+    return coldBB;
+}
+
 static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, jl_module_t *mod, jl_sym_t *name)
 {
     Value *bp = julia_binding_gv(ctx, bnd);
@@ -3568,7 +3610,7 @@ static bool ci_has_binding_edge(jl_code_instance_t *ci, jl_binding_t *bnd)
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order, bool from_literal_globalref = true)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
+    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0, NULL };
     if (!jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
@@ -3609,10 +3651,111 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     if (bnd != rkp.binding_if_global)
         bp = julia_binding_gv(ctx, rkp.binding_if_global);
     jl_value_t *ty = rkp.restriction;
-    Value *bpval = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
-    return update_julia_type(ctx, emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
+    // #62154: if a later declaration changes the declared type incompatibly, the
+    // (single, shared) value slot may hold a value of a type other than `ty` --
+    // either written by code compiled against a later type, or observed by this code
+    // after a redefinition that happened on the stack. Such an access must error
+    // rather than return an ill-typed value.
+    Value *bpval = julia_binding_pvalue(ctx, bp);
+    jl_cgval_t v = emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
+    // As long as no later declaration invalidates this partition's restriction the
+    // verification is dead: it sits behind a runtime test of the partition's read
+    // guard. The guard is always emitted -- codegen must not specialize on the
+    // current flag state, since a partition that reads clear now can be re-type
+    // flagged later while this code is still live (and a set bit can never be
+    // observed to clear, so the flagged form would gain nothing).
+    if (ty != (jl_value_t*)jl_any_type) {
+        jl_binding_partition_t *bpart = rkp.leaf_partition;
+        BasicBlock *coldBB = emit_retype_guard(ctx, bpart, PARTITION_FLAG_RETYPE_READ);
+        BasicBlock *fastBB = ctx.builder.GetInsertBlock();
+        ctx.builder.SetInsertPoint(coldBB);
+        emit_typecheck(ctx, v, ty, "getglobal");
+        ctx.builder.CreateBr(fastBB);
+        ctx.builder.SetInsertPoint(fastBB);
+    }
+    return update_julia_type(ctx, v, ty);
+}
+
+// Emit the out-of-line store path for a global: check that the binding is currently
+// writable and perform `op` with full runtime semantics, validating the stored value
+// against the binding's *latest* declared type. Returns the operation's boxed
+// language-level result (converting runtime protocols as needed), or NULL for
+// StoreKind::Set.
+static Value *emit_globalop_runtime_call(jl_codectx_t &ctx, StoreKind op, Value *bp,
+                                         jl_module_t *mod, jl_sym_t *sym,
+                                         const jl_cgval_t &rval, const jl_cgval_t &cmp)
+{
+    Value *m = literal_pointer_val(ctx, (jl_value_t*)mod);
+    Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
+    ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
+        { bp, m, s });
+    switch (op) {
+    case StoreKind::Set:
+        ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
+                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
+        return nullptr;
+    case StoreKind::Replace:
+        return ctx.builder.CreateCall(prepare_call(jlcheckreplace_func),
+                { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
+    case StoreKind::Swap:
+        return ctx.builder.CreateCall(prepare_call(jlcheckswap_func),
+                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
+    case StoreKind::Modify:
+        return ctx.builder.CreateCall(prepare_call(jlcheckmodify_func),
+                { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
+    case StoreKind::SetOnce: {
+        Value *old = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
+                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
+        // jl_checked_assignonce returns the previous value, or NULL when the store
+        // succeeds. The builtin wrapper converts that protocol result to Bool too;
+        // do so here before downstream code marks or merges it as a boxed Bool.
+        return track_pjlvalue(ctx, julia_bool(ctx, ctx.builder.CreateIsNull(old)));
+    }
+    case StoreKind::Unset:
+        break; // Unset is not a valid operation for globals
+    }
+    abort(); // unreachable
+}
+
+// The result type of `op` on a global declared with type `ty`
+static jl_value_t *global_op_rettyp(StoreKind op, jl_value_t *ty)
+{
+    switch (op) {
+    case StoreKind::Swap:
+        return ty;
+    case StoreKind::SetOnce:
+        return (jl_value_t*)jl_bool_type;
+    case StoreKind::Replace:
+        return (jl_value_t*)jl_apply_cmpswap_type(ty);
+    case StoreKind::Modify:
+        return (jl_value_t*)jl_apply_modify_type(ty);
+    case StoreKind::Set:
+    case StoreKind::Unset:
+        break; // no result type
+    }
+    abort(); // unreachable
+}
+
+// Mark the boxed runtime-path result `r` of `op`, first verifying (for
+// value-carrying results) that it conforms to the result type this code was compiled
+// to expect. #62154: the
+// runtime store validates and reflects the *latest* declared type, so when the binding
+// has been re-typed the result may not conform to the compile-time type; erroring here
+// keeps the old-world typing of the result sound. For Swap this checks the returned
+// value itself and is precise. For Replace and Modify it checks the whole result
+// container, whose type (NamedTuple/Pair) is invariant in the value type and is
+// constructed by the runtime at the latest declared type, so a stale replace/modify on
+// a re-typed binding errs on the side of throwing (after the store took effect).
+static jl_cgval_t mark_verified_globalop_result(jl_codectx_t &ctx, StoreKind op, Value *r,
+                                                jl_value_t *rettyp, const char *fname)
+{
+    if (op != StoreKind::SetOnce) {
+        jl_cgval_t rv = mark_julia_type(ctx, r, true, (jl_value_t*)jl_any_type);
+        emit_typecheck(ctx, rv, rettyp, fname);
+    }
+    return mark_julia_type(ctx, r, true, rettyp);
 }
 
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
@@ -3623,73 +3766,107 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     jl_binding_t *bnd = jl_get_module_binding(mod, sym, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
     Value *bp = julia_binding_gv(ctx, bnd);
-    if (bpart) {
-        if (jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) {
-            int possibly_deprecated = bpart->kind & PARTITION_FLAG_DEPWARN;
-            jl_value_t *ty = bpart->restriction;
-            if (ty != nullptr) {
-                const char *fname = store_kind_name(op, "global");
-                if (op != StoreKind::Modify) {
-                    emit_typecheck(ctx, rval, ty, fname);
-                    rval = update_julia_type(ctx, rval, ty);
-                    if (rval.typ == jl_bottom_type)
-                        return jl_cgval_t();
-                }
-                bool isboxed = true;
-                bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
-                if (possibly_deprecated) {
-                    ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
-                }
-                return typed_store(ctx,
-                                julia_binding_pvalue(ctx, bp),
-                                rval, cmp, ty,
-                                ctx.tbaa().tbaa_binding,
-                                nullptr,
-                                bp,
-                                isboxed,
-                                Order,
-                                FailOrder,
-                                0,
-                                nullptr,
-                                op,
-                                maybe_null,
-                                modifyop,
-                                fname,
-                                mod,
-                                sym);
-
-            }
+    const char *fname = store_kind_name(op, "global");
+    if (bpart && jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL && bpart->restriction != nullptr) {
+        jl_value_t *ty = bpart->restriction;
+        // "narrow, never expand" (#62154): the declared type this code is compiled
+        // against governs which stores it may perform, in every world; a later
+        // re-declaration can narrow the set of stores that succeed, but never expand it.
+        if (op != StoreKind::Modify && ty != (jl_value_t*)jl_any_type) {
+            emit_typecheck(ctx, rval, ty, fname);
+            rval = update_julia_type(ctx, rval, ty);
+            if (rval.typ == jl_bottom_type)
+                return jl_cgval_t();
         }
+        // Which of the partition's re-type guard bits gate this operation: a plain
+        // store only needs the write guard (its value was validated against `ty`),
+        // while the RMW kinds additionally trust values they load from the slot at
+        // type `ty`, so they must also divert once the read guard is set.
+        uint16_t guard_mask = op == StoreKind::Set
+                ? PARTITION_FLAG_RETYPE_WRITE
+                : (PARTITION_FLAG_RETYPE_READ | PARTITION_FLAG_RETYPE_WRITE);
+        bool isboxed = true;
+        bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
+        if (bpart->kind & PARTITION_FLAG_DEPWARN) {
+            ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
+        }
+        // #62154: the declared type may still change after this code is compiled, at
+        // which point the inline store below would bypass validation against the (new)
+        // latest type, and the values the inline RMW kinds observe in the slot could
+        // no longer be trusted to be of type `ty`. Guard the whole operation so that
+        // it diverts to the runtime path once a later declaration flags this
+        // partition. The guard is always emitted -- codegen must not specialize on
+        // the current flag state, since the partition can be re-type flagged after
+        // this code is compiled while it is still live.
+        BasicBlock *coldBB = emit_retype_guard(ctx, bpart, guard_mask);
+        jl_cgval_t res = typed_store(ctx,
+                        julia_binding_pvalue(ctx, bp),
+                        rval, cmp, ty,
+                        ctx.tbaa().tbaa_binding,
+                        nullptr,
+                        bp,
+                        isboxed,
+                        Order,
+                        FailOrder,
+                        0,
+                        nullptr,
+                        op,
+                        maybe_null,
+                        modifyop,
+                        fname,
+                        mod,
+                        sym,
+                        nullptr,
+                        nullptr,
+                        /*retype_flagp*/julia_bpart_flagp(ctx, bpart),
+                        /*retype_mask*/guard_mask,
+                        /*retype_deoptBB*/coldBB);
+        if (res.typ == jl_bottom_type) {
+            // The inline operation cannot complete -- the modify `op` is inferred
+            // to never return -- so only the deoptimized runtime path (which
+            // reaches the same `op` through a dynamic call) can produce a result;
+            // emit it as the sole continuation.
+            assert(op == StoreKind::Modify);
+            ctx.builder.CreateUnreachable();
+            ctx.builder.SetInsertPoint(coldBB);
+            Value *coldV = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
+            return mark_verified_globalop_result(ctx, op, coldV, global_op_rettyp(op, ty), fname);
+        }
+        // Merge with the deoptimized path. Set returns `rval` itself, which dominates
+        // both paths, so it needs no merge; the other kinds merge the boxed results.
+        // No post-commit re-check is needed for any kind: every commit runs inside
+        // a commit window (see typed_store) whose flag check either diverted the
+        // not-yet-committed operation to the runtime path or entitled it to trust
+        // the slot at the compiled-against declared type.
+        jl_value_t *rettyp = op == StoreKind::Set ? NULL : global_op_rettyp(op, ty);
+        Value *fastV = op == StoreKind::Set ? nullptr : boxed(ctx, res);
+        BasicBlock *fastEnd = ctx.builder.GetInsertBlock();
+        BasicBlock *doneBB = BasicBlock::Create(ctx.builder.getContext(), "retype_done", ctx.f);
+        ctx.builder.CreateBr(doneBB);
+        ctx.builder.SetInsertPoint(coldBB);
+        Value *coldV = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
+        if (op != StoreKind::Set)
+            mark_verified_globalop_result(ctx, op, coldV, rettyp, fname); // for the typecheck
+        BasicBlock *coldEnd = ctx.builder.GetInsertBlock();
+        ctx.builder.CreateBr(doneBB);
+        ctx.builder.SetInsertPoint(doneBB);
+        if (op == StoreKind::Set)
+            return res;
+        PHINode *phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+        phi->addIncoming(fastV, fastEnd);
+        phi->addIncoming(coldV, coldEnd);
+        return mark_julia_type(ctx, phi, true, rettyp);
     }
-    Value *m = literal_pointer_val(ctx, (jl_value_t*)mod);
-    Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
-    ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
-        { bp, m, s });
+    Value *r = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
     switch (op) {
     case StoreKind::Set:
-        ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
-                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
         return rval;
-    case StoreKind::Replace: {
-        Value *r = ctx.builder.CreateCall(prepare_call(jlcheckreplace_func),
-                { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
+    case StoreKind::Replace:
+    case StoreKind::Swap:
+    case StoreKind::Modify:
         return mark_julia_type(ctx, r, true, jl_any_type);
-    }
-    case StoreKind::Swap: {
-        Value *r = ctx.builder.CreateCall(prepare_call(jlcheckswap_func),
-                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
-        return mark_julia_type(ctx, r, true, jl_any_type);
-    }
-    case StoreKind::Modify: {
-        Value *r = ctx.builder.CreateCall(prepare_call(jlcheckmodify_func),
-                { bp, m, s, boxed(ctx, cmp), boxed(ctx, rval) });
-        return mark_julia_type(ctx, r, true, jl_any_type);
-    }
-    case StoreKind::SetOnce: {
-        Value *r = ctx.builder.CreateCall(prepare_call(jlcheckassignonce_func),
-                { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
+    case StoreKind::SetOnce:
         return mark_julia_type(ctx, r, true, jl_bool_type);
-    }
     case StoreKind::Unset:
         abort(); // Unset is not a valid operation for globals
     }
@@ -4180,7 +4357,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_sym_t *name, int allow_import, enum jl_memory_order order)
 {
     jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
+    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0, NULL };
     if (allow_import && jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
         if (jl_bkind_is_real_constant(rkp.kind))
             return mark_julia_const(ctx, jl_true);

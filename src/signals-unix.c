@@ -1408,7 +1408,11 @@ static void jl_thread_suspend_membarrier(void)
     // jl_thread_suspend tries to interrupt the thread for up to 1 second,
     // so we retry in a loop until it succeeds or we determine the thread
     // is no longer alive.
+    jl_task_t *ct = jl_get_current_task();
+    int16_t self_tid = ct == NULL ? -1 : jl_atomic_load_relaxed(&ct->tid);
     for (int tid = 0; tid < jl_atomic_load_acquire(&jl_n_threads); tid++) {
+        if (tid == self_tid)
+            continue; // the calling thread is synchronized by program order
         while (!jl_thread_suspend(tid, &ctx)) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
             jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
@@ -1565,4 +1569,5 @@ JL_DLLEXPORT void jl_membarrier(void) {
         abort();
     }
 }
+
 #endif // !_OS_DARWIN_

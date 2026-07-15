@@ -2048,7 +2048,7 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
         jl_value_t *y = jl_apply_generic(op, args, 2);
         args[1] = y;
         if (b)
-            jl_check_binding_assign_value(b, mod, name, y, "modifyglobal!");
+            jl_check_binding_assign_value(b, mod, name, y, "modifyglobal!", NULL);
         else if (!jl_isa(y, ty))
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
         jl_gc_wb(parent, y);

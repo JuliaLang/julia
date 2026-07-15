@@ -33,6 +33,16 @@ Language changes
     that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
     operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
     in the default operators ([#50790]).
+  - The declared type of a mutable global variable can now be changed by a subsequent typed
+    declaration. For example, after `global x::Int = 1`, both `global x::Float64 = 2.0` and a
+    bare `global x::Real` are now accepted rather than raising an error. The latest declaration
+    governs every access to the binding; code compiled against the previous type is recompiled,
+    and reads in older world ages begin to error where the value no longer matches the type they
+    were compiled against, as do writes once the binding is no longer a writable global. A bare `global x::T` re-declaration is rejected when the value
+    the binding currently holds is not an instance of `T`, so that the value is never silently
+    dropped; use the `global x::T = v` form to change the type and value together (this installs
+    both atomically). A declared global may also be replaced by a constant, provided the `const`
+    declaration carries a value; the reverse transition remains an error ([#62154]).
 
 Compiler/Runtime improvements
 -----------------------------

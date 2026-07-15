@@ -2177,8 +2177,11 @@ precompile_test_harness("Issue #50538") do load_path
     invokelatest() do
         @test I50538.newglobal.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
         @test I50538.newtype.msg == "Evaluation into the closed module `Base` breaks incremental compilation because the side effects will not be permanent. This is likely due to some other module mutating `Base` with `eval` during precompilation - don't do this."
-        @test_throws(ErrorException("cannot set type for global I50538.undefglobal. It already has a value or is already set to a different type."),
-                    Core.eval(I50538, :(global undefglobal::Int)))
+        # #62154: re-typing an (undefined) typed global to a different type is now allowed
+        Core.eval(I50538, :(global undefglobal::Int))
+        invokelatest() do
+            @test Core.get_binding_type(I50538, :undefglobal) === Int
+        end
         Core.eval(I50538, :(global undefglobal::Any))
         invokelatest() do
             @test Core.get_binding_type(I50538, :undefglobal) === Any

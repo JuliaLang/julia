@@ -381,7 +381,9 @@ f_glob_assign_int() = global glob_assign_int = 1
 let effects = Base.infer_effects(f_glob_assign_int, (); optimize=false)
     @test Compiler.is_consistent(effects)
     @test !Compiler.is_effect_free(effects)
-    @test Compiler.is_nothrow(effects)
+    # not nothrow (#62154): the store validates against the *latest* declared type,
+    # which a re-declaration may narrow while this code still runs in an older world
+    @test !Compiler.is_nothrow(effects)
 end
 # effects modeling for setglobal!
 global SETGLOBAL!_NOTHROW::Int = 0
@@ -390,7 +392,9 @@ let effects = Base.infer_effects(; optimize=false) do
     end
     @test Compiler.is_consistent(effects)
     @test !Compiler.is_effect_free(effects)
-    @test Compiler.is_nothrow(effects)
+    # not nothrow (#62154): the store validates against the *latest* declared type,
+    # which a re-declaration may narrow while this code still runs in an older world
+    @test !Compiler.is_nothrow(effects)
 end
 
 # we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
@@ -402,7 +406,10 @@ end
 # This declares the binding as ::Any
 @eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
 let effects = Base.infer_effects(global_assignment_undefinedyet)
-    @test Compiler.is_nothrow(effects)
+    # not nothrow (#62154): even an Any-declared binding may later be re-declared
+    # with a narrower type (or replaced by a constant), which stale stores validate
+    # against
+    @test !Compiler.is_nothrow(effects)
 end
 # Again with type mismatch
 global UNDEFINEDYET2::String = "0"
