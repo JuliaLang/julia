@@ -1081,6 +1081,25 @@ typedef struct JL_GC_TRACKED_TYPE _jl_methtable_t {
     jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
 } jl_methtable_t;
 
+#define JL_TYPEMAP_LIST_NO_HASHMAP (~(unsigned)0)
+
+// typedef'd so the safepoint annotations apply to calls through the pointer
+typedef uintptr_t (*jl_typemap_list_hash_t)(jl_value_t *item) JL_NOTSAFEPOINT;
+typedef int (*jl_typemap_list_match_t)(jl_value_t *item, void *key) JL_CANSAFEPOINT;
+
+typedef struct {
+    size_t next_offset;           // offsetof the item's intrusive `next` field
+    unsigned max_list_count;      // max bucket size before switch from linked-list to hashmap
+    jl_typemap_list_hash_t hash;
+    jl_typemap_list_match_t match;
+} jl_typemap_list_config_t;
+
+typedef struct JL_GC_TRACKED_TYPE _jl_typemap_list_t {
+    _Atomic(jl_typemap_t*) root;
+// hidden fields:
+    const jl_typemap_list_config_t *config;
+} jl_typemap_list_t;
+
 typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE
     jl_sym_t *head;
