@@ -6,7 +6,7 @@ Low level module for mmap (memory mapping of files).
 module Mmap
 
 import Base: OS_HANDLE, INVALID_OS_HANDLE, IOError
-import Base.Filesystem: JL_O_CREAT, JL_O_RDONLY, JL_O_RDWR, JL_O_EXCL, JL_O_CLOEXEC, S_IRUSR, S_IWUSR
+import Base.Filesystem: JL_O_CREAT, JL_O_RDONLY, JL_O_RDWR, JL_O_EXCL, S_IRUSR, S_IWUSR
 using Base.Sys: PAGESIZE
 import Serialization: Serialization, AbstractSerializer
 
@@ -64,6 +64,8 @@ const MAP_SHARED    = Cint(1)
 const MAP_PRIVATE   = Cint(2)
 const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
 const F_GETFL       = Cint(3)
+const F_SETFD       = Cint(2)
+const FD_CLOEXEC    = Cint(1)
 
 gethandle(io::IO) = fd(io)
 
@@ -89,7 +91,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     validate_sharedmemory_args(name, size, readonly, create)
     io = SharedMemory(name, readonly, create, size)
     if !isempty(name)
-        oflag = (readonly ? JL_O_RDONLY : JL_O_RDWR) | JL_O_CLOEXEC
+        oflag = (readonly ? JL_O_RDONLY : JL_O_RDWR)
         if create
             oflag |= JL_O_CREAT | JL_O_EXCL
         end
@@ -97,7 +99,12 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
         try
             io.handle = RawFD(shm_open(name, oflag, mode))
             systemerror(:shm_open, io.handle == INVALID_OS_HANDLE)
+
+            # Set close-on-exec (MacOS rejects this on `shm_open`)
+            status = ccall(:fcntl, Cint, (RawFD, Cint, Cint...), io.handle, F_SETFD, FD_CLOEXEC)
+            systemerror(:fcntl, status == -1)
         catch e
+            io.handle != INVALID_OS_HANDLE && close(io)
             if e isa SystemError
                 throw(IOError("Failed to $(create ? "create" : "open") shared memory", e.errnum))
             else

@@ -540,8 +540,9 @@ end
 
         @static if Sys.islinux()
 
-            # A spawned child must not end up with an open fd to the segment: shm_open()
-            # is called with JL_O_CLOEXEC, so the fd should vanish across the child's exec().
+            # A spawned child must not end up with an open fd to the segment: the fd is marked
+            # close-on-exec via fcntl(F_SETFD, FD_CLOEXEC) right after shm_open(), so it should
+            # vanish across the child's exec().
             io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
             child = run(`sleep 5`; wait = false)
             try
