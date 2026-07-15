@@ -237,7 +237,10 @@ static void wake_libuv(void) JL_NOTSAFEPOINT
     JULIA_DEBUG_SLEEPWAKE( io_wakeup_leave = cycleclock() );
 }
 
-static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
+// Returns 1 if a sleeping thread was transitioned to running (i.e. the wake
+// added a running thread), 0 if the target was already awake or is the caller.
+static int wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
+    int woke = 0;
     int16_t self = jl_atomic_load_relaxed(&ct->tid);
     if (tid != self)
         jl_fence(); // [^store_buffering_1]
@@ -259,16 +262,19 @@ static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass 
     }
     else {
         // something added to the sticky-queue: notify that thread
-        if (wake_thread(tid) && uvlock != ct) {
-            // check if we need to notify uv_run too
-            jl_fence();
-            jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-            jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
-            // now that we have changed the thread to not-sleeping, ensure that
-            // either it has not yet acquired the libuv lock, or that it will
-            // observe the change of state to not_sleeping
-            if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
-                wake_libuv();
+        if (wake_thread(tid)) {
+            woke = 1;
+            if (uvlock != ct) {
+                // check if we need to notify uv_run too
+                jl_fence();
+                jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+                jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
+                // now that we have changed the thread to not-sleeping, ensure that
+                // either it has not yet acquired the libuv lock, or that it will
+                // observe the change of state to not_sleeping
+                if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+                    wake_libuv();
+            }
         }
     }
     if (tid == -1) {
@@ -279,6 +285,7 @@ static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass 
             if (tid != self)
                 anysleep |= wake_thread(tid);
         }
+        woke = anysleep;
         // check if we need to notify uv_run too
         if (uvlock != ct && anysleep) {
             jl_fence();
@@ -287,13 +294,15 @@ static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass 
         }
     }
     JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
+    return woke;
 }
 
-/* ensure thread tid is awake if necessary */
-JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
+/* ensure thread tid is awake if necessary; returns 1 if a sleeping thread was
+   woken (a running thread was added), 0 otherwise */
+JL_DLLEXPORT int jl_wakeup_thread(int16_t tid)
 {
     jl_task_t *ct = jl_current_task;
-    wakeup_thread(ct, tid);
+    return wakeup_thread(ct, tid);
 }
 
 // Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-padded

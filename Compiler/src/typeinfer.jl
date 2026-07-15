@@ -1892,7 +1892,70 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
         verify_typeinf_trim(codeinfos, trim_mode == TRIM_UNSAFE_WARN)
     end
-    return codeinfos
+
+    # Build the ordered list of CodeInstances to store in the image's method
+    # caches. This is kept as its own array (rather than being recovered from
+    # `codeinfos` by the caller) so the set and ordering of cached entries can be
+    # chosen independently of what native code gets emitted. The linked list of
+    # each MethodInstance's cache is rebuilt from this order during serialization
+    # (see jl_rewrite_mi_caches in staticdata.c).
+    #
+    # First the compiled entries, in compilation order: every entry paired with a
+    # CodeInfo in `codeinfos` is inferred and about to be compiled, so it lands in
+    # the single invoke+inferred group that jl_mi_cache_insert (gf.c) keeps at the
+    # front, and the compilation order already lists higher-`max_world` entries
+    # first (worlds are processed newest-first).
+    cis = Any[]
+    seen = IdSet{CodeInstance}()
+    for i = 1:length(codeinfos)
+        item = codeinfos[i]
+        if item isa CodeInstance && !(item in seen)
+            push!(seen, item)
+            push!(cis, item)
+        end
+    end
+
+    # Then walk each CodeInstance's forward `edges` recursively and append every
+    # reachable CodeInstance. These callees are inferred but were not compiled
+    # (no `invoke` assigned), so appending them after the compiled entries places
+    # them in gf.c's inferred (post-invoke) group within each MethodInstance's
+    # cache. Preserving them keeps the inference results callers depend on from
+    # being dropped by the cache-clearing pass in staticdata.c. `cis` doubles as
+    # the worklist, so edges discovered from appended entries are visited too.
+    #
+    # Skip under `--trim` where inferred-but-not-compiled entries are not useful
+    # at runtime without a Compiler / JIT.
+    if trim_mode == TRIM_NO
+        i = 1
+        while i <= length(cis)
+            ci = cis[i]::CodeInstance
+            if isdefined(ci, :edges)
+                edges = ci.edges
+                for j = 1:length(edges)
+                    isassigned(edges, j) || continue
+                    edge = edges[j]
+                    if edge isa CodeInstance && !(edge in seen)
+                        push!(seen, edge)
+                        push!(cis, edge)
+                    end
+                end
+            end
+            i += 1
+        end
+    end
+
+    # Keep cache CodeInstances that represent an existing cache entry: either they are
+    # already linked into their MethodInstance's cache, or jl_get_ci_equiv finds
+    # another equivalent already cached for them.
+    # This hack avoids putting badly inferred edges in the cache, while still trying to populate the cache sufficiently.
+    filter!(cis) do ci
+        ci = ci::CodeInstance
+        mi = get_ci_mi(ci)
+        return !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, ci)) ||
+            ccall(:jl_get_ci_equiv, Any, (Any, UInt), ci, ci.min_world)::CodeInstance !== ci
+    end
+
+    return Core.svec(codeinfos, cis)
 end
 
 const _verify_trim_world_age = RefValue{UInt}(typemax(UInt))

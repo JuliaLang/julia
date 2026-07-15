@@ -423,9 +423,15 @@ static int needs_uniquing(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFE
     return caching_tag(v, query_cache) == 1;
 }
 
+// whether `record_field_change` has already registered a replacement for `addr`
+static int has_field_change(jl_value_t **addr) JL_NOTSAFEPOINT
+{
+    return ptrhash_get(&field_replace, (void*)addr) != HT_NOTFOUND;
+}
+
 static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAFEPOINT
 {
-    if (*addr != newval)
+    if (has_field_change(addr) || *addr != newval)
         ptrhash_put(&field_replace, (void*)addr, newval);
 }
 
@@ -445,6 +451,55 @@ static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DI
         return fld;
     }
     return fld;
+}
+
+// Rewrite the `cache` field of each MethodInstance (and the `next` chain of the
+// CodeInstances it points to) so the image stores exactly the ordered list of
+// CodeInstances `cis` that codegen produced, converted to a linked list via the
+// `next` field, instead of whatever the live runtime cache happened to contain.
+// CodeInstances are grouped by their owning MethodInstance, preserving the order
+// in which they appear in `cis`. These changes are recorded through the normal
+// `field_replace` machinery, so they must be applied before the serialization
+// queue pass runs (both queueing and writing consult `get_replaceable_field`).
+static void jl_rewrite_mi_caches(jl_code_instance_t **cis, size_t n) JL_GC_DISABLED
+{
+    htable_t mi_last; // MethodInstance -> last CodeInstance recorded for it
+    htable_t seen;    // CodeInstances already placed, to guard against duplicates
+    htable_new(&mi_last, 0);
+    htable_new(&seen, 0);
+    for (size_t i = 0; i < n; i++) {
+        jl_code_instance_t *ci = cis[i];
+        // ignore any repeated CodeInstance: chaining it twice would corrupt the list
+        if (ptrhash_get(&seen, ci) != HT_NOTFOUND)
+            continue;
+        ptrhash_put(&seen, ci, ci);
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        // this CodeInstance terminates its MethodInstance's chain, unless a
+        // later CodeInstance for the same MethodInstance extends it below
+        record_field_change((jl_value_t**)&ci->next, NULL);
+        if (jl_options.trim && ci->owner == (jl_value_t*)jl_trim_sym) {
+            // this is an "isolated" cache entry for `--trim` inference / AOT
+            // replace the owner with `nothing` so that these are available
+            // as ordinary cache entries at runtime
+            record_field_change((jl_value_t**)&ci->owner, jl_nothing);
+        }
+        void **bp = ptrhash_bp(&mi_last, mi);
+        // Register unconditionally (not via record_field_change) so this
+        // cache rebuilds correctly, even if it matches what was there (which would
+        // accidentally excise the item with the next write to field_replace).
+        if (*bp == HT_NOTFOUND) {
+            // first CodeInstance seen for this MethodInstance becomes the head.
+            ptrhash_put(&field_replace, (void*)&mi->cache, (void*)ci);
+        }
+        else {
+            // link this CodeInstance after the previous one for the same MethodInstance
+            jl_code_instance_t *prev = (jl_code_instance_t*)*bp;
+            ptrhash_put(&field_replace, (void*)&prev->next, (void*)ci);
+        }
+        *bp = ci;
+    }
+    htable_free(&seen);
+    htable_free(&mi_last);
 }
 
 static uintptr_t jl_fptr_id(void *fptr)
@@ -586,27 +641,21 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // prevent this from happening, so we do not need to detect that user
             // error now.
         }
-        else if (jl_options.trim) {
-            // Rebuild the `mi->cache` list with any non-:trim-owned CodeInstances removed.
-            jl_code_instance_t *first = NULL;
-            jl_code_instance_t *prev = NULL;
-            jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
-            while (codeinst) {
-                jl_code_instance_t *next = jl_atomic_load_relaxed(&codeinst->next);
-                if (codeinst->owner == (jl_value_t *)jl_trim_sym) {
-                    record_field_change((jl_value_t**)&codeinst->owner, jl_nothing);
-                    if (prev == NULL)
-                        first = codeinst;
-                    else
-                        record_field_change((jl_value_t**)&prev->next, (jl_value_t*)codeinst);
-                    prev = codeinst;
-                }
-                codeinst = next;
-            }
-            if (prev != NULL)
-                record_field_change((jl_value_t**)&prev->next, NULL);
-            record_field_change((jl_value_t**)&mi->cache, (jl_value_t*)first);
-        }
+        // Only the CodeInstances deliberately selected for the image caches
+        // should be reachable through `cache`; jl_rewrite_mi_caches records the
+        // chosen ordering for those MethodInstances. Any MethodInstance whose
+        // cache was not rewritten gets an empty cache here, rather than leaking
+        // whatever the live runtime cache happened to contain. Builtin functions
+        // are an exception: their cache is not part of the codegen ordering and
+        // is not repopulated at load, so keep it. Builtin-like functions are
+        //  recognized by their method having neither source nor a generator
+        // (cf. the jl_is_builtinfunc computation).
+        jl_value_t *midef = mi->def.value;
+        int is_builtin = jl_is_method(midef) &&
+            ((jl_method_t*)midef)->source == NULL &&
+            ((jl_method_t*)midef)->generator == NULL;
+        if (native_functions && !is_builtin && !has_field_change((jl_value_t**)&mi->cache))
+            record_field_change((jl_value_t**)&mi->cache, NULL);
         // don't recurse into all backedges memory (yet)
         jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
         if (backedges) {
@@ -691,6 +740,10 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        if (jl_options.strip_ir)
+            record_field_change((jl_value_t**)&ci->edges, (jl_value_t*)jl_emptysvec);
+        if (jl_options.strip_metadata)
+            record_field_change((jl_value_t**)&ci->debuginfo, (jl_value_t*)jl_nulldebuginfo);
         if (s->incremental) {
             // make sure we don't serialize other reachable cache entries of foreign methods
             // Should this now be:
@@ -2514,10 +2567,8 @@ static void strip_specializations_(jl_method_instance_t *mi)
                 jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped);
             }
         }
-        if (jl_options.strip_ir)
-            record_field_change((jl_value_t**)&codeinst->edges, (jl_value_t*)jl_emptysvec);
-        if (jl_options.strip_metadata)
-            record_field_change((jl_value_t**)&codeinst->debuginfo, (jl_value_t*)jl_nulldebuginfo);
+        // n.b. `edges` and `debuginfo` are stripped in jl_insert_into_serialization_queue,
+        // which covers every serialized CodeInstance regardless of how it is reached
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     if (jl_options.trim || jl_options.strip_ir) {
@@ -2789,6 +2840,23 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
     return val;
 }
 
+// Companion to jl_collect_methtable_from_mod: method tables owned by the worklist
+// are serialized without their contents, since all of their (currently valid)
+// methods were collected as extext methods, to be re-added and re-activated on
+// load by jl_add_methods / jl_activate_methods, which also restores their
+// dispatch status.
+static int jl_prune_internal_mtable(jl_methtable_t *mt, void *env)
+{
+    (void)env;
+    if (jl_object_in_image((jl_value_t*)mt))
+        return 1;
+    record_field_change((jl_value_t**)&mt->defs, jl_nothing);
+    jl_methcache_t *mc = mt->cache;
+    record_field_change((jl_value_t**)&mc->cache, jl_nothing);
+    record_field_change((jl_value_t**)&mc->leafcache, jl_an_empty_memory_any);
+    return 1;
+}
+
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *module_init_order, jl_array_t *worklist, jl_array_t *extext_methods,
@@ -2796,6 +2864,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 {
     htable_new(&field_replace, 0);
     htable_new(&bits_replace, 0);
+    if (worklist)
+        jl_foreach_reachable_mtable(jl_prune_internal_mtable, mod_array, NULL);
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir) {
         if (jl_options.strip_metadata) {
@@ -2803,6 +2873,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             if (jl_nulldebuginfo == NULL)
                 jl_errorf("Core.NullDebugInfo required for --strip-metadata option");
         }
+        // FIXME: stripping should not rely on objects being installed in the
+        // (JIT) cache to be reached for stripping / pruning in this step
+        // the AOT-compiled CodeInstances etc. are (partially) provided up-front
+        // to the serializer and may not be in the cache at all in this process
         jl_strip_all_codeinfos(mod_array);
         jl_strip_all_docmeta(mod_array);
     }
@@ -2848,6 +2922,16 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 
     int en = jl_gc_enable(0);
     if (native_functions) {
+        // Rewrite each MethodInstance's cache to the ordered list of
+        // CodeInstances codegen emitted for this image (see jl_rewrite_mi_caches).
+        size_t num_ci_order = 0;
+        jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, NULL);
+        if (num_ci_order) {
+            jl_code_instance_t **ci_order = (jl_code_instance_t**)malloc_s(num_ci_order * sizeof(jl_code_instance_t*));
+            jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, ci_order);
+            jl_rewrite_mi_caches(ci_order, num_ci_order);
+            free(ci_order);
+        }
         size_t num_gvars, num_external_fns;
         jl_get_llvm_gv_inits(native_functions, &num_gvars, NULL);
         arraylist_grow(&gvars, num_gvars);

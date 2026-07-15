@@ -406,7 +406,7 @@ register_kinds!(JuliaSyntax, 0, [
         "flatten"
         # QuoteNode; not quasiquote
         "inert"
-        "inert_syntaxtree"
+        "syntaxinert"
     "END_SYNTAXTREE_KINDS"
 
     # Special tokens
