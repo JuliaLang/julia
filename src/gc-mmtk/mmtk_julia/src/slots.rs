@@ -48,6 +48,7 @@ pub struct OffsetSlot {
 }
 
 unsafe impl Send for OffsetSlot {}
+unsafe impl Sync for OffsetSlot {}
 
 impl OffsetSlot {
     pub fn new_no_offset(address: Address) -> Self {
