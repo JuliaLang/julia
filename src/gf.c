@@ -5519,6 +5519,196 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, char 
 }
 
 
+// Sort the intersecting matches in `t` (a Vector{Any} of MethodMatch, as
+// collected for a single query type) into dispatch order, removing every match
+// that can never be the dispatch target over its intersection with the query
+// (being fully covered by more specific methods), and setting *has_ambiguity
+// if the sorted order of the remaining matches is not exact (some of them are
+// ambiguous with each other over part of the query). When `approximate_ambig`
+// is set, the caller does not need *has_ambiguity computed accurately and it
+// is pessimistically set to 1 without attempting to prove otherwise.
+// Returns the new length of `t`, or -1 if `lim` was exceeded (in which case
+// the contents of `t` are left in an unspecified state).
+static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous, int approximate_ambig, int *has_ambiguity_out) JL_CANSAFEPOINT
+{
+    int has_ambiguity = 0;
+    size_t i, j, len = jl_array_nrows(t);
+
+    // the 'minmax' method is a method that (1) fully-covers the queried type, and (2) is
+    // more-specific than any other fully-covering method (but if !all_subtypes, there are
+    // non-fully-covering methods to which it is _likely_ not more specific)
+    jl_method_match_t *minmax = NULL;
+    int any_subtypes = 0;
+    if (len > 1) {
+        // first try to pre-process the results to find the most specific option
+        // among the fully-covering methods, since we can do this in O(n^2)
+        // time, and the rest is O(n^3)
+        //   - first find a candidate for the best of these method results
+        for (i = 0; i < len; i++) {
+            jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, i);
+            if (matc->fully_covers == FULLY_COVERS) {
+                any_subtypes = 1;
+                jl_method_t *m = matc->method;
+                for (j = 0; j < len; j++) {
+                    if (i == j)
+                        continue;
+                    jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, j);
+                    if (matc2->fully_covers == FULLY_COVERS) {
+                        jl_method_t *m2 = matc2->method;
+                        if (!method_morespecific_via_interferences(m, m2))
+                            break;
+                    }
+                }
+                if (j == len) {
+                    // Found the minmax method
+                    minmax = matc;
+                    break;
+                }
+            }
+        }
+        //   - it may even dominate (be more specific than) some choices that are not fully-covering!
+        //     move those into the subtype group, where we'll filter them out shortly after
+        //     (potentially avoiding reporting these as an ambiguity, and
+        //     potentially allowing us to hit the next fast path)
+        //   - we could always check here if *any* FULLY_COVERS method is
+        //     more-specific (instead of just considering minmax), but that may
+        //     cost much extra and is less likely to help us hit a fast path
+        //     (we will look for this later, when we compute ambig_groupid, for
+        //     correctness)
+        int all_subtypes = any_subtypes;
+        if (any_subtypes) {
+            jl_method_t *minmaxm = NULL;
+            if (minmax != NULL)
+                minmaxm = minmax->method;
+            // scan through all the non-fully-matching methods and count them as "fully-covering" (ish)
+            // (i.e. in the 'subtype' group) if `minmax` is more-specific
+            for (i = 0; i < len; i++) {
+                jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, i);
+                if (matc->fully_covers != FULLY_COVERS) {
+                    jl_method_t *m = matc->method;
+                    if (minmaxm) {
+                        if (method_morespecific_via_interferences(minmaxm, m)) {
+                            matc->fully_covers = SENTINEL; // put a sentinel value here for sorting
+                            continue;
+                        }
+                        if (method_in_interferences(minmaxm, m)) // !morespecific(m, minmaxm)
+                            has_ambiguity = 1;
+                    }
+                    all_subtypes = 0;
+                }
+            }
+        }
+        //    - now we might have a fast-return here, if we see that
+        //      we've already processed all of the possible outputs
+        if (all_subtypes) {
+            if (minmax == NULL) {
+                // all intersecting methods are fully-covering, but there is no unique most-specific method
+                if (!include_ambiguous) {
+                    // there no unambiguous choice of method
+                    jl_array_del_end(t, len);
+                    len = 0;
+                }
+                else if (lim == 1) {
+                    // we'd have to return >1 method due to the ambiguity, so bail early
+                    return -1;
+                }
+            }
+            else {
+                // `minmax` is more-specific than all other matches and is fully-covering
+                // we can return it as our only result
+                jl_array_ptr_set(t, 0, minmax);
+                jl_array_del_end(t, len - 1);
+                len = 1;
+            }
+        }
+        if (minmax && lim == 0) {
+            // protect some later algorithms from underflow
+            return -1;
+        }
+    }
+    if (len > 1) {
+        arraylist_t stack, visited, result, recursion_stack;
+        arraylist_new(&result, lim != -1 && lim < len ? lim : len);
+        arraylist_new(&stack, 0);
+        arraylist_new(&visited, len);
+        arraylist_new(&recursion_stack, len);
+        arraylist_grow(&visited, len);
+        memset(visited.items, 0, len * sizeof(size_t));
+        char *tainted = (char*)calloc_s(len);
+        // if we had a minmax method (any subtypes), now may now be able to
+        // quickly cleanup some of methods
+        int found_minmax = 0;
+        if (has_ambiguity)
+            found_minmax = 1;
+        else if (minmax != NULL)
+            found_minmax = 2;
+        else if (any_subtypes && !include_ambiguous)
+            found_minmax = 1;
+        has_ambiguity = 0;
+        if (approximate_ambig) // if we don't care about the result, set it now so we won't bother attempting to compute it accurately later
+            has_ambiguity = 1;
+        for (i = 0; i < len; i++) {
+            assert(visited.items[i] == (void*)0 || visited.items[i] == (void*)1);
+            jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, i);
+            if (matc->fully_covers != NOT_FULLY_COVERS && found_minmax) {
+                // this was already handled above and below, so we won't learn anything new
+                // by visiting it and it might be a bit costly
+                continue;
+            }
+            int child_cycle = sort_mlmatches(t, i, &visited, tainted, &stack, &result, &recursion_stack, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, &has_ambiguity, &found_minmax, minmax == NULL ? NULL : minmax->method);
+            if (child_cycle == -1) {
+                free(tainted);
+                arraylist_free(&recursion_stack);
+                arraylist_free(&visited);
+                arraylist_free(&stack);
+                arraylist_free(&result);
+                return -1;
+            }
+            assert(child_cycle == 0); (void)child_cycle;
+            assert(stack.len == 0);
+            assert(visited.items[i] == (void*)1);
+        }
+        free(tainted);
+        arraylist_free(&recursion_stack);
+        arraylist_free(&visited);
+        arraylist_free(&stack);
+        for (j = 0; j < result.len; j++) {
+            i = (size_t)result.items[j];
+            jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, i);
+            // remove our sentinel entry markers
+            if (matc->fully_covers == SENTINEL)
+                matc->fully_covers = NOT_FULLY_COVERS;
+            result.items[j] = (void*)matc;
+        }
+        if (minmax) {
+            arraylist_push(&result, minmax);
+            j++;
+        }
+        memcpy(jl_array_data(t, jl_method_match_t*), result.items, j * sizeof(jl_method_match_t*));
+        arraylist_free(&result);
+        if (j != len)
+            jl_array_del_end(t, len - j);
+        len = j;
+    }
+    *has_ambiguity_out = has_ambiguity;
+    return len;
+}
+
+// Re-sort a (possibly filtered) vector of MethodMatch objects, as collected by
+// jl_matching_methods for a single query type, removing matches that can no
+// longer be the dispatch target, and return whether any dispatch ambiguity
+// remains between the remaining matches. Used by `Base.isambiguous` to decide
+// whether an ambiguity remains after filtering out matches whose intersection
+// has a Union{} type parameter.
+JL_DLLEXPORT int jl_sort_method_matches(jl_array_t *t, int include_ambiguous) JL_CANSAFEPOINT
+{
+    JL_TYPECHK(sort_method_matches, array_any, (jl_value_t*)t);
+    int has_ambiguity = 0;
+    ssize_t sorted = sort_method_matches(t, -1, include_ambiguous, 0, &has_ambiguity);
+    assert(sorted != -1); (void)sorted; // lim == -1 cannot be exceeded
+    return has_ambiguity;
+}
+
 // This is the collect form of calling jl_typemap_intersection_visitor
 // with optimizations to skip fully shadowed methods.
 //
@@ -5671,166 +5861,14 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
 
     // all intersecting methods have been collected now. the remaining work is to sort
     // these and apply specificity to determine a list of dispatch-possible call targets
-    size_t i, j, len = jl_array_nrows(env.t);
-
-    // the 'minmax' method is a method that (1) fully-covers the queried type, and (2) is
-    // more-specific than any other fully-covering method (but if !all_subtypes, there are
-    // non-fully-covering methods to which it is _likely_ not more specific)
-    jl_method_match_t *minmax = NULL;
-    int any_subtypes = 0;
-    if (len > 1) {
-        // first try to pre-process the results to find the most specific option
-        // among the fully-covering methods, since we can do this in O(n^2)
-        // time, and the rest is O(n^3)
-        //   - first find a candidate for the best of these method results
-        for (i = 0; i < len; i++) {
-            jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
-            if (matc->fully_covers == FULLY_COVERS) {
-                any_subtypes = 1;
-                jl_method_t *m = matc->method;
-                for (j = 0; j < len; j++) {
-                    if (i == j)
-                        continue;
-                    jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(env.t, j);
-                    if (matc2->fully_covers == FULLY_COVERS) {
-                        jl_method_t *m2 = matc2->method;
-                        if (!method_morespecific_via_interferences(m, m2))
-                            break;
-                    }
-                }
-                if (j == len) {
-                    // Found the minmax method
-                    minmax = matc;
-                    break;
-                }
-            }
-        }
-        //   - it may even dominate (be more specific than) some choices that are not fully-covering!
-        //     move those into the subtype group, where we'll filter them out shortly after
-        //     (potentially avoiding reporting these as an ambiguity, and
-        //     potentially allowing us to hit the next fast path)
-        //   - we could always check here if *any* FULLY_COVERS method is
-        //     more-specific (instead of just considering minmax), but that may
-        //     cost much extra and is less likely to help us hit a fast path
-        //     (we will look for this later, when we compute ambig_groupid, for
-        //     correctness)
-        int all_subtypes = any_subtypes;
-        if (any_subtypes) {
-            jl_method_t *minmaxm = NULL;
-            if (minmax != NULL)
-                minmaxm = minmax->method;
-            // scan through all the non-fully-matching methods and count them as "fully-covering" (ish)
-            // (i.e. in the 'subtype' group) if `minmax` is more-specific
-            for (i = 0; i < len; i++) {
-                jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
-                if (matc->fully_covers != FULLY_COVERS) {
-                    jl_method_t *m = matc->method;
-                    if (minmaxm) {
-                        if (method_morespecific_via_interferences(minmaxm, m)) {
-                            matc->fully_covers = SENTINEL; // put a sentinel value here for sorting
-                            continue;
-                        }
-                        if (method_in_interferences(minmaxm, m)) // !morespecific(m, minmaxm)
-                            has_ambiguity = 1;
-                    }
-                    all_subtypes = 0;
-                }
-            }
-        }
-        //    - now we might have a fast-return here, if we see that
-        //      we've already processed all of the possible outputs
-        if (all_subtypes) {
-            if (minmax == NULL) {
-                // all intersecting methods are fully-covering, but there is no unique most-specific method
-                if (!include_ambiguous) {
-                    // there no unambiguous choice of method
-                    len = 0;
-                    env.t = jl_an_empty_vec_any;
-                }
-                else if (lim == 1) {
-                    // we'd have to return >1 method due to the ambiguity, so bail early
-                    JL_GC_POP();
-                    return jl_nothing;
-                }
-            }
-            else {
-                // `minmax` is more-specific than all other matches and is fully-covering
-                // we can return it as our only result
-                jl_array_ptr_set(env.t, 0, minmax);
-                jl_array_del_end((jl_array_t*)env.t, len - 1);
-                len = 1;
-            }
-        }
-        if (minmax && lim == 0) {
-            // protect some later algorithms from underflow
+    size_t j, len;
+    {
+        ssize_t sorted = sort_method_matches((jl_array_t*)env.t, lim, include_ambiguous, ambig == NULL, &has_ambiguity);
+        if (sorted == -1) {
             JL_GC_POP();
             return jl_nothing;
         }
-    }
-    if (len > 1) {
-        arraylist_t stack, visited, result, recursion_stack;
-        arraylist_new(&result, lim != -1 && lim < len ? lim : len);
-        arraylist_new(&stack, 0);
-        arraylist_new(&visited, len);
-        arraylist_new(&recursion_stack, len);
-        arraylist_grow(&visited, len);
-        memset(visited.items, 0, len * sizeof(size_t));
-        char *tainted = (char*)calloc_s(len);
-        // if we had a minmax method (any subtypes), now may now be able to
-        // quickly cleanup some of methods
-        int found_minmax = 0;
-        if (has_ambiguity)
-            found_minmax = 1;
-        else if (minmax != NULL)
-            found_minmax = 2;
-        else if (any_subtypes && !include_ambiguous)
-            found_minmax = 1;
-        has_ambiguity = 0;
-        if (ambig == NULL) // if we don't care about the result, set it now so we won't bother attempting to compute it accurately later
-            has_ambiguity = 1;
-        for (i = 0; i < len; i++) {
-            assert(visited.items[i] == (void*)0 || visited.items[i] == (void*)1);
-            jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
-            if (matc->fully_covers != NOT_FULLY_COVERS && found_minmax) {
-                // this was already handled above and below, so we won't learn anything new
-                // by visiting it and it might be a bit costly
-                continue;
-            }
-            int child_cycle = sort_mlmatches((jl_array_t*)env.t, i, &visited, tainted, &stack, &result, &recursion_stack, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, &has_ambiguity, &found_minmax, minmax == NULL ? NULL : minmax->method);
-            if (child_cycle == -1) {
-                free(tainted);
-                arraylist_free(&recursion_stack);
-                arraylist_free(&visited);
-                arraylist_free(&stack);
-                arraylist_free(&result);
-                JL_GC_POP();
-                return jl_nothing;
-            }
-            assert(child_cycle == 0); (void)child_cycle;
-            assert(stack.len == 0);
-            assert(visited.items[i] == (void*)1);
-        }
-        free(tainted);
-        arraylist_free(&recursion_stack);
-        arraylist_free(&visited);
-        arraylist_free(&stack);
-        for (j = 0; j < result.len; j++) {
-            i = (size_t)result.items[j];
-            jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
-            // remove our sentinel entry markers
-            if (matc->fully_covers == SENTINEL)
-                matc->fully_covers = NOT_FULLY_COVERS;
-            result.items[j] = (void*)matc;
-        }
-        if (minmax) {
-            arraylist_push(&result, minmax);
-            j++;
-        }
-        memcpy(jl_array_data(env.t, jl_method_match_t*), result.items, j * sizeof(jl_method_match_t*));
-        arraylist_free(&result);
-        if (j != len)
-            jl_array_del_end((jl_array_t*)env.t, len - j);
-        len = j;
+        len = (size_t)sorted;
     }
     for (j = 0; j < len; j++) {
         jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, j);
