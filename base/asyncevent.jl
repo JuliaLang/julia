@@ -423,7 +423,7 @@ function timedwait(testcb, timeout::Real; pollint::Real=0.1)
         if testcb()
             close(t)
             return :ok
-        elseif (time_ns() - start) > ns_timeout
+        elseif (time_ns() -% start) > ns_timeout
             close(t)
             break
         end

@@ -3,6 +3,7 @@
 
 function vst1_ok(x::Expr)
     est = JuliaLowering.expr_to_est(x)
+    JuliaSyntax.fill_context!(est, JuliaSyntax.SyntaxContext(@__MODULE__, v"1.13"))
     JuliaLowering.valid_st1(est).ok
 end
 
@@ -39,7 +40,7 @@ let
         "macrocall",
         "quote",
         "inert",
-        "inert_syntaxtree",
+        "syntaxinert",
         "top",
         "opaque_closure",
         "symboliclabel",

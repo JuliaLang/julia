@@ -425,7 +425,7 @@ end
     end
     """) == (Complex(1), Complex(2))
 
-    # Both JL and flisp will evaluate the sparam bound multiple times
+    # flisp will evaluate the sparam bound multiple times
     let res = JuliaLowering.include_string(test_mod, """
         let eval_spbounds_counter = 0
             global function f_optarg_eval_spbounds_counter(
@@ -436,8 +436,7 @@ end
             f_optarg_eval_spbounds_counter(Complex(1))
         end
         """)
-        @test res == (Complex(1), 4)
-        @test_broken res == (Complex(1), 1)
+        @test res == (Complex(1), 1)
     end
 end
 
@@ -636,10 +635,7 @@ end
     @testset for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
         arg1 in [arg0, Expr(:..., arg0)],
         arg2 in [arg1, Expr(:kw, arg1, :Int)],
-        expander in [fl_macroexpand, (_,x)->x]
-        # TODO: would use jl_macroexpand, but that cannot be done as a separate
-        # step due to MacroExpansionContext, and we must use jl_eval.
-        @test_broken false
+        expander in [fl_macroexpand, jl_macroexpand]
 
         @testset let expanded = expander(
             test_mod, :(function (specialized, @nospecialize($arg2))
@@ -1369,6 +1365,28 @@ end
     @test xy(0,0) == (1,9,9,9,2,0,0)
 end
 
+@testset "sparam in keyword default" begin
+    # The keyword default is evaluated in the body method, which carries all
+    # of the function's static parameters
+    @test JL.include_string(test_mod,
+        "f_kwdef_sp(y::T; k=T) where T = (y, k); f_kwdef_sp(1)") == (1, Int)
+    # ... but an sparam unused in the signature is undetermined at dispatch
+    JL.include_string(test_mod, "f_kwdef_sp_undet(y; k=T) where T = (y, k)")
+    @test_throws UndefVarError test_mod.f_kwdef_sp_undet(1)
+end
+
+@testset "anonymous static parameters" begin
+    # `where _` declares a static parameter which can never be referenced
+    @test JL.include_string(test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)") == 42
+    @test JL.include_string(
+        test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)") == (1.5, Float64)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "f_anon_sp3(x) where {_, _} = x"; expr_compat_mode=true)
+    # Currently allowed (like arguments).  Could error like flisp.
+    @test_throws LoweringError JL.include_string(
+        test_mod, "f_anon_sp3(x) where {_, _} = x") broken=true
+end
+
 @testset "first arg `where`" begin
     @eval test_mod struct A12238{T} end
     Core.@latestworld
@@ -1583,6 +1601,7 @@ end
 
 @testset "Generated functions" begin; for expr_compat_mode in (false, true)
     local genfunc_s, genfunc_f
+    @eval test_mod import JuliaLowering.@legacy_quote_to_syntax
 
     @testset "returning special syntax forms" begin
         @test JuliaLowering.include_string(test_mod, raw"""
@@ -1802,12 +1821,22 @@ end
         f_gen_calls_macros(1)
     end
     """; expr_compat_mode) === "foo"
+    @test JuliaLowering.include_string(test_mod, raw"""begin
+        @generated function calls_versioned_macro(::Type{T}, ::Val{i}) where {T, i}
+            i isa Integer || @goto err
+            return i
+            @label err
+            return 0
+        end
+
+        calls_versioned_macro(Tuple{Int}, Val(1))
+    end """; expr_compat_mode) == 1
 end
 
     genfunc_quote_s = """
     begin
         function f_gen_quote_1(::Tuple{T}) where {T}
-            out = :(:x1,first)
+            out = @legacy_quote_to_syntax :(:x1,first)
             if @generated
             else
             end
@@ -1828,7 +1857,7 @@ end
         function f_gen_quote_2(::Tuple{T}) where {T}
             out = nothing
             if @generated
-                :(out = :(:x2,generated))
+                @legacy_quote_to_syntax :(out = @legacy_quote_to_syntax :(:x2,generated))
             else
                 out = (:x2,nongen)
             end
@@ -1850,7 +1879,7 @@ end
             if @generated
             else
             end
-            return :(:x4,after)
+            return @legacy_quote_to_syntax :(:x4,after)
         end
 
         f_gen_quote_3((1,))
@@ -1867,9 +1896,9 @@ end
         function f_gen_interpolate(::Tuple{T}) where {T}
             out = :(:x1,first)
             if @generated
-                out = :($out, generated)
+                out = @legacy_quote_to_syntax :($out, generated)
             else
-                out = :($out, nongen)
+                out = @legacy_quote_to_syntax :($out, nongen)
             end
             return out
         end
@@ -1888,18 +1917,21 @@ end
 
     genfunc_quote_s = raw"""
     begin
-        @eval function f_gen_quote_1(::Tuple{T}) where {T}
+        @eval function f_gen_eval_quote_1(::Tuple{T}) where {T}
             out = $(Expr(:quote, Expr(:call, :+, 1, Expr(:if, Expr(:generated), 1, 2))))
             if @generated
             else
             end
             return out
         end
-        f_gen_quote_1((1,))
+        f_gen_eval_quote_1((1,))
     end
     """
     @test JuliaLowering.include_string(
         test_mod, genfunc_quote_s; expr_compat_mode=true) ==
+            :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=false) ==
             :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
 
     # Test generated function edges to bindings

@@ -40,7 +40,7 @@ void jl_gc_init_page(void)
 
 // Try to allocate a memory block for multiple pages
 // Return `NULL` if allocation failed. Result is aligned to `GC_PAGE_SZ`.
-char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
+static char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 {
     size_t pages_sz = GC_PAGE_SZ * pg_cnt;
 #ifdef _OS_WINDOWS_
@@ -72,7 +72,7 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 // smaller `MIN_BLOCK_PG_ALLOC` a `jl_memory_exception` is thrown.
 // Assumes `gc_pages_lock` is acquired, the lock is released before the
 // exception is thrown.
-char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT
+STATIC_INLINE char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT_LEAVE_ENTER
 {
     unsigned pg_cnt = block_pg_cnt;
     char *mem = NULL;
@@ -157,7 +157,20 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     }
 exit:
 #ifdef _OS_WINDOWS_
-    VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
+    // The page was previously only reserved (jl_gc_try_alloc_pages_) or has been
+    // decommitted (jl_gc_free_page), so it needs to be committed before use. This
+    // charges the page against the system commit limit and can fail when that is
+    // exhausted; returning it anyway would hand out memory that raises an access
+    // violation on first touch, so undo and report out-of-memory instead (as
+    // jl_gc_try_alloc_pages does when the reservation itself fails).
+    if (VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE) == NULL) {
+        gc_alloc_map_set(meta->data, GC_PAGE_FREED);
+        push_lf_back(&global_page_pool_freed, meta);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -(int64_t)GC_PAGE_SZ);
+        SetLastError(last_error);
+        errno = last_errno;
+        jl_throw(jl_memory_exception);
+    }
     SetLastError(last_error);
 #endif
     errno = last_errno;

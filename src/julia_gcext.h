@@ -51,7 +51,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_foreign_type(
         jl_markfunc_t markfunc,
         jl_sweepfunc_t sweepfunc,
         int haspointers,
-        int large);
+        int large) JL_CANSAFEPOINT;
 
 
 #define HAVE_JL_REINIT_FOREIGN_TYPE 1
@@ -74,7 +74,7 @@ typedef struct {
 } jl_fielddescdyn_t;
 
 // Allocate an object of a foreign type.
-JL_DLLEXPORT void *jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty);
+JL_DLLEXPORT void *jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty) JL_CANSAFEPOINT;
 
 // Queue an object or array of objects for scanning by the garbage collector.
 // These functions must only be called from within a root scanner callback
@@ -113,7 +113,7 @@ JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *b
 // whether support was already enabled. The function may implicitly
 // trigger a full garbage collection to properly update all internal
 // data structures.
-JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void);
+JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void) JL_CANSAFEPOINT;
 
 // This function returns whether support for conservative scanning has
 // been enabled. The return values are the same as for

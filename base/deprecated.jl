@@ -577,6 +577,13 @@ to_power_type(x) = oftype(x*x, x)
 
 # BEGIN 1.14 deprecations
 
+# These operators are new in 1.14, but these fallback methods are added for
+# compatibility while packages adjust to defining both operators, to allow
+# Base and other packages to start using these.
+*%(a::T, b::T) where {T} = *(a, b)
++%(a::T, b::T) where {T} = +(a, b)
+-%(a::T, b::T) where {T} = -(a, b)
+
 # Revise calls this
 function explicit_manifest_entry_path(args...)
     spec = explicit_manifest_entry_load_spec(args...)
@@ -628,6 +635,40 @@ end
 end
 
 @noinline function isabstracttype(x::TypeEq)
+    depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
+    return true
+end
+
+@noinline function getproperty(x::Core.TypeEgal, s::Symbol)
+    if s === :parameters
+        depwarn_if_not_pure("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
+        return Core.svec(type_parameter(x))
+    elseif s === :name
+        depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
+        return TypeEq.name
+    elseif s === :hash
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
+    end
+    return getfield(x, s)
+end
+
+@noinline function typename(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
+    return TypeEq.name
+end
+
+@noinline function nameof(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `nameof` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :nameof)
+    return :Type
+end
+
+@noinline function parentmodule(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `parentmodule` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :parentmodule)
+    return Core
+end
+
+@noinline function isabstracttype(x::Core.TypeEgal)
     depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
     return true
 end

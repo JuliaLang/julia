@@ -376,7 +376,8 @@ function _buffer_lookahead_tokens(lexer, lookahead)
         was_whitespace = is_whitespace(k)
         had_whitespace |= was_whitespace
         f = EMPTY_FLAGS
-        if k == K"Operator" && raw.op_precedence != Tokenize.PREC_NONE
+        if (k == K"Operator" || raw.op_precedence == Tokenize.PREC_COMPOUND_ASSIGN) &&
+                raw.op_precedence != Tokenize.PREC_NONE
             # Store operator precedence in numeric flags
             f |= set_numeric_flags(Int(raw.op_precedence))
         end

@@ -33,29 +33,28 @@ dmg/Applications:
 	-mkdir -p dmg
 	ln -fs /Applications $@
 
-dmg/$(APP_NAME): startup.applescript julia.icns
-	-mkdir -p dmg
-	osacompile -o $@ startup.applescript
-	rm $@/Contents/Resources/applet.icns
-	# Newer osacompile ships the applet icon as a compiled asset catalog
-	# (Assets.car, referenced by CFBundleIconName) which modern macOS prefers
-	# over CFBundleIconFile -- so just dropping applet.icns/setting julia.icns
-	# below leaves the generic AppleScript applet icon showing. Remove the stale
-	# catalog and its key so CFBundleIconFile=julia.icns is authoritative.
-	rm -f $@/Contents/Resources/Assets.car
-	-plutil -remove CFBundleIconName $@/Contents/Info.plist
-	cp julia.icns $@/Contents/Resources/
-	plutil -replace CFBundleDevelopmentRegion  -string "en" $@/Contents/Info.plist
-	plutil -insert  CFBundleDisplayName        -string "Julia" $@/Contents/Info.plist
-	plutil -replace CFBundleIconFile           -string "julia.icns" $@/Contents/Info.plist
-	plutil -insert  CFBundleIdentifier         -string "$(APP_ID)" $@/Contents/Info.plist
-	plutil -replace CFBundleName               -string "Julia" $@/Contents/Info.plist
-	plutil -insert  CFBundleShortVersionString -string "$(JULIA_VERSION_MAJOR_MINOR_PATCH)" $@/Contents/Info.plist
-	plutil -insert  CFBundleVersion            -string "$(JULIA_VERSION_OPT_COMMIT)" $@/Contents/Info.plist
-	plutil -insert  NSHumanReadableCopyright   -string "$(APP_COPYRIGHT)" $@/Contents/Info.plist
+dmg/$(APP_NAME): Info.plist.in julia.icns
+	-mkdir -p $@/Contents/MacOS
 	-mkdir -p $@/Contents/Resources/julia
+	# Author the bundle's Info.plist from the template, substituting version info.
+	sed -e 's|@APP_ID@|$(APP_ID)|g' \
+	    -e 's|@APP_COPYRIGHT@|$(APP_COPYRIGHT)|g' \
+	    -e 's|@JULIA_VERSION_MAJOR_MINOR_PATCH@|$(JULIA_VERSION_MAJOR_MINOR_PATCH)|g' \
+	    -e 's|@JULIA_VERSION_OPT_COMMIT@|$(JULIA_VERSION_OPT_COMMIT)|g' \
+	    Info.plist.in > $@/Contents/Info.plist
+	printf 'APPL????' > $@/Contents/PkgInfo
+	cp julia.icns $@/Contents/Resources/
 	$(MAKE) -C $(JULIAHOME) binary-dist
 	$(TAR) -xzf $(JULIAHOME)/$(JULIA_BINARYDIST_FILENAME).tar.gz -C $@/Contents/Resources/julia --strip-components 1
+	# The app's double-clickable entry point is `julia-terminal`. It is a hardlink to
+	# the bundled julia binary (NOT a symlink: LaunchServices resolves a symlinked
+	# CFBundleExecutable down to its target, discarding the name the loader keys off).
+	# When the loader is invoked under this name it relaunches julia inside Terminal.app
+	# (see cli/loader_exe.c) instead of starting the REPL in the windowless bundle
+	# process. Contents/MacOS/julia-terminal is a symlink to that hardlink, so the real
+	# executable keeps its bin/ location and thus its relative rpath to the libraries.
+	ln -f $@/Contents/Resources/julia/bin/julia $@/Contents/Resources/julia/bin/julia-terminal
+	ln -fs ../Resources/julia/bin/julia-terminal $@/Contents/MacOS/julia-terminal
 	find $@/Contents/Resources/julia -type f -exec chmod -w {} \;
 	# Even though the tarball may already be signed, we re-sign here to make it easier to add
 	# unsigned executables (like the app launcher) and whatnot, without needing to maintain lists

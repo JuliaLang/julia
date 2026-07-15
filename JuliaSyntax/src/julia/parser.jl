@@ -198,6 +198,12 @@ function min_supported_version(min_ver, ps, mark, message)
     end
 end
 
+function min_supported_wrapping_arithmetic_op(ps, mark, t)
+    if kind(t) in KSet"+% -% *%"
+        min_supported_version(v"1.14", ps, mark, "wrapping arithmetic operators `+%`, `-%`, and `*%`")
+    end
+end
+
 # flisp: disallow-space
 function bump_disallowed_space(ps)
     if preceding_whitespace(peek_token(ps))
@@ -297,13 +303,13 @@ end
 function is_unary_op(t, isdot)
     k = kind(t)
     (k in KSet"<: >:" && !isdot) ||
-    k in KSet"+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓" # dotop allowed
+    k in KSet"+ +% - -% ! ~ ¬ √ ∛ ∜ ⋆ ± ∓" # dotop allowed
 end
 
 # Operators that are both unary and binary
 function is_both_unary_and_binary(t, isdot)
     k = kind(t)
-    k in KSet"+ - ⋆ ± ∓" || (k in KSet"$ & ~" && !isdot)
+    k in KSet"+ +% - -% ⋆ ± ∓" || (k in KSet"$ & ~" && !isdot)
 end
 
 function is_string_macro_suffix(k)
@@ -988,14 +994,14 @@ end
 #
 # flisp: parse-expr
 function parse_expr(ps::ParseState)
-    parse_with_chains(ps, parse_term, is_prec_plus, KSet"+ ++")
+    parse_with_chains(ps, parse_term, is_prec_plus, KSet"+ +% ++")
 end
 
 # a * b * c  ==>  (call-i a * b c)
 #
 # flisp: parse-term
 function parse_term(ps::ParseState)
-    parse_with_chains(ps, parse_rational, is_prec_times, KSet"*")
+    parse_with_chains(ps, parse_rational, is_prec_times, KSet"* *%")
 end
 
 # Parse left to right, combining any of `chain_ops` into one call

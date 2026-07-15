@@ -208,6 +208,8 @@ function showerror(io::IO, ex::CanonicalIndexError)
     print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
 end
 
+# Must match `jl_inst_arg_tuple_type`: reflection through `typesof` should agree
+# with actual dispatch, including egality keys for closed type-valued arguments.
 typesof(@nospecialize args...) = Tuple{Any[Core.Typeof(arg) for arg in args]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
@@ -545,7 +547,7 @@ end
 #   `(sa_env, ca_env, alias::GlobalRef)`           — both resolve to the same alias
 #   `nothing`                                      — bail; caller falls back to whole-subtree highlighting
 function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
-    if sig isa TypeEq && called isa TypeEq
+    if sig isa TypeEq && (called isa TypeEq || called isa Core.TypeEgal)
         return Core.svec(type_parameter(sig)), Core.svec(type_parameter(called)), nothing
     end
     sig isa DataType && called isa DataType || return nothing

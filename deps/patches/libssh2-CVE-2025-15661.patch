@@ -1,0 +1,111 @@
+From 2dae3024897e1898d389835151f4e9606227721d Mon Sep 17 00:00:00 2001
+From: Will Cosgrove <will@panic.com>
+Date: Fri, 10 Oct 2025 08:26:20 -0700
+Subject: [PATCH] Update sftp_symlink to avoid out of bounds read on malformed
+ packet #1705 (#1717)
+
+--- libssh2-1.11.1.orig/src/sftp.c
++++ libssh2-1.11.1/src/sftp.c
+@@ -3795,15 +3795,19 @@ static int sftp_symlink(LIBSSH2_SFTP *sf
+ {
+     LIBSSH2_CHANNEL *channel = sftp->channel;
+     LIBSSH2_SESSION *session = channel->session;
+-    size_t data_len = 0, link_len;
++    size_t data_len = 0, lk_len;
+     /* 13 = packet_len(4) + packet_type(1) + request_id(4) + path_len(4) */
+     ssize_t packet_len =
+         path_len + 13 +
+         ((link_type == LIBSSH2_SFTP_SYMLINK) ? (4 + target_len) : 0);
+     unsigned char *s, *data = NULL;
++    struct string_buf buf;
+     static const unsigned char link_responses[2] =
+         { SSH_FXP_NAME, SSH_FXP_STATUS };
+     int retcode;
++    unsigned char packet_type;
++    uint32_t tmp_u32;
++    unsigned char *lk_target;
+ 
+     if(sftp->symlink_state == libssh2_NB_state_idle) {
+         sftp->last_errno = LIBSSH2_FX_OK;
+@@ -3891,8 +3895,25 @@ static int sftp_symlink(LIBSSH2_SFTP *sf
+ 
+     sftp->symlink_state = libssh2_NB_state_idle;
+ 
+-    if(data[0] == SSH_FXP_STATUS) {
+-        retcode = _libssh2_ntohu32(data + 5);
++    buf.data = (unsigned char *)LIBSSH2_UNCONST(data);
++    buf.dataptr = buf.data;
++    buf.len = data_len;
++
++    if(_libssh2_get_byte(&buf, &packet_type)) {
++        LIBSSH2_FREE(session, data);
++        return _libssh2_error(session, LIBSSH2_ERROR_SFTP_PROTOCOL,
++                              "SFTP Protocol Error (type)");
++    }
++
++    if(packet_type == SSH_FXP_STATUS) {
++        if(_libssh2_get_u32(&buf, &tmp_u32)) {
++            LIBSSH2_FREE(session, data);
++            return _libssh2_error(session, LIBSSH2_ERROR_SFTP_PROTOCOL,
++                                  "SFTP Protocol Error (code)");
++        }
++
++        retcode = (int)tmp_u32;
++
+         LIBSSH2_FREE(session, data);
+         if(retcode == LIBSSH2_FX_OK)
+             return LIBSSH2_ERROR_NONE;
+@@ -3903,30 +3924,37 @@ static int sftp_symlink(LIBSSH2_SFTP *sf
+         }
+     }
+ 
+-    if(_libssh2_ntohu32(data + 5) < 1) {
++    /* advance past id */
++    if(_libssh2_get_u32(&buf, &tmp_u32)) {
+         LIBSSH2_FREE(session, data);
+         return _libssh2_error(session, LIBSSH2_ERROR_SFTP_PROTOCOL,
+-                              "Invalid READLINK/REALPATH response, "
+-                              "no name entries");
++                              "SFTP Protocol Error (id)");
+     }
+ 
+-    if(data_len < 13) {
+-        if(data_len > 0) {
+-            LIBSSH2_FREE(session, data);
+-        }
++    /* look for at least one link */
++    if(_libssh2_get_u32(&buf, &tmp_u32) || tmp_u32 < 1) {
++        LIBSSH2_FREE(session, data);
+         return _libssh2_error(session, LIBSSH2_ERROR_SFTP_PROTOCOL,
+-                              "SFTP stat packet too short");
++                                     "Invalid READLINK/REALPATH response, "
++                                     "no name entries");
+     }
+ 
+-    /* this reads a u32 and stores it into a signed 32bit value */
+-    link_len = _libssh2_ntohu32(data + 9);
+-    if(link_len < target_len) {
+-        memcpy(target, data + 13, link_len);
+-        target[link_len] = 0;
+-        retcode = (int)link_len;
++    if(_libssh2_get_string(&buf, &lk_target, &lk_len) == LIBSSH2_ERROR_NONE) {
++        if(lk_len < target_len) {
++            memcpy(target, lk_target, lk_len);
++            target[lk_len] = '\0';
++            retcode = (int)lk_len;
++        }
++        else {
++            retcode = LIBSSH2_ERROR_BUFFER_TOO_SMALL;
++        }
+     }
+-    else
+-        retcode = LIBSSH2_ERROR_BUFFER_TOO_SMALL;
++    else {
++        LIBSSH2_FREE(session, data);
++        return _libssh2_error(session, LIBSSH2_ERROR_SFTP_PROTOCOL,
++                              "SFTP Protocol Error (filename)");
++    }
++
+     LIBSSH2_FREE(session, data);
+ 
+     return retcode;

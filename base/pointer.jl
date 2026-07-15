@@ -309,7 +309,8 @@ isless(x::Ptr{T}, y::Ptr{T}) where {T} = x < y
 
 ==(x::Ptr, y::Ptr) = UInt(x) == UInt(y)
 <(x::Ptr,  y::Ptr) = UInt(x) < UInt(y)
--(x::Ptr,  y::Ptr) = UInt(x) - UInt(y)
+-(x::Ptr,  y::Ptr) = UInt(x) -% UInt(y)
+-%(x::Ptr,  y::Ptr) = UInt(x) -% UInt(y)
 
 +(x::Ptr, y::Integer) = add_ptr(x, (y % UInt) % UInt)
 -(x::Ptr, y::Integer) = sub_ptr(x, (y % UInt) % UInt)

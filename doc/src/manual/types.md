@@ -1465,7 +1465,7 @@ is raised:
 
 ```jldoctest; filter = r"Closest candidates.*"s
 julia> supertype(Union{Float64,Int64})
-ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
+ERROR: MethodError: no method matching supertype(::Core.TypeEgal{Union{Float64, Int64}})
 The function `supertype` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:

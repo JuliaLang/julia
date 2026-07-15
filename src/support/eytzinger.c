@@ -45,14 +45,25 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
         eyt_range_t *r = &t->ranges[i / 2];
         uintptr_t val = (i & 1) ? r->end : r->start;
         assert(val % 4 == 0 && "Range boundary not 4-byte aligned!");
-        // We abuse the pointer here a little so that a couple of properties are true:
-        // 1. a start and an end are never the same value. This simplifies the binary search.
-        // 2. ends are always after starts. This also simplifies the binary search.
-        // We assume that there exist no 0-size ranges, but that's a safe assumption
-        // since it means nothing could be there anyways
-        //
-        // FIXME: https://github.com/JuliaLang/julia/issues/61385
-        idxs[i] = val + (i & 1);
+        // Encode each boundary so that the strictly-less-than predecessor search
+        // in _eyt_obj_idx answers half-open [start, end) containment queries
+        // correctly, including for abutting ranges. All boundaries are 4-byte
+        // aligned (asserted above), so the low two bits are free; we offset a
+        // start boundary by +2 and an end boundary by +1:
+        //   start(s) -> s + 2   (s % 4 == 0, so this is even; low bit 0)
+        //   end(e)   -> e + 1   (odd; low bit 1)
+        // This gives three useful properties:
+        // 1. A start and an end never encode to the same value, so all boundaries
+        //    are distinct (required to build the Eytzinger tree).
+        // 2. When a range ends exactly where the next one starts (abutting), the
+        //    start boundary (e + 2) sorts *after* the coincident end boundary
+        //    (e + 1), so a lookup at that address lands in the later range.
+        // 3. The low bit distinguishes starts (even, in-range) from ends (odd,
+        //    out-of-range), which eyt_tree_is_in_range tests directly.
+        // We assume there are no 0-size ranges, which is safe since nothing could
+        // be stored there anyway. See _eyt_obj_idx for how the query value for a
+        // given address is chosen to match this encoding.
+        idxs[i] = val + ((i & 1) ? 1 : 2);
     }
     qsort(idxs, end, sizeof(uintptr_t), ptr_cmp);
     t->min_addr = idxs[0];
@@ -65,7 +76,7 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
         eyt_range_t *r = &t->ranges[i / 2];
         uintptr_t val = (i & 1) ? r->end : r->start;
         // This is the same computation as in the prior for loop
-        uintptr_t eyt_val = val + (i & 1);
+        uintptr_t eyt_val = val + ((i & 1) ? 1 : 2);
         size_t eyt_idx = _eyt_obj_idx(eyt_val + 1, tree, end, t->min_addr, t->max_addr);
         assert(eyt_idx < end);
         assert(tree[eyt_idx] == eyt_val &&

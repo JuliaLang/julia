@@ -1,0 +1,6 @@
+# -*- makefile -*-
+
+## source build
+LMDB_VER := 0.9.33
+LMDB_BRANCH=LMDB_0.9.33
+LMDB_SHA1=3a29a24777c82a0165de813ae696a5068b5add30

@@ -185,7 +185,7 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
     return ctx.builder.CreateZExtOrTrunc(x, to);
 }
 
-static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_datatype_t *bt)
+static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_datatype_t *bt) JL_CANSAFEPOINT
 {
     // assumes `jl_is_pointerfree(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
@@ -436,7 +436,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
 }
 
 // emit code to unpack a raw value from a box into registers
-static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, MaybeAlign align)
 {
     assert(to != getVoidTy(ctx.builder.getContext()));
     if (x.isghost) {
@@ -477,21 +477,23 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
         return unboxed;
     }
 
-    unsigned alignment = julia_alignment(x.typ);
+    Align alignment = align ? *align :
+        jl_is_concrete_type(x.typ) ? Align(julia_alignment(x.typ)) :
+        jl_Module->getDataLayout().getABITypeAlign(to);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     if (!x.inline_roots.empty()) {
-        AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
+        AllocaInst *combined = emit_static_alloca(ctx, to, alignment);
         setName(ctx.emission_context, combined, [&]() {
             std::string type_str = jl_is_datatype(x.typ) ? jl_symbol_name(((jl_datatype_t*)x.typ)->name->name) : "<unknown type>";
             return "unbox::" + type_str;
         });
         auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-        recombine_value(ctx, x, combined, combined_ai, Align(alignment), false);
+        recombine_value(ctx, x, combined, combined_ai, alignment, false);
         p = combined;
         ai = combined_ai;
     }
     assert(p); // clang-sa doesn't know that x.ispointer() implied this is true
-    Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
+    Instruction *load = ctx.builder.CreateAlignedLoad(to, p, alignment);
     setName(ctx.emission_context, load, p->getName() + ".unbox");
     return ai.decorateInst(load);
 }
@@ -529,10 +531,14 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
 {
-    // evaluate an argument at compile time to determine what type it is
-    jl_value_t *unw = jl_unwrap_unionall(targ.typ);
-    if (jl_is_typeeq(unw)) {
-        jl_value_t *bt = jl_typeeq_T(unw);
+    // evaluate an argument at compile time to determine what type it is.
+    // The result becomes the constructed value's type tag, so it must be
+    // exactly the runtime type object: only egality-pinned (`TypeEgal`)
+    // knowledge qualifies; `==`-only (`Type`) knowledge admits a distinct
+    // (possibly not even concrete) runtime spelling and falls back to the
+    // runtime call, which tags with (and checks) the argument itself.
+    if (is_uniquerep_Type(targ.typ)) {
+        jl_value_t *bt = jl_some_Type_T(targ.typ);
         if (jl_is_primitivetype(bt))
             return (jl_datatype_t*)bt;
     }
@@ -551,7 +557,7 @@ static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayR
 }
 
 // put a bits type tag on some value (despite the name, this doesn't necessarily actually change anything about the value however)
-static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
+static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
     // Give the arguments names //
     const jl_cgval_t &bt_value = argv[0];
@@ -667,7 +673,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 static jl_cgval_t generic_cast(
         jl_codectx_t &ctx,
         intrinsic f, Instruction::CastOps Op,
-        ArrayRef<jl_cgval_t> argv, bool toint, bool fromint)
+        ArrayRef<jl_cgval_t> argv, bool toint, bool fromint) JL_CANSAFEPOINT
 {
     auto &TT = ctx.emission_context.TargetTriple;
     auto &DL = ctx.emission_context.DL;
@@ -738,12 +744,12 @@ static jl_cgval_t generic_cast(
     }
 }
 
-static jl_cgval_t emit_runtime_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
+static jl_cgval_t emit_runtime_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
     return emit_runtime_call(ctx, pointerref, argv, 3);
 }
 
-static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
+static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &i = argv[1];
@@ -812,13 +818,13 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
     }
 }
 
-static jl_cgval_t emit_runtime_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
+static jl_cgval_t emit_runtime_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
     return emit_runtime_call(ctx, pointerset, argv, 4);
 }
 
 // e[i] = x
-static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
+static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
     const jl_cgval_t &e = argv[0];
     jl_cgval_t x = argv[1];
@@ -891,7 +897,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 // ptr + offset
 // ptr - offset
 static jl_cgval_t emit_pointerarith(jl_codectx_t &ctx, intrinsic f,
-                                    ArrayRef<jl_cgval_t> argv)
+                                    ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
     jl_value_t *ptrtyp = argv[0].typ;
     jl_value_t *offtyp = argv[1].typ;
@@ -916,7 +922,7 @@ static jl_cgval_t emit_pointerarith(jl_codectx_t &ctx, intrinsic f,
     }
 }
 
-static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
+static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
     const jl_cgval_t &ord = argv[0];
     const jl_cgval_t &ssid_arg = argv[1];
@@ -941,7 +947,7 @@ static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
     return emit_runtime_call(ctx, atomic_fence, argv, 2);
 }
 
-static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
+static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) JL_CANSAFEPOINT
 {
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &ord = argv[1];
@@ -1018,7 +1024,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
 // e[i] <= x (swap)
 // e[i] y => x (replace)
 // x(e[i], y) (modify)
-static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef<jl_cgval_t> argv, int nargs, const jl_cgval_t *modifyop)
+static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef<jl_cgval_t> argv, int nargs, const jl_cgval_t *modifyop) JL_CANSAFEPOINT
 {
     StoreKind op;
     if (f == atomic_pointerset)
@@ -1114,7 +1120,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
     }
 }
 
-static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
+static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den) JL_CANSAFEPOINT
 {
     Type *t = den->getType();
     auto ndivby0 = ctx.builder.CreateICmpNE(den, ConstantInt::get(t, 0));
@@ -1169,10 +1175,10 @@ struct math_builder {
 };
 
 static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Value*> argvalues, size_t nargs,
-                                     jl_datatype_t **newtyp, jl_value_t *xtyp);
+                                     jl_datatype_t **newtyp, jl_value_t *xtyp) JL_CANSAFEPOINT;
 
 
-static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_cgval_t y, jl_value_t *rt_hint)
+static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_cgval_t y, jl_value_t *rt_hint) JL_CANSAFEPOINT
 {
     Value *isfalse = emit_condition(ctx, c, "ifelse");
     setName(ctx.emission_context, isfalse, "ifelse_cond");
@@ -1339,7 +1345,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     return mark_julia_type(ctx, ifelse_result, isboxed, jt);
 }
 
-static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **args, size_t nargs)
+static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
     auto &DL = ctx.emission_context.DL;
     assert(f < num_intrinsics);

@@ -79,7 +79,7 @@ static void createWeakCmpXchgInstFun(IRBuilderBase &Builder, Value *Addr,
 }
 
 // from AtomicExpandImpl, with modification of values returned
-std::pair<Value *, Value *> insertRMWCmpXchgLoop(
+static std::pair<Value *, Value *> insertRMWCmpXchgLoop(
     IRBuilderBase &Builder, Type *ResultTy, Value *Addr, Align AddrAlign,
     AtomicOrdering MemOpOrder, SyncScope::ID SSID, Instruction &Attributes,
     const std::function<Value *(IRBuilderBase &, Value *)> &PerformOp,
@@ -143,6 +143,7 @@ std::pair<Value *, Value *> insertRMWCmpXchgLoop(
 
 // from AtomicExpandImpl
 // IRBuilder to be used for replacement atomic instructions.
+namespace {
 struct ReplacementIRBuilder
     : IRBuilder<InstSimplifyFolder, IRBuilderCallbackInserter> {
   MDNode *MMRAMD = nullptr;
@@ -166,6 +167,7 @@ struct ReplacementIRBuilder
       I->setMetadata(LLVMContext::MD_mmra, MMRAMD);
   }
 };
+}  // anonymous namespace
 
 // Must check that either Target cannot observe or mutate global state
 // or that no trailing instructions does so either.
@@ -323,7 +325,7 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
   return false;
 }
 
-void expandAtomicModifyToCmpXchg(CallInst &Modify,
+static void expandAtomicModifyToCmpXchg(CallInst &Modify,
                                  const CreateWeakCmpXchgInstFun &CreateWeakCmpXchg) {
   Value *Ptr = Modify.getOperand(0);
   Function *Op = dyn_cast<Function>(Modify.getOperand(1));
