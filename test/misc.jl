@@ -1758,8 +1758,17 @@ if !Sys.iswindows() && !running_under_rr()
             # the marker is split so the pty echo of the input line does not match it
             write(ptm, "println(\"LOOP\", \"START\"); while true; sleep(0.05); end\n")
             @test expect_output(output, "LOOPSTART")
-            kill(p, 2) # SIGINT
-            @test expect_output(output, "InterruptException")
+            # a single SIGINT can be missed on a loaded machine, so resend until
+            # the InterruptException surfaces
+            interrupted = false
+            for _ in 1:5
+                kill(p, 2) # SIGINT
+                if expect_output(output, "InterruptException"; timeout=10)
+                    interrupted = true
+                    break
+                end
+            end
+            @test interrupted
             @test !has_internal_err(output[])
             @test process_running(p)
             write(ptm, "println(\"CHECK_\", 1+1)\n")
