@@ -889,7 +889,7 @@ protected:
     // false after calling MR.failMaterialization().
     bool linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                     jitlink::LinkGraph &G,
-                    std::unique_ptr<jl_linker_info_t> Info) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
+                    std::unique_ptr<jl_linker_info_t> Info) JL_CANSAFEPOINT_ENTER_LEAVE;
 
     // Return a symbol that should be linked to the call target.  The origin of
     // this symbol depends on the code instance:

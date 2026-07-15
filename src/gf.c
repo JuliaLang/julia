@@ -625,7 +625,7 @@ JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi,
 }
 
 // return whether the ci has more restrictions than the other arguments (more edges and narrower worlds)
-static int jl_codeinst_edges_sub(jl_code_instance_t *ci, size_t min_world2, size_t max_world2, jl_svec_t *edges2)
+static int jl_codeinst_edges_sub(jl_code_instance_t *ci, size_t min_world2, size_t max_world2, jl_svec_t *edges2) JL_NOTSAFEPOINT
 {
     size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
     size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
@@ -3870,12 +3870,14 @@ static jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGAT
     // it so that invalidation of codeinst2 also invalidates codeinst
     jl_method_t *m = mi->def.method;
     jl_svec_t *copy_edge = jl_is_method(m) ? jl_svec2(m->sig, codeinst2) : jl_emptysvec;
+    JL_GC_PUSH1(&copy_edge);
     jl_code_instance_t *codeinst = jl_get_method_uninferred(
             mi, codeinst2->rettype,
             jl_atomic_load_relaxed(&codeinst2->min_world),
             max_world2 < current_world ? max_world2 : current_world,
             jl_atomic_load_relaxed(&codeinst2->debuginfo),
             copy_edge);
+    JL_GC_POP();
     if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
         if (max_world2 == ~(size_t)0) {
             JL_LOCK(&world_counter_lock);
