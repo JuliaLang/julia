@@ -8,6 +8,7 @@ module Mmap
 import Base: OS_HANDLE, INVALID_OS_HANDLE, IOError
 import Base.Filesystem: JL_O_CREAT, JL_O_RDONLY, JL_O_RDWR, JL_O_EXCL, JL_O_CLOEXEC, S_IRUSR, S_IWUSR
 using Base.Sys: PAGESIZE
+import Serialization: Serialization, AbstractSerializer
 
 export mmap
 
@@ -59,6 +60,9 @@ const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
 const F_GETFL       = Cint(3)
 
 gethandle(io::IO) = fd(io)
+
+Serialization.serialize(::AbstractSerializer, ::SharedMemory) =
+    error("SharedMemory cannot currently be serialized. Send a Future/RemoteChannel referencing it instead.")
 
 function shm_open(name, oflags, permissions)
     # On macOS, `shm_open()` is a variadic function, so to properly match
