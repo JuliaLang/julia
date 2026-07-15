@@ -317,6 +317,12 @@ m = mmap(BitVector, 12)
 @test !any(m)
 finalize(m); m = nothing; GC.gc()
 
+# 0-length anonymous mmaps
+@test length(mmap(Vector{UInt8}, 0)) == 0
+@test size(mmap(Matrix{Int8}, (0, 5))) == (0, 5)
+@test length(mmap(BitVector, 0)) == 0
+@test size(mmap(BitMatrix, (0, 5))) == (0, 5)
+
 @static if Sys.islinux()
 
     function has_open_fd(name)

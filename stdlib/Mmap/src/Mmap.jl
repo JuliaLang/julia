@@ -550,10 +550,14 @@ mmap(io::IO, T::Type, len::Integer, args...; kwargs...) = mmap(io, T, (len,), ar
 mmap(T::Type, i::Integer...; kwargs...) = mmap(T, convert(Tuple{Vararg{Int}}, i); kwargs...)
 
 # anonymous -> open SharedMemory
-mmap(::Type{Array{T, N}}, dims::NTuple{N, Integer}; kwargs...) where {T, N} =
+function mmap(::Type{Array{T, N}}, dims::NTuple{N, Integer}; kwargs...) where {T, N}
+    (prod(dims) == 0 || sizeof(T) == 0) && return Array{T}(undef, dims)
     open(io -> mmap(io, Array{T, N}, dims; kwargs...), SharedMemory, "", prod(dims) * sizeof(T); readonly = false, create = true)
-mmap(::Type{BitArray{N}}, dims::NTuple{N, Integer}; kwargs...) where {N} =
+end
+function mmap(::Type{BitArray{N}}, dims::NTuple{N, Integer}; kwargs...) where {N}
+    prod(dims) == 0 && return BitArray{N}(undef, dims)
     open(io -> mmap(io, BitArray{N}, dims; kwargs...), SharedMemory, "", Base.num_bit_chunks(prod(dims)) * sizeof(UInt64); readonly = false, create = true)
+end
 
 
 """
