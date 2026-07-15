@@ -433,6 +433,47 @@ end
         close(io1); close(io2); finalize(m); m = nothing; GC.gc()
     end
 
+    @static if Sys.isunix()
+        @testset "Opening an existing region with an oversized declared size is rejected at mmap()" begin
+            name = "/jlsharedsegment"
+            io1 = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+
+            io2 = open(Mmap.SharedMemory, name, 13; readonly = false, create = false)
+            @test_throws ArgumentError mmap(io2, Vector{UInt8}, 13)
+            close(io2)
+
+            io3 = open(Mmap.SharedMemory, name, 12; readonly = false, create = false) # exact size still works
+            m3 = mmap(io3, Vector{UInt8}, 12)
+            finalize(m3); m3 = nothing; GC.gc()
+
+            io4 = open(Mmap.SharedMemory, name, 5; readonly = false, create = false)  # smaller declared size is safe
+            m4 = mmap(io4, Vector{UInt8}, 5)
+            finalize(m4); m4 = nothing; GC.gc()
+
+            close(io1); close(io3); close(io4)
+        end
+    elseif Sys.iswindows()
+        @testset "Opening an existing region with an oversized declared size still fails safely at mmap()" begin
+            name = "/jlsharedsegment"
+            io1 = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+
+            io2 = open(Mmap.SharedMemory, name, 1_000_000; readonly = false, create = false)
+            @test_throws Base.IOError mmap(io2, Vector{UInt8}, 1_000_000)
+            close(io2)
+
+            io3 = open(Mmap.SharedMemory, name, 12; readonly = false, create = false) # exact size still works
+            io4 = open(Mmap.SharedMemory, name, 5; readonly = false, create = false)  # smaller declared size is safe
+
+            # Documented limitation: a declared size that still fits within the same committed
+            # page as the real region is indistinguishable from it, so mmap() succeeds for it too.
+            io5 = open(Mmap.SharedMemory, name, 100; readonly = false, create = false)
+            m = mmap(io5, Vector{UInt8}, 100)
+            finalize(m); m = nothing; GC.gc()
+
+            close(io1); close(io3); close(io4); close(io5)
+        end
+    end
+
     @testset "Named SharedMemory mmaps are shared" begin
         io1 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
         io2 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = false)

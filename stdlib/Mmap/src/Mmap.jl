@@ -26,10 +26,16 @@ fail if a shared memory region with the same name already exists.
 SharedMemory size cannot be grown after creation, though smaller regions can be mmapped within it. Each SharedMemory may
 only be mmapped a single time.
 
-!!! warning "MacOS"
+!!! warning "MacOS does not guarantee allocation"
     On Windows and Linux, shared memory creation fails if the system does not have enough memory available. This is not
     possible on MacOS, which defers final allocation of memory until it is accessed. Therefore, on MacOS, creation of a
     large shared memory region will always succeed, but accessing it may trigger the system out-of-memory killer.
+
+!!! note "Mmapping a reopened named shared memory segments with larger size"
+    Windows shared memory segments are natively rounded up to multiples of the system page size. The SharedMemory object
+    will not reflect this, but reopening a named shared memory segment with a size larger than initially requested but
+    less than the page boundary will succeed. On Linux and MacOS, the size is strictly enforced. Failure due to size
+    will occur in `mmap`, not in `open`.
 """
 SharedMemory
 
@@ -98,8 +104,8 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
                 rethrow()
             end
         end
-        try
-            if create
+        if create
+            try
                 # Set the size of the shared memory object
                 # On OSX, ftruncate must be used to set size of segment, just lseek does not work.
                 # And only at creation time.
@@ -114,13 +120,13 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
                     status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int, Int), io.handle, 0, size) # does not set `errno`
                     status != 0 && systemerror(:posix_fallocate, status)
                 end
-            end
-        catch e
-            close(io)
-            if e isa SystemError
-                throw(IOError("Failed to allocate shared memory", e.errnum))
-            else
-                rethrow()
+            catch e
+                close(io)
+                if e isa SystemError
+                    throw(IOError("Failed to allocate shared memory", e.errnum))
+                else
+                    rethrow()
+                end
             end
         end
     else
@@ -146,6 +152,8 @@ function Base.close(io::SharedMemory)
     end
     return nothing
 end
+
+Base.filesize(io::SharedMemory) = io.handle == INVALID_OS_HANDLE ? io.size : stat(io.handle).size
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
 function settings(s::RawFD, shared::Bool)
@@ -277,6 +285,10 @@ function Base.close(io::SharedMemory)
     return nothing
 end
 
+# `size` is unverified caller input for an existing (create = false) segment, and Windows has no
+# API to recover the exact size a section was created with prior to mapping
+Base.filesize(io::SharedMemory) = io.size
+
 else
     error("mmap not defined for this OS")
 end # os-test
@@ -292,7 +304,6 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer, mo
     throw(ArgumentError("invalid SharedMemory open mode: $mode; must be \"r\", \"r+\", or \"w+\""))
 end
 
-Base.filesize(io::SharedMemory) = io.size
 Base.position(io::SharedMemory) = 0
 Base.isfile(io::SharedMemory) = false
 Base.isreadable(io::SharedMemory) = true
