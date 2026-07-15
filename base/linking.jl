@@ -110,6 +110,11 @@ function ld()
         # the pkgimage references are resolvable at link time (catches regressions early
         # instead of deferring to first-call crashes at runtime).
         default_args = `--build-id --eh-frame-hdr --hash-style=gnu --as-needed -z relro -z defs`
+        # Keep static relocations in the linked image (--emit-relocs) so its code
+        # sections can later be extracted and re-linked into another image.
+        if Base.get_bool_env("JULIA_IMAGE_EMIT_RELOCS", false)
+            default_args = `$default_args -q`
+        end
     end
 
     `$(lld()) -flavor $flavor $default_args`

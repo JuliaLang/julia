@@ -415,9 +415,8 @@ static const char *const common_names[256] = {
 // most are given "friendly" abbreviations
 // the remaining few will print as hex
 // e.g. mangles "llvm.a≠a$a!a##" as "llvmDOT.a≠a$aNOT.aYY.YY."
-static void makeSafeName(GlobalObject &G)
+static std::string makeSafeNameStr(StringRef Name)
 {
-    StringRef Name = G.getName();
     SmallVector<char, 32> SafeName;
     for (unsigned char c : Name.bytes()) {
         if (is_safe_char(c)) {
@@ -437,8 +436,15 @@ static void makeSafeName(GlobalObject &G)
             SafeName.push_back('.');
         }
     }
+    return std::string(SafeName.data(), SafeName.size());
+}
+
+static void makeSafeName(GlobalObject &G)
+{
+    StringRef Name = G.getName();
+    std::string SafeName = makeSafeNameStr(Name);
     if (SafeName.size() != Name.size())
-        G.setName(StringRef(SafeName.data(), SafeName.size()));
+        G.setName(SafeName);
 }
 
 namespace { // file-local namespace
@@ -869,10 +875,525 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
             funcs.specptr = f;
         }
 
-        target.decl->replaceAllUsesWith(funcs.specptr);
-        target.decl->eraseFromParent();
+        if (target.decl != funcs.specptr) {
+            target.decl->replaceAllUsesWith(funcs.specptr);
+            target.decl->eraseFromParent();
+        }
     }
 }
+
+// Experiment knob: skip LLVM emission for CodeInstances whose native code is
+// already resident in a loaded image, even in non-incremental (sysimage)
+// builds. The output image is NOT usable (reused code is not wired up); this
+// exists only to measure the codegen time/size attributable to regenerating
+// image-resident code.
+static int jl_experiment_skip_from_image(void)
+{
+    static int cached = -1;
+    if (cached == -1) {
+        const char *env = getenv("JULIA_EXPERIMENT_SKIP_FROM_IMAGE");
+        cached = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return cached;
+}
+
+// Reuse mode (prototype, ELF/Linux only): skip LLVM emission for valid
+// image-resident CodeInstances and instead reference the donor image's machine
+// code by symbol. The donor .so must have been linked with --emit-relocs
+// (JULIA_IMAGE_EMIT_RELOCS=1); a driver script "unlinks" it back into a
+// relocatable object and includes it in the final image link. This process
+// writes a manifest (<output-o>.reuse) listing the donor images and the GOT
+// slot bindings the unlinker must apply.
+static int jl_reuse_image_code_enabled(void)
+{
+#if !defined(_OS_LINUX_)
+    return 0;   // prototype is ELF/Linux-only
+#else
+    static int cached = -1;
+    if (cached == -1) {
+        const char *env = getenv("JULIA_REUSE_IMAGE_CODE");
+        cached = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return cached;
+#endif
+}
+
+extern void jl_foreach_image_fptr_info(llvm::function_ref<void(uint64_t, const jl_image_fptrs_t &,
+                                                               jl_code_instance_t **, size_t)> f) JL_NOTSAFEPOINT;
+
+#if defined(_OS_LINUX_)
+
+#include <dlfcn.h>
+#include <deque>
+#include <cinttypes>
+#include <llvm/Object/ELFObjectFile.h>
+
+namespace {
+struct jl_reuse_donor_t {
+    uint64_t base = 0;
+    std::string path;
+    std::string prefix;
+    bool usable = false;
+    bool enqueued = false;               // referenced: must be unlinked + linked in
+    bool processed = false;              // slots already handled
+    object::OwningBinary<object::ObjectFile> binary;
+    std::deque<std::string> sym_names;       // stable storage for uniquified names
+    DenseMap<uint64_t, StringRef> sym_at;    // runtime address -> unprefixed (uniquified) name
+    const jl_image_pointers_t *pointers = nullptr;
+};
+
+// The reuse design: the new image's fvar/gvar tables (and all serialized
+// records) are rebuilt from scratch with donor functions and donor data slots
+// as ordinary, fairly-interleaved entries — only the donor's machine code is
+// not regenerated. Reused CodeInstances are serialized and deserialized
+// exactly like freshly-compiled ones; at the LLVM level donor entries are
+// external symbol references that the static link resolves into the donor
+// objects. The only remnants that cannot be expressed through the image's own
+// tables are the donor-internal GOT-style slots (multiversioning clone slots
+// and cross-image call slots), whose load-time patching is replaced by
+// equivalent link-time ABS64 fills (LABEL/BIND entries in the manifest).
+// fresh-function BIND targets (post-mangling names), for a visibility fixup at
+// jl_dump_native time (file-static: the plan doesn't survive that long)
+static SmallVector<std::string, 0> jl_reuse_fresh_bind_targets;
+
+struct jl_reuse_plan_t {
+    struct entry_t {
+        jl_invoke_api_t api;
+        Function *invoke = nullptr;
+        Function *specptr = nullptr;
+    };
+    DenseMap<jl_code_instance_t *, entry_t> entries;
+    DenseMap<uint64_t, std::unique_ptr<jl_reuse_donor_t>> donors;
+    DenseMap<jl_code_instance_t *, uint64_t> ci_base;    // CI -> home image base
+    DenseMap<uint64_t, jl_code_instance_t *> addr_ci;    // image code addr -> CI
+    DenseSet<GlobalVariable *> donor_gvar_decls;         // defined by linked-in donor objects
+    SmallVector<std::pair<std::string, uint64_t>, 0> labels;    // synthesized symbol -> donor VA
+    SmallVector<std::pair<std::string, std::string>, 0> binds;  // slot label -> target sym
+    size_t n_object_slots = 0, n_code_slots = 0, n_clone_slots = 0, n_dropped_slots = 0;
+};
+} // anonymous namespace
+
+static jl_reuse_donor_t *jl_reuse_donor_for(jl_reuse_plan_t &plan, uint64_t base)
+{
+    auto it = plan.donors.find(base);
+    if (it != plan.donors.end())
+        return it->second.get();
+    auto donor = std::make_unique<jl_reuse_donor_t>();
+    donor->base = base;
+    Dl_info dlinfo;
+    if (dladdr((void *)base, &dlinfo) && dlinfo.dli_fname && (uint64_t)dlinfo.dli_fbase == base) {
+        donor->path = dlinfo.dli_fname;
+        donor->prefix = "Jd" + std::to_string(plan.donors.size()) + "_";
+        auto binOrErr = object::createBinary(donor->path);
+        if (binOrErr) {
+            object::OwningBinary<object::Binary> owning = std::move(*binOrErr);
+            if (auto *elf = dyn_cast<object::ELFObjectFileBase>(owning.getBinary())) {
+                // require --emit-relocs output: without static relocations the
+                // donor's code cannot be re-linked into a new image
+                bool has_static_relocs = false;
+                for (const object::SectionRef sec : elf->sections()) {
+                    auto name = sec.getName();
+                    if (name && name->starts_with(".rela.text")) {
+                        has_static_relocs = true;
+                        break;
+                    }
+                    if (!name)
+                        consumeError(name.takeError());
+                }
+                bool symok = has_static_relocs;
+                // Names can repeat across the image's shard objects (local
+                // symbols). Both we and the unlinker disambiguate with the
+                // same rule: any name that occurs more than once in the symtab
+                // (over FUNC/OBJECT/IFUNC/NOTYPE) gets ".sym<index>" appended.
+                StringMap<unsigned> name_count;
+                for (const object::ELFSymbolRef sym : elf->symbols()) {
+                    auto type = sym.getELFType();
+                    if (type != ELF::STT_FUNC && type != ELF::STT_OBJECT &&
+                        type != ELF::STT_GNU_IFUNC && type != ELF::STT_NOTYPE)
+                        continue;
+                    auto name = sym.getName();
+                    if (!name) { consumeError(name.takeError()); continue; }
+                    if (!name->empty())
+                        name_count[*name]++;
+                }
+                unsigned symidx = 0;
+                for (const object::ELFSymbolRef sym : elf->symbols()) {
+                    symidx++;   // 1-based, matching ELF symtab indices (null entry is 0)
+                    auto type = sym.getELFType();
+                    if (type != ELF::STT_FUNC && type != ELF::STT_OBJECT && type != ELF::STT_GNU_IFUNC)
+                        continue;
+                    auto name = sym.getName();
+                    auto addr = sym.getValue();
+                    if (!name || !addr) { consumeError(name.takeError()); consumeError(addr.takeError()); continue; }
+                    if (name->empty())
+                        continue;
+                    std::string uniq = name->str();
+                    if (name_count[*name] > 1)
+                        uniq += ".sym" + std::to_string(symidx);
+                    donor->sym_names.push_back(std::move(uniq));
+                    donor->sym_at[base + *addr] = donor->sym_names.back();
+                }
+                donor->usable = symok && !donor->sym_at.empty();
+                // reconstruct an ObjectFile-owning binary handle
+                auto pair = owning.takeBinary();
+                donor->binary = object::OwningBinary<object::ObjectFile>(
+                    std::unique_ptr<object::ObjectFile>(cast<object::ObjectFile>(pair.first.release())),
+                    std::move(pair.second));
+            }
+        }
+        else
+            consumeError(binOrErr.takeError());
+        void *handle = dlopen(donor->path.c_str(), RTLD_NOLOAD | RTLD_LAZY | RTLD_LOCAL);
+        if (handle) {
+            donor->pointers = (const jl_image_pointers_t *)dlsym(handle, "jl_image_pointers");
+            dlclose(handle);  // refcount was bumped by NOLOAD lookup
+        }
+        if (!donor->pointers)
+            donor->usable = false;
+        // The donor's shards are walked by the consuming image's loader with
+        // the consuming image's chosen target index, so the target lists must
+        // agree. (Prototype: compare the stored cpu-target strings, treating
+        // the "sysimage" alias as compatible.)
+        if (donor->pointers && donor->usable) {
+            const char *donor_tgt = donor->pointers->cpu_target_string;
+            const char *our_tgt = jl_options.cpu_target;
+            if (donor_tgt && our_tgt && strcmp(donor_tgt, our_tgt) != 0 &&
+                strcmp(donor_tgt, "sysimage") != 0)
+                donor->usable = false;
+        }
+    }
+    if (getenv("JULIA_REUSE_DEBUG"))
+        jl_safe_printf("jl_reuse donor probe: base=%p usable=%d syms=%zu pointers=%p tgt=%s ourtgt=%s path=%s\n",
+                       (void *)base, (int)donor->usable, (size_t)donor->sym_at.size(),
+                       (void *)donor->pointers,
+                       donor->pointers && donor->pointers->cpu_target_string ? donor->pointers->cpu_target_string : "<null>",
+                       jl_options.cpu_target ? jl_options.cpu_target : "<null>",
+                       donor->path.c_str());
+    auto *ret = donor.get();
+    plan.donors[base] = std::move(donor);
+    return ret;
+}
+
+// Prefixed name for the donor symbol covering `addr`, or empty if unknown.
+static std::string jl_reuse_sym_for(jl_reuse_plan_t &plan, uint64_t base, uint64_t addr)
+{
+    jl_reuse_donor_t *donor = jl_reuse_donor_for(plan, base);
+    if (!donor->usable)
+        return std::string();
+    auto it = donor->sym_at.find(addr);
+    if (it == donor->sym_at.end())
+        return std::string();
+    return donor->prefix + it->second.str();
+}
+
+// Build the reuse plan for every reusable FROM_IMAGE CodeInstance in codeinfos.
+static void jl_reuse_build_plan(jl_reuse_plan_t &plan, jl_codegen_output_t &out, jl_array_t *codeinfos)
+{
+    jl_foreach_image_fptr_info([&](uint64_t base, const jl_image_fptrs_t &fptrs,
+                                   jl_code_instance_t **cinsts, size_t n) JL_NOTSAFEPOINT {
+        if (getenv("JULIA_REUSE_DEBUG"))
+            jl_safe_printf("jl_reuse image: base=%p nfvars=%u nclones=%u fptr_record=%zu\n",
+                           (void *)base, fptrs.nptrs, fptrs.nclones, n);
+        for (size_t i = 0; i < n; i++) {
+            jl_code_instance_t *ci = cinsts[i];
+            if (!ci || i >= (size_t)fptrs.nptrs)
+                continue;
+            plan.ci_base[ci] = base;
+            plan.addr_ci[(uint64_t)fptrs.ptrs[i]] = ci;
+        }
+    });
+
+    auto &M = out.get_module();
+    auto &Ctx = out.get_context();
+    auto FTy = FunctionType::get(Type::getVoidTy(Ctx), false);
+    auto make_fdecl = [&](const std::string &name) -> Function * {
+        Function *F = M.getFunction(name);
+        if (!F) {
+            F = Function::Create(FTy, GlobalValue::ExternalLinkage, name, &M);
+            F->setVisibility(GlobalValue::HiddenVisibility);
+            F->setDSOLocal(true);
+        }
+        return F;
+    };
+
+    size_t rej_world = 0, rej_noinvoke = 0, rej_nobase = 0, rej_nosym = 0, rej_api = 0, n_from_image = 0;
+    for (size_t i = 0, l = jl_array_nrows(codeinfos); i < l; i++) {
+        jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+        if (!jl_is_code_instance(item)) {
+            continue;
+        }
+        i++; // skip the CodeInfo
+        jl_code_instance_t *ci = (jl_code_instance_t *)item;
+        if (!(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE))
+            continue;
+        n_from_image++;
+        if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0) {
+            rej_world++;
+            continue;
+        }
+        jl_callptr_t invoke = jl_atomic_load_relaxed(&ci->invoke);
+        if (invoke == NULL) {
+            rej_noinvoke++;
+            continue;
+        }
+        if (invoke == jl_fptr_const_return_addr) {
+            plan.entries[ci] = {JL_INVOKE_CONST, 0, 0};
+            continue;
+        }
+        auto baseit = plan.ci_base.find(ci);
+        if (baseit == plan.ci_base.end()) {
+            rej_nobase++;
+            continue;
+        }
+        uint64_t base = baseit->second;
+        jl_reuse_donor_t *donor = jl_reuse_donor_for(plan, base);
+        if (!donor->usable) {
+            rej_nobase++;
+            continue;
+        }
+        jl_invoke_api_t api = jl_callptr_invoke_api(invoke);
+        void *specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
+        // Each entry point becomes an external symbol reference into the donor
+        // object; from here on the CodeInstance flows through the standard
+        // pipeline (ci_funcs -> fvar table -> fptr record) exactly like a
+        // freshly-compiled one.
+        jl_reuse_plan_t::entry_t entry{api, nullptr, nullptr};
+        if (api == JL_INVOKE_SPECSIG) {
+            std::string invoke_sym = jl_reuse_sym_for(plan, base, (uint64_t)invoke);
+            if (invoke_sym.empty()) {
+                rej_nosym++;
+                continue;
+            }
+            entry.invoke = make_fdecl(invoke_sym);
+            if (specptr && specptr != (void *)invoke) {
+                std::string spec_sym = jl_reuse_sym_for(plan, base, (uint64_t)specptr);
+                if (spec_sym.empty()) {
+                    rej_nosym++;
+                    continue;
+                }
+                entry.specptr = make_fdecl(spec_sym);
+            }
+            else if (specptr) {
+                entry.specptr = entry.invoke;
+            }
+        }
+        else if (api == JL_INVOKE_ARGS || api == JL_INVOKE_SPARAM) {
+            if (!specptr) {
+                rej_noinvoke++;
+                continue;
+            }
+            std::string spec_sym = jl_reuse_sym_for(plan, base, (uint64_t)specptr);
+            if (spec_sym.empty()) {
+                rej_nosym++;
+                continue;
+            }
+            entry.specptr = make_fdecl(spec_sym);
+        }
+        else {
+            rej_api++;
+            continue;
+        }
+        if (!entry.specptr) {
+            // wrapper-only entries would confuse emit_always_inline/RAUW paths
+            // that assume a specptr; just re-emit those
+            rej_api++;
+            continue;
+        }
+        donor->enqueued = true;
+        plan.entries[ci] = entry;
+    }
+    if (getenv("JULIA_REUSE_DEBUG"))
+        jl_safe_printf("jl_reuse plan: %zu FROM_IMAGE -> %zu planned (rejected: world=%zu noinvoke=%zu nobase=%zu nosym=%zu api=%zu)\n",
+                       n_from_image, (size_t)plan.entries.size(), rej_world, rej_noinvoke,
+                       rej_nobase, rej_nosym, rej_api);
+}
+
+// After emission: walk the gvar slots of every donor whose code is referenced
+// and (a) register object slots with the new image's gvar record so the loader
+// re-points them at this image's serialized objects, (b) record code slots
+// (cross-image call GOT entries) as static BIND requests for the unlinker.
+static void jl_reuse_process_donor_slots(jl_reuse_plan_t &plan, jl_codegen_output_t &out,
+                                         jl_native_code_desc_t *data)
+{
+    auto &M = out.get_module();
+    auto &Ctx = out.get_context();
+    Type *PtrTy = PointerType::getUnqual(Ctx);
+    auto make_gvdecl = [&](const std::string &name) -> GlobalVariable * {
+        if (GlobalVariable *gv = M.getGlobalVariable(name, true)) {
+            plan.donor_gvar_decls.insert(gv);
+            return gv;
+        }
+        auto gv = new GlobalVariable(M, PtrTy, false, GlobalValue::ExternalLinkage, nullptr, name);
+        gv->setVisibility(GlobalValue::HiddenVisibility);
+        gv->setDSOLocal(true);
+        plan.donor_gvar_decls.insert(gv);
+        return gv;
+    };
+
+    // Slot addresses are labeled with synthesized symbols (LABEL manifest
+    // entries the unlinker defines at the given donor VA); this avoids any
+    // dependence on the donor's own symbol names for data.
+    size_t label_counter = 0;
+    auto make_label = [&](jl_reuse_donor_t *donor, uint64_t runtime_va) {
+        std::string name = donor->prefix + "slot" + std::to_string(label_counter++);
+        // the unlinker operates on the donor file's link-time addresses
+        plan.labels.emplace_back(name, runtime_va - donor->base);
+        return name;
+    };
+
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        SmallVector<jl_reuse_donor_t *, 8> worklist;
+        for (auto &kv : plan.donors)
+            if (kv.second->enqueued && kv.second->usable && !kv.second->processed)
+                worklist.push_back(kv.second.get());
+        for (auto *donor : worklist) {
+            donor->processed = true;
+            if (donor->pointers == nullptr)
+                continue;
+            const jl_image_pointers_t *pointers = donor->pointers;
+            for (unsigned s = 0; s < pointers->header->nshards; s++) {
+                const auto &shard = pointers->shards[s];
+
+                // Heap-object and cross-image-call slots (the donor's gvars).
+                const char *data_base = (const char *)shard.gvar_offsets;
+                unsigned ngvars = shard.gvar_offsets[0];
+                for (unsigned g = 0; g < ngvars; g++) {
+                    uint64_t slot = (uint64_t)(data_base + shard.gvar_offsets[g + 1]);
+                    uint64_t value = *(const uint64_t *)slot;
+                    auto ciit = plan.addr_ci.find(value);
+                    if (ciit != plan.addr_ci.end()) {
+                        // cross-image call GOT slot: bind statically to the callee
+                        jl_code_instance_t *callee = ciit->second;
+                        std::string target;
+                        auto planit = plan.entries.find(callee);
+                        if (planit != plan.entries.end() && planit->second.api != JL_INVOKE_CONST) {
+                            // callee reused from (possibly another) donor
+                            uint64_t cbase = plan.ci_base.lookup(callee);
+                            target = jl_reuse_sym_for(plan, cbase, value);
+                            jl_reuse_donor_t *cd = jl_reuse_donor_for(plan, cbase);
+                            if (!target.empty() && !cd->enqueued && cd->usable) {
+                                cd->enqueued = true;
+                                changed = true;
+                            }
+                        }
+                        else {
+                            // callee freshly emitted into this image
+                            auto fit = out.ci_funcs.find(callee);
+                            if (fit != out.ci_funcs.end()) {
+                                void *spec = jl_atomic_load_relaxed(&callee->specptr.fptr);
+                                Function *tf = nullptr;
+                                if (value == (uint64_t)spec && fit->second.specptr)
+                                    tf = fit->second.specptr;
+                                else if (fit->second.invoke)
+                                    tf = fit->second.invoke;
+                                if (tf) {
+                                    // jl_create_native_impl will internalize
+                                    // and safe-name-mangle every definition
+                                    // after emission; record the post-mangling
+                                    // name and re-promote it in jl_dump_native
+                                    // so the donor object can reference it.
+                                    target = makeSafeNameStr(tf->getName());
+                                    jl_reuse_fresh_bind_targets.push_back(target);
+                                }
+                            }
+                        }
+                        if (target.empty())
+                            plan.n_dropped_slots++;
+                        else {
+                            plan.binds.emplace_back(make_label(donor, slot), target);
+                            plan.n_code_slots++;
+                        }
+                    }
+                    else if (value != 0) {
+                        // Julia object slot: an ordinary entry in THIS image's
+                        // gvar table/record; the loader re-points it at this
+                        // image's serialized copy of the object like any other
+                        GlobalVariable *gv = make_gvdecl(make_label(donor, slot));
+                        data->jl_value_to_llvm.push_back((void *)value);
+                        data->jl_sysimg_gvars.push_back(gv);
+                        plan.n_object_slots++;
+                    }
+                }
+
+                // Multiversioning clone slots: normally patched at load using
+                // the donor's clone tables (which we discard along with all
+                // other donor tables). Their post-load values are function
+                // pointers the builder's loader already selected, so bind them
+                // statically to the same functions.
+                const int32_t *reloc_slots = shard.clone_slots;
+                uint32_t nreloc = (uint32_t)reloc_slots[0];
+                const char *clone_base = (const char *)shard.clone_slots;
+                for (uint32_t k = 0; k < nreloc; k++) {
+                    uint64_t slot = (uint64_t)(clone_base + reloc_slots[1 + 2 * k + 1]);
+                    uint64_t value = *(const uint64_t *)slot;
+                    if (value == 0) {
+                        plan.n_dropped_slots++;
+                        continue;
+                    }
+                    std::string target = jl_reuse_sym_for(plan, donor->base, value);
+                    if (target.empty()) {
+                        plan.n_dropped_slots++;
+                        continue;
+                    }
+                    plan.binds.emplace_back(make_label(donor, slot), target);
+                    plan.n_clone_slots++;
+                }
+            }
+        }
+    }
+}
+
+static void jl_reuse_write_manifest(jl_reuse_plan_t &plan)
+{
+    const char *outputo = jl_options.outputo ? jl_options.outputo : "image.o";
+    std::string path = std::string(outputo) + ".reuse";
+    if (const char *env = getenv("JULIA_REUSE_MANIFEST"))
+        path = env;
+    std::error_code EC;
+    raw_fd_ostream os(path, EC);
+    if (EC) {
+        jl_safe_printf("WARNING: cannot write reuse manifest %s\n", path.c_str());
+        return;
+    }
+    size_t ndonors = 0;
+    for (auto &kv : plan.donors) {
+        auto &donor = kv.second;
+        if (donor->enqueued && donor->usable) {
+            os << "DONOR\t" << donor->prefix << "\t" << donor->path << "\n";
+            ndonors++;
+        }
+    }
+    for (auto &l : plan.labels) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%" PRIx64, l.second);
+        os << "LABEL\t" << l.first << "\t" << buf << "\n";
+    }
+    for (auto &b : plan.binds)
+        os << "BIND\t" << b.first << "\t" << b.second << "\n";
+    os << "# reused_cis=" << plan.entries.size()
+       << " object_slots=" << plan.n_object_slots
+       << " code_slots=" << plan.n_code_slots
+       << " clone_slots=" << plan.n_clone_slots
+       << " dropped_slots=" << plan.n_dropped_slots << "\n";
+    jl_safe_printf("jl_reuse_image_code: %zu CIs reused, %zu donors, %zu object slots, %zu code slots, %zu clone slots, %zu dropped slots -> %s\n",
+                   (size_t)plan.entries.size(), ndonors, plan.n_object_slots,
+                   plan.n_code_slots, plan.n_clone_slots, plan.n_dropped_slots, path.c_str());
+}
+
+#else  // !_OS_LINUX_
+
+struct jl_reuse_plan_t {
+    struct entry_t { jl_invoke_api_t api; Function *invoke; Function *specptr; };
+    DenseMap<jl_code_instance_t *, entry_t> entries;
+    DenseSet<GlobalVariable *> donor_gvar_decls;
+};
+static void jl_reuse_build_plan(jl_reuse_plan_t &, jl_codegen_output_t &, jl_array_t *) {}
+static void jl_reuse_process_donor_slots(jl_reuse_plan_t &, jl_codegen_output_t &, jl_native_code_desc_t *) {}
+static void jl_reuse_write_manifest(jl_reuse_plan_t &) {}
+
+#endif
 
 static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
                                       jl_array_t *ci_order, const jl_cgparams_t *cgparams,
@@ -903,6 +1424,12 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
     bool safepoint_on_entry = out.safepoint_on_entry;
     JL_GC_PUSH3(&out.temporary_roots, &method_roots.list, &method_roots.keyset);
+    int skip_from_image = external_linkage || jl_experiment_skip_from_image();
+    int reuse_mode = !external_linkage && jl_reuse_image_code_enabled();
+    jl_reuse_plan_t reuse_plan;
+    if (reuse_mode)
+        jl_reuse_build_plan(reuse_plan, out, codeinfos);
+    size_t n_ci_total = 0, n_ci_from_image = 0, n_ci_skipped = 0, n_ci_reused = 0;
     size_t i, l;
     for (i = 0, l = jl_array_nrows(codeinfos); i < l; i++) {
         // each item in this list is either a CodeInstance followed by a CodeInfo indicating something
@@ -912,10 +1439,27 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
             // now add it to our compilation results
             jl_code_instance_t *codeinst = (jl_code_instance_t*)item;
 
-            if (external_linkage &&
-                (jl_atomic_load_relaxed(&codeinst->flags) & JL_CI_FLAGS_FROM_IMAGE)) {
-                ++i;
-                continue;
+            n_ci_total++;
+            if (jl_atomic_load_relaxed(&codeinst->flags) & JL_CI_FLAGS_FROM_IMAGE) {
+                n_ci_from_image++;
+                if (skip_from_image) {
+                    ++i;
+                    n_ci_skipped++;
+                    continue;
+                }
+                if (reuse_mode) {
+                    auto planit = reuse_plan.entries.find(codeinst);
+                    if (planit != reuse_plan.entries.end()) {
+                        // reuse the donor image's machine code: enters the
+                        // standard pipeline as an external symbol reference
+                        if (!out.ci_funcs.contains(codeinst))
+                            out.ci_funcs[codeinst] = {planit->second.api, planit->second.invoke,
+                                                      planit->second.specptr};
+                        ++i;
+                        n_ci_reused++;
+                        continue;
+                    }
+                }
             }
 
             jl_code_info_t *src = (jl_code_info_t*)jl_array_ptr_ref(codeinfos, ++i);
@@ -942,6 +1486,11 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
             jl_generate_ccallable(out, nameval, rt, sig);
         }
     }
+
+    if (jl_experiment_skip_from_image() || reuse_mode || getenv("JULIA_REPORT_IMAGE_REUSE"))
+        jl_safe_printf("jl_emit_native_to_output: %zu CodeInstances (%zu FROM_IMAGE, %zu skipped, %zu reused, %zu emitted)\n",
+                       n_ci_total, n_ci_from_image, n_ci_skipped, n_ci_reused,
+                       n_ci_total - n_ci_skipped - n_ci_reused);
 
     emit_always_inline(out,
                        [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
@@ -971,8 +1520,17 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
         data->jl_external_to_llvm.push_back(ci);
     }
 
+    if (reuse_mode) {
+        jl_reuse_process_donor_slots(reuse_plan, out, data);
+        jl_reuse_write_manifest(reuse_plan);
+    }
+
     for (auto v : data->jl_sysimg_gvars) {
         auto gv = (GlobalVariable *)v;
+        if (reuse_mode && reuse_plan.donor_gvar_decls.count(gv)) {
+            // donor image gvar slot: defined by the linked-in donor object
+            continue;
+        }
         gv->setInitializer(Constant::getNullValue(gv->getValueType()));
         gv->setLinkage(GlobalValue::InternalLinkage);
         gv->setDSOLocal(true);
@@ -2272,6 +2830,10 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                               GlobalVariable::ExternalLinkage,
                                               data, "jl_system_image_data");
             sysdata->setAlignment(Align(jl_page_size));
+            // Dedicated section so that image-code reuse can drop the (dead)
+            // serialized data blob when re-linking this image's code elsewhere.
+            if (TheTriple.isOSBinFormatELF())
+                sysdata->setSection(".jlsysdata");
 #if JL_LLVM_VERSION >= 180000
             sysdata->setCodeModel(CodeModel::Large);
 #else
@@ -2344,6 +2906,28 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         // add metadata information
         if (imaging_mode) {
             multiversioning_preannotate(dataM);
+            if (jl_reuse_image_code_enabled()) {
+                // Donor objects reference some of this image's functions by
+                // symbol (GOT slot fills); jl_create_native_impl internalized
+                // every definition after emission, so re-promote exactly those
+                size_t promoted = 0;
+                for (auto &name : jl_reuse_fresh_bind_targets) {
+                    GlobalValue *gv = dataM.getNamedValue(name);
+                    if (!gv || gv->isDeclaration()) {
+                        jl_safe_printf("jl_reuse WARNING: fresh BIND target '%s' %s at emission\n",
+                                       name.c_str(), gv ? "is only a declaration" : "vanished");
+                        continue;
+                    }
+                    if (gv->hasLocalLinkage()) {
+                        gv->setLinkage(GlobalValue::ExternalLinkage);
+                        gv->setVisibility(GlobalValue::HiddenVisibility);
+                        gv->setDSOLocal(true);
+                        promoted++;
+                    }
+                }
+                if (getenv("JULIA_REUSE_DEBUG"))
+                    jl_safe_printf("jl_dump_native prep: promoted %zu fresh BIND targets\n", promoted);
+            }
             {
                 DenseSet<GlobalValue *> fvars(data->jl_sysimg_fvars.begin(), data->jl_sysimg_fvars.end());
                 for (auto &F : dataM) {

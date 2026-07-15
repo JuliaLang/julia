@@ -128,6 +128,22 @@ void JITDebugInfoRegistry::add_image_info(image_info_t info) {
     (**this->image_info)[info.base] = info;
 }
 
+void JITDebugInfoRegistry::foreach_image_info(llvm::function_ref<void(const image_info_t &)> f) JL_NOTSAFEPOINT {
+    auto infos = *this->image_info;
+    for (auto &kv : *infos)
+        f(kv.second);
+}
+
+// aotcompile.cpp (image-code reuse): enumerate every loaded image's
+// fvar-slot -> CodeInstance association
+void jl_foreach_image_fptr_info(llvm::function_ref<void(uint64_t, const jl_image_fptrs_t &,
+                                                        jl_code_instance_t **, size_t)> f) JL_NOTSAFEPOINT
+{
+    getJITDebugRegistry().foreach_image_info([&](const JITDebugInfoRegistry::image_info_t &info) JL_NOTSAFEPOINT {
+        f(info.base, info.fptrs, info.fvars_cinst, info.fvars_n);
+    });
+}
+
 
 bool JITDebugInfoRegistry::get_image_info(uint64_t base, JITDebugInfoRegistry::image_info_t *info) const {
     auto infos = *this->image_info;

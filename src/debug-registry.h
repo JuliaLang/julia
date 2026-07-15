@@ -87,6 +87,8 @@ public:
         size_t fvars_n;
     };
 
+    void foreach_image_info(llvm::function_ref<void(const image_info_t &)> f) JL_NOTSAFEPOINT;
+
     struct libc_frames_t {
 #if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
         typedef void (*frame_register_func)(void *) JL_NOTSAFEPOINT;

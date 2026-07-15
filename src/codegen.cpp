@@ -10441,6 +10441,14 @@ void emit_always_inline(jl_codegen_output_t &out,
             jl_llvm_functions_t decls;
             if (it != out.ci_funcs.end()) {
                 decls = it->second;
+                if (!decls.specptr || decls.specptr->isDeclaration()) {
+                    // the CodeInstance's code is not in this module (e.g.
+                    // reused from a donor image, or a constant return): it
+                    // cannot be inlined. Leave the call target for
+                    // aot_link_output to substitute and don't re-queue it.
+                    target.private_linkage = false;
+                    continue;
+                }
             } else {
                 target.private_linkage = false;
                 src = get_src(ci);
