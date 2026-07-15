@@ -105,9 +105,13 @@ end
 
 #--------------------------------------------------
 # Functions called by closure conversion
-function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, field_is_box)
+function eval_closure_type(mod::Module, closure_type_name::Symbol,
+                           capt_sp, field_names, field_is_box)
     type_params = Core.TypeVar[]
     field_types = []
+    for name in capt_sp
+        push!(type_params, Core.TypeVar(name))
+    end
     for (name, isbox) in zip(field_names, field_is_box)
         if !isbox
             T = Core.TypeVar(Symbol(name, "_type"))
@@ -130,13 +134,14 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, 
 end
 
 # Interpolate captured local variables into the CodeInfo for a global method
-function replace_captured_locals!(codeinfo::Core.CodeInfo, locals::Core.SimpleVector)
-    for (i, ex) in enumerate(codeinfo.code)
+function replace_captured_locals(ci_in::Core.CodeInfo, locals::Core.SimpleVector)
+    ci = copy(ci_in)
+    for (i, ex) in enumerate(ci.code)
         if Meta.isexpr(ex, :captured_local)
-            codeinfo.code[i] = locals[ex.args[1]::Int]
+            ci.code[i] = locals[ex.args[1]::Int]
         end
     end
-    codeinfo
+    ci
 end
 
 #--------------------------------------------------

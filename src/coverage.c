@@ -101,7 +101,7 @@ JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line)
     return ret;
 }
 
-JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line)
+JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int line) JL_CANSAFEPOINT
 {
     // TODO: remove `len` and use C-style strings exclusively
     //       (kept for backwards-compatibility with JuliaInterpreter)

@@ -59,7 +59,7 @@ JL_DLLEXPORT void *jl_get_ptls_states(void)
     return jl_current_task->ptls;
 }
 
-static void jl_delete_thread(void*) JL_NOTSAFEPOINT_ENTER;
+static void jl_delete_thread(void*) JL_CANSAFEPOINT_ENTER_LEAVE;
 
 #if !defined(_OS_WINDOWS_)
 static pthread_key_t jl_task_exit_key;
@@ -68,7 +68,7 @@ static pthread_key_t jl_safe_restore_key;
 static __attribute__((constructor)) void _jl_init_safe_restore(void)
 {
     pthread_key_create(&jl_safe_restore_key, NULL);
-    pthread_key_create(&jl_task_exit_key, jl_delete_thread);
+    pthread_key_create(&jl_task_exit_key, jl_delete_thread); // NOLINT[julia-first-decl-annotations]
 }
 
 JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
@@ -375,7 +375,11 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
         hMainThread = ptls->system_id;
 #endif
     }
+#ifdef __clang_safetyanalysis__
+    jl_gc_unsafe_enter(ptls);
+#else
     jl_atomic_store_relaxed(&ptls->gc_state, JL_GC_STATE_UNSAFE); // GC unsafe
+#endif
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
@@ -429,7 +433,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 
 static _Atomic(jl_value_t*) init_task_lock_func JL_GLOBALLY_ROOTED = NULL;
 
-static void jl_init_task_lock(jl_task_t *ct)
+static void jl_init_task_lock(jl_task_t *ct) JL_CANSAFEPOINT
 {
     size_t last_age = ct->world_age;
     ct->world_age = jl_get_world_counter();
@@ -475,7 +479,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
-JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
+JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_ENTER
 {
     if (!jl_is_initialized()) {
         void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
@@ -629,7 +633,7 @@ static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align
 {
     return LLT_ALIGN(orig_size, align) + size;
 }
-static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size)
+static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size) JL_NOTSAFEPOINT
 {
     ssize_t offset = (char*)k0 - (char*)tp;
     if (offset < JL_ELF_TLS_INIT_SIZE ||
@@ -644,7 +648,7 @@ static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align
 {
     return LLT_ALIGN(orig_size + size, align);
 }
-static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size)
+static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size) JL_NOTSAFEPOINT
 {
     ssize_t offset = (char*)tp - (char*)k0;
     if (offset < sizeof(*k0) || offset > tls_size)
@@ -680,10 +684,10 @@ static int check_tls_cb(struct dl_phdr_info *info, size_t size, void *_data)
     return 1;
 }
 
-static void jl_check_tls(void)
+static void jl_check_tls(void) JL_NOTSAFEPOINT
 {
     jl_get_pgcstack_func_t f;
-    jl_gcframe_t ***(*k)(void);
+    jl_pgcstack_key_t k;
     jl_pgcstack_getkey(&f, &k);
     jl_gcframe_t ***k0 = k();
     if (k0 == NULL)
@@ -886,7 +890,7 @@ void jl_start_threads(void)
         jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;
-        uv_thread_create(&uvtid, jl_threadfun, t);
+        uv_thread_create(&uvtid, jl_threadfun, t); // NOLINT[julia-first-decl-annotations]
 
         // Interactive pool threads get the low IDs, so check if this is a
         // default pool thread.  The master thread is already on CPU 0.
@@ -926,7 +930,7 @@ JL_DLLEXPORT void jl_exit_threaded_region(void)
     }
 }
 
-JL_DLLEXPORT void jl_set_io_loop_tid(int16_t tid)
+JL_DLLEXPORT void jl_set_io_loop_tid(int16_t tid) JL_CANSAFEPOINT
 {
     if (tid < 0 || tid >= jl_atomic_load_relaxed(&jl_n_threads)) {
         // TODO: do we care if this thread has exited or not started yet,
@@ -963,7 +967,7 @@ void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
 #endif
 }
 
-void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
+void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint) JL_NO_SAFEPOINT_ANALYSIS
 {
     jl_task_t *owner = jl_atomic_load_relaxed(&lock->owner);
     if (jl_mutex_owner(owner) == self) {
@@ -1025,7 +1029,7 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
 #endif
 }
 
-static void jl_lock_frame_push(jl_task_t *self, jl_mutex_t *lock)
+static void jl_lock_frame_push(jl_task_t *self, jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = self->ptls;
     small_arraylist_t *locks = &ptls->locks;
@@ -1059,7 +1063,7 @@ void _jl_mutex_lock(jl_task_t *self, jl_mutex_t *lock)
 #endif
 }
 
-int _jl_mutex_trylock_nogc(jl_task_t *self, jl_mutex_t *lock)
+int _jl_mutex_trylock_nogc(jl_task_t *self, jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSIS
 {
 #ifdef _COMPILER_TSAN_ENABLED_
     __tsan_mutex_pre_lock(lock, __tsan_mutex_try_lock | __tsan_mutex_write_reentrant);
@@ -1091,7 +1095,7 @@ done:
     return ret;
 }
 
-int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock)
+int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSIS
 {
     int got = _jl_mutex_trylock_nogc(self, lock);
     if (got) {
@@ -1101,7 +1105,7 @@ int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock)
     return got;
 }
 
-void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
+void _jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSIS
 {
 #ifndef __clang_gcanalyzer__
 #ifdef _COMPILER_TSAN_ENABLED_
@@ -1128,7 +1132,7 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
 #endif
 }
 
-void _jl_mutex_unlock(jl_task_t *self, jl_mutex_t *lock)
+void _jl_mutex_unlock(jl_task_t *self, jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSIS
 {
     _jl_mutex_unlock_nogc(lock);
     jl_lock_frame_pop(self);

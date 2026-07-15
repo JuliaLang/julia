@@ -53,7 +53,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls
     return m;
 }
 
-static jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz)
+static jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz) JL_CANSAFEPOINT
 {
     if (nel == 0) // zero-sized allocation optimization
         return (jl_genericmemory_t*)((jl_datatype_t*)mtype)->instance;
@@ -102,7 +102,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory(jl_value_t *mtype, size_
     return _new_genericmemory_(mtype, nel, isunion, zi, elsz);
 }
 
-JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str)
+JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str) JL_CANSAFEPOINT
 {
     if (jl_string_len(str) == 0)
         return (jl_genericmemory_t*)((jl_datatype_t*)jl_memory_uint8_type)->instance;
@@ -180,7 +180,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_new_genericmemory(jl_value_t *mtype, jl_valu
     return jl_alloc_genericmemory(mtype, jl_unbox_long(nel));
 }
 
-JL_DLLEXPORT jl_genericmemory_t *jl_pchar_to_genericmemory(const char *str, size_t len)
+JL_DLLEXPORT jl_genericmemory_t *jl_pchar_to_genericmemory(const char *str, size_t len) JL_CANSAFEPOINT
 {
     jl_genericmemory_t *m = jl_alloc_genericmemory(jl_memory_uint8_type, len);
     memcpy(m->ptr, str, len);

@@ -293,6 +293,40 @@ defaultport = rand(2000:4000)
     end
 end
 
+# flush() must not throw after the peer has received everything and closed.
+@testset "flush after peer close" begin
+    mktempdir() do tmpdir
+        for reply in (false, true)
+            socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) :
+                         joinpath(tmpdir, "socket-$(Int(reply))")
+            server = listen(socketname)
+            peer_closed = Channel{Nothing}(1)
+            server_task = @async begin
+                peer = accept(server)
+                try
+                    @test readline(peer) == "ping"
+                    reply && write(peer, "pong\n")
+                finally
+                    close(peer)
+                    close(server)
+                    put!(peer_closed, nothing)
+                end
+            end
+
+            client = connect(socketname)
+            try
+                @test write(client, "ping\n") == 5
+                take!(peer_closed)
+                reply && @test readline(client) == "pong"
+                @test flush(client) === nothing
+            finally
+                close(client)
+            end
+            wait(server_task)
+        end
+    end
+end
+
 @testset "getsockname errors" begin
     sock = TCPSocket()
     serv = Sockets.TCPServer()

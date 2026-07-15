@@ -109,7 +109,11 @@ void jl_threadfun(void *arg)
     JL_GC_PROMISE_ROOTED(ct);
 
     // wait for all threads
+#ifdef __clang_safetyanalysis__
+    jl_gc_safe_enter(ptls);
+#else
     jl_gc_state_set(ptls, JL_GC_STATE_SAFE, JL_GC_STATE_UNSAFE);
+#endif
     uv_barrier_wait(targ->barrier);
 
     // free the thread argument here
@@ -121,7 +125,7 @@ void jl_threadfun(void *arg)
 
 
 
-void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT
+void jl_init_thread_scheduler(jl_ptls_t ptls)
 {
     uv_mutex_init(&ptls->sleep_lock);
     uv_cond_init(&ptls->wake_signal);
@@ -376,7 +380,7 @@ JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid)
 }
 
 // get the next runnable task
-static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
+static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q) JL_CANSAFEPOINT
 {
     jl_gc_safepoint();
     jl_task_t *task = (jl_task_t*)jl_apply_generic(trypoptask, &q, 1);
@@ -388,7 +392,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
     return NULL;
 }
 
-static int check_empty(jl_value_t *checkempty)
+static int check_empty(jl_value_t *checkempty) JL_CANSAFEPOINT
 {
     return jl_apply_generic(checkempty, NULL, 0) == jl_true;
 }
@@ -433,7 +437,7 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
 }
 
 
-JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty)
+JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     uint64_t start_cycles = 0;
@@ -574,7 +578,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
                 // the other threads will just wait for an individual wake signal to resume
                 JULIA_DEBUG_SLEEPWAKE( ptls->sleep_enter = cycleclock() );
-                int8_t gc_state = jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
+                int8_t gc_state = jl_gc_safe_enter(ptls);
+                jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
                 while (may_sleep(ptls)) {
                     if (ptls->tid == 0) {
                         task = wait_empty;

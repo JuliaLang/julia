@@ -355,13 +355,16 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
 {
     return jl_gc_state_set(ptls, state, jl_atomic_load_relaxed(&ptls->gc_state));
 }
-#ifdef __clang_gcanalyzer__
+
 // these might not be a safepoint (if they are no-op safe=>safe transitions), but we have to assume it could be (statically)
-// however mark a delineated region in which safepoints would be not permissible
-int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT_LEAVE;
-void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_ENTER;
-int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
-void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE;
+// however mark a delineated region in which safepoints would be permissible: a
+// gc-unsafe region is entered (jl_gc_unsafe_enter / jl_gc_safe_leave) and left
+// (jl_gc_unsafe_leave / jl_gc_safe_enter) as the thread toggles gc-unsafe state.
+#if defined(__clang_gcanalyzer__) || defined(__clang_safetyanalysis__)
+int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_CANSAFEPOINT_ENTER;
+void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_CANSAFEPOINT_LEAVE;
+int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
+void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_CANSAFEPOINT_ENTER;
 #else
 #define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_UNSAFE)
 #define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_UNSAFE))
@@ -369,10 +372,10 @@ void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE;
 #define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
 #endif
 
-JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
+JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
-JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
+JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct) JL_CANSAFEPOINT;
 extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void) JL_NOTSAFEPOINT;
 

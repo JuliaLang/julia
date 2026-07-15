@@ -632,12 +632,17 @@ $(CODEGEN_OBJS) $(CODEGEN_DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -
 # set the exports for the source files based on where they are getting linked
 $(addprefix clang-sa-,$(SRCS)) \
 $(addprefix clang-sagc-,$(SRCS)) \
+$(addprefix clang-safety-,$(SRCS)) \
 $(addprefix clang-tidy-,$(SRCS)): \
 	FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
 $(addprefix clang-sa-,$(CODEGEN_SRCS)) \
 $(addprefix clang-sagc-,$(CODEGEN_SRCS)) \
+$(addprefix clang-safety-,$(CODEGEN_SRCS)) \
 $(addprefix clang-tidy-,$(CODEGEN_SRCS)): \
 	FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
+
+$(addprefix clang-safety-,$(SRCS) $(CODEGEN_SRCS)): \
+	FLAGS_COMMON += -D__clang_analyzer__
 
 # Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
 CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(LLVM_CFLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
@@ -755,7 +760,7 @@ SA_EXCEPTIONS-gc-stock.c                    := -Xanalyzer -analyzer-config -Xana
 SKIP_GC_CHECK := codegen.cpp rtutils.c
 
 # make sure LLVM's invariant information is not discarded with -DNDEBUG
-clang-sagc-%: JCXXFLAGS_COMMON += -UNDEBUG
+clang-sagc-%: JCPPFLAGS_COMMON += -UNDEBUG
 clang-sagc-%: $(SRCDIR)/%.c $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
 		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
@@ -767,7 +772,7 @@ clang-sagc-%: $(SRCDIR)/%.cpp $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -x c++ $<)
 
-clang-sa-%: JCXXFLAGS_COMMON += -UNDEBUG
+clang-sa-%: JCPPFLAGS_COMMON += -UNDEBUG
 clang-sa-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
@@ -778,6 +783,24 @@ clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -Werror -x c++ $<)
+
+# Clang Thread Safety Analysis of Julia's safepoint annotations. Compiling with
+# -D__clang_safetyanalysis__ makes JL_CANSAFEPOINT and the ENTER/LEAVE annotations expand to
+# capability attributes on the reentrant `jl_notsafepoint` token (see
+# src/support/analyzer_annotations.h), which -Wthread-safety then checks.
+#
+# -Wno-ignored-attributes and -Wno-thread-safety-attributes: JL_CANSAFEPOINT (and friends) expand to a
+# `requires_capability` attribute, which clang-21's thread-safety analysis only
+# accepts on functions and parameters -- not on a function-pointer *typedef*.
+# This should be revisisted after clang-23, which added some support for this.
+clang-safety-%: JCPPFLAGS_COMMON += -UNDEBUG -D__clang_safetyanalysis__ -fsyntax-only -fcolor-diagnostics \
+		-Wthread-safety -Wthread-safety-negative -Werror=thread-safety \
+		-Wno-ignored-attributes -Wno-thread-safety-attributes
+clang-safety-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang $(CLANG_TOOLING_C_FLAGS) -x c $<)
+clang-safety-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang \
+		$(CLANG_TOOLING_CXX_FLAGS) --system-header-prefix=llvm -x c++ $<)
 
 # Run clang-tidy with our plugins: `-header-filter='.*'` so the first
 # (header) declarations participate in the comparison. The annotation macros
@@ -807,12 +830,14 @@ clang-tidy-%: $(SRCDIR)/%.cpp $(TIDY_PLUGIN_LIBS) .FORCE | analyzegc-deps-check
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
 .PHONY: tidysrc
 tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
+.PHONY: safesrc
+safesrc: $(addprefix clang-safety-,$(CODEGEN_SRCS) $(SRCS))
 .PHONY: analyzesrc
 analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(SRCS))
 .PHONY: analyzegc
 analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS)))
 .PHONY: analyze
-analyze: analyzesrc analyzegc tidysrc
+analyze: analyzesrc analyzegc tidysrc safesrc
 
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-sa-%
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-tidy-%

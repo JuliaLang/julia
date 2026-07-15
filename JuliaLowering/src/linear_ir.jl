@@ -1131,10 +1131,11 @@ function renumber_body(ctx, input_code, slot_rewrites)
     for ex in input_code
         k = kind(ex)
         ex_out = nothing
-        if k == K"=" && is_ssa(ctx, ex[1])
+        if k == K"=" && (b = get_binding(ctx, ex[1]); b.is_ssa || b.kind == :typevar)
             lhs_id = _binding_id(ex[1])
             @jl_assert(!haskey(ssa_rewrites, lhs_id),
                        (ex, "multiple assignments to ssavalue"))
+            @jl_assert ctx.is_toplevel_thunk || b.kind !== :typevar binding_ex(ctx, b)
             if is_ssa(ctx, ex[2])
                 # For SSA₁ = SSA₂, record that all uses of SSA₁ should be replaced by SSA₂
                 ssa_rewrites[lhs_id] = ssa_rewrites[_binding_id(ex[2])]

@@ -167,7 +167,7 @@ void jl_dump_llvm_opt_impl(void *s)
 static void decorate_module(Module &M) JL_NOTSAFEPOINT;
 
 // convert local roots into global roots, if they are needed
-static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi)
+static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi) JL_CANSAFEPOINT
 {
     JL_GC_PROMISE_ROOTED(out.temporary_roots); // rooted by caller
     if (jl_array_dim0(out.temporary_roots) == 0)
@@ -181,7 +181,7 @@ static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance
         auto ref = out.global_targets.find((void*)val);
         if (ref == out.global_targets.end())
             continue;
-        auto get_global_root = [val, m]() {
+        auto get_global_root = [val, m]() JL_CANSAFEPOINT {
             if (jl_is_globally_rooted(val))
                 return val;
             if (jl_is_method(m) && m->roots) {
@@ -690,7 +690,9 @@ void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     }
 }
 
-Error JLDebuginfoPlugin::notifyEmitted(MaterializationResponsibility &MR)
+// TODO: analysis disabled since we aren't able to annotate that it was safe to lock
+// std::mutex here because we asserted !jl_gcunsaferegion, so we don't need to assert jl_notsafepoint
+Error JLDebuginfoPlugin::notifyEmitted(MaterializationResponsibility &MR) JL_NO_SAFEPOINT_ANALYSIS // NOLINT[julia-first-decl-annotations]
 {
     {
         std::lock_guard<std::mutex> lock(PluginMutex);
@@ -882,7 +884,7 @@ public:
     }
 
     // During materialization: finalizers disabled, GC safe
-    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER override
+    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_CANSAFEPOINT_ENTER_LEAVE override // NOLINT[julia-first-decl-annotations]
     {
         auto &ES = R->getExecutionSession();
 
@@ -899,7 +901,7 @@ public:
                                       MDString::get(*Out.ctx,
                                                     JIT.getTargetFeatureString()));
             Obj = JIT.OCache.get(*Out.module,
-                                 [this]() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
+                                 [this]() JL_CANSAFEPOINT_ENTER_LEAVE {
                                      JIT.optimizeModule(*Out.module);
                                      return JIT.compileModule(*Out.module);
                                  });
@@ -983,7 +985,7 @@ public:
     };
 
     // During materialization: finalizers disabled, GC safe
-    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE override
+    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_CANSAFEPOINT_ENTER_LEAVE override // NOLINT[julia-first-decl-annotations]
     {
         auto Ctx = std::make_unique<LLVMContext>();
         auto Mod =
@@ -1536,7 +1538,9 @@ struct JuliaOJIT::DLSymOptimizer {
         return addr;
     }
 
-    void *lookup(const char *libname, const char *fname) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+    // TODO: analysis disabled since we aren't able to annotate that it was safe to lock
+    // std::mutex here because we asserted !jl_gcunsaferegion, so we don't need to assert jl_notsafepoint
+    void *lookup(const char *libname, const char *fname) JL_CANSAFEPOINT_ENTER_LEAVE JL_NO_SAFEPOINT_ANALYSIS {
         StringRef lib(libname);
         StringRef f(fname);
         std::lock_guard<std::mutex> lock(symbols_mutex);
@@ -1572,7 +1576,7 @@ struct JuliaOJIT::DLSymOptimizer {
         return handle;
     }
 
-    void operator()(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+    void operator()(Module &M) JL_CANSAFEPOINT_ENTER_LEAVE {
         for (auto &GV : M.globals()) {
             auto Name = GV.getName();
             if (Name.starts_with("jlplt") && Name.ends_with("got")) {
@@ -2467,8 +2471,14 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     void *SpecPtr;
 
     // Tell the analyzer no safepoint is possible with waitcompile = 0
+#ifdef __clang_safetyanalysis__
+    #define jl_read_codeinst_invoke jl_read_codeinst_invoke_nosafepoint
+#endif
     void jl_read_codeinst_invoke(jl_code_instance_t *, uint8_t *, jl_callptr_t *, void **, int) JL_NOTSAFEPOINT;
     jl_read_codeinst_invoke(CI, &Flags, &Invoke, &SpecPtr, 0);
+#ifdef __clang_safetyanalysis__
+    #undef jl_read_codeinst_invoke
+#endif
 
     if (!(Flags & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR))
         return nullptr;

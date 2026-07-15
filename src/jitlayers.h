@@ -309,10 +309,10 @@ struct jl_locked_stream {
         }
     };
 
-    jl_locked_stream() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER = default;
-    ~jl_locked_stream() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
+    jl_locked_stream() JL_NOTSAFEPOINT = default;
+    ~jl_locked_stream() JL_NOTSAFEPOINT = default;
 
-    lock operator*() JL_NOTSAFEPOINT {
+    lock operator*() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
         return lock(mutex, stream);
     }
 };
@@ -446,7 +446,7 @@ public:
     std::string make_name(StringRef prefix, StringRef orig_name) JL_NOTSAFEPOINT;
     std::string make_name(StringRef orig_name) JL_NOTSAFEPOINT;
 
-    StringRef get_call_target(jl_code_instance_t *ci, bool specsig, bool always_inline);
+    StringRef get_call_target(jl_code_instance_t *ci, bool specsig, bool always_inline) JL_CANSAFEPOINT;
 
     // Discard all the context that will be invalidated when we compile the
     // module.  The context and module will be moved to the jl_emitted_output_t.
@@ -508,7 +508,7 @@ public:
     ~jl_codegen_output_t() JL_NOTSAFEPOINT = default;
 };
 
-const char *jl_generate_ccallable(jl_codegen_output_t &out, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt);
+const char *jl_generate_ccallable(jl_codegen_output_t &out, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt) JL_CANSAFEPOINT;
 
 std::optional<jl_llvm_functions_t> jl_emit_code(
         jl_codegen_output_t &out,
@@ -516,20 +516,20 @@ std::optional<jl_llvm_functions_t> jl_emit_code(
         jl_code_info_t *src,
         jl_value_t *abi_at,
         jl_value_t *abi_rt,
-        jl_code_instance_t *codeinst = nullptr);
+        jl_code_instance_t *codeinst = nullptr) JL_CANSAFEPOINT;
 
 std::optional<jl_llvm_functions_t> jl_emit_codeinst(
         jl_codegen_output_t &out,
         jl_code_instance_t *codeinst,
-        jl_code_info_t *src);
+        jl_code_info_t *src) JL_CANSAFEPOINT;
 
 jl_llvm_functions_t jl_emit_codedecls(
         jl_codegen_output_t &out,
-        jl_code_instance_t *codeinst);
+        jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
 
-jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci);
+jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci) JL_CANSAFEPOINT;
 void emit_always_inline(jl_codegen_output_t &out,
-                        unique_function<jl_code_info_t *(jl_code_instance_t *)> get_src);
+                        unique_function<jl_code_info_t *(jl_code_instance_t *)> get_src) JL_CANSAFEPOINT;
 void emit_llvmcall_modules(jl_codegen_output_t &out) JL_NOTSAFEPOINT;
 
 enum CompilationPolicy {
@@ -542,20 +542,20 @@ Function *jl_cfunction_object(jl_value_t *f, jl_value_t *rt, jl_tupletype_t *arg
 
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_jit_abi_convert(jl_task_t *ct, jl_abi_t from_abi, _Atomic(void*) *fptr, _Atomic(size_t) *last_world, void *data);
-std::string emit_abi_dispatcher(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *invoke);
-std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *target, bool target_specsig);
-std::string emit_abi_constreturn(jl_codegen_output_t &out, jl_abi_t from_abi, jl_value_t *rettype_const);
-std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code_instance_t *codeinst);
+std::string emit_abi_dispatcher(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *invoke) JL_CANSAFEPOINT;
+std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *target, bool target_specsig) JL_CANSAFEPOINT;
+std::string emit_abi_constreturn(jl_codegen_output_t &out, jl_abi_t from_abi, jl_value_t *rettype_const) JL_CANSAFEPOINT;
+std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
 
-Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, jl_codegen_output_t &out) JL_NOTSAFEPOINT;
+Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, jl_codegen_output_t &out) JL_CANSAFEPOINT;
 void emit_specsig_to_fptr1(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc, unsigned return_roots,
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
         size_t nargs,
         jl_codegen_output_t &out,
-        Value *target) JL_NOTSAFEPOINT;
+        Value *target) JL_CANSAFEPOINT;
 Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci,
-                                Value *func) JL_NOTSAFEPOINT;
+                                Value *func) JL_CANSAFEPOINT;
 Function *get_or_emit_fptr1(StringRef Name, Module *M) JL_NOTSAFEPOINT;
 void jl_init_function(Function *F, const jl_codegen_output_t &params) JL_NOTSAFEPOINT;
 
@@ -563,11 +563,11 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &ctx, Module *M, Value 
                                      StringRef name, jl_value_t *sig, jl_value_t *jlrettype,
                                      bool is_opaque_closure,
                                      ArrayRef<const char *> ArgNames = {},
-                                     unsigned nreq = 0);
+                                     unsigned nreq = 0) JL_CANSAFEPOINT;
 
 void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
 
-Constant *literal_pointer_val_slot(jl_codegen_output_t &out, jl_value_t *p);
+Constant *literal_pointer_val_slot(jl_codegen_output_t &out, jl_value_t *p) JL_CANSAFEPOINT;
 
 static inline Constant *literal_static_pointer_val(const void *p, Type *T) JL_NOTSAFEPOINT
 {
@@ -658,7 +658,7 @@ public:
                                      jitlink::LinkGraph &G, MemoryBufferRef InputObject,
                                      std::unique_ptr<jl_linker_info_t> LinkerInfo)
         JL_NOTSAFEPOINT;
-    Error notifyEmitted(orc::MaterializationResponsibility &MR) override JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    Error notifyEmitted(orc::MaterializationResponsibility &MR) override JL_CANSAFEPOINT_ENTER_LEAVE; // NOLINT[julia-first-decl-annotations]
     Error notifyFailed(orc::MaterializationResponsibility &MR) override;
     Error notifyRemovingResources(orc::JITDylib &JD, orc::ResourceKey K) override;
     void notifyTransferringResources(orc::JITDylib &JD, orc::ResourceKey DstKey,
@@ -814,7 +814,7 @@ public:
     JuliaOJIT() JL_NOTSAFEPOINT;
     ~JuliaOJIT() JL_NOTSAFEPOINT;
 
-    void enableJITDebuggingSupport();
+    void enableJITDebuggingSupport() JL_CANSAFEPOINT;
     void enableIntelJITEventListener() JL_NOTSAFEPOINT;
     void enableOProfileJITEventListener() JL_NOTSAFEPOINT;
     void enablePerfJITEventListener() JL_NOTSAFEPOINT;
@@ -830,12 +830,12 @@ public:
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
     orc::JITDylib &createJITDylib(StringRef NamePrefix) JL_NOTSAFEPOINT;
 
-    Expected<llvm::orc::ExecutorSymbolDef> findJDSymbol(orc::JITDylib &JD, StringRef Name, bool ExportedSymbolsOnly);
-    SmallVector<uint64_t> findSymbols(ArrayRef<StringRef> Names);
-    uint64_t getGlobalValueAddress(StringRef Name);
-    uint64_t getFunctionAddress(StringRef Name);
+    Expected<llvm::orc::ExecutorSymbolDef> findJDSymbol(orc::JITDylib &JD, StringRef Name, bool ExportedSymbolsOnly) JL_CANSAFEPOINT;
+    SmallVector<uint64_t> findSymbols(ArrayRef<StringRef> Names) JL_CANSAFEPOINT;
+    uint64_t getGlobalValueAddress(StringRef Name) JL_CANSAFEPOINT;
+    uint64_t getFunctionAddress(StringRef Name) JL_CANSAFEPOINT;
 
-    void publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait=false);
+    void publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait=false) JL_CANSAFEPOINT;
 
     void registerCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
     // When a CodeInstance is garbage collected, we must remove any existing
@@ -859,13 +859,13 @@ public:
     void addBytes(size_t bytes) JL_NOTSAFEPOINT;
     void printTimers() JL_NOTSAFEPOINT;
 
-    jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
+    jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
     }
-    jl_locked_stream &get_dump_compiles_stream() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
+    jl_locked_stream &get_dump_compiles_stream() JL_NOTSAFEPOINT {
         return dump_compiles_stream;
     }
-    jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
+    jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT {
         return dump_llvm_opt_stream;
     }
     std::string getMangledName(StringRef Name) JL_NOTSAFEPOINT;
@@ -873,8 +873,7 @@ public:
 
     // Note that this is a potential safepoint due to jl_get_library_ and jl_dlsym calls
     // and must be called from inside safe-regions due to internal use of locks
-    // (this lock strategy is unusual here, so the annotations aren't entirely correct)
-    void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
+    void optimizeDLSyms(Module &M) JL_CANSAFEPOINT_ENTER_LEAVE;
 
     void shutdown() JL_NOTSAFEPOINT;
 
@@ -916,7 +915,7 @@ protected:
     // returning a pointer into CISymbols or NULL if the CI is not compiled.
     CISymbolPtr *linkCISymbol(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
-    void optimizeModule(Module &M) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    void optimizeModule(Module &M) JL_CANSAFEPOINT_ENTER_LEAVE;
     std::unique_ptr<MemoryBuffer> compileModule(Module &M) JL_NOTSAFEPOINT;
 
 private:
@@ -966,7 +965,7 @@ extern JuliaOJIT *jl_ExecutionEngine;
 
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
-void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
+void optimizeDLSyms(Module &M) JL_CANSAFEPOINT_ENTER_LEAVE;
 
 static inline const char *jl_symbol_prefix(jl_symbol_prefix_t type,
                                            jl_invoke_api_t api) JL_NOTSAFEPOINT
@@ -1020,4 +1019,4 @@ void jl_jit_add_bytes(size_t bytes) JL_NOTSAFEPOINT;
 
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            const jl_linker_info_t &Info) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+                            const jl_linker_info_t &Info) JL_CANSAFEPOINT_ENTER_LEAVE;

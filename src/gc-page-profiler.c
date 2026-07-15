@@ -163,7 +163,7 @@ static void gc_page_profile_write_json_epilogue(ios_t *stream) JL_NOTSAFEPOINT
     }
 }
 
-JL_DLLEXPORT void jl_gc_take_page_profile(ios_t *stream)
+JL_DLLEXPORT void jl_gc_take_page_profile(ios_t *stream) JL_CANSAFEPOINT
 {
     gc_enable_page_profile();
     page_profile_pages_written = 0;

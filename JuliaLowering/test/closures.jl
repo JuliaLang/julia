@@ -640,7 +640,7 @@ begin
 end
 """) == (1, Int)
 
-@test_broken JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 begin
     function f_argcapt_sp(x::T) where T
         (inner_x::T)->(x, inner_x, T)
@@ -649,10 +649,10 @@ begin
 end
 """) == (1, 2, Int)
 
-# Inner method typevar `U` depending on a static parameter `T` so hoisting the
-# method def for `inner` out to top level would require detecting this and
-# making `inner` parametric on `T`.  Note this doesn't work in flisp either.
-@test_broken JuliaLowering.include_string(test_mod, """
+# Inner method typevar `U` depending on a static parameter `T`: the hoisted
+# method def for `inner` captures `T` as a closure type parameter, making
+# `inner` parametric on `T`.  This doesn't work in flisp (UndefVarError).
+@test JuliaLowering.include_string(test_mod, """
 begin
     function f_typevarcapt_sp(x::T) where T
         function inner(y::U) where {U<:T}
@@ -747,3 +747,463 @@ let (g, x) = test_mod.f_arg_reassign_with_label(42)
     @test g() == 1
     @test x == 1
 end
+
+@test JuliaLowering.include_string(test_mod, """
+func_in_own_sig(x::typeof(func_in_own_sig)) = (x, 1)
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+func_in_own_sig(func_in_own_sig)
+""") == (test_mod.func_in_own_sig, 1)
+@test JuliaLowering.include_string(test_mod, """
+function func_in_own_sp(x::T) where {T<:typeof(func_in_own_sp)}
+(x, T)
+end
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+func_in_own_sp(func_in_own_sp)
+""") == (test_mod.func_in_own_sp, typeof(test_mod.func_in_own_sp))
+
+@testset "(AI) Captured static parameters" begin
+    # Captured static parameter used in a closure signature: dispatch must pin
+    # `T` to the value captured in the closure's type parameter, not re-derive
+    # it from the argument.
+    JuliaLowering.include_string(test_mod, """
+    function f_sigcapt_sp(x::T) where T
+        g_sigcapt(y::T) = (y, T)
+        g_sigcapt
+    end
+    """)
+    @test test_mod.f_sigcapt_sp(1)(2) == (2, Int)
+    @test_throws MethodError test_mod.f_sigcapt_sp(1)(2.5)
+
+    # All methods of a closure share its captured static parameters, even
+    # methods that don't reference them.
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_multimeth_sp(x::T) where T
+            g() = T
+            g(y) = (y, T)
+            g
+        end
+        (f_multimeth_sp(1.5)(), f_multimeth_sp(1.5)(2))
+    end
+    """) == (Float64, (2, Float64))
+
+    # Static parameter captured by an opaque closure (as a field, since opaque
+    # closures have no closure type to parameterize)
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_oc_sp(x::T) where T
+            Base.Experimental.@opaque y -> (x, y, T)
+        end
+        f_oc_sp(1)(2)
+    end
+    """) == (1, 2, Int)
+
+    # A captured sparam's typevar bound may reference another sparam the closure
+    # doesn't mention at all: `S` must be captured transitively or the hoisted
+    # method signature contains a free TypeVar.  (flisp instead drops the bound.)
+    JuliaLowering.include_string(test_mod, """
+    function f_captsp_bound_dep(x::S, y::T) where {S, T<:AbstractVector{S}}
+        g_bound_dep(z::T) = (z, T)
+        g_bound_dep
+    end
+    """)
+    let g = test_mod.f_captsp_bound_dep(1, [1, 2])
+        @test g([3, 4]) == ([3, 4], Vector{Int})
+        @test_throws MethodError g("nope")
+        @test_throws MethodError g(Any[1, 2]) # T is pinned to Vector{Int}
+    end
+
+    # As above, but the dependency `S` is also captured normally by the body
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_captsp_bound_dep2(x::S, y::T) where {S, T<:AbstractVector{S}}
+            g_bound_dep2(z::T) = (z, T, S)
+            g_bound_dep2
+        end
+        f_captsp_bound_dep2(1, [1, 2])([3, 4])
+    end
+    """) == ([3, 4], Vector{Int}, Int)
+
+    # Same, via a lower bound
+    JuliaLowering.include_string(test_mod, """
+    function f_captsp_lb_dep(x::T, ys::Vector{S}) where {T, S>:T}
+        g_lb_dep(z::S) = (z, S)
+        g_lb_dep
+    end
+    """)
+    @test test_mod.f_captsp_lb_dep(1, Any[1.0])("anything") == ("anything", Any)
+
+    # (broken in flisp, JL may or may not have the desired behaviour) Typevar
+    # bound referencing a static parameter two closure levels up: `g` must
+    # capture `T` in passing so its value reaches `h`'s creation site.
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_typevarcapt_sp_deep(::T) where T
+            function g_deep()
+                h_deep(y::U) where {U<:T} = (y, T, U)
+                h_deep
+            end
+            g_deep
+        end
+        f_typevarcapt_sp_deep(1.5)()(2.0)
+    end
+    """) == (2.0, Float64, Float64)
+
+    # Runtime state of enclosing functions can't be used in hoisted method
+    # signatures or typevar bounds (flisp errors identically).
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    function f_local_in_closure_sig(x)
+        g(y::typeof(x)) = y
+        g
+    end
+    """)
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    function f_local_in_closure_spbound(x)
+        g(y::T) where {T<:typeof(x)} = y
+        g
+    end
+    """)
+
+    # Global method definitions can't be nested inside functions (flisp errors
+    # identically).
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    function f_nested_global_methdef()
+        global g_nested_global_methdef
+        g_nested_global_methdef(x::T) where T = x
+    end
+    """)
+
+    #-------------------------------------------------------------------------------
+    # Static parameter capture: combinations with other closure features
+
+    # do-block closure capturing a static parameter
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_do_sp(y::T) where T
+            call_it(3) do x
+                (x, y, T)
+            end
+        end
+        f_do_sp(1.5)
+    end
+    """) == (3, 1.5, Float64)
+
+    # comprehensions and generators capturing a static parameter
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_generator_sp(::T) where T
+            ([T for _ in 1:2], first(T for _ in 1:1))
+        end
+        f_generator_sp(1)
+    end
+    """) == ([Int, Int], Int)
+
+    # Closure defined inside an opaque closure, capturing a static parameter
+    # through it.  This is broken in flisp ("Found raw symbol T in code returned
+    # from lowering").
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_closure_in_oc_sp(x::T) where T
+            Base.Experimental.@opaque () -> begin
+                g() = (x, T)
+                g()
+            end
+        end
+        f_closure_in_oc_sp(1)()
+    end
+    """) == (1, Int)
+
+    # Opaque closure nested inside a regular closure, capturing a static parameter
+    # through it
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_oc_in_closure_sp(x::T) where T
+            function mid()
+                Base.Experimental.@opaque () -> (x, T)
+            end
+            mid
+        end
+        f_oc_in_closure_sp(2)()()
+    end
+    """) == (2, Int)
+
+    # Local function overloaded with keyword and plain methods; the captured
+    # static parameter appears only in a keyword default, which is evaluated in
+    # the kwcall method, while the body method's signature mentions the closure's
+    # type unparameterized.
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_kw_overload_sp(x::T) where T
+            g(y; k=T) = (:kw, y, k)
+            g(y::Int) = (:plain, y)
+            (g(1), g(1.5), g(1.5; k=2))
+        end
+        f_kw_overload_sp(1)
+    end
+    """) == ((:plain, 1), (:kw, 1.5, Int), (:kw, 1.5, 2))
+
+    # Keyword closure with the captured sparam in both signature and kw default:
+    # dispatch through the kw sorter still pins `T`.
+    JuliaLowering.include_string(test_mod, """
+    function f_kwsig_sp(x::T) where T
+        g_kwsig(y::T; k=T) = (y, k, T)
+        g_kwsig
+    end
+    """)
+    let g = test_mod.f_kwsig_sp(1)
+        @test g(2) == (2, Int, Int)
+        @test g(2; k=Int8) == (2, Int8, Int)
+        @test_throws MethodError g(2.5)
+    end
+
+    # Self-recursive closure capturing a static parameter
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_recursive_sp(x::T) where T
+            g(n) = n <= 0 ? T : g(n - 1)
+            g(3)
+        end
+        f_recursive_sp(1.5)
+    end
+    """) == Float64
+
+    # Boxed (assigned) captured local and captured static parameter in one closure
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_box_plus_sp(x::T) where T
+            c = 0
+            g() = (c += 1; (c, T))
+            (g(), g())
+        end
+        f_box_plus_sp(1im)
+    end
+    """) == ((1, Complex{Int}), (2, Complex{Int}))
+
+    # @isdefined of a captured static parameter inside a closure; an undefined
+    # sparam throws at closure creation (as in flisp), not at the @isdefined
+    JuliaLowering.include_string(test_mod, """
+    function f_isdefined_sp(x::Union{T,Nothing}) where T
+        g_isdefined_sp() = @isdefined(T)
+        g_isdefined_sp
+    end
+    """)
+    @test test_mod.f_isdefined_sp(1)()
+    @test_throws UndefVarError test_mod.f_isdefined_sp(nothing)
+
+    # Closure with an anonymous static parameter of its own plus a captured one
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_anon_sp_closure(x::T) where T
+            g(y) where _ = (y, T)
+            g(2)
+        end
+        f_anon_sp_closure(1)
+    end
+    """) == (2, Int)
+
+    # `let` inside a closure signature referencing a captured static parameter
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_let_sig_sp(::T) where T
+            g(x::(let v = T; Vector{v} end)) = x
+            g
+        end
+        f_let_sig_sp(1)([1, 2])
+    end
+    """) == [1, 2]
+
+    # Undetermined static parameter throws at closure creation (flisp parity)
+    @test_throws UndefVarError JuliaLowering.include_string(test_mod, """
+    begin
+        function f_undet_sp_creation(x::T, y::S) where {T, S>:T}
+            g(z::S) = z
+            g
+        end
+        f_undet_sp_creation(1, 2.5)
+    end
+    """)
+
+    # Signature capture through four levels of nested closures
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_sig_capture_depth4(x::T) where T
+            function a()
+                function b()
+                    function c()
+                        d(y::T) = (y, T)
+                        d(x)
+                    end
+                    c()
+                end
+                b()
+            end
+            a()
+        end
+        f_sig_capture_depth4(42)
+    end
+    """) == (42, Int)
+
+    # The closure's own sparam shadows the captured one, with the outer as bound
+    JuliaLowering.include_string(test_mod, """
+    function f_shadow_sp_bound(x::T) where T
+        g_shadow(y::T) where {T<:T} = (y, T)
+        g_shadow
+    end
+    """)
+    let g = test_mod.f_shadow_sp_bound(1)
+        @test g(2) == (2, Int)
+        @test_throws MethodError g(2.5) # inner T <: outer T == Int
+    end
+
+    # Vararg length pinned by a captured static parameter
+    JuliaLowering.include_string(test_mod, """
+    function f_vararg_n_sp(::Val{N}) where N
+        g_vararg_n(xs::Vararg{Int,N}) = xs
+        g_vararg_n
+    end
+    """)
+    let g = test_mod.f_vararg_n_sp(Val(2))
+        @test g(1, 2) == (1, 2)
+        @test_throws MethodError g(1, 2, 3) # N is pinned to 2
+    end
+
+    # Return-type annotation is the only use of the captured static parameter
+    JuliaLowering.include_string(test_mod, """
+    function f_rett_only_sp(x::T) where T
+        g_rett(y)::T = y
+        g_rett
+    end
+    """)
+    @test test_mod.f_rett_only_sp(1)(2) === 2
+    @test_throws MethodError test_mod.f_rett_only_sp(1)("s") # convert(Int, "s")
+
+    # Two sibling closures capturing the same static parameter (and sharing its
+    # typevar object in their hoisted method signatures)
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_two_closures_sp(x::T) where T
+            g(y::T) = (y, :g)
+            h(y::T) = (y, :h)
+            (g(x), h(x))
+        end
+        f_two_closures_sp(2)
+    end
+    """) == ((2, :g), (2, :h))
+
+    # A closure which captures nothing must be creatable even when the enclosing
+    # method's sparams are undetermined: closures must capture only the sparams
+    # they (transitively) reference, not all lexically enclosing ones.
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nocapt_undet_sp(x::Union{T,Nothing}) where T
+            g_nocapt() = 1
+            g_nocapt
+        end
+        f_nocapt_undet_sp(nothing)()
+    end
+    """) == 1
+
+    # The static parameter's owner is itself a nested closure: its hoisted typevar
+    # assignments must be emitted before the inner closure's hoisted methods,
+    # which reference them (issue found as a segfault from a forward SSA ref).
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nested_owner_body()
+            function g(x::T) where T
+                () -> T
+            end
+            g
+        end
+        f_nested_owner_body()(1)()
+    end
+    """) == Int
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nested_owner_sig()
+            function g(x::T) where T
+                h(y::T) = (y, T)
+                h(x)
+            end
+            g
+        end
+        f_nested_owner_sig()(2.5)
+    end
+    """) == (2.5, Float64)
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nested_owner_bound()
+            function g(x::T) where T
+                h(y::U) where {U<:T} = (y, T, U)
+                h(x)
+            end
+            g
+        end
+        f_nested_owner_bound()(3)
+    end
+    """) == (3, Int, Int)
+
+    # Sparams owned by two different nesting levels, captured together
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_two_level_sps(a::A) where A
+            function g(x::T) where T
+                () -> (A, T)
+            end
+            g
+        end
+        f_two_level_sps(1im)(2.5)()
+    end
+    """) == (Complex{Int}, Float64)
+
+    # method_defs in value position (not a top-level sequence point), with a
+    # nested closure capturing the sparam
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        x_value_pos_sp = (f_value_pos_sp(y::T) where T = () -> T)
+        f_value_pos_sp(42)()
+    end
+    """) == Int
+
+    # CC must not lift typevar T above assignment to x
+    @test JuliaLowering.include_string(test_mod, """
+    for x in (Int, Float64)
+        global f_local_in_tvbounds
+        f_local_in_tvbounds(y::T) where {T<:x} = T
+    end
+    """) == nothing
+    @test JuliaLowering.include_string(test_mod, """
+    f_local_in_tvbounds(1)
+    """) == Int
+    @test JuliaLowering.include_string(test_mod, """
+    f_local_in_tvbounds(1.0)
+    """) == Float64
+
+    @test JuliaLowering.include_string(test_mod, """
+    global g_tvbound = Int
+    for i in 1:2
+        global f_global_in_tvbounds, g_tvbound
+        f_global_in_tvbounds(y::T) where {T<:g_tvbound} = (i, T)
+        g_tvbound = Float64
+    end
+    f_global_in_tvbounds(1), f_global_in_tvbounds(1.5)
+    """) == ((1, Int), (2, Float64))
+end
+
+# questionable test: g_shadowed_by_sparam is not an sparam of the single-arg
+# version of `f`, so capture into the single-arg method's body resolves to the
+# outer typevar instead of an sparam, which scope resolution re-resolves in
+# global scope (typevars are only visible in the same lambda).  However, it
+# would probably make more sense to keep the sparam in both methods, and have
+# the inner lambda's sig refer to the sparam instead of the global.
+@test JuliaLowering.include_string(test_mod, """
+global g_shadowed_by_sparam = Int
+function f_sp_in_sig_in_lam_in_optarg(
+        x, y=((z::g_shadowed_by_sparam)->z)) where g_shadowed_by_sparam
+    y
+end
+f_sp_in_sig_in_lam_in_optarg(1.)(2)
+""") == 2

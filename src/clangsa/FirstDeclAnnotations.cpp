@@ -152,7 +152,7 @@ public:
             checkFnPtrConversion(Conv, Result);
         else if (const auto *MD =
                      Result.Nodes.getNodeAs<CXXMethodDecl>("override"))
-            checkOverride(MD, Result);
+            checkOverride(MD);
     }
 
     void checkFirstDecl(const FunctionDecl *FD,
@@ -180,6 +180,27 @@ public:
         // be hoisted onto it. Flagging a later declaration here would be a
         // false positive with no applicable fix, so skip it.
         if (SM.isInSystemHeader(First->getLocation()))
+            return;
+
+        // The same applies to a first declaration in an upstream dependency
+        // header that the build does not mark as a system header -- notably
+        // libuv's uv.h (reached via usr/include), which declares the runtime
+        // helpers such as uv_mutex_lock. We re-declare those in our own headers
+        // to add the annotations they need for the analyzer (e.g. julia_locks.h
+        // adds JL_NOTSAFEPOINT_ENTER to uv_mutex_lock, and julia.h adds
+        // JL_CANSAFEPOINT to uv_run), but the annotation cannot be hoisted onto
+        // uv.h. Recognize these declarations as external -- by an `llvm-*`
+        // header file name or a `uv_`/`unw_`/`_U` runtime-helper name -- so the
+        // later, annotated re-declaration is not flagged. Unlike GCChecker's
+        // safepoint reasoning this is a purely lexical test on where the
+        // declaration lives, so it must include uv_run: its first declaration
+        // is in uv.h just like the others, and the JL_CANSAFEPOINT we add is
+        // exactly what cannot be hoisted there.
+        if (jl_clangsa::isInLLVMHeaderFile(First->getLocation(), SM))
+            return;
+        StringRef FirstName =
+            First->getDeclName().isIdentifier() ? First->getName() : "";
+        if (jl_clangsa::nameIsExternalRuntimeHelper(FirstName))
             return;
 
         // A block-scope redeclaration (a prototype written inside a function
@@ -307,10 +328,16 @@ private:
     }
 
     // A function `Conv` (a function-to-pointer decay or `&f`) is being
-    // converted to a function pointer. Diagnose if the function lacks a Julia
-    // annotation that the target function-pointer type requires: the analyzer
-    // assumes calls through that pointer carry the annotation, so the function
-    // must carry at least the annotations of the type it is assigned to.
+    // converted to a function pointer. The analyzer assumes calls through that
+    // pointer carry the pointer type's annotations, so the function and the
+    // type must be compatible -- but in opposite directions for restrictions
+    // and capabilities:
+    //   * A restriction the target type requires (e.g. a rooting contract) must
+    //     also be on the function, or calls through the pointer would assume a
+    //     contract the function does not honor.
+    //   * A capability the function has (JL_CANSAFEPOINT) must also be on the
+    //     target type, or calls through the pointer -- trusting the type's
+    //     missing annotation -- would be treated as not safepointing.
     void checkFnPtrConversion(const Expr *Conv,
                               const MatchFinder::MatchResult &Result) {
         ASTContext &Ctx = *Result.Context;
@@ -325,16 +352,32 @@ private:
         if (Target.isNull() || !Target->isFunctionPointerType())
             return;
 
-        SourceManager &SM = Ctx.getSourceManager();
-
-        // Collect the annotations the target type requires, then report each
-        // one the function does not provide.
         llvm::SmallVector<std::pair<std::string, const TypedefNameDecl *>, 2>
-            Required;
-        collectTypedefAnnotations(Target, Ctx, Required);
-        for (const auto &R : Required) {
+            TypeAnns;
+        collectTypedefAnnotations(Target, Ctx, TypeAnns);
+        llvm::StringSet<> TypeKeys;
+        for (const auto &R : TypeAnns)
+            TypeKeys.insert(R.first);
+        // The annotation may live directly on the target declaration rather
+        // than on a typedef of its type -- e.g. a function-pointer parameter,
+        // variable, or field whose raw (non-typedef'd) type carries no
+        // annotation of its own, as jl_foreach_top_typename_for's `f` parameter
+        // does. collectTypedefAnnotations only sees typedef sugar, so also fold
+        // in the target declaration's own annotations.
+        if (const Decl *TgtDecl = targetDecl(Conv, Ctx))
+            for (const auto *A : TgtDecl->attrs()) {
+                std::string Key = attrKey(A);
+                if (StringRef(Key).starts_with("annotate:"))
+                    TypeKeys.insert(std::move(Key));
+            }
+
+        // Restriction annotations the target type requires but the function
+        // does not provide.
+        for (const auto &R : TypeAnns) {
             StringRef Key = R.first;
-            if (functionProvidesAnnotation(FD, Key, SM))
+            if (isCapabilityAnnotation(Key))
+                continue; // capabilities propagate the other way (below)
+            if (functionProvidesAnnotation(FD, Key))
                 continue;
             // Strip the "annotate:" prefix added by attrKey() for the message.
             StringRef Name = Key;
@@ -353,32 +396,72 @@ private:
                  "%0 is declared here", DiagnosticIDs::Note)
                 << FD;
         }
+
+        // Capability annotations on the function that the target type lacks:
+        // storing a JL_CANSAFEPOINT function in a pointer that is not
+        // JL_CANSAFEPOINT would let calls through the pointer miss the safepoint.
+        llvm::StringSet<> Reported;
+        for (const FunctionDecl *R : FD->redecls()) {
+            for (const auto *A : R->attrs()) {
+                std::string Key = attrKey(A);
+                if (!isCapabilityAnnotation(Key))
+                    continue;
+                if (TypeKeys.count(Key))
+                    continue;
+                if (!Reported.insert(Key).second)
+                    continue;
+                StringRef Name = StringRef(Key);
+                Name.consume_front("annotate:");
+                auto Diag = diag(Conv->getExprLoc(),
+                     "%0 is annotated \"%1\" but is converted to a function "
+                     "pointer of type %2 that is not; annotate the "
+                     "function-pointer type so calls through the pointer are "
+                     "analyzed soundly");
+                Diag << FD << Name << Target;
+                diag(FD->getFirstDecl()->getLocation(),
+                     "%0 is declared here", DiagnosticIDs::Note)
+                    << FD;
+            }
+        }
     }
 
     // A C++ method `MD` overrides one or more virtual methods. The analyzer
     // assumes a virtual call dispatched through a base-class reference carries
-    // the overridden method's annotations, so the override must carry at least
-    // every annotation of the methods it overrides -- it must be "stronger
-    // than" the original.
-    void checkOverride(const CXXMethodDecl *MD,
-                       const MatchFinder::MatchResult &Result) {
-        SourceManager &SM = Result.Context->getSourceManager();
-
+    // the overridden method's annotations, so the override and the base must be
+    // compatible -- but in opposite directions for restrictions and
+    // capabilities:
+    //   * A restriction on an overridden method must also be on the override,
+    //     or a call dispatched to the override would assume a contract it does
+    //     not honor.
+    //   * A capability on the override (JL_CANSAFEPOINT) must also be on the
+    //     overridden method, or virtual calls through the base -- trusting the
+    //     base's missing annotation -- would be treated as not safepointing.
+    void checkOverride(const CXXMethodDecl *MD) {
         llvm::SmallVector<std::pair<std::string, const CXXMethodDecl *>, 2> Required;
         llvm::StringSet<> Seen;
-        for (const CXXMethodDecl *Base : MD->overridden_methods())
+        llvm::StringSet<> BaseKeys;
+        const CXXMethodDecl *AnyBase = nullptr;
+        for (const CXXMethodDecl *Base : MD->overridden_methods()) {
+            if (!AnyBase)
+                AnyBase = Base;
             for (const FunctionDecl *R : Base->redecls())
                 for (const auto *A : R->attrs()) {
                     std::string Key = attrKey(A);
                     if (!StringRef(Key).starts_with("annotate:"))
                         continue;
+                    BaseKeys.insert(Key);
+                    if (isCapabilityAnnotation(Key))
+                        continue; // capabilities propagate the other way (below)
                     if (Seen.insert(Key).second)
                         Required.emplace_back(std::move(Key), Base);
                 }
+        }
 
+        // Restriction annotations the overridden methods require but the
+        // override does not provide.
         for (const auto &R : Required) {
             StringRef Key = R.first;
-            if (functionProvidesAnnotation(MD, Key, SM))
+            if (functionProvidesAnnotation(MD, Key))
                 continue;
             // Strip the "annotate:" prefix added by attrKey() for the message.
             StringRef Name = Key;
@@ -392,6 +475,34 @@ private:
                  "overridden method %0 requires the annotation here",
                  DiagnosticIDs::Note)
                 << R.second;
+        }
+
+        // Capability annotations on the override that the overridden methods
+        // lack: a JL_CANSAFEPOINT override of a non-JL_CANSAFEPOINT method would
+        // let virtual calls through the base miss the safepoint.
+        llvm::StringSet<> Reported;
+        for (const FunctionDecl *R : MD->redecls()) {
+            for (const auto *A : R->attrs()) {
+                std::string Key = attrKey(A);
+                if (!isCapabilityAnnotation(Key))
+                    continue;
+                if (BaseKeys.count(Key))
+                    continue;
+                if (!Reported.insert(Key).second)
+                    continue;
+                StringRef Name = StringRef(Key);
+                Name.consume_front("annotate:");
+                auto Diag = diag(MD->getLocation(),
+                     "%0 is annotated \"%1\" but overrides a method that is not; "
+                     "annotate the overridden method so virtual calls through "
+                     "the base class are analyzed soundly");
+                Diag << MD << Name;
+                if (AnyBase)
+                    diag(AnyBase->getLocation(),
+                         "overridden method %0 is declared here",
+                         DiagnosticIDs::Note)
+                        << AnyBase;
+            }
         }
     }
 
@@ -439,6 +550,43 @@ private:
         if (const auto *ILE = P.get<InitListExpr>())
             return initListElementType(ILE, Conv);
         return QualType();
+    }
+
+    // The declaration `Conv`'s target position resolves to -- the variable,
+    // field, assigned lvalue, or callee parameter the function pointer is
+    // stored into -- or null when the target has no such declaration (a return
+    // position, an unresolved callee, or a computed lvalue). Its own
+    // annotations complement targetType(), which only sees typedef sugar, so an
+    // annotation written directly on e.g. a function-pointer parameter is
+    // honored even when the parameter's type is a raw (non-typedef'd) pointer.
+    static const Decl *targetDecl(const Expr *Conv, ASTContext &Ctx) {
+        DynTypedNodeList Parents = Ctx.getParents(*Conv);
+        if (Parents.empty())
+            return nullptr;
+        const DynTypedNode &P = Parents[0];
+        if (const auto *VD = P.get<VarDecl>())
+            return VD;
+        if (const auto *FD = P.get<FieldDecl>())
+            return FD;
+        if (const auto *BO = P.get<BinaryOperator>()) {
+            if (BO->getOpcode() == BO_Assign && BO->getRHS() == Conv)
+                if (const auto *DRE = dyn_cast<DeclRefExpr>(
+                        BO->getLHS()->IgnoreParenImpCasts()))
+                    return DRE->getDecl();
+            return nullptr;
+        }
+        if (const auto *CE = P.get<CallExpr>()) {
+            if (CE->getCallee() == Conv)
+                return nullptr;
+            const FunctionDecl *Callee = CE->getDirectCallee();
+            if (!Callee)
+                return nullptr;
+            for (unsigned I = 0, N = CE->getNumArgs(); I < N; ++I)
+                if (CE->getArg(I) == Conv)
+                    return I < Callee->getNumParams() ? Callee->getParamDecl(I)
+                                                      : nullptr;
+        }
+        return nullptr;
     }
 
     // The parameter type (with sugar) that argument `Conv` of call `CE` is
@@ -525,38 +673,28 @@ private:
     }
 
     // True if the function provides the annotation identified by `Key` (an
-    // attrKey(), e.g. "annotate:julia_not_safepoint"), either by carrying it on
-    // some declaration or -- for julia_not_safepoint -- by being a function the
-    // GC analyzer already treats as a non-safepoint without an explicit
-    // annotation. The exemptions mirror GCChecker so that conversions the
-    // analyzer considers sound are not flagged here.
+    // attrKey(), e.g. "annotate:julia_can_safepoint") by carrying it on some
+    // declaration. Under the opt-in safepoint model every safepoint-relevant
+    // annotation is explicit, so there is no implicit exemption here.
     static bool functionProvidesAnnotation(const FunctionDecl *FD,
-                                           StringRef Key, SourceManager &SM) {
+                                           StringRef Key) {
         for (const FunctionDecl *R : FD->redecls())
             if (hasAttrLike(R, Key))
                 return true;
-        if (Key == "annotate:julia_not_safepoint")
-            return analyzerTreatsAsNotSafepoint(FD, SM);
         return false;
     }
 
-    // Mirror of GCChecker's reasoning for callees that are non-safepoints
-    // without an explicit JL_NOTSAFEPOINT: external declarations we cannot
-    // annotate (system or `llvm-*` headers, the `llvm`/`std`/`tp` namespaces),
-    // compiler builtins, and the `uv_`/`unw_`/`_U` runtime helpers.
-    static bool analyzerTreatsAsNotSafepoint(const FunctionDecl *FD,
-                                             SourceManager &SM) {
-        const FunctionDecl *First = FD->getFirstDecl();
-        if (SM.isInSystemHeader(First->getLocation()))
-            return true;
-        if (jl_clangsa::isInLLVMHeaderFile(First->getLocation(), SM))
-            return true;
-        if (jl_clangsa::isInNonSafepointNamespace(FD->getDeclContext()))
-            return true;
-        if (FD->getBuiltinID() != 0)
-            return true;
-        StringRef Name = FD->getDeclName().isIdentifier() ? FD->getName() : "";
-        return jl_clangsa::nameIsNonSafepointRuntimeHelper(Name);
+    // A capability annotation grants a permission (the function MAY do
+    // something) rather than imposing a restriction (a promise the function
+    // will NOT do something, or a rooting contract). JL_CANSAFEPOINT is the
+    // capability: it says the function may reach a safepoint. Capabilities
+    // propagate in the opposite direction from restrictions across fn-ptr
+    // conversions and overrides -- a function that HAS the capability may only
+    // be used where the capability is also declared, because the analyzer
+    // trusts the (fn-ptr / overridden-method) declaration. See
+    // checkFnPtrConversion / checkOverride.
+    static bool isCapabilityAnnotation(StringRef Key) {
+        return Key == "annotate:julia_can_safepoint";
     }
 
     // True if the function has a global prototype: some declaration other
@@ -623,8 +761,15 @@ private:
     // do not check. Two declarations "have the same attribute" iff their keys
     // match -- this is what lets us tell a missing attribute from a present one.
     static std::string attrKey(const Attr *A) {
-        if (const auto *Ann = dyn_cast<AnnotateAttr>(A))
+        if (const auto *Ann = dyn_cast<AnnotateAttr>(A)) {
+            // JL_NO_SAFEPOINT_ANALYSIS opts a function body out of the
+            // thread-safety analysis; it applies to the definition being
+            // analyzed, not to callers, so it legitimately lives only on the
+            // definition and must not be required on the first declaration.
+            if (Ann->getAnnotation() == "julia_no_safepoint_analysis")
+                return std::string();
             return ("annotate:" + Ann->getAnnotation()).str();
+        }
         if (const auto *Vis = dyn_cast<VisibilityAttr>(A))
             return "visibility:" + std::to_string(Vis->getVisibility());
         if (isa<DLLExportAttr>(A))

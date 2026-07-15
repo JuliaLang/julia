@@ -179,7 +179,7 @@ static void JL_NO_ASAN JL_NO_MSAN memcpy_stack_a16(uint64_t *to, uint64_t *from,
 #endif
 }
 
-static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt)
+static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt) JL_CANSAFEPOINT
 {
     char *frame_addr = (char*)((uintptr_t)jl_get_frame_addr() & ~15);
     char *stackbase = (char*)ptls->stackbase;
@@ -419,7 +419,7 @@ JL_DLLEXPORT jl_task_t *jl_get_next_task(void) JL_NOTSAFEPOINT
 const char tsan_state_corruption[] = "TSAN state corrupted. Exiting HARD!\n";
 #endif
 
-JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
+JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
 {
     jl_ptls_t ptls = lastt->ptls;
     jl_task_t **pt = &ptls->next_task;
@@ -657,7 +657,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     sanitizer_finish_switch_fiber(&ptls->previous_task->ctx, &lastt->ctx);
 }
 
-JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
+JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -713,13 +713,13 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     jl_gc_unsafe_leave(ptls, gc_state);
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt) // n.b. this does not actually enter a safepoint
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
 {
     jl_set_next_task(*pt);
     jl_switch();
 }
 
-JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
+JL_DLLEXPORT JL_NORETURN void JL_NO_SAFEPOINT_ANALYSIS jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 {
     // NULL exception objects are used when rethrowing. we don't have a handler to process
     // the exception stack, so at least report the exception at the top of the stack.
@@ -776,7 +776,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack() /* Nothing */
 #endif
 
-static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
+static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED) JL_CANSAFEPOINT_ENTER
 {
     JL_GC_PUSH1(&exception);
     jl_ptls_t ptls = ct->ptls;
@@ -805,7 +805,7 @@ static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_M
 }
 
 // record backtrace and raise an error
-JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
+JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
 {
     assert(e != NULL);
     jl_jmp_buf *safe_restore = jl_get_safe_restore();
@@ -821,7 +821,7 @@ JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
 }
 
 // rethrow with current excstack state
-JL_DLLEXPORT void jl_rethrow(void)
+JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow(void)
 {
     jl_task_t *ct = jl_current_task;
     jl_excstack_t *excstack = ct->excstack;
@@ -830,7 +830,7 @@ JL_DLLEXPORT void jl_rethrow(void)
     throw_internal(ct, NULL);
 }
 
-JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
+JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
 {
     // TODO: Should uses of `rethrow(exc)` be replaced with a normal throw, now
     // that exception stacks allow root cause analysis?
@@ -1142,7 +1142,7 @@ JL_DLLEXPORT jl_task_t *jl_get_current_task(void)
 }
 
 // Do one-time initializations for task system
-void jl_init_tasks(void) JL_GC_DISABLED
+void jl_init_tasks(void)
 {
     char *acs = getenv("JULIA_COPY_STACKS");
     if (acs) {
@@ -1175,10 +1175,10 @@ void jl_init_tasks(void) JL_GC_DISABLED
 }
 
 #if defined(_COMPILER_ASAN_ENABLED_)
-static void NOINLINE JL_NORETURN _start_task(void);
+static void NOINLINE JL_NORETURN _start_task(void) JL_CANSAFEPOINT;
 #endif
 
-static void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void)
+static void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void) JL_CANSAFEPOINT
 {
 CFI_NORETURN
 #if defined(_COMPILER_ASAN_ENABLED_)

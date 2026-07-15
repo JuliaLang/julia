@@ -78,6 +78,12 @@ struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
     # be assigned to without the `global` keyword in soft scopes due to being
     # assigned to at top level, or passing the defined-and-owned-global check.
     soft_assignable_globals::Set{NameKey}
+    # Every static parameter corresponds to some typevar (top-level local)
+    # required to create this method
+    sp_typevars::Dict{IdTag, IdTag}
+    # Typevars referenced in each typevar's bounds.  Closures capturing a static
+    # parameter must also capture the sparams of its typevar's dependencies
+    tv_deps::Dict{IdTag, Vector{IdTag}}
     enable_soft_scopes::Bool
     world::UInt
 end
@@ -100,6 +106,7 @@ _var_str(v) = v === :local ? "local variable" :
     v === :global ? "global variable" :
     v === :argument ? "argument" :
     v === :destructured_arg ? "destructured argument" :
+    v === :typevar ? "typevar" :
     v === :static_parameter ? "static parameter" : "unknown"
 
 # Declare `ex` in `scope`, unless a binding already exists with the same name in
@@ -167,6 +174,7 @@ function add_lambda_local!(ctx, scope::ScopeInfo, b)
         return
     end
     lam = scope.is_lifted ? top_scope(ctx) : enclosing_lambda(ctx, scope)
+    b.kind == :typevar && @jl_assert scope.is_lifted binding_ex(ctx, b)
     @jl_assert !haskey(lam.locals_capt, b.id) (
         binding_ex(ctx, b), "adding lambda local twice")
     lam.locals_capt[b.id] = false
@@ -175,11 +183,12 @@ function add_lambda_local!(ctx, scope::ScopeInfo, b)
 end
 
 function ensure_captured!(ctx, scope::ScopeInfo, b)
-    if b.kind === :global || b.is_ssa
+    if b.kind === :global || b.kind === :typevar || b.is_ssa
         return
     end
     lam = enclosing_lambda(ctx, scope)
     if !haskey(lam.locals_capt, b.id)
+        # assert is opaque closure, or b not static_parameter
         b.is_captured = true
         lam.locals_capt[b.id] = true
         s2 = parent(ctx, lam)
@@ -203,11 +212,28 @@ function resolve_name(ctx, ex; exclude_toplevel_globals=false)
         bid = get(ctx.scopes[sid].vars, nk, nothing)
         isnothing(bid) && continue
         b = get_binding(ctx, bid)
+        if b.kind === :typevar
+            # only visible to lifted scopes in the same lambda (we should only
+            # hit this when we filter sparams with `used_typevars`)
+            s0 = ctx.scopes[ctx.scope_stack[end]]
+            s0.is_lifted && ctx.scopes[sid].lambda_id == s0.lambda_id || continue
+        end
         if !exclude_toplevel_globals || sid !== top_scope(ctx).id || b.kind !== :global
             return b
         end
     end
     return nothing
+end
+
+# Collect typevar bindings referenced in `ex` (a resolved typevar bound)
+function _typevar_refs!(out, ctx, ex)
+    k = kind(ex)
+    if k == K"BindingId"
+        b = get_binding(ctx, ex)
+        b.kind === :typevar && !(b.id in out) && push!(out, b.id)
+    elseif !is_leaf(ex) && needs_resolution(ex)
+        foreach(e->_typevar_refs!(out, ctx, e), children(ex))
+    end
 end
 
 function _record_layer!(ctx, ex)
@@ -281,7 +307,6 @@ function enter_scope!(ctx, ex)
     parent_id = (is_toplevel_thunk || isempty(ctx.scope_stack)) ?
         0 : ctx.scopes[ctx.scope_stack[end]].id
     scope = ScopeInfo(ctx, parent_id, ex)
-    push!(ctx.scope_stack, scope.id)
 
     #---------------------------------------------------------------------------
     # Find explicit decls that may influence assignment assignment resolution
@@ -291,8 +316,13 @@ function enter_scope!(ctx, ex)
             explicit_declare_in_scope!(ctx, scope, c, :argument)
         end
         for c in children(ex[2])
-            @jl_assert kind(c) in KSet"Identifier BindingId Placeholder" c
-            explicit_declare_in_scope!(ctx, scope, c, :static_parameter)
+            kind(c) === K"Placeholder" && continue
+            @jl_assert kind(c) === K"Identifier" c
+            sp_id = explicit_declare_in_scope!(ctx, scope, c, :static_parameter)
+            p = parent(ctx, scope)
+            if !isnothing(p) # usually true, false for generated functions
+                ctx.sp_typevars[sp_id] = p.vars[NameKey(c)]
+            end
         end
         for c in children(ex)[3:end]
             _find_scope_decls!(ctx, scope, c)
@@ -302,6 +332,7 @@ function enter_scope!(ctx, ex)
             _find_scope_decls!(ctx, scope, c)
         end
     end
+    push!(ctx.scope_stack, scope.id) # influences resolution below
 
     #---------------------------------------------------------------------------
     # Find assignment targets, possibly introducing implicit locals and globals
@@ -424,9 +455,15 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         resolve_name(ctx, ex[1]).is_always_defined = true
         newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"lambda"
+        # opaque closures are the exception
+        # scope isa ScopeInfo && @jl_assert scope.is_lifted ex
         newscope = enter_scope!(ctx, ex)
         arg_bindings = _resolve_scopes(ctx, ex[1], newscope)
-        sparam_bindings = _resolve_scopes(ctx, ex[2], newscope)
+        sparam_bindings = SyntaxList(ctx)
+        for sp in children(ex[2])
+            kind(sp) === K"Placeholder" && continue
+            push!(sparam_bindings, _resolve_scopes(ctx, sp, newscope))
+        end
         self_id = if numchildren(arg_bindings) === 0
             0
         elseif getmeta(ex[1][1], :is_kwcall_self, false)
@@ -451,10 +488,8 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
                                is_toplevel_thunk=ex.is_toplevel_thunk,
                                toplevel_pure=ex.toplevel_pure)
             arg_bindings
-            sparam_bindings
-            [K"block"
-                body_stmts...
-            ]
+            [K"block" sparam_bindings...]
+            [K"block" body_stmts...]
             ret_var
         ]
     elseif k == K"scope_block"
@@ -468,15 +503,28 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         @ast ctx ex [K"block" stmts...]
     elseif k == K"method_defs"
         newscope = enter_scope!(ctx, ex)
-        mname = _resolve_scopes(ctx, ex[1], newscope)
+        mname = _resolve_scopes(ctx, ex[1], scope)
+        tvs = SyntaxList(ctx.graph)
+        for tv in children(ex[2]) # hack. flisp: replace-vars
+            rhs = _resolve_scopes(ctx, tv[2], newscope)
+            if kind(tv[1]) === K"Placeholder"
+                @ast ctx tv [K"=" tv[1] rhs]
+            else
+                bid = declare_in_scope!(ctx, newscope, tv[1], :typevar)
+                get_binding(ctx, bid).is_always_defined = true
+                deps = Vector{IdTag}()
+                _typevar_refs!(deps, ctx, rhs)
+                isempty(deps) || (ctx.tv_deps[bid] = deps)
+                push!(tvs, @ast ctx tv [K"=" binding_ex(ctx, bid) rhs])
+            end
+        end
         stmts = SyntaxList(ctx)
         add_local_decls!(ctx, stmts, ex, newscope)
-        for e in children(ex[2])
-            push!(stmts, _resolve_scopes(ctx, e, newscope))
-        end
+        push!(stmts, _resolve_scopes(ctx, ex[3], newscope))
         pop!(ctx.scope_stack)
         lb = LambdaBindings(0, top_scope(ctx).id, top_scope(ctx).locals_capt::Dict)
-        @ast ctx ex [K"method_defs"(lambda_bindings=lb) mname [K"block" stmts...]]
+        @ast ctx ex [K"method_defs"(lambda_bindings=lb)
+            mname [K"block" tvs...] [K"block" stmts...]]
     elseif k == K"islocal"
         e1 = ex[1]
         islocal = kind(e1) == K"Identifier" &&
@@ -615,9 +663,11 @@ end
 struct ClosureBindings
     name_stack::Vector{String}      # Names of functions the closure is nested within
     lambdas::Vector{LambdaBindings} # Bindings for each method of the closure
+    capt_sp::Set{IdTag}
 end
 
-ClosureBindings(name_stack) = ClosureBindings(name_stack, Vector{LambdaBindings}())
+ClosureBindings(name_stack) =
+    ClosureBindings(name_stack, Vector{LambdaBindings}(), Set{IdTag}())
 
 struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
     graph::SyntaxGraph{Attrs}
@@ -625,11 +675,14 @@ struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
     bindings::Bindings
     scopes::Vector{ScopeInfo}
     lambda_bindings::LambdaBindings
+    lifted::Bool
     # Stack of method definitions for closure naming
     method_def_stack::SyntaxList{Attrs, Vector{NodeId}}
     # Collection of information about each closure, principally which methods
     # are part of the closure (and hence captures).
     closure_bindings::Dict{IdTag,ClosureBindings}
+    sp_typevars::Dict{IdTag, IdTag}
+    tv_deps::Dict{IdTag, Vector{IdTag}}
 end
 
 function init_closure_bindings!(ctx, fname)
@@ -670,6 +723,46 @@ function add_assign!(b::BindingInfo)
     b.is_assigned = true
 end
 
+# When a closure captures `T` and `T`'s typevar bound references `S`, it must
+# capture `S` too
+function expand_captured_sp_deps!(ctx, cb::ClosureBindings, scope)
+    sps = copy(cb.capt_sp)
+    for lb in cb.lambdas, (id, is_capt) in lb.locals_capt
+        is_capt && get_binding(ctx, id).kind === :static_parameter && push!(sps, id)
+    end
+    todo = collect(sps)
+    while !isempty(todo)
+        sp = pop!(todo)
+        owner = ctx.scopes[get_binding(ctx, sp).lambda_id]
+        for dep_tv in get(ctx.tv_deps, ctx.sp_typevars[sp], ())
+            # The sparam for dep_tv in the same lambda that owns `sp`
+            dep_sp = nothing
+            for id in keys(owner.locals_capt)
+                b = get_binding(ctx, id)
+                if b.kind === :static_parameter &&
+                        get(ctx.sp_typevars, b.id, IdTag(0)) == dep_tv
+                    dep_sp = id
+                    break
+                end
+            end
+            isnothing(dep_sp) && throw(LoweringError(
+                binding_ex(ctx, dep_tv), "unimplemented capture in sparam bounds"))
+            dep_sp in sps && continue
+            push!(sps, dep_sp)
+            push!(cb.capt_sp, dep_sp)
+            ensure_captured!(ctx, scope, get_binding(ctx, dep_sp))
+            push!(todo, dep_sp)
+        end
+    end
+end
+
+function current_closure_bindings(ctx)
+    isempty(ctx.method_def_stack) && return nothing
+    mdef = ctx.method_def_stack[end]
+    kind(mdef) !== K"BindingId" && return nothing
+    get(ctx.closure_bindings, mdef.var_id::IdTag, nothing)
+end
+
 # Update ctx.bindings metadata based on binding usage
 function analyze_variables!(ctx, ex)
     k = kind(ex)
@@ -680,9 +773,13 @@ function analyze_variables!(ctx, ex)
         # but is filled in here.
         scope = ctx.scopes[ctx.lambda_bindings.scope_id]
         ensure_captured!(ctx, scope, b)
-        @jl_assert (b.kind === :global ||
-            b.is_ssa ||
+        # b.kind === :static_parameter && ensure_captured!(ctx, scope, b)
+        @jl_assert (b.kind === :global || b.kind === :typevar || b.is_ssa ||
             haskey(ctx.lambda_bindings.locals_capt, b.id)) ex binding_ex(ctx, b.id)
+        if b.kind === :static_parameter && ctx.lifted
+            cb = current_closure_bindings(ctx)
+            isnothing(cb) || push!(cb.capt_sp, b.id)
+        end
     elseif k == K"Identifier"
         @jl_assert false ex
     elseif k == K"break" && numchildren(ex) >= 2
@@ -744,7 +841,22 @@ function analyze_variables!(ctx, ex)
         foreach(e->analyze_variables!(ctx, e), children(ex))
     elseif k == K"method_defs"
         push!(ctx.method_def_stack, ex[1])
-        analyze_variables!(ctx, ex[2])
+        is_closure = kind(ex[1]) == K"BindingId" &&
+            get_binding(ctx, ex[1]).kind === :local
+        ctx2 = VariableAnalysisContext(
+            ctx.graph, ctx.layer, ctx.bindings, ctx.scopes,
+            ctx.lambda_bindings, true, ctx.method_def_stack,
+            ctx.closure_bindings, ctx.sp_typevars, ctx.tv_deps)
+        if is_closure
+            cb = init_closure_bindings!(ctx2, ex[1])
+            scope = ctx.scopes[ctx2.lambda_bindings.scope_id]
+        end
+        analyze_variables!(ctx2, ex[2])
+        analyze_variables!(ctx2, ex[3])
+        if is_closure
+            # All captures are known now; close them over typevar-bound deps
+            expand_captured_sp_deps!(ctx, cb, scope)
+        end
         pop!(ctx.method_def_stack)
     elseif k == K"_opaque_closure"
         name = ex[1]
@@ -756,7 +868,7 @@ function analyze_variables!(ctx, ex)
         analyze_variables!(ctx, ex[9])
         pop!(ctx.method_def_stack)
     elseif k == K"lambda"
-        lambda_bindings = ex.lambda_bindings
+        lambda_bindings = ex.lambda_bindings::LambdaBindings
         if !ex.is_toplevel_thunk && !isempty(ctx.method_def_stack)
             # Record all lambdas for the same closure type in one place
             func_name = last(ctx.method_def_stack)
@@ -767,10 +879,12 @@ function analyze_variables!(ctx, ex)
                 end
             end
         end
-        ctx2 = VariableAnalysisContext(
+        let ctx2 = VariableAnalysisContext(
             ctx.graph, ctx.layer, ctx.bindings, ctx.scopes,
-            lambda_bindings, ctx.method_def_stack, ctx.closure_bindings)
-        foreach(e->analyze_variables!(ctx2, e), ex[3:end]) # body & return type
+            lambda_bindings, false, ctx.method_def_stack, ctx.closure_bindings,
+            ctx.sp_typevars, ctx.tv_deps)
+            foreach(e->analyze_variables!(ctx2, e), ex[3:end])
+        end
     else
         foreach(e->analyze_variables!(ctx, e), children(ex))
     end
@@ -813,14 +927,16 @@ enclosing lambda form and information about variables captured by closures.
     ctx2 = ScopeResolutionContext(graph, ctx.layer, ctx.bindings,
                                   Dict{ScopeLayer, Int}(),
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
-                                  Set{NameKey}(),
+                                  Set{NameKey}(), Dict{IdTag, IdTag}(),
+                                  Dict{IdTag, Vector{IdTag}}(),
                                   enable_soft_scopes,
                                   world)
     ex2 = resolve_scopes(ctx2, ex)
     ctx3 = VariableAnalysisContext(graph, ctx2.layer, ctx2.bindings,
-                                   ctx2.scopes, ex2.lambda_bindings,
+                                   ctx2.scopes, ex2.lambda_bindings, true,
                                    SyntaxList(graph),
-                                   Dict{IdTag,ClosureBindings}())
+                                   Dict{IdTag,ClosureBindings}(),
+                                   ctx2.sp_typevars, ctx2.tv_deps)
     analyze_variables!(ctx3, ex2)
     analyze_def_and_use!(ctx3, ex2)
     ctx3, ex2
