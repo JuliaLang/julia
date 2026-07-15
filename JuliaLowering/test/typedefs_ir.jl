@@ -795,7 +795,7 @@ end
     2   (call %₁)
     3   (return %₂)
 49  (call core.svec slot₂/f)
-50  (call JuliaLowering.replace_captured_locals! %₄₈ %₄₉)
+50  (call JuliaLowering.replace_captured_locals %₄₈ %₄₉)
 51  --- method core.nothing %₄₇ %₅₀
 52  latestworld
 53  TestMod.X

@@ -646,7 +646,7 @@ function closure_convert_lambda(ctx, ex, sps)
     lam = setattr!(mknode(ex, lambda_children), :lambda_bindings, lambda_bindings)
     if !isnothing(interpolations) && !isempty(interpolations)
         @ast ctx ex [K"call"
-            replace_captured_locals!::K"Value"
+            replace_captured_locals::K"Value"
             lam
             [K"call"
                 "svec"::K"core"

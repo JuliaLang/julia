@@ -134,7 +134,7 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol,
 end
 
 # Interpolate captured local variables into the CodeInfo for a global method
-function replace_captured_locals!(ci_in::Core.CodeInfo, locals::Core.SimpleVector)
+function replace_captured_locals(ci_in::Core.CodeInfo, locals::Core.SimpleVector)
     ci = copy(ci_in)
     for (i, ex) in enumerate(ci.code)
         if Meta.isexpr(ex, :captured_local)

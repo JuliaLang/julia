@@ -420,7 +420,7 @@ end
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
 15  (call core.svec slot₁/x)
-16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
+16  (call JuliaLowering.replace_captured_locals %₁₄ %₁₅)
 17  --- method TestMod.f %₁₃ %₁₆
 18  latestworld
 19  (call core.declare_global TestMod :g false)
@@ -444,7 +444,7 @@ end
     7   (call core.getfield %₁ :contents)
     8   (return %₇)
 30  (call core.svec slot₁/x)
-31  (call JuliaLowering.replace_captured_locals! %₂₉ %₃₀)
+31  (call JuliaLowering.replace_captured_locals %₂₉ %₃₀)
 32  --- method TestMod.g %₂₈ %₃₁
 33  latestworld
 34  TestMod.g
@@ -484,7 +484,7 @@ end
     11  (call core.setfield! %₁₀ :contents %₉)
     12  (return %₉)
 15  (call core.svec slot₁/x)
-16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
+16  (call JuliaLowering.replace_captured_locals %₁₄ %₁₅)
 17  --- method TestMod.f %₁₃ %₁₆
 18  latestworld
 19  TestMod.f

@@ -422,7 +422,7 @@ end
     12  (return %₉)
 14  slot₁/x
 15  (call core.svec %₁₄)
-16  (call JuliaLowering.replace_captured_locals! %₁₃ %₁₅)
+16  (call JuliaLowering.replace_captured_locals %₁₃ %₁₅)
 17  --- method TestMod.f %₁₂ %₁₆
 18  latestworld
 19  TestMod.f
