@@ -59,15 +59,19 @@ pointers); LABEL defines synthesized syms at donor VAs; BIND applies ABS64
 slot fills. Roundtrip of full sys.so: unlink 3.6s, relinked image boots and
 passes smoke (gmp/pcre/BLAS/threads/JIT/GC/backtraces).
 
-## Measured results (prototype, Zen4 Linux, native target)
-- `using Dates, Test, Statistics` app, sysimage + stdlib pkgimages as donors:
-  20,404 CIs reused (68% of emission events), full pipeline (build + unlink +
-  link + boot test) 254s -> 110s (2.3x), interleaved repeats consistent, images
-  pass extended functional tests.
-- `using Plots`: 28,021 CIs reused from 47 donor images; the resulting image
-  renders plots correctly.
+## Measured results (prototype, Zen4 Linux, native target, 8 emission threads)
+Full pipeline (build + unlink + link + boot test), interleaved ON/OFF repeats:
+- no-op sysimage rebuild: 64s -> 34s (1.9x); 31,168 machine-code CIs reused,
+  1,982 emitted (94% reuse; remainder is the per-boot invalidation tail).
+- `using Dates, Test, Statistics` (sysimage + stdlib donors): 71s -> 40s (1.8x),
+  images pass extended functional tests.
+- `using Plots` (47 donor images): 138s -> 90s (1.5x), 28,021 machine-code CIs
+  reused; the resulting image renders plots correctly.
 - --emit-relocs producer cost on sys.so: +11.6% disk for the required reloc
   sections (rest is .rela.debug_*), zero runtime memory cost.
+- Reuse-built images are currently smaller than baseline only because the
+  unlinker drops donor DWARF (a fixable omission); they also carry the donor's
+  unreused code as dead text until gc-sections support lands.
 
 ## Known limitations (prototype)
 - JULIA_IMAGE_THREADS=1 required: the module partitioner drops declaration

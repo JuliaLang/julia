@@ -26,21 +26,19 @@ OUT_O=${OUT_SO%.so}.o
 PRE='Sys.__init__(); Base.reinit_stdio(); Base.init_depot_path(); Base.init_load_path(); Base.init_active_project();'
 
 echo "--- building object (reuse enabled)"
-env JULIA_REUSE_IMAGE_CODE=1 JULIA_IMAGE_THREADS=1 \
+env JULIA_REUSE_IMAGE_CODE=1 JULIA_IMAGE_THREADS="${JULIA_IMAGE_THREADS:-8}" \
     "$JULIA" --startup-file=no -J "$SYS" --cpu-target=native \
     --output-o "$OUT_O" --output-incremental=no \
     -e "$PRE $APP; nothing"
 
 DONOR_OBJS=()
-if [ -f "$OUT_O.reuse" ]; then
+if [ -f "$OUT_O.reuse" ] && grep -q "^DONOR" "$OUT_O.reuse"; then
     echo "--- unlinking donor images"
-    while IFS=$'\t' read -r tag a b; do
-        [ "$tag" == "DONOR" ] || continue
-        obj=${OUT_SO%.so}_donor_${a%_}.o
-        "$JULIA" --startup-file=no "$HERE/unlink.jl" "$b" "$obj" \
-            --prefix="$a" --bind="$OUT_O.reuse"
-        DONOR_OBJS+=("$obj")
-    done < "$OUT_O.reuse"
+    DONORDIR=${OUT_SO%.so}_donors
+    rm -rf "$DONORDIR" && mkdir -p "$DONORDIR"
+    "$JULIA" --startup-file=no --threads=8 "$HERE/unlink.jl" \
+        --batch="$OUT_O.reuse" --outdir="$DONORDIR"
+    while IFS= read -r obj; do DONOR_OBJS+=("$obj"); done < <(ls "$DONORDIR"/donor_*.o)
 fi
 
 echo "--- linking"

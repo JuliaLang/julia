@@ -633,6 +633,8 @@ function (@main)(argv)
     prefix = ""
     sidecar = nothing
     bindfile = nothing
+    batch = nothing
+    outdir = nothing
     args = String[]
     for a in argv
         if startswith(a, "--prefix=")
@@ -641,9 +643,26 @@ function (@main)(argv)
             sidecar = a[11:end]
         elseif startswith(a, "--bind=")
             bindfile = a[8:end]
+        elseif startswith(a, "--batch=")
+            batch = a[9:end]
+        elseif startswith(a, "--outdir=")
+            outdir = a[10:end]
         else
             push!(args, a)
         end
+    end
+    if batch !== nothing
+        # process every DONOR line of a reuse manifest in this one process;
+        # emits <outdir>/donor_<prefix>.o per donor
+        outdir === nothing && error("--batch requires --outdir")
+        Threads.@threads for line in readlines(batch)
+            parts = split(line, '\t')
+            (length(parts) == 3 && parts[1] == "DONOR") || continue
+            p, path = String(parts[2]), String(parts[3])
+            obj = joinpath(outdir, "donor_" * rstrip(p, '_') * ".o")
+            Unlink.unlink(path, obj; prefix=p, bindfile=batch)
+        end
+        return 0
     end
     Unlink.unlink(args[1], args[2]; prefix, sidecar, bindfile)
     return 0

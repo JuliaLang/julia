@@ -1372,13 +1372,17 @@ static void jl_reuse_write_manifest(jl_reuse_plan_t &plan)
     }
     for (auto &b : plan.binds)
         os << "BIND\t" << b.first << "\t" << b.second << "\n";
-    os << "# reused_cis=" << plan.entries.size()
+    size_t code_cis = 0;
+    for (auto &kv : plan.entries)
+        if (kv.second.api != JL_INVOKE_CONST)
+            code_cis++;
+    os << "# reused_cis=" << code_cis << " (+" << plan.entries.size() - code_cis << " const)"
        << " object_slots=" << plan.n_object_slots
        << " code_slots=" << plan.n_code_slots
        << " clone_slots=" << plan.n_clone_slots
        << " dropped_slots=" << plan.n_dropped_slots << "\n";
-    jl_safe_printf("jl_reuse_image_code: %zu CIs reused, %zu donors, %zu object slots, %zu code slots, %zu clone slots, %zu dropped slots -> %s\n",
-                   (size_t)plan.entries.size(), ndonors, plan.n_object_slots,
+    jl_safe_printf("jl_reuse_image_code: %zu machine-code CIs reused (+%zu const), %zu donors, %zu object slots, %zu code slots, %zu clone slots, %zu dropped slots -> %s\n",
+                   code_cis, (size_t)plan.entries.size() - code_cis, ndonors, plan.n_object_slots,
                    plan.n_code_slots, plan.n_clone_slots, plan.n_dropped_slots, path.c_str());
 }
 
@@ -1430,6 +1434,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     if (reuse_mode)
         jl_reuse_build_plan(reuse_plan, out, codeinfos);
     size_t n_ci_total = 0, n_ci_from_image = 0, n_ci_skipped = 0, n_ci_reused = 0;
+    size_t n_ci_const = 0, n_ci_emitted = 0, n_ci_dup = 0;
     // classification of the non-FROM_IMAGE remainder: deserialized from an
     // image's data (inference-only cache entry, natively compiled for the
     // first time here) vs allocated fresh in this session
@@ -1469,7 +1474,11 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
                             out.ci_funcs[codeinst] = {planit->second.api, planit->second.invoke,
                                                       planit->second.specptr};
                         ++i;
-                        n_ci_reused++;
+                        // count only machine-code reuse; const entries have no code
+                        if (planit->second.api == JL_INVOKE_CONST)
+                            n_ci_const++;
+                        else
+                            n_ci_reused++;
                         continue;
                     }
                 }
@@ -1480,12 +1489,18 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
             ci_infos[codeinst] = src;
             if (jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
                 out.safepoint_on_entry = false; // ensure we don't block ExpandAtomicModifyPass from inlining this code if applicable
-            if (out.ci_funcs.contains(codeinst))
+            if (out.ci_funcs.contains(codeinst)) {
+                n_ci_dup++;
                 continue;       // TODO: make this an error
-            if (!(out.params->force_emit_all) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
+            }
+            if (!(out.params->force_emit_all) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) {
                 out.ci_funcs[codeinst] = {JL_INVOKE_CONST};
-            else
+                n_ci_const++;
+            }
+            else {
                 jl_emit_codeinst(out, codeinst, src);
+                n_ci_emitted++;
+            }
             out.safepoint_on_entry = safepoint_on_entry;
             JL_GC_PROMISE_ROOTED(codeinst);
             record_method_roots(method_roots, jl_get_ci_mi(codeinst));
@@ -1501,10 +1516,9 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     }
 
     if (jl_experiment_skip_from_image() || reuse_mode || getenv("JULIA_REPORT_IMAGE_REUSE"))
-        jl_safe_printf("jl_emit_native_to_output: %zu CodeInstances (%zu FROM_IMAGE, %zu inference-only-from-image (%zu const/builtin), %zu session-fresh, %zu skipped, %zu reused, %zu emitted)\n",
-                       n_ci_total, n_ci_from_image, n_ci_inferonly, n_ci_inferonly_const,
-                       n_ci_session, n_ci_skipped, n_ci_reused,
-                       n_ci_total - n_ci_skipped - n_ci_reused);
+        jl_safe_printf("jl_emit_native_to_output: %zu CodeInstance events: machine code %zu reused / %zu emitted; %zu const/no-code, %zu duplicate, %zu skipped (origin: %zu FROM_IMAGE, %zu inference-only-from-image (%zu const/builtin), %zu session-fresh)\n",
+                       n_ci_total, n_ci_reused, n_ci_emitted, n_ci_const, n_ci_dup, n_ci_skipped,
+                       n_ci_from_image, n_ci_inferonly, n_ci_inferonly_const, n_ci_session);
 
     emit_always_inline(out,
                        [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
@@ -2026,6 +2040,20 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         }
     }
 
+    // Table entries that are declarations (e.g. donor-image functions and
+    // data slots when reusing image code) have no definition to partition;
+    // assign them to partition 0's tables so the per-shard table
+    // reconstruction includes them. Every shard's module clone retains the
+    // declarations, and their symbols resolve at the final image link.
+    for (auto &kv : fvars) {
+        if (kv.first->isDeclaration())
+            partitions[0].fvars[kv.first->getName()] = kv.second;
+    }
+    for (auto &kv : gvars) {
+        if (kv.first->isDeclaration())
+            partitions[0].gvars[kv.first->getName()] = kv.second;
+    }
+
     bool verified = verify_partitioning(partitions, M, fvars, gvars);
     if (!verified)
         llvm_dump(&M);
@@ -2399,7 +2427,8 @@ static void construct_vars(Module &M, Partition &partition, StringRef suffix) {
     for (auto &fvar : partition.fvars) {
         auto F = M.getFunction(fvar.first());
         assert(F);
-        assert(!F->isDeclaration());
+        // F may be a declaration: donor-image entries (image-code reuse) are
+        // defined by donor objects at the final image link
         fvar_pairs.push_back({ fvar.second, F });
     }
     SmallVector<GlobalValue *, 0> fvars;
@@ -2416,7 +2445,7 @@ static void construct_vars(Module &M, Partition &partition, StringRef suffix) {
     for (auto &gvar : partition.gvars) {
         auto GV = M.getNamedGlobal(gvar.first());
         assert(GV);
-        assert(!GV->isDeclaration());
+        // GV may be a declaration (donor-image data slot), see above
         gvar_pairs.push_back({ gvar.second, GV });
     }
     SmallVector<Constant*, 0> gvars;

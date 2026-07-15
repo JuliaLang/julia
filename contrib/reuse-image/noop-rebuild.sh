@@ -25,19 +25,17 @@ for gen in $(seq 1 "$NGENS"); do
     OUT_O=$WORK/gen$gen.o
     OUT_SO=$WORK/gen$gen.so
     echo "=== generation $gen (boot image: $CUR) ==="
-    env JULIA_REUSE_IMAGE_CODE=1 JULIA_IMAGE_THREADS=1 JULIA_REUSE_DEBUG=1 \
+    env JULIA_REUSE_IMAGE_CODE=1 JULIA_REUSE_DEBUG=1 JULIA_IMAGE_THREADS="${JULIA_IMAGE_THREADS:-8}" \
         "$JULIA" --startup-file=no -J "$CUR" --cpu-target=native \
         --output-o "$OUT_O" --output-incremental=no \
         -e "$PRE nothing" 2>&1 | grep -E "jl_emit_native_to_output|jl_reuse_image_code:" || true
 
     DONOR_OBJS=()
-    while IFS=$'\t' read -r tag a b; do
-        [ "$tag" == "DONOR" ] || continue
-        obj=$WORK/gen${gen}_donor_${a%_}.o
-        "$JULIA" --startup-file=no "$HERE/unlink.jl" "$b" "$obj" \
-            --prefix="$a" --bind="$OUT_O.reuse" > /dev/null
-        DONOR_OBJS+=("$obj")
-    done < "$OUT_O.reuse"
+    DONORDIR=$WORK/gen${gen}_donors
+    rm -rf "$DONORDIR" && mkdir -p "$DONORDIR"
+    "$JULIA" --startup-file=no --threads=8 "$HERE/unlink.jl" \
+        --batch="$OUT_O.reuse" --outdir="$DONORDIR" > /dev/null
+    while IFS= read -r obj; do DONOR_OBJS+=("$obj"); done < <(ls "$DONORDIR"/donor_*.o 2>/dev/null)
     echo "    donors: ${#DONOR_OBJS[@]}"
 
     # -q so this generation can donate its code to the next
