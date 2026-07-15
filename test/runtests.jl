@@ -13,6 +13,9 @@ include("buildkitetestjson.jl")
 
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
 const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL", "15")) * 60 # minutes
+# Warn when the host load average exceeds this multiple of the CPU count
+const oversub_interval = parse(Int, get(ENV, "JULIA_TEST_OVERSUBSCRIPTION_INTERVAL", "30")) # seconds
+const oversub_factor = parse(Float64, get(ENV, "JULIA_TEST_OVERSUBSCRIPTION_FACTOR", "1.25"))
 
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
@@ -293,6 +296,19 @@ cd(@__DIR__) do
             end
             Base.errormonitor(stdin_monitor)
         end
+        oversub_timer = let ncpu = length(Sys.cpu_info())
+            Timer(oversub_interval, interval=oversub_interval) do timer
+                load1 = Sys.loadavg()[1]
+                if load1 > ncpu * oversub_factor
+                    @lock print_lock begin
+                        active = join(sort!(collect(keys(running_tests))), ", ")
+                        printstyled("⚠ oversubscription: load average ", round(load1, digits=1),
+                            " exceeds ", ncpu, " CPUs (", nworkers(), " test workers)",
+                            isempty(active) ? "" : "; running: $active", "\n"; color=:yellow)
+                    end
+                end
+            end
+        end
         o_ts_duration = @elapsed Experimental.@sync begin
             for p in workers()
                 @async begin
@@ -429,6 +445,9 @@ cd(@__DIR__) do
         end
         if @isdefined test_timers
             foreach(close, values(test_timers))
+        end
+        if @isdefined oversub_timer
+            close(oversub_timer)
         end
     end
 
