@@ -323,6 +323,20 @@ finalize(m); m = nothing; GC.gc()
 @test length(mmap(BitVector, 0)) == 0
 @test size(mmap(BitMatrix, (0, 5))) == (0, 5)
 
+# Regression test: anonymous mmap size computation overflowing must raise ArgumentError, not
+# a confusing InexactError from a wrapped/corrupted size reaching a later, unrelated conversion.
+@test_throws ArgumentError mmap(Array{Int,1}, (typemax(Int) ÷ 4,))
+
+# Regression test: offset addition overflowing must also raise ArgumentError, not InexactError,
+# even when the byte-count computation alone does not overflow.
+let file = tempname()
+    write(file, UInt8(0))
+    s = open(file, "r+")
+    @test_throws ArgumentError mmap(s, Vector{UInt8}, (100,), typemax(Int) - 10)
+    close(s)
+    rm(file)
+end
+
 @static if Sys.islinux()
 
     function has_open_fd(name)
@@ -632,6 +646,10 @@ end
     a = Mmap.mmap(anon, Vector{UInt8}, (5,), 4)
     @test length(a) == 5
     finalize(a); a = nothing; GC.gc()
+
+    # Regression test: overflowing offset addition should raise ArgumentError, not InexactError.
+    anon2 = @test_deprecated Mmap.Anonymous()
+    @test_throws ArgumentError Mmap.mmap(anon2, Vector{UInt8}, (100,), typemax(Int) - 10)
 end=#
 
 if Sys.isunix()

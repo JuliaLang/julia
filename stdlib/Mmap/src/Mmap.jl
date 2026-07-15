@@ -333,6 +333,21 @@ function check_can_grow(io::IO, szfile::Csize_t, readonly::Bool, grow::Bool)
     return false
 end
 
+function checked_bytesize(dims::Tuple, elsize::Integer)
+    len = elsize
+    for l in dims
+        len, overflow = Base.Checked.mul_with_overflow(promote(len, l)...)
+        overflow && throw(ArgumentError("requested size prod($dims) * $elsize too large, would overflow typeof(size) == $(typeof(len))"))
+    end
+    return len
+end
+
+function checked_add_offset(len::Integer, offset::Integer)
+    total, overflow = Base.Checked.add_with_overflow(promote(len, offset)...)
+    overflow && throw(ArgumentError("requested size $len plus offset $offset too large, would overflow typeof(size) == $(typeof(len))"))
+    return total
+end
+
 # core implementation of mmap
 
 """
@@ -402,12 +417,7 @@ function mmap(io::IO,
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
-    len = Base.aligned_sizeof(T)
-    orig_len = len
-    for l in dims
-        len, overflow = Base.Checked.mul_with_overflow(promote(len, l)...)
-        overflow && throw(ArgumentError("requested size prod($dims) * $orig_len too large, would overflow typeof(size(T)) == $(typeof(len))"))
-    end
+    len = checked_bytesize(dims, Base.aligned_sizeof(T))
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
     len == 0 && return Array{T}(undef, dims)
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
@@ -420,7 +430,7 @@ function mmap(io::IO,
     mmaplen = (offset - offset_page) + len
 
     file_desc = gethandle(io)
-    szfile = convert(Csize_t, len + offset)
+    szfile = convert(Csize_t, checked_add_offset(len, offset))
 
     io isa SharedMemory && io.ismapped &&
         throw(ArgumentError("SharedMemory is single-use; this object has already been mapped"))
@@ -563,11 +573,13 @@ mmap(T::Type, i::Integer...; kwargs...) = mmap(T, convert(Tuple{Vararg{Int}}, i)
 # anonymous -> open SharedMemory
 function mmap(::Type{Array{T, N}}, dims::NTuple{N, Integer}; kwargs...) where {T, N}
     (prod(dims) == 0 || sizeof(T) == 0) && return Array{T}(undef, dims)
-    open(io -> mmap(io, Array{T, N}, dims; kwargs...), SharedMemory, "", prod(dims) * sizeof(T); readonly = false, create = true)
+    size = checked_bytesize(dims, Base.aligned_sizeof(T))
+    open(io -> mmap(io, Array{T, N}, dims; kwargs...), SharedMemory, "", size; readonly = false, create = true)
 end
 function mmap(::Type{BitArray{N}}, dims::NTuple{N, Integer}; kwargs...) where {N}
     prod(dims) == 0 && return BitArray{N}(undef, dims)
-    open(io -> mmap(io, BitArray{N}, dims; kwargs...), SharedMemory, "", Base.num_bit_chunks(prod(dims)) * sizeof(UInt64); readonly = false, create = true)
+    size = checked_bytesize((Base.num_bit_chunks(prod(dims)),), sizeof(UInt64))
+    open(io -> mmap(io, BitArray{N}, dims; kwargs...), SharedMemory, "", size; readonly = false, create = true)
 end
 
 
@@ -690,10 +702,11 @@ Base.iswritable(a::Anonymous) = !a.readonly
 
 # Anonymous -> open SharedMemory IO
 mmap(anon::Anonymous, ::Type{Array{T, N}}, len::Integer, args...; kwargs...) where {T, N} =
-    open(io -> mmap(io, Array{T, N}, len, args...; kwargs...), SharedMemory, anon.name, len * sizeof(T); anon.readonly, anon.create)
+    open(io -> mmap(io, Array{T, N}, len, args...; kwargs...), SharedMemory, anon.name, checked_bytesize((len,), Base.aligned_sizeof(T)); anon.readonly, anon.create)
 mmap(anon::Anonymous, ::Type{Array{T, N}}, dims::NTuple{N, <:Integer}; kwargs...) where {T, N} =
     mmap(anon, Array{T, N}, dims, 0; kwargs...)
 mmap(anon::Anonymous, ::Type{Array{T, N}}, dims::NTuple{N, <:Integer}, offset::Integer; kwargs...) where {T, N} =
-    open(io -> mmap(io, Array{T, N}, dims, offset; kwargs...), SharedMemory, anon.name, prod(dims) * sizeof(T) + offset; anon.readonly, anon.create)
+    open(io -> mmap(io, Array{T, N}, dims, offset; kwargs...), SharedMemory, anon.name,
+         checked_add_offset(checked_bytesize(dims, Base.aligned_sizeof(T)), offset); anon.readonly, anon.create)
 
 end # module
