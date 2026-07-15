@@ -419,13 +419,20 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     jl_fence();
     uv_mutex_unlock(&tls_lock);
 
-#if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
+#if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND) && !defined(JL_USE_FRAMEHOP)
     // ensures libunwind TLS space for this thread is allocated eagerly
     // to make unwinding async-signal-safe even when using thread local caches.
     unw_tls_ensure_func jl_unw_ensure_tls = NULL;
     jl_dlsym(jl_RTLD_DEFAULT_handle, "unw_ensure_tls", (void**)&jl_unw_ensure_tls, 0, 1);
     if (jl_unw_ensure_tls)
         jl_unw_ensure_tls();
+#endif
+
+#ifdef JL_USE_FRAMEHOP
+    // Pre-fault framehop's TLS and record this thread's pthread-stack bounds. The
+    // bounds only cover same-thread walks; cross-thread walks pass exact bounds via
+    // rec_backtrace_ctx_target.
+    fh_thread_register();
 #endif
 
     return ptls;
