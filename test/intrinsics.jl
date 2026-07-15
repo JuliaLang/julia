@@ -5,6 +5,8 @@
 # For curmod_*
 include("testenv.jl")
 
+import InteractiveUtils
+
 # bits types
 @test isa((() -> Core.Intrinsics.bitcast(Ptr{Int8}, 0))(), Ptr{Int8})
 @test isa(convert(Char, 65), Char)
@@ -621,3 +623,17 @@ tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
 # https://github.com/JuliaLang/julia/issues/61436
 primitive type UIntN256 <: Unsigned 256 end
 @test tofloat(reinterpret(UIntN256, (zeros(UInt8, 32)...,))) == 0.0
+
+@testset "assume_range" begin
+    ar = Base.assume_range
+    icmps(f, ts) = count("icmp", sprint(io -> InteractiveUtils.code_llvm(io, f, ts; debuginfo=:none)))
+    # identity semantics (incl. non-constant bounds, where the hint is silently dropped)
+    @test all(ar(x, 0x00, 0xff) === x for x in 0x00:0xff)
+    @test ((x, lo, hi) -> ar(x, lo, hi))(0x2a, 0x00, 0x40) === 0x2a
+    # a narrow constant range folds an out-of-range comparison to a constant (unsigned + signed)
+    @test icmps(x::UInt8 -> ar(x, 0x00, 0x07) < 0x08, (UInt8,)) == 0
+    @test icmps(x::Int8 -> ar(x, Int8(-4), Int8(3)) > Int8(3), (Int8,)) == 0
+    # inference: identity return type, and nothrow
+    @test Base.infer_return_type(ar, (UInt16, UInt16, UInt16)) === UInt16
+    @test Base.infer_effects(ar, (UInt16, UInt16, UInt16)).nothrow
+end

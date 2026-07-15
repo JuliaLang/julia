@@ -1520,3 +1520,32 @@ Clamp `x` to lie within range `r`.
      This method requires at least Julia 1.6.
 """
 clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))
+
+"""
+    Base.assume_range(x::T, lo::T, hi::T) where {T<:Base.BitInteger} -> x
+
+Return `x` unchanged while asserting to the compiler that `lo <= x <= hi` (an
+inclusive range). Knowing the range lets the optimizer fold range-dependent code
+at the use site for free — for example an `@boundscheck` or a comparison against
+an out-of-range constant collapses to a constant — at no runtime cost, since the
+assertion produces no machine instruction.
+
+`lo` and `hi` should be compile-time constants; if they are not, the assertion is
+ignored and `x` is returned unchanged.
+
+The hint is local to the function it is compiled into: it is only exploited where
+the value is used within that same (post-inlining) function, and is *not* recorded
+in the method's inferred return type. It therefore does not propagate across a
+non-inlined call boundary — for a caller to benefit, the code consuming the value
+must be inlined together with the `assume_range` call.
+
+Unlike [`clamp`](@ref), this does not coerce out-of-range values — it *asserts*
+they cannot occur.
+
+!!! warning
+    This is an unchecked assertion. If `x` ever lies outside `[lo, hi]`, the
+    program has undefined behavior, exactly like an out-of-bounds `@inbounds`
+    access. Only use it when the range is guaranteed by construction.
+"""
+@inline assume_range(x::T, lo::T, hi::T) where {T<:BitInteger} =
+    Core.Intrinsics.assume_range(x, lo, hi)

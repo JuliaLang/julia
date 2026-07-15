@@ -419,6 +419,17 @@ JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
     return jl_new_bits(ty, jl_data_ptr(v));
 }
 
+// run time version of assume_range intrinsic: identity, the range is only a
+// codegen hint so there is nothing to do at run time (interpreter/constant eval).
+JL_DLLEXPORT jl_value_t *jl_assume_range(jl_value_t *a, jl_value_t *lo, jl_value_t *hi)
+{
+    if (!jl_is_primitivetype(jl_typeof(a)))
+        jl_error("assume_range: value is not a primitive type");
+    if (jl_typeof(lo) != jl_typeof(a) || jl_typeof(hi) != jl_typeof(a))
+        jl_error("assume_range: bounds must have the same type as the value");
+    return a;
+}
+
 // run time version of pointerref intrinsic (warning: i is not rooted)
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align)
 {

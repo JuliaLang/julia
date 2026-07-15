@@ -86,6 +86,7 @@ public
 # Integer math
     uabs,
     mul_hi,
+    assume_range,
 
 # C interface
     cconvert,

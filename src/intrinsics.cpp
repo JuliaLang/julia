@@ -8,6 +8,8 @@ namespace JL_I {
 #include <bitset>
 #include <string>
 
+#include <llvm/IR/ConstantRange.h>
+
 #include "ccall.cpp"
 
 //Mark our stats as being from intrinsics irgen
@@ -1345,6 +1347,30 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     return mark_julia_type(ctx, ifelse_result, isboxed, jt);
 }
 
+// Advertise that `v` lies in the (inclusive) constant range `CR` by routing it
+// through an `alwaysinline` identity carrier whose return carries an LLVM `range`
+// attribute. After inlining the carrier leaves no instruction — only the range
+// fact, which LLVM propagates to the use site.
+static Value *emit_assume_range_hint(jl_codectx_t &ctx, Value *v, const ConstantRange &CR)
+{
+    Type *t = v->getType();
+    std::string fname;
+    raw_string_ostream(fname) << "julia.range_hint.i" << t->getIntegerBitWidth()
+        << "." << CR.getLower() << "." << CR.getUpper();
+    Function *F = jl_Module->getFunction(fname);
+    if (!F) {
+        FunctionType *FT = FunctionType::get(t, {t}, false);
+        F = Function::Create(FT, GlobalValue::InternalLinkage, fname, jl_Module);
+        F->addFnAttr(Attribute::AlwaysInline);
+        F->addFnAttr(Attribute::NoUnwind);
+        F->addRetAttr(Attribute::get(ctx.builder.getContext(), Attribute::Range, CR));
+        BasicBlock *BB = BasicBlock::Create(ctx.builder.getContext(), "top", F);
+        IRBuilder<> B(BB);
+        B.CreateRet(F->getArg(0));
+    }
+    return ctx.builder.CreateCall(F, {v});
+}
+
 static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **args, size_t nargs)
 {
     auto &DL = ctx.emission_context.DL;
@@ -1453,6 +1479,34 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         Value *from = emit_unbox(ctx, xt, x);
         Value *ans = ctx.builder.CreateNot(from);
         return mark_julia_type(ctx, ans, false, x.typ);
+    }
+
+    case assume_range: {
+        assert(nargs == 3);
+        const jl_cgval_t &x = argv[0];
+        const jl_cgval_t &lo = argv[1];
+        const jl_cgval_t &hi = argv[2];
+        // require three values of the same primitive integer type
+        if (!jl_is_primitivetype(x.typ) || x.typ != lo.typ || x.typ != hi.typ)
+            return emit_runtime_call(ctx, f, argv, nargs);
+        Type *xt = INTT(bitstype_to_llvm(x.typ, ctx.builder.getContext(), true), DL);
+        if (!xt || !xt->isIntegerTy())
+            return emit_runtime_call(ctx, f, argv, nargs);
+        Value *xv = emit_unbox(ctx, xt, x);
+        Value *lov = emit_unbox(ctx, xt, lo);
+        Value *hiv = emit_unbox(ctx, xt, hi);
+        // the range can only be advertised when the bounds fold to constants;
+        // otherwise this is a plain identity (the hint is silently dropped).
+        if (auto *loc = dyn_cast<ConstantInt>(lov)) {
+            if (auto *hic = dyn_cast<ConstantInt>(hiv)) {
+                // assume_range is inclusive [lo, hi]; ConstantRange is half-open.
+                APInt hiEx = hic->getValue() + 1;
+                ConstantRange CR(loc->getValue(), hiEx);
+                if (!CR.isFullSet() && !CR.isEmptySet())
+                    xv = emit_assume_range_hint(ctx, xv, CR);
+            }
+        }
+        return mark_julia_type(ctx, xv, false, x.typ);
     }
 
     case have_fma: {

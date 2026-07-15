@@ -99,6 +99,10 @@ New library functions
   `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
   image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
   original transform when an `include(mapexpr, …)`-ed file is edited.
+- `Base.assume_range(x, lo, hi)` returns the integer `x` unchanged while asserting to the
+  compiler that `lo <= x <= hi`, letting the optimizer fold range-dependent code (bounds
+  checks, comparisons against out-of-range constants) at no runtime cost. It is an unchecked
+  assertion: out-of-range values are undefined behavior.
 
 New library features
 --------------------
