@@ -281,7 +281,6 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
         empty!(S.pids)
         empty!(S.refs)
         init_loc_flds(S)
-        Mmap.munmap!(S.s)
         S.s = Array{T}(undef, ntuple(d->0,N))
         delete!(sa_refs, S.id)
     end

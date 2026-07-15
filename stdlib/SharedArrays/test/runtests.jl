@@ -453,7 +453,7 @@ end
         end
     end
 
-    @testset "finalize eagerly releases local mmap on parent" begin
+    @testset "finalize drops the parent's own reference without force-invalidating it" begin
         S = SharedArray{Int64}(100, 100)
         segname = S.segname
 
@@ -465,10 +465,27 @@ end
         finalize(S)
 
         @static if Sys.islinux()
-            # munmap! is called synchronously inside finalize_refs, so no GC needed
+            ismapped, _ = shmem_mapped(segname)
+            @test ismapped
+
+            GC.gc(); GC.gc()
             ismapped, _ = shmem_mapped(segname)
             @test !ismapped
         end
+    end
+
+    @testset "backing array remains valid after the SharedArray wrapper is GC'd" begin
+        S = SharedArray{Int64}(10, 10)
+        fill!(S, 7)
+        a = sdata(S) # alias to the real backing array, kept alive independently of S
+        S = nothing
+        GC.gc(); GC.gc()
+
+        # `a` is still reachable, so ordinary Julia semantics must keep its backing
+        # memory valid even though the SharedArray wrapper itself was collected.
+        @test all(a .== 7)
+        a[1] = 99
+        @test a[1] == 99
     end
 
     @testset "Zero-element SharedArray creates no shared memory segment" begin
