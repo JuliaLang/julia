@@ -48,11 +48,15 @@ EXTENDS Naturals, FiniteSets
 CONSTANTS
     Threads,        \* set of worker ids, e.g. {1, 2}
     Pool,           \* function Threads -> pool id, e.g. (1 :> "A" @@ 2 :> "B")
-    Inject0         \* function pool -> Nat: tasks producers will inject per pool
+    Inject0,        \* function pool -> Nat: tasks producers will inject per pool
+    UnwindPropagates \* BOOLEAN: does a last-spinner unwind wake a successor?
+                     \* TRUE models the fixed code; FALSE lets TLC exhibit the
+                     \* lost wakeup of an exception unwinding past the slot.
 
 VARIABLES
     st,             \* st[t] in {"running", "sleeping"} -- the sleep_check_state
-    pc,             \* pc[t] in {"run", "exitspin", "propagate", "recheck", "park", "parked"}
+    pc,             \* pc[t] in {"run", "exitspin", "propagate", "unwindwake",
+                    \*           "recheck", "park", "parked", "outside"}
     spin,           \* spin[t] in BOOLEAN -- does t hold a spinner slot?
     nspin,          \* nspin[p] -- the pool's n_spinning counter
     nrun,           \* n_threads_running counter
@@ -72,14 +76,26 @@ SumOver(acc, S) == IF S = {} THEN acc
 
 Inject0Total == SumOver(0, Pools)
 
-(* A worker is "blocked" once it has committed to the sleep (pc = "parked"). *)
-Blocked(t)   == pc[t] = "parked"
+(* A worker cannot service queued work once it has committed to the sleep    *)
+(* (pc = "parked") or left the scheduler on an exception (pc = "outside"):    *)
+(* an unwinding thread is awake but will never consult the queues again, so   *)
+(* for the lost-wakeup invariant it must count the same as a parked one.      *)
+Blocked(t)   == pc[t] \in {"parked", "outside"}
 
 QueueEmpty   == \A p \in Pools : queue[p] = 0
 
+(* All of a pool's workers threw out of the scheduler simultaneously. The     *)
+(* model's "outside" is permanent, but in the implementation an unwinding     *)
+(* worker always re-enters jl_task_get_next (its task's teardown ends in      *)
+(* wait()), so this state heals by re-entry and is out of scope for the wake  *)
+(* protocol. The protocol's own obligation is the sharper property below:     *)
+(* work must never be stranded while a *parked* (wakeable) worker exists.     *)
+AllOutside(p) == \A t \in ThreadsOf(p) : pc[t] = "outside"
+
 TypeOK ==
     /\ st    \in [Threads -> {"running", "sleeping"}]
-    /\ pc    \in [Threads -> {"run", "exitspin", "propagate", "recheck", "park", "parked"}]
+    /\ pc    \in [Threads -> {"run", "exitspin", "propagate", "unwindwake",
+                             "recheck", "park", "parked", "outside"}]
     /\ spin  \in [Threads -> BOOLEAN]
     /\ nspin \in [Pools -> 0..N]
     /\ nrun  \in 0..(2 * N)
@@ -204,6 +220,42 @@ SpinExit ==
         /\ pc'    = [pc EXCEPT ![t] = "exitspin"]
         /\ UNCHANGED <<st, nrun, queue, inject>>
 
+(* An exception unwinds a spinner out of the scheduler (SIGINT delivered in   *)
+(* trypoptask, or the callback throwing). The slot is released, but unlike     *)
+(* SpinExit the thread never performs the post-publish queue re-check: it      *)
+(* leaves for "outside". If it was the pool's last spinner it must therefore   *)
+(* discharge the wakeup duty a producer deferred onto it -- exactly like        *)
+(* ConsumeSpinner's propagation. UnwindPropagates = FALSE models the bug where *)
+(* the unwind path merely releases the slot.                                   *)
+ThrowSpinner ==
+    \E t \in Threads :
+        /\ pc[t] = "run"
+        /\ st[t] = "running"
+        /\ spin[t]
+        /\ spin'  = [spin EXCEPT ![t] = FALSE]
+        /\ nspin' = [nspin EXCEPT ![Pool[t]] = @ - 1]
+        /\ pc'    = [pc EXCEPT ![t] =
+                        IF nspin[Pool[t]] = 1 /\ UnwindPropagates
+                            THEN "unwindwake" ELSE "outside"]
+        /\ UNCHANGED <<st, nrun, queue, inject>>
+
+(* The unwind-path propagation wake (the jl_wakeup_threadpool call in the      *)
+(* outer JL_CATCH), after which the thread is gone from the scheduler.         *)
+UnwindPropagate ==
+    \E t \in Threads :
+        /\ pc[t] = "unwindwake"
+        /\ LET p == Pool[t] IN
+           IF nspin[p] > 0 \/ ~CanWakeIn(p)
+               THEN /\ pc' = [pc EXCEPT ![t] = "outside"]
+                    /\ UNCHANGED <<st, nrun>>
+               ELSE \E w \in ThreadsOf(p) :
+                       /\ st[w] = "sleeping"
+                       /\ st'   = [st EXCEPT ![w] = "running"]
+                       /\ nrun' = nrun + 1
+                       /\ pc'   = [pc EXCEPT ![t] = "outside",
+                                              ![w] = IF pc[w] = "parked" THEN "run" ELSE pc[w]]
+        /\ UNCHANGED <<spin, nspin, queue, inject>>
+
 (* c1: begin the sleep transition by publishing sleep_check_state = sleeping. *)
 (* Non-spinners enter from "run" (a worker denied a spinner slot parks        *)
 (* without polling); ex-spinners enter from "exitspin".                       *)
@@ -271,6 +323,8 @@ Next ==
     \/ ConsumeSpinner
     \/ PropagateWake
     \/ SpinExit
+    \/ ThrowSpinner
+    \/ UnwindPropagate
     \/ SleepBegin
     \/ SleepRecheckAbortSelf
     \/ SleepRecheckAbortRaced
@@ -278,10 +332,11 @@ Next ==
     \/ ParkCommit
     \/ ParkRaced
     \* When no task is queued the system is legitimately quiescent (producers
-    \* that went to sleep simply never inject their remaining tasks). Allow a
+    \* that went to sleep simply never inject their remaining tasks), and a
+    \* pool whose workers all unwound is excused (see AllOutside). Allow a
     \* stutter step there so TLC's deadlock detector only fires on states that
     \* are stuck with work *still in a queue* -- i.e. a genuine lost wakeup.
-    \/ (QueueEmpty /\ UNCHANGED vars)
+    \/ ((\A p \in Pools : queue[p] = 0 \/ AllOutside(p)) /\ UNCHANGED vars)
 
 Spec == Init /\ [][Next]_vars /\ WF_vars(Next)
 
@@ -291,14 +346,17 @@ Spec == Init /\ [][Next]_vars /\ WF_vars(Next)
 (* Everything that was queued has been consumed. *)
 Done == QueueEmpty /\ \A p \in Pools : inject[p] = 0
 
-(* Safety: a non-empty queue must always have a worker in its pool that is    *)
-(* not blocked (so it will eventually re-check and consume). This is the       *)
-(* "no permanently lost wakeup" invariant. Because Produce enqueues and runs   *)
-(* the wakeup policy atomically here, it can only fail in a genuine stuck       *)
-(* state, never transiently.                                                   *)
+(* Safety: a non-empty queue must always have a worker in its pool that can    *)
+(* still service it (neither parked nor gone), unless every worker unwound --   *)
+(* the AllOutside case that re-entry heals. The state this forbids is the       *)
+(* genuine lost wakeup: a task in the queue, a parked worker that could take    *)
+(* it, and nobody left who will ever wake it. Because Produce enqueues and      *)
+(* runs the wakeup policy atomically here, it can only fail in a genuine        *)
+(* stuck state, never transiently.                                              *)
 NoLostWakeup ==
     \A p \in Pools :
         (queue[p] > 0) =>
-            \E t \in ThreadsOf(p) : ~Blocked(t)
+            \/ \E t \in ThreadsOf(p) : ~Blocked(t)
+            \/ AllOutside(p)
 
 =============================================================================

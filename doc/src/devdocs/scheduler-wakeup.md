@@ -99,6 +99,39 @@ Toggling the model to the unsound variant — releasing the spinner slot at
 wake, and the "spinner" it is trusting has already parked. That is the danger
 window item 1 closes.
 
+### The unwind exit path
+
+A spinner has a third way out of `jl_task_get_next` besides finding work and
+parking: an exception. `trypoptask`/`checkempty` are Julia callbacks and can
+throw, and a SIGINT delivered to a spinning thread surfaces there too. The
+outer `JL_CATCH` releases the spinner slot — and, when it was the pool's last
+spinner, runs `jl_wakeup_threadpool` once, exactly like the found-work exit.
+This is load-bearing: work enqueued while the slot was held had its wakeup
+gated on that slot, and the unwinding thread — unlike a parking one — never
+performs the post-fence queue re-check, so without the propagation the task
+would strand with every other worker parked. `test/threads.jl` contains the
+regression test (throwing callback that enqueues under its own gate).
+
+The model covers this exit with `ThrowSpinner` (slot release on unwind),
+`UnwindPropagate` (the catch-block wake), and a distinct `"outside"` state
+that the `NoLostWakeup` invariant counts as unable to service work — an
+unwinding thread is awake but will never consult the queues again. A pool
+whose workers *all* unwound simultaneously is excused by the invariant
+(`AllOutside`): in the implementation an unwinding worker always re-enters
+`jl_task_get_next` through its task's teardown, so that state heals by
+re-entry; the protocol's own obligation is only that work is never stranded
+while a parked, wakeable worker exists. Setting the `UnwindPropagates`
+constant to `FALSE` models the missing catch-block wake and makes TLC produce
+the stranded-task counterexample.
+
+The model checks the protocol, not the C code; the connection is maintained
+by hand. Every scheduler exit path in C (found work, park, unwind) must map
+to a model action, each modeled mechanism has a negative variant that TLC
+must fail (this section's toggles), and the protocol-critical edges have
+runtime regression tests. The model also assumes sequentially-consistent
+atomic steps: the argument that the C11 fences realize them is the
+store-buffering pairing documented in `src/scheduler.c` itself.
+
 ## TLA+ model
 
 The directory [`scheduler-wakeup/`](https://github.com/JuliaLang/julia/tree/master/doc/src/devdocs/scheduler-wakeup)

@@ -702,8 +702,13 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
     }
     }
     JL_CATCH {
-        if (spinning)
-            spin_exit(tpid);
+        // An unwinding spinner leaves without the post-fence queue recheck
+        // that the park path performs, so it must discharge the last-spinner
+        // obligation the same way a spinner that found work does: work may
+        // have been enqueued (with its wakeup gated on us) that no one else
+        // will ever look at.
+        if (spinning && spin_exit(tpid))
+            jl_wakeup_threadpool(tpid);
         jl_rethrow();
     }
     return task;

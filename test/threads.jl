@@ -605,3 +605,37 @@ let code = """
     # JULIA_COPY_STACKS is broken on Windows (#35147)
     @test read(cmd, String) == "75025" skip=Sys.iswindows()
 end
+
+# A spinner that unwinds via an exception must pass on the wakeup duty
+# (the last-spinner rule): work enqueued while it held the spinner slot had
+# its wakeup gated on that slot, and no other worker will ever look for it.
+let code = """
+    using Base.Threads
+    ran = Atomic{Int}(0)
+    victim = Task(() -> (ran[] = 1))
+    victim.sticky = false
+    done = Channel{Bool}(1)
+    calls = Ref(0)
+    trypop = q -> begin
+        calls[] += 1
+        calls[] == 1 && return nothing   # not a Task: keep polling (take a spinner slot)
+        schedule(victim)                 # wakeup is gated on our own spinner slot
+        error("boom")
+    end
+    checkempty = () -> true
+    a = Task(() -> begin
+        try
+            ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypop, [], checkempty)
+        catch
+        end
+        Libc.systemsleep(0.5)            # block this thread without yielding
+        put!(done, ran[] == 1)
+    end)
+    a.sticky = true
+    ccall(:jl_set_task_tid, Cint, (Any, Cint), a, 1)  # first default-pool thread
+    schedule(a)
+    exit(take!(done) ? 0 : 1)
+    """
+    cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no -t2,1 -e $code`
+    @test success(cmd)
+end
