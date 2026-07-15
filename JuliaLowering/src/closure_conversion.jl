@@ -376,13 +376,13 @@ end
 
 # Map the children of `ex` through _convert_closures, lifting any toplevel
 # closure definition statements to occur before the other content of `ex`.
-function map_cl_convert(ctx::ClosureConversionCtx, ex, toplevel_preserving)
-    if ctx.toplevel && !toplevel_preserving
+function map_cl_convert(ctx::ClosureConversionCtx, ex)
+    if ctx.toplevel
         toplevel_stmts = SyntaxList(ctx)
         ctx2 = ClosureConversionCtx(
             ctx.graph, ctx.bindings, ctx.mod,
             ctx.closure_bindings, ctx.capture_rewriting, ctx.lambda_bindings,
-            ctx.sp_typevars, false, ctx.lifted,
+            ctx.sp_typevars, true, ctx.lifted,
             ctx.toplevel_pure, toplevel_stmts, ctx.closure_infos)
         res = mapchildren(e->_convert_closures(ctx2, e), ctx2, ex)
         if isempty(toplevel_stmts)
@@ -537,12 +537,12 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ctx.closure_bindings, cap_rewrite, ex.lambda_bindings, ctx.sp_typevars,
             ctx.toplevel, true, ctx.toplevel_pure, ctx.toplevel_stmts,
             ctx.closure_infos)
-        tvs = map_cl_convert(ctx2, ex[2], true)
+        tvs = map_cl_convert(ctx2, ex[2])
         if !ctx.toplevel
             push!(ctx2.toplevel_stmts, tvs)
             tvs = @ast ctx ex[2] (::K"TOMBSTONE")
         end
-        body = map_cl_convert(ctx2, ex[3], false)
+        body = map_cl_convert(ctx2, ex[3])
         if is_closure
             if ctx.toplevel
                 @ast ctx ex [K"block" tvs body]
@@ -593,10 +593,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             init_closure_args...
         ]
     else
-        toplevel_seq_preserving =
-            k == K"if" || k == K"elseif" || k == K"block" ||
-            k == K"tryfinally" || k == K"trycatchelse"
-        map_cl_convert(ctx, ex, toplevel_seq_preserving)
+        map_cl_convert(ctx, ex)
     end
 end
 
