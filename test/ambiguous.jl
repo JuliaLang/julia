@@ -694,15 +694,48 @@ s(x::LikeMissing, y::LikeInt...) = 4                              # genuinely co
 s(x::Union{LikeSigned,LikeStr}, y::LikeStr...) = 5               # more specific than method 3
 s(x::LikeSigned, y::LikeStr...) = 6                              # more specific than 5; method 2 is more specific than this
 end
-let ms = collect(methods(AmbigUnionCycle.s)),
-    m1 = only(filter(m -> m.sig == Tuple{typeof(AmbigUnionCycle.s), Union{AmbigUnionCycle.LikeSigned,AmbigUnionCycle.LikeMissing}, Vararg{AmbigUnionCycle.LikeInt}}, ms)),
-    m2 = only(filter(m -> m.sig == Tuple{typeof(AmbigUnionCycle.s), Union{AmbigUnionCycle.LikeInt,AmbigUnionCycle.LikeString,AmbigUnionCycle.LikeMissing}, Vararg{AmbigUnionCycle.LikeSigned}}, ms))
+let m1 = which(AmbigUnionCycle.s, Tuple{Union{AmbigUnionCycle.LikeSigned,AmbigUnionCycle.LikeMissing}, Vararg{AmbigUnionCycle.LikeInt}}),
+    m2 = which(AmbigUnionCycle.s, Tuple{Union{AmbigUnionCycle.LikeInt,AmbigUnionCycle.LikeString,AmbigUnionCycle.LikeMissing}, Vararg{AmbigUnionCycle.LikeSigned}})
     # method 3 "covers" the LikeInt part but is in a specificity cycle (2 ≻ 6 ≻ 5 ≻ 3 ≻ 2)
     @test Base.isambiguous(m1, m2)
 end
 @test_throws MethodError AmbigUnionCycle.s(AmbigUnionCycle.LikeInt()) # genuinely ambiguous
 @test AmbigUnionCycle.s(AmbigUnionCycle.LikeMissing()) == 4
 @test AmbigUnionCycle.s(AmbigUnionCycle.LikeInt(), AmbigUnionCycle.LikeInt()) == 3
+
+# the transitive loser rejection in `isambiguous` is region-blind: a candidate
+# resolver may be rejected because a loser is `morespecific` than it globally,
+# even when the loser's overlap with it inside the intersection is itself
+# resolved by other methods. Here dispatch resolves every point of the
+# intersection of methods 1 and 2 (methods 7 and 8 rescue the only points where
+# the loser chain 2 ≻ 6 ≻ 5 ≻ 3 overlaps method 3). The region-aware
+# union-coverage resolution in `ml_matches` (gf.c) sees that the cycle members
+# are fully covered over this query before they can disqualify method 3, so the
+# pair is correctly reported as resolved.
+module AmbigLoserRegion
+abstract type LikeSigned end
+struct LikeInt <: LikeSigned end
+abstract type LikeString end
+struct LikeStr <: LikeString end
+struct LikeMissing end
+s(x::Union{LikeSigned,LikeMissing}, y::LikeInt...) = 1             # m1
+s(x::Union{LikeInt,LikeString,LikeMissing}, y::LikeSigned...) = 2  # m2
+s(x::T, y::T...) where {T<:Union{LikeInt,LikeString}} = 3          # resolves the (LikeInt, LikeInt...) region
+s(x::LikeMissing, y::LikeInt...) = 4                               # resolves the LikeMissing region
+s(x::Union{LikeSigned,LikeStr,LikeMissing}, y::LikeStr...) = 5     # more specific than method 3
+s(x::Union{LikeSigned,LikeMissing}, y::LikeStr...) = 6             # more specific than 5; method 2 is more specific than this
+s(x::LikeInt) = 7                                                  # resolves the arity-1 LikeInt point
+s(x::LikeMissing) = 8                                              # resolves the arity-1 LikeMissing point
+end
+# dispatch is fully resolved over the intersection of methods 1 and 2 ...
+@test AmbigLoserRegion.s(AmbigLoserRegion.LikeInt()) == 7
+@test AmbigLoserRegion.s(AmbigLoserRegion.LikeMissing()) == 8
+@test AmbigLoserRegion.s(AmbigLoserRegion.LikeInt(), AmbigLoserRegion.LikeInt()) == 3
+@test AmbigLoserRegion.s(AmbigLoserRegion.LikeMissing(), AmbigLoserRegion.LikeInt()) == 4
+let m1 = which(AmbigLoserRegion.s, Tuple{Union{AmbigLoserRegion.LikeSigned,AmbigLoserRegion.LikeMissing}, Vararg{AmbigLoserRegion.LikeInt}}),
+    m2 = which(AmbigLoserRegion.s, Tuple{Union{AmbigLoserRegion.LikeInt,AmbigLoserRegion.LikeString,AmbigLoserRegion.LikeMissing}, Vararg{AmbigLoserRegion.LikeSigned}})
+    @test !Base.isambiguous(m1, m2)
+end
 
 # complement of #62262: if the more specific methods only cover *part* of the
 # intersection, the uncovered part is still a genuine ambiguity (so the union
@@ -728,28 +761,34 @@ f(::T, ::Vararg{T}) where {T<:Integer} = 1    # mT
 f(::Integer, ::Vararg{String}) = 2            # mStr
 f(::Integer, ::Vararg{Union{Int,String}}) = 3 # mU
 end
-let tf = typeof(AmbigCycle3.f),
-    ms = collect(methods(AmbigCycle3.f)),
-    bysig = s -> only(filter(m -> m.sig == s, ms)),
-    mT   = bysig(Tuple{tf, T, Vararg{T}} where T<:Integer),
-    mStr = bysig(Tuple{tf, Integer, Vararg{String}}),
-    mU   = bysig(Tuple{tf, Integer, Vararg{Union{Int,String}}})
+let mT   = which(AmbigCycle3.f, Tuple{T, Vararg{T}} where T<:Integer),
+    mStr = which(AmbigCycle3.f, Tuple{Integer, Vararg{String}}),
+    mU   = which(AmbigCycle3.f, Tuple{Integer, Vararg{Union{Int,String}}})
     # specificity cycle mT ≻ mStr ≻ mU ≻ mT: no unique most specific method
     @test Base.morespecific(mT, mStr) && Base.morespecific(mStr, mU) && Base.morespecific(mU, mT)
     @test !(Base.morespecific(mStr, mT) || Base.morespecific(mU, mStr) || Base.morespecific(mT, mU))
-    # `isambiguous` still detects the ambiguity present in the mT/mStr region
+    # every pair is pairwise ordered, but each pair still participates in the
+    # unresolved cycle over their shared region, so all are ambiguous in context
     @test Base.isambiguous(mT, mStr)
-    @test !Base.isambiguous(mStr, mU)
-    @test !Base.isambiguous(mU, mT)
+    @test Base.isambiguous(mStr, mU)
+    @test Base.isambiguous(mU, mT)
 end
 @test_throws MethodError AmbigCycle3.f(3) # genuinely ambiguous in dispatch
 let ambig = Ref{Int32}(0)
     Base._methods_by_ftype(Tuple{typeof(AmbigCycle3.f), Int}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ambig[] == 1
 end
-# `detect_ambiguities` queries each method signature on its own, where the cycle
-# does not surface (`has_ambig == 0` for each), so pairwise detection misses the
-# 3-way ambiguity entirely
-@test_broken !isempty(detect_ambiguities(AmbigCycle3))
+# querying a single method signature must also report the cycle (`has_ambig`):
+# inference consumes that result, and effects for a signature covering the
+# throwing call `f(3)` above must not be inferred `:nothrow`
+@test !Base.infer_effects(AmbigCycle3.f, Tuple{Integer, Vararg{Union{Int,String}}}).nothrow
+let ambig = Ref{Int32}(0)
+    Base._methods_by_ftype(Tuple{typeof(AmbigCycle3.f), Integer, Vararg{Union{Int,String}}}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ambig[] == 1
+end
+# `detect_ambiguities` queries each method signature on its own, where the
+# cycle now surfaces via `has_ambig`, so pairwise detection reports the 3-way
+# ambiguity
+@test !isempty(detect_ambiguities(AmbigCycle3))
 
 nothing
