@@ -1320,6 +1320,19 @@ endif
 # to framehop) and links the libframehopunwind built by deps/framehopunwind.mk. libunwind
 # stays linked (task.c context switching + proc-info still use it). The arch is further
 # gated by the JL_USE_FRAMEHOP predicate in julia_internal.h (x86_64/aarch64 only).
+# DO NOT MERGE: default USE_FRAMEHOP to 1 on supported platforms so every CI
+# pipeline exercises the framehop unwinder. Unsupported combinations keep 0 so
+# they don't trip the $(error) gates below; musl is skipped because
+# LibFramehopUnwind_jll has no *-linux-musl artifact yet.
+ifneq ($(filter $(OS),Linux FreeBSD Darwin),)
+ifneq ($(filter $(ARCH),x86_64 aarch64),)
+ifeq ($(DISABLE_LIBUNWIND), 0)
+ifeq (,$(findstring musl,$(shell $(CC) -dumpmachine 2>/dev/null)))
+USE_FRAMEHOP ?= 1
+endif
+endif
+endif
+endif
 USE_FRAMEHOP ?= 0
 FRAMEHOPUNWIND :=
 ifeq ($(USE_FRAMEHOP), 1)
