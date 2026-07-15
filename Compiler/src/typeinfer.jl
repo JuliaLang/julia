@@ -1787,7 +1787,21 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             # and this is either the primary world, or not applicable in the primary world
             # then we want to compile and emit this
             if item.def.primary_world <= world
-                ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
+                # if a cached CodeInstance will reuse donor-image machine code
+                # (image-code reuse), skip re-inference: its source is unused
+                ci = nothing
+                cached = isdefined(item, :cache) ? item.cache : nothing
+                while cached !== nothing
+                    if cached.owner === nothing && cached.min_world <= world &&
+                       ccall(:jl_reuse_image_code_eligible, Cint, (Any,), cached) != 0
+                        ci = cached
+                        break
+                    end
+                    cached = isdefined(cached, :next) ? cached.next : nothing
+                end
+                if ci === nothing
+                    ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
+                end
                 ci isa CodeInstance && push!(workqueue, ci)
             end
             markinspected!(workqueue, item)
@@ -1810,6 +1824,16 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             mi = get_ci_mi(callee)
             if !has_valid_abi_sparams(mi)
                 markinspected!(workqueue, callee)
+                continue
+            end
+            if callee.owner === nothing &&
+               ccall(:jl_reuse_image_code_eligible, Cint, (Any,), callee) != 0
+                # native code comes from a donor image (image-code reuse):
+                # source is not needed, and the callee graph of image code is
+                # covered by the all-modules specialization walk
+                markinspected!(workqueue, callee)
+                push!(codeinfos, callee)
+                push!(codeinfos, nothing)
                 continue
             end
             # now make sure everything has source code, if desired

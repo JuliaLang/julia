@@ -674,7 +674,9 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     fargs[8] = ext_foreign_cis ? (jl_value_t*)ext_foreign_cis : jl_nothing; // ext_foreign_cis (or nothing)
     size_t last_age = ct->world_age;
     ct->world_age = jl_typeinf_world;
+    uint64_t t_sel0 = jl_hrtime();
     fargs[0] = jl_apply(fargs, 9);
+    uint64_t t_sel1 = jl_hrtime();
     fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = fargs[8] = NULL;
     ct->world_age = last_age;
     // the bridge returns svec(codeinfos, ci_order): the interleaved
@@ -687,6 +689,10 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     JL_TYPECHK(jl_create_native, array_any, codeinfos);
     JL_TYPECHK(jl_create_native, array_any, ci_order);
     auto data = (jl_native_code_desc_t *)jl_emit_native((jl_array_t*)codeinfos, (jl_array_t*)ci_order, llvmmod, NULL, external_linkage ? 1 : 0);
+    uint64_t t_emit = jl_hrtime();
+    if (getenv("JULIA_REUSE_DEBUG"))
+        jl_safe_printf("jl_create_native timing: selection %.1fs, emission %.1fs\n",
+                       (t_sel1 - t_sel0) / 1e9, (t_emit - t_sel1) / 1e9);
     JL_GC_POP();
 
     // move everything inside, now that we've merged everything
@@ -887,7 +893,7 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
 // builds. The output image is NOT usable (reused code is not wired up); this
 // exists only to measure the codegen time/size attributable to regenerating
 // image-resident code.
-static int jl_experiment_skip_from_image(void)
+static int jl_experiment_skip_from_image(void) JL_NOTSAFEPOINT
 {
     static int cached = -1;
     if (cached == -1) {
@@ -904,7 +910,7 @@ static int jl_experiment_skip_from_image(void)
 // relocatable object and includes it in the final image link. This process
 // writes a manifest (<output-o>.reuse) listing the donor images and the GOT
 // slot bindings the unlinker must apply.
-static int jl_reuse_image_code_enabled(void)
+static int jl_reuse_image_code_enabled(void) JL_NOTSAFEPOINT
 {
 #if !defined(_OS_LINUX_)
     return 0;   // prototype is ELF/Linux-only
@@ -920,6 +926,25 @@ static int jl_reuse_image_code_enabled(void)
 
 extern void jl_foreach_image_fptr_info(llvm::function_ref<void(uint64_t, const jl_image_fptrs_t &,
                                                                jl_code_instance_t **, size_t)> f) JL_NOTSAFEPOINT;
+
+// Called by Compiler.compile! during output selection: a CodeInstance that
+// will (most likely) reuse donor-image machine code does not need its inferred
+// source materialized. This is a fast conservative predicate; if the reuse
+// plan later rejects the CodeInstance (e.g. its donor lacks --emit-relocs),
+// emission re-derives the source on demand.
+extern "C" JL_DLLEXPORT_CODEGEN int jl_reuse_image_code_eligible(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    if (!jl_reuse_image_code_enabled())
+        return 0;
+    if (!(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE))
+        return 0;
+    if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0)
+        return 0;
+    jl_callptr_t invoke = jl_atomic_load_relaxed(&ci->invoke);
+    if (invoke == NULL || invoke == jl_fptr_const_return_addr)
+        return 0;
+    return 1;
+}
 
 #if defined(_OS_LINUX_)
 
@@ -1485,7 +1510,16 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
             }
 
             jl_code_info_t *src = (jl_code_info_t*)jl_array_ptr_ref(codeinfos, ++i);
-            assert(jl_is_code_info(src));
+            if (!jl_is_code_info(src)) {
+                // selection skipped source materialization expecting reuse
+                // (jl_reuse_image_code_eligible), but the plan rejected this
+                // CodeInstance (e.g. donor without --emit-relocs): re-derive
+                src = jl_get_method_ir(codeinst);
+                if (src == NULL)
+                    continue;   // no source recoverable; leave for the JIT
+                // keep the derived source rooted for the rest of emission
+                jl_array_ptr_set(codeinfos, i, (jl_value_t*)src);
+            }
             ci_infos[codeinst] = src;
             if (jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
                 out.safepoint_on_entry = false; // ensure we don't block ExpandAtomicModifyPass from inlining this code if applicable

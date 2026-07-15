@@ -137,10 +137,12 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     ios_t *s = NULL;
     int64_t srctextpos = 0 ;
+    uint64_t t_csi0 = jl_hrtime();
     uint32_t checksum =
         jl_create_system_image(emit_native ? &native_code : NULL,
                                jl_options.incremental ? worklist : NULL, emit_split, comp,
                                &s, &udeps, &srctextpos, jl_module_init_order);
+    uint64_t t_csi1 = jl_hrtime();
 
     ios_t f;
 
@@ -164,9 +166,13 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         // jl_dump_native will close and free s when appropriate
         // this is a horrible abstraction, but
         // this helps reduce live memory significantly
+        uint64_t t_dump0 = jl_hrtime();
         jl_dump_native(native_code, jl_options.outputbc, jl_options.outputunoptbc,
                        jl_options.outputo, jl_options.outputasm, outputji ? NULL : s,
                        checksum, unpack_func, NULL);
+        if (getenv("JULIA_REUSE_DEBUG"))
+            jl_safe_printf("jl_write_compiler_output timing: create_system_image %.1fs (incl. codegen), dump_native %.1fs\n",
+                           (t_csi1 - t_csi0) / 1e9, (jl_hrtime() - t_dump0) / 1e9);
         jl_postoutput_hook();
     }
 

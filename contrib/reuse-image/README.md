@@ -60,13 +60,16 @@ slot fills. Roundtrip of full sys.so: unlink 3.6s, relinked image boots and
 passes smoke (gmp/pcre/BLAS/threads/JIT/GC/backtraces).
 
 ## Measured results (prototype, Zen4 Linux, native target, 8 emission threads)
-Full pipeline (build + unlink + link + boot test), interleaved ON/OFF repeats:
-- no-op sysimage rebuild: 64s -> 34s (1.9x); 31,168 machine-code CIs reused,
-  1,982 emitted (94% reuse; remainder is the per-boot invalidation tail).
-- `using Dates, Test, Statistics` (sysimage + stdlib donors): 71s -> 40s (1.8x),
+Full pipeline (build + unlink + link + boot test), interleaved ON/OFF repeats,
+including the selection fast-path (no re-inference for reused code):
+- no-op sysimage rebuild: 71s -> 20s (3.6x); ~29k machine-code CIs reused,
+  1,981 emitted (94% reuse; remainder is the per-boot invalidation tail).
+- `using Dates, Test, Statistics` (sysimage + stdlib donors): 79s -> 24s (3.3x),
   images pass extended functional tests.
-- `using Plots` (47 donor images): 138s -> 90s (1.5x), 28,021 machine-code CIs
+- `using Plots` (47 donor images): 140s -> 63s (2.2x), 28k machine-code CIs
   reused; the resulting image renders plots correctly.
+- no-op reuse-arm breakdown: ~6s dump/archive write, ~5s donor unlinking
+  (cacheable), ~4s residual selection walk, ~4s serialization+link+boot.
 - --emit-relocs producer cost on sys.so: +11.6% disk for the required reloc
   sections (rest is .rela.debug_*), zero runtime memory cost.
 - Reuse-built images are currently smaller than baseline only because the
@@ -74,8 +77,6 @@ Full pipeline (build + unlink + link + boot test), interleaved ON/OFF repeats:
   unreused code as dead text until gc-sections support lands.
 
 ## Known limitations (prototype)
-- JULIA_IMAGE_THREADS=1 required: the module partitioner drops declaration
-  entries from shard tables (fix: assign decls to partition 0).
 - Multi-target output images: donor clone slots are snapshot-bound to the
   builder's selected target; folding donor slots into the image's own clone
   tables would restore load-time dispatch (follow-up).
