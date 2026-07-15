@@ -327,6 +327,10 @@ ifeq ($(WITH_TRACY),1)
 JL_PRIVATE_LIBS-0 += libTracyClient
 endif
 
+ifeq ($(USE_FRAMEHOP),1)
+# libjulia-internal and libjulia-codegen link against this.
+JL_PRIVATE_LIBS-0 += libframehopunwind
+endif
 
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
