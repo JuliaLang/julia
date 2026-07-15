@@ -126,9 +126,10 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         else
             # The shared array is created on a remote machine
             shmmem_create_pid = pids[1]
-            io = remotecall_fetch(pids[1]) do
+            io = remotecall(pids[1]) do
                 last(shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR, false))
             end
+            wait(io)
         end
 
         func_mapshmem = () -> first(shm_mmap_array(T, dims, seg_name, JL_O_RDWR, true))
@@ -148,7 +149,9 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
             if onlocalhost
                 close(io)
             else
-                remotecall_fetch(close, shmmem_create_pid, io)
+                remotecall_fetch(shmmem_create_pid, io) do fut
+                    close(fetch(fut))
+                end
             end
         end
         S = SharedArray{T,N}(dims, pids, refs, seg_name, s)
@@ -157,7 +160,13 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
 
     finally
         if io !== nothing && @isdefined shmmem_create_pid
-            remotecall_fetch(close, shmmem_create_pid, io)
+            if onlocalhost
+                close(io)
+            else
+                remotecall_fetch(shmmem_create_pid, io) do fut
+                    close(fetch(fut))
+                end
+            end
         end
     end
     S
