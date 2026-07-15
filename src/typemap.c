@@ -291,6 +291,8 @@ static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n
                 return 0;
         }
         jl_value_t *t = jl_unwrap_vararg(decl);
+        if (t == (jl_value_t*)jl_any_type)
+            return 1;
         for (; i < n; i++) {
             jl_value_t *a = (i == 0 ? arg1 : args[i - 1]);
             if (!jl_isa(a, t))
@@ -299,6 +301,32 @@ static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n
         return 1;
     }
     return 1;
+}
+
+// Test whether a single typemap entry matches the given call, mirroring the
+// per-entry logic of jl_typemap_entry_assoc_exact, excluding guardsigs (callers
+// caching entries for re-matching must not cache guarded entries).
+int jl_typemap_entry_sig_match(jl_typemap_entry_t *ml, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world)
+{
+    assert(ml->guardsigs == jl_emptysvec);
+    if (world < jl_atomic_load_relaxed(&ml->min_world) || world > jl_atomic_load_relaxed(&ml->max_world))
+        return 0;
+    size_t lensig = jl_nparams(ml->sig);
+    if (!(lensig == n || (ml->va && lensig <= n + 1)))
+        return 0;
+    if (ml->simplesig != (void*)jl_nothing) {
+        size_t lensimplesig = jl_nparams(ml->simplesig);
+        int isva = lensimplesig > 0 && jl_is_vararg(jl_tparam(ml->simplesig, lensimplesig - 1));
+        if (!(lensimplesig == n || (isva && lensimplesig <= n + 1)))
+            return 0;
+        if (!sig_match_simple(arg1, args, n, jl_svec_data(ml->simplesig->parameters), isva, lensimplesig))
+            return 0;
+    }
+    if (ml->isleafsig)
+        return sig_match_leaf(arg1, args, jl_svec_data(ml->sig->parameters), n);
+    if (ml->issimplesig)
+        return sig_match_simple(arg1, args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig);
+    return jl_tuple1_isa(arg1, args, n, ml->sig);
 }
 
 

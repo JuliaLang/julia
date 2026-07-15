@@ -4546,6 +4546,15 @@ STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_
     return 1;
 }
 
+// quick inline rejection before the full jl_typemap_entry_sig_match test: a
+// simple signature whose first parameter is a concrete type can only match a
+// call of that callee type
+STATIC_INLINE int sig_match_simple_maybe(jl_typemap_entry_t *entry, jl_value_t *FT) JL_NOTSAFEPOINT
+{
+    jl_value_t *d0 = jl_svec_data(entry->sig->parameters)[0];
+    return d0 == FT || !jl_is_datatype(d0) || !((jl_datatype_t*)d0)->isconcretetype;
+}
+
 _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 static _Atomic(uint8_t) pick_which[N_CALL_CACHE];
 #ifdef JL_GF_PROFILE
@@ -4598,11 +4607,47 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         (callsite >> 8) & (N_CALL_CACHE - 1),
         (callsite >> 16) & (N_CALL_CACHE - 1),
         (callsite >> 24 | callsite << 8) & (N_CALL_CACHE - 1)};
+    // one additional slot hashed on the callee itself: most callees dispatch to a
+    // single cache entry regardless of callsite ("single dispatch"), so this slot is
+    // checked first and usually hits, from any callsite (including ones that thrash
+    // the callsite-hashed slots, such as the interpreter's few C callsites). hashing
+    // the value instead of its type keeps constructors (where the callee is the type
+    // itself, but its type is nearly always DataType) in separate slots.
+    uint32_t f_idx = (((uintptr_t)F >> 4) ^ ((uintptr_t)F >> 16)) & (N_CALL_CACHE - 1);
     jl_typemap_entry_t *entry = NULL;
     int i;
     jl_tupletype_t *tt = NULL;
     int64_t last_alloc = 0;
-    // check each cache entry to see if it matches
+    // check the callee-hashed slot first
+    entry = jl_atomic_load_relaxed(&call_cache[f_idx]);
+    if (entry) {
+        if (entry->isleafsig) {
+            if (nargs == jl_svec_len(entry->sig->parameters) &&
+                sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) &&
+                world >= jl_atomic_load_relaxed(&entry->min_world) &&
+                world <= jl_atomic_load_relaxed(&entry->max_world))
+                goto have_entry;
+        }
+        else {
+            // an entry whose signature is Tuple{typeof(f), Vararg{Any}} (notably
+            // builtins and intrinsic calls) matches every call of f: accept it with
+            // an inline shape test, since those calls are too hot for the general matcher
+            if (entry->simplesig == (void*)jl_nothing &&
+                jl_svec_len(entry->sig->parameters) == 2 &&
+                jl_svec_data(entry->sig->parameters)[0] == FT) {
+                jl_value_t *va = jl_svec_data(entry->sig->parameters)[1];
+                if (jl_is_vararg(va) && ((jl_vararg_t*)va)->T == (jl_value_t*)jl_any_type &&
+                    ((jl_vararg_t*)va)->N == NULL &&
+                    world >= jl_atomic_load_relaxed(&entry->min_world) &&
+                    world <= jl_atomic_load_relaxed(&entry->max_world))
+                    goto have_entry;
+            }
+            if (sig_match_simple_maybe(entry, FT) &&
+                jl_typemap_entry_sig_match(entry, F, args, nargs, world))
+                goto have_entry;
+        }
+    }
+    // then check each callsite-hashed entry to see if it matches
     //#pragma unroll
     //for (i = 0; i < 4; i++) {
     //    LOOP_BODY(i);
@@ -4610,10 +4655,17 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
 #define LOOP_BODY(_i) do { \
             i = _i; \
             entry = jl_atomic_load_relaxed(&call_cache[cache_idx[i]]); \
-            if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
-                sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
-                world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) { \
-                goto have_entry; \
+            if (entry) { \
+                if (entry->isleafsig) { \
+                    if (nargs == jl_svec_len(entry->sig->parameters) && \
+                        sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
+                        world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) \
+                        goto have_entry; \
+                } \
+                else if (sig_match_simple_maybe(entry, FT) && \
+                         jl_typemap_entry_sig_match(entry, F, args, nargs, world)) { \
+                    goto have_entry; \
+                } \
             } \
         } while (0);
     LOOP_BODY(0);
@@ -4646,9 +4698,14 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
                 }
             }
         }
-        if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-            // put the entry into the cache if it's valid for a leafsig lookup,
-            // using pick_which to slightly randomize where it ends up
+        if (entry != NULL && entry->guardsigs == jl_emptysvec &&
+            (entry->isleafsig ? entry->simplesig == (void*)jl_nothing : entry->issimplesig)) {
+            // cache the entry if a probe can re-match it without the rest of the
+            // typemap: guarded entries never qualify, since a guard rejection must
+            // fall through to later entries. store it both by callee and by callsite
+            // so both probe patterns can find it.
+            jl_atomic_store_release(&call_cache[f_idx], entry);
+            // for the callsite slots, use pick_which to slightly randomize where it ends up
             // (intentionally not atomically synchronized, since we're just using it for randomness)
             // TODO: use the thread's `cong` instead as a source of randomness
             int which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
