@@ -1167,4 +1167,43 @@ func_in_own_sp(func_in_own_sp)
         f_value_pos_sp(42)()
     end
     """) == Int
+
+    # CC must not lift typevar T above assignment to x
+    @test JuliaLowering.include_string(test_mod, """
+    for x in (Int, Float64)
+        global f_local_in_tvbounds
+        f_local_in_tvbounds(y::T) where {T<:x} = T
+    end
+    """) == nothing
+    @test JuliaLowering.include_string(test_mod, """
+    f_local_in_tvbounds(1)
+    """) == Int
+    @test JuliaLowering.include_string(test_mod, """
+    f_local_in_tvbounds(1.0)
+    """) == Float64
+
+    @test JuliaLowering.include_string(test_mod, """
+    global g_tvbound = Int
+    for i in 1:2
+        global f_global_in_tvbounds, g_tvbound
+        f_global_in_tvbounds(y::T) where {T<:g_tvbound} = (i, T)
+        g_tvbound = Float64
+    end
+    f_global_in_tvbounds(1), f_global_in_tvbounds(1.5)
+    """) == ((1, Int), (2, Float64))
 end
+
+# questionable test: g_shadowed_by_sparam is not an sparam of the single-arg
+# version of `f`, so capture into the single-arg method's body resolves to the
+# outer typevar instead of an sparam, which scope resolution re-resolves in
+# global scope (typevars are only visible in the same lambda).  However, it
+# would probably make more sense to keep the sparam in both methods, and have
+# the inner lambda's sig refer to the sparam instead of the global.
+@test JuliaLowering.include_string(test_mod, """
+global g_shadowed_by_sparam = Int
+function f_sp_in_sig_in_lam_in_optarg(
+        x, y=((z::g_shadowed_by_sparam)->z)) where g_shadowed_by_sparam
+    y
+end
+f_sp_in_sig_in_lam_in_optarg(1.)(2)
+""") == 2

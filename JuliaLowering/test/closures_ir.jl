@@ -499,19 +499,19 @@ end
 9   (call JuliaLowering.eval_closure_type TestMod :##->###1 %₆ %₇ %₈)
 10  latestworld
 11  TestMod.##->###1
-12  (call core.svec %₁₁ core.Any)
-13  (call core.svec)
-14  SourceLocation::1:10
-15  (call core.svec %₁₂ %₁₃ %₁₄)
-16  --- method core.nothing %₁₅
+12  (new %₁₁)
+13  (= slot₁/#-># %₁₂)
+14  TestMod.##->###1
+15  (call core.svec %₁₄ core.Any)
+16  (call core.svec)
+17  SourceLocation::1:10
+18  (call core.svec %₁₅ %₁₆ %₁₇)
+19  --- method core.nothing %₁₈
     slots: [slot₁/#self#(!read) slot₂/y]
     1   TestMod.+
     2   (call %₁ slot₂/y 2)
     3   (return %₂)
-17  latestworld
-18  TestMod.##->###1
-19  (new %₁₈)
-20  (= slot₁/#-># %₁₉)
+20  latestworld
 21  slot₁/#->#
 22  TestMod.x
 23  (call core.kwcall %₅ %₁ %₂₁ %₂₂)
