@@ -1430,6 +1430,10 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     if (reuse_mode)
         jl_reuse_build_plan(reuse_plan, out, codeinfos);
     size_t n_ci_total = 0, n_ci_from_image = 0, n_ci_skipped = 0, n_ci_reused = 0;
+    // classification of the non-FROM_IMAGE remainder: deserialized from an
+    // image's data (inference-only cache entry, natively compiled for the
+    // first time here) vs allocated fresh in this session
+    size_t n_ci_inferonly = 0, n_ci_inferonly_const = 0, n_ci_session = 0;
     size_t i, l;
     for (i = 0, l = jl_array_nrows(codeinfos); i < l; i++) {
         // each item in this list is either a CodeInstance followed by a CodeInfo indicating something
@@ -1440,6 +1444,15 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
             jl_code_instance_t *codeinst = (jl_code_instance_t*)item;
 
             n_ci_total++;
+            if (!(jl_atomic_load_relaxed(&codeinst->flags) & JL_CI_FLAGS_FROM_IMAGE)) {
+                if (jl_object_in_image((jl_value_t *)codeinst)) {
+                    n_ci_inferonly++;
+                    if (jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
+                        n_ci_inferonly_const++;
+                }
+                else
+                    n_ci_session++;
+            }
             if (jl_atomic_load_relaxed(&codeinst->flags) & JL_CI_FLAGS_FROM_IMAGE) {
                 n_ci_from_image++;
                 if (skip_from_image) {
@@ -1488,8 +1501,9 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     }
 
     if (jl_experiment_skip_from_image() || reuse_mode || getenv("JULIA_REPORT_IMAGE_REUSE"))
-        jl_safe_printf("jl_emit_native_to_output: %zu CodeInstances (%zu FROM_IMAGE, %zu skipped, %zu reused, %zu emitted)\n",
-                       n_ci_total, n_ci_from_image, n_ci_skipped, n_ci_reused,
+        jl_safe_printf("jl_emit_native_to_output: %zu CodeInstances (%zu FROM_IMAGE, %zu inference-only-from-image (%zu const/builtin), %zu session-fresh, %zu skipped, %zu reused, %zu emitted)\n",
+                       n_ci_total, n_ci_from_image, n_ci_inferonly, n_ci_inferonly_const,
+                       n_ci_session, n_ci_skipped, n_ci_reused,
                        n_ci_total - n_ci_skipped - n_ci_reused);
 
     emit_always_inline(out,
