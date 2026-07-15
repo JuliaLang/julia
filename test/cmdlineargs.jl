@@ -1307,6 +1307,23 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test startswith(txt, r"ERROR: (syntax: incomplete|ParseError:)")
 end
 
+# uncaught errors in `-e` and script files must not leak driver frames
+# (exec_options, _start, eval/include machinery) into the printed backtrace
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+    script = tempname() * ".jl"
+    write(script, "f() = error(\"boom\")\nf()\n")
+    for cmd in (`$exename -e 'f() = error("boom"); f()'`, `$exename $script`)
+        (success, out, err) = readchomperrors(cmd)
+        @test !success
+        @test occursin("boom", err)
+        @test occursin("top-level scope", err)
+        @test !occursin("exec_options", err)
+        @test !occursin("_start", err)
+        @test !occursin("__script_entry", err)
+    end
+    rm(script; force=true)
+end
+
 # Issue #29855
 for yn in ("no", "yes")
     exename = `$(Base.julia_cmd()) --inline=no --startup-file=no --color=no --inline=$yn`

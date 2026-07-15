@@ -1156,6 +1156,27 @@ end
     rm(f; force=true)
 end
 
+@testset "backtraces in exceptions thrown outside of @test" begin
+    # the backtrace is anchored at the enclosing @testset: frames below it
+    # (include machinery, script/test-harness drivers) say nothing about the
+    # failure
+    local f = tempname() * ".jl"
+    write(f,
+    """
+    using Test
+    @testset "outer" begin
+        error("boom")
+    end
+    """)
+    local msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=devnull), String)
+    @test occursin("Got exception outside of a @test", msg)
+    @test occursin(f * ":3", msg)
+    @test !occursin("include(", msg)
+    @test !occursin("exec_options", msg)
+    @test !occursin("_start()", msg)
+    rm(f; force=true)
+end
+
 @testset "provide informative location in backtrace for test failures" begin
     utils = tempname()
     write(utils,

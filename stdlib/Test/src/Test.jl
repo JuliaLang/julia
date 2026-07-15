@@ -236,7 +236,7 @@ struct Error <: Result
         @nospecialize orig_expr value
         bt_str = ""
         if !isnothing(excs)
-            if test_type === :test_error
+            if test_type === :test_error || test_type === :nontest_error
                 excs = scrub_exc_stack(excs, nothing, extract_file(source))
             end
             if test_type === :test_error || test_type === :nontest_error
