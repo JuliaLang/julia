@@ -585,6 +585,12 @@ end
     @test isopen(m)
     @test isreadable(m)
     @test iswritable(m)
+
+    # Regression test: a positive offset should work with Anonymous.
+    anon = @test_deprecated Mmap.Anonymous()
+    a = Mmap.mmap(anon, Vector{UInt8}, (5,), 4)
+    @test length(a) == 5
+    finalize(a); a = nothing; GC.gc()
 end=#
 
 if Sys.isunix()

@@ -683,6 +683,6 @@ mmap(anon::Anonymous, ::Type{Array{T, N}}, len::Integer, args...; kwargs...) whe
 mmap(anon::Anonymous, ::Type{Array{T, N}}, dims::NTuple{N, <:Integer}; kwargs...) where {T, N} =
     mmap(anon, Array{T, N}, dims, 0; kwargs...)
 mmap(anon::Anonymous, ::Type{Array{T, N}}, dims::NTuple{N, <:Integer}, offset::Integer; kwargs...) where {T, N} =
-    open(io -> mmap(io, Array{T, N}, dims, offset; kwargs...), SharedMemory, anon.name, prod(dims) * sizeof(T); anon.readonly, anon.create)
+    open(io -> mmap(io, Array{T, N}, dims, offset; kwargs...), SharedMemory, anon.name, prod(dims) * sizeof(T) + offset; anon.readonly, anon.create)
 
 end # module
