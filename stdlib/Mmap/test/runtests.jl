@@ -330,6 +330,17 @@ finalize(m); m = nothing; GC.gc()
         return false
     end
 
+    function has_open_fd(pid::Integer, name)
+        for fd in readdir("/proc/$pid/fd")
+            try
+                basename(name) == basename(Base.Filesystem.readlink("/proc/$pid/fd/$fd")) && return true
+            catch
+                # fd may close between listing and reading the link
+            end
+        end
+        return false
+    end
+
 elseif Sys.iswindows()
 
 function named_mapping_open(segname)
@@ -457,6 +468,46 @@ end
             finalize(io)
             @test !named_mapping_open(name)
             io = nothing; GC.gc()
+
+        else # other Unix, tests TODO
+
+        end
+    end
+
+    @testset "SharedMemory handles/fds are not inherited by child processes" begin
+        name = "/jlsharedsegment"
+
+        @static if Sys.islinux()
+
+            # A spawned child must not end up with an open fd to the segment: shm_open()
+            # is called with JL_O_CLOEXEC, so the fd should vanish across the child's exec().
+            io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+            child = run(`sleep 5`; wait = false)
+            try
+                sleep(0.3) # let the child settle after exec()
+                @test !has_open_fd(Base.Libc.getpid(child), name)
+            finally
+                close(io)
+                kill(child)
+                wait(child)
+            end
+
+        elseif Sys.iswindows()
+
+            # If the handle were inherited (bInheritHandle=true), the still-running child
+            # would keep the kernel object alive after we close our own handle, and
+            # recreating the segment here would fail with ERROR_ALREADY_EXISTS.
+            io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+            child = run(`$(Base.julia_cmd()) -e "sleep(5)"`; wait = false)
+            try
+                sleep(0.5)
+                close(io)
+                io2 = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+                close(io2)
+            finally
+                kill(child)
+                wait(child)
+            end
 
         else # other Unix, tests TODO
 

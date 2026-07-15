@@ -402,7 +402,12 @@ end
         S = SharedArray{Int64}(100, 100)
         segname = S.segname
         pids = procs(S)
+        fill!(S, 42)
         unshare!(S)
+
+        # bookkeeping is cleared, and the parent-side data survives unshare
+        @test isempty(procs(S))
+        @test all(S .== 42)
 
         @static if Sys.islinux()
 
@@ -418,6 +423,33 @@ end
 
         else # Other platforms TODO, if possible
 
+        end
+
+        # calling again on an already-unshared array is a no-op, not an error
+        unshare!(S)
+        @test isempty(procs(S))
+        @test all(S .== 42)
+    end
+
+    @testset "Remote creation's close-via-future path releases resources" begin
+        p = id_other
+        segname = "/jltestremoteclose" * randstring(8)
+        mode = SharedArrays.JL_O_CREAT | SharedArrays.JL_O_RDWR
+        io = remotecall(p) do
+            last(SharedArrays.shm_mmap_array(Int64, (10, 10), segname, mode, false))
+        end
+        wait(io)
+
+        @static if Sys.islinux()
+            @test remotecall_fetch(has_open_fd, p, segname)
+        end
+
+        remotecall_fetch(p, io) do fut
+            close(fetch(fut))
+        end
+
+        @static if Sys.islinux()
+            @test !remotecall_fetch(has_open_fd, p, segname)
         end
     end
 
