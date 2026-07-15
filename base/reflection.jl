@@ -1224,11 +1224,11 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector)
+        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector{Any}
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
-            filter!(ms) do m::Core.MethodMatch
-                return !has_bottom_parameter(m.spec_types)
+            filter!(ms) do m
+                return !has_bottom_parameter((m::Core.MethodMatch).spec_types)
             end
         end
         # if ml-matches reported the existence of an ambiguity over their
@@ -1237,7 +1237,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         # report the other ambiguous pair)
         have_m1 = have_m2 = false
         for match in ms
-            m = match.method
+            m = (match::Core.MethodMatch).method
             m === m1 && (have_m1 = true)
             m === m2 && (have_m2 = true)
         end
@@ -1247,55 +1247,24 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         end
         if !ambiguous_bottom
             # Since we're intentionally ignoring certain ambiguities (via the
-            # filter call above), see if the intersection is nevertheless fully
-            # resolved by other methods. There need not be a single method that
-            # covers all of `ti`: several methods may each be more specific than
-            # both `m1` and `m2`, and together cover the whole intersection, in
-            # which case dispatch is never actually ambiguous between `m1` and
-            # `m2`.
-            #
-            # `morespecific` is not transitive, so being more specific than both
-            # `m1` and `m2` does not by itself guarantee that a method actually
-            # wins dispatch over its portion of the intersection: a specificity
-            # cycle may lead back to `m1` or `m2` (e.g. some `m4` more specific
-            # than the candidate resolver `m3`, while `m1` is more specific than
-            # `m4`), keeping the ambiguity real over the part of the
-            # intersection shared with `m4`. So first (transitively) reject
-            # every method that loses to `m1` or `m2` through such a chain, then
-            # check whether the union of the signatures of the remaining methods
-            # that are more specific than both `m1` and `m2` covers the whole
-            # intersection.
-            losers = IdSet{Method}()
-            worklist = Method[]
+            # filter call above), re-run the runtime's match sort on the
+            # remaining matches: without the Union{}-parameter matches, the
+            # apparent ambiguity may now be resolved by the other more specific
+            # methods (possibly only by a union of several of them together).
+            # This prunes every match that can no longer be a dispatch target
+            # from `ms` and recomputes whether any ambiguity remains.
+            ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0 && return false
+            have_m1 = have_m2 = false
             for match in ms
-                m = match.method
-                (m === m1 || m === m2) && continue
-                if morespecific(m1, m) || morespecific(m2, m)
-                    push!(losers, m)
-                    push!(worklist, m)
-                end
+                m = (match::Core.MethodMatch).method
+                m === m1 && (have_m1 = true)
+                m === m2 && (have_m2 = true)
             end
-            while !isempty(worklist)
-                u = pop!(worklist)
-                for match in ms
-                    m = match.method
-                    (m === m1 || m === m2 || m in losers) && continue
-                    if morespecific(u, m)
-                        push!(losers, m)
-                        push!(worklist, m)
-                    end
-                end
+            if !have_m1 || !have_m2
+                # the remaining ambiguity is not between m1 and m2 (at least one
+                # of them can never be the dispatch target over `ti`)
+                return false
             end
-            resolvers = nothing
-            for match in ms
-                m = match.method
-                (m === m1 || m === m2 || m in losers) && continue
-                if morespecific(m, m1) && morespecific(m, m2)
-                    resolvers = resolvers === nothing ? match.spec_types : Union{resolvers, match.spec_types}
-                end
-            end
-            resolvers === nothing && return true
-            return !(ti <: resolvers)
         end
         return true
     end
