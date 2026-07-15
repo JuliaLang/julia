@@ -378,6 +378,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
     jl_value_t *declrt = *cfuncdata->declrt;
     JL_GC_PROMISE_ROOTED(declrt);
     int specsig = cfuncdata->flags & 1;
+    int gcstack_arg = (cfuncdata->flags & 2) != 0;
     size_t nargs = jl_nparams(sigt);
     jl_value_t *mi;
     jl_code_instance_t *codeinst;
@@ -426,7 +427,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         return f; // another thread fixed this up while we were away
     }
     int is_opaque_closure = 0;
-    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure };
+    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure, gcstack_arg };
     if (codeinst == NULL) {
         // Generate an adapter to a dynamic dispatch
         if (cfuncdata->unspecialized == NULL)

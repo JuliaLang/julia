@@ -437,6 +437,7 @@ typedef struct _jl_abi_t {
     int specsig; // bool
     // OpaqueClosure Methods override the first argument of their signature
     int is_opaque_closure;
+    int gcstack_arg;
 } jl_abi_t;
 
 // The compiler uses the specific integer values returned by jl_invoke_api

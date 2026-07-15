@@ -527,7 +527,7 @@ static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, 
 {
     std::string gf_thunk_name;
     if (specfunc)
-        gf_thunk_name = emit_abi_converter(out, from_abi, codeinst, specfunc, target_specsig);
+        gf_thunk_name = emit_abi_converter(out, from_abi, codeinst, specfunc, target_specsig, out.params->gcstack_arg);
     else
         gf_thunk_name = emit_abi_dispatcher(out, from_abi, codeinst, func);
     auto F = out.get_module().getFunction(gf_thunk_name);
