@@ -493,7 +493,8 @@ julia> print("Hello World!")
 Hello World!
 ```
 """
-show(io::IO, @nospecialize(x)) = show_default(io, x)
+show(io::IO, @nospecialize(x)) =
+    isenumtype(typeof(x)) ? show_enum_value(io, x) : show_default(io, x)
 
 show(x) = show(stdout, x)
 

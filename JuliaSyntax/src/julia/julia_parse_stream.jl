@@ -54,6 +54,17 @@ Set for K"module" when it's not bare (`module`, not `baremodule`)
 """
 const BARE_MODULE_FLAG = RawFlags(1<<8)
 
+"""
+Set for K"enum" when the body has a trailing `...` (an open/extensible enum)
+"""
+const ENUM_OPEN_FLAG = RawFlags(1<<8)
+
+"""
+Set for K"enum" when the body has a leading `...` (an extension of an
+existing enum)
+"""
+const ENUM_EXTEND_FLAG = RawFlags(1<<9)
+
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 # TODO: Given this is only used for nrow/ncat, we could actually use all the flags?
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
@@ -145,6 +156,9 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
                 has_flags(head, MUTABLE_FLAG) && (str = str*"-mut")
             elseif k == K"module"
                 has_flags(head, BARE_MODULE_FLAG) && (str = str*"-bare")
+            elseif k == K"enum"
+                has_flags(head, ENUM_OPEN_FLAG) && (str = str*"-open")
+                has_flags(head, ENUM_EXTEND_FLAG) && (str = str*"-extend")
             end
             if k in KSet"tuple call dotcall macrocall vect curly braces <: >:" &&
                     has_flags(head, TRAILING_COMMA_FLAG)

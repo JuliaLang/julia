@@ -1490,6 +1490,81 @@
                                (cons fdef fdefs) (cons info-var info-vars)
                                (append (reverse doc-calls) doc-stmts))))))))))))
 
+;; expand (enum isopen isextend sig (block items...))
+;; sig is name, name::storage, name <: super or name::storage <: super, where
+;; name may be dotted (M.E) for extensions of an existing enum.
+(define (expand-enum-def e)
+  (define (lit-true? x) (and (pair? x) (eq? (car x) 'true)))
+  (define (member-name x)
+    (cond ((symbol? x) x)
+          ((and (pair? x) (eq? (car x) '=) (symbol? (cadr x))) (cadr x))
+          ((and (pair? x) (eq? (car x) 'block))
+           (error "docstrings on enum members are not currently supported"))
+          (else (error (string "invalid enum member \"" (deparse x) "\"")))))
+  (define (member-form target x)
+    (let ((n (member-name x))
+          (v (if (symbol? x) '(null) (caddr x))))
+      `(call (core _enum_add_member) ,target (thismodule) (inert ,n) ,v)))
+  (define (member-forms target items)
+    (apply append (map (lambda (x) (list (member-form target x) '(latestworld)))
+                       items)))
+  (let* ((isopen   (lit-true? (cadr e)))
+         (isextend (lit-true? (caddr e)))
+         (sig      (cadddr e))
+         (blk      (car (cddddr e)))
+         (items    (filter (lambda (x) (not (linenum? x)))
+                           (if (and (pair? blk) (eq? (car blk) 'block))
+                               (cdr blk)
+                               (list blk))))
+         (has-super   (and (pair? sig) (eq? (car sig) '|<:|)))
+         (sig1        (if has-super (cadr sig) sig))
+         (super       (if has-super (caddr sig) #f))
+         (has-storage (and (pair? sig1) (eq? (car sig1) '|::|)))
+         (name        (if has-storage (cadr sig1) sig1))
+         (storage     (if has-storage (caddr sig1) #f))
+         (dotted      (and (pair? name) (eq? (car name) '|.|)))
+         ;; a leading `...` marks an extension; a sole `...` sets both markers
+         ;; and means an empty open origin declaration for a plain name, or an
+         ;; empty extension for a dotted name
+         (extension   (or dotted (and isextend (pair? items)))))
+    (if (and dotted (not isextend))
+        (error "cannot declare a new enum with a qualified name; extending an enum requires a leading \"...\""))
+    (if extension
+        (begin
+          (if (and isopen (pair? items))
+              (error "an enum extension cannot contain \"...\" at the end; an enum is declared extensible at its original definition"))
+          (if (not storage)
+              (error "extending an enum requires repeating its storage type"))
+          (if has-super
+              (error "an enum extension cannot declare a supertype"))
+          (let ((t (make-ssavalue)))
+            (expand-forms
+             `(block
+               (toplevel-only enum)
+               (= ,t ,name)
+               (call (core _enum_extend) ,t (thismodule) ,storage)
+               ,@(member-forms t items)
+               (null)))))
+        (begin
+          (if (not (symbol? name))
+              (error (string "invalid enum name \"" (deparse name) "\"")))
+          (expand-forms
+           `(block
+             (global ,name)
+             (scope-block
+              (block
+               (local-def ,name)
+               (toplevel-only enum)
+               (= ,name (call (core _enumtype) (thismodule) (inert ,name)
+                              ,(or super '(core Any))
+                              ,(or storage '(core Int32))
+                              ,(if isopen '(true) '(false))))
+               (const (globalref (thismodule) ,name) ,name)
+               (latestworld)
+               (null)))
+             ,@(member-forms `(globalref (thismodule) ,name) items)
+             (null)))))))
+
 ;; the following are for expanding `try` blocks
 
 (define (find-symbolic-label-defs e tbl)
@@ -2695,6 +2770,7 @@
    'macro          expand-macro-def
    'struct         expand-struct-def
    'typegroup      expand-typegroup-def
+   'enum           expand-enum-def
    'try            expand-try
 
    'lambda

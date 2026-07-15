@@ -778,6 +778,13 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
     otherwise be prevented by the type's constructors and methods. Unexpected behavior
     may result without additional validation.
 
+!!! warning
+
+    The bit patterns of automatically assigned members of [`enum`](@ref) types are
+    rebased when precompiled packages are loaded and are not stable across sessions.
+    Integers obtained by `reinterpret`-ing such enum values must not be persisted or
+    transmitted between processes.
+
 """
 function reinterpret(::Type{Out}, x) where {Out}
     @inline

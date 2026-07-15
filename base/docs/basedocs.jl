@@ -1638,6 +1638,70 @@ See the manual section on [Mutually Recursive Types](@ref) for more details.
 kw"typegroup"
 
 """
+    enum
+
+`enum` declares an enumerated type whose members are bound as constants in the
+enclosing module:
+
+```julia
+enum Color::UInt8
+    Red
+    Green = 5
+    ...
+end
+```
+
+The storage type (`UInt8` above) must be a concrete primitive integer type and
+defaults to `Int32`; a supertype may be declared with `<:` and defaults to
+`Any`. Members may pin an explicit value of the storage type (any integer that
+is representable in it is accepted); members without one are assigned the next
+free value automatically. Two members of an enum can never share a value.
+
+A trailing `...` declares the enum *open* (extensible): other modules may then
+add members to it by repeating the declaration with a leading `...` and the
+name of the existing enum:
+
+```julia
+enum ColorPkg.Color::UInt8
+    ...
+    Blue
+end
+```
+
+Extension members are identified by their owning module together with their
+name, so two packages can extend the same enum with the same member name
+without conflict. Extensions must repeat the storage type and cannot declare a
+supertype or the `...` openness marker.
+
+The integer value of an enum member can be recovered with
+[`reinterpret`](@ref), and an integer can be converted to the corresponding
+enum value the same way:
+
+```julia
+reinterpret(UInt8, Green)  # 0x05
+reinterpret(Color, 0x05)   # Green
+```
+
+!!! warning
+    The value of an *automatically assigned* member is determined by
+    registration order and is rebased when precompiled packages are loaded; it
+    is **not stable** across sessions, package versions, or precompilation.
+    Never persist or transmit `reinterpret`-ed enum values, and never compare
+    them across processes. Only explicitly assigned values are stable.
+
+The [`hash`](@ref) of an enum value is derived from its member's identity (the
+owning module and name) rather than its bit pattern, so hashes and hash-based
+containers keyed by enum values are unaffected by rebasing.
+
+Use [`instances`](@ref) to obtain the currently registered members of an enum
+type. For open enums this grows as extensions are loaded.
+
+!!! compat "Julia 1.14"
+    The `enum` keyword requires at least Julia 1.14.
+"""
+kw"enum"
+
+"""
     new, or new{A,B,...}
 
 Special function available to inner constructors which creates a new object

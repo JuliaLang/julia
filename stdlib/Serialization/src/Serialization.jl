@@ -89,7 +89,11 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 30 # do not make changes without bumping the version #!
+const ser_version = 31 # do not make changes without bumping the version #!
+# v31: values of enum types (Base.isenumtype) carry their member identity
+#      (module, name, isexplicit) and are resolved by identity when read;
+#      isbits arrays with enum-containing eltype are preceded by an identity
+#      table for the member bit patterns occurring in the data
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -331,6 +335,152 @@ function serialize(s::AbstractSerializer, x::Symbol)
     nothing
 end
 
+# Enum values (Base.isenumtype) are serialized together with their member
+# identity (owning module, name, isexplicit) and resolved by that identity
+# when read: their bit patterns are rebased when package images are loaded,
+# so raw bits are not meaningful across sessions. For isbits arrays the raw
+# data block is kept and preceded by a table of the member identities
+# occurring in it; the reader remaps the bits in place after reading.
+
+# the bit pattern of `raw` (an instance of the storage type ST), zero-extended
+enum_bits_u64(ST::DataType, raw) =
+    UInt64(reinterpret(sizeof(ST) == 1 ? UInt8 :
+                       sizeof(ST) == 2 ? UInt16 :
+                       sizeof(ST) == 4 ? UInt32 : UInt64, raw))
+
+function serialize_enum_ident(s::AbstractSerializer, @nospecialize(v))
+    write(s.io, reinterpret(Base.enumstoragetype(typeof(v))::DataType, v))
+    info = Base.enum_member_info(v)
+    if info === nothing
+        # a bit pattern with no registered member round-trips as raw bits
+        serialize(s, nothing)
+    else
+        serialize(s, info[2]) # owning module
+        serialize(s, info[1]) # member name
+        serialize(s, info[3]) # isexplicit
+    end
+    nothing
+end
+
+function deserialize_enum_ident(s::AbstractSerializer, t::DataType)
+    ST = Base.enumstoragetype(t)::DataType
+    raw = read(s.io, ST)
+    mod = deserialize(s)
+    mod === nothing && return raw, nothing
+    name = deserialize(s)::Symbol
+    isexplicit = deserialize(s)::Bool
+    inst = Base.enum_resolve_member(t, mod::Module, name, enum_bits_u64(ST, raw), isexplicit)
+    return raw, inst
+end
+
+function serialize_enum_value(s::AbstractSerializer, t::DataType, @nospecialize(x))
+    serialize_type(s, t)
+    serialize_enum_ident(s, x)
+    nothing
+end
+
+function deserialize_enum_value(s::AbstractSerializer, t::DataType)
+    raw, inst = deserialize_enum_ident(s, t)
+    return inst === nothing ? reinterpret(t, raw) : inst
+end
+
+# collect the distinct enum member values occurring (possibly nested) in `x`
+function collect_enum_members!(seen::IdDict{Any,Nothing}, @nospecialize(x))
+    t = typeof(x)
+    if Base.isenumtype(t)
+        seen[x] = nothing
+    elseif !isprimitivetype(t)
+        for i in 1:nfields(x)
+            collect_enum_members!(seen, getfield(x, i))
+        end
+    end
+    nothing
+end
+
+function serialize_enum_array_idents(s::AbstractSerializer, a)
+    seen = IdDict{Any,Nothing}()
+    for x in a
+        collect_enum_members!(seen, x)
+    end
+    serialize(s, Int32(length(seen)))
+    for v in keys(seen)
+        serialize(s, typeof(v))
+        serialize_enum_ident(s, v)
+    end
+    nothing
+end
+
+# read the identity table written by serialize_enum_array_idents and return a
+# map from serialized bit patterns to this session's bit patterns (or nothing
+# when no bits changed)
+function deserialize_enum_array_idents(s::AbstractSerializer, @nospecialize(elty))
+    format_version(s) >= 31 || return nothing
+    Base.type_contains_enum(elty) || return nothing
+    n = Int(deserialize(s)::Int32)
+    remap = nothing
+    for _ = 1:n
+        t = deserialize(s)::DataType
+        raw, inst = deserialize_enum_ident(s, t)
+        inst === nothing && continue
+        ST = Base.enumstoragetype(t)::DataType
+        old = enum_bits_u64(ST, raw)
+        new = enum_bits_u64(ST, reinterpret(ST, inst))
+        if old != new
+            if remap === nothing
+                remap = Dict{Tuple{DataType,UInt64},UInt64}()
+            end
+            remap[(t, old)] = new
+        end
+    end
+    return remap
+end
+
+# byte offsets (and types) of enum-typed data inside an element of type `t`
+function enum_field_ranges!(out::Vector{Tuple{Int,DataType}}, @nospecialize(t), base::Int)
+    if Base.isenumtype(t)
+        push!(out, (base, t::DataType))
+    elseif isa(t, DataType)
+        for i in 1:fieldcount(t)
+            ft = fieldtype(t, i)
+            Base.type_contains_enum(ft) || continue
+            enum_field_ranges!(out, ft, base + Int(fieldoffset(t, i)))
+        end
+    end
+    return out
+end
+
+load_enum_bits(p::Ptr{UInt8}, nb::Int) =
+    nb == 1 ? UInt64(unsafe_load(Ptr{UInt8}(p))) :
+    nb == 2 ? UInt64(unsafe_load(Ptr{UInt16}(p))) :
+    nb == 4 ? UInt64(unsafe_load(Ptr{UInt32}(p))) :
+              unsafe_load(Ptr{UInt64}(p))
+
+store_enum_bits(p::Ptr{UInt8}, nb::Int, bits::UInt64) =
+    nb == 1 ? unsafe_store!(Ptr{UInt8}(p), bits % UInt8) :
+    nb == 2 ? unsafe_store!(Ptr{UInt16}(p), bits % UInt16) :
+    nb == 4 ? unsafe_store!(Ptr{UInt32}(p), bits % UInt32) :
+              unsafe_store!(Ptr{UInt64}(p), bits)
+
+# rewrite the enum-typed bits of the raw-read isbits array `a` in place
+function apply_enum_remap!(a, @nospecialize(elty), remap)
+    remap === nothing && return a
+    ranges = enum_field_ranges!(Tuple{Int,DataType}[], elty, 0)
+    elsz = Base.aligned_sizeof(elty)
+    GC.@preserve a begin
+        p = Ptr{UInt8}(pointer(a))
+        for i in 0:length(a)-1
+            for (off, et) in ranges
+                nb = sizeof(et)
+                q = p + i * elsz + off
+                old = load_enum_bits(q, nb)
+                new = get(remap, (et, old), nothing)
+                new === nothing || store_enum_bits(q, nb, new)
+            end
+        end
+    end
+    return a
+end
+
 function serialize_array_data(s::IO, a)
     require_one_based_indexing(a)
     isempty(a) && return 0
@@ -376,6 +526,7 @@ function serialize(s::AbstractSerializer, a::Array)
         serialize(s, length(a))
     end
     if isbitstype(elty)
+        Base.type_contains_enum(elty) && serialize_enum_array_idents(s, a)
         serialize_array_data(s.io, a)
     else
         _serialize_non_bits_elements!(s, a)
@@ -395,6 +546,7 @@ function serialize(s::AbstractSerializer, m::Memory)
     serialize(s, length(m))
     elty = eltype(m)
     if isbitstype(elty)
+        Base.type_contains_enum(elty) && serialize_enum_array_idents(s, m)
         serialize_array_data(s.io, m)
     else
         _serialize_non_bits_elements!(s, m)
@@ -800,6 +952,9 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
     end
     t = typeof(x)::DataType
     if isprimitivetype(t)
+        if Base.isenumtype(t)
+            return serialize_enum_value(s, t, x)
+        end
         serialize_type(s, t)
         write(s.io, x)
     else
@@ -1453,9 +1608,11 @@ function deserialize_array(s::AbstractSerializer)
     end
     if isa(d1, Int32) || isa(d1, Int64)
         if elty !== Bool && isbitstype(elty)
+            remap = deserialize_enum_array_idents(s, elty)
             a = Vector{elty}(undef, d1)
             _setbackref!(s, slot, a)
-            return read!(s.io, a)
+            read!(s.io, a)
+            return apply_enum_remap!(a, elty, remap)
         end
         dims = (Int(d1),)
     elseif d1 isa Dims
@@ -1479,7 +1636,9 @@ function deserialize_array(s::AbstractSerializer)
                 end
             end
         else
+            remap = deserialize_enum_array_idents(s, elty)
             A = read!(s.io, Array{elty}(undef, dims))
+            apply_enum_remap!(A, elty, remap)
         end
         _setbackref!(s, slot, A)
         return A
@@ -1520,7 +1679,9 @@ function deserialize(s::AbstractSerializer, X::Type{Memory{T}} where T)
                 end
             end
         else
+            remap = deserialize_enum_array_idents(s, elty)
             A = read!(s.io, A)::X
+            apply_enum_remap!(A, elty, remap)
         end
         _setbackref!(s, slot, A)
         return A
@@ -1735,6 +1896,9 @@ end
 function deserialize(s::AbstractSerializer, t::DataType)
     nf = length(t.types)
     if isprimitivetype(t)
+        if Base.isenumtype(t) && format_version(s) >= 31
+            return deserialize_enum_value(s, t)
+        end
         return read(s.io, t)
     elseif ismutabletype(t)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)

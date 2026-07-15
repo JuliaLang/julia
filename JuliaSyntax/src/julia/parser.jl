@@ -275,7 +275,12 @@ function peek_initial_reserved_words(ps::ParseState)
         k2 = peek(ps, 2, skip_newlines=false)
         return (k == K"mutable"   && k2 == K"struct") ||
                (k == K"primitive" && k2 == K"type")   ||
-               (k == K"abstract"  && k2 == K"type")
+               (k == K"abstract"  && k2 == K"type")   ||
+               # `enum` is only a keyword in Julia >= 1.14, but `enum Foo` was
+               # always a juxtaposition error, so parse as enum on older
+               # versions too for error recovery (the version error is
+               # attached by parse_resword)
+               (k == K"enum" && (k2 == K"Identifier" || is_contextual_keyword(k2)))
     elseif k == K"typegroup" && ps.stream.version < (1, 14)
         # On older versions, typegroup is an identifier. But if followed by
         # a type definition keyword (which would be a syntax error in old
@@ -289,7 +294,7 @@ end
 
 function is_block_form(k)
     kind(k) in KSet"block quote if for while let function macro
-                    abstract primitive struct typegroup try module"
+                    abstract primitive struct typegroup enum try module"
 end
 
 function is_syntactic_unary_op(k)
@@ -1869,6 +1874,62 @@ function parse_subtype_spec(ps::ParseState)
     parse_comparison(ps, true)
 end
 
+# Parse the body of an `enum` declaration: member entries (`A` or `A = val`,
+# optionally with docstrings) separated by newlines or semicolons, emitted as
+# a K"block". A `...` entry is bumped as trivia and reported via the returned
+# flags; it may only appear as the first entry (marking the declaration as an
+# extension of an existing enum) or the last entry (marking the enum as
+# open/extensible).
+function parse_enum_body(ps::ParseState)
+    mark = position(ps)
+    leading_dots = false
+    trailing_dots = false
+    dots_error_emitted = false
+    nitems = 0
+    while true
+        bump_trivia(ps)
+        k = peek(ps)
+        if k == K";"
+            bump(ps, TRIVIA_FLAG)
+        elseif k == K"end" || k == K"EndMarker" || is_closing_token(ps, k)
+            break
+        elseif k == K"." && peek(ps, 2) == K"." && peek(ps, 3) == K"."
+            # a `...` entry, lexed as three adjacent dots
+            dots_mark = position(ps)
+            bump(ps, TRIVIA_FLAG)
+            bump(ps, TRIVIA_FLAG) # second dot
+            bump(ps, TRIVIA_FLAG) # third dot
+            if nitems == 0 && !leading_dots
+                leading_dots = true
+            elseif !trailing_dots
+                trailing_dots = true
+            else
+                # enum E\nA\n...\n...\nend  ==>  (enum E (block A (error)))
+                emit(ps, dots_mark, K"error",
+                     error="`...` may only appear at the start or the end of an `enum` body")
+            end
+        else
+            m = position(ps)
+            parse_docstring(ps)
+            nitems += 1
+            if trailing_dots && !dots_error_emitted
+                # enum E\n...ish: a member after a non-leading `...`
+                # enum E\nA\n...\nB\nend  ==>  (enum E (block A (error B)))
+                dots_error_emitted = true
+                emit(ps, m, K"error",
+                     error="`...` must be the last entry in an `enum` body")
+            end
+        end
+    end
+    if leading_dots && nitems == 0 && !trailing_dots
+        # a sole `...` is also the last entry
+        trailing_dots = true
+    end
+    emit(ps, mark, K"block")
+    return (leading_dots ? ENUM_EXTEND_FLAG : EMPTY_FLAGS) |
+           (trailing_dots ? ENUM_OPEN_FLAG : EMPTY_FLAGS)
+end
+
 # flisp: parse-struct-field
 function parse_struct_field(ps::ParseState)
     mark = position(ps)
@@ -2089,6 +2150,24 @@ function parse_resword(ps::ParseState)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"typegroup")
         min_supported_version(v"1.14", ps, mark, "typegroup")
+    elseif word == K"enum"
+        # Enum type definitions
+        # enum E\nA\nB = 5\nend        ==> (enum E (block A (= B 5)))
+        # enum E::Int8\nA\nend         ==> (enum (::-i E Int8) (block A))
+        # enum E <: S\nA\nend          ==> (enum (<: E S) (block A))
+        # enum E end                   ==> (enum E (block))
+        # A trailing `...` marks the enum open (extensible):
+        # enum E\nA\n...\nend          ==> (enum-open E (block A))
+        # A leading `...` marks an extension of an existing enum:
+        # enum M.E::Int8\n...\nC\nend  ==> (enum-extend (::-i (. M (quote E)) Int8) (block C))
+        # A sole `...` sets both markers; lowering disambiguates by name shape:
+        # enum E\n...\nend             ==> (enum-open-extend E (block))
+        bump(ps, TRIVIA_FLAG)
+        parse_subtype_spec(ps)
+        flags = parse_enum_body(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"enum", flags)
+        min_supported_version(v"1.14", ps, mark, "enum")
     elseif word == K"try"
         parse_try(ps)
     elseif word == K"return"

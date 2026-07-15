@@ -575,6 +575,10 @@ typedef struct {
     _Atomic(jl_svec_t*) cache;        // sorted array
     _Atomic(jl_svec_t*) linearcache;  // unsorted array
     jl_array_t *partial;     // incomplete instantiations of this type
+    // for enum types: member table svec (storage type, isopen, next_auto hint,
+    // then (name, module, instance, isexplicit, identityhash) per member);
+    // NULL otherwise
+    _Atomic(jl_svec_t*) enumtab;
     intptr_t hash;
     _Atomic(int32_t) max_args;  // max # of non-vararg arguments in a signature with this type as the function
     int32_t n_uninitialized;
@@ -582,7 +586,8 @@ typedef struct {
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
-    uint8_t _unused:5;
+    uint8_t isenumtype:1;
+    uint8_t _unused:4;
     _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
@@ -1740,6 +1745,11 @@ STATIC_INLINE int jl_is_primitivetype(void *v) JL_NOTSAFEPOINT
     return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->isprimitivetype);
 }
 
+STATIC_INLINE int jl_is_enumtype(void *v) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->name->isenumtype);
+}
+
 STATIC_INLINE int jl_is_structtype(void *v) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(v) &&
@@ -1977,6 +1987,11 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name,
                                                  jl_module_t *module,
                                                  jl_datatype_t *super,
                                                  jl_svec_t *parameters, size_t nbits);
+JL_DLLEXPORT jl_datatype_t *jl_new_enumtype(jl_sym_t *name,
+                                            jl_module_t *module,
+                                            jl_value_t *super,
+                                            jl_datatype_t *storagetype,
+                                            int isopen);
 
 // constructors
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, const void *src);

@@ -75,7 +75,8 @@ macro MIME_str(s)
 end
 
 # fallback text/plain representation of any type:
-show(io::IO, ::MIME"text/plain", x) = show(io, x)
+show(io::IO, ::MIME"text/plain", x) =
+    Base.isenumtype(typeof(x)) ? Base.show_enum_value_plain(io, x) : show(io, x)
 
 MIME(s) = MIME{Symbol(s)}()
 show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))

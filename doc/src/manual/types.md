@@ -552,6 +552,85 @@ Vector{Edge} (alias for Array{Edge, 1})
 !!! compat "Julia 1.14"
     The `typegroup` keyword requires at least Julia 1.14.
 
+## [Enumerated Types](@id man-enum-types)
+
+The `enum` keyword declares an enumerated type: a primitive-like type backed by
+an integer *storage type* whose named members are bound as constants in the
+enclosing module:
+
+```julia
+enum Color::UInt8
+    Red
+    Green = 5
+    ...
+end
+```
+
+The storage type must be a concrete primitive integer type and defaults to
+`Int32` when omitted; a supertype may be declared with `<:` and defaults to
+`Any`. A member may pin an explicit value (any integer representable in the
+storage type); members without one are assigned the next free value
+automatically. Two members of an enum never share a value.
+
+The trailing `...` above declares the enum *open* (extensible). Other modules
+may then add their own members by repeating the declaration with a leading
+`...` and the (usually module-qualified) name of the existing enum:
+
+```julia
+enum ColorPkg.Color::UInt8
+    ...
+    Blue
+end
+```
+
+An extension must repeat the storage type of the original declaration and
+cannot declare a supertype or the trailing `...`. A member added by an
+extension is identified by its owning module together with its name, so two
+packages can independently add a member with the same name to one enum; the
+two members are distinct and are referenced through their respective modules.
+Without the trailing `...` an enum is *closed* and only its defining module
+can add members to it. A declaration whose body is a sole `...` defines an
+empty open enum, to be populated entirely by extensions.
+
+The currently registered members of an enum type are available from
+[`instances`](@ref); for open enums this grows as extensions are loaded. The
+integer value of a member is recovered with [`reinterpret`](@ref), which also
+converts back:
+
+```julia
+reinterpret(UInt8, Green)  # 0x05
+reinterpret(Color, 0x05)   # Green
+```
+
+!!! warning
+    The value of an automatically assigned member is determined by
+    registration order and is *rebased* when precompiled packages are loaded,
+    so that unrelated packages extending the same enum are deconflicted. Such
+    values are therefore **not stable** across sessions, package versions, or
+    precompilation. Data containing enum values is rewritten to the current
+    session's values when a package image is loaded, but values that escaped
+    into non-enum storage — such as integers obtained from `reinterpret` — are
+    not. Never persist or transmit `reinterpret`-ed enum values; when durable
+    identification is needed, use the member's name (and owning module) or pin
+    explicit values, which are stable.
+
+The [`hash`](@ref) of an enum value is derived from the identity of its member
+(the owning module and name), not from its bit pattern, so hashes — and
+therefore hash-based containers such as `Dict` keyed by enum values, including
+ones serialized into package images — are unaffected by rebasing. The
+`Serialization` standard library likewise records member identities alongside
+enum data, so deserialized enum values resolve to the correct members of the
+reading session, even when that session assigned them different bit patterns
+(or has not yet loaded the package that declares them).
+
+Unlike the [`@enum`](@ref Base.Enums.@enum) macro, which fixes the full member
+list at definition time, `enum` types support extension by other packages and
+do not define arithmetic or `convert` methods for their values: the only
+integer round-trip is the explicit (and loudly unstable) `reinterpret`.
+
+!!! compat "Julia 1.14"
+    The `enum` keyword requires at least Julia 1.14.
+
 ## [Declared Types](@id man-declared-types)
 
 The three kinds of types (abstract, primitive, composite) discussed in the previous

@@ -1070,6 +1070,7 @@ const all_kws = Set([
     "abstract",
     "as",
     "doc",
+    "enum",
     "goto",
     "mutable",
     "outer",

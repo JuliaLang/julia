@@ -391,6 +391,8 @@ vst1_toplevel_only(vcx, st) = @stm st begin
     [K"latestworld"] -> pass()
     [K"typegroup" [K"block" xs...]] ->
         all(vst1, vcx, xs)
+    [K"enum" [K"Value"] [K"Value"] sig [K"block" xs...]] ->
+        vst1(vcx, sig) & all(vst1, vcx, xs)
     _ -> unknown()
 end
 

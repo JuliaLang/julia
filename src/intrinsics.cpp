@@ -318,6 +318,11 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e)
     jl_value_t *bt = jl_typeof(e);
     if (!jl_is_pointerfree(bt))
         return NULL;
+    // Bits of auto-assigned enum members are rebased when a package image is
+    // loaded; such constants must be loaded at runtime from their (patchable)
+    // boxed instance instead of being emitted as immediates.
+    if (jl_options.incremental && jl_generating_output() && !jl_enum_const_is_stable(e))
+        return NULL;
     return julia_const_to_llvm(ctx, e, (jl_datatype_t*)bt);
 }
 
@@ -622,9 +627,12 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
             vxt = llvmt;
         auto storage_type = vxt->isIntegerTy(1) ? getInt8Ty(ctx.builder.getContext()) : vxt;
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, v.tbaa);
+        // v.V may be null for a constant that julia_const_to_llvm refused to
+        // emit as an immediate (unstable enum bits); load from its box instead
+        Value *vp = v.V == NULL && v.constant ? literal_pointer_val(ctx, v.constant) : v.V;
         vx = ai.decorateInst(ctx.builder.CreateLoad(
             storage_type,
-            maybe_decay_tracked(ctx, v.V)));
+            maybe_decay_tracked(ctx, vp)));
         setName(ctx.emission_context, vx, "bitcast");
     }
 

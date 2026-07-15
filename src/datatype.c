@@ -87,6 +87,8 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
     tn->partial = NULL;
+    jl_atomic_store_relaxed(&tn->enumtab, NULL);
+    tn->isenumtype = 0;
     tn->atomicfields = NULL;
     tn->constfields = NULL;
     tn->max_methods = 0;
@@ -1027,6 +1029,41 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     bt->isbitstype = (parameters == jl_emptysvec);
     bt->layout = jl_get_layout(nbytes, 0, 0, alignm, 0, 1, 0, NULL, NULL);
     bt->instance = NULL;
+    return bt;
+}
+
+JL_DLLEXPORT jl_datatype_t *jl_new_enumtype(jl_sym_t *name, jl_module_t *module,
+                                            jl_value_t *super,
+                                            jl_datatype_t *storagetype, int isopen)
+{
+    if (!jl_is_primitivetype(storagetype) || jl_is_enumtype(storagetype))
+        jl_errorf("invalid storage type for enum type %s: %s is not a primitive type",
+                  jl_symbol_name(name), jl_symbol_name(storagetype->name->name));
+    size_t nbytes = jl_datatype_size(storagetype);
+    if (nbytes != 1 && nbytes != 2 && nbytes != 4 && nbytes != 8)
+        jl_errorf("invalid storage type for enum type %s: size must be 1, 2, 4 or 8 bytes",
+                  jl_symbol_name(name));
+    jl_value_t *integer_type = jl_get_global(jl_core_module, jl_symbol("Integer"));
+    if (integer_type != NULL && !jl_subtype((jl_value_t*)storagetype, integer_type))
+        jl_errorf("invalid storage type for enum type %s: %s is not a subtype of Integer",
+                  jl_symbol_name(name), jl_symbol_name(storagetype->name->name));
+    if (super == NULL)
+        super = (jl_value_t*)jl_any_type;
+    jl_check_valid_supertype(super, jl_symbol_name(name));
+    jl_datatype_t *bt = jl_new_primitivetype((jl_value_t*)name, module,
+                                             (jl_datatype_t*)super, jl_emptysvec,
+                                             8 * nbytes);
+    jl_value_t *hint = NULL;
+    JL_GC_PUSH2(&bt, &hint);
+    bt->name->isenumtype = 1;
+    hint = jl_box_uint64(0);
+    // member table: 3-slot header (storage type, isopen, next auto value hint),
+    // then 4 slots per member (name, owning module, instance, isexplicit)
+    jl_svec_t *tab = jl_svec(3, (jl_value_t*)storagetype,
+                             isopen ? jl_true : jl_false, hint);
+    jl_atomic_store_release(&bt->name->enumtab, tab);
+    jl_gc_wb(bt->name, tab);
+    JL_GC_POP();
     return bt;
 }
 

@@ -13,6 +13,10 @@ extern "C" {
     XX(_apply_iterate,"_apply_iterate") \
     XX(_call_in_world_total,"_call_in_world_total") \
     XX(_compute_sparams,"_compute_sparams") \
+    XX(_enum_add_member,"_enum_add_member") \
+    XX(_enum_extend,"_enum_extend") \
+    XX(_enum_members,"_enum_members") \
+    XX(_enumtype,"_enumtype") \
     XX(_equiv_typedef,"_equiv_typedef") \
     XX(_expr,"_expr") \
     XX(_import, "_import") \

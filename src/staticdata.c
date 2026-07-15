@@ -254,6 +254,12 @@ typedef struct {
     arraylist_t uniquing_objs;  // a list of locations that reference non-types that must be de-duplicated
     arraylist_t fixup_types;    // a list of locations of types requiring (re)caching
     arraylist_t fixup_objs;     // a list of locations of objects requiring (re)caching
+    arraylist_t enum_patches;   // a list of (member idx, offset<<1|in_const_data) pairs of serialized
+                                // auto-assigned enum member bits, rewritten at load time when the
+                                // member's value is rebased
+    jl_array_t *enum_member_list; // flat stride-5 list of externally-owned enum members to
+                                  // re-register at load time (see jl_enum_collect_save_list)
+    htable_t enum_member_index;   // canonical member instance -> 1-based index into enum_member_list
     // mapping from a buildid_idx to a depmods_idx
     jl_array_t *buildid_depmods_idxs;
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
@@ -1326,6 +1332,77 @@ static void record_memoryrefs_inside(jl_serializer_state *s, jl_datatype_t *t, s
     }
 }
 
+// whether inline data of type t can contain enum-typed bits
+static int dt_contains_enum(jl_value_t *t)
+{
+    if (jl_is_uniontype(t))
+        return dt_contains_enum(((jl_uniontype_t*)t)->a) ||
+               dt_contains_enum(((jl_uniontype_t*)t)->b);
+    if (!jl_is_datatype(t))
+        return 0;
+    if (jl_is_enumtype(t))
+        return 1;
+    jl_datatype_t *dt = (jl_datatype_t*)t;
+    if (dt->layout == NULL)
+        return 0;
+    size_t i, nf = jl_datatype_nfields(dt);
+    for (i = 0; i < nf; i++) {
+        if (jl_field_isptr(dt, i))
+            continue;
+        if (dt_contains_enum(jl_field_type_concrete(dt, i)))
+            return 1;
+    }
+    return 0;
+}
+
+// Record the location of serialized enum-typed bits whose member value must be
+// rebased at load time (auto-assigned members of enum types owned by another
+// image). `f` is the stream the bits were written to (s->s or s->const_data)
+// and `offset` their position in it; the bits are read back from the stream so
+// that bits_replace overrides are respected.
+static void record_enum_bits(jl_serializer_state *s, jl_datatype_t *et, ios_t *f, uintptr_t offset)
+{
+    if (s->enum_member_list == NULL)
+        return;
+    if (!jl_object_in_image((jl_value_t*)et))
+        return; // enum types in this image keep their serialized member values
+    jl_value_t *member = jl_enum_lookup_auto_member(et, &f->buf[offset]);
+    if (member == NULL)
+        return;
+    void *idx = ptrhash_get(&s->enum_member_index, member);
+    if (idx == HT_NOTFOUND)
+        return;
+    arraylist_push(&s->enum_patches, (void*)((uintptr_t)idx - 2));
+    arraylist_push(&s->enum_patches, (void*)((offset << 1) | (f == s->const_data)));
+}
+
+// Analog of record_memoryrefs_inside: walk the inline fields of an object of
+// type t serialized at `offset` in `f` and record any enum-typed bits.
+static void record_enum_bits_inside(jl_serializer_state *s, jl_datatype_t *t, ios_t *f, uintptr_t offset)
+{
+    assert(jl_is_datatype(t));
+    size_t i, nf = jl_datatype_nfields(t);
+    for (i = 0; i < nf; i++) {
+        size_t foffset = jl_field_offset(t, i);
+        if (jl_field_isptr(t, i))
+            continue;
+        jl_value_t *ft = jl_field_type_concrete(t, i);
+        if (jl_is_uniontype(ft)) {
+            size_t fsz = jl_field_size(t, i);
+            uint8_t sel = (uint8_t)f->buf[offset + foffset + fsz - 1];
+            jl_value_t *active = jl_nth_union_component(ft, sel);
+            if (active != NULL && jl_is_enumtype(active))
+                record_enum_bits(s, (jl_datatype_t*)active, f, offset + foffset);
+            continue;
+        }
+        ft = normalize_typeofbottom_layout_alias(ft);
+        if (jl_is_enumtype(ft))
+            record_enum_bits(s, (jl_datatype_t*)ft, f, offset + foffset);
+        else if (jl_is_datatype(ft))
+            record_enum_bits_inside(s, (jl_datatype_t*)ft, f, offset + foffset);
+    }
+}
+
 static void record_gvars(jl_serializer_state *s, arraylist_t *globals) JL_GC_DISABLED
 {
     for (size_t i = 0; i < globals->len; i++)
@@ -1517,6 +1594,28 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         else {
                             ios_write(s->const_data, (char*)m->ptr, tot);
                         }
+                        if (s->enum_member_list != NULL && len > 0 && dt_contains_enum(et)) {
+                            // record element positions of enum-typed bits for rebasing
+                            uintptr_t cdata_offset = data * sizeof(void*);
+                            uint16_t elsz = layout->size;
+                            size_t i;
+                            if (isbitsunion) {
+                                const char *tags = jl_genericmemory_typetagdata(m);
+                                for (i = 0; i < len; i++) {
+                                    jl_value_t *active = jl_nth_union_component(et, tags[i]);
+                                    if (active != NULL && jl_is_enumtype(active))
+                                        record_enum_bits(s, (jl_datatype_t*)active, s->const_data, cdata_offset + i * elsz);
+                                }
+                            }
+                            else if (jl_is_enumtype(et)) {
+                                for (i = 0; i < len; i++)
+                                    record_enum_bits(s, (jl_datatype_t*)et, s->const_data, cdata_offset + i * elsz);
+                            }
+                            else if (jl_is_datatype(et)) {
+                                for (i = 0; i < len; i++)
+                                    record_enum_bits_inside(s, (jl_datatype_t*)et, s->const_data, cdata_offset + i * elsz);
+                            }
+                        }
                     }
                     if (len == 0) { // TODO: should we have a zero-page, instead of writing each type's fragment separately?
                         write_padding(s->const_data, layout->size ? layout->size : isbitsunion);
@@ -1596,6 +1695,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             // The object has no fields, so we just snapshot its byte representation
             assert(t->layout->npointers == 0);
             ios_write(f, (char*)v, jl_datatype_size(t));
+            if (jl_is_enumtype((jl_value_t*)t))
+                record_enum_bits(s, t, f, reloc_offset);
         }
         else if (jl_bigint_type && jl_typetagis(v, jl_bigint_type)) {
             // foreign types require special handling
@@ -1673,6 +1774,10 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 
             // Need do a tricky fieldtype walk an record all memoryref we find inlined in this value
             record_memoryrefs_inside(s, t, reloc_offset, data);
+
+            // and the same walk to record inline enum-typed bits for rebasing
+            if (s->enum_member_list != NULL && dt_contains_enum((jl_value_t*)t))
+                record_enum_bits_inside(s, t, f, reloc_offset);
 
             // A few objects need additional handling beyond the generic serialization above
             if (s->incremental && jl_typetagis(v, jl_typemap_entry_type)) {
@@ -3012,11 +3117,19 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.method_roots_list = NULL;
     htable_new(&s.method_roots_index, 0);
+    arraylist_new(&s.enum_patches, 0);
+    s.enum_member_list = NULL;
+    htable_new(&s.enum_member_index, 0);
     jl_value_t **_tags[NUM_TAGS];
     jl_value_t ***tags = s.incremental ? NULL : _tags;
     if (worklist) {
         s.method_roots_list = jl_alloc_vec_any(0);
         s.worklist_key = jl_worklist_key(worklist);
+        s.enum_member_list = jl_enum_collect_save_list();
+        // values are stored biased by 2 since HT_NOTFOUND is (void*)1
+        for (size_t i = 0; i < jl_array_nrows(s.enum_member_list) / 5; i++)
+            ptrhash_put(&s.enum_member_index,
+                        jl_array_ptr_ref(s.enum_member_list, 5 * i + 3), (void*)(i + 2));
     }
     else {
         get_tags(_tags);
@@ -3081,6 +3194,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         if (s.incremental) {
             // Queue the new roots array
             jl_queue_for_serialization(&s, s.method_roots_list);
+            // Queue the enum members needing re-registration at load time
+            jl_queue_for_serialization(&s, s.enum_member_list);
             jl_serialize_reachable(&s);
         }
         // step 1.4: prune (garbage collect) special weak references from the jl_global_roots_list
@@ -3202,6 +3317,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_write_arraylist(s.relocs, &s.fixup_types);
     }
     jl_write_arraylist(s.relocs, &s.fixup_objs);
+    if (s.incremental)
+        jl_write_arraylist(s.relocs, &s.enum_patches);
     write_uint(f, relocs.size);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&relocs, 0);
@@ -3258,6 +3375,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, extext_methods);
             jl_write_value(&s, new_ext);
             jl_write_value(&s, s.method_roots_list);
+            jl_write_value(&s, s.enum_member_list);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
         ios_write(f, (char*)jl_array_data(s.link_ids_gctags, uint32_t), jl_array_len(s.link_ids_gctags) * sizeof(uint32_t));
@@ -3287,7 +3405,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&s.gctags_list);
     arraylist_free(&gvars);
     arraylist_free(&external_fns);
+    arraylist_free(&s.enum_patches);
     htable_free(&s.method_roots_index);
+    htable_free(&s.enum_member_index);
     htable_free(&field_replace);
     htable_free(&bits_replace);
     htable_free(&serialization_order);
@@ -3849,7 +3969,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     s.s = f;
-    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0, offset_enum_member_list = 0;
+    jl_array_t *enum_member_list = NULL;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -3886,6 +4007,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         offset_extext_methods = jl_read_offset(&s);
         offset_new_ext = jl_read_offset(&s);
         offset_method_roots_list = jl_read_offset(&s);
+        offset_enum_member_list = jl_read_offset(&s);
     }
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
     size_t nlinks_gctags = read_uint32(f);
@@ -3916,6 +4038,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         *extext_methods = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_methods);
         (void)(jl_array_t*)jl_delayed_reloc(&s, offset_new_ext);
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
+        enum_member_list = (jl_array_t*)jl_delayed_reloc(&s, offset_enum_member_list);
         *internal_methods = jl_alloc_vec_any(0);
     }
     s.s = NULL;
@@ -3949,6 +4072,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         arraylist_new(&s.fixup_types, 0);
     }
     jl_read_arraylist(s.relocs, &s.fixup_objs);
+    if (s.incremental)
+        jl_read_arraylist(s.relocs, &s.enum_patches);
+    else
+        arraylist_new(&s.enum_patches, 0);
     // Perform the uniquing of objects that we don't "own" and consequently can't promise
     // weren't created by some other package before this one got loaded:
     // - iterate through all objects that need to be uniqued. The first encounter has to be the
@@ -4245,6 +4372,37 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
+
+    // Re-register enum members owned by other images into the live member
+    // tables (rebasing auto-assigned values that are already taken) and patch
+    // every serialized occurrence of a rebased member's bits.
+    if (s.incremental && enum_member_list != NULL && jl_array_nrows(enum_member_list) > 0) {
+        size_t nmembers = jl_array_nrows(enum_member_list) / 5;
+        uint64_t *newvals = (uint64_t*)calloc_s(nmembers * sizeof(uint64_t));
+        JL_TRY {
+            jl_enum_restore_members(enum_member_list, newvals);
+        }
+        JL_CATCH {
+            // an explicit enum value conflict between packages: surface it as
+            // a catchable load error (the partially restored image is inert
+            // since its methods have not been activated yet)
+            free(newvals);
+            arraylist_free(&s.enum_patches);
+            jl_gc_enable(en);
+            jl_rethrow();
+        }
+        for (size_t i = 0; i < s.enum_patches.len; i += 2) {
+            size_t idx = (uintptr_t)s.enum_patches.items[i];
+            uintptr_t tagged = (uintptr_t)s.enum_patches.items[i + 1];
+            assert(idx < nmembers);
+            jl_datatype_t *et = (jl_datatype_t*)jl_array_ptr_ref(enum_member_list, 5 * idx);
+            char *target = (tagged & 1) ? (char*)&const_data.buf[0] + (tagged >> 1)
+                                        : image_base + (tagged >> 1);
+            jl_enum_write_raw_bits(target, newvals[idx], jl_datatype_size(et));
+        }
+        free(newvals);
+    }
+    arraylist_free(&s.enum_patches);
 
     if (s.incremental)
         jl_root_new_gvars(&s, image, external_fns_begin);

@@ -3082,7 +3082,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                            sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
     # Early constant evaluation for foldable builtins with all const args
-    if isa(f, IntrinsicFunction) ? is_pure_intrinsic_infer(f) : (contains_is(_PURE_BUILTINS, f) || (contains_is(_CONSISTENT_BUILTINS, f) && contains_is(_EFFECT_FREE_BUILTINS, f)))
+    if isa(f, IntrinsicFunction) ? (is_pure_intrinsic_infer(f) && intrinsic_fold_stable(f, argtypes)) : (contains_is(_PURE_BUILTINS, f) || (contains_is(_CONSISTENT_BUILTINS, f) && contains_is(_EFFECT_FREE_BUILTINS, f)))
         if is_all_const_arg(argtypes, 1)
             argvals = collect_const_args(argtypes, 1)
             try
@@ -3359,6 +3359,21 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction, is_effect_free::Union{Not
             f === Intrinsics.cglobal)                 # cglobal lookup answer changes at runtime
 end
 
+function is_enum_datatype(@nospecialize t)
+    isa(t, DataType) || return false
+    return isdefined(t.name, :enumtab)
+end
+
+# `bitcast` to or from an enum type exposes the raw bits of enum members; for
+# auto-assigned members these are rebased when a package image is loaded, so
+# such calls must never be const-folded
+function intrinsic_fold_stable(f::IntrinsicFunction, argtypes::Vector{Any})
+    f === Intrinsics.bitcast || return true
+    length(argtypes) == 2 || return true
+    return !(is_enum_datatype(instanceof_tfunc(argtypes[1], true)[1]) ||
+             is_enum_datatype(widenconst(argtypes[2])))
+end
+
 function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
     if f === Intrinsics.llvmcall
         # llvmcall can do arbitrary things
@@ -3374,6 +3389,15 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         consistent = ALWAYS_TRUE
     else
         consistent = ALWAYS_FALSE
+    end
+    if f === Intrinsics.bitcast && length(argtypes) == 2
+        # reinterpreting to or from an enum type exposes the raw bits of enum
+        # members; for auto-assigned members these are rebased when a package
+        # image is loaded, so they must not be const-folded into compiled code
+        if is_enum_datatype(instanceof_tfunc(argtypes[1], true)[1]) ||
+           is_enum_datatype(widenconst(argtypes[2]))
+            consistent = ALWAYS_FALSE
+        end
     end
     nothrow = intrinsic_nothrow(f, argtypes)
     inaccessiblememonly = is_effect_free && !(f === Intrinsics.pointerref) ? ALWAYS_TRUE : ALWAYS_FALSE

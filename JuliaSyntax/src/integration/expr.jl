@@ -642,6 +642,10 @@ end
         end
         args[2] = fields
         pushfirst!(args, has_flags(nodehead, MUTABLE_FLAG))
+    elseif k == K"enum"
+        # Expr(:enum, isopen, isextend, sig, body)
+        pushfirst!(args, has_flags(nodehead, ENUM_EXTEND_FLAG))
+        pushfirst!(args, has_flags(nodehead, ENUM_OPEN_FLAG))
     elseif k == K"importpath"
         retexpr.head = :.
         for i = 1:length(args)

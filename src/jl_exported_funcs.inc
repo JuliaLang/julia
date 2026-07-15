@@ -117,6 +117,13 @@
     XX(jl_eh_restore_state_noexcept) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
+    XX(jl_enum_add_member) \
+    XX(jl_enum_extend_check) \
+    XX(jl_enum_isopen) \
+    XX(jl_enum_lookup_value) \
+    XX(jl_enum_members) \
+    XX(jl_enum_resolve_member) \
+    XX(jl_enum_storagetype) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \
@@ -339,6 +346,7 @@
     XX(jl_end_new_module) \
     XX(jl_new_opaque_closure_from_code_info) \
     XX(jl_new_opaque_closure_from_code_info_in_world) \
+    XX(jl_new_enumtype) \
     XX(jl_new_primitivetype) \
     XX(jl_new_struct) \
     XX(jl_new_structt) \

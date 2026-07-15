@@ -18,6 +18,18 @@ New language features
     `continue name` to continue a labeled loop ([#60481]).
   - `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
     field types. All types in the group are resolved atomically at the end of the block ([#60569]).
+  - The new `enum` keyword declares enumerated types whose members are bound as constants of the
+    enclosing module. An enum declared with a trailing `...` is *open*: other packages may add
+    members to it with an `enum` declaration carrying a leading `...`. Members without an explicit
+    value are assigned one automatically, and such values are rebased when precompiled packages are
+    loaded so that unrelated packages extending the same enum never collide; consequently
+    automatically assigned values (observable via `reinterpret`) are not stable across sessions.
+    Enum values that escape into non-enum storage (for example integers obtained from `reinterpret`)
+    do not participate in this rebasing. The `hash` of an enum value is derived from the identity
+    of its member (owning module and name) rather than its bit pattern, so hash-based containers
+    keyed by enum values are unaffected, and the `Serialization` standard library serializes enum
+    values together with their member identity, so they deserialize to the correct members in any
+    session.
 
 Language changes
 ----------------

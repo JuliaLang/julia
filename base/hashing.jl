@@ -44,7 +44,8 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 @noinline _jl_type_hash(T::Type) = @assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)
 @noinline _jl_type_cache_hash(T::Type) = @assume_effects :total ccall(:jl_type_cache_hash, UInt, (Any,), T)
 hash(T::Type, h::UInt) = hash(_jl_type_hash(T), h)
-hash(@nospecialize(data), h::UInt) = hash(objectid(data), h)
+hash(@nospecialize(data), h::UInt) =
+    isenumtype(typeof(data)) ? hash_enum_value(data, h) : hash(objectid(data), h)
 
 function mul_parts(a::UInt64, b::UInt64)
     p = widemul(a, b)

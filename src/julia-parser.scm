@@ -1094,7 +1094,7 @@
              (fix-syntactic-unary (list op arg)))))))
 
 (define block-form? (Set '(block quote if for while let function macro abstract primitive struct
-                                 try module typegroup)))
+                                 try module typegroup enum)))
 
 ;; handle ^ and .^
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
@@ -1137,7 +1137,7 @@
     (parse-call-with-initial-ex s (parse-unary-prefix s) nxt)))
 
 (define (parse-call-with-initial-ex s ex tok)
-  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract)))
+  (if (or (initial-reserved-word? tok) (memq tok '(mutable primitive abstract enum)))
       (parse-resword s ex)
       (parse-call-chain s ex #f)))
 
@@ -1370,6 +1370,46 @@
     (begin0 (list 'struct (if mut? '(true) '(false)) sig (parse-block s parse-struct-field))
             (expect-end s word))))
 
+;; parse an enum definition: (enum isopen isextend sig (block items...))
+;; The body is member entries (`A` or `A = val`, optionally with docstrings)
+;; separated by newlines or semicolons. A `...` entry may only appear first
+;; (marking an extension of an existing enum) or last (marking the enum as
+;; open/extensible); a sole `...` sets both markers and lowering
+;; disambiguates by the shape of the name.
+(define (parse-enum-def s word)
+  (let ((sig (parse-subtype-spec s)))
+    (let loop ((items '())
+               (leading-dots #f)
+               (trailing-dots #f))
+      (let ((t (peek-token s)))
+        (cond ((or (newline? t) (eqv? t #\;))
+               (take-token s)
+               (loop items leading-dots trailing-dots))
+              ((eq? t 'end)
+               (take-token s)
+               (let* ((sole (and leading-dots (null? items) (not trailing-dots)))
+                      (open (or trailing-dots sole)))
+                 (list 'enum
+                       (if open '(true) '(false))
+                       (if leading-dots '(true) '(false))
+                       sig
+                       (cons 'block (reverse items)))))
+              ((eof-object? t)
+               (error "incomplete: \"enum\" definition requires \"end\""))
+              ((eq? t '...)
+               (take-token s)
+               (cond ((and (null? items) (not leading-dots))
+                      (loop items #t trailing-dots))
+                     ((not trailing-dots)
+                      (loop items leading-dots #t))
+                     (else
+                      (error "\"...\" may only appear at the start or the end of an \"enum\" body"))))
+              (else
+               (if trailing-dots
+                   (error "\"...\" must be the last entry in an \"enum\" body"))
+               (loop (cons (parse-docstring s parse-eq) items)
+                     leading-dots trailing-dots)))))))
+
 ;; consume any number of line endings from a token stream
 (define (take-lineendings s)
   (let ((nt (peek-token s)))
@@ -1529,6 +1569,17 @@
         (let ((body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
           (begin0 (list 'typegroup body)
                   (expect-end s "typegroup"))))
+
+       ((enum)
+        ;; Enum type definitions: (enum isopen isextend sig (block items...))
+        ;; A trailing `...` marks the enum open (extensible); a leading `...`
+        ;; marks an extension of an existing enum; a sole `...` sets both.
+        (let ((nxt (peek-token s)))
+          (if (or (not (symbol? nxt)) (operator? nxt) (reserved-word? nxt)
+                  (eof-object? nxt))
+              ;; not an enum definition; `enum` is a plain identifier
+              (parse-call-chain s word #f)
+              (parse-enum-def s word))))
 
        ((try)
         (let ((try-block (if (memq (peek-token s) '(catch finally))
