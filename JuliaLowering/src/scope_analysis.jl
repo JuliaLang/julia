@@ -745,7 +745,9 @@ function expand_captured_sp_deps!(ctx, cb::ClosureBindings, scope)
                     break
                 end
             end
-            (isnothing(dep_sp) || dep_sp in sps) && continue
+            isnothing(dep_sp) && throw(LoweringError(
+                binding_ex(ctx, dep_tv), "unimplemented capture in sparam bounds"))
+            dep_sp in sps && continue
             push!(sps, dep_sp)
             push!(cb.capt_sp, dep_sp)
             ensure_captured!(ctx, scope, get_binding(ctx, dep_sp))
