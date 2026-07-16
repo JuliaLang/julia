@@ -725,6 +725,9 @@ function _tier_osr_impl(src::Core.CodeInfo, mi::Core.MethodInstance, ip::Int, st
 end
 
 function _tier_osr(@nospecialize(src), @nospecialize(mi), @nospecialize(ip), @nospecialize(state))
+    # test observability (see test/tiered.jl): this counts an OSR attempt;
+    # the entry counter is bumped just before the continuation is invoked
+    ccall(:jl_tier_note_osr, Cvoid, (Cint,), 0)
     # Called (via @cfunction) from the interpreter's back-edge check.
     # Build/lookup failures decline by returning nothing. The continuation
     # CALL is deliberately OUTSIDE the try: it runs user code with the
@@ -739,9 +742,14 @@ function _tier_osr(@nospecialize(src), @nospecialize(mi), @nospecialize(ip), @no
                                ip::Int, state::Vector{Any})
         entry === nothing && return nothing
         oc, args = entry
-    catch
+    catch ex
+        # Constructing the continuation may run inference/codegen for a
+        # while; a user interrupt landing here must cancel, not silently
+        # fall back to interpreting.
+        ex isa InterruptException && rethrow()
         return nothing
     end
+    ccall(:jl_tier_note_osr, Cvoid, (Cint,), 1)
     return Some{Any}(oc(args...))
 end
 

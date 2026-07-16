@@ -198,6 +198,38 @@ JL_DLLEXPORT void *jl_tier_get_osr_hook(void) JL_NOTSAFEPOINT
     return jl_atomic_load_acquire(&tier_osr_hook);
 }
 
+// OSR observability for tests: how many times the back-edge budget fired and
+// invoked the OSR hook, and how many of those actually entered a
+// continuation (a NULL hook result is a decline; the frame keeps
+// interpreting). Set the budget at runtime with jl_tier_set_osr_threshold so
+// a harness can force OSR without process-wide env configuration.
+static _Atomic(uint64_t) tier_osr_attempts = 0;
+static _Atomic(uint64_t) tier_osr_entered = 0;
+
+// Called from Base._tier_osr: entered=0 at hook entry (an attempt),
+// entered=1 immediately before the continuation is invoked — before, not
+// after, so continuations that terminate by throwing still count.
+JL_DLLEXPORT void jl_tier_note_osr(int entered) JL_NOTSAFEPOINT
+{
+    if (entered)
+        jl_atomic_fetch_add_relaxed(&tier_osr_entered, 1);
+    else
+        jl_atomic_fetch_add_relaxed(&tier_osr_attempts, 1);
+}
+
+JL_DLLEXPORT void jl_tier_get_osr_stats(uint64_t *attempts, uint64_t *entered) JL_NOTSAFEPOINT
+{
+    if (attempts) *attempts = jl_atomic_load_relaxed(&tier_osr_attempts);
+    if (entered)  *entered  = jl_atomic_load_relaxed(&tier_osr_entered);
+}
+
+JL_DLLEXPORT void jl_tier_set_osr_threshold(int threshold) JL_NOTSAFEPOINT
+{
+    if (threshold < 0)
+        threshold = 0;
+    jl_atomic_store_relaxed(&tier_osr_threshold, threshold);
+}
+
 JL_DLLEXPORT uint32_t jl_tier_get_osr_threshold(void) JL_NOTSAFEPOINT
 {
     int v = jl_atomic_load_relaxed(&tier_osr_threshold);
@@ -295,7 +327,7 @@ STATIC_INLINE int tier_queue_empty_locked(void) JL_NOTSAFEPOINT
 {
     return tier_queue_head >= tier_queue.len;
 }
-STATIC_INLINE jl_method_instance_t *tier_queue_popfront_locked(void) JL_NOTSAFEPOINT
+STATIC_INLINE jl_method_instance_t *tier_queue_popfront_locked(void) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
 {
     if (tier_queue_head >= tier_queue.len)
         return NULL;

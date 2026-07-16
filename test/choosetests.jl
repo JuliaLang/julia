@@ -9,7 +9,7 @@ const TESTNAMES = [
         "subarray", "core", "compiler", "compiler_extras", "worlds", "atomics",
         "keywordargs", "numbers", "subtype", "typegroup",
         "char", "strings", "triplequote", "unicode", "intrinsics", "apint",
-        "dict", "hashing", "iobuffer", "staged", "offsetarray",
+        "dict", "hashing", "iobuffer", "staged", "tiered", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
