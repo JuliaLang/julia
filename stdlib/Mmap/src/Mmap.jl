@@ -32,10 +32,10 @@ only be mmapped a single time.
     large shared memory region will always succeed, but accessing it may trigger the system out-of-memory killer.
 
 !!! note "Mmapping a reopened named shared memory segments with larger size"
-    Windows shared memory segments are natively rounded up to multiples of the system page size. The SharedMemory object
-    will not reflect this, but reopening a named shared memory segment with a size larger than initially requested but
-    less than the page boundary will succeed. On Linux and MacOS, the size is strictly enforced. Failure due to size
-    will occur in `mmap`, not in `open`.
+    Windows and MacOS shared memory segments are natively rounded up to multiples of the system page size. The SharedMemory
+    object will not reflect this, but reopening a named shared memory segment with a size larger than initially requested but
+    less than the page boundary will succeed. On Linux, the size is strictly enforced. Failure due to size will occur in `mmap`,
+    not in `open`.
 """
 SharedMemory
 
@@ -334,7 +334,7 @@ function check_can_grow(io::IO, szfile::Csize_t, readonly::Bool, grow::Bool)
     if requestedSizeLarger
         readonly && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
         !grow && throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
-        io isa SharedMemory && throw(ArgumentError("requested size $szfile larger than shared memory size $(filesize(io))"))
+        io isa SharedMemory && throw(IOError("requested size $szfile larger than shared memory size $(filesize(io))", 0))
         return true
     end
     return false

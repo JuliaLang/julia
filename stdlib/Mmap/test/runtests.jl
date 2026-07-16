@@ -447,13 +447,13 @@ end
         close(io1); close(io2); finalize(m); m = nothing; GC.gc()
     end
 
-    @static if Sys.isunix()
+    @static if Sys.islinux()
         @testset "Opening an existing region with an oversized declared size is rejected at mmap()" begin
             name = "/jlsharedsegment"
             io1 = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
 
             io2 = open(Mmap.SharedMemory, name, 13; readonly = false, create = false)
-            @test_throws ArgumentError mmap(io2, Vector{UInt8}, 13)
+            @test_throws Base.IOError mmap(io2, Vector{UInt8}, 13)
             close(io2)
 
             io3 = open(Mmap.SharedMemory, name, 12; readonly = false, create = false) # exact size still works
@@ -466,8 +466,8 @@ end
 
             close(io1); close(io3); close(io4)
         end
-    elseif Sys.iswindows()
-        @testset "Opening an existing region with an oversized declared size still fails safely at mmap()" begin
+    elseif Sys.isapple() || Sys.iswindows()
+        @testset "Opening an existing region with a declared size beyond the real page allocation still fails safely at mmap()" begin
             name = "/jlsharedsegment"
             io1 = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
 
