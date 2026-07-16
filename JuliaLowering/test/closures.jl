@@ -675,7 +675,11 @@ function f_update_outer_capture()
 end
 """)
 let (f, response) = test_mod.f_update_outer_capture()
-    @test f.response isa Core.Box
+    # Part 3 merged capture: the shared container is a mutable field of the
+    # (unique) capturing closure, not a separate Core.Box
+    @test !(f.response isa Core.Box)
+    @test ismutabletype(typeof(f))
+    @test f.response == 1
     @test response == 1
 end
 

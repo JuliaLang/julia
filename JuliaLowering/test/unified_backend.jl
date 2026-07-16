@@ -166,7 +166,9 @@ count_boxes(ir) = count_globals(ir, Core, :Box)
 
 RG_CORPUS = [
     # (name, src, execs, expect: :value = no shared container in the
-    #  enclosing IR, :shared = at least one, nothing = don't check)
+    #  enclosing IR, :shared = at least one Core.Box, :merged = shared
+    #  through a mutable closure field (Part 3: box-free, setfield! traffic
+    #  on the instance), nothing = don't check)
     (:rg_join, """
         function rg_join(c)
             local x
@@ -204,7 +206,7 @@ RG_CORPUS = [
             a = f()            # use before the store: blocks the sink
             x = 2
             (a, f())
-        end""", [()], :shared),
+        end""", [()], :merged),
     (:rg_ifstore, """
         function rg_ifstore(c)
             x = 1
@@ -218,14 +220,14 @@ RG_CORPUS = [
             inc = () -> (x = x + 1)
             inc(); inc(); inc()
             x
-        end""", [()], :shared),
+        end""", [()], :merged),
     (:rg_typed, """
         function rg_typed()
             local x::Int = 0
             inc = () -> (x = x + 1)
             inc(); inc()
             x
-        end""", [()], :shared),
+        end""", [()], :merged),
     (:rg_loopfresh, """
         function rg_loopfresh(n)
             s = 0
@@ -302,6 +304,11 @@ RG_CORPUS = [
                 @test count_globals(m.ir, Core, :setfield!) == 0
             elseif expect === :shared
                 @test count_boxes(m.ir) > 0
+            elseif expect === :merged
+                # the share is a mutable field of the closure: no Box
+                # anywhere, mutation via setfield! on the instance
+                @test count_boxes(m.ir) == 0
+                @test sum(count_globals(mm.ir, Core, :setfield!) for mm in ms) > 0
             end
             f = Base.invokelatest(getglobal, ub_mod, name)
             for args in execs
