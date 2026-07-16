@@ -1898,6 +1898,35 @@ const TRIM_NO = 0x0
 const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
+# Whether `mi` is worth compiling as a root for a non-latest `world` (i.e. the
+# frozen typeinf world). Only the compiler itself executes there, so a root
+# belongs in that pass only if it is compiler code, or if there is evidence a
+# specialization of it was valid in that world (the compiler executed it this
+# session, or a loaded image carries a twin for that world). Anything else the
+# compiler can reach is pulled in transitively by `collectinvokes!` during the
+# pass itself; compiling every latest-world root there merely duplicates code
+# that can never be dispatched in that world.
+function root_wanted_at_world(mi::MethodInstance, world::UInt)
+    def = mi.def
+    def isa Method || return true
+    def.primary_world <= world || return false
+    mod = def.module
+    while true
+        mod === (@__MODULE__) && return true
+        pmod = parentmodule(mod)
+        pmod === mod && break
+        mod = pmod
+    end
+    cached = isdefined(mi, :cache) ? mi.cache : nothing
+    while cached !== nothing
+        if cached.owner === nothing && cached.min_world <= world <= cached.max_world
+            return true
+        end
+        cached = isdefined(cached, :next) ? cached.next : nothing
+    end
+    return false
+end
+
 function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
     # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
     # back to `nothing` at serialization time (see `src/staticdata.c`).
@@ -1912,12 +1941,25 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
 
     codeinfos = []
     workqueue = CompilationQueue(; interp = nothing)
-    for this_world in reverse!(sort!(worlds))
+    reverse!(sort!(worlds))
+    latestworld = worlds[1]
+    for this_world in worlds
         workqueue = CompilationQueue(workqueue;
             interp = NativeInterpreter(this_world; inf_params)
         )
 
-        append!(workqueue, methods)
+        if this_world == latestworld
+            append!(workqueue, methods)
+        else
+            for item in methods
+                if item isa MethodInstance
+                    root_wanted_at_world(item, this_world) && push!(workqueue, item)
+                end
+                # ccallable aliases (SimpleVector) are entrypoints invoked from
+                # C in the runtime's current world; they never run in the
+                # typeinf world
+            end
+        end
         compile!(codeinfos, workqueue; invokelatest_queue,
                  enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
