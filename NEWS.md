@@ -160,6 +160,13 @@ Standard library changes
   allocate `Core.Box` in their lowered code, which can indicate performance issues from
   captured variables in closures.
 
+* `detect_unbound_args` now uses a static rule derived from how subtyping assigns values
+  to static parameters, instead of a heuristic. It detects previously missed
+  possibly-unbound parameters (such as `f(::Type{<:T}) where {T}`, which leaves `T`
+  unbound when called with `Union{}`, or `f(::Vector{<:T}) where {T}` with a
+  `Vector{Union{}}` argument), and no longer reports methods whose problematic calls are
+  all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback).
+
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
