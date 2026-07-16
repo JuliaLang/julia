@@ -17,41 +17,50 @@ const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVA
 const oversub_interval = parse(Int, get(ENV, "JULIA_TEST_OVERSUBSCRIPTION_INTERVAL", "30")) # seconds
 const oversub_factor = parse(Float64, get(ENV, "JULIA_TEST_OVERSUBSCRIPTION_FACTOR", "1.25"))
 
-# Map each root pid to the summed CPU usage percent (100 == one full core) of its whole
-# process subtree, so subprocesses a test spawns count toward its worker. Takes one `ps`
-# snapshot of the full process table. Returns an empty Dict on Windows or if `ps` fails.
-function subtree_cpu_percents(roots)
-    (isempty(roots) || Sys.iswindows()) && return Dict{Int,Float64}()
-    pcpu = Dict{Int,Float64}()
+# Parse a `ps` TIME field ([[DD-]HH:]MM:SS[.ss]) into seconds.
+function parse_cpu_time(s)
+    s = strip(s)
+    days = 0
+    d = findfirst('-', s)
+    if d !== nothing
+        dd = tryparse(Int, s[1:prevind(s, d)])
+        dd === nothing && return nothing
+        days = dd
+        s = s[nextind(s, d):end]
+    end
+    total = 0.0
+    mult = 1.0
+    for p in Iterators.reverse(split(s, ':'))
+        v = tryparse(Float64, p)
+        v === nothing && return nothing
+        total += v * mult
+        mult *= 60
+    end
+    return total + days * 86400
+end
+
+# One `ps` snapshot: cumulative CPU time (seconds, user+sys) and parent link for every
+# process. `pcpu` is unreliable on some platforms (e.g. FreeBSD reports ~0), so callers
+# difference successive snapshots to derive utilization. Empty on Windows or if `ps` fails.
+function proc_cpu_times()
+    cputime = Dict{Int,Float64}()
     children = Dict{Int,Vector{Int}}()
+    Sys.iswindows() && return (cputime, children)
     try
-        raw = read(`ps -A -o pid=,ppid=,pcpu=`, String)
+        raw = read(`ps -A -o pid=,ppid=,time=`, String)
         for line in eachline(IOBuffer(raw))
             f = split(line)
             length(f) == 3 || continue
             pid = tryparse(Int, f[1])
             ppid = tryparse(Int, f[2])
-            pct = tryparse(Float64, f[3])
-            (pid === nothing || ppid === nothing || pct === nothing) && continue
-            pcpu[pid] = pct
+            secs = parse_cpu_time(f[3])
+            (pid === nothing || ppid === nothing || secs === nothing) && continue
+            cputime[pid] = secs
             push!(get!(children, ppid, Int[]), pid)
         end
     catch
-        return Dict{Int,Float64}()
     end
-    out = Dict{Int,Float64}()
-    for r in roots
-        total = 0.0
-        stack = [r]
-        while !isempty(stack)
-            p = pop!(stack)
-            haskey(pcpu, p) || continue
-            total += pcpu[p]
-            append!(stack, get(children, p, Int[]))
-        end
-        out[r] = total
-    end
-    return out
+    return (cputime, children)
 end
 
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
@@ -338,13 +347,30 @@ cd(@__DIR__) do
             Base.errormonitor(stdin_monitor)
         end
         oversub_timer = let ncpu = length(Sys.cpu_info())
+            prev_cputime, _ = proc_cpu_times()  # baseline so the first tick reports one interval
+            prev_t = time()
             Timer(oversub_interval, interval=oversub_interval) do timer
                 load1 = Sys.loadavg()[1]
+                cputime, children = proc_cpu_times()
+                dt = max(time() - prev_t, 1.0)
+                # Summed CPU% (100 == one core) accrued over each worker's process subtree
+                # during the interval, so subprocesses a test spawns count toward it.
+                subtree_pct = function (root)
+                    total = 0.0
+                    stack = [root]
+                    while !isempty(stack)
+                        p = pop!(stack)
+                        haskey(cputime, p) || continue
+                        d = cputime[p] - get(prev_cputime, p, 0.0)
+                        d > 0 && (total += d)
+                        append!(stack, get(children, p, Int[]))
+                    end
+                    return 100 * total / dt
+                end
                 if load1 > ncpu * oversub_factor
                     names = sort!(collect(keys(running_tests)))
-                    cpu = subtree_cpu_percents(unique(p for p in (get(running_test_pids, t, 0) for t in names) if p > 0))
-                    active = join((haskey(cpu, get(running_test_pids, t, 0)) ?
-                        string(t, " (", round(Int, cpu[running_test_pids[t]]), "%)") : t
+                    active = join((haskey(running_test_pids, t) ?
+                        string(t, " (", round(Int, subtree_pct(running_test_pids[t])), "%)") : t
                         for t in names), ", ")
                     @lock print_lock begin
                         printstyled("⚠ oversubscription: load average ", round(load1, digits=1),
@@ -352,6 +378,8 @@ cd(@__DIR__) do
                             isempty(active) ? "" : "; running: $active", "\n"; color=:yellow)
                     end
                 end
+                prev_cputime = cputime
+                prev_t = time()
             end
         end
         o_ts_duration = @elapsed Experimental.@sync begin
