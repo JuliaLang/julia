@@ -337,4 +337,105 @@ for name in (:bench_join, :bench_counter, :bench_mutcap)
             "speedup ", round(ts / to; digits = 1), "x", extra)
 end
 
+# ---- the late pipeline: inference over the closure regions themselves ------
+# (Spliced into UnifiedIR/demo/capture_zoo.jl before the final exit; the
+# `ndiff` accounting joins the demo's exit code.)
+#
+# Compiler.Unified's experimental late pipeline consumes the SAME
+# pre-materialization region IR the backend produces (real `closure` ops +
+# residual `cell_shared` cells, after the capture-decision fixpoint, before
+# materialization) and runs unified inference extended to descend into
+# deferred regions: shared-cell contents become a structural fixpoint over
+# every store site — home and deferred alike — and visible closure call
+# sites take the body's inferred return type. NO typed containers come out
+# of this (a nominal closure's fields cannot be typed: a later-world store
+# may produce a type unknowable at definition time — docs/closures.md); the
+# win is inference-internal PRECISION, sound exactly when the closure is
+# non-escaping and no world barrier sits between creation and call.
+
+import Compiler
+const ULATE = Compiler.load_unified!()
+
+const ZOO_LATE = [
+    # (label, source, expected-late-rettype-string)
+    ("zoo5b", raw"""
+     function zl5b()
+         x = 0
+         inc = () -> (x = x + 1)
+         inc(); inc(); inc()
+         return x
+     end"""),
+    ("zoo5-decl", raw"""
+     function zl5()
+         local x::Int = 0
+         inc = () -> (x = x + 1)
+         inc(); inc(); inc()
+         return x
+     end"""),
+    ("zoo5b-escape", raw"""
+     function zl5esc()
+         x = 0
+         inc = () -> (x = x + 1)
+         holder = Any[inc]
+         holder[1]()
+         return x
+     end"""),
+]
+
+# The front half, stopped where emit_method_region! would materialize: this
+# is exactly the IR the late pipeline is defined on.
+const JSZ = JuliaLowering.JuliaSyntax
+function late_region_method(mod::Module, src::String)
+    st0 = JSZ.parseall(JuliaLowering.SyntaxTree, src; filename = "late.jl")
+    st = JSZ.kind(st0) == JSZ.K"toplevel" ? collect(JSZ.children(st0))[1] : st0
+    ctx1, ex1 = JuliaLowering.expand_forms_1(mod, st, false, Base.get_world_counter())
+    ctx2, ex2 = JuliaLowering.expand_forms_2(ctx1, ex1)
+    ctx3, ex3 = JuliaLowering.resolve_scopes(ctx2, ex2)
+    found = Ref{Any}(nothing)
+    function walk(ex)
+        found[] === nothing || return
+        k = JSZ.kind(ex)
+        if k == JSZ.K"method" && JSZ.numchildren(ex) == 3 && JSZ.kind(ex[3]) == JSZ.K"lambda"
+            name = JuliaLowering.UnifiedBackend.method_name(ctx3, ex[1])
+            ir, nargs, _, _ = JuliaLowering.UnifiedBackend.emit_lambda(
+                ctx3, ex[3], name; region = true)
+            UnifiedIR.promote_fixpoint!(ir; include_undef = false)
+            found[] = (; name, nargs, ir)
+            return
+        end
+        if k == JSZ.K"lambda"
+            ex.is_toplevel_thunk && walk(ex[3])
+            return
+        end
+        JSZ.is_leaf(ex) && return
+        (k == JSZ.K"inert" || k == JSZ.K"inert_syntaxtree" || k == JSZ.K"quote") && return
+        foreach(walk, JSZ.children(ex))
+    end
+    walk(ex3)
+    return found[]
+end
+
+println("\n== the late pipeline: typed region IR (containers unchanged) ==")
+println(rpad("case", 14), rpad("stock rt", 10), rpad("late rt", 10),
+        rpad("cell reads / join", 26), "differential")
+let lmod = Module()
+    Base.eval(lmod, :(using Base))
+    for (label, src) in ZOO_LATE
+        Base.include_string(lmod, src, "$label.jl")
+        m = late_region_method(lmod, src)
+        res = ULATE.typed_region_ir!(m.ir, Any[Any])
+        cellinfo = join(sort!([v.poisoned ? "Any (join $(v.content))" :
+                               string(v.content) for v in values(res.cells)]), ", ")
+        f = Base.invokelatest(getglobal, lmod, Symbol(m.name))
+        stock_rt = Base.return_types(f, Tuple{})[1]
+        a = outcome(() -> Base.invokelatest(f))
+        b = outcome(() -> Base.invokelatest(UnifiedIR.interpret, m.ir, f))
+        ok = isequal(a, b)
+        ok || global ndiff += 1
+        println(rpad(label, 14), rpad(string(stock_rt), 10),
+                rpad(string(res.rettype), 10), rpad(cellinfo, 26),
+                ok ? "MATCH  ($(repr(a[2])))" : "DIFF!! stock=$a late=$b")
+    end
+end
+
 exit(ndiff == 0 ? 0 : 1)
