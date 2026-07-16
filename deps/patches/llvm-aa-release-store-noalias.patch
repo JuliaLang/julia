@@ -1,0 +1,70 @@
+AA: a non-aliasing atomic store (release or weaker) does not clobber a location
+
+AAResults::getModRefInfo(StoreInst) returned ModRef for every location as
+soon as the store's ordering was stronger than unordered, before consulting
+alias information at all. But ModRef describes data effects on the queried
+location: a store that provably does not alias Loc cannot modify it, and an
+ordering of release or weaker constrains only program-order-earlier accesses,
+imposing nothing on unrelated memory. Consult the alias result first and
+return NoModRef for a proven-NoAlias location unless the store is seq_cst
+(which also participates in the global total order of seq_cst operations).
+
+This lets e.g. LICM hoist an invariant load out of a loop whose body performs
+a release store to unrelated memory (the publication-store idiom); moving a
+program-order-later read above a release store is permitted by the memory
+model. Note the asymmetry: passes that would *sink* a program-order-earlier
+access past a release store must (and do) justify that movement by the moved
+instruction's own ordering, not by this query.
+
+Experimental patch carried on Julia's kf/retyped-globals-flagcheck branch to
+measure the cost of runtime re-type guards (JuliaLang/julia#62154).
+
+diff --git a/lib/Analysis/AliasAnalysis.cpp b/lib/Analysis/AliasAnalysis.cpp
+--- a/lib/Analysis/AliasAnalysis.cpp
++++ b/lib/Analysis/AliasAnalysis.cpp
+@@ -438,16 +438,23 @@
+ ModRefInfo AAResults::getModRefInfo(const StoreInst *S,
+                                     const MemoryLocation &Loc,
+                                     AAQueryInfo &AAQI) {
+-  // Be conservative in the face of atomic.
+-  if (isStrongerThan(S->getOrdering(), AtomicOrdering::Unordered))
+-    return ModRefInfo::ModRef;
+-
+   if (Loc.Ptr) {
+     AliasResult AR = alias(MemoryLocation::get(S), Loc, AAQI, S);
+     // If the store address cannot alias the pointer in question, then the
+-    // specified memory cannot be modified by the store.
++    // specified memory cannot be modified by the store. This holds for atomic
++    // stores as well: an ordering of release or weaker constrains only
++    // program-order-earlier accesses and says nothing about the contents of
++    // unrelated memory, so it must not turn a non-aliasing store into a
++    // clobber of Loc. Remain conservative for seq_cst stores, which also
++    // participate in the global total order of seq_cst operations.
+     if (AR == AliasResult::NoAlias)
+-      return ModRefInfo::NoModRef;
++      return isStrongerThan(S->getOrdering(), AtomicOrdering::Release)
++                 ? ModRefInfo::ModRef
++                 : ModRefInfo::NoModRef;
++
++    // Be conservative in the face of atomic.
++    if (isStrongerThan(S->getOrdering(), AtomicOrdering::Unordered))
++      return ModRefInfo::ModRef;
+ 
+     // Examine the ModRef mask. If Mod isn't present, then return NoModRef.
+     // This ensures that if Loc is a constant memory location, we take into
+@@ -455,8 +462,15 @@
+     // location.
+     if (!isModSet(getModRefInfoMask(Loc)))
+       return ModRefInfo::NoModRef;
++
++    // Otherwise, a store just writes.
++    return ModRefInfo::Mod;
+   }
+ 
++  // Be conservative in the face of atomic.
++  if (isStrongerThan(S->getOrdering(), AtomicOrdering::Unordered))
++    return ModRefInfo::ModRef;
++
+   // Otherwise, a store just writes.
+   return ModRefInfo::Mod;
+ }

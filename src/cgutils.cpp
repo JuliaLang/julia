@@ -797,7 +797,19 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
     // emit a literal_pointer_val to a jl_binding_t
     Constant *pgv = julia_binding_pgv(ctx, b);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+    // Emit the load in the entry block: the slot is a link-time constant, and an
+    // unconditionally executed load keeps its UB-implying metadata (dereferenceable
+    // below) when LICM later moves instructions off it -- hoisting a conditionally
+    // executed instruction would otherwise strip such metadata.
+    IRBuilderBase::InsertPointGuard IPG(ctx.builder);
+    if (ctx.topalloca)
+        ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
     auto load = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))));
+    // The binding is a GC object kept alive by its module, so the whole struct is
+    // dereferenceable; this lets loads off it (e.g. the re-type guard's flag load) be
+    // speculated, and hence hoisted out of loops even when control flow reaches them
+    // conditionally.
+    maybe_mark_load_dereferenceable(load, /*can_be_null*/false, sizeof(jl_binding_t), alignof(jl_binding_t));
     setName(ctx.emission_context, load, pgv->getName());
     return load;
 }

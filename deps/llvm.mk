@@ -257,6 +257,11 @@ ifeq ($(shell test $(LLVM_VER_MAJ) -lt 19 && echo true),true)
 $(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
 endif
 
+# Experimental (#62154 guard-cost measurement): a non-aliasing atomic store of
+# release or weaker ordering does not clobber unrelated memory, which lets LICM
+# hoist a re-type guard's flag load out of a loop past the binding value store.
+$(eval $(call LLVM_PATCH,llvm-aa-release-store-noalias))
+
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
