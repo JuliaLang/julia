@@ -192,7 +192,7 @@ end
     end
 end
 
-# extras
+# Preferences may be keyed by packages in [extras].
 @testset "extras" begin
     mktempdir() do dir
         project_file = joinpath(dir, "Project.toml")
@@ -210,6 +210,8 @@ end
             uuid = "$root_uuid"
             [extras]
             This = "$this_uuid"
+            [preferences.This]
+            value = 1
             """)
             # look up various packages by name
             root = Base.identify_package("Root")
@@ -220,10 +222,361 @@ end
             @test this === nothing
             @test that === nothing
 
-            @test Base.get_uuid_name(project_file, this_uuid) == "This"
+            @test Base.get_preferences(this_uuid) == Dict{String, Any}("value" => 1)
         finally
             copy!(LOAD_PATH, old_load_path)
         end
+    end
+end
+
+@testset "structured environment loading regressions" begin
+    @testset "unrelated malformed implicit package" begin
+        mktempdir() do dir
+            mkpath(joinpath(dir, "Good", "src"))
+            write(joinpath(dir, "Good", "src", "Good.jl"), "module Good\nend\n")
+            mkpath(joinpath(dir, "Bad", "src"))
+            write(joinpath(dir, "Bad", "src", "Bad.jl"), "module Bad\nend\n")
+            write(joinpath(dir, "Bad", "Project.toml"), """
+                name = "Bad"
+                uuid = "not-a-uuid"
+                """)
+
+            old_load_path = copy(LOAD_PATH)
+            try
+                copy!(LOAD_PATH, [dir])
+                @test Base.identify_package("Good") == PkgId("Good")
+            finally
+                copy!(LOAD_PATH, old_load_path)
+            end
+        end
+    end
+
+    @testset "implicit extension metadata stays lazy" begin
+        mktempdir() do dir
+            parent_uuid = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            trigger_uuid = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+            mkpath(joinpath(dir, "Parent", "src"))
+            write(joinpath(dir, "Parent", "src", "Parent.jl"), "module Parent\nend\n")
+            write(joinpath(dir, "Parent", "Project.toml"), """
+                name = "Parent"
+                uuid = "$parent_uuid"
+                [weakdeps]
+                Trigger = "$trigger_uuid"
+                [extensions]
+                ParentExt = "Trigger"
+                """)
+            mkpath(joinpath(dir, "Malformed", "src"))
+            write(joinpath(dir, "Malformed", "src", "Malformed.jl"), "module Malformed\nend\n")
+            write(joinpath(dir, "Malformed", "Project.toml"), "uuid = \"not-a-uuid\"\n")
+
+            env = Base.ImplicitEnv(dir)
+            ext = PkgId(Base.uuid5(parent_uuid, "ParentExt"), "ParentExt")
+            @test Base._extension_parent(env, ext)[1] == "Parent"
+            @test !haskey(env.pkgs, "Malformed")
+        end
+    end
+
+    @testset "project extras are not extension triggers" begin
+        mktempdir() do dir
+            project = joinpath(dir, "Project.toml")
+            write(project, """
+                name = "Parent"
+                uuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+                [extras]
+                Trigger = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+                [extensions]
+                ParentExt = "Trigger"
+                """)
+            @test_throws ErrorException Base.ExplicitEnv(project)
+        end
+    end
+
+    @testset "duplicate-name extension triggers" begin
+        mktempdir() do dir
+            parent_a = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            parent_b = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+            dep_a = UUID("11111111-1111-4111-8111-111111111111")
+            dep_b = UUID("22222222-2222-4222-8222-222222222222")
+            write(joinpath(dir, "Project.toml"), """
+                [deps]
+                ParentA = "$parent_a"
+                ParentB = "$parent_b"
+                """)
+            write(joinpath(dir, "Manifest.toml"), """
+                manifest_format = "2.0"
+
+                [[deps.Dup]]
+                uuid = "$dep_a"
+                path = "DupA"
+
+                [[deps.Dup]]
+                uuid = "$dep_b"
+                path = "DupB"
+
+                [[deps.ParentA]]
+                uuid = "$parent_a"
+                path = "ParentA"
+                weakdeps = {Dup = "$dep_a"}
+                    [deps.ParentA.extensions]
+                    AExt = "Dup"
+
+                [[deps.ParentB]]
+                uuid = "$parent_b"
+                path = "ParentB"
+                weakdeps = {Dup = "$dep_b"}
+                    [deps.ParentB.extensions]
+                    BExt = "Dup"
+                """)
+
+            old_load_path = copy(LOAD_PATH)
+            try
+                copy!(LOAD_PATH, [dir])
+                ext_a = PkgId(Base.uuid5(parent_a, "AExt"), "AExt")
+                ext_b = PkgId(Base.uuid5(parent_b, "BExt"), "BExt")
+                @test Base.identify_package(ext_a, "Dup") == PkgId(dep_a, "Dup")
+                @test Base.identify_package(ext_b, "Dup") == PkgId(dep_b, "Dup")
+            finally
+                copy!(LOAD_PATH, old_load_path)
+            end
+        end
+    end
+
+    # Explicit environments must match both components of a package identity.
+    @testset "package location requires matching name" begin
+        mktempdir() do dir
+            uuid = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            root = joinpath(dir, "Real")
+            mkpath(joinpath(root, "src"))
+            write(joinpath(root, "src", "Real.jl"), "module Real\nend\n")
+            write(joinpath(root, "src", "Wrong.jl"), "module Wrong\nend\n")
+            write(joinpath(dir, "Project.toml"), """
+                [deps]
+                Real = "$uuid"
+                """)
+            write(joinpath(dir, "Manifest.toml"), """
+                manifest_format = "2.0"
+                [[deps.Real]]
+                uuid = "$uuid"
+                path = "Real"
+                """)
+
+            old_load_path = copy(LOAD_PATH)
+            try
+                copy!(LOAD_PATH, [dir])
+                @test Base.locate_package(PkgId(uuid, "Real")) == joinpath(root, "src", "Real.jl")
+                @test Base.locate_package(PkgId(uuid, "Wrong")) === nothing
+            finally
+                copy!(LOAD_PATH, old_load_path)
+            end
+        end
+    end
+
+    # A project dep without a manifest entry (e.g. a package dir in a depot, which has no
+    # manifest) has no source information in that environment, but must not stop the
+    # search: environments further down the stack may provide the source. Only a manifest
+    # entry that pins an uninstalled source stops it (tested below).
+    @testset "project dep without manifest entry falls through to lower environments" begin
+        mktempdir() do dir
+            dep_uuid = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+            pkgdir = joinpath(dir, "Pkg")
+            env2 = joinpath(dir, "Env2")
+            mkpath(pkgdir)
+            mkpath(joinpath(env2, "Dep", "src"))
+            write(joinpath(env2, "Dep", "src", "Dep.jl"), "module Dep\nend\n")
+            write(joinpath(pkgdir, "Project.toml"), """
+                name = "Pkg"
+                uuid = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+                [deps]
+                Dep = "$dep_uuid"
+                """)
+            write(joinpath(env2, "Project.toml"), """
+                [deps]
+                Dep = "$dep_uuid"
+                """)
+            write(joinpath(env2, "Manifest.toml"), """
+                manifest_format = "2.0"
+                [[deps.Dep]]
+                uuid = "$dep_uuid"
+                path = "Dep"
+                """)
+
+            old_load_path = copy(LOAD_PATH)
+            try
+                copy!(LOAD_PATH, [pkgdir, env2])
+                dep = PkgId(dep_uuid, "Dep")
+                @test Base.locate_package(dep) == joinpath(env2, "Dep", "src", "Dep.jl")
+                # but a stopenv at the manifest-less environment still stops the search
+                @test Base.locate_package(dep, joinpath(pkgdir, "Project.toml")) === nothing
+            finally
+                copy!(LOAD_PATH, old_load_path)
+            end
+        end
+    end
+
+    @testset "missing extension parent preserves environment precedence" begin
+        mktempdir() do dir
+            parent_uuid = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            trigger_uuid = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+            env1 = joinpath(dir, "Env1")
+            env2 = joinpath(dir, "Env2")
+            mkpath(env1)
+            mkpath(joinpath(env2, "Parent", "ext"))
+            write(joinpath(env2, "Parent", "ext", "ParentExt.jl"), "module ParentExt\nend\n")
+            for env in (env1, env2)
+                write(joinpath(env, "Project.toml"), """
+                    [deps]
+                    Parent = "$parent_uuid"
+                    """)
+            end
+            write(joinpath(env1, "Manifest.toml"), """
+                manifest_format = "2.0"
+                [[deps.Parent]]
+                uuid = "$parent_uuid"
+                git-tree-sha1 = "0000000000000000000000000000000000000000"
+                weakdeps = {Trigger = "$trigger_uuid"}
+                    [deps.Parent.extensions]
+                    ParentExt = "Trigger"
+                [[deps.Trigger]]
+                uuid = "$trigger_uuid"
+                path = "Trigger"
+                """)
+            write(joinpath(env2, "Manifest.toml"), """
+                manifest_format = "2.0"
+                [[deps.Parent]]
+                uuid = "$parent_uuid"
+                path = "Parent"
+                weakdeps = {Trigger = "$trigger_uuid"}
+                    [deps.Parent.extensions]
+                    ParentExt = "Trigger"
+                [[deps.Trigger]]
+                uuid = "$trigger_uuid"
+                path = "Trigger"
+                """)
+
+            old_load_path = copy(LOAD_PATH)
+            old_depot_path = copy(DEPOT_PATH)
+            try
+                copy!(LOAD_PATH, [env1, env2])
+                empty!(DEPOT_PATH)
+                ext = PkgId(Base.uuid5(parent_uuid, "ParentExt"), "ParentExt")
+                @test Base.locate_package(ext, joinpath(env1, "Project.toml")) === nothing
+            finally
+                copy!(LOAD_PATH, old_load_path)
+                copy!(DEPOT_PATH, old_depot_path)
+            end
+        end
+    end
+
+    @testset "manifest entry with empty syntax table" begin
+        mktempdir() do dir
+            uuid = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            project = joinpath(dir, "Project.toml")
+            write(project, """
+                [deps]
+                Foo = "$uuid"
+                """)
+            write(joinpath(dir, "Manifest.toml"), """
+                manifest_format = "2.0"
+                [[deps.Foo]]
+                uuid = "$uuid"
+                path = "Foo"
+                    [deps.Foo.syntax]
+                """)
+            # An empty `[syntax]` table (no `julia_version`) must not error during
+            # eager construction; it falls back to the non-versioned syntax.
+            env = Base.ExplicitEnv(project)
+            @test env.syntax_version[uuid] == Base.NON_VERSIONED_SYNTAX
+        end
+    end
+
+    @testset "empty project syntax table" begin
+        mktempdir() do dir
+            uuid = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            project = joinpath(dir, "Project.toml")
+            write(project, """
+                name = "Proj"
+                uuid = "$uuid"
+                [syntax]
+                """)
+            # A project with an empty `[syntax]` table must construct without error.
+            @test Base.ExplicitEnv(project) isa Base.ExplicitEnv
+        end
+    end
+
+    @testset "ambiguous compressed manifest dependency" begin
+        mktempdir() do dir
+            foo = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            dup_a = UUID("11111111-1111-4111-8111-111111111111")
+            dup_b = UUID("22222222-2222-4222-8222-222222222222")
+            project = joinpath(dir, "Project.toml")
+            write(project, """
+                [deps]
+                Foo = "$foo"
+                """)
+            write(joinpath(dir, "Manifest.toml"), """
+                manifest_format = "2.0"
+                [[deps.Foo]]
+                uuid = "$foo"
+                path = "Foo"
+                deps = ["Dup"]
+                [[deps.Dup]]
+                uuid = "$dup_a"
+                path = "DupA"
+                [[deps.Dup]]
+                uuid = "$dup_b"
+                path = "DupB"
+                """)
+            # A compressed (name-only) reference to a name shared by multiple manifest
+            # entries is ambiguous and must error rather than silently resolve to one.
+            @test_throws ErrorException Base.ExplicitEnv(project)
+        end
+    end
+
+    # Pkg can record the root project itself in the manifest (as an entry with `path = "."`
+    # and no dependency list). That entry must not clobber the project's own `[deps]`, which
+    # remain authoritative for the root package.
+    @testset "manifest entry for the root project keeps project deps" begin
+        mktempdir() do dir
+            root_uuid = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            dep_uuid = UUID("11111111-1111-4111-8111-111111111111")
+            project = joinpath(dir, "Project.toml")
+            write(project, """
+                name = "Root"
+                uuid = "$root_uuid"
+                [deps]
+                Dep = "$dep_uuid"
+                """)
+            write(joinpath(dir, "Manifest.toml"), """
+                manifest_format = "2.0"
+                [[deps.Dep]]
+                uuid = "$dep_uuid"
+                path = "Dep"
+                [[deps.Root]]
+                uuid = "$root_uuid"
+                path = "."
+                """)
+
+            env = Base.ExplicitEnv(project)
+            @test env.deps[root_uuid] == [dep_uuid]
+
+            old_load_path = copy(LOAD_PATH)
+            try
+                copy!(LOAD_PATH, [dir])
+                root = PkgId(root_uuid, "Root")
+                @test Base.identify_package(root, "Dep") == PkgId(dep_uuid, "Dep")
+            finally
+                copy!(LOAD_PATH, old_load_path)
+            end
+        end
+    end
+end
+
+@testset "cache paths inside depot roots" begin
+    mktempdir() do dir
+        cachepath = joinpath(dir, "compiled", "v1", "Pkg.ji")
+        @test Base._cachepath_in_depots(cachepath, [dir])
+        @test !Base._cachepath_in_depots(cachepath, [dir * "-other"])
+        @test !Base._cachepath_in_depots(nothing, [dir])
     end
 end
 

@@ -584,7 +584,39 @@ to_power_type(x) = oftype(x*x, x)
 +%(a::T, b::T) where {T} = +(a, b)
 -%(a::T, b::T) where {T} = -(a, b)
 
+# CondaPkg (and other packages) call this
+function project_file_name_uuid(project_file::String, name::String)::PkgId
+    d = parsed_toml(project_file)
+    uuid′ = get(d, "uuid", nothing)::Union{String, Nothing}
+    uuid = uuid′ === nothing ? dummy_uuid(project_file) : UUID(uuid′)
+    name = get(d, "name", name)::String
+    return PkgId(uuid, name)
+end
+
 # Revise calls this
+function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, entry::Dict{String,Any})::Union{Nothing, Missing, PkgLoadSpec}
+    syntax_version = syntax_table_version(get(entry, "syntax", nothing))
+    if syntax_version === nothing || syntax_version <= NON_VERSIONED_SYNTAX
+        syntax_version = NON_VERSIONED_SYNTAX
+    end
+
+    entryfile = get(entry, "entryfile", nothing)::Union{Nothing, String}
+    path = get(entry, "path", nothing)::Union{Nothing, String}
+    if path !== nothing
+        root = normpath(abspath(dirname(manifest_file), path))
+        return PkgLoadSpec(entry_path(root, pkg.name, entryfile), syntax_version)
+    end
+
+    hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
+    if hash === nothing
+        spec = _locate_package(stdlib_env(), pkg)
+        return spec isa PkgLoadSpec && isfile(spec.path) ? spec : nothing
+    end
+    root = find_depot_package_root(pkg, SHA1(hash))
+    root === nothing && return missing
+    return PkgLoadSpec(entry_path(root, pkg.name, entryfile), syntax_version)
+end
+
 function explicit_manifest_entry_path(args...)
     spec = explicit_manifest_entry_load_spec(args...)
     spec === nothing && return nothing
