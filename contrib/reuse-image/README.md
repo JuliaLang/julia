@@ -124,5 +124,7 @@ Reuse works identically in both modes.
   builder's selected target; folding donor slots into the image's own clone
   tables would restore load-time dispatch (follow-up).
 - macOS/Windows: fall back to full emission (ELF-only unlink).
-- Dropped-slot safety: unresolvable slots are left null (latent crash if
-  executed); should fall back to rejecting the affected donor CIs instead.
+- Dropped-slot safety: cross-image call slots and clone slots are snapshot by
+  symbol even when the callee was not selected for the image (the live value
+  is era-consistent donor code); a slot is only left null if its target
+  cannot be attributed to any donor symbol at all.

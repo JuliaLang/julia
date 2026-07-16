@@ -1352,8 +1352,29 @@ static void jl_reuse_process_donor_slots(jl_reuse_plan_t &plan, jl_codegen_outpu
                                 }
                             }
                         }
-                        if (target.empty())
+                        if (target.empty()) {
+                            // Callee not selected for this image (invalidated,
+                            // or simply not reached by selection): the slot's
+                            // live value is the loader-patched address of the
+                            // callee's donor code, which is era-consistent with
+                            // the calling donor, so snapshot it by symbol just
+                            // like clone slots; the callee's donor image is
+                            // enqueued as a link dependency.
+                            uint64_t cbase = plan.ci_base.lookup(callee);
+                            if (cbase) {
+                                target = jl_reuse_sym_for(plan, cbase, value);
+                                if (!target.empty()) {
+                                    jl_reuse_donor_t *cd = jl_reuse_donor_for(plan, cbase);
+                                    if (!cd->enqueued && cd->usable) {
+                                        cd->enqueued = true;
+                                        changed = true;
+                                    }
+                                }
+                            }
+                        }
+                        if (target.empty()) {
                             plan.n_dropped_slots++;
+                        }
                         else {
                             plan.binds.emplace_back(make_label(donor, slot), target);
                             plan.n_code_slots++;
