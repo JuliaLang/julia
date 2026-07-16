@@ -599,30 +599,49 @@ function _gen_allocation_measurer(ex, fname::Symbol)
             $(esc(ex))
         end
     elseif fname === :allocated
-        # v1.11-compatible implementation. NB: `try` introduces a scope, and
-        # assignments in `ex` must remain visible to the caller, so this path
-        # cannot pair quiesce/resume exception-safely and stays unguarded.
+        # v1.11-compatible implementation. `@__tryfinally` does not introduce
+        # a scope, so assignments in `ex` stay visible to the caller while the
+        # tier bracket (park + drain the worker, suspend parking) keeps
+        # background promotions out of the process-global counters.
         return quote
             Experimental.@force_compile
+            ccall(:jl_tier_suspend_parking, Cvoid, ())
+            ccall(:jl_tier_quiesce, Cvoid, ())
+            ccall(:jl_tier_drain, Cvoid, ())
             local b0 = Ref{Int64}(0)
             local b1 = Ref{Int64}(0)
-            gc_bytes(b0)
-            $(esc(ex))
-            gc_bytes(b1)
+            @__tryfinally(begin
+                gc_bytes(b0)
+                $(esc(ex))
+                gc_bytes(b1)
+            end, begin
+                ccall(:jl_tier_resume, Cvoid, ())
+                ccall(:jl_tier_resume_parking, Cvoid, ())
+            end)
             b1[] - b0[]
         end
     else
         @assert fname === :allocations "unexpected fname"
         return quote
             Experimental.@force_compile
+            ccall(:jl_tier_suspend_parking, Cvoid, ())
+            ccall(:jl_tier_quiesce, Cvoid, ())
+            ccall(:jl_tier_drain, Cvoid, ())
             # Note this value is unused, but without it `allocated` and `allocations`
             # are sufficiently different that the compiler can remove allocations here
             # that it cannot remove there, giving inconsistent numbers.
             local b1 = Ref{Int64}(0)
-            local stats = Base.gc_num()
-            $(esc(ex))
-            local diff = Base.GC_Diff(Base.gc_num(), stats)
-            gc_bytes(b1)
+            local stats
+            local diff
+            @__tryfinally(begin
+                stats = Base.gc_num()
+                $(esc(ex))
+                diff = Base.GC_Diff(Base.gc_num(), stats)
+                gc_bytes(b1)
+            end, begin
+                ccall(:jl_tier_resume, Cvoid, ())
+                ccall(:jl_tier_resume_parking, Cvoid, ())
+            end)
             Base.gc_alloc_count(diff)
         end
     end
@@ -813,8 +832,12 @@ end
 macro trace_compile(ex)
     quote
         # Tracing observes compilation, so suspend tier-0 parking for the
-        # window (like @allocated's quiesce/drain around the GC counters).
+        # window, and park + drain the promotion worker first: previously
+        # queued promotions would otherwise emit trace records unrelated to
+        # the traced expression.
         ccall(:jl_tier_suspend_parking, Cvoid, ())
+        ccall(:jl_tier_quiesce, Cvoid, ())
+        ccall(:jl_tier_drain, Cvoid, ())
         ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
         @__tryfinally(
             # try
@@ -822,6 +845,7 @@ macro trace_compile(ex)
             # finally
             begin
                 ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
+                ccall(:jl_tier_resume, Cvoid, ())
                 ccall(:jl_tier_resume_parking, Cvoid, ())
             end
         )
