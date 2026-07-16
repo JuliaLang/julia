@@ -1262,7 +1262,14 @@ fresh shared box per iteration, the structural form of per-iteration
 rebinding), **and (c)** a single defined value reaches each `C`, joins
 included — judged by the standard fixpoint itself on a scratch copy,
 without definedness-as-data. Maybe-undef captures keep the shared cell,
-preserving use-time `UndefVarError`. `JuliaLowering.analyze_captures_precise!`
+preserving use-time `UndefVarError`. Closure-definition SINKING — the one
+code motion lowering is allowed ("as long as they haven't been used yet")
+— runs on the scoped tree before the analysis and before both lowering
+paths read it (`sink_closure_definitions!`, closure_conversion.jl): a pure
+creation statement moves to just before its first use within its block, so
+store-after-creation-before-first-use becomes a value capture of the
+post-store value, and the decision and emission positions agree in every
+consumer by construction. `JuliaLowering.analyze_captures_precise!`
 (`JuliaLowering/src/unified/capture_analysis.jl`) emits throwaway IR whose
 creation sites are real closure regions holding the capture FOOTPRINT and
 reads the per-variable verdict off which `cell_shared` cells survive; the

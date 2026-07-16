@@ -832,6 +832,12 @@ enclosing lambda form and information about variables captured by closures.
                                    Dict{IdTag,ClosureBindings}())
     analyze_variables!(ctx3, ex2)
     analyze_def_and_use!(ctx3, ex2)
+    # sink closure definitions to just before their first use (structural
+    # statement motion inside the envelope; closure_conversion.jl). Runs
+    # BEFORE the capture analysis and before either lowering path reads the
+    # tree, so the capture DECISION and the EMITTED creation position agree
+    # in every consumer by construction.
+    sink_closure_definitions!(ctx3, ex2)
     # widen `unboxed` with the mem2reg-precise capture verdicts (julia#15276;
     # unified/capture_analysis.jl — monotone over the syntactic pass above)
     analyze_captures_precise!(ctx3, ex2)

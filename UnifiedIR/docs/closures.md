@@ -82,6 +82,37 @@ materialization for unavoidable shares belongs to the compiler's
 late-materialization pipeline (the §5.7 definition/specialization split),
 after inference.
 
+**Sinking: the authorized code motion.** Before the capture analysis runs
+— and before either lowering path reads the tree —
+`sink_closure_definitions!` (`JuliaLowering/src/closure_conversion.jl`)
+moves each pure closure-creation statement down its enclosing block to
+just before the first statement that mentions any binding it assigns.
+Creation is pure and nothing has observed it yet, so the motion is
+unobservable — and a store that sat between creation and first use now
+lands *before* the sunk creation, where criterion (b) holds: `x = 1;
+f = () -> x; x = 2; f()` becomes a VALUE capture of `2`. The soundness
+coupling is by construction: the capture decision and the emitted creation
+position cannot disagree, because every consumer — the capture-analysis
+IR, `convert_closures`, and the region emitter — reads the same
+already-sunk statement order; the position rule has exactly one
+implementation. v1 is deliberately conservative: whole statements only,
+same block only, method bodies only (never toplevel thunks, where
+closure-type definition and world-age effects pin the position). Every
+occurrence of the created bindings outside the statement must sit in a
+later statement of the same block (a capture by another closure,
+`@isdefined f`, an alias `g = f` — all uses; declaration markers are not);
+skipped statements may not mention them anywhere in their subtree (nested
+lambdas included), may not carry `@label`/`@goto` (a label could admit
+control between the old and new positions), and a skipped `function_decl`
+counts as mentioning everything its closure *captures* — the instance
+materializes at the decl and reads each captured binding there, a mention
+outside the decl's subtree when the methods sit in separate `method_defs`
+statements (kwargs closures split this way). Skipping statements that may
+throw or exit early is fine: on such a path control leaves the block and,
+by confinement, nothing that can observe the binding is ever reached — a
+loop re-enters the block from the top and re-runs the sunk creation before
+any use, preserving per-iteration lifetimes.
+
 ## The zoo
 
 Run `demo/capture_zoo.jl` under the built binary for the live table,
@@ -91,16 +122,22 @@ execution differential, and microbenchmarks. Decisions:
 |---|-------|-------|------|-----|
 | 1 | `if c; x=1 else x=2 end; ()->x` | Box | **value** | (c) arm join; no store after the site |
 | 2 | `try x=f() catch; x=g() end; ()->x` | Box | **value** | (c) try join (`promote_try_cells!`); defined on both paths |
-| 3 | `x=1; f=()->x; x=2` | Box | **shared, `Core.Box`** | (b) fails — `f()` must see `2` |
-| 4 | closure in loop, `x=i` later in body | Box | **shared, `Core.Box`** | (b) fails via the backedge — multi-shot closures see later iterations |
+| 3 | `x=1; f=()->x; x=2; f()` | Box | **value** | the creation sinks past the store; (b) holds at the sunk position — the snapshot sees `2` |
+| 3b | `x=1; f=()->x; f(); x=2` | Box | **shared, `Core.Box`** | the use blocks the sink; (b) fails — the second `f()` must see `2` |
+| 4 | closure in loop, `x=i` later in body | Box | **shared, `Core.Box`** | (b) fails via the backedge — multi-shot closures see later iterations (creation feeds `push!` in the same statement: nothing to sink) |
 | 5 | counter `()->(x+=1)` | Box | **shared, `Core.Box`** | (a) fails — the closure writes its capture |
 | 6 | `local x; if c; x=1 end; ()->x` | Box | **shared, `Core.Box`** | (c) fails (maybe-undef); Box preserves use-time `UndefVarError` |
 | 7 | conditional assignment feeding a comprehension | Box | **value** | same as 1 through the generator closure |
 
-Cases 3, 4, 6 are seeded as regression sentinels
+Cases 3b, 4, 6 are seeded as regression sentinels
 (`JuliaLowering/test/capture_analysis.jl`): a wrong-direction decision there
 is a silent miscompile, so they assert both the decision *and* the observable
-semantics (mutation visibility, multi-shot reads, undef errors).
+semantics (mutation visibility, multi-shot reads, undef errors). Case 3 is
+the sinking sentinel in the other direction: its differential proves the
+sunk snapshot sees the post-store value (2, never the stale 1 that a
+decision-at-sunk/emission-at-original mismatch would produce), and a seeded
+source-level fuzz battery generates the store-after-creation class heavily
+against stock execution.
 
 The payoff shows in inference: case 1's return type goes `Any → Int64`,
 case 2 `Any → Float64`, case 7 `Vector → Vector{Int64}`. Escaping-closure

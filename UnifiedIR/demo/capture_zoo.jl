@@ -32,13 +32,25 @@ function zoo2(a)
     cl = () -> x
     return cl()
 end
-# 3. mutation AFTER capture: must stay shared (untyped Core.Box, as stock --
-#    lowering may not type the container)
+# 3. mutation after creation but BEFORE FIRST USE: the creation statement
+#    SINKS to just before the first use (the one code motion lowering is
+#    allowed), the store lands before the sunk creation, and the capture
+#    becomes a VALUE capture -- of the post-store value 2 (the execution
+#    differential is the soundness sentinel)
 function zoo3()
     x = 1
     f = () -> x
     x = 2
     return f()
+end
+# 3b. same store, but the closure is USED first: the use blocks the sink,
+#     the store stays after the creation, must stay shared (Core.Box)
+function zoo3b()
+    x = 1
+    f = () -> x
+    a = f()
+    x = 2
+    return (a, f())
 end
 # 4. closure created in a loop, var stored later in the body: multi-shot
 #    backedge, must stay shared
@@ -115,7 +127,7 @@ trunc26(x) = (t = string(x); length(t) > 25 ? t[1:22] * "..." : t)
 println(rpad("case", 8), rpad("stock boxes", 13), rpad("stock rt", 26),
         rpad("ours rt", 26), "our closure fields")
 for (name, tt) in [(:zoo1, (Bool,)), (:zoo2, (Float64,)), (:zoo3, ()),
-                   (:zoo4, (Int,)), (:zoo5, ()), (:zoo5b, ()),
+                   (:zoo3b, ()), (:zoo4, (Int,)), (:zoo5, ()), (:zoo5b, ()),
                    (:zoo6, (Bool,)), (:zoo7, (Bool,))]
     fs = getglobal(ZStock, name)
     fo = getglobal(ZOurs, name)
@@ -141,7 +153,8 @@ for (label, run) in [
     ("zoo1(false)",  M -> M.zoo1(false)),
     ("zoo2(4.0)",    M -> M.zoo2(4.0)),
     ("zoo2(-4.0)",   M -> M.zoo2(-4.0)),      # DomainError path
-    ("zoo3()",       M -> M.zoo3()),          # mutation visible: 2
+    ("zoo3()",       M -> M.zoo3()),          # sunk creation snapshots 2
+    ("zoo3b()",      M -> M.zoo3b()),         # use blocks sink: (1, 2)
     ("zoo4(3)",      M -> M.zoo4(3)),         # multi-shot: all see final x
     ("zoo5()",       M -> M.zoo5()),          # writes propagate out: 3
     ("zoo5b()",      M -> M.zoo5b()),
@@ -197,15 +210,28 @@ function t1(c)
     return cl()
 end
 """)
-show_analysis_ir("""zoo3: mutation after capture -> stays shared: criterion (b) inside
-     promote_capture_cells! sees the `cell_set` AFTER the closure op (a
-     store the deferred reads can observe at call time) and refuses the
-     value rewrite""", raw"""
+show_analysis_ir("""zoo3: the creation statement was SUNK past the store before this IR
+     was even emitted (sink_closure_definitions! on the scoped tree — the
+     one code motion lowering is allowed), so the closure op sits AFTER the
+     `cell_set` and promote_capture_cells! proves the value capture at the
+     sunk position; the resolved value is the post-store 2""", raw"""
 function t3()
     x = 1
     f = () -> x
     x = 2
     return f()
+end
+""")
+show_analysis_ir("""zoo3b: a USE between creation and store blocks the sink (the call
+     mentions f), so the closure op stays put, criterion (b) inside
+     promote_capture_cells! sees the `cell_set` AFTER it, and the value
+     rewrite is refused — the shared cell survives""", raw"""
+function t3b()
+    x = 1
+    f = () -> x
+    a = f()
+    x = 2
+    return (a, f())
 end
 """)
 show_analysis_ir("""zoo6: maybe-undef capture -> the cell SURVIVES the fixpoint (no

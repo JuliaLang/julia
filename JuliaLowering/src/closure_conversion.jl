@@ -654,3 +654,282 @@ Invariants:
     end
     ctx_out, flatten_blocks(ex_out)
 end
+
+#-------------------------------------------------------------------------------
+# Closure-definition sinking
+#
+# The one code-motion optimization lowering is allowed ("sinking closure
+# definitions, as long as they haven't been used yet" — the envelope rule,
+# UnifiedIR/docs/closures.md): closure CREATION is pure, so moving a whole
+# creation statement from its declaration position down to just before the
+# first statement that can observe it is unobservable — and it turns
+# store-after-creation-but-before-first-use into a legal VALUE capture,
+# because the capture criterion is evaluated at the creation position.
+#
+# This runs on the scoped tree BEFORE `analyze_captures_precise!` and before
+# EITHER lowering path reads it, which is the soundness story: the capture
+# DECISION and the EMITTED creation position cannot disagree, because every
+# consumer (the capture-analysis IR, `convert_closures`, and the
+# UnifiedBackend region emitter) consumes the same already-sunk statement
+# order. There is exactly one implementation of the position rule.
+#
+# v1 rule (purely structural, conservative):
+#   * The unit of motion is a whole statement S of a block B inside a method
+#     body. S must be a PURE CREATION STATEMENT (whitelist `_sink_match`):
+#     nothing but closure-creation machinery for local bindings —
+#     function_decl + method_defs + the instance assignment — whose only
+#     runtime effects are the pure creation and stores to the bindings it
+#     creates, W(S). (Signature svecs may read globals: the eager path lifts
+#     them to definition toplevel, so their in-body position is already
+#     meaningless; anything else non-trivial disqualifies S.)
+#   * Confinement: every occurrence of every w ∈ W(S) outside S must sit in
+#     a LATER statement of the same block B (declaration markers `local w`
+#     do not count). Occurrences in earlier statements, enclosing blocks,
+#     handlers, or other frames could observe w's definedness or identity on
+#     paths the motion changes — refuse.
+#   * S sinks past following statements that mention no w ∈ W(S) anywhere in
+#     their subtree (nested lambdas included — a capture is a use;
+#     `@isdefined w` is a use) and contain no `@label`/`@goto` (a label
+#     could let control enter between the old and new position, reaching
+#     the use region without the sunk creation). It stops just before the
+#     first statement that mentions W(S): the first use. A `function_decl z`
+#     for a closure z counts as mentioning every variable z CAPTURES, not
+#     just z: instance materialization happens at the decl (`%new(T,
+#     captures...)` above) and reads each captured binding there — an
+#     implicit read the subtree scan cannot see when z's methods live in
+#     separate `method_defs` statements (kwargs closures split this way:
+#     sinking the kw-body's decl past the sorter's decl would make the
+#     sorter capture an undefined variable).
+#   * Same block only, never to the block's last position (block value).
+#     Statements that may throw or exit early are fine to sink past: on such
+#     a path control leaves B, and by confinement nothing that can observe w
+#     is reachable afterwards; a loop re-enters B from the top and re-runs
+#     the sunk creation before any use, preserving per-iteration lifetimes.
+#   * Method bodies only, never toplevel thunks (a toplevel creation pins
+#     closure-type definition and world-age effects to its position).
+
+function sink_closure_definitions!(ctx::VariableAnalysisContext, ex)
+    isempty(ctx.closure_bindings) && return nothing
+    census = Dict{IdTag,Int}()
+    _sink_count!(census, ex)
+    _sink_walk!(ctx, ex, census, false)
+    return nothing
+end
+
+# Occurrence census: every K"BindingId" under `ex`, in the motion sense —
+# declaration markers do not count; quoted subtrees cannot reference
+# bindings; nested lambda bodies DO count (a capture is a use).
+function _sink_count!(census::Dict{IdTag,Int}, ex)
+    k = kind(ex)
+    if k == K"BindingId"
+        census[ex.var_id] = get(census, ex.var_id, 0) + 1
+    elseif k == K"local" || k == K"global"
+        return nothing
+    elseif is_leaf(ex) || k == K"inert" || k == K"inert_syntaxtree" || k == K"quote"
+        return nothing
+    else
+        for c in children(ex)
+            _sink_count!(census, c)
+        end
+    end
+    return nothing
+end
+
+function _sink_walk!(ctx, ex, census, in_method::Bool)
+    k = kind(ex)
+    if k == K"lambda"
+        inm = !ex.is_toplevel_thunk
+        for c in children(ex)
+            _sink_walk!(ctx, c, census, inm)
+        end
+        return nothing
+    elseif is_leaf(ex) || k == K"inert" || k == K"inert_syntaxtree" || k == K"quote"
+        return nothing
+    end
+    in_method && k == K"block" && _sink_block!(ctx, ex, census)
+    for c in children(ex)
+        _sink_walk!(ctx, c, census, in_method)
+    end
+    return nothing
+end
+
+function _sink_block!(ctx, bex, census)
+    n = numchildren(bex)
+    moved = Set{NodeId}()   # each statement moves at most once: two movable
+                            # creations before a common first use would
+                            # otherwise leapfrog each other forever
+    i = 1
+    while i < n
+        if getfield(bex[i], :_id) in moved
+            i += 1
+            continue
+        end
+        W = _sink_creation_bindings(ctx, bex[i])
+        if W === nothing || isempty(W)
+            i += 1
+            continue
+        end
+        inS = Dict{IdTag,Int}()
+        _sink_count!(inS, bex[i])
+        rest = Dict{IdTag,Int}()
+        for j in (i+1):n
+            _sink_count!(rest, bex[j])
+        end
+        confined = true
+        hasuse = false
+        for w in W
+            if get(census, w, 0) != get(inS, w, 0) + get(rest, w, 0)
+                confined = false
+                break
+            end
+            get(rest, w, 0) > 0 && (hasuse = true)
+        end
+        if !(confined && hasuse)
+            i += 1
+            continue
+        end
+        j = i
+        while j + 1 <= n && _sink_past_ok(ctx, bex[j+1], W)
+            j += 1
+        end
+        # hasuse ⇒ the scan stopped at a mentioning statement ⇒ j < n
+        if j > i
+            push!(moved, getfield(bex[i], :_id))
+            _sink_move!(bex, i, j)
+            # do not advance: the statement previously at i+1 is now at i
+        else
+            i += 1
+        end
+    end
+    return nothing
+end
+
+"""
+Sinkable creation statement? Returns the set of bindings it assigns, or
+nothing. The whitelist must have matched at least one actual
+`function_decl` — a statement of otherwise-pure material (e.g. a literal
+assignment `r = 0`) is not a closure creation and is not this
+optimization's to move.
+"""
+function _sink_creation_bindings(ctx, ex)
+    W = Set{IdTag}()
+    saw_decl = Ref(false)
+    (_sink_match(ctx, ex, W, false, saw_decl) && saw_decl[]) ? W : nothing
+end
+
+function _sink_match(ctx, ex, W::Set{IdTag}, insig::Bool, saw_decl::Ref{Bool})::Bool
+    k = kind(ex)
+    if k == K"block"
+        for c in children(ex)
+            _sink_match(ctx, c, W, insig, saw_decl) || return false
+        end
+        return numchildren(ex) > 0
+    elseif k == K"nothing" || k == K"TOMBSTONE"
+        return true
+    elseif k == K"=" && numchildren(ex) == 2
+        lhs = ex[1]
+        kind(lhs) == K"BindingId" || return false
+        b = get_binding(ctx, lhs)
+        (b.kind === :local || b.kind === :argument) || return false
+        push!(W, lhs.var_id)
+        return _sink_match(ctx, ex[2], W, insig, saw_decl)
+    elseif k == K"function_decl"
+        f = ex[1]
+        kind(f) == K"BindingId" || return false
+        b = get_binding(ctx, f)
+        (b.kind === :local && haskey(ctx.closure_bindings, f.var_id)) || return false
+        saw_decl[] = true
+        push!(W, f.var_id)
+        for i in 2:numchildren(ex)
+            _sink_match(ctx, ex[i], W, insig, saw_decl) || return false
+        end
+        return true
+    elseif k == K"method_defs"
+        numchildren(ex) >= 2 || return false
+        nm = ex[1]
+        (kind(nm) == K"BindingId" && get_binding(ctx, nm).kind === :local) || return false
+        for i in 2:numchildren(ex)
+            _sink_match(ctx, ex[i], W, true, saw_decl) || return false
+        end
+        return true
+    elseif k == K"method"
+        # closure method entry [name sig lambda]: the lambda body is deferred
+        # code, not part of the statement's runtime effects
+        (insig && numchildren(ex) == 3) || return false
+        kind(ex[1]) == K"BindingId" || return false
+        _sink_match(ctx, ex[2], W, true, saw_decl) || return false
+        return kind(ex[3]) == K"lambda"
+    elseif k == K"removable" || k == K"unused_only"
+        for c in children(ex)
+            _sink_match(ctx, c, W, insig, saw_decl) || return false
+        end
+        return true
+    elseif k == K"BindingId"
+        ex.var_id in W && return true
+        b = get_binding(ctx, ex.var_id)
+        return insig && (b.kind === :global || b.kind === :static_parameter)
+    elseif k == K"function_type"
+        return numchildren(ex) == 1 && kind(ex[1]) == K"BindingId"
+    elseif k == K"call"
+        insig || return false
+        for c in children(ex)
+            _sink_match(ctx, c, W, true, saw_decl) || return false
+        end
+        return true
+    elseif k == K"core" || k == K"top" || k == K"globalref" || k == K"Value" ||
+           k == K"Symbol" || k == K"SourceLocation" || k == K"inert" ||
+           k == K"inert_syntaxtree" || k == K"quote" || is_literal(k)
+        return true
+    else
+        return false
+    end
+end
+
+# May the creation sink past `ex`? No mention of any w ∈ W anywhere in the
+# subtree (nested lambdas included; `local w` markers count as mentions here,
+# conservatively), no symbolic label/goto, and no `function_decl` of a
+# closure that CAPTURES a w — the decl materializes the instance and reads
+# every captured binding right there (see the conversion above), a mention
+# that lives outside the decl's subtree when the closure's methods sit in
+# separate `method_defs` statements.
+function _sink_past_ok(ctx, ex, W::Set{IdTag})
+    k = kind(ex)
+    if k == K"BindingId"
+        return !(ex.var_id in W)
+    elseif k == K"symboliclabel" || k == K"symbolicgoto" || k == K"oldsymbolicgoto"
+        return false
+    elseif k == K"function_decl"
+        f = ex[1]
+        kind(f) == K"BindingId" || return false
+        f.var_id in W && return false
+        cb = get(ctx.closure_bindings, f.var_id, nothing)
+        if cb !== nothing
+            for lam in cb.lambdas, (id, capt) in lam.locals_capt
+                capt && id in W && return false
+            end
+        end
+        return true
+    elseif is_leaf(ex) || k == K"inert" || k == K"inert_syntaxtree" || k == K"quote"
+        return true
+    else
+        for c in children(ex)
+            _sink_past_ok(ctx, c, W) || return false
+        end
+        return true
+    end
+end
+
+# Move B[i] to position j (i < j < numchildren): an in-place permutation of
+# the block node's child edge list — same children, new order, no new nodes.
+function _sink_move!(bex, i::Int, j::Int)
+    graph = syntax_graph(bex)
+    r = graph.edge_ranges[getfield(bex, :_id)]
+    ids = collect(graph.edges[r])
+    moved = ids[i]
+    deleteat!(ids, i)
+    insert!(ids, j, moved)
+    for (m, e) in enumerate(r)
+        graph.edges[e] = ids[m]
+    end
+    return nothing
+end

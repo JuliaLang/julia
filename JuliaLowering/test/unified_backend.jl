@@ -70,7 +70,7 @@ UB_CORPUS = [
     (:cl2, """
         function cl2()
             x = 1
-            f = () -> x            # Core.Box: mutated after capture
+            f = () -> x            # sunk past the store: value capture of 2
             x = 2
             f()
         end""", [()]),
@@ -185,13 +185,33 @@ RG_CORPUS = [
             cl = () -> x
             cl()
         end""", [(4.0,), (-4.0,)], :value),
+    # store between creation and first use: the creation statement SINKS
+    # (sink_closure_definitions!, before either path reads the tree), the
+    # closure op sits after the store, and promote_capture_cells! proves the
+    # value capture AT THE SUNK POSITION. The execution differential is the
+    # soundness sentinel: the snapshot must see 2, not the stale 1.
     (:rg_after, """
         function rg_after()
             x = 1
             f = () -> x
             x = 2
             f()
+        end""", [()], :value),
+    (:rg_usestore, """
+        function rg_usestore()
+            x = 1
+            f = () -> x
+            a = f()            # use before the store: blocks the sink
+            x = 2
+            (a, f())
         end""", [()], :shared),
+    (:rg_ifstore, """
+        function rg_ifstore(c)
+            x = 1
+            f = () -> x
+            if c; x = 2; end   # whole statement mentions no f: sunk past
+            f()
+        end""", [(true,), (false,)], :value),
     (:rg_counter, """
         function rg_counter()
             x = 0
@@ -246,9 +266,9 @@ RG_CORPUS = [
     (:rg_arg2, """
         function rg_arg2(x)
             g = () -> x
-            x = x + 1
+            x = x + 1          # between creation and first use: sunk past
             g()
-        end""", [(41,)], :shared),
+        end""", [(41,)], :value),
     (:rg_manyfields, """
         function rg_manyfields(a, b)
             u = a + 1
