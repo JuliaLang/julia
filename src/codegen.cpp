@@ -3783,10 +3783,24 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
         // latest type, and the values the inline RMW kinds observe in the slot could
         // no longer be trusted to be of type `ty`. Guard the whole operation so that
         // it diverts to the runtime path once a later declaration flags this
-        // partition. The guard is always emitted -- codegen must not specialize on
-        // the current flag state, since the partition can be re-type flagged after
-        // this code is compiled while it is still live.
-        BasicBlock *coldBB = emit_retype_guard(ctx, bpart, guard_mask);
+        // partition. The guard is never specialized on the current flag state, since
+        // the partition can be re-type flagged after this code is compiled while it is
+        // still live.
+        //
+        // A plain `Set` needs no up-front guard: the commit window opened inside
+        // `typed_store` re-checks the write guard after announcing the window and
+        // diverts to `coldBB` itself, and that in-window re-check is the authoritative
+        // one (the asymmetric-fence protocol requires it to follow the window store).
+        // An outer guard here would only be a redundant early-out -- on the hot path
+        // (never re-typed) it is pure overhead (an extra fenced flag load and branch),
+        // and on the cold path it merely saves opening the window before diverting. So
+        // for `Set` we create the divert block but emit no outer check, leaving the
+        // single flag re-check to the commit window. The RMW kinds trust a value they
+        // load from the slot at `ty` *before* a possibly-safepoint-bearing modify runs,
+        // outside any window, so they must still gate on the read guard up front.
+        BasicBlock *coldBB = op == StoreKind::Set
+                ? BasicBlock::Create(ctx.builder.getContext(), "retype_deopt", ctx.f)
+                : emit_retype_guard(ctx, bpart, guard_mask);
         jl_cgval_t res = typed_store(ctx,
                         julia_binding_pvalue(ctx, bp),
                         rval, cmp, ty,
