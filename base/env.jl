@@ -222,6 +222,10 @@ else # !windows
     function iterate(::EnvDict, i=0)
         envs = _environ()
         if envs == C_NULL
+            # If julia is loaded via dlopen with RTLD_DEEPBIND, environ may be NULL.
+            # If that happens then this causes segfaults when we try to "iterate" over the environment.
+            # Iterating over the environment makes no sense in that context and we should not try to do it
+            # so just return `nothing` and be done with it.
             return nothing
         end
         while true
