@@ -341,6 +341,9 @@ struct jl_tbaacache_t {
     MDNode *tbaa_unionselbyte;   // a selector byte in isbits Union struct fields
     MDNode *tbaa_data;       // Any user data that `pointerset/ref` are allowed to alias
     MDNode *tbaa_binding;        // jl_binding_t::value
+    MDNode *tbaa_binding_scalar; // scalar-type parent of tbaa_binding, so per-binding
+                                 // value-slot tags can be minted as its children
+                                 // (distinct bindings are then NoAlias)
     MDNode *tbaa_binding_flags;  // jl_binding_partition_t::retype_flags (never stored by
                                  // compiled code, so guard loads cannot alias binding
                                  // value stores)
@@ -362,7 +365,7 @@ struct jl_tbaacache_t {
 
     jl_tbaacache_t(): tbaa_root(nullptr), tbaa_gcframe(nullptr), tbaa_stack(nullptr),
                     tbaa_unionselbyte(nullptr), tbaa_data(nullptr), tbaa_binding(nullptr),
-                    tbaa_binding_flags(nullptr),
+                    tbaa_binding_scalar(nullptr), tbaa_binding_flags(nullptr),
                     tbaa_value(nullptr), tbaa_mutab(nullptr), tbaa_datatype(nullptr),
                     tbaa_immut(nullptr), tbaa_ptrarraybuf(nullptr), tbaa_arraybuf(nullptr),
                     tbaa_array(nullptr), tbaa_arrayptr(nullptr), tbaa_arraysize(nullptr),
@@ -390,7 +393,7 @@ struct jl_tbaacache_t {
         tbaa_unionselbyte = tbaa_make_child(mbuilder, "jtbaa_unionselbyte", tbaa_stack_scalar).first;
         MDNode *tbaa_data_scalar;
         std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child(mbuilder, "jtbaa_data");
-        tbaa_binding = tbaa_make_child(mbuilder, "jtbaa_binding", tbaa_data_scalar).first;
+        std::tie(tbaa_binding, tbaa_binding_scalar) = tbaa_make_child(mbuilder, "jtbaa_binding", tbaa_data_scalar);
         tbaa_binding_flags = tbaa_make_child(mbuilder, "jtbaa_binding_flags", tbaa_data_scalar).first;
         MDNode *tbaa_value_scalar;
         std::tie(tbaa_value, tbaa_value_scalar) =
@@ -2111,6 +2114,11 @@ public:
     Instruction *topalloca = NULL;
     Value *world_age_at_entry = NULL;
 
+    // EXPERIMENT (per-binding TBAA): a distinct value-slot TBAA tag per binding,
+    // minted on demand and cached for this function so a store to one global does
+    // not appear to alias a load of another (letting invariant global reads hoist).
+    std::map<jl_binding_t*, MDNode*> per_binding_tbaa;
+
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
@@ -3559,6 +3567,27 @@ static Value *julia_bpart_flagp(jl_codectx_t &ctx, jl_binding_partition_t *bpart
     return emit_ptrgep(ctx, bpartv, offsetof(jl_binding_partition_t, retype_flags));
 }
 
+// EXPERIMENT (per-binding TBAA): the value-slot TBAA tag for a specific binding.
+// Each binding gets its own scalar-type node under jtbaa_binding, so accesses to
+// two different bindings are proven NoAlias (siblings), while all accesses to the
+// same binding share the tag (they may alias). This lets a loop-invariant global
+// read hoist past a store to a different global. Only inline accesses to a known
+// binding use this; the dynamic runtime paths remain conservative opaque calls.
+static MDNode *tbaa_for_binding_value(jl_codectx_t &ctx, jl_binding_t *bnd)
+{
+    auto it = ctx.per_binding_tbaa.find(bnd);
+    if (it != ctx.per_binding_tbaa.end())
+        return it->second;
+    MDBuilder mbuilder(ctx.builder.getContext());
+    // LLVM hash-conses TBAA scalar nodes by (name, parent), so the name must be
+    // unique per binding or all bindings would collapse back to one aliasing type.
+    std::string name = "jtbaa_binding_slot#" + std::to_string(ctx.per_binding_tbaa.size());
+    MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, ctx.tbaa().tbaa_binding_scalar);
+    MDNode *tag = mbuilder.createTBAAStructTagNode(scalar, scalar, 0);
+    ctx.per_binding_tbaa[bnd] = tag;
+    return tag;
+}
+
 // Emit a guard that diverts to a cold block once a later declaration invalidates
 // what this code is compiled to assume about `bpart` (i.e. once the `mask` bits of
 // its guard word -- clear at compile time here -- become set; see #62154): a fenced
@@ -3696,7 +3725,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     // after a redefinition that happened on the stack. Such an access must error
     // rather than return an ill-typed value.
     Value *bpval = julia_binding_pvalue(ctx, bp);
-    jl_cgval_t v = emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
+    jl_cgval_t v = emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, tbaa_for_binding_value(ctx, rkp.binding_if_global));
     // As long as no later declaration invalidates this partition's restriction the
     // verification is dead: it sits behind a runtime test of the partition's read
     // guard. The guard is always emitted -- codegen must not specialize on the
@@ -3876,7 +3905,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
         jl_cgval_t res = typed_store(ctx,
                         julia_binding_pvalue(ctx, bp),
                         rval, cmp, ty,
-                        ctx.tbaa().tbaa_binding,
+                        tbaa_for_binding_value(ctx, bnd),
                         nullptr,
                         bp,
                         isboxed,
@@ -4439,7 +4468,7 @@ static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_
             Value *bp = julia_binding_gv(ctx, rkp.binding_if_global);
             bp = julia_binding_pvalue(ctx, bp);
             LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_for_binding_value(ctx, rkp.binding_if_global));
             ai.decorateInst(v);
             v->setOrdering(get_llvm_atomic_order(order));
             Value *isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
