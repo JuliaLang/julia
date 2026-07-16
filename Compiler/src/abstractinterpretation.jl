@@ -2430,6 +2430,9 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
     canconst = true
     if isa(a3, Const)
         body = a3.val
+    elseif isconstType(a3)
+        # the body value is pinned exactly (`===`)
+        body = type_parameter(a3)
     elseif isType(a3)
         body = type_parameter(a3)
         canconst = false

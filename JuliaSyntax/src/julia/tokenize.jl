@@ -447,6 +447,15 @@ function emit_operator_or_compound_assign(l::Lexer, kind::Kind, prec::Precedence
     return emit_operator(l, kind, prec)
 end
 
+# Emit wrapping arithmetic operators with their own kind so `+%=`, `-%=`, and
+# `*%=` can round-trip to distinct update-assignment heads.
+function emit_wrapping_operator_or_compound_assign(l::Lexer, kind::Kind, prec::PrecedenceLevel)
+    if compound_assign_follows(l)
+        return emit_operator(l, kind, PREC_COMPOUND_ASSIGN)
+    end
+    return emit_operator(l, kind, prec)
+end
+
 function emit_trivia(l::Lexer, kind::Kind)
     tok = RawToken(kind, startpos(l), position(l) - 1, PREC_NONE)
     l.last_token = kind
@@ -922,6 +931,8 @@ end
 function lex_plus(l::Lexer)
     if accept(l, '+')
         return emit_operator(l, K"++", PREC_PLUS)
+    elseif accept(l, '%')
+        return emit_wrapping_operator_or_compound_assign(l, K"+%", PREC_PLUS)
     end
     return emit_operator_or_compound_assign(l, K"+", PREC_PLUS)
 end
@@ -935,6 +946,8 @@ function lex_minus(l::Lexer)
         end
     elseif l.last_token != K"." && accept(l, '>')
         return emit_operator(l, K"->", PREC_ARROW)
+    elseif accept(l, '%')
+        return emit_wrapping_operator_or_compound_assign(l, K"-%", PREC_PLUS)
     end
     return emit_operator_or_compound_assign(l, K"-", PREC_PLUS)
 end
@@ -942,6 +955,8 @@ end
 function lex_star(l::Lexer)
     if accept(l, '*')
         return emit(l, K"Error**") # "**" is an invalid operator; use ^
+    elseif accept(l, '%')
+        return emit_wrapping_operator_or_compound_assign(l, K"*%", PREC_TIMES)
     end
     return emit_operator_or_compound_assign(l, K"*", PREC_TIMES)
 end

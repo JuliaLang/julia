@@ -2043,7 +2043,8 @@ function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, pipe, sing
                     liveprinting = true
                     s.pkg_liveprinted = pkg
                 end
-                print(s.io, ansi_cleartoendofline, str)
+                # in fancy mode clear the progress bar residue from the line first
+                print(s.io, s.fancyprint ? ansi_cleartoendofline : "", str)
             end
         end
         write(s.jobs[pkg_config].output, str)
@@ -2056,7 +2057,7 @@ function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, pipe, sing
         elseif !thistaskwaiting
             # XXX: don't just re-enable IO for random packages without printing the context for them first
             !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                print(s.io, ansi_cleartoendofline, str)
+                print(s.io, str)
             end
         end
     end
@@ -2426,7 +2427,7 @@ function report_precompile_results!(s::PrecompileSession)
     notify(s.first_started) # in cases of no-op or !fancyprint
 
     quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), s.tasks) || s.interrupted || s.canceled
-    seconds_elapsed = round(Int, (s.time_start > 0 ? (time_ns() - s.time_start) : 0) / 1e9)
+    seconds_elapsed = round(Int, (s.time_start > 0 ? (time_ns() -% s.time_start) : 0) / 1e9)
     ndeps = count(j -> is_recompiled(j), values(s.jobs))
 
     requested_errs = false

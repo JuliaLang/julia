@@ -912,6 +912,47 @@ Keyword arguments behave quite differently from ordinary positional arguments. I
 they do not participate in method dispatch. Methods are dispatched based only on positional arguments,
 with keyword arguments processed after the matching method is identified.
 
+!!! warning "Known bug: the presence of keyword arguments affects dispatch"
+    Due to a long-standing bug ([#9498](https://github.com/JuliaLang/julia/issues/9498)),
+    a call that supplies keyword arguments only considers methods that accept keyword
+    arguments. This can select a less specific method over a more specific one that
+    accepts no keywords:
+
+    ```julia
+    julia> f(x; y=10) = "generic";
+
+    julia> f(x::Int) = "int-specific";
+
+    julia> f(1)
+    "int-specific"
+
+    julia> f(1; y=2)  # bug: bypasses the more specific method
+    "generic"
+    ```
+
+    Relatedly, redefining a method without keyword arguments does not replace the keyword
+    handling of an earlier definition with the same positional signature, even though only
+    one method is displayed:
+
+    ```julia
+    julia> g(x; y=1) = "with keywords";
+
+    julia> g(x) = "without keywords";
+
+    julia> g
+    g (generic function with 1 method)
+
+    julia> g(1)
+    "without keywords"
+
+    julia> g(1; y=2)  # bug: calls the overwritten definition
+    "with keywords"
+    ```
+
+    This warning is descriptive, not prescriptive, and code should not rely on this behavior. To keep a specialized
+    method applicable to calls with keyword arguments, give it its own keyword interface,
+    either by repeating the keyword arguments or by collecting any keyword with `kwargs...`.
+
 ## Function-like objects
 
 Methods are associated with types, so it is possible to make any arbitrary Julia object "callable"

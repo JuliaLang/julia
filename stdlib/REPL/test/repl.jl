@@ -1300,6 +1300,25 @@ end
     Base.wait(backend.backend_task)
 end
 
+# a stray InterruptException forwarded to the backend between evaluations (e.g. a
+# Ctrl-C arriving just as user code finishes) must not tear down the backend (#58689)
+@testset "stray InterruptException in REPL backend" begin
+    backend = REPL.REPLBackend()
+    errormonitor(@async REPL.start_repl_backend(backend))
+    put!(backend.repl_channel, (:(1+1), false))
+    @test take!(backend.response_channel) == Pair{Any, Bool}(2, false)
+    # the backend task is now parked in take!(repl_channel); inject the interrupt
+    # from a throwaway task, since throwto does not reschedule its caller
+    @async Base.throwto(backend.backend_task, InterruptException())
+    yield()
+    @test !istaskdone(backend.backend_task)
+    put!(backend.repl_channel, (:(1+2), false))
+    @test timedwait(() -> isready(backend.response_channel), 60) === :ok
+    @test take!(backend.response_channel) == Pair{Any, Bool}(3, false)
+    put!(backend.repl_channel, (nothing, -1))
+    Base.wait(backend.backend_task)
+end
+
 # Mimic of JSON.jl's structure
 module JSON54872
 
@@ -2039,6 +2058,43 @@ end
             Base.wait(repltask)
         end
     end
+end
+
+# Test find_enclosing_parens boundary conditions and multi-byte handling
+@testset "find_enclosing_parens" begin
+    using REPL.StylingPasses: find_enclosing_parens
+    JuliaSyntax = Base.JuliaSyntax
+    fep(input, cursor_pos) = find_enclosing_parens(input,
+        JuliaSyntax.parseall(JuliaSyntax.GreenNode, input; ignore_errors=true), cursor_pos)
+
+    # cursor_pos is a 1-indexed byte offset.
+    # Returned positions are 1-indexed byte positions.
+
+    # Boundary: "a(x)b" — '(' at byte 2, ')' at byte 4
+    # Match range is cursor_pos ∈ [open_pos-1, close_pos] = [1, 4]
+    @test isempty(fep("a(x)b", 1))    # just before range
+    @test fep("a(x)b", 2) == [(2, 4)] # on '(' (left boundary)
+    @test fep("a(x)b", 4) == [(2, 4)] # inside
+    @test fep("a(x)b", 5) == [(2, 4)] # one past ')' (right boundary)
+    @test isempty(fep("a(x)b", 6))    # just after range
+
+    # Multi-byte: α is 2 bytes, so ')' lands at byte 4 instead of 3
+    @test fep("(α)", 1) == [(1, 4)]
+    @test fep("(α)", 2) == [(1, 4)]
+    @test fep("(α)", 4) == [(1, 4)]
+    # 4-byte char: 𝐱 is U+1D431, ')' lands at byte 6
+    @test fep("(𝐱)", 1) == [(1, 6)]
+    @test fep("(𝐱)", 7) == [(1, 6)]
+
+    # Nested same-type: innermost wins
+    @test fep("(a+(b))", 5) == [(4, 6)]
+    # Mixed types: matched independently
+    pairs = fep("f(a[b])", 5)
+    @test (2, 7) in pairs && (4, 6) in pairs
+
+    # Edge cases
+    @test isempty(fep("", 1))
+    @test isempty(fep("(x", 2))
 end
 
 # Test that REPL picks up syntax version from active project and re-latches on project switch

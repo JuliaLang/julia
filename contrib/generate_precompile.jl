@@ -15,20 +15,14 @@ end
 using Base.Meta
 
 ## Debugging options
-# Disable parallel precompile generation by setting `false`
-const PARALLEL_PRECOMPILATION = true
-
-# View the code sent to the repl by setting this to `stdout`
+# View the code sent to the subprocesses by setting this to `stdout`
 const debug_output = devnull # or stdout
-
-# Disable fancy printing
-const fancyprint = (stdout isa Base.TTY) && Base.get_bool_env("CI", false) !== true
 ##
 
-CTRL_C = '\x03'
-CTRL_R = '\x12'
-UP_ARROW = "\e[A"
-DOWN_ARROW = "\e[B"
+if Sys.isunix()
+    include(joinpath(@__DIR__, "..", "test", "testhelpers", "FakePTYs.jl"))
+    import .FakePTYs: open_fake_pty
+end
 
 hardcoded_precompile_statements = """
 precompile(Base.unsafe_string, (Ptr{UInt8},))
@@ -42,7 +36,7 @@ precompile(Tuple{typeof(Base.Terminals.enable_bracketed_paste), Base.Terminals.T
 precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
-precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}}
+precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}})
 
 # loading.jl - without these each precompile worker would precompile these because they're hit before pkgimages are loaded
 precompile(Base.__require, (Module, Symbol))
@@ -56,11 +50,10 @@ precompile(Tuple{typeof(Base.in!), Tuple{Module, String, UInt64, UInt32, Float64
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
 precompile(Tuple{typeof(Base.getindex), Type{Pair{Base.PkgId, UInt128}}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Vararg{Pair{Base.PkgId, UInt128}}})
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}, Core.SimpleVector})
-precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
-precompile(include_package_for_output, (PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing)) || @assert false
-precompile(include_package_for_output, (PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String)) || @assert false
-precompile(create_expr_cache, (PkgId, PkgLoadSpec, String, String, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false
-precompile(create_expr_cache, (PkgId, PkgLoadSpec, String, Nothing, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false
+precompile(Base.include_package_for_output, (Base.PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), Nothing))
+precompile(Base.include_package_for_output, (Base.PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(Base._concrete_dependencies), String))
+precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, String, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, IO, IO))
+precompile(Base.create_expr_cache, (Base.PkgId, Base.PkgLoadSpec, String, Nothing, typeof(Base._concrete_dependencies), Cmd, Base.CacheFlags, IO, IO))
 
 # LazyArtifacts (but more generally helpful)
 precompile(Tuple{Type{Base.Val{x} where x}, Module})
@@ -81,6 +74,7 @@ precompile(Base.check_open, (Base.TTY,))
 precompile(Base.getproperty, (Base.TTY, Symbol))
 precompile(write, (Base.TTY, String))
 precompile(Tuple{typeof(Base.get), Base.TTY, Symbol, Bool})
+precompile(Tuple{typeof(Base.eof), Base.TTY})
 precompile(Tuple{typeof(Base.hashindex), String, Int})
 precompile(Tuple{typeof(Base.write), Base.GenericIOBuffer{Array{UInt8, 1}}, String})
 precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Nothing, Int}, Int})
@@ -91,6 +85,8 @@ precompile(Tuple{typeof(Base.promoteK), Type, Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.promoteV), Type, Base.Dict{String, Any}, Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.eval_user_input), Base.PipeEndpoint, Any, Bool})
 precompile(Tuple{typeof(Base.get), Base.PipeEndpoint, Symbol, Bool})
+precompile(Tuple{Core.TypeEgal{Base.IOContext{IO_t} where IO_t<:IO}, Base.PipeEndpoint, Pair{Symbol, Bool}})
+precompile(Tuple{typeof(Base.print), Base.IOContext{Base.PipeEndpoint}, String})
 precompile(Tuple{typeof(Base.HashArrayMappedTries.next), Base.HashArrayMappedTries.HashState{Base.ScopedValues.ScopedValue{Any}}})
 
 # used by Revise.jl
@@ -146,9 +142,12 @@ precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:context,), Tuple{Base.TTY}}, 
 precompile(Tuple{Type{Base.UUID}, Base.UUID})
 """
 
-for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
-    global hardcoded_precompile_statements
-    hardcoded_precompile_statements *= "precompile(Tuple{typeof(show), $IO, $T})\n"
+if Sys.iswindows()
+    # on Unix these are covered (with the real terminal types) by `tty_script` below
+    for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
+        global hardcoded_precompile_statements
+        hardcoded_precompile_statements *= "precompile(Tuple{typeof(show), $IO, $T})\n"
+    end
 end
 
 # Precompiles for Revise and other packages
@@ -212,6 +211,22 @@ write(IOBuffer(), "")
 @time @eval Base.Experimental.@force_compile
 """
 
+# Runs in a subprocess with stdout/stderr attached to a pty, so that the traced
+# signatures use the concrete `Base.TTY` types seen in a terminal session
+# (tracing these in the pipe-attached process above would compile the wrong
+# specializations). Ends by throwing, to trace the error-report path for an
+# uncaught exception in a script.
+tty_script = """
+for x in (Float16(1.0), 1.0f0, 1.0)
+    show(stdout, x); println()
+    show(IOContext(stdout, :compact => true), x); println()
+    buf = IOBuffer()
+    show(buf, x)
+    show(IOContext(buf, :compact => true), x)
+end
+throw(InterruptException())
+"""
+
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 Artifacts = get(Base.loaded_modules,
@@ -259,81 +274,26 @@ if Libdl !== nothing
     """
 end
 
-# Printing the current state
-let
-    global print_state
-    print_lk = ReentrantLock()
-    status = Dict{String, String}(
-        "step1" => "W",
-        "step3" => "W",
-        "clock" => "◐",
-    )
-    function print_status(key::String)
-        txt = status[key]
-        if startswith(txt, "W") # Waiting
-            printstyled("? ", color=Base.warn_color()); print(txt[2:end])
-        elseif startswith(txt, "R") # Running
-            print(status["clock"], " ", txt[2:end])
-        elseif startswith(txt, "F") # Finished
-            printstyled("✓ ", color=:green); print(txt[2:end])
-        else
-            print(txt)
-        end
-    end
-    function print_state(args::Pair{String,String}...)
-        lock(print_lk) do
-            isempty(args) || push!(status, args...)
-            print("\r└ Collect (Basic: ")
-            print_status("step1")
-            print(") => Execute ")
-            print_status("step3")
-        end
-    end
-end
-
-ansi_enablecursor = "\e[?25h"
-ansi_disablecursor = "\e[?25l"
-blackhole = Sys.isunix() ? "/dev/null" : "nul"
 procenv = Dict{String,Any}(
-        "JULIA_HISTORY" => blackhole,
         "JULIA_LOAD_PATH" => "@$(Sys.iswindows() ? ";" : ":")@stdlib",
         "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
         "TERM" => "",
-        # "JULIA_DEBUG" => "precompilation",
+        # a piped-stdin child runs the REPL machinery; the REPL stdlib's pkgimage
+        # does not exist yet at sysimage-build time, so it must not be loaded
         "JULIA_FALLBACK_REPL" => "true")
 
-generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
+function generate_precompile_statements()
     start_time = time_ns()
     sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
-    # Extract the precompile statements from the precompile file
-    statements_step1 = Channel{String}(Inf)
+    statements = String[]
+    append!(statements, split(hardcoded_precompile_statements::String, '\n'))
 
-    # From hardcoded statements
-    for statement in split(hardcoded_precompile_statements::String, '\n')
-        push!(statements_step1, statement)
-    end
-
-    println("Collecting and executing precompile statements")
-    fancyprint && print(ansi_disablecursor)
-    print_state()
-    clock = @async begin
-        t = Timer(0; interval=1/10)
-        anim_chars = ["◐","◓","◑","◒"]
-        current = 1
-        if fancyprint
-            while isopen(statements_step1) || !isempty(statements_step1)
-                print_state("clock" => anim_chars[current])
-                wait(t)
-                current = current == 4 ? 1 : current + 1
-            end
-        end
-        close(t)
-    end
-
-    # Collect statements from running the script
-    step1 = @async mktempdir() do prec_path
-        print_state("step1" => "R")
+    # Collect statements from running the script in a fresh process: only such a
+    # process compiles (and therefore traces) the specializations that startup and
+    # code loading hit, since this process has already run them.
+    println("Collecting precompile statements")
+    mktempdir() do prec_path
         # Also precompile a package here
         pkgname = "__PackagePrecompilationStatementModule"
         pkguuid = "824efdaf-a0e9-431c-8ee7-3d356b2531c2"
@@ -353,28 +313,55 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         touch(joinpath(pkgpath, "Manifest.toml"))
         tmp_prec = tempname(prec_path; cleanup=false)
         tmp_proc = tempname(prec_path; cleanup=false)
+        tmp_tty = tempname(prec_path; cleanup=false)
         s = """
             pushfirst!(DEPOT_PATH, $(repr(joinpath(prec_path,"depot"))));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
             Base.Precompilation.precompilepkgs(;fancyprint=true);
             $precompile_script
             """
-        p = run(pipeline(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_proc --sysimage $sysimg
+        run(pipeline(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_proc --sysimage $sysimg
                 --cpu-target=native --startup-file=no --color=yes --project=$(pkgpath)`, procenv),
                  stdin=IOBuffer(s), stderr=debug_output, stdout=debug_output))
-        n_step1 = 0
-        for f in (tmp_prec, tmp_proc)
-            isfile(f) || continue
-            for statement in split(read(f, String), '\n')
-                push!(statements_step1, statement)
-                n_step1 += 1
+        if Sys.isunix()
+            try
+                script = joinpath(prec_path, "tty_script.jl")
+                write(script, tty_script)
+                pts, ptm = open_fake_pty()
+                outbuf = IOBuffer()
+                drain = @async try
+                    while !eof(ptm)
+                        write(outbuf, readavailable(ptm))
+                    end
+                catch # ignore EIO when the child exits
+                end
+                p = run(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_tty --sysimage $sysimg
+                        --cpu-target=native --startup-file=no --color=yes $script`, procenv),
+                        devnull, pts, pts; wait=false)
+                Base.close_stdio(pts)
+                wait(p)
+                wait(drain)
+                close(ptm)
+                output = String(take!(outbuf))
+                # the script must reach its final `throw` for the error path to be traced
+                occursin("InterruptException", output) ||
+                    error("unexpected output from the pty-attached process:\n$output")
+            catch ex
+                @warn "Failed to collect precompile statements from the pty-attached process" exception=(ex, catch_backtrace())
             end
         end
-        close(statements_step1)
-        print_state("step1" => "F$n_step1")
-        return :ok
+        for (name, f) in (("package precompilation", tmp_prec), ("script", tmp_proc))
+            n = isfile(f) ? countlines(f) : 0
+            if n == 0
+                # in a real sysimage build (bare sysimage) both processes trace plenty;
+                # when run standalone against a finished sysimage they may trace nothing
+                msg = "no precompile statements were traced from the $name process"
+                Base.get_bool_env("CI", false) ? error(msg) : @warn(msg)
+            end
+            n > 0 && append!(statements, eachline(f))
+        end
+        isfile(tmp_tty) && append!(statements, eachline(tmp_tty))
     end
-    PARALLEL_PRECOMPILATION ? bind(statements_step1, step1) : wait(step1)
 
     # Create a staging area where all the loaded packages are available
     PrecompileStagingArea = Module()
@@ -385,59 +372,40 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     end
     Core.eval(PrecompileStagingArea, :(const Compiler = Base.Compiler))
 
+    println("Executing precompile statements")
     n_succeeded = 0
-    # Make statements unique
-    statements = Set{String}()
-    # Execute the precompile statements
-    for statement in statements_step1
+    executed = Set{String}()
+    for statement in statements
+        statement = strip(statement)
+        # the hardcoded statements are written as a commented block
+        (isempty(statement) || startswith(statement, '#')) && continue
         # Main should be completely clean
         occursin("Main.", statement) && continue
-        Base.in!(statement, statements) && continue
-        # println(statement)
+        Base.in!(statement, executed) && continue
         try
             ps = Meta.parse(statement)
-            if !isexpr(ps, :call)
-                # these are typically comments
-                @debug "skipping statement because it does not parse as an expression" statement
-                delete!(statements, statement)
-                continue
-            end
+            # a malformed statement used to be skipped silently here, allowing
+            # hardcoded statements to rot unnoticed; make it loud instead
+            isexpr(ps, :call) || error("statement does not parse to a call")
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
-            # println(ps)
             ps = Core.eval(PrecompileStagingArea, ps)
-            if precompile(ps...)
-                n_succeeded += 1
-            else
-                Base.get_bool_env("CI", false) && error("Precompilation failed for $statement")
-                @warn "Failed to precompile expression" form=statement _module=nothing _file=nothing _line=0
-            end
-            failed = length(statements) - n_succeeded
-            yield() # Make clock spinning
-            print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
+            precompile(ps...) || error("precompile returned false")
+            n_succeeded += 1
         catch ex
             # See #28808
             Base.get_bool_env("CI", false) && error("Precompilation failed for $statement")
             @warn "Failed to precompile expression" form=statement exception=(ex,catch_backtrace()) _module=nothing _file=nothing _line=0
         end
     end
-    wait(clock) # Stop asynchronous printing
-    failed = length(statements) - n_succeeded
-    print_state("step3" => string("F$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
-    println()
-    # Seems like a reasonable number right now, adjust as needed
-    # comment out if debugging script
-    have_repl = false
-    n_succeeded > (have_repl ? 650 : 90) || @warn "Only $n_succeeded precompile statements"
-
-    fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
+    failed = length(executed) - n_succeeded
+    println("Executed $n_succeeded precompile statements", failed > 0 ? " ($failed failed)" : "")
 
     tot_time = time_ns() - start_time
     println("Precompilation complete. Summary:")
     print("Total ─────── "); Base.time_print(stdout, tot_time); println()
-finally
-    fancyprint && print(ansi_enablecursor)
     GC.gc(true); GC.gc(false); # reduce memory footprint
+    return
 end
 
 generate_precompile_statements()

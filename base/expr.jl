@@ -1458,8 +1458,14 @@ function make_atomic(order, ex)
         if length(ex.args) == 2
             if ex.head === :(+=)
                 op = :+
+            elseif ex.head === Symbol("+%=")
+                op = Symbol("+%")
             elseif ex.head === :(-=)
                 op = :-
+            elseif ex.head === Symbol("-%=")
+                op = Symbol("-%")
+            elseif ex.head === Symbol("*%=")
+                op = Symbol("*%")
             elseif ex.head === :(|=)
                 op = :|
             elseif ex.head === :(&=)

@@ -213,7 +213,7 @@ function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
                         push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
                     else # 4-byte UTF-8
-                        push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
+                        push!(dst, 0xe5b8 +% (UInt16(a) << 8) +% (UInt16(b) << 2) +% UInt16(c >> 4),
                                    xor(0xdc80, UInt16(c & 0xf) << 6, d))
                     end
                 else # too short
@@ -281,7 +281,7 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
             b = src[i += 1]
             if (b & 0xfc00) == 0xdc00
                 # 2-unit UTF-16 sequence => 4-byte UTF-8
-                a += 0x2840
+                a +%= 0x2840
                 dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
                 dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
                 dst[j += 1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)
