@@ -17,6 +17,43 @@ const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVA
 const oversub_interval = parse(Int, get(ENV, "JULIA_TEST_OVERSUBSCRIPTION_INTERVAL", "30")) # seconds
 const oversub_factor = parse(Float64, get(ENV, "JULIA_TEST_OVERSUBSCRIPTION_FACTOR", "1.25"))
 
+# Map each root pid to the summed CPU usage percent (100 == one full core) of its whole
+# process subtree, so subprocesses a test spawns count toward its worker. Takes one `ps`
+# snapshot of the full process table. Returns an empty Dict on Windows or if `ps` fails.
+function subtree_cpu_percents(roots)
+    (isempty(roots) || Sys.iswindows()) && return Dict{Int,Float64}()
+    pcpu = Dict{Int,Float64}()
+    children = Dict{Int,Vector{Int}}()
+    try
+        raw = read(`ps -A -o pid=,ppid=,pcpu=`, String)
+        for line in eachline(IOBuffer(raw))
+            f = split(line)
+            length(f) == 3 || continue
+            pid = tryparse(Int, f[1])
+            ppid = tryparse(Int, f[2])
+            pct = tryparse(Float64, f[3])
+            (pid === nothing || ppid === nothing || pct === nothing) && continue
+            pcpu[pid] = pct
+            push!(get!(children, ppid, Int[]), pid)
+        end
+    catch
+        return Dict{Int,Float64}()
+    end
+    out = Dict{Int,Float64}()
+    for r in roots
+        total = 0.0
+        stack = [r]
+        while !isempty(stack)
+            p = pop!(stack)
+            haskey(pcpu, p) || continue
+            total += pcpu[p]
+            append!(stack, get(children, p, Int[]))
+        end
+        out[r] = total
+    end
+    return out
+end
+
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
@@ -235,6 +272,10 @@ cd(@__DIR__) do
         # but don't do this on Windows, because it may deadlock in the kernel
         running_tests = Dict{String, DateTime}()
 
+        # OS pid of each running test's worker (cached per worker id, which is fresh on recycle)
+        running_test_pids = Dict{String, Int}()
+        worker_pids = Dict{Int, Int}()
+
         # Track timeout timers for each test
         test_timers = Dict{String, Timer}()
 
@@ -300,8 +341,12 @@ cd(@__DIR__) do
             Timer(oversub_interval, interval=oversub_interval) do timer
                 load1 = Sys.loadavg()[1]
                 if load1 > ncpu * oversub_factor
+                    names = sort!(collect(keys(running_tests)))
+                    cpu = subtree_cpu_percents(unique(p for p in (get(running_test_pids, t, 0) for t in names) if p > 0))
+                    active = join((haskey(cpu, get(running_test_pids, t, 0)) ?
+                        string(t, " (", round(Int, cpu[running_test_pids[t]]), "%)") : t
+                        for t in names), ", ")
                     @lock print_lock begin
-                        active = join(sort!(collect(keys(running_tests))), ", ")
                         printstyled("⚠ oversubscription: load average ", round(load1, digits=1),
                             " exceeds ", ncpu, " CPUs (", nworkers(), " test workers)",
                             isempty(active) ? "" : "; running: $active", "\n"; color=:yellow)
@@ -318,6 +363,7 @@ cd(@__DIR__) do
                         running_tests[test] = now()
                         wrkr = p
                         running_on[test] = wrkr
+                        running_test_pids[test] = get!(() -> remotecall_fetch(getpid, p), worker_pids, p)
 
                         # Create a timer for this test to report long-running status
                         test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
@@ -355,6 +401,7 @@ cd(@__DIR__) do
                             end
                         delete!(running_tests, test)
                         delete!(running_on, test)
+                        delete!(running_test_pids, test)
                         if haskey(test_timers, test)
                             close(test_timers[test])
                             delete!(test_timers, test)
