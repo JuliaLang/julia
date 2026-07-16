@@ -151,24 +151,64 @@ end
 
 #--------------------------------------------------
 # Functions called by closure conversion
-function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, field_is_box)
+
+# Field kinds for closure types (see closure_conversion.jl): value captures
+# are const fields typed via a per-field type parameter; `Core.Box` shared
+# captures are const fields; merged mutable captures (a mutably-captured
+# variable owned solely by this closure) are UNTYPED mutable fields — never
+# type-annotated, because any later assignment in the closure body could
+# read an updated world we know nothing about. Maybe-undef merged fields are
+# ordered last and left uninitialized by `new` (partial `new` is legal for
+# a prefix of the fields).
+const CAPTURE_VALUE     = 0
+const CAPTURE_BOX       = 1
+const CAPTURE_MUT       = 2
+const CAPTURE_MUT_UNDEF = 3
+
+function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, field_kinds)
     type_params = Core.TypeVar[]
     field_types = []
-    for (name, isbox) in zip(field_names, field_is_box)
-        if isbox
-            push!(field_types, Core.Box)
-        else
+    is_mutable = false
+    ninit = 0
+    for (i, (name, fk)) in enumerate(zip(field_names, field_kinds))
+        k = Int(fk)
+        if k == CAPTURE_VALUE
             T = Core.TypeVar(Symbol(name, "_type"))
             push!(type_params, T)
             push!(field_types, T)
+        elseif k == CAPTURE_BOX
+            push!(field_types, Core.Box)
+        else
+            is_mutable = true
+            push!(field_types, Any)
         end
+        if k == CAPTURE_MUT_UNDEF
+            # `new` initializes a field prefix: uninitializable fields last
+        else
+            ninit == i - 1 ||
+                error("maybe-undef closure fields must be ordered last")
+            ninit = i
+        end
+    end
+    field_attrs = if is_mutable
+        # non-merged fields of a merged (mutable struct) closure stay const
+        attrs = []
+        for (i, fk) in enumerate(field_kinds)
+            if Int(fk) <= CAPTURE_BOX
+                push!(attrs, i)
+                push!(attrs, :const)
+            end
+        end
+        Core.svec(attrs...)
+    else
+        Core.svec()
     end
     type = Core._structtype(mod, closure_type_name,
                             Core.svec(type_params...),
                             Core.svec(field_names...),
-                            Core.svec(),
-                            false,
-                            length(field_names))
+                            field_attrs,
+                            is_mutable,
+                            ninit)
     Core._setsuper!(type, Core.Function)
     Core.declare_const(mod, closure_type_name, type)
     Core._typebody!(false, type, Core.svec(field_types...))

@@ -639,6 +639,11 @@ struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
     # Collection of information about each closure, principally which methods
     # are part of the closure (and hence captures).
     closure_bindings::Dict{IdTag,ClosureBindings}
+    # Occurrence nodes of merged-capture variables (BindingInfo.merged_into)
+    # classified as POST-creation by analyze_merged_captures!: these home
+    # accesses compile to field operations on the closure instance; every
+    # other home occurrence uses the local slot (pre-creation).
+    merged_post::Set{NodeId}
 end
 
 function init_closure_bindings!(ctx, fname)
@@ -778,7 +783,7 @@ function analyze_variables!(ctx, ex)
         end
         ctx2 = VariableAnalysisContext(
             ctx.graph, ctx.bindings, ctx.mod, ctx.scopes, lambda_bindings,
-            ctx.method_def_stack, ctx.closure_bindings)
+            ctx.method_def_stack, ctx.closure_bindings, ctx.merged_post)
         foreach(e->analyze_variables!(ctx2, e), ex[3:end]) # body & return type
     else
         foreach(e->analyze_variables!(ctx, e), children(ex))
@@ -829,7 +834,8 @@ enclosing lambda form and information about variables captured by closures.
     ctx3 = VariableAnalysisContext(graph, ctx2.bindings, ctx2.mod,
                                    ctx2.scopes, ex2.lambda_bindings,
                                    SyntaxList(graph),
-                                   Dict{IdTag,ClosureBindings}())
+                                   Dict{IdTag,ClosureBindings}(),
+                                   Set{NodeId}())
     analyze_variables!(ctx3, ex2)
     analyze_def_and_use!(ctx3, ex2)
     # sink closure definitions to just before their first use (structural
@@ -841,5 +847,10 @@ enclosing lambda form and information about variables captured by closures.
     # widen `unboxed` with the mem2reg-precise capture verdicts (julia#15276;
     # unified/capture_analysis.jl — monotone over the syntactic pass above)
     analyze_captures_precise!(ctx3, ex2)
+    # merge the remaining shared containers into their closures as mutable
+    # struct fields where the structural rules prove it legal (Part 3;
+    # closure_conversion.jl). Runs LAST: positions are final after sinking
+    # and only still-shared variables are candidates.
+    analyze_merged_captures!(ctx3, ex2)
     ctx3, ex2
 end

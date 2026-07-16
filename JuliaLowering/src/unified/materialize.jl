@@ -7,18 +7,35 @@
 #   * the capture set IS `closure_environment` (the derived free values:
 #     ordered SSA values + shared cells);
 #   * the closure type is created with the EXISTING runtime machinery
-#     (`eval_closure_type`): value captures are type-parameterized fields,
-#     surviving shared cells are `Core.Box` fields;
+#     (`eval_closure_type`): value captures are type-parameterized const
+#     fields; surviving shared cells are `Core.Box` fields — EXCEPT cells
+#     whose binding the tree-level merge analysis
+#     (`analyze_merged_captures!`, Part 3) proved mergeable into THIS
+#     closure: those become untyped MUTABLE fields of the (now mutable
+#     struct) closure type;
 #   * the deferred region is EXTRACTED into a standalone method IR whose
 #     region 1 is `#self#` + the params; capture references become
-#     `getfield(#self#, name)` (values) or field-box get/set sequences
-#     (shared cells), and nested closure ops ride along to be materialized
-#     recursively;
-#   * the op itself is replaced by `new(apply_type(T, typeof(v)...), caps…)`;
+#     `getfield(#self#, name)` (values), field-box get/set sequences
+#     (shared cells), or direct field get/set on `#self#` (merged cells),
+#     and nested closure ops ride along to be materialized recursively;
+#   * the op itself is replaced by `new(apply_type(T, typeof(v)...), caps…)`
+#     where a merged cell contributes the VALUE it holds at creation
+#     (`cell_get` planted before the `new`) instead of a container;
+#   * home-frame cell ops AFTER the creation on a merged cell become field
+#     operations on the `new` instance (the tree analysis proved the
+#     creation dominates them); ops before it keep using the cell, which is
+#     demoted to an ordinary frame cell — the post-materialization
+#     promotion fixpoint then dissolves the init-phase cell entirely in the
+#     common case (no separate container allocation remains);
 #   * a trampoline method `(self::T)(args...) = interpret(method_ir, self,
 #     args...)` is defined on the new type, so instances are CALLABLE and
 #     the interpreter differential runs end-to-end through UnifiedIR on both
 #     sides of the call boundary — no aliasing to natively-created types.
+#
+# Merged-cell gate in THIS path: `binfo.merged_into == closure binding` AND
+# `!binfo.merged_undef` — the maybe-undef flavor (conditional field
+# initialization needs an `if` region planted mid-surgery) keeps the Box
+# here in v1; the tree path handles it. Conservative per the plan.
 #
 # Surviving shared cells in the enclosing frame are lowered to the same
 # runtime containers (`Core.Box()` + getfield/setfield! with the
@@ -48,6 +65,7 @@ function materialize_closures!(jlctx, ir::_UIR.IR, encname::Symbol)
                     collect(_UIR.each_stmt(ir)))
     (anyclosure || anyshared) || return extras
     _UIR.layout(ir) === _UIR.LAYOUT_DENSE && _UIR.editable(ir)
+    anymerged = Ref(false)
     while true
         target = _UIR.NULL_STMT
         for s in _UIR.each_stmt(ir)
@@ -59,7 +77,15 @@ function materialize_closures!(jlctx, ir::_UIR.IR, encname::Symbol)
             break
         end
         _UIR.isnull(target) && break
-        _materialize_one!(jlctx, ir, target, extras, encname)
+        _materialize_one!(jlctx, ir, target, extras, encname, anymerged)
+    end
+    if anymerged[]
+        # merged cells were demoted to init-phase frame cells (all their
+        # remaining uses precede the creation): the shared fixpoint now
+        # dissolves them in the common case, leaving no container allocation
+        _UIR.compact!(ir)
+        _UIR.promote_fixpoint!(ir; include_undef = false)
+        _UIR.editable(ir)
     end
     _lower_shared_cells!(jlctx, ir)
     _UIR.compact!(ir)
@@ -68,7 +94,8 @@ function materialize_closures!(jlctx, ir::_UIR.IR, encname::Symbol)
 end
 
 function _materialize_one!(jlctx, ir::_UIR.IR, s::StmtId,
-                           extras::Vector{LoweredMethod}, encname::Symbol)
+                           extras::Vector{LoweredMethod}, encname::Symbol,
+                           anymerged::Base.RefValue{Bool} = Ref(false))
     _UIR.nops(ir, s) == 0 ||
         throw(UnsupportedForm("closure", "materializing a flagged (isva) closure op"))
     env = _UIR.closure_environment(ir, s)
@@ -78,6 +105,33 @@ function _materialize_one!(jlctx, ir::_UIR.IR, s::StmtId,
     cb = bid isa Int ? get(jlctx.closure_bindings, bid, nothing) : nothing
     name_stack = cb === nothing ? String[String(encname), "#anon#"] : cb.name_stack
     mname = Symbol(last(name_stack))
+
+    # ---- merged cells: the tree analysis proved this cell's variable merges
+    # into THIS closure as an untyped mutable field (see the header comment;
+    # maybe-undef keeps the Box in this path). Every use must be a plain
+    # cell op — anything else keeps the Box conservatively.
+    merged = Set{Int32}()
+    for c in env.cells
+        cbid = cellcol[c]
+        cbid isa Int || continue
+        binfo = jlctx.bindings.info[cbid]
+        (bid isa Int && binfo.merged_into == bid && !binfo.merged_undef) || continue
+        ok = Ref(true)
+        _UIR.each_ssa_use(ir) do site, used
+            (ok[] && used == c) || return
+            site isa _UIR.StmtOperand || (ok[] = false; return)
+            u = site.user
+            _UIR.is_tombstone(ir, u) && return
+            k = _UIR.stmt_kind(ir, u)
+            if !(k === _UIR.K"cell_get" || k === _UIR.K"cell_set" ||
+                 k === _UIR.K"cell_isdefined") || site.opidx != 1
+                ok[] = false
+            end
+            return
+        end
+        ok[] && push!(merged, c.id)
+    end
+    isempty(merged) || (anymerged[] = true)
 
     # ---- field spec (values first, then cells; names deduplicated) --------
     fsyms = Symbol[]
@@ -98,12 +152,12 @@ function _materialize_one!(jlctx, ir::_UIR.IR, s::StmtId,
     for c in env.cells
         push!(fsyms, uniq(_cell_bind_name(jlctx, cellcol, c)))
     end
-    flags = Bool[]
+    flags = Int[]
     for _ in env.values
-        push!(flags, false)                  # type-parameterized value field
+        push!(flags, 0)                      # type-parameterized value field
     end
-    for _ in env.cells
-        push!(flags, true)                   # Core.Box shared field
+    for c in env.cells
+        push!(flags, c.id in merged ? 2 : 1) # mutable field / Core.Box
     end
 
     # ---- the closure type + extracted method IR ----------------------------
@@ -132,9 +186,14 @@ function _materialize_one!(jlctx, ir::_UIR.IR, s::StmtId,
     end
     for (j, c) in enumerate(env.cells)
         fi = length(env.values) + j
-        g = append_stmt!(mb, _UIR.K"call", GlobalRef(Core, :getfield),
-                         op_stmt(selfarg), fsyms[fi]; type = Any)
-        boxmap[c.id] = (op_stmt(g), :contents)
+        if c.id in merged
+            # merged mutable field: cell ops become field ops on #self#
+            boxmap[c.id] = (op_stmt(selfarg), fsyms[fi])
+        else
+            g = append_stmt!(mb, _UIR.K"call", GlobalRef(Core, :getfield),
+                             op_stmt(selfarg), fsyms[fi]; type = Any)
+            boxmap[c.id] = (op_stmt(g), :contents)
+        end
     end
     _copy_region!(mb, ir, rs[1], stmtmap, regmap, boxmap)
     mir = _UIR.finish!(mb)
@@ -167,11 +226,57 @@ function _materialize_one!(jlctx, ir::_UIR.IR, s::StmtId,
         ctop = op_stmt(ct)
     end
     caps = Operand[op_stmt(v) for v in env.values]
-    append!(caps, Operand[op_stmt(c) for c in env.cells])
+    for c in env.cells
+        if c.id in merged
+            # the mutable field is initialized from the value the variable
+            # holds AT CREATION (the analysis guarantees it is defined here)
+            iv = _UIR.insert_before!(ir, s, _UIR.K"cell_get", op_stmt(c); type = Any)
+            push!(caps, op_stmt(iv))
+        else
+            push!(caps, op_stmt(c))
+        end
+    end
     inst = _UIR.insert_before!(ir, s, _UIR.K"new", ctop, caps...; type = Any)
     _UIR.replace_uses!(ir, s => op_stmt(inst))
     _UIR.flush_renames!(ir)
     _UIR.kill_stmt!(ir, s)
+
+    # home-frame accesses AFTER the creation on merged cells become field
+    # operations on the instance (the tree analysis proved the creation
+    # dominates them); earlier ops keep the cell, which demotes to an
+    # ordinary init-phase frame cell (promoted away by the caller's fixpoint)
+    for (j, c) in enumerate(env.cells)
+        c.id in merged || continue
+        fsym = fsyms[length(env.values) + j]
+        uses = Tuple{StmtId,Int}[]
+        _UIR.each_ssa_use(ir) do site, used
+            used == c || return
+            site isa _UIR.StmtOperand || return
+            push!(uses, (site.user, Int(site.opidx)))
+            return
+        end
+        for (u, opidx) in uses
+            _UIR.is_tombstone(ir, u) && continue
+            _UIR.comes_before(ir, inst, u) || continue   # pre-creation: keep
+            k = _UIR.stmt_kind(ir, u)
+            if k === _UIR.K"cell_get" && opidx == 1
+                _UIR.replace_stmt!(ir, u, _UIR.K"call",
+                                   vop(ir, GlobalRef(Core, :getfield)),
+                                   op_stmt(inst), vop(ir, fsym);
+                                   type = _UIR.stmt_type(ir, u))
+            elseif k === _UIR.K"cell_isdefined" && opidx == 1
+                _UIR.replace_stmt!(ir, u, _UIR.K"call",
+                                   vop(ir, GlobalRef(Core, :isdefined)),
+                                   op_stmt(inst), vop(ir, fsym); type = Bool)
+            elseif k === _UIR.K"cell_set" && opidx == 1
+                _UIR.insert_before!(ir, u, _UIR.K"call",
+                                    GlobalRef(Core, :setfield!), op_stmt(inst),
+                                    fsym, _UIR.getop(ir, u, 2); type = Any)
+                _UIR.delete_stmt!(ir, u)
+            end
+        end
+        _UIR.replace_stmt!(ir, c, _UIR.K"cell", _UIR.operands(ir, c)...)
+    end
     return nothing
 end
 
