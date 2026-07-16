@@ -47,7 +47,9 @@ function proc_cpu_times()
     children = Dict{Int,Vector{Int}}()
     Sys.iswindows() && return (cputime, children)
     try
-        raw = read(`ps -A -o pid=,ppid=,time=`, String)
+        # Separate `-o` flags (not `-o pid=,ppid=,time=`): some BSD `ps` treat the text
+        # after the first `=` as a header, collapsing the output to one column.
+        raw = read(`ps -A -o pid= -o ppid= -o time=`, String)
         for line in eachline(IOBuffer(raw))
             f = split(line)
             length(f) == 3 || continue
