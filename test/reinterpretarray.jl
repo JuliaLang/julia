@@ -291,24 +291,43 @@ end
     end
 end
 
-# a primitive type with alignment padding: sizeof(Int24) = 3 < elsize(Array{Int24}) = 4
+# a primitive type with padding
 primitive type Int24 24 end
-
-# a reinterpret array packs elements at sizeof(T) spacing, so it must not claim
-# Array layout when T has alignment padding
-@testset "is_contiguous with padded primitive eltype" begin
-    v = reinterpret(Int24, collect(UInt8, 1:12))
-    T = typeof(v)
-    @test !Base.is_contiguous(T)
-    @test !Base.has_contiguous_layout(T)
-    @test Base.is_strided(T)
-    @test is_ptr_loadable(T)
-    @test Base.elsize(T)*strides(v)[1] == 3
-    check_strided_traits(v)
-    # views and reshapes take the packed-spacing pointer/stride paths
-    check_strided_get(view(v, 2:4))
-    @test strides(reshape(v, 2, 2)) == (1, 2)
-    check_strided_get(reshape(v, 2, 2))
+primitive type AlsoInt24 24 end
+# This is all very broken right now
+@testset "check_strided_traits with padded primitive eltype" begin
+    a = reinterpret(Int24, collect(UInt8, 1:12))
+    z = reinterpret(Int24, zeros(UInt8, 12))
+    check_strided_traits(a)
+    @test_broken Base.is_strided(a)
+    @test !is_ptr_storable(a)
+    b = collect(a)
+    check_strided_traits(b)
+    @test is_ptr_loadable(b)
+    @test is_ptr_storable(b)
+    @test Base.is_strided(b)
+    c = reinterpret(AlsoInt24, b)
+    check_strided_traits(c)
+    @test_broken Base.is_strided(c) # elsize is currently incorrect: https://github.com/JuliaLang/julia/issues/62398
+    for N in 1:4
+        d = reinterpret(NTuple{N,UInt8}, b)
+        # b has padding that should not be exposed
+        @test !is_ptr_loadable(d)
+        check_strided_traits(d)
+        @test_broken Base.is_strided(d)
+        # check_strided_set(
+        #     deepcopy(d),
+        #     deepcopy(d),
+        #     rand(NTuple{N,UInt8}, length(d)),
+        #     (a, b) -> @test_broken(parent(a) == parent(b)),
+        # )
+        # check_strided_set(
+        #     deepcopy(d),
+        #     deepcopy(d),
+        #     fill(ntuple(Returns(0x00), N), length(d)),
+        #     (a, b) -> @test_broken(parent(a) == parent(b) == z),
+        # )
+    end
 end
 
 # IndexStyle
@@ -417,7 +436,7 @@ test_many_wrappers((A1, A2), (identity, wrapper)) do (A1_, A2_)
         reinterpret(S2, deepcopy(A1_)),
         reinterpret(S2, deepcopy(A1_)),
         [S2(1, 2)],
-        (a, b) -> parent(a) == parent(b),
+        (a, b) -> @test(parent(a) == parent(b)),
     )
     reinterpret(S2, A1)[1] = S2(1, 2)
     @test A1[1] == S1(1, 2)

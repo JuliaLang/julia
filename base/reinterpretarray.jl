@@ -203,7 +203,7 @@ function is_ptr_storable(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P}
     is_ptr_storable(P) && array_subpadding(S, T)
 end
 function is_strided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S,P,IsReshaped}
-    if !is_strided(P)
+    if !is_strided(P) || sizeof(T) != elsize(Array{T}) || sizeof(S) != elsize(Array{S})
         return false
     end
     if has_contiguous_layout(P)
@@ -222,7 +222,7 @@ end
 # A reinterpret array stores elements packed at `sizeof(T)` spacing, which only
 # matches the `Array{T}` layout if `T` has no alignment padding.
 is_contiguous(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P} =
-    has_contiguous_layout(P) && sizeof(T) == elsize(Array{T})
+    has_contiguous_layout(P) && sizeof(T) == elsize(Array{T}) && sizeof(S) == elsize(Array{S})
 
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)

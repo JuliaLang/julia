@@ -33,6 +33,8 @@ end
 function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
     @test Base.is_strided(typeof(a)) === Base.is_strided(a)
     isbitstype(T) || return
+    Base.is_contiguous(typeof(a)) && @test Base.is_vec_strided(typeof(a))
+    Base.is_vec_strided(typeof(a)) && @test Base.is_strided(a)
     Base.is_strided(a) || return
     @test strides(a) isa NTuple{N, Int}
     @test Base.elsize(a) isa Int
