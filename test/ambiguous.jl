@@ -385,6 +385,12 @@ module UnboundDetect
     struct WithoutField{S, A<:Tuple} end
     fieldpins(x::WithField{<:Any, <:Tuple{Ref{Type{T}}, Vararg{Any}}}) where {T} = T
     nofieldpins(x::WithoutField{<:Any, <:Tuple{Ref{Type{T}}, Vararg{Any}}}) where {T} = T
+    # issue #54893: `Foo54893(1.0)` leaves `T` unbound; the constructor
+    # signature spells `Type{Foo54893}` with the struct's own variable
+    # object, which must not be mistaken for an occurrence of `T`
+    struct Foo54893{T>:Int}
+        x::T
+    end
 end
 let unbound = Set{Method}(detect_unbound_args(UnboundDetect))
     tested = 0
@@ -402,6 +408,9 @@ let unbound = Set{Method}(detect_unbound_args(UnboundDetect))
         tested += 1
     end
     @test tested == 28
+    let ms = filter(m -> m.sig isa UnionAll, collect(methods(UnboundDetect.Foo54893)))
+        @test only(ms) in unbound
+    end
 end
 
 # Test that Core and Base are free of UndefVarErrors

@@ -2876,6 +2876,12 @@ function constrains_var(var::TypeVar, @nospecialize(t), covariant::Bool, nonempt
             end
         end
         # other occurrences in the bounds of `t.var` do not reliably pin `var`
+        if t.var === var
+            # `var` is rebound: occurrences below belong to the inner
+            # variable (a constructor signature reuses the struct's own
+            # variable objects in `Type{TheStruct}`, issue #54893)
+            return false
+        end
         t = t.body
     end
     if t isa Union
@@ -2955,6 +2961,7 @@ function constrains_type_value(var::TypeVar, @nospecialize(P))
     P === var && return true
     while P isa UnionAll
         # ranges inside `P` can be widened away by the spelling of `X`
+        P.var === var && return false # `var` is rebound below
         P = P.body
     end
     if P isa Union
@@ -3010,6 +3017,7 @@ function pin_grade(v::TypeVar, @nospecialize(t), nonempty_vararg::Bool=false)
             # the least solution for `v` is the other variable's value
             return PIN_TYPEOF
         end
+        t.var === v && return PIN_NONE # `v` is rebound below
         t = t.body
     end
     if t isa Union
