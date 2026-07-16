@@ -531,6 +531,41 @@ _tier_osr_collect_ssas!(out::Dict{Int,Int}, @nospecialize(x), k::Int, reachable)
     nothing
 end
 
+# Conservative whitelist over lowered IR: the plan declines when any
+# statement contains a node the rewriter does not explicitly understand.
+# The continuation renumbers slots and SSA values and inserts its own
+# #self#, so a frame-relative reference the rewriter does not remap would
+# silently change meaning — e.g. Core.Argument is valid lowered IR that the
+# interpreter reads like a slot, and Core.PiNode carries a nested value
+# reference; neither is remapped, so both decline. Exception regions decline
+# because the continuation cannot re-establish active handlers, and inferred
+# IR (phi and friends) declines because this transform only handles lowered
+# source. Everything not matched below is a plain literal, which is
+# position-independent.
+function _tier_osr_supported(@nospecialize(x))
+    if x isa Expr
+        (x.head === :enter || x.head === :leave || x.head === :pop_exception) && return false
+        x.head === :static_parameter && return true # substituted by the rewrite
+        for a in x.args
+            _tier_osr_supported(a) || return false
+        end
+        return true
+    elseif x isa Core.SlotNumber || x isa Core.SSAValue || x isa Core.GotoNode ||
+           x isa Core.NewvarNode || x isa QuoteNode || x isa GlobalRef ||
+           x isa Symbol || x isa LineNumberNode
+        return true
+    elseif x isa Core.GotoIfNot
+        return _tier_osr_supported(x.cond)
+    elseif x isa Core.ReturnNode
+        return !isdefined(x, :val) || _tier_osr_supported(x.val)
+    elseif x isa Core.Argument || x isa Core.PiNode || x isa Core.PhiNode ||
+           x isa Core.PhiCNode || x isa Core.UpsilonNode || x isa Core.EnterNode
+        return false
+    else
+        return true
+    end
+end
+
 # Decide whether `src` is OSR-able at `ip` and, if so, which saved
 # ssavalues the continuation needs as arguments (definitions that cannot
 # re-execute from ip but are referenced by reachable code). Returns the
@@ -544,11 +579,7 @@ function _tier_osr_build_plan(src::Core.CodeInfo, ip::Int, sparams::Core.SimpleV
     # concrete values during the rewrite; decline if any used one is still
     # an unbound TypeVar.
     for st in code
-        if st isa Core.EnterNode || st isa Core.PhiNode ||
-           st isa Core.PhiCNode || st isa Core.UpsilonNode ||
-           (st isa Expr && (st.head === :enter || st.head === :leave || st.head === :pop_exception))
-            return nothing
-        end
+        _tier_osr_supported(st) || return nothing
         _tier_osr_bad_sparam(st, sparams) && return nothing
     end
     reachable = _tier_osr_reachable(code, ip)
