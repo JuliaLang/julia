@@ -1276,13 +1276,17 @@ reads the per-variable verdict off which `cell_shared` cells survive; the
 UnifiedBackend's default lowering path (`lower_to_ir`) emits full closure
 regions and MATERIALIZES the residuals (`unified/materialize.jl`): capture
 set := `closure_environment`, closure types via the existing
-`eval_closure_type` machinery — value fields type-parameterized, surviving
-shares untyped `Core.Box` (lowering does no typed materialization: typing a
-container needs binding-table reads or inference, which lowering may not
-do; the typed-cell form above is the compiler pipeline's) — and the
-deferred region extracted as a standalone method IR. The worked examples
-(the julia#15276 zoo) are in `docs/closures.md`; `demo/capture_zoo.jl` is
-the runnable differential.
+`eval_closure_type` machinery — value fields type-parameterized `const`,
+surviving shares either merged into the closure as untyped MUTABLE fields
+(the authorized mutable-struct representation, when exactly one closure
+captures the variable and its creation dominates the later home accesses —
+see `docs/closures.md`) or kept as untyped `Core.Box` (lowering does no
+typed materialization in either representation: typing a location needs
+binding-table reads or inference, which lowering may not do; the
+typed-cell form above is the compiler pipeline's) — and the deferred
+region extracted as a standalone method IR. The worked examples (the
+julia#15276 zoo) are in `docs/closures.md`; `demo/capture_zoo.jl` is the
+runnable differential.
 
 Still eager/fallback in v1 (per-construct, to `convert_closures`):
 recursive self-capture keeps the shared-cell fallback (matching stock's

@@ -8,7 +8,14 @@
 # allocations in lowered code / closure-type field types), the inferred
 # return type before/after, an EXECUTION differential (semantics must be
 # byte-identical: mutation visibility, undef errors, multi-shot loops), and
-# a microbenchmark of two representative cases.
+# microbenchmarks of representative cases.
+#
+# Shares have TWO representations on our side (Part 3, the authorized
+# mutable-struct lowering): a variable mutably captured by exactly ONE
+# closure whose creation dominates its later home accesses merges into that
+# closure as an untyped MUTABLE FIELD (`x::Any (mutable field)` below — one
+# allocation instead of Box + closure); anything else (cross-closure
+# sharing, multi-instance loops, recursion) keeps the classical `Core.Box`.
 pushfirst!(LOAD_PATH, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia"))
 using JuliaLowering
 using InteractiveUtils
@@ -44,7 +51,10 @@ function zoo3()
     return f()
 end
 # 3b. same store, but the closure is USED first: the use blocks the sink,
-#     the store stays after the creation, must stay shared (Core.Box)
+#     the store stays after the creation, must stay SHARED -- and since
+#     exactly one closure captures x, the share is a mutable FIELD of the
+#     (mutable struct) closure, not a separate Core.Box: the post-creation
+#     home store compiles to setfield!(f, :x, 2)
 function zoo3b()
     x = 1
     f = () -> x
@@ -53,7 +63,9 @@ function zoo3b()
     return (a, f())
 end
 # 4. closure created in a loop, var stored later in the body: multi-shot
-#    backedge, must stay shared
+#    backedge, must stay shared -- and KEEPS Core.Box: x's scope is outside
+#    the loop while the creation repeats inside it, so all instances must
+#    alias ONE location (the mutable-field merge is refused)
 function zoo4(n)
     fs = Any[]
     local x::Int = 0
@@ -64,7 +76,9 @@ function zoo4(n)
     return Any[f() for f in fs]
 end
 # 5. closure writing its capture: must stay shared (declared-type variant --
-#    the declaration constrains the stored VALUES, never the container)
+#    the declaration constrains the stored VALUES, never the container);
+#    single capturer => merged mutable field, stores still funnel through
+#    convert
 function zoo5()
     local x::Int = 0
     inc = () -> (x = x + 1)
@@ -79,7 +93,9 @@ function zoo5b()
     return x
 end
 # 6. maybe-undef capture: must stay shared (UndefVarError at USE, not at
-#    capture)
+#    capture); merges as an uninitialized trailing mutable field --
+#    `new` omits it, creation conditionally initializes it, and the guarded
+#    read still throws UndefVarError naming `x`
 function zoo6(c)
     local x
     if c; x = 1; end
@@ -114,8 +130,11 @@ function closure_fields(m::Module, fname)
         base = Base.unwrap_unionall(t)
         ft = fieldtypes(base)
         isempty(ft) && continue
-        descr(n, T) = T isa TypeVar ? "$n::<value capture, type param>" : "$n::$T"
-        push!(out, join((descr(n, T) for (n, T) in zip(fieldnames(base), ft)), ", "))
+        descr(i, n, T) = T isa TypeVar          ? "$n::<value capture, type param>" :
+                         !isconst(base, i)      ? "$n::$T (mutable field)" :
+                                                  "$n::$T"
+        push!(out, join((descr(i, n, T) for (i, (n, T)) in
+                         enumerate(zip(fieldnames(base), ft))), ", "))
     end
     return isempty(out) ? "-" : join(out, "; ")
 end
@@ -266,6 +285,19 @@ function bench_counter(n)       # zoo5 shape (shared-capture counter)
     call_n(acc, n)
     c
 end
+function bench_mutcap(n)        # Part 3 shape: escaping shared-capture
+    fs = Vector{Any}(undef, n)  # closures created in a hot loop. Stock
+    for i in 1:n                # allocates a Core.Box AND the closure per
+        local x = 0             # element (and pays box->contents on every
+        f = () -> (x = x + i)   # capture access); the merged mutable field
+        fs[i] = f               # is ONE object and ONE indirection.
+    end
+    s = 0
+    for f in fs
+        s += f()
+    end
+    s
+end
 """
 Base.include_string(ZStock, BENCH, "bench.jl")
 JuliaLowering.include_string(ZOurs, BENCH, "bench.jl")
@@ -280,15 +312,29 @@ function bench(f, n)
     return best
 end
 
+alloc_of(f, n) = (f(n); @allocated f(n))
+
 println("\n== microbenchmarks (n = 1_000_000, best of 5) ==")
-for name in (:bench_join, :bench_counter)
+for name in (:bench_join, :bench_counter, :bench_mutcap)
     n = 1_000_000
-    ts = bench(getglobal(ZStock, name), n)
-    to = bench(getglobal(ZOurs, name), n)
+    fs = getglobal(ZStock, name)
+    fo = getglobal(ZOurs, name)
+    ts = bench(fs, n)
+    to = bench(fo, n)
+    extra = if name === :bench_mutcap
+        # the allocation win: Box + closure per iteration vs closure only
+        as = alloc_of(fs, n)
+        ao = alloc_of(fo, n)
+        string("  alloc stock ", round(as / 2^20; digits = 1), " MiB",
+               " ours ", round(ao / 2^20; digits = 1), " MiB (",
+               round(as / ao; digits = 2), "x)")
+    else
+        ""
+    end
     println(rpad(string(name), 15),
             "stock ", rpad(string(round(ts * 1000; digits = 2), " ms"), 12),
             "ours ", rpad(string(round(to * 1000; digits = 2), " ms"), 12),
-            "speedup ", round(ts / to; digits = 1), "x")
+            "speedup ", round(ts / to; digits = 1), "x", extra)
 end
 
 exit(ndiff == 0 ? 0 : 1)
