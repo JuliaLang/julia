@@ -534,6 +534,9 @@
     YY(jl_get_llvm_external_fns) \
     YY(jl_get_llvm_cis) \
     YY(jl_get_llvm_mi_cache_order) \
+    YY(jl_reuse_image_code_enabled) \
+    YY(jl_reuse_image_code_eligible) \
+    YY(jl_reuse_image_code_cert) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \

@@ -236,6 +236,7 @@ function collect_all_method_defs(newmodules, mod_array)
 end
 
 function infer_all_method_defs!(all::Bool, allmeths, world::UInt, worklist)
+    reuse = ccall(:jl_reuse_image_code_enabled, Cint, ()) != 0
     # Process collected methods and create method instances
     for m in allmeths
         m = m::Method
@@ -246,6 +247,16 @@ function infer_all_method_defs!(all::Bool, allmeths, world::UInt, worklist)
         end
 
         if !isdefined(m, :source)
+            continue
+        end
+
+        # With image-code reuse enabled, align with the pkgimage policy: a
+        # method defined in an image-loaded module already had this exact
+        # force-compilation pass run over it by its own image build, and
+        # whatever that produced (code, or a deliberate decision not to
+        # compile) is what we reuse. Only methods defined in this session
+        # need the sweep.
+        if reuse && ccall(:jl_object_in_image, UInt8, (Any,), m) != 0
             continue
         end
 

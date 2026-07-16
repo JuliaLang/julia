@@ -910,7 +910,7 @@ static int jl_experiment_skip_from_image(void) JL_NOTSAFEPOINT
 // relocatable object and includes it in the final image link. This process
 // writes a manifest (<output-o>.reuse) listing the donor images and the GOT
 // slot bindings the unlinker must apply.
-static int jl_reuse_image_code_enabled(void) JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT_CODEGEN int jl_reuse_image_code_enabled_impl(void) JL_NOTSAFEPOINT
 {
 #if !defined(_OS_LINUX_)
     return 0;   // prototype is ELF/Linux-only
@@ -932,9 +932,9 @@ extern void jl_foreach_image_fptr_info(llvm::function_ref<void(uint64_t, const j
 // source materialized. This is a fast conservative predicate; if the reuse
 // plan later rejects the CodeInstance (e.g. its donor lacks --emit-relocs),
 // emission re-derives the source on demand.
-extern "C" JL_DLLEXPORT_CODEGEN int jl_reuse_image_code_eligible(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT_CODEGEN int jl_reuse_image_code_eligible_impl(jl_code_instance_t *ci) JL_NOTSAFEPOINT
 {
-    if (!jl_reuse_image_code_enabled())
+    if (!jl_reuse_image_code_enabled_impl())
         return 0;
     if (!(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE))
         return 0;
@@ -943,6 +943,23 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_reuse_image_code_eligible(jl_code_instanc
     jl_callptr_t invoke = jl_atomic_load_relaxed(&ci->invoke);
     if (invoke == NULL || invoke == jl_fptr_const_return_addr)
         return 0;
+    return 1;
+}
+
+// A valid, image-resident CodeInstance without native code: the image
+// ecosystem already processed this MethodInstance and chose not to give it
+// standalone code, so a reuse-mode sysimage build should not re-infer and
+// compile it either (pkgimage-aligned selection policy).
+extern "C" JL_DLLEXPORT_CODEGEN int jl_reuse_image_code_cert_impl(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    if (!jl_reuse_image_code_enabled_impl())
+        return 0;
+    if (!jl_object_in_image((jl_value_t *)ci))
+        return 0;
+    if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0)
+        return 0;
+    if (jl_atomic_load_relaxed(&ci->invoke) != NULL)
+        return 0;   // has code (or const): handled elsewhere
     return 1;
 }
 
@@ -1454,12 +1471,12 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     bool safepoint_on_entry = out.safepoint_on_entry;
     JL_GC_PUSH3(&out.temporary_roots, &method_roots.list, &method_roots.keyset);
     int skip_from_image = external_linkage || jl_experiment_skip_from_image();
-    int reuse_mode = !external_linkage && jl_reuse_image_code_enabled();
+    int reuse_mode = !external_linkage && jl_reuse_image_code_enabled_impl();
     jl_reuse_plan_t reuse_plan;
     if (reuse_mode)
         jl_reuse_build_plan(reuse_plan, out, codeinfos);
     size_t n_ci_total = 0, n_ci_from_image = 0, n_ci_skipped = 0, n_ci_reused = 0;
-    size_t n_ci_const = 0, n_ci_emitted = 0, n_ci_dup = 0;
+    size_t n_ci_const = 0, n_ci_emitted = 0, n_ci_dup = 0, n_ci_twin_skipped = 0;
     // classification of the non-FROM_IMAGE remainder: deserialized from an
     // image's data (inference-only cache entry, natively compiled for the
     // first time here) vs allocated fresh in this session
@@ -1512,7 +1529,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
             jl_code_info_t *src = (jl_code_info_t*)jl_array_ptr_ref(codeinfos, ++i);
             if (!jl_is_code_info(src)) {
                 // selection skipped source materialization expecting reuse
-                // (jl_reuse_image_code_eligible), but the plan rejected this
+                // (jl_reuse_image_code_eligible_impl), but the plan rejected this
                 // CodeInstance (e.g. donor without --emit-relocs): re-derive
                 src = jl_get_method_ir(codeinst);
                 if (src == NULL)
@@ -1530,6 +1547,23 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
             if (!(out.params->force_emit_all) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) {
                 out.ci_funcs[codeinst] = {JL_INVOKE_CONST};
                 n_ci_const++;
+            }
+            else if (reuse_mode && [&]() JL_NOTSAFEPOINT {
+                // a session-fresh CodeInstance whose MethodInstance already
+                // has a valid, code-bearing image CodeInstance (e.g. the
+                // compiler compiling itself while selection runs): the image
+                // twin serves dispatch, so emitting this one is redundant
+                jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+                jl_code_instance_t *c = jl_atomic_load_relaxed(&mi->cache);
+                while (c) {
+                    if (c != codeinst && jl_egal(c->owner, codeinst->owner) &&
+                        jl_reuse_image_code_eligible_impl(c))
+                        return true;
+                    c = jl_atomic_load_relaxed(&c->next);
+                }
+                return false;
+            }()) {
+                n_ci_twin_skipped++;
             }
             else {
                 jl_emit_codeinst(out, codeinst, src);
@@ -1550,9 +1584,9 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     }
 
     if (jl_experiment_skip_from_image() || reuse_mode || getenv("JULIA_REPORT_IMAGE_REUSE"))
-        jl_safe_printf("jl_emit_native_to_output: %zu CodeInstance events: machine code %zu reused / %zu emitted; %zu const/no-code, %zu duplicate, %zu skipped (origin: %zu FROM_IMAGE, %zu inference-only-from-image (%zu const/builtin), %zu session-fresh)\n",
+        jl_safe_printf("jl_emit_native_to_output: %zu CodeInstance events: machine code %zu reused / %zu emitted; %zu const/no-code, %zu duplicate, %zu skipped, %zu twin-skipped (origin: %zu FROM_IMAGE, %zu inference-only-from-image (%zu const/builtin), %zu session-fresh)\n",
                        n_ci_total, n_ci_reused, n_ci_emitted, n_ci_const, n_ci_dup, n_ci_skipped,
-                       n_ci_from_image, n_ci_inferonly, n_ci_inferonly_const, n_ci_session);
+                       n_ci_twin_skipped, n_ci_from_image, n_ci_inferonly, n_ci_inferonly_const, n_ci_session);
 
     emit_always_inline(out,
                        [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
@@ -2983,7 +3017,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
         // add metadata information
         if (imaging_mode) {
             multiversioning_preannotate(dataM);
-            if (jl_reuse_image_code_enabled()) {
+            if (jl_reuse_image_code_enabled_impl()) {
                 // Donor objects reference some of this image's functions by
                 // symbol (GOT slot fills); jl_create_native_impl internalized
                 // every definition after emission, so re-promote exactly those

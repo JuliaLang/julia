@@ -1788,18 +1788,25 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             # then we want to compile and emit this
             if item.def.primary_world <= world
                 # if a cached CodeInstance will reuse donor-image machine code
-                # (image-code reuse), skip re-inference: its source is unused
+                # (image-code reuse), skip re-inference: its source is unused.
+                # Similarly, a valid image CodeInstance *without* code is a
+                # certificate that the image ecosystem chose not to compile
+                # this specialization; don't re-infer and compile it here.
                 ci = nothing
+                cert = false
                 cached = isdefined(item, :cache) ? item.cache : nothing
                 while cached !== nothing
-                    if cached.owner === nothing && cached.min_world <= world &&
-                       ccall(:jl_reuse_image_code_eligible, Cint, (Any,), cached) != 0
-                        ci = cached
-                        break
+                    if cached.owner === nothing && cached.min_world <= world
+                        if ccall(:jl_reuse_image_code_eligible, Cint, (Any,), cached) != 0
+                            ci = cached
+                            break
+                        elseif ccall(:jl_reuse_image_code_cert, Cint, (Any,), cached) != 0
+                            cert = true
+                        end
                     end
                     cached = isdefined(cached, :next) ? cached.next : nothing
                 end
-                if ci === nothing
+                if ci === nothing && !cert
                     ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
                 end
                 ci isa CodeInstance && push!(workqueue, ci)
@@ -1834,6 +1841,15 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
                 markinspected!(workqueue, callee)
                 push!(codeinfos, callee)
                 push!(codeinfos, nothing)
+                continue
+            end
+            if callee.owner === nothing &&
+               ccall(:jl_reuse_image_code_cert, Cint, (Any,), callee) != 0
+                # valid image CodeInstance without code (e.g. reached as a call
+                # edge of freshly-compiled code): its image build chose not to
+                # compile it, so don't re-infer it here; callers dispatch to it
+                # lazily
+                markinspected!(workqueue, callee)
                 continue
             end
             # now make sure everything has source code, if desired

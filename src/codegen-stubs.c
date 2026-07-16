@@ -20,6 +20,19 @@ JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, size_t *n
 JL_DLLEXPORT void jl_get_llvm_cis_fallback(void *native_code, size_t *num_els, jl_code_instance_t **CIs) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_mi_cache_order_fallback(void *native_code, size_t *num_els, jl_code_instance_t **CIs) UNAVAILABLE
 
+JL_DLLEXPORT int jl_reuse_image_code_enabled_fallback(void) JL_NOTSAFEPOINT
+{
+    return 0;
+}
+JL_DLLEXPORT int jl_reuse_image_code_eligible_fallback(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    return 0;
+}
+JL_DLLEXPORT int jl_reuse_image_code_cert_fallback(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    return 0;
+}
+
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir_fallback(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo) UNAVAILABLE
