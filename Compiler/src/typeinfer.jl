@@ -1917,14 +1917,26 @@ function root_wanted_at_world(mi::MethodInstance, world::UInt)
     def = mi.def
     def isa Method || return true
     def.primary_world <= world || return false
-    mod = def.module
-    while true
-        mod === (@__MODULE__) && return true
-        pmod = parentmodule(mod)
-        pmod === mod && break
-        mod = pmod
-    end
     cached = isdefined(mi, :cache) ? mi.cache : nothing
+    if cached === nothing
+        # no specialization evidence either way: compile compiler methods for
+        # the non-latest (typeinf) world, since only the compiler executes
+        # there and a cold build has nothing else to go by; skip anything else
+        mod = def.module
+        while true
+            mod === (@__MODULE__) && return true
+            pmod = parentmodule(mod)
+            pmod === mod && return false
+            mod = pmod
+        end
+    end
+    # evidence: a native specialization of this MethodInstance was valid in
+    # that world (the compiler executed it this session, or a loaded image
+    # carries a twin for that world). An MI whose cache holds only other-world
+    # code — e.g. compiler internals specialized for an external interpreter,
+    # cached at the latest world by a package image — is not wanted here even
+    # when its method is compiler code: such interpreters never run in the
+    # typeinf world (their interface methods do not exist there).
     while cached !== nothing
         if cached.owner === nothing && cached.min_world <= world <= cached.max_world
             return true
