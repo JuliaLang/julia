@@ -439,9 +439,20 @@ function _tier_osr_rewrite(@nospecialize(x), slotmap::Vector{Int}, ssamap::Dict{
             # The continuation OpaqueClosure method has no static parameters
             # (a stray :static_parameter would crash inference of the
             # continuation), so substitute the MethodInstance's concrete
-            # value. The plan declines when any used sparam is still a
-            # TypeVar (incompletely determined).
+            # value. The plan declines when any used sparam is not a plain
+            # concrete value (TypeVar, or the svec/vararg uncertainty
+            # markers), see _tier_osr_bad_sparam.
             return QuoteNode(sparams[x.args[1]::Int])
+        end
+        if x.head === :isdefined && length(x.args) == 1
+            a1 = x.args[1]
+            if a1 isa Expr && a1.head === :static_parameter
+                # The plan declines OSR unless every referenced static
+                # parameter has a concrete value, so here it is always
+                # defined; substituting inside :isdefined would produce
+                # malformed IR (Expr(:isdefined, QuoteNode(...))).
+                return true
+            end
         end
         return Expr(x.head, Any[_tier_osr_rewrite(a, slotmap, ssamap, shift, sparams) for a in x.args]...)
     else
@@ -450,14 +461,20 @@ function _tier_osr_rewrite(@nospecialize(x), slotmap::Vector{Int}, ssamap::Dict{
 end
 
 # Does `x` reference a static parameter that cannot be substituted with a
-# concrete value (out of range, or still an unbound TypeVar)?
+# concrete value? That is: out of range, still an unbound TypeVar, or one of
+# the runtime's uncertainty markers — `svec(TypeVar, constrained)` for a
+# diagonal/uncertain sparam (the interpreter resolves these through
+# jl_sparam_defined_value and using one throws UndefVarError) and vararg
+# markers. Substituting those as quoted values would change semantics, so the
+# OSR plan declines instead.
 function _tier_osr_bad_sparam(@nospecialize(x), sparams::Core.SimpleVector)
     if x isa Expr
         if x.head === :static_parameter
             n = x.args[1]
             n isa Int || return true
             (1 <= n <= length(sparams)) || return true
-            return sparams[n] isa Core.TypeVar
+            sp = sparams[n]
+            return sp isa Core.TypeVar || sp isa Core.SimpleVector || isvarargtype(sp)
         end
         for a in x.args
             _tier_osr_bad_sparam(a, sparams) && return true
