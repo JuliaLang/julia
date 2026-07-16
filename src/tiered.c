@@ -283,6 +283,29 @@ JL_DLLEXPORT void jl_tier_reset_stats(void) JL_NOTSAFEPOINT
 static _Atomic(int) tier_initialized = 0;
 static uv_mutex_t tier_queue_mutex;
 static arraylist_t tier_queue;
+// FIFO head index into tier_queue (all access under tier_queue_mutex):
+// enqueue pushes at the tail, consumers pop from the head so sustained
+// arrivals cannot starve older hot methods (whose one-shot queued bit
+// would otherwise never earn another promotion attempt). Storage resets
+// once the last element is consumed.
+static size_t tier_queue_head = 0;
+
+// Both must be called with tier_queue_mutex held.
+STATIC_INLINE int tier_queue_empty_locked(void) JL_NOTSAFEPOINT
+{
+    return tier_queue_head >= tier_queue.len;
+}
+STATIC_INLINE jl_method_instance_t *tier_queue_popfront_locked(void) JL_NOTSAFEPOINT
+{
+    if (tier_queue_head >= tier_queue.len)
+        return NULL;
+    jl_method_instance_t *mi = (jl_method_instance_t*)tier_queue.items[tier_queue_head++];
+    if (tier_queue_head >= tier_queue.len) {
+        tier_queue.len = 0;
+        tier_queue_head = 0;
+    }
+    return mi;
+}
 // Signaled (with tier_queue_mutex held by the waiter's predicate check)
 // on every push, on quiesce resume, and on worker stop. The worker
 // re-checks the queue under the mutex before waiting, so wakeups cannot
@@ -393,14 +416,25 @@ static void tier_worker_threadfun(void *arg)
         size_t nbatch = 0;
         int8_t gc_state = jl_gc_safe_enter(ptls);
         uv_mutex_lock(&tier_queue_mutex);
-        while (jl_atomic_load_relaxed(&tier_worker_stop) ||
-               jl_atomic_load_relaxed(&tier_pause) || tier_queue.len == 0) {
+        while (!jl_atomic_load_relaxed(&tier_worker_stop) &&
+               (jl_atomic_load_relaxed(&tier_pause) || tier_queue_empty_locked())) {
             tier_worker_park();
             uv_cond_wait(&tier_queue_cond, &tier_queue_mutex);
             tier_worker_unpark();
         }
-        while (nbatch < sizeof(batch) / sizeof(batch[0]) && tier_queue.len > 0)
-            batch[nbatch++] = (jl_method_instance_t*)arraylist_pop(&tier_queue);
+        if (jl_atomic_load_relaxed(&tier_worker_stop)) {
+            // Exit for good, in the unparked ("running") state: the pthread
+            // exit hook (jl_delete_thread -> scheduler_delete_thread) performs
+            // the departing thread's n_threads_running decrement with the
+            // proper sleep-state compensation; parking here as well would
+            // double-count the departure and drive the count to zero under
+            // the still-running main thread. jl_tier_stop_worker joins us
+            // before runtime teardown proceeds.
+            uv_mutex_unlock(&tier_queue_mutex);
+            return;
+        }
+        while (nbatch < sizeof(batch) / sizeof(batch[0]) && !tier_queue_empty_locked())
+            batch[nbatch++] = tier_queue_popfront_locked();
         // Under the queue mutex, so jl_tier_quiesce's lock/unlock barrier
         // observes either this increment or the pause flag.
         jl_atomic_fetch_add_relaxed(&tier_busy, (int)nbatch);
@@ -423,6 +457,8 @@ static void tier_worker_threadfun(void *arg)
 JL_DLLEXPORT void jl_tier_start_worker(void)
 {
     jl_tier_init();
+    if (jl_atomic_load_relaxed(&tier_worker_stop))
+        return; // shutdown already began; never start (or restart) past it
     if (jl_atomic_exchange_relaxed(&tier_worker_running, 1))
         return; // already started
     if (uv_thread_create(&tier_worker_uvthread, tier_worker_threadfun, NULL) != 0) {
@@ -432,7 +468,8 @@ JL_DLLEXPORT void jl_tier_start_worker(void)
                        "tiered compilation disabled\n");
         return;
     }
-    uv_thread_detach(&tier_worker_uvthread);
+    // Not detached: jl_tier_stop_worker joins the thread at exit so runtime
+    // and JIT teardown never race a live worker.
 }
 
 JL_DLLEXPORT void jl_tier_stop_worker(void)
@@ -446,8 +483,18 @@ JL_DLLEXPORT void jl_tier_stop_worker(void)
         uv_mutex_unlock(&tier_queue_mutex);
     }
     // Wait for any in-flight promotion so runtime teardown never races a
-    // compile; the worker then stays parked (GC-safe) until process exit.
+    // compile.
     jl_tier_quiesce();
+    // Join the (exiting) worker exactly once, in a GC-safe state: its final
+    // batch may still need a collection to complete, and a joiner blocked
+    // GC-unsafe would deadlock stop-the-world.
+    if (jl_atomic_exchange_relaxed(&tier_worker_running, 0)) {
+        jl_task_t *ct = jl_get_current_task();
+        int8_t gc_state = ct ? jl_gc_safe_enter(ct->ptls) : 0;
+        uv_thread_join(&tier_worker_uvthread);
+        if (ct)
+            jl_gc_safe_leave(ct->ptls, gc_state);
+    }
 }
 
 // Quiesce support. The worker runs on its own OS thread, truly concurrent
@@ -467,8 +514,8 @@ static jl_method_instance_t *tier_pop_locked(int respect_pause) JL_NOTSAFEPOINT
         return NULL;
     jl_method_instance_t *mi = NULL;
     uv_mutex_lock(&tier_queue_mutex);
-    if (!(respect_pause && jl_atomic_load_relaxed(&tier_pause)) && tier_queue.len > 0)
-        mi = (jl_method_instance_t*)arraylist_pop(&tier_queue);
+    if (!(respect_pause && jl_atomic_load_relaxed(&tier_pause)))
+        mi = tier_queue_popfront_locked();
     uv_mutex_unlock(&tier_queue_mutex);
     if (mi != NULL)
         jl_atomic_fetch_add_relaxed(&tier_queue_pops, 1);
