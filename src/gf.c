@@ -1059,7 +1059,7 @@ static void drop_all_methcache(jl_methcache_t *mc) JL_CANSAFEPOINT
     jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_all_entries, NULL);
     jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
     size_t i, l = leafcache->length;
-    for (i = 1; i < l; i += 2) {
+    for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
         jl_typemap_entry_t *oldentry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(leafcache, i);
         if (oldentry) {
             while ((jl_value_t*)oldentry != jl_nothing) {
@@ -1677,10 +1677,55 @@ static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPO
     return 1;
 }
 
+// The leafcache is an insertion-ordered dictionary stored inline in a Memory{Any}:
+// slot [0] holds a `smallintset` mapping each key's hash to its logical entry
+// index, and entry `p` (0-based) is stored densely at slot `1 + p`. The key of
+// each entry is derivable from its value (`entry->sig == tt`), so no separate key
+// column is needed.
+static uint_t leafcache_hash(size_t p, jl_value_t *data) JL_NOTSAFEPOINT
+{
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(data, 1 + p);
+    // entry should not be NULL, unless there was concurrent corruption
+    return entry == NULL ? 0 : (uint_t)jl_object_id((jl_value_t*)entry->sig);
+}
+
+static int leafcache_eq(size_t p, const void *tt, jl_value_t *data, uint_t hv) JL_NOTSAFEPOINT
+{
+    size_t i = 1 + p;
+    if (i >= ((jl_genericmemory_t*)data)->length)
+        return 0; // OOB access, probably due to a data race
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(data, i);
+    return entry != NULL && jl_egal((jl_value_t*)entry->sig, (jl_value_t*)tt);
+}
+
+// find the logical index of the chain whose entries have `entry->sig == tt`, or -1
+static ssize_t leafcache_peek(jl_genericmemory_t *leafcache JL_PROPAGATES_ROOT, jl_value_t *tt) JL_NOTSAFEPOINT
+{
+    if (leafcache == (jl_genericmemory_t*)jl_an_empty_memory_any)
+        return -1;
+    jl_genericmemory_t *idxs = (jl_genericmemory_t*)jl_genericmemory_ptr_ref(leafcache, 0); // acquire
+    JL_GC_PROMISE_ROOTED(idxs);
+    // leafcache_eq does not safepoint, so declare this lookup is safe from JL_NOTSAFEPOINT callers
+    ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop) JL_NOTSAFEPOINT;
+    return jl_smallintset_lookup(idxs, leafcache_eq, tt, (jl_value_t*)leafcache, (uint_t)jl_object_id(tt), 0);
+}
+
+// append `entry` as a new chain and publish it in the index (caller holds the write lock)
+static void leafcache_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, jl_typemap_entry_t *entry) JL_CANSAFEPOINT
+{
+    size_t p = jl_ordereddict_reserve(pcache, parent, 1); // reserve one entry
+    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
+    jl_genericmemory_ptr_set(a, 1 + p, (jl_value_t*)entry); // release
+    // publish the entry last, so a concurrent lookup that observes it in the
+    // index also observes the entry written above
+    jl_smallintset_insert((_Atomic(jl_genericmemory_t*)*)a->ptr, (jl_value_t*)a, leafcache_hash, p, (jl_value_t*)a);
+}
+
 // if available, returns a TypeMapEntry in the "leafcache" that matches `tt` (by type-equality) and is valid during `world`
 static inline jl_typemap_entry_t *lookup_leafcache(jl_genericmemory_t *leafcache JL_PROPAGATES_ROOT, jl_value_t *tt, size_t world) JL_NOTSAFEPOINT
 {
-    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_eqtable_get(leafcache, (jl_value_t*)tt, NULL);
+    ssize_t p = leafcache_peek(leafcache, tt);
+    jl_typemap_entry_t *entry = p == -1 ? NULL : (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(leafcache, 1 + p);
     if (entry) {
         // search tail of the linked-list (including the returned entry) for an entry intersecting world
         //
@@ -1784,11 +1829,17 @@ static void cache_insert(
             JL_UNLOCK(&typecache_lock); // Might GC
         }
         jl_genericmemory_t *oldcache = jl_atomic_load_relaxed(&mc->leafcache);
-        jl_typemap_entry_t *old = (jl_typemap_entry_t*)jl_eqtable_get(oldcache, (jl_value_t*)tt, jl_nothing);
+        ssize_t p = leafcache_peek(oldcache, (jl_value_t*)tt);
+        jl_typemap_entry_t *old = p == -1 ? (jl_typemap_entry_t*)jl_nothing
+                                          : (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(oldcache, 1 + p);
         jl_gc_write_atomic(newentry, newentry->next, jl_typemap_entry_t, old, relaxed);
-        jl_genericmemory_t *newcache = jl_eqtable_put(jl_atomic_load_relaxed(&mc->leafcache), (jl_value_t*)tt, (jl_value_t*)newentry, NULL);
-        if (newcache != oldcache) {
-            jl_gc_write_atomic(mc, mc->leafcache, jl_genericmemory_t, newcache, release);
+        if (p != -1) {
+            // prepend to the existing chain by replacing its head in place (release,
+            // so a concurrent lookup sees a consistent, world-versioned chain)
+            jl_genericmemory_ptr_set(oldcache, 1 + p, (jl_value_t*)newentry);
+        }
+        else {
+            leafcache_insert(&mc->leafcache, (jl_value_t*)mc, newentry);
         }
     }
     else {
@@ -2801,7 +2852,7 @@ static void _method_table_invalidate(jl_methcache_t *mc, void *env0) JL_CANSAFEP
     jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), disable_mt_cache, env0);
     jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
     size_t i, l = leafcache->length;
-    for (i = 1; i < l; i += 2) {
+    for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
         jl_typemap_entry_t *oldentry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(leafcache, i);
         if (oldentry) {
             while ((jl_value_t*)oldentry != jl_nothing) {
@@ -3334,7 +3385,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
         jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache, (void*)&mt_cache_env);
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
         size_t i, l = leafcache->length;
-        for (i = 1; i < l; i += 2) {
+        for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
             jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
             if (entry) {
                 while (entry != jl_nothing) {
@@ -3758,7 +3809,7 @@ JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *src
         jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache, (void*)&mt_cache_env);
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
         size_t i, l = leafcache->length;
-        for (i = 1; i < l; i += 2) {
+        for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
             jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
             if (entry) {
                 while (entry != jl_nothing) {
