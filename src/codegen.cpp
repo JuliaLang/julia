@@ -3563,6 +3563,34 @@ static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_partition_t *
     return coldBB;
 }
 
+// EXPERIMENT (safepoint-quiescence write side): the pre-asymmetric-fence guard.
+// Under safepoint quiescence a re-declaration suspends every thread at a safepoint
+// before it changes the declared type, so the flag can never flip while this code
+// runs between safepoints. The guard is therefore a *plain*, unfenced flag load --
+// LICM may hoist it out of loops -- and the store needs no commit window at all.
+// This is used only to measure the store hot path of that design; it is not the
+// sound protocol (which is the fenced emit_retype_guard + commit window above).
+static BasicBlock *emit_retype_guard_quiescent(jl_codectx_t &ctx, jl_binding_partition_t *bpart, uint16_t mask)
+{
+    LLVMContext &C = ctx.builder.getContext();
+    BasicBlock *fastBB = BasicBlock::Create(C, "retype_fast", ctx.f);
+    BasicBlock *coldBB = BasicBlock::Create(C, "retype_deopt", ctx.f);
+    Type *flagty = getInt16Ty(C);
+    LoadInst *bflags = ctx.builder.CreateAlignedLoad(flagty, julia_bpart_flagp(ctx, bpart),
+            Align(alignof(uint16_t)));
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding_flags);
+    ai.decorateInst(bflags);
+    setName(ctx.emission_context, bflags, "retype_check");
+    Value *retyped = ctx.builder.CreateICmpNE(
+            ctx.builder.CreateAnd(bflags, ConstantInt::get(flagty, mask)),
+            ConstantInt::get(flagty, 0));
+    MDBuilder MDB(C);
+    ctx.builder.CreateCondBr(retyped, coldBB, fastBB,
+            MDB.createBranchWeights({1, 2000}));
+    ctx.builder.SetInsertPoint(fastBB);
+    return coldBB;
+}
+
 static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, jl_module_t *mod, jl_sym_t *name)
 {
     Value *bp = julia_binding_gv(ctx, bnd);
@@ -3798,8 +3826,14 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
         // single flag re-check to the commit window. The RMW kinds trust a value they
         // load from the slot at `ty` *before* a possibly-safepoint-bearing modify runs,
         // outside any window, so they must still gate on the read guard up front.
-        BasicBlock *coldBB = op == StoreKind::Set
-                ? BasicBlock::Create(ctx.builder.getContext(), "retype_deopt", ctx.f)
+        // EXPERIMENT (safepoint-quiescence write side): for a plain `Set`, use the
+        // pre-asymmetric-fence store shape -- a plain, hoistable flag-load guard and
+        // NO commit window (pass no retype_flagp to typed_store). This measures the
+        // store hot path of the safepoint-quiescence design. The RMW kinds keep the
+        // fenced asymmetric-fence guard + commit window unchanged.
+        bool quiescent_set = op == StoreKind::Set;
+        BasicBlock *coldBB = quiescent_set
+                ? emit_retype_guard_quiescent(ctx, bpart, guard_mask)
                 : emit_retype_guard(ctx, bpart, guard_mask);
         jl_cgval_t res = typed_store(ctx,
                         julia_binding_pvalue(ctx, bp),
@@ -3820,9 +3854,9 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                         sym,
                         nullptr,
                         nullptr,
-                        /*retype_flagp*/julia_bpart_flagp(ctx, bpart),
-                        /*retype_mask*/guard_mask,
-                        /*retype_deoptBB*/coldBB);
+                        /*retype_flagp*/quiescent_set ? nullptr : julia_bpart_flagp(ctx, bpart),
+                        /*retype_mask*/quiescent_set ? (uint16_t)0 : guard_mask,
+                        /*retype_deoptBB*/quiescent_set ? nullptr : coldBB);
         if (res.typ == jl_bottom_type) {
             // The inline operation cannot complete -- the modify `op` is inferred
             // to never return -- so only the deoptimized runtime path (which
