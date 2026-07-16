@@ -371,12 +371,16 @@ cd(@__DIR__) do
                 end
                 if load1 > ncpu * oversub_factor
                     names = sort!(collect(keys(running_tests)))
-                    active = join((haskey(running_test_pids, t) ?
-                        string(t, " (", round(Int, subtree_pct(running_test_pids[t])), "%)") : t
-                        for t in names), ", ")
+                    # Report load, capacity and the tests' own usage in the same unit
+                    # (100% == one core) so "owned" can be compared against total load.
+                    pcts = [haskey(running_test_pids, t) ? subtree_pct(running_test_pids[t]) : nothing for t in names]
+                    owned = sum(p for p in pcts if p !== nothing; init=0.0)
+                    active = join((p === nothing ? t : string(t, " (", round(Int, p), "%)")
+                        for (t, p) in zip(names, pcts)), ", ")
                     @lock print_lock begin
-                        printstyled("⚠ oversubscription: load average ", round(load1, digits=1),
-                            " exceeds ", ncpu, " CPUs (", nworkers(), " test workers)",
+                        printstyled("⚠ oversubscription: load avg ", round(Int, load1 * 100),
+                            "%, capacity ", ncpu * 100, "%, tests own ", round(Int, owned),
+                            "% (", nworkers(), " test workers)",
                             isempty(active) ? "" : "; running: $active", "\n"; color=:yellow)
                     end
                 end
