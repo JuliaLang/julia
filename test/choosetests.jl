@@ -28,7 +28,7 @@ const TESTNAMES = [
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "cancellation", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
-        "smallarrayshrink", "opaque_closure", "filesystem", "download",
+        "smallarrayshrink", "opaque_closure", "typed_callable", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
         "faulty_constructor_method_should_not_cause_stack_overflows",
         "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs", "jit",

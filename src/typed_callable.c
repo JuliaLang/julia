@@ -7,6 +7,20 @@
 // TypedCallable{A,R} wraps a callable and dispatches it in the latest world.
 // Each instance holds a shared trampoline for `Tuple{typeof(f), A...}`.
 
+// Return the shared trampoline for `Tuple{ftype, argt...}`.
+JL_DLLEXPORT jl_dispatch_trampoline_t *jl_get_typed_callable_trampoline(jl_value_t *ftype, jl_value_t *argt, jl_value_t *rt) JL_CANSAFEPOINT
+{
+    if (!jl_is_tuple_type(argt))
+        jl_error("TypedCallable argument tuple must be a tuple type");
+    JL_TYPECHK(TypedCallable, type, rt);
+    jl_value_t *sigt = NULL;
+    JL_GC_PUSH1(&sigt);
+    sigt = jl_argtype_with_function_type(ftype, argt);
+    jl_dispatch_trampoline_t *tr = jl_get_dispatch_trampoline(sigt, rt, /*specsig*/1, JL_ABI_TYPED_CALLABLE);
+    JL_GC_POP();
+    return tr;
+}
+
 // Construct a TypedCallable, using `tr` when the optimizer supplied one.
 static jl_typed_callable_t *typed_callable_construct(jl_task_t *ct, jl_value_t *f,
         jl_tupletype_t *argt, jl_value_t *rt, jl_dispatch_trampoline_t *tr) JL_CANSAFEPOINT

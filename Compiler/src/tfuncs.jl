@@ -2441,6 +2441,28 @@ end
     return PartialOpaque(t, tuple_tfunc(𝕃, env), mi, source.val)
 end
 
+# Decode the `A`/`R` arguments of `_typed_callable` (the final two in both forms),
+# returning `(A, R)` when both are statically known and well-formed. Shared by the tfunc
+# and the effects model: a call is nothrow exactly when this succeeds.
+@nospecs function typed_callable_argt_rt(args...)
+    na = length(args)
+    (na == 3 || na == 4) || return nothing
+    AT, A_exact = instanceof_tfunc(args[na-1])
+    RT, R_exact = instanceof_tfunc(args[na])
+    if A_exact && R_exact && isa(AT, Type) && AT <: Tuple && isa(RT, Type) &&
+            !has_free_typevars(AT) && !has_free_typevars(RT)
+        return (AT, RT)
+    end
+    return nothing
+end
+
+@nospecs function typed_callable_tfunc(𝕃::AbstractLattice, args...)
+    r = typed_callable_argt_rt(args...)
+    r === nothing && return Core.TypedCallable
+    return Core.TypedCallable{r[1], r[2]}
+end
+add_tfunc(Core._typed_callable, 3, 4, typed_callable_tfunc, 10)
+
 # whether getindex for the elements can potentially throw UndefRef
 @nospecs function array_type_undefable(arytype)
     arytype = unwrap_unionall(arytype)
@@ -2891,6 +2913,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     Core._svec_len,
     Core._svec_ref,
     Core._task,
+    Core._typed_callable,
     # Core._typebody!,
     Core._typevar,
     apply_type,
@@ -2997,6 +3020,17 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
             nothrow)
     elseif f === Core._task
         return TASK_BUILTIN_EFFECTS
+    elseif f === Core._typed_callable
+        # Allocates an immutable `TypedCallable{A,R}` holding the wrapped `f` and the
+        # trampoline for (`Tuple{typeof(f), A...}`, `R`). Not `consistent`: that trampoline
+        # is canonical only within a process. Deserialization re-inserts records keep-first
+        # (`jl_insert_dispatch_trampoline`) without rewriting references to the losers, so
+        # two images can each carry their own record for one key and constructions with
+        # egal arguments can then differ in that field. Interning is still unobservable
+        # memoization, so the call remains effect-free; it throws only for a malformed
+        # `A`/`R`.
+        nothrow = typed_callable_argt_rt(argtypes...) !== nothing
+        return Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, nothrow)
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
