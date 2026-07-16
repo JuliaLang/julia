@@ -79,13 +79,18 @@ end
 
 # Identify the refinement subject of a value operand: a cell (through a
 # fresh cell_get) or the SSA statement itself. Returns nothing for
-# non-refinable operands (constants, globals).
+# non-refinable operands (constants, globals). Shared cells take no
+# flow-sensitive refinements at all: a visible closure call between the test
+# and the use may store (the same reason `cell_set` excludes them from the
+# store-forwarding overlay), so an `isa`/typeassert fact about a
+# `cell_shared` read does not survive to any later program point.
 function cond_subject(fr::Frame, o::UnifiedIR.Operand)
     UnifiedIR.optag(o) == UnifiedIR.TAG_STMT || return nothing
     sid = UnifiedIR.asstmt(o)
     if UnifiedIR.stmt_kind(fr.ir, sid) === K"cell_get"
-        cellid = UnifiedIR.asstmt(UnifiedIR.getop(fr.ir, sid, 1)).id
-        return (:cell, cellid)
+        cellop = UnifiedIR.asstmt(UnifiedIR.getop(fr.ir, sid, 1))
+        UnifiedIR.stmt_kind(fr.ir, cellop) === K"cell_shared" && return nothing
+        return (:cell, cellop.id)
     end
     return (:stmt, sid.id)
 end
@@ -129,9 +134,74 @@ function apply_intercond(fr::Frame, s::StmtId, firstargop::Int, r::UResult)
                          meet_cond(argt, rt.elsetype)), r.effects)
 end
 
+"""Call-site result refinement for visible closures (§5.7 piece 3): when the
+callee operand's def is a `K"closure"` stmt in this frame, the call's result
+type is the body's inferred return-type join and its effects are the body's
+mask (`infer_closure!` records both). The site's argtypes feed the closure's
+param join (`closure_args`) unless the closure is escaped/world-shifted
+(whose params are already declared/`Any`). Arity-incompatible calls of a
+visible closure always throw — the reference interpreter, the materialized
+trampoline, and a native single-method closure all reject them, and methods
+added to the closure type later are invisible without a world barrier
+(shifted closures bypass this fast path entirely). Returns `nothing` when
+the callee is not a visible closure op (generic `infer_call` applies)."""
+function closure_callee_transfer(fr::Frame, s::StmtId)
+    ir = fr.ir
+    fo = UnifiedIR.getop(ir, s, 1)
+    UnifiedIR.optag(fo) == UnifiedIR.TAG_STMT || return nothing
+    cs = UnifiedIR.asstmt(fo)
+    UnifiedIR.stmt_kind(ir, cs) === K"closure" || return nothing
+    # a world barrier between creation and this call: the body may execute
+    # against a newer method/binding table than inference consulted (§5.8) —
+    # no refinement of any kind
+    cs.id in fr.closure_shifted && return nothing
+    rs = UnifiedIR.live_owned_regions(ir, cs)
+    isempty(rs) && return nothing
+    breg = UnifiedIR.getregion(ir, rs[1])
+    np = length(breg.args)
+    isva = false
+    if UnifiedIR.nops(ir, cs) >= 1
+        flags = UnifiedIR.imm_value(UnifiedIR.getop(ir, cs, 1))::Int64
+        isva = (flags & UnifiedIR.CLOSURE_FLAG_ISVA) != 0
+    end
+    nargs = UnifiedIR.nops(ir, s) - 1
+    if !(isva ? nargs >= np - 1 : nargs == np)
+        return (Union{}, EFFECTS_THROWS)   # arity mismatch: guaranteed throw
+    end
+    if !(cs.id in fr.closure_escaped)
+        args = Any[widenucond(opl(fr, UnifiedIR.getop(ir, s, 1 + i))) for i in 1:nargs]
+        prm = Vector{Any}(undef, np)
+        for i in 1:(isva ? np - 1 : np)
+            prm[i] = args[i]
+        end
+        if isva
+            rest = Any[args[i] for i in np:nargs]
+            prm[np] = CC.builtin_tfunction(fr.st.cfg.interp, Core.tuple, rest, nothing)
+        end
+        old = get(fr.closure_args, cs.id, nothing)
+        if old === nothing
+            fr.closure_args[cs.id] = prm
+            fr.cells_changed = true
+        else
+            for i in 1:np
+                m = CC.tmerge(CC.fallback_lattice, old[i], prm[i])
+                lat_eq(m, old[i]) || (old[i] = m; fr.cells_changed = true)
+            end
+        end
+    end
+    # def-before-use within a sweep makes these reads never stale at
+    # convergence (a skipped def implies dead uses); missing entries are
+    # unreadable, ⊥/no-guarantees only as a defensive default
+    rt = get(fr.closure_rets, cs.id, Union{})
+    eff = get(fr.closure_effs, cs.id, EFFECTS_NONE)
+    return (rt, eff)
+end
+
 function _transfer(fr::Frame, s::StmtId, k::UnifiedIR.Kind)
     ir = fr.ir
     if k === K"call"
+        cl = closure_callee_transfer(fr, s)
+        cl === nothing || return cl
         cond = conditional_call(fr, s)
         cond === nothing || return (cond, EFFECTS_ALL)
         args = Any[widenucond(a) for a in opls(fr, s, 1)]
@@ -219,6 +289,11 @@ function _transfer(fr::Frame, s::StmtId, k::UnifiedIR.Kind)
         cellid = UnifiedIR.asstmt(UnifiedIR.getop(ir, s, 1)).id
         eff = cellid in fr.newed_cells ? EFFECTS_ALL & ~UnifiedIR.FLAG_NOTHROW :
               EFFECTS_ALL              # maybe-undef read can throw UndefVarError
+        # escape/world discipline (§5.7): reads of a poisoned shared cell
+        # (some capturing closure escapes or is world-shifted, or the cell
+        # itself escapes as a value) are Any — the join is still accumulated
+        # for diagnostics, but never used for refinement
+        cellid in fr.poisoned_cells && return (Any, eff)
         return (cell_lattice(fr, cellid), eff)
     elseif k === K"cell_set"
         cellop = UnifiedIR.asstmt(UnifiedIR.getop(ir, s, 1))

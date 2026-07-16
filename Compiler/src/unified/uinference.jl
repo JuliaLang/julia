@@ -144,16 +144,110 @@ mutable struct Frame
     stmt_effects::Vector{UInt32}      # per-stmt effect masks (sentinel = untouched)
     newed_cells::Set{Int32}           # cells with a cell_new (maybe-undef reads)
     pending_refine::Any               # (subject => lattice) from a typeassert, or nothing
+    # §5.7 descent state (the late pipeline): monotone per-closure maps driven
+    # by the same `cells_changed` flag and capped by the same widening
+    # escalator as `celltypes` — one fixpoint, no second lattice
+    closure_args::Dict{Int32,Vector{Any}} # closure stmt -> param joins over visible calls
+    closure_rets::Dict{Int32,Any}         # closure stmt -> body return-type join
+    closure_effs::Dict{Int32,UInt32}      # closure stmt -> body effects mask
+    closure_escaped::Set{Int32}           # closures with a use besides call-callee
+    closure_shifted::Set{Int32}           # closures with a world barrier before a call
+    poisoned_cells::Set{Int32}            # shared cells whose reads must stay Any
+end
+
+"""May the `latestworld` statement `L` execute after the creation of closure
+`C`? The §5.8 world-split discipline for deferred bodies: a barrier between
+creation and a call site means the body may run against a newer
+method/binding table than the one inference consulted, so the closure is
+unrefinable. Same-activation pairs use the capture criterion-(b) position
+machinery (forward order + reach, shared loops always hazardous — no
+fresh-cell cancellation applies to world state); a deferred-resident barrier
+can run at any time relative to anything (v1 conservatism); a home barrier
+against a nested closure applies to its outermost home creation site."""
+function world_hazard(ir::UnifiedIR.IR, L::StmtId, C::StmtId)
+    arL = UnifiedIR.activation_root(ir, UnifiedIR.stmt_region(ir, L))
+    arC = UnifiedIR.activation_root(ir, UnifiedIR.stmt_region(ir, C))
+    if arL != arC
+        UnifiedIR.getregion(ir, arL).activation === UnifiedIR.ACT_DEFERRED && return true
+        anchor = UnifiedIR._home_site(ir, C, arL)
+        UnifiedIR.isnull(anchor) && return true
+        C = anchor
+    end
+    UnifiedIR.isnull(UnifiedIR._innermost_shared_body(ir, L, C)) || return true
+    return UnifiedIR.comes_before(ir, C, L) && UnifiedIR._may_reach(ir, C, L)
 end
 
 "Frame constructor with empty analysis state (transfers.jl defines the masks)."
 function Frame(ir::UnifiedIR.IR, st::UInferState, env::Vector{Any})
     fr = Frame(ir, st, env, Dict{Int32,Any}(), false, nothing, Dict{Int32,Any}(),
                Dict{Int32,Any}(), Set{Int32}(), RefMap[], ~UInt32(0),
-               fill(~UInt32(0), length(env)), Set{Int32}(), nothing)
+               fill(~UInt32(0), length(env)), Set{Int32}(), nothing,
+               Dict{Int32,Vector{Any}}(), Dict{Int32,Any}(), Dict{Int32,UInt32}(),
+               Set{Int32}(), Set{Int32}(), Set{Int32}())
+    # One structural scan (positions do not change during inference):
+    #   - escape discipline (§5.7): a closure value that flows anywhere but
+    #     the callee position of a call escapes — unknown callers, and after
+    #     materialization any holder can set the closure's untyped mutable
+    #     fields, so params AND its captured cells' reads degrade;
+    #   - capturing closures per shared cell (the deferred owners between
+    #     each cell op and the cell's home activation);
+    #   - world barriers (`latestworld`) for the shifted-closure rule.
+    lws = StmtId[]
+    closures = StmtId[]
+    cellcaps = Dict{Int32,Set{Int32}}()   # shared cell -> capturing closure ids
     for s in UnifiedIR.each_stmt(ir)
-        if UnifiedIR.stmt_kind(ir, s) === K"cell_new"
+        k = UnifiedIR.stmt_kind(ir, s)
+        if k === K"cell_new"
             push!(fr.newed_cells, UnifiedIR.asstmt(UnifiedIR.getop(ir, s, 1)).id)
+        elseif k === K"latestworld"
+            push!(lws, s)
+        elseif k === K"closure"
+            push!(closures, s)
+        end
+        iscellop = k === K"cell_get" || k === K"cell_set" ||
+                   k === K"cell_new" || k === K"cell_isdefined"
+        for j in 1:UnifiedIR.nops(ir, s)
+            o = UnifiedIR.getop(ir, s, j)
+            UnifiedIR.optag(o) == UnifiedIR.TAG_STMT || continue
+            d = UnifiedIR.asstmt(o)
+            dk = UnifiedIR.stmt_kind(ir, d)
+            if dk === K"closure"
+                (k === K"call" && j == 1) || push!(fr.closure_escaped, d.id)
+            elseif dk === K"cell_shared"
+                if iscellop && j == 1
+                    caps = get!(() -> Set{Int32}(), cellcaps, d.id)
+                    home = UnifiedIR.activation_root(ir, UnifiedIR.stmt_region(ir, d))
+                    r = UnifiedIR.stmt_region(ir, s)
+                    while !UnifiedIR.isnull(r) && r != home
+                        reg = UnifiedIR.getregion(ir, r)
+                        if reg.activation === UnifiedIR.ACT_DEFERRED &&
+                           !UnifiedIR.isnull(reg.owner)
+                            push!(caps, reg.owner.id)
+                        end
+                        r = reg.parent
+                    end
+                else
+                    # a shared cell used outside the cell-op vocabulary
+                    # escapes as a value: its contents are unknowable
+                    push!(fr.poisoned_cells, d.id)
+                end
+            end
+        end
+    end
+    if !isempty(lws)
+        for c in closures
+            any(L -> world_hazard(ir, L, c), lws) && push!(fr.closure_shifted, c.id)
+        end
+    end
+    # Content-join READ refinement is legal only when every capturing closure
+    # is non-escaping and world-stable (Keno's rule): an escaping closure's
+    # untyped mutable field is settable by any holder, and a shifted
+    # closure's stores run against an unknown world — either poisons the
+    # cell's reads to Any. The join itself is still computed (diagnostics,
+    # the future await consumer); it is just never used for refinement.
+    for (cid, caps) in cellcaps
+        if any(x -> x in fr.closure_escaped || x in fr.closure_shifted, caps)
+            push!(fr.poisoned_cells, cid)
         end
     end
     return fr
@@ -201,12 +295,26 @@ function infer_ir!(ir::UnifiedIR.IR, argtypes::Vector{Any};
         fr.cells_changed || break
         if iter == 20
             # force-widen every cell to its widenconst to cap the ascent
+            # (closure param/ret joins ride the same escalator — they are the
+            # same kind of monotone accumulator)
             for (k, v) in fr.celltypes
                 fr.celltypes[k] = CC.widenconst(widenucond(v))
+            end
+            for (k, v) in fr.closure_args
+                fr.closure_args[k] = Any[CC.widenconst(widenucond(t)) for t in v]
+            end
+            for (k, v) in fr.closure_rets
+                fr.closure_rets[k] = CC.widenconst(widenucond(v))
             end
         elseif iter > 40
             for (k, v) in fr.celltypes
                 fr.celltypes[k] = Any
+            end
+            for (k, v) in fr.closure_args
+                fr.closure_args[k] = Any[Any for _ in v]
+            end
+            for (k, v) in fr.closure_rets
+                fr.closure_rets[k] = Any
             end
         end
     end
@@ -239,6 +347,14 @@ function infer_ir!(ir::UnifiedIR.IR, argtypes::Vector{Any};
     end
     ir.meta[:rettype] = widenucond(rt)
     ir.meta[:effects] = fr.effects & effmask
+    # late-pipeline channels (late.jl's query surfaces them): shared-cell
+    # content joins, per-closure body result joins, and the refinement
+    # classification (escape/world/poison discipline)
+    ir.meta[:cell_content] = copy(fr.celltypes)
+    ir.meta[:closure_rets] = copy(fr.closure_rets)
+    ir.meta[:closure_escaped] = copy(fr.closure_escaped)
+    ir.meta[:closure_shifted] = copy(fr.closure_shifted)
+    ir.meta[:poisoned_cells] = copy(fr.poisoned_cells)
     return rt
 end
 
@@ -421,7 +537,7 @@ function infer_region!(fr::Frame, r::RegionId)
             infer_cfg!(fr, s)
             fr.env[s.id] === Union{} && break
         elseif k === K"closure"
-            fr.env[s.id] = Any   # enters the core at P3
+            infer_closure!(fr, s)
         else
             fr.env[s.id] = transfer(fr, s, k)
             if fr.pending_refine !== nothing
@@ -575,6 +691,88 @@ function infer_try!(fr::Frame, s::StmtId)
     return nothing
 end
 
+"""
+    infer_closure!(fr, s)
+
+The §5.7 descent: type a `closure` op's deferred body "as if", inside the
+enclosing frame's fixpoint. Sound regardless of when the body runs provided
+the environment types are sound at every call time: value captures are SSA
+(fixed values), cell captures read the monotone content join (`celltypes`,
+which every `cell_set` — home or deferred — feeds), and params are the join
+of argtypes over visible call sites (`closure_args`, fed by
+`closure_callee_transfer`) or declared/`Any` for escapees. The body walk runs
+behind three barriers:
+
+  - refinement barrier: outer flow-sensitive facts are creation-time facts,
+    invalid at call time (the body may run after any number of stores);
+  - rettype isolation: body `return`s bind to the closure (its activation
+    root), not the home frame — recorded as `closure_rets[s]`;
+  - effects isolation (§3.3 mode-aware composition): deferred effects do not
+    count at the creation site; the mask is recorded as `closure_effs[s]`
+    and applied at call sites instead.
+
+The op's own value stays `Any` (its runtime type does not exist until
+materialization). Map changes set `cells_changed`, re-entering the same
+frame fixpoint; the shared widening escalator caps the ascent.
+"""
+function infer_closure!(fr::Frame, s::StmtId)
+    ir = fr.ir
+    fr.env[s.id] = Any
+    rs = UnifiedIR.live_owned_regions(ir, s)
+    isempty(rs) && return nothing
+    breg = UnifiedIR.getregion(ir, rs[1])
+    np = length(breg.args)
+    isva = false
+    if UnifiedIR.nops(ir, s) >= 1
+        flags = UnifiedIR.imm_value(UnifiedIR.getop(ir, s, 1))::Int64
+        isva = (flags & UnifiedIR.CLOSURE_FLAG_ISVA) != 0
+    end
+    if s.id in fr.closure_escaped || s.id in fr.closure_shifted
+        # unknown callers (escape) or unknown execution world (shifted):
+        # declared types honored (region_arg type column; the current
+        # producer writes Any), the trailing isva param is at least a tuple
+        for (i, a) in enumerate(breg.args)
+            t = UnifiedIR.stmt_type(ir, a)
+            t === nothing && (t = Any)
+            (isva && i == np && t === Any) && (t = Tuple)
+            fr.env[a.id] = t
+        end
+    else
+        joins = get(fr.closure_args, s.id, nothing)
+        for (i, a) in enumerate(breg.args)
+            fr.env[a.id] = joins === nothing ? Union{} : joins[i]
+        end
+    end
+    saved_refs = fr.refinements
+    saved_ret = fr.rettype
+    saved_eff = fr.effects
+    fr.refinements = RefMap[]
+    fr.rettype = nothing
+    effmask = UnifiedIR.FLAG_CONSISTENT | UnifiedIR.FLAG_EFFECT_FREE |
+              UnifiedIR.FLAG_NOTHROW | UnifiedIR.FLAG_TERMINATES
+    fr.effects = effmask
+    infer_region!(fr, rs[1])
+    bodyret = fr.rettype === nothing ? Union{} : widenucond(fr.rettype)
+    bodyeff = fr.effects & effmask
+    fr.refinements = saved_refs
+    fr.rettype = saved_ret
+    fr.effects = saved_eff
+    old = get(fr.closure_rets, s.id, nothing)
+    newret = old === nothing ? bodyret :
+        CC.tmerge(CC.fallback_lattice, widenucond(old), bodyret)
+    if old === nothing || !lat_eq(newret, old)
+        fr.closure_rets[s.id] = newret
+        fr.cells_changed = true
+    end
+    oldeff = get(fr.closure_effs, s.id, nothing)
+    neweff = oldeff === nothing ? bodyeff : (oldeff & bodyeff)
+    if oldeff === nothing || neweff != oldeff
+        fr.closure_effs[s.id] = neweff
+        fr.cells_changed = true
+    end
+    return nothing
+end
+
 function infer_cfg!(fr::Frame, s::StmtId)
     ir = fr.ir
     rs = UnifiedIR.live_owned_regions(ir, s)
@@ -678,7 +876,7 @@ function infer_cfg!(fr::Frame, s::StmtId)
                     infer_cfg!(fr, st)
                     fr.env[st.id] === Union{} && break
                 elseif k === K"closure"
-                    fr.env[st.id] = Any
+                    infer_closure!(fr, st)
                 elseif k === K"break"
                     tgt = UnifiedIR.asregion(UnifiedIR.getop(ir, st, 1))
                     fr.break_vals[tgt.id] = ⊔(fr.st, get(fr.break_vals, tgt.id, nothing),
