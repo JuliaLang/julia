@@ -938,7 +938,12 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_reuse_image_code_eligible_impl(jl_code_in
         return 0;
     if (!(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE))
         return 0;
-    if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0)
+    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+    // valid forever, or pinned to the (frozen) typeinf world: the compiler's
+    // own CodeInstances carry a finite world range containing jl_typeinf_world
+    // by construction, which is not an invalidation
+    if (max_world != ~(size_t)0 &&
+        !(jl_atomic_load_relaxed(&ci->min_world) <= jl_typeinf_world && jl_typeinf_world <= max_world))
         return 0;
     jl_callptr_t invoke = jl_atomic_load_relaxed(&ci->invoke);
     if (invoke == NULL || invoke == jl_fptr_const_return_addr)
@@ -956,7 +961,9 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_reuse_image_code_cert_impl(jl_code_instan
         return 0;
     if (!jl_object_in_image((jl_value_t *)ci))
         return 0;
-    if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0)
+    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+    if (max_world != ~(size_t)0 &&
+        !(jl_atomic_load_relaxed(&ci->min_world) <= jl_typeinf_world && jl_typeinf_world <= max_world))
         return 0;
     if (jl_atomic_load_relaxed(&ci->invoke) != NULL)
         return 0;   // has code (or const): handled elsewhere
@@ -1169,9 +1176,13 @@ static void jl_reuse_build_plan(jl_reuse_plan_t &plan, jl_codegen_output_t &out,
         if (!(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE))
             continue;
         n_from_image++;
-        if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0) {
-            rej_world++;
-            continue;
+        {
+            size_t maxw = jl_atomic_load_relaxed(&ci->max_world);
+            if (maxw != ~(size_t)0 &&
+                !(jl_atomic_load_relaxed(&ci->min_world) <= jl_typeinf_world && jl_typeinf_world <= maxw)) {
+                rej_world++;
+                continue;
+            }
         }
         jl_callptr_t invoke = jl_atomic_load_relaxed(&ci->invoke);
         if (invoke == NULL) {
@@ -1554,10 +1565,16 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
                 // compiler compiling itself while selection runs): the image
                 // twin serves dispatch, so emitting this one is redundant
                 jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+                size_t fresh_min = jl_atomic_load_relaxed(&codeinst->min_world);
+                size_t fresh_max = jl_atomic_load_relaxed(&codeinst->max_world);
                 jl_code_instance_t *c = jl_atomic_load_relaxed(&mi->cache);
                 while (c) {
+                    // world ranges must intersect: any world both can serve is
+                    // one where the twin's code answers dispatch for this MI
                     if (c != codeinst && jl_egal(c->owner, codeinst->owner) &&
-                        jl_reuse_image_code_eligible_impl(c))
+                        jl_reuse_image_code_eligible_impl(c) &&
+                        jl_atomic_load_relaxed(&c->min_world) <= fresh_max &&
+                        fresh_min <= jl_atomic_load_relaxed(&c->max_world))
                         return true;
                     c = jl_atomic_load_relaxed(&c->next);
                 }

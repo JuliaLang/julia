@@ -1796,7 +1796,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
                 cert = false
                 cached = isdefined(item, :cache) ? item.cache : nothing
                 while cached !== nothing
-                    if cached.owner === nothing && cached.min_world <= world
+                    if cached.owner === nothing && cached.min_world <= world <= cached.max_world
                         if ccall(:jl_reuse_image_code_eligible, Cint, (Any,), cached) != 0
                             ci = cached
                             break
