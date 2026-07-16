@@ -549,7 +549,7 @@ std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code
 Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, jl_codegen_output_t &out) JL_CANSAFEPOINT;
 void emit_specsig_to_fptr1(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc, unsigned return_roots,
-        jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
+        jl_value_t *calltype, jl_value_t *rettype, jl_abi_kind_t kind,
         jl_codegen_output_t &out,
         Value *target) JL_CANSAFEPOINT;
 Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci,
