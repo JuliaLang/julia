@@ -41,7 +41,7 @@ function _infer_effects(interp::AbstractInterpreter, @nospecialize(tt), optimize
 end
 
 function statement_costs!(interp::AbstractInterpreter, cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, match::Core.MethodMatch)
-    params = OptimizationParams(interp)
+    params = optimization_params(interp)
     sptypes = VarState[VarState(sp, #= ssadef =# typemin(Int), false) for sp in match.sparams]
     return statement_costs!(cost, body, src, sptypes, params)
 end

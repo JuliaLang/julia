@@ -3119,7 +3119,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             end
             return current_scope_tfunc(interp, sv)
         elseif f === Core.apply_type
-            return apply_type_tfunc(𝕃ᵢ, argtypes; max_union_splitting=InferenceParams(interp).max_union_splitting)
+            return apply_type_tfunc(𝕃ᵢ, argtypes; max_union_splitting=inference_params(interp).max_union_splitting)
         end
         fidx = find_tfunc(f)
         if fidx === nothing
@@ -3501,7 +3501,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
             rt = Bool # too many matches to analyze
         else
             (; valid_worlds, applicable) = matches
-            update_valid_age!(sv, get_inference_world(interp), valid_worlds)
+            update_valid_age!(sv, inference_world(interp), valid_worlds)
             napplicable = length(applicable)
             if napplicable == 0
                 rt = Const(false) # never any matches
@@ -3543,7 +3543,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
         types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     end
     match, valid_worlds = findsup(types, method_table(interp))
-    update_valid_age!(sv, get_inference_world(interp), valid_worlds)
+    update_valid_age!(sv, inference_world(interp), valid_worlds)
     if match === nothing
         rt = Const(false)
         vresults = MethodLookupResult(Any[], valid_worlds, true)

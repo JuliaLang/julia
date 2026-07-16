@@ -480,7 +480,7 @@ get_inference_world(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
 cache_owner(interp::NativeInterpreter) = interp.inf_params.cache_owner
 
-engine_reserve(interp::AbstractInterpreter, mi::MethodInstance) = engine_reserve(mi, cache_owner(interp))
+engine_reserve(interp::AbstractInterpreter, mi::MethodInstance) = engine_reserve(mi, inference_cache_owner(interp))
 engine_reserve(mi::MethodInstance, @nospecialize owner) = ccall(:jl_engine_reserve, Any, (Any, Any), mi, owner)::CodeInstance
 # engine_fulfill(::AbstractInterpreter, ci::CodeInstance, src::CodeInfo) = ccall(:jl_engine_fulfill, Cvoid, (Any, Any), ci, src) # currently the same as engine_reject, so just use that one
 engine_reject(::AbstractInterpreter, ci::CodeInstance) = ccall(:jl_engine_fulfill, Cvoid, (Any, Ptr{Cvoid}), ci, C_NULL)
@@ -499,6 +499,46 @@ inference results.
 function add_remark! end
 
 may_optimize(::AbstractInterpreter) = true
+
+# Invalidation barriers for the open AbstractInterpreter interface. Compiler
+# code that has only an abstractly-typed `interp` (e.g. the entry points
+# pre-inferred at their declared signatures by `bootstrap!`) would otherwise
+# take method-match edges on these interface functions, so defining a new
+# interpreter (for instance loading REPL, whose REPLInterpreter extends them)
+# invalidates large parts of the inference core, and invalidation propagates
+# transitively through CodeInstance backedges, so any edge into the cascade
+# dooms the whole caller tree. The wrappers below dispatch concretely for the
+# native interpreter (the isa branch folds away in frames where `interp` is
+# concrete) and otherwise call a @noinline single-method barrier via
+# `Core.invokelatest`, which takes no edge at all: new interpreter methods
+# then invalidate only the barrier itself, and nothing depends on it. The
+# typeasserts restore the return types the interface contract documents, so
+# abstract-frame inference keeps its precision.
+@noinline _inference_params_barrier(i::AbstractInterpreter) = InferenceParams(i)
+inference_params(i::AbstractInterpreter) =
+    i isa NativeInterpreter ? InferenceParams(i) :
+        (Core.invokelatest(_inference_params_barrier, i)::InferenceParams)
+@noinline _inference_world_barrier(i::AbstractInterpreter) = get_inference_world(i)
+inference_world(i::AbstractInterpreter) =
+    i isa NativeInterpreter ? get_inference_world(i) :
+        (Core.invokelatest(_inference_world_barrier, i)::UInt)
+@noinline _inference_cache_barrier(i::AbstractInterpreter) = get_inference_cache(i)
+inference_cache(i::AbstractInterpreter) =
+    i isa NativeInterpreter ? get_inference_cache(i) :
+        (Core.invokelatest(_inference_cache_barrier, i)::InferenceCache)
+@noinline _cache_owner_barrier(i::AbstractInterpreter) = cache_owner(i)
+inference_cache_owner(i::AbstractInterpreter) =
+    i isa NativeInterpreter ? cache_owner(i) :
+        Core.invokelatest(_cache_owner_barrier, i)
+@noinline _may_optimize_barrier(i::AbstractInterpreter) = may_optimize(i)
+inference_may_optimize(i::AbstractInterpreter) =
+    i isa NativeInterpreter ? may_optimize(i) :
+        (Core.invokelatest(_may_optimize_barrier, i)::Bool)
+@noinline _optimization_params_barrier(i::AbstractInterpreter) = OptimizationParams(i)
+optimization_params(i::AbstractInterpreter) =
+    i isa NativeInterpreter ? OptimizationParams(i) :
+        (Core.invokelatest(_optimization_params_barrier, i)::OptimizationParams)
+
 may_compress(::AbstractInterpreter) = true
 may_discard_trees(::AbstractInterpreter) = true
 may_discard_trees(::NativeInterpreter) =
@@ -514,7 +554,7 @@ Returns a method table this `interp` uses for method lookup.
 External `AbstractInterpreter` can optionally return `OverlayMethodTable` here
 to incorporate customized dispatches for the overridden methods.
 """
-method_table(interp::AbstractInterpreter) = InternalMethodTable(get_inference_world(interp))
+method_table(interp::AbstractInterpreter) = InternalMethodTable(inference_world(interp))
 method_table(interp::NativeInterpreter) = interp.method_table
 
 """
@@ -606,14 +646,14 @@ end
 code_cache(interp::AbstractInterpreter, #=extended_range=#::WorldRange) = code_cache(interp)
 
 function code_cache(interp::AbstractInterpreter)
-    cache = InternalCodeCache(cache_owner(interp), get_inference_world(interp))
-    return OverlayCodeCache(cache, get_inference_cache(interp))
+    cache = InternalCodeCache(inference_cache_owner(interp), inference_world(interp))
+    return OverlayCodeCache(cache, inference_cache(interp))
 end
 
 function code_cache(interp::NativeInterpreter, extended_range::WorldRange)
-    @assert get_inference_world(interp) in extended_range
-    cache = InternalCodeCache(cache_owner(interp), extended_range)
-    return OverlayCodeCache(cache, get_inference_cache(interp))
+    @assert inference_world(interp) in extended_range
+    cache = InternalCodeCache(inference_cache_owner(interp), extended_range)
+    return OverlayCodeCache(cache, inference_cache(interp))
 end
 
 get_escape_cache(interp::AbstractInterpreter) = GetNativeEscapeCache(interp)

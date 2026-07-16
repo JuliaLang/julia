@@ -617,7 +617,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
 end
 
 function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, interp::AbstractInterpreter)
-    params = OptimizationParams(interp)
+    params = optimization_params(interp)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     state = CFGInliningState(ir)
     for (idx, item) in todo
@@ -779,7 +779,7 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     mi = code isa CodeInstance ? code.def : code
     mi_invoke = mi
     method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
-    if OptimizationParams(state.interp).compilesig_invokes
+    if optimization_params(state.interp).compilesig_invokes
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
         if atype !== new_atype
@@ -856,7 +856,7 @@ function resolve_todo(mi::MethodInstance, call_result::Union{Nothing,InferenceRe
 
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
-    if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
+    if !optimization_params(state.interp).inlining || is_stmt_noinline(flag)
         return compileable_specialization(edge, effects, et, info, state)
     end
 
@@ -1096,7 +1096,7 @@ function inline_apply!(todo::Vector{Pair{Int,Any}},
         arginfos = MaybeAbstractIterationInfo[]
         for i = (arg_start+1):length(argtypes)
             thisarginfo = nothing
-            if !is_valid_type_for_apply_rewrite(argtypes[i], OptimizationParams(state.interp))
+            if !is_valid_type_for_apply_rewrite(argtypes[i], optimization_params(state.interp))
                 isa(info, ApplyCallInfo) || return nothing
                 thisarginfo = info.arginfo[i-arg_start]
                 if thisarginfo === nothing || !thisarginfo.complete
@@ -1409,7 +1409,7 @@ function semiconcrete_result_item(result::SemiConcreteResult,
     mi = get_ci_mi(code)
     et = InliningEdgeTracker(state)
 
-    if (!OptimizationParams(state.interp).inlining || is_stmt_noinline(flag) ||
+    if (!optimization_params(state.interp).inlining || is_stmt_noinline(flag) ||
         # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
         # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
         # Suppress the inlining here (unless inlining is requested at the callsite).
@@ -1420,7 +1420,7 @@ function semiconcrete_result_item(result::SemiConcreteResult,
         return compileable_specialization(code, result.effects, et, info, state)
 
     add_inlining_edge!(et, result.edge)
-    preserve_local_sources = OptimizationParams(state.interp).preserve_local_sources
+    preserve_local_sources = optimization_params(state.interp).preserve_local_sources
     ir, _, debuginfo = retrieve_ir_for_inlining(mi, result.ir, preserve_local_sources)
     return InliningTodo(mi, ir, result.spec_info, debuginfo, result.effects)
 end
@@ -1642,7 +1642,7 @@ end
 
 function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
                                    @nospecialize(type), sig::Signature, state::InliningState)
-    OptimizationParams(state.interp).inlining || return nothing
+    optimization_params(state.interp).inlining || return nothing
     (; f, ft, argtypes) = sig
 
     if isa(type, Const) # || isconstType(type)
@@ -1693,7 +1693,7 @@ end
 # NOTE we manually inline the method bodies, and so the logic here needs to precisely sync with their definitions
 function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, flag::UInt32,
                                    @nospecialize(type), sig::Signature, state::InliningState)
-    OptimizationParams(state.interp).inlining || return nothing
+    optimization_params(state.interp).inlining || return nothing
     (; f, ft, argtypes) = sig
     if length(argtypes) == 3 && f === Core.:(!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting

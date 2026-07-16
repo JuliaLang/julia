@@ -253,7 +253,7 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_states, false)
 end
 function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
-    world = get_inference_world(interp)
+    world = inference_world(interp)
     src = retrieve_code_info(mi, world)
     src === nothing && return nothing
     return OptimizationState(mi, src, interp)

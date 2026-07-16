@@ -357,7 +357,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     function InferenceState{I}(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
                                interp::I) where {I<:AbstractInterpreter}
         mi = result.linfo
-        world = get_inference_world(interp)
+        world = inference_world(interp)
         if world == typemax(UInt)
             error("Entering inference from a generated function with an invalid world")
         end
@@ -494,7 +494,7 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
         ssa_refined = BitSet()
         lazyreachability = LazyCFGReachability(ir)
         valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
-        if !(get_inference_world(interp) in valid_worlds)
+        if !(inference_world(interp) in valid_worlds)
             error("invalid age range update")
         end
         tasks = WorkThunk[]
@@ -686,7 +686,7 @@ end
 
 function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
-    world = get_inference_world(interp)
+    world = inference_world(interp)
     mi = result.linfo
     src = retrieve_code_info(mi, world)
     src === nothing && return nothing
@@ -1309,7 +1309,7 @@ function get_max_methods(interp::AbstractInterpreter, sv::AbsIntState)
     mmax !== nothing && return mmax
     return get_max_methods(interp)
 end
-get_max_methods(interp::AbstractInterpreter) = InferenceParams(interp).max_methods
+get_max_methods(interp::AbstractInterpreter) = inference_params(interp).max_methods
 
 function get_max_methods_for_func(@nospecialize(f))
     if f !== nothing

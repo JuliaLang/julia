@@ -1751,7 +1751,7 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     end
     insert_bb != 0 || return nothing # verify post-dominator of all uses exists
 
-    if !OptimizationParams(inlining.interp).assume_fatal_throw
+    if !optimization_params(inlining.interp).assume_fatal_throw
         # Collect all reachable blocks between the finalizer registration and the
         # insertion point
         blocks = reachable_blocks(ir.cfg, finalizer_bb, insert_bb)

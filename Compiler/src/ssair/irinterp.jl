@@ -15,7 +15,7 @@ function collect_limitations!(@nospecialize(typ), sv::IRInterpretationState)
 end
 
 function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, argtypes::Vector{Any}, parent::IRInterpretationState)
-    world = get_inference_world(interp)
+    world = inference_world(interp)
     effects = decode_effects(ci.ipo_purity_bits)
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
         (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
