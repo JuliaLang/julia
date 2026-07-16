@@ -561,13 +561,15 @@ static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, 
 // Resolve a trampoline's invokee at the build world: the compiled CodeInstance for the
 // current dispatch target, or NULL if calls must go through dynamic dispatch (multiple
 // targets, ambiguous, or no matching method).
-static jl_code_instance_t *resolve_trampoline_invokee(jl_abi_t from_abi,
+static jl_code_instance_t *resolve_trampoline_invokee(jl_dispatch_trampoline_t *tr,
         DenseMap<jl_method_instance_t*, jl_code_instance_t*> &compiled_mi,
         size_t latestworld) JL_CANSAFEPOINT
 {
-    jl_value_t *sigt = from_abi.sigt;
+    JL_GC_PROMISE_ROOTED(tr);
+    // Dispatch uses `tr->sigt`; a TypedCallable adapter has a different slot 0 type.
+    jl_value_t *sigt = tr->sigt;
     JL_GC_PROMISE_ROOTED(sigt);
-    jl_value_t *declrt = from_abi.rt;
+    jl_value_t *declrt = tr->rt;
     JL_GC_PROMISE_ROOTED(declrt);
     jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
     if ((jl_value_t*)mi == jl_nothing)
@@ -582,7 +584,7 @@ static jl_code_instance_t *resolve_trampoline_invokee(jl_abi_t from_abi,
     jl_code_instance_t *codeinst = it->second;
     JL_GC_PROMISE_ROOTED(codeinst);
     jl_value_t *astrt = codeinst->rettype;
-    if (astrt != (jl_value_t*)jl_bottom_type &&
+    if ((jl_abi_kind_t)tr->kind == JL_ABI_STD && astrt != (jl_value_t*)jl_bottom_type &&
         jl_type_intersection(astrt, declrt) == jl_bottom_type) {
         // Do not warn if the function never returns since it is occasionally required by
         // the C API (typically error callbacks) even though we're likely to encounter
@@ -636,7 +638,7 @@ static jl_abi_adapter_t *emit_abi_adapter(jl_codegen_output_t &out, jl_abi_t fro
     return adapter;
 }
 
-// Emit each canonical trampoline's adapters.
+// Emit adapters for dispatch trampolines registered during code generation.
 static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
     if (out.cfuncs.empty())
@@ -659,7 +661,7 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
         // or the caller's array), and neither path is owned or checked here, so root locally.
         // `abi.sigt` is freshly derived for TypedCallable rather than borrowed from `tr`.
         JL_GC_PUSH2(&abi.sigt, &codeinst);
-        codeinst = resolve_trampoline_invokee(abi, compiled_mi, latestworld);
+        codeinst = resolve_trampoline_invokee(tr, compiled_mi, latestworld);
         // If the target's own compiled ABI already satisfies the declared C ABI, no adapter
         // is needed: map to the bare CodeInstance so the first post-load call derives `fptr`
         // from its (independently wired) specptr.

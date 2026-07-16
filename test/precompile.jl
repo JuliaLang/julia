@@ -1421,6 +1421,58 @@ precompile_test_harness("cross-image dispatch trampolines") do dir
     end
 end
 
+precompile_test_harness("TypedCallable trampoline serialization") do dir
+    TCMod = :TCAdapter0x3a91be07
+    write(joinpath(dir, "$TCMod.jl"),
+          """
+          module $TCMod
+              llvm_version() = ccall(:jl_get_LLVM_VERSION, UInt32, ())  # 0 = no-codegen stub
+              target(x::Int) = x * 3
+              # Serialize an adapter resolved during optimization.
+              @noinline make_tc() = Core.TypedCallable{Tuple{Int},Int}(target)
+              call_tc(t::Core.TypedCallable{Tuple{Int},Int}, x) = t(x)
+              driver(x) = call_tc(make_tc(), x)
+              # Also serialize a trampoline stored in a top-level value.
+              const TC = Core.TypedCallable{Tuple{Int},Int}(target)
+              call_const(x) = TC(x)
+              precompile(driver, (Int,))
+              precompile(call_const, (Int,))
+              precompile(llvm_version, ())
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(TCMod)))
+    M = Base.require(Main, TCMod)
+    @test Base.invokelatest(M.driver, 5) === 15
+    @test Base.invokelatest(M.call_const, 7) === 21
+    # Deserialized trampolines re-resolve at the latest world.
+    @eval M target(x::Int) = x * 100
+    @test Base.invokelatest(M.driver, 5) === 500
+    @test Base.invokelatest(M.call_const, 7) === 700
+    if Bool(Base.JLOptions().use_pkgimages)
+        # Require the serialized adapter by disabling code generation.
+        sep = Sys.iswindows() ? ";" : ":"
+        script = """
+            using $TCMod
+            const M = $TCMod
+            println("llvm=", M.llvm_version())
+            println("driver=", M.driver(5))
+            println("const=", M.call_const(7))
+            """
+        outbuf = IOBuffer(); errbuf = IOBuffer()
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                     "JULIA_LOAD_CODEGEN_LIB" => "0",
+                     "JULIA_LOAD_PATH" => dir * sep * "@stdlib",
+                     "JULIA_DEPOT_PATH" => first(DEPOT_PATH) * sep)
+        proc = run(pipeline(ignorestatus(cmd), stdout=outbuf, stderr=errbuf))
+        out = String(take!(outbuf))
+        success(proc) || println(stderr, "codegen-free child failed:\n", String(take!(errbuf)))
+        @test success(proc)
+        @test occursin("llvm=0", out)
+        @test occursin("driver=15", out)
+        @test occursin("const=21", out)
+    end
+end
+
 precompile_test_harness("invoke") do dir
     InvokeModule = :Invoke0x030e7e97c2365aad
     CallerModule = :Caller0x030e7e97c2365aad

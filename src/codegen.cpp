@@ -5955,6 +5955,13 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         return mark_julia_type(ctx, ret, true, rt);
     }
     else if (f.constant && jl_isa(f.constant, (jl_value_t*)jl_builtin_type)) {
+        // Register a statically resolved TypedCallable trampoline for AOT emission.
+        if (f.constant == BUILTIN(_typed_callable) && nargs == 5 && argv[1].constant &&
+            jl_typetagis(argv[1].constant, jl_dispatch_trampoline_type)) {
+            jl_dispatch_trampoline_t *tr = (jl_dispatch_trampoline_t*)argv[1].constant;
+            jl_temporary_root(ctx, (jl_value_t*)tr); // keep alive through codegen + serialization
+            ctx.emission_context.cfuncs.push_back(tr);
+        }
         jl_cgval_t result;
         bool handled = emit_builtin_call(ctx, &result, f.constant, argv, nargs - 1, rt, ex, is_promotable);
         if (handled)
