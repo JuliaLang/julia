@@ -321,7 +321,12 @@ function enqueue_specialization!(all::Bool, worklist, mi::MethodInstance)
             do_compile = true
         elseif codeinst.invoke != C_NULL
             do_compile = true
-        elseif !do_compile && isdefined(codeinst, :inferred)
+        elseif !do_compile && isdefined(codeinst, :inferred) &&
+               ccall(:jl_reuse_image_code_enabled, Cint, ()) == 0
+            # Inference-only cache entries (never executed, no native code in
+            # any image). The default sysimage policy compiles these eagerly;
+            # with image-code reuse enabled we align with the pkgimage policy
+            # instead and leave them to be compiled lazily on first use.
             inferred = codeinst.inferred
             # Check compilation options and inlining cost
             if (all || inferred === nothing ||

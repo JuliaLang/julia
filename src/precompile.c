@@ -147,15 +147,20 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     ios_t f;
 
     if (outputji) {
+        uint64_t t_ji0 = jl_hrtime();
         if (ios_file(&f, outputji, 1, 1, 1, 1) == NULL)
             jl_errorf("cannot open system image file \"%s\" for writing", outputji);
         // It would be a waste to allocate a huge buffer only to write it all
         // immediately to the file.
         ios_bufmode(&f, bm_none);
-        ios_write(&f, (const char *)s->buf, (size_t)s->size);
+        size_t ji_size = (size_t)s->size;
+        ios_write(&f, (const char *)s->buf, ji_size);
         ios_close(s);
         free(s);
         ios_bufmode(&f, bm_block);
+        if (getenv("JULIA_REUSE_DEBUG"))
+            jl_safe_printf("jl_write_compiler_output timing: .ji write %.1fs (%zu MB)\n",
+                           (jl_hrtime() - t_ji0) / 1e9, ji_size >> 20);
     }
 
     if (native_code) {

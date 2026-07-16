@@ -685,7 +685,13 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         int is_builtin = jl_is_method(midef) &&
             ((jl_method_t*)midef)->source == NULL &&
             ((jl_method_t*)midef)->generator == NULL;
-        if (native_functions && !is_builtin && !has_field_change((jl_value_t**)&mi->cache))
+        // Under image-code reuse the selection deliberately does not visit
+        // MethodInstances that live entirely in donor images, so their cache
+        // contents are not in the rewrite list; the live cache *is* the donor
+        // image state we intend to carry forward, so keep it instead of
+        // emptying it.
+        if (native_functions && !is_builtin && !jl_reuse_image_code_enabled() &&
+            !has_field_change((jl_value_t**)&mi->cache))
             record_field_change((jl_value_t**)&mi->cache, NULL);
         // don't recurse into all backedges memory (yet)
         jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);

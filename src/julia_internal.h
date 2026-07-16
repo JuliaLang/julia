@@ -2225,6 +2225,7 @@ JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,
                                   jl_code_instance_t **CIs);
 JL_DLLIMPORT void jl_get_llvm_mi_cache_order(void *native_code, size_t *num_els,
                                              jl_code_instance_t **CIs);
+JL_DLLIMPORT int jl_reuse_image_code_enabled(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_init_codegen(void) JL_CANSAFEPOINT;
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_decorate_llvm_module(LLVMModuleRef m) JL_NOTSAFEPOINT;
