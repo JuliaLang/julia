@@ -80,11 +80,15 @@ impl Collection<JuliaVM> for VMCollection {
             )
         }
 
+        // Holding the mutex here guarantees that any mutator that observed
+        // `BLOCK_FOR_GC == true` is already enqueued in `wait()` by the time
+        // we call `notify_all`.
+        let (lock, cvar) = &*STW_COND.clone();
+        let count = lock.lock().unwrap();
         AtomicBool::store(&BLOCK_FOR_GC, false, Ordering::SeqCst);
         AtomicBool::store(&WORLD_HAS_STOPPED, false, Ordering::SeqCst);
-
-        let (_, cvar) = &*STW_COND.clone();
         cvar.notify_all();
+        drop(count);
 
         info!(
             "Live bytes = {}, total bytes = {}",
