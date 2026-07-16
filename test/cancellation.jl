@@ -619,6 +619,38 @@ end
     @test length(t.result.exceptions) == 2
 end
 
+@testset "escalation during @sync teardown keeps awaiting internal tasks" begin
+    # A SAFE cancellation parks the @sync teardown on a child that has no
+    # cancellation points; an ABANDON_EXTERNAL escalation must re-arm that
+    # wait - internal tasks are still awaited at ABANDON_EXTERNAL - rather
+    # than unwind the @sync while the child is still running.
+    stop = Ref(false)
+    started = Base.Event()
+    t, src = cancellable() do
+        @sync begin
+            @async begin
+                notify(started)
+                while !stop[]
+                    yield() # no cancellation points: ignores SAFE/ABANDON_EXTERNAL
+                end
+            end
+        end
+    end
+    wait(started)
+    cancel!(src)
+    spin(20)
+    @test !istaskdone(t)
+    cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    spin(20)
+    @test !istaskdone(t)
+    stop[] = true
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test istaskfailed(t)
+    req = t.result
+    @test req isa CancellationRequest
+    @test req.request == CANCEL_REQUEST_ABANDON_EXTERNAL.request
+end
+
 @testset "unfriendly cancellation modes" begin
     # Acknowledgment preserves the request's severity.
     seen = Ref{Any}(nothing)

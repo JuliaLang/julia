@@ -1574,10 +1574,24 @@ end
     sev = severity(cr)
     for r in waitees
         if isa(r, Task)
-            if sev < CANCEL_REQUEST_ABANDON_ALL.request
+            while sev < CANCEL_REQUEST_ABANDON_ALL.request
                 # Tasks are internal: their cancellation is awaited (for
                 # ABANDON_ALL they were frozen; there is nothing to wait for).
-                _wait(r, tok; min_severity=sev + 0x01)
+                try
+                    _wait(r, tok; min_severity=sev + 0x01)
+                    break
+                catch e
+                    # A severity escalation interrupts the teardown wait;
+                    # adopt the stronger request and keep awaiting internal
+                    # tasks per its policy rather than unwinding out of the
+                    # `@sync` while children are still running.
+                    if e isa CancellationRequest && severity(e) > sev
+                        cr = e
+                        sev = severity(e)
+                        continue
+                    end
+                    rethrow()
+                end
             end
             if istaskfailed(r)
                 push!(c_ex, TaskFailedException(r))
