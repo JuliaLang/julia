@@ -235,6 +235,35 @@ cd(@__DIR__) do
         # Track timeout timers for each test
         test_timers = Dict{String, Timer}()
 
+        # Which worker each in-flight test is running on
+        running_on = Dict{String, Int}()
+
+        Sys.iswindows() || atexit() do
+            # This `atexit()` is a desperate attempt to collect .core dumps from
+            # any hung workers, if the CI test infrastructure decides to tear us
+            # down due to a timeout
+            isempty(running_on) && return
+            stuck = Int[]
+            # Send a `SIGQUIT` signal to any stuck workers so they produce
+            # a .core file and a stacktrace.
+            for (test, wrkr) in running_on
+                ospid = get(worker_ospids, wrkr, nothing)
+                ospid === nothing && continue
+                println(stderr, "Test $test is still running on worker $wrkr (pid $ospid) at teardown; sending SIGQUIT for a core dump.")
+                if ccall(:kill, Cint, (Cint, Cint), ospid, Base.SIGQUIT) == 0
+                    push!(stuck, ospid)
+                end
+            end
+            alive(pid) = ccall(:kill, Cint, (Cint, Cint), pid, 0) == 0
+            # This must stay comfortably below the watchdog's post-SIGTERM
+            # escalation timeout (JL_KILL_TIMEOUT) so that we exit before it
+            # escalates.
+            deadline = time() + 300
+            while time() < deadline && any(alive, stuck)
+                sleep(1)
+            end
+        end
+
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
@@ -272,6 +301,7 @@ cd(@__DIR__) do
                         test = popfirst!(tests)
                         running_tests[test] = now()
                         wrkr = p
+                        running_on[test] = wrkr
 
                         # Create a timer for this test to report long-running status
                         test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
@@ -308,6 +338,7 @@ cd(@__DIR__) do
                                 Any[CapturedException(e, catch_backtrace())], time() - before
                             end
                         delete!(running_tests, test)
+                        delete!(running_on, test)
                         if haskey(test_timers, test)
                             close(test_timers[test])
                             delete!(test_timers, test)
@@ -321,7 +352,7 @@ cd(@__DIR__) do
                             elseif n > 1
                                 # the worker encountered some failure, recycle it
                                 # so future tests get a fresh environment
-                                rmprocs(wrkr, waitfor=rmwait_timeout)
+                                rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
                                 if use_revise
@@ -334,7 +365,7 @@ cd(@__DIR__) do
                                 # the worker has reached the max-rss limit, recycle it
                                 # so future tests start with a smaller working set
                                 if n > 1
-                                    rmprocs(wrkr, waitfor=rmwait_timeout)
+                                    rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
                                     p = addprocs_with_testenv(1)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
                                     if use_revise
@@ -348,7 +379,7 @@ cd(@__DIR__) do
                     end
                     if p != 1
                         # Free up memory =)
-                        rmprocs(p, waitfor=rmwait_timeout)
+                        rmprocs_with_testenv(p, waitfor=rmwait_timeout)
                     end
                 end
             end
