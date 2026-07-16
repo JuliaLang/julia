@@ -117,9 +117,17 @@ function test_jl_dump_llvm_opt()
     mktemp() do func_file, func_io
         mktemp() do llvm_file, llvm_io
             # suspend tier parking so the call below compiles (and is dumped)
-            # rather than running interpreted
+            # rather than running interpreted, and give the body a unique
+            # SHAPE: an object-cache hit skips LLVM optimization entirely
+            # (leaving the opt dump empty), and the cache canonicalizes data
+            # constants, so uniqueness must be structural
             ccall(:jl_tier_suspend_parking, Cvoid, ())
-            @eval(test_jl_dump_compiles_internal(x) = x)
+            let ex = :x
+                for _ in 1:rand(8:64)
+                    ex = :($ex + 1)
+                end
+                @eval(test_jl_dump_compiles_internal(x) = $ex)
+            end
             ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), func_io.handle)
             ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), llvm_io.handle)
             @eval test_jl_dump_compiles_internal(1)
