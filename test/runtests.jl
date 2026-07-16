@@ -4,6 +4,7 @@ using Test
 using Distributed
 using Dates
 using Printf: @sprintf
+using StyledStrings: @styled_str
 using Base: Experimental
 using Base.ScopedValues
 
@@ -13,6 +14,34 @@ include("buildkitetestjson.jl")
 
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
 const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL", "15")) * 60 # minutes
+
+# Run `f()` with its stdout/stderr captured and re-emitted to `io`, each line prefixed
+# with a de-emphasized `prefix`. Used for the node-1 tests, whose output does not flow
+# through Distributed's worker-output redirection (and so its `worker_output_hook`).
+# `prefix` is styled with `StyledStrings`, so it is only colorized when `io` supports it.
+function with_output_prefix(f, prefix::AbstractString, io::IO, lock::ReentrantLock)
+    pipe = Pipe()
+    Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
+
+    reader_task = @async while !eof(pipe)
+        line = readline(pipe; keep=true)
+        @lock lock begin
+            print(io, styled"{bright_black: $prefix: }")
+            print(io, line)
+            endswith(line, '\n') || println(io)
+        end
+    end
+
+    try
+        redirect_stdio(; stdout=pipe, stderr=pipe) do
+            f()
+        end
+    finally
+        close(pipe.in)
+        wait(reader_task)
+        close(pipe)
+    end
+end
 
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
@@ -159,6 +188,19 @@ cd(@__DIR__) do
     print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
     if stderr isa Base.LibuvStream
         stderr.lock = print_lock
+    end
+
+    # Track which test each worker is currently running (worker id => test name), so
+    # that worker output can be labeled with the test rather than just the worker id.
+    worker_current_test = Dict{Int, String}()
+
+    # Transform each line of worker output into a de-emphasized, test-labeled prefix.
+    # Distributed still owns the actual printing; see `Distributed.worker_output_hook`.
+    Distributed.worker_output_hook[] = (ident, line) -> begin
+        wrkr_id = tryparse(Int, ident)
+        test_name = wrkr_id === nothing ? nothing : get(worker_current_test, wrkr_id, nothing)
+        label = test_name === nothing ? "From worker $ident" : "$test_name ($ident)"
+        return styled"{bright_black: $label: }$line"
     end
 
     function print_testworker_stats(test, wrkr, resp)
@@ -357,6 +399,7 @@ cd(@__DIR__) do
                         running_tests[test] = now()
                         wrkr = p
                         running_on[test] = wrkr
+                        worker_current_test[wrkr] = test
 
                         # Create a timer for this test to report long-running status
                         test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
@@ -394,6 +437,7 @@ cd(@__DIR__) do
                             end
                         delete!(running_tests, test)
                         delete!(running_on, test)
+                        delete!(worker_current_test, wrkr)
                         if haskey(test_timers, test)
                             close(test_timers[test])
                             delete!(test_timers, test)
@@ -452,8 +496,10 @@ cd(@__DIR__) do
             running_on[t] = 1
             before = time()
             resp, duration = try
-                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
-                    r, time() - before
+                    with_output_prefix("$t (1)", stdout, print_lock) do
+                        r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                        r, time() - before
+                    end
                 catch e
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
@@ -487,6 +533,7 @@ cd(@__DIR__) do
         if @isdefined test_timers
             foreach(close, values(test_timers))
         end
+        Distributed.worker_output_hook[] = nothing
     end
 
     #=
