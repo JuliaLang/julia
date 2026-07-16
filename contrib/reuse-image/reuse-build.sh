@@ -25,12 +25,15 @@ OUT_O=${OUT_SO%.so}.o
 
 PRE='Sys.__init__(); Base.reinit_stdio(); Base.init_depot_path(); Base.init_load_path(); Base.init_active_project();'
 
-echo "--- building object (reuse enabled)"
-env JULIA_REUSE_IMAGE_CODE=1 JULIA_IMAGE_THREADS="${JULIA_IMAGE_THREADS:-8}" \
+stamp() { echo "PHASE $1: $(date +%s.%N)"; }
+stamp "julia start"
+echo "--- building object (reuse=${JULIA_REUSE_IMAGE_CODE:-1})"
+env JULIA_REUSE_IMAGE_CODE="${JULIA_REUSE_IMAGE_CODE:-1}" JULIA_IMAGE_THREADS="${JULIA_IMAGE_THREADS:-8}" \
     "$JULIA" --startup-file=no -J "$SYS" --cpu-target=native \
-    --output-o "$OUT_O" --output-incremental=no \
+    --output-o "$OUT_O" ${SPLIT_JI:+--output-ji "${OUT_SO%.so}.ji"} --output-incremental=no \
     -e "$PRE $APP; nothing"
 
+stamp "build done"
 DONOR_OBJS=()
 if [ -f "$OUT_O.reuse" ] && grep -q "^DONOR" "$OUT_O.reuse"; then
     echo "--- unlinking donor images"
@@ -41,9 +44,17 @@ if [ -f "$OUT_O.reuse" ] && grep -q "^DONOR" "$OUT_O.reuse"; then
     while IFS= read -r obj; do DONOR_OBJS+=("$obj"); done < <(ls "$DONORDIR"/donor_*.o)
 fi
 
+stamp "unlink done"
 echo "--- linking"
 c++ -shared -fPIC -o "$OUT_SO" \
     -Wl,--whole-archive "$OUT_O" -Wl,--no-whole-archive \
     ${DONOR_OBJS[@]+"${DONOR_OBJS[@]}"} \
     -L"$BINDIR/../lib" -L"$BINDIR/../lib/julia" -ljulia-internal -ljulia
+stamp "link done"
 echo "built $OUT_SO"
+echo "--- boot smoke test"
+"$JULIA" --startup-file=no -J "$OUT_SO" -e '
+@assert 2 + 2 == 4
+try; error("probe"); catch; @assert length(catch_backtrace()) > 3; end
+println("SMOKE OK")'
+stamp "boot test done"

@@ -60,21 +60,64 @@ slot fills. Roundtrip of full sys.so: unlink 3.6s, relinked image boots and
 passes smoke (gmp/pcre/BLAS/threads/JIT/GC/backtraces).
 
 ## Measured results (prototype, Zen4 Linux, native target, 8 emission threads)
-Full pipeline (build + unlink + link + boot test), interleaved ON/OFF repeats,
-including the selection fast-path (no re-inference for reused code):
-- no-op sysimage rebuild: 71s -> 20s (3.6x); ~29k machine-code CIs reused,
-  1,981 emitted (94% reuse; remainder is the per-boot invalidation tail).
-- `using Dates, Test, Statistics` (sysimage + stdlib donors): 79s -> 24s (3.3x),
-  images pass extended functional tests.
-- `using Plots` (47 donor images): 140s -> 63s (2.2x), 28k machine-code CIs
-  reused; the resulting image renders plots correctly.
-- no-op reuse-arm breakdown: ~6s dump/archive write, ~5s donor unlinking
-  (cacheable), ~4s residual selection walk, ~4s serialization+link+boot.
+Full pipeline (build + unlink + link + boot smoke), 3 interleaved OFF/ON pairs,
+after the selection fast-path and the invalidation work below:
+- no-op sysimage rebuild: 65s -> 8.0s (8.1x); 29,760 machine-code CIs reused,
+  5 emitted (99.98% reuse). Excluding donor unlinking (cacheable): 2.6s (25x).
+- `using Plots` sysimage (210-package dep tree): 128s -> 19.0s (6.7x);
+  39,296 machine-code CIs reused, 171 emitted (99.57% reuse; the remainder is
+  genuine invalidation fallout of package loading). Excluding unlinking:
+  11.1s (11.5x). The image is a proper nonincremental sysimage (code .text
+  28.8MB vs stock 16.2MB, heap 325MB vs 153MB embedded), boots interactively,
+  `using Plots` is 0.0s and first-plot 0.16s vs 1.53s/0.17s on stock+pkgimages.
+- Reuse-arm phase profile (Plots): julia 9.5s (selection 0.9, emission 0.3,
+  heap serialization ~2.8, dump 1.5), unlink 7.8s, link 1.2s, boot 0.5s.
+  Compilation is no longer the bottleneck; unlinking and heap serialization are.
 - --emit-relocs producer cost on sys.so: +11.6% disk for the required reloc
   sections (rest is .rela.debug_*), zero runtime memory cost.
-- Reuse-built images are currently smaller than baseline only because the
-  unlinker drops donor DWARF (a fixable omission); they also carry the donor's
-  unreused code as dead text until gc-sections support lands.
+- Reuse-built .so is smaller than baseline only because the unlinker drops
+  donor DWARF (fixable omission); .text is within 2MB of baseline.
+
+## Invalidation work (what made 99%+ reuse possible)
+Reuse can only be as good as image-code validity. Invalidation attribution
+found and fixed three sources that re-derived thousands of CIs on every
+`using Plots`:
+1. Typeinf-world pinning misread as invalidation (finite max_world containing
+   jl_typeinf_world is by construction) — eligibility/twin-skip made
+   world-range-aware, and typeinf-world enqueueing made evidence-based
+   (a root is compiled for the frozen world only with world-range evidence or
+   as a cache-less compiler method; external interpreters' compiler
+   specializations cached by pkgimages never qualify).
+2. REPL's REPLInterpreter extending the AbstractInterpreter interface
+   invalidated ~2,900 compiler CIs (the bootstrap-pre-inferred abstract core
+   holds open method-match edges). Fixed with interface barriers: isa-guarded
+   concrete fast path + Core.invokelatest to a @noinline single-method barrier
+   (no edge -> no transitive cascade; plain @noinline barriers do NOT work,
+   invalidation propagates through CI backedges). Now 7 CIs invalidated.
+3. ColorVectorSpace's promote_rule(::Type{<:Real}, ::Type{<:AbstractGray})
+   invalidated 1,160 CIs via two abstract promote_rule edges. Fix: flip the
+   argument order (promote_type consults both; values identical, but a
+   Gray-first signature cannot intersect concrete-Real-first edges). See
+   ColorVectorSpace-promote_rule.patch (upstream PR candidate).
+Residual 171 emissions: ~250-victim JSON.PtrString convert speculation break
+plus smaller FixedPointNumbers / RelocatableFolders / SparseArrays / etc.
+triggers — legitimate compiler speculation losses, not package bugs.
+
+## Tools
+- reuse-build.sh — end-to-end driver (PHASE timing stamps, boot smoke test,
+  JULIA_REUSE_IMAGE_CODE toggleable for baselines).
+- bench.sh — interleaved A/B (default emission vs reuse) with per-arm stats.
+- unlink.jl — the ELF unlinker.
+
+## Split heap images (JuliaLang/julia#61649)
+The branch incorporates PR 61649: with SPLIT_JI=1 the drivers pass
+--output-ji alongside --output-o, so the serialized heap is written directly
+to the .ji instead of round-tripping through an LLVM constant array in the
+object. A no-op rebuild then produces a 32MB .so (code + tables only) plus a
+160MB .ji, booted via -J app.so with the sibling .ji; pipeline time is
+unchanged (~18.5s) but peak memory drops and the heap write becomes a plain
+stream — the intended substrate for delta/mmap heap-serialization tricks.
+Reuse works identically in both modes.
 
 ## Known limitations (prototype)
 - Multi-target output images: donor clone slots are snapshot-bound to the

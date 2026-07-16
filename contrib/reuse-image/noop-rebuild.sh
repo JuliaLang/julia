@@ -27,7 +27,7 @@ for gen in $(seq 1 "$NGENS"); do
     echo "=== generation $gen (boot image: $CUR) ==="
     env JULIA_REUSE_IMAGE_CODE=1 JULIA_REUSE_DEBUG=1 JULIA_IMAGE_THREADS="${JULIA_IMAGE_THREADS:-8}" \
         "$JULIA" --startup-file=no -J "$CUR" --cpu-target=native \
-        --output-o "$OUT_O" --output-incremental=no \
+        --output-o "$OUT_O" ${SPLIT_JI:+--output-ji "${OUT_SO%.so}.ji"} --output-incremental=no \
         -e "$PRE nothing" 2>&1 | grep -E "jl_emit_native_to_output|jl_reuse_image_code:" || true
 
     DONOR_OBJS=()

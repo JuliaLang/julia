@@ -1,0 +1,17 @@
+--- a/src/ColorVectorSpace.jl
++++ b/src/ColorVectorSpace.jl
+@@ -80,8 +80,12 @@
+     real(::Type{C}) where {C<:AbstractGray} = real(eltype(C))
+ end
+ 
+-# To help type inference
+-promote_rule(::Type{T}, ::Type{C}) where {T<:Real,C<:AbstractGray} = promote_type(T, eltype(C))
++# To help type inference. Defined color-first: promote_type(T, S) consults
++# promote_rule for both argument orders, so this gives identical results to a
++# Real-first rule, but its signature cannot intersect (and therefore cannot
++# invalidate) the many pre-inferred promote_rule(::Type{<:Real}, ::Type)
++# call edges in the sysimage and other package images.
++promote_rule(::Type{C}, ::Type{T}) where {C<:AbstractGray,T<:Real} = promote_type(T, eltype(C))
+ 
+ promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{T,Vararg{T}}}) where {T<:MathTypes} = eltype(T)
+ 
