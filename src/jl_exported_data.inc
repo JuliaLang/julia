@@ -108,6 +108,9 @@
     XX(opaque_closure_method, jl_method_t*) \
     XX(opaque_closure_type, jl_unionall_t*) \
     XX(opaque_closure_typename, jl_typename_t*) \
+    XX(typed_callable_method, jl_method_t*) \
+    XX(typed_callable_type, jl_unionall_t*) \
+    XX(typed_callable_typename, jl_typename_t*) \
     XX(pair_type, jl_value_t*) \
     XX(partial_opaque_type, jl_datatype_t*) \
     XX(partial_struct_type, jl_datatype_t*) \

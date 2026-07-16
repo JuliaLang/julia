@@ -4499,6 +4499,15 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_opaque_closure_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type))->name;
     jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type));
 
+    tv = jl_svec2(tvar("A"), tvar("R"));
+    jl_typed_callable_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("TypedCallable"), core, jl_function_type, tv,
+        // The trailing unnamed field holds the shared dispatch trampoline.
+        jl_perm_symsvec(2, "f", ""),
+        jl_svec(2, jl_any_type, jl_any_type),
+        jl_emptysvec, 0, 0, 1)->name->wrapper;
+    jl_typed_callable_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_typed_callable_type))->name;
+    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_typed_callable_type));
+
     // complete builtin type metadata
     jl_uint8pointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_uint8_type);
     jl_svecset(jl_datatype_type->types, 5, jl_voidpointer_type);

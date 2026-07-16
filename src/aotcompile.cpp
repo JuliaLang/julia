@@ -657,7 +657,8 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
         // `ci_funcs` and `trampoline_invokees` are LLVM containers, so they root nothing.
         // The CodeInstances reached through them are only incidentally alive (via `mi->cache`
         // or the caller's array), and neither path is owned or checked here, so root locally.
-        JL_GC_PUSH1(&codeinst);
+        // `abi.sigt` is freshly derived for TypedCallable rather than borrowed from `tr`.
+        JL_GC_PUSH2(&abi.sigt, &codeinst);
         codeinst = resolve_trampoline_invokee(abi, compiled_mi, latestworld);
         // If the target's own compiled ABI already satisfies the declared C ABI, no adapter
         // is needed: map to the bare CodeInstance so the first post-load call derives `fptr`

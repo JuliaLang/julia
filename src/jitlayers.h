@@ -375,12 +375,6 @@ struct jl_codegen_call_target_t {
     // neither = unused
 };
 
-// The caller ABI a DispatchTrampoline was keyed on (canonical type objects).
-inline jl_abi_t jl_trampoline_abi(jl_dispatch_trampoline_t *tr) JL_NOTSAFEPOINT
-{
-    return {tr->sigt, tr->rt, tr->specsig != 0, (jl_abi_kind_t)tr->kind};
-}
-
 std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx,
                                               const DataLayout &DL, const Triple &triple,
                                               Module *source = nullptr) JL_NOTSAFEPOINT;

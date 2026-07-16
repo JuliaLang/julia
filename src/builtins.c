@@ -2719,6 +2719,9 @@ void jl_init_intrinsic_functions(void)
     // codegen for it later.
     jl_opaque_closure_method = jl_mk_builtin_func(oc, jl_symbol("OpaqueClosure"), jl_f_opaque_closure_call); // TODO: awkwardly not actually declared a Builtin, even though it relies on being handled by the special cases for Builtin everywhere else
 
+    jl_datatype_t *tc = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_typed_callable_type);
+    jl_typed_callable_method = jl_mk_builtin_func(tc, jl_symbol("TypedCallable"), jl_f_typed_callable_call);
+
 #define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
 #define ADD_HIDDEN(name, nargs)
 #define ALIAS ADD_I
@@ -2738,7 +2741,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // Builtins are specially considered available from world 0
     for (int i = 0; i < jl_n_builtins; i++) {
         if (i == jl_builtin_id_intrinsic_call ||
-            i == jl_builtin_id_opaque_closure_call)
+            i == jl_builtin_id_opaque_closure_call ||
+            i == jl_builtin_id_typed_callable_call)
             continue;
         jl_sym_t *sname = jl_symbol(jl_builtin_names[i]);
         jl_value_t *builtin = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
@@ -2747,6 +2751,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
         jl_builtin_instances[i] = builtin;
     }
     add_builtin("OpaqueClosure", (jl_value_t*)jl_opaque_closure_type);
+    add_builtin("TypedCallable", (jl_value_t*)jl_typed_callable_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
 
     // builtin types

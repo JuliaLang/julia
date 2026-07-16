@@ -105,6 +105,25 @@ static void *abi_adapter_resolve_target(jl_abi_t from_abi, jl_code_instance_t *c
     return NULL;
 }
 
+// Return the ABI used to enter an adapter for `tr`. A TypedCallable adapter replaces
+// `typeof(f)` in slot 0 with `TypedCallable{A,R}`. The caller must root the returned
+// `sigt`, which may be newly allocated.
+JL_DLLEXPORT jl_abi_t jl_trampoline_abi(jl_dispatch_trampoline_t *tr) JL_CANSAFEPOINT
+{
+    jl_value_t *sigt = tr->sigt;
+    if ((jl_abi_kind_t)tr->kind == JL_ABI_TYPED_CALLABLE) {
+        jl_value_t *argt = NULL;
+        jl_value_t *tc_type = NULL;
+        JL_GC_PUSH2(&argt, &tc_type);
+        argt = jl_argtype_without_function(sigt); // Tuple{A...}
+        tc_type = jl_apply_type2((jl_value_t*)jl_typed_callable_type, argt, tr->rt); // TypedCallable{A,R}
+        sigt = jl_argtype_with_function_type(tc_type, argt); // Tuple{TypedCallable{A,R}, A...}
+        JL_GC_POP();
+    }
+    jl_abi_t abi = { sigt, tr->rt, tr->specsig != 0, (jl_abi_kind_t)tr->kind };
+    return abi;
+}
+
 // Return the target's directly compatible specptr (for a from_abi call), if any.
 JL_DLLEXPORT void *jl_abi_matching_specptr(jl_abi_t from_abi, jl_code_instance_t *codeinst) JL_CANSAFEPOINT
 {

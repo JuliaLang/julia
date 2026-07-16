@@ -376,7 +376,6 @@ void *jl_update_dispatch_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr)
     JL_GC_PROMISE_ROOTED(sigt);
     jl_value_t *rt = tr->rt;
     JL_GC_PROMISE_ROOTED(rt);
-    jl_abi_t from_abi = { sigt, rt, tr->specsig, (jl_abi_kind_t)tr->kind };
     jl_value_t *mi;
     jl_code_instance_t *codeinst;
     size_t world;
@@ -446,8 +445,9 @@ void *jl_update_dispatch_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr)
     }
     // @cfunction warns when the declared C return type cannot match the resolved target's
     // rettype (skip must-not-return targets, occasionally required by the C API for error
-    // callbacks even though memory errors are then likely).
-    if (codeinst != NULL) {
+    // callbacks even though memory errors are then likely). TypedCallable adapters enforce
+    // their declared return type instead.
+    if ((jl_abi_kind_t)tr->kind == JL_ABI_STD && codeinst != NULL) {
         jl_value_t *astrt = codeinst->rettype;
         if (astrt != (jl_value_t*)jl_bottom_type &&
             jl_type_intersection(astrt, rt) == jl_bottom_type)
@@ -460,7 +460,10 @@ void *jl_update_dispatch_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr)
         codeinst = NULL;
     // Keep the CodeInstance or ABIAdapter used to derive fptr.
     jl_value_t *new_invokee = NULL;
-    f = jl_jit_abi_converter(ct, from_abi, codeinst, &new_invokee);
+    jl_abi_t adapter_abi = jl_trampoline_abi(tr);
+    JL_GC_PUSH1(&adapter_abi.sigt);
+    f = jl_jit_abi_converter(ct, adapter_abi, codeinst, &new_invokee);
+    JL_GC_POP();
     // Published fptrs always have an invokee for later validation.
     assert(new_invokee != NULL);
     jl_gc_write(tr, tr->last_invokee, jl_value_t, new_invokee);
