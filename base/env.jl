@@ -221,6 +221,9 @@ if Sys.iswindows()
 else # !windows
     function iterate(::EnvDict, i=0)
         envs = _environ()
+        if envs == C_NULL
+            return nothing
+        end
         while true
             envp = unsafe_load(envs, i + 1)
             envp == C_NULL && return nothing
