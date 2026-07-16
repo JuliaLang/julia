@@ -556,6 +556,27 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
 // target to the Base hook, which compiles (and caches) a continuation
 // specialized on the live values and runs the rest of the call. Returns the
 // call's result, or NULL to decline (frame keeps interpreting).
+// Remaining C-stack headroom below the current frame, measured against the
+// CURRENT task's stack. Interpreted frames commonly run on task stacks;
+// ptls->stackbase/stacksize describe the thread's root stack, so using them
+// here would measure the wrong buffer entirely (making every task-borne
+// frame look out of stack, permanently rescue-compiling instead of
+// interpreting). The rescue threshold scales down for small task stacks so
+// they can still interpret near the top of their range.
+static int interp_stack_low(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    char *active_start, *active_end, *total_start, *total_end;
+    jl_active_task_stack(ct, &active_start, &active_end, &total_start, &total_end);
+    if (total_start == NULL || total_end == NULL)
+        return 0; // unknown bounds: assume fine (matches prior stackbase==NULL case)
+    ptrdiff_t limit = (ptrdiff_t)(4 << 20);
+    ptrdiff_t half = (total_end - total_start) / 2;
+    if (half < limit)
+        limit = half;
+    char here;
+    return (&here - total_start) < limit;
+}
+
 static jl_value_t *eval_try_osr(interpreter_state *s, size_t target0)
 {
     if (!jl_tier_enabled() || s->src == NULL || s->mi == NULL)
@@ -580,10 +601,7 @@ static jl_value_t *eval_try_osr(interpreter_state *s, size_t target0)
     }
     // The hook runs inference + codegen; deep interpreted recursion may
     // have nearly exhausted the C stack by the time the budget fires.
-    jl_ptls_t ptls = jl_current_task->ptls;
-    char here;
-    if (ptls->stackbase != NULL &&
-        (char*)&here - ((char*)ptls->stackbase - ptls->stacksize) < (ptrdiff_t)(4 << 20))
+    if (interp_stack_low(jl_current_task))
         return NULL;
     jl_code_info_t *src = s->src;
     size_t n = jl_source_nslots(src) + jl_source_nssavalues(src);
@@ -935,10 +953,7 @@ jl_value_t *NOINLINE jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t 
     // compiled code survives. When headroom runs low, rescue the frame:
     // compile real code and enter it instead of interpreting.
     if (allow_rescue && jl_tier_enabled() && jl_is_method(mi->def.method)) {
-        jl_ptls_t ptls = ct->ptls;
-        char here;
-        if (ptls->stackbase != NULL &&
-            (char*)&here - ((char*)ptls->stackbase - ptls->stacksize) < (ptrdiff_t)(4 << 20)) {
+        if (interp_stack_low(ct)) {
             jl_code_instance_t *native = jl_compile_method_internal(mi, world);
             jl_callptr_t inv = native == NULL ? NULL : jl_atomic_load_acquire(&native->invoke);
             if (native != NULL && inv != NULL && inv != jl_fptr_interpret_call_addr)

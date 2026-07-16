@@ -2279,6 +2279,13 @@ JL_DLLEXPORT void jl_tier_set_interp_loops(int enabled) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_set_osr_hook(void *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void *jl_tier_get_osr_hook(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t jl_tier_get_osr_threshold(void) JL_NOTSAFEPOINT;
+// (declared in julia_gcext.h for embedders; redeclared here for runtime use)
+JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
+                                       char **active_start, char **active_end,
+                                       char **total_start, char **total_end) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_set_osr_threshold(int threshold) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_note_osr(int entered) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_get_osr_stats(uint64_t *attempts, uint64_t *entered) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t jl_tier_get_threshold(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_set_threshold(uint32_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_init(void) JL_NOTSAFEPOINT;
