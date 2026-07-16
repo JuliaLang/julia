@@ -87,4 +87,43 @@ entry:
   ret void
 }
 
+; Atomic stores are unsafe points like plain ones: a reset delivered around
+; e.g. a lock-release store would leave the lock owned forever. Only the
+; pass's own bookkeeping stores (which carry the reset_safe metadata) are
+; exempt.
+define void @test_atomic_store_unsafe(ptr %lock) {
+entry:
+; CHECK-LABEL: @test_atomic_store_unsafe
+; CHECK: call i32 @{{.*}}setjmp
+; CHECK-NEXT: store atomic ptr %cancel_ucontext, ptr %reset_ctx_ptr release
+; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: store atomic i64 0, ptr %lock release
+; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: ret void
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %result = call i32 @julia.cancellation_point()
+  store atomic i64 0, ptr %lock release, align 8
+  ret void
+}
+
+; Atomic read-modify-write operations publish state a reset could tear
+; (e.g. a cmpxchg acquiring a user spin lock).
+define void @test_atomic_rmw_unsafe(ptr %lock, ptr %counter) {
+entry:
+; CHECK-LABEL: @test_atomic_rmw_unsafe
+; CHECK: call i32 @{{.*}}setjmp
+; CHECK-NEXT: store atomic ptr %cancel_ucontext, ptr %reset_ctx_ptr release
+; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: cmpxchg ptr %lock, i64 0, i64 1 acq_rel monotonic
+; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: atomicrmw add ptr %counter, i64 1 seq_cst
+; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: ret void
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %result = call i32 @julia.cancellation_point()
+  %acq = cmpxchg ptr %lock, i64 0, i64 1 acq_rel monotonic, align 8
+  %old = atomicrmw add ptr %counter, i64 1 seq_cst, align 8
+  ret void
+}
+
 !0 = !{}

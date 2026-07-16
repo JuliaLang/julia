@@ -38,6 +38,13 @@ static bool hasResetSafeMetadata(Instruction *I) {
     return I->getMetadata("julia.reset_safe") != nullptr;
 }
 
+// Mark an instruction created by this pass as reset-safe, so the unsafe-point
+// walk does not treat the pass's own reset_ctx bookkeeping as program state
+// that a reset could tear.
+static void setResetSafeMetadata(Instruction *I) {
+    I->setMetadata("julia.reset_safe", MDNode::get(I->getContext(), {}));
+}
+
 namespace {
 
 struct CancellationLowering {
@@ -197,6 +204,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
         Value *null_ptr0 = ConstantPointerNull::get(cast<PointerType>(PtrTy));
         StoreInst *unpub = Builder.CreateAlignedStore(null_ptr0, reset_ctx_ptr, Align(sizeof(void*)));
         unpub->setOrdering(AtomicOrdering::Release);
+        setResetSafeMetadata(unpub);
 
         // A cancellation point is also a GC safepoint: code that polls for
         // cancellation in a hot loop must not starve a stop-the-world request.
@@ -211,11 +219,11 @@ bool CancellationLowering::runOnFunction(Function &F) {
         // buffer's own frame address) distinguishes it from the sp == 0
         // handler flavor published around foreign calls with a cancellation
         // handler (see the delivery dispatch in the signal handlers). Atomic
-        // monotonic so the unsafe-point walk below does not treat it as a
-        // publication-invalidating store.
+        // monotonic since the signal handler reads it from another thread.
         Value *sp_val = Builder.CreatePtrToInt(UContextBuf, T_size);
         StoreInst *sp_store = Builder.CreateAlignedStore(sp_val, UContextBuf, Align(alignof(jl_reset_ctx_t)));
         sp_store->setOrdering(AtomicOrdering::Monotonic);
+        setResetSafeMetadata(sp_store);
 
         // Call setjmp on the ctx.uc_mcontext field.
         // Use the platform-specific setjmp function name defined in julia.h
@@ -232,6 +240,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
         // the buffer contents are visible before the pointer).
         StoreInst *store = Builder.CreateAlignedStore(UContextBuf, reset_ctx_ptr, Align(sizeof(void*)));
         store->setOrdering(AtomicOrdering::Release);
+        setResetSafeMetadata(store);
 
         // Replace uses and remove the intrinsic
         CI->replaceAllUsesWith(SetjmpCall);
@@ -257,14 +266,19 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 continue;
             }
 
-            // Check for stores (but skip the reset_ctx stores we just created)
+            // Check for stores (the reset_ctx stores we just created carry
+            // the reset_safe metadata). Atomic stores are unsafe points like
+            // plain ones: a reset delivered around e.g. a lock-release store
+            // would leave the lock owned forever.
             if (auto *SI = dyn_cast<StoreInst>(&I)) {
-                if (!hasResetSafeMetadata(SI)) {
-                    // Skip atomic stores (including reset_ctx stores we just created)
-                    if (SI->isAtomic())
-                        continue;
+                if (!hasResetSafeMetadata(SI))
                     UnsafePoints.push_back(SI);
-                }
+            }
+            // Atomic read-modify-write operations publish state a reset
+            // could tear (e.g. a cmpxchg acquiring a user spin lock).
+            else if (isa<AtomicCmpXchgInst>(&I) || isa<AtomicRMWInst>(&I)) {
+                if (!hasResetSafeMetadata(&I))
+                    UnsafePoints.push_back(&I);
             }
             // Check for calls (but not debug intrinsics, lifetime markers, etc.)
             else if (auto *CI = dyn_cast<CallInst>(&I)) {
@@ -326,6 +340,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
         Value *null_ptr = ConstantPointerNull::get(cast<PointerType>(PtrTy));
         StoreInst *store = Builder.CreateAlignedStore(null_ptr, reset_ctx_ptr, Align(sizeof(void*)));
         store->setOrdering(AtomicOrdering::Release);
+        setResetSafeMetadata(store);
     }
 
     // Insert reset_ctx = NULL before all return instructions
@@ -341,6 +356,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                 IRBuilder<> Builder(RI);
                 StoreInst *store = Builder.CreateAlignedStore(null_ptr, reset_ctx_ptr, Align(sizeof(void*)));
                 store->setOrdering(AtomicOrdering::Release);
+                setResetSafeMetadata(store);
                 ++ResetCtxClearsInserted;
             }
         }
