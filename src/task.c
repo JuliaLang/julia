@@ -1874,12 +1874,18 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
     //    holders raise this; the counter would leak and permanently disable
     //    finalizers on this thread);
     //  - the victim is in a signal-deferral region (sigatomic; this also
-    //    covers the inference entry point).
+    //    covers the inference entry point);
+    //  - the victim is inside the scheduler's sleep transition
+    //    (sleep_check_state != not_sleeping): abandonment bypasses the
+    //    JL_CATCH in jl_task_get_next that would restore the sleep state
+    //    and running count, so the rescue task would re-enter the
+    //    scheduler with sleep bookkeeping still claimed by the victim.
     if (ct != t ||
         ptls2->locks.len != 0 ||
         ptls2->in_finalizer ||
         ptls2->finalizers_inhibited != 0 ||
         ptls2->defer_signal != 0 ||
+        jl_atomic_load_relaxed(&ptls2->sleep_check_state) != 0 || // 0 == not_sleeping
         jl_atomic_load_relaxed(&jl_uv_mutex.owner) == ct) {
         jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_REFUSED);
         return 0;
