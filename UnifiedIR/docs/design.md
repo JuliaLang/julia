@@ -1288,6 +1288,29 @@ region extracted as a standalone method IR. The worked examples (the
 julia#15276 zoo) are in `docs/closures.md`; `demo/capture_zoo.jl` is the
 runnable differential.
 
+**The late pipeline (implemented, experimental): typed IR carries closure
+regions.** `Compiler.Unified.typed_region_ir!` consumes the backend's
+pre-materialization region IR and runs the inference port extended in
+place (`infer_closure!` in the same frame fixpoint — no second engine, no
+λ-lattice element): deferred bodies are typed "as if" (value captures SSA;
+cell captures the content join; params joined over visible call sites,
+declared/`Any` for escapees), shared-cell contents are a structural
+fixpoint over every `cell_set` site home and deferred (the same monotone
+accumulator and widening escalator as frame cells), and a call whose
+callee def is a visible `closure` op takes the body's return-type join and
+effects mask. NO typed containers are produced: a nominal closure's field
+cannot be typed, because any later assignment in the closure body could
+read an updated world table inference knows nothing about — that
+optimization is reserved for the late-generated closures of the `await`
+mechanism (§5.6), which never outlive their inference world. Refinement is
+gated accordingly: an ESCAPING closure (any use besides call-callee
+position) degrades its params and poisons every cell it captures (reads
+`Any` — an untyped mutable capture field is settable by any holder), and a
+`latestworld` barrier that may execute after creation makes the closure
+unrefinable outright (§5.8 world-split discipline; the barrier check
+reuses the capture criterion-(b) position machinery). Poisoned cells still
+compute their joins — diagnostics now, the await consumer later.
+
 Still eager/fallback in v1 (per-construct, to `convert_closures`):
 recursive self-capture keeps the shared-cell fallback (matching stock's
 Box'd self-reference; the `rec` binder is design question #5), multi-method

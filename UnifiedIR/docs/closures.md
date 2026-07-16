@@ -249,3 +249,80 @@ Box allocation and one indirection on every shared-capture closure (see
   bodies, …) bail per-lambda to the stock syntactic verdicts —
   `UnsupportedForm` is a legitimate exit, never a mis-lowering. The merge
   analysis likewise refuses whole frames containing `@label`/`@goto`.
+
+## The late pipeline: inferring what lowering leaves untyped
+
+Runtime containers stay untyped by design. Typing a generic closure's field
+is not possible: **"any later assignment in the closure body could read an
+updated world table that we know nothing about, so we don't know what the
+type is gonna be. That kind of optimization only works on the
+late-generated closures from the await mechanism."** A nominal closure type
+is world-persistent — a typed field would bake an inference-world fact into
+it, and a semantically legal later-world store would throw instead of
+proceeding. Typed layouts are therefore reserved for late-generated
+closures (`await`'s per-specialization continuations, §5.6), which never
+outlive their inference world.
+
+What CAN be typed, soundly, is the in-world dataflow.
+`Compiler.Unified.typed_region_ir!` (the experimental late pipeline)
+consumes the backend's PRE-materialization region IR — real §5.7 `closure`
+ops and residual `cell_shared` cells, after the capture-decision fixpoint —
+and runs unified inference extended with four pieces (no λ-lattice
+element):
+
+- **Deferred descent.** A closure body is typed "as if", inside the
+  enclosing frame's fixpoint: value captures are SSA (fixed values), cell
+  captures read the content join, params come from the join of argtypes
+  over visible call sites (declared/`Any` for escapees). The walk runs
+  behind a refinement barrier (creation-time flow facts are invalid at call
+  time) with rettype/effects isolated (a body `return` binds to the
+  closure; deferred effects surface at call sites, not the creation site —
+  §3.3).
+- **Shared-cell content fixpoint.** Every store to the variable is
+  syntactically present in the enclosing IR — only the method body can name
+  the local — so the content type is a join over ALL `cell_set` sites, home
+  and deferred alike, in the same monotone accumulator (and under the same
+  widening escalator) the engine already uses for frame cells.
+  Self-referential stores (`x = x + 1`) iterate to a fixpoint. Maybe-undef
+  affects definedness, not the type: the `cell_isdefined` /
+  `throw_undef_if_not` guards pass through untouched.
+- **Call-site result refinement.** A call whose callee operand's def is a
+  visible `closure` op takes the body's inferred return-type join and the
+  body's effects mask. Arity-incompatible calls of a visible closure are
+  `Union{}` (guaranteed throw — dispatch arity is fixed at definition, and
+  later-added methods are invisible without a world barrier).
+- **The escape/world discipline** — what keeps the in-world answer sound:
+  - a closure value that flows anywhere but the callee position of a call
+    ESCAPES: its params degrade to declared/`Any`, and every cell it
+    captures is *poisoned* — the materialized closure's untyped mutable
+    capture fields are settable by any holder, so poisoned-cell reads are
+    `Any` even when every visible store is monomorphic (the joins are still
+    computed, for diagnostics and the future await consumer — they are just
+    never used for refinement);
+  - a `latestworld` barrier that may execute after a closure's creation
+    (same position machinery as capture criterion (b): forward order +
+    reach, shared loops always hazardous) makes the closure *world-shifted*:
+    no refinement of any kind — its body may run against a newer
+    method/binding table (§5.8). Redefinition within a world stays covered
+    by the ordinary invalidation contract, like all inference.
+
+The payoff is the class lowering cannot type: zoo5b's undeclared counter
+(`x = 0; inc = () -> (x = x + 1); inc(); inc(); inc(); x`) — `Core.Box` at
+runtime, `Any` in stock inference — infers `Int64` end-to-end (the cell
+join converges `Const(0) ∨ Int64 → Int64`, `inc()` refines to `Int64`, the
+home read follows). The declared-type counter (zoo5) infers the same way,
+with the declared type arriving structurally through the emitted
+`convert`/`typeassert` store funnels rather than through any lowering-side
+type fact.
+
+Honest limits (v1): a never-called, non-escaping closure's stores still
+join (walk-everything conservatism); splatted closure calls
+(`Core._apply_iterate`) count as escapes; closure values crossing `cfg`
+block boundaries travel through cells/block args and get no callee
+refinement; recursive local functions self-capture through a shared cell
+whose content is the closure value (`Any`) — calls through it are opaque;
+`isa`/typeassert refinements never attach to shared cells (a visible call
+in between may store); the engine-wide `latestworld` coarseness for
+straight-line home code predates this pipeline and is unchanged. No
+materialization happens in the pipeline: differentials interpret the
+region IR itself (closure ops execute natively as `UClosure`s).
