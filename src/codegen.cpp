@@ -3549,6 +3549,13 @@ static Value *julia_bpart_flagp(jl_codectx_t &ctx, jl_binding_partition_t *bpart
     if (jl_generating_output())
         jl_temporary_root(ctx, (jl_value_t*)bpart);
     Value *bpartv = literal_pointer_val(ctx, (jl_value_t*)bpart);
+    // The partition is a GC object kept alive by its binding, so the whole struct is
+    // dereferenceable; mark the pointer load so the guard's flag load off it can be
+    // speculated -- and hence hoisted out of a loop -- even when a preceding access's
+    // null check makes it only conditionally reached (safepoint-quiescence read side).
+    if (auto *li = dyn_cast<LoadInst>(bpartv))
+        maybe_mark_load_dereferenceable(li, /*can_be_null*/false,
+                sizeof(jl_binding_partition_t), alignof(jl_binding_partition_t));
     return emit_ptrgep(ctx, bpartv, offsetof(jl_binding_partition_t, retype_flags));
 }
 
@@ -3698,7 +3705,12 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     // observed to clear, so the flagged form would gain nothing).
     if (ty != (jl_value_t*)jl_any_type) {
         jl_binding_partition_t *bpart = rkp.leaf_partition;
-        BasicBlock *coldBB = emit_retype_guard(ctx, bpart, PARTITION_FLAG_RETYPE_READ);
+        // EXPERIMENT (safepoint-quiescence read side): a plain, unfenced, hoistable
+        // guard. Under safepoint quiescence the flag cannot flip while this thread
+        // runs between safepoints, so the read needs no fence to order its value load
+        // before the flag check, and the guard (one flag test) may be hoisted/
+        // unswitched out of a loop over the access.
+        BasicBlock *coldBB = emit_retype_guard_quiescent(ctx, bpart, PARTITION_FLAG_RETYPE_READ);
         BasicBlock *fastBB = ctx.builder.GetInsertBlock();
         ctx.builder.SetInsertPoint(coldBB);
         emit_typecheck(ctx, v, ty, "getglobal");
