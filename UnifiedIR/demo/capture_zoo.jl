@@ -21,6 +21,18 @@ using JuliaLowering
 using InteractiveUtils
 
 const ZOO = raw"""
+# 0. THE julia#15276 function (abmult, also the manual's "performance of
+#    captured variable" example): the argument is reassigned before the
+#    closure exists, so stock's assigned-once test boxes it — but every
+#    store precedes the creation, so the mem2reg criterion proves a value
+#    capture through the if-join. No `let r = r` workaround needed.
+function abmult(r::Int)
+    if r < 0
+        r = -r
+    end
+    f = x -> x * r
+    return f
+end
 # 1. assigned in both if-arms before capture: the join is a single value
 function zoo1(c)
     local x
@@ -145,7 +157,7 @@ println("== capture decisions and inferred return types ==")
 trunc26(x) = (t = string(x); length(t) > 25 ? t[1:22] * "..." : t)
 println(rpad("case", 8), rpad("stock boxes", 13), rpad("stock rt", 26),
         rpad("ours rt", 26), "our closure fields")
-for (name, tt) in [(:zoo1, (Bool,)), (:zoo2, (Float64,)), (:zoo3, ()),
+for (name, tt) in [(:abmult, (Int,)), (:zoo1, (Bool,)), (:zoo2, (Float64,)), (:zoo3, ()),
                    (:zoo3b, ()), (:zoo4, (Int,)), (:zoo5, ()), (:zoo5b, ()),
                    (:zoo6, (Bool,)), (:zoo7, (Bool,))]
     fs = getglobal(ZStock, name)
@@ -168,6 +180,8 @@ end
 println("\n== execution differential (stock vs ours; must MATCH) ==")
 ndiff = 0
 for (label, run) in [
+    ("abmult(-3)(2)", M -> M.abmult(-3)(2)),   # the issue function: 6
+    ("abmult(5)(7)", M -> M.abmult(5)(7)),
     ("zoo1(true)",   M -> M.zoo1(true)),
     ("zoo1(false)",  M -> M.zoo1(false)),
     ("zoo2(4.0)",    M -> M.zoo2(4.0)),
@@ -269,6 +283,15 @@ end
 const BENCH = raw"""
 @noinline apply_it(f) = f()
 @noinline call_n(f, n) = (for i in 1:n; f(i); end; nothing)
+function bench_abmult(n)        # THE issue function, called in a hot loop
+    if n < 0; n = -n; end
+    f = x -> x * n
+    s = 0
+    for i in 1:n
+        s = s ⊻ f(i)            # xor keeps LLVM from closed-forming the loop
+    end
+    s
+end
 function bench_join(n)          # zoo1 shape in a hot loop (escaping closure)
     local x
     if n > 0; x = n; else; x = -n; end
@@ -302,20 +325,23 @@ end
 Base.include_string(ZStock, BENCH, "bench.jl")
 JuliaLowering.include_string(ZOurs, BENCH, "bench.jl")
 
+const BENCH_SINK = Ref{Any}(0)  # consume results: a discarded, provably
+                                # effect-free loop is dead code once it
+                                # infers, and ours infers
 function bench(f, n)
-    f(n)                        # compile
+    BENCH_SINK[] = f(n)         # compile
     best = Inf
     for _ in 1:5
-        t = @elapsed f(n)
+        t = @elapsed (BENCH_SINK[] = f(n))
         best = min(best, t)
     end
     return best
 end
 
-alloc_of(f, n) = (f(n); @allocated f(n))
+alloc_of(f, n) = (BENCH_SINK[] = f(n); @allocated (BENCH_SINK[] = f(n)))
 
 println("\n== microbenchmarks (n = 1_000_000, best of 5) ==")
-for name in (:bench_join, :bench_counter, :bench_mutcap)
+for name in (:bench_abmult, :bench_join, :bench_counter, :bench_mutcap)
     n = 1_000_000
     fs = getglobal(ZStock, name)
     fo = getglobal(ZOurs, name)
