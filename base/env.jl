@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const exe_handle = Base.OncePerProcess{Ptr{Cvoid}}() do
+    ccall(:dlopen, Ptr{Cvoid}, (Ptr{Cchar}, Cint), C_NULL, RTLD_LAZY)
+end;
+
+
 if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
@@ -58,7 +63,16 @@ else # !windows
     if Sys.isapple()
         _environ() = unsafe_load(ccall(:_NSGetEnviron, Ptr{Ptr{Cstring}}, ()))
     else
-        _environ() = unsafe_load(cglobal(:environ, Ptr{Cstring}))
+        function _environ()
+            environ = unsafe_load(cglobal(:environ, Ptr{Cstring}))
+            if environ == C_NULL
+                # We are being loaded with RTLD_DEEPBIND and environ is NULL
+                # So we try to get the executable.
+                environ_ptr = ccall(:dlsym, Ptr{Ptr{Cchar}}, (Ptr{Cvoid}, Cstring), exe_handle, "environ")
+                environ = environ_ptr[]
+            end
+            return environ
+        end
     end
 
     function access_env(onError::Function, var::AbstractString)
