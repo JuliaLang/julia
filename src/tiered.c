@@ -824,7 +824,7 @@ static struct { jl_method_t *m; int8_t reasons; } tier_loop_cache[TIER_LOOP_BUCK
 // NB: NOT JL_NOTSAFEPOINT — it may jl_uncompress_ir (allocates) and run
 // body_attributes (may resolve bindings). Callers must hold a GC root for `ci`
 // (jl_mi_cache_insert does).
-JL_DLLEXPORT int jl_tier_ci_avoid_interp(jl_code_instance_t *ci)
+JL_DLLEXPORT int jl_tier_ci_avoid_interp(jl_code_instance_t *ci) JL_CANSAFEPOINT
 {
     if (ci == NULL)
         return 1;
@@ -835,7 +835,7 @@ JL_DLLEXPORT int jl_tier_ci_avoid_interp(jl_code_instance_t *ci)
     return jl_tier_method_avoid_interp(mi->def.method);
 }
 
-JL_DLLEXPORT int jl_tier_method_avoid_interp(jl_method_t *m)
+JL_DLLEXPORT int jl_tier_method_avoid_interp(jl_method_t *m) JL_CANSAFEPOINT
 {
     return jl_tier_method_interp_reasons(m) != 0;
 }
@@ -930,7 +930,7 @@ JL_DLLEXPORT int jl_tier_method_interp_reasons(jl_method_t *m) JL_CANSAFEPOINT
 static _Atomic(uint64_t) tier_root_count[TIER_ROOT_BUCKETS];
 static _Atomic(uint64_t) tier_root_ns[TIER_ROOT_BUCKETS];
 
-JL_DLLEXPORT void jl_tier_note_root_infer(jl_method_t *m, uint64_t ns)
+JL_DLLEXPORT void jl_tier_note_root_infer(jl_method_t *m, uint64_t ns) JL_CANSAFEPOINT
 {
     int bucket = 7;
     if (m != NULL) {

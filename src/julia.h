@@ -291,7 +291,7 @@ typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_
 extern jl_call_t jl_fptr_interpret_call JL_CANSAFEPOINT;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_interpret_call_addr;
 jl_value_t *jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
-                            jl_method_instance_t *mi, size_t world, int allow_rescue);
+                            jl_method_instance_t *mi, size_t world, int allow_rescue) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
