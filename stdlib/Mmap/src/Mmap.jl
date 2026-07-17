@@ -55,6 +55,9 @@ mutable struct SharedMemory <: IO
     end
 end
 
+Serialization.serialize(::AbstractSerializer, ::SharedMemory) =
+    error("SharedMemory cannot currently be serialized. Send a Future/RemoteChannel referencing it instead.")
+
 # platform-specific mmap utilities
 if Sys.isunix()
 
@@ -68,9 +71,6 @@ const F_SETFD       = Cint(2)
 const FD_CLOEXEC    = Cint(1)
 
 gethandle(io::IO) = fd(io)
-
-Serialization.serialize(::AbstractSerializer, ::SharedMemory) =
-    error("SharedMemory cannot currently be serialized. Send a Future/RemoteChannel referencing it instead.")
 
 function shm_open(name, oflags, permissions)
     # On macOS, `shm_open()` is a variadic function, so to properly match
