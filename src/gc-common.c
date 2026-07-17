@@ -308,6 +308,16 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
     jl_rng_split(ct->rngState, finalizer_rngState);
 
+    // Isolate the error state like the RNG state: finalizers run at
+    // effectively arbitrary points, so their errno/GetLastError side effects
+    // must not leak into the interrupted code (jl_gc_collect happens to
+    // restore around its own finalizer run, but deferred flushes via
+    // jl_gc_run_pending_finalizers have no such wrapper).
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+
     // This releases the finalizers lock.
     int8_t was_in_finalizer = ct->ptls->in_finalizer;
     ct->ptls->in_finalizer = !finalizers_thread;
@@ -315,6 +325,10 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     ct->ptls->in_finalizer = was_in_finalizer;
     arraylist_free(&copied_list);
 
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
     memcpy(&ct->rngState[0], &save_rngState[0], sizeof(save_rngState));
 }
 
