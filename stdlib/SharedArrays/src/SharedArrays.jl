@@ -624,7 +624,9 @@ end
     unshare!(S::SharedArray)
 
 Release resources from workers and make the memory no longer available to them. The array is still usable
-on the main process.
+on the host process.
+
+Must be called from the process that created `S`; calling it from any other process throws an `ArgumentError`.
 
 !!! note
      Relying on the finalizers to perform cleanup requires multiple GC rounds to release the underlying
@@ -632,8 +634,10 @@ on the main process.
 """
 function unshare!(S::SharedArray)
     if !isempty(S.pids)
+        myid() == S.id.whence || throw(ArgumentError("unshare! must be called from the process that created the SharedArray"))
         @sync begin
             for i in eachindex(S.pids)
+                S.pids[i] == myid() && continue
                 @async remotecall_wait(S.pids[i], S.refs[i]) do r
                     Mmap.munmap!(local_array_by_id(r))
                 end
@@ -641,6 +645,7 @@ function unshare!(S::SharedArray)
         end
         empty!(S.pids)
         empty!(S.refs)
+        return nothing
     end
 end
 

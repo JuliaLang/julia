@@ -431,6 +431,73 @@ end
         @test all(S .== 42)
     end
 
+    @testset "unshare! on a single-process SharedArray leaves it intact" begin
+        S = SharedArray{Int64}(10, 10; pids=[id_me])
+        segname = S.segname
+        fill!(S, 7)
+        @test procs(S) == [id_me]
+
+        unshare!(S)
+        @test isempty(procs(S))
+        @test all(S .== 7)
+
+        @static if Sys.islinux()
+            # the sole process is also the host, so its mapping must survive
+            ismapped, _ = shmem_mapped(segname)
+            @test ismapped
+        end
+    end
+
+    @testset "unshare! on a 2-process SharedArray created by the host leaves the host's copy intact" begin
+        S = SharedArray{Int64}(10, 10; pids=[id_me, id_other])
+        segname = S.segname
+        fill!(S, 7)
+
+        unshare!(S)
+        @test isempty(procs(S))
+        @test all(S .== 7)
+
+        @static if Sys.islinux()
+            ismapped, _ = shmem_mapped(segname)
+            @test ismapped
+            @test !remotecall_fetch(shmem_mapped, id_other, segname)[1]
+        end
+    end
+
+    @testset "unshare! throws when called from a process other than the host" begin
+        host = id_other
+        @everywhere global _unshare_host_S = nothing
+        remotecall_wait(host) do
+            global _unshare_host_S = SharedArray{Int64}((10, 10); pids=[id_me, host])
+            fill!(Main._unshare_host_S, 7)
+            nothing
+        end
+        S = remotecall_fetch(() -> Main._unshare_host_S, host)
+        segname = S.segname
+        @test all(S .== 7) # main's own local mapping works before unshare!
+
+        # main did not create S, so unshare! must refuse and leave everything untouched
+        @test_throws ArgumentError unshare!(S)
+        @test procs(S) == [id_me, host]
+        @test all(S .== 7)
+
+        @static if Sys.islinux()
+            ismapped, _ = shmem_mapped(segname)
+            @test ismapped
+        end
+
+        # unshare! succeeds when called from the actual host process
+        @test remotecall_fetch(host) do
+            unshare!(Main._unshare_host_S)
+            isempty(procs(Main._unshare_host_S)) && all(Main._unshare_host_S .== 7)
+        end
+
+        remotecall_wait(host) do
+            global _unshare_host_S = nothing
+            nothing
+        end
+    end
+
     @testset "Remote creation's close-via-future path releases resources" begin
         p = id_other
         segname = "/jltestremoteclose" * randstring(8)
