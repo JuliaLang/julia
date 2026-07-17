@@ -69,7 +69,7 @@ else # !windows
                 # We are being loaded with RTLD_DEEPBIND and environ is NULL
                 # So we try to get the executable.
                 environ_ptr = ccall(:dlsym, Ptr{Ptr{Cchar}}, (Ptr{Cvoid}, Cstring), exe_handle, "environ")
-                environ = environ_ptr[]
+                environ = unsafe_load(environ_ptr)
             end
             return environ
         end
