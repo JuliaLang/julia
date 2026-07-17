@@ -2,8 +2,12 @@
 
 # These tests assert on the shape and attribution of profiled stacks and on
 # sampled allocation counts, which assume the workloads run compiled; suspend
-# tier-0 parking for the file (resumed at the end).
+# tier-0 parking for the file (resumed at the end). Also quiesce the tier
+# worker: an active worker thread is sampled too, so thread-filtered prints
+# and sleep-state assertions would see its samples.
 ccall(:jl_tier_suspend_parking, Cvoid, ())
+ccall(:jl_tier_quiesce, Cvoid, ())
+ccall(:jl_tier_drain, Cvoid, ())
 
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
@@ -565,4 +569,5 @@ include("allocs.jl")
 end
 include("heapsnapshot_reassemble.jl")
 
+ccall(:jl_tier_resume, Cvoid, ())
 ccall(:jl_tier_resume_parking, Cvoid, ())
