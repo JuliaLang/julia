@@ -232,7 +232,7 @@ arraylist_t *jl_get_all_tasks_arraylist(void) JL_NOTSAFEPOINT
     return tasks;
 }
 
-JL_DLLEXPORT jl_array_t *jl_live_tasks(void)
+JL_DLLEXPORT jl_array_t *jl_live_tasks(void) JL_CANSAFEPOINT
 {
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);

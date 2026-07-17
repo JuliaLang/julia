@@ -149,6 +149,10 @@ function iterate(A::Reverse, state=(reverse(eachindex(A.itr)),))
     (A.itr[idx], (state[1], itrs))
 end
 
+# Guard against invalidations due to spurious `Reverse{Union{}}` intersections
+iterate(r::Reverse{Union{}}) = throw(ArgumentError("cannot iterate a reversed iterator of type Union{}"))
+iterate(r::Reverse{Union{}}, state) = throw(ArgumentError("cannot iterate a reversed iterator of type Union{}"))
+
 reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
 reverse(G::Generator) = Generator(G.f, reverse(G.iter))
 reverse(r::Reverse) = r.itr

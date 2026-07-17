@@ -117,7 +117,7 @@ static int jl_parameter_includes_bottom(jl_value_t *t1)
 
 // ----- Type Signature Subtype Testing ----- //
 
-static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_t n)
+static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_t n) JL_CANSAFEPOINT
 {
     size_t i;
     for (i = 0; i < n; i++) {
@@ -152,7 +152,7 @@ static int jl_subtype_anytype(jl_value_t *a) JL_NOTSAFEPOINT
     }
 }
 
-static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t *sig, size_t lensig, int va)
+static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t *sig, size_t lensig, int va) JL_CANSAFEPOINT
 {
     size_t i;
     if (va) lensig -= 1;
@@ -235,7 +235,7 @@ static inline int sig_match_leaf(jl_value_t *arg1, jl_value_t **args, jl_value_t
 }
 
 static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n, jl_value_t **sig,
-                                   int va, size_t lensig)
+                                   int va, size_t lensig) JL_CANSAFEPOINT
 {
     // NOTE: This function is a performance hot spot!!
     size_t i;
@@ -325,7 +325,7 @@ static _Atomic(jl_value_t*) *mtcache_hash_lookup_bp(jl_genericmemory_t *cache JL
     return pml;
 }
 
-static void mtcache_hash_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val)
+static void mtcache_hash_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val) JL_CANSAFEPOINT
 {
     int inserted = 0;
     jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
@@ -354,7 +354,7 @@ static jl_typemap_t *mtcache_hash_lookup(jl_genericmemory_t *cache JL_PROPAGATES
 
 // ----- Sorted Type Signature Lookup Matching ----- //
 
-static int jl_typemap_memory_visitor(jl_genericmemory_t *a, jl_typemap_visitor_fptr fptr, void *closure)
+static int jl_typemap_memory_visitor(jl_genericmemory_t *a, jl_typemap_visitor_fptr fptr, void *closure) JL_CANSAFEPOINT
 {
     size_t i, l = a->length;
     _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*) a->ptr;
@@ -377,7 +377,7 @@ static int jl_typemap_memory_visitor(jl_genericmemory_t *a, jl_typemap_visitor_f
 
 
 // calls fptr on each jl_typemap_entry_t in cache in sort order, until fptr returns false
-static int jl_typemap_node_visitor(jl_typemap_entry_t *ml, jl_typemap_visitor_fptr fptr, void *closure)
+static int jl_typemap_node_visitor(jl_typemap_entry_t *ml, jl_typemap_visitor_fptr fptr, void *closure) JL_CANSAFEPOINT
 {
     while (ml != (void*)jl_nothing) {
         if (!fptr(ml, closure))
@@ -483,7 +483,7 @@ static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam
     return 0;
 }
 
-static int concrete_intersects(jl_value_t *t, jl_value_t *ty, int8_t tparam)
+static int concrete_intersects(jl_value_t *t, jl_value_t *ty, int8_t tparam) JL_CANSAFEPOINT
 {
     if (ty == (jl_value_t*)jl_any_type) // easy case: Any always matches
         return 1;
@@ -496,7 +496,7 @@ static int concrete_intersects(jl_value_t *t, jl_value_t *ty, int8_t tparam)
 // tparam bit 0 is ::Type{T} (vs. T)
 // tparam bit 1 is typename(T) (vs. T)
 static int jl_typemap_intersection_memory_visitor(jl_genericmemory_t *a, jl_value_t *ty, int8_t tparam,
-                                                 int8_t offs, struct typemap_intersection_env *closure)
+                                                 int8_t offs, struct typemap_intersection_env *closure) JL_CANSAFEPOINT
 {
     JL_GC_PUSH1(&a);
     size_t i, l = a->length;
@@ -568,7 +568,7 @@ exit:
 
 // calls fptr on each jl_typemap_entry_t in cache in sort order
 // for which type ∩ ml->type != Union{}, until fptr return false
-static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure)
+static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure) JL_CANSAFEPOINT
 {
     // slow-path scan everything in ml
     // mark this `register` because (for branch prediction)
@@ -878,7 +878,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
 */
 static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
         jl_typemap_entry_t *ml,
-        struct jl_typemap_assoc *search)
+        struct jl_typemap_assoc *search) JL_CANSAFEPOINT
 {
     jl_value_t *types = search->types;
     JL_GC_PROMISE_ROOTED(types);
@@ -936,7 +936,7 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
 }
 
 static jl_typemap_entry_t *jl_typemap_entry_lookup_by_type(
-        jl_typemap_entry_t *ml, struct jl_typemap_assoc *search)
+        jl_typemap_entry_t *ml, struct jl_typemap_assoc *search) JL_CANSAFEPOINT
 {
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
         if (search->world < jl_atomic_load_relaxed(&ml->min_world) || search->world > jl_atomic_load_relaxed(&ml->max_world))
@@ -1319,9 +1319,9 @@ static unsigned jl_typemap_list_count_locked(jl_typemap_entry_t *ml) JL_NOTSAFEP
     return count;
 }
 
-static void jl_typemap_level_insert_(jl_typemap_t *map, jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs);
+static void jl_typemap_level_insert_(jl_typemap_t *map, jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs) JL_CANSAFEPOINT;
 
-static jl_typemap_level_t *jl_new_typemap_level(void)
+static jl_typemap_level_t *jl_new_typemap_level(void) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_typemap_level_t *cache =
@@ -1338,10 +1338,10 @@ static jl_typemap_level_t *jl_new_typemap_level(void)
 
 static void jl_typemap_memory_insert_(
         jl_typemap_t *map, _Atomic(jl_genericmemory_t*) *pcache, jl_value_t *key, jl_typemap_entry_t *newrec,
-        jl_value_t *parent, int8_t tparam, int8_t offs, jl_value_t *doublesplit);
+        jl_value_t *parent, int8_t tparam, int8_t offs, jl_value_t *doublesplit) JL_CANSAFEPOINT;
 
 static jl_value_t *jl_method_convert_list_to_cache(
-        jl_typemap_t *map, jl_typemap_entry_t *ml, int8_t tparam, int8_t offs, int8_t doublesplit)
+        jl_typemap_t *map, jl_typemap_entry_t *ml, int8_t tparam, int8_t offs, int8_t doublesplit) JL_CANSAFEPOINT
 {
     _Atomic(jl_genericmemory_t*) dblcache = (jl_genericmemory_t*)jl_an_empty_memory_any;
     jl_typemap_level_t *cache = doublesplit ? NULL : jl_new_typemap_level();
@@ -1400,7 +1400,7 @@ static void jl_typemap_list_insert_(
 // n.b. tparam value only needed if doublesplit is set (for jl_method_convert_list_to_cache)
 static void jl_typemap_insert_generic(
         jl_typemap_t *map, _Atomic(jl_value_t*) *pml, jl_value_t *parent,
-        jl_typemap_entry_t *newrec, int8_t tparam, int8_t offs, jl_value_t *doublesplit)
+        jl_typemap_entry_t *newrec, int8_t tparam, int8_t offs, jl_value_t *doublesplit) JL_CANSAFEPOINT
 {
     jl_value_t *ml = jl_atomic_load_relaxed(pml);
     if (jl_is_genericmemory(ml)) {

@@ -28,8 +28,8 @@ volatile int profile_running = 0;
 volatile int profile_all_tasks = 0;
 static const uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
-JL_DLLEXPORT void jl_profile_stop_timer(void);
-JL_DLLEXPORT int jl_profile_start_timer(uint8_t);
+JL_DLLEXPORT void jl_profile_stop_timer(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_profile_start_timer(uint8_t) JL_NOTSAFEPOINT;
 
 ///////////////////////
 // Utility functions //
@@ -111,7 +111,13 @@ static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 #endif
 }
 
-int jl_lock_profile(void)
+void jl_lock_profile(void)
+{
+    int got = jl_trylock_profile();
+    assert(got); (void)got;
+}
+
+int jl_trylock_profile(void)
 {
     uintptr_t held = jl_lock_profile_rd_held();
     if (held == -1)
@@ -135,7 +141,7 @@ int jl_lock_profile(void)
     return 1;
 }
 
-JL_DLLEXPORT void jl_unlock_profile(void)
+JL_DLLEXPORT void jl_unlock_profile(void) JL_NO_SAFEPOINT_ANALYSIS
 {
     uintptr_t held = jl_lock_profile_rd_held();
     assert(held && held != -1);
@@ -164,7 +170,7 @@ int jl_lock_profile_wr(void)
     return 1;
 }
 
-void jl_unlock_profile_wr(void)
+void jl_unlock_profile_wr(void) JL_NO_SAFEPOINT_ANALYSIS
 {
     uintptr_t held = jl_lock_profile_rd_held();
     assert(held == -1);
@@ -210,7 +216,7 @@ static int *profile_get_randperm(int size)
 }
 
 
-JL_DLLEXPORT int jl_profile_is_buffer_full(void)
+JL_DLLEXPORT int jl_profile_is_buffer_full(void) JL_NOTSAFEPOINT
 {
     // Declare buffer full if there isn't enough room to sample even just the
     // thread metadata and one max-sized frame. The `+ 6` is for the two block
@@ -221,7 +227,7 @@ JL_DLLEXPORT int jl_profile_is_buffer_full(void)
 #define PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE (0)
 #define PROFILE_TASK_DEBUG_FORCE_STOP_THREAD_FAILURE (0)
 
-void jl_profile_task(void)
+void jl_profile_task(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
 {
     if (jl_profile_is_buffer_full()) {
         // Buffer full: Delete the timer
@@ -268,7 +274,7 @@ collect_backtrace:
         return;
     }
 
-    jl_record_backtrace_result_t r = {0, INT16_MAX};
+    jl_record_backtrace_result_t r = {0, -1};
     jl_bt_element_t *bt_data_prof = (jl_bt_element_t*)(profile_bt_data_prof + profile_bt_size_cur);
     size_t bt_size_max = profile_bt_size_max - profile_bt_size_cur - 1;
     if (t == NULL || PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE) {
@@ -289,7 +295,7 @@ collect_backtrace:
     profile_bt_size_cur += r.bt_size;
 
     // store threadid but add 1 as 0 is preserved to indicate end of block
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = (uintptr_t)r.tid + 1;
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = r.tid == -1 ? -1 : (uintptr_t)r.tid + 1;
 
     // store task id (never null)
     profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)t;
@@ -420,7 +426,7 @@ JL_DLLEXPORT void jl_set_peek_cond(uv_async_t *cond)
     JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
 }
 
-static void jl_check_profile_autostop(void)
+static void jl_check_profile_autostop(void) JL_NOTSAFEPOINT
 {
     if (profile_show_peek_cond_loc != NULL && profile_autostop_time != -1.0 && jl_hrtime() > profile_autostop_time) {
         profile_autostop_time = -1.0;
@@ -683,7 +689,7 @@ static void jl_fprint_sigill(ios_t *s, void *_ctx)
 // this is generally quite a foolish operation, but does free you up to do
 // arbitrary things on this stack now without worrying about corrupt state that
 // existed already on it
-void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
+void jl_task_frame_noreturn(jl_task_t *ct)
 {
     jl_set_safe_restore(NULL);
     if (ct) {
@@ -693,8 +699,10 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         // Force all locks to drop. Is this a good idea? Of course not. But the alternative would probably deadlock instead of crashing.
         jl_ptls_t ptls = ct->ptls;
         small_arraylist_t *locks = &ptls->locks;
+#ifndef __clang_safetyanalysis__
         for (size_t i = locks->len; i > 0; i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
+#endif
         locks->len = 0;
         ptls->in_pure_callback = 0;
         ptls->in_finalizer = 0;

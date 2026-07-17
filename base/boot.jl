@@ -302,6 +302,18 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       end
       end)
 
+# like `Typeof`, but yields the equality kind `Type{x}` for type values; used
+# by lowering to spell the callee self-type of method definitions, so equal
+# UnionAll spellings share the constructor method they define
+function TypeEqOf end
+ccall(:jl_toplevel_eval_in, Any, (Any, Any),
+      Core, quote
+      (f::typeof(TypeEqOf))(x) = begin
+          $(_expr(:meta,:nospecialize,:x))
+          isa(x,Type) ? Type{x} : typeof(x)
+      end
+      end)
+
 function iterate end
 
 macro nospecialize(x)

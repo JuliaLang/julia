@@ -307,7 +307,7 @@ function log_record_id(_module, level, message, log_kws)
             push!(_log_record_ids, id)
             return id
         end
-        h += 1
+        h +%= 1
     end
 end
 

@@ -295,6 +295,25 @@ function divrem(a::Integer, b::Integer, r::Union{typeof(RoundUp),
         (d, a - d * b)
     end
 end
+# For fixed-width integers the floored/ceiled quotient times `b` lies in
+# `(a - b, a + b]` and so wraps on valid inputs (e.g. `fld(typemin(Int), 3)*3`);
+# the remainder is correct only through wrap-cancellation.  The truncated
+# quotient satisfies `|d*b| <= |a|`, so the RoundToZero branch cannot overflow
+# and stays on checkable operators.
+function divrem(a::T, b::T, r::Union{typeof(RoundUp),
+                                     typeof(RoundDown),
+                                     typeof(RoundToZero)}) where T<:BitSigned
+    if r === RoundToZero
+        d = div(a, b)
+        (d, a - d * b)
+    elseif r === RoundDown
+        d = fld(a, b)
+        (d, a -% d *% b)
+    elseif r === RoundUp
+        d = div(a, b, r)
+        (d, a -% d *% b)
+    end
+end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))
     (q, r) = divrem(x, y)
     if x >= 0

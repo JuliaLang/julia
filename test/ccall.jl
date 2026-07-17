@@ -1741,6 +1741,23 @@ let
     @test dest[] == (7,8,9)
 end
 
+# issue #61320: the size argument of memcpy/memset/memmove may be declared with a
+# signed integer type; this should be reinterpreted as Csize_t rather than
+# treated as an ABI violation (which previously compiled to a trap)
+let
+    A = Vector{Int64}(undef, 4)
+    B = Int64[1, 2, 3, 4]
+    ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Int), A, B, sizeof(Int64) * 4)
+    @test A == B
+
+    ccall(:memmove, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Int), A, B, sizeof(Int64) * 4)
+    @test A == B
+
+    C = Vector{UInt8}(undef, 8)
+    ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Int), C, 0xab % Cint, length(C))
+    @test all(==(0xab), C)
+end
+
 
 # @ccall macro
 using Base: ccall_macro_parse, ccall_macro_lower
@@ -2010,6 +2027,15 @@ cglobal_non_static2() = cglobal(the_sym)
 
 @test_throws TypeError cglobal_non_static1()
 @test_throws TypeError cglobal_non_static2()
+
+# a ccall pointer argument whose unsafe_convert returns a small union must
+# extract and convert the Ptr and typecheck the other options
+struct UnionConvertPtr; flag::Cint; end
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, w::UnionConvertPtr) = w.flag == 1 ? C_NULL : (w.flag == 2 ? Ptr{Cint}(1) : (:x,))
+union_convert_ptr(w) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Ptr{Cvoid},), w)
+@test union_convert_ptr(UnionConvertPtr(1)) == C_NULL
+@test union_convert_ptr(UnionConvertPtr(2)) == Ptr{Cvoid}(1)
+@test_throws TypeError union_convert_ptr(UnionConvertPtr(3))
 
 @generated function generated_world_counter()
     return :($(Base.get_world_counter()))

@@ -29,6 +29,10 @@ Language changes
     (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
     unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
     ([#33136], [#62141]).
+  - Introduced explicitly wrapping arithmetic operators `+%`, `-%`, `*%` to annotate arithmetic operations
+    that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
+    operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
+    in the default operators ([#50790]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -90,6 +94,11 @@ New library functions
   without checking for valid string indices.
 - `Base.unannotate(::AnnotatedString)` returns the underlying un-annotated string
   of the input string.
+- `Base.include_mapexprs(mod)` is an unexported, public function returning the non-identity
+  `mapexpr` functions used by `include(mapexpr, …)` calls while loading the package rooted at
+  `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
+  image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
+  original transform when an `include(mapexpr, …)`-ed file is edited.
 
 New library features
 --------------------
@@ -154,6 +163,8 @@ Standard library changes
 #### InteractiveUtils
 
 * `less`/`@less` and `edit`/`@edit` are now supported for documented variables ([#53539]).
+* A new `@methods` macro lists all methods applicable to a call expression, using the types of
+  the given arguments, e.g. `@methods isvalid('a', 1)` or `@methods isvalid(::AbstractChar, ::Integer)`.
 
 #### Dates
 

@@ -17,6 +17,7 @@ JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, size_t *num, void 
 JL_DLLEXPORT void jl_get_llvm_gv_inits_fallback(void *native_code, size_t *num, void **inits) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, size_t *num_els, jl_code_instance_t *fns) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_cis_fallback(void *native_code, size_t *num_els, jl_code_instance_t **CIs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_mi_cache_order_fallback(void *native_code, size_t *num_els, jl_code_instance_t **CIs) UNAVAILABLE
 
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
@@ -103,7 +104,7 @@ JL_DLLEXPORT void jl_jit_unregister_ci_fallback(jl_code_instance_t *ci)
 }
 
 JL_DLLEXPORT void *jl_create_native_fallback(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis) UNAVAILABLE
-JL_DLLEXPORT void *jl_emit_native_fallback(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) UNAVAILABLE
+JL_DLLEXPORT void *jl_emit_native_fallback(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {

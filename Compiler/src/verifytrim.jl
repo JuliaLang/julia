@@ -441,7 +441,10 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         item = codeinfos[i]
         if item isa CodeInstance
             push!(inspected, item)
-            if item.owner === nothing && item.min_world <= this_world <= item.max_world
+            # Trim inference caches its results under the `:trim` symbol as the owner (see
+            # `typeinf_ext_toplevel`), so the `CodeInstance`s handed to us here carry that
+            # owner rather than `nothing`.
+            if item.owner === :trim && item.min_world <= this_world <= item.max_world
                 mi = get_ci_mi(item)
                 if mi === item.def
                     caches[mi] = item

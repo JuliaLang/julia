@@ -456,6 +456,10 @@ end
 -(x::Number, y::Number) = -(promote(x,y)...)
 /(x::Number, y::Number) = /(promote(x,y)...)
 
++%(x::Number, y::Number) = +%(promote(x,y)...)
+*%(x::Number, y::Number) = *%(promote(x,y)...)
+-%(x::Number, y::Number) = -%(promote(x,y)...)
+
 """
     ^(x, y)
 

@@ -25,7 +25,7 @@ jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 static htable_t libMap;
 static jl_mutex_t libmap_lock;
 
-void *jl_get_library_(const char *f_lib, int throw_err)
+void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT
 {
     if (f_lib == NULL)
         return jl_RTLD_DEFAULT_handle;
@@ -97,7 +97,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
 // miscellany
 
 JL_DLLEXPORT
-jl_value_t *jl_get_JIT(void)
+jl_value_t *jl_get_JIT(void) JL_CANSAFEPOINT
 {
     const char *JITName = "ORCJIT";
     return jl_pchar_to_string(JITName, strlen(JITName));

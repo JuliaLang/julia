@@ -385,7 +385,7 @@ test_once_undef(ARefxy{UndefComplex{UndefComplex{Any}}})
 
 @test_throws ErrorException @macroexpand @atomic foo()
 @test_throws ErrorException @macroexpand @atomic foo += bar
-@test_throws ErrorException @macroexpand @atomic foo += bar
+@test_throws ErrorException @macroexpand @atomic foo +%= bar
 @test_throws ErrorException @macroexpand @atomic foo = bar
 @test_throws ErrorException @macroexpand @atomic foo()
 @test_throws ErrorException @macroexpand @atomic foo(bar)
@@ -409,6 +409,13 @@ let a = ARefxy(1, -1)
     @test 5 === @atomic a.x += 2
     @test 4 === @atomic :monotonic a.x -= 1
     @test 12 === @atomic :monotonic a.x *= 3
+
+    # Wrapping update operators lower through the atomic update path too.
+    @test typemax(Int) === @atomic :monotonic a.x = typemax(Int)
+    @test typemin(Int) === @atomic a.x +%= 1
+    @test typemax(Int) === @atomic :monotonic a.x -%= 1
+    @test -2 === @atomic :monotonic a.x *%= 2
+    @test 12 === @atomic :monotonic a.x = 12
 
     @test 12 === @atomic a.x
     @test (12 => 13) === @atomic a.x + 1
@@ -475,6 +482,13 @@ function _test_atomic_get_set_swap_modify(T, x, y, z)
             end
         end
     end
+end
+
+let mem = AtomicMemory{Int}(undef, 1)
+    @atomic mem[1] = typemax(Int)
+    @test (@atomic mem[1] +%= 1) == typemin(Int)
+    @test (@atomic :monotonic mem[1] -%= 1) == typemax(Int)
+    @test (@atomic :monotonic mem[1] *%= 2) == -2
 end
 
 function _test_atomic_setonce_replace(T, initial, desired)
@@ -792,6 +806,12 @@ let a = @__MODULE__
     @test 5 === @atomic a.x += 2
     @test 4 === @atomic :monotonic a.x -= 1
     @test 12 === @atomic :monotonic a.x *= 3
+
+    @test typemax(Int) === @atomic :monotonic a.x = typemax(Int)
+    @test typemin(Int) === @atomic a.x +%= 1
+    @test typemax(Int) === @atomic :monotonic a.x -%= 1
+    @test -2 === @atomic :monotonic a.x *%= 2
+    @test 12 === @atomic :monotonic a.x = 12
 
     @test 12 === @atomic a.x
     @test (12 => 13) === @atomic a.x + 1

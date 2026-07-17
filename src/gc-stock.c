@@ -346,7 +346,7 @@ STATIC_INLINE void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, si
     }
 }
 
-STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
+STATIC_INLINE void maybe_collect(jl_ptls_t ptls) JL_CANSAFEPOINT
 {
     if (jl_atomic_load_relaxed(&gc_heap_stats.heap_size) >= jl_atomic_load_relaxed(&gc_heap_stats.heap_target) || jl_gc_debug_check_other()) {
         jl_gc_collect(JL_GC_AUTO);
@@ -428,7 +428,7 @@ STATIC_INLINE void jl_batch_accum_free_size(jl_ptls_t ptls, uint64_t sz) JL_NOTS
 // big value list
 
 // Size includes the tag and the tag field is undefined on return (must be set before the next GC safepoint)
-STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz)
+STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz) JL_CANSAFEPOINT
 {
     maybe_collect(ptls);
     size_t offs = offsetof(bigval_t, header);
@@ -716,7 +716,7 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 
 // Size includes the tag and the tag is not cleared!!
 STATIC_INLINE jl_value_t *jl_gc_small_alloc_inner(jl_ptls_t ptls, int offset,
-                                          int osize)
+                                          int osize) JL_CANSAFEPOINT
 {
     // Use the pool offset instead of the pool address as the argument
     // to workaround a llvm bug.
@@ -2338,7 +2338,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 if (gc_cblist_task_scanner) {
                     int16_t tid = jl_atomic_load_relaxed(&ta->tid);
                     gc_invoke_callbacks(jl_gc_cb_task_scanner_t, gc_cblist_task_scanner,
-                                        (ta, tid != -1 && ta == gc_all_tls_states[tid]->root_task));
+                                        (ta, tid >= 0 && tid < gc_n_threads && ta == gc_all_tls_states[tid]->root_task));
                 }
         #ifdef COPY_STACKS
                 void *stkbuf = ta->ctx.stkbuf;
@@ -3672,10 +3672,10 @@ void jl_start_gc_threads(void)
         t->tid = i;
         t->barrier = &thread_init_done;
         if (i == nthreads - 1 && jl_n_sweepthreads == 1) {
-            uv_thread_create(&uvtid, jl_concurrent_gc_threadfun, t);
+            uv_thread_create(&uvtid, jl_concurrent_gc_threadfun, t); // NOLINT[julia-first-decl-annotations]
         }
         else {
-            uv_thread_create(&uvtid, jl_parallel_gc_threadfun, t);
+            uv_thread_create(&uvtid, jl_parallel_gc_threadfun, t); // NOLINT[julia-first-decl-annotations]
         }
     }
 }

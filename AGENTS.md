@@ -82,6 +82,7 @@ If your change fixes one or more issues, use the syntax "Fixes #" at the end of 
 
 When referencing external GitHub PRs or issues, use proper GitHub interlinking format (e.g., `owner/repo#123` for PRs/issues).
 When fixing CI failures, include the link to the specific CI failure in the commit message.
+Always quote macro names in backticks in commit messages and PR titles/bodies (e.g. `` `@inbounds` ``, not @inbounds), so GitHub does not notify the unrelated user with that handle.
 
 When creating pull requests:
 1. If the pull request consists of one commit only, use the body of the commit for the body of the pull request.
