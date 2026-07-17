@@ -410,11 +410,14 @@ cd(@__DIR__) do
                 if load1 > ncpu * oversub_factor
                     names = sort!(collect(keys(running_tests)))
                     # Load, capacity and usage all in the same unit (100% == one core) so
-                    # "owned" (this process plus its workers) can be compared to total load.
+                    # "owned" can be compared to total load. "owned" is this process's whole
+                    # subtree (workers, their subprocesses, and serial node1-test
+                    # subprocesses this process spawns directly), not just the tracked
+                    # per-test workers, which are empty during the serial node1 phase.
                     pcts = [haskey(running_test_pids, t) ? subtree_pct(running_test_pids[t]) : nothing for t in names]
                     self_d = get(cputime, getpid(), 0.0) - get(prev_cputime, getpid(), 0.0)
                     self_pct = 100 * max(self_d, 0.0) / dt
-                    owned = self_pct + sum(p for p in pcts if p !== nothing; init=0.0)
+                    owned = subtree_pct(getpid())
                     active = join((p === nothing ? t : string(t, " (", round(Int, p), "%)")
                         for (t, p) in zip(names, pcts)), ", ")
                     @lock print_lock begin
