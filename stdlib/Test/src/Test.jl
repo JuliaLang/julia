@@ -2755,7 +2755,10 @@ a definite value, so reading such a parameter in the method body throws an
 
 The check is a conservative static approximation of how subtyping assigns
 static parameters, so a reported method may in practice never see the calls
-that leave the parameter unbound. Methods are not reported when those calls
+that leave the parameter unbound. A parameter that some matching call can
+pin only as `T == Union{}`, by absorbing a `Union` arm (such as
+`f(::Vector{Union{Nothing, T}}) where {T<:Real}` called with a
+`Vector{Nothing}`), is deliberately reported as well. Methods are not reported when those calls
 are provably shadowed by a more specific method: a definition like
 `f(::Type{Union{}})` covers the `Union{}` argument that would leave `T`
 unbound in `f(::Type{<:T}) where {T}`, and a zero-argument fallback covers
