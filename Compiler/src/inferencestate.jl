@@ -353,6 +353,13 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     # values through every method that takes `interp`).
     interp::AbstractInterpreter
 
+    # Cached `InferenceParams(interp).max_methods`. The constructor specializes on
+    # the concrete interpreter type, so reading this field from abstractly-compiled
+    # code avoids a method-table backedge on the extensible AbstractInterpreter
+    # interface (extending which, e.g. by loading REPL/JET, would otherwise
+    # invalidate large parts of the compiled compiler).
+    max_methods::Int
+
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState{I}(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
                                interp::I) where {I<:AbstractInterpreter}
@@ -434,7 +441,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
-            interp)
+            interp, InferenceParams(interp).max_methods)
 
         # some more setups
         if !iszero(cache_mode & CACHE_MODE_GLOBAL)
@@ -472,6 +479,7 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
     frameid::Int
     parentid::Int
     interp::AbstractInterpreter # see comment on `InferenceState.interp`
+    const max_methods::Int # see comment on `InferenceState.max_methods`
 
     function IRInterpretationState{I}(
             interp::I, spec_info::SpecInfo, ir::IRCode,
@@ -502,7 +510,8 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
         callstack = Union{InferenceState{I},IRInterpretationState{I}}[]
         return new{I}(spec_info, ir, mi, valid_worlds,
                 curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
-                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, interp)
+                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, interp,
+                InferenceParams(interp).max_methods)
     end
 end
 
@@ -1307,7 +1316,11 @@ end
 function get_max_methods(interp::AbstractInterpreter, sv::AbsIntState)
     mmax = get_max_methods_for_module(sv)
     mmax !== nothing && return mmax
-    return get_max_methods(interp)
+    # Read the value cached at state construction instead of going through
+    # `InferenceParams(interp)`: this keeps abstractly-compiled callers free of
+    # backedges on the extensible AbstractInterpreter interface (see the comment
+    # on `InferenceState.max_methods`).
+    return sv.max_methods
 end
 get_max_methods(interp::AbstractInterpreter) = InferenceParams(interp).max_methods
 
