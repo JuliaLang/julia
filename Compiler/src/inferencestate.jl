@@ -758,7 +758,9 @@ function constrains_var(var::TypeVar, @nospecialize(t), covariant::Bool, nonempt
         return !covariant || var.lb === Union{}
     end
     while t isa UnionAll
-        if covariant && t.var.lb === Union{}
+        # the cheap occurs-check gates the `pin_grade` body traversal: both
+        # consumers below can only succeed when `var` occurs in the bound
+        if covariant && t.var.lb === Union{} && has_typevar(t.var.ub, var)
             pin = pin_grade(t.var, t.body, nonempty_vararg)
             if pin == PIN_TYPEOF && constrains_var(var, t.var.ub, true)
                 return true
