@@ -385,6 +385,21 @@ cd(@__DIR__) do
                             "% (self ", round(Int, self_pct), "%, ", length(names), "/",
                             nworkers(), " workers active)",
                             isempty(active) ? "" : "; running: $active", "\n"; color=:yellow)
+                        # TEMP DIAGNOSTIC (revert after CI): why does macOS x86 read 0%?
+                        rawhead = try
+                            split(read(`ps -A -o pid= -o ppid= -o time=`, String), '\n')[1:min(end,3)]
+                        catch e
+                            ["<ps error: $e>"]
+                        end
+                        printstyled("DBG snapshot=", length(cputime), " procs; self pid=", getpid(),
+                            " in=", haskey(cputime, getpid()), " t=", get(cputime, getpid(), -1.0),
+                            "; ps head: ", join(strip.(rawhead), " | "), "\n"; color=:cyan)
+                        for t in names
+                            pid = get(running_test_pids, t, 0)
+                            printstyled("DBG  ", t, " pid=", pid, " in=", haskey(cputime, pid),
+                                " t=", get(cputime, pid, -1.0), " prev=", get(prev_cputime, pid, -1.0),
+                                " nkids=", length(get(children, pid, Int[])), "\n"; color=:cyan)
+                        end
                     end
                 end
                 prev_cputime = cputime
