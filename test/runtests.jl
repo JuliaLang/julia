@@ -39,13 +39,19 @@ function parse_cpu_time(s)
     return total + days * 86400
 end
 
-# One `ps` snapshot: cumulative CPU time (seconds, user+sys) and parent link for every
-# process. `pcpu` is unreliable on some platforms (e.g. FreeBSD reports ~0), so callers
-# difference successive snapshots to derive utilization. Empty on Windows or if `ps` fails.
+# Cumulative CPU time (seconds, user+sys) and parent link for every process, so callers
+# can difference successive snapshots to derive utilization. `pcpu` is avoided because it
+# is unreliable on some platforms (e.g. FreeBSD reports ~0). Empty on Windows.
 function proc_cpu_times()
+    Sys.iswindows() && return (Dict{Int,Float64}(), Dict{Int,Vector{Int}}())
+    # macOS CI runs under a sandbox that forbids spawning `ps` (EPERM), so use libproc
+    # syscalls there; elsewhere one `ps` snapshot is simplest and works.
+    return Sys.isapple() ? proc_cpu_times_libproc() : proc_cpu_times_ps()
+end
+
+function proc_cpu_times_ps()
     cputime = Dict{Int,Float64}()
     children = Dict{Int,Vector{Int}}()
-    Sys.iswindows() && return (cputime, children)
     try
         # Separate `-o` flags (not `-o pid=,ppid=,time=`): some BSD `ps` treat the text
         # after the first `=` as a header, collapsing the output to one column.
@@ -61,6 +67,38 @@ function proc_cpu_times()
             push!(get!(children, ppid, Int[]), pid)
         end
     catch
+    end
+    return (cputime, children)
+end
+
+# macOS: gather CPU time and parent links via libproc, without spawning a subprocess.
+# proc_pid_rusage reports user+system time in mach ticks (converted with mach_timebase);
+# proc_pidinfo(PROC_PIDTBSDINFO) yields the parent pid. Both only succeed for own-uid
+# processes, which is all we need. Empty if the timebase or pid list is unavailable.
+function proc_cpu_times_libproc()
+    cputime = Dict{Int,Float64}()
+    children = Dict{Int,Vector{Int}}()
+    tb = Ref((UInt32(0), UInt32(0)))
+    ccall(:mach_timebase_info, Cint, (Ptr{Cvoid},), tb) == 0 || return (cputime, children)
+    numer, denom = tb[]
+    (numer == 0 || denom == 0) && return (cputime, children)
+    scale = numer / denom / 1e9  # mach ticks -> seconds (numer/denom is 1/1 on Intel)
+    npids = ccall(:proc_listallpids, Cint, (Ptr{Cvoid}, Cint), C_NULL, 0)
+    npids > 0 || return (cputime, children)
+    pids = Vector{Cint}(undef, npids + 128)  # headroom for pids spawned since the count
+    got = ccall(:proc_listallpids, Cint, (Ptr{Cint}, Cint), pids, sizeof(Cint) * length(pids))
+    rb = Ref(ntuple(_ -> UInt64(0), 16))  # rusage_info_v0: uuid[16B], ri_user_time, ri_system_time, ...
+    bi = Ref(ntuple(_ -> UInt32(0), 40))  # proc_bsdinfo: pbi_ppid is the 5th uint32
+    for i in 1:min(got, length(pids))
+        pid = Int(pids[i])
+        pid > 0 || continue
+        if ccall(:proc_pid_rusage, Cint, (Cint, Cint, Ptr{Cvoid}), pid, 0, rb) == 0
+            t = rb[]
+            cputime[pid] = (t[3] + t[4]) * scale
+        end
+        if ccall(:proc_pidinfo, Cint, (Cint, Cint, UInt64, Ptr{Cvoid}, Cint), pid, 3, 0, bi, 160) > 0
+            push!(get!(children, Int(bi[][5]), Int[]), pid)
+        end
     end
     return (cputime, children)
 end
@@ -385,21 +423,6 @@ cd(@__DIR__) do
                             "% (self ", round(Int, self_pct), "%, ", length(names), "/",
                             nworkers(), " workers active)",
                             isempty(active) ? "" : "; running: $active", "\n"; color=:yellow)
-                        # TEMP DIAGNOSTIC (revert after CI): why does macOS x86 read 0%?
-                        rawhead = try
-                            split(read(`ps -A -o pid= -o ppid= -o time=`, String), '\n')[1:min(end,3)]
-                        catch e
-                            ["<ps error: $e>"]
-                        end
-                        printstyled("DBG snapshot=", length(cputime), " procs; self pid=", getpid(),
-                            " in=", haskey(cputime, getpid()), " t=", get(cputime, getpid(), -1.0),
-                            "; ps head: ", join(strip.(rawhead), " | "), "\n"; color=:cyan)
-                        for t in names
-                            pid = get(running_test_pids, t, 0)
-                            printstyled("DBG  ", t, " pid=", pid, " in=", haskey(cputime, pid),
-                                " t=", get(cputime, pid, -1.0), " prev=", get(prev_cputime, pid, -1.0),
-                                " nkids=", length(get(children, pid, Int[])), "\n"; color=:cyan)
-                        end
                     end
                 end
                 prev_cputime = cputime
