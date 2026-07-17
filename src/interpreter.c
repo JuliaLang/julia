@@ -577,7 +577,7 @@ static int interp_stack_low(jl_task_t *ct) JL_NOTSAFEPOINT
     return (&here - total_start) < limit;
 }
 
-static jl_value_t *eval_try_osr(interpreter_state *s, size_t target0)
+static jl_value_t *eval_try_osr(interpreter_state *s, size_t target0) JL_CANSAFEPOINT
 {
     if (!jl_tier_enabled() || s->src == NULL || s->mi == NULL)
         return NULL;
@@ -939,7 +939,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 // interpreter entry points
 
 jl_value_t *NOINLINE jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
-                                     jl_method_instance_t *mi, size_t world, int allow_rescue)
+                                     jl_method_instance_t *mi, size_t world, int allow_rescue) JL_CANSAFEPOINT
 {
     interpreter_state *s;
     // Tiered compilation probe (counts toward promotion). Gated on

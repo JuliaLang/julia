@@ -409,7 +409,10 @@ void JuliaTaskDispatcher::shutdown() {
 extern "C" __declspec(dllimport) void __stdcall Sleep(unsigned long dwMilliseconds);
 #endif
 
-void JuliaTaskDispatcher::work_until(future_base &F) {
+// The body drops and retakes the dispatch lock manually (the Windows sliced
+// poll and the stall dump), which the capability analysis cannot follow; the
+// declaration keeps the JL_CANSAFEPOINT contract for callers.
+void JuliaTaskDispatcher::work_until(future_base &F) JL_NO_SAFEPOINT_ANALYSIS {
   bool WasCooperative = InCooperativeContext;
   InCooperativeContext = true;
   dispatcher_sigdefer_guard defer;

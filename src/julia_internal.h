@@ -902,8 +902,8 @@ int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile) JL
 #define JL_TIER_REJECT_FORCED    0x08
 #define JL_TIER_REJECT_GENERATED 0x10
 #define JL_TIER_REJECT_NOSOURCE  0x20
-JL_DLLEXPORT int jl_code_info_interp_reject_reasons(jl_code_info_t *src);
-JL_DLLEXPORT int jl_code_info_avoid_interp(jl_code_info_t *src);
+JL_DLLEXPORT int jl_code_info_interp_reject_reasons(jl_code_info_t *src) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_code_info_avoid_interp(jl_code_info_t *src) JL_CANSAFEPOINT;
 jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
@@ -2216,7 +2216,7 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 
 JL_DLLIMPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec) JL_CANSAFEPOINT;
 JL_DLLIMPORT int jl_compile_codeinst(jl_code_instance_t *unspec) JL_CANSAFEPOINT;
-JL_DLLEXPORT void jl_tier_drain(void);
+JL_DLLEXPORT void jl_tier_drain(void) JL_CANSAFEPOINT;
 JL_DLLIMPORT void jl_emit_codeinsts_to_jit(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len) JL_CANSAFEPOINT;
 
 typedef struct {
@@ -2290,18 +2290,18 @@ JL_DLLEXPORT uint32_t jl_tier_get_threshold(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_set_threshold(uint32_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_init(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_start_worker(void);
-JL_DLLEXPORT void jl_tier_stop_worker(void);
+JL_DLLEXPORT void jl_tier_stop_worker(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_method_instance_t *jl_tier_worker_pop(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_tier_quiesce(void);
+JL_DLLEXPORT void jl_tier_quiesce(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_tier_resume(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_suspend_parking(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_resume_parking(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_tier_parking_suspended(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_tier_promote(jl_method_instance_t *mi);
+JL_DLLEXPORT int jl_tier_promote(jl_method_instance_t *mi) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_tier_in_promotion(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_tier_ci_avoid_interp(jl_code_instance_t *ci);
 JL_DLLEXPORT int jl_tier_method_avoid_interp(jl_method_t *m);
-JL_DLLEXPORT int jl_tier_method_interp_reasons(jl_method_t *m);
+JL_DLLEXPORT int jl_tier_method_interp_reasons(jl_method_t *m) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_tier_note_root_infer(jl_method_t *m, uint64_t ns);
 JL_DLLEXPORT void jl_tier_get_root_infer_stats(uint64_t *counts, uint64_t *ns);
 JL_DLLEXPORT void jl_tier_get_class_stats(uint64_t *compile, uint64_t *interp, uint64_t *unknown) JL_NOTSAFEPOINT;

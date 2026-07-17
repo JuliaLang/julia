@@ -382,7 +382,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 // `getproperty(<const module>, :name)` chains (lowering emits the latter for
 // dotted paths like `Core.Intrinsics.llvmcall`, which a plain GlobalRef
 // check misses).
-static jl_value_t *resolve_const_callee(jl_value_t *f JL_PROPAGATES_ROOT, jl_array_t *body JL_PROPAGATES_ROOT, int depth)
+static jl_value_t *resolve_const_callee(jl_value_t *f JL_PROPAGATES_ROOT, jl_array_t *body JL_PROPAGATES_ROOT, int depth) JL_CANSAFEPOINT
 {
     if (depth > 8)
         return NULL;
@@ -525,7 +525,7 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
 // optimizer unrolling constant-bound loops).
 // Bitmask variant: which attributes force compilation (JL_TIER_REJECT_* in
 // julia_internal.h); 0 = interp-eligible.
-JL_DLLEXPORT int jl_code_info_interp_reject_reasons(jl_code_info_t *src)
+JL_DLLEXPORT int jl_code_info_interp_reject_reasons(jl_code_info_t *src) JL_CANSAFEPOINT
 {
     // body_attributes/expr_attributes use jl_array_ptr_ref, valid only for an
     // Any-element (pointer) array — match jl_code_requires_compiler's contract.
@@ -539,7 +539,7 @@ JL_DLLEXPORT int jl_code_info_interp_reject_reasons(jl_code_info_t *src)
            (forced ? JL_TIER_REJECT_FORCED : 0);
 }
 
-JL_DLLEXPORT int jl_code_info_avoid_interp(jl_code_info_t *src)
+JL_DLLEXPORT int jl_code_info_avoid_interp(jl_code_info_t *src) JL_CANSAFEPOINT
 {
     return jl_code_info_interp_reject_reasons(src) != 0;
 }

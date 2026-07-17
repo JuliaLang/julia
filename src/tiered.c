@@ -421,7 +421,10 @@ static void tier_worker_unpark(void) JL_NOTSAFEPOINT
     uv_mutex_unlock(&ptls2->sleep_lock);
 }
 
-static void tier_worker_threadfun(void *arg)
+// The worker alternates GC-safe waiting and GC-unsafe promotion in a loop the
+// capability analysis cannot follow (adopt acquires the unsafe region; each
+// iteration releases and re-acquires it around the condvar wait).
+static void tier_worker_threadfun(void *arg) JL_NO_SAFEPOINT_ANALYSIS
 {
     (void)arg;
     jl_adopt_thread();
@@ -504,7 +507,7 @@ JL_DLLEXPORT void jl_tier_start_worker(void)
     // and JIT teardown never race a live worker.
 }
 
-JL_DLLEXPORT void jl_tier_stop_worker(void)
+JL_DLLEXPORT void jl_tier_stop_worker(void) JL_CANSAFEPOINT
 {
     if (!jl_atomic_load_relaxed(&tier_worker_running))
         return;
@@ -522,10 +525,14 @@ JL_DLLEXPORT void jl_tier_stop_worker(void)
     // GC-unsafe would deadlock stop-the-world.
     if (jl_atomic_exchange_relaxed(&tier_worker_running, 0)) {
         jl_task_t *ct = jl_get_current_task();
-        int8_t gc_state = ct ? jl_gc_safe_enter(ct->ptls) : 0;
-        uv_thread_join(&tier_worker_uvthread);
-        if (ct)
+        if (ct != NULL) {
+            int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+            uv_thread_join(&tier_worker_uvthread);
             jl_gc_safe_leave(ct->ptls, gc_state);
+        }
+        else {
+            uv_thread_join(&tier_worker_uvthread);
+        }
     }
 }
 
@@ -592,7 +599,7 @@ JL_DLLEXPORT int jl_tier_parking_suspended(void) JL_NOTSAFEPOINT
 // holders (e.g. `@allocated` measurements on several threads, or
 // serialization inside an already-paused region) each take and release
 // their own hold, and the worker resumes only when the last one releases.
-JL_DLLEXPORT void jl_tier_quiesce(void)
+JL_DLLEXPORT void jl_tier_quiesce(void) JL_CANSAFEPOINT
 {
     jl_atomic_fetch_add(&tier_pause, 1);
     if (!jl_atomic_load_acquire(&tier_initialized))
@@ -631,7 +638,7 @@ JL_DLLEXPORT void jl_tier_resume(void) JL_NOTSAFEPOINT
 // NOT wait for the asynchronous worker task here; instead we steal its
 // work, which guarantees forward progress even if the worker is busy on
 // an unrelated CI or has not been scheduled yet.
-JL_DLLEXPORT void jl_tier_drain(void)
+JL_DLLEXPORT void jl_tier_drain(void) JL_CANSAFEPOINT
 {
     if (!jl_atomic_load_acquire(&tier_initialized))
         return;
@@ -687,7 +694,7 @@ JL_DLLEXPORT int jl_tier_in_promotion(void) JL_NOTSAFEPOINT
 // retire: jl_compile_method_internal inserts a real native CodeInstance into
 // mi->cache and dispatch finds it from then on. The MI is reachable through the
 // (never-freed) method table, so the raw pointer from the queue is GC-rooted.
-JL_DLLEXPORT int jl_tier_promote(jl_method_instance_t *mi)
+JL_DLLEXPORT int jl_tier_promote(jl_method_instance_t *mi) JL_CANSAFEPOINT
 {
     if (mi == NULL)
         return 0;
@@ -837,7 +844,7 @@ JL_DLLEXPORT int jl_tier_method_avoid_interp(jl_method_t *m)
 // (0 = interp-eligible). The decision is a property of the method's lowered
 // body, identical across its type specializations. Callers must hold a GC
 // root for `m`.
-JL_DLLEXPORT int jl_tier_method_interp_reasons(jl_method_t *m)
+JL_DLLEXPORT int jl_tier_method_interp_reasons(jl_method_t *m) JL_CANSAFEPOINT
 {
     if (m == NULL)
         return JL_TIER_REJECT_NOSOURCE;
