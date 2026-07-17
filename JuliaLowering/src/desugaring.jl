@@ -2315,14 +2315,6 @@ end
 #-------------------------------------------------------------------------------
 # Expansion of function definitions
 
-# Expand `where` clause(s) of a function into (typevar_names, typevar_stmts) where
-# - `typevar_names` are the names of the type's type parameters
-# - `typevar_stmts` are a list of statements to define a `TypeVar` for each parameter
-#   name in `typevar_names`, with exactly one per `typevar_name`. Some of these
-#   may already have been emitted.
-# - `new_typevar_stmts` is the list of statements which needs to be emitted
-#   prior to uses of `typevar_names`.
-
 # (where (where x a b) c d) -> (x, [c d a b])
 function flatten_wheres(ex)
     tvs = SyntaxList(ex._graph)
@@ -2426,6 +2418,15 @@ function assign_sparams(ctx, tvs)
     out
 end
 
+function method_def_sparams(ctx, src, tvs)
+    out = SyntaxList(ctx)
+    for tv in tvs
+        @jl_assert kind(tv) === K"_typevar" tv
+        push!(out, @ast ctx tv [K"typevar" tv[1] bounds_to_typevar(ctx, tv)])
+    end
+    @ast ctx src [K"block" out...]
+end
+
 # Hack: Normally just (block ex body), but needs special handling due to
 # pre-quoted parts of generated function body, where we need to prepend
 # desugarable AST to macro AST.  Fortunately there are only two places (meta
@@ -2465,23 +2466,13 @@ function method_def_expr(ctx, src, mtable, sparams, argl, body,
     end
     # Needs to be done per method, not per function (may create ssavalues)
     arg_types = mapsyntax(a->expand_forms_2(ctx, a[2]), argl)
-    @ast ctx src [K"block"
-        # possible TODO: flisp assigns typevars to ssavalues and manually
-        # resolves them here instead of assigning to locals
-        assign_sparams(ctx, sparams)...
-        method_metadata := [K"call"(src) "svec"::K"core"
-            [K"call" "svec"::K"core" arg_types...]
-            [K"call" "svec"::K"core" mapindex(sparams, 1)...]
-            ::K"SourceLocation"(src[1])]
-        [K"method"
-            mtable
-            method_metadata
-            [K"lambda"(body, is_toplevel_thunk=false, toplevel_pure=false)
-                [K"block" mapindex(argl, 1)...]
-                [K"block" mapindex(sparams, 1)...]
-                expand_forms_2(ctx, body)
-                is_core_Any(rett) ? nothing : expand_forms_2(ctx, rett)]]
-        [K"removable" method_metadata]]
+    @ast ctx src [K"method" mtable
+        [K"call" "svec"::K"core" arg_types...]
+        [K"lambda"(body, is_toplevel_thunk=false, toplevel_pure=false)
+            [K"block" mapindex(argl, 1)...]
+            [K"block" mapindex(sparams, 1)...]
+            expand_forms_2(ctx, body)
+            is_core_Any(rett) ? nothing : expand_forms_2(ctx, rett)]]
 end
 
 function _untyped_arg(a)
@@ -2548,7 +2539,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @ast ctx src [K"block"
         [K"global" gen_name]
         [K"function_decl" gen_name]
-        [K"method_defs" gen_name gen_mdef]
+        [K"method_defs" gen_name [K"block"] gen_mdef]
         nongen_mdef]
 end
 
@@ -2605,6 +2596,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
             @ast ctx src [K"block"
                 [K"call" mapindex(passed, 1)... opt_defaults[i]]]
         end
+        # this function and method_def_expr need sp bounds because of this
         push!(methods, method_def_expr(
             ctx, src, mtable, used_typevars(passed, sparams),
             passed, wrapper_body))
@@ -2670,7 +2662,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
     end
     (kw_decls, kw_names, kw_syms, kw_defaults, restkw) = expand_kw_args(ctx, kws)
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
-    positional_sparams = used_typevars(pargl, sparams)
+    pos_sparams = used_typevars(pargl, sparams)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : mtable.name_val,
         mangled = string(startswith(n, '#') ? "" : "#kw_body#", n, "#")
@@ -2702,7 +2694,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
                 @ast ctx src [K"call" m1_name kw_names... rkw forward_pargl...])
         end
         method_def_expr(
-            ctx, src, mtable, positional_sparams, pargl,
+            ctx, src, mtable, pos_sparams, pargl,
             @ast(ctx, src, [K"block" [K"return" body2]]))
     end
     # (3) Core.kwcall(arg2::NamedTuple, pargl...) methods (one per optarg).
@@ -2791,16 +2783,16 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
             ]
             arg2 = @ast ctx arg2_name [K"::" arg2_name "NamedTuple"::K"core"]
             method_def_expr(
-                ctx, src, mtable, positional_sparams,
+                ctx, src, mtable, pos_sparams,
                 SyntaxList(arg1, arg2, pargl...), kwcall_body)
         end
     end
     @ast ctx src [K"block"
         [K"function_decl" m1_name]
         kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
-        [K"method_defs" m1_name mdefs1]
-        [K"method_defs" mtable mdefs2]
-        [K"method_defs" mtable mdefs3]
+        [K"method_defs" m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+        [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
+        [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
         mtable
     ]
 end
@@ -2907,7 +2899,7 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
             end
         end
     end
-    sparams = mapsyntax(x->typevar_bounds(ctx, x), wheres)
+    sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
         pos_va = @stm raw_args[end-1] begin
             [K"kw" [K"..." _] _...] -> true
@@ -2918,8 +2910,9 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     else
         @ast ctx src [K"block"
             (overlay || kind(mtable) === K"nothing") ? nothing : [K"function_decl" mtable]
-            [K"method_defs" mtable [K"block"
-                method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
+            [K"method_defs" mtable
+                method_def_sparams(ctx, src, sparams)
+                [K"block" method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
                 # TODO: overlay should return the method
                 [K"removable" mtable]]
     end
@@ -3044,8 +3037,8 @@ end
 
 # argument to where expression -> (_typevar name expanded_lb expanded_ub)
 # used, e.g. in all `sparams`, where flisp generally uses a list (name, lb, ub)
-function typevar_bounds(ctx, ex)
-    any = @ast ctx ex "Any"::K"core"
+function typevar_bounds(ex)
+    any = @ast ex._graph ex "Any"::K"core"
     (name, lb, ub) = bounds = @stm ex begin
         [K"Identifier"] -> (ex, any, any)
         [K"Placeholder"] -> (ex, any, any)
@@ -3054,7 +3047,7 @@ function typevar_bounds(ctx, ex)
         [K"<:" x ub] -> (x, any, ub)
         [K">:" x lb] -> (x, lb, any)
     end
-    @ast ctx ex [K"_typevar" name lb ub]
+    @ast ex._graph ex [K"_typevar" name lb ub]
 end
 
 function bounds_to_typevar(ctx, ex)
@@ -3119,7 +3112,7 @@ function expand_typevars(ctx, type_params)
     typevar_names = SyntaxList(ctx)
     typevar_stmts = SyntaxList(ctx)
     for param in type_params
-        bounds = typevar_bounds(ctx, param)
+        bounds = typevar_bounds(param)
         n = bounds[1]
         push!(typevar_names, n)
         push!(typevar_stmts, @ast ctx param [K"block"
@@ -3379,7 +3372,7 @@ function rewrite_ctor(ctx, ex, tname, global_tname, struct_typevars, field_types
                 rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres)
             body2 = _rewrite_ctor_new_calls(
                 ctx, body, global_tname,
-                mapsyntax(x->typevar_bounds(ctx, x), wheres),
+                mapsyntax(typevar_bounds, wheres),
                 struct_typevars, ctor_self, field_types)
             @ast ctx ex [K"function" call2 body2]
         end
@@ -3836,7 +3829,7 @@ function expand_struct_def(ctx, ex, docs)
             if !typevar_in_fields
                 typevar_in_bounds = any(type_params[i+1:end]) do param
                     # Check the bounds of subsequent type params
-                    (lb,ub) = let bounds = typevar_bounds(ctx, param)
+                    (lb,ub) = let bounds = typevar_bounds(param)
                         bounds[2], bounds[3]
                     end
                     # todo: flisp lowering tests `lb` here so we also do. But
@@ -3961,7 +3954,7 @@ end
 # Expand `where` syntax
 
 function expand_where(ctx, srcref, lhs, rhs)
-    bounds = typevar_bounds(ctx, rhs)
+    bounds = typevar_bounds(rhs)
     v = bounds[1]
     @ast ctx srcref [K"let"
         [K"block" [K"=" v bounds_to_typevar(ctx, bounds)]]

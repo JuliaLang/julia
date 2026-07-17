@@ -25,12 +25,12 @@ template <> struct future_value_storage<void> {
 struct JuliaTaskDispatcher : public TaskDispatcher {
     /// Forward declarations
     class future_base;
-    void dispatch(std::unique_ptr<Task> T) override;
+    void dispatch(std::unique_ptr<Task> T) override JL_CANSAFEPOINT; // NOLINT(julia-first-decl-annotations)
     void shutdown() override;
-    void work_until(future_base &F);
+    void work_until(future_base &F) JL_CANSAFEPOINT;
 
 protected:
-  void process_tasks(jl_unique_gcsafe_lock &Lock) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+  void process_tasks(jl_unique_gcsafe_lock &Lock) JL_CANSAFEPOINT_ENTER_LEAVE;
 
 private:
   /// C++ does not support non-static thread_local variables, so this needs to
@@ -85,7 +85,7 @@ public:
   bool valid() const JL_NOTSAFEPOINT { return state_ != nullptr; }
 
   /// Wait for the future to be ready, helping with task dispatch
-  void wait(JuliaTaskDispatcher &D) {
+  void wait(JuliaTaskDispatcher &D) JL_CANSAFEPOINT {
     // Keep helping with task dispatch until our future is ready
     if (!ready()) {
       D.work_until(*this);
@@ -174,7 +174,7 @@ public:
   /// Get the value, helping with task dispatch while waiting.
   /// This will destroy the underlying value, so this must be called exactly
   /// once, which returns the future to the initial state.
-  T get(JuliaTaskDispatcher &D) {
+  T get(JuliaTaskDispatcher &D) JL_CANSAFEPOINT {
     if (!valid())
       report_fatal_error("get() must only be called once, after get_promise()");
     wait(D);
@@ -349,7 +349,7 @@ private:
 
 }; // class JuliaTaskDispatcher
 
-void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
+void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-first-decl-annotations)
   if (!InCooperativeContext) {
     // Not inside work_until/process_tasks — run inline to prevent deadlock
     // with callers that block on std::future (e.g. LocalTrampolinePool::reenter).
@@ -396,12 +396,13 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
   InCooperativeContext = WasCooperative;
 }
 
-void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) {
+// not analyzed, since it cannot represent the native unlock (normally implies a notsafepoint_leave)
+void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) JL_NO_SAFEPOINT_ANALYSIS {
     while (!TaskQueue.empty()) {
         auto T = TaskQueue.pop_back_val();
 
         Lock.native.unlock();
-        T->run();
+        T->run(); // n.b. JL_CANCALLBACK
         Lock.native.lock();
 
         WorkFinishedCV.notify_all();
@@ -423,7 +424,7 @@ safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolLookupSet Symbols, LookupKind K = LookupKind::Static,
            SymbolState RequiredState = SymbolState::Ready,
-           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister) {
+           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister) JL_CANSAFEPOINT {
   JuliaTaskDispatcher::future<MSVCPExpected<SymbolMap>> PromisedFuture;
   auto NotifyComplete = [PromisedResult = PromisedFuture.get_promise()](Expected<SymbolMap> R) {
     PromisedResult.set_value(std::move(R));
@@ -437,7 +438,7 @@ Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready) {
+           SymbolState RequiredState = SymbolState::Ready) JL_CANSAFEPOINT {
   SymbolLookupSet Names({Name});
 
   if (auto ResultMap = safelookup(ES, SearchOrder, std::move(Names), LookupKind::Static,
@@ -452,13 +453,13 @@ safelookup(ExecutionSession &ES,
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready) {
+           SymbolState RequiredState = SymbolState::Ready) JL_CANSAFEPOINT {
   return safelookup(ES, makeJITDylibSearchOrder(SearchOrder), Name, RequiredState);
 }
 
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, StringRef Name,
-           SymbolState RequiredState = SymbolState::Ready) {
+           SymbolState RequiredState = SymbolState::Ready) JL_CANSAFEPOINT {
   return safelookup(ES, SearchOrder, ES.intern(Name), RequiredState);
 }

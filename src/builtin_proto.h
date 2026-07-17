@@ -79,7 +79,7 @@ extern "C" {
     XX(has_free_typevars,"has_free_typevars")
 
 #define DECLARE_BUILTIN(cname,jlname) \
-    JL_CALLABLE(jl_f_##cname);
+    JL_CALLABLE(jl_f_##cname) JL_CANSAFEPOINT;
 JL_BUILTIN_FUNCTIONS(DECLARE_BUILTIN)
 #undef DECLARE_BUILTIN
 

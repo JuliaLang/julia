@@ -392,7 +392,7 @@ int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
     return 0;
 }
 
-static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align, int asfield)
+static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align, int asfield) JL_CANSAFEPOINT
 {
     if (jl_is_uniontype(ty)) {
         unsigned na = union_isinlinable(((jl_uniontype_t*)ty)->a, 1, nbytes, align, asfield);
@@ -513,7 +513,7 @@ static int is_type_identityfree(jl_value_t *t)
 }
 
 // make a copy of the layout of st, but with nfields=0
-static void jl_get_genericmemory_layout(jl_datatype_t *st)
+static void jl_get_genericmemory_layout(jl_datatype_t *st) JL_CANSAFEPOINT
 {
     jl_value_t *kind = jl_tparam0(st);
     jl_value_t *eltype = normalize_typeofbottom_layout_alias(jl_tparam1(st));
@@ -928,7 +928,7 @@ static void jl_process_field_attrs(jl_svec_t *fattrs, jl_svec_t *fnames, int mut
 // Create UnionAll wrapper chain for parametric types
 // wrapper should initially point to the DataType, will be updated to final wrapper
 // Caller must handle GC rooting of wrapper across this call
-static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_value_t **wrapper)
+static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_value_t **wrapper) JL_CANSAFEPOINT
 {
     jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     int np = jl_svec_len(parameters);
@@ -1772,27 +1772,27 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 // field access ---------------------------------------------------------------
 
 // TODO(jwn): these lock/unlock pairs must be full seq-cst fences
-JL_DLLEXPORT void jl_lock_value(jl_mutex_t *v) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_lock_value(jl_mutex_t *v)
 {
     JL_LOCK_NOGC(v);
 }
 
-JL_DLLEXPORT void jl_unlock_value(jl_mutex_t *v) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_unlock_value(jl_mutex_t *v)
 {
     JL_UNLOCK_NOGC(v);
 }
 
-JL_DLLEXPORT void jl_lock_field(jl_mutex_t *v) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_lock_field(jl_mutex_t *v)
 {
     JL_LOCK_NOGC(v);
 }
 
-JL_DLLEXPORT void jl_unlock_field(jl_mutex_t *v) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_unlock_field(jl_mutex_t *v)
 {
     JL_UNLOCK_NOGC(v);
 }
 
-static inline char *lock(char *p, jl_value_t *parent, int needlock, enum atomic_kind isatomic) JL_NOTSAFEPOINT
+static inline char *lock(char *p, jl_value_t *parent, int needlock, enum atomic_kind isatomic) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER JL_NO_SAFEPOINT_ANALYSIS
 {
     if (needlock) {
         if (isatomic == isatomic_object) {
@@ -1806,7 +1806,7 @@ static inline char *lock(char *p, jl_value_t *parent, int needlock, enum atomic_
     return p;
 }
 
-static inline void unlock(char *p, jl_value_t *parent, int needlock, enum atomic_kind isatomic) JL_NOTSAFEPOINT
+static inline void unlock(char *p, jl_value_t *parent, int needlock, enum atomic_kind isatomic) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE JL_NO_SAFEPOINT_ANALYSIS
 {
     if (needlock) {
         if (isatomic == isatomic_object) {
@@ -2131,8 +2131,10 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
                         if (!jl_find_union_component(ty, yty, &nth))
                             assert(0 && "invalid field assignment to isbits union");
                         *psel = nth;
-                        if (jl_is_datatype_singleton((jl_datatype_t*)yty))
+                        if (jl_is_datatype_singleton((jl_datatype_t*)yty)) {
+                            unlock(p, parent, needlock, isatomic);
                             break;
+                        }
                     }
                     fsz = jl_datatype_size((jl_datatype_t*)yty); // need to shrink-wrap the final copy
                 }
@@ -2251,8 +2253,10 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
                 if (!jl_find_union_component(ty, rty, &nth))
                     assert(0 && "invalid field assignment to isbits union");
                 *psel = nth;
-                if (jl_is_datatype_singleton((jl_datatype_t*)rty))
+                if (jl_is_datatype_singleton((jl_datatype_t*)rty)) {
+                    unlock(p, parent, needlock, isatomic);
                     return r;
+                }
             }
             if (hasptr)
                 jl_gc_multi_wb(parent, rhs); // rhs is immutable
@@ -2362,7 +2366,7 @@ JL_DLLEXPORT int jl_field_isdefined_checked(jl_value_t *v, size_t i)
     return !!jl_field_isdefined(v, i);
 }
 
-JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
+JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field) JL_CANSAFEPOINT
 {
     if (!jl_struct_try_layout(ty) || field > jl_datatype_nfields(ty) || field < 1)
         jl_bounds_error_int((jl_value_t*)ty, field);
@@ -2415,7 +2419,7 @@ JL_DLLEXPORT int jl_nth_pointer_isdefined(jl_value_t *v, size_t i)
 jl_datatype_t *jl_typeapp_type = NULL;
 
 // Forward declaration
-static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map);
+static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map) JL_CANSAFEPOINT;
 
 // Check if a typename is reachable from a type through struct fields
 // This is used to detect cycles in type definitions for mayinlinealloc

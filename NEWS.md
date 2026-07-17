@@ -163,6 +163,8 @@ Standard library changes
 #### InteractiveUtils
 
 * `less`/`@less` and `edit`/`@edit` are now supported for documented variables ([#53539]).
+* A new `@methods` macro lists all methods applicable to a call expression, using the types of
+  the given arguments, e.g. `@methods isvalid('a', 1)` or `@methods isvalid(::AbstractChar, ::Integer)`.
 
 #### Dates
 

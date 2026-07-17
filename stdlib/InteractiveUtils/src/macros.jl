@@ -561,13 +561,14 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; is_sourc
     return gen_call_with_extracted_types(__module__, fcn, arg, kws; is_source_reflection, supports_binding_reflection, use_signature_tuple)
 end
 
-for fname in [:which, :less, :edit, :functionloc]
+for fname in [:which, :less, :edit, :functionloc, :methods]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0, Expr[];
                                           is_source_reflection = true,
                                           supports_binding_reflection = $(fname in (:which,:less,:edit)),
-                                          use_signature_tuple = true)
+                                          # `methods` takes a `(f, types)` pair rather than a signature tuple
+                                          use_signature_tuple = $(fname !== :methods))
         end
     end
 end
@@ -606,9 +607,36 @@ returns the `Method` object for the method that would be called for those argume
 to a variable, it returns the module in which the variable was bound. It calls out to the
 [`which`](@ref) function.
 
-See also: [`@less`](@ref), [`@edit`](@ref).
+See also: [`@less`](@ref), [`@edit`](@ref), [`@methods`](@ref).
 """
 :@which
+
+"""
+    @methods
+
+Applied to a function call, it uses the types of the given arguments to return the list of
+`Method`s that could be applicable, i.e. all methods whose signature is compatible with those
+argument types. It calls out to the [`methods`](@ref) function.
+
+Just like [`@which`](@ref), the arguments are interpreted as values, so their concrete types
+are used. To query against another type, annotate the argument with `::`, e.g.
+`@methods f(::Integer)`. Unlike `@which`, which returns the single method that would be
+dispatched for a concrete call, `@methods` lists every matching method, which is particularly
+useful when the argument types are non-concrete (abstract types, `Union`s or `UnionAll`s).
+
+# Examples
+```julia-repl
+julia> @methods isvalid(::AbstractChar, ::Integer)
+
+julia> @methods isvalid('a', 1)
+```
+
+!!! compat "Julia 1.14"
+    This macro requires at least Julia 1.14.
+
+See also: [`@which`](@ref), [`methods`](@ref).
+"""
+:@methods
 
 """
     @less

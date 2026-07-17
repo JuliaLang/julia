@@ -69,22 +69,23 @@ end
 #---------------------
 1   (call core.svec)
 2   (call core.svec)
-3   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₁ %₂)
-4   latestworld
-5   TestMod.#f##0
-6   (new %₅)
-7   (= slot₁/f %₆)
-8   TestMod.#f##0
-9   (call core.svec %₈)
-10  (call core.svec)
-11  SourceLocation::1:5
-12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+3   (call core.svec)
+4   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₁ %₂ %₃)
+5   latestworld
+6   TestMod.#f##0
+7   (new %₆)
+8   (= slot₁/f %₇)
+9   TestMod.#f##0
+10  (call core.svec %₉)
+11  (call core.svec)
+12  SourceLocation::1:4
+13  (call core.svec %₁₀ %₁₁ %₁₂)
+14  --- method core.nothing %₁₃
     slots: [slot₁/#self#(!read)]
     1   TestMod.body
     2   (return %₁)
-14  latestworld
-15  (return core.nothing)
+15  latestworld
+16  (return core.nothing)
 
 ########################################
 # Error: Invalid `let` var with K"::"
@@ -144,7 +145,7 @@ end
 5   (call core.TypeEqOf %₄)
 6   (call core.svec %₅ core.Any)
 7   (call core.svec)
-8   SourceLocation::3:14
+8   SourceLocation::3:5
 9   (call core.svec %₆ %₇ %₈)
 10  --- method TestMod.f %₉
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
@@ -196,7 +197,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   SourceLocation::1:10
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.f %₈
     slots: [slot₁/#self#(!read) slot₂/z]
@@ -410,7 +411,7 @@ end
 9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉ core.Any)
 11  (call core.svec)
-12  SourceLocation::2:12
+12  SourceLocation::2:11
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
     slots: [slot₁/#self#(!read) slot₂/y]
@@ -419,7 +420,7 @@ end
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
 15  (call core.svec slot₁/x)
-16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
+16  (call JuliaLowering.replace_captured_locals %₁₄ %₁₅)
 17  --- method TestMod.f %₁₃ %₁₆
 18  latestworld
 19  (call core.declare_global TestMod :g false)
@@ -430,7 +431,7 @@ end
 24  (call core.TypeEqOf %₂₃)
 25  (call core.svec %₂₄)
 26  (call core.svec)
-27  SourceLocation::3:12
+27  SourceLocation::3:11
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
@@ -443,7 +444,7 @@ end
     7   (call core.getfield %₁ :contents)
     8   (return %₇)
 30  (call core.svec slot₁/x)
-31  (call JuliaLowering.replace_captured_locals! %₂₉ %₃₀)
+31  (call JuliaLowering.replace_captured_locals %₂₉ %₃₀)
 32  --- method TestMod.g %₂₈ %₃₁
 33  latestworld
 34  TestMod.g
@@ -466,7 +467,7 @@ end
 9   (call core.TypeEqOf %₈)
 10  (call core.svec %₉)
 11  (call core.svec)
-12  SourceLocation::2:12
+12  SourceLocation::2:11
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
@@ -483,7 +484,7 @@ end
     11  (call core.setfield! %₁₀ :contents %₉)
     12  (return %₉)
 15  (call core.svec slot₁/x)
-16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
+16  (call JuliaLowering.replace_captured_locals %₁₄ %₁₅)
 17  --- method TestMod.f %₁₃ %₁₆
 18  latestworld
 19  TestMod.f

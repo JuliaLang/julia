@@ -105,7 +105,7 @@ void jl_safepoint_init(void)
         addr = NULL;
 #endif
     if (addr == NULL) {
-        jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
+        ios_printf(ios_safe_stderr, "could not allocate GC synchronization page\n");
         jl_gc_debug_fprint_critical_error(ios_safe_stderr);
         abort();
     }
@@ -126,7 +126,7 @@ void jl_safepoint_init(void)
     jl_safepoint_pages = addr;
 }
 
-extern void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
+extern void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads) JL_CANSAFEPOINT
 {
     JL_TIMING(GC, GC_Stop);
 #ifdef USE_TRACY
@@ -294,9 +294,8 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
     uv_mutex_unlock(&ct->ptls->sleep_lock);
 }
 // This takes the sleep lock and puts the thread in GC_SAFE
-int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
+void jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
 {
-    int8_t gc_state = jl_gc_safe_enter(ptls);
     uv_mutex_lock(&ptls->sleep_lock);
     if (jl_atomic_load_relaxed(&ptls->suspend_count)) {
         // This dance with the locks is because we are not allowed to hold both these locks at the same time
@@ -310,7 +309,6 @@ int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
         uv_mutex_unlock(&safepoint_lock);
         uv_mutex_lock(&ptls->sleep_lock);
     }
-    return gc_state;
 }
 
 // n.b. suspended threads may still run in the GC or GC safe regions

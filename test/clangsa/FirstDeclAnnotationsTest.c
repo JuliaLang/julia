@@ -18,18 +18,24 @@
 
 #include "FirstDeclAnnotationsTest.h"
 
-void fda_ok_both(void) JL_NOTSAFEPOINT {}
+void fda_ok_both(void) JL_CANSAFEPOINT {}
 void fda_ok_header_only(void) {}
-// CHECK: warning: Julia annotation "julia_not_safepoint" is on this declaration of 'fda_missing_func' but missing from its first declaration
+// CHECK: warning: Julia annotation "julia_can_safepoint" is on this declaration of 'fda_missing_func' but missing from its first declaration
 // CHECK-FIXES: {{^}}void fda_missing_func(void) {}{{$}}
-// CHECK-FIXES-H: {{^}}void fda_missing_func(void) JL_NOTSAFEPOINT;{{$}}
-void fda_missing_func(void) JL_NOTSAFEPOINT {}
+// CHECK-FIXES-H: {{^}}void fda_missing_func(void) JL_CANSAFEPOINT;{{$}}
+void fda_missing_func(void) JL_CANSAFEPOINT {}
 
 int fda_ok_param(int *p) { return *p; }
 // CHECK: warning: Julia annotation "julia_propagates_root" is on parameter 1 of this declaration of 'fda_missing_param' but missing from its first declaration
 // CHECK-FIXES: {{^}}int fda_missing_param(int *p) { return *p; }{{$}}
 // CHECK-FIXES-H: {{^}}int fda_missing_param(int *p JL_PROPAGATES_ROOT);{{$}}
 int fda_missing_param(int *p JL_PROPAGATES_ROOT) { return *p; }
+
+int fda_ok_cbparam(void (*cb)(int) JL_CANSAFEPOINT) { cb(0); return 0; }
+// CHECK: warning: Julia annotation "julia_can_safepoint" is on parameter 1 of this declaration of 'fda_missing_cbparam' but missing from its first declaration
+// CHECK-FIXES: {{^}}int fda_missing_cbparam(void (*cb)(int)) { cb(0); return 0; }{{$}}
+// CHECK-FIXES-H: {{^}}int fda_missing_cbparam(void (*cb)(int) JL_CANSAFEPOINT);{{$}}
+int fda_missing_cbparam(void (*cb)(int) JL_CANSAFEPOINT) { cb(0); return 0; }
 
 void fda_ok_vis(void) JL_DLLEXPORT {}
 // CHECK: warning: Julia annotation "visibility("default")" is on this declaration of 'fda_missing_vis' but missing from its first declaration
@@ -41,84 +47,85 @@ void fda_missing_vis(void) JL_DLLEXPORT {}
 // CHECK-FIXES: {{^}}void fda_raw_vis(void) __attribute__((visibility("default"))) {}{{$}}
 void fda_raw_vis(void) __attribute__((visibility("default"))) {}
 
-// CHECK: warning: Julia annotation "julia_not_safepoint" is on this declaration of 'fda_chain' but missing from its first declaration
-// CHECK-FIXES: {{^}}void fda_chain(void) JL_NOTSAFEPOINT;{{$}}
+// CHECK: warning: Julia annotation "julia_can_safepoint" is on this declaration of 'fda_chain' but missing from its first declaration
+// CHECK-FIXES: {{^}}void fda_chain(void) JL_CANSAFEPOINT;{{$}}
 // CHECK-FIXES: {{^}}void fda_chain(void);{{$}}
 void fda_chain(void);
-void fda_chain(void) JL_NOTSAFEPOINT;
+void fda_chain(void) JL_CANSAFEPOINT;
 void fda_chain(void) {}
 
 // CHECK-FIXES: {{^}}void fda_local(void);{{$}}
-// CHECK-FIXES: {{^ *}}void fda_local(void) JL_NOTSAFEPOINT;{{$}}
+// CHECK-FIXES: {{^ *}}void fda_local(void) JL_CANSAFEPOINT;{{$}}
 void fda_local(void);
 void fda_local_caller(void) {
-    void fda_local(void) JL_NOTSAFEPOINT;
+    void fda_local(void) JL_CANSAFEPOINT;
     fda_local();
 }
 void fda_local(void) {}
 
 // CHECK-FIXES: {{^}}void fda_localdef(void) {}{{$}}
-// CHECK-FIXES: {{^ *}}void fda_localdef(void) JL_NOTSAFEPOINT;{{$}}
+// CHECK-FIXES: {{^ *}}void fda_localdef(void) JL_CANSAFEPOINT;{{$}}
 void fda_localdef(void) {}
 void fda_localdef_caller(void) {
-    void fda_localdef(void) JL_NOTSAFEPOINT;
+    void fda_localdef(void) JL_CANSAFEPOINT;
     fda_localdef();
 }
 
-// CHECK: warning: Julia annotation "julia_not_safepoint" is on this declaration of 'fda_blockonly' but missing from its first declaration
+// CHECK: warning: Julia annotation "julia_can_safepoint" is on this declaration of 'fda_blockonly' but missing from its first declaration
 void fda_blockonly_caller1(void) {
     void fda_blockonly(void);
     fda_blockonly();
 }
 void fda_blockonly_caller2(void) {
-    void fda_blockonly(void) JL_NOTSAFEPOINT;
+    void fda_blockonly(void) JL_CANSAFEPOINT;
     fda_blockonly();
 }
 
-// Function-pointer annotation compatibility. Converting a function to fda_cb_t
-// (which is JL_NOTSAFEPOINT) requires the function to carry that annotation, in
-// every context where the conversion happens.
 fda_cb_t fda_cb_okglobal = fda_cb_ok;
+fda_cb_safepoint_t fda_cb_okglobal2 = fda_cb_bad;
+fda_cb_safepoint_t fda_cb_okglobal3 = fda_cb_ok;
 
-// CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}requires Julia annotation "julia_not_safepoint", but 'fda_cb_bad' is not annotated "julia_not_safepoint"
+// CHECK: warning: 'fda_cb_bad' is annotated "julia_can_safepoint" but is converted to a function pointer of type 'fda_cb_t'{{.*}}that is not
 fda_cb_t fda_cb_badglobal = fda_cb_bad;
 
 void fda_cb_uses(void) {
     fda_cb_t a = fda_cb_ok;
     fda_cb_t b = uv_fda_fake;
-    // CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+    // CHECK: warning: 'fda_cb_bad' is annotated "julia_can_safepoint" but is converted to a function pointer of type 'fda_cb_t'{{.*}}that is not
     fda_cb_t c = fda_cb_bad;
-    // CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+    // CHECK: warning: 'fda_cb_bad' is annotated "julia_can_safepoint" but is converted to a function pointer of type 'fda_cb_t'{{.*}}that is not
     a = fda_cb_bad;
-    // CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+    // CHECK: warning: 'fda_cb_bad' is annotated "julia_can_safepoint" but is converted to a function pointer of type 'fda_cb_t'{{.*}}that is not
     fda_take_cb(fda_cb_bad);
-    // CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+    // CHECK: warning: 'fda_cb_bad' is annotated "julia_can_safepoint" but is converted to a function pointer of type 'fda_cb_t'{{.*}}that is not
     fda_take_cb(&fda_cb_bad);
+    // JL_CANSAFEPOINT, so passing a JL_CANSAFEPOINT function is sound (no warning).
+    fda_take_cansafepoint_cb(fda_cb_bad);
     (void)a; (void)b; (void)c;
 }
 
-// CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+// CHECK: warning: 'fda_cb_bad' is annotated "julia_can_safepoint" but is converted to a function pointer of type 'fda_cb_t'{{.*}}that is not
 fda_cb_t fda_cb_ret(void) { return fda_cb_bad; }
 
 struct fda_cb_holder { fda_cb_t cb; };
-// CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+// CHECK: warning: 'fda_cb_bad' is annotated "julia_can_safepoint" but is converted to a function pointer of type 'fda_cb_t'{{.*}}that is not
 struct fda_cb_holder fda_cb_inst = { fda_cb_bad };
 
 #ifdef __cplusplus
-// CHECK-CXX: warning: Julia annotation "julia_not_safepoint" is on this declaration of 'm' but missing from its first declaration
+// CHECK-CXX: warning: Julia annotation "julia_can_safepoint" is on this declaration of 'm' but missing from its first declaration
 struct fda_S { void m(void); };
-void fda_S::m(void) JL_NOTSAFEPOINT {}
+void fda_S::m(void) JL_CANSAFEPOINT {}
 
 struct fda_Base {
-    virtual void fda_ovr_ok(void) JL_NOTSAFEPOINT;
-    virtual void fda_ovr_bad(void) JL_NOTSAFEPOINT;
-    virtual void fda_ovr_plain(void);
+    virtual void fda_ovr_ok(void) JL_CANSAFEPOINT;
+    virtual void fda_ovr_bad(void);
+    virtual void fda_ovr_plain(void) JL_CANSAFEPOINT;
 };
 
 struct fda_Derived : fda_Base {
-    void fda_ovr_ok(void) JL_NOTSAFEPOINT override;
-    // CHECK-CXX: warning: 'fda_ovr_bad' overrides a method that requires Julia annotation "julia_not_safepoint", but 'fda_ovr_bad' is not annotated "julia_not_safepoint"
-    void fda_ovr_bad(void) override;
+    void fda_ovr_ok(void) JL_CANSAFEPOINT override;
+    // CHECK-CXX: warning: 'fda_ovr_bad' is annotated "julia_can_safepoint" but overrides a method that is not
+    void fda_ovr_bad(void) JL_CANSAFEPOINT override;
     void fda_ovr_plain(void) override;
 };
 #endif
@@ -127,8 +134,8 @@ struct fda_Derived : fda_Base {
 // the region as a system header.
 // Kept last so the line-marker renumbering does not affect the cases above.
 // CHECK-FIXES: {{^}}void fda_sysproto(void);{{$}}
-// CHECK-FIXES: {{^}}void fda_sysproto(void) JL_NOTSAFEPOINT {}{{$}}
+// CHECK-FIXES: {{^}}void fda_sysproto(void) JL_CANSAFEPOINT {}{{$}}
 # 1 "fda_first_decl_annotations_fake_sys.h" 1 3
 void fda_sysproto(void);
 # 1 "FirstDeclAnnotationsTest.c" 2
-void fda_sysproto(void) JL_NOTSAFEPOINT {}
+void fda_sysproto(void) JL_CANSAFEPOINT {}

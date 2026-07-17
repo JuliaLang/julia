@@ -62,7 +62,7 @@ static void walk_print_cb(uv_handle_t *h, void *arg)
         jl_safe_printf(" %s[%zd] %s%p->%p\n", type, resource_id, pad, (void*)h, (void*)h->data);
 }
 
-static void wait_empty_func(uv_timer_t *t)
+static void wait_empty_func(uv_timer_t *t) JL_CANSAFEPOINT
 {
     // make sure this is hidden now, since we would auto-unref it later
     uv_unref((uv_handle_t*)&signal_async);
@@ -145,7 +145,7 @@ void JL_UV_LOCK(void)
 /**
  * @brief Begin an IO lock.
  */
-JL_DLLEXPORT void jl_iolock_begin(void)
+JL_DLLEXPORT void jl_iolock_begin(void) JL_CANSAFEPOINT
 {
     JL_UV_LOCK();
 }
@@ -153,13 +153,13 @@ JL_DLLEXPORT void jl_iolock_begin(void)
 /**
  * @brief End an IO lock.
  */
-JL_DLLEXPORT void jl_iolock_end(void)
+JL_DLLEXPORT void jl_iolock_end(void) JL_CANSAFEPOINT
 {
     JL_UV_UNLOCK();
 }
 
 
-static void jl_uv_call_close_callback(jl_value_t *val)
+static void jl_uv_call_close_callback(jl_value_t *val) JL_CANSAFEPOINT
 {
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2); // val is "rooted" in the finalizer list only right now
@@ -172,7 +172,7 @@ static void jl_uv_call_close_callback(jl_value_t *val)
     JL_GC_POP();
 }
 
-static void jl_uv_closeHandle(uv_handle_t *handle)
+static void jl_uv_closeHandle(uv_handle_t *handle) JL_CANSAFEPOINT
 {
     // if the user killed a stdio handle,
     // revert back to direct stdio FILE* writes
@@ -453,7 +453,7 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
  *
  * @param handle A pointer to `uv_handle_t` to be forcefully closed.
  */
-JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
+JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle) JL_CANSAFEPOINT
 {
     if (!uv_is_closing(handle)) { // avoid double-closing the stream
         JL_UV_LOCK();
@@ -517,7 +517,7 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
                           uv_stdio_container_t *stdio, int nstdio,
                           uint32_t flags, char **env, char *cwd, char* cpumask,
-                          size_t cpumask_size, uint32_t uid, uint32_t gid, uv_exit_cb cb)
+                          size_t cpumask_size, uint32_t uid, uint32_t gid, uv_exit_cb cb) JL_CANSAFEPOINT
 {
     uv_process_options_t opts = {0};
     opts.stdio = stdio;
@@ -687,7 +687,7 @@ JL_DLLEXPORT int jl_fs_close(uv_os_fd_t handle)
 }
 
 JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
-                             uv_write_t *uvw, uv_write_cb writecb)
+                             uv_write_t *uvw, uv_write_cb writecb) JL_CANSAFEPOINT
 {
     uv_buf_t buf[1];
     buf[0].base = (char*)data;
@@ -771,12 +771,12 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
     }
 }
 
-JL_DLLEXPORT void jl_uv_putb(uv_stream_t *stream, uint8_t b)
+JL_DLLEXPORT void jl_uv_putb(uv_stream_t *stream, uint8_t b) JL_CANSAFEPOINT
 {
     jl_uv_puts(stream, (char*)&b, 1);
 }
 
-JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t c)
+JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t c) JL_CANSAFEPOINT
 {
     char s[4];
     int n = 1;
@@ -1107,7 +1107,7 @@ JL_DLLEXPORT int jl_tcp_reuseport(uv_tcp_t *handle)
 #ifndef _OS_WINDOWS_
 
 JL_DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle,
-                                          uv_loop_t *loop)
+                                          uv_loop_t *loop) JL_CANSAFEPOINT
 {
     JL_UV_LOCK();
     if (fd >= loop->nwatchers) {
@@ -1232,7 +1232,7 @@ static void jl_work_notifier(uv_work_t *req, int status)
 JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_ctx,
                                notify_cb_t notify_func,
                                void *notify_data1,
-                               void *notify_data2)
+                               void *notify_data2) JL_CANSAFEPOINT
 {
     struct work_baton *baton = (struct work_baton*)malloc_s(sizeof(struct work_baton));
     baton->req.data = (void*) baton;

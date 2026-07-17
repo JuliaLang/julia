@@ -237,7 +237,9 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
     Changed = true;
   }
   if (State->get<SafepointDisabledAt>() == CurrentHeight) {
-    if (!isFDAnnotatedNotSafepoint(FD, getSM(C)) && !(FD && declHasAnnotation(FD, "julia_notsafepoint_enter"))) {
+    if (!isFDAnnotatedNotSafepoint(FD, getSM(C)) &&
+        !(FD && (declHasAnnotation(FD, "julia_notsafepoint_enter") ||
+                 declHasIndexedAnnotation(FD, "julia_notsafepoint_enter_conditional:")))) {
       report_error(C, "Safepoints disabled at end of function");
     }
     State = State->set<SafepointDisabledAt>((unsigned)-1);
@@ -523,21 +525,34 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
       return false;
     const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
     if (!Decl || !FD) {
-      if (Callee == nullptr) {
-        isCalleeSafepoint = true;
-      } else if (const ElaboratedType *ET = dyn_cast<ElaboratedType>(Callee->getType())){
-        if (const TypedefType *TDT = dyn_cast<TypedefType>(ET->getNamedType())) {
-          isCalleeSafepoint =
-              !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+      // Indirect call through a function pointer. A safepoint annotation on the
+      // callee can live either on the function-pointer typedef (e.g.
+      // intrinsic_2_t) or, for a raw (non-typedef'd) function pointer, on the
+      // callee value declaration itself -- a parameter, variable, or struct
+      // field (as jl_iintrinsic_2's `lambda2` parameter carries it). Consult
+      // whichever carries it so an annotated function pointer is recognized
+      // without requiring a typedef; treat the callee as a non-safepoint if
+      // either source says so.
+      bool notSafepoint = false;
+      if (Decl && declHasAnnotation(Decl, "julia_not_safepoint"))
+        notSafepoint = true;
+      if (Callee) {
+        if (const ElaboratedType *ET =
+                dyn_cast<ElaboratedType>(Callee->getType())) {
+          if (const TypedefType *TDT =
+                  dyn_cast<TypedefType>(ET->getNamedType())) {
+            if (declHasAnnotation(TDT->getDecl(), "julia_not_safepoint"))
+              notSafepoint = true;
+          }
+        } else if (isa<CXXPseudoDestructorExpr>(Callee)) {
+          // A pseudo-destructor is an expression that looks like a member
+          // access to a destructor of a scalar type. It has no run-time
+          // semantics beyond evaluating the base expression (which would have
+          // its own CallEvent, if applicable).
+          notSafepoint = true;
         }
-      } else if (const CXXPseudoDestructorExpr *PDE =
-                     dyn_cast<CXXPseudoDestructorExpr>(Callee)) {
-        // A pseudo-destructor is an expression that looks like a member
-        // access to a destructor of a scalar type. A pseudo-destructor
-        // expression has no run-time semantics beyond evaluating the base
-        // expression (which would have its own CallEvent, if applicable).
-        isCalleeSafepoint = false;
       }
+      isCalleeSafepoint = !notSafepoint;
     } else if (FD) {
       StringRef FDName =
           FD->getDeclName().isIdentifier() ? FD->getName() : "";
@@ -562,27 +577,6 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
     return false;
   const Decl *D = Call.getDecl();
   const FunctionDecl *FD = D ? D->getAsFunction() : nullptr;
-  GCObjectSet SpeciallyRootedObjects = emptyObjectSet(State);
-  if (FD) {
-    for (unsigned i = 0; i < FD->getNumParams(); ++i) {
-      QualType ParmType = FD->getParamDecl(i)->getType();
-      if (declHasAnnotation(FD->getParamDecl(i), "julia_temporarily_roots")) {
-        if (ParmType->isPointerType() &&
-            ParmType->getPointeeType()->isPointerType() &&
-            isGCTrackedType(ParmType->getPointeeType())) {
-          // This is probably an out parameter. Find the value it refers to now.
-          SVal Loaded =
-              State->getSVal(*(Call.getArgSVal(i).getAs<Loc>()));
-          SpeciallyRootedObjects = getObjectsForSVal(State, Loaded);
-          continue;
-        }
-        SVal Test = Call.getArgSVal(i);
-        SpeciallyRootedObjects = getObjectsForSVal(State, Test);
-        break;
-      }
-    }
-  }
-
   // Don't free the return value
   SymbolRef RetSym = Call.getReturnValue().getAsSymbol();
   GCObjectSet RetObjects = getObjectsForSymbol(State, RetSym);
@@ -592,8 +586,6 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
   GCObjectStateMapTy AMap = State->get<GCObjectStateMap>();
   for (auto I = AMap.begin(), E = AMap.end(); I != E; ++I) {
     if (I.getData().isJustAllocated()) {
-      if (objectSetContains(SpeciallyRootedObjects, I.getKey()))
-        continue;
       if (objectSetContains(RetObjects, I.getKey()))
         continue;
       if (Reachable.contains(I.getKey()))
@@ -1107,7 +1099,25 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
 void GCChecker::checkPostCall(const CallEvent &Call, CheckerContext &C) const {
   ProgramStateRef State = C.getState();
   bool didChange = processArgumentRooting(Call, C, State);
-  if (!C.wasInlined)
+  // A call is normally modeled as a potential safepoint only when it is not
+  // inlined; when it is inlined, the safepoints reached inside its body are
+  // modeled directly as they are encountered. But a function explicitly
+  // annotated as able to safepoint promises that it may reach one, so honor
+  // that promise even when its body was inlined and happened to not reach a
+  // recognized safepoint (e.g. the safepoint is behind a branch the analyzer
+  // pruned, or behind an opaque call it could not see into). Only
+  // JL_NOTSAFEPOINT marks a function as unable to safepoint; the
+  // JL_NOTSAFEPOINT_ENTER/LEAVE transitions (and the conditional enter) run code
+  // that may safepoint, so they count here too. isSafepoint() below still
+  // excludes anything additionally annotated JL_NOTSAFEPOINT.
+  const Decl *D = Call.getDecl();
+  const FunctionDecl *FD = D ? D->getAsFunction() : nullptr;
+  bool annotatedCanSafepoint =
+      FD && (declHasAnnotation(FD, "julia_can_safepoint") ||
+             declHasAnnotation(FD, "julia_notsafepoint_enter") ||
+             declHasIndexedAnnotation(FD, "julia_notsafepoint_enter_conditional:") ||
+             declHasAnnotation(FD, "julia_notsafepoint_leave"));
+  if (!C.wasInlined || annotatedCanSafepoint)
     didChange |= processPotentialSafepoint(Call, C, State);
   didChange |= processRootPropagatingRegionResult(Call, C, State);
   didChange |= processAllocationOfResult(Call, C, State);
@@ -1731,6 +1741,41 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       // exits.
       ProgramStateRef State = PopGCFramesToDepth(C.getState(), CurrentDepth, 0);
       C.addTransition(State);
+      return true;
+    }
+    // A conditional enter (e.g. a no-gc trylock) only disables safepoints when
+    // it succeeds, which it reports through its return value. The annotation
+    // records which return value means success -- JL_NOTSAFEPOINT_ENTER_CONDITIONAL(success)
+    // encodes it as julia_notsafepoint_enter_conditional:<success>. Split the
+    // state on the return value: the branch matching `success` takes the no-gc
+    // lock and disables safepoints, while the other branch leaves them enabled.
+    std::optional<unsigned> CondSuccess =
+        FD ? declHasIndexedAnnotation(FD, "julia_notsafepoint_enter_conditional:")
+           : std::nullopt;
+    if (CondSuccess) {
+      ProgramStateRef State = C.getState();
+      SValBuilder &SVB = C.getSValBuilder();
+      DefinedOrUnknownSVal RetVal =
+          SVB.conjureSymbolVal(nullptr, C.getCFGElementRef(),
+                               C.getLocationContext(), CE->getType(),
+                               C.blockCount())
+              .castAs<DefinedOrUnknownSVal>();
+      State = State->BindExpr(CE, C.getLocationContext(), RetVal);
+      if (State->get<SafepointDisabledAt>() == (unsigned)-1) {
+        ProgramStateRef StateNonzero, StateZero;
+        std::tie(StateNonzero, StateZero) = State->assume(RetVal);
+        // A nonzero success value means a nonzero (true) return acquired the
+        // no-gc lock; a zero success value means a zero (false) return did.
+        ProgramStateRef Acquired = *CondSuccess ? StateNonzero : StateZero;
+        ProgramStateRef NotAcquired = *CondSuccess ? StateZero : StateNonzero;
+        unsigned Height = getStackFrameHeight(C.getStackFrame());
+        if (Acquired)
+          C.addTransition(Acquired->set<SafepointDisabledAt>(Height));
+        if (NotAcquired)
+          C.addTransition(NotAcquired);
+      } else {
+        C.addTransition(State);
+      }
       return true;
     }
     if (isMutexLock(name) ||

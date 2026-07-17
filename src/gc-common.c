@@ -253,7 +253,7 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOI
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
 // to be held for the current thread and will release the lock when the
 // function returns.
-static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE
+static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE_WITH_CANSAFEPOINT
 {
     // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
     // of `finalizer`) in a finalizer:
@@ -526,7 +526,7 @@ JL_DLLEXPORT void * jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc(ptls, sz, ty);
 }
 
-JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
+JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz) JL_CANSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return jl_gc_alloc(ptls, sz, NULL);
@@ -539,18 +539,18 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc_(ptls, sz, ty);
 }
 
-JL_DLLEXPORT void *jl_malloc(size_t sz)
+JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 {
     return jl_gc_counted_malloc(sz);
 }
 
 //_unchecked_calloc does not check for potential overflow of nm*sz
-STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
+STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT {
     size_t nmsz = nm*sz;
     return jl_gc_counted_calloc(nmsz, 1);
 }
 
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT
 {
     if (nm > SSIZE_MAX/sz)
         return NULL;
@@ -565,7 +565,7 @@ JL_DLLEXPORT void jl_free(void *p)
     }
 }
 
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
+JL_DLLEXPORT void *jl_realloc(void *p, size_t sz) JL_CANSAFEPOINT
 {
     size_t old = p ? memory_block_usable_size(p, 0) : 0;
     return jl_gc_counted_realloc_with_old_size(p, old, sz);

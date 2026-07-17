@@ -121,7 +121,7 @@ static jl_value_t *jl_deser_symbol(uint8_t tag)
 
 // --- encoding ---
 
-static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal);
+static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) JL_CANSAFEPOINT;
 #define jl_encode_value(s, v) jl_encode_value_((s), (jl_value_t*)(v), 0)
 
 static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
@@ -130,7 +130,7 @@ static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
         s->relocatability = 0;
 }
 
-static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
+static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v) JL_CANSAFEPOINT
 {
     jl_array_t *rs = s->method->roots;
     int i, l = jl_array_nrows(rs);
@@ -168,7 +168,7 @@ static void jl_encode_int32(jl_ircode_state *s, int32_t x)
     }
 }
 
-static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
+static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v) JL_CANSAFEPOINT
 {
     rle_reference rr = {.key = -1, .index = -1};
 
@@ -203,7 +203,7 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
     }
 }
 
-static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, size_t offset, size_t len)
+static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, size_t offset, size_t len) JL_CANSAFEPOINT
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typetagof(mem);
     size_t i;
@@ -572,9 +572,9 @@ static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t 
 
 // --- decoding ---
 
-static jl_value_t *jl_decode_value(jl_ircode_state *s);
+static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_CANSAFEPOINT;
 
-static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     size_t i, len;
     if (tag == TAG_SVEC)
@@ -589,7 +589,7 @@ static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag)
     return (jl_value_t*)sv;
 }
 
-static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t *mty, size_t nel)
+static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t *mty, size_t nel) JL_CANSAFEPOINT
 {
     jl_genericmemory_t *m = jl_alloc_genericmemory(mty, nel);
     JL_GC_PUSH1(&m);
@@ -630,7 +630,7 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
     return m;
 }
 
-static jl_value_t *jl_decode_value_array1d(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_array1d(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     int16_t ndims = 1;
     size_t dim0 = jl_unbox_long(jl_decode_value(s));
@@ -652,7 +652,7 @@ static jl_value_t *jl_decode_value_array1d(jl_ircode_state *s, uint8_t tag)
     return (jl_value_t*)a;
 }
 
-static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     size_t i, len;
     jl_sym_t *head = NULL;
@@ -683,7 +683,7 @@ static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag)
     return (jl_value_t*)e;
 }
 
-static jl_value_t *jl_decode_value_phi(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_phi(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     size_t i, len_e, len_v;
     if (tag == TAG_PHINODE) {
@@ -712,7 +712,7 @@ static jl_value_t *jl_decode_value_phi(jl_ircode_state *s, uint8_t tag)
     return phi;
 }
 
-static jl_value_t *jl_decode_value_phic(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_phic(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     size_t i, len;
     if (tag == TAG_PHICNODE)
@@ -731,7 +731,7 @@ static jl_value_t *jl_decode_value_phic(jl_ircode_state *s, uint8_t tag)
     return phic;
 }
 
-static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s)
+static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s) JL_CANSAFEPOINT
 {
     jl_module_t *mod = (jl_module_t*)jl_decode_value(s);
     JL_GC_PROMISE_ROOTED(mod);
@@ -740,7 +740,7 @@ static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s)
     return jl_module_globalref(mod, var);
 }
 
-static jl_value_t *jl_decode_value_any(jl_ircode_state *s)
+static jl_value_t *jl_decode_value_any(jl_ircode_state *s) JL_CANSAFEPOINT
 {
     jl_datatype_t *dt = (jl_datatype_t*)jl_decode_value(s);
     JL_GC_PROMISE_ROOTED(dt); // (JL_ALWAYS_LEAFTYPE)

@@ -425,7 +425,7 @@ end
     end
     """) == (Complex(1), Complex(2))
 
-    # Both JL and flisp will evaluate the sparam bound multiple times
+    # flisp will evaluate the sparam bound multiple times
     let res = JuliaLowering.include_string(test_mod, """
         let eval_spbounds_counter = 0
             global function f_optarg_eval_spbounds_counter(
@@ -436,8 +436,7 @@ end
             f_optarg_eval_spbounds_counter(Complex(1))
         end
         """)
-        @test res == (Complex(1), 4)
-        @test_broken res == (Complex(1), 1)
+        @test res == (Complex(1), 1)
     end
 end
 
@@ -1364,6 +1363,28 @@ end
     @test JL.include_string(test_mod, "((x,rest...,y)::XYVec)(a1,a2) = (x,rest...,y,a1,a2)") === nothing
     Core.@latestworld
     @test xy(0,0) == (1,9,9,9,2,0,0)
+end
+
+@testset "sparam in keyword default" begin
+    # The keyword default is evaluated in the body method, which carries all
+    # of the function's static parameters
+    @test JL.include_string(test_mod,
+        "f_kwdef_sp(y::T; k=T) where T = (y, k); f_kwdef_sp(1)") == (1, Int)
+    # ... but an sparam unused in the signature is undetermined at dispatch
+    JL.include_string(test_mod, "f_kwdef_sp_undet(y; k=T) where T = (y, k)")
+    @test_throws UndefVarError test_mod.f_kwdef_sp_undet(1)
+end
+
+@testset "anonymous static parameters" begin
+    # `where _` declares a static parameter which can never be referenced
+    @test JL.include_string(test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)") == 42
+    @test JL.include_string(
+        test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)") == (1.5, Float64)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "f_anon_sp3(x) where {_, _} = x"; expr_compat_mode=true)
+    # Currently allowed (like arguments).  Could error like flisp.
+    @test_throws LoweringError JL.include_string(
+        test_mod, "f_anon_sp3(x) where {_, _} = x") broken=true
 end
 
 @testset "first arg `where`" begin
