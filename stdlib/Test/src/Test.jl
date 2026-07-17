@@ -2760,6 +2760,9 @@ are provably shadowed by a more specific method: a definition like
 `f(::Type{Union{}})` covers the `Union{}` argument that would leave `T`
 unbound in `f(::Type{<:T}) where {T}`, and a zero-argument fallback covers
 the empty call that would leave `T` unbound in `f(x::T...) where {T}`.
+Methods are also not reported when none of the possibly-unbound parameters
+is read in the method's lowered body (querying a parameter with
+`@isdefined` does not count as a read, since it cannot throw).
 
 By default, any undefined symbols trigger a warning. This warning can
 be suppressed by supplying a collection of `GlobalRef`s for which
@@ -2824,10 +2827,13 @@ function detect_unbound_args(mods...;
                     push!(shadowed_slots, i)
                 end
             end
-            if nonempty_vararg || !isempty(shadowed_slots)
-                # re-check unboundness under the verified assumptions
-                has_unbound_vars(m.sig, nonempty_vararg, shadowed_slots) || continue
-            end
+            # re-check unboundness under the verified assumptions, keeping
+            # the parameter indices for the body query below
+            idxs = unbound_sparams(m.sig, nonempty_vararg, shadowed_slots)
+            isempty(idxs) && continue
+            # unboundness only matters if the body actually reads one of the
+            # possibly-unbound parameters
+            reads_sparams(m, idxs) || continue
             push!(ambs, m)
         end
     end
@@ -2855,32 +2861,67 @@ function type_slot_var(@nospecialize(p))
     return nothing
 end
 
-# `nonempty_vararg` assumes the signature's trailing `Vararg` matches at
-# least one argument; `shadowed_slots` lists `Type{S}` argument positions
-# whose `Union{}` member never reaches this method. Both are assumptions the
-# caller must justify (see `detect_unbound_args`).
-function has_unbound_vars(@nospecialize(sig), nonempty_vararg::Bool=false,
-                          shadowed_slots::Vector{Int}=Int[])
+# The 1-based positions in the signature's `where` chain — which is also the
+# `static_parameter` numbering used by the lowered body — of parameters that
+# some matching call may leave unbound. `nonempty_vararg` assumes the
+# signature's trailing `Vararg` matches at least one argument;
+# `shadowed_slots` lists `Type{S}` argument positions whose `Union{}` member
+# never reaches this method. Both are assumptions the caller must justify
+# (see `detect_unbound_args`).
+function unbound_sparams(@nospecialize(sig), nonempty_vararg::Bool=false,
+                         shadowed_slots::Vector{Int}=Int[])
+    idxs = Int[]
     params = isempty(shadowed_slots) ? Core.svec() :
         (Base.unwrap_unionall(sig)::DataType).parameters
     body = sig
+    i = 0
     while body isa UnionAll
+        i += 1
         var = body.var
         body = body.body
         Core.Compiler.constrains_var(var, body, #=covariant=#true, nonempty_vararg) && continue
         pinned = false
-        for i in shadowed_slots
+        for j in shadowed_slots
             # any non-`Union{}` value of this slot's `Type` parameter pins
             # `var` if it occurs invariantly below a constructor of its bound
-            v = type_slot_var(params[i])::TypeVar
+            v = type_slot_var(params[j])::TypeVar
             if v !== var && Core.Compiler.constrains_type_value(var, v.ub)
                 pinned = true
                 break
             end
         end
-        pinned || return true
+        pinned || push!(idxs, i)
     end
-    return false
+    return idxs
+end
+
+has_unbound_vars(@nospecialize sig) = !isempty(unbound_sparams(sig))
+
+# Whether the lowered body of `m` reads any of the static parameters whose
+# indices are in `idxs`. An `Expr(:isdefined, ...)` query does not count as a
+# read (it cannot throw), but a raw read is counted even when an `@isdefined`
+# guard exists elsewhere in the body: verifying that the guard dominates the
+# read would require dataflow over typed code. Conservatively `true` when no
+# lowered code is available to inspect (e.g. generated functions).
+function reads_sparams(m::Method, idxs::Vector{Int})
+    isdefined(m, :source) || return true
+    src = Base.uncompressed_ir(m)
+    read = BitSet()
+    function scan(@nospecialize ex)
+        ex isa Expr || return
+        if ex.head === :static_parameter
+            push!(read, ex.args[1]::Int)
+        elseif ex.head !== :isdefined
+            for a in ex.args
+                scan(a)
+            end
+        end
+        return
+    end
+    for stmt in src.code
+        scan(stmt)
+    end
+    return any(in(read), idxs)
 end
 
 

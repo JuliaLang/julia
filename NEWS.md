@@ -165,7 +165,9 @@ Standard library changes
   possibly-unbound parameters (such as `f(::Type{<:T}) where {T}`, which leaves `T`
   unbound when called with `Union{}`, or `f(::Vector{<:T}) where {T}` with a
   `Vector{Union{}}` argument), and no longer reports methods whose problematic calls are
-  all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback).
+  all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback), or
+  whose lowered bodies never read the possibly-unbound parameters (other than by
+  querying them with `@isdefined`).
 
 #### Dates
 
