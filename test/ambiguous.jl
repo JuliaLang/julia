@@ -343,7 +343,14 @@ module UnboundDetect
     unbound7(x::Vector{S}) where {T, S<:AbstractVector{T}} = T # f(Union{}[])
     unbound8(x::Type{Union{T,Missing}}) where {T} = T          # f(Missing)
     unbound9(x::Ref{Vector{<:T}}) where {T} = T                # f(Ref{Vector}(...))
-    unbound10(x) where {T} = 0                                 # unused parameter
+    unbound10(x::Type{<:T}, y::Type{<:S}) where {T, S} = T     # f(Union{}, Int): S is never read, but T is
+    # a raw read is reported even when an `@isdefined` guard exists elsewhere
+    # in the body: proving the guard dominates the read would need dataflow
+    unbound13(x::Type{<:T}) where {T} = @isdefined(T) ? T : 0
+    # a possibly-unbound parameter is only reported when the lowered body
+    # actually reads it; an `@isdefined` query alone cannot throw
+    unused1(x::Type{<:T}) where {T} = 0
+    unused2(x::Type{<:T}) where {T} = @isdefined(T)
     # every matching call pins the parameter
     bound1(x::T) where {T} = T
     bound2(x::Type{T}) where {T} = T
@@ -435,7 +442,7 @@ let unbound = Set{Method}(detect_unbound_args(UnboundDetect))
         @test (m in unbound) == should_flag context=name
         tested += 1
     end
-    @test tested == 34
+    @test tested == 37
     let ms = filter(m -> m.sig isa UnionAll, collect(methods(UnboundDetect.Foo54893)))
         @test only(ms) in unbound
     end
@@ -452,11 +459,10 @@ end
         # reviewed and expected
         expected_undef_sparam = Any[
             Tuple{typeof(Base._totuple), Type{Tuple{Vararg{E}}}, Any, Vararg{Any}} where E,
+            # the raw reads are `@isdefined`-guarded and safe at runtime, but
+            # verifying that the guard dominates the read would need dataflow
             Tuple{typeof(Base._eltype_ntuple), Type{<:Tuple{Vararg{E}}}} where E,
             Tuple{typeof(Base.reduce_empty_iter), Any, Tuple{Vararg{T}}, Base.HasEltype} where T,
-            Tuple{typeof(Base.same_names), Vararg{NamedTuple{names}}} where names,
-            # the body does not read the maybe-unbound sparams
-            Tuple{typeof(Base.el_same), Type{T}, Type{<:AbstractArray{T, n}}, Type{<:AbstractArray{T, n}}} where {T, n},
             # `T` is unbound only for element type `Missing`, whose calls dispatch to the more specific `float(::AbstractArray{Missing})`
             Tuple{typeof(float), AbstractArray{Union{Missing, T}}} where T,
             # `N` is unbound only for element type `Union{}`, whose calls are dispatch-ambiguous with the `<:ScalarIndex` and `<:AbstractCartesianIndex{0}` methods, erroring before the body
@@ -478,7 +484,7 @@ end
         @test_broken isempty(need_to_handle_undef_sparam)
         # TODO: not yet investigated or fixed — review this list and empty
         # it, e.g. by adding a `::Type{Union{}}` method that shadows the
-        # problematic calls, or guarding parameter uses with `@isdefined`
+        # problematic calls
         todo_undef_sparam = Any[
             # each entry notes an example call that throws UndefVarError from the body
             Tuple{Type{Base.IteratorEltype}, Type{Base.Iterators.ProductIterator{T}}} where {N, T<:NTuple{N, Any}}, # IteratorEltype(ProductIterator{Union{}})
