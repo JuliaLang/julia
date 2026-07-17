@@ -213,17 +213,18 @@ release-candidate: release testall
 	@echo 4. Increase SOMAJOR and SOMINOR if needed.
 	@echo 5. Update SPDX document by running the script contrib/updateSPDX.jl
 	@echo 6. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
-	@echo 7. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
-	@echo 8. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist with USE_BINARYBUILDER=0
-	@echo 9. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
-	@echo 10. Follow packaging instructions in doc/src/devdocs/build/distributing.md to create binary packages for all platforms
-	@echo 11. Upload to AWS, update https://julialang.org/downloads and https://status.julialang.org/stable links
-	@echo 12. Update checksums on AWS for tarball and packaged binaries
-	@echo 13. Update versions.json. Wait at least 60 minutes before proceeding to step 14.
-	@echo 14. Push to Juliaup (https://github.com/JuliaLang/juliaup/wiki/Adding-a-Julia-version)
-	@echo 15. Announce on mailing lists
-	@echo 16. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
-	@echo 17. Move NEWS.md contents to HISTORY.md
+	@echo 7. Register the frozen Compiler snapshot for this release by running contrib/refresh_basecompiler.sh --basecompiler DIR --general DIR v\`cat VERSION\`, then push the BaseCompiler.jl release-X.Y branch and tags and open the General registry PR	#"`
+	@echo 8. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
+	@echo 9. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist with USE_BINARYBUILDER=0
+	@echo 10. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
+	@echo 11. Follow packaging instructions in doc/src/devdocs/build/distributing.md to create binary packages for all platforms
+	@echo 12. Upload to AWS, update https://julialang.org/downloads and https://status.julialang.org/stable links
+	@echo 13. Update checksums on AWS for tarball and packaged binaries
+	@echo 14. Update versions.json. Wait at least 60 minutes before proceeding to step 15.
+	@echo 15. Push to Juliaup (https://github.com/JuliaLang/juliaup/wiki/Adding-a-Julia-version)
+	@echo 16. Announce on mailing lists
+	@echo 17. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 18. Move NEWS.md contents to HISTORY.md
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
