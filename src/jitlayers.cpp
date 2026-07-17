@@ -458,13 +458,8 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time) JL_N
                             julia_double_to_half(orig_time + time * 1e-9));
 }
 
-extern "C" JL_DLLEXPORT_CODEGEN void
-jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
+static void jl_emit_codeinsts_chunk(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {
-    if (len == 0)
-        return;
-
-    JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
     const char *name = name_from_method_instance(jl_get_ci_mi(codeinsts[len - 1]));
     auto ctx = std::make_unique<LLVMContext>();
     auto &dl = jl_ExecutionEngine->getDataLayout();
@@ -514,6 +509,29 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
     jl_emitted_output_t emitted =
         out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
     jl_ExecutionEngine->addOutput(std::move(emitted));
+}
+
+// The workqueue holds the transitive closure of not-yet-emitted callees, which
+// with a tiered (or otherwise deferred) compilation schedule can be the whole
+// call graph of an entry point, and a module is both the unit of optimization
+// (one giant module means one unboundedly long, uninterruptible LLVM run on
+// whichever thread first looks a symbol up) and the unit of materialization
+// (the lookup would force-optimize the entire graph to run one entry). Emit in
+// bounded chunks instead; cross-chunk calls resolve through the call-target
+// linking machinery exactly like calls across separate emission batches, and
+// unmaterialized chunks stay pending until a symbol of theirs is demanded.
+#define JIT_EMIT_CHUNK 64
+
+extern "C" JL_DLLEXPORT_CODEGEN void
+jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
+{
+    if (len == 0)
+        return;
+    JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
+    for (int base = 0; base < len; base += JIT_EMIT_CHUNK) {
+        int n = len - base < JIT_EMIT_CHUNK ? len - base : JIT_EMIT_CHUNK;
+        jl_emit_codeinsts_chunk(codeinsts + base, srcs + base, n);
+    }
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
