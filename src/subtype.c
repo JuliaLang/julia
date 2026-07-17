@@ -1432,10 +1432,11 @@ static int unionall_is_Type_range(jl_unionall_t *ua) JL_NOTSAFEPOINT
     return jl_is_some_Type(ua->body) && jl_some_Type_T(ua->body) == (jl_value_t*)ua->var;
 }
 
-// Static check mirroring Core.Compiler.constrains_param: is `var` guaranteed
-// to be pinned by any concrete leaftype subtype of `typ`? Conservative: a
-// false return is always safe. Used only on fast paths where we don't have
-// dynamic varbinding state to draw from.
+// Static check approximating Core.Compiler.constrains_var (a coarser,
+// allocation-free subset of that rule): is `var` guaranteed to be pinned by
+// any concrete leaftype subtype of `typ`? Conservative: a false return is
+// always safe. Used only on fast paths where we don't have dynamic
+// varbinding state to draw from.
 static int constrains_param_static(jl_tvar_t *var, jl_value_t *typ, int covariant) JL_NOTSAFEPOINT
 {
     if (typ == (jl_value_t*)var)

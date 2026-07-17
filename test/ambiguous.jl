@@ -331,7 +331,7 @@ end
 @test length(detect_unbound_args(M25341; recursive=true)) == 1
 
 # detect_unbound_args uses a static rule derived from how subtyping assigns
-# static parameters (see `constrains_var` in Test.jl)
+# static parameters (see `Core.Compiler.constrains_var`)
 module UnboundDetect
     # some matching call leaves the parameter unbound
     unbound1(x::Type{<:T}) where {T} = T                       # f(Union{})
@@ -376,15 +376,43 @@ module UnboundDetect
     # parameter unbound (here: `f(Int)` never touches `T`)
     notshadowed1(x::Type{<:Union{T,Int}}) where {T} = T
     notshadowed1(x::Type{Union{}}) = 0
+    # when the range variable occurs in another slot, the `Type{Union{}}`
+    # probe signature is not covered by the method itself, so the lookup
+    # finding the broad fallback proves nothing: `f(Union{}, Ref{Union{}}())`
+    # still dispatches to the `where`-method and leaves `T` unbound
+    notshadowed2(x::Type{A}, y::Ref{A}) where {T, A<:AbstractArray{T}} = T
+    notshadowed2(x::Type, y::Any) = 0
+    # a shadowed slot pins `T` only through a bare lower-bound occurrence,
+    # which is indefinite when `T`'s declared lower bound is not `Union{}`
+    # (`f(Float64)` leaves `T` unbound: the least solution unions in `Int`)
+    notshadowed3(x::Type{<:T}) where {T>:Int} = T
+    notshadowed3(x::Type{Union{}}) = 0
+    # a zero-length-vararg shadow rescues chained bounds too, but not when a
+    # nonempty call can still leave the chain unpinned (`f(1, Ref{Union{}}())`)
+    shadowed5(x::Int, y::S...) where {T, U<:T, S<:U} = T
+    shadowed5(x::Int) = 0
+    notshadowed4(x::Int, y::Ref{S}...) where {T, U<:T, S<:U} = T
+    notshadowed4(x::Int) = 0
     # a parameter of an argument's constructor that is also the declared type
-    # of one of its fields cannot be `Union{}` (no instance would exist), so
-    # its bound pins T; without such a field it can, and T may be unbound
+    # of one of its always-initialized fields cannot be `Union{}` (no
+    # instance would exist), so its bound pins T; without such a field it
+    # can, and T may be unbound
     struct WithField{S, A<:Tuple}
         x::A
     end
     struct WithoutField{S, A<:Tuple} end
     fieldpins(x::WithField{<:Any, <:Tuple{Ref{Type{T}}, Vararg{Any}}}) where {T} = T
     nofieldpins(x::WithoutField{<:Any, <:Tuple{Ref{Type{T}}, Vararg{Any}}}) where {T} = T
+    # an incomplete `new` inner constructor can leave the field `#undef`, so
+    # `Incomplete{Union{}}()` is constructible and `T` may be unbound
+    mutable struct Incomplete{A}
+        x::A
+        Incomplete{A}() where {A} = new()
+    end
+    unbound11(x::Incomplete{<:T}) where {T} = T                # f(Incomplete{Union{}}())
+    # a field-pinned constructor parameter contributes only a lower bound,
+    # indefinite when `T`'s declared lower bound is not `Union{}`
+    unbound12(x::WithField{<:Any, <:T}) where {T>:Tuple{}} = T # f(WithField{1,Tuple{Int}}((1,)))
     # issue #54893: `Foo54893(1.0)` leaves `T` unbound; the constructor
     # signature spells `Type{Foo54893}` with the struct's own variable
     # object, which must not be mistaken for an occurrence of `T`
@@ -407,7 +435,7 @@ let unbound = Set{Method}(detect_unbound_args(UnboundDetect))
         @test (m in unbound) == should_flag context=name
         tested += 1
     end
-    @test tested == 28
+    @test tested == 34
     let ms = filter(m -> m.sig isa UnionAll, collect(methods(UnboundDetect.Foo54893)))
         @test only(ms) in unbound
     end
