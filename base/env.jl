@@ -1,10 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const exe_handle = Base.OncePerProcess{Ptr{Cvoid}}() do
-    ccall(:dlopen, Ptr{Cvoid}, (Ptr{Cchar}, Cint), C_NULL, RTLD_LAZY)
-end;
-
-
 if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
@@ -63,16 +58,16 @@ else # !windows
     if Sys.isapple()
         _environ() = unsafe_load(ccall(:_NSGetEnviron, Ptr{Ptr{Cstring}}, ()))
     else
-        function _environ()
-            environ = unsafe_load(cglobal(:environ, Ptr{Cstring}))
-            if environ == C_NULL
-                # We are being loaded with RTLD_DEEPBIND and environ is NULL
-                # So we try to get the executable's environ.
-                environ_ptr = ccall(:dlsym, Ptr{Ptr{Cchar}}, (Ptr{Cvoid}, Cstring), exe_handle, "environ")
-                environ = unsafe_load(environ_ptr)
-            end
-            return environ
+        const _environ_ptr = Base.OncePerProcess{Ptr{Ptr{Cstring}}}() do
+            # Look up `environ` in the main executable, since if Julia is loaded
+            # via RTLD_DEEPBIND this may resolve to NULL in our own namespace.
+            # (see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=111413)
+            executable_handle = ccall(:jl_dlopen, Ptr{Cvoid}, (Ptr{Cchar}, Cint),
+                C_NULL, Libc.Libdl.RTLD_LAZY)
+            return Ptr{Ptr{Cstring}}(Libc.Libdl.dlsym(executable_handle, :environ))
         end
+
+        _environ() = unsafe_load(_environ_ptr())
     end
 
     function access_env(onError::Function, var::AbstractString)
@@ -235,15 +230,7 @@ if Sys.iswindows()
 else # !windows
     function iterate(::EnvDict, i=0)
         envs = _environ()
-        if envs == C_NULL
-            # If julia is loaded via dlopen with RTLD_DEEPBIND, environ may be NULL.
-            # If that happens then this causes segfaults when we try to "iterate" over the environment.
-            # We have already tried above to get the loading executable's `environ` but if that still failed
-            # we may still end up with `envs == C_NULL`.
-            # Iterating over the environment makes no sense in this context and we should not try to do it
-            # so just return `nothing` and be done with it.
-            return nothing
-        end
+        envs == C_NULL && error("Failed to resolve `environ`.")
         while true
             envp = unsafe_load(envs, i + 1)
             envp == C_NULL && return nothing
