@@ -2789,7 +2789,8 @@ function detect_unbound_args(mods...;
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             is_in_mods(parentmodule(m), recursive, mods) || continue
-            has_unbound_vars(m.sig) || continue
+            idxs = unbound_sparams(m.sig)
+            isempty(idxs) && continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType
             params = tuple_sig.parameters
             # The calls that leave a parameter unbound may all dispatch to
@@ -2806,13 +2807,31 @@ function detect_unbound_args(mods...;
                     nonempty_vararg = true
                 end
             end
+            # the where-chain binders, aligned with the `static_parameter`
+            # numbering used in `idxs`
+            sig_vars = TypeVar[]
+            let body = m.sig
+                while body isa UnionAll
+                    push!(sig_vars, body.var)
+                    body = body.body
+                end
+            end
             shadowed_slots = Int[]
             for i in eachindex(params)
                 # a `Type{S}` argument (with `S` a slot-local range or a
                 # method parameter) binds `S = Union{}` — which constrains
                 # nothing in the bounds of `S` — only when the argument is
                 # `Union{}` itself
-                type_slot_var(params[i]) === nothing && continue
+                v = type_slot_var(params[i])
+                v === nothing && continue
+                # the re-check consumes a shadowed slot only through
+                # `constrains_type_value` on the slot variable's bound, so a
+                # slot that cannot pin any possibly-unbound parameter that
+                # way needs no method-table probe (`idxs` is a superset of
+                # the parameters still unbound under `nonempty_vararg`)
+                any(idx -> (var = sig_vars[idx];
+                            v !== var && Core.Compiler.constrains_type_value(var, v.ub)),
+                    idxs) || continue
                 bot_params = Any[params...]
                 bot_params[i] = Type{Union{}}
                 bot_sig = Base.rewrap_unionall(Tuple{bot_params...}, m.sig)
@@ -2828,9 +2847,12 @@ function detect_unbound_args(mods...;
                 end
             end
             # re-check unboundness under the verified assumptions, keeping
-            # the parameter indices for the body query below
-            idxs = unbound_sparams(m.sig, nonempty_vararg, shadowed_slots)
-            isempty(idxs) && continue
+            # the parameter indices for the body query below; without any
+            # assumption the first scan already answered
+            if nonempty_vararg || !isempty(shadowed_slots)
+                idxs = unbound_sparams(m.sig, nonempty_vararg, shadowed_slots)
+                isempty(idxs) && continue
+            end
             # unboundness only matters if the body actually reads one of the
             # possibly-unbound parameters
             reads_sparams(m, idxs) || continue
@@ -2894,8 +2916,6 @@ function unbound_sparams(@nospecialize(sig), nonempty_vararg::Bool=false,
     end
     return idxs
 end
-
-has_unbound_vars(@nospecialize sig) = !isempty(unbound_sparams(sig))
 
 # Whether the lowered body of `m` reads any of the static parameters whose
 # indices are in `idxs`. An `Expr(:isdefined, ...)` query does not count as a

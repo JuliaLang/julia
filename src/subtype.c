@@ -1427,28 +1427,77 @@ static jl_value_t *wrap_tvar_env(jl_value_t *tvar, int constrained) JL_CANSAFEPO
     return (jl_value_t*)jl_svec2(tvar, constrained ? jl_true : jl_false);
 }
 
-static int unionall_is_Type_range(jl_unionall_t *ua) JL_NOTSAFEPOINT
+// Allocation-free mirror of the `PIN_TYPEOF` grade of
+// `Core.Compiler.pin_grade`: is `v` pinned to a `typeof`-produced argument
+// type (concrete, in particular not `Union{}`) by every call matching `t`?
+// True for a required covariant argument slot (directly, under nested
+// `Tuple`s, or in all arms of a `Union`), or as the sole upper bound of
+// another variable in such a slot. A false return is always safe.
+static int pins_typeof_static(jl_tvar_t *v, jl_value_t *t) JL_NOTSAFEPOINT
 {
-    return jl_is_some_Type(ua->body) && jl_some_Type_T(ua->body) == (jl_value_t*)ua->var;
+    if (t == (jl_value_t*)v)
+        return 1;
+    while (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        if (ua->var->ub == (jl_value_t*)v && ua->var->lb == jl_bottom_type &&
+            pins_typeof_static(ua->var, ua->body))
+            // the least solution for `v` is the other variable's value
+            return 1;
+        if (ua->var == v)
+            return 0; // `v` is rebound below
+        t = ua->body;
+    }
+    if (jl_is_uniontype(t)) {
+        return pins_typeof_static(v, ((jl_uniontype_t*)t)->a) &&
+               pins_typeof_static(v, ((jl_uniontype_t*)t)->b);
+    }
+    if (!jl_is_datatype(t))
+        return 0;
+    jl_datatype_t *dt = (jl_datatype_t*)t;
+    if (dt->name == jl_tuple_typename) {
+        size_t fc = jl_nparams(dt);
+        for (size_t i = 0; i < fc; i++) {
+            jl_value_t *p = jl_tparam(dt, i);
+            // a `Vararg` tail may match zero arguments
+            if (!jl_is_vararg(p) && pins_typeof_static(v, p))
+                return 1;
+        }
+    }
+    // `Type{v}` can be matched by the argument `Union{}`, and invariant
+    // occurrences guarantee at most an inhabited value (the `PIN_INHABITED`
+    // grade, not mirrored here)
+    return 0;
 }
 
-// Static check approximating Core.Compiler.constrains_var (a coarser,
-// allocation-free subset of that rule): is `var` guaranteed to be pinned by
-// any concrete leaftype subtype of `typ`? Conservative: a false return is
-// always safe. Used only on fast paths where we don't have dynamic
-// varbinding state to draw from.
+// Static check mirroring a conservative subset of
+// Core.Compiler.constrains_var: is `var` guaranteed to be pinned by any
+// concrete leaftype subtype of `typ`? A false return is always safe; a true
+// return must also hold under `constrains_var`. Used only on fast paths
+// where we don't have dynamic varbinding state to draw from.
 static int constrains_param_static(jl_tvar_t *var, jl_value_t *typ, int covariant) JL_NOTSAFEPOINT
 {
     if (typ == (jl_value_t*)var)
-        return 1;
+        // a covariant occurrence contributes `typeof` of an argument as a
+        // lower bound, which determines the least solution only when the
+        // declared lower bound does not also union into it
+        return !covariant || var->lb == jl_bottom_type;
     while (jl_is_unionall(typ)) {
         jl_unionall_t *ua = (jl_unionall_t*)typ;
-        // A Type{<:...} range can be inhabited by Union{}, which does not
-        // expose the structure of the range bound to static parameters.
-        if (covariant && !unionall_is_Type_range(ua) &&
-            constrains_param_static(var, ua->var->ub, covariant))
+        // occurrences in the inner variable's declared bound pin `var` only
+        // when every call pins that variable to a `typeof`-produced argument
+        // type; otherwise it can take the value `Union{}` (e.g. a
+        // `Type{<:...}` range matched by `Union{}`), satisfying its bounds
+        // without constraining them (the `jl_has_typevar` occurs-check gates
+        // the `pins_typeof_static` body traversal)
+        if (covariant && ua->var->lb == jl_bottom_type &&
+            jl_has_typevar(ua->var->ub, var) &&
+            pins_typeof_static(ua->var, ua->body) &&
+            constrains_param_static(var, ua->var->ub, 1))
             return 1;
-        // ua->var->lb doesn't constrain var
+        if (ua->var == var)
+            // `var` is rebound: occurrences below belong to the inner
+            // variable (issue #54893)
+            return 0;
         typ = ua->body;
     }
     if (jl_is_uniontype(typ)) {
