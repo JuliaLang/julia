@@ -70,6 +70,28 @@ typedef struct {
 } padded_tid_hint_t;
 static padded_tid_hint_t last_parked[JL_SCHED_MAX_POOLS];
 
+// Per-thread flag: set when the thread receives a *targeted* wake
+// (jl_wakeup_thread), i.e. work was delivered specifically to it (a sticky
+// or pinned task in its workqueue). The woken thread may then poll without
+// holding a spinner slot until the sleep threshold elapses, instead of
+// being force-parked by a saturated spinner cap: threads that demonstrably
+// receive directed work would otherwise pay a futex round trip per task
+// (the parked-consumer channel pattern). Polling uncounted is safe: the
+// wake gate's lost-wakeup argument depends only on counted spinners'
+// exit protocol, and this thread still parks through the standard
+// publish + fence + re-check sequence. Demand-proportional by
+// construction — only an actual targeted wake grants a window.
+static _Atomic(uint8_t) *targeted_wake_flags = NULL; // one cache line each
+// Off by default: the window helps schedulers with per-thread queues (an
+// extra poller is nearly free) and hurts ones with shared queues (partr's
+// heaps suffer under idle polling), so the scheduler opts in at runtime.
+static _Atomic(int) targeted_wake_poll = 0;
+
+JL_DLLEXPORT void jl_set_targeted_wake_poll(int enable) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&targeted_wake_poll, enable);
+}
+
 // invariant: No thread is ever asleep unless sleep_check_state is sleeping (or we have a wakeup signal pending).
 // invariant: Any particular thread is not asleep unless that thread's sleep_check_state is sleeping.
 // invariant: The transition of a thread state to sleeping must be followed by a check that there wasn't work pending for it.
@@ -121,6 +143,9 @@ JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSA
 // (called only by the main thread)
 void jl_init_threadinginfra(void)
 {
+    // one cache line per thread; jl_n_threads is final here
+    int nt = jl_atomic_load_relaxed(&jl_n_threads);
+    targeted_wake_flags = (_Atomic(uint8_t)*)calloc(nt < 1 ? 1 : nt, 64);
     /* initialize the synchronization trees pool */
     sleep_threshold = DEFAULT_THREAD_SLEEP_THRESHOLD;
     char *cp = getenv(THREAD_SLEEP_THRESHOLD_NAME);
@@ -331,7 +356,10 @@ static int wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass i
         wake_self(ct, uvlock);
     }
     else {
-        // something added to the sticky-queue: notify that thread
+        // something added to the sticky-queue: notify that thread, and grant
+        // it a slotless poll window (see targeted_wake_flags)
+        if (targeted_wake_flags && jl_atomic_load_relaxed(&targeted_wake_poll))
+            jl_atomic_store_relaxed(&targeted_wake_flags[tid * 64], 1);
         woke = wake_thread_and_uv(ct, uvlock, tid);
     }
     if (tid == -1) {
@@ -487,6 +515,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
         tpid = -1; // treat as unpooled: legacy spin/sleep behavior
     // volatile: read in the outer JL_CATCH after a longjmp
     volatile int spinning = 0;
+    int woken_poll = 0; // slotless poll window after a targeted wake
     jl_task_t *task = NULL;
 
     // The outer handler exists to release the spinner slot on ANY unwind:
@@ -509,15 +538,20 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
         jl_ptls_t ptls = ct->ptls;
         int is_io_thread = ptls->tid == jl_atomic_load_relaxed(&io_loop_tid);
         if (!spinning && tpid >= 0 && !is_io_thread) {
+            if (!woken_poll && targeted_wake_flags &&
+                jl_atomic_exchange_relaxed(&targeted_wake_flags[ptls->tid * 64], 0))
+                woken_poll = 1;
             int32_t ns = jl_atomic_load_relaxed(&n_spinning[tpid].v);
             if (2 * ns < jl_n_threads_per_pool[tpid]) {
                 jl_atomic_fetch_add_relaxed(&n_spinning[tpid].v, 1);
                 spinning = 1;
             }
         }
-        // Denied a spinner slot: park without polling. The post-fence
-        // get_next_task retry below keeps this race-free.
-        int force_park = tpid >= 0 && !spinning && !is_io_thread;
+        // Denied a spinner slot: park without polling — unless a targeted
+        // wake granted a poll window (work is being delivered specifically
+        // to this thread; see targeted_wake_flags). The post-fence
+        // get_next_task retry below keeps parking race-free either way.
+        int force_park = tpid >= 0 && !spinning && !is_io_thread && !woken_poll;
 
         // quick, race-y check to see if there seems to be any stuff in there
         jl_cpu_pause();
@@ -528,6 +562,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
         jl_cpu_pause();
         if (force_park || sleep_check_after_threshold(&start_cycles) || (is_io_thread && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
+            woken_poll = 0;     // the poll window ends where parking begins
             if (spinning) {
                 // release the slot before the sleeping-store + fence: pairs
                 // with the wakeup gate's n_spinning load

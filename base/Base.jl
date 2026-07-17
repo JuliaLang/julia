@@ -391,6 +391,12 @@ function start_profile_listener()
 end
 
 function __init__()
+    # The workstealing scheduler opts in to the slotless poll window after
+    # targeted wakes (per-thread queues make an extra poller nearly free;
+    # partr's shared heaps do not).
+    if Scheduler.ChosenScheduler === Scheduler.Workstealing
+        ccall(:jl_set_targeted_wake_poll, Cvoid, (Cint,), 1)
+    end
     # Base library init
     global _atexit_hooks_finished = false
     Filesystem.__postinit__()

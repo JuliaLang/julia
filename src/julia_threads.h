@@ -380,6 +380,7 @@ extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_set_targeted_wake_poll(int enable) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize);
