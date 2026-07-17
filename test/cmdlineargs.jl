@@ -1520,6 +1520,66 @@ end
     end
 end
 
+# Precompile and load a package, exercising the split pkgimage layout
+# (--pkgimages=yes: native code goes into the ocachefile, the heap stays in the
+# .ji) and the plain serialized .ji (--pkgimages=no), with --compress-sysimage
+# (which precompile workers inherit through julia_cmd) on and off in each.
+# Compression requires the split layout, so with --pkgimages=no the worker must
+# warn and emit an uncompressed heap.
+@testset "pkgimage: native=$native compress=$compress" for native in (true, false), compress in (true, false)
+    mktempdir() do dir
+        pkgdir = joinpath(dir, "CompressMe")
+        mkpath(joinpath(pkgdir, "src"))
+        write(joinpath(pkgdir, "Project.toml"),
+            """
+            name = "CompressMe"
+            uuid = "d1cd1848-32b7-4b19-a4d5-11c4de8b4381"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkgdir, "src", "CompressMe.jl"),
+            """
+            module CompressMe
+            f() = 42
+            end
+            """)
+        cmd = addenv(`$(Base.julia_cmd()) --pkgimages=$(native ? "yes" : "no")
+                      --compress-sysimage=$(compress ? "yes" : "no")
+                      --startup-file=no -E 'using CompressMe; CompressMe.f()'`,
+                     "JULIA_DEPOT_PATH" => joinpath(dir, "depot"),
+                     "JULIA_LOAD_PATH" => join((dir, "@stdlib"), Sys.iswindows() ? ";" : ":"))
+        success, out, err = readchomperrors(cmd)
+        @test success
+        @test out == "42"
+        @test occursin("--compress-sysimage=yes is unsupported", err) == (compress && !native)
+
+        compiled = joinpath(dir, "depot", "compiled", "v$(VERSION.major).$(VERSION.minor)", "CompressMe")
+        ji_file = only(filter(endswith(".ji"), readdir(compiled; join=true)))
+        @test isfile(Base.ocachefile_from_cachefile(ji_file)) == native
+
+        # The heap payload in the .ji must be zstd-compressed exactly when a
+        # compressed split pkgimage was requested.
+        open(ji_file) do io
+            pkgimage = Ref{UInt8}()
+            dataendpos = Ref{Int64}()
+            datastartpos = Ref{Int64}()
+            checksum = ccall(:jl_read_verify_header, UInt32, (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Int64}, Ptr{Int64}), io.ios, pkgimage, dataendpos, datastartpos)
+            @test checksum != 0
+            @test pkgimage[] == 1
+            seek(io, datastartpos[])
+            zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
+            @test (read(io, 4) == zstd_magic) == (native && compress)
+        end
+
+        # Load again in a fresh process from the existing cache, without
+        # recompiling (which would rewrite the .ji, e.g. with a new build_id).
+        cache_bytes = read(ji_file)
+        success, out, err = readchomperrors(cmd)
+        @test success
+        @test out == "42"
+        @test read(ji_file) == cache_bytes
+    end
+end
+
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
 @test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
 

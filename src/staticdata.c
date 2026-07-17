@@ -3497,31 +3497,45 @@ static char *jl_image_alloc_pages(size_t size)
     return data;
 }
 
-static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_t *checksum,
-                                          uint32_t expect_checksum, int64_t *dataendpos,
-                                          int64_t *datastartpos);
-
 // Decompress a compressed image payload found after the .ji header in data, and
 // return a buffer containing the uncompressed header and payload.
 static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len)
 {
     ios_t f;
-    uint32_t checksum;
-    int64_t datastartpos, dataendpos;
+    uint8_t pkgimage = 0;
+    int64_t datastartpos = 0, dataendpos = 0;
     ios_static_buffer(&f, data, len);
-    jl_value_t *exc = jl_validate_cache_file(&f, NULL, &checksum, image->heap_checksum,
-                                             &dataendpos, &datastartpos);
-    if (exc)
-        jl_throw(exc);
+    // Only parse the header here; for incremental images the dependency
+    // modules are not known yet, so the full cache validation happens later,
+    // against the decompressed buffer.
+    uint32_t checksum = jl_read_verify_header(&f, &pkgimage, &dataendpos, &datastartpos);
+    if (checksum == 0)
+        jl_error("Precompile file header verification checks failed.");
+    if (image->heap_checksum != 0 && checksum != image->heap_checksum)
+        jl_error("Image checksum mismatch: the heap image (.ji) was not "
+                 "compiled for use with this native image.");
+    // jl_read_verify_header leaves the stream just past the dataendpos field
+    int64_t dataendpos_fieldpos = ios_pos(&f) - sizeof(uint64_t);
 
     char *comp_data = data + datastartpos;
     size_t comp_len = dataendpos - datastartpos;
-    image->size = datastartpos + ZSTD_getFrameContentSize(comp_data, comp_len);
+    unsigned long long heap_size = ZSTD_getFrameContentSize(comp_data, comp_len);
+    if (heap_size == ZSTD_CONTENTSIZE_UNKNOWN || heap_size == ZSTD_CONTENTSIZE_ERROR)
+        jl_error("Compressed heap image is corrupt.");
+    image->size = datastartpos + heap_size;
     image->data = jl_image_alloc_pages(image->size);
 
-    // Copy uncompressed header
+    // Copy the uncompressed header, updating its recorded end of the payload
+    // to account for decompression
     memcpy((void *)image->data, data, datastartpos);
-    ZSTD_decompress((void *)(image->data + datastartpos), image->size, comp_data, comp_len);
+    int64_t new_dataendpos = image->size;
+    memcpy((void *)(image->data + dataendpos_fieldpos), &new_dataendpos, sizeof(uint64_t));
+    size_t res = ZSTD_decompress((void *)(image->data + datastartpos), heap_size,
+                                 comp_data, comp_len);
+    if (ZSTD_isError(res))
+        jl_errorf("Failed to decompress heap image: %s", ZSTD_getErrorName(res));
+    if (res != heap_size)
+        jl_error("Decompressed heap image has unexpected size.");
 }
 
 JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
