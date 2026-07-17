@@ -67,7 +67,7 @@ else # !windows
             environ = unsafe_load(cglobal(:environ, Ptr{Cstring}))
             if environ == C_NULL
                 # We are being loaded with RTLD_DEEPBIND and environ is NULL
-                # So we try to get the executable.
+                # So we try to get the executable's environ.
                 environ_ptr = ccall(:dlsym, Ptr{Ptr{Cchar}}, (Ptr{Cvoid}, Cstring), exe_handle, "environ")
                 environ = unsafe_load(environ_ptr)
             end
@@ -238,7 +238,9 @@ else # !windows
         if envs == C_NULL
             # If julia is loaded via dlopen with RTLD_DEEPBIND, environ may be NULL.
             # If that happens then this causes segfaults when we try to "iterate" over the environment.
-            # Iterating over the environment makes no sense in that context and we should not try to do it
+            # We have already tried above to get the loading executable's `environ` but if that still failed
+            # we may still end up with `envs == C_NULL`.
+            # Iterating over the environment makes no sense in this context and we should not try to do it
             # so just return `nothing` and be done with it.
             return nothing
         end
