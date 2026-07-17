@@ -882,6 +882,12 @@ end
 else
     SetLastError(_) = nothing
 end
+# tier suspension: the window between SetLastError and the GetLastError reads
+# must contain only compiled-code execution, as upstream; interpreted dispatch
+# and tier bookkeeping make Win32 calls that can reset the thread's last error
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+ccall(:jl_tier_quiesce, Cvoid, ())
+ccall(:jl_tier_drain, Cvoid, ())
 @test Libc.errno(0xc0ffee) === nothing
 @test SetLastError(0xc0def00d) === nothing
 let finalized = false
@@ -899,6 +905,8 @@ end
     @test Libc.GetLastError() == 0xc0def00d
 end
 @test Libc.errno() == 0xc0ffee
+ccall(:jl_tier_resume, Cvoid, ())
+ccall(:jl_tier_resume_parking, Cvoid, ())
 
 # Test that we can VirtualProtect jitted code to writable
 @noinline function WeVirtualProtectThisToRWX(x, y)
