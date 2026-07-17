@@ -727,4 +727,22 @@ end
         NTuple{4, UInt8},
         RHasUInt17(Core.Intrinsics.trunc_int(RUInt17, UInt32(1)), 0x02),
     )
+
+    # Dense odd-bit arrays use byte-rounded element storage and reject byte reinterpretation.
+    values = Core.Intrinsics.trunc_int.(RUInt63, UInt64[1, 2, 3])
+    memory = Memory{RUInt63}(undef, 3)
+    memory .= values
+    @test Core.Intrinsics.zext_int.(UInt64, memory) == UInt64[1, 2, 3]
+    memory[2] = Core.Intrinsics.trunc_int(RUInt63, UInt64(4))
+    @test Core.Intrinsics.zext_int(UInt64, memory[2]) == 4
+
+    array = Array(memory)
+    @test Base.elsize(array) == sizeof(RUInt63)
+    @test Core.Intrinsics.zext_int.(UInt64, array) == UInt64[1, 4, 3]
+    array[3] = Core.Intrinsics.trunc_int(RUInt63, UInt64(5))
+    @test Core.Intrinsics.zext_int(UInt64, array[3]) == 5
+
+    @test_throws ArgumentError reinterpret(UInt8, memory)
+    @test_throws ArgumentError reinterpret(UInt8, array)
+    @test_throws ArgumentError reinterpret(RUInt63, zeros(UInt8, 8))
 end

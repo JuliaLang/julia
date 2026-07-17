@@ -24,6 +24,11 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         @noinline
         throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T, "` which is a singleton type")))
     end
+    function throwbitpadding(S::Type, T::Type, U::Type)
+        @noinline
+        throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T,
+            "` because type `", U, "` contains non-byte-aligned primitive fields")))
+    end
 
     global reinterpret
 
@@ -79,6 +84,8 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
+        has_bit_padding(T) && throwbitpadding(S, T, T)
+        has_bit_padding(S) && throwbitpadding(S, T, S)
         (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T, "different")
         if N != 0 && sizeof(S) != sizeof(T)
             ax1 = axes(a)[1]
@@ -116,6 +123,8 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
+        has_bit_padding(T) && throwbitpadding(S, T, T)
+        has_bit_padding(S) && throwbitpadding(S, T, S)
         if sizeof(S) == sizeof(T)
             N = ndims(a)
         elseif sizeof(S) > sizeof(T)

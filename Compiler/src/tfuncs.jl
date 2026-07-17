@@ -3326,6 +3326,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
     isprimitivetype(argtype1) || return ErrorException
+    f === bswap_int && Core.bitsizeof(argtype1) % 16 != 0 && return ErrorException
     if contains_is(_FLOAT_INTRINSICS, f)
         argtype1 <: CORE_FLOAT_TYPES || return ErrorException
     end

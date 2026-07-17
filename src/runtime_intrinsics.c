@@ -1605,7 +1605,19 @@ bi_iintrinsic_cnvtb_fast(APInt_lshr, lshr_op, lshr_int, u, 1)
 bi_iintrinsic_cnvtb_fast(APInt_ashr, ashr_op, ashr_int, , 1)
 //#define bswap_op(a) __builtin_bswap(a)
 //un_iintrinsic_fast(APInt_bswap, bswap_op, bswap_int, u)
-un_iintrinsic_slow(APInt_bswap, bswap_int, u)
+static const select_intrinsic_1_t bswap_int_list = {
+    APInt_bswap
+};
+JL_DLLEXPORT jl_value_t *jl_bswap_int(jl_value_t *a)
+{
+    jl_value_t *ty = jl_typeof(a);
+    if (!jl_is_primitivetype(ty))
+        jl_error("bswap_int: value is not a primitive type");
+    if (jl_datatype_nbits((jl_datatype_t*)ty) % 16 != 0)
+        jl_error("bswap_int: argument bitsize must be a multiple of 16");
+    return jl_iintrinsic_1(a, "bswap_int", usignbitbyte,
+                          jl_intrinsiclambda_ty1, bswap_int_list);
+}
 //#define ctpop_op(a) __builtin_ctpop(a)
 //uu_iintrinsic_fast(APInt_popcount, ctpop_op, ctpop_int, u)
 uu_iintrinsic_slow(APInt_popcount, ctpop_int, u)

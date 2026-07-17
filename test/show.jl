@@ -1546,6 +1546,15 @@ end
 # Test for PR 17803
 @test static_shown(Int128(-1)) == "Int128(0xffffffffffffffffffffffffffffffff)"
 
+# Ignore unused high bits when statically showing odd-bit primitives.
+primitive type StaticShowUInt63 63 end
+let m = Memory{StaticShowUInt63}(undef, 1)
+    GC.@preserve m unsafe_store!(Ptr{UInt64}(pointer(m)), typemax(UInt64))
+    shown = static_shown(m)
+    @test occursin("StaticShowUInt63(0x7fffffffffffffff)", shown)
+    @test !occursin("StaticShowUInt63(0xffffffffffffffff)", shown)
+end
+
 # PR #22160
 @test static_shown(:aa) == ":aa"
 @test static_shown(:+) == ":+"

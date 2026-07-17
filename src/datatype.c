@@ -341,6 +341,10 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
         // computing type size, but adds no extra bytes for each element, so
         // their effect on offsets are never what you may naturally expect).
         return 0;
+    if (jl_datatype_nbits((jl_datatype_t*)ty) != elsz * 8)
+        // SIMD operations would include the unused high bits of an odd-bit
+        // primitive even though they are not part of the logical value.
+        return 0;
     size_t size = nfields * elsz;
     // Use natural alignment for this vector: this matches LLVM and clang.
     return next_power_of_two(size);

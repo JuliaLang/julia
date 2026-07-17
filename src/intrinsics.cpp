@@ -1476,6 +1476,10 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         // verify argument types
         if (!jl_is_primitivetype(xinfo.typ))
             return emit_runtime_call(ctx, f, argv, nargs);
+        if (f == bswap_int && jl_datatype_nbits((jl_datatype_t*)xinfo.typ) % 16 != 0) {
+            emit_error(ctx, "bswap_int: argument bitsize must be a multiple of 16");
+            return jl_cgval_t();
+        }
         Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext(), true);
         if (float_func()[f]) {
             if (!xtyp->isFloatingPointTy())

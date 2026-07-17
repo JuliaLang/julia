@@ -6191,10 +6191,18 @@ end
 
 # make sure VecElement Tuple has the C alignment and ABI for supported types
 primitive type Int24 24 end
+primitive type VecUInt63 63 end
+vecuint63(x) = Core.Intrinsics.trunc_int(VecUInt63, UInt64(x))
+@noinline second_vecuint63(v) = Core.Intrinsics.zext_int(UInt64, v[2].value)
 @test Base.datatype_alignment(NTuple{10,VecElement{Int16}}) == 32
 @test Base.datatype_alignment(NTuple{10,VecElement{Int24}}) == 4
 @test Base.datatype_alignment(NTuple{10,VecElement{Int64}}) == 128
 @test Base.datatype_alignment(NTuple{10,VecElement{Int128}}) == 256
+let v = (VecElement(vecuint63(1)), VecElement(vecuint63(2)))
+    @test fieldoffset(typeof(v), 2) == 8
+    @test Core.Intrinsics.zext_int(UInt64, getfield(v, 2).value) == 2
+    @test second_vecuint63(v) == 2
+end
 
 # issue #21516
 struct T21516
