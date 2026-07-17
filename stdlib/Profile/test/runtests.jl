@@ -320,8 +320,10 @@ let cmd = Base.julia_cmd()
         println("done")
         print(Profile.len_data())
         """
-    # use multiple threads here to ensure that profiling works with threading
-    s = run_with_watchdog(`$cmd -t2 -e $script`)
+    # use multiple threads here to ensure that profiling works with threading.
+    # Tiering is pinned off: the sample-count bound assumes the profiled
+    # expression compiles inside the window.
+    s = run_with_watchdog(addenv(`$cmd -t2 -e $script`, "JULIA_TIER_ENABLE" => "0"))
     @test !isempty(s)
     @test occursin("done", s)
     @test parse(Int, split(s, '\n')[end]) > 100
