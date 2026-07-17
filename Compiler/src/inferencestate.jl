@@ -712,66 +712,252 @@ function convert_cache_mode(cache_mode::Symbol)
 end
 
 """
-    constrains_param(var::TypeVar, sig, covariant::Bool, type_constrains::Bool)
+    constrains_var(var::TypeVar, t, covariant::Bool, nonempty_vararg::Bool=false)
 
-Check if `var` will be constrained to have a definite value
-in any concrete leaftype subtype of `sig`.
+Check whether every call matching a method signature pins the static parameter
+`var` to a definite value; `t` is the signature body under `var`'s binder.
+`true` means every matching call pins `var`; `false` means some call may leave
+it unbound, so reading it in the method body would throw `UndefVarError`.
 
-It is used as a helper to determine whether type intersection is guaranteed to be able to
-find a value for a particular type parameter.
-A necessary condition for type intersection to not assign a parameter is that it only
-appears in a `Union[All]` and during subtyping some other union component (that does not
-constrain the type parameter) is selected.
+When a call matches a method, type intersection computes a value for each
+static parameter (`subtype_unionall` in `src/subtype.c`). Subtyping pins a
+variable through two channels (`eff_constrained` in `src/subtype.c`):
 
-The `type_constrains` flag determines whether Type{T} is considered to be constraining
-`T`. This is not true in general, because of the existence of types with free type
-parameters, however, some callers would like to ignore this corner case.
+ * an invariant occurrence: the corresponding position of the call
+   signature must be *equal* to the instantiated method parameter, so any
+   successful match determines the variable. This fails to be definite
+   only where distinct assignments can spell equal types: a `Union` arm
+   can be absorbed by the other arm (`Union{T,Int}` matched against `Int`),
+   a `Vararg` can be respelled (`Tuple{Vararg{T}}` matched against
+   `Tuple`), and the bound of an inner variable can be widened away
+   (`Vector{<:T}` matched against `Vector`), so none of those count.
+
+ * a covariant occurrence: the position is filled with `typeof` of an
+   argument, which contributes a lower bound, and the least solution is
+   taken as the parameter value. This is definite only if the declared
+   lower bound of the variable is `Union{}` (otherwise other types union
+   into the solution: `f(x::T) where {T>:Int}` is unbound for `f(2.0)`),
+   and only for occurrences guaranteed to contribute in every call:
+   present in all `Union` arms, not under a `Vararg` tail (which may match
+   zero arguments), and not merely in the declared bounds of another
+   variable — unless that variable is itself pinned to a `typeof`-produced
+   argument type in every call, since a variable ranging over an invariant
+   position or over a `Type` argument can take the value `Union{}`,
+   satisfying its bounds without constraining them (`f(::Type{<:T})` is
+   unbound for `f(Union{})`, and `f(::Vector{<:T})` for a
+   `Vector{Union{}}` argument).
+
+`constrains_var` is a conservative static approximation of that dynamic
+rule. `nonempty_vararg` credits the signature's own trailing `Vararg` as if
+it matched at least one argument (it is not propagated into nested
+positions, where an empty tuple can always occur); it is an assumption the
+caller must justify (see `Test.detect_unbound_args`).
 """
-function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, type_constrains::Bool=false)
-    typ === var && return true
-    while typ isa UnionAll
-        covariant && constrains_param(var, typ.var.ub, covariant, type_constrains) && return true
-        # typ.var.lb doesn't constrain var
-        typ = typ.body
+function constrains_var(var::TypeVar, @nospecialize(t), covariant::Bool, nonempty_vararg::Bool=false)
+    if t === var
+        return !covariant || var.lb === Union{}
     end
-    if typ isa Union
-        # for unions, verify that both options would constrain var
-        ba = constrains_param(var, typ.a, covariant, type_constrains)
-        bb = constrains_param(var, typ.b, covariant, type_constrains)
-        (ba && bb) && return true
-    elseif isType(typ)
-        p = type_parameter(typ)
-        if p === var && var.ub === Any
-            # Types with free type parameters are <: Type cause the typevar
-            # to be unconstrained because Type{T} with free typevars is illegal
-            return type_constrains
-        end
-        constrains_param(var, p, false, type_constrains) && return true
-    elseif typ isa DataType
-        # return true if any param constrains var
-        fc = length(typ.parameters)
-        if fc > 0
-            if typ.name === Tuple.name
-                # vararg tuple needs special handling
-                for i in 1:(fc - 1)
-                    p = typ.parameters[i]
-                    constrains_param(var, p, covariant, type_constrains) && return true
-                end
-                lastp = typ.parameters[fc]
-                vararg = unwrap_unionall(lastp)
-                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
-                    constrains_param(var, vararg.N, covariant, type_constrains) && return true
-                    # T = vararg.parameters[1] doesn't constrain var
-                else
-                    constrains_param(var, lastp, covariant, type_constrains) && return true
-                end
-            else
-                for i in 1:fc
-                    p = typ.parameters[i]
-                    constrains_param(var, p, false, type_constrains) && return true
-                end
+    while t isa UnionAll
+        if covariant && t.var.lb === Union{}
+            pin = pin_grade(t.var, t.body, nonempty_vararg)
+            if pin == PIN_TYPEOF && constrains_var(var, t.var.ub, true)
+                return true
+            elseif pin == PIN_INHABITED && constrains_type_value(var, t.var.ub)
+                return true
             end
         end
+        # other occurrences in the bounds of `t.var` do not reliably pin `var`
+        if t.var === var
+            # `var` is rebound: occurrences below belong to the inner
+            # variable (a constructor signature reuses the struct's own
+            # variable objects in `Type{TheStruct}`, issue #54893)
+            return false
+        end
+        t = t.body
+    end
+    if t isa Union
+        if covariant
+            # each arm is individually reachable by some argument, so every
+            # arm must pin `var`
+            return constrains_var(var, t.a, true) &&
+                   constrains_var(var, t.b, true)
+        end
+        # matched by type equality: pinned if every arm pins `var`, or
+        # through any arm that the matched value must expose because no
+        # instantiation of it can be absorbed into the other arms
+        # (issues #58427, #59023)
+        constrains_var(var, t.a, false) && constrains_var(var, t.b, false) &&
+            return true
+        arms = uniontypes(t)
+        for (i, arm) in enumerate(arms)
+            # the cheap occurrence tests first; only arms that pass them
+            # need the `Union` reassembly and `typeintersect` query below
+            if arm === var
+                # absorbing a bare `var` arm forces `var = Union{}`, which
+                # pins it, provided `Union{}` is its only value inside the
+                # other arms
+                var.lb === Union{} || continue
+            else
+                constrains_var(var, arm, false) || continue
+            end
+            others = Union{}
+            for j in eachindex(arms)
+                j == i && continue
+                others = Union{others, arms[j]}
+            end
+            others = UnionAll(var, others)
+            if union_disjoint(arm === var ? var.ub : UnionAll(var, arm), others)
+                return true
+            end
+        end
+        return false
+    end
+    if isType(t)
+        # the parameter is matched exactly by the argument (covariant) or by
+        # type equality (invariant)
+        return constrains_var(var, type_parameter(t), false)
+    end
+    t isa DataType || return false
+    if t.name === Tuple.name
+        for p in t.parameters
+            if p isa Core.TypeofVararg
+                # the argument count pins `N` exactly (including zero)
+                isdefined(p, :N) && constrains_var(var, p.N, covariant) && return true
+                if covariant && nonempty_vararg && isdefined(p, :T)
+                    constrains_var(var, p.T, covariant) && return true
+                end
+            else
+                constrains_var(var, p, covariant) && return true
+            end
+        end
+    else
+        for p in t.parameters
+            constrains_var(var, p, false) && return true
+        end
+    end
+    return false
+end
+
+# Whether no instantiation of `a` overlaps `b`, so that no part of a matched
+# value can satisfy both. `false` when undecidable (free typevars remain).
+function union_disjoint(@nospecialize(a), @nospecialize(b))
+    (has_free_typevars(a) || has_free_typevars(b)) && return false
+    return !hasintersect(a, b)
+end
+
+# Whether matching any specific type value `X <: P` other than `Union{}`
+# necessarily pins `var` (or fails to match): `var` must occur where the
+# subtyping query is forced to constrain it — as `P` itself (`X` becomes its
+# lower bound, which pins any non-`Union{}` value up to type equality,
+# provided `var`'s declared lower bound is `Union{}` and does not union into
+# the solution), invariantly below a non-Tuple constructor, or as a `Vararg`
+# length — in every `Union` arm. Fixed `Tuple` slots of `P` correspond to
+# non-`Union{}` positions of `X` (a tuple type with a `Union{}` field cannot
+# be constructed) and are descended into; `Vararg` tails and ranges inside
+# `P` can be spelled away by `X` and never count.
+function constrains_type_value(var::TypeVar, @nospecialize(P))
+    P === var && return var.lb === Union{}
+    while P isa UnionAll
+        # ranges inside `P` can be widened away by the spelling of `X`
+        P.var === var && return false # `var` is rebound below
+        P = P.body
+    end
+    if P isa Union
+        return constrains_type_value(var, P.a) &&
+               constrains_type_value(var, P.b)
+    end
+    if isType(P)
+        # X <: Type{q} pins the parameter of X by equality with q
+        return constrains_var(var, type_parameter(P), false)
+    end
+    P isa DataType || return false
+    if P.name === Tuple.name
+        for p in P.parameters
+            if p isa Core.TypeofVararg
+                # the length of X pins `N` exactly (or the match fails)
+                isdefined(p, :N) && constrains_var(var, p.N, false) && return true
+            else
+                constrains_type_value(var, p) && return true
+            end
+        end
+        return false
+    end
+    for p in P.parameters
+        constrains_var(var, p, false) && return true
+    end
+    return false
+end
+
+# How strongly the position(s) of `v` in `t` pin its value, for every call:
+#  * `PIN_TYPEOF`: `v` takes a `typeof`-produced argument type — a concrete
+#    type, in particular not `Union{}` and without free type variables. This
+#    holds for a required covariant argument slot (directly, under nested
+#    `Tuple`s, or in all arms of a `Union`), or as the sole upper bound of
+#    another variable in such a slot.
+#  * `PIN_INHABITED`: `v` takes an *inhabited* type (not `Union{}`), though
+#    possibly an abstract one: `v` is an invariant parameter of a constructor
+#    in a required covariant slot, and that constructor declares a field of
+#    exactly that parameter's type which every inner constructor initializes,
+#    so a value of the parameter type must exist inside the argument.
+#  * `PIN_NONE`: neither is guaranteed; `v` may be `Union{}` (e.g. `Type{v}`
+#    positions matched by the argument `Union{}`, or invariant parameters
+#    without such a field), leaving its bounds unconstraining.
+const PIN_NONE = 0
+const PIN_INHABITED = 1
+const PIN_TYPEOF = 2
+
+function pin_grade(v::TypeVar, @nospecialize(t), nonempty_vararg::Bool=false)
+    t === v && return PIN_TYPEOF
+    while t isa UnionAll
+        if t.var.ub === v && t.var.lb === Union{} &&
+            pin_grade(t.var, t.body, nonempty_vararg) == PIN_TYPEOF
+            # the least solution for `v` is the other variable's value
+            return PIN_TYPEOF
+        end
+        t.var === v && return PIN_NONE # `v` is rebound below
+        t = t.body
+    end
+    if t isa Union
+        return min(pin_grade(v, t.a), pin_grade(v, t.b))
+    end
+    t isa DataType || return PIN_NONE
+    if t.name === Tuple.name
+        grade = PIN_NONE
+        for p in t.parameters
+            if p isa Core.TypeofVararg
+                if nonempty_vararg && isdefined(p, :T)
+                    grade = max(grade, pin_grade(v, p.T))
+                end
+            else
+                grade = max(grade, pin_grade(v, p))
+            end
+            grade == PIN_TYPEOF && break
+        end
+        return grade
+    end
+    isType(t) && return PIN_NONE
+    for (i, p) in enumerate(t.parameters)
+        if p === v && param_has_field(t, i)
+            return PIN_INHABITED
+        end
+    end
+    return PIN_NONE
+end
+
+# Whether the `i`-th type parameter of `t`'s constructor is also the declared
+# type of one of its always-initialized fields, so that instances are
+# guaranteed to contain a value of it. Fields beyond
+# `datatype_min_ninitialized` can be left `#undef` by an incomplete `new`
+# inner constructor (`Base.RefValue{Union{}}()` is constructible), so they
+# prove nothing.
+function param_has_field(t::DataType, i::Int)
+    base = unwrap_unionall(t.name.wrapper)
+    base isa DataType || return false
+    tv = base.parameters[i]
+    tv isa TypeVar || return false
+    ftypes = datatype_fieldtypes(base)
+    for j in 1:datatype_min_ninitialized(base)
+        ftypes[j] === tv && return true
     end
     return false
 end
@@ -902,7 +1088,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     sig = def.sig
     # mi is unspecialized: no subtyping has run, so we don't have the
     # `svec(tvar, constrained)` markers that specialized env entries carry.
-    # Use the static `constrains_param` check directly.
+    # Use the static `constrains_var` check directly.
     isempty(mi.sparam_vals) && return sptypes_from_unspecialized(sig)
     spvals = mi.sparam_vals
     nvals = length(spvals)
@@ -917,7 +1103,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         # typevars (when the var got pinned to a value that still contains
         # call-site tvars). `constrained` is true iff every concrete subtype
         # of the call site will pin this var to a definite value.
-        # `src/subtype.c` folds in the static `constrains_param` semantics
+        # `src/subtype.c` folds in static `constrains_var`-style semantics
         # via `constrains_param_static`, so `v_constrained` is authoritative.
         v_tvar = nothing
         v_constrained = false
@@ -974,7 +1160,7 @@ end
 # Separate path for unspecialized MIs (empty `sparam_vals`): no subtyping has
 # run, so we can't rely on the svec-wrapped env entries produced by
 # intersection. Every sparam is represented by its raw method-sig TypeVar, and
-# `undef` is determined by the static `constrains_param` check.
+# `undef` is determined by the static `constrains_var` check.
 function sptypes_from_unspecialized(@nospecialize sig)
     isa(sig, UnionAll) || return EMPTY_SPTYPES
     nvals = 0
@@ -991,10 +1177,7 @@ function sptypes_from_unspecialized(@nospecialize sig)
         ty = sptype_for_tvar(vᵢ, vᵢ,
                              (unwrap_unionall(temp)::DataType).parameters,
                              sig)
-        undef = !(let sig=sig
-            @assert !has_free_typevars(sig)
-            vᵢ.lb === Bottom && constrains_param(vᵢ, sig, #=covariant=#true)
-        end)
+        undef = !constrains_var(vᵢ, (temp::UnionAll).body, #=covariant=#true)
         sptypes[i] = VarState(ty, typemin(Int), undef)
         temp = (temp::UnionAll).body
     end
