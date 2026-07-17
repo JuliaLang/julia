@@ -748,7 +748,14 @@ variable through two channels (`eff_constrained` in `src/subtype.c`):
    `Vector{Union{}}` argument).
 
 `constrains_var` is a conservative static approximation of that dynamic
-rule. `nonempty_vararg` credits the signature's own trailing `Vararg` as if
+rule. In particular an invariant `Union` arm is always treated as
+absorbable, even when it is disjoint from the other arms so that every
+match either exposes it or pins `var = Union{}` by absorbing it
+(issues #58427, #59023): a parameter that some match pins only as
+`Union{}` is still worth reporting, and the arm-must-be-exposed
+refinement would need `typeintersect`-based disjointness proofs whose
+answers depend on union normalization order.
+`nonempty_vararg` credits the signature's own trailing `Vararg` as if
 it matched at least one argument (it is not propagated into nested
 positions, where an empty tuple can always occur); it is an assumption the
 caller must justify (see `Test.detect_unbound_args`).
@@ -778,41 +785,17 @@ function constrains_var(var::TypeVar, @nospecialize(t), covariant::Bool, nonempt
         t = t.body
     end
     if t isa Union
-        if covariant
-            # each arm is individually reachable by some argument, so every
-            # arm must pin `var`
-            return constrains_var(var, t.a, true) &&
-                   constrains_var(var, t.b, true)
-        end
-        # matched by type equality: pinned if every arm pins `var`, or
-        # through any arm that the matched value must expose because no
-        # instantiation of it can be absorbed into the other arms
-        # (issues #58427, #59023)
-        constrains_var(var, t.a, false) && constrains_var(var, t.b, false) &&
-            return true
-        arms = uniontypes(t)
-        for (i, arm) in enumerate(arms)
-            # the cheap occurrence tests first; only arms that pass them
-            # need the `Union` reassembly and `typeintersect` query below
-            if arm === var
-                # absorbing a bare `var` arm forces `var = Union{}`, which
-                # pins it, provided `Union{}` is its only value inside the
-                # other arms
-                var.lb === Union{} || continue
-            else
-                constrains_var(var, arm, false) || continue
-            end
-            others = Union{}
-            for j in eachindex(arms)
-                j == i && continue
-                others = Union{others, arms[j]}
-            end
-            others = UnionAll(var, others)
-            if union_disjoint(arm === var ? var.ub : UnionAll(var, arm), others)
-                return true
-            end
-        end
-        return false
+        # covariant: each arm is individually reachable by some argument, so
+        # every arm must pin `var`. invariant (matched by type equality): an
+        # arm that the other arms can absorb (`Union{T,Int}` matched against
+        # `Int`) pins nothing; when absorption is impossible (the arm is
+        # disjoint from the others) the assignments it does admit pin `var`,
+        # but possibly only as `var = Union{}` (issue #58427), which we
+        # deliberately still report as a problem — so in both cases require
+        # every arm to pin `var`, accepting the false positive for arms that
+        # every match must genuinely expose (issue #59023)
+        return constrains_var(var, t.a, covariant) &&
+               constrains_var(var, t.b, covariant)
     end
     if isType(t)
         # the parameter is matched exactly by the argument (covariant) or by
@@ -838,13 +821,6 @@ function constrains_var(var::TypeVar, @nospecialize(t), covariant::Bool, nonempt
         end
     end
     return false
-end
-
-# Whether no instantiation of `a` overlaps `b`, so that no part of a matched
-# value can satisfy both. `false` when undecidable (free typevars remain).
-function union_disjoint(@nospecialize(a), @nospecialize(b))
-    (has_free_typevars(a) || has_free_typevars(b)) && return false
-    return !hasintersect(a, b)
 end
 
 # Whether matching any specific type value `X <: P` other than `Union{}`

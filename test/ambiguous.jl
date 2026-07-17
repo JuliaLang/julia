@@ -361,12 +361,14 @@ module UnboundDetect
     bound7(x::Union{Vector{T}, Ref{T}}) where {T} = T
     bound8(x::Ref{Vector{T}}) where {T} = T
     bound9(x::Tuple{<:T}) where {T} = T
-    # issue #58427: absorbing `T` into `Missing` forces `T = Union{}` (its
-    # bound `Real` is disjoint from `Missing`), so every match pins it
-    bound10(x::Vector{Union{Missing, T}}) where {T<:Real} = T
+    # issue #58427: every match pins `T`, but a `Vector{Missing}` argument
+    # does so only by absorbing the `T` arm as `T = Union{}` — deliberately
+    # still reported, since `T == Union{}` is a real problem for the body
+    unbound14(x::Vector{Union{Missing, T}}) where {T<:Real} = T
     # issue #59023: the `Vector{T}` arm cannot be absorbed into `Nothing`,
-    # so every match must expose it
-    bound11(x::Type{Union{Nothing, Vector{T}}}) where {T} = T
+    # so every match genuinely pins `T` — an accepted false positive: the
+    # arm-must-be-exposed refinement is deliberately not implemented
+    unbound15(x::Type{Union{Nothing, Vector{T}}}) where {T} = T
     # the calls that would leave the parameter unbound all dispatch to a more
     # specific method
     shadowed1(x::Type{<:AbstractArray{T}}) where {T} = T

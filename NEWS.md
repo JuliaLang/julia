@@ -210,7 +210,9 @@ Standard library changes
   `Vector{Union{}}` argument), and no longer reports methods whose problematic calls are
   all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback), or
   whose lowered bodies never read the possibly-unbound parameters (other than by
-  querying them with `@isdefined`).
+  querying them with `@isdefined`). A parameter that some calls can pin only as
+  `T == Union{}` by absorbing a `Union` arm (such as `f(::Vector{Union{Nothing, T}})
+  where {T<:Real}` called with a `Vector{Nothing}`) is deliberately still reported.
 
 #### Dates
 
