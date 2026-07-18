@@ -197,7 +197,7 @@ broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
     # Vararg type signature to specialize on args count. This is necessary for performance
-    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    # and inexpensive because this should only ever get called with 1+N = length(bc.args)
     broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a && bcf.f(args...), a, bcf.args...)
 end
 struct OrOr end
@@ -206,7 +206,7 @@ broadcasted(::OrOr, a, b) = broadcasted((a, b) -> a || b, a, b)
 function broadcasted(::OrOr, a, bc::Broadcasted)
     bcf = flatten(bc)
     # Vararg type signature to specialize on args count. This is necessary for performance
-    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    # and inexpensive because this should only ever get called with 1+N = length(bc.args)
     broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a || bcf.f(args...), a, bcf.args...)
 end
 
@@ -574,7 +574,7 @@ Two methods are supported, both allowing for `I` to be specified as either a [`C
 an `Int`.
 
 * `newindex(argument, I)` dynamically constrains `I` based upon the axes of `argument`.
-* `newindex(I, keep, default)` constrains `I` using the pre-computed tuples `keeps` and `defaults`.
+* `newindex(I, keep, default)` constrains `I` using the pre-computed tuples `keep` and `default`.
     * `keep` is a tuple of `Bool`s, where `keep[d] == true` means that dimension `d` in `I` should be preserved as is
     * `default` is a tuple of Integers, specifying what index to use in dimension `d` when `keep[d] == false`.
     Any remaining indices in `I` beyond the length of the `keep` tuple are truncated. The `keep` and `default`

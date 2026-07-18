@@ -28,7 +28,7 @@ int jl_unw_get(void *context) { return -1; }
 extern "C" {
 #endif
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler) JL_NOTSAFEPOINT;
 static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
 
 static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintptr_t sp) JL_NOTSAFEPOINT
@@ -85,7 +85,8 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         skip--;
     }
 #endif
-    jl_lock_profile();
+    if (!jl_trylock_profile())
+        return 0;
 #endif
 #if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -203,7 +204,7 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
                                   bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, context))
+    if (!jl_unw_init(&cursor, context, 1))
         return 0;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
@@ -223,7 +224,7 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     if (r < 0)
         return 0;
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, &context) || maxsize == 0)
+    if (!jl_unw_init(&cursor, &context, 0) || maxsize == 0)
         return 0;
     jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
@@ -231,7 +232,7 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     return bt_size;
 }
 
-NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
+JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
 {
     if (maxsize < 1) {
         return 0;
@@ -240,7 +241,7 @@ NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize,
     return 1;
 }
 
-NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
+JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
 {
     if (maxsize < 1) {
         return 0;
@@ -276,7 +277,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     memset(&context, 0, sizeof(context));
     int r = jl_unw_get(&context);
     jl_gcframe_t *pgcstack = jl_pgcstack;
-    if (r == 0 && jl_unw_init(&cursor, &context)) {
+    if (r == 0 && jl_unw_init(&cursor, &context, 0)) {
         // Skip frame for jl_backtrace_from_here itself
         skip += 1;
         size_t offset = 0;
@@ -320,7 +321,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
 
 static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
                              jl_array_t **btout JL_REQUIRE_ROOTED_SLOT,
-                             jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
+                             jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT) JL_CANSAFEPOINT
 {
     jl_array_t *bt, *bt2;
     if (array_ptr_void_type == NULL) {
@@ -371,7 +372,7 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 // with the top of the stack and returning up to `max_entries`. If requested by
 // setting the `include_bt` flag, backtrace data in bt,bt2 format is
 // interleaved.
-JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
+JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries) JL_CANSAFEPOINT
 {
     JL_TYPECHK(current_exceptions, task, (jl_value_t*)task);
     JL_TIMING(STACKWALK, STACKWALK_Excstack);
@@ -629,9 +630,10 @@ JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPO
 }
 #endif
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_signal_handler)
 {
     int result;
+    (void)from_signal_handler;
 
 #if !defined(_CPU_X86_64_)
     memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
@@ -739,8 +741,14 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // stacktrace using libunwind
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler)
 {
+#if !defined(LLVMLIBUNWIND)
+    if (from_signal_handler)
+        return unw_init_local2(cursor, context, UNW_INIT_SIGNAL_FRAME) == 0;
+#else
+    (void)from_signal_handler;
+#endif
     return unw_init_local(cursor, context) == 0;
 }
 
@@ -772,7 +780,7 @@ NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize
 
 #else
 // stacktraces are disabled
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler)
 {
     return 0;
 }
@@ -783,7 +791,7 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 }
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
+JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_frame_t *frames = NULL;
@@ -984,18 +992,18 @@ JL_UNUSED static uintptr_t ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
 {
 #if defined(__GLIBC__)
 #if defined(_CPU_X86_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/sysdep.h
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/pointer_guard.h
 // last changed for GLIBC_2.6 on 2007-02-01
     asm(" rorl $9, %0\n"
         " xorl %%gs:0x18, %0"
         : "=r"(p) : "0"(p) : );
 #elif defined(_CPU_X86_64_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/sysdep.h
+// from https://github.com/bminor/glibc/blob/master/sysdeps/unix/sysv/linux/x86_64/pointer_guard.h
     asm(" rorq $17, %0\n"
         " xorq %%fs:0x30, %0"
         : "=r"(p) : "0"(p) : );
 #elif defined(_CPU_AARCH64_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/aarch64/sysdep.h
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h
 // We need to use a trick like this (from GCC/LLVM TSAN) to get access to it:
 // https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
     static pthread_once_t once = PTHREAD_ONCE_INIT;
@@ -1109,8 +1117,6 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 #define _OS_PTR_UNMUNGE(_ptr) _os_ptr_munge((uintptr_t)(_ptr))
 #endif
 
-
-extern bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT;
 
 // Some notes: this simulates a longjmp call occurring in context `c`, as if the
 // user was to set the PC in `c` to call longjmp and the PC in the longjmp to
@@ -1422,45 +1428,75 @@ return 0;
 #endif
 }
 
-JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
+JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size)
 {
     int16_t tid = ptls2->tid;
     jl_task_t *t = NULL;
     bt_context_t *context = NULL;
     bt_context_t c;
-    if (!jl_thread_suspend(tid, &c)) {
-        return 0;
+    size_t bt_size = 0;
+    if (jl_thread_suspend(tid, &c)) {
+        // thread is stopped, safe to read the task it was running before we stopped it
+        t = jl_atomic_load_relaxed(&ptls2->current_task);
+        context = &c;
+        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
+        jl_thread_resume(tid);
     }
-    // thread is stopped, safe to read the task it was running before we stopped it
-    t = jl_atomic_load_relaxed(&ptls2->current_task);
-    context = &c;
-    size_t bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
-    jl_thread_resume(tid);
     return bt_size;
+}
+
+static size_t rec_backtrace_task(jl_task_t *t, bt_context_t *c, int use_ctx,  jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
+{
+    if (!use_ctx && !t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL) {
+        // need to read the context from the task stored state
+        jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
+#if defined(JL_TASK_SWITCH_WINDOWS)
+        memset(c, 0, sizeof(*c));
+        if (jl_simulate_longjmp(*mctx, c))
+            use_ctx = 1;
+#elif defined(JL_TASK_SWITCH_LIBUNWIND)
+        context = t->ctx.ctx;
+#elif defined(JL_TASK_SWITCH_ASM)
+        memset(c, 0, sizeof(*c));
+        if (jl_simulate_longjmp(*mctx, c))
+            use_ctx = 1;
+#else
+     #pragma message("jl_record_backtrace not defined for unknown task system")
+#endif
+    }
+    if (use_ctx)
+        return rec_backtrace_ctx(bt_data, max_bt_size, c, all_tasks_profiler ? NULL : t->gcstack);
+    return 0;
 }
 
 JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
 {
-    int16_t tid = INT16_MAX;
-    jl_record_backtrace_result_t result = {0, tid};
+    jl_record_backtrace_result_t result = {0, -1};
+    int16_t tid = INT16_MAX; // assign invalid id to non-native tasks
     jl_task_t *ct = NULL;
-    jl_ptls_t ptls = NULL;
     if (!all_tasks_profiler) {
-        ct = jl_current_task;
-        ptls = ct->ptls;
-        ptls->bt_size = 0;
-        tid = ptls->tid;
+        ct = jl_get_current_task();
+        if (ct) {
+            tid = ct->ptls->tid;
+            if (t == ct) {
+                result.bt_size = rec_backtrace(bt_data, max_bt_size, 0);
+                result.tid = tid;
+                return result;
+            }
+        }
     }
-    if (t == ct) {
-        result.bt_size = rec_backtrace(bt_data, max_bt_size, 0);
-        result.tid = tid;
-        return result;
-    }
-    bt_context_t *context = NULL;
     bt_context_t c;
     int16_t old;
-    for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, tid) && old != tid; old = -1) {
-        // if this task is already running somewhere, we need to stop the thread it is running on and query its state
+    while (1) {
+        old = -1;
+        // Try to lock this task, if free, otherwise get the id of the thread running it
+        if (jl_atomic_cmpswap(&t->tid, &old, tid))
+            break; // temporary claim successful
+        if (old == INT16_MAX)
+            return result; // another (non-native) thread already claimed it
+        if (old == tid)
+            break; // already claimed by this thread
+        // Try to stop that thread
         if (!jl_thread_suspend(old, &c)) {
             if (jl_atomic_load_relaxed(&t->tid) != old)
                 continue;
@@ -1468,50 +1504,32 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
         }
         if (jl_atomic_load_relaxed(&t->tid) == old) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[old];
+            int use_ctx = 0;
             if (ptls2->previous_task == t || // we might print the wrong stack here, since we can't know whether we executed the swapcontext yet or not, but it at least avoids trying to access the state inside uc_mcontext which might not be set yet
                 (ptls2->previous_task == NULL && jl_atomic_load_relaxed(&ptls2->current_task) == t)) { // this case should be always accurate
                 // use the thread context for the unwind state
-                context = &c;
+                use_ctx = 1;
             }
-            break;
+            result.bt_size = rec_backtrace_task(t, &c, use_ctx, bt_data, max_bt_size, all_tasks_profiler);
+            result.tid = old;
+            jl_thread_resume(old);
+            return result;
         }
         // got the wrong thread stopped, try again
         jl_thread_resume(old);
     }
-    if (context == NULL && (!t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL)) {
-        // need to read the context from the task stored state
-        jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
-#if defined(JL_TASK_SWITCH_WINDOWS)
-        memset(&c, 0, sizeof(c));
-        if (jl_simulate_longjmp(*mctx, &c))
-            context = &c;
-#elif defined(JL_TASK_SWITCH_LIBUNWIND)
-        context = t->ctx.ctx;
-#elif defined(JL_TASK_SWITCH_ASM)
-        memset(&c, 0, sizeof(c));
-        if (jl_simulate_longjmp(*mctx, &c))
-            context = &c;
-#else
-     #pragma message("jl_record_backtrace not defined for unknown task system")
-#endif
-    }
-    size_t bt_size = 0;
-    if (context) {
-        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, all_tasks_profiler ? NULL : t->gcstack);
-    }
+    // This task is locked to our thread
+    result.bt_size = rec_backtrace_task(t, &c, 0, bt_data, max_bt_size, all_tasks_profiler);
+    result.tid = old;
     if (old == -1)
         jl_atomic_store_relaxed(&t->tid, old);
-    else if (old != tid)
-        jl_thread_resume(old);
-    result.bt_size = bt_size;
-    result.tid = old;
     return result;
 }
 
 //--------------------------------------------------
 // Tools for interactive debugging in gdb
 
-JL_DLLEXPORT void jl_gdblookup(void* ip)
+JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT
 {
     jl_fprint_native_codeloc(ios_safe_stderr, (uintptr_t)ip);
 }
@@ -1553,7 +1571,8 @@ JL_DLLEXPORT void jl_fprint_backtracet(ios_t *s, jl_task_t *t) JL_NOTSAFEPOINT
         ptls->bt_size = 0;
         bt_data = ptls->bt_data;
         max_bt_size = JL_MAX_BT_SIZE;
-    } else {
+    }
+    else {
         max_bt_size = 1024; //8kb of stack should be safe
         bt_data = (jl_bt_element_t *)alloca(max_bt_size * sizeof(jl_bt_element_t));
     }

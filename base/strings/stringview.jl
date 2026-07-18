@@ -76,7 +76,7 @@ function reverse(s::UTF8String)::String
         __unsafe_string!(out, c, offs)
     end
     # note that for StringViewAndSub, we cannot return the same type of StringView
-    # anyway since the data type may not be mutable, so just we return String
+    # anyway since the data type may not be mutable, so we just return String
     return out
 end
 
@@ -145,10 +145,7 @@ function chomp(s::StringViewAndSub)
         has_cr = has_lf & two_bytes & (cu[ncu - two_bytes] == 0x0d)
         ncu - (has_lf + has_cr)
     end
-    off = s isa StringView ? 0 : s.offset
-    par = s isa StringView ? s : s.string
-    T = s isa SubString ? typeof(s) : SubString{typeof(s)}
-    return @inbounds @inline T(par, off, len, Val{:noshift}())
+    @inbounds raw_substring(s, 1, len)
 end
 
 function replace(io::IO, s::DenseStringViewAndSub, pat_f::Pair...; count = typemax(Int))

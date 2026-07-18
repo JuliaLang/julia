@@ -82,10 +82,6 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
         } \
     } while (0)
 
-#ifdef __cplusplus
-}
-#endif
-
 // =========================================================================== //
 // malloc wrappers, aligned allocation
 // =========================================================================== //
@@ -198,10 +194,10 @@ extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 
 void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT;
-void run_finalizer(jl_task_t *ct, void *o, void *ff);
-void run_finalizers(jl_task_t *ct, int finalizers_thread);
+void run_finalizer(jl_task_t *ct, void *o, void *ff) JL_CANSAFEPOINT;
+void run_finalizers(jl_task_t *ct, int finalizers_thread) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o);
+JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o) JL_CANSAFEPOINT;
 
 
 // =========================================================================== //
@@ -226,5 +222,12 @@ extern int gc_logging_enabled;
 
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT;
+
+int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
+int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // JL_GC_COMMON_H

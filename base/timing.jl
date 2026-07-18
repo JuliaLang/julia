@@ -10,7 +10,7 @@ struct GC_Num
     # reset after every garbage collection cycle and will always be zero in case of no use
     # of `gc_disable/gc_enable` blocks
     deferred_alloc::Int64
-    # (GC Internal) Number of bytes freed bytes in the current collection cycle. This field is
+    # (GC Internal) Number of bytes freed in the current collection cycle. This field is
     # reset after every garbage collection cycle and will always be zero when observed
     # during execution of Julia user code. It's incremented as memory is reclaimed during a collection,
     # used to gather some statistics within the collection itself and reset at the end of a GC cycle.
@@ -41,7 +41,7 @@ struct GC_Num
     full_sweep::Cint
     # Maximum pause duration observed so far in nanoseconds
     max_pause::Int64
-    # Maximum number of bytes allocated any point in time.
+    # Maximum number of bytes allocated at any point in time.
     # NOTE: This is aggregated over objects, not pages
     max_memory::Int64
     # Time taken to reach a safepoint in the last GC cycle in nanoseconds
@@ -129,7 +129,7 @@ function cumulative_compile_timing(b::Bool)
     return
 end
 
-# total time spend in garbage collection, in nanoseconds
+# total time spent in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
 """
@@ -503,7 +503,7 @@ macro elapsed(ex)
         Experimental.@force_compile
         local t0 = time_ns()
         $(esc(ex))
-        (time_ns() - t0) / 1e9
+        (time_ns() -% t0) / 1e9
     end
 end
 
@@ -739,9 +739,9 @@ macro timed(ex)
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
         local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
+            (elapsedtime = time_ns() -% elapsedtime;
             cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
+            compile_elapsedtimes = map(-%, cumulative_compile_time_ns(), compile_elapsedtimes);
             lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
             Threads.lock_profiling(false))
         )

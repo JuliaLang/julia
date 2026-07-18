@@ -65,7 +65,7 @@ function hashheader(stream::IO, md::MD)
             c = '\n'
         end
 
-        if c != '\n' # Empty header
+        if c != '\n' # Non-empty header
             h = strip(readline(stream))
             h = (match(r"(.*?)( +#+)?$", h)::AbstractMatch).captures[1]
             buffer = IOBuffer()
@@ -460,13 +460,13 @@ const OPEN_TAG = "<($TAG_NAME)((?:$ATTRIBUTE)*)$SPACES?/?>"
 # and up to one line ending, and the character >.
 const CLOSING_TAG = "</$TAG_NAME$SPACES?>"
 
-# Regex for a the HTML block start condition of type 7
+# Regex for the HTML block start condition of type 7
 const TYPE_7_REGEX = Regex("^(?:(?:$OPEN_TAG)|(?:$CLOSING_TAG))[ \t]*\$")
 
 # Tag names allowed as tag names for type 6 HTML blocks
 const TYPE_6_TAGNAMES = "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul"
 
-# Regex for a the HTML block start condition of type 6
+# Regex for the HTML block start condition of type 6
 const TYPE_6_REGEX = Regex("^<(?:$TYPE_6_TAGNAMES)(?:[ \t>]|/>|\$)", "i")
 
 # Regex for a the HTML block start condition of type 1

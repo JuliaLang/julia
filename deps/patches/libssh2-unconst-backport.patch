@@ -1,0 +1,24 @@
+Needed by the fix for CVE-2025-15661
+
+Cherrypicked from 
+commit 606c102e52f8447de2b745dd6c5ddf418defc519
+Author: Viktor Szakats <commit@vsz.me>
+Date:   Thu Jan 30 21:18:23 2025 +0100
+
+--- libssh2-1.11.1.orig/src/libssh2_priv.h
++++ libssh2-1.11.1/src/libssh2_priv.h
+@@ -117,6 +117,14 @@
+ #define UINT32_MAX 0xffffffffU
+ #endif
+ 
++#ifdef _WIN64
++#define LIBSSH2_UNCONST(p)  ((void *)(libssh2_uint64_t)(const void *)(p))
++#elif defined(_MSC_VER)
++#define LIBSSH2_UNCONST(p)  ((void *)(unsigned int)(const void *)(p))
++#else
++#define LIBSSH2_UNCONST(p)  ((void *)(uintptr_t)(const void *)(p))
++#endif
++
+ #if (defined(__GNUC__) || defined(__clang__)) && \
+     defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
+     !defined(LIBSSH2_NO_FMT_CHECKS)

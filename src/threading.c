@@ -59,16 +59,16 @@ JL_DLLEXPORT void *jl_get_ptls_states(void)
     return jl_current_task->ptls;
 }
 
-static void jl_delete_thread(void*);
+static void jl_delete_thread(void*) JL_CANSAFEPOINT_ENTER_LEAVE;
 
 #if !defined(_OS_WINDOWS_)
 static pthread_key_t jl_task_exit_key;
 static pthread_key_t jl_safe_restore_key;
 
-__attribute__((constructor)) void _jl_init_safe_restore(void)
+static __attribute__((constructor)) void _jl_init_safe_restore(void)
 {
     pthread_key_create(&jl_safe_restore_key, NULL);
-    pthread_key_create(&jl_task_exit_key, jl_delete_thread);
+    pthread_key_create(&jl_task_exit_key, jl_delete_thread); // NOLINT[julia-first-decl-annotations]
 }
 
 JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
@@ -189,14 +189,14 @@ void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
     TlsSetValue(jl_pgcstack_key, (void*)pgcstack);
 }
 
-void jl_pgcstack_getkey(jl_get_pgcstack_func **f, DWORD *k)
+void jl_pgcstack_getkey(jl_get_pgcstack_func_t *f, DWORD *k)
 {
     // for codegen
     *f = jl_get_pgcstack;
     *k = jl_pgcstack_key;
 }
 
-JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, DWORD k)
+JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func_t *f, DWORD k)
 {
     jl_safe_printf("ERROR: Attempt to change TLS address.\n");
 }
@@ -218,7 +218,7 @@ JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, DWORD k)
 // fallback provided for embedding
 static jl_pgcstack_key_t jl_pgcstack_key;
 static __thread jl_gcframe_t **pgcstack_;
-static jl_gcframe_t **jl_get_pgcstack_fallback(void) JL_NOTSAFEPOINT
+static jl_gcframe_t **jl_get_pgcstack_fallback(void) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
 {
     return pgcstack_;
 }
@@ -230,8 +230,9 @@ void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
 {
     *jl_pgcstack_key() = pgcstack;
 }
-static jl_gcframe_t **jl_get_pgcstack_init(void);
-static jl_get_pgcstack_func *jl_get_pgcstack_cb = jl_get_pgcstack_init;
+
+static jl_gcframe_t **jl_get_pgcstack_init(void) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED;
+static jl_get_pgcstack_func_t jl_get_pgcstack_cb = jl_get_pgcstack_init;
 static jl_gcframe_t **jl_get_pgcstack_init(void)
 {
     // This 2-step initialization is used to detect calling
@@ -247,7 +248,7 @@ static jl_gcframe_t **jl_get_pgcstack_init(void)
     return jl_get_pgcstack_cb();
 }
 
-JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, jl_pgcstack_key_t k)
+JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func_t f, jl_pgcstack_key_t k)
 {
     if (f == jl_get_pgcstack_cb || !f)
         return;
@@ -260,19 +261,15 @@ JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, jl_pgcstack_key_t 
     jl_pgcstack_key = k;
 }
 
-JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_GLOBALLY_ROOTED
+JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void)
 {
-#ifndef __clang_gcanalyzer__
     return jl_get_pgcstack_cb();
-#endif
 }
 
-void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
+void jl_pgcstack_getkey(jl_get_pgcstack_func_t *f, jl_pgcstack_key_t *k)
 {
-#ifndef __clang_gcanalyzer__
     if (jl_get_pgcstack_cb == jl_get_pgcstack_init)
         jl_get_pgcstack_init();
-#endif
     // for codegen
     *f = jl_get_pgcstack_cb;
     *k = jl_pgcstack_key;
@@ -282,10 +279,37 @@ void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 static uv_mutex_t tls_lock; // controls write-access to these variables:
 _Atomic(jl_ptls_t*) jl_all_tls_states JL_GLOBALLY_ROOTED;
 int jl_all_tls_states_size;
-static uv_cond_t cond;
-// concurrent reads are permitted, using the same pattern as mtsmall_arraylist
-// it is implemented separately because the API of direct jl_all_tls_states use is already widely prevalent
-void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+
+// Parking lot for jl_mutex_t: keeps the blocking state out of jl_mutex_t so it
+// can stay a movable, zero-initializable struct ({owner, count}) embedded in
+// sysimage objects. A waiter that loses the CAS parks on the bucket its lock
+// hashes to; the owner broadcasts that bucket on release. Sharding bounds the
+// wakeup fan-out.
+#define JL_MUTEX_NPARK 256
+static struct {
+    uv_mutex_t mtx;
+    uv_cond_t cond;
+} jl_mutex_park[JL_MUTEX_NPARK];
+
+static inline uint32_t jl_mutex_park_idx(jl_mutex_t *lock) JL_NOTSAFEPOINT
+{
+    // Invertible xorshift (low bits dropped for alignment). Permutation-like on
+    // purpose: the set of locks parked at once is small and often consecutively
+    // allocated, so mapping neighbors to distinct buckets keeps collisions low.
+    uintptr_t h = (uintptr_t)lock >> 4;
+    h ^= h >> 7;
+    h ^= h >> 13;
+    return (uint32_t)(h & (JL_MUTEX_NPARK - 1));
+}
+
+// The low bit of lock->owner flags that a task may be parked on this lock: a
+// ThunderLock. Release clears the bit and broadcasts the bucket, and the woken
+// waiters re-contend. Tasks are >=16-byte aligned so the bit is free; release
+// swaps owner and reads the flag in one atomic step.
+#define JL_MUTEX_PARKED ((uintptr_t)1)
+#define jl_mutex_owner(w)     ((jl_task_t*)((uintptr_t)(w) & ~JL_MUTEX_PARKED))
+#define jl_mutex_parked(w)    ((uintptr_t)(w) & JL_MUTEX_PARKED)
+#define jl_mutex_with_park(t) ((jl_task_t*)((uintptr_t)(t) | JL_MUTEX_PARKED))
 
 // return calling thread's ID
 JL_DLLEXPORT int16_t jl_threadid(void)
@@ -315,7 +339,7 @@ JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT
 
 typedef void (*unw_tls_ensure_func)(void) JL_NOTSAFEPOINT;
 
-// get thread local rng
+// set thread local rng
 JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT
 {
     jl_current_task->ptls->rngseed = new_seed;
@@ -351,7 +375,11 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
         hMainThread = ptls->system_id;
 #endif
     }
+#ifdef __clang_safetyanalysis__
+    jl_gc_unsafe_enter(ptls);
+#else
     jl_atomic_store_relaxed(&ptls->gc_state, JL_GC_STATE_UNSAFE); // GC unsafe
+#endif
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
@@ -405,7 +433,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 
 static _Atomic(jl_value_t*) init_task_lock_func JL_GLOBALLY_ROOTED = NULL;
 
-static void jl_init_task_lock(jl_task_t *ct)
+static void jl_init_task_lock(jl_task_t *ct) JL_CANSAFEPOINT
 {
     size_t last_age = ct->world_age;
     ct->world_age = jl_get_world_counter();
@@ -451,7 +479,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
-JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
+JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void) JL_CANSAFEPOINT_ENTER
 {
     if (!jl_is_initialized()) {
         void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
@@ -491,11 +519,7 @@ void jl_safepoint_resume_all_threads(jl_task_t *ct)
     };
 }
 
-void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
-void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
-
-static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
+static void jl_delete_thread(void *value)
 {
 #ifndef _OS_WINDOWS_
     pthread_setspecific(jl_task_exit_key, NULL);
@@ -609,7 +633,7 @@ static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align
 {
     return LLT_ALIGN(orig_size, align) + size;
 }
-static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size)
+static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size) JL_NOTSAFEPOINT
 {
     ssize_t offset = (char*)k0 - (char*)tp;
     if (offset < JL_ELF_TLS_INIT_SIZE ||
@@ -624,7 +648,7 @@ static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align
 {
     return LLT_ALIGN(orig_size + size, align);
 }
-static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size)
+static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size) JL_NOTSAFEPOINT
 {
     ssize_t offset = (char*)tp - (char*)k0;
     if (offset < sizeof(*k0) || offset > tls_size)
@@ -660,10 +684,10 @@ static int check_tls_cb(struct dl_phdr_info *info, size_t size, void *_data)
     return 1;
 }
 
-static void jl_check_tls(void)
+static void jl_check_tls(void) JL_NOTSAFEPOINT
 {
-    jl_get_pgcstack_func *f;
-    jl_gcframe_t ***(*k)(void);
+    jl_get_pgcstack_func_t f;
+    jl_pgcstack_key_t k;
     jl_pgcstack_getkey(&f, &k);
     jl_gcframe_t ***k0 = k();
     if (k0 == NULL)
@@ -706,7 +730,10 @@ void jl_init_threading(void)
     char *cp;
 
     uv_mutex_init(&tls_lock);
-    uv_cond_init(&cond);
+    for (int i = 0; i < JL_MUTEX_NPARK; i++) {
+        uv_mutex_init(&jl_mutex_park[i].mtx);
+        uv_cond_init(&jl_mutex_park[i].cond);
+    }
 #ifdef JL_ELF_TLS_VARIANT
     jl_check_tls();
 #endif
@@ -863,7 +890,7 @@ void jl_start_threads(void)
         jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;
-        uv_thread_create(&uvtid, jl_threadfun, t);
+        uv_thread_create(&uvtid, jl_threadfun, t); // NOLINT[julia-first-decl-annotations]
 
         // Interactive pool threads get the low IDs, so check if this is a
         // default pool thread.  The master thread is already on CPU 0.
@@ -903,7 +930,7 @@ JL_DLLEXPORT void jl_exit_threaded_region(void)
     }
 }
 
-JL_DLLEXPORT void jl_set_io_loop_tid(int16_t tid)
+JL_DLLEXPORT void jl_set_io_loop_tid(int16_t tid) JL_CANSAFEPOINT
 {
     if (tid < 0 || tid >= jl_atomic_load_relaxed(&jl_n_threads)) {
         // TODO: do we care if this thread has exited or not started yet,
@@ -940,10 +967,10 @@ void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
 #endif
 }
 
-void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
+void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint) JL_NO_SAFEPOINT_ANALYSIS
 {
     jl_task_t *owner = jl_atomic_load_relaxed(&lock->owner);
-    if (owner == self) {
+    if (jl_mutex_owner(owner) == self) {
         lock->count++;
         return;
     }
@@ -961,39 +988,48 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         return;
     }
     JL_TIMING(LOCK_SPIN, LOCK_SPIN);
+    uint32_t idx = jl_mutex_park_idx(lock);
     while (1) {
-        if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
-            lock->count = 1;
-            jl_profile_lock_acquired(lock);
-#ifdef _COMPILER_TSAN_ENABLED_
-            __tsan_mutex_post_divert(lock, 0);
-#endif
-            return;
-        }
-        if (jl_running_under_rr(0)) {
-            // when running under `rr`, use system mutexes rather than spin locking
-            int8_t gc_state;
-            if (safepoint)
-                gc_state = jl_gc_safe_enter(self->ptls);
-            uv_mutex_lock(&tls_lock);
-            if (jl_atomic_load_relaxed(&lock->owner))
-                uv_cond_wait(&cond, &tls_lock);
-            uv_mutex_unlock(&tls_lock);
-            if (safepoint)
-                jl_gc_safe_leave(self->ptls, gc_state);
-        }
-        else if (safepoint) {
-            jl_gc_safepoint_(self->ptls);
-        }
-        jl_cpu_suspend();
         owner = jl_atomic_load_relaxed(&lock->owner);
+        if (jl_mutex_owner(owner) == NULL) {
+            // Owner slot is free -- grab it.
+            if (jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+                lock->count = 1;
+                jl_profile_lock_acquired(lock);
+#ifdef _COMPILER_TSAN_ENABLED_
+                __tsan_mutex_post_divert(lock, 0);
+#endif
+                return;
+            }
+            continue; // raced; retry
+        }
+        // Held by another task: set the parked bit so release wakes us, then park
+        // on the bucket (GC-safe unless a nogc waiter). We park rather than spin
+        // first: benchmarking showed a pre-park spin only adds owner-cacheline
+        // contention here and never helps the long-held locks that actually
+        // contend (they outlast any spin), losing up to ~2x under contention.
+        if (!jl_mutex_parked(owner) &&
+            !jl_atomic_cmpswap(&lock->owner, &owner, jl_mutex_with_park(owner)))
+            continue; // raced; retry
+        int8_t gc_state = 0;
+        if (safepoint)
+            gc_state = jl_gc_safe_enter(self->ptls);
+        uv_mutex_lock(&jl_mutex_park[idx].mtx);
+        // Re-check under the bucket lock (the release broadcast is serialized by
+        // it): only sleep while the lock is held and flagged parked.
+        owner = jl_atomic_load_relaxed(&lock->owner);
+        if (jl_mutex_owner(owner) != NULL && jl_mutex_parked(owner))
+            uv_cond_wait(&jl_mutex_park[idx].cond, &jl_mutex_park[idx].mtx);
+        uv_mutex_unlock(&jl_mutex_park[idx].mtx);
+        if (safepoint)
+            jl_gc_safe_leave(self->ptls, gc_state);
     }
 #ifdef _COMPILER_TSAN_ENABLED_
     __tsan_mutex_post_divert(lock, 0);
 #endif
 }
 
-static void jl_lock_frame_push(jl_task_t *self, jl_mutex_t *lock)
+static void jl_lock_frame_push(jl_task_t *self, jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = self->ptls;
     small_arraylist_t *locks = &ptls->locks;
@@ -1027,22 +1063,26 @@ void _jl_mutex_lock(jl_task_t *self, jl_mutex_t *lock)
 #endif
 }
 
-int _jl_mutex_trylock_nogc(jl_task_t *self, jl_mutex_t *lock)
+int _jl_mutex_trylock_nogc(jl_task_t *self, jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSIS
 {
 #ifdef _COMPILER_TSAN_ENABLED_
     __tsan_mutex_pre_lock(lock, __tsan_mutex_try_lock | __tsan_mutex_write_reentrant);
 #endif
     jl_task_t *owner = jl_atomic_load_acquire(&lock->owner);
     int ret = 0;
-    if (owner == self) {
+    if (jl_mutex_owner(owner) == self) {
         lock->count++;
         ret = 1;
         goto done;
     }
-    if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
-        lock->count = 1;
-        ret = 1;
-        goto done;
+    if (jl_mutex_owner(owner) == NULL) {
+        // Owner slot is free -- grab it. Unlock clears the parked bit on release,
+        // so a free lock is never flagged parked.
+        if (jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+            lock->count = 1;
+            ret = 1;
+            goto done;
+        }
     }
 done:
 #ifdef _COMPILER_TSAN_ENABLED_
@@ -1055,7 +1095,7 @@ done:
     return ret;
 }
 
-int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock)
+int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSIS
 {
     int got = _jl_mutex_trylock_nogc(self, lock);
     if (got) {
@@ -1065,23 +1105,24 @@ int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock)
     return got;
 }
 
-void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
+void _jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSIS
 {
 #ifndef __clang_gcanalyzer__
 #ifdef _COMPILER_TSAN_ENABLED_
     __tsan_mutex_pre_unlock(lock, 0);
 #endif
-    assert(jl_atomic_load_relaxed(&lock->owner) == jl_current_task &&
+    assert(jl_mutex_owner(jl_atomic_load_relaxed(&lock->owner)) == jl_current_task &&
            "Unlocking a lock in a different thread.");
     if (--lock->count == 0) {
         jl_profile_lock_release_start(lock);
-        jl_atomic_store_release(&lock->owner, (jl_task_t*)NULL);
-        jl_cpu_wake();
-        if (jl_running_under_rr(0)) {
-            // when running under `rr`, use system mutexes rather than spin locking
-            uv_mutex_lock(&tls_lock);
-            uv_cond_broadcast(&cond);
-            uv_mutex_unlock(&tls_lock);
+        // Release the lock and read whether a waiter is parked in one atomic
+        // step; if the parked bit was set, broadcast its bucket to wake it.
+        jl_task_t *prev = jl_atomic_exchange(&lock->owner, (jl_task_t*)NULL);
+        if (jl_mutex_parked(prev)) {
+            uint32_t idx = jl_mutex_park_idx(lock);
+            uv_mutex_lock(&jl_mutex_park[idx].mtx);
+            uv_cond_broadcast(&jl_mutex_park[idx].cond);
+            uv_mutex_unlock(&jl_mutex_park[idx].mtx);
         }
         jl_profile_lock_release_end(lock);
     }
@@ -1091,7 +1132,7 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
 #endif
 }
 
-void _jl_mutex_unlock(jl_task_t *self, jl_mutex_t *lock)
+void _jl_mutex_unlock(jl_task_t *self, jl_mutex_t *lock) JL_NO_SAFEPOINT_ANALYSIS
 {
     _jl_mutex_unlock_nogc(lock);
     jl_lock_frame_pop(self);
@@ -1136,7 +1177,7 @@ JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
 //     0  == success
 //     1  == invalid thread id provided
 //     2  == ptls2 was NULL
-//     <0 == uv_thread_getaffinity exit code
+//     <0 == uv_thread_setaffinity exit code
 JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     if (tid < 0 || tid >= nthreads)

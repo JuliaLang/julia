@@ -33,7 +33,7 @@ STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
 
 /*
  * Julia LICM pass.
- * This takes care of some julia intrinsics that is safe to move around/out of loops but
+ * This takes care of some julia intrinsics that are safe to move around/out of loops but
  * can't be handled by LLVM's LICM. These intrinsics can be moved outside of
  * loop context as well but it is inside a loop where they matter the most.
  */

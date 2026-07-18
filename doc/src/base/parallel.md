@@ -153,7 +153,7 @@ notifying...
 done
 ```
 
-`OneWayEvent` lets one task to `wait` for another task's `notify`. It is a limited
+`OneWayEvent` lets one task `wait` for another task's `notify`. It is a limited
 communication interface since `wait` can only be used once from a single task (note the
 non-atomic assignment of `ev.task`)
 

@@ -420,7 +420,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
  * another exception handler (or terminate the thread). Any other value will
  * cause mach_msg_server to remove the task and thread port references.
  *
- * However MIG_DESTROY_REQUEST does not exist, not does it appear the source
+ * However MIG_DESTROY_REQUEST does not exist, nor does it appear the source
  * code for mach_msg_server ever destroy those references (only the message
  * itself).
  */
@@ -568,6 +568,8 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
 
 static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT
 {
+    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return 0;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL) // this thread is not alive
         return 0;
@@ -842,7 +844,7 @@ void jl_profile_thread_mach(int tid)
         // store cpu cycle clock
         profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
 
-        // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
+        // store whether thread is sleeping (don't ever encode a state as `0` since it is preserved to indicate end of block)
         int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
         profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
 

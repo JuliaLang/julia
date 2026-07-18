@@ -432,7 +432,7 @@ julia> open(io->read(io, String), "myfile.txt")
 julia> rm("myfile.txt")
 ```
 """
-function open(f::Function, args...; kwargs...)
+@inline function open(f::Function, args...; kwargs...)
     io = open(args...; kwargs...)
     try
         f(io)
@@ -603,6 +603,9 @@ julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true))
 
 julia> rm("my_file.txt")
 ```
+
+!!! compat "Julia 1.11"
+    `copyuntil` was introduced in Julia 1.11.
 """
 copyuntil(out::IO, filename::AbstractString, delim; kw...) = open(io->copyuntil(out, io, delim; kw...), convert(String, filename)::String)
 
@@ -678,6 +681,9 @@ julia> takestring!(copyline(IOBuffer(), "my_file.txt", keep=true))
 
 julia> rm("my_file.txt")
 ```
+
+!!! compat "Julia 1.11"
+    `copyline` was introduced in Julia 1.11.
 """
 copyline(out::IO, filename::AbstractString; keep::Bool=false) =
     open(io -> copyline(out, io; keep), filename)
@@ -988,9 +994,10 @@ end
 
 function read(io::IO, ::Type{Char})
     b0 = read(io, UInt8)::UInt8
-    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
+    lo = UInt8(leading_ones(b0))
     c = UInt32(b0) << 24
-    if l ≤ 0x10
+    if 0x02 ≤ lo ≤ 0x04
+        l = 0x08 * (0x04 - lo)
         s = 16
         while s ≥ l && !eof(io)::Bool
             peek(io) & 0xc0 == 0x80 || break
@@ -1198,7 +1205,7 @@ Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 """
 function read(s::IO, nb::Integer = typemax(Int))
     # Let readbytes! grow the array progressively by default
-    # instead of taking of risk of over-allocating
+    # instead of taking the risk of over-allocating
     b = Vector{UInt8}(undef, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     return resize!(b, nr)
@@ -1409,7 +1416,8 @@ readeach(stream::IOT, T::Type) where IOT<:IO = ReadEachIterator{T,IOT}(stream)
 iterate(itr::ReadEachIterator{T}, state=nothing) where T =
     eof(itr.stream) ? nothing : (read(itr.stream, T), nothing)
 
-eltype(::Type{ReadEachIterator{T}}) where T = T
+eltype(::Type{<:ReadEachIterator{T}}) where {T} = T
+eltype(::Type{ReadEachIterator}) = Any
 
 IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
 

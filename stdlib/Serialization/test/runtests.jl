@@ -184,7 +184,7 @@ create_serialization_stream() do s # immutable struct with 1 field
     @test invokelatest(deserialize, s) == utype
 end
 
-create_serialization_stream() do s # immutable struct with 2 field
+create_serialization_stream() do s # immutable struct with 2 fields
     usertype = "SerializeSomeType4"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2)"))
@@ -193,7 +193,7 @@ create_serialization_stream() do s # immutable struct with 2 field
     @test invokelatest(deserialize, s) === utval
 end
 
-create_serialization_stream() do s # immutable struct with 3 field
+create_serialization_stream() do s # immutable struct with 3 fields
     usertype = "SerializeSomeType5"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2,3)"))
@@ -202,7 +202,7 @@ create_serialization_stream() do s # immutable struct with 3 field
     @test invokelatest(deserialize, s) === utval
 end
 
-create_serialization_stream() do s # immutable struct with 4 field
+create_serialization_stream() do s # immutable struct with 4 fields
     usertype = "SerializeSomeType6"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
