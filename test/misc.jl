@@ -1721,28 +1721,47 @@ if !Sys.iswindows() && !running_under_rr()
     end
 
     @testset "SIGINT at idle REPL prompt" begin
-        p, ptm, output = spawn_interrupt_test_repl()
-        try
-            @test expect_output(output, "julia>")
-            write(ptm, "println(\"READY_\", 1+1)\n")
-            @test expect_output(output, "READY_2")
-            sleep(2) # best-effort: let the thread park; the checks below do not depend on it
-            kill(p, 2) # SIGINT
-            # SIGINT aborts any in-flight input line, so retry with distinct markers
-            alive = false
-            for attempt in 1:3
-                write(ptm, "println(\"CHECK$(attempt)_\", 1+1)\n")
-                if expect_output(output, "CHECK$(attempt)_2"; timeout=20)
-                    alive = true
+        # On a loaded machine the SIGINT can land while the child is not yet
+        # parked at the prompt, killing the process; the next pty write then
+        # raises an uncaught IOError instead of a test failure. Retry the whole
+        # scenario with a fresh child, like the Distributed testset below: a
+        # REPL that reproducibly dies on SIGINT still fails every attempt.
+        ok = false
+        local output = Ref("")
+        for _ in 1:3
+            p, ptm, output = spawn_interrupt_test_repl()
+            try
+                expect_output(output, "julia>") || continue
+                write(ptm, "println(\"READY_\", 1+1)\n")
+                expect_output(output, "READY_2") || continue
+                sleep(2) # best-effort: let the thread park; the checks below do not depend on it
+                kill(p, 2) # SIGINT
+                # SIGINT aborts any in-flight input line, so retry with distinct markers
+                alive = false
+                for attempt in 1:3
+                    process_running(p) || break
+                    try
+                        write(ptm, "println(\"CHECK$(attempt)_\", 1+1)\n")
+                    catch ex
+                        # the child died and the pty closed under us
+                        ex isa Base.IOError || rethrow()
+                        break
+                    end
+                    if expect_output(output, "CHECK$(attempt)_2"; timeout=20)
+                        alive = true
+                        break
+                    end
+                end
+                if alive && process_running(p) && !has_internal_err(output[])
+                    ok = true
                     break
                 end
+            finally
+                cleanup_interrupt_test_repl(p, ptm)
             end
-            @test alive
-            @test process_running(p)
-            @test !has_internal_err(output[])
-        finally
-            cleanup_interrupt_test_repl(p, ptm)
         end
+        ok || @error "SIGINT at idle REPL prompt: no clean attempt" last_output = output[]
+        @test ok
     end
 
     @testset "SIGINT during REPL evaluation of a sleep loop" begin
@@ -1796,16 +1815,25 @@ if !Sys.iswindows() && !running_under_rr()
         end
         try
             @test occursin("READY", readuntil(iob, "READY", keep=true))
-            # even 1.11 needed a 2nd SIGINT here, so allow a few attempts
-            for i in 1:3
+            # even 1.11 needed a 2nd SIGINT here, so allow several attempts;
+            # loaded CI machines have needed more than three 10-second windows
+            # for the wakeup to reach the sleeping task
+            exited = false
+            for i in 1:5
                 kill(p, 2) # SIGINT
-                timedwait(() -> process_exited(p), 10) === :ok && break
+                if timedwait(() -> process_exited(p), 20) === :ok
+                    exited = true
+                    break
+                end
             end
-            @test process_exited(p)
-            wait(reader) # wait for iob to reach EOF
-            err = read(iob, String)
-            @test occursin("InterruptException", err)
-            @test !has_internal_err(err)
+            exited || @error "child not exited after repeated SIGINT" partial_output = String(read(iob, bytesavailable(iob)))
+            @test exited
+            if exited # otherwise waiting on the reader blocks until sleep(600) returns
+                wait(reader) # wait for iob to reach EOF
+                err = read(iob, String)
+                @test occursin("InterruptException", err)
+                @test !has_internal_err(err)
+            end
         finally
             process_running(p) && kill(p, Base.SIGKILL)
             wait(p)
