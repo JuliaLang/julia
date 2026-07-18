@@ -1177,7 +1177,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             end
         end
     end
-    if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
+    if !InferenceParams(caller).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
         add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
         return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
     end

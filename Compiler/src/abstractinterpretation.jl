@@ -715,7 +715,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         end
 
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : mi.specTypes, InferenceParams(interp).tuple_complexity_limit_depth, spec_len)
+        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : mi.specTypes, InferenceParams(sv).tuple_complexity_limit_depth, spec_len)
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
@@ -995,7 +995,7 @@ end
 
 function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult,
                              si::StmtInfo, match::MethodMatch, sv::AbsIntState)
-    if !InferenceParams(interp).ipo_constant_propagation
+    if !InferenceParams(sv).ipo_constant_propagation
         add_remark!(interp, sv, "[constprop] Disabled by parameter")
         return true
     end
@@ -1836,7 +1836,7 @@ function (inferiterate_2arg::InferIterate2Arg)(interp, sv)
             iterateresult[] = AbstractIterationResult(ret, AbstractIterationInfo(calls, true))
             return true
         end
-        if Nothing <: state.stateordonet_widened || length(ret) >= InferenceParams(interp).max_tuple_splat
+        if Nothing <: state.stateordonet_widened || length(ret) >= InferenceParams(sv).max_tuple_splat
             break
         end
         if (!isa(state.stateordonet_widened, DataType) ||
@@ -1962,7 +1962,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
             return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         end
     end
-    splitunions = 1 < unionsplitcost(typeinf_lattice(interp), aargtypes) <= InferenceParams(interp).max_apply_union_enum
+    splitunions = 1 < unionsplitcost(typeinf_lattice(interp), aargtypes) <= InferenceParams(sv).max_apply_union_enum
     retinfos = ApplyCallInfo[]
     retinfo = UnionSplitApplyCallInfo(retinfos)
     applyresult = Future{CallMeta}()
@@ -2233,7 +2233,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             a2 = argtypes[2]
             a3 = argtypes[3]
             if isa(a, SlotNumber)
-                cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting, rt)
+                cndt = isa_condition(a2, a3, InferenceParams(sv).max_union_splitting, rt)
                 if cndt !== nothing
                     @assert vtypes !== nothing
                     vtyp = vtypes[slot_id(a)]
@@ -2242,7 +2242,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             end
             if isa(a2, MustAlias)
                 if !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting)
+                    cndt = isa_condition(a2, a3, InferenceParams(sv).max_union_splitting)
                     if cndt !== nothing
                         return form_mustalias_conditional(a2, cndt.thentype, cndt.elsetype)
                     end
@@ -2254,7 +2254,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 if isa(b, SlotNumber)
                     # !(x isa T) implies !(Type{a2} <: T)
                     # TODO: complete splitting, based on which portions of the Union a3 for which isa_tfunc returns Const(true) or Const(false) instead of Bool
-                    elsetype = typesubtract(a3, Type{widenconst(a2)}, InferenceParams(interp).max_union_splitting)
+                    elsetype = typesubtract(a3, Type{widenconst(a2)}, InferenceParams(sv).max_union_splitting)
                     @assert vtypes !== nothing
                     vtyp = vtypes[slot_id(b)]
                     return Conditional(b, vtyp.ssadef, a3, elsetype)
@@ -2270,20 +2270,20 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 if isa(b, SlotNumber)
                     @assert vtypes !== nothing
                     vtyp = vtypes[slot_id(b)]
-                    cndt = egal_condition(aty, bty, InferenceParams(interp).max_union_splitting, rt)
+                    cndt = egal_condition(aty, bty, InferenceParams(sv).max_union_splitting, rt)
                     return Conditional(b, vtyp.ssadef, cndt.thentype, cndt.elsetype)
                 elseif isa(bty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = egal_condition(aty, bty.fldtyp, InferenceParams(interp).max_union_splitting)
+                    cndt = egal_condition(aty, bty.fldtyp, InferenceParams(sv).max_union_splitting)
                     return form_mustalias_conditional(bty, cndt.thentype, cndt.elsetype)
                 end
             elseif isa(bty, Const)
                 if isa(a, SlotNumber)
                     @assert vtypes !== nothing
                     vtyp = vtypes[slot_id(a)]
-                    cndt = egal_condition(bty, aty, InferenceParams(interp).max_union_splitting, rt)
+                    cndt = egal_condition(bty, aty, InferenceParams(sv).max_union_splitting, rt)
                     return Conditional(a, vtyp.ssadef, cndt.thentype, cndt.elsetype)
                 elseif isa(aty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = egal_condition(bty, aty.fldtyp, InferenceParams(interp).max_union_splitting)
+                    cndt = egal_condition(bty, aty.fldtyp, InferenceParams(sv).max_union_splitting)
                     return form_mustalias_conditional(aty, cndt.thentype, cndt.elsetype)
                 end
             end
