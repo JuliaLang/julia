@@ -91,16 +91,21 @@ end
 function ld()
     default_args = ``
     @static if Sys.iswindows()
-        # LLD supports mingw style linking
+        # From`x86_64-w64-mingw32-gcc -shared -Wl,--verbose`
         flavor = "gnu"
         m = Sys.ARCH == :x86_64 ? "i386pep" : "i386pe"
-        default_args = `-m $m -Bdynamic --enable-auto-image-base --allow-multiple-definition --disable-auto-import --disable-runtime-pseudo-reloc`
+        entry = Sys.ARCH == :x86_64 ? "DllMainCRTStartup" : "_DllMainCRTStartup"
+        default_args = `-m $m -Bdynamic -e $entry --enable-auto-image-base --allow-multiple-definition --disable-auto-import --disable-runtime-pseudo-reloc`
     elseif Sys.isapple()
         flavor = "darwin"
         arch = Sys.ARCH == :aarch64 ? :arm64 : Sys.ARCH
         default_args = `-arch $arch -undefined dynamic_lookup -platform_version macos $(Base.MACOS_PRODUCT_VERSION) $(Base.MACOS_PLATFORM_VERSION)`
     else
         flavor = "gnu"
+        # From `gcc -shared -Wl,--verbose`; `-z defs` added to enforce that all symbols
+        # the pkgimage references are resolvable at link time (catches regressions early
+        # instead of deferring to first-call crashes at runtime).
+        default_args = `--build-id --eh-frame-hdr --hash-style=gnu --as-needed -z relro -z defs`
     end
 
     `$(lld()) -flavor $flavor $default_args`
@@ -116,6 +121,17 @@ const NO_WHOLE_ARCHIVE = if Sys.isapple()
     ""
 else
     "--no-whole-archive"
+end
+
+# Prefer whole_archive to WHOLE_ARCHIVE
+whole_archive(paths::String; is_cc=false) = whole_archive([paths]; is_cc)
+function whole_archive(paths::Vector{String}; is_cc=false)
+    cc_arg(a) = is_cc ? "-Wl,$a" : a
+    if Sys.isapple()
+        Cmd(collect(Iterators.flatmap(p -> (cc_arg("-force_load"), p), paths)))
+    else
+        `$(cc_arg("--whole-archive")) $paths $(cc_arg("--no-whole-archive"))`
+    end
 end
 
 const SHARED = if Sys.isapple()
@@ -134,25 +150,66 @@ end
 
 verbose_linking() = something(Base.get_bool_env("JULIA_VERBOSE_LINKING", false), false)
 
+function _find_static(lib)
+    if isfile(joinpath(private_libdir(), lib))
+        return joinpath(private_libdir(), lib)
+    else
+        return joinpath(libdir(), lib)
+    end
+end
+
+function _find_loaded(re::Regex)
+    for p in Libdl.dllist()
+        occursin(re, p) && return p
+    end
+    error("no loaded shared object matching $re")
+end
+
 function link_image_cmd(path, out)
     PRIVATE_LIBDIR = "-L$(private_libdir())"
+    LIBDIR = "-L$(libdir())"
     SHLIBDIR = "-L$(shlibdir())"
-    LIBS = isdebugbuild() ? ("-ljulia-debug", "-ljulia-internal-debug") :
-                        ("-ljulia", "-ljulia-internal")
+    LIBS = String[]
+    if isdebugbuild()
+        push!(LIBS, "-ljulia-debug")
+        push!(LIBS, "-ljulia-internal-debug")
+    else
+        push!(LIBS, "-ljulia")
+        push!(LIBS, "-ljulia-internal")
+    end
+    crtbegin = String[]
+    crtend = String[]
     @static if Sys.iswindows()
-        LIBS = (LIBS..., "-lopenlibm", "-lgcc_s", "-lgcc", "-lmsvcrt")
-        if isdebugbuild()
-            LIBS = (LIBS..., "-lssp")
-            if isfile(joinpath(private_libdir(), "libmingwex.a"))
-                # In MinGW 11, the ssp implementation was moved from libssp to
-                # libmingwex with ssp only being a stub. See #59020.
-                LIBS = (LIBS..., "-lmingwex", "-lkernel32")
-            end
-        end
+        # From `x86_64-w64-mingw32-gcc -shared -Wl,--verbose`.
+        append!(LIBS,     String["-lopenlibm"])
+        # libmsvcrt-os.a contains MinGW CRT objects that can refer back to
+        # libmingw32.a/libmingwex.a; keep the selected CRT last.
+        append!(LIBS,     String["-lmingw32", "-lgcc_s", "-lgcc", "-lmoldname", "-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os", "-lkernel32"])
+        append!(LIBS,     String["-lpthread", "-ladvapi32", "-lshell32", "-luser32"])
+        append!(crtbegin, String[_find_static("dllcrt2.o"), _find_static("crtbegin.o")])
+        append!(crtend,   String[_find_static("crtend.o")])
+        isdebugbuild() && push!(LIBS, "-lssp")
+        append!(LIBS,     String["-lmingwex", "-lmsvcrt-os", "-lmingw32", "-lmingwex", "-lmsvcrt-os"])
+    elseif Sys.isapple()
+        # Unlike Windows -- where the host mingw libraries are wrong, so we ship
+        # and link our own -- macOS resolves libSystem and the compiler-rt
+        # builtins from the host SDK at load time, via `-undefined
+        # dynamic_lookup` above. So we neither ship nor link a C runtime here.
+    else
+        # From `gcc -shared -Wl,--verbose`
+        # but without repeated libraries (lld auto-resolves circular library references)
+        libc           = _find_loaded(r"/libc\.so\.\d+$")                       # system libc
+        ld_linux       = _find_loaded(r"/ld-(?:linux|musl|elf)[^/]*\.so\.\d+$") # system ld
+        libc_nonshared = _find_static("libc_nonshared.a")
+        append!(LIBS,     String["-lgcc", "--as-needed", "-lgcc_s", "-latomic", "-lopenlibm", "--no-as-needed", libc])
+        isfile(libc_nonshared) && push!(LIBS, libc_nonshared)
+        append!(LIBS,     String["--as-needed", ld_linux, "--no-as-needed"])
+        append!(crtbegin, String[_find_static("crti.o"), _find_static("crtbeginS.o")])
+        append!(crtend,   String[_find_static("crtendS.o"), _find_static("crtn.o")])
     end
 
     V = verbose_linking() ? "--verbose" : ""
-    `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
+    `$(ld()) $V $SHARED -o $out $crtbegin $(whole_archive(path)) $PRIVATE_LIBDIR $LIBDIR $SHLIBDIR $LIBS $crtend`
 end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)

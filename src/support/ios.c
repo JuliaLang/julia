@@ -959,13 +959,18 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
 #if defined(_OS_WINDOWS_)
-    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);
-    if (!wlen) goto open_file_err;
-    wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
-    if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen)) goto open_file_err;
-    set_io_wait_begin(1);
-    fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
-    set_io_wait_begin(0);
+    // These locals are braced so that the `goto open_file_err`s -- both the one
+    // above and the ones below -- do not jump over their initialization while
+    // they are still in scope, which gcc >= 15 rejects (-Werror=jump-misses-init).
+    {
+        size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);
+        if (!wlen) goto open_file_err;
+        wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
+        if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen)) goto open_file_err;
+        set_io_wait_begin(1);
+        fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
+        set_io_wait_begin(0);
+    }
 #else
     // The mode of the created file is (mode & ~umask), which resolves with
     // default umask to u=rw,g=r,o=r
@@ -1006,15 +1011,19 @@ ios_t *ios_mkstemp(ios_t *s, char *fname)
     int fd;
     // would be better to use a libuv function once it exists (see libuv/libuv#322)
 #ifdef _OS_WINDOWS_
-    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);
-    if (!wlen) goto open_file_err;
-    wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
-    if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen) ||
-        !_wmktemp(fname_w) ||
-        !WideCharToMultiByte(CP_UTF8, 0, fname_w, -1, fname, strlen(fname)+1,
-                             NULL, NULL))
-        goto open_file_err;
-    fd = _wopen(fname_w, O_CREAT|O_TRUNC|O_RDWR | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
+    // Braced for the same reason as in ios_file: the `goto open_file_err` below
+    // must not jump over `fname_w`'s initialization while it is still in scope.
+    {
+        size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);
+        if (!wlen) goto open_file_err;
+        wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
+        if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen) ||
+            !_wmktemp(fname_w) ||
+            !WideCharToMultiByte(CP_UTF8, 0, fname_w, -1, fname, strlen(fname)+1,
+                                 NULL, NULL))
+            goto open_file_err;
+        fd = _wopen(fname_w, O_CREAT|O_TRUNC|O_RDWR | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
+    }
 #else
     fd = mkstemp(fname);
 #endif

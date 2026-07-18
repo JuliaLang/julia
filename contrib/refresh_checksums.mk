@@ -103,9 +103,15 @@ pack-checksum-llvm: | checksum-llvm-tools
 pack-checksum-csl: | pack-checksum-compilersupportlibraries
 	@# nothing to do but disable the prefix rule
 pack-checksum-compilersupportlibraries: | checksum-csl
+.PHONY: checksum-compilersupportlibraries compilersupportlibraries
+checksum-compilersupportlibraries: checksum-csl
+compilersupportlibraries: csl
 pack-checksum-libsuitesparse: | pack-checksum-suitesparse
 	@# nothing to do but disable the prefix rule
 pack-checksum-suitesparse: | checksum-libsuitesparse
+.PHONY: checksum-suitesparse suitesparse
+checksum-suitesparse: checksum-libsuitesparse
+suitesparse: libsuitesparse
 # This is a bit tricky: we want llvmunwind, clang, and lld to be separate from unwind and llvm,
 # so we add a rule to process those first
 pack-checksum-llvm pack-checksum-unwind: | pack-checksum-llvmunwind
@@ -117,7 +123,7 @@ pack-checksum-llvmunwind: | pack-checksum-llvm.*unwind # override general rule b
 	cd "$(JULIAHOME)/deps/checksums" && mv 'llvm.*unwind' llvmunwind
 
 clean-%: FORCE
-	-rm "$(JULIAHOME)/deps/checksums"/'$*'
+	rm -f "$(JULIAHOME)/deps/checksums"/'$*'
 
 # define how to pack parallel checksums into a single file format
 pack-checksum-%: FORCE | checksum-%
