@@ -18,6 +18,38 @@ New language features
     `continue name` to continue a labeled loop ([#60481]).
   - `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
     field types. All types in the group are resolved atomically at the end of the block ([#60569]).
+  - Task cancellation is now supported, organized around cancellation tokens:
+    `Base.CancellationTokenSource` is a level-triggered cancellation scope
+    (cancelling a source cancels everything linked beneath it, at monotonically escalating
+    severities), and `Base.CancellationToken` is its observe/wait view. Sources form a tree -
+    or, when a source is linked under several parent tokens at once, a DAG: the linked source
+    is cancelled as soon as any of its parents is. The token governing a computation is carried
+    as a scoped value (`Base.CANCEL_TOKEN`, established with the standard `ScopedValues` API) that
+    propagates to child tasks; blocking operations
+    (`wait`, `lock`, Channel operations, `sleep`, stream and command I/O, Sockets, FileWatching,
+    ...) accept a `cancel` keyword argument defaulting to the scoped token and throw a
+    `Base.CancellationRequest` while it is cancelled. Cancellation is uniformly level-triggered:
+    cleanup code that must block under a cancelled scope shields itself with `cancel = nothing`
+    (or by scoping `Base.CANCEL_TOKEN => nothing` over a whole block). `@sync` and
+    `Threads.@threads` blocks form
+    cancellation scopes, so cancelling an enclosing scope reaches everything spawned within.
+    Compute-bound code can opt into cancellation with the `Base.@cancel_check` cancellation
+    point. A task can also wait for a token's cancellation as an event -
+    `wait(tok::Base.CancellationToken)` returns the request as a value instead of throwing it -
+    which is the building block for cancellation callbacks (watcher tasks).
+    A long-running foreign call can be made cancellable with
+    `@ccall cancel_handler=(fn, state) ...`: cancelling the governing token runs the
+    C-callable `fn(state, severity)` on the thread executing the call, signal-handler-style,
+    so it can tell the library to return early (the pending cancellation is then thrown at
+    the next cancellation point). Calls into libraries audited for asynchronous unwinding
+    can be annotated `@ccall reset_safe=true ...` instead, letting a cancellation unwind
+    the foreign computation at an arbitrary instruction; `BigInt` (GMP) arithmetic uses
+    this, so checkless bignum loops now cancel cleanly at the first ^C.
+    In interactive sessions, ^C cancels the current evaluation's cancellation scope, with
+    graded escalation (safe unwind -> abandoning external waits -> abandoning tasks) on repeated
+    presses, and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
+    cancellation continues under the cancelled scope unless it re-arms one itself
+    (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`).
 
 Language changes
 ----------------

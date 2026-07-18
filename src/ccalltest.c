@@ -960,5 +960,29 @@ DLLEXPORT void c_exit_finalizer(void* v) {
     printf("c_exit_finalizer: %d, %u", *(int*)v, (unsigned)((uintptr_t)v & (uintptr_t)1));
 }
 
+// Test helpers for `@ccall cancel_handler=(fn, state) ...`: a foreign
+// computation that spins until cancelled, and a matching handler.
+// `cell` points at two int64 slots: [0] the stop flag, [1] a scratch slot
+// the handler fills. The handler runs asynchronously on the thread blocked
+// in cancelspin_wait, like a signal handler.
+DLLEXPORT int64_t cancelspin_wait(volatile int64_t *cell) {
+    int64_t iters = 0;
+    while (!cell[0])
+        iters++;
+    return iters;
+}
+
+// A cancellation handler's contract is the preserve_all calling convention
+// (clang-only attribute today; this integer-only body satisfies it under
+// any compiler).
+#ifdef __clang__
+__attribute__((preserve_all))
+#endif
+DLLEXPORT void cancelspin_handler(void *state, uint8_t sev) {
+    volatile int64_t *cell = (volatile int64_t*)state;
+    cell[1] = (int64_t)sev + 1; // distinguish severity 0 from "never ran"
+    cell[0] = 1;
+}
+
 // global variable for cglobal testing
 DLLEXPORT const int global_var = 1;

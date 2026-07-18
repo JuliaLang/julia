@@ -74,6 +74,25 @@ Base.close(::Channel)
 Base.bind(c::Channel, task::Task)
 ```
 
+## Task Cancellation
+
+See the [Task Cancellation](@ref man-cancellation) chapter of the manual for an overview.
+
+```@docs
+Base.CancellationTokenSource
+Base.CancellationToken
+Base.cancel!
+Base.iscancelled
+Base.cancel_severity
+Base.CancellationRequest
+Base.CANCEL_REQUEST_SAFE
+Base.CANCEL_REQUEST_ABANDON_EXTERNAL
+Base.CANCEL_REQUEST_ABANDON_ALL
+Base.@cancel_check
+Base.CANCEL_TOKEN
+Base.wait(::Base.CancellationToken)
+```
+
 ## [Low-level synchronization using `schedule` and `wait`](@id low-level-schedule-wait)
 
 The easiest correct use of [`schedule`](@ref) is on a `Task` that is not started (scheduled)

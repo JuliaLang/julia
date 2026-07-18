@@ -98,6 +98,11 @@ end
 
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
+    # Entry cancellation check before the child exists: a spawn under an
+    # already-cancelled scope must not run the command (its side effects
+    # cannot be taken back); shielded callers (`cancel = nothing`) scope the
+    # token away and pass through.
+    @cancel_check
     loop = eventloop()
     cpumask = cmd.cpus
     cpumask === nothing || (cpumask = as_cpumask(cpumask))
@@ -484,7 +489,8 @@ end
 
 Run `command` and return the resulting output as an array of bytes.
 """
-function read(cmd::AbstractCmd)
+function read(cmd::AbstractCmd; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> read(cmd), cancel)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
@@ -496,7 +502,8 @@ end
 
 Run `command` and return the resulting output as a `String`.
 """
-read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
+read(cmd::AbstractCmd, ::Type{String}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    String(read(cmd; cancel))::String
 
 """
     run(command, args...; wait::Bool = true)
@@ -519,7 +526,8 @@ Use [`pipeline`](@ref) to control I/O redirection.
 
 See also: [`Cmd`](@ref).
 """
-function run(cmds::AbstractCmd, args...; wait::Bool = true)
+function run(cmds::AbstractCmd, args...; wait::Bool = true, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> run(cmds, args...; wait), cancel)
     if wait
         ps = _spawn(cmds, spawn_opts_inherit(args...))
         success(ps) || pipeline_error(ps)
@@ -580,7 +588,8 @@ Run a command object, constructed with backticks (see the [Running External Prog
 section in the manual), and tell whether it was successful (exited with a code of 0).
 An exception is raised if the process cannot be started.
 """
-success(cmd::AbstractCmd) = success(_spawn(cmd))
+success(cmd::AbstractCmd; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _with_cancel_arg(() -> success(_spawn(cmd)), cancel)
 
 
 """
@@ -697,7 +706,8 @@ function process_status(s::Process)
            error("process status error")
 end
 
-function wait(x::Process, syncd::Bool=true)
+function wait(x::Process, syncd::Bool=true; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = check_cancel_arg(cancel)
     if !process_exited(x)
         iolock_begin()
         if !process_exited(x)
@@ -705,7 +715,7 @@ function wait(x::Process, syncd::Bool=true)
             lock(x.exitnotify)
             iolock_end()
             try
-                wait(x.exitnotify)
+                wait(x.exitnotify, tok)
             finally
                 unlock(x.exitnotify)
                 unpreserve_handle(x)
@@ -716,12 +726,13 @@ function wait(x::Process, syncd::Bool=true)
     end
     # and make sure all sync'd Tasks are complete too
     syncd && for t in x.syncd
-        wait(t)
+        wait(t, tok)
     end
     nothing
 end
 
-wait(x::ProcessChain, syncd::Bool=true) = foreach(p -> wait(p, syncd), x.processes)
+wait(x::ProcessChain, syncd::Bool=true; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    foreach(p -> wait(p, syncd; cancel), x.processes)
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 

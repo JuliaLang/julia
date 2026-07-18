@@ -1758,12 +1758,13 @@ if !Sys.iswindows() && !running_under_rr()
             # the marker is split so the pty echo of the input line does not match it
             write(ptm, "println(\"LOOP\", \"START\"); while true; sleep(0.05); end\n")
             @test expect_output(output, "LOOPSTART")
-            # a single SIGINT can be missed on a loaded machine, so resend until
-            # the InterruptException surfaces
+            # ^C is delivered as a cancellation request (InterruptException is
+            # what packages may still rethrow it as); a single SIGINT can be
+            # missed on a loaded machine, so resend until it surfaces
             interrupted = false
             for _ in 1:5
                 kill(p, 2) # SIGINT
-                if expect_output(output, "InterruptException"; timeout=10)
+                if expect_output(output, r"InterruptException|CancellationRequest"; timeout=10)
                     interrupted = true
                     break
                 end
@@ -1804,7 +1805,11 @@ if !Sys.iswindows() && !running_under_rr()
             @test process_exited(p)
             wait(reader) # wait for iob to reach EOF
             err = read(iob, String)
-            @test occursin("InterruptException", err)
+            # ^C is delivered as a cancellation request (InterruptException is
+            # what packages may still rethrow it as). A repeat press may land
+            # while the first one's error report is being displayed, cancelling
+            # the report itself - the fallback note is an acceptable outcome.
+            @test occursin(r"InterruptException|CancellationRequest|displaying the error report failed", err)
             @test !has_internal_err(err)
         finally
             process_running(p) && kill(p, Base.SIGKILL)
@@ -1842,19 +1847,8 @@ if !Sys.iswindows() && !running_under_rr()
                 """
             cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
                          Dict("JULIA_LOAD_PATH" => "@stdlib"))
-            iob = Base.BufferStream() # capture output for diagnosis on failure
-            p = run(cmd, devnull, iob, iob; wait=false)
-            reader = @async try
-                wait(p)
-            finally
-                closewrite(iob)
-            end
-            exited = timedwait(() -> process_exited(p), 180) === :ok
-            if !(exited && p.exitcode == 0)
-                process_running(p) && kill(p, Base.SIGKILL)
-                wait(reader)
-                @error "Distributed.interrupt test failed" exited read(iob, String)
-            end
+            p = run(pipeline(cmd; stdout=devnull, stderr=devnull); wait=false)
+            exited = timedwait(() -> process_exited(p), 120) === :ok
             @test exited && p.exitcode == 0
             process_running(p) && kill(p, Base.SIGKILL)
             wait(p)

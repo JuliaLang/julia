@@ -5,5 +5,8 @@ LIBUV_JLL_NAME := LibUV
 
 ## source build
 LIBUV_VER := 2
-LIBUV_BRANCH=julia-uv2-1.48.0
-LIBUV_SHA1=b21d6d84e46f6c97ecbc8e4e8a8ea6ad98049ea8
+# TEMPORARY: julia-uv2-1.48.0 plus libuv/libuv#4966 (write cancellation), staged in
+# the KenoAIStaging fork until the upstream PR lands (see also LIBUV_GIT_URL override
+# in libuv.mk). Requires USE_BINARYBUILDER_LIBUV=0 until a matching JLL is built.
+LIBUV_BRANCH=kf/julia-writecancel-2
+LIBUV_SHA1=4559b013316c8713e707c796c36daf36076a15eb

@@ -41,6 +41,16 @@
 #include <sys/event.h>
 #endif
 
+// sigwaitinfo (and the siginfo_t it fills) lets the signal listener
+// distinguish timer-raised signals from user-sent ones (SI_TIMER + sigev
+// value). glibc advertises it via _POSIX_C_SOURCE (defined through
+// _GNU_SOURCE); FreeBSD supports it without defining that macro, and
+// without the discrimination a rescue-timer SIGINT is indistinguishable
+// from a user press (breaking the whole ^C escalation ladder there).
+#if (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L) || defined(__FreeBSD__)
+#define HAVE_SIGWAITINFO
+#endif
+
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
 
@@ -337,6 +347,205 @@ static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *e, int sig, void *sigctx)
     }
 }
 
+// === Cancellation-handler delivery ==========================================
+// A foreign call annotated with a cancellation handler publishes an sp == 0
+// jl_reset_ctx_t in task->cancel_handler_ctx (see emit_ccall) - a slot
+// separate from a compiled reset region's task->reset_ctx, so both can be
+// active at once (the handler takes delivery priority while published).
+// Delivering the cancellation signal to such a region runs the handler *on
+// the interrupted thread*, like a signal handler, and then resumes the
+// interrupted computation:
+//  1. The signal handler copies the interrupted general-purpose registers
+//     from the signal context into ptls->cancel_handler_save and redirects
+//     the context to jl_cancel_handler_shim, dropping sp just past the
+//     interrupted frame's red zone but touching no other register. Nothing
+//     is written to the stack: the memory below the red zone holds only
+//     this signal's own frame, which is dead the moment sigreturn launches
+//     the shim.
+//  2. The shim - running in ordinary, unmasked context once the signal
+//     handler returns - calls jl_cancel_handler_trampoline, which invokes
+//     fn(state, severity) from the save area. GPRs need no care anywhere on
+//     this path: the resume below replays every one of them. FP/vector
+//     state is the *handler's* responsibility: its contract is the LLVM
+//     `preserve_all` calling convention (clang
+//     `__attribute__((preserve_all))`, and reachable from Julia's own LLVM
+//     pipeline), i.e. it generates whatever stack saves it needs - a
+//     handler that touches no FP/vector registers satisfies this trivially.
+//     The runtime pieces on this path are compiled general-regs-only so
+//     they cannot clobber FP state themselves.
+//  3. The shim then calls jl_cancel_handler_resume, which arbitrates the
+//     shared signal_request slot (request 7) and re-raises the signal; the
+//     restore branch copies the saved GPR state back over its own signal
+//     context, so that returning from it resumes the originally interrupted
+//     instruction (the self-signal's frame round-trips the still-live
+//     interrupted FP state through the kernel untouched).
+// The save area holds at most one delivery per thread: while one is in
+// flight (armed), further deliveries are skipped and recovered
+// level-triggered. The region context stays published throughout, so an
+// escalation or redelivery runs the (idempotent) handler again once the
+// current delivery completes.
+
+// (On Darwin this file's delivery machinery is replaced by the mach-based
+// implementation in signals-mach.c, which rides the resumable
+// jl_call_in_state + restore-trigger machinery instead of a self-signal.)
+#if defined(JL_HAVE_CANCEL_HANDLER_DELIVERY) && defined(_OS_LINUX_)
+
+extern void jl_cancel_handler_shim(void);
+void jl_cancel_handler_trampoline(void);
+JL_NORETURN void jl_cancel_handler_resume(void);
+
+#if defined(_CPU_X86_64_)
+_Static_assert(sizeof(((mcontext_t*)0)->gregs) <= sizeof(((jl_cancel_handler_save_t*)0)->gregs),
+               "jl_cancel_handler_save_t.gregs must hold mcontext_t.gregs");
+__asm__(
+    "  .type jl_cancel_handler_shim, @function\n"
+    "jl_cancel_handler_shim:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    // Mark as end of stack; the interrupted pc/sp live in the per-thread
+    // save area, not anywhere an unwinder could recover them.
+    "  .cfi_undefined %rip\n"
+    "  .cfi_undefined %rsp\n"
+    // Entered with sp just past the interrupted frame's red zone (16-byte
+    // aligned) and every other register still holding the interrupted
+    // computation's value. GPRs are free to clobber (the resume replays
+    // them from the save area); FP/vector state is preserved by the
+    // handler's preserve_all contract.
+    "  cld\n" // C ABI needs DF clear; the interrupted flags are replayed on resume
+    "  callq jl_cancel_handler_trampoline@PLT\n"
+    "  callq jl_cancel_handler_resume@PLT\n" // does not return
+    "  ud2\n"
+    "  .cfi_endproc\n"
+    "  .size jl_cancel_handler_shim, .-jl_cancel_handler_shim\n"
+);
+#elif defined(_CPU_AARCH64_)
+__asm__(
+    "  .type jl_cancel_handler_shim, @function\n"
+    "jl_cancel_handler_shim:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    "  .cfi_undefined 30\n" // end of stack (lr was cleared by the deliverer)
+    // Entered with sp at the (16-byte aligned) interrupted sp - no red zone
+    // on aarch64 - and every other register still holding the interrupted
+    // computation's value. GPRs are free to clobber (the resume replays
+    // them); FP/vector state is preserved by the handler's preserve_all
+    // contract.
+    "  bl jl_cancel_handler_trampoline\n"
+    "  bl jl_cancel_handler_resume\n" // does not return
+    "  brk #1\n"
+    "  .cfi_endproc\n"
+    "  .size jl_cancel_handler_shim, .-jl_cancel_handler_shim\n"
+);
+#endif
+
+// Save the interrupted GPR state into the per-thread save area and rewrite
+// the (suspended) signal context so that sigreturn runs fn(state, sev) on
+// the interrupted thread. Only sp and pc are redirected.
+JL_NO_ASAN static void jl_deliver_cancel_handler(jl_ptls_t ptls, jl_task_t *ct, jl_reset_ctx_t *rctx, void *_ctx) JL_NOTSAFEPOINT
+{
+    // At most one delivery in flight per thread (its state occupies the one
+    // save area); skips are recovered level-triggered.
+    if (ptls->cancel_handler_armed)
+        return;
+    jl_cancel_handler_save_t *save = &ptls->cancel_handler_save;
+    // Severity: the state of the task's bound token source (relaxed; a
+    // spurious delivery passes whatever is current - handlers tolerate it).
+    uint8_t sev = 0;
+    jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    if (bound != NULL && bound != jl_nothing)
+        sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x3f;
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    save->fn = rctx->handler.fn;
+    save->state = rctx->handler.state;
+    save->sev = sev;
+#if defined(_CPU_X86_64_)
+    memcpy(save->gregs, ctx->uc_mcontext.gregs, sizeof(ctx->uc_mcontext.gregs));
+    ptls->cancel_handler_armed = 1;
+    // Drop sp past the interrupted frame's red zone (the signal frame below
+    // it is dead once sigreturn fires) and redirect to the shim; at the
+    // shim's `call`, sp is 16-aligned as the C ABI requires.
+    uintptr_t sp = ((uintptr_t)ctx->uc_mcontext.gregs[REG_RSP] - 128) & ~(uintptr_t)15;
+    ctx->uc_mcontext.gregs[REG_RSP] = (greg_t)sp;
+    ctx->uc_mcontext.gregs[REG_RIP] = (greg_t)(uintptr_t)&jl_cancel_handler_shim;
+#elif defined(_CPU_AARCH64_)
+    memcpy(save->regs, ctx->uc_mcontext.regs, sizeof(save->regs));
+    save->sp = ctx->uc_mcontext.sp;
+    save->pc = ctx->uc_mcontext.pc;
+    save->pstate = ctx->uc_mcontext.pstate;
+    ptls->cancel_handler_armed = 1;
+    // No red zone on aarch64: the interrupted sp (16-aligned per the ABI) is
+    // directly usable; the dead signal frame lies below it.
+    ctx->uc_mcontext.sp = ctx->uc_mcontext.sp & ~(uintptr_t)15;
+    ctx->uc_mcontext.regs[30] = 0; // clear lr: stop unwinding at the shim
+    ctx->uc_mcontext.pc = (uintptr_t)&jl_cancel_handler_shim;
+#endif
+}
+
+// Copy the saved GPR state back over this signal's own context, so that
+// sigreturn resumes the originally interrupted instruction. (The shim
+// already restored the FP state before raising this signal.)
+JL_NO_ASAN static void jl_cancel_handler_restore(jl_ptls_t ptls, void *_ctx) JL_NOTSAFEPOINT
+{
+    if (!ptls->cancel_handler_armed)
+        return;
+    jl_cancel_handler_save_t *save = &ptls->cancel_handler_save;
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+#if defined(_CPU_X86_64_)
+    memcpy(ctx->uc_mcontext.gregs, save->gregs, sizeof(ctx->uc_mcontext.gregs));
+#elif defined(_CPU_AARCH64_)
+    memcpy(ctx->uc_mcontext.regs, save->regs, sizeof(save->regs));
+    ctx->uc_mcontext.sp = save->sp;
+    ctx->uc_mcontext.pc = save->pc;
+    ctx->uc_mcontext.pstate = save->pstate;
+#endif
+    ptls->cancel_handler_armed = 0;
+}
+
+// Between the (still-FP-live) interrupted context and the final sigreturn,
+// the runtime's own code must not clobber FP/vector registers: the kernel
+// captures the live FP state into the self-signal's frame and sigreturn
+// replays it verbatim. JL_GENERAL_REGS_ONLY (support/platform.h) has the
+// compiler enforce that.
+
+// Called by the shim: invoke the registered handler with its arguments from
+// the save area. The handler itself preserves all register state it touches
+// (the preserve_all contract).
+JL_GENERAL_REGS_ONLY void jl_cancel_handler_trampoline(void)
+{
+    jl_ptls_t ptls = jl_get_current_task()->ptls;
+    jl_cancel_handler_save_t *save = &ptls->cancel_handler_save;
+    save->fn(save->state, save->sev);
+}
+
+// Called by the shim after the handler returned: hand the saved GPR state
+// to the restore branch (request 7) via a self-signal. Free to clobber any
+// GPR (all of them are replayed).
+JL_GENERAL_REGS_ONLY JL_NORETURN JL_NO_ASAN void jl_cancel_handler_resume(void)
+{
+    jl_ptls_t ptls = jl_get_current_task()->ptls;
+    // Arbitrate the shared signal_request slot: a concurrent suspend/abandon
+    // request holds it transiently, and its delivery interrupts this spin
+    // (we run with the normal signal mask) and releases the slot.
+    for (;;) {
+        sig_atomic_t expected = 0;
+        if (jl_atomic_cmpswap(&ptls->signal_request, &expected, 7))
+            break;
+        // jl_cpu_pause() is spelled out: _mm_pause is an SSE-header intrinsic
+        // that general-regs-only rejects (the instruction itself is fine).
+#if defined(_CPU_X86_64_)
+        __asm__ volatile ("pause" ::: "memory");
+#elif defined(_CPU_AARCH64_)
+        __asm__ volatile ("isb" ::: "memory");
+#endif
+    }
+    pthread_kill(pthread_self(), SIGUSR2);
+    // The restore branch rewrites the self-signal's context to the saved
+    // state, so its handler returns straight to the originally interrupted
+    // instruction; control never reaches this point.
+    abort();
+}
+#endif // JL_HAVE_CANCEL_HANDLER_DELIVERY && _OS_LINUX_
+
 static pthread_t signals_thread;
 
 static int is_addr_on_stack(jl_task_t *ct, void *addr) JL_NOTSAFEPOINT
@@ -537,7 +746,6 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, context);
         }
         return;
     }
@@ -606,7 +814,13 @@ static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *c
     }
     signals_inflight++;
     sig_atomic_t request = jl_atomic_exchange(&ptls2->signal_request, 1);
-    assert(request == 0 || request == -1);
+    // A parked best-effort cancellation (5) or abandon (6) request may
+    // occupy the slot indefinitely - its victim may never consume it (e.g.
+    // a thread with SIGUSR2 blocked) - and both senders tolerate a lost
+    // delivery (they re-send or time out and withdraw), so the suspend
+    // handshake may displace them. The handshake states 1-4/-1 cannot
+    // appear here: those settle under in_signal_lock, which we hold.
+    assert(request == 0 || request == -1 || request == 5 || request == 6);
     request = 1;
     err = pthread_kill(ptls2->system_id, SIGUSR2);
     if (err == 0) {
@@ -652,18 +866,59 @@ void jl_thread_resume(int tid)
     pthread_mutex_unlock(&in_signal_lock);
 }
 
-// Throw jl_interrupt_exception if the master thread is in a signal async region
-// or if SIGINT happens too often.
-static void jl_try_deliver_sigint(void) JL_NOTSAFEPOINT
+// Send a signal to the specified thread to deliver to its current task's
+// published reset_ctx, if available: longjmp to a compiled reset point, or
+// run a foreign call's cancellation handler (see usr2_handler request 5).
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    jl_safepoint_enable_sigint();
-    jl_wake_libuv();
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct == NULL)
+        return;
+    // Only send if the task has an interruptible-region context published
+    // (a compiled reset point, or a foreign call with a cancellation
+    // handler) - unless a ^C dispatch is pending and the task carries a
+    // token binding: the handler's episode-propagation step (see
+    // jl_sigint_propagate_to_bound) needs no published region, and a
+    // purely polling victim between cancellation points never has one.
+    if (jl_atomic_load_relaxed(&ct->reset_ctx) == NULL &&
+        jl_atomic_load_relaxed(&ct->cancel_handler_ctx) == NULL) {
+        jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+        if (bound == NULL || bound == jl_nothing ||
+            !jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+            return;
+    }
     pthread_mutex_lock(&in_signal_lock);
-    signals_inflight++;
-    jl_atomic_store_release(&ptls2->signal_request, 2);
-    // This also makes sure `sleep` is aborted.
-    pthread_kill(ptls2->system_id, SIGUSR2);
+    // This request is best-effort and produces no acknowledgment token (see
+    // the handler): do not count it in signals_inflight, and never clobber a
+    // request that is already pending or being processed - blindly storing
+    // over an in-flight suspend handshake (or an abandon request) would lose
+    // it; our caller retries delivery anyway.
+    sig_atomic_t expected = 0;
+    if (jl_atomic_cmpswap(&ptls2->signal_request, &expected, 5))
+        pthread_kill(ptls2->system_id, SIGUSR2);
+    pthread_mutex_unlock(&in_signal_lock);
+}
+
+// Send a signal to the specified thread to abandon the current task.
+// The target task to switch to must already be set in ptls2->abandon_to,
+// and the task's state must already be set to JL_TASK_STATE_ABANDONED.
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    pthread_mutex_lock(&in_signal_lock);
+    // Like the cancellation signal, this produces no acknowledgment token.
+    // Abandonment overrides a pending best-effort cancellation signal (5),
+    // but must not disturb a suspend handshake in progress (requests 1-4 /
+    // processing) - jl_abandon_task re-sends until the switch is observed.
+    sig_atomic_t expected = 0;
+    if (jl_atomic_cmpswap(&ptls2->signal_request, &expected, 6) ||
+        (expected == 5 && jl_atomic_cmpswap(&ptls2->signal_request, &expected, 6)))
+        pthread_kill(ptls2->system_id, SIGUSR2);
     pthread_mutex_unlock(&in_signal_lock);
 }
 
@@ -704,6 +959,12 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 //     is reached
 //  3: raise `thread0_exit_signo` and try to exit
 //  4: no-op
+//  5: deliver to the current task's published reset_ctx if available (for
+//     task cancellation): longjmp to a reset point, or run a foreign call's
+//     cancellation handler
+//  6: abandon the current task and switch to ptls->abandon_to
+//  7: restore the context saved by a cancellation-handler delivery
+//     (self-sent by jl_cancel_handler_resume)
 void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_get_current_task();
@@ -737,10 +998,16 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         usr2_signal_context = NULL;
         assert(request == 2 || request == 3 || request == 4);
     }
-    int err;
-    eventfd_t got = 1;
-    err = write(signal_caught_cond, &got, sizeof(eventfd_t));
-    if (err != sizeof(eventfd_t)) abort();
+    if (request != 5 && request != 6 && request != 7) {
+        // Acknowledge the request to its synchronously waiting sender. The
+        // cancellation, abandon and restore senders (requests 5-7) are
+        // fire-and-forget and never consume the token; writing it would
+        // poison the next suspend handshake with a stale acknowledgment.
+        int err;
+        eventfd_t got = 1;
+        err = write(signal_caught_cond, &got, sizeof(eventfd_t));
+        if (err != sizeof(eventfd_t)) abort();
+    }
     sig_atomic_t processing = -1;
     jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
     if (request == 2) {
@@ -760,6 +1027,78 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
     }
     else if (request == 3) {
         jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
+    }
+    else if (request == 5) {
+        // Deliver to the published context(s) of the current task's
+        // asynchronously interruptible regions, if any. N.B.: these are only
+        // ever consumed for the thread's *current* task, whose stack is live
+        // at its canonical address (copied stacks are swapped in before a
+        // task becomes current), so the buffer addresses are valid here.
+        // A handler region and a reset region may be active at the same
+        // time; the handler takes priority while published - its span (e.g.
+        // a protected allocator) is exactly where a longjmp must not land,
+        // and the handler can defer the cancellation and chain into the
+        // reset on region exit.
+        // Deliveries are gated on an actual cancellation of the task's bound
+        // token: a request-5 signal is also sent for cooperative preemption
+        // (see jl_preempt_thread_task), which cannot be honored inside an
+        // asynchronously interruptible region - aborting a foreign call (or
+        // unwinding a protected span just to restart it) for a mere yield
+        // request would discard its work for nothing. Preemption is instead
+        // polled at every cancellation point.
+        jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+        int bound_cancelled = bound != NULL && bound != jl_nothing &&
+            (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80);
+        // A pending ^C episode reaches scoped descendant sources through the
+        // julia-side listener's walk; when the listener is starved (e.g. a
+        // single-threaded process spinning in this task), carry it into the
+        // task's own bound source here so the next cancellation point sees it.
+        if (!bound_cancelled)
+            bound_cancelled = jl_sigint_propagate_to_bound(bound);
+        jl_reset_ctx_t *hctx = jl_atomic_load_acquire(&ct->cancel_handler_ctx);
+        if (hctx != NULL) {
+            // Handler flavor: run the registered cancellation handler on
+            // this thread, signal-handler-style, and resume. The context
+            // stays published - escalation or redelivery runs the
+            // (idempotent) handler again once this delivery completes. (And
+            // never fall through to the reset while the handler region is
+            // published.)
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+            if (hctx->sp == 0 && bound_cancelled)
+                jl_deliver_cancel_handler(ptls, ct, hctx, ctx);
+#endif
+        }
+        else {
+            jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct->reset_ctx);
+            if (reset_ctx != NULL && reset_ctx->sp != 0 && bound_cancelled) {
+                // Reset flavor: abandon the interrupted register state and
+                // longjmp to the reset point, whose re-executed check
+                // observes the cancellation and throws. Clear reset_ctx
+                // before the longjmp to prevent a double reset.
+                jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
+                jl_longjmp_in_ctx(sig, ctx, reset_ctx->ctx.uc_mcontext);
+            }
+        }
+    }
+    else if (request == 7) {
+        // Restore the interrupted context saved by a cancellation-handler
+        // delivery on this thread (see jl_cancel_handler_trampoline):
+        // returning from this handler then resumes the originally
+        // interrupted instruction.
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+        jl_cancel_handler_restore(ptls, ctx);
+#endif
+    }
+    else if (request == 6) {
+        // Task abandonment: validate the pending request against this
+        // thread's actual state (we ARE the victim thread, stopped in this
+        // handler, so nothing can change under the check) and, on commit,
+        // redirect into the abandon callback (which must not return) to
+        // switch to ptls->abandon_to. On refusal the requester observes the
+        // verdict and withdraws; the current task continues untouched.
+        if (jl_abandon_try_commit(ct->ptls)) {
+            jl_call_in_ctx(ct->ptls, jl_abandon_task_cb, sig, ctx);
+        }
     }
     errno = errno_save;
 }
@@ -1042,9 +1381,9 @@ static void do_profile(void) JL_NOTSAFEPOINT
 static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 {
     sigset_t sset;
-    int sig, critical, profile;
+    int sig, critical, profile, doexit = 0, rescue_bt = 0;
     jl_sigsetset(&sset);
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
     siginfo_t info;
 #endif
 #ifdef HAVE_KEVENT
@@ -1062,10 +1401,14 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 signal(*sig, SIG_DFL);
         }
     }
+    // The ^C escalation timer is delivered through this kqueue
+    sigint_rescue_kq = sigqueue;
 #endif
+    int rescue_timer_fired;
     while (1) {
         sig = 0;
         errno = 0;
+        rescue_timer_fired = 0;
 #ifdef HAVE_KEVENT
         if (sigqueue != -1) {
             int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
@@ -1077,15 +1420,25 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             if (nevents != 1) {
                 close(sigqueue);
                 sigqueue = -1;
+                sigint_rescue_kq = -1;
                 for (const int *sig = sigwait_sigs; *sig; sig++)
                     signal(*sig, SIG_DFL);
                 continue;
             }
-            sig = ev.ident;
+            if (ev.filter == EVFILT_TIMER) {
+                // the ^C escalation (rescue) timer expired
+                if (ev.ident != JL_SIGINT_RESCUE_TIMER_IDENT)
+                    continue;
+                sig = SIGINT;
+                rescue_timer_fired = 1;
+            }
+            else {
+                sig = ev.ident;
+            }
         }
         else
 #endif
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
         sig = sigwaitinfo(&sset, &info);
 #else
         if (sigwait(&sset, &sig))
@@ -1100,7 +1453,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
         profile = (sig == SIGUSR1);
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
         if (profile && !(info.si_code == SI_TIMER &&
                 info.si_value.sival_ptr == &timerprof))
             profile = 0;
@@ -1109,6 +1462,51 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 
         if (sig == SIGINT) {
+#if defined(HAVE_SIGWAITINFO) && !defined(HAVE_KEVENT)
+            // Check if this SIGINT came from our rescue timer (si_code == SI_TIMER
+            // and sival_int == 1). This means the process failed to respond to
+            // the cancellation request in time.
+            if (info.si_code == SI_TIMER && info.si_value.sival_int == 1)
+                rescue_timer_fired = 1;
+#endif
+            if (rescue_timer_fired) {
+                int est = jl_sigint_episode_state();
+                if (est == 0)
+                    continue; // the episode already completed - stand down
+                // Mark that the timer has expired - the next SIGINT escalates
+                // (via the listener, or the direct abandonment below).
+                jl_sigint_rescue_timer_expired();
+                if (est == 2) {
+                    jl_safe_printf("\nWARNING: Cancellation is in progress, but has not completed within 1s.\n"
+                                     "         You (or a package author) may need to add more @cancel_check's.\n"
+                                     "         Press ^C again to also stop waiting for external resources (e.g. in-flight I/O).\n"
+#ifdef SIGINFO
+                                     "         Press ^T to print thread backtraces.\n");
+#else
+                                     "         Send SIGUSR1 to print thread backtraces.\n");
+#endif
+                    continue;
+                }
+                if (est == 3) {
+                    jl_safe_printf("\nWARNING: Cancellation has still not completed.\n"
+                                     "         Press ^C again to forcibly abandon the current task (unsafe; may leak resources).\n"
+#ifdef SIGINFO
+                                     "         Press ^T to print thread backtraces.\n");
+#else
+                                     "         Send SIGUSR1 to print thread backtraces.\n");
+#endif
+                    continue;
+                }
+                jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
+                                 "         You (or a package author) may need to add more @cancel_check's.\n"
+#ifdef SIGINFO
+                                 "         Press ^T to print thread backtraces.\n"
+#else
+                                 "         Send SIGUSR1 to print thread backtraces.\n"
+#endif
+                                 "         Press ^C again to (unsafely) abandon the current task.\n");
+                continue;
+            }
             if (jl_ignore_sigint()) {
                 continue;
             }
@@ -1116,7 +1514,79 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 critical = 1;
             }
             else {
-                jl_try_deliver_sigint();
+                // Check if the rescue timer has already expired (from a previous SIGINT
+                // cycle). If so, the user is pressing Ctrl-C again after the warning -
+                // time to abandon the stuck task, unless the julia-side
+                // escalation (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can
+                // still make progress on it.
+                jl_task_t *rescue_task = NULL;
+                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+                // Direct abandonment rips away whatever thread 0 is currently
+                // running, which is only legitimate when that is the stuck
+                // victim monopolizing the thread in managed compute. A thread
+                // in GC-safe state is parked in the scheduler or a foreign
+                // call (possibly holding the uv loop lock!) - not the victim;
+                // and an idle thread 0 means the julia-side listener can act.
+                if (jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed()) {
+                    // The victim may transiently be inside the allocator or
+                    // the GC (runtime locks held / not in managed compute)
+                    // when the press lands - especially with an allocating
+                    // interpreted loop. Give it a brief window to return to
+                    // an abandonable state rather than consuming the press
+                    // and losing the escalation rung.
+                    for (int tries = 0; tries < 100; tries++) {
+                        if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
+                            ptls2->locks.len == 0) {
+                            // consumes the expiry; returns NULL if the episode
+                            // completed (or was reset) while we waited
+                            rescue_task = jl_check_sigint_rescue_abandon();
+                            break;
+                        }
+                        uv_sleep(1);
+                    }
+                }
+                if (rescue_task != NULL) {
+                    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+                    jl_value_t *bound = ct == NULL ? NULL :
+                        jl_atomic_load_acquire(&ct->bound_cancel_token);
+                    jl_value_t *sigsrc = (jl_value_t*)jl_atomic_load_acquire(&jl_sigint_source);
+                // Only a task actually governed by the ^C source may be
+                // ripped away: thread 0 can be running unrelated work while
+                // the real victim is stalled elsewhere - including runtime
+                // infrastructure like the sigint listener itself, whose
+                // token binding is empty - and a no-op rung beats
+                // destroying a bystander.
+                    int governed = bound != NULL && bound != jl_nothing &&
+                        sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc);
+                    if (ct != NULL && ct != rescue_task && governed) {
+                        // Announce BEFORE abandoning: the moment the victim
+                        // thread switches to the rescue task, session cleanup
+                        // can conclude (in a script it exits the process) -
+                        // on a busy or single-CPU machine that exit wins the
+                        // race against a message printed afterwards.
+                        jl_safe_printf("\nWARNING: Abandoning the current task and switching to a rescue task.\n"
+                                         "         This may leave the process in an inconsistent state.\n");
+                        if (jl_abandon_task(ct, rescue_task)) {
+                            // Let the sigint listener task perform the
+                            // Julia-side cleanup (waking the abandoned task's
+                            // waiters and re-initializing or shutting down
+                            // the session).
+                            deliver_sigint_notification();
+                        }
+                        else {
+                            jl_safe_printf("\nWARNING: Could not abandon the current task (it holds runtime resources); still trying.\n");
+                        }
+                        continue;
+                    }
+                }
+
+                // Request cancellation of the root task and notify the sigint
+                // listener - if the task is not currently running, the sigint
+                // listener will take care of safely moving us through the
+                // cancellation state machine.
+                // TODO: If there is only one thread, we may need to ask the currently
+                // running task to yield, so that the sigint listener can run.
+                jl_sigint_request_cancellation();
                 continue;
             }
         }
@@ -1133,15 +1603,31 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         critical |= (sig == SIGUSR1 && !profile);
 #endif
 
-        int doexit = critical;
+        doexit = critical;
 #ifdef SIGINFO
         if (sig == SIGINFO) {
+            if (jl_sigint_episode_state() != 0) {
+                // On-demand thread backtraces during a ^C episode.
+                critical = 1;
+                doexit = 0;
+                rescue_bt = 1;
+                goto noexit_critical;
+            }
             if (profile_running != 1)
                 trigger_profile_peek();
             doexit = 0;
         }
 #else
         if (sig == SIGUSR1) {
+#ifdef HAVE_SIGWAITINFO
+            if (jl_sigint_episode_state() != 0) {
+                // On-demand thread backtraces during a ^C episode.
+                critical = 1;
+                doexit = 0;
+                rescue_bt = 1;
+                goto noexit_critical;
+            }
+#endif
             if (profile_running != 1 && timer_graceperiod_elapsed())
                 trigger_profile_peek();
             doexit = 0;
@@ -1172,6 +1658,9 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
         }
 
+#if defined(SIGINFO) || defined(HAVE_SIGWAITINFO) || defined(HAVE_KEVENT)
+noexit_critical:
+#endif
         signal_bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
         if (critical) {
@@ -1229,7 +1718,10 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
             jl_safe_printf("\n");
             // Enable trace compilation to stderr with timing during profile collection
-            jl_force_trace_compile_timing_enable();
+            // (not wanted for the automated ^C-escalation backtrace collection)
+            if (!rescue_bt)
+                jl_force_trace_compile_timing_enable();
+            rescue_bt = 0;
         }
     }
     return NULL;

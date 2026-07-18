@@ -1199,7 +1199,9 @@ public:
             const native_sym_arg_t &symarg,
             jl_cgval_t *argv,
             SmallVectorImpl<Value*> &gc_uses,
-            bool static_rt) const JL_CANSAFEPOINT;
+            bool static_rt,
+            const jl_cgval_t *cancel_guard, // NULL, or (fn, state, src)
+            bool reset_safe_call) const JL_CANSAFEPOINT;
 
 private:
 std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
@@ -1444,7 +1446,12 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
 
 const int fc_args_start = 6;
 
-// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq, gc_safe, [cconv | (cconv, effects)], args..., roots...)
+// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq,
+//      [cconv | (cconv, effects, gc_safe[, cancel_guard])], args..., roots...)
+// With cancel_guard set, the first three args are (handler_fn::Ptr{Cvoid},
+// state::Ptr{Cvoid}, src::Union{Nothing, CancellationTokenSource}) - the
+// cancellation guard published around the call - and are not passed to the
+// C function (see `@ccall cancel_handler=(fn, state)`).
 static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
     JL_NARGSV(ccall, 5);
@@ -1457,12 +1464,18 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     jl_value_t *jlcc = jl_quotenode_value(args[5]);
     jl_sym_t *cc_sym = NULL;
     bool gc_safe = false;
+    bool cancel_guard = false;
+    bool reset_safe_call = false;
     if (jl_is_symbol(jlcc)) {
         cc_sym = (jl_sym_t*)jlcc;
     }
     else if (jl_is_tuple(jlcc)) {
         cc_sym = (jl_sym_t*)jl_get_nth_field_noalloc(jlcc, 0);
         gc_safe = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 2));
+        if (jl_nfields(jlcc) > 3)
+            cancel_guard = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 3));
+        if (jl_nfields(jlcc) > 4)
+            reset_safe_call = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 4));
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
@@ -1518,6 +1531,31 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
         gc_uses.append(get_gc_roots_for(ctx, arg_root));
+    }
+
+    // Peel the cancellation-guard operands (handler_fn, state, src)
+    // prepended by `@ccall cancel_handler=(fn, state)`: they parameterize
+    // the guard context published around the call and are not passed to the
+    // C function.
+    SmallVector<jl_cgval_t, 3> cancel_guard_args;
+    if (cancel_guard) {
+        if (nccallargs < 3) {
+            emit_error(ctx, "ccall: malformed cancellation handler annotation");
+            JL_GC_POP();
+            return jl_cgval_t();
+        }
+        cancel_guard_args.append(argv.begin(), argv.begin() + 3);
+        argv.erase(argv.begin(), argv.begin() + 3);
+        nccallargs -= 3;
+        if (nreqargs > 0)
+            nreqargs -= 3;
+        jl_svec_t *at_peeled = jl_alloc_svec(nccallargs);
+        JL_GC_PUSH1(&at_peeled);
+        for (size_t i = 0; i < nccallargs; i++)
+            jl_svecset(at_peeled, i, jl_svecref(at, i + 3));
+        jl_temporary_root(ctx, (jl_value_t*)at_peeled);
+        JL_GC_POP();
+        at = (jl_value_t*)at_peeled;
     }
 
     jl_unionall_t *unionall = (jl_is_method(ctx.linfo->def.method) && jl_is_unionall(ctx.linfo->def.method->sig))
@@ -1985,7 +2023,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             symarg,
             argv.data(),
             gc_uses,
-            static_rt);
+            static_rt,
+            cancel_guard ? cancel_guard_args.data() : NULL,
+            reset_safe_call);
     JL_GC_POP();
     return retval;
 }
@@ -1997,7 +2037,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         const native_sym_arg_t &symarg,
         jl_cgval_t *argv,
         SmallVectorImpl<Value*> &gc_uses,
-        bool static_rt) const
+        bool static_rt,
+        const jl_cgval_t *cancel_guard,
+        bool reset_safe_call) const
 {
     ++EmittedCCalls;
     if (!err_msg.empty()) {
@@ -2167,6 +2209,85 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             llvmf = emit_plt(ctx, functype, attributes, cc, symarg);
     }
 
+    // Cancellation guard (`@ccall cancel_handler=(fn, state)`): fill an
+    // sp == 0 jl_reset_ctx_t and publish it in task->cancel_handler_ctx
+    // around the call, so that a cancellation of the governing token
+    // delivered while the call runs invokes fn(state, severity) on this
+    // thread (see the usr2_handler request-5 dispatch), instead of waiting
+    // for the next cancellation point. The handler slot is separate from
+    // (and may be active at the same time as) a compiled reset region's
+    // task->reset_ctx, and takes delivery priority while published.
+    Value *guard_reset_ctx_ptr = NULL;
+    Value *guard_null = NULL;
+    if (cancel_guard) {
+        Type *T_size = ctx.types().T_size;
+        Type *T_int8 = getInt8Ty(ctx.builder.getContext());
+        AllocaInst *guard_buf = emit_static_alloca(ctx, ArrayType::get(T_size, 3), Align(alignof(jl_reset_ctx_t)));
+        setName(ctx.emission_context, guard_buf, "cancel_guard");
+        // The handler-flavor layout of jl_reset_ctx_t: {sp = 0, fn, state}.
+        // All guard stores are atomic monotonic so the cancellation-lowering
+        // pass does not treat them as publication-invalidating unsafe points.
+        auto unbox_ptr_arg = [&] (jl_cgval_t v, const char *msg) {
+            if (!jl_subtype(v.typ, (jl_value_t*)jl_voidpointer_type)) {
+                emit_typecheck(ctx, v, (jl_value_t*)jl_voidpointer_type, msg);
+                v = update_julia_type(ctx, v, (jl_value_t*)jl_voidpointer_type);
+            }
+            return emit_unbox(ctx, T_size, v);
+        };
+        Value *fnv = unbox_ptr_arg(cancel_guard[0], "ccall cancellation handler");
+        Value *statev = unbox_ptr_arg(cancel_guard[1], "ccall cancellation handler state");
+        Value *srcv = boxed(ctx, cancel_guard[2]);
+        auto store_slot = [&] (Value *v, size_t slot) {
+            Value *p = slot == 0 ? (Value*)guard_buf :
+                emit_ptrgep(ctx, guard_buf, slot * sizeof(void*));
+            StoreInst *st = ctx.builder.CreateAlignedStore(v, p, Align(sizeof(void*)));
+            st->setOrdering(AtomicOrdering::Monotonic);
+        };
+        store_slot(ConstantInt::get(T_size, 0), 0); // sp == 0: handler flavor
+        store_slot(fnv, 1);
+        store_slot(statev, 2);
+        // Publish (release: the guard contents must be visible before the
+        // pointer).
+        Value *task = get_current_task(ctx);
+        guard_reset_ctx_ptr = emit_ptrgep(ctx, task, offsetof(jl_task_t, cancel_handler_ctx), "cancel_handler_ctx_ptr");
+        StoreInst *pub = ctx.builder.CreateAlignedStore(guard_buf, guard_reset_ctx_ptr, ctx.types().alignof_ptr);
+        pub->setOrdering(AtomicOrdering::Release);
+        guard_null = ConstantPointerNull::get(cast<PointerType>(guard_buf->getType()));
+        // Re-check the governing source now that the guard is published:
+        // the canceller writes the source state before its delivery scan
+        // (with a heavy fence in between), so either it observes our
+        // publication and signals us, or we observe its cancellation here
+        // and throw without starting the call.
+        Value *nothing_val = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
+        BasicBlock *check_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_guard_check", ctx.f);
+        BasicBlock *cancelled_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_guard_cancelled", ctx.f);
+        BasicBlock *docall_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_guard_call", ctx.f);
+        Value *is_nothing = ctx.builder.CreateICmpEQ(decay_derived(ctx, srcv), decay_derived(ctx, nothing_val));
+        ctx.builder.CreateCondBr(is_nothing, docall_bb, check_bb);
+
+        ctx.builder.SetInsertPoint(check_bb);
+        Value *state_ptr = emit_ptrgep(ctx, decay_derived(ctx, srcv), offsetof(jl_cancel_source_t, state), "cancel_state");
+        LoadInst *st_load = ctx.builder.CreateAlignedLoad(T_int8, state_ptr, Align(1));
+        st_load->setOrdering(AtomicOrdering::Monotonic);
+        jl_aliasinfo_t ai_src = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_mutab);
+        ai_src.decorateInst(st_load);
+        Value *is_cancelled = ctx.builder.CreateICmpNE(
+                ctx.builder.CreateAnd(st_load, ConstantInt::get(T_int8, 0x80)),
+                ConstantInt::get(T_int8, 0));
+        ctx.builder.CreateCondBr(is_cancelled, cancelled_bb, docall_bb);
+
+        ctx.builder.SetInsertPoint(cancelled_bb);
+        StoreInst *unpub_throw = ctx.builder.CreateAlignedStore(guard_null, guard_reset_ctx_ptr, ctx.types().alignof_ptr);
+        unpub_throw->setOrdering(AtomicOrdering::Release);
+        FunctionCallee deliverf = jl_Module->getOrInsertFunction("jl_deliver_cancellation",
+                FunctionType::get(getVoidTy(ctx.builder.getContext()), {ctx.types().T_prjlvalue}, false));
+        CallInst *deliver = ctx.builder.CreateCall(deliverf, {srcv});
+        deliver->addFnAttr(Attribute::NoReturn);
+        ctx.builder.CreateUnreachable();
+
+        ctx.builder.SetInsertPoint(docall_bb);
+    }
+
     // Potentially we could add gc_uses to `gc-transition`, instead of emitting them separately as jl_roots
     SmallVector<OperandBundleDef, 2> bundles;
     if (!gc_uses.empty())
@@ -2178,6 +2299,25 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             argvals,
             bundles);
     ((CallInst*)ret)->setAttributes(attributes);
+
+    if (reset_safe_call) {
+        // `@ccall reset_safe=true`: the callee is audited for an
+        // asynchronous unwind landing anywhere inside it - keep the
+        // enclosing reset region published across this call (the
+        // cancellation-lowering pass otherwise clears it before any call).
+        ret->setMetadata("julia.reset_safe", MDNode::get(ctx.builder.getContext(), {}));
+    }
+
+    if (cancel_guard) {
+        // Unpublish: the guard buffer's validity ends with the call. (The
+        // handler slot is not touched by the cancellation-lowering pass, so
+        // it needs no reset_safe marking to survive the call - and the call
+        // is deliberately *not* marked reset_safe: it has not been audited
+        // for a longjmp landing inside it, so an enclosing reset region is
+        // still cleared before it as usual.)
+        StoreInst *unpub = ctx.builder.CreateAlignedStore(guard_null, guard_reset_ctx_ptr, ctx.types().alignof_ptr);
+        unpub->setOrdering(AtomicOrdering::Release);
+    }
 
     if (cc != CallingConv::C)
         ((CallInst*)ret)->setCallingConv(cc);

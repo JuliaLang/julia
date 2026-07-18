@@ -51,31 +51,49 @@ macro aliasscope(body)
 end
 
 
-function sync_end(c::Channel{Any})
+function sync_end(c::Channel{Any}, src::Union{Nothing, Base.CancellationTokenSource}=nothing)
     if !isready(c)
         # there must be at least one item to begin with
         close(c)
         return
     end
     nremaining::Int = 0
-    while true
-        event = take!(c)
-        if event === :__completion__
-            nremaining -= 1
-            if nremaining == 0
-                break
-            end
-        else
-            nremaining += 1
-            schedule(Task(()->begin
-                try
-                    wait(event)
-                    put!(c, :__completion__)
-                catch e
-                    close(c, e)
+    try
+        while true
+            event = take!(c)
+            if event === :__completion__
+                nremaining -= 1
+                if nremaining == 0
+                    break
                 end
-            end))
+            else
+                nremaining += 1
+                # Shield via the scope rather than a keyword: `event` can
+                # be any waitable (e.g. a Distributed.Future), whose `wait`
+                # method need not accept `cancel`.
+                schedule(Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                    Task(()->begin
+                        try
+                            wait(event)
+                            put!(c, :__completion__)
+                        catch e
+                            close(c, e)
+                        end
+                    end)
+                end)
+            end
         end
+    catch e
+        # Per this macro's contract the exception (a child failure delivered
+        # via `close(c, e)`, or a cancellation of this block's scope) is
+        # rethrown immediately - we do not wait for the children to finish
+        # dying, but we cancel the block's own source so that all children
+        # observe the cancellation through the token tree.
+        if src !== nothing
+            Base.cancel!(src)
+        end
+        close(c, e isa Exception ? e : ErrorException("sync_end interrupted"))
+        rethrow()
     end
     close(c)
     nothing
@@ -99,10 +117,18 @@ during error handling.
 """
 macro sync(block)
     var = esc(sync_varname)
+    # like Base.@sync, the block runs in a new dynamic scope carrying the
+    # token of a fresh cancellation source; on the fail-fast path (and on
+    # cancellation from outside) the source is cancelled, reaching all
+    # children through the token tree without awaiting them
+    scoped_block = Expr(:tryfinally, esc(block), nothing,
+        :(Base.Scope(Core.current_scope()::Union{Nothing, Base.Scope},
+                     Base.CANCEL_TOKEN => Base.CancellationToken(var"#sync_src#"))))
     quote
-        let $var = Channel(Inf)
-            v = $(esc(block))
-            sync_end($var)
+        let var"#sync_src#" = Base.CancellationTokenSource(Base.default_cancel_token()),
+            $var = Channel(Inf)
+            v = $scoped_block
+            sync_end($var, var"#sync_src#")
             v
         end
     end
@@ -667,9 +693,19 @@ If `timeout` is specified, cancel the `wait` when it expires and return
 `:timed_out`. The minimum value for `timeout` is 0.001 seconds, i.e. 1
 millisecond.
 """
-function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0,
+                           cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     ct = current_task()
-    Base._wait2(c, ct, first)
+    tok = Base.check_cancel_arg(cancel)
+    src = tok === nothing ? nothing : tok.source
+    w = Base._wait2(c, ct, c, first)
+    if src !== nothing && !Base.register_cancellation!(src, w)
+        # The governing token is already cancelled: don't park.
+        Base.list_deletefirst!(Base.withwaitee(Base.waitqueue(c), c), w)
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
+        Base.checkcancel(src)
+        error("cancellation registration refused, but the source is not cancelled")
+    end
     token = Base.unlockall(c.lock)
 
     timer::Union{Timer, Nothing} = nothing
@@ -678,44 +714,58 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         timer = Timer(timeout)
         waiter_left = Threads.Atomic{Bool}(false)
         # start a task to wait on the timer
-        t = _wait_with_timeout_task(c, ct, timer, waiter_left)
+        t = _wait_with_timeout_task(c, ct, w, timer, waiter_left)
         t.sticky = false
         Threads._spawn_set_thrpool(t, :interactive)
         schedule(t)
     end
 
+    local res
     try
         res = wait()
+    catch
+        Base.relockall(c.lock, token)
         if timer !== nothing
             close(timer)
             waiter_left[] = true
         end
-        return res
-    catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        src === nothing || Base.unregister_cancellation!(src, w)
+        Base.list_deletefirst!(Base.withwaitee(Base.waitqueue(c), c), w)
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
         rethrow()
-    finally
-        Base.relockall(c.lock, token)
     end
+    Base.relockall(c.lock, token)
+    if timer !== nothing
+        close(timer)
+        waiter_left[] = true
+    end
+    src === nothing || Base.unregister_cancellation!(src, w)
+    Base.list_deletefirst!(Base.withwaitee(Base.waitqueue(c), c), w)
+    @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
+    return res
 end
 
-function _wait_with_timeout_task(c::GenericCondition, ct::Task, timer::Timer,
+function _wait_with_timeout_task(c::GenericCondition, ct::Task, w::Task, timer::Timer,
     waiter_left::Threads.Atomic{Bool})
     return Task() do
         try
-            wait(timer)
+            # not cancellable: this is internal mechanism; closing the timer
+            # wakes it in all exit paths of wait_with_timeout
+            wait(timer; cancel=nothing)
         catch e
             # if the timer was closed, the waiting task has been scheduled; do nothing
             e isa EOFError && return
         end
         dosched = false
         lock(c.lock)
-        # Confirm that the waiting task is still in the wait queue and remove it. If
-        # the task is not in the wait queue, it must have been notified already so we
-        # don't do anything here.
-        if !waiter_left[] && ct.queue === c.waitq
+        # Confirm that the waiting task is still in this wait's queue entry,
+        # claim its wake, and remove it. If the wake was already claimed (by
+        # notify or a canceller) or the node was reused for a later wait
+        # (waiter_left), do nothing.
+        if !waiter_left[] && w.wait_queue === c &&
+           (@atomicreplace w.wait_state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
             dosched = true
-            Base.list_deletefirst!(c.waitq, ct)
+            Base.list_deletefirst!(Base.waitqueue(c), w)
         end
         unlock(c.lock)
         # send the waiting task a timeout

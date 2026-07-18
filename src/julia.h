@@ -1757,6 +1757,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
 #define jl_is_mcache(v)      jl_typetagis(v,jl_methcache_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
+#define jl_is_cancel_source(v) jl_typetagis(v,jl_cancel_source_type)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
@@ -2525,18 +2526,32 @@ struct _jl_handler_t {
     size_t locks_len;
     jl_timing_block_t *timing_stack;
     size_t world_age;
+    // The published interruptible-region contexts at handler entry. Restored
+    // when the handler is left or entered exceptionally, so that an exception
+    // thrown through a foreign call with a cancellation handler unpublishes
+    // the guard whose establishing frame the unwind destroyed (and,
+    // conversely, a try/catch running in a callback under such a guard
+    // re-arms it on exit).
+    struct _jl_reset_ctx_t *reset_ctx;
+    struct _jl_reset_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
 };
 
-#define JL_TASK_STATE_RUNNABLE 0
-#define JL_TASK_STATE_DONE     1
-#define JL_TASK_STATE_FAILED   2
+#define JL_TASK_STATE_RUNNABLE  0
+#define JL_TASK_STATE_DONE      1
+#define JL_TASK_STATE_FAILED    2
+#define JL_TASK_STATE_CANCELLED 3
+#define JL_TASK_STATE_ABANDONED 4
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_CANSAFEPOINT_ENTER_LEAVE;
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_preempt_thread_task(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_deliver_cancellation(jl_value_t *src);
+JL_DLLEXPORT int jl_abandon_task(jl_task_t *t, jl_task_t *next_task);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);

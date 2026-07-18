@@ -173,23 +173,44 @@ function threading_run(fun, static)
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
+    # The workers run in a new dynamic scope carrying the token of a fresh
+    # cancellation source, so that cancellation of the enclosing scope reaches
+    # every worker through the token tree.
+    src = Base.CancellationTokenSource(Base.default_cancel_token())
+    tok = Base.CancellationToken(src)
     try
-        for i = 1:n
-            t = Task(() -> fun(i)) # pass in tid
-            t.sticky = static
-            if static
-                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
-            else
-                # TODO: this should be the current pool (except interactive) if there
-                # are ever more than two pools.
-                _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
-                @assert _result == 1 "_result != 1"
+        Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
+            for i = 1:n
+                t = Task(() -> fun(i)) # pass in tid
+                t.sticky = static
+                if static
+                    ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+                else
+                    # TODO: this should be the current pool (except interactive) if there
+                    # are ever more than two pools.
+                    _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+                    @assert _result == 1 "_result != 1"
+                end
+                tasks[i] = t
+                schedule(t)
             end
-            tasks[i] = t
-            schedule(t)
         end
         for i = 1:n
-            Base._wait(tasks[i])
+            try
+                Base._wait(tasks[i], tok)
+            catch e
+                e isa Base.CancellationRequest || rethrow()
+                # Our own scope was cancelled; the workers observe the same
+                # cancellation through the tree. Await their unwind (only a
+                # severity escalation may interrupt these teardown waits),
+                # then report the failures as usual.
+                if Base.severity(e) < Base.CANCEL_REQUEST_ABANDON_ALL.request
+                    for j = i:n
+                        Base._wait(tasks[j], tok; min_severity=Base.severity(e) + 0x01)
+                    end
+                end
+                break
+            end
         end
     finally
         ccall(:jl_exit_threaded_region, Cvoid, ())

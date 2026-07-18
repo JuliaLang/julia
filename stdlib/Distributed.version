@@ -1,4 +1,6 @@
-DISTRIBUTED_BRANCH = master
-DISTRIBUTED_SHA1 = fde987fbb05c65bb6bd183396137383931107059
-DISTRIBUTED_GIT_URL := https://github.com/JuliaLang/Distributed.jl
-DISTRIBUTED_TAR_URL = https://api.github.com/repos/JuliaLang/Distributed.jl/tarball/$1
+# TEMPORARY: staging branch carrying the worker-side interrupt scoping for
+# the cancellation rework; retarget to JuliaLang/Distributed.jl once merged.
+DISTRIBUTED_BRANCH = kf/cancellation
+DISTRIBUTED_SHA1 = 0294e1464a53f7f845e0036215563004260cf495
+DISTRIBUTED_GIT_URL := https://github.com/KenoAIStaging/Distributed.jl
+DISTRIBUTED_TAR_URL = https://api.github.com/repos/KenoAIStaging/Distributed.jl/tarball/$1

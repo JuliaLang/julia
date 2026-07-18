@@ -848,6 +848,144 @@ a reference to `b` and both `a` and `b` are due for garbage collection, there is
 that `b` would be finalized after `a`. If proper finalization of `a` depends on `b` being valid,
 it must be handled in other ways.
 
+## [Long-Running Foreign Calls: GC and Cancellation](@id man-foreign-calls-gc-cancellation)
+
+A foreign call is opaque to the Julia runtime: while a thread executes C code it reaches
+neither GC safepoints nor cancellation points. For the short calls that make up most wrappers
+this is invisible. A call that runs — or blocks — for a long time, however, interacts badly
+with two runtime services:
+
+  * **The garbage collector.** Collection stops the world, and the world includes the thread
+    sitting inside your C call: every other thread parks at its next safepoint and then waits
+    for the foreign call to return. One multi-second `dgemm` freezes allocation process-wide.
+  * **[Task cancellation](@ref man-cancellation)** (including ^C). A cancellation request is
+    observed at cancellation points and by waiting operations; code inside a foreign call
+    observes it only after the call returns. In sessions with few threads, a long
+    non-cooperative call can also starve the runtime's event loop and with it the ^C
+    machinery itself.
+
+Three `@ccall` annotations let a wrapper make progressively stronger promises about its C
+code in exchange for progressively better runtime cooperation. They compose freely.
+
+### `gc_safe`: allow collection during the call
+
+```julia
+@ccall gc_safe=true lib.solve(prob::Ptr{Cvoid})::Cint
+```
+
+`gc_safe = true` transitions the thread to the *GC-safe* state for the duration of the call:
+the collector treats it like a parked thread and runs concurrently with it, and (because the
+thread no longer counts as running managed code) an idle thread may take over runtime duties
+such as the I/O event loop — which is also what keeps ^C responsive while the call runs. The
+transition back at return waits for any in-progress collection, so the C code never observes
+a Julia world in motion.
+
+The promise you make is that, for the duration of the call, the C code behaves like a
+*foreign* thread:
+
+  * It must not call Julia runtime functions (`jl_*` — allocation, `jl_call*`, throwing,
+    task or GC control) directly: those require the managed state. Calling back into Julia
+    through an [`@cfunction`](@ref) or [`@ccallable`](@ref Base.@ccallable) entry point
+    **is** safe — those entry points perform the state transition themselves.
+  * It may freely use the memory passed to it as arguments (rooted for the duration of the
+    call, per the rules above; Julia's collector does not move objects), but it must not
+    otherwise poke around in GC-managed objects.
+
+Pure computation, blocking system calls, and calls into other native libraries all qualify.
+When in doubt about a callback-heavy API, leave the annotation off — a wrong `gc_safe` is
+undefined behavior — or route every re-entry through `@cfunction`.
+
+### `cancel_handler`: interrupting a call in flight
+
+`gc_safe` lets the rest of the process make progress, but the call itself still runs to
+completion regardless of any cancellation. If the library provides a way to make an
+in-flight operation return early — a flag it polls, or a dedicated cancellation entry
+point — the `cancel_handler` annotation connects that to Julia's cancellation:
+
+```julia
+@ccall gc_safe=true cancel_handler=(fn, state) lib.solve(prob::Ptr{Cvoid})::Cint
+```
+
+If the [cancellation token](@ref man-cancellation) governing the calling task is cancelled
+while the call is running, the runtime invokes `fn(state, severity)` **on the thread
+executing the call**, like a signal handler: at an arbitrary point of the foreign code, on
+the same stack, resuming the call when the handler returns. Because it runs on the executing
+thread, thread-local library state (current operation handles, thread-bound cancel tokens)
+is simply current. The handler's only job is to make the call return early; the annotated
+call then throws the pending [`CancellationRequest`](@ref Base.CancellationRequest) as soon
+as it returns, so a partially computed result never escapes. A cancellation that is already
+pending throws before the call's arguments are even evaluated.
+
+`fn` is a C-callable function pointer `void (*)(void *state, uint8_t severity)`, and `state`
+undergoes the standard `Ptr{Cvoid}` argument conversion and is rooted for the duration of
+the call like any other argument. A complete wrapper for a library with an
+(async-signal-safe) stop function looks like:
+
+```julia
+module LibSolver
+
+using Libdl
+
+const libsolver = "libsolver.so"
+
+# handlers must not take locks, so resolve everything they need eagerly
+const STOP_FPTR = Ref(C_NULL)    # void solver_request_stop(solver_t *); async-signal-safe
+const STOP_HANDLER = Ref(C_NULL)
+
+function stop_handler(state::Ptr{Cvoid}, severity::UInt8)
+    # runs like a signal handler on the thread inside solver_run
+    ccall(STOP_FPTR[], Cvoid, (Ptr{Cvoid},), state)
+    nothing
+end
+
+function __init__()
+    STOP_FPTR[] = dlsym(dlopen(libsolver), :solver_request_stop)
+    STOP_HANDLER[] = @cfunction(stop_handler, Cvoid, (Ptr{Cvoid}, UInt8))
+end
+
+function solve(prob::Ptr{Cvoid})
+    # cancelling the governing token (e.g. by ^C) stops the solver early and
+    # throws a CancellationRequest from this call
+    @ccall gc_safe=true cancel_handler=(STOP_HANDLER[], prob) libsolver.solver_run(prob::Ptr{Cvoid})::Cint
+end
+
+end
+```
+
+The handler runs in a context comparable to a signal handler, and its restrictions follow
+from that:
+
+  * No allocation, no locks (including `dlsym` — pre-resolve function pointers into globals,
+    as above), no I/O, no yielding, no throwing. It must return.
+  * Its register contract is the LLVM `preserve_all` calling convention: it must preserve
+    any floating-point/vector state it touches. A handler that sticks to integer code and
+    calls into async-signal-safe library entry points — the normal case — satisfies this
+    trivially; C handlers can also be compiled with clang's `__attribute__((preserve_all))`.
+  * It must be idempotent and tolerant of spurious invocation: it may run once per severity
+    escalation or redelivery, may race the call completing (or not yet having reached the
+    library), and is only invoked while the call is actually executing on a thread (at most
+    one invocation at a time per thread). Delivery is best-effort; the cancellation itself
+    is level-triggered and is never lost.
+
+To pass Julia-managed data as `state`, use a `Ref` (the handler receives a pointer to its
+data); the `state` argument is rooted across the call like every other argument.
+
+### `reset_safe`: audited libraries
+
+For a library that has been *audited* for asynchronous unwinding — interruption at any
+instruction leaves no lock held and no global state torn, at worst leaking bounded in-flight
+temporaries — `reset_safe = true` goes further than a handler: a cancellation unwinds the
+foreign computation at an arbitrary point, without waiting for the call to return. This is
+a strong claim about the C code; see [`@ccall`](@ref) for the exact contract. Base uses it
+for GMP, which is how a `BigInt` loop with no cancellation points of its own cancels at the
+first ^C.
+
+!!! note
+    Asynchronous delivery of cancellation handlers is currently implemented on Linux and
+    macOS (x86-64 and AArch64) and on Windows (x86-64). On other platforms the annotation is
+    a safe no-op in this respect: the cancellation is still delivered, level-triggered, once
+    the call returns and the task reaches its next cancellation point.
+
 ## Non-constant Function Specifications
 
 In some cases, the exact name or path of the needed library is not known in

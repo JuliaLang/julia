@@ -309,6 +309,23 @@ JL_DLLEXPORT int jl_wakeup_thread(int16_t tid)
     return wakeup_thread(ct, tid);
 }
 
+// Like jl_wakeup_thread, but callable from non-Julia threads (e.g. the signal
+// listener), which have no task context.
+JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT
+{
+    if (tid < 0)
+        return;
+    jl_fence(); // [^store_buffering_1]
+    if (wake_thread(tid)) {
+        // check if we need to notify uv_run too
+        jl_fence();
+        jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
+        if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+            wake_libuv();
+    }
+}
+
 // Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-padded
 // stripes so concurrent producers don't contend on a single counter.
 #define POOL_WAKE_HINT_STRIPES 64
@@ -514,9 +531,20 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     // If trylock would have succeeded, that may have been our
                     // responsibility, so need to make sure thread 0 will take care
                     // of us.
-                    if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
-                        jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
-
+                    if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) { // aka trylock
+                        int16_t io_tid = jl_atomic_load_relaxed(&io_loop_tid);
+                        jl_wakeup_thread(io_tid);
+                        // If the io thread cannot currently run the event loop
+                        // - it is executing foreign code (gc-safe state, e.g.
+                        // a gc_safe ccall), or a ^C notification is stuck
+                        // waiting for dispatch (the io thread may be inside a
+                        // long-running foreign call that only that
+                        // notification can interrupt) - take the loop over.
+                        jl_ptls_t io_ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[io_tid];
+                        if (jl_atomic_load_relaxed(&io_ptls->gc_state) == JL_GC_STATE_SAFE ||
+                            jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+                            uvlock = jl_mutex_trylock(&jl_uv_mutex);
+                    }
                 }
                 if (uvlock) {
                     int enter_eventloop = may_sleep(ptls);
@@ -581,6 +609,25 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 int8_t gc_state = jl_gc_safe_enter(ptls);
                 jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
                 while (may_sleep(ptls)) {
+                    if (jl_atomic_load_relaxed(&jl_sigint_dispatch_pending) && wait_empty == NULL) {
+                        // (When the process is draining for exit, sleep
+                        // normally: staying awake would inflate
+                        // n_threads_running and stall jl_task_wait_empty.)
+                        // A ^C notification awaits dispatch to the sigint
+                        // listener task. Its wakeup is racy (the enqueue may
+                        // happen after we checked the queues but before we
+                        // commit to sleeping, and pool-restricted threads
+                        // cannot dispatch it for us) - stay awake and keep
+                        // polling the queues until it is dispatched (the
+                        // listener clears the flag when it runs).
+                        if (set_not_sleeping(ptls)) {
+                            // we own this wakeup: restore the running count
+                            // we gave up before entering the sleep loop
+                            jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+                            JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
+                        }
+                        break;
+                    }
                     if (ptls->tid == 0) {
                         task = wait_empty;
                         if (task && jl_atomic_load_relaxed(&n_threads_running) == 0) {

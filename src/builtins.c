@@ -2603,6 +2603,30 @@ JL_CALLABLE(jl_f_intrinsic_call)
     abort();
 }
 
+// cancellation_point!(src::Union{Nothing, Core.CancellationTokenSource})::UInt8
+// Returns a status byte: 0x00 nothing pending; (0x80 | sev) if `src` is
+// cancelled at severity `sev`; the 0x40 bit is set if a preempt (cooperative
+// yield) request is pending.
+// N.B.: this runtime version only *checks* the source. Publishing the source
+// into `ct->bound_cancel_token` is done exclusively by the codegen'ed
+// lowering: the binding describes the async-interruptible region that the
+// CancellationLowering pass produces around the compiled cancellation point
+// (reset_ctx), which has no interpreter equivalent.
+JL_CALLABLE(jl_f_cancellation_point)
+{
+    JL_NARGS(cancellation_point!, 1, 1);
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *src = args[0];
+    uint8_t st = 0;
+    if (src != jl_nothing) {
+        JL_TYPECHK(cancellation_point!, cancel_source, src);
+        st = jl_atomic_load_relaxed(&((jl_cancel_source_t*)src)->state);
+    }
+    if (jl_atomic_load_relaxed(&ct->preempt_request))
+        st |= 0x40;
+    return jl_box_uint8(st);
+}
+
 JL_DLLEXPORT const char *jl_intrinsic_name(int f)
 {
     switch ((enum intrinsic)f) {
@@ -2729,6 +2753,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
+    add_builtin("CancellationTokenSource", (jl_value_t*)jl_cancel_source_type);
 
     add_builtin("AddrSpace", (jl_value_t*)jl_addrspace_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);

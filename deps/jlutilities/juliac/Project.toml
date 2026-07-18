@@ -2,4 +2,4 @@
 JuliaC = "acedd4c2-ced6-4a15-accc-2607eb759ba2"
 
 [sources]
-JuliaC = {rev = "main", url = "https://github.com/JuliaLang/JuliaC.jl.git"}
+JuliaC = {rev = "kf/trim-sigint-listener", url = "https://github.com/KenoAIStaging/JuliaC.jl.git"}

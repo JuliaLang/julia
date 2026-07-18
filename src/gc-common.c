@@ -6,6 +6,9 @@
 #include "julia_gcext.h"
 #include "julia_assert.h"
 #include "threading.h"
+#if defined(__GLIBC__)
+#include <execinfo.h> // debug memlog return-address capture
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -542,6 +545,168 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
 JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 {
     return jl_gc_counted_malloc(sz);
+}
+
+// === GMP allocation hooks ===================================================
+// Installed by Base.GMP.__init__ in place of the plain jl_gc_counted_*
+// functions. GMP computations run under a reset region published across the
+// GMP ccall (see the `reset_safe` option of `@ccall`), so an asynchronous
+// cancellation can unwind them at any point - except while inside the
+// allocation hook, where a longjmp could orphan the libc allocator's arena
+// lock, or land mid-GC (jl_gc_counted_* may collect, and collection may run
+// finalizers). These wrappers therefore publish a cancellation-handler
+// region across the whole underlying call: a delivery while inside merely
+// notes the cancellation (and suppresses the reset), and the exit path
+// chains the deferred note into the still-published reset synchronously.
+// If no reset region is published (an unannotated caller), the cancellation
+// stays pending and is recovered level-triggered at the next cancellation
+// point. N.B.: a collection that runs finalizers may execute cancellation
+// points that clear the enclosing reset region; the remaining GMP call then
+// simply degrades to level-triggered cancellation.
+
+// The handler contract is the preserve_all calling convention; keeping the
+// note handler to general registers satisfies it under any compiler.
+JL_GENERAL_REGS_ONLY
+static void jl_gmp_defer_note(void *state, uint8_t sev)
+{
+    (void)sev;
+    *(volatile sig_atomic_t*)state = 1;
+}
+
+// These guards NEST: an allocation hook may trigger a collection whose
+// finalizers run __gmpz_clear, re-entering the free hook inside the outer
+// guard. Enter therefore saves the previously published context and leave
+// restores it (never bare NULL - clearing would strip the outer hook's
+// protection for the remainder of its libc call, letting a reset longjmp
+// land mid-malloc with the arena lock held).
+STATIC_INLINE jl_reset_ctx_t *jl_gmp_guard_enter(jl_task_t *ct, jl_reset_ctx_t *hctx,
+                                                 volatile sig_atomic_t *deferred) JL_NOTSAFEPOINT
+{
+    jl_reset_ctx_t *prev = jl_atomic_load_relaxed(&ct->cancel_handler_ctx);
+    hctx->sp = 0; // handler flavor
+    hctx->handler.fn = &jl_gmp_defer_note;
+    hctx->handler.state = (void*)deferred;
+    jl_signal_fence(); // contents before publication (same-thread signal)
+    jl_atomic_store_release(&ct->cancel_handler_ctx, hctx);
+    jl_signal_fence();
+    return prev;
+}
+
+STATIC_INLINE void jl_gmp_guard_leave(jl_task_t *ct, volatile sig_atomic_t *deferred,
+                                      jl_reset_ctx_t *prev)
+{
+    jl_signal_fence();
+    jl_atomic_store_release(&ct->cancel_handler_ctx, prev);
+    jl_signal_fence();
+    if (*deferred && prev == NULL && !ct->ptls->in_finalizer) {
+        // A cancellation was delivered while inside the allocator: chain
+        // into the reset region published across the enclosing GMP call
+        // (synchronously - this is a safe point by construction). The
+        // re-executed cancellation point at the reset throws the request.
+        // Chaining is only safe at the OUTERMOST guard and outside
+        // finalizer execution: a nested leave is still inside the outer
+        // hook's collection, and a finalizer-context leave would longjmp
+        // out of run_finalizers mid-list - both tear GC state that the
+        // unwind cannot repair. Dropping the note there is fine: the
+        // request is level-triggered and the next cancellation point (or
+        // the outermost hook's own leave) picks it up.
+        jl_reset_ctx_t *rctx = jl_atomic_load_relaxed(&ct->reset_ctx);
+        if (rctx != NULL && rctx->sp != 0) {
+            jl_atomic_store_release(&ct->reset_ctx, NULL);
+            jl_longjmp(rctx->ctx.uc_mcontext, 1);
+        }
+    }
+}
+
+// Debug ring for hunting GMP-hook memory corruption: JL_GMP_MEMLOG=1
+// records every hook event (never enabled in production; dumped from gdb).
+typedef struct {
+    void *p;
+    void *oldp;      // realloc only
+    size_t sz;
+    void *ret[6];    // return-address chain into GMP
+    uint16_t tid;
+    uint8_t op;      // 1=malloc 2=realloc 3=free
+    uint8_t in_fin;
+} jl_gmp_memlog_ent_t;
+#define JL_GMP_MEMLOG_LEN (1u << 24)
+static jl_gmp_memlog_ent_t *jl_gmp_memlog = NULL;
+static _Atomic(uint32_t) jl_gmp_memlog_i = 0;
+static int jl_gmp_memlog_on = -1;
+
+static void jl_gmp_memlog_rec(uint8_t op, void *p, void *oldp, size_t sz) JL_NOTSAFEPOINT
+{
+    if (jl_gmp_memlog_on == -1) {
+        char *env = getenv("JL_GMP_MEMLOG");
+        jl_gmp_memlog_on = (env && env[0] == '1') ? 1 : 0;
+        if (jl_gmp_memlog_on)
+            jl_gmp_memlog = (jl_gmp_memlog_ent_t*)calloc(JL_GMP_MEMLOG_LEN, sizeof(jl_gmp_memlog_ent_t));
+    }
+    if (!jl_gmp_memlog_on || jl_gmp_memlog == NULL)
+        return;
+    uint32_t i = jl_atomic_fetch_add_relaxed(&jl_gmp_memlog_i, 1) & (JL_GMP_MEMLOG_LEN - 1);
+    jl_gmp_memlog_ent_t *e = &jl_gmp_memlog[i];
+    e->op = 0; // mark in-progress
+    e->p = p;
+    e->oldp = oldp;
+    e->sz = sz;
+    jl_task_t *ct = jl_get_current_task();
+    e->tid = (ct && ct->ptls) ? (uint16_t)ct->ptls->tid : 0xffff;
+    e->in_fin = (ct && ct->ptls) ? (uint8_t)ct->ptls->in_finalizer : 0xff;
+    memset(e->ret, 0, sizeof(e->ret));
+#if defined(__GLIBC__)
+    // capture a short return-address chain (skip this frame + the hook)
+    void *bt[8];
+    int n = backtrace(bt, 8);
+    for (int k = 2; k < n && k - 2 < 6; k++)
+        e->ret[k - 2] = bt[k];
+#endif
+    e->op = op;
+}
+
+JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL)
+        return jl_gc_counted_malloc(sz);
+    volatile sig_atomic_t deferred = 0;
+    jl_reset_ctx_t hctx;
+    jl_reset_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    void *data = jl_gc_counted_malloc(sz);
+    jl_gmp_memlog_rec(1, data, NULL, sz);
+    // may longjmp; `data` then leaks, like the aborted operation's other
+    // in-flight temporaries (its output is discarded by the unwind anyway)
+    jl_gmp_guard_leave(ct, &deferred, prev);
+    return data;
+}
+
+JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL)
+        return jl_gc_counted_realloc_with_old_size(p, old, sz);
+    volatile sig_atomic_t deferred = 0;
+    jl_reset_ctx_t hctx;
+    jl_reset_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    void *data = jl_gc_counted_realloc_with_old_size(p, old, sz);
+    jl_gmp_memlog_rec(2, data, p, sz);
+    jl_gmp_guard_leave(ct, &deferred, prev);
+    return data;
+}
+
+JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL) {
+        jl_gc_counted_free_with_size(p, sz);
+        return;
+    }
+    volatile sig_atomic_t deferred = 0;
+    jl_reset_ctx_t hctx;
+    jl_reset_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    jl_gmp_memlog_rec(3, p, NULL, sz);
+    jl_gc_counted_free_with_size(p, sz);
+    jl_gmp_guard_leave(ct, &deferred, prev);
 }
 
 //_unchecked_calloc does not check for potential overflow of nm*sz

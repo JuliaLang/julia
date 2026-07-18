@@ -572,9 +572,12 @@ julia> rm("my_file.txt")
 ```
 """
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
-readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
-readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = takestring!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
-readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
+readuntil(stream::IO, delim::UInt8; cancel::CancelTokenArg=DEFAULT_CANCEL, kw...) =
+    _with_cancel_arg(() -> _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...)), cancel)
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; cancel::CancelTokenArg=DEFAULT_CANCEL, kw...) =
+    _with_cancel_arg(() -> takestring!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...)), cancel)
+readuntil(stream::IO, delim::T; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) where T =
+    _with_cancel_arg(() -> _copyuntil(Vector{T}(), stream, delim, keep), cancel)
 
 
 """
@@ -646,9 +649,11 @@ Logan
 "Logan"
 ```
 """
-readline(filename::AbstractString; keep::Bool=false) =
-    open(io -> readline(io; keep), filename)
-readline(s::IO=stdin; keep::Bool=false) = takestring!(copyline(IOBuffer(sizehint=16), s; keep))
+readline(filename::AbstractString; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    cancel === DEFAULT_CANCEL ? open(io -> readline(io; keep), filename) :
+        _with_cancel_arg(() -> open(io -> readline(io; keep), filename), cancel)
+readline(s::IO=stdin; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _with_cancel_arg(() -> takestring!(copyline(IOBuffer(sizehint=16), s; keep)), cancel)
 
 """
     copyline(out::IO, io::IO=stdin; keep::Bool=false)
@@ -689,7 +694,8 @@ copyline(out::IO, filename::AbstractString; keep::Bool=false) =
     open(io -> copyline(out, io; keep), filename)
 
 # fallback to optimized methods for IOBuffer in iobuffer.jl
-function copyline(out::IO, s::IO; keep::Bool=false)
+function copyline(out::IO, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> copyline(out, s; keep), cancel)
     if keep
         return copyuntil(out, s, 0x0a, keep=true)
     else
@@ -739,7 +745,8 @@ function readlines(filename::AbstractString; kw...)
         readlines(f; kw...)
     end
 end
-readlines(s=stdin; kw...) = collect(eachline(s; kw...))
+readlines(s=stdin; cancel::CancelTokenArg=DEFAULT_CANCEL, kw...) =
+    _with_cancel_arg(() -> collect(eachline(s; kw...)), cancel)
 
 ## byte-order mark, ntoh & hton ##
 
@@ -824,7 +831,8 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 ## binary I/O ##
 
 write(io::IO, x) = throw(MethodError(write, (io, x)))
-function write(io::IO, x1, xs...)
+function write(io::IO, x1, xs...; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> write(io, x1, xs...), cancel)
     written::Int = write(io, x1)
     for x in xs
         written += write(io, x)
@@ -851,7 +859,8 @@ end
 write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
-function write(s::IO, A::AbstractArray)
+function write(s::IO, A::AbstractArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> write(s, A), cancel)
     if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
@@ -864,7 +873,8 @@ function write(s::IO, A::AbstractArray)
     return nb
 end
 
-function write(s::IO, A::StridedArray)
+function write(s::IO, A::StridedArray; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> write(s, A), cancel)
     if !isbitstype(eltype(A))
         error("`write` is not supported on non-isbits arrays")
     end
@@ -942,7 +952,8 @@ end
 read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
-function read!(s::IO, A::AbstractArray{T}) where {T}
+function read!(s::IO, A::AbstractArray{T}; cancel::CancelTokenArg=DEFAULT_CANCEL) where {T}
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> read!(s, A), cancel)
     if isbitstype(T) && _checkcontiguous(Bool, A)
         GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
     else
@@ -961,7 +972,8 @@ function read!(s::IO, A::AbstractArray{T}) where {T}
     return A
 end
 
-function read!(s::IO, A::StridedArray{T}) where {T}
+function read!(s::IO, A::StridedArray{T}; cancel::CancelTokenArg=DEFAULT_CANCEL) where {T}
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> read!(s, A), cancel)
     if !isbitstype(T) || _checkcontiguous(Bool, A)
         return invoke(read!, Tuple{IO, AbstractArray}, s, A)
     end
@@ -1168,7 +1180,7 @@ julia> readchomp("my_file.txt")
 julia> rm("my_file.txt");
 ```
 """
-readchomp(x) = chomp(read(x, String))
+readchomp(x; cancel::CancelTokenArg=DEFAULT_CANCEL) = _with_cancel_arg(() -> chomp(read(x, String)), cancel)
 
 # read up to nb bytes into nb, returning # bytes read
 
@@ -1179,7 +1191,8 @@ Read at most `nb` bytes from `stream` into `b`, returning the number of bytes re
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
 """
-function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
+function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b); cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> readbytes!(s, b, nb), cancel)
     require_one_based_indexing(b)
     olb = lb = length(b)
     nr = 0
@@ -1203,15 +1216,18 @@ end
 
 Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 """
-function read(s::IO, nb::Integer = typemax(Int))
-    # Let readbytes! grow the array progressively by default
-    # instead of taking the risk of over-allocating
-    b = Vector{UInt8}(undef, nb == typemax(Int) ? 1024 : nb)
-    nr = readbytes!(s, b, nb)
-    return resize!(b, nr)
+function read(s::IO, nb::Integer = typemax(Int); cancel::CancelTokenArg=DEFAULT_CANCEL)
+    _with_cancel_arg(cancel) do
+        # Let readbytes! grow the array progressively by default
+        # instead of taking the risk of over-allocating
+        b = Vector{UInt8}(undef, nb == typemax(Int) ? 1024 : nb)
+        nr = readbytes!(s, b, nb)
+        return resize!(b, nr)
+    end
 end
 
-read(s::IO, ::Type{String}) = String(read(s)::Vector{UInt8})
+read(s::IO, ::Type{String}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _with_cancel_arg(() -> String(read(s)::Vector{UInt8}), cancel)
 read(s::IO, T::Type) = error("The IO stream does not support reading objects of type $T.")
 
 ## high-level iterator interfaces ##

@@ -994,7 +994,8 @@ function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     return out
 end
 
-function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
+function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> copyline(out, s; keep), cancel)
     # If the data is copied into the middle of the buffer of `out` instead of appended to the end,
     # and !keep, and the line copied ends with \r\n, then the copyuntil (even if keep=false)
     # will overwrite one too many bytes with the new \r byte.
@@ -1051,8 +1052,10 @@ function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
     return out
 end
 
-copyline(out::IO, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
-copyline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
+# reading from an in-memory buffer never blocks; accept (and ignore) `cancel`
+# so the documented keyword surface is uniform across source types
+copyline(out::IO, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) = _copyline(out, io; keep)
+copyline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) = _copyline(out, io; keep)
 
 
 # copy-free crc32c of IOBuffer:

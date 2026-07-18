@@ -27,22 +27,6 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 
-static void jl_try_throw_sigint(void)
-{
-    jl_task_t *ct = jl_current_task;
-    jl_safepoint_enable_sigint();
-    jl_wake_libuv();
-    int force = jl_check_force_sigint();
-    if (force || (!ct->ptls->defer_signal && ct->ptls->io_wait)) {
-        jl_safepoint_consume_sigint();
-        if (force)
-            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
-        // Force a throw
-        jl_clear_force_sigint();
-        jl_throw(jl_interrupt_exception);
-    }
-}
-
 void __cdecl crt_sig_handler(int sig, int num)
 {
     CONTEXT Context;
@@ -67,7 +51,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         if (!jl_ignore_sigint()) {
             if (exit_on_sigint)
                 jl_exit(130); // 128 + SIGINT
-            jl_try_throw_sigint();
+            jl_sigint_request_cancellation();
         }
         break;
     default: // SIGSEGV, SIGTERM, SIGILL, SIGABRT
@@ -236,7 +220,62 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     if (!jl_ignore_sigint()) {
         if (exit_on_sigint)
             jl_exit(128 + sig); // 128 + SIGINT
-        jl_try_deliver_sigint();
+        if (sig == SIGINT) {
+            // If the escalation timer has expired, this repeated ^C abandons
+            // the stuck task, unless the julia-side escalation
+            // (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can still make
+            // progress on it.
+            jl_task_t *rescue_task = NULL;
+            jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+            // See signals-unix.c: only abandon a thread busy in managed
+            // compute - a GC-safe thread is parked, not the stuck victim -
+            // but give a thread transiently inside the allocator or GC a
+            // brief window rather than consuming the press.
+            if (jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed()) {
+                for (int tries = 0; tries < 100; tries++) {
+                    if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
+                        ptls2->locks.len == 0) {
+                        // consumes the expiry; NULL if the episode completed
+                        // (or was reset) while we waited
+                        rescue_task = jl_check_sigint_rescue_abandon();
+                        break;
+                    }
+                    uv_sleep(1);
+                }
+            }
+            if (rescue_task != NULL) {
+                jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+                jl_value_t *bound = ct == NULL ? NULL :
+                    jl_atomic_load_acquire(&ct->bound_cancel_token);
+                jl_value_t *sigsrc = (jl_value_t*)jl_atomic_load_acquire(&jl_sigint_source);
+                // See signals-unix.c: only abandon work governed by the ^C
+                // source - an unbound task may be runtime infrastructure.
+                int governed = bound != NULL && bound != jl_nothing &&
+                    sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc);
+                if (ct != NULL && ct != rescue_task && governed) {
+                    // Announce BEFORE abandoning (see signals-unix.c): the
+                    // session cleanup that follows the switch can exit the
+                    // process before a message printed afterwards makes it
+                    // out.
+                    jl_safe_printf("\nWARNING: Abandoning the current task and switching to a rescue task.\n"
+                                     "         This may leave the process in an inconsistent state.\n");
+                    if (jl_abandon_task(ct, rescue_task)) {
+                        // Let the sigint listener task perform the Julia-side cleanup.
+                        deliver_sigint_notification();
+                    }
+                    else {
+                        jl_safe_printf("\nWARNING: Could not abandon the current task (it holds runtime resources); still trying.\n");
+                    }
+                    return 1;
+                }
+            }
+            // Request cancellation of the root task and notify the sigint
+            // listener, which drives the cancellation state machine.
+            jl_sigint_request_cancellation();
+        }
+        else {
+            jl_try_deliver_sigint();
+        }
     }
     return 1;
 }
@@ -629,6 +668,10 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     uv_mutex_unlock(&bt_data_prof_lock);
 }
 
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+static void jl_win_init_cancel_handler_delivery(void);
+#endif
+
 void jl_install_default_signal_handlers(void)
 {
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
@@ -650,6 +693,9 @@ void jl_install_default_signal_handlers(void)
         jl_error("fatal error: Couldn't set SIGABRT");
     }
     SetUnhandledExceptionFilter(jl_exception_handler);
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+    jl_win_init_cancel_handler_delivery();
+#endif
 }
 
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
@@ -669,4 +715,237 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
 
 JL_DLLEXPORT void jl_membarrier(void) {
     FlushProcessWriteBuffers();
+}
+
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+// === Cancellation-handler delivery ==========================================
+// The suspend-based analog of the Unix implementation (see signals-unix.c):
+// the sender saves the interrupted thread's full CONTEXT (including FP
+// state) onto the interrupted stack, redirects the thread to a trampoline
+// that runs fn(state, severity), and rigs the trampoline's return address
+// to fault on a dedicated no-access page. A first-chance vectored exception
+// handler recognizes that fault and restores the saved CONTEXT wholesale,
+// resuming the originally interrupted instruction. (A vectored handler runs
+// before any frame-based SEH search, so the synthetic frame needs no unwind
+// information.)
+
+static void *jl_win_restore_page = NULL;
+
+static inline int jl_addr_is_win_restore_trigger(uintptr_t addr)
+{
+    uintptr_t page_addr = (uintptr_t)jl_win_restore_page;
+    return page_addr != 0 && addr >= page_addr && addr < page_addr + jl_page_size;
+}
+
+// The return target rigged under the trampoline. An asm stub (rather than a
+// C function) so that no prologue moves Rsp before the faulting read: at the
+// fault, Rsp still points just below the saved CONTEXT.
+extern void jl_win_restore_trigger(void);
+__asm__(
+    "  .globl jl_win_restore_trigger\n"
+    "jl_win_restore_trigger:\n"
+    "  movq jl_win_restore_page(%rip), %r11\n"
+    "  movq (%r11), %r11\n" // EXCEPTION_ACCESS_VIOLATION here
+    "  ud2\n"               // should never reach here
+);
+
+// Runs on the interrupted thread with the interrupted CONTEXT saved on the
+// stack below: invoke the registered cancellation handler with its
+// arguments from the per-thread save area. Returning runs into the restore
+// trigger.
+static void jl_win_cancel_handler_trampoline(jl_ptls_t ptls)
+{
+    jl_cancel_handler_save_t *save = &ptls->cancel_handler_save;
+    save->fn(save->state, save->sev);
+}
+
+// Rewrite the (suspended) thread context so that it runs fptr(arg0) on a
+// frame carved below the interrupted stack, with the full interrupted
+// CONTEXT saved in that frame for the restore trigger.
+static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t arg0)
+{
+    uintptr_t sp = (uintptr_t)ctx->Rsp; // no red zone in the Win64 ABI
+    sp = (sp - sizeof(CONTEXT)) & ~(uintptr_t)15;
+    CONTEXT *saved = (CONTEXT*)sp;
+    memcpy(saved, ctx, sizeof(CONTEXT));
+    sp -= 32;            // the callee's register-home space, above the return address
+    sp -= sizeof(void*); // return-address slot: entry Rsp == 8 (mod 16), per the ABI
+    *(uintptr_t*)sp = (uintptr_t)&jl_win_restore_trigger;
+    ctx->Rsp = sp;
+    ctx->Rip = (uintptr_t)fptr;
+    ctx->Rcx = arg0;
+}
+
+static LONG WINAPI jl_win_restore_veh(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
+    if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION &&
+        ExceptionInfo->ExceptionRecord->ExceptionFlags == 0 &&
+        jl_addr_is_win_restore_trigger(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
+        // Returning from a cancellation-handler delivery: the trampoline's
+        // `ret` left Rsp pointing at its home space, with the saved CONTEXT
+        // just above. Restore it wholesale and resume the originally
+        // interrupted instruction.
+        CONTEXT *saved = (CONTEXT*)(ExceptionInfo->ContextRecord->Rsp + 32);
+        memcpy(ExceptionInfo->ContextRecord, saved, sizeof(CONTEXT));
+        jl_task_t *ct = jl_get_current_task();
+        if (ct != NULL && ct->ptls != NULL)
+            ct->ptls->cancel_handler_armed = 0;
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void jl_win_init_cancel_handler_delivery(void)
+{
+    jl_win_restore_page = VirtualAlloc(NULL, jl_page_size, MEM_RESERVE | MEM_COMMIT, PAGE_NOACCESS);
+    if (jl_win_restore_page == NULL)
+        jl_error("fatal error: could not allocate the cancellation restore-trigger page");
+    if (AddVectoredExceptionHandler(1 /* first */, jl_win_restore_veh) == NULL)
+        jl_error("fatal error: could not install the cancellation restore handler");
+}
+#endif // JL_HAVE_CANCEL_HANDLER_DELIVERY
+
+// Interrupt the target thread's current task through the published context
+// of its asynchronously interruptible region (used for task cancellation):
+// longjmp to a compiled reset point, or run a foreign call's cancellation
+// handler on the interrupted thread and resume.
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL)
+        return;
+    // Only send if the task has an interruptible-region context published -
+    // unless a ^C dispatch is pending and the task carries a token binding:
+    // the delivery's episode-propagation step (see
+    // jl_sigint_propagate_to_bound) needs no published region, and a purely
+    // polling victim between cancellation points never has one.
+    if (jl_atomic_load_acquire(&ct2->reset_ctx) == NULL &&
+        jl_atomic_load_acquire(&ct2->cancel_handler_ctx) == NULL) {
+        jl_value_t *bound0 = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+        if (bound0 == NULL || bound0 == jl_nothing ||
+            !jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+            return;
+    }
+    HANDLE hThread = ptls2->system_id;
+    if ((DWORD)-1 == SuspendThread(hThread))
+        return;
+    // SuspendThread is asynchronous: the victim can execute past it until a
+    // GetThreadContext forces the suspension to complete. Freeze it first -
+    // validating (or consuming) the published region context while the
+    // victim still runs races with it re-executing the establishing
+    // cancellation point (rewriting the buffer) or leaving the frame
+    // entirely, and a SetThreadContext computed from such a buffer redirects
+    // the thread into garbage.
+    CONTEXT ctxThread;
+    memset(&ctxThread, 0, sizeof(CONTEXT));
+    ctxThread.ContextFlags = CONTEXT_FULL; // control + integer + floating point
+    if (!GetThreadContext(hThread, &ctxThread)) {
+        ResumeThread(hThread);
+        return;
+    }
+    // Re-check now that the thread cannot run. A published handler region
+    // takes priority over (and suppresses) the reset: its span (e.g. a
+    // protected allocator) is exactly where a longjmp must not land, and
+    // the handler can defer the cancellation and chain into the reset on
+    // region exit. Both flavors deliver only for an actual cancellation of
+    // the task's bound token: the request is also sent for cooperative
+    // preemption, which cannot be honored inside an asynchronously
+    // interruptible region (aborting a foreign call, or unwinding a
+    // protected span just to restart it, would discard its work for a mere
+    // yield request); preemption is instead polled at every cancellation
+    // point.
+    ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    jl_value_t *bound = ct2 == NULL ? NULL :
+        jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+    int bound_cancelled = bound != NULL && bound != jl_nothing &&
+        (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80);
+    // A pending ^C episode reaches scoped descendant sources through the
+    // julia-side listener's walk; when the listener is starved (e.g. a
+    // single-threaded process spinning in this task), carry it into the
+    // task's own bound source here so the next cancellation point sees it.
+    if (!bound_cancelled)
+        bound_cancelled = jl_sigint_propagate_to_bound(bound);
+    jl_reset_ctx_t *hctx = ct2 == NULL ? NULL : jl_atomic_load_acquire(&ct2->cancel_handler_ctx);
+    if (hctx != NULL) {
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+        // Handler flavor: hijack the thread to run fn(state, severity) on
+        // its own stack - at most one delivery at a time per thread (the
+        // save area holds one; skips recover level-triggered).
+        if (hctx->sp == 0 && !ptls2->cancel_handler_armed && bound_cancelled) {
+            jl_cancel_handler_save_t *save = &ptls2->cancel_handler_save;
+            save->fn = hctx->handler.fn;
+            save->state = hctx->handler.state;
+            save->sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x3f;
+            ptls2->cancel_handler_armed = 1;
+            jl_win_call_in_context(&ctxThread, (void (*)(void))&jl_win_cancel_handler_trampoline,
+                                   (uintptr_t)ptls2);
+            ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+            SetThreadContext(hThread, &ctxThread);
+        }
+#endif
+    }
+    else {
+        jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : jl_atomic_load_acquire(&ct2->reset_ctx);
+        if (reset_ctx != NULL && reset_ctx->sp != 0 && bound_cancelled) {
+            // Reset flavor: consume the reset point (prevents a double
+            // reset) and longjmp there.
+            jl_atomic_store_release(&ct2->reset_ctx, NULL);
+            if (jl_simulate_longjmp(reset_ctx->ctx.uc_mcontext, &ctxThread)) {
+                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+                SetThreadContext(hThread, &ctxThread);
+            }
+        }
+    }
+    ResumeThread(hThread);
+}
+
+// Switch the target thread's current (already ABANDONED-marked) task to
+// ptls->abandon_to (used to implement task abandonment).
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    HANDLE hThread = ptls2->system_id;
+    if ((DWORD)-1 == SuspendThread(hThread))
+        return;
+    // SuspendThread is asynchronous; the GetThreadContext is what actually
+    // completes the suspension. Only then is the victim's state frozen and
+    // the commit check below meaningful (a pre-freeze commit would race with
+    // the victim entering GC or taking a runtime lock before it stops).
+    CONTEXT ctxThread;
+    memset(&ctxThread, 0, sizeof(CONTEXT));
+    ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+    if (!GetThreadContext(hThread, &ctxThread)) {
+        ResumeThread(hThread);
+        return;
+    }
+    // The victim thread is suspended: validate the pending request against
+    // its frozen state and, on commit, redirect it into the abandon
+    // callback. On refusal the requester observes the verdict.
+    if (jl_abandon_try_commit(ptls2)) {
+        // Redirect the thread to call jl_abandon_task_cb (which never
+        // returns) on a minimal fake frame.
+#if defined(_CPU_X86_64_)
+        uintptr_t sp = (uintptr_t)ctxThread.Rsp;
+        sp = (sp - 256) & ~(uintptr_t)15; // skip resume data, realign
+        sp -= sizeof(uintptr_t); // fake return address slot
+        *(uintptr_t*)sp = 0;
+        ctxThread.Rsp = (DWORD64)sp;
+        ctxThread.Rip = (DWORD64)&jl_abandon_task_cb;
+#elif defined(_CPU_X86_)
+        uintptr_t sp = (uintptr_t)ctxThread.Esp;
+        sp = (sp - 64) & ~(uintptr_t)15;
+        sp -= sizeof(uintptr_t); // fake return address slot
+        *(uintptr_t*)sp = 0;
+        ctxThread.Esp = (DWORD)sp;
+        ctxThread.Eip = (DWORD)&jl_abandon_task_cb;
+#endif
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        SetThreadContext(hThread, &ctxThread);
+    }
+    ResumeThread(hThread);
 }

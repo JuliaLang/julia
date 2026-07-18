@@ -19,32 +19,43 @@ end
 
 function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
     data = uv_req_data(req)
-    if data != C_NULL
-        t = unsafe_pointer_to_objref(data)::Task
-        uv_req_set_data(req, C_NULL)
-        if status != 0 || addrinfo == C_NULL
-            schedule(t, _UVError("getaddrinfo", status))
-        else
-            freeaddrinfo = addrinfo
-            addrs = IPAddr[]
-            while addrinfo != C_NULL
-                sockaddr = ccall(:jl_sockaddr_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
-                if ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
-                    ip4addr = ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr)
-                    push!(addrs, IPv4(ntoh(ip4addr)))
-                elseif ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
-                    ip6addr = Ref{UInt128}()
-                    scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), sockaddr, ip6addr)
-                    push!(addrs, IPv6(ntoh(ip6addr[])))
-                end
-                addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
-            end
-            ccall(:uv_freeaddrinfo, Cvoid, (Ptr{Cvoid},), freeaddrinfo)
-            schedule(t, addrs)
-        end
-    else
-        # no owner for this req, safe to just free it
+    if data == C_NULL || data == Base.UV_REQ_DETACHED
+        # No owner for this req (the waiter departed and left the freeing to
+        # us); also release the system-owned result.
+        addrinfo == C_NULL || ccall(:uv_freeaddrinfo, Cvoid, (Ptr{Cvoid},), addrinfo)
         Libc.free(req)
+        return nothing
+    end
+    # Mark the callback as done; the waiter (which inspects the req under the
+    # iolock) owns freeing it.
+    uv_req_set_data(req, C_NULL)
+    w = unsafe_pointer_to_objref(data)::Task
+    if !(@atomicreplace w.wait_state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
+        # a canceller claimed the wake; drop the result
+        addrinfo == C_NULL || ccall(:uv_freeaddrinfo, Cvoid, (Ptr{Cvoid},), addrinfo)
+        return nothing
+    end
+    w.wait_queue = nothing
+    w.wait_uvreq = C_NULL
+    if status != 0 || addrinfo == C_NULL
+        schedule(w, _UVError("getaddrinfo", status))
+    else
+        freeaddrinfo = addrinfo
+        addrs = IPAddr[]
+        while addrinfo != C_NULL
+            sockaddr = ccall(:jl_sockaddr_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
+            if ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
+                ip4addr = ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr)
+                push!(addrs, IPv4(ntoh(ip4addr)))
+            elseif ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
+                ip6addr = Ref{UInt128}()
+                scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ptr{UInt128}), sockaddr, ip6addr)
+                push!(addrs, IPv6(ntoh(ip6addr[])))
+            end
+            addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
+        end
+        ccall(:uv_freeaddrinfo, Cvoid, (Ptr{Cvoid},), freeaddrinfo)
+        schedule(w, addrs)
     end
     nothing
 end
@@ -63,7 +74,8 @@ julia> getalladdrinfo("google.com")
  ip"2607:f8b0:4000:804::200e"
 ```
 """
-function getalladdrinfo(host::String)
+function getalladdrinfo(host::String; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     req = Libc.malloc(Base._sizeof_uv_getaddrinfo)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     iolock_begin()
@@ -79,30 +91,7 @@ function getalladdrinfo(host::String)
         end
         uv_error("getaddrinfo", status)
     end
-    ct = current_task()
-    preserve_handle(ct)
-    Base.sigatomic_begin()
-    uv_req_set_data(req, ct)
-    iolock_end()
-    r = try
-        Base.sigatomic_end()
-        wait()
-    finally
-        Base.sigatomic_end()
-        iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
-        if uv_req_data(req) != C_NULL
-            # req is still alive,
-            # so make sure we don't get spurious notifications later
-            uv_req_set_data(req, C_NULL)
-            ccall(:uv_cancel, Int32, (Ptr{Cvoid},), req) # try to let libuv know we don't care anymore
-        else
-            # done with req
-            Libc.free(req)
-        end
-        iolock_end()
-        unpreserve_handle(ct)
-    end
+    r = _wait_dns_req(req, tok)
     if isa(r, IOError)
         code = r.code
         if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
@@ -119,7 +108,81 @@ function getalladdrinfo(host::String)
     end
     return r::Vector{IPAddr}
 end
-getalladdrinfo(host::AbstractString) = getalladdrinfo(String(host))
+getalladdrinfo(host::AbstractString; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    getalladdrinfo(String(host); cancel)
+
+# Park on an in-flight uv getaddrinfo/getnameinfo request (already issued,
+# with its data field still C_NULL) using the wait-node protocol: register
+# the node for both the completion callback and cancellation, and resolve
+# request ownership on the way out. Caller must hold the iolock.
+function _wait_dns_req(req::Ptr{Cvoid}, tok::Base.MaybeToken)
+    ct = current_task()
+    src = tok === nothing ? nothing : tok.source
+    w = ct
+    @atomic :monotonic w.wait_state = Base.WAITNODE_WAITING
+    w.wait_uvreq = req
+    preserve_handle(ct)
+    Base.sigatomic_begin()
+    uv_req_set_data(req, Base.pointer_from_objref(w))
+    if src !== nothing && !Base.register_cancellation!(src, w)
+        # The token was cancelled since the entry check: don't park; ask
+        # libuv to cancel the lookup and detach the request (its completion
+        # callback frees it).
+        ccall(:uv_cancel, Int32, (Ptr{Cvoid},), req)
+        uv_req_set_data(req, Base.UV_REQ_DETACHED)
+        w.wait_uvreq = C_NULL
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
+        iolock_end()
+        Base.sigatomic_end()
+        unpreserve_handle(ct)
+        Base.checkcancel(src)
+        error("cancellation registration refused, but the source is not cancelled")
+    end
+    iolock_end()
+    local r
+    try
+        Base.sigatomic_end()
+        r = wait()
+        Base.sigatomic_begin()
+    catch
+        # (catch restored the sigatomic level from the try entry)
+        iolock_begin()
+        src === nothing || Base.unregister_cancellation!(src, w)
+        if uv_req_data(req) == C_NULL
+            # the completion callback already ran; the request is ours
+            Libc.free(req)
+        else
+            # cancel the lookup and detach the request (the completion
+            # callback frees it)
+            ccall(:uv_cancel, Int32, (Ptr{Cvoid},), req)
+            uv_req_set_data(req, Base.UV_REQ_DETACHED)
+        end
+        w.wait_uvreq = C_NULL
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
+        iolock_end()
+        Base.sigatomic_end()
+        unpreserve_handle(ct)
+        rethrow()
+    end
+    Base.sigatomic_end()
+    iolock_begin()
+    src === nothing || Base.unregister_cancellation!(src, w)
+    w.wait_uvreq = C_NULL
+    @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
+    if uv_req_data(req) == C_NULL
+        # done with req (the completion callback already ran)
+        Libc.free(req)
+    else
+        # resumed without the completion callback having run (unexpected
+        # `schedule`): make sure we won't get spurious notifications later
+        # and leave the freeing to the callback
+        ccall(:uv_cancel, Int32, (Ptr{Cvoid},), req)
+        uv_req_set_data(req, Base.UV_REQ_DETACHED)
+    end
+    iolock_end()
+    unpreserve_handle(ct)
+    return r
+end
 
 """
     getaddrinfo(host::AbstractString, IPAddr) -> IPAddr
@@ -137,8 +200,8 @@ julia> getaddrinfo("localhost", IPv4)
 ip"127.0.0.1"
 ```
 """
-function getaddrinfo(host::String, T::Type{<:IPAddr})
-    addrs = getalladdrinfo(host)
+function getaddrinfo(host::String, T::Type{<:IPAddr}; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    addrs = getalladdrinfo(host; cancel)
     for addr in addrs
         if addr isa T
             return addr
@@ -146,7 +209,8 @@ function getaddrinfo(host::String, T::Type{<:IPAddr})
     end
     throw(DNSError(host, UV_EAI_NONAME))
 end
-getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
+getaddrinfo(host::AbstractString, T::Type{<:IPAddr}; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    getaddrinfo(String(host), T; cancel)
 
 """
     getaddrinfo(host::AbstractString) -> IPAddr
@@ -155,8 +219,8 @@ Gets the first available IP address of `host`, which may be either an `IPv4` or
 `IPv6` address. Uses the operating system's underlying getaddrinfo
 implementation, which may do a DNS lookup.
 """
-function getaddrinfo(host::AbstractString)
-    addrs = getalladdrinfo(String(host))
+function getaddrinfo(host::AbstractString; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    addrs = getalladdrinfo(String(host); cancel)
     if !isempty(addrs)
         return addrs[begin]::Union{IPv4,IPv6}
     end
@@ -165,17 +229,23 @@ end
 
 function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, service::Cstring)
     data = uv_req_data(req)
-    if data != C_NULL
-        t = unsafe_pointer_to_objref(data)::Task
-        uv_req_set_data(req, C_NULL)
-        if status != 0
-            schedule(t, _UVError("getnameinfo", status))
-        else
-            schedule(t, unsafe_string(hostname))
-        end
-    else
-        # no owner for this req, safe to just free it
+    if data == C_NULL || data == Base.UV_REQ_DETACHED
+        # No owner for this req (the waiter departed and left the freeing to us).
         Libc.free(req)
+        return nothing
+    end
+    # Mark the callback as done; the waiter (which inspects the req under the
+    # iolock) owns freeing it.
+    uv_req_set_data(req, C_NULL)
+    w = unsafe_pointer_to_objref(data)::Task
+    if (@atomicreplace w.wait_state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
+        w.wait_queue = nothing
+        w.wait_uvreq = C_NULL
+        if status != 0
+            schedule(w, _UVError("getnameinfo", status))
+        else
+            schedule(w, unsafe_string(hostname))
+        end
     end
     nothing
 end
@@ -192,7 +262,8 @@ julia> getnameinfo(IPv4("8.8.8.8"))
 "google-public-dns-a.google.com"
 ```
 """
-function getnameinfo(address::Union{IPv4, IPv6})
+function getnameinfo(address::Union{IPv4, IPv6}; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     req = Libc.malloc(Base._sizeof_uv_getnameinfo)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     port = hton(UInt16(0))
@@ -212,30 +283,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
         end
         uv_error("getnameinfo", status)
     end
-    ct = current_task()
-    preserve_handle(ct)
-    Base.sigatomic_begin()
-    uv_req_set_data(req, ct)
-    iolock_end()
-    r = try
-        Base.sigatomic_end()
-        wait()
-    finally
-        Base.sigatomic_end()
-        iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
-        if uv_req_data(req) != C_NULL
-            # req is still alive,
-            # so make sure we don't get spurious notifications later
-            uv_req_set_data(req, C_NULL)
-            ccall(:uv_cancel, Int32, (Ptr{Cvoid},), req) # try to let libuv know we don't care anymore
-        else
-            # done with req
-            Libc.free(req)
-        end
-        iolock_end()
-        unpreserve_handle(ct)
-    end
+    r = _wait_dns_req(req, tok)
     if isa(r, IOError)
         code = r.code
         if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,

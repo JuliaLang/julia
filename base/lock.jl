@@ -17,6 +17,54 @@ const PARKED_BIT = 0b10
 
 const MAX_SPIN_ITERS = 40
 
+# The lock's contention parking: a spinlock-protected queue of tasks waiting
+# to acquire a ReentrantLock, linked through the dedicated
+# `lock_next`/`lock_queue` Task fields (see LockWaitQueue). Deliberately not
+# a GenericCondition: its queue must stay disjoint from the condition-wait
+# node, so that a task whose condition wait was cancelled - leaving a stale
+# entry in the condition's queue for lazy collection - can still park here
+# to reacquire the lock.
+mutable struct LockParking
+    lock::Threads.SpinLock
+    waitq::LockWaitQueue
+    LockParking() = new(Threads.SpinLock(), LockWaitQueue())
+end
+
+waitqueue(c::LockParking) = LockQueueRef(c.waitq, c)
+lock(c::LockParking) = lock(c.lock)
+unlock(c::LockParking) = unlock(c.lock)
+assert_havelock(c::LockParking) = assert_havelock(c.lock)
+
+# Park the current task on `c` (caller holds `c.lock`); mirrors `_wait2`.
+function _lock_wait2(c::LockParking, w::Task)
+    ct = current_task()
+    assert_havelock(c)
+    @atomic :monotonic w.wait_state = WAITNODE_WAITING
+    push!(waitqueue(c), w)
+    # since this is similar to schedule, we should observe the sticky bit now
+    if w.sticky && Threads.threadid(w) == 0 && !GC.in_finalizer()
+        # Issue #41324: co-schedule with the parent task (see _wait2)
+        ct.sticky = true
+        tid = Threads.threadid()
+        ccall(:jl_set_task_tid, Cint, (Any, Cint), w, tid-1)
+    end
+    return w
+end
+
+# Wake one parked acquirer (caller holds `c.lock`); mirrors `notify` -
+# a node whose wake was already claimed by a canceller does not count as
+# woken (the cancelled task resumes via the exception the canceller
+# scheduled).
+function _lock_notify_one(c::LockParking)
+    while !isempty(waitqueue(c))
+        w = popfirst!(waitqueue(c))
+        (@atomicreplace w.wait_state WAITNODE_WAITING => WAITNODE_NOTIFIED).success || continue
+        schedule(w)
+        return 1
+    end
+    return 0
+end
+
 # Advisory reentrant lock
 """
     ReentrantLock()
@@ -74,7 +122,7 @@ mutable struct ReentrantLock <: AbstractLock
     #            |            | potentially never getting woken up).
     @atomic havelock::UInt8
     # offset32 = 28, offset64 = 32
-    cond_wait::ThreadSynchronizer # 2 words
+    cond_wait::LockParking # 2 words
     # offset32 = 36, offset64 = 48
     # sizeof32 = 20, sizeof64 = 32
     # now add padding to make this a full cache line to minimize false sharing between objects
@@ -82,7 +130,7 @@ mutable struct ReentrantLock <: AbstractLock
     # offset32 = 44, offset64 = 72 == sizeof+offset
     # sizeof32 = 28, sizeof64 = 56
 
-    ReentrantLock() = new(nothing, 0x0000_0000, 0x00, ThreadSynchronizer())
+    ReentrantLock() = new(nothing, 0x0000_0000, 0x00, LockParking())
 end
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
@@ -191,9 +239,13 @@ wait for it to become available.
 
 Each `lock` must be matched by an [`unlock`](@ref).
 """
-@inline function lock(rl::ReentrantLock)
-    trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+@inline function lock(rl::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || (cancel = check_cancel_arg(cancel))
+    trylock(rl) || (@noinline function slowlock(rl::ReentrantLock, cancel::CancelTokenArg)
         Threads.lock_profiling() && Threads.inc_lock_conflict_count()
+        # resolve the scoped default once; a cancelled acquisition throws the
+        # CancellationRequest without the lock held
+        tok = resolve_cancel_token(cancel)
         c = rl.cond_wait
         ct = current_task()
         iteration = 1
@@ -236,23 +288,43 @@ Each `lock` must be matched by an [`unlock`](@ref).
             end
 
             # It was locked, so now wait for the unlock to notify us
-            wait_no_relock(c)
+            wait_no_relock(c, tok)
 
             # Loop back and try locking again
             iteration = 1
         end
-    end)(rl)
+    end)(rl, cancel)
     return
 end
 
-function wait_no_relock(c::GenericCondition)
+function wait_no_relock(c::LockParking, tok::MaybeToken=default_cancel_token())
     ct = current_task()
-    _wait2(c, ct)
+    src = tok === nothing ? nothing : tok.source
+    w = _lock_wait2(c, ct)
+    if src !== nothing && !register_cancellation!(src, w)
+        # The governing token is already cancelled (e.g. it was cancelled
+        # while we were still spinning and thus not interruptibly waiting):
+        # don't park.
+        list_deletefirst!(withwaitee(waitqueue(c), c), w)
+        @atomic :monotonic w.wait_state = WAITNODE_IDLE
+        unlock(c.lock)
+        checkcancel(src)
+        error("cancellation registration refused, but the source is not cancelled")
+    end
     token = unlockall(c.lock)
     try
-        return wait()
+        ret = wait()
+        src === nothing || unregister_cancellation!(src, w)
+        @atomic :monotonic w.wait_state = WAITNODE_IDLE
+        return ret
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        # Unlink our node if it is still queued (cancellation or unexpected
+        # throwto); this requires the waitee lock, which we do not hold here.
+        lock(c.lock)
+        list_deletefirst!(withwaitee(waitqueue(c), c), w)
+        unlock(c.lock)
+        src === nothing || unregister_cancellation!(src, w)
+        @atomic :monotonic w.wait_state = WAITNODE_IDLE
         rethrow()
     end
 end
@@ -282,7 +354,7 @@ internal counter and return immediately.
                     cond_wait = rl.cond_wait
                     lock(cond_wait)
 
-                    notify(cond_wait, all=false)
+                    _lock_notify_one(cond_wait)
                     if !isempty(cond_wait.waitq)
                         @atomic :release rl.havelock = PARKED_BIT
                     else
@@ -308,7 +380,11 @@ function unlockall(rl::ReentrantLock)
 end
 
 function relockall(rl::ReentrantLock, n::UInt32)
-    lock(rl)
+    # The reacquire is the cleanup half of a wait whose outcome (including a
+    # cancellation) has already been delivered: it must not itself be
+    # cancellable, or a cancelled scope would throw out of here without the
+    # lock and the caller's queue cleanup would run unlocked.
+    lock(rl; cancel=nothing)
     old = @atomicswap :not_atomic rl.reentrancy_cnt = n
     old == 0x0000_0001 || concurrency_violation()
     return
@@ -331,6 +407,15 @@ See also [`@lock`](@ref).
 """
 function lock(f, l::AbstractLock)
     lock(l)
+    try
+        return f()
+    finally
+        unlock(l)
+    end
+end
+
+function lock(f, l::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    lock(l; cancel)
     try
         return f()
     finally
@@ -515,11 +600,16 @@ end
 Wait for one of the `sem_size` permits to be available,
 blocking until one can be acquired.
 """
-function acquire(s::Semaphore)
+function acquire(s::Semaphore; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || (cancel = check_cancel_arg(cancel))
     lock(s.cond_wait)
     try
-        while s.curr_cnt >= s.sem_size
-            wait(s.cond_wait)
+        if s.curr_cnt >= s.sem_size
+            tok = resolve_cancel_token(cancel)
+            while s.curr_cnt >= s.sem_size
+                # a cancelled wait throws before the permit is taken
+                wait(s.cond_wait, tok)
+            end
         end
         s.curr_cnt = s.curr_cnt + 1
     finally
@@ -552,8 +642,8 @@ end
     This method requires at least Julia 1.8.
 
 """
-function acquire(f, s::Semaphore)
-    acquire(s)
+function acquire(f, s::Semaphore; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    acquire(s; cancel)
     try
         return f()
     finally
@@ -637,7 +727,8 @@ mutable struct Event
     Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
 end
 
-function wait(e::Event)
+function wait(e::Event; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || (cancel = check_cancel_arg(cancel))
     if e.autoreset
         (@atomicswap :acquire_release e.set = false) && return
     else
@@ -650,7 +741,7 @@ function wait(e::Event)
         else
             e.set && return
         end
-        wait(e.notify)
+        wait(e.notify, resolve_cancel_token(cancel))
     finally
         unlock(e.notify) # release barrier
     end

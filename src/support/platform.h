@@ -140,4 +140,28 @@
 #define _HAS_INT128_
 #endif
 
+
+// Restrict a function to general-purpose registers: used on the runtime
+// pieces of the cancellation-handler delivery path, which run between an
+// interrupted context whose floating-point state is still live in the
+// registers and the sigreturn that replays it, and so must not clobber
+// FP/vector registers. `target("general-regs-only")` is the precise
+// spelling, but on x86-64 only GCC >= 11, clang >= 17, and Apple clang
+// >= 16 know it; elsewhere disable the FP/vector instruction sets instead,
+// which keeps the compiler from touching them (e.g. for vectorized copies)
+// in code that has no floating-point expressions of its own.
+#if defined(_CPU_X86_64_)
+#if (defined(__apple_build_version__) && __clang_major__ >= 16) || \
+    (defined(__clang__) && !defined(__apple_build_version__) && __clang_major__ >= 17) || \
+    (!defined(__clang__) && defined(__GNUC__) && __GNUC__ >= 11)
+#define JL_GENERAL_REGS_ONLY __attribute__((target("general-regs-only")))
+#else
+#define JL_GENERAL_REGS_ONLY __attribute__((target("no-mmx,no-sse,no-avx")))
+#endif
+#elif defined(_CPU_AARCH64_)
+#define JL_GENERAL_REGS_ONLY __attribute__((target("general-regs-only")))
+#else
+#define JL_GENERAL_REGS_ONLY
+#endif
+
 #endif /* !PLATFORM_H */

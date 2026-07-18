@@ -333,7 +333,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
         try
             Base.sigatomic_end()
             if lasterr !== nothing
-                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
+                # REPL machinery: reporting the result must work even when
+                # the evaluation's epoch was cancelled
+                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true); cancel=nothing)
             else
                 backend.in_eval = true
                 for xf in backend.ast_transforms
@@ -342,7 +344,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
                 setglobal!(Base.MainInclude, :ans, value)
-                put!(backend.response_channel, Pair{Any, Bool}(value, false))
+                put!(backend.response_channel, Pair{Any, Bool}(value, false); cancel=nothing)
             end
             break
         catch err
@@ -445,18 +447,55 @@ function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x ->
     return backend
 end
 
+# If we had to abandon the REPL's backend task, we're now in an inconsistent state.
+# Inform the frontend of what happened and re-initialize the REPL backend.
+function maybe_rescue_REPL_after_sigint()
+    backend = Base.active_repl_backend
+    backend === nothing && return nothing
+    if backend.backend_task.state === :abandoned
+        # Inform the frontend what happened to its backend
+        exc = Base.ExceptionStack(Any[(exception = Base.CANCEL_REQUEST_ABANDON_ALL, backtrace = Any[])])
+        put!(backend.response_channel, Pair{Any, Bool}(exc, true))
+        # Re-initialize the REPL backend. N.B.: the fresh backend task must
+        # not be sticky to this task's thread (the default for @async-created
+        # tasks): a later stuck evaluation on it would then monopolize the
+        # very thread the sigint listener needs to escalate again.
+        newbackend = start_repl_backend(backend.repl_channel, backend.response_channel)
+        newbackend.backend_task.sticky = false
+        setglobal!(Base, :active_repl_backend, newbackend)
+        # The session's shutdown continuation lived on the abandoned task
+        # (with the default REPL the backend loop runs on the task that
+        # started the session), so nothing runs after the rescued backend's
+        # loop finishes (e.g. when the frontend sends the exit flag for ^D).
+        # Complete the shutdown here in that case.
+        @async begin
+            Base._wait(newbackend.backend_task)
+            Base.istaskfailed(newbackend.backend_task) || exit()
+        end
+    end
+    return nothing
+end
+
 function repl_backend_loop(backend::REPLBackend, get_module::Function)
     # include looks at this to determine the relative include path
     # nothing means cwd
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
+        # Control is back with the REPL: close the previous work item's ^C
+        # episode. This stands down the escalation machinery (in particular
+        # the rescue timer, which otherwise keeps offering escalation rungs
+        # for an episode that already completed) and makes a ^C at the idle
+        # prompt (or one that raced the end of the previous evaluation,
+        # issue #58689) a no-op. The idle wait itself is not cancellable.
+        Base.sigint_close_episode!()
         ast_or_func, show_value = try
-            take!(backend.repl_channel)
+            take!(backend.repl_channel; cancel=nothing)
         catch e
-            # An asynchronous interrupt may be forwarded to this task if user code
-            # finished evaluating just as Ctrl-C arrived (issue #58689); ignore it
-            # rather than tearing down the REPL session.
+            # ^C never lands here as an exception (the idle wait is not
+            # cancellable), but a stray InterruptException injected into the
+            # backend task by a package or user code must not tear down the
+            # REPL session.
             e isa InterruptException && continue
             rethrow()
         end
@@ -464,19 +503,27 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
             # exit flag
             break
         end
+        # Re-arm ^C: install a fresh episode source (standing down the
+        # escalation machinery of - and detaching any work still unwinding
+        # from - the previous epoch) and run this evaluation or display
+        # request in its scope, so that ^C cancels exactly this epoch and
+        # everything it spawns.
+        tok = Base.sigint_new_episode!()
         # Mark this task as the foreground task while running user work, so that
         # components like the precompile keyboard menu know who owns interactive stdin.
-        Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
-            f = ast_or_func
-            try
-                ret = f()
-                put!(backend.response_channel, Pair{Any, Bool}(ret, false))
-            catch
-                put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true))
+        Base.ScopedValues.@with Base.CANCEL_TOKEN => tok begin
+            Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
+                f = ast_or_func
+                try
+                    ret = f()
+                    put!(backend.response_channel, Pair{Any, Bool}(ret, false))
+                catch
+                    put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true))
+                end
+            else
+                ast = ast_or_func
+                eval_user_input(ast, backend, get_module())
             end
-        else
-            ast = ast_or_func
-            eval_user_input(ast, backend, get_module())
         end
     end
     return nothing

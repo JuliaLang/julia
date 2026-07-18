@@ -80,6 +80,8 @@ end
 function parse_stdlib_version_file(path)
     values = Dict{String,String}()
     for line in readlines(path)
+        isempty(strip(line)) && continue
+        startswith(strip(line), '#') && continue
         m = match(r"^([A-Z0-9_]+)\s+:?=\s+(\S+)$", line)
         if isnothing(m)
             @warn "Unable to parse line in $(path)" line
@@ -263,6 +265,7 @@ Manual = [
     "manual/networking-and-streams.md",
     "manual/parallel-computing.md",
     "manual/asynchronous-programming.md",
+    "manual/cancellation.md",
     "manual/multi-threading.md",
     "manual/distributed-computing.md",
     "manual/running-external-programs.md",

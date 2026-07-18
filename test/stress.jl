@@ -76,13 +76,25 @@ end  # !Sys.iswindows
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
 if !Sys.iswindows()
+    # With exit_on_sigint disabled, SIGINT cancels the current ^C episode's
+    # cancellation scope and is observed at a cancellation point as a
+    # CancellationRequest (it is no longer force-thrown asynchronously at GC
+    # safepoints). Contain the cancellation in a fresh episode scope so the
+    # enclosing test scope stays live, and close the episode afterwards so
+    # the SIGINT rescue timer stands down.
     Base.exit_on_sigint(false)
-    @test_throws InterruptException begin
-        ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
-        for i in 1:10
-            Libc.systemsleep(0.1)
-            ccall(:jl_gc_safepoint, Cvoid, ()) # wait for SIGINT to arrive
+    try
+        @test_throws Base.CancellationRequest begin
+            Base.ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() begin
+                ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
+                for i in 1:100
+                    Libc.systemsleep(0.1)
+                    Base.@cancel_check # wait for the SIGINT cancellation to arrive
+                end
+            end
         end
+    finally
+        Base.sigint_close_episode!()
+        Base.exit_on_sigint(true)
     end
-    Base.exit_on_sigint(true)
 end

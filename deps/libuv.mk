@@ -1,7 +1,9 @@
 ## LIBUV ##
 ifneq ($(USE_BINARYBUILDER_LIBUV),1)
-LIBUV_GIT_URL:=https://github.com/JuliaLang/libuv.git
-LIBUV_TAR_URL=https://api.github.com/repos/JuliaLang/libuv/tarball/$1
+# TEMPORARY: fetch from the KenoAIStaging fork while libuv/libuv#4966 is pending
+# upstream; restore the JuliaLang URLs when the staged branch lands in JuliaLang/libuv.
+LIBUV_GIT_URL:=https://github.com/KenoAIStaging/libuv.git
+LIBUV_TAR_URL=https://api.github.com/repos/KenoAIStaging/libuv/tarball/$1
 $(eval $(call git-external,libuv,LIBUV,configure,,$(SRCCACHE)))
 
 UV_CFLAGS := -O2 -DBUILDING_UV_SHARED=1

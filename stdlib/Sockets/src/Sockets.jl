@@ -150,7 +150,8 @@ Accepts a connection on the given server and returns a connection to the client.
 uninitialized client stream may be provided, in which case it will be used instead of
 creating a new stream.
 """
-accept(server::TCPServer) = accept(server, TCPSocket())
+accept(server::TCPServer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    accept(server, TCPSocket(); cancel)
 
 function accept(callback, server::LibuvServer)
     task = @async try
@@ -326,8 +327,8 @@ end
 
 Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
 """
-function recv(sock::UDPSocket)
-    addr, data = recvfrom(sock)
+function recv(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    addr, data = recvfrom(sock; cancel)
     return data
 end
 
@@ -343,7 +344,8 @@ Read a UDP packet from the specified socket, returning a tuple of `(host_port, d
     Prior to Julia version 1.3, the first returned value was an address (`IPAddr`).
     In version 1.3 it was changed to an `InetAddr`.
 """
-function recvfrom(sock::UDPSocket)
+function recvfrom(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     iolock_begin()
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
@@ -362,7 +364,7 @@ function recvfrom(sock::UDPSocket)
     try
         From = Union{InetAddr{IPv4}, InetAddr{IPv6}}
         Data = Vector{UInt8}
-        from, data = wait(sock.recvnotify)::Tuple{From, Data}
+        from, data = wait(sock.recvnotify, tok)::Tuple{From, Data}
         return (from, data)
     finally
         unlock(sock.recvnotify)
@@ -418,13 +420,38 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
     nothing
 end
 
+# completion callback for UDP sends: like Base.uv_writecb_task, but delivers
+# the raw status (a UDP send has no partial write count)
+function uv_sendcb_task(req::Ptr{Cvoid}, status::Cint)
+    d = uv_req_data(req)
+    if d == C_NULL || d == Base.UV_REQ_DETACHED
+        # No waiter for this req (it departed and left the freeing to us):
+        # release the message root, if one was recorded, and the request.
+        Base._unroot_detached_uvreq!(req)
+        Libc.free(req)
+    else
+        # Mark the callback as done; the waiter (which inspects the req under
+        # the iolock) owns freeing it.
+        uv_req_set_data(req, C_NULL)
+        w = unsafe_pointer_to_objref(d)::Task
+        if (@atomicreplace w.wait_state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
+            w.wait_queue = nothing
+            w.wait_uvreq = C_NULL
+            schedule(w, status)
+        end
+        # CAS failure: a canceller claimed the wake; the waiter's teardown
+        # observes data == C_NULL and takes over the request.
+    end
+    nothing
+end
+
 function _send_async(sock::UDPSocket, ipaddr::Union{IPv4, IPv6}, port::UInt16, buf)
     req = Libc.malloc(Base._sizeof_uv_udp_send)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     host_in = Ref(hton(ipaddr.host))
     err = ccall(:jl_udp_send, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Cvoid}, Cint),
                 req, sock, hton(port), host_in, buf, sizeof(buf),
-                @cfunction(Base.uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint)),
+                @cfunction(uv_sendcb_task, Cvoid, (Ptr{Cvoid}, Cint)),
                 ipaddr isa IPv6)
     if err < 0
         Libc.free(req)
@@ -438,36 +465,96 @@ end
 
 Send `msg` over `socket` to `host:port`.
 """
-function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
+function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
+              cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     iolock_begin()
     if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
         error("UDPSocket is not initialized and open")
     end
-    uvw = _send_async(sock, ipaddr, UInt16(port), msg)
     ct = current_task()
+    tok = cancel === Base.DEFAULT_CANCEL ? Base.resolve_cancel_token(cancel) : Base.check_cancel_arg(cancel)
+    src = tok === nothing ? nothing : tok.source
+    if src !== nothing && Base.iscancelled(src)
+        # The governing token is already cancelled: throw before handing
+        # anything to libuv.
+        iolock_end()
+        Base.checkcancel(src)
+    end
+    uvw = _send_async(sock, ipaddr, UInt16(port), msg)
+    if Base.abandoning_external_waits(ct)
+        # Unwinding from an ABANDON_EXTERNAL (or stronger) cancellation:
+        # issue the send, but do not wait for its completion (data stays
+        # C_NULL, so the completion callback frees the request).
+        iolock_end()
+        return nothing
+    end
+    w = ct
+    @atomic :monotonic w.wait_state = Base.WAITNODE_WAITING
+    w.wait_queue = sock
+    w.wait_uvreq = uvw
     preserve_handle(ct)
     Base.sigatomic_begin()
-    uv_req_set_data(uvw, ct)
-    iolock_end()
-    status = try
-        Base.sigatomic_end()
-        wait()::Cint
-    finally
-        Base.sigatomic_end()
-        iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
-        if uv_req_data(uvw) != C_NULL
-            # uvw is still alive,
-            # so make sure we won't get spurious notifications later
-            uv_req_set_data(uvw, C_NULL)
-        else
-            # done with uvw
-            Libc.free(uvw)
-        end
+    uv_req_set_data(uvw, Base.pointer_from_objref(w))
+    if src !== nothing && !Base.register_cancellation!(src, w)
+        # The token was cancelled since the entry check: don't park; detach
+        # the request (its completion callback frees it) and deliver.
+        uv_req_set_data(uvw, Base.UV_REQ_DETACHED)
+        Base._root_detached_uvreq!(uvw, msg)
+        w.wait_queue = nothing
+        w.wait_uvreq = C_NULL
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
         iolock_end()
+        Base.sigatomic_end()
         unpreserve_handle(ct)
+        Base.checkcancel(src)
+        error("cancellation registration refused, but the source is not cancelled")
     end
+    iolock_end()
+    local status
+    try
+        Base.sigatomic_end()
+        status = wait()::Cint
+        Base.sigatomic_begin()
+    catch
+        # (catch restored the sigatomic level from the try entry)
+        iolock_begin()
+        src === nothing || Base.unregister_cancellation!(src, w)
+        if uv_req_data(uvw) == C_NULL
+            # the completion callback already ran; the request is ours
+            Libc.free(uvw)
+        else
+            # a UDP send cannot be cancelled; detach the request (its
+            # completion callback frees it)
+            uv_req_set_data(uvw, Base.UV_REQ_DETACHED)
+            Base._root_detached_uvreq!(uvw, msg)
+        end
+        w.wait_queue = nothing
+        w.wait_uvreq = C_NULL
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
+        iolock_end()
+        Base.sigatomic_end()
+        unpreserve_handle(ct)
+        rethrow()
+    end
+    Base.sigatomic_end()
+    iolock_begin()
+    src === nothing || Base.unregister_cancellation!(src, w)
+    w.wait_queue = nothing
+    w.wait_uvreq = C_NULL
+    @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
+    if uv_req_data(uvw) == C_NULL
+        # done with uvw (the completion callback already ran)
+        Libc.free(uvw)
+    else
+        # resumed without the completion callback having run (unexpected
+        # `schedule`): make sure we won't get spurious notifications later
+        # and leave the freeing to the callback
+        uv_req_set_data(uvw, Base.UV_REQ_DETACHED)
+        Base._root_detached_uvreq!(uvw, msg)
+    end
+    iolock_end()
+    unpreserve_handle(ct)
     uv_error("send", status)
     nothing
 end
@@ -527,7 +614,7 @@ end
 
 connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
 
-function wait_connected(x::LibuvStream)
+function wait_connected(x::LibuvStream, tok::Base.MaybeToken=Base.default_cancel_token())
     iolock_begin()
     check_open(x)
     isopen(x) || x.readerror === nothing || throw(x.readerror)
@@ -536,7 +623,7 @@ function wait_connected(x::LibuvStream)
     try
         while x.status == StatusConnecting
             iolock_end()
-            wait(x.cond)
+            wait(x.cond, tok)
             unlock(x.cond)
             iolock_begin()
             lock(x.cond)
@@ -557,13 +644,16 @@ end
 
 Connect to the host `host` on port `port`.
 """
-connect(sock::TCPSocket, port::Integer) = connect(sock, localhost, port)
-connect(port::Integer) = connect(localhost, port)
+connect(sock::TCPSocket, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(sock, localhost, port; cancel)
+connect(port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) = connect(localhost, port; cancel)
 
 # Valid connect signatures for TCP
-connect(host::AbstractString, port::Integer) = connect(TCPSocket(), host, port)
-connect(addr::IPAddr, port::Integer) = connect(TCPSocket(), addr, port)
-connect(addr::InetAddr) = connect(TCPSocket(), addr)
+connect(host::AbstractString, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(TCPSocket(), host, port; cancel)
+connect(addr::IPAddr, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(TCPSocket(), addr, port; cancel)
+connect(addr::InetAddr; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) = connect(TCPSocket(), addr; cancel)
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
@@ -574,9 +664,10 @@ function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     return sock
 end
 
-function connect(sock::LibuvStream, args...)
+function connect(sock::LibuvStream, args::Vararg{Any, N}; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) where {N}
+    tok = Base.check_cancel_arg(cancel)
     connect!(sock, args...)
-    wait_connected(sock)
+    wait_connected(sock, tok)
     return sock
 end
 
@@ -696,7 +787,8 @@ function accept_nonblock(server::TCPServer)
     return client
 end
 
-function accept(server::LibuvServer, client::LibuvStream)
+function accept(server::LibuvServer, client::LibuvStream; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     iolock_begin()
     if server.status != StatusActive && server.status != StatusClosing && server.status != StatusClosed
         throw(ArgumentError("server not connected, make sure \"listen\" has been called"))
@@ -713,7 +805,7 @@ function accept(server::LibuvServer, client::LibuvStream)
         lock(server.cond)
         iolock_end()
         try
-            wait(server.cond)
+            wait(server.cond, tok)
         finally
             unlock(server.cond)
             unpreserve_handle(server)

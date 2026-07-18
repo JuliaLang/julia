@@ -1252,6 +1252,17 @@ static const auto jl_write_barrier_func = new JuliaFunction<>{
     },
 };
 
+static const auto jl_cancellation_point_func = new JuliaFunction<>{
+    "julia.cancellation_point",
+    [](LLVMContext &C) {
+        return FunctionType::get(getInt32Ty(C), {}, false);
+    },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            Attributes(C, {Attribute::ReturnsTwice}),
+            AttributeSet(),
+            {}); }
+};
+
 static const auto jlisa_func = new JuliaFunction<>{
     XSTR(jl_isa),
     [](LLVMContext &C) {
@@ -2099,6 +2110,7 @@ public:
     int nargs = 0;
     int nvargs = -1;
     bool is_opaque_closure = false;
+    ssize_t current_stmt_idx = -1; // current statement index for ssaflags lookup
 
     Value *pgcstack = NULL;
     Instruction *topalloca = NULL;
@@ -2276,6 +2288,28 @@ static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, size_t byte_offset, co
     auto *gep = ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), base, byte_offset);
     setName(ctx.emission_context, gep, Name);
     return gep;
+}
+
+// Check if the current statement has the reset_safe flag set
+static bool current_stmt_is_reset_safe(jl_codectx_t &ctx)
+{
+    if (ctx.current_stmt_idx < 0 || ctx.source == nullptr || ctx.source->ssaflags == nullptr)
+        return false;
+    size_t nstmts = jl_array_dim0(ctx.source->ssaflags);
+    if ((size_t)ctx.current_stmt_idx >= nstmts)
+        return false;
+    uint32_t flag = jl_array_data(ctx.source->ssaflags, uint32_t)[ctx.current_stmt_idx];
+    return (flag & IR_FLAG_RESET_SAFE) != 0;
+}
+
+// Mark a call instruction with reset_safe metadata if the current statement has the flag
+static void mark_reset_safe(jl_codectx_t &ctx, CallInst *call)
+{
+    if (call && current_stmt_is_reset_safe(ctx)) {
+        LLVMContext &llvmctx = ctx.builder.getContext();
+        MDNode *md = MDNode::get(llvmctx, {});
+        call->setMetadata("julia.reset_safe", md);
+    }
 }
 
 static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, Value *byte_offset, const Twine &Name="")
@@ -5436,6 +5470,111 @@ isdefined_unknown_idx:
         return true;
     }
 
+    else if (f == BUILTIN(cancellation_point) && nargs == 1) {
+        // Only lower inline when the argument is statically known to be a
+        // token source or nothing; fall back to the runtime builtin (which
+        // also type-checks) otherwise.
+        jl_value_t *srct = argv[1].typ;
+        auto ok_arm = [](jl_value_t *t) {
+            return t == (jl_value_t*)jl_nothing_type ||
+                   jl_subtype(t, (jl_value_t*)jl_cancel_source_type);
+        };
+        bool known_src = jl_subtype(srct, (jl_value_t*)jl_cancel_source_type);
+        bool known_nothing = srct == (jl_value_t*)jl_nothing_type;
+        bool known_union = known_src || known_nothing ||
+            (jl_is_uniontype(srct) && ok_arm(((jl_uniontype_t*)srct)->a) &&
+             ok_arm(((jl_uniontype_t*)srct)->b));
+        if (!known_union)
+            return false; // emit as a runtime call for the dynamic type check
+
+        Value *ct = get_current_task(ctx);
+        Value *src = boxed(ctx, argv[1]);
+        Value *bound_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_token), "bound_cancel_token");
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        Value *nothing_val = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
+        Type *T_int8 = getInt8Ty(ctx.builder.getContext());
+
+        BasicBlock *src_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_src", ctx.f);
+        BasicBlock *rebind_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_rebind", ctx.f);
+        BasicBlock *point_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_point", ctx.f);
+        BasicBlock *loadst_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_state", ctx.f);
+        BasicBlock *nothing_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_nothing", ctx.f);
+        BasicBlock *clear_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_clear", ctx.f);
+        BasicBlock *merge_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_merge", ctx.f);
+
+        Value *is_nothing = known_src ? ConstantInt::getFalse(ctx.builder.getContext()) :
+            known_nothing ? ConstantInt::getTrue(ctx.builder.getContext()) :
+            ctx.builder.CreateICmpEQ(decay_derived(ctx, src), decay_derived(ctx, nothing_val));
+        ctx.builder.CreateCondBr(is_nothing, nothing_bb, src_bb);
+
+        // src === nothing: clear a stale binding (store only on change)
+        ctx.builder.SetInsertPoint(nothing_bb);
+        LoadInst *bound0 = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bound_ptr, ctx.types().alignof_ptr);
+        bound0->setOrdering(AtomicOrdering::Monotonic);
+        ai.decorateInst(bound0);
+        Value *already_clear = ctx.builder.CreateICmpEQ(decay_derived(ctx, bound0), decay_derived(ctx, nothing_val));
+        ctx.builder.CreateCondBr(already_clear, point_bb, clear_bb);
+
+        ctx.builder.SetInsertPoint(clear_bb);
+        StoreInst *clear_store = ctx.builder.CreateAlignedStore(nothing_val, bound_ptr, ctx.types().alignof_ptr);
+        clear_store->setOrdering(AtomicOrdering::Monotonic);
+        ai.decorateInst(clear_store);
+        ctx.builder.CreateBr(point_bb);
+
+        // src is a token source: publish the binding (store only on rebind,
+        // so steady-state checks in a loop do not dirty the cache line), then
+        // load its cancellation state
+        ctx.builder.SetInsertPoint(src_bb);
+        LoadInst *bound1 = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bound_ptr, ctx.types().alignof_ptr);
+        bound1->setOrdering(AtomicOrdering::Monotonic);
+        ai.decorateInst(bound1);
+        Value *same = ctx.builder.CreateICmpEQ(decay_derived(ctx, bound1), decay_derived(ctx, src));
+        ctx.builder.CreateCondBr(same, point_bb, rebind_bb);
+
+        ctx.builder.SetInsertPoint(rebind_bb);
+        StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
+        bind_store->setOrdering(AtomicOrdering::Release);
+        ai.decorateInst(bind_store);
+        emit_write_barrier(ctx, ct, src);
+        ctx.builder.CreateBr(point_bb);
+
+        // The cancellation point intrinsic (which the CancellationLowering
+        // pass expands into the reset region publication) must come after all
+        // of the binding bookkeeping above: the rebind path's write barrier
+        // is an ordinary call, so the pass clears the published region before
+        // it. Emitting the intrinsic afterwards keeps the region live from
+        // here through a following reset_safe foreign call; only the state
+        // load below may follow it, so that a longjmp back onto the setjmp
+        // re-reads the now-cancelled state.
+        ctx.builder.SetInsertPoint(point_bb);
+        ctx.builder.CreateCall(prepare_call(jl_cancellation_point_func));
+        ctx.builder.CreateCondBr(is_nothing, merge_bb, loadst_bb);
+
+        ctx.builder.SetInsertPoint(loadst_bb);
+        Value *state_ptr = emit_ptrgep(ctx, decay_derived(ctx, src), offsetof(jl_cancel_source_t, state), "cancel_state");
+        LoadInst *st_load = ctx.builder.CreateAlignedLoad(T_int8, state_ptr, Align(1));
+        st_load->setOrdering(AtomicOrdering::Monotonic);
+        jl_aliasinfo_t ai_src = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_mutab);
+        ai_src.decorateInst(st_load);
+        ctx.builder.CreateBr(merge_bb);
+
+        // Merge and fold in the preempt-request bit (0x40)
+        ctx.builder.SetInsertPoint(merge_bb);
+        PHINode *st = ctx.builder.CreatePHI(T_int8, 2);
+        st->addIncoming(ConstantInt::get(T_int8, 0), point_bb);
+        st->addIncoming(st_load, loadst_bb);
+        Value *preempt_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, preempt_request), "preempt_request");
+        LoadInst *preempt = ctx.builder.CreateAlignedLoad(T_int8, preempt_ptr, Align(1));
+        preempt->setOrdering(AtomicOrdering::Monotonic);
+        ai.decorateInst(preempt);
+        Value *has_preempt = ctx.builder.CreateICmpNE(preempt, ConstantInt::get(T_int8, 0));
+        Value *pbit = ctx.builder.CreateSelect(has_preempt, ConstantInt::get(T_int8, 0x40), ConstantInt::get(T_int8, 0));
+        Value *result = ctx.builder.CreateOr(st, pbit);
+
+        *ret = mark_julia_type(ctx, result, /*boxed*/ false, (jl_value_t*)jl_uint8_type);
+        return true;
+    }
+
     return false;
 }
 
@@ -5464,6 +5603,8 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
     }
     CallInst *result = ctx.builder.CreateCall(TheTrampoline, theArgs);
     result->setAttributes(TheTrampoline->getAttributes());
+    // Mark as reset_safe if the current statement has that flag
+    mark_reset_safe(ctx, result);
     // TODO: we could add readonly attributes in many cases to the args
     return result;
 }
@@ -5585,6 +5726,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         call->setCallingConv(CallingConv::Swift);
     if (returninfo.effects != 0)
         add_fn_attrs_for_effects(call, returninfo.effects);
+    // Mark as reset_safe if the current statement has that flag
+    mark_reset_safe(ctx, call);
 
     jl_cgval_t retval;
     switch (returninfo.cc) {
@@ -9954,7 +10097,9 @@ static jl_llvm_functions_t
             }
         }
         else {
+            ctx.current_stmt_idx = cursor;
             emit_stmtpos(ctx, stmt, cursor);
+            ctx.current_stmt_idx = -1;
             mallocVisitStmt(nullptr, have_dbg_update);
         }
         find_next_stmt(cursor + 1);
