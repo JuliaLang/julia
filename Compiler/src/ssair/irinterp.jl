@@ -15,10 +15,10 @@ function collect_limitations!(@nospecialize(typ), sv::IRInterpretationState)
 end
 
 function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, argtypes::Vector{Any}, parent::IRInterpretationState)
-    world = get_inference_world(interp)
+    world = get_inference_world(parent)
     effects = decode_effects(ci.ipo_purity_bits)
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
-        (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
+        (is_nonoverlayed(parent) || is_nonoverlayed(effects)))
         args = collect_const_args(argtypes, #=start=#1)
         value = try
             Core._call_in_world_total(world, args...)
@@ -45,7 +45,7 @@ function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instructio
     stmt = inst[:stmt]::Expr
     ci = stmt.args[1]
     if ci isa MethodInstance
-        mi_cache = code_cache(interp)
+        mi_cache = code_cache(irsv)
         code = get(mi_cache, ci, nothing)
         code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
         code isa InferenceResult && (code = code.ci) # COMBAK: we shouldn't discard the src so easily here, as we might not be able to get it back again

@@ -205,7 +205,7 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
             caller.cache_mode = CACHE_MODE_LOCAL
         end
         if !iszero(caller.cache_mode & CACHE_MODE_GLOBAL)
-            code_cache(interp)[mi] = ci
+            code_cache(caller)[mi] = ci
         end
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
@@ -965,8 +965,8 @@ function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
     return frame
 end
 
-function is_same_frame(interp::I, mi::MethodInstance, frame::InferenceState) where {I<:AbstractInterpreter}
-    return mi === frame_instance(frame) && cache_owner(interp) === cache_owner(frame)
+function is_same_frame(parent::AbsIntState, mi::MethodInstance, frame::InferenceState)
+    return mi === frame_instance(frame) && cache_owner(parent) === cache_owner(frame)
 end
 
 function poison_callstack!(infstate::InferenceState, topmost::InferenceState)
@@ -991,7 +991,7 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
         frame = frames[frameid]
         isa(frame, InferenceState) || break
         uncached |= !is_cached(frame) # ensure we never add a (globally) uncached frame to a cycle
-        if is_same_frame(interp, mi, frame)
+        if is_same_frame(parent, mi, frame)
             if uncached
                 # our attempt to speculate into a constant call lead to an undesired self-cycle
                 # that cannot be converged: if necessary, poison our call-stack (up to the discovered duplicate frame)
@@ -1149,7 +1149,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     force_inline = is_stmt_inline(get_curr_ssaflag(caller))
     edge_ci = nothing
-    let code = get(code_cache(interp), mi, nothing)
+    let code = get(code_cache(caller), mi, nothing)
         codeinst = code
         if code isa InferenceResult
             inferred = code.src
@@ -1192,9 +1192,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # completely new, but check again after reserving in the engine
         if cache_mode == CACHE_MODE_GLOBAL
             reserve_start = _time_ns() # subtract engine_reserve (thread-synchronization) time from callers to avoid double-counting
-            ci_from_engine = engine_reserve(interp, mi)
+            ci_from_engine = engine_reserve(mi, cache_owner(caller))
             caller.time_paused += (_time_ns() - reserve_start)
-            code = get(code_cache(interp), mi, nothing)
+            code = get(code_cache(caller), mi, nothing)
             codeinst = code
             if code isa InferenceResult
                 inferred = code.src

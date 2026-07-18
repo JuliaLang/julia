@@ -132,7 +132,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
     current_world = get_world_counter()
-    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
+    matches = find_method_matches(interp, argtypes, atype; max_methods,
+                                  max_union_splitting = InferenceParams(sv).max_union_splitting,
+                                  fargs = arginfo.fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -801,10 +803,10 @@ function edge_matches_sv(interp::I, frame::AbsIntState,
     # Frames in one callstack share the same interpreter type (enforced by the
     # `AbsIntState{I}` parameter), but distinct instances of that type may still
     # have different cache owners.
-    if isa(frame, InferenceState) && cache_owner(frame) !== cache_owner(interp)
+    if isa(frame, InferenceState) && cache_owner(frame) !== cache_owner(sv)
         return false
     end
-    if !hardlimit || InferenceParams(interp).ignore_recursion_hardlimit
+    if !hardlimit || InferenceParams(sv).ignore_recursion_hardlimit
         # if this is a soft limit,
         # also inspect the parent of this edge,
         # to see if they are the same Method as sv
@@ -1153,7 +1155,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
     result::MethodCallResult, @nospecialize(f), arginfo::ArgInfo, si::StmtInfo,
     match::MethodMatch, sv::AbsIntState)
     method = match.method
-    force = force_const_prop(interp, f, method)
+    force = force_const_prop(sv, f, method)
     if !const_prop_rettype_heuristic(interp, result, si, sv, force)
         # N.B. remarks are emitted within `const_prop_rettype_heuristic`
         return nothing
@@ -1277,9 +1279,9 @@ function is_all_overridden(interp::AbstractInterpreter, (; fargs, argtypes)::Arg
     return true
 end
 
-function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method::Method)
+function force_const_prop(sv::AbsIntState, @nospecialize(f), method::Method)
     return is_aggressive_constprop(method) ||
-           InferenceParams(interp).aggressive_constant_propagation ||
+           InferenceParams(sv).aggressive_constant_propagation ||
            !iszero(typename(typeof(f)).constprop_heuristic & Core.FORCE_CONST_PROP)
 end
 
@@ -2844,7 +2846,7 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
                 world = get_inference_world(sv)
                 (valid_worlds, (rte, T)) = scan_leaf_partitions(interp, gr, binding_world_hints(world, sv)) do interp::AbstractInterpreter, binding::Core.Binding, partition::Core.BindingPartition
                     partition_T = nothing
-                    partition_rte = abstract_eval_partition_load(interp, binding, partition)
+                    partition_rte = abstract_eval_partition_load(InferenceParams(sv).assume_bindings_static, binding, partition)
                     if binding_kind(partition) == PARTITION_KIND_GLOBAL
                         partition_T = partition_restriction(partition)
                     end
@@ -3947,12 +3949,12 @@ function abstract_eval_binding_partition!(interp::AbstractInterpreter, g::Global
     return partition
 end
 
-function abstract_eval_partition_load(interp::Union{AbstractInterpreter,Nothing}, binding::Core.Binding, partition::Core.BindingPartition)
+function abstract_eval_partition_load(assume_static::Bool, binding::Core.Binding, partition::Core.BindingPartition)
     kind = binding_kind(partition)
     isdepwarn = (partition.kind & PARTITION_FLAG_DEPWARN) != 0
     local_getglobal_effects = Effects(generic_getglobal_effects, effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE)
     if is_some_guard(kind)
-        if interp !== nothing && InferenceParams(interp).assume_bindings_static
+        if assume_static
             return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
         else
             # We do not currently assume an invalidation for guard -> defined transitions
@@ -3983,7 +3985,7 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter,Nothing}
         rt = partition_restriction(partition)
         effects = local_getglobal_effects
     end
-    if (interp !== nothing && InferenceParams(interp).assume_bindings_static &&
+    if (assume_static &&
         kind in (PARTITION_KIND_GLOBAL, PARTITION_KIND_DECLARED) &&
         isdefined(binding, :value))
         exct = Union{}
@@ -4050,10 +4052,15 @@ function scan_partitions(query::F, interp::AbstractInterpreter, g::GlobalRef, ww
     return scan_specified_partitions(query, walk_binding_partition, interp, g, wwr)
 end
 
-abstract_load_all_consistent_leaf_partitions(interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange) =
-    scan_leaf_partitions(abstract_eval_partition_load, interp, g, wwr)
-abstract_load_all_consistent_leaf_partitions(::Nothing, g::GlobalRef, wwr::WorldWithRange) =
-    scan_leaf_partitions(abstract_eval_partition_load, nothing, g, wwr)
+function abstract_load_all_consistent_leaf_partitions(interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange)
+    assume_static = InferenceParams(interp).assume_bindings_static
+    query = (::Any, b::Core.Binding, p::Core.BindingPartition) -> abstract_eval_partition_load(assume_static, b, p)
+    return scan_leaf_partitions(query, interp, g, wwr)
+end
+function abstract_load_all_consistent_leaf_partitions(::Nothing, g::GlobalRef, wwr::WorldWithRange)
+    query = (::Any, b::Core.Binding, p::Core.BindingPartition) -> abstract_eval_partition_load(false, b, p)
+    return scan_leaf_partitions(query, nothing, g, wwr)
+end
 
 function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState{I}) where {I<:AbstractInterpreter}
     if saw_latestworld
@@ -4062,8 +4069,10 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_
     # For inference purposes, we don't particularly care which global binding we end up loading, we only
     # care about its type. However, we would still like to terminate the world range for the particular
     # binding we end up reaching such that codegen can emit a simpler pointer load.
-    world = get_inference_world(interp::I)
-    (valid_worlds, ret) = scan_leaf_partitions(abstract_eval_partition_load, interp, g, binding_world_hints(world, sv))
+    world = get_inference_world(sv)
+    assume_static = InferenceParams(sv).assume_bindings_static
+    query = (::Any, b::Core.Binding, p::Core.BindingPartition) -> abstract_eval_partition_load(assume_static, b, p)
+    (valid_worlds, ret) = scan_leaf_partitions(query, interp, g, binding_world_hints(world, sv))
     update_valid_age!(sv, world, valid_worlds)
     return ret
 end

@@ -363,6 +363,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     inf_cache::InferenceCache # get_inference_cache(interp)
     cache_owner::Any            # cache_owner(interp)
     method_table::MethodTableView # method_table(interp)
+    code_cache::Any             # code_cache(interp) — cached result, so interpreter overrides are respected
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState{I}(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
@@ -446,7 +447,8 @@ mutable struct InferenceState{I<:AbstractInterpreter}
             _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp, InferenceParams(interp), world,
-            get_inference_cache(interp), cache_owner(interp), method_table(interp))
+            get_inference_cache(interp), cache_owner(interp), method_table(interp),
+            code_cache(interp))
 
         # some more setups
         if !iszero(cache_mode & CACHE_MODE_GLOBAL)
@@ -489,6 +491,7 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
     const inf_cache::InferenceCache # see comment on `InferenceState.inf_cache`
     const cache_owner::Any            # see comment on `InferenceState.cache_owner`
     const method_table::MethodTableView # see comment on `InferenceState.method_table`
+    const code_cache::Any             # see comment on `InferenceState.code_cache`
 
     function IRInterpretationState{I}(
             interp::I, spec_info::SpecInfo, ir::IRCode,
@@ -521,7 +524,8 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
                 curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
                 ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, interp,
                 InferenceParams(interp), get_inference_world(interp),
-                get_inference_cache(interp), cache_owner(interp), method_table(interp))
+                get_inference_cache(interp), cache_owner(interp), method_table(interp),
+                code_cache(interp))
     end
 end
 
@@ -1112,6 +1116,8 @@ get_inference_world(sv::AbsIntState) = sv.world
 get_inference_cache(sv::AbsIntState) = sv.inf_cache
 cache_owner(sv::AbsIntState) = sv.cache_owner
 method_table(sv::AbsIntState) = sv.method_table
+is_nonoverlayed(sv::AbsIntState) = !isoverlayed(method_table(sv))
+code_cache(sv::AbsIntState) = sv.code_cache
 
 function print_callstack(frame::AbsIntState)
     print("=================== Callstack: ==================\n")

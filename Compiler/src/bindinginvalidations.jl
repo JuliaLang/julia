@@ -98,8 +98,8 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
     # reads from a binding partition. If this information does not change - we do not need to
     # invalidate any code that inference created, because we know that the result will not change.
     need_to_invalidate_code =
-        abstract_eval_partition_load(nothing, ib, ibpart) !==
-        abstract_eval_partition_load(nothing, nb, nbpart)
+        abstract_eval_partition_load(false, ib, ibpart) !==
+        abstract_eval_partition_load(false, nb, nbpart)
 
     need_to_invalidate_export = export_affecting_partition_flags(invalidated_bpart) !==
                                 export_affecting_partition_flags(new_bpart)

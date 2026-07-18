@@ -3119,7 +3119,8 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             end
             return current_scope_tfunc(interp, sv)
         elseif f === Core.apply_type
-            return apply_type_tfunc(𝕃ᵢ, argtypes; max_union_splitting=InferenceParams(interp).max_union_splitting)
+            return apply_type_tfunc(𝕃ᵢ, argtypes; max_union_splitting =
+                (sv === nothing ? InferenceParams(interp) : InferenceParams(sv)).max_union_splitting)
         end
         fidx = find_tfunc(f)
         if fidx === nothing
@@ -3495,7 +3496,8 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     if atype === Union{}
         rt = Union{} # accidentally unreachable code
     else
-        matches = find_method_matches(interp, argtypes, atype; max_methods)
+        matches = find_method_matches(interp, argtypes, atype; max_methods,
+                                      max_union_splitting = InferenceParams(sv).max_union_splitting)
         info = NoCallInfo()
         if isa(matches, FailedMethodMatch)
             rt = Bool # too many matches to analyze
