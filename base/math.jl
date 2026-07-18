@@ -870,7 +870,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         return flipsign(T(0.0), x)
     end
     n = e % Int
-    k += n
+    k = k +% n
     # overflow, if k is larger than maximum possible exponent
     if k >= exponent_raw_max(T)
         return flipsign(T(Inf), x)

@@ -229,12 +229,24 @@ f38435(::Int, ::Int) = 3.0
 function method_instance(f, types=Base.default_tt(f))
     m = which(f, types)
     inst = nothing
-    tt = Base.signature_type(f, types)
+    tt0 = Base.signature_type(f, types)
+    # runtime-dispatch specializations key type-valued slots by egality
+    # (see `jl_compilation_sig`); inference-only (`==`) ones keep `Type{X}`
+    u = Base.unwrap_unionall(tt0)::DataType
+    ps = Any[isa(p, Core.TypeEq) && !Base.has_free_typevars(Base.type_parameter(p)) ?
+             Core.TypeEgal{Base.type_parameter(p)} : p for p in u.parameters]
+    tt1 = Base.rewrap_unionall(Tuple{ps...}, tt0)
     for mi in Base.specializations(m)
-        if mi.specTypes <: tt && tt <: mi.specTypes
+        if (mi.specTypes <: tt1 && tt1 <: mi.specTypes) ||
+           (mi.specTypes <: tt0 && tt0 <: mi.specTypes)
             inst = mi
             break
         end
+    end
+    if inst === nothing
+        # create the (egality-keyed) dispatch specialization if nothing has needed it yet
+        match = Base._which(tt1; raise=false)
+        match === nothing || (inst = Base.specialize_method(match))
     end
     return inst
 end

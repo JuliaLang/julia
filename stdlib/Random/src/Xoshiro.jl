@@ -234,14 +234,14 @@ rng_native_52(::TaskLocalRNG) = UInt64
     length(state) == 4 && eltype(state) == UInt64 ||
         _throw_argerror("initstate! expects a list of 4 `UInt64` values")
     s0, s1, s2, s3 = state
-    setstate!(x, (s0, s1, s2, s3, 1s0 + 3s1 + 5s2 + 7s3))
+    setstate!(x, (s0, s1, s2, s3, s0 +% (3 *% s1) +% (5 *% s2) +% (7 *% s3)))
 end
 
 copy(rng::Union{TaskLocalRNG, Xoshiro}) = Xoshiro(getstate(rng)...)
 copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = setstate!(dst, getstate(src))
 ==(x::Union{TaskLocalRNG, Xoshiro}, y::Union{TaskLocalRNG, Xoshiro}) = getstate(x) == getstate(y)
 # use a magic (random) number to scramble `h` so that `hash(x)` is distinct from `hash(getstate(x))`
-hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2dda6fa9be % UInt)
+hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h +% 0x49a62c2dda6fa9be % UInt)
 
 seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::AbstractRNG) =
     initstate!(rng, rand(seeder, NTuple{4, UInt64}))
@@ -249,8 +249,8 @@ seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::AbstractRNG) =
 
 @inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})
     s0, s1, s2, s3 = getstate(x)
-    tmp = s0 + s3
-    res = ((tmp << 23) | (tmp >> 41)) + s0
+    tmp = s0 +% s3
+    res = ((tmp << 23) | (tmp >> 41)) +% s0
     t = s1 << 17
     s2 ⊻= s0
     s3 ⊻= s1

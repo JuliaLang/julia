@@ -72,12 +72,12 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 #endif
 
 
-static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
-static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel);
+static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s) JL_CANSAFEPOINT;
+static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel) JL_CANSAFEPOINT;
 
 // method definition form
 
-static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
+static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
 
@@ -112,7 +112,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
 // expression evaluator
 
-static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
+static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **argv;
     assert(nargs >= 1);
@@ -125,7 +125,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     return result;
 }
 
-static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state *s)
+static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **argv;
     assert(nargs >= 2);
@@ -189,13 +189,13 @@ static int jl_source_nssavalues(jl_code_info_t *src) JL_NOTSAFEPOINT
     return jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_nrows(src->ssavaluetypes);
 }
 
-static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
+static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t *res = eval_value(stmt, s);
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
 
-static jl_value_t *eval_expr_tuple(jl_expr_t *ex, interpreter_state *s)
+static jl_value_t *eval_expr_tuple(jl_expr_t *ex, interpreter_state *s) JL_CANSAFEPOINT
 {
     // evaluate Expr(:tuple, ...)
     // only appears in post-lowered IR in foreignglobal / foreigncall
@@ -282,7 +282,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             assert(n > 0);
             if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
                 jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-                defined = !jl_is_svec(sp) && !jl_has_free_typevars(sp);
+                defined = jl_sparam_defined_value(sp) != NULL;
             }
             else {
                 // static parameter val unknown needs to be an error for ccall
@@ -340,7 +340,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         assert(n > 0);
         if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
             jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-            if ((jl_is_svec(sp) || jl_has_free_typevars(sp)) && !s->preevaluation) {
+            jl_value_t *defval = jl_sparam_defined_value(sp);
+            if (defval != NULL)
+                return defval;
+            if (!s->preevaluation) {
                 // look up the parameter name from the method's signature
                 jl_unionall_t *sig = (jl_unionall_t*)s->mi->def.method->sig;
                 jl_tvar_t *var = NULL;
@@ -427,7 +430,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 }
 
 // phi nodes don't behave like proper instructions, so we require a special interpreter to handle them
-static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to)
+static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to) JL_CANSAFEPOINT
 {
     size_t from = s->ip;
     size_t ip = to;
@@ -763,7 +766,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 // preparing method IR for interpreter
 
-jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world)
+jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     jl_value_t *ret = NULL;
     jl_code_info_t *src = NULL;
@@ -772,11 +775,20 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world
             jl_method_t *m = mi->def.method;
             src = (jl_code_info_t*)m->source;
             if (!jl_is_code_info(src)) {
-                src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
+                // Root the compressed blob across the (allocating) decode:
+                // another thread interpreting the same method concurrently can
+                // win the publish below first, at which point m->source no
+                // longer keeps the blob alive while this thread is still
+                // reading it.
+                jl_value_t *compressed = (jl_value_t*)src;
+                JL_GC_PUSH1(&compressed);
+                src = jl_uncompress_ir(m, NULL, compressed);
+                JL_GC_POP();
                 // Replace the method source by the uncompressed version,
                 // under the assumption that the interpreter may need to
                 // access it frequently. TODO: Have some sort of usage-based
-                // cache here.
+                // cache here. (Concurrent publishes store equivalent copies;
+                // last one wins.)
                 jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)src);
             }
             ret = (jl_value_t*)src;
@@ -822,6 +834,9 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
     jl_code_info_t *src = NULL;
+    // NOTE: from here until `code`/`src` are stored into the GC frame below,
+    // they may be reachable only through these locals (a concurrent thread
+    // can republish m->source); this stretch must stay free of safepoints.
     jl_value_t *code = jl_code_or_ci_for_interpreter(mi, world);
     jl_code_instance_t *ci = NULL;
     if (jl_is_code_instance(code)) {

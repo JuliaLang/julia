@@ -103,7 +103,7 @@ void smallintset_empty(const jl_genericmemory_t *a) JL_NOTSAFEPOINT
     memset(a->ptr, 0, a->length * elsize);
 }
 
-static jl_genericmemory_t *jl_alloc_int_1d(size_t np, size_t len)
+static jl_genericmemory_t *jl_alloc_int_1d(size_t np, size_t len) JL_CANSAFEPOINT
 {
     jl_value_t *ty;
     if (np < 0xFF)

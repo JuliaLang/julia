@@ -10,11 +10,6 @@
 #include <math.h>
 #include <string.h>
 
-// bfloat conversion functions defined in runtime_intrinsics.c
-// (half-float equivalents are declared in julia_internal.h)
-extern uint16_t julia_float_to_bfloat(float param) JL_NOTSAFEPOINT;
-extern float julia_bfloat_to_float(uint16_t param) JL_NOTSAFEPOINT;
-
 // ---- Constants and macros ----
 
 #define WORD_SIZE 64

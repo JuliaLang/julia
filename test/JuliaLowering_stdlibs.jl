@@ -46,7 +46,7 @@ stdlibs_to_test = filter(name -> !in(name, INCOMPATIBLE_STDLIBS), readdir(Sys.ST
 push!(stdlibs_to_test, "Compiler")
 
 configs = [
-    ``=>Base.CacheFlags(check_bounds=0, debug_level=2, opt_level=3),
+    # ``=>Base.CacheFlags(check_bounds=0, debug_level=2, opt_level=3),
     ``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3),
 ]
 

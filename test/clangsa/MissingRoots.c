@@ -1027,3 +1027,63 @@ JL_DLLEXPORT jl_value_t *jl_totally_used_function(int i)
     return v; // expected-warning{{Return value may have been GCed}}
               // expected-note@-1{{Return value may have been GCed}}
 }
+
+// A function explicitly annotated JL_CANSAFEPOINT is treated as a possible
+// safepoint even when it is defined locally (so the analyzer inlines it) and
+// its body reaches no recognized safepoint.
+void inlinable_cansafepoint(void) JL_CANSAFEPOINT {
+}
+jl_value_t *inlined_cansafepoint_is_safepoint() {
+    jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+    inlinable_cansafepoint(); // expected-note{{Value may have been GCed here}}
+    return jl_svecref(val, 0); // expected-warning{{Argument value may have been GCed}}
+                               // expected-note@-1{{Argument value may have been GCed}}
+}
+
+// Contrast: a locally-defined function with no safepoint in its body and no
+// JL_CANSAFEPOINT annotation is not a safepoint, so val survives the call.
+void inlinable_no_safepoint(void) JL_NOTSAFEPOINT {
+}
+jl_value_t *inlined_no_safepoint_is_not_safepoint() {
+    jl_svec_t *val = jl_svec1(NULL);
+    inlinable_no_safepoint();
+    return jl_svecref(val, 0);
+}
+
+// A conditional enter (e.g. a no-gc trylock) only disables safepoints on the
+// branch where it succeeds; the failure branch leaves them enabled.
+extern void ce_safepoint(void); // expected-note 2 {{Tried to call method defined here}}
+extern int ce_trylock(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1);
+extern void ce_unlock(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
+void conditional_enter_disables_on_success(void) {
+    if (ce_trylock()) { // expected-note{{Safepoints re-enabled here}}
+                        // expected-note@-1{{Tracking JL_NOTSAFEPOINT annotation here}}
+                        // expected-note@-2{{Taking true branch}}
+        ce_safepoint(); // expected-warning{{Calling potential safepoint as SimpleFunctionCall from function annotated JL_NOTSAFEPOINT}}
+                        // expected-note@-1{{Calling potential safepoint as SimpleFunctionCall from function annotated JL_NOTSAFEPOINT}}
+        ce_unlock();
+    }
+}
+void conditional_enter_ok_when_not_taken(void) {
+    if (ce_trylock())
+        ce_unlock();
+    else
+        ce_safepoint();
+}
+
+// The success value is read from the annotation: a conditional enter that
+// signals success with a zero return (JL_NOTSAFEPOINT_ENTER_CONDITIONAL(0), e.g.
+// a pthread-style trylock) disables safepoints on the zero-return branch, so a
+// safepoint is flagged there and allowed on the nonzero (failure) branch.
+extern int ce_trylock0(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER_CONDITIONAL(0);
+void conditional_enter_zero_success(void) {
+    if (ce_trylock0()) { // expected-note{{Safepoints re-enabled here}}
+                         // expected-note@-1{{Tracking JL_NOTSAFEPOINT annotation here}}
+                         // expected-note@-2{{Taking false branch}}
+        ce_safepoint();
+    } else {
+        ce_safepoint(); // expected-warning{{Calling potential safepoint as SimpleFunctionCall from function annotated JL_NOTSAFEPOINT}}
+                        // expected-note@-1{{Calling potential safepoint as SimpleFunctionCall from function annotated JL_NOTSAFEPOINT}}
+        ce_unlock();
+    }
+}

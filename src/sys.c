@@ -263,7 +263,7 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
 //   0 - keep delimiter
 //   1 - remove 1 byte delimiter
 //   2 - remove 2 bytes \r\n if present
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp)
+JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp) JL_CANSAFEPOINT
 {
     jl_array_t *a;
     // manually inlined common case
@@ -624,30 +624,6 @@ JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT
     return uv_hrtime();
 }
 
-// -- child process status --
-
-#if defined _OS_WINDOWS_
-/* Native Woe32 API.  */
-#include <process.h>
-#define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
-#define WAIT_T int
-#define WTERMSIG(x) ((x) & 0xff) /* or: SIGABRT ?? */
-#define WCOREDUMP(x) 0
-#define WEXITSTATUS(x) (((x) >> 8) & 0xff) /* or: (x) ?? */
-#define WIFSIGNALED(x) (WTERMSIG (x) != 0) /* or: ((x) == 3) ?? */
-#define WIFEXITED(x) (WTERMSIG (x) == 0) /* or: ((x) != 3) ?? */
-#define WIFSTOPPED(x) 0
-#define WSTOPSIG(x) 0 //Is this correct?
-#endif
-
-int jl_process_exited(int status)      { return WIFEXITED(status); }
-int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
-int jl_process_stopped(int status)     { return WIFSTOPPED(status); }
-
-int jl_process_exit_status(int status) { return WEXITSTATUS(status); }
-int jl_process_term_signal(int status) { return WTERMSIG(status); }
-int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
-
 // -- access to std filehandles --
 
 JL_STREAM *JL_STDIN  = (JL_STREAM*)STDIN_FILENO;
@@ -812,6 +788,8 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT
         // dlopen() each image, check handle.
         const char *image_name = _dyld_get_image_name(i);
         void *probe_lib = jl_dlopen(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);
+        if (!probe_lib)
+            continue;
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
@@ -992,7 +970,7 @@ static int dllist_helper(struct dl_phdr_info *info, size_t size, void *vdata) JL
 // This is done in C, rather than a Julia `dl_iterate_phdr` callback, so that
 // no Julia code (which can allocate, run finalizers, or re-enter the linker
 // via (lazy) `ccall`) runs under the dynamic loader lock. See `dllist_helper`
-JL_DLLEXPORT int jl_dllist(jl_array_t *list)
+JL_DLLEXPORT int jl_dllist(jl_array_t *list) JL_CANSAFEPOINT
 {
     arraylist_t names;
     arraylist_new(&names, 0);

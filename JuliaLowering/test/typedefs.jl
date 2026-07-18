@@ -409,6 +409,16 @@ end
     @test fieldnames(test_mod.DefaultInnerCtors6) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors7
+        field::Int
+        begin; end
+        begin; begin; end; end
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors7)
+    @test fieldnames(test_mod.DefaultInnerCtors7) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
         struct NoDefaultInnerCtors1
         field::Int
         identity(1)
@@ -534,6 +544,18 @@ end
 # Wrong number of args checked by lowering
 @test_throws ArgumentError test_mod.S8((1,), ())
 @test_throws ArgumentError test_mod.S8((1,2,3), ())
+
+# empty-curly `new{}()`
+@test JuliaLowering.include_string(test_mod, """
+struct S_empty_new
+    x::Int
+    S_empty_new() = new{}(5)
+end
+""") === nothing
+let s = test_mod.S_empty_new()
+    @test s isa test_mod.S_empty_new
+    @test s.x === 5
+end
 
 # new() with splats and untyped fields
 @test JuliaLowering.include_string(test_mod, """
@@ -798,3 +820,104 @@ end
           end
           (struct_eq_assigns_test(5).x, struct_eq_assigns_test().x)
       end)) == (5, 1)
+
+@testset "(AI) inner ctor with return-type annotation and `where`" begin
+    # Regression: an inner constructor with BOTH an explicit return-type
+    # annotation and a `where` clause used to fail lowering ("No match found"),
+    # because `rewrite_ctor_sig` re-wrapped the `where` a second time — nesting
+    # it inside the `::` — when it recursed through the return-type branch.
+    m = Module()
+    JuliaLowering.include_string(m, """
+        struct Wrap{T}
+            x::T
+            function Wrap{T}(x)::Wrap{T} where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    w = JuliaLowering.include_string(m, "Wrap{Int}(5)")
+    @test w isa m.Wrap{Int}
+    @test w.x === 5
+
+    # The return-type annotation performs `convert` (matching flisp): a
+    # mismatched annotation only fails at construction time, as a MethodError
+    # from the missing `convert`, not as a lowering/type-assert error.
+    JuliaLowering.include_string(m, """
+        struct W2{T}
+            x::T
+            function W2{T}(x)::W2{Int} where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "W2{Int}(3)") isa m.W2{Int}
+    @test_throws MethodError JuliaLowering.include_string(m, "W2{String}(\"hi\")")
+
+    # The `where`-bound typevar scopes over the return-type annotation (`::T`).
+    JuliaLowering.include_string(m, """
+        struct W4{T}
+            x::T
+            function W4{T}(x)::T where {T}
+                return new{T}(x).x
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "W4{Int}(9)") === 9
+
+    # Constructor name without curlies, plus return annotation and `where`.
+    JuliaLowering.include_string(m, """
+        struct B2{T}
+            x::T
+            function B2(x::T)::B2{T} where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "B2(7)") isa m.B2{Int}
+
+    # Multiple `where`-bound typevars with subtype bounds (the shape found in
+    # FlexiChains that first surfaced this bug).
+    JuliaLowering.include_string(m, """
+        struct FS{TKey, TIIdx<:Union{Int,Nothing}, TCIdx<:Union{Int,Nothing}, TSIdx<:Real}
+            _iter::TIIdx
+            _chain::TCIdx
+            _stat::TSIdx
+            function FS{TKey}(iter::TIIdx, chain::TCIdx, stat::TSIdx)::FS{TKey,TIIdx,TCIdx,TSIdx} where {
+                TKey, TIIdx<:Union{Int,Nothing}, TCIdx<:Union{Int,Nothing}, TSIdx<:Real}
+                return new{TKey,TIIdx,TCIdx,TSIdx}(iter, chain, stat)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "FS{Symbol}(1, nothing, 2.0)") isa
+        m.FS{Symbol, Int, Nothing, Float64}
+
+    # Success path of the return-type `convert` (complements the W2 failure case
+    # above): an `::Any` annotation converts by identity, so the constructor
+    # still returns the freshly-built struct.  Combined with `where`.
+    JuliaLowering.include_string(m, """
+        struct WA{T}
+            x::T
+            function WA{T}(x)::Any where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "WA{Int}(5)") isa m.WA{Int}
+end
+
+@testset "(AI) struct fields named with underscores" begin
+    # Bug in _defaultctors giving lowering a K"lambda"
+    m = Module()
+    JuliaLowering.include_string(m, """
+        struct TextItem
+            _::String
+        end
+        struct TwoScores
+            _::Int
+            __::Int
+        end
+    """)
+    @test JuliaLowering.include_string(m, """TextItem("hi")._""") == "hi"
+    t = JuliaLowering.include_string(m, "TwoScores(1, 2)")
+    @test (t._, t.__) == (1, 2)
+end

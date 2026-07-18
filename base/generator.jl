@@ -36,7 +36,8 @@ end
 
 Generator(f, I1, I2, Is...) = Generator(splat(f), zip(I1, I2, Is...))
 
-Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
+Generator(::Type{T}, iter::I) where {T,I} =
+    Generator{I,has_free_typevars(T) ? typeof(T) : Core.TypeEgal{T}}(T, iter)
 
 Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(splat(T), zip(I1, I2, Is...))
 

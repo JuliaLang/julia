@@ -14,6 +14,47 @@ extern "C" {
 
 JULIA_DEFINE_FAST_TLS
 
+#ifdef _OS_DARWIN_
+// The macOS application bundle (contrib/mac/app) uses `julia-terminal` as its
+// double-clickable entry point (CFBundleExecutable). `julia-terminal` is a hardlink
+// to the julia binary sitting next to it in `bin/`. When the loader is invoked under
+// that name, we don't start the REPL in-process (a Finder-launched bundle has no
+// controlling terminal); instead we relaunch the sibling `julia` binary inside a new
+// Terminal.app window so the user gets an interactive session.
+//
+// A hardlink (rather than a symlink) is what makes this work: LaunchServices resolves
+// a symlinked CFBundleExecutable down to its target, discarding the `julia-terminal`
+// name, whereas a hardlink keeps its own name. That distinct name is also how we avoid
+// hijacking ordinary `julia` invocations (e.g. non-interactive `julia script.jl`).
+static void maybe_launch_terminal(void)
+{
+    char exe_path[JL_PATH_MAX];
+    uint32_t bufsize = sizeof(exe_path);
+    if (_NSGetExecutablePath(exe_path, &bufsize) != 0)
+        return;
+    // Resolve any intermediate symlinks (the bundle's Contents/MacOS/julia-terminal
+    // is a symlink into bin/) to land on the real `julia-terminal` hardlink.
+    char self_path[JL_PATH_MAX];
+    if (realpath(exe_path, self_path) == NULL)
+        return;
+
+    // Only take over when invoked as `julia-terminal`.
+    char * base = strrchr(self_path, '/');
+    if (base == NULL)
+        return;
+    base++;
+    if (strcmp(base, "julia-terminal") != 0)
+        return;
+
+    // The real julia binary is the sibling `julia`. Hand it to Terminal.app, which
+    // opens a window and runs the REPL there.
+    strcpy(base, "julia");
+    execl("/usr/bin/open", "open", "-a", "Terminal", self_path, (char *)NULL);
+    jl_loader_print_stderr("ERROR: Failed to launch Terminal.app!\n");
+    exit(1);
+}
+#endif
+
 #ifdef _COMPILER_ASAN_ENABLED_
 JL_DLLEXPORT const char* __asan_default_options(void)
 {
@@ -40,6 +81,10 @@ int main(int argc, char * argv[])
     // ASAN/TSAN do not support RTLD_DEEPBIND
     // https://github.com/google/sanitizers/issues/611
     putenv("LBT_USE_RTLD_DEEPBIND=0");
+#endif
+
+#ifdef _OS_DARWIN_
+    maybe_launch_terminal();
 #endif
 
     // Convert Windows wchar_t values to UTF8

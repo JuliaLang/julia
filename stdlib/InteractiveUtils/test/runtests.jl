@@ -271,6 +271,18 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 # issue #13264
 @test (@which vcat(1...)).name === :vcat
 
+@testset "@methods" begin
+    ms = @methods sort(::AbstractVector)
+    @test ms isa Base.MethodList
+    @test ms == methods(sort, (AbstractVector,))
+    # arguments are interpreted as values, like `@which`
+    @test (@methods sort([1, 2, 3])) == methods(sort, (Vector{Int},))
+    # qualified callable
+    @test (@methods Base.sort(::AbstractVector)) == methods(sort, (AbstractVector,))
+    # unlike `@which`, lists every matching method when types are abstract
+    @test length(@methods +(::Integer, ::Integer)) > 1
+end
+
 # PR #28122, issue #25474
 @test (@which [1][1]).name === :getindex
 @test (@which [1][1] = 2).name === :setindex!
@@ -634,7 +646,7 @@ expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...)
 # Make sure broadcasts in nested arguments are not processed.
 v = Any[1]
 expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
-@test contains(expansion, "Typeof(rand.(Ref(1)))")
+@test contains(expansion, "Core.Typeof(rand.(Ref(1)))")
 @test !contains(expansion, "(x1) =")
 
 # Issue # 45889

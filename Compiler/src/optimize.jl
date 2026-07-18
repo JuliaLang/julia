@@ -1589,17 +1589,16 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
         elseif isa(el, EnterNode)
             tgt = el.catch_dest
-            if tgt != 0
-                was_deleted = labelchangemap[tgt] == typemin(Int)
-                if was_deleted
-                    @assert !isdefined(el, :scope)
-                    body[i] = nothing
+            if tgt != 0 && labelchangemap[tgt] == typemin(Int)
+                @assert !isdefined(el, :scope)
+                body[i] = nothing  # the enclosing catch block was deleted
+            else
+                # renumber the catch destination (tgt == 0 stays frame-less) and the scope operand
+                newdest = tgt == 0 ? 0 : tgt + labelchangemap[tgt]
+                if isdefined(el, :scope) && isa(el.scope, SSAValue)
+                    body[i] = EnterNode(newdest, SSAValue(el.scope.id + ssachangemap[el.scope.id]))
                 else
-                    if isdefined(el, :scope) && isa(el.scope, SSAValue)
-                        body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
-                    else
-                        body[i] = EnterNode(el, tgt + labelchangemap[tgt])
-                    end
+                    body[i] = EnterNode(el, newdest)
                 end
             end
         elseif isa(el, Expr)

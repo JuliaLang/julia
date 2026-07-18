@@ -65,6 +65,7 @@ Fields:
 - `args`: argument variables (never undefined, special handling in mark_used!)
 """
 mutable struct DefUseState
+    const lambda_id::ScopeId
     const unused::Set{IdTag}
     const live::Set{IdTag}
     const seen::Set{IdTag}
@@ -72,7 +73,7 @@ mutable struct DefUseState
     decl_outside_loop::Set{IdTag}
     const args::Set{IdTag}
 
-    function DefUseState(ctx, candidates)
+    function DefUseState(lambda_id, ctx, candidates)
         unused = copy(candidates)
         live = Set{IdTag}()
         seen = Set{IdTag}()
@@ -87,7 +88,7 @@ mutable struct DefUseState
                 push!(args, id)
             end
         end
-        return new(unused, live, seen, decl, decl_outside_loop, args)
+        return new(lambda_id, unused, live, seen, decl, decl_outside_loop, args)
     end
 end
 
@@ -231,12 +232,13 @@ function du_visit!(ctx, state::DefUseState, e)
 
     elseif k == K"function_decl"
         # [function_decl] defines and instantiates the closure type and assigns
-        # it to its first argument (but only once per unique first argument).
-        func_id = e[1].var_id
+        # it to its first argument (but only once per unique closure key).
         @assert kind(e[1]) == K"BindingId"
+        func_id = e[1].var_id::IdTag
         func_id in state.seen && return false
-        if haskey(ctx.closure_bindings, func_id)
-            for lam in ctx.closure_bindings[func_id].lambdas
+        ck = ClosureKey(func_id, state.lambda_id)
+        if haskey(ctx.closure_bindings, ck)
+            for lam in ctx.closure_bindings[ck].lambdas
                 for (id, capt) in lam.locals_capt
                     capt && du_mark_captured!(state, id)
                 end
@@ -318,8 +320,8 @@ function du_visit!(ctx, state::DefUseState, e)
     end
 end
 
-function _analyze_lambda_vars!(ctx, ex)
-    lambda_bindings = ex.lambda_bindings
+function _analyze_lambda_vars!(ctx::VariableAnalysisContext, ex)
+    lambda_bindings = ex.lambda_bindings::LambdaBindings
 
     # Collect candidate variables: captured and single-assigned
     candidates = Set{IdTag}()
@@ -333,7 +335,7 @@ function _analyze_lambda_vars!(ctx, ex)
     end
     isempty(candidates) && return
 
-    state = DefUseState(ctx, candidates)
+    state = DefUseState(lambda_bindings.scope_id, ctx, candidates)
     @stm ex begin
         [K"lambda" _ _ body] -> du_visit!(ctx, state, body)
         [K"lambda" _ _ body rett] -> (du_visit!(ctx, state, body);

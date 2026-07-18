@@ -58,7 +58,16 @@ else # !windows
     if Sys.isapple()
         _environ() = unsafe_load(ccall(:_NSGetEnviron, Ptr{Ptr{Cstring}}, ()))
     else
-        _environ() = unsafe_load(cglobal(:environ, Ptr{Cstring}))
+        const _environ_ptr = Base.OncePerProcess{Ptr{Ptr{Cstring}}}() do
+            # Look up `environ` in the main executable, since if Julia is loaded
+            # via RTLD_DEEPBIND this may resolve to NULL in our own namespace.
+            # (see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=111413)
+            executable_handle = ccall(:jl_dlopen, Ptr{Cvoid}, (Ptr{Cchar}, Cint),
+                C_NULL, Libc.Libdl.RTLD_LAZY)
+            return Ptr{Ptr{Cstring}}(Libc.Libdl.dlsym(executable_handle, :environ))
+        end
+
+        _environ() = unsafe_load(_environ_ptr())
     end
 
     function access_env(onError::Function, var::AbstractString)
@@ -221,6 +230,7 @@ if Sys.iswindows()
 else # !windows
     function iterate(::EnvDict, i=0)
         envs = _environ()
+        envs == C_NULL && error("Failed to resolve `environ`.")
         while true
             envp = unsafe_load(envs, i + 1)
             envp == C_NULL && return nothing
