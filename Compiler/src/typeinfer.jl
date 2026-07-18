@@ -1027,7 +1027,7 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
     else
         inf_result = nothing
     end
-    update_valid_age!(caller, get_inference_world(interp), valid_worlds)
+    update_valid_age!(caller, get_inference_world(caller), valid_worlds)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
     return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited, inf_result))
@@ -1041,7 +1041,7 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, inf_r
     end
     effects = inf_result.ipo_effects
     codeinst = inf_result.ci
-    update_valid_age!(caller, get_inference_world(interp), inf_result.valid_worlds)
+    update_valid_age!(caller, get_inference_world(caller), inf_result.valid_worlds)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
     return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited, inf_result))
@@ -1116,7 +1116,7 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
                                     edgecycle::Bool, edgelimited::Bool)
     mresult = Future{MethodCallResult}()
     push!(caller.tasks, function get_infer_result(interp, caller)
-        update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
+        update_valid_age!(caller, get_inference_world(caller), frame.valid_worlds)
         isinferred = is_inferred(frame)
         effects = nothing
         call_result = nothing
@@ -1251,7 +1251,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
-    update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
+    update_valid_age!(caller, get_inference_world(caller), frame.valid_worlds)
     effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)

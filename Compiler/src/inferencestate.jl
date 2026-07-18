@@ -353,12 +353,13 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     # values through every method that takes `interp`).
     interp::AbstractInterpreter
 
-    # Cached `InferenceParams(interp).max_methods`. The constructor specializes on
-    # the concrete interpreter type, so reading this field from abstractly-compiled
-    # code avoids a method-table backedge on the extensible AbstractInterpreter
-    # interface (extending which, e.g. by loading REPL/JET, would otherwise
-    # invalidate large parts of the compiled compiler).
-    max_methods::Int
+    # Values cached from the AbstractInterpreter interface at construction. The
+    # constructor specializes on the concrete interpreter type, so reading these
+    # fields from abstractly-compiled code avoids method-table backedges on the
+    # extensible interface (extending which, e.g. by loading REPL/JET, would
+    # otherwise invalidate large parts of the compiled compiler).
+    max_methods::Int # InferenceParams(interp).max_methods
+    world::UInt      # get_inference_world(interp)
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState{I}(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
@@ -441,7 +442,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
-            interp, InferenceParams(interp).max_methods)
+            interp, InferenceParams(interp).max_methods, world)
 
         # some more setups
         if !iszero(cache_mode & CACHE_MODE_GLOBAL)
@@ -480,6 +481,7 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
     parentid::Int
     interp::AbstractInterpreter # see comment on `InferenceState.interp`
     const max_methods::Int # see comment on `InferenceState.max_methods`
+    const world::UInt      # see comment on `InferenceState.world`
 
     function IRInterpretationState{I}(
             interp::I, spec_info::SpecInfo, ir::IRCode,
@@ -511,7 +513,7 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
         return new{I}(spec_info, ir, mi, valid_worlds,
                 curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
                 ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, interp,
-                InferenceParams(interp).max_methods)
+                InferenceParams(interp).max_methods, get_inference_world(interp))
     end
 end
 
@@ -1091,6 +1093,12 @@ end
 # ===========
 
 const AbsIntState{I<:AbstractInterpreter} = Union{InferenceState{I}, IRInterpretationState{I}}
+
+# The inference world cached at state construction (see the comment on
+# `InferenceState.world`). Equal to `get_inference_world(sv.interp)`, but reading
+# the field from abstractly-compiled code avoids a method-table backedge on the
+# extensible AbstractInterpreter interface.
+get_inference_world(sv::AbsIntState) = sv.world
 
 function print_callstack(frame::AbsIntState)
     print("=================== Callstack: ==================\n")
