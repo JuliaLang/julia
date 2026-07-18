@@ -360,6 +360,9 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     # otherwise invalidate large parts of the compiled compiler).
     inf_params::InferenceParams # InferenceParams(interp)
     world::UInt                 # get_inference_world(interp)
+    inf_cache::InferenceCache # get_inference_cache(interp)
+    cache_owner::Any            # cache_owner(interp)
+    method_table::MethodTableView # method_table(interp)
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState{I}(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
@@ -442,7 +445,8 @@ mutable struct InferenceState{I<:AbstractInterpreter}
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
-            interp, InferenceParams(interp), world)
+            interp, InferenceParams(interp), world,
+            get_inference_cache(interp), cache_owner(interp), method_table(interp))
 
         # some more setups
         if !iszero(cache_mode & CACHE_MODE_GLOBAL)
@@ -482,6 +486,9 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
     interp::AbstractInterpreter # see comment on `InferenceState.interp`
     const inf_params::InferenceParams # see comment on `InferenceState.inf_params`
     const world::UInt                 # see comment on `InferenceState.world`
+    const inf_cache::InferenceCache # see comment on `InferenceState.inf_cache`
+    const cache_owner::Any            # see comment on `InferenceState.cache_owner`
+    const method_table::MethodTableView # see comment on `InferenceState.method_table`
 
     function IRInterpretationState{I}(
             interp::I, spec_info::SpecInfo, ir::IRCode,
@@ -513,7 +520,8 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
         return new{I}(spec_info, ir, mi, valid_worlds,
                 curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
                 ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, interp,
-                InferenceParams(interp), get_inference_world(interp))
+                InferenceParams(interp), get_inference_world(interp),
+                get_inference_cache(interp), cache_owner(interp), method_table(interp))
     end
 end
 
@@ -1101,6 +1109,9 @@ const AbsIntState{I<:AbstractInterpreter} = Union{InferenceState{I}, IRInterpret
 # AbstractInterpreter interface.
 InferenceParams(sv::AbsIntState) = sv.inf_params
 get_inference_world(sv::AbsIntState) = sv.world
+get_inference_cache(sv::AbsIntState) = sv.inf_cache
+cache_owner(sv::AbsIntState) = sv.cache_owner
+method_table(sv::AbsIntState) = sv.method_table
 
 function print_callstack(frame::AbsIntState)
     print("=================== Callstack: ==================\n")

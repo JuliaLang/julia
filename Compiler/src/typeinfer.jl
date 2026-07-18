@@ -230,7 +230,7 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
         end
     end
     if !iszero(caller.cache_mode & CACHE_MODE_LOCAL)
-        push!(get_inference_cache(interp), result)
+        push!(get_inference_cache(caller), result)
     end
     nothing
 end
@@ -966,7 +966,7 @@ function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
 end
 
 function is_same_frame(interp::I, mi::MethodInstance, frame::InferenceState) where {I<:AbstractInterpreter}
-    return mi === frame_instance(frame) && cache_owner(interp) === cache_owner(frame.interp::I)
+    return mi === frame_instance(frame) && cache_owner(interp) === cache_owner(frame)
 end
 
 function poison_callstack!(infstate::InferenceState, topmost::InferenceState)
@@ -1023,7 +1023,7 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
         inf_result.ipo_effects = effects
         inf_result.ci_as_edge = inf_result.ci = codeinst
         inf_result.valid_worlds = valid_worlds
-        push!(get_inference_cache(interp), inf_result)
+        push!(get_inference_cache(caller), inf_result)
     else
         inf_result = nothing
     end
@@ -1099,7 +1099,7 @@ function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState, @nosp
         return existing_edge
     end
     mi = sv.linfo
-    ci = CodeInstance(mi, cache_owner(interp), Any, Any, nothing, nothing, zero(Int32),
+    ci = CodeInstance(mi, cache_owner(sv), Any, Any, nothing, nothing, zero(Int32),
         min_world, max_world, zero(UInt32), nothing, nothing, edges)
     if max_world == typemax(UInt)
         # if we can record all of the backedges in the global reverse-cache,
@@ -1229,7 +1229,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         result.ci = if ci_from_engine !== nothing
                 ci_from_engine
             else
-                ccall(:jl_new_codeinst_uninit, Any, (Any, Any), mi, cache_owner(interp))::CodeInstance
+                ccall(:jl_new_codeinst_uninit, Any, (Any, Any), mi, cache_owner(caller))::CodeInstance
             end
         frame = InferenceState(result, cache_mode, interp) # always use the cache for edge targets
         if frame === nothing

@@ -801,7 +801,7 @@ function edge_matches_sv(interp::I, frame::AbsIntState,
     # Frames in one callstack share the same interpreter type (enforced by the
     # `AbsIntState{I}` parameter), but distinct instances of that type may still
     # have different cache owners.
-    if isa(frame, InferenceState) && cache_owner(frame.interp::I) !== cache_owner(interp)
+    if isa(frame, InferenceState) && cache_owner(frame) !== cache_owner(interp)
         return false
     end
     if !hardlimit || InferenceParams(interp).ignore_recursion_hardlimit
@@ -1439,7 +1439,7 @@ function const_prop_call(interp::AbstractInterpreter,
     end
     argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
     argtypes = get_nospecializeinfer_argtypes(argtypes, cache_argtypes, mi.def::Method)
-    inf_result = constprop_cache_lookup(𝕃ᵢ, mi, argtypes, get_inference_cache(interp))
+    inf_result = constprop_cache_lookup(𝕃ᵢ, mi, argtypes, get_inference_cache(sv))
     if inf_result === missing
         # a previous const-prop attempt hit a cycle and produced a limited result;
         # don't re-attempt the same work that would lead to the same limited outcome
@@ -1481,7 +1481,7 @@ function const_prop_call(interp::AbstractInterpreter,
         @assert callstack[end] === frame && length(callstack) == frame.frameid
         pop!(callstack)
         # add to the cache to record that this will always fail
-        push!(get_inference_cache(interp), inf_result)
+        push!(get_inference_cache(sv), inf_result)
         return nothing
     end
     if inf_result.tombstone
@@ -2526,7 +2526,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
         nargtype = Tuple{ft, nargtype.parameters...}
         argtype = Tuple{ft, argtype.parameters...}
-        matched, valid_worlds = findsup(lookupsig, method_table(interp))
+        matched, valid_worlds = findsup(lookupsig, method_table(sv))
         matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         update_valid_age!(sv, our_world, valid_worlds)
         method = matched.method
