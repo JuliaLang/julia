@@ -149,16 +149,18 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         inner_vcx = vcx.toplevel ? with(vcx; inner_cond=true) : vcx
         @stm st begin
             [K"if" [K"generated"] t f] ->
-                vst1(inner_vcx, t) & vst1_else(inner_vcx, f)
+                vst1(inner_vcx, t) & vst1(inner_vcx, f)
             [K"if" [K"generated"] _...] ->
                 @fail(st, "if-generated requires both true and false cases")
             [K"if" cond t] ->
                 vst1(vcx, cond) & vst1(inner_vcx, t)
             [K"if" cond t f] ->
-                vst1(vcx, cond) & vst1(inner_vcx, t) & vst1_else(inner_vcx, f)
+                vst1(vcx, cond) & vst1(inner_vcx, t) & vst1(inner_vcx, f)
             _ -> @fail(st, "expected (if cond body) or (if cond body else)")
         end
     end
+    [K"elseif" cond t] -> vst1(vcx, cond) & vst1(vcx, t)
+    [K"elseif" cond t f] -> vst1(vcx, cond) & vst1(vcx, t) & vst1(vcx, f)
     [K"try" _...] -> vst1_try(vcx, st)
     [K"function" _...] -> vst1_function(vcx, st)
     [K"call" _...] -> vst1_call(vcx, st)
@@ -219,11 +221,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         # TODO: can we restrict xs[2:2:end] to identifier or .identifier?
         all(vst1, vcx, xs[2:2:end]) &
         all(vst1, vcx, xs[1:2:end])
-    [K"<:" x] -> vst1(vcx, x)
-    [K">:" x] -> vst1(vcx, x)
-    [K"<:" x y] -> vst1(vcx, x) & vst1(vcx, y)
-    [K">:" x y] -> vst1(vcx, x) & vst1(vcx, y)
-    [K"-->" xs...] -> all(vst1, vcx, xs)
+    [K"<:" xs...] -> all(vst1_call_arg, vcx, xs)
+    [K">:" xs...] -> all(vst1_call_arg, vcx, xs)
+    [K"-->" xs...] -> all(vst1_call_arg, vcx, xs)
     [K"::" x y] -> vst1(vcx, x) & vst1(vcx, y)
     # TODO: inner_cond on args[2:end]
     [K"&&" xs...] -> all(vst1, vcx, xs)
@@ -268,8 +268,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
     [K"lambda" [K"block" b1...] [K"block" b2...] _] ->
-        all(vst1_ident, vcx, b1) &
-        all(vst1_ident, vcx, b2) &
+        all(vst1_ident, vcx, b1; lhs=true) &
+        all(vst1_ident, vcx, b2; lhs=true) &
         (kind(st[3]) === K"->" ? vst1_lam(vcx, st[3]) :
             vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), st[3]))
     [K"softscope" _] -> pass()
@@ -431,7 +431,8 @@ function vst1_importpath(vcx, st; dots_ok)
             end
             continue
         end
-        ok = ok & vst1_ident(vcx, c)
+        # syntax todo: lhs should probably not be true here
+        ok = ok & (vst1_ident(vcx, c).ok ? pass() : vst1_ident(vcx, c; lhs=true))
         seen_first = true
     end
     return !seen_first ? @fail(st, "expected identifier in `importpath`") : ok
@@ -445,15 +446,6 @@ vst1_tuple(vcx, st) = @stm st begin
         all(vst1_call_arg, vcx, args)
     [K"tuple" xs...] -> all(vst1_splat_or_val, vcx, xs)
     _ -> @fail(st, "malformed tuple")
-end
-
-vst1_else(vcx, st) = @stm st begin
-    [K"elseif" cond t] -> vst1(vcx, cond) &
-        vst1(vcx, t)
-    [K"elseif" cond t f] -> vst1(vcx, cond) &
-        vst1(vcx, t) &
-        vst1_else(vcx, f)
-    _ -> vst1(vcx, st)
 end
 
 # TODO: disallow (has-unmatched-symbolic-goto? tryb)
@@ -625,6 +617,7 @@ vst1_lam_lhs(vcx, st) = @stm st begin
     [K"block" x p] -> _calldecl_positionals(vcx, SyntaxList(x), true) &
         @stm p begin
             [K"=" kw v] -> vst1_param(vcx, kw) & vst1(vcx, v)
+            [K"kw" kw v] -> vst1_param(vcx, kw) & vst1(vcx, v)
             [K"..." kw] -> vst1_param_varkw(vcx, kw)
             _ -> vst1_param(vcx, p)
         end
@@ -984,7 +977,7 @@ vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begi
         vst1(vcx, x) & vst1(vcx, y)
     [K"ref" x is...] ->
         in_const ? @fail(st, "cannot declare this form constant") :
-        vst1(vcx, x) & all(vst1_splat_or_val, vcx, is)
+        vst1(vcx, x) & all(vst1_call_arg, vcx, is)
     [K"curly" x tvs...] ->
         vst1_ident(vcx, x; lhs=true) & all(vst1_typevar_decl, vcx, tvs)
 
@@ -1012,8 +1005,7 @@ vst1_arraylike(vcx, st) = @stm st begin
         no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
     [K"ncat" [K"Value"] xs...] ->
         no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
-    [K"ref" x is...] -> vst1(vcx, x) &
-        no_assignment(is, "[ ... ]") & all(vst1_splat_or_val, vcx, is)
+    [K"ref" x is...] -> vst1(vcx, x) & all(vst1_call_arg, vcx, is)
     [K"row" xs...] ->
         no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
     [K"nrow" [K"Value"] xs...] ->
@@ -1245,13 +1237,16 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"scope_block" xs...] -> all(vst2, vcx, xs)
     [K"=" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
     [K"assign_or_constdecl_if_global" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
+    [K"global_if_global" x] -> vst2_ident_lhs(vcx, x)
     [K"constdecl" l] -> vst2_ident_lhs(vcx, l)
     [K"constdecl" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
     [K"global" x] -> vst2_ident_lhs(vcx, x)
     [K"local" x] -> vst2_ident_lhs(vcx, x)
     [K"decl" x t] -> vst2_ident(vcx, x) & vst2(vcx, t)
     [K"if" cond t] -> vst2(vcx, cond) & vst2(vcx, t)
-    [K"if" cond t f] ->  vst2(vcx, cond) & vst2(vcx, t) & vst2_else(vcx, f)
+    [K"if" cond t f] -> vst2(vcx, cond) & vst2(vcx, t) & vst2(vcx, f)
+    [K"elseif" cond t] -> vst2(vcx, cond) & vst2(vcx, t)
+    [K"elseif" cond t f] -> vst2(vcx, cond) & vst2(vcx, t) & vst2(vcx, f)
     [K"&&" xs...] -> all(vst2, vcx, xs)
     [K"||" xs...] -> all(vst2, vcx, xs)
     [K"symbolicblock" [K"symboliclabel"] body] -> vst2(vcx, body)
@@ -1360,12 +1355,6 @@ vst2_lam(vcx, st) = @stm st begin
         vst2(vcx, body) &
         vst2(vcx, rett)
     _ -> @fail(st, "malformed lambda")
-end
-
-vst2_else(vcx, st) = @stm st begin
-    [K"elseif" cond t] -> vst2(vcx, cond) & vst2(vcx, t)
-    [K"elseif" cond t f] -> vst2(vcx, cond) & vst2(vcx, t) & vst2_else(vcx, f)
-    _ -> vst2(vcx, st)
 end
 
 vst2_typevar(vcx, st) = @stm st begin

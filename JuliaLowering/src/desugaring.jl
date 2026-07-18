@@ -62,7 +62,7 @@ function is_effect_free(ex)
     # TODO: metas
     is_literal(k) || is_identifier_like(ex) || k == K"Symbol" ||
         k == K"inert" || k == K"syntaxinert" || k == K"top" ||
-        k == K"core" || k == K"Value"
+        k == K"core" || k == K"Value" || k == K"nothing"
     # flisp also includes `a.b` with simple `a`, but this seems like a bug
     # because this calls the user-defined getproperty?
 end
@@ -673,8 +673,8 @@ function process_indices(sctx::StatementListCtx, arr, idxs)
         is_splat = kind(idx0) == K"..."
         val = replace_beginend(sctx, is_splat ? idx0[1] : idx0,
                                arr, n, splats, n == length(idxs))
-        # TODO: kwarg?
-        idx = !has_splats || is_simple_atom(sctx, val) ? val : emit_assign_tmp(sctx, val)
+        idx = kind(val) === K"kw" || !has_splats || is_simple_atom(sctx, val) ?
+            val : emit_assign_tmp(sctx, val)
         if is_splat
             push!(splats, idx)
         end
@@ -1459,7 +1459,9 @@ function expand_update_operator(ctx, ex)
             lhs = emit_assign_tmp(stmts, ctx, lhs)
         end
     else
-        if kind(lhs) == K"tuple" && contains_ssa_binding(ctx, lhs)
+        if kind(lhs) == K"tuple" && contains_unquoted(
+                e->kind(e) == K"BindingId" && get_binding(ctx, e).is_ssa,
+                lhs)
             # If remove_argument_side_effects needed to replace an expression
             # with an ssavalue, then it can't be updated by assignment
             # (JuliaLang/julia#30062)
@@ -1501,15 +1503,16 @@ end
 
 # Expand condition in, eg, `if` or `while`
 function expand_condition(ctx, ex)
-    isblock = kind(ex) == K"block"
+    isblock = kind(ex) == K"block" && numchildren(ex) >= 1
     test = isblock ? ex[end] : ex
     k = kind(test)
     if k == K"&&" || k == K"||"
         # `||` and `&&` get special lowering so that they compile directly to
         # jumps rather than first computing a bool and then jumping.
         cs = expand_cond_children(ctx, test)
-        @jl_assert length(cs) > 1 ex
-        test = newnode(ctx, test, k, cs)
+        test = isempty(cs) ? (@ast ctx ex (k === K"&&")::K"Bool") :
+            length(cs) == 1 ? (@ast ctx ex cs[1]) :
+            newnode(ctx, test, k, cs)
     else
         test = expand_forms_2(ctx, test)
     end
@@ -2437,9 +2440,9 @@ function prepend_function_body(ctx, body, ex)
             ex_est = @stm ex begin
                 [K"meta" [K"Symbol"] n] ->
                     @ast ctx ex [K"meta" "nkw"::K"Identifier" n]
-                # TODO: need to handle destructuring arg assignments
-                [K"block" _... [K"nothing"]] ->
-                    newleaf(ctx, ex, K"Value", nothing)
+                # destructured arg assignments
+                [K"block" stmts... [K"nothing"]] ->
+                    @ast ctx ex [K"block" stmts...]
                 _ -> @jl_assert false (ex, "unexpected prepend_function_body")
             end
             @ast ctx body [K"_generated_body"
@@ -2481,13 +2484,22 @@ function _untyped_arg(a)
     @ast a._graph a [K"::" aname "Any"::K"core"]
 end
 
-function _expr_arg_sym(a)
-    @jl_assert kind(a) === K"::" || kind(a) === K"_typevar" a
-    sym = setattr(a[1], :kind, K"Symbol")
-    if kind(a[1]) === K"Placeholder"
-        setattr!(sym, :name_val, UNUSED)
+function _expr_arg_syms(args)
+    out = SyntaxList(args.graph)
+    for (i, a) in enumerate(args)
+        @jl_assert kind(a) === K"::" || kind(a) === K"_typevar" a
+        sym = setattr(a[1], :kind, K"Symbol")
+        if kind(a[1]) === K"Placeholder"
+            setattr!(sym, :name_val, UNUSED)
+        elseif (a[1].context::SyntaxContext).internal && i > 1
+            # we lose context, so deduplicate names (ignoring #self# to be
+            # safe).  HACK: destructured args must match the desugared rhs
+            n = sym.name_val::String
+            contains(n, "destructured") || setattr!(sym, :name_val, n*"#"*string(i))
+        end
+        push!(out, sym)
     end
-    sym
+    out
 end
 
 # The Julia runtime associates the code generator with the non-generated method
@@ -2530,8 +2542,8 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
                 # (TODO: More truncation. We certainly don't want to store the
                 #  source file either.)
                 sourceref(src)::K"Value"
-                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, argl)...]
-                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, sparams)...]]]
+                [K"call" "svec"::K"core" _expr_arg_syms(argl)...]
+                [K"call" "svec"::K"core" _expr_arg_syms(sparams)...]]]
             body[2]]
         method_def_expr(ctx, src, mtable, sparams, argl, nongen_body, rett)
     end
@@ -2642,7 +2654,15 @@ function expand_kw_args(ctx, kws)
     return (kw_decls, kw_names, kw_syms, kw_defaults, restkw_list)
 end
 
-function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, pos_va)
+# Assumes `expand_function_arg` has run.  Note that user-supplied
+# "Vararg"::K"Identifier" is assumed to resolve to Core.Vararg
+is_vararg_type_expr(st) = @stm st begin
+    [K"curly" x _...] -> is_vararg_type_expr(x)
+    [K"where" x _...] -> is_vararg_type_expr(x)
+    _ -> kind(st) in KSet"core Identifier" && st.name_val::String == "Vararg"
+end
+
+function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     kws = argl[end]
     pargl = argl[1:end-1]
     @jl_assert kind(kws) === K"parameters" src
@@ -2657,6 +2677,11 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
 
     # Positional names and splatted vararg so we can `(call f forward_pargl...)`
     forward_pargl = let l = mapindex(pos_decls, 1)
+        pos_va = @stm argl[end-1] begin
+            [K"kw" [K"::" _... t] _...] -> is_vararg_type_expr(t)
+            [K"::" _... t] -> is_vararg_type_expr(t)
+            _ -> false
+        end
         pos_va && (l[end] = @ast ctx l[end] [K"..." l[end]])
         l
     end
@@ -2665,11 +2690,12 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
     pos_sparams = used_typevars(pargl, sparams)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : mtable.name_val,
-        mangled = string(startswith(n, '#') ? "" : "#kw_body#", n, "#")
+        mangled = reserve_module_binding_i(
+            ctx.layer.mod,
+            string(startswith(n, '#') ? "" : "#kw_body#", n, "#"))
         # probably not desirable, but fixes eval-into-closed-module
-        a1 = setattr(mtable, :context,
-                     escape_layer(mtable.context::SyntaxContext, true))
-        newsym(ctx, a1, reserve_module_binding_i(syntax_module(a1), mangled))
+        setattr!(newsym(ctx, mtable, mangled),
+                 :context, escape_layer(mtable.context::SyntaxContext, true))
     end
     # (1) Body method.  This contains the actual function body, and requires
     # every possible default to be filled.  `rett` is only passed here since it
@@ -2711,7 +2737,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
                 !any(val->contains_unquoted(e->kind(e) == K"=", val), kw_defaults)
         kw_temps = use_ssa_kw_temps ?
             mapsyntax(x->ssavar(ctx, x, x.name_val), kw_names) : kw_names
-        tempslot = newsym(ctx, kws, "kwtmp")
+        tempslot = newsym(ctx, kws, "#kwtmp#")
         keyword_only_spnames = mapindex(unused_typevars(pargl, sparams), 1)
 
         kw_assigns = SyntaxList(ctx.graph)
@@ -2797,22 +2823,24 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
     ]
 end
 
-_lower_destructuring_arg(stmts, ctx, ex) = @stm ex begin
-    [K"tuple" _...] -> let arg2 = newsym(ctx, ex, "destructured")
+# string mangling is necessary until generated functions know about scope layers
+# (hack, see _expr_arg_syms).
+_lower_destructuring_arg(stmts, ctx, i, ex) = @stm ex begin
+    [K"tuple" _...] -> let arg2 = newsym(ctx, ex, "destructured#" * string(i))
         push!(stmts, @ast(ctx, ex, [K"local"(meta=CompileHints(:is_destructured_arg, true))
             [K"=" ex arg2]]))
         arg2
     end
-    [K"::" x t] -> @ast ctx ex [K"::" _lower_destructuring_arg(stmts, ctx, x) t]
-    [K"kw" x t] -> @ast ctx ex [K"kw" _lower_destructuring_arg(stmts, ctx, x) t]
-    [K"..." x]  -> @ast ctx ex [K"..." _lower_destructuring_arg(stmts, ctx, x)]
+    [K"::" x t] -> @ast ctx ex [K"::" _lower_destructuring_arg(stmts, ctx, i, x) t]
+    [K"kw" x t] -> @ast ctx ex [K"kw" _lower_destructuring_arg(stmts, ctx, i, x) t]
+    [K"..." x]  -> @ast ctx ex [K"..." _lower_destructuring_arg(stmts, ctx, i, x)]
     _ -> ex
 end
 
 function lower_destructuring_args!(ctx, args)
     stmts = SyntaxList(ctx.graph)
     for (i, a) in enumerate(args)
-        args[i] = _lower_destructuring_arg(stmts, ctx, a)
+        args[i] = _lower_destructuring_arg(stmts, ctx, i, a)
     end
     # return `nothing` from the assignments (issue #26518)
     !isempty(stmts) && push!(stmts, @ast ctx stmts[1] (::K"nothing"))
@@ -2901,12 +2929,7 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     end
     sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
-        pos_va = @stm raw_args[end-1] begin
-            [K"kw" [K"..." _] _...] -> true
-            [K"..." _] -> true
-            _ -> false
-        end
-        keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, pos_va)
+        keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     else
         @ast ctx src [K"block"
             (overlay || kind(mtable) === K"nothing") ? nothing : [K"function_decl" mtable]
@@ -3284,7 +3307,7 @@ function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres
     @stm sig begin
         [K"::" x rett] -> let
             call2, ctor_self = rewrite_ctor_sig(
-                ctx, x, tname, global_tname, struct_typevars, wheres)
+                ctx, x, tname, global_tname, struct_typevars, SyntaxList(ctx))
             sig2 = @ast(ctx, sig, [K"::" call2 rett])
         end
         # recognize `(_::(Type{X{T}} where T))(...)` as an inner-style
@@ -3415,7 +3438,8 @@ function _rewrite_ctor_new_calls(ctx, ex, global_struct_name, ctor_sparams,
         elseif n_type_nonsplat > length(struct_typevars)
             throw(LoweringError(ex[1], "too many type parameters specified in `new{...}`"))
         end
-        @ast ctx ex[1] [K"curly" global_struct_name new_type_params...]
+        isempty(new_type_params) ? global_struct_name :
+            @ast ctx ex[1] [K"curly" global_struct_name new_type_params...]
     elseif !isnothing(ctor_self)
         # new(...) in constructors
         ctor_self
@@ -4022,7 +4046,13 @@ end
 
 function expand_importpath(ctx, path)
     @jl_assert kind(path) == K"importpath" path
-    setattr(path, :kind, K".")
+    @ast ctx path [K"." mapsyntax(_unplaceholder, children(path))...]
+end
+
+function _unplaceholder(st)
+    k = kind(st)
+    k === K"Placeholder" ? setattr(st, :kind, K"Identifier") :
+        k === K"Identifier" ? st : @jl_assert false st
 end
 
 # importer does not obey hygiene.  Doesn't bother with relayering any imported
@@ -4053,8 +4083,8 @@ function expand_import_or_using(ctx, ex)
     for spec in paths
         if kind(spec) == K"as"
             @jl_assert numchildren(spec) == 2 spec
-            @jl_assert kind(spec[2]) == K"Identifier" spec
-            path = @ast ctx spec [K"as" expand_importpath(ctx, spec[1]) spec[2]]
+            s2 = _unplaceholder(spec[2])
+            path = @ast ctx spec [K"as" expand_importpath(ctx, spec[1]) s2]
         else
             path = expand_importpath(ctx, spec)
         end
@@ -4275,7 +4305,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"function"
         if numchildren(ex) == 1
-            return @ast ctx ex [K"block" [K"function_decl" ex[1]] ex[1]]
+            return @ast ctx ex [K"block"
+                [K"global_if_global" ex[1]] [K"function_decl" ex[1]] ex[1]]
         end
         sig, wheres = flatten_wheres(ex[1])
         name, args, rett = @stm sig begin

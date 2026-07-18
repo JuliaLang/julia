@@ -1127,3 +1127,14 @@ end
         Base.delete_binding(test_mod, :old_hyg_struct_tv_G)
     end
 end
+
+@testset "@isdefined sees imported globals" begin
+    # implicit Core/Base visibility and `using`-provided names count as defined
+    # at module scope
+    m = Module(:IsdefM)
+    @test JuliaLowering.include_string(m, "@isdefined Core") === true
+    @test JuliaLowering.include_string(m, "@isdefined Base") === true
+    @test JuliaLowering.include_string(m, "@isdefined sin") === true
+    @test JuliaLowering.include_string(m, "@isdefined not_a_thing_anywhere") === false
+    @test JuliaLowering.include_string(m, "f() = @isdefined(Core); f()") === true
+end

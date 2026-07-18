@@ -93,6 +93,25 @@ end
 @test test_mod.f_global_method_capturing_local() == 2
 @test test_mod.f_global_method_capturing_local() == 3
 
+# quote interpolated AST
+@test JuliaLowering.include_string(test_mod, """
+let x = Symbol("foo"), xq = QuoteNode(x)
+    global function f_global_method_capturing_sym()
+        x, xq
+    end
+    f_global_method_capturing_sym()
+end
+""") == (:foo, QuoteNode(:foo))
+@test JuliaLowering.include_string(test_mod, """
+global dont_resolve = 1
+let x = GlobalRef(@__MODULE__, :dont_resolve), xq = QuoteNode(x)
+    global function f_global_method_capturing_gr()
+        x, xq
+    end
+    f_global_method_capturing_gr()
+end
+""") == (GlobalRef(test_mod, :dont_resolve), QuoteNode(GlobalRef(test_mod, :dont_resolve)))
+
 # Closure with multiple methods depending on local variables
 f_closure_local_var_types = JuliaLowering.include_string(test_mod, """
 let T=Int, S=Float64
@@ -1207,3 +1226,256 @@ function f_sp_in_sig_in_lam_in_optarg(
 end
 f_sp_in_sig_in_lam_in_optarg(1.)(2)
 """) == 2
+
+@testset "sparam captured into static_eval" begin
+    @test JuliaLowering.include_string(test_mod, """
+    function f_capt_sp_in_ccall_rett(v::Vector{T}) where {T}
+        g = () -> ccall(:memset, Ptr{T}, (Ptr{Cvoid}, Cint, Csize_t), v, 0, 0)
+        g() isa Ptr
+    end
+    f_capt_sp_in_ccall_rett([1, 2])
+    """) == true
+    @test JuliaLowering.include_string(test_mod, """
+    function f_capt_sp_in_ccall_argtype(v::Vector{T}) where {T}
+        g = () -> ccall(:memset, Ptr{Cvoid}, (Ptr{T}, Cint, Csize_t), v, 0, 0)
+        g() isa Ptr
+    end
+    f_capt_sp_in_ccall_argtype([1, 2])
+    """) == true
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    function f_local_in_ccall_in_closure(v)
+        T = typeof(v)
+        g = () -> ccall(:memset, Ptr{T}, (Ptr{Cvoid}, Cint, Csize_t), v, 0, 0)
+        g()
+    end
+    """)
+end
+
+# A function definition is treated as an assignment to a name
+@testset "inner functions sharing names" begin
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_midfunc_redefines_inner(exec_mid)
+            function inner(); 1; end
+            function mid()
+                function inner(); 2; end
+            end
+            exec_mid && mid()
+            inner
+        end
+    (f_midfunc_redefines_inner(false)(), f_midfunc_redefines_inner(true)())
+    end
+    """) == (1,2)
+
+    # Inner methods in control flow are known to be buggy/discouraged
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_if_redefines_inner(cond)
+            function inner(); 1; end
+            if cond
+                function inner(); 2; end
+            end
+            inner
+        end
+    (f_if_redefines_inner(false)(), f_if_redefines_inner(true)())
+    end
+    """) == (2,2)
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_let_redefines_inner()
+            local a,b
+            a = function inner(); 1; end
+            let
+                b = function inner(); 2; end
+            end
+            a(), b(), inner()
+        end
+    f_let_redefines_inner()
+    end
+    """) == (2,2,2)
+
+    # like normal locals, reassign doesn't happen if you add a local decl
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_midfunc_redefines_inner(exec_mid)
+            function inner(); 1; end
+            function mid()
+                local inner
+                function inner(); 2; end
+            end
+            exec_mid && mid()
+            inner
+        end
+    (f_midfunc_redefines_inner(false)(), f_midfunc_redefines_inner(true)())
+    end
+    """) == (1,1)
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_let_local_shadows_inner()
+            local a,b
+            a = function inner(); 1; end
+            let
+                local inner
+                b = function inner(); 2; end
+            end
+            a(), b(), inner()
+        end
+    f_let_local_shadows_inner()
+    end
+    """) == (1,2,1)
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function multimethod_inner(arg)
+            function inner(x::Int); x; end
+            function inner(x::Float64); x; end
+            (length(methods(inner)), inner(arg))
+        end
+        multimethod_inner(1), multimethod_inner(1.0)
+    end
+    """) == ((2, 1), (2, 1.0))
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function multimethod_let_inner(arg)
+            function inner(x::Int); x; end
+            let
+                function inner(x::Float64); x; end
+            end
+            (length(methods(inner)), inner(arg))
+        end
+        multimethod_let_inner(1), multimethod_let_inner(1.0)
+    end
+    """) == ((2, 1), (2, 1.0))
+    # reassign does not add method
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_mid_does_not_add_method(exec_mid)
+            function inner(x::Int); x; end
+            function mid()
+                function inner(x::Float64); x; end
+            end
+            exec_mid && mid()
+            (length(methods(inner)), inner(exec_mid ? 123.0 : 123))
+        end
+    (f_mid_does_not_add_method(false), f_mid_does_not_add_method(true))
+    end
+    """) == ((1, 123), (1, 123.0))
+
+    # Closure info is keyed on (binding_id, lambda_id), so a name reassigned inside a
+    # *nested* function is a genuinely distinct closure type.  The cases above use
+    # non-capturing closures; these check that distinct types with *different capture
+    # sets* are kept separate (the case where a merged type would be most wrong).
+    @testset "(AI) inner functions with differing captures across lambdas" begin
+        # `inner` (in `f`) captures only `a`; the redefinition (in `mid`) captures
+        # both `a` and `b`.  `v1` observes the first type, `v2`/`inner` the second.
+        @test JuliaLowering.include_string(test_mod, """
+        begin
+            function f_diffcap(a, b)
+                inner() = a
+                v1 = inner
+                function mid()
+                    inner() = a + b
+                end
+                mid()
+                v2 = inner
+                (v1(), v2())
+            end
+            f_diffcap(1, 10)
+        end
+        """) == (1, 11)
+
+        # The two definitions really are separate closure *types*.
+        @test JuliaLowering.include_string(test_mod, """
+        begin
+            function f_diffcap_types(a, b)
+                inner() = a
+                t1 = typeof(inner)
+                function mid()
+                    inner() = a + b
+                end
+                mid()
+                t1 === typeof(inner)
+            end
+            f_diffcap_types(1, 10)
+        end
+        """) == false
+
+        # Static-parameter captures are also keyed per (name, lambda): `g` in `f`
+        # captures only `T`, while the redefinition in `mid` captures both `T` and
+        # `S`.  A shared closure type would merge these capture sets.
+        @test JuliaLowering.include_string(test_mod, """
+        begin
+            function f_sp_redef(::Type{T}) where {T}
+                g() = T
+                v1 = g
+                function mid(::Type{S}) where {S}
+                    g() = (T, S)
+                end
+                mid(Float64)
+                (v1(), g())
+            end
+            f_sp_redef(Int)
+        end
+        """) == (Int, (Int, Float64))
+
+        @test JuliaLowering.include_string(test_mod, """
+        let
+            function closure2(::Type{T}) where {T}
+                function f()
+                    T
+                end
+                f
+            end
+            closure2(Int)()
+
+            x2 = 2
+            function closure3(a)
+                b = "whatever"
+                f(c) = (a, b, c)
+                b = x2
+                return f
+            end
+            f = closure3(1)
+            f(3)
+        end
+        """) == (1,2,3)
+    end
+end
+
+@testset "captured type declarations" begin
+   JuliaLowering.include_string(test_mod, """
+   function f_boxed_typed_capture(v, k)
+       if k == -1
+           k::Int = maximum(v)
+       end
+       findall(x -> x >= k, v)
+   end
+   """)
+   @test test_mod.f_boxed_typed_capture([3, 1, 2], -1) == [1]
+   @test only(Base.return_types(test_mod.f_boxed_typed_capture, (Vector{Int}, Int))) ===
+       Vector{Int}
+
+   # declared types may reference locals in the outer function
+   JuliaLowering.include_string(test_mod, """
+   function f_boxed_sparam_typed(v::Vector{T}, k) where T
+       if k == -1
+           k::T = maximum(v)
+       end
+       findall(x -> x >= k, v)
+   end
+   function f_boxed_localvar_typed(v, k)
+       T = Int
+       if k == -1
+           k::T = maximum(v)
+       end
+       findall(x -> x >= k, v)
+   end
+   """)
+   @test test_mod.f_boxed_sparam_typed([3, 1, 2], -1) == [1]
+   @test only(Base.return_types(test_mod.f_boxed_sparam_typed, (Vector{Int}, Int))) ===
+       Vector{Int}
+   @test test_mod.f_boxed_localvar_typed([3, 1, 2], -1) == [1]
+   @test only(Base.return_types(test_mod.f_boxed_localvar_typed, (Vector{Int}, Int))) ===
+       Vector{Int}
+end

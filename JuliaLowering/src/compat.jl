@@ -57,10 +57,13 @@ function is_expr_value(st::SyntaxTree)
     return JuliaSyntax.is_literal(k) || k === K"Value"
 end
 
-# Most of the complexity here is LineNumberNode absorption logic: linenodes are
-# always considered provenance if unquoted, then removed in certain forms.  If
-# `src` is not an linenode, it is assumed to be a better provenance source, so
-# linenodes in `e` are not used for provenance (but still removed).
+# Adding more cases to this function is almost certainly wrong, since this
+# operates on arbitrary heads and arguments throughout macro expansion, not
+# well-formed syntax after expansion is done.  Most of the complexity here is
+# LineNumberNode absorption logic: linenodes are always considered provenance if
+# unquoted, then removed in certain forms.  If `src` is not an linenode, it is
+# assumed to be a better provenance source, so linenodes in `e` are not used for
+# provenance (but still removed).
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
     st = if e isa Symbol
         setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
@@ -119,6 +122,12 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
     return st._id, src
 end
 
+# @__doc__ is brittle
+_is_meta_doc_block(st) = @stm st begin
+    [K"block" [K"meta" [K"Identifier"]] _] -> st[1][1].name_val::String == "doc"
+    _ -> false
+end
+
 # `suppress_linenodes` is true if `st`'s parent knows `st` is an exception to
 # normal linenode rules.  It only applies to `st`, and not transitively to its
 # children.
@@ -156,7 +165,8 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
         # Macro authors are responsible for handling any linenodes that follow
         # the rules above (but the presence of optional linenodes can't be
         # counted upon).
-        need_lnns = head in (:block, :toplevel) && !suppress_linenodes
+        need_lnns = head in (:block, :toplevel) && !suppress_linenodes &&
+            !_is_meta_doc_block(st)
         for (i, c) in enumerate(children(st))
             need_lnns && push!(out.args, source_location(LineNumberNode, c))
             let suppress_c = i == 1 && (k == K"for" || k == K"let")
@@ -629,6 +639,8 @@ function est_to_dst(st::SyntaxTree)
          when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
              newleaf(g, st, K"nothing")
+        ([K"meta" s gen], when=get(s, :name_val, "")::String == "generated") ->
+            @ast g st [K"meta" setattr(s, :kind, K"Symbol") rec(gen)]
         [K"meta" syms...] ->
             @ast g st [K"meta" mapsyntax(
                 s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
@@ -639,6 +651,7 @@ function est_to_dst(st::SyntaxTree)
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
+        [K"lambda" args sps body] -> mknode(st, [args._id, sps._id, rec(body)._id])
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_expr::K"Value"
             [K"inert"(st[1]) ex]
@@ -664,15 +677,12 @@ function est_to_dst(st::SyntaxTree)
         end
         ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
         [K"cfunction" typ fptr rt at sym] -> let
-            # Identifier callables are scope-resolved against the outermost
-            # lowering layer (which corresponds to the method module used by
-            # `method.c`'s `jl_toplevel_eval`), so the IR carries a binding
-            # reference matching `@cfunction`'s runtime resolution. Other
-            # forms (e.g. function definitions) stay inert.
+            # A symbol in fptr[1] does not observe hygiene or local scopes, but
+            # treating this as a binding is better for e.g. JETLS.
             out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
-                          kind(fptr[1]) == K"Identifier"
-                ident = mkleaf(fptr[1])
-                # TODO: relayer if unhygienic
+                    kind(fptr[1]) == K"Identifier"
+                sc = fptr[1].context::SyntaxContext
+                ident = setattr!(mkleaf(fptr[1]), :mod, base_layer(sc).mod)
                 @ast g fptr [K"static_eval"(fptr) ident]
             else
                 rec(fptr)

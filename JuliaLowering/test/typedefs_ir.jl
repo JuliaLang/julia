@@ -1105,7 +1105,7 @@ struct X
 end
 
 ########################################
-# Error: User defined inner constructors without enough type params
+# Error: User defined inner constructors without enough type params {A}
 struct X{S,T}
     X() = new{A}()
 end
@@ -1114,6 +1114,18 @@ LoweringError:
 struct X{S,T}
     X() = new{A}()
 #         └────┘ ── too few type parameters specified in `new{...}`
+end
+
+########################################
+# Error: User defined inner constructors without enough type params {}
+struct X{S,T}
+    X() = new{}()
+end
+#---------------------
+LoweringError:
+struct X{S,T}
+    X() = new{}()
+#         └───┘ ── too few type parameters specified in `new{...}`
 end
 
 ########################################

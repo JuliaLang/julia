@@ -29,8 +29,6 @@ let
         "comprehension",
         "typed_comprehension",
         "comparison",
-        "<:",
-        ">:",
         "::",
         ".&&",
         ".||",
@@ -78,8 +76,6 @@ let
         "primitive",
         "module",
         "local-def",
-        "<:",
-        ">:",
         "::",
         "where",
         "curly",
@@ -99,6 +95,8 @@ let
         "export",
         "string",
         "&&",
+        "<:",
+        ">:",
         "-->",
         "&&",
         "||",
@@ -128,6 +126,8 @@ end
 @test vst1_ok(Expr(:-->, 1))
 @test vst1_ok(Expr(:-->, 1, 2))
 @test vst1_ok(Expr(:-->, 1, 2, 3))
+@test vst1_ok(Expr(:-->, Expr(:..., Expr(:tuple, 1, 2, 3))))
+@test vst1_ok(Expr(:-->, Expr(:kw, :foo, 1)))
 
 @test vst1_ok(Expr(:const, :a, 1))
 

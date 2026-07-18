@@ -551,7 +551,6 @@ Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, j
 void emit_specsig_to_fptr1(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc, unsigned return_roots,
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
-        size_t nargs,
         jl_codegen_output_t &out,
         Value *target) JL_CANSAFEPOINT;
 Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci,

@@ -142,6 +142,7 @@ function _register_kinds()
             # like v = val, except that if `v` turns out global (either
             # implicitly or by explicit `global`), it gains an implicit `const`
             "assign_or_constdecl_if_global"
+            "global_if_global"
             "moved_local"
             "label"
             "trycatchelse"

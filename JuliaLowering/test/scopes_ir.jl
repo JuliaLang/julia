@@ -382,16 +382,16 @@ function f()
 end
 
 ########################################
-# @isdefined with defined variables
+# @isdefined with local and global variables
 let x = 1
-    @isdefined x
-    @isdefined y
+    @isdefined(x), @isdefined(y)
 end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   (call core.isdefinedglobal TestMod :y false)
-4   (return %₃)
+3   (call core.isdefinedglobal TestMod :y)
+4   (call core.tuple true %₃)
+5   (return %₄)
 
 ########################################
 # Global function defined inside let (let over lambda)

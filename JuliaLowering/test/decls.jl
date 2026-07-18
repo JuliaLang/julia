@@ -1017,3 +1017,198 @@ end
                         Expr(:islocal, :f)))) == ("xy", true)
 
 end
+
+@testset "(AI) reassigned local with `<:`-bounded declared type" begin
+    # A declared type containing a `<:` bound desugars to a `TypeVar(...)`
+    # construction bound to an SSA value.  The declared type is re-evaluated at
+    # each assignment (like flisp), so each emission needs fresh SSA values.
+    @test JuliaLowering.include_string(test_mod, """
+    function f()
+        local x::Type{<:Real} = Int
+        x = Float64
+        x
+    end
+    f()
+    """) === Float64
+
+    # Bare declaration followed by two assignments
+    @test JuliaLowering.include_string(test_mod, """
+    function f()
+        local x::Type{<:Real}
+        x = Int
+        x = Float64
+        x
+    end
+    f()
+    """) === Float64
+
+    # `Vector{<:Real}` variant
+    @test JuliaLowering.include_string(test_mod, """
+    function f()
+        local x::Vector{<:Real} = [1, 2, 3]
+        x = [1.0]
+        x
+    end
+    f()
+    """) == [1.0]
+
+    # Declaration + reassignment inside a `let`
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        local y::Type{<:Real} = Int
+        y = Float64
+        y
+    end
+    """) === Float64
+
+    # Captured typed local: the closure sees the reassigned value
+    @test JuliaLowering.include_string(test_mod, """
+    function f()
+        local x::Type{<:Real} = Int
+        g = () -> x
+        x = Float64
+        g()
+    end
+    f()
+    """) === Float64
+
+    # Three-plus assignments
+    @test JuliaLowering.include_string(test_mod, """
+    function f()
+        local x::Type{<:Real} = Int
+        x = Float32
+        x = Float64
+        x = Int8
+        x
+    end
+    f()
+    """) === Int8
+
+    # The convert/typeassert is still enforced on every assignment
+    @test_throws Exception JuliaLowering.include_string(test_mod, """
+    function f()
+        local x::Type{<:Real} = Int
+        x = String
+        x
+    end
+    f()
+    """)
+
+    # A side-effecting declared-type expression is re-evaluated once per
+    # assignment, exactly as flisp does
+    @test JuliaLowering.include_string(test_mod, """
+    let side = Ref(0)
+        sidetype() = (side[] += 1; Type{<:Real})
+        function f()
+            local x::(sidetype()) = Int
+            x = Float64
+            x
+        end
+        (f(), side[])
+    end
+    """) === (Float64, 2)
+end
+
+@testset "Bodyless `function Name end` declares a fresh generic function" begin
+    # Shadowing a type visible via `using Mod` (Globtim / Optim.Sphere): the
+    # following method builds a real Function, not the imported constructor.
+    m = @newmod()
+    @test JuliaLowering.include_string(m, """
+        module Provider
+            export Sphere
+            struct Sphere end
+        end
+        module Consumer
+            using ..Provider
+            function Sphere end
+            Sphere(x::AbstractVector) = sum(x)
+        end
+        (Consumer.Sphere isa Function, parentmodule(Consumer.Sphere) === Consumer,
+         Consumer.Sphere([1,2,3]))
+        """) == (true, true, 6)
+
+    # Shadowing a type visible only via the implicit `using Core, Base`
+    # (CImGui / Base.Docs.Text): `Base.Text`'s own constructor is untouched.
+    m = @newmod()
+    @test JuliaLowering.include_string(m, """
+        module Consumer
+            function Text end
+            Text(fmt) = "text: \$fmt"
+        end
+        (Consumer.Text isa Function, Consumer.Text !== Base.Text,
+         Base.Text("x") isa Base.Docs.Text, Consumer.Text("hi"))
+        """) == (true, true, true, "text: hi")
+
+    # A fresh (unimported) name works unchanged.
+    m = @newmod()
+    @test JuliaLowering.include_string(m, """
+        module Consumer
+            function Foo end
+            Foo(x::Int) = x + 1
+        end
+        (Consumer.Foo isa Function, parentmodule(Consumer.Foo) === Consumer,
+         Consumer.Foo(3))
+        """) == (true, true, 4)
+
+    # A function visible via `using Mod` is likewise shadowed by a fresh one.
+    m = @newmod()
+    @test JuliaLowering.include_string(m, """
+        module Provider
+            export myfun
+            function myfun end
+            myfun(x::Int) = x * 10
+        end
+        module Consumer
+            using ..Provider
+            function myfun end
+            myfun(x::AbstractVector) = length(x)
+        end
+        (Consumer.myfun !== Provider.myfun, Consumer.myfun([1,2,3]))
+        """) == (true, 3)
+
+    # An *explicit* selective `using Mod: Name` binding is extended, not
+    # shadowed -- flisp defers to the existing binding (the runtime `global`
+    # refers to it), so the bodyless decl leaves `Name` bound to the imported
+    # type.  The bare `(method Name)` on that type prints the same "extended
+    # without qualification" warning flisp does, so we silence it here.
+    m = @newmod()
+    @test redirect_stderr(devnull) do
+        JuliaLowering.include_string(m, """
+            module Provider
+                export Sphere
+                struct Sphere end
+            end
+            module Consumer
+                using ..Provider: Sphere
+                function Sphere end
+            end
+            (Consumer.Sphere === Provider.Sphere, Consumer.Sphere isa Function)
+            """)
+    end == (true, false)
+
+    # Likewise for an explicit `import Mod: Name`.
+    m = @newmod()
+    @test JuliaLowering.include_string(m, """
+        module Provider
+            export Sphere
+            struct Sphere end
+        end
+        module Consumer
+            import ..Provider: Sphere
+            function Sphere end
+        end
+        (Consumer.Sphere === Provider.Sphere, Consumer.Sphere isa Function)
+        """) == (true, false)
+
+    # A bodyless decl whose name is a local stays a local closure and leaks no
+    # module global (flisp's `global-if-global` local exemption).
+    m = @newmod()
+    @test JuliaLowering.include_string(m, """
+        begin
+            local no_method_f
+            function no_method_f end
+            no_method_f
+        end
+        """) isa Function
+    @test !isdefined(m, :no_method_f)
+end

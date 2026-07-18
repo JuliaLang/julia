@@ -415,6 +415,7 @@ end
 
 function compile_condition_term(ctx, ex)
     cond = compile(ctx, ex, true, false)
+    isnothing(cond) && return nothing
     if !is_valid_body_ir_argument(ctx, cond)
         cond = emit_assign_tmp(ctx, cond)
     end
@@ -423,7 +424,7 @@ end
 
 # flisp: emit-cond
 function compile_conditional(ctx, ex, false_label)
-    if kind(ex) == K"block"
+    if kind(ex) == K"block" && numchildren(ex) >= 1
         for i in 1:numchildren(ex)-1
             compile(ctx, ex[i], false, false)
         end
@@ -436,6 +437,7 @@ function compile_conditional(ctx, ex, false_label)
         true_label = make_label(ctx, test)
         for (i,e) in enumerate(children(test))
             c = compile_condition_term(ctx, e)
+            isnothing(c) && break
             if i < numchildren(test)
                 next_term_label = make_label(ctx, test)
                 # Jump over short circuit
@@ -451,11 +453,12 @@ function compile_conditional(ctx, ex, false_label)
     elseif k == K"&&"
         for e in children(test)
             c = compile_condition_term(ctx, e)
+            isnothing(c) && break
             emit(ctx, @ast ctx e [K"gotoifnot" c false_label])
         end
     else
         c = compile_condition_term(ctx, test)
-        emit(ctx, @ast ctx test [K"gotoifnot" c false_label])
+        isnothing(c) || emit(ctx, @ast ctx test [K"gotoifnot" c false_label])
     end
 end
 
