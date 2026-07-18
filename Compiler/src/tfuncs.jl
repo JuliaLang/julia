@@ -67,6 +67,7 @@ end
 
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
+const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
 
 ##########
 # tfuncs #
@@ -74,7 +75,9 @@ const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
 
 # Note that in most places in the compiler here, we'll assume that T=Type{S} is well-formed,
 # and implies that `S <: Type`, not `1::Type{1}`, for example.
-# This means that isType(T) implies we can call subtype on T.parameters[1], etc.
+# This means that isType(T) implies we can call subtype on type_parameter(T), etc.
+# Use isTypeEq(T) or isTypeEgal(T) where equality-only and egality-certain
+# type-object kinds need to be distinguished.
 
 function add_tfunc(f::IntrinsicFunction, minarg::Int, maxarg::Int, @nospecialize(tfunc), cost::Int)
     idx = reinterpret(Int32, f) + 1
@@ -95,7 +98,7 @@ add_tfunc(Core.throw_methoderror, 1, INT_INF, @nospecs((𝕃::AbstractLattice, x
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 # if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 # if istype is true, the actual runtime value will definitely be a type (e.g. this is false for Union{Type{Int}, Int})
-function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot) = t)
+function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot = t))
     if isa(t, Const)
         if isa(t.val, Type) && valid_as_lattice(t.val, astag)
             return t.val, true, isconcretetype(t.val), true
@@ -108,8 +111,13 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
         return Bottom, true, true, false # runtime unreachable
     elseif t === typeof(Bottom) || !hasintersect(t, Type)
         return Bottom, true, false, false # literal Bottom or non-Type
-    elseif isType(t)
-        tp = t.parameters[1]
+    elseif isTypeEgal(t)
+        # the value is exactly (`===`) the closed type `tp`
+        tp = type_parameter(t)
+        valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
+        return tp, true, isconcretetype(tp), true
+    elseif isTypeEq(t)
+        tp = type_parameter(t)
         valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
         if troot isa UnionAll
             # Free `TypeVar`s inside `Type` has violated the "diagonal" rule.
@@ -131,6 +139,14 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
                 # uninhabited with any runtime T that exists)
                 isexact = true
             end
+        end
+        # If this is a NamedTuple type with known names but an unknown tuple type
+        # parameter, use the length of the names to constrain the tuple type.
+        if t′′ isa DataType && t′′.name === _NAMEDTUPLE_NAME && t′′.parameters[1] isa Tuple && has_free_typevars(t′′)
+            names = t′′.parameters[1]::Tuple
+            n = length(names)
+            nt_bound = NamedTuple{names, T} where T<:NTuple{n, Any}
+            tr = typeintersect(tr, nt_bound)
         end
         return tr, isexact, isconcrete, istype
     elseif isa(t, Union)
@@ -233,7 +249,7 @@ end
 
 function not_tfunc(𝕃::AbstractLattice, @nospecialize(b))
     if isa(b, Conditional)
-        return Conditional(b.slot, b.elsetype, b.thentype)
+        return Conditional(b.slot, b.ssadef, b.elsetype, b.thentype)
     elseif isa(b, Const)
         return Const(not_int(b.val))
     end
@@ -315,7 +331,7 @@ add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF, llvmcall_tfunc, 10)
 @nospecs cglobal_tfunc(𝕃::AbstractLattice, fptr) = Ptr{Cvoid}
 @nospecs function cglobal_tfunc(𝕃::AbstractLattice, fptr, t)
     isa(t, Const) && return isa(t.val, Type) ? Ptr{t.val} : Ptr
-    return isType(t) ? Ptr{t.parameters[1]} : Ptr
+    return isType(t) ? Ptr{type_parameter(t)} : Ptr
 end
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
@@ -354,14 +370,14 @@ end
     if isa(x, Conditional)
         y = widenconditional(y)
         if isa(y, Const)
-            y.val === false && return Conditional(x.slot, x.elsetype, x.thentype)
+            y.val === false && return Conditional(x.slot, x.ssadef, x.elsetype, x.thentype)
             y.val === true && return x
             return Const(false)
         end
     elseif isa(y, Conditional)
         x = widenconditional(x)
         if isa(x, Const)
-            x.val === false && return Conditional(y.slot, y.elsetype, y.thentype)
+            x.val === false && return Conditional(y.slot, y.ssadef, y.elsetype, y.thentype)
             x.val === true && return y
             return Const(false)
         end
@@ -371,8 +387,8 @@ end
 @nospecs function egal_tfunc(𝕃::ConstsLattice, x, y)
     if isa(x, Const) && isa(y, Const)
         return Const(x.val === y.val)
-    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(x)) ||
-           (isa(y, Const) && x === typeof(y.val) && issingletontype(y))
+    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(y)) ||
+           (isa(y, Const) && x === typeof(y.val) && issingletontype(x))
         return Const(true)
     end
     return egal_tfunc(widenlattice(𝕃), x, y)
@@ -405,7 +421,10 @@ end
     return isdefined_tfunc(𝕃, arg1, sym)
 end
 @nospecs function isdefined_tfunc(𝕃::AbstractLattice, arg1, sym)
-    arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(arg1.parameters[1]) : widenconst(arg1)
+    if arg1 isa MustAlias
+        arg1 = widenmustalias(arg1)
+    end
+    arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(type_parameter(arg1)) : widenconst(arg1)
     a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
@@ -450,6 +469,10 @@ end
                     return Const(true)
                 end
             end
+        # datatype_fieldcount is what `fieldcount` uses internally
+        # and returns nothing (!==0) for non-definite field counts.
+        elseif datatype_fieldcount(a1) === 0
+            return Const(false)
         end
     elseif isa(a1, Union)
         # Results can only be `Const` or `Bool`
@@ -479,6 +502,8 @@ function sizeof_nothrow(@nospecialize(x))
         x = widenconst(x)
         return !hasintersect(x, Type)
     end
+    xw = widenconst(x)
+    isType(xw) && !isconstType(xw) && return false
     x = unwrap_unionall(t)
     if isconcrete
         if isa(x, DataType) && x.layout != C_NULL
@@ -517,7 +542,7 @@ end
     x = widenmustalias(x)
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
-    isconstType(x) && return _const_sizeof(x.parameters[1])
+    isconstType(x) && return _const_sizeof(type_parameter(x))
     xu = unwrap_unionall(x)
     if isa(xu, Union)
         return tmerge(sizeof_tfunc(𝕃, rewrap_unionall(xu.a, x)),
@@ -549,7 +574,7 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
     isa(x, Conditional) && return Const(0)
     xt = widenconst(x)
     x = unwrap_unionall(xt)
-    isconstType(x) && return Const(nfields(x.parameters[1]))
+    isconstType(x) && return Const(nfields(type_parameter(x)))
     if isa(x, DataType) && !isabstracttype(x)
         if x.name === Tuple.name
             isvatuple(x) && return Int
@@ -573,7 +598,30 @@ end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
-@nospecs function typevar_tfunc(𝕃::AbstractLattice, n, lb_arg, ub_arg)
+
+@nospecs function _svec_len_tfunc(::AbstractLattice, s)
+    if isa(s, Const) && isa(s.val, SimpleVector)
+        return Const(length(s.val))
+    end
+    return Int
+end
+add_tfunc(Core._svec_len, 1, 1, _svec_len_tfunc, 1)
+@nospecs function _svec_len_nothrow(𝕃::AbstractLattice, s)
+    ⊑ = partialorder(𝕃)
+    return s ⊑ SimpleVector
+end
+
+@nospecs function _svec_ref_tfunc(::AbstractLattice, s, i)
+    if isa(s, Const) && isa(i, Const)
+        s, i = s.val, i.val
+        if isa(s, SimpleVector) && isa(i, Int)
+            return 1 ≤ i ≤ length(s) ? Const(s[i]) : Bottom
+        end
+    end
+    return Any
+end
+add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
+@nospecs function typevar_tfunc(::AbstractLattice, n, lb_arg, ub_arg)
     lb = Union{}
     ub = Any
     ub_certain = lb_certain = true
@@ -584,8 +632,10 @@ add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVec
             lb = lb_arg.val
         else
             lb_arg = widenslotwrapper(lb_arg)
-            if isType(lb_arg)
-                lb = lb_arg.parameters[1]
+            if isTypeEgal(lb_arg)
+                lb = type_parameter(lb_arg)
+            elseif isTypeEq(lb_arg)
+                lb = type_parameter(lb_arg)
                 lb_certain = false
             else
                 return TypeVar
@@ -595,8 +645,10 @@ add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVec
             ub = ub_arg.val
         else
             ub_arg = widenslotwrapper(ub_arg)
-            if isType(ub_arg)
-                ub = ub_arg.parameters[1]
+            if isTypeEgal(ub_arg)
+                ub = type_parameter(ub_arg)
+            elseif isTypeEq(ub_arg)
+                ub = type_parameter(ub_arg)
                 ub_certain = false
             else
                 return TypeVar
@@ -619,7 +671,7 @@ end
     ⊑ = partialorder(𝕃)
     b = widenconst(b)
     (b ⊑ TypeVar) && return true
-    if isType(b)
+    if isType(b) || b === typeof(Union{})
         return true
     end
     return false
@@ -678,7 +730,7 @@ function pointer_eltype(@nospecialize(ptr))
 end
 
 @nospecs function pointerarith_tfunc(𝕃::AbstractLattice, ptr, offset)
-    return ptr
+    return widenconst(ptr)
 end
 @nospecs function pointerref_tfunc(𝕃::AbstractLattice, a, i, align)
     return pointer_eltype(a)
@@ -686,7 +738,7 @@ end
 @nospecs function pointerset_tfunc(𝕃::AbstractLattice, a, v, i, align)
     return a
 end
-@nospecs function atomic_fence_tfunc(𝕃::AbstractLattice, order)
+@nospecs function atomic_fence_tfunc(𝕃::AbstractLattice, order, syncscope)
     return Nothing
 end
 @nospecs function atomic_pointerref_tfunc(𝕃::AbstractLattice, a, order)
@@ -727,7 +779,7 @@ add_tfunc(add_ptr, 2, 2, pointerarith_tfunc, 1)
 add_tfunc(sub_ptr, 2, 2, pointerarith_tfunc, 1)
 add_tfunc(pointerref, 3, 3, pointerref_tfunc, 4)
 add_tfunc(pointerset, 4, 4, pointerset_tfunc, 5)
-add_tfunc(atomic_fence, 1, 1, atomic_fence_tfunc, 4)
+add_tfunc(atomic_fence, 2, 2, atomic_fence_tfunc, 4)
 add_tfunc(atomic_pointerref, 2, 2, atomic_pointerref_tfunc, 4)
 add_tfunc(atomic_pointerset, 3, 3, atomic_pointerset_tfunc, 5)
 add_tfunc(atomic_pointerswap, 3, 3, atomic_pointerswap_tfunc, 5)
@@ -746,6 +798,8 @@ add_tfunc(donotdelete, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->No
         return widenconditional(val)
     elseif setting === :type
         return Any
+    elseif setting === :blackbox
+        return widenconst(val)
     else
         return Bottom
     end
@@ -754,7 +808,7 @@ add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 5)
 
 @nospecs function compilerbarrier_nothrow(setting, val)
-    return isa(setting, Const) && contains_is((:type, :const, :conditional), setting.val)
+    return isa(setting, Const) && contains_is((:type, :const, :conditional, :blackbox), setting.val)
 end
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
@@ -780,11 +834,10 @@ end
 @nospecs function typeof_tfunc(𝕃::AbstractLattice, t)
     isa(t, Const) && return Const(typeof(t.val))
     t = widenconst(t)
-    if isType(t)
-        tp = t.parameters[1]
-        if hasuniquerep(tp)
-            return Const(typeof(tp))
-        end
+    if isconstType(t)
+        return Const(typeof(type_parameter(t)))
+    elseif isTypeEq(t)
+        # the value is only `== tp`, so its `typeof` is not pinned down (#61323)
     elseif isa(t, DataType)
         if isconcretetype(t)
             return Const(t)
@@ -826,6 +879,23 @@ end
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
 
+@nospecs function has_free_typevars_tfunc(𝕃::AbstractLattice, t)
+    isa(t, Const) && return Const(has_free_typevars(t.val))
+    t = widenconst(t)
+    if isType(t)
+        p = type_parameter(t)
+        # a free typevar in the lattice element stands for closed runtime values
+        has_free_typevars(p) && return Bool
+        return Const(has_free_typevars(p))
+    elseif t === TypeVar
+        return Const(true)
+    elseif !hasintersect(t, Type) && !hasintersect(t, TypeVar) && !hasintersect(t, TypeofVararg)
+        return Const(false)
+    end
+    return Bool
+end
+add_tfunc(has_free_typevars, 1, 1, has_free_typevars_tfunc, 1)
+
 @nospecs function typeassert_tfunc(𝕃::AbstractLattice, v, t)
     t = instanceof_tfunc(t, true)[1]
     t === Any && return v
@@ -837,7 +907,7 @@ add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
     ⊑ = partialorder(𝕃)
     # ty, exact = instanceof_tfunc(t, true)
     # return exact && v ⊑ ty
-    if (isType(t) && !has_free_typevars(t) && v ⊑ t.parameters[1]) ||
+    if (isType(t) && !has_free_typevars(t) && v ⊑ type_parameter(t)) ||
         (isa(t, Const) && isa(t.val, Type) && v ⊑ t.val)
         return true
     end
@@ -908,8 +978,8 @@ add_tfunc(<:, 2, 2, subtype_tfunc, 10)
 end
 
 function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
-    typ = argument_datatype(typ)
-    typ === nothing && return nothing
+    typ = unwraptv(typ)
+    typ isa Union || typ isa UnionAll || typ isa DataType || return nothing
     if isa(field, Symbol)
         field = fieldindex(typ, field, false)
         field == 0 && return nothing
@@ -991,7 +1061,7 @@ end
             nflds = fieldcount_noerror(sty)
             ismod = false
         else
-            sv = (s00::DataType).parameters[1]
+            sv = type_parameter(s00)
             sty = typeof(sv)
             nflds = nfields(sv)
             ismod = sv isa Module
@@ -1023,7 +1093,7 @@ end
     if isa(s, Union)
         return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
                getfield_nothrow(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
-    elseif isType(s) && isTypeDataType(s.parameters[1])
+    elseif isa(s, Core.TypeEgal) && isTypeDataType(type_parameter(s))
         s = s0 = DataType
     end
     if isa(s, DataType)
@@ -1121,6 +1191,7 @@ end
                 if nv < 1
                     return Bottom
                 elseif nv ≤ length(s00.fields)
+                    setfield && isconst(sty, nv) && return Bottom
                     return unwrapva(s00.fields[nv])
                 end
             end
@@ -1160,14 +1231,21 @@ end
     end
     if isType(s)
         if isconstType(s)
-            sv = (s00::DataType).parameters[1]
+            sv = type_parameter(s)
             if isa(name, Const)
                 r = _getfield_tfunc_const(sv, name)
                 r !== nothing && return r
             end
             s = typeof(sv)
         else
-            sv = s.parameters[1]
+            sv = type_parameter(s)
+            if isa(sv, DataType) && isa(name, Const) &&
+               _getfield_fieldindex(DataType, name) == DATATYPE_SUPER_FIELDINDEX &&
+               !has_free_typevars(sv.super)
+                # only `DataType` reps reach `.super` without throwing, and the
+                # `.super`s of `==`-equal `DataType`s are `==`-equal (if not egal)
+                return Type{sv.super}
+            end
             if isTypeDataType(sv) && isa(name, Const)
                 nv = _getfield_fieldindex(DataType, name)::Int
                 if nv == DATATYPE_NAME_FIELDINDEX
@@ -1256,18 +1334,6 @@ end
     return rewrap_unionall(R, s00)
 end
 
-# checks if a field of this type is guaranteed to be defined to a value
-# and that access to an uninitialized field will cause an `UndefRefError` or return zero
-# - is_undefref_fieldtype(String) === true
-# - is_undefref_fieldtype(Integer) === true
-# - is_undefref_fieldtype(Any) === true
-# - is_undefref_fieldtype(Int) === false
-# - is_undefref_fieldtype(Union{Int32,Int64}) === false
-# - is_undefref_fieldtype(T) === false
-function is_undefref_fieldtype(@nospecialize ftyp)
-    return !has_free_typevars(ftyp) && !allocatedinline(ftyp)
-end
-
 @nospecs function setfield!_tfunc(𝕃::AbstractLattice, o, f, v, order)
     if !isvarargtype(order)
         hasintersect(widenconst(order), Symbol) || return Bottom
@@ -1327,15 +1393,25 @@ end
     return getfield_tfunc(𝕃, o, f)
 end
 @nospecs function modifyfield!_tfunc(𝕃::AbstractLattice, o, f, op, v, order=Symbol)
+    # the stored value is `op(o.f, v)`, so check only that `o.f` is writable at all
+    setfield!_tfunc(𝕃, o, f, Any) === Bottom && return Bottom
     o′ = widenconst(o)
-    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
+    exact = isconcretetype(o′)
+    egal = isa(o, Const) || exact
+    T = _fieldtype_tfunc(𝕃, o′, f, exact, egal)
     T === Bottom && return Bottom
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T, T]), true)[1]
 end
 @nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order=Symbol, failure_order=Symbol)
+    # `replacefield!` type-checks the replacement `v` before the comparison, so a
+    # non-writable field or a `v` that cannot be stored always throws (even when the
+    # comparison would have failed)
+    setfield!_tfunc(𝕃, o, f, v) === Bottom && return Bottom
     o′ = widenconst(o)
-    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
+    exact = isconcretetype(o′)
+    egal = isa(o, Const) || exact
+    T = _fieldtype_tfunc(𝕃, o′, f, exact, egal)
     T === Bottom && return Bottom
     PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
     return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T]), true)[1]
@@ -1346,7 +1422,7 @@ end
     return Bool
 end
 
-@nospecs function abstract_modifyop!(interp::AbstractInterpreter, ff, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
+@nospecs function abstract_modifyop!(interp::AbstractInterpreter, ff, argtypes::Vector{Any}, si::StmtInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if ff === modifyfield!
         minargs = 5
         maxargs = 6
@@ -1407,7 +1483,7 @@ end
         # as well as compute the info for the method matches
         op = unwrapva(argtypes[op_argi])
         v = unwrapva(argtypes[v_argi])
-        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), sv, #=max_methods=#1)
+        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
         TF = Core.Box(TF)
         RT = Core.Box(RT)
         return Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, sv
@@ -1435,6 +1511,14 @@ add_tfunc(modifyfield!, 4, 5, modifyfield!_tfunc, 3)
 add_tfunc(replacefield!, 4, 6, replacefield!_tfunc, 3)
 add_tfunc(setfieldonce!, 3, 5, setfieldonce!_tfunc, 3)
 
+function fieldtype_egal_lattice(@nospecialize(s0))
+    s = widenconst(s0)
+    if isa(s, Union)
+        return fieldtype_egal_lattice(s.a) && fieldtype_egal_lattice(s.b)
+    end
+    return isa(s, Core.TypeEgal)
+end
+
 @nospecs function fieldtype_nothrow(𝕃::AbstractLattice, s0, name)
     s0 === Bottom && return true # unreachable
     ⊑ = partialorder(𝕃)
@@ -1457,16 +1541,18 @@ add_tfunc(setfieldonce!, 3, 5, setfieldonce!_tfunc, 3)
 
     s, exact = instanceof_tfunc(s0, false)
     s === Bottom && return false # always
-    return _fieldtype_nothrow(s, exact, name)
+    egal = isa(s0, Const) || fieldtype_egal_lattice(s0)
+    return _fieldtype_nothrow(s, exact, egal, name)
 end
 
-function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
+function _fieldtype_nothrow(@nospecialize(s), exact::Bool, egal::Bool, name::Const)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        a = _fieldtype_nothrow(u.a, exact, name)
-        b = _fieldtype_nothrow(u.b, exact, name)
+        a = _fieldtype_nothrow(u.a, exact, egal, name)
+        b = _fieldtype_nothrow(u.b, exact, egal, name)
         return exact ? (a || b) : (a && b)
     end
+    egal || return false
     u isa DataType || return false
     isabstracttype(u) && return false
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
@@ -1522,15 +1608,24 @@ end
 
     s, exact = instanceof_tfunc(s0, false)
     s === Bottom && return Bottom
-    return _fieldtype_tfunc(𝕃, s, name, exact)
+    # `exact` from a `Type{X}` element still admits `==`-equal but non-egal reps
+    # of `X`, whose `fieldtype` results are only `==`-equal to the stored type;
+    # the `Const` folds below additionally require an egality-certain argument
+    # value (#61323)
+    egal = isa(s0, Const) || isa(widenconst(s0), Core.TypeEgal)
+    return _fieldtype_tfunc(𝕃, s, name, exact, egal)
 end
 
-@nospecs function _fieldtype_tfunc(𝕃::AbstractLattice, s, name, exact::Bool)
+# `egal` must be true only if `s` is the type of a runtime value (a canonical
+# tag, whose stored field types are interned) or the egality-certain value of a
+# `fieldtype` argument; a merely `==`-certain `fieldtype` argument yields field
+# types that are `==` but not necessarily `===` the stored ones (#61323).
+@nospecs function _fieldtype_tfunc(𝕃::AbstractLattice, s, name, exact::Bool, egal::Bool)
     exact = exact && !has_free_typevars(s)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        ta0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.a, s), name, exact)
-        tb0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.b, s), name, exact)
+        ta0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.a, s), name, exact, egal)
+        tb0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.b, s), name, exact, egal)
         ta0 ⊑ tb0 && return tb0
         tb0 ⊑ ta0 && return ta0
         ta, exacta, _, istypea = instanceof_tfunc(ta0, false)
@@ -1543,13 +1638,14 @@ end
         end
         return Any
     end
+    isType(u) && return Bottom # type objects have no fields
     u isa DataType || return Any
     if isabstracttype(u)
         # Abstract types have no fields
         exact && return Bottom
         # Type{...} without free typevars has no subtypes, so it is actually
         # exact, even if `exact` is false.
-        isType(u) && !has_free_typevars(u.parameters[1]) && return Bottom
+        isType(u) && !has_free_typevars(type_parameter(u)) && return Bottom
         return Any
     end
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
@@ -1568,15 +1664,30 @@ end
         end
         t = Bottom
         for i in 1:length(ftypes)
-            ft1 = unwrapva(ftypes[i])
+            fti = ftypes[i]
+            ft1 = unwrapva(fti)
+            if !(isa(ft1, Type) || isa(ft1, TypeVar))
+                if !isvarargtype(fti) && u.name === Tuple.name
+                    # A genuine tuple field may be a value parameter (e.g.
+                    # `Tuple{1:2}`); `fieldtype` returns that value rather than
+                    # throwing. Type identity compares non-type parameters by
+                    # egality, so the stored value is `===` the parameter even
+                    # when the argument type is only `==`-certain (#61323) -- the
+                    # `==`-vs-`===` ambiguity is specific to type-valued fields.
+                    t = tmerge(t, Const(ft1))
+                    t === Any && break
+                    continue
+                end
+                # Malformed Vararg types like `NTuple{<:Any, 3}` have non-Type
+                # components (e.g., `3`); `fieldtype` would throw at runtime.
+                continue
+            end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
-                if hasuniquerep(ft1)
-                    ft1 = Const(ft1) # ft unique via type cache
-                else
-                    ft1 = Type{ft1}
-                end
+                # `fieldtype` returns exactly (`===`) the stored type, but only
+                # an egality-certain argument pins which stored rep is returned
+                ft1 = egal ? Const(ft1) : Type{ft1}
             elseif ft1 isa Type || ft1 isa TypeVar
                 if ft1 === Any && u.name === Tuple.name
                     # Tuple{:x} is possible in this case
@@ -1607,18 +1718,22 @@ end
         return Bottom
     else
         ft = ftypes[fld]
+        if !(isa(ft, Type) || isa(ft, TypeVar)) && u.name === Tuple.name
+            # a value parameter in a genuine tuple field (see the loop above):
+            # non-type parameters are compared by egality, so this is `Const`
+            # even for an `==`-only argument
+            return Const(ft)
+        end
     end
-    if !isa(ft, Type) && !isa(ft, TypeVar)
-        return Const(ft)
+    if !(isa(ft, Type) || isa(ft, TypeVar))
+        return Bottom # see non-`Const` case above
     end
 
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
     if exactft
-        if hasuniquerep(ft)
-            return Const(ft) # ft unique via type cache
-        end
-        return Type{ft}
+        # only an egality-certain argument pins the stored rep (see above)
+        return egal ? Const(ft) : Type{ft}
     end
     if u.name === Tuple.name && ft === Any
         # Tuple{:x} is possible
@@ -1630,8 +1745,77 @@ add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 
 # Like `valid_tparam`, but in the type domain.
 valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
+valid_tparam_type(T::TypeEq) = true
+valid_tparam_type(T::Core.TypeEgal) = true
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
+
+function typeeq_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
+    length(argtypes) == 2 || return false
+    ai = widenslotwrapper(widenconditional(argtypes[2]))
+    # a bare `TypeEgal{T}` element pins the argument value like `Const(T)` does
+    ai = maybe_singleton_const(ai)
+    if isa(ai, Const)
+        v = ai.val
+        return isa(v, Type) || isa(v, TypeVar) || valid_tparam(v)
+    end
+    isTypeEq(ai) && return true
+    isa(ai, PartialTypeVar) && return true
+    ai = widenconst(ai)
+    return (⊑(𝕃, ai, AnyType) || ⊑(𝕃, ai, TypeVar) ||
+            (isa(ai, Type) && valid_tparam_type(ai)))
+end
+
+function typeeq_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
+    length(argtypes) == 2 || return Bottom
+    ai = widenslotwrapper(argtypes[2])
+    # a bare `TypeEgal{T}` element pins the argument value like `Const(T)` does
+    ai = maybe_singleton_const(ai)
+    if isa(ai, Const)
+        v = ai.val
+        (isa(v, Type) || isa(v, TypeVar) || valid_tparam(v)) || return Bottom
+        return Const(apply_type(TypeEq, v))
+    end
+    if isTypeEq(ai)
+        # the argument is only `== X`, so the result is only `== Type{X}` (#61323)
+        return Type{ai}
+    end
+    if isa(ai, PartialTypeVar)
+        (ai.lb_certain && ai.ub_certain) || return TypeEq
+        return Type{TypeEq{ai.tv}}
+    end
+    ai = widenconst(ai)
+    if ⊑(𝕃, ai, AnyType) || ⊑(𝕃, ai, TypeVar) || (isa(ai, Type) && valid_tparam_type(ai))
+        return TypeEq
+    end
+    if isa(ai, Type) && isconcretetype(ai)
+        return Bottom
+    end
+    return TypeEq
+end
+
+# like `TypeEq`, but only closed type values are valid parameters
+function typeegal_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
+    length(argtypes) == 2 || return false
+    ai = widenslotwrapper(widenconditional(argtypes[2]))
+    if isa(ai, Const)
+        v = ai.val
+        return isa(v, Type) && !has_free_typevars(v)
+    end
+    # for a non-constant parameter we cannot rule out non-types or free typevars
+    return false
+end
+
+function typeegal_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
+    length(argtypes) == 2 || return Bottom
+    ai = widenslotwrapper(argtypes[2])
+    if isa(ai, Const)
+        v = ai.val
+        (isa(v, Type) && !has_free_typevars(v)) || return Bottom
+        return Const(Core.apply_type(Core.TypeEgal, v))
+    end
+    return Core.TypeEgal
+end
 
 function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     rt === Type && return false
@@ -1640,13 +1824,15 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     if isa(headtypetype, Const)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
-        headtype = headtypetype.parameters[1]
+        headtype = type_parameter(headtypetype)
     else
         return false
     end
     # We know the apply_type is well formed. Otherwise our rt would have been
     # Bottom (or Type).
     (headtype === Union) && return true
+    headtype === TypeEq && return typeeq_apply_type_nothrow(𝕃, argtypes)
+    headtype === Core.TypeEgal && return typeegal_apply_type_nothrow(𝕃, argtypes)
     isa(rt, Const) && return true
     u = headtype
     # TODO: implement optimization for isvarargtype(u) and istuple occurrences (which are valid but are not UnionAll)
@@ -1660,7 +1846,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 return false
             end
         elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
-            ai = isa(ai, Const) ? ai.val : (ai::DataType).parameters[1]
+            ai = isa(ai, Const) ? ai.val : type_parameter(ai)
             if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
                 return false
             end
@@ -1678,7 +1864,14 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 end
             else
                 istype || return false
-                if isa(u.var.ub, TypeVar) || !(T <: u.var.ub)
+                if isa(u.var.ub, TypeVar)
+                    return false
+                end
+                Tub = T
+                while isa(Tub, TypeVar)
+                    Tub = Tub.ub
+                end
+                if !(Tub <: u.var.ub)
                     return false
                 end
                 if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
@@ -1704,7 +1897,11 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
     if isa(headtypetype, Const)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
-        headtype = headtypetype.parameters[1]
+        headtype = type_parameter(headtypetype)
+    elseif isTypeEq(headtypetype)
+        # an `==`-only head cannot be pinned down; a `Union` head can also collapse
+        # `Union{T}` to a bare `TypeVar`
+        return type_parameter(headtypetype) == Union ? Union{Type, TypeVar} : Type
     else
         return Any
     end
@@ -1726,7 +1923,7 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
                     end
                 end
             else
-                if !isType(ai)
+                if !(isTypeEq(ai) || (isTypeEgal(ai) && type_parameter(ai) isa Type))
                     if !isa(ai, Type) || hasintersect(ai, Type) || hasintersect(ai, TypeVar)
                         hasnonType = true
                     else
@@ -1743,15 +1940,26 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
         allconst = true
         for i = 2:largs
             ai = argtypes[i]
-            if isType(ai)
-                aty = ai.parameters[1]
-                allconst &= hasuniquerep(aty)
+            if isTypeEgal(ai)
+                aty = type_parameter(ai)
+            elseif isTypeEq(ai)
+                aty = type_parameter(ai)
+                # `Union` instantiation does not canonicalize its arguments the
+                # way datatype instantiation does (`Union{S}` is `S` itself), so
+                # an `==`-only argument leaves the result only `==`-certain
+                allconst = false
             else
                 aty = (ai::Const).val
             end
             ty = Union{ty, aty}
         end
         return allconst ? Const(ty) : Type{ty}
+    end
+    if headtype === TypeEq
+        return typeeq_apply_type_tfunc(𝕃, argtypes)
+    end
+    if headtype === Core.TypeEgal
+        return typeegal_apply_type_tfunc(𝕃, argtypes)
     end
     if 1 < unionsplitcost(𝕃, argtypes) ≤ max_union_splitting
         rt = Bottom
@@ -1763,6 +1971,44 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
     end
     return _apply_type_tfunc(𝕃, headtype, argtypes)
 end
+
+function apply_type_arg_value(@nospecialize(t))
+    if isa(t, Const)
+        val = t.val
+    elseif isType(t)
+        val = type_parameter(t)
+    else
+        val = singleton_type(t)
+        val === nothing && return nothing
+    end
+    return (isa(val, Type) || isvarargtype(val)) ? val : nothing
+end
+
+function partial_typeofvararg_value(@nospecialize(t))
+    isa(t, PartialStruct) || return nothing
+    t.typ === TypeofVararg || return nothing
+    length(t.fields) >= 1 || return nothing
+    undefs = _getundefs(t)
+    undefs[1] === false || return nothing
+    T = apply_type_arg_value(t.fields[1])
+    isa(T, Type) || return nothing
+    try
+        if length(t.fields) >= 2 && undefs[2] === false
+            N = t.fields[2]
+            isa(N, Const) && isa(N.val, Int) || return nothing
+            return Core.apply_type(Vararg, T, N.val)
+        end
+        # `Vararg{T}` claims the `N` field is absent; an unknown defined-ness
+        # (e.g. from merging `Vararg{T}` and `Vararg{T,n}` partials) may stand
+        # for a value that does carry `N`
+        (length(undefs) >= 2 && undefs[2] === true) || return nothing
+        return Core.apply_type(Vararg, T)
+    catch ex
+        ex isa InterruptException && rethrow()
+        return nothing
+    end
+end
+
 @nospecs function _apply_type_tfunc(𝕃::AbstractLattice, headtype, argtypes::Vector{Any})
     largs = length(argtypes)
     istuple = headtype === Tuple
@@ -1772,6 +2018,7 @@ end
     uw = unwrap_unionall(headtype)
     uncertain = false
     canconst = true
+    anyeq = false # some argument is only known up to type equality (`==`)
     tparams = Any[]
     outervars = TypeVar[]
 
@@ -1792,10 +2039,16 @@ end
     ua = headtype
     for i = 2:largs
         ai = widenslotwrapper(argtypes[i])
-        if isType(ai)
-            aip1 = ai.parameters[1]
+        if isTypeEgal(ai)
+            push!(tparams, type_parameter(ai))
+        elseif isTypeEq(ai)
+            aip1 = type_parameter(ai)
             canconst &= !has_free_typevars(aip1)
+            anyeq = true
             push!(tparams, aip1)
+        elseif istuple && (pva = partial_typeofvararg_value(ai)) !== nothing
+            anyeq = true
+            push!(tparams, pva)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
                                   valid_tparam(ai.val) || (istuple && isvarargtype(ai.val)))
             push!(tparams, ai.val)
@@ -1803,12 +2056,19 @@ end
             canconst = false
             push!(tparams, ai.tv)
         else
+            if widenconst(ai) <: TypeVar && widenconst(ai) !== Union{}
+                # A TypeVar value of unknown identity used as a type parameter
+                # yields a type with a free typevar, which `jl_isa` excludes
+                # from every closed `Type{...}` form this function could
+                # construct; only the top kind forms are sound here.
+                return isvarargtype(headtype) ? TypeofVararg : Type
+            end
             uncertain = true
             unw = unwrap_unionall(ai)
             isT = isType(unw)
             # compute our desired upper bound value
             if isT
-                ub = rewrap_unionall(unw.parameters[1], ai)
+                ub = rewrap_unionall(type_parameter(unw), ai)
             else
                 ub = Any
             end
@@ -1817,7 +2077,7 @@ end
                 # outer type, use the wrapper type, instead of letting it nest more
                 # complexity here. This is not monotonic, but seems to work out pretty well.
                 if isT
-                    ub = unwrap_unionall(unw.parameters[1])
+                    ub = unwrap_unionall(type_parameter(unw))
                     if ub isa DataType
                         ub = ub.name.wrapper
                         unw = Type{unwrap_unionall(ub)}
@@ -1848,13 +2108,13 @@ end
                     # make sure vars introduced here are unique
                     if contains_is(outervars, tai.var)
                         ai = rename_unionall(ai)
-                        unw = unwrap_unionall(ai)::DataType
+                        unw = unwrap_unionall(ai)
                         # ub = rewrap_unionall(unw, ai)
                         break
                     end
                     tai = tai.body
                 end
-                push!(tparams, unw.parameters[1])
+                push!(tparams, type_parameter(unw))
                 while isa(ai, UnionAll)
                     push!(outervars, ai.var)
                     ai = ai.body
@@ -1914,11 +2174,28 @@ end
             end
         end
     end
-    !uncertain && canconst && return Const(appl)
+    # An `==`-only (`Type{X}`) argument still yields a `Const`: datatype instantiation
+    # normalizes and `==`-deduplicates its (invariant) parameters, so all `S == X` reps
+    # apply to the same (egal) object. Wrapper (`Type{...}`), `UnionAll` and covariant
+    # `Tuple` results do not canonicalize and stay egal-distinct across reps (#61323).
+    !uncertain && canconst &&
+        (!anyeq || (isa(appl, DataType) && appl.name !== Tuple.name)) && return Const(appl)
     if isvarargtype(appl)
+        !uncertain && canconst && !anyeq && return Const(appl)
+        if !uncertain && canconst && 2 <= largs <= 3
+            fields = Any[widenslotwrapper(argtypes[2]), largs == 3 ? widenslotwrapper(argtypes[3]) : Any]
+            undefs = Union{Nothing,Bool}[false, largs == 3 ? false : true]
+            return PartialStruct(𝕃, TypeofVararg, undefs, fields)
+        end
         return TypeofVararg
     end
     if istuple
+        if !uncertain && canconst
+            # every parameter is exactly known and only `==`-certainty (`anyeq`)
+            # blocked the `Const` fold above: the invariant parameters still pin
+            # the tuple up to type equality (`S == X` implies `Tuple{S} == Tuple{X}`)
+            return Type{appl}
+        end
         return Type{<:appl}
     end
     ans = Type{appl}
@@ -1943,15 +2220,8 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
         # UnionAll context is missing around this.
         pop!(argtypes)
     end
-    all_are_const = true
-    for i in 1:length(argtypes)
-        if !isa(argtypes[i], Const)
-            all_are_const = false
-            break
-        end
-    end
-    if all_are_const
-        return Const(ntuple(i::Int->argtypes[i].val, length(argtypes)))
+    if is_all_const_arg(argtypes, 1) # repeated from builtin_tfunction for the benefit of callers that use this tfunc directly
+        return Const(tuple(collect_const_args(argtypes, 1)...))
     end
     params = Vector{Any}(undef, length(argtypes))
     anyinfo = false
@@ -1973,10 +2243,15 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
             # here we should turn such `Type{...}`-parameters to valid parameters, e.g.
             # (::Type{Int},) -> Tuple{DataType} (or PartialStruct for more accuracy)
             # (::Union{Type{Int32},Type{Int64}}) -> Tuple{Type}
-            if isType(x)
+            if isTypeEgal(x)
                 anyinfo = true
-                xparam = x.parameters[1]
-                if hasuniquerep(xparam) || xparam === Bottom
+                params[i] = typeof(type_parameter(x))
+            elseif isTypeEq(x)
+                anyinfo = true
+                xparam = type_parameter(x)
+                # an `==`-only type value has no pinned `typeof` (#61323), except
+                # `Type{Union{}}` whose only value is `Union{}`
+                if xparam === Bottom
                     params[i] = typeof(xparam)
                 else
                     params[i] = Type
@@ -1995,7 +2270,7 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     typ = Tuple{params...}
     # replace a singleton type with its equivalent Const object
     issingletontype(typ) && return Const(typ.instance)
-    return anyinfo ? PartialStruct(𝕃, typ, partialstruct_init_undefs(typ, argtypes), argtypes) : typ
+    return anyinfo ? PartialStruct(𝕃, typ, partialstruct_init_undefs(typ, argtypes)::Vector, argtypes) : typ
 end
 
 @nospecs function memorynew_tfunc(𝕃::AbstractLattice, memtype, memlen)
@@ -2014,6 +2289,10 @@ end
 @nospecs function memoryrefset!_tfunc(𝕃::AbstractLattice, mem, item, order, boundscheck)
     hasintersect(widenconst(item), memoryrefget_tfunc(𝕃, mem, order, boundscheck)) || return Bottom
     return item
+end
+@nospecs function memoryrefunset!_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
+    memoryref_builtin_common_errorcheck(mem, order, boundscheck) || return Bottom
+    return Nothing
 end
 @nospecs function memoryrefswap!_tfunc(𝕃::AbstractLattice, mem, v, order, boundscheck)
     memoryrefset!_tfunc(𝕃, mem, v, order, boundscheck) === Bottom && return Bottom
@@ -2042,6 +2321,7 @@ end
 
 add_tfunc(Core.memoryrefget, 3, 3, memoryrefget_tfunc, 20)
 add_tfunc(Core.memoryrefset!, 4, 4, memoryrefset!_tfunc, 20)
+add_tfunc(Core.memoryrefunset!, 3, 3, memoryrefunset!_tfunc, 20)
 add_tfunc(Core.memoryrefswap!, 4, 4, memoryrefswap!_tfunc, 20)
 add_tfunc(Core.memoryrefmodify!, 5, 5, memoryrefmodify!_tfunc, 20)
 add_tfunc(Core.memoryrefreplace!, 6, 6, memoryrefreplace!_tfunc, 20)
@@ -2079,6 +2359,7 @@ end
 @nospecs function memoryref_tfunc(𝕃::AbstractLattice, ref, idx, boundscheck)
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
+    hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
     return ref
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
@@ -2090,7 +2371,7 @@ end
 add_tfunc(memoryrefoffset, 1, 1, memoryrefoffset_tfunc, 5)
 
 @nospecs function memoryref_builtin_common_errorcheck(mem, order, boundscheck)
-    hasintersect(widenconst(mem), GenericMemoryRef) || return false
+    hasintersect(widenconst(mem), Union{GenericMemory, GenericMemoryRef}) || return false
     hasintersect(widenconst(order), Symbol) || return false
     hasintersect(widenconst(unwrapva(boundscheck)), Bool) || return false
     return true
@@ -2186,7 +2467,7 @@ function memoryref_builtin_common_nothrow(argtypes::Vector{Any})
         idx = widenconst(argtypes[2])
         idx ⊑ Int || return false
         boundscheck ⊑ Bool || return false
-        memtype ⊑ GenericMemoryRef || return false
+        memtype ⊑ Union{GenericMemory, GenericMemoryRef} || return false
         # If we have @inbounds (last argument is false), we're allowed to assume
         # we don't throw bounds errors.
         if isa(boundscheck, Const)
@@ -2213,6 +2494,8 @@ function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vec
         # If we could potentially throw undef ref errors, bail out now.
         array_type_undefable(memtype) && return false
     end
+    # memoryrefunset! has no value-typed arg to check; element type is always
+    # compatible with `nothing` since we are only zeroing pointer slots.
     # If we have @inbounds (last argument is false), we're allowed to assume
     # we don't throw bounds errors.
     if isa(boundscheck, Const)
@@ -2260,6 +2543,8 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         memtype = widenconst(argtypes[1])
         return memtype ⊑ GenericMemoryRef
     elseif f === memoryrefset!
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
+    elseif f === memoryrefunset!
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefget
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
@@ -2316,16 +2601,23 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === Core.compilerbarrier
         na == 2 || return false
         return compilerbarrier_nothrow(argtypes[1], nothing)
+    elseif f === Core._svec_len
+        na == 1 || return false
+        return _svec_len_nothrow(𝕃, argtypes[1])
+    elseif f === Core._svec_ref
+        na == 2 || return false
+        return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const
     end
     return false
 end
 
-# known to be always effect-free (in particular nothrow)
+# known to be always effect-free (in particular also nothrow)
 const _PURE_BUILTINS = Any[
     tuple,
     svec,
     ===,
     typeof,
+    has_free_typevars,
     nfields,
 ]
 
@@ -2334,6 +2626,7 @@ const _CONSISTENT_BUILTINS = Any[
     svec,  # SimpleVector is immutable, thus svecs of egal arguments are egal
     ===,
     typeof,
+    has_free_typevars,
     nfields,
     fieldtype,
     apply_type,
@@ -2346,7 +2639,11 @@ const _CONSISTENT_BUILTINS = Any[
     throw,
     Core.throw_methoderror,
     setfield!,
-    donotdelete
+    donotdelete,
+    memoryrefnew,
+    memoryrefoffset,
+    Core._svec_len,
+    Core._svec_ref,
 ]
 
 # known to be effect-free (but not necessarily nothrow)
@@ -2371,6 +2668,8 @@ const _EFFECT_FREE_BUILTINS = [
     Core.throw_methoderror,
     getglobal,
     compilerbarrier,
+    Core._svec_len,
+    Core._svec_ref,
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -2388,6 +2687,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     tuple,
     typeassert,
     typeof,
+    has_free_typevars,
     compilerbarrier,
     Core._typevar,
     donotdelete,
@@ -2400,18 +2700,18 @@ const _ARGMEM_BUILTINS = Any[
     memoryrefget,
     memoryref_isassigned,
     memoryrefset!,
+    memoryrefunset!,
     modifyfield!,
     replacefield!,
     setfield!,
     swapfield!,
+    Core._svec_len,
+    Core._svec_ref,
 ]
 
 const _INCONSISTENT_INTRINSICS = Any[
-    Intrinsics.pointerref,      # this one is volatile
-    Intrinsics.sqrt_llvm_fast,  # this one may differ at runtime (by a few ulps)
-    Intrinsics.have_fma,        # this one depends on the runtime environment
-    Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
-    # ... and list fastmath intrinsics:
+    # all is_pure_intrinsic_infer plus
+    # ... all the unsound fastmath functions which should have been in is_pure_intrinsic_infer
     # join(string.("Intrinsics.", sort(filter(endswith("_fast")∘string, names(Core.Intrinsics)))), ",\n")
     Intrinsics.add_float_fast,
     Intrinsics.div_float_fast,
@@ -2428,8 +2728,41 @@ const _INCONSISTENT_INTRINSICS = Any[
     # Intrinsics.muladd_float,    # this is not interprocedurally consistent
 ]
 
-const _SPECIAL_BUILTINS = Any[
-    Core._apply_iterate,
+# Intrinsics that require all arguments to be floats
+const _FLOAT_INTRINSICS = Any[
+    Intrinsics.neg_float,
+    Intrinsics.add_float,
+    Intrinsics.sub_float,
+    Intrinsics.mul_float,
+    Intrinsics.div_float,
+    Intrinsics.min_float,
+    Intrinsics.max_float,
+    Intrinsics.fma_float,
+    Intrinsics.muladd_float,
+    Intrinsics.neg_float_fast,
+    Intrinsics.add_float_fast,
+    Intrinsics.sub_float_fast,
+    Intrinsics.mul_float_fast,
+    Intrinsics.div_float_fast,
+    Intrinsics.min_float_fast,
+    Intrinsics.max_float_fast,
+    Intrinsics.eq_float,
+    Intrinsics.ne_float,
+    Intrinsics.lt_float,
+    Intrinsics.le_float,
+    Intrinsics.eq_float_fast,
+    Intrinsics.ne_float_fast,
+    Intrinsics.lt_float_fast,
+    Intrinsics.le_float_fast,
+    Intrinsics.fpiseq,
+    Intrinsics.abs_float,
+    Intrinsics.copysign_float,
+    Intrinsics.ceil_llvm,
+    Intrinsics.floor_llvm,
+    Intrinsics.trunc_llvm,
+    Intrinsics.rint_llvm,
+    Intrinsics.sqrt_llvm,
+    Intrinsics.sqrt_llvm_fast
 ]
 
 # Types compatible with fpext/fptrunc
@@ -2461,6 +2794,20 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
+function is_relocatable_ptr_field(ty, fld)
+    # Special case: these fields are not mutated, but they are the only native pointer fields
+    # that have relocations in staticdata.c, so they can change between processes.
+    if hasintersect(widenconst(ty), Core.TypeName) &&
+        (Const(:constfields) ⊑ fld || Const(fieldindex(Core.TypeName, :constfields)) ⊑ fld ||
+        Const(:atomicfields) ⊑ fld || Const(fieldindex(Core.TypeName, :atomicfields)) ⊑ fld)
+        return true
+    elseif hasintersect(widenconst(ty), DataType) &&
+        (Const(:layout) ⊑ fld || Const(fieldindex(DataType, :layout)) ⊑ fld)
+        return true
+    end
+    return false
+end
+
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 2 && return EFFECTS_THROWS
     obj = argtypes[1]
@@ -2472,8 +2819,12 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub=ALWAYS_FALSE)
     end
     # :consistent if the argtype is immutable
-    consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
-        ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    if is_relocatable_ptr_field(argtypes[1], argtypes[2])
+        consistent = ALWAYS_FALSE
+    else
+        consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
+            ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    end
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
@@ -2490,7 +2841,7 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub = ALWAYS_FALSE
         end
     end
-    if hasintersect(widenconst(obj), Module)
+    if hasintersect(widenconst(obj), Module) || is_relocatable_ptr_field(argtypes[1], argtypes[2])
         # Modeled more precisely in abstract_eval_getglobal
         inaccessiblememonly = ALWAYS_FALSE
     elseif is_mutation_free_argtype(obj)
@@ -2501,8 +2852,75 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly, noub)
 end
 
+# add a new builtin function to this list only after making sure that
+# `builtin_effects` is properly implemented for it
+const _EFFECTS_KNOWN_BUILTINS = Any[
+    <:,
+    ===,
+    # Core._abstracttype,
+    # _apply_iterate,
+    # Core._call_in_world_total,
+    # Core._compute_sparams,
+    # Core._equiv_typedef,
+    Core._expr,
+    # Core._primitivetype,
+    # Core._setsuper!,
+    # Core._structtype,
+    Core._svec_len,
+    Core._svec_ref,
+    # Core._typebody!,
+    Core._typevar,
+    apply_type,
+    compilerbarrier,
+    Core.current_scope,
+    donotdelete,
+    Core.finalizer,
+    Core.get_binding_type,
+    Core.ifelse,
+    # Core.invoke_in_world,
+    # invokelatest,
+    Core.memorynew,
+    memoryref_isassigned,
+    memoryrefget,
+    # Core.memoryrefmodify!,
+    memoryrefnew,
+    memoryrefoffset,
+    # Core.memoryrefreplace!,
+    memoryrefset!,
+    # Core.memoryrefsetonce!,
+    # Core.memoryrefswap!,
+    memoryrefunset!,
+    Core.sizeof,
+    svec,
+    Core.throw_methoderror,
+    applicable,
+    fieldtype,
+    getfield,
+    getglobal,
+    has_free_typevars,
+    # invoke,
+    isa,
+    isdefined,
+    # isdefinedglobal,
+    modifyfield!,
+    # modifyglobal!,
+    nfields,
+    replacefield!,
+    # replaceglobal!,
+    setfield!,
+    # setfieldonce!,
+    # setglobal!,
+    # setglobalonce!,
+    swapfield!,
+    # swapglobal!,
+    throw,
+    tuple,
+    typeassert,
+    typeof
+]
+
 """
-    builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Effects
+    builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt)::Effects
 
 Compute the effects of a builtin function call. `argtypes` should not include `f` itself.
 """
@@ -2511,7 +2929,9 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return intrinsic_effects(f, argtypes)
     end
 
-    @assert !contains_is(_SPECIAL_BUILTINS, f)
+    if !(f in _EFFECTS_KNOWN_BUILTINS)
+        return Effects()
+    end
 
     if f === getfield
         return getfield_effects(𝕃, argtypes, rt)
@@ -2553,16 +2973,14 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefnew || f === memoryrefoffset
-            consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
+        elseif f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
         else
             consistent = ALWAYS_FALSE
         end
-        if f === setfield! || f === memoryrefset!
+        if f === setfield! || f === memoryrefset! || f === memoryrefunset!
             effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
         elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
             effect_free = ALWAYS_TRUE
@@ -2577,7 +2995,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             inaccessiblememonly = ALWAYS_FALSE
         end
-        if f === memoryrefnew || f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
+        if f === memoryrefnew || f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -2598,7 +3016,7 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
             return true
         end
         expected_nargs = 3
-    elseif f === memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
         expected_nargs = 3
     else
         @assert f === memoryrefset! "unexpected memoryop is given"
@@ -2616,9 +3034,8 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     return false
 end
 
-function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
+function current_scope_tfunc(::AbstractInterpreter, sv::InferenceState)
     pc = sv.currpc
-    handler_info = sv.handler_info
     while true
         pchandler = gethandler(sv, pc)
         if pchandler === nothing
@@ -2640,12 +3057,12 @@ function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
         pc = pchandler.enter_idx
     end
 end
-current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
+current_scope_tfunc(::AbstractInterpreter, ::IRInterpretationState) = Any
 
 hasvarargtype(argtypes::Vector{Any}) = !isempty(argtypes) && isvarargtype(argtypes[end])
 
 """
-    builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
+    builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt)::Bool
 
 Compute throw-ness of a builtin function call. `argtypes` should not include `f` itself.
 """
@@ -2664,11 +3081,12 @@ end
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
                            sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
-    if isa(f, IntrinsicFunction)
-        if is_pure_intrinsic_infer(f) && all(@nospecialize(a) -> isa(a, Const), argtypes)
-            argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
+    # Early constant evaluation for foldable builtins with all const args
+    if isa(f, IntrinsicFunction) ? is_pure_intrinsic_infer(f) : (contains_is(_PURE_BUILTINS, f) || (contains_is(_CONSISTENT_BUILTINS, f) && contains_is(_EFFECT_FREE_BUILTINS, f)))
+        if is_all_const_arg(argtypes, 1)
+            argvals = collect_const_args(argtypes, 1)
             try
-                # unroll a few cases which have specialized codegen
+                # unroll a few common cases for better codegen
                 if length(argvals) == 1
                     return Const(f(argvals[1]))
                 elseif length(argvals) == 2
@@ -2682,6 +3100,8 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                 return Bottom
             end
         end
+    end
+    if isa(f, IntrinsicFunction)
         iidx = Int(reinterpret(Int32, f)) + 1
         if iidx < 0 || iidx > length(T_IFUNC)
             # unknown intrinsic
@@ -2708,6 +3128,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         end
         tf = T_FFUNC_VAL[fidx]
     end
+
     if hasvarargtype(argtypes)
         if length(argtypes) - 1 > tf[2]
             # definitely too many arguments
@@ -2741,6 +3162,8 @@ _istypemin(@nospecialize x) = !_iszero(x) && Intrinsics.neg_int(x) === x
 function builtin_exct(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any}, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
         return intrinsic_exct(𝕃, f, argtypes)
+    elseif f === Core._svec_ref
+        return BoundsError
     end
     return Any
 end
@@ -2824,7 +3247,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     end
 
     if f === Intrinsics.bitcast
-        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        ty, _, isconcrete, _ = instanceof_tfunc(argtypes[1], true)
         xty = widenconst(argtypes[2])
         if !isconcrete
             return Union{ErrorException, TypeError}
@@ -2840,7 +3263,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
              Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
         # If !isconcrete, `ty` may be Union{} at runtime even if we have
         # isprimitivetype(ty).
-        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        ty, _, isconcrete, _ = instanceof_tfunc(argtypes[1], true)
         if !isconcrete
             return Union{ErrorException, TypeError}
         end
@@ -2849,13 +3272,26 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             return ErrorException
         end
 
-        # fpext and fptrunc have further restrictions on the allowed types.
+        # fpext, sext_int, zext_int, fptrunc, trunc_int, fptoui, fptosi, uitofp, and sitofp
+        # have further restrictions on the allowed types.
         if f === Intrinsics.fpext &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
+        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(Core.sizeof(ty) > Core.sizeof(xty))
+            return ErrorException
+        end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+        if f === Intrinsics.trunc_int && !(Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+        if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)
+            return ErrorException
+        end
+        if (f === Intrinsics.uitofp || f === Intrinsics.sitofp) && !(ty <: CORE_FLOAT_TYPES)
             return ErrorException
         end
 
@@ -2863,18 +3299,29 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     end
 
     if f === Intrinsics.have_fma
-        ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        ty, _, isconcrete, _ = instanceof_tfunc(argtypes[1], true)
         if !(isconcrete && isprimitivetype(ty))
             return TypeError
         end
         return Union{}
     end
 
-    # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
-    # primitive types of the same type.
+    if f === Intrinsics.add_ptr || f === Intrinsics.sub_ptr
+        if !(argtypes[1] ⊑ Ptr && argtypes[2] ⊑ UInt)
+            return TypeError
+        end
+        return Union{}
+    end
+
+    # The remaining intrinsics are math/bits/comparison intrinsics.
+    # All the non-floating point intrinsics work on primitive values of the same type.
     isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
     isprimitivetype(argtype1) || return ErrorException
+    if contains_is(_FLOAT_INTRINSICS, f)
+        argtype1 <: CORE_FLOAT_TYPES || return ErrorException
+    end
+
     for i = 2:length(argtypes)
         argtype = widenconst(argtypes[i])
         if isshift ? !isprimitivetype(argtype) : argtype !== argtype1
@@ -2888,36 +3335,48 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
     return intrinsic_exct(SimpleInferenceLattice.instance, f, argtypes) === Union{}
 end
 
-# whether `f` is pure for inference
-function is_pure_intrinsic_infer(f::IntrinsicFunction)
-    return !(f === Intrinsics.pointerref || # this one is volatile
-             f === Intrinsics.pointerset || # this one is never effect-free
-             f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-             f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-             f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
+function _is_effect_free_infer(f::IntrinsicFunction)
+     return !(f === Intrinsics.pointerset ||
+              f === Intrinsics.atomic_pointerref ||
+              f === Intrinsics.atomic_pointerset ||
+              f === Intrinsics.atomic_pointerswap ||
+              # f === Intrinsics.atomic_pointermodify ||
+              f === Intrinsics.atomic_pointerreplace ||
+              f === Intrinsics.atomic_fence)
 end
 
-# whether `f` is effect free if nothrow
-function intrinsic_effect_free_if_nothrow(@nospecialize f)
-    return f === Intrinsics.pointerref ||
-           f === Intrinsics.have_fma ||
-           is_pure_intrinsic_infer(f)
+# whether `f` is pure for inference
+function is_pure_intrinsic_infer(f::IntrinsicFunction, is_effect_free::Union{Nothing,Bool}=nothing)
+    if is_effect_free === nothing
+        is_effect_free = _is_effect_free_infer(f)
+    end
+    return is_effect_free && !(
+            f === Intrinsics.llvmcall ||              # can do arbitrary things
+            f === Intrinsics.atomic_pointermodify ||  # can do arbitrary things
+            f === Intrinsics.pointerref ||            # this one is volatile
+            f === Intrinsics.sqrt_llvm_fast ||        # this one may differ at runtime (by a few ulps)
+            f === Intrinsics.have_fma ||              # this one depends on the runtime environment
+            f === Intrinsics.cglobal)                 # cglobal lookup answer changes at runtime
 end
 
 function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
     if f === Intrinsics.llvmcall
         # llvmcall can do arbitrary things
         return Effects()
+    elseif f === atomic_pointermodify
+        # atomic_pointermodify has memory effects, plus any effects from the ModifyOpInfo
+        return Effects()
     end
-    if contains_is(_INCONSISTENT_INTRINSICS, f)
-        consistent = ALWAYS_FALSE
-    else
+    is_effect_free = _is_effect_free_infer(f)
+    effect_free = is_effect_free ? ALWAYS_TRUE : ALWAYS_FALSE
+    if ((is_pure_intrinsic_infer(f, is_effect_free) && !contains_is(_INCONSISTENT_INTRINSICS, f)) ||
+        f === Intrinsics.pointerset || f === Intrinsics.atomic_pointerset || f === Intrinsics.atomic_fence)
         consistent = ALWAYS_TRUE
+    else
+        consistent = ALWAYS_FALSE
     end
-    effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
     nothrow = intrinsic_nothrow(f, argtypes)
-    inaccessiblememonly = ALWAYS_TRUE
+    inaccessiblememonly = is_effect_free && !(f === Intrinsics.pointerref) ? ALWAYS_TRUE : ALWAYS_FALSE
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
 end
 
@@ -2935,7 +3394,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         return Future(UNKNOWN)
     end
 
-    af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
+    af_argtype = isa(tt, Const) ? tt.val : type_parameter(tt)
     if !isa(af_argtype, DataType) || !(af_argtype <: Tuple)
         return Future(UNKNOWN)
     end
@@ -2948,14 +3407,35 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         isempty(argtypes_vec) && push!(argtypes_vec, Union{})
         aft = argtypes_vec[1]
     end
-    if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-            (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
-        return Future(UNKNOWN)
-    end
-
     # effects are not an issue if we know this statement will get removed, but if it does not get removed,
     # then this could be recursively re-entering inference (via concrete-eval), which will not terminate
     RT_CALL_EFFECTS = Effects(EFFECTS_TOTAL; nortcall=false)
+
+    if isa(aft, PartialOpaque)
+        argtypes_vec[1] = aft = widenconst(aft)
+    end
+    aftw = widenconst(aft)
+    if hasintersect(aftw, Core.OpaqueClosure)
+        # Match `return_type(::OpaqueClosure, ::DataType)`: observe the return type
+        # declared by the OC type without inspecting the opaque closure source.
+        uaft = unwrap_unionall(aftw)
+        if isa(uaft, DataType) && aftw <: Core.OpaqueClosure
+            ocargt = rewrap_unionall(uaft.parameters[1], aftw)
+            if !hasintersect(af_argtype, ocargt)
+                return Future(CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+            end
+            rt = rewrap_unionall(uaft.parameters[2], aftw)
+            if aftw isa DataType
+                return Future(CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+            else
+                return Future(CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+            end
+        end
+    end
+    if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
+         (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
+        return Future(UNKNOWN)
+    end
 
     if contains_is(argtypes_vec, Union{})
         return Future(CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
@@ -2968,9 +3448,13 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
     end
-    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
+    # TODO: Could pass vtypes here to enable Conditional/MustAlias refinements
+    # in return_type inference. Currently passing `nothing` which means any
+    # slot-dependent refinements will be widened. This is conservative but
+    # may miss some precision opportunities.
+    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
     tt = Core.Box(tt)
-    return Future{CallMeta}(call, interp, sv) do call, interp, sv
+    return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)
             sv.restrict_abstract_call_sites = old_restrict
         end
@@ -2993,7 +3477,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             # input arguments were known for certain
             # XXX: this doesn't imply we know anything about rt
             return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
-        elseif isType(rt)
+        elseif isTypeEq(rt)
             return CallMeta(Type{rt}, Union{}, RT_CALL_EFFECTS, info)
         else
             return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
@@ -3017,7 +3501,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
             rt = Bool # too many matches to analyze
         else
             (; valid_worlds, applicable) = matches
-            update_valid_age!(sv, valid_worlds)
+            update_valid_age!(sv, get_inference_world(interp), valid_worlds)
             napplicable = length(applicable)
             if napplicable == 0
                 rt = Const(false) # never any matches
@@ -3048,7 +3532,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     else
         return CallMeta(Any, Any, Effects(), NoCallInfo())
     end
-    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, typeidx), false)
+    (types, isexact, _, _) = instanceof_tfunc(argtype_by_index(argtypes, typeidx), false)
     isexact || return CallMeta(Bool, Any, Effects(), NoCallInfo())
     unwrapped = unwrap_unionall(types)
     if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
@@ -3058,15 +3542,12 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
         isdispatchelem(ft) || return CallMeta(Bool, Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
         types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     end
-    mt = ccall(:jl_method_table_for, Any, (Any,), types)
-    if !isa(mt, MethodTable)
-        return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
-    end
     match, valid_worlds = findsup(types, method_table(interp))
-    update_valid_age!(sv, valid_worlds)
+    update_valid_age!(sv, get_inference_world(interp), valid_worlds)
     if match === nothing
         rt = Const(false)
         vresults = MethodLookupResult(Any[], valid_worlds, true)
+        mt = Core.methodtable
         vinfo = MethodMatchInfo(vresults, mt, types, false) # XXX: this should actually be an info with invoke-type edge
     else
         rt = Const(true)
@@ -3081,7 +3562,7 @@ function typename_static(@nospecialize(t))
     t isa Const && return _typename(t.val)
     t isa Conditional && return Bool.name
     t = unwrap_unionall(widenconst(t))
-    return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
+    return isType(t) ? _typename(type_parameter(t)) : Core.TypeName
 end
 
 function global_order_exct(@nospecialize(o), loading::Bool, storing::Bool)
@@ -3128,7 +3609,7 @@ add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)
 
 const FOREIGNCALL_ARG_START = 6
 
-function foreigncall_effects(@nospecialize(abstract_eval), e::Expr)
+function foreigncall_effects(@nospecialize(abstract_eval), ::Expr)
     # `:foreigncall` can potentially perform all sorts of operations, including calling
     # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
     # concern that the method calls that potentially occur within the `:foreigncall` will
@@ -3151,7 +3632,7 @@ function new_genericmemory_nothrow(@nospecialize(abstract_eval), args::Vector{An
     0 < dimval < typemax(Int) || return false
     tot, ovflw = Intrinsics.checked_smul_int(dimval, elsz)
     ovflw && return false
-    isboxed = 1; isunion = 2
+    isunion = 2
     tot, ovflw = Intrinsics.checked_sadd_int(tot, arrayelem == isunion ? 1 + dimval : 1)
     ovflw && return false
     return true

@@ -1,19 +1,23 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module contextual
+
 # N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
 using Test
-include("setup_Compiler.jl")
 
 # Cassette
 # ========
+
+# TODO Use CassetteBase.jl instead of this mini-cassette?
 
 module MiniCassette
     # A minimal demonstration of the cassette mechanism. Doesn't support all the
     # fancy features, but sufficient to exercise this code path in the compiler.
 
+    using Core: SimpleVector
     using Core.IR
-    using ..Compiler
-    using ..Compiler: retrieve_code_info, quoted, anymap
+    using Base: Compiler as CC
+    using .CC: retrieve_code_info, quoted, anymap
     using Base.Meta: isexpr
 
     export Ctx, overdub
@@ -21,7 +25,7 @@ module MiniCassette
     struct Ctx; end
 
     # A no-op cassette-like transform
-    function transform_expr(expr, map_slot_number, map_ssa_value, sparams::Core.SimpleVector)
+    function transform_expr(expr, map_slot_number, map_ssa_value, sparams::SimpleVector)
         @nospecialize expr
         transform(@nospecialize expr) = transform_expr(expr, map_slot_number, map_ssa_value, sparams)
         if isexpr(expr, :call)
@@ -45,11 +49,11 @@ module MiniCassette
         end
     end
 
-    function transform!(mi::MethodInstance, ci::CodeInfo, nargs::Int, sparams::Core.SimpleVector)
+    function transform!(mi::MethodInstance, ci::CodeInfo, nargs::Int, sparams::SimpleVector)
         code = ci.code
-        di = Compiler.DebugInfoStream(mi, ci.debuginfo, length(code))
-        ci.slotnames = Symbol[Symbol("#self#"), :ctx, :f, :args, ci.slotnames[nargs+1:end]...]
-        ci.slotflags = UInt8[(0x00 for i = 1:4)..., ci.slotflags[nargs+1:end]...]
+        di = CC.DebugInfoStream(mi, ci.debuginfo, length(code))
+        ci.slotnames = Symbol[Symbol("#self#"), :ctx, :f, :args, ci.slotnames[nargs+2:end]...]
+        ci.slotflags = UInt8[(0x00 for i = 1:4)..., ci.slotflags[nargs+2:end]...]
         # Insert one SSAValue for every argument statement
         prepend!(code, Any[Expr(:call, getfield, SlotNumber(4), i) for i = 1:nargs])
         prepend!(di.codelocs, fill(Int32(0), 3nargs))
@@ -76,21 +80,26 @@ module MiniCassette
 
     function overdub_generator(world::UInt, source, self, ctx, f, args)
         @nospecialize
+        argnames = Core.svec(:overdub, :ctx, :f, :args)
+        spnames = Core.svec()
+
         if !Base.issingletontype(f)
             # (c, f, args..) -> f(args...)
-            ex = :(return f(args...))
-            return Core.GeneratedFunctionStub(identity, Core.svec(:overdub, :ctx, :f, :args), Core.svec())(world, source, ex)
+            return generate_lambda_ex(world, source, argnames, spnames, :(return f(args...)))
         end
 
         tt = Tuple{f, args...}
         match = Base._which(tt; world)
         mi = Base.specialize_method(match)
         # Unsupported in this mini-cassette
-        @assert !mi.def.isva
+        !mi.def.isva ||
+            return generate_lambda_ex(world, source, argnames, spnames, :(error("Unsupported vararg method")))
         src = retrieve_code_info(mi, world)
-        @assert isa(src, CodeInfo)
+        isa(src, CodeInfo) ||
+            return generate_lambda_ex(world, source, argnames, spnames, :(error("Unexpected code transformation")))
         src = copy(src)
-        @assert src.edges === Core.svec()
+        src.edges === Core.svec() ||
+            return generate_lambda_ex(world, source, argnames, spnames, :(error("Unexpected code transformation")))
         src.edges = Any[mi]
         transform!(mi, src, length(args), match.sparams)
         # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
@@ -98,7 +107,19 @@ module MiniCassette
         # Match the generator, since that's what our transform! does
         src.nargs = 4
         src.isva = true
+        errors = CC.validate_code(mi, src)
+        if !isempty(errors)
+            foreach(Core.println, errors)
+            return generate_lambda_ex(world, source, argnames, spnames, :(error("Found errors in generated code")))
+        end
         return src
+    end
+
+    function generate_lambda_ex(world::UInt, source::Method,
+                                argnames::SimpleVector, spnames::SimpleVector,
+                                body::Expr)
+        stub = Core.GeneratedFunctionStub(identity, argnames, spnames)
+        return stub(world, source, body)
     end
 
     @inline overdub(::Ctx, f::Union{Core.Builtin, Core.IntrinsicFunction}, args...) = f(args...)
@@ -124,3 +145,8 @@ f() = 2
 foo(i) = i+bar(Val(1))
 
 @test @inferred(overdub(Ctx(), foo, 1)) == 43
+
+morethan4args(a, b, c, d, e) = (((a + b) + c) + d) + e
+@test overdub(Ctx(), morethan4args, 1, 2, 3, 4, 5) == 15
+
+end # module contextual

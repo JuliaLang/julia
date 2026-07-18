@@ -363,6 +363,14 @@ QuoteNode
 
 `QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
+Note that while it does not support `$`, it also does not prevent it, nor does
+it preserve the identity of the wrapped object:
+
+```jldoctest
+julia> b = 2; eval(Expr(:quote, QuoteNode(Expr(:$, :b))))
+:($(QuoteNode(2)))
+```
+
 ### Evaluating expressions
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using
@@ -711,7 +719,7 @@ user to optionally specify their own error message, instead of just printing the
 Just like in functions with a variable number of arguments ([Varargs Functions](@ref)), this is specified with an ellipses
 following the last argument:
 
-```jldoctest assert2
+```julia-repl assert2
 julia> macro assert(ex, msgs...)
            msg_body = isempty(msgs) ? ex : msgs[1]
            msg = string(msg_body)
@@ -950,7 +958,7 @@ end
 
 ```
 
-for which we want to add a number of methods to. We can do this programmatically in the
+to which we want to add a number of methods. We can do this programmatically in the
 following loop:
 
 ```jldoctest mynumber-codegen
@@ -1424,7 +1432,7 @@ julia> sub2ind_gen_impl(Tuple{Int,Int}, Int, Int)
 ```
 
 So, the method body that will be used here doesn't include a loop at all - just indexing into
-the two tuples, multiplication and addition/subtraction. All the looping is performed compile-time,
+the two tuples, multiplication and addition/subtraction. All the looping is performed at compile time,
 and we avoid looping during execution entirely. Thus, we only loop *once per type*, in this case
 once per `N` (except in edge cases where the function is generated more than once - see disclaimer
 above).

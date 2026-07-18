@@ -247,17 +247,17 @@ PV = view(P, 2:3, :)
 
 # Similar
 B = similar(A, Float32)
-@test isa(B, OffsetArray{Float32,2})
+@test isa(B, OffsetMatrix{Float32})
 @test axes(B) === axes(A)
 B = similar(A, (3,4))
-@test isa(B, Array{Int,2})
+@test isa(B, Matrix{Int})
 @test size(B) == (3,4)
 @test axes(B) === (Base.OneTo(3), Base.OneTo(4))
 B = similar(A, (-3:3,1:4))
-@test isa(B, OffsetArray{Int,2})
+@test isa(B, OffsetMatrix{Int})
 @test axes(B) === (OffsetArrays.IdOffsetRange(Base.OneTo(7), -4), OffsetArrays.IdOffsetRange(Base.OneTo(4)))
 B = similar(parent(A), (-3:3,1:4))
-@test isa(B, OffsetArray{Int,2})
+@test isa(B, OffsetMatrix{Int})
 @test axes(B) === (OffsetArrays.IdOffsetRange(Base.OneTo(7), -4), OffsetArrays.IdOffsetRange(Base.OneTo(4)))
 
 # Indexing with OffsetArray indices
@@ -597,6 +597,8 @@ A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 # issue #33614
 A = OffsetArray(-1:0, (-2,))
 @test reshape(A, :) === A
+@test axes(similar(typeof(A),axes(A))) == axes(A)
+@test eltype(similar(typeof(A),axes(A))) == eltype(A)
 Arsc = reshape(A, :, 1)
 Arss = reshape(A, 2, 1)
 @test Arsc[1,1] == Arss[1,1] == -1
@@ -921,7 +923,7 @@ end
     @test axes(A) == Base.IdentityUnitRange.((2:3, 4:5))
 
     B = reshape(A0, -10:-9, 9:10)
-    @test isa(B, OffsetArray{Int,2})
+    @test isa(B, OffsetMatrix{Int})
     @test parent(B) == A0
     @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
 end

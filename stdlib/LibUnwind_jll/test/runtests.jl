@@ -4,6 +4,6 @@ using Test, Libdl, LibUnwind_jll
 
 @testset "LibUnwind_jll" begin
     if !Sys.isapple() && !Sys.iswindows()
-        @test dlsym(LibUnwind_jll.libunwind_handle, :unw_backtrace; throw_error=false) !== nothing
+        @test dlsym(LibUnwind_jll.libunwind, :unw_backtrace; throw_error=false) !== nothing
     end
 end

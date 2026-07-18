@@ -1,5 +1,6 @@
+# -*- makefile -*-
 ## jll artifact
 MPFR_JLL_NAME := MPFR
 
 ## source build
-MPFR_VER := 4.2.1
+MPFR_VER := 4.2.2

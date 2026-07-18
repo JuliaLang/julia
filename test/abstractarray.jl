@@ -16,6 +16,9 @@ using .Main.FillArrays
 isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
 using .Main.SizedArrays
 
+isdefined(Main, :StridedArrays) || @eval Main include("testhelpers/StridedArrays.jl")
+using .Main.StridedArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -831,6 +834,21 @@ function test_cat(::Type{TestAbstractArray})
     r = rand(Float32, 56, 56, 64, 1);
     f(r) = cat(r, r, dims=(3,))
     @inferred f(r);
+
+    #58866 - ensure proper dimension calculation for 0-dimension elements
+    @test [zeros(1, 0) zeros(1,0); zeros(0,0) zeros(0, 0)] == Matrix{Float64}(undef, 1, 0)
+
+    # type stability on hvncat_fill! internal iteration (#61426)
+    let
+        a1 = Matrix{Float64}(undef, 2, 2)
+        Base.hvncat_fill!(a1, true, (1, 2.0, 3, 4.0))
+        @test @allocated(Base.hvncat_fill!(a1, true, (1, 2.0, 3, 4.0))) == 0
+
+        a2 = Array{Float64, 3}(undef, 2, 3, 2)
+        xs = (1, 2.0, 3, 4.0, 5, 6.0, 7, 8.0, 9, 10.0, 11, 12.0)
+        @test @allocated(Base.hvncat_fill!(a2, false, xs)) == 0
+        @test @allocated(Base.hvncat_fill!(a2, true, xs)) == 0
+    end
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -844,7 +862,7 @@ function test_ind2sub(::Type{TestAbstractArray})
     end
 end
 
-# A custom linear slow array that insists upon Cartesian indexing
+# A custom slow array that insists upon Cartesian indexing
 mutable struct TSlowNIndexes{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
@@ -910,6 +928,26 @@ include("generic_map_tests.jl")
 generic_map_tests(map, map!)
 @test map!(-, [1]) == [-1]
 
+@testset "#30624" begin
+    ### unstructured
+    @test map!(+, ones(3), ones(3), ones(3), [1]) == [3, 1, 1]
+    @test map!(+, ones(3), [1], ones(3), ones(3)) == [3, 1, 1]
+    @test map!(+, [1], [1], [], []) == [1]
+    @test map!(+, [[1]], [1], [], []) == [[1]]
+
+    # TODO: decide if input axes & lengths should be validated
+    # @test_throws BoundsError map!(+, ones(1), ones(2))
+    # @test_throws BoundsError map!(+, ones(1), ones(2, 2))
+
+    @test map!(+, ones(3), view(ones(2, 3), 1:2, 2:3), ones(3)) == [2, 2, 2]
+    @test map!(+, ones(3), ones(2, 2), ones(3)) == [2, 2, 2]
+
+    ### structured (all mapped arguments are <:AbstractArray equal ndims > 1)
+    @test map!(+, ones(4), ones(2, 2), ones(2, 2)) == [2, 2, 2, 2]
+    @test map!(+, ones(4), ones(2, 2), ones(1, 2)) == [2, 2, 1, 1]
+    # @test_throws BoundsError map!(+, ones(3), ones(2, 2), ones(2, 2))
+end
+
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
 test_checksquare()
@@ -940,6 +978,9 @@ end
         @test +(A) == A
         @test *(A) == A
     end
+
+    # Unary addition is valid for Arrays over anything, not just numbers
+    @test +[[1]] == [[1]]
 end
 
 @testset "reverse dim on empty" begin
@@ -1211,38 +1252,12 @@ end
     end
 end
 
-struct Strider{T,N} <: AbstractArray{T,N}
-    data::Vector{T}
-    offset::Int
-    strides::NTuple{N,Int}
-    size::NTuple{N,Int}
-end
-function Strider{T}(strides::NTuple{N}, size::NTuple{N}) where {T,N}
-    offset = 1-sum(strides .* (strides .< 0) .* (size .- 1))
-    data = Array{T}(undef, sum(abs.(strides) .* (size .- 1)) + 1)
-    return Strider{T, N, Vector{T}}(data, offset, strides, size)
-end
-function Strider(vec::AbstractArray{T}, strides::NTuple{N}, size::NTuple{N}) where {T,N}
-    offset = 1-sum(strides .* (strides .< 0) .* (size .- 1))
-    @assert length(vec) >= sum(abs.(strides) .* (size .- 1)) + 1
-    return Strider{T, N}(vec, offset, strides, size)
-end
-Base.size(S::Strider) = S.size
-function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
-    return S.data[sum(S.strides .* (I .- 1)) + S.offset]
-end
-Base.strides(S::Strider) = S.strides
-Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
-Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = memoryref(S.data.ref, S.offset)
-
 @testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
     A = collect(reshape(1:prod(sz), sz))
     S = Strider(vec(A), strides(A), sz)
-    @test pointer(A) == pointer(S)
-    for i in 1:prod(sz)
-        @test pointer(A, i) == pointer(S, i)
-        @test A[i] == S[i]
-    end
+    @test A == S
+    check_strided_get(A)
+    check_strided_get(S)
     for idxs in ((1:sz[1], 1:sz[2], 1:sz[3]),
                  (1:sz[1], 2:2:sz[2], sz[3]:-1:1),
                  (2:2:sz[1]-1, sz[2]:-1:1, sz[3]:-2:2),
@@ -1251,45 +1266,46 @@ Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = memoryref(S.data.ref, S
         Ai = A[idxs...]
         Av = view(A, idxs...)
         Sv = view(S, idxs...)
-        Ss = Strider{Int, 3}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Av), length.(idxs))
-        @test pointer(Av) == pointer(Sv) == pointer(Ss)
-        for i in 1:length(Av)
-            @test pointer(Av, i) == pointer(Sv, i) == pointer(Ss, i)
-            @test Ai[i] == Av[i] == Sv[i] == Ss[i]
-        end
+        Ss = Strider(vec(A), strides(Av), length.(idxs), sum((minimum.(idxs).-1).*strides(A)))
+        @test Ai == Av
+        @test Ai == Sv
+        @test Ai == Ss
+        check_strided_get(Av)
+        check_strided_get(Sv)
+        check_strided_get(Ss)
         for perm in ((3, 2, 1), (2, 1, 3), (3, 1, 2))
             P = permutedims(A, perm)
             Ap = Base.PermutedDimsArray(A, perm)
             Sp = Base.PermutedDimsArray(S, perm)
-            Ps = Strider{Int, 3}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
-            @test pointer(Ap) == pointer(Sp) == pointer(Ps)
-            for i in 1:length(Ap)
-                # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`.
-                # But only evaluate one iteration as broken to reduce test report noise
-                i == 1 && @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i)
-                @test P[i] == Ap[i] == Sp[i] == Ps[i]
-            end
+            Ps = Strider(vec(A), strides(A)[collect(perm)], sz[collect(perm)])
+            @test P == Ap
+            @test P == Sp
+            @test P == Ps
+            check_strided_get(Ap)
+            check_strided_get(Sp)
+            check_strided_get(Ps)
             Pv = view(P, idxs[collect(perm)]...)
             Pi = P[idxs[collect(perm)]...]
             Apv = view(Ap, idxs[collect(perm)]...)
             Spv = view(Sp, idxs[collect(perm)]...)
-            Pvs = Strider{Int, 3}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Apv), size(Apv))
-            @test pointer(Apv) == pointer(Spv) == pointer(Pvs)
-            for i in 1:length(Apv)
-                @test pointer(Apv, i) == pointer(Spv, i) == pointer(Pvs, i)
-                @test Pi[i] == Pv[i] == Apv[i] == Spv[i] == Pvs[i]
-            end
+            Pvs = Strider(vec(A), strides(Apv), size(Apv), sum((minimum.(idxs).-1).*strides(A)))
+            @test Pi == Pv
+            @test Pi == Apv
+            @test Pi == Spv
+            @test Pi == Pvs
+            check_strided_get(Pv)
+            check_strided_get(Apv)
+            check_strided_get(Spv)
             Vp = permutedims(Av, perm)
             Ip = permutedims(Ai, perm)
             Avp = Base.PermutedDimsArray(Av, perm)
             Svp = Base.PermutedDimsArray(Sv, perm)
-            @test pointer(Avp) == pointer(Svp)
-            for i in 1:length(Avp)
-                # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
-                # But only evaluate one iteration as broken to reduce test report noise
-                i == 1 && @test_broken pointer(Avp, i) == pointer(Svp, i)
-                @test Ip[i] == Vp[i] == Avp[i] == Svp[i]
-            end
+            @test Ip == Vp
+            @test Ip == Avp
+            @test Ip == Svp
+            check_strided_get(Vp)
+            check_strided_get(Avp)
+            check_strided_get(Svp)
         end
     end
     # constant propagation in the PermutedDimsArray constructor
@@ -1300,11 +1316,9 @@ end
 @testset "simple 2d strided views, permutes, transposes" for sz in ((5, 3), (7, 11))
     A = collect(reshape(1:prod(sz), sz))
     S = Strider(vec(A), strides(A), sz)
-    @test pointer(A) == pointer(S)
-    for i in 1:prod(sz)
-        @test pointer(A, i) == pointer(S, i)
-        @test A[i] == S[i]
-    end
+    @test A == S
+    check_strided_get(A)
+    check_strided_get(S)
     for idxs in ((1:sz[1], 1:sz[2]),
                  (1:sz[1], 2:2:sz[2]),
                  (2:2:sz[1]-1, sz[2]:-1:1),
@@ -1312,58 +1326,44 @@ end
                  (sz[1]-1:-3:1, sz[2]:-2:3),)
         Av = view(A, idxs...)
         Sv = view(S, idxs...)
-        Ss = Strider{Int, 2}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Av), length.(idxs))
-        @test pointer(Av) == pointer(Sv) == pointer(Ss)
-        for i in 1:length(Av)
-            @test pointer(Av, i) == pointer(Sv, i) == pointer(Ss, i)
-            @test Av[i] == Sv[i] == Ss[i]
-        end
+        @test Av == Sv
+        check_strided_get(Av)
+        check_strided_get(Sv)
         perm = (2, 1)
         P = permutedims(A, perm)
-        Ap = Base.PermutedDimsArray(A, perm)
-        At = transpose(A)
-        Aa = adjoint(A)
-        St = transpose(A)
-        Sa = adjoint(A)
-        Sp = Base.PermutedDimsArray(S, perm)
-        Ps = Strider{Int, 2}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
-        @test pointer(Ap) == pointer(Sp) == pointer(Ps) == pointer(At) == pointer(Aa)
-        for i in 1:length(Ap)
-            # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
-            # But only evaluate one iteration as broken to reduce test report noise
-            i == 1 && @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
-            @test pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
-            @test P[i] == Ap[i] == Sp[i] == Ps[i] == At[i] == Aa[i] == St[i] == Sa[i]
-        end
         Pv = view(P, idxs[collect(perm)]...)
-        Apv = view(Ap, idxs[collect(perm)]...)
-        Atv = view(At, idxs[collect(perm)]...)
-        Ata = view(Aa, idxs[collect(perm)]...)
-        Stv = view(St, idxs[collect(perm)]...)
-        Sta = view(Sa, idxs[collect(perm)]...)
-        Spv = view(Sp, idxs[collect(perm)]...)
-        Pvs = Strider{Int, 2}(vec(A), sum((first.(idxs).-1).*strides(A))+1, strides(Apv), size(Apv))
-        @test pointer(Apv) == pointer(Spv) == pointer(Pvs) == pointer(Atv) == pointer(Ata)
-        for i in 1:length(Apv)
-            @test pointer(Apv, i) == pointer(Spv, i) == pointer(Pvs, i) == pointer(Atv, i) == pointer(Ata, i) == pointer(Stv, i) == pointer(Sta, i)
-            @test Pv[i] == Apv[i] == Spv[i] == Pvs[i] == Atv[i] == Ata[i] == Stv[i] == Sta[i]
+        check_strided_get(Pv)
+        for equivalent_array in [
+                Base.PermutedDimsArray(A, perm),
+                transpose(A),
+                adjoint(A),
+                transpose(S),
+                adjoint(S),
+                Base.PermutedDimsArray(S, perm),
+            ]
+            @test P == equivalent_array
+            check_strided_get(equivalent_array)
+            array_v = view(equivalent_array, idxs[collect(perm)]...)
+            @test Pv == array_v
+            check_strided_get(array_v)
         end
         Vp = permutedims(Av, perm)
-        Avp = Base.PermutedDimsArray(Av, perm)
-        Avt = transpose(Av)
-        Ava = adjoint(Av)
-        Svt = transpose(Sv)
-        Sva = adjoint(Sv)
-        Svp = Base.PermutedDimsArray(Sv, perm)
-        @test pointer(Avp) == pointer(Svp) == pointer(Avt) == pointer(Ava)
-        for i in 1:length(Avp)
-            # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
-            # But only evaluate one iteration as broken to reduce test report noise
-            i == 1 && @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
-            @test pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
-            @test Vp[i] == Avp[i] == Svp[i] == Avt[i] == Ava[i] == Svt[i] == Sva[i]
+        for equivalent_array in [
+                Base.PermutedDimsArray(Av, perm),
+                transpose(Av),
+                adjoint(Av),
+                transpose(Sv),
+                adjoint(Sv),
+                Base.PermutedDimsArray(Sv, perm),
+            ]
+            @test Vp == equivalent_array
+            check_strided_get(equivalent_array)
         end
     end
+    check_strided_get(view(Base.PermutedDimsArray(view(rand(10, 10), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
+    check_strided_get(NonMemStridedArray(rand(3, 10)))
+    check_strided_get(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9))
+    check_strided_get(view(Base.PermutedDimsArray(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
 end
 
 @testset "first/last n elements of $(typeof(itr))" for itr in (collect(1:9),
@@ -1723,6 +1723,9 @@ using Base: typed_hvncat
     @test ["A";;"B";;"C";;"D"] == ["A" "B" "C" "D"]
     @test ["A";"B";;"C";"D"] == ["A" "C"; "B" "D"]
     @test [["A";"B"];;"C";"D"] == ["A" "C"; "B" "D"]
+
+    #58866 - ensure proper dimension calculation for 0-dimension elements
+    @test [zeros(1, 0) zeros(1,0);;; zeros(0,0) zeros(0, 0)] == Array{Float64, 3}(undef, 1, 0, 0)
 end
 
 @testset "stack" begin
@@ -1854,6 +1857,33 @@ end
     end
 end
 
+@testset "issue 56771, stack(; dims) on containers with HasLength eltype & HasShape elements" begin
+    for T in (Matrix, Array, Any)
+        xs = T[rand(2,3) for _ in 1:4]
+        @test size(stack(xs; dims=1)) == (4,2,3)
+        @test size(stack(xs; dims=2)) == (2,4,3)  # this was the problem case, for T=Array
+        @test size(stack(xs; dims=3)) == (2,3,4)
+        @test size(stack(identity, xs; dims=2)) == (2,4,3)
+        @test size(stack(x for x in xs if true; dims=2)) == (2,4,3)
+
+        xmat = T[rand(2,3) for _ in 1:4, _ in 1:5]
+        @test size(stack(xmat; dims=1)) == (20,2,3)
+        @test size(stack(xmat; dims=2)) == (2,20,3)
+        @test size(stack(xmat; dims=3)) == (2,3,20)
+    end
+
+    it = Iterators.product(1:2, 3:5)
+    @test size(it) == (2,3)
+    @test Base.IteratorSize(typeof(it)) == Base.HasShape{2}()
+    @test Base.IteratorSize(Iterators.ProductIterator) == Base.HasLength()
+    for T in (typeof(it), Iterators.ProductIterator, Any)
+        ys = T[it for _ in 1:4]
+        @test size(stack(ys; dims=2)) == (2,4,3)
+        @test size(stack(identity, ys; dims=2)) == (2,4,3)
+        @test size(stack(y for y in ys if true; dims=2)) == (2,4,3)
+    end
+end
+
 @testset "keepat!" begin
     a = [1:6;]
     @test a === keepat!(a, 1:5)
@@ -1888,19 +1918,6 @@ module IRUtils
     include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 end
 
-function check_pointer_strides(A::AbstractArray)
-    # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
-    dims = ntuple(identity, ndims(A))
-    map(i -> stride(A, i), dims) == @inferred(strides(A)) || return false
-    # Test pointer via value check.
-    first(A) === Base.unsafe_load(pointer(A)) || return false
-    # Test strides via value check.
-    for i in eachindex(IndexLinear(), A)
-        A[i] === Base.unsafe_load(pointer(A, i)) || return false
-    end
-    return true
-end
-
 @testset "colonful `reshape`, #54245" begin
     @test reshape([], (0, :)) isa Matrix
     @test_throws DimensionMismatch reshape([7], (0, :))
@@ -1926,34 +1943,34 @@ end
     @test IRUtils.fully_eliminated(f, Base.typesof(a)) && f(a) == 1
     # General contiguous check
     a = view(rand(10,10), 1:10, 1:10)
-    @test check_pointer_strides(vec(a))
+    check_strided_get(vec(a))
     b = view(parent(a), 1:9, 1:10)
-    @test_throws "Input is not strided." strides(vec(b))
+    check_strides_throws("Input is not strided.", vec(b))
     # StridedVector parent
     for n in 1:3
         a = view(collect(1:60n), 1:n:60n)
-        @test check_pointer_strides(reshape(a, 3, 4, 5))
-        @test check_pointer_strides(reshape(a, 5, 6, 2))
+        check_strided_get(reshape(a, 3, 4, 5))
+        check_strided_get(reshape(a, 5, 6, 2))
         b = view(parent(a), 60n:-n:1)
-        @test check_pointer_strides(reshape(b, 3, 4, 5))
-        @test check_pointer_strides(reshape(b, 5, 6, 2))
+        check_strided_get(reshape(b, 3, 4, 5))
+        check_strided_get(reshape(b, 5, 6, 2))
     end
     # StridedVector like parent
     a = randn(10, 10, 10)
     b = view(a, 1:10, 1:1, 5:5)
-    @test check_pointer_strides(reshape(b, 2, 5))
+    check_strided_get(reshape(b, 2, 5))
     # Other StridedArray parent
     a = view(randn(10,10), 1:9, 1:10)
-    @test check_pointer_strides(reshape(a,3,3,2,5))
-    @test check_pointer_strides(reshape(a,3,3,5,2))
-    @test check_pointer_strides(reshape(a,9,5,2))
-    @test check_pointer_strides(reshape(a,3,3,10))
-    @test check_pointer_strides(reshape(a,1,3,1,3,1,5,1,2))
-    @test check_pointer_strides(reshape(a,3,3,5,1,1,2,1,1))
-    @test_throws "Input is not strided." strides(reshape(a,3,6,5))
-    @test_throws "Input is not strided." strides(reshape(a,3,2,3,5))
-    @test_throws "Input is not strided." strides(reshape(a,3,5,3,2))
-    @test_throws "Input is not strided." strides(reshape(a,5,3,3,2))
+    check_strided_get(reshape(a,3,3,2,5))
+    check_strided_get(reshape(a,3,3,5,2))
+    check_strided_get(reshape(a,9,5,2))
+    check_strided_get(reshape(a,3,3,10))
+    check_strided_get(reshape(a,1,3,1,3,1,5,1,2))
+    check_strided_get(reshape(a,3,3,5,1,1,2,1,1))
+    check_strides_throws("Input is not strided.", reshape(a,3,6,5))
+    check_strides_throws("Input is not strided.", reshape(a,3,2,3,5))
+    check_strides_throws("Input is not strided.", reshape(a,3,5,3,2))
+    check_strides_throws("Input is not strided.", reshape(a,5,3,3,2))
     # Zero dimensional parent
     struct FakeZeroDimArray <: AbstractArray{Int, 0} end
     Base.strides(::FakeZeroDimArray) = ()
@@ -1962,14 +1979,14 @@ end
     @test @inferred(strides(a)) == (1, 1, 1)
     # Dense parent (but not StridedArray)
     A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
-    @test check_pointer_strides(reshape(A, 3, 2, 3))
+    check_strided_get(reshape(A, 3, 2, 3))
 end
 
-@testset "pointer for SubArray with none-dense parent." begin
+@testset "strided arrays for SubArray with none-dense parent." begin
     a = view(Matrix(reshape(0x01:0xc8, 20, :)), 1:2:20, :)
     b = reshape(a, 20, :)
-    @test check_pointer_strides(view(b, 2:11, 1:5))
-    @test check_pointer_strides(view(b, reshape(2:11, 2, :), 1:5))
+    check_strided_get(view(b, 2:11, 1:5))
+    check_strided_get(view(b, reshape(2:11, 2, :), 1:5))
 end
 
 @testset "stride for 0 dims array #44087" begin
@@ -1980,9 +1997,13 @@ end
     @test_throws MethodError stride(Fill44087(1), 1)
     # It is intentionally to only check the return type. (The value is somehow arbitrary)
     @test stride(fill(1), 1) isa Int
+    check_strided_get(fill(1))
     @test stride(reinterpret(Float64, fill(Int64(1))), 1) isa Int
+    check_strided_get(reinterpret(Float64, fill(Int64(1))))
     @test stride(reinterpret(reshape, Float64, fill(Int64(1))), 1) isa Int
+    check_strided_get(reinterpret(reshape, Float64, fill(Int64(1))))
     @test stride(Base.ReshapedArray(fill(1), (), ()), 1) isa Int
+    check_strided_get(Base.ReshapedArray(fill(1), (), ()))
 end
 
 @testset "to_indices inference (issue #42001 #44059)" begin
@@ -2171,6 +2192,22 @@ end
 
     @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
     @test one(Mat([1 2; 3 4])) isa Mat
+
+    @testset "SizedArray" begin
+        S = [1 2; 3 4]
+        A = SizedArrays.SizedArray{(2,2)}(S)
+        @test one(A) == one(typeof(A))
+        @test oneunit(A) == oneunit(typeof(A))
+        M = fill(A, 2, 2)
+        O = one(M)
+        for I in CartesianIndices(M)
+            if I[1] == I[2]
+                @test O[I] == one(S)
+            else
+                @test O[I] == zero(S)
+            end
+        end
+    end
 end
 
 @testset "copyto! with non-AbstractArray src" begin
@@ -2225,5 +2262,98 @@ end
         @test isreal(F) == true
         G = ["a", "b", "c"]
         @test_throws MethodError isreal(G)
+    end
+end
+
+@testset "similar/reshape for AbstractOneTo" begin
+    A = [1,2]
+    @testset "reshape" begin
+        @test reshape(A, 2, SizedArrays.SOneTo(1)) == reshape(A, 2, 1)
+        @test reshape(A, Base.OneTo(2), SizedArrays.SOneTo(1)) == reshape(A, 2, 1)
+        @test reshape(A, SizedArrays.SOneTo(1), 2) == reshape(A, 1, 2)
+        @test reshape(A, SizedArrays.SOneTo(1), Base.OneTo(2)) == reshape(A, 1, 2)
+    end
+    @testset "similar" begin
+        b = similar(A, SizedArrays.SOneTo(1), big(2))
+        @test b isa Array{Int, 2}
+        @test size(b) == (1, 2)
+        b = similar(A, SizedArrays.SOneTo(1), Base.OneTo(2))
+        @test b isa Array{Int, 2}
+        @test size(b) == (1, 2)
+        b = similar(A, SizedArrays.SOneTo(1), 2, Base.OneTo(2))
+        @test b isa Array{Int, 3}
+        @test size(b) == (1, 2, 2)
+
+        @test_throws "no method matching $Int(::$Infinity)" similar(ones(2), OneToInf())
+    end
+end
+
+@testset "AbstractOneTo" begin
+    s = SizedArrays.SizedArray{(2,2)}(ones(2,2))
+    v = view(s, :, 1)
+    @test axes(v,1) isa SizedArrays.SOneTo{2}
+    @test eachindex(v) isa SizedArrays.SOneTo{2}
+
+    ax = axes(v,1)
+    @test ax[Base.IdentityUnitRange(ax)] == ax
+    @test ax[Base.IdentityUnitRange(2:2)] == Base.IdentityUnitRange(2:2)
+
+    # check that IdentityUnitRange behaves like Slice
+    @test axes(Base.IdentityUnitRange(ax), 1) === ax
+    @test eachindex(Base.IdentityUnitRange(ax)) === ax
+end
+
+@testset "effect inference for `iterate` for `Array` and for `Memory`" begin
+    for El ∈ (Float32, Real, Any)
+        for Arr ∈ (Memory{El}, Array{El, 0}, Vector{El}, Matrix{El}, Array{El, 3})
+            effects = Base.infer_effects(iterate, Tuple{Arr, Int})
+            @test Base.Compiler.is_effect_free(effects)
+            @test Base.Compiler.is_terminates(effects)
+            @test Base.Compiler.is_notaskstate(effects)
+            @test Base.Compiler.is_noub(effects)
+            @test Base.Compiler.is_nonoverlayed(effects)
+            @test Base.Compiler.is_nortcall(effects)
+        end
+    end
+end
+
+@testset "iterate for linear indexing" begin
+    A = [1 2; 3 4]
+    v = view(A, :)
+    @test sum(x for x in v) == sum(A)
+    v = view(A, 1:2:lastindex(A))
+    @test sum(x for x in v) == sum(A[1:2:end])
+    v2 = view(A, Base.IdentityUnitRange(1:length(A)))
+    @test sum(x for x in v2) == sum(A)
+end
+
+@testset "self referential" begin
+    v = Any[1,2,3]
+    v[1] = v
+    io = IOBuffer()
+    show(io, v)
+    @test String(take!(io)) == "Any[Any[#= circular reference @-1 =#], 2, 3]"
+
+    m1 = Any[1 2; 3 4]
+    m1[1] = m1
+    show(io, m1)
+    @test String(take!(io)) == "Any[#= circular reference @-1 =# 2; 3 4]"
+
+    m2 = Any[1; 2;; 3; 4;;; 5; 6;; 7; 8]
+    m2[1] = m2
+    show(io, m2)
+    @test String(take!(io)) == "Any[#= circular reference @-1 =# 3; 2 4;;; 5 7; 6 8]"
+end
+
+@testset "size promotion in addition/subtraction" begin
+    for A in Any[ones(), ones(1), ones(1,1,1)]
+        @test +(A) == A
+        for B in Any[ones(), ones(1), ones(1,1,1)]
+            sz = ndims(A) > ndims(B) ? size(A) : size(B)
+            @test A + B == fill(2.0,sz)
+            @test A - B == zeros(sz)
+            @test A + B + zeros() == A + B
+            @test A - B - zeros() == A - B
+        end
     end
 end

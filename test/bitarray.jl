@@ -19,7 +19,7 @@ bitcheck(x) = true
 function check_bitop_call(ret_type, func, args...; kwargs...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
     r1 = func(args...; kwargs...)
-    ret_type ≢ nothing && (@test isa(r1, ret_type) || @show ret_type, typeof(r1))
+    ret_type ≢ nothing && @test isa(r1, ret_type) context=(; ret_type, actual=typeof(r1))
     @test tc(r1, r2)
     @test isequal(r1, r2)
     @test bitcheck(r1)
@@ -1524,7 +1524,7 @@ timesofar("reductions")
     |<------------------b2(l)------>|    extra_l     |
     |<------------------b3(l)------>|
     |<------------------b4(l+extra_l)--------------->|
-    |<--------------desk_inbetween-------->| extra÷2 |
+    |<--------------dest_inbetween-------->| extra÷2 |
     =#
     @testset "Issue #47011, map! over unequal length bitarray" begin
         for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
@@ -1563,6 +1563,24 @@ timesofar("reductions")
             end
         end
     end
+
+    @testset "binary bitwise map shape and chunks" begin
+        @test axes(map(&, trues(2, 2), trues(4))) == axes(map(&, fill(true, 2, 2), fill(true, 4)))
+        @test_throws DimensionMismatch map(&, trues(2, 2), trues(2, 1))
+
+        A = falses(130)
+        A[[1, 3, 64, 65, 129]] .= true
+        B = falses(64)
+        B[[2, 3, 63]] .= true
+        for (X, Y) in ((A, B), (B, A))
+            expected = BitVector(map(&, Vector{Bool}(X), Vector{Bool}(Y)))
+            @test map(&, X, Y) == expected
+            dest = trues(70)
+            @test map!(&, dest, X, Y) === dest
+            @test dest == [expected; trues(6)]
+        end
+    end
+
     @testset "Issue #50780, map! bitarray map! where dest aliases source" begin
         a = BitVector([1,0])
         b = map(!, a)

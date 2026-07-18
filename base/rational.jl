@@ -52,7 +52,7 @@ Rational(n::Integer) = unsafe_rational(n, one(n))
 """
     divgcd(x::Integer, y::Integer)
 
-Returns `(x÷gcd(x,y), y÷gcd(x,y))`.
+Return `(x÷gcd(x,y), y÷gcd(x,y))`.
 
 See also [`div`](@ref), [`gcd`](@ref).
 """
@@ -105,8 +105,42 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-//(x::Number, y::Complex) = x*conj(y)//abs2(y)
 
+# Return a complex numerator and real denominator
+# of the exact inverse of a Complex number.
+function _complex_exact_inv(y::Complex)
+    c, d = reim(y)
+    num = if (isinf(c) | isinf(d))
+        conj(zero(y))
+    else
+        conj(y)
+    end
+    num, abs2(y)
+end
+function _complex_exact_inv(y::Complex{<:Integer})
+    c, d = reim(y)
+    c_r, d_r = divgcd(c, d)
+    abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
+    num = complex(c_r, checked_neg(d_r))
+    num, abs2y_r
+end
+
+function //(x::Number, y::Complex)
+    num, den = _complex_exact_inv(y)
+    (x * num) // den
+end
+function //(x::Integer, y::Complex{<:Integer})
+    complex(x) // y
+end
+function //(x::Complex{<:Integer}, y::Complex{<:Integer})
+    a, b, c, d = promote(reim(x)..., reim(y)...)
+    c_r, d_r = divgcd(c, d)
+    abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
+    complex(
+        checked_add(checked_mul(a, c_r), checked_mul(b, d_r)),
+        checked_add(checked_mul(b, c_r), checked_neg(checked_mul(a, d_r)))
+    )//abs2y_r
+end
 
 //(X::AbstractArray, y::Number) = X .// y
 
@@ -210,11 +244,8 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) where T<:Integer
-    if tol < 0
-        throw(ArgumentError("negative tolerance $tol"))
-    end
-
+function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
+    tol < 0 && throw(ArgumentError("Tolerance can not be negative. tol=$tol"))
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
@@ -235,14 +266,18 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
     while r > nt
         try
             ia = convert(T,a)
-
             np = checked_add(checked_mul(ia,p),pp)
             nq = checked_add(checked_mul(ia,q),qq)
             p, pp = np, p
             q, qq = nq, q
         catch e
             isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-            return p // q
+            (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+            # find best semiconvergent that fits in T
+            ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+            ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+            ia = min(ia_p, ia_q)
+            return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
         end
 
         # naive approach of using
@@ -259,25 +294,38 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
 
     # find optimal semiconvergent
     # smallest a such that x-a*y < a*t+tt
-    a = cld(x-tt,y+t)
+    a_min = cld(x-tt,y+t)
     try
-        ia = convert(T,a)
+        ia = convert(T,a_min)
         np = checked_add(checked_mul(ia,p),pp)
         nq = checked_add(checked_mul(ia,q),qq)
         return np // nq
     catch e
         isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-        return p // q
+        (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+        ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+        ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+        ia = min(ia_p, ia_q)
+        return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
     end
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
 rationalize(x::Real; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
-rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)
-rationalize(x::Rational; kvs...) = x
+rationalize(::Type{T}, x::Rational; tol::Real = eps(float(x))) where {T<:Integer} = rationalize(T, x, tol)
+rationalize(x::Rational{T}; kvs...) where {T<:Integer} = rationalize(T, x; kvs...)
+function rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
+    if !hastypemax(T) || (typemin(T) ≤ x.num ≤ typemax(T) && x.den ≤ typemax(T))
+        return Rational{T}(x)
+    end
+    isfinite(float(x)) && tol ≥ eps(float(x))/2 || throw(InexactError(:rationalize, Rational{T}, x))
+    return rationalize(T, float(x), tol)
+end
 rationalize(x::Integer; kvs...) = Rational(x)
 function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
     if Base.hastypemax(T) # BigInt doesn't
         x < typemin(T) && return unsafe_rational(-one(T), zero(T))
         x > typemax(T) && return unsafe_rational(one(T), zero(T))
@@ -359,7 +407,16 @@ function +(x::Rational, y::Rational)
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
-    Rational(checked_add(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+    Rational(checked_add(checked_mul(x.num, yd), checked_mul(y.num, xd)), checked_mul(x.den, yd))
+end
+
+function +%(x::Rational, y::Rational)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
+    if isinf(x) && x == y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(+%(*%(x.num,yd), *%(y.num,xd)), *%(x.den,yd))
 end
 
 function -(x::Rational, y::Rational)
@@ -368,7 +425,16 @@ function -(x::Rational, y::Rational)
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
-    Rational(checked_sub(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+    Rational(checked_sub(checked_mul(x.num, yd), checked_mul(y.num, xd)), checked_mul(x.den, yd))
+end
+
+function -%(x::Rational, y::Rational)
+    xp, yp = promote(x, y)::NTuple{2,Rational}
+    if isinf(x) && x == -y
+        return xp
+    end
+    xd, yd = divgcd(promote(x.den, y.den)...)
+    Rational(-%(*%(x.num, yd), *%(y.num, xd)), *%(x.den, yd))
 end
 
 for (op,chop) in ((:rem,:rem), (:mod,:mod))
@@ -421,8 +487,8 @@ function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Rational
     return ifelse(x, y, copysign(zero(y), y))
 end
 *(y::Rational, x::Bool) = x * y
-/(x::Rational, y::Union{Rational, Integer, Complex{<:Union{Integer,Rational}}}) = x//y
-/(x::Union{Integer, Complex{<:Union{Integer,Rational}}}, y::Rational) = x//y
+/(x::Rational, y::Union{Rational, Integer}) = x//y
+/(x::Integer, y::Rational) = x//y
 inv(x::Rational{T}) where {T} = checked_den(x.den, x.num)
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
@@ -443,7 +509,7 @@ fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
 function ==(x::AbstractFloat, q::Rational)
     if isfinite(x)
-        (count_ones(q.den) == 1) & (x*q.den == q.num)
+        (count_ones(q.den) == 1) && (ldexp(x, top_set_bit(q.den-1)) == q.num)
     else
         x == q.num/q.den
     end
@@ -572,13 +638,13 @@ float(::Type{Rational{T}}) where {T<:Integer} = float(T)
 
 function gcd(x::Rational, y::Rational)
     if isinf(x) != isinf(y)
-        throw(ArgumentError("lcm is not defined between infinite and finite numbers"))
+        throw(ArgumentError("gcd is not defined between infinite and finite numbers"))
     end
     unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
 end
 function lcm(x::Rational, y::Rational)
     if isinf(x) != isinf(y)
-        throw(ArgumentError("lcm is not defined"))
+        throw(ArgumentError("lcm is not defined between infinite and finite numbers"))
     end
     return unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
 end
@@ -620,7 +686,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
         end
     end
     h = hash_integer(pow, h)
-    h = hash_integer(num, h)
+    h = hash_integer((pow > 0) ? (num << (pow % 64)) : num, h)
     return h
 end
 

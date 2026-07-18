@@ -1,9 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-baremodule Base
+module Base
 
-using Core
-using Core.Intrinsics, Core.IR
+Core._import(Base, Core, :_eval_import, :_eval_import, true)
+Core._import(Base, Core, :_eval_using, :_eval_using, true)
+
+using .Core.Intrinsics, .Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
@@ -28,6 +30,7 @@ include(path::String) = include(Base, path)
 
 struct IncludeInto <: Function
     m::Module
+    IncludeInto(m::Module) = new(m)
 end
 (this::IncludeInto)(fname::AbstractString) = include(this.m, fname)
 
@@ -59,7 +62,7 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
-typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function getproperty end).name.constprop_heuristic = or_int(Core.FORCE_CONST_PROP, Core.DISABLE_SEMI_CONCRETE_EVAL)
 typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
 
 dotgetproperty(x, f) = getproperty(x, f)
@@ -139,6 +142,20 @@ import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_s
 # Export list
 include("exports.jl")
 
+function set_syntax_version end
+_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
+function _setup_module!(mod::Module, Core.@nospecialize syntax_ver)
+    # using Base
+    Core._using(mod, _topmod(mod), UInt8(0))
+    Core.declare_const(mod, :include, IncludeInto(mod))
+    Core.declare_const(mod, :eval, Core.EvalInto(mod))
+    if syntax_ver === nothing
+        return nothing
+    end
+    set_syntax_version(mod, syntax_ver)
+    return nothing
+end
+
 # core docsystem
 include("docs/core.jl")
 Core.atdoc!(CoreDocs.docm)
@@ -149,20 +166,49 @@ eval(m::Module, x) = Core.eval(m, x)
 include("public.jl")
 
 if false
-    # simple print definitions for debugging. enable these if something
+    # Simple print definitions for debugging. Enable these if something
     # goes wrong during bootstrap before printing code is available.
-    # otherwise, they just just eventually get (noisily) overwritten later
+    # otherwise, they eventually get (noisily) overwritten later
     global show, print, println
     show(io::IO, x) = Core.show(io, x)
     print(io::IO, a...) = Core.print(io, a...)
     println(io::IO, x...) = Core.println(io, x...)
 end
 
-"""
-    time_ns() -> UInt64
+## Load essential files and libraries
+include("essentials.jl")
 
-Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
-between two moments in time.
+# Because lowering inserts direct references, it is mandatory for this binding
+# to exist before we start inferring code.
+function string end
+import Core: String
+
+# For OS specific stuff
+# We need to strcat things here, before strings are really defined
+function strcat(x::String, y::String)
+    out = ccall(:jl_alloc_string, Ref{String}, (Int,), Core.sizeof(x) + Core.sizeof(y))
+    gc_x = @_gc_preserve_begin(x)
+    gc_y = @_gc_preserve_begin(y)
+    gc_out = @_gc_preserve_begin(out)
+    out_ptr = unsafe_convert(Ptr{UInt8}, out)
+    unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
+    unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
+    @_gc_preserve_end(gc_x)
+    @_gc_preserve_end(gc_y)
+    @_gc_preserve_end(gc_out)
+    return out
+end
+
+
+"""
+    time_ns()::UInt64
+
+Get the time in nanoseconds relative to some machine-specific arbitrary time in the past.
+The primary use is for measuring elapsed times during program execution. The return value is guaranteed to
+be monotonic (mod 2⁶⁴) while the system is running, and is unaffected by clock drift or changes to local calendar time,
+but it may change arbitrarily across system reboots or suspensions.
+
+(Although the returned time is always in nanoseconds, the timing resolution is platform-dependent.)
 """
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
@@ -172,8 +218,6 @@ const _DOCS_ALIASING_WARNING = """
     Behavior can be unexpected when any mutated argument shares memory with any other argument.
 """
 
-## Load essential files and libraries
-include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
 include("generator.jl")
@@ -184,12 +228,12 @@ include("options.jl")
 # to forward to invoke
 function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
     @inline
-    # prepend kwargs and f to the invoked from the user
+    # prepend kwargs and f to the invoke from the user
     T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
     return invoke(Core.kwcall, T, kwargs, f, args...)
 end
 # invoke does not have its own call cache, but kwcall for invoke does
-setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
+setfield!(typeof(invoke).name, :max_args, Int32(3), :monotonic) # invoke, f, T, args...
 
 # define applicable(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to applicable
@@ -198,6 +242,8 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(arg
     return applicable(Core.kwcall, kwargs, args...)
 end
 function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
+    Core.@nospecializeinfer
+    @noinline
     tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
     return Core._hasmethod(tt)
 end
@@ -223,7 +269,7 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invokelatest), f, args...)
     @inline
     return Core.invokelatest(Core.kwcall, kwargs, f, args...)
 end
-setfield!(typeof(invokelatest).name.mt, :max_args, 2, :monotonic) # invokelatest, f, args...
+setfield!(typeof(invokelatest).name, :max_args, Int32(2), :monotonic) # invokelatest, f, args...
 
 """
     invoke_in_world(world, f, args...; kwargs...)
@@ -236,7 +282,7 @@ support libraries, etc. In these cases it can be useful to prevent unwanted
 method invalidation and recompilation latency, and to prevent the user from
 breaking supporting infrastructure by mistake.
 
-The current world age can be queried using [`Base.get_world_counter()`](@ref)
+The global world age can be queried using [`Base.get_world_counter()`](@ref)
 and stored for later use within the lifetime of the current Julia session, or
 when serializing and reloading the system image.
 
@@ -257,7 +303,7 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke_in_world), world::UInt,
     @inline
     return Core.invoke_in_world(world, Core.kwcall, kwargs, f, args...)
 end
-setfield!(typeof(invoke_in_world).name.mt, :max_args, 3, :monotonic) # invoke_in_world, world, f, args...
+setfield!(typeof(invoke_in_world).name, :max_args, Int32(3), :monotonic) # invoke_in_world, world, f, args...
 
 # core operations & types
 include("promotion.jl")
@@ -278,29 +324,33 @@ include("pointer.jl")
 include("refvalue.jl")
 include("cmem.jl")
 
-include("checked.jl")
-using .Checked
-function cld end
-function fld end
+function nextfloat end
+function prevfloat end
+include("rounding.jl")
+include("float.jl")
 
 # Lazy strings
-import Core: String
 include("strings/lazy.jl")
+
+function cld end
+function fld end
+include("checked.jl")
+using .Checked
 
 # array structures
 include("indices.jl")
 include("genericmemory.jl")
 include("array.jl")
+include("abstractset.jl")
+include("abstractdict.jl")
+include("iddict.jl")
+include("idset.jl")
 include("abstractarray.jl")
 include("baseext.jl")
 
 include("c.jl")
-include("abstractset.jl")
 include("bitarray.jl")
 include("bitset.jl")
-include("abstractdict.jl")
-include("iddict.jl")
-include("idset.jl")
 include("ntuple.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
@@ -314,23 +364,7 @@ include("ordering.jl")
 using .Order
 
 include("coreir.jl")
-include("invalidation.jl")
-
-# Because lowering inserts direct references, it is mandatory for this binding
-# to exist before we start inferring code.
-function string end
-
-# For OS specific stuff
-# We need to strcat things here, before strings are really defined
-function strcat(x::String, y::String)
-    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), Core.sizeof(x) + Core.sizeof(y))
-    GC.@preserve x y out begin
-        out_ptr = unsafe_convert(Ptr{UInt8}, out)
-        unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
-        unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
-    end
-    return out
-end
+include("module.jl")
 
 BUILDROOT::String = ""
 DATAROOT::String = ""
@@ -359,15 +393,22 @@ process_sysimg_args!()
 function isready end
 
 include(strcat(DATAROOT, "julia/Compiler/src/Compiler.jl"))
+using .Compiler.ReinferUtils: ReinferUtils, invalidate_code_for_globalref!
 
 const _return_type = Compiler.return_type
 
 # Enable compiler
 Compiler.bootstrap!()
 
-include("flparse.jl")
+include("flfrontend.jl")
 Core._setparser!(fl_parse)
+Core._setlowerer!(fl_lower)
 
 # Further definition of Base will happen in Base.jl if loaded.
 
-end # baremodule Base
+# Ensure this file is also tracked
+@assert !isassigned(_included_files, 1)
+_included_files[1] = (@__MODULE__, ccall(:jl_prepend_cwd, Any, (Any,), "Base_compiler.jl"))
+
+end # module Base
+using .Base

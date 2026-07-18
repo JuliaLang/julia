@@ -3,6 +3,6 @@
 using Test, Libdl, GMP_jll
 
 @testset "GMP_jll" begin
-    vn = VersionNumber(unsafe_string(unsafe_load(cglobal((:__gmp_version, libgmp), Ptr{Cchar}))))
+    vn = VersionNumber(unsafe_string(unsafe_load(cglobal(dlsym(libgmp, :__gmp_version), Ptr{Cchar}))))
     @test vn == v"6.3.0"
 end

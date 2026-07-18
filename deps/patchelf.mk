@@ -7,7 +7,7 @@ $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2: | $(SRCCACHE)
 $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	mkdir $(dir $@)
-	cd $(dir $@) && $(TAR) jxf $< --strip-components=1
+	cd $(dir $@) && $(TAR) -jxf $< --strip-components=1
 	touch -c $(SRCCACHE)/patchelf-$(PATCHELF_VER)/configure # old target
 	echo 1 > $@
 
@@ -41,7 +41,7 @@ $(eval $(call staged-install, \
 clean-patchelf:
 	-rm -f $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean
+	-if [ -d $(BUILDDIR)/patchelf-$(PATCHELF_VER) ]; then $(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean; fi
 
 distclean-patchelf:
 	rm -rf $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2 \

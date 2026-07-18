@@ -848,8 +848,8 @@ check_code_trampoline(testclosure, (Any, Any, Bool, Type), 2)
 check_code_trampoline(testclosure, (Any, Int, Bool, Type{Int}), 2)
 check_code_trampoline(testclosure, (Any, String, Bool, Type{String}), 2)
 check_code_trampoline(testclosure, (typeof(identity), Any, Bool, Type), 2)
-check_code_trampoline(testclosure, (typeof(identity), Int, Bool, Type{Int}), 0)
-check_code_trampoline(testclosure, (typeof(identity), String, Bool, Type{String}), 0)
+check_code_trampoline(testclosure, (typeof(identity), Int, Bool, Core.TypeEgal{Int}), 0)
+check_code_trampoline(testclosure, (typeof(identity), String, Bool, Core.TypeEgal{String}), 0)
 
 function g(i)
     x = -332210 + i
@@ -1537,6 +1537,14 @@ fn45187() = nothing
 @test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x, y, z)))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
 
+# test for ccall first argument tuple validation errors
+@test_throws "ccall function name cannot be empty tuple" eval(:(f() = ccall((), A, (), )))
+@test_throws "ccall function name tuple can have at most 2 elements" eval(:(f() = ccall((:a, :b, :c), A, (), )))
+@test_throws "ccall function name tuple can have at most 2 elements" eval(:(f() = ccall((:a, :b, :c, :d), A, (), )))
+@test_throws TypeError eval(:(f() = ccall((1 + 2,), A, (), )))
+@test_throws TypeError eval(:(f() = ccall((:a, 1 + 2), A, (), )))
+@test_throws TypeError eval(:(ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,), x % UInt8)))
+
 # cfunction on non-function singleton
 struct CallableSingleton
 end
@@ -1733,6 +1741,23 @@ let
     @test dest[] == (7,8,9)
 end
 
+# issue #61320: the size argument of memcpy/memset/memmove may be declared with a
+# signed integer type; this should be reinterpreted as Csize_t rather than
+# treated as an ABI violation (which previously compiled to a trap)
+let
+    A = Vector{Int64}(undef, 4)
+    B = Int64[1, 2, 3, 4]
+    ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Int), A, B, sizeof(Int64) * 4)
+    @test A == B
+
+    ccall(:memmove, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Int), A, B, sizeof(Int64) * 4)
+    @test A == B
+
+    C = Vector{UInt8}(undef, 8)
+    ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Int), C, 0xab % Cint, length(C))
+    @test all(==(0xab), C)
+end
+
 
 # @ccall macro
 using Base: ccall_macro_parse, ccall_macro_lower
@@ -1751,18 +1776,16 @@ using Base: ccall_macro_parse, ccall_macro_lower
 end
 
 @testset "ensure the base-case of @ccall works, including library name and pointer interpolation" begin
-    call = ccall_macro_lower(:ccall, ccall_macro_parse( :( libstring.func(
+    ccallmacro = ccall_macro_lower(:ccall, ccall_macro_parse( :( libstring.func(
         str::Cstring,
         num1::Cint,
         num2::Cint
     )::Cstring))...)
-    @test call == Base.remove_linenums!(
-        quote
-        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, (:ccall, UInt16(0), false), 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
-        end)
+    ccallfunction = :(ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, (:ccall, UInt16(0), false), 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2))))
+    @test ccallmacro == ccallfunction
 
     local fptr = :x
-    @test_throws ArgumentError("interpolated function `fptr` was not a Ptr{Cvoid}, but Symbol") @ccall $fptr()::Cvoid
+    @test_throws TypeError @ccall $fptr()::Cvoid
 end
 
 @testset "check error paths" begin
@@ -1777,7 +1800,7 @@ end
     # no required args on varargs call
     @test_throws ArgumentError("C ABI prohibits vararg without one required argument") ccall_macro_parse(:( foo(; x::Cint)::Cint ))
     # not a function pointer
-    @test_throws ArgumentError("interpolated function `PROGRAM_FILE` was not a Ptr{Cvoid}, but String") @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
+    @test_throws TypeError @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
 end
 
 @testset "check error path for @cfunction" begin
@@ -1834,10 +1857,6 @@ end
 end
 
 # issue #36458
-compute_lib_name() = "libcc" * "alltest"
-ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,), x % UInt8)
-@test ccall_lazy_lib_name(0) == 0
-@test ccall_lazy_lib_name(3) == 1
 ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid},), C_NULL)
 @test_throws UndefVarError(:xx_nOt_DeFiNeD_xx, @__MODULE__) ccall_with_undefined_lib()
 
@@ -1909,6 +1928,62 @@ end
     @test_throws(TypeError, cglobal45187fn())
     @test_throws(TypeError, @eval cglobal(nothing))
     @test_throws(TypeError, @eval cglobal((:fn, fn45187)))
+
+    # method-definition-time validation of literal name tuples (#59165 follow-up)
+    @test_throws ErrorException @eval cglobal((:a, :b, :c))
+    @test_throws ErrorException @eval cglobal(())
+    @test_throws TypeError @eval cglobal((1,))
+
+    # Runtime-resolved type argument: cglobal(name, T) lowers to bitcast(Ptr{T}, foreignglobal(name)),
+    # so T may be any runtime expression (including one that depends on local variables).
+    function cglobal_runtime_type(T)
+        return cglobal((:global_var, libccalltest), T)
+    end
+    @test cglobal_runtime_type(Cint) isa Ptr{Cint}
+    @test unsafe_load(cglobal_runtime_type(Cint)) == 1
+end
+
+@testset "cglobal interpreter matches compiler" begin
+    # The `cglobal(...)` calls written directly in `@test` run at top-level, i.e. through
+    # the interpreter; wrapping the same call in a function and calling it forces codegen.
+    # The two must agree on both pointer value and result type (`===` checks both).
+    compiled_tuple()    = cglobal((:global_var, libccalltest))
+    compiled_tuple_T()  = cglobal((:global_var, libccalltest), Cint)
+    compiled_sym()      = cglobal(:sin)
+    compiled_sym_T()    = cglobal(:sin, Cint)
+    compiled_str()      = cglobal("sin")
+    compiled_str_T()    = cglobal("sin", Cint)
+    compiled_ptr(p)     = cglobal(p)
+    compiled_ptr_T(p)   = cglobal(p, Cfloat)
+
+    typed_ptr = convert(Ptr{Cint}, cglobal((:global_var, libccalltest)))
+
+    @test cglobal((:global_var, libccalltest))        === compiled_tuple()
+    @test cglobal((:global_var, libccalltest), Cint)  === compiled_tuple_T()
+    @test cglobal(:sin)                               === compiled_sym()
+    @test cglobal(:sin, Cint)                         === compiled_sym_T()
+    @test cglobal("sin")                              === compiled_str()
+    @test cglobal("sin", Cint)                        === compiled_str_T()
+    @test cglobal(typed_ptr)                          === compiled_ptr(typed_ptr)
+    @test cglobal(typed_ptr, Cfloat)                  === compiled_ptr_T(typed_ptr)
+
+    # the no-type form always normalizes its result to Ptr{Cvoid}, even from a typed pointer
+    @test cglobal((:global_var, libccalltest)) isa Ptr{Cvoid}
+    @test cglobal(:sin)                        isa Ptr{Cvoid}
+    @test cglobal("sin")                       isa Ptr{Cvoid}
+    @test cglobal(typed_ptr)                   isa Ptr{Cvoid}
+
+    # Erroring forms: the pointer-vs-name choice is now syntactic, not value-based.
+    compiled_ptr_arg(x) = cglobal(x)
+    name_sym = :sin
+    name_str = "sin"
+    name_tup = (:global_var, libccalltest)
+    @test_throws TypeError cglobal(name_sym)           # interpreter
+    @test_throws TypeError compiled_ptr_arg(name_sym)  # compiler
+    @test_throws TypeError cglobal(name_str)           # interpreter
+    @test_throws TypeError compiled_ptr_arg(name_str)  # compiler
+    @test_throws TypeError cglobal(name_tup)           # interpreter
+    @test_throws TypeError compiled_ptr_arg(name_tup)  # compiler
 end
 
 @testset "ccall_effects" begin
@@ -1942,7 +2017,7 @@ end
 for A in (reinterpret(UInt, [0]), reshape([0, 0], 1, 2))
     @test pointer(A) == Base.unsafe_convert(Ptr{Cvoid}, A) == Base.unsafe_convert(Ptr{Int}, A)
 end
-# Cglobal with non-static symbols doesn't error
+# Cglobal with non-static symbols errors, just like ccall
 function cglobal_non_static1()
     sym = (:global_var, libccalltest)
     cglobal(sym)
@@ -1950,8 +2025,17 @@ end
 global the_sym = (:global_var, libccalltest)
 cglobal_non_static2() = cglobal(the_sym)
 
-@test isa(cglobal_non_static1(), Ptr)
-@test isa(cglobal_non_static2(), Ptr)
+@test_throws TypeError cglobal_non_static1()
+@test_throws TypeError cglobal_non_static2()
+
+# a ccall pointer argument whose unsafe_convert returns a small union must
+# extract and convert the Ptr and typecheck the other options
+struct UnionConvertPtr; flag::Cint; end
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, w::UnionConvertPtr) = w.flag == 1 ? C_NULL : (w.flag == 2 ? Ptr{Cint}(1) : (:x,))
+union_convert_ptr(w) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Ptr{Cvoid},), w)
+@test union_convert_ptr(UnionConvertPtr(1)) == C_NULL
+@test union_convert_ptr(UnionConvertPtr(2)) == Ptr{Cvoid}(1)
+@test_throws TypeError union_convert_ptr(UnionConvertPtr(3))
 
 @generated function generated_world_counter()
     return :($(Base.get_world_counter()))
@@ -1970,7 +2054,7 @@ end
 
 function gc_safe_ccall()
     # jl_rand is marked as JL_NOTSAFEPOINT
-    @ccall gc_safe=true jl_rand()::UInt64
+    Base.@assume_effects :nothrow @ccall gc_safe=true jl_rand()::UInt64
 end
 
 let llvm = sprint(code_llvm, gc_safe_ccall, ())
@@ -1978,4 +2062,61 @@ let llvm = sprint(code_llvm, gc_safe_ccall, ())
     @test gc_safe_ccall() isa UInt64
     # check for the gc_safe store
     @test occursin("store atomic i8 2", llvm)
+    @test Base.infer_effects(gc_safe_ccall, Tuple{}).nothrow == true
+end
+
+# Non-concrete immutable values with inline roots must use the boxed jl_object_id ccall path.
+abstract type ObjectIdAbstract62001 end
+struct ObjectIdBox62001{T} <: ObjectIdAbstract62001
+    x::Vector{Any}
+end
+const ObjectIdSomeBox62001 = ObjectIdBox62001{T} where {T}
+object_id_abstract_box62001(x::ObjectIdSomeBox62001) = ccall(:jl_object_id, UInt, (Any,), x)
+@test object_id_abstract_box62001(ObjectIdBox62001{Int}(Any[1])) isa UInt
+
+@testset "jl_dlfind and dlsym" begin
+    # Test that jl_dlfind finds things in the expected places.
+    @test ccall(:jl_dlfind, Int, (Cstring,), "doesnotexist") == 0       # not found (RTLD_DEFAULT)
+    @static if !Sys.iswindows()
+        @test ccall(:jl_dlfind, Int, (Cstring,), "main") == 1               # JL_EXE_LIBNAME
+    end
+    @test ccall(:jl_dlfind, Int, (Cstring,), "jl_gc_safepoint") == 2    # JL_LIBJULIA_DL_LIBNAME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "ijl_gc_small_alloc") == 3 # JL_LIBJULIA_INTERNAL_DL_LIBNAME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "malloc") ∉ (1, 2, 3)      # Either 0 or msvcrt.dll on Windows
+    let hdl = Libdl.dlopen(libccalltest, Libdl.RTLD_GLOBAL)
+        try
+            @static if Sys.iswindows()
+                @test_throws ErrorException ccall(:get_c_int, Cint, ())
+            else
+                @test ccall(:get_c_int, Cint, ()) isa Cint
+            end
+        finally
+            Libdl.dlclose(hdl)
+        end
+    end
+end
+
+# issue #51293: Ensure we can load libraries even when a directory with the same name exists
+@testset "dlload with directory collision" begin
+    mktempdir() do dir
+        # Create a subdirectory with the same name as our test library
+        libdir = joinpath(dir, "libccalltest")
+        mkdir(libdir)
+
+        # Try to load libccalltest from within this directory
+        cd(dir) do
+            # This should successfully load the library from DL_LOAD_PATH, not fail due to the directory
+            hdl = Libdl.dlopen(libccalltest)
+            @test hdl != C_NULL
+            Libdl.dlclose(hdl)
+        end
+    end
+end
+
+module Test57749
+using Test, Zstd_jll
+const prefix = "Zstd version: "
+const sym = :ZSTD_versionString
+get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
+@test startswith(get_zstd_version(), "Zstd")
 end

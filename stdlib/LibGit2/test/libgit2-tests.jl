@@ -7,7 +7,7 @@ using LibGit2_jll
 using Test
 using Random, Serialization, Sockets
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :ChallengePrompts) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ChallengePrompts.jl"))
 using .Main.ChallengePrompts: challenge_prompt as basic_challenge_prompt
 
@@ -744,6 +744,23 @@ mktempdir() do dir
             cred_payload = LibGit2.CredentialPayload()
             @test_throws ArgumentError LibGit2.clone(cache_repo, test_repo, callbacks=callbacks, credentials=cred_payload)
         end
+        @testset "shallow clone" begin
+            @static if LibGit2.VERSION >= v"1.7.0"
+                # Note: Shallow clones are not supported with local file:// transport
+                # This is a limitation in libgit2 - shallow clones only work with
+                # network protocols (http, https, git, ssh)
+                # See online-tests.jl for tests with remote repositories
+
+                # Test normal clone is not shallow
+                normal_path = joinpath(dir, "Example.NotShallow")
+                LibGit2.with(LibGit2.clone(cache_repo, normal_path)) do repo
+                    @test !LibGit2.isshallow(repo)
+                end
+            else
+                # Test that depth parameter throws error on older libgit2
+                @test_throws ArgumentError LibGit2.clone(cache_repo, joinpath(dir, "Example.Shallow"), depth=1)
+            end
+        end
     end
 
     @testset "Update cache repository" begin
@@ -905,6 +922,18 @@ mktempdir() do dir
                         LibGit2.delete_branch(tbref)
                         @test LibGit2.lookup_branch(repo, test_branch2, true) === nothing
                     end
+
+                    # an invalid branch name propagates the underlying error
+                    # instead of a generic "cannot create branch" error
+                    err = try
+                        LibGit2.branch!(repo, "invalid name", string(commit_oid1),
+                                        set_head=false, force=true)
+                        nothing
+                    catch ex
+                        ex
+                    end
+                    @test err isa LibGit2.Error.GitError
+                    @test err.code == LibGit2.Error.EINVALIDSPEC
                 end
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
                 @test default_branch in branches
@@ -1030,6 +1059,20 @@ mktempdir() do dir
                 @test length(blob2) == len1
                 @test blob  == blob2
                 @test blob !== blob2
+
+                # showing a text blob previews only the first 3 lines
+                text_file = joinpath(dir, "long_text_blob")
+                write(text_file, "l1\nl2\nl3\nl4\nl5\n")
+                text_blob = LibGit2.GitBlob(repo, LibGit2.addblob!(repo, text_file))
+                @test sprint(show, text_blob) ==
+                      "GitBlob:\nBlob id: $(LibGit2.GitHash(text_blob))\nContents:\nl1\nl2\nl3\n"
+
+                # showing a text blob with fewer than 3 lines should not error
+                short_file = joinpath(dir, "short_text_blob")
+                write(short_file, "l1\n")
+                short_blob = LibGit2.GitBlob(repo, LibGit2.addblob!(repo, short_file))
+                @test sprint(show, short_blob) ==
+                      "GitBlob:\nBlob id: $(LibGit2.GitHash(short_blob))\nContents:\nl1\n\n"
             end
         end
         @testset "trees" begin
@@ -1058,7 +1101,10 @@ mktempdir() do dir
                 @test te_str == ref_te_str
                 blob = LibGit2.GitBlob(tree_entry)
                 blob_str = sprint(show, blob)
-                @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
+                blob_lines = split(LibGit2.content(blob), "\n")
+                expected = "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n" *
+                           join([blob_lines[i] for i in 1:min(length(blob_lines), 3)], "\n") * "\n"
+                @test blob_str == expected
 
                 # tests for walking the tree and accessing objects
                 @test tree[""] == tree
@@ -1082,6 +1128,14 @@ mktempdir() do dir
                         rethrow()
                     end
                 end
+
+                # Test GitTree constructor with GitHash
+                tree1 = LibGit2.GitTree(repo, "HEAD^{tree}")
+                tree_hash = LibGit2.GitHash(tree1)
+                tree2 = LibGit2.GitTree(repo, tree_hash)
+                @test isa(tree2, LibGit2.GitTree)
+                @test LibGit2.GitHash(tree1) == LibGit2.GitHash(tree2)
+                @test LibGit2.count(tree1) == LibGit2.count(tree2)
             end
         end
 
@@ -1146,6 +1200,20 @@ mktempdir() do dir
                 @test !LibGit2.isdiff(repo, "HEAD")
                 @test !LibGit2.isdirty(repo, cached=true)
                 @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+            end
+
+            LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
+                diff_str = "diff --git a/test.txt b/test.txt\nindex 0000000..1111111 100644\n"
+                @test_throws LibGit2.GitError LibGit2.GitDiff(diff_str)
+
+                tree1 = LibGit2.GitTree(repo, "HEAD~1^{tree}")
+                tree2 = LibGit2.GitTree(repo, "HEAD^{tree}")
+                diff = LibGit2.diff_tree(repo, tree1, tree2)
+                idx = LibGit2.apply_to_tree(repo, tree1, diff)
+                @test idx isa LibGit2.GitIndex
+                oid = LibGit2.write_tree_to!(repo, idx)
+                @test oid isa LibGit2.GitHash
+                close(idx)
             end
         end
     end
@@ -1678,6 +1746,9 @@ mktempdir() do dir
             LibGit2.checkout!(repo, string(commit_oid1))
             @test !LibGit2.isattached(repo)
             @test LibGit2.headname(repo) == "(detached from $(string(commit_oid1)[1:7]))"
+            # the reflog message should end with the commit id (no stray paren)
+            reflog_msg = split(last(readlines(joinpath(cache_repo, ".git", "logs", "HEAD"))), '\t')[2]
+            @test endswith(reflog_msg, "to $(string(commit_oid1))")
         end
     end
 
@@ -1806,7 +1877,7 @@ mktempdir() do dir
                 username = LibGit2.default_username(cfg, github_cred)
                 @test username === nothing
 
-                # Add a credential setting for a specific for a URL
+                # Add a credential setting for a specific URL
                 LibGit2.set!(cfg, "credential.https://github.com.username", "foo")
 
                 username = LibGit2.default_username(cfg, github_cred)
@@ -1873,7 +1944,7 @@ mktempdir() do dir
                 @test !LibGit2.use_http_path(cfg, github_cred)
                 @test !LibGit2.use_http_path(cfg, mygit_cred)
 
-                # Add a credential setting for a specific for a URL
+                # Add a credential setting for a specific URL
                 LibGit2.set!(cfg, "credential.https://github.com.useHttpPath", "true")
 
                 @test LibGit2.use_http_path(cfg, github_cred)
@@ -1936,6 +2007,59 @@ mktempdir() do dir
 
                 Base.shred!(github_cred)
                 Base.shred!(mygit_cred)
+            end
+        end
+
+        @testset "fill! with multiple helpers" begin
+            # Requires `git` to be installed and available on the path.
+            if GIT_INSTALLED
+                config_path = joinpath(dir, config_file)
+                empty_store = joinpath(dir, "empty-credentials")
+                bob_store = joinpath(dir, "bob-credentials")
+                alice_store = joinpath(dir, "alice-credentials")
+                alice_alt_store = joinpath(dir, "alice-alt-credentials")
+                touch(empty_store)
+                write(bob_store, "https://bob:s3cre7@mygithost\n")
+                write(alice_store, "https://alice:pa55w0rd@mygithost\n")
+                write(alice_alt_store, "https://alice:0therpa55@mygithost\n")
+                store_helper(path) = "store --file=$(replace(path, '\\' => '/'))"
+
+                # helpers after one that returned nothing are still tried
+                open(config_path, "w+") do fp
+                    write(fp, """
+                        [credential]
+                            helper = $(store_helper(empty_store))
+                        [credential]
+                            helper = $(store_helper(bob_store))
+                        """)
+                end
+                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    cred = GitCredential("https", "mygithost")
+                    LibGit2.fill!(cfg, cred)
+                    @test LibGit2.isfilled(cred)
+                    @test cred.username == "bob"
+                    Base.shred!(cred)
+                end
+
+                # no more helpers are tried once the credential is filled
+                open(config_path, "w+") do fp
+                    write(fp, """
+                        [credential]
+                            helper = $(store_helper(alice_store))
+                        [credential]
+                            helper = $(store_helper(alice_alt_store))
+                        """)
+                end
+                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    cred = GitCredential("https", "mygithost")
+                    LibGit2.fill!(cfg, cred)
+                    @test LibGit2.isfilled(cred)
+                    @test cred.username == "alice"
+                    Base.shred!(Base.SecretBuffer("pa55w0rd")) do pw
+                        @test cred.password == pw
+                    end
+                    Base.shred!(cred)
+                end
             end
         end
 
@@ -2163,7 +2287,7 @@ mktempdir() do dir
             ssh_u_ex = gen_ex(valid_cred, username=nothing)
 
             # Note: We cannot use the default ~/.ssh/id_rsa for tests since we cannot be
-            # sure a users will actually have these files. Instead we will use the ENV
+            # sure a user will actually have these files. Instead we will use the ENV
             # variables to set the default values.
 
             # ENV credentials are valid
@@ -3054,29 +3178,51 @@ mktempdir() do dir
                 key = joinpath(root, common_name * ".key")
                 cert = joinpath(root, common_name * ".crt")
                 pem = joinpath(root, common_name * ".pem")
+                conf = joinpath(root, common_name * ".conf")
 
-                # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
+                # Make sure test doesn't depend on system OpenSSL config (which may be broken)
+                open(conf, "w") do io
+                    write(io, """
+                        [req]
+                        distinguished_name = req_distinguished_name
+
+                        [req_distinguished_name]
+                        CN = $common_name
+                        """)
+                end
+
+                # Generate a certificate which has the CN set correctly but no subjectAltName
+                err = IOBuffer()
+                p = run(pipeline(addenv(
+                    `openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`,
+                    "OPENSSL_CONF" => conf), stderr=err); wait=false)
+                wait(p)
+                @testset let err = String(take!(err))
+                    @test success(p)
+                end
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
+                # Make a fake Julia package and minimal HTTPS server with our generated
+                # certificate. The minimal server can't actually serve a Git repository.
+                mkdir(joinpath(root, "Example.jl"))
                 local pobj, port
                 for attempt in 1:10
                     # Find an available port by listening, but there's a race condition where
                     # another process could grab this port, so retry on failure
-                    port, server = listenany(49152)
+                    port, server = listenany(49052 + rand(1:100) + attempt*10)
                     close(server)
 
-                    # Make a fake Julia package and minimal HTTPS server with our generated
-                    # certificate. The minimal server can't actually serve a Git repository.
-                    mkdir(joinpath(root, "Example.jl"))
                     pobj = cd(root) do
-                        run(pipeline(`openssl s_server -key $key -cert $cert -WWW -accept $port`, stderr=RawFD(2)), wait=false)
+                        open(`openssl s_server -key $key -cert $cert -WWW -accept $port`)
                     end
-                    @test readuntil(pobj, "ACCEPT") == ""
 
                     # Two options: Either we reached "ACCEPT" and the process is running and ready
                     # or it failed to listen and exited, in which case we try again.
-                    process_running(pobj) && break
+                    if !contains(readuntil(pobj, "ACCEPT"; keep=true), "ACCEPT")
+                        close(pobj)
+                    else
+                        break
+                    end
                 end
 
                 @test process_running(pobj)

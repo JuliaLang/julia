@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# The epochs used for date rounding are based ISO 8601's "year zero" notation
+# The epochs used for date rounding are based on ISO 8601's "year zero" notation
 const DATEEPOCH = value(Date(0))
 const DATETIMEEPOCH = value(DateTime(0))
 
@@ -11,7 +11,7 @@ const ConvertiblePeriod = Union{TimePeriod, Week, Day}
 const TimeTypeOrPeriod = Union{TimeType, ConvertiblePeriod}
 
 """
-    epochdays2date(days) -> Date
+    epochdays2date(days)::Date
 
 Take the number of days since the rounding epoch (`0000-01-01T00:00:00`) and return the
 corresponding `Date`.
@@ -19,7 +19,7 @@ corresponding `Date`.
 epochdays2date(i) = Date(UTD(DATEEPOCH + Int64(i)))
 
 """
-    epochms2datetime(milliseconds) -> DateTime
+    epochms2datetime(milliseconds)::DateTime
 
 Take the number of milliseconds since the rounding epoch (`0000-01-01T00:00:00`) and
 return the corresponding `DateTime`.
@@ -27,7 +27,7 @@ return the corresponding `DateTime`.
 epochms2datetime(i) = DateTime(UTM(DATETIMEEPOCH + Int64(i)))
 
 """
-    date2epochdays(dt::Date) -> Int64
+    date2epochdays(dt::Date)::Int64
 
 Take the given `Date` and return the number of days since the rounding epoch
 (`0000-01-01T00:00:00`) as an [`Int64`](@ref).
@@ -35,7 +35,7 @@ Take the given `Date` and return the number of days since the rounding epoch
 date2epochdays(dt::Date) = value(dt) - DATEEPOCH
 
 """
-    datetime2epochms(dt::DateTime) -> Int64
+    datetime2epochms(dt::DateTime)::Int64
 
 Take the given `DateTime` and return the number of milliseconds since the rounding epoch
 (`0000-01-01T00:00:00`) as an [`Int64`](@ref).
@@ -120,7 +120,7 @@ function Base.floor(x::ConvertiblePeriod, precision::T) where T <: ConvertiblePe
 end
 
 """
-    floor(dt::TimeType, p::Period) -> TimeType
+    floor(dt::TimeType, p::Period)::TimeType
 
 Return the nearest `Date` or `DateTime` less than or equal to `dt` at resolution `p`.
 
@@ -141,7 +141,7 @@ julia> floor(DateTime(2016, 8, 6, 12, 0, 0), Day)
 Base.floor(::Dates.TimeType, ::Dates.Period)
 
 """
-    ceil(dt::TimeType, p::Period) -> TimeType
+    ceil(dt::TimeType, p::Period)::TimeType
 
 Return the nearest `Date` or `DateTime` greater than or equal to `dt` at resolution `p`.
 
@@ -206,7 +206,7 @@ end
 """
     floorceil(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> (T, T)
 
-Simultaneously return the `floor` and `ceil` of `Period` at resolution `p`.  More efficient
+Simultaneously return the `floor` and `ceil` of a `Period` at resolution `precision`.  More efficient
 than calling both `floor` and `ceil` individually.
 """
 function floorceil(x::ConvertiblePeriod, precision::ConvertiblePeriod)

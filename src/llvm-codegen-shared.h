@@ -6,15 +6,13 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/IR/Attributes.h>
+#include <llvm/IR/Module.h>
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/Support/ModRef.h>
 
 #include "julia.h"
-
-#define STR(csym)           #csym
-#define XSTR(csym)          STR(csym)
 
 static constexpr std::nullopt_t None = std::nullopt;
 
@@ -106,7 +104,7 @@ struct CountTrackedPointers {
     CountTrackedPointers(llvm::Type *T, bool ignore_loaded=false);
 };
 
-llvm::SmallVector<llvm::Value*, 0> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> &irbuilder, llvm::ArrayRef<unsigned> perm_offsets={});
+llvm::SmallVector<llvm::SmallVector<unsigned, 0>, 0> TrackCompositeType(llvm::Type *T);
 
 static inline void llvm_dump(llvm::Value *v)
 {
@@ -161,7 +159,7 @@ static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instructi
     using namespace llvm;
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
     if (llvm::isa<llvm::LoadInst>(inst) && md && md == get_tbaa_const(md->getContext())) {
-        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), std::nullopt));
+        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), {}));
     }
     return inst;
 }
@@ -197,9 +195,10 @@ static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &
     auto T_ptr = builder.getPtrTy();
     auto i8 = builder.getInt8Ty();
     int nthfield = offsetof(jl_tls_states_t, safepoint);
-    llvm::Value *psafepoint = builder.CreateConstInBoundsGEP1_32(i8, ptls, nthfield);
+    llvm::Value *psafepoint = builder.CreateConstInBoundsGEP1_32(i8, ptls, nthfield, "safepoint_addr");
     LoadInst *ptls_load = builder.CreateAlignedLoad(
             T_ptr, psafepoint, Align(sizeof(void *)), "safepoint");
+    ptls_load->setOrdering(AtomicOrdering::Monotonic);
     tbaa_decorate(tbaa, ptls_load);
     return ptls_load;
 }
@@ -250,7 +249,7 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
                 return old_state;
     BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
     BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
-    builder.CreateCondBr(builder.CreateICmpEQ(old_state, state, "is_new_state"), // Safepoint whenever we change the GC state
+    builder.CreateCondBr(builder.CreateICmpEQ(old_state, state, "is_new_state"), // Safepoint whenever we do not change the GC state
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
@@ -518,3 +517,12 @@ void ConstantUses<U>::forward()
     }
 }
 }
+
+
+void multiversioning_preannotate(llvm::Module &M);
+std::optional<bool> always_have_fma(Function&, const Triple &TT) JL_NOTSAFEPOINT;
+
+namespace llvm::jitlink {
+    class JITLinkMemoryManager;
+}
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT;

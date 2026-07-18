@@ -17,7 +17,7 @@ $(eval $(call staged-install, \
 
 clean-openlibm:
 	-rm -f $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/build-compiled $(build_libdir)/libopenlibm.a
-	-$(MAKE) -C $(BUILDDIR)/$(OPENLIBM_SRC_DIR) distclean $(OPENLIBM_FLAGS)
+	-if [ -d $(BUILDDIR)/$(OPENLIBM_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(OPENLIBM_SRC_DIR) distclean $(OPENLIBM_FLAGS); fi
 
 
 get-openlibm: $(OPENLIBM_SRC_FILE)

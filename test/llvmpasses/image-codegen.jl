@@ -2,7 +2,7 @@
 # RUN: export JULIA_LLVM_ARGS="--print-before=loop-vectorize --print-module-scope"
 # RUN: rm -rf %t
 # RUN: mkdir %t
-# RUN: julia --image-codegen --startup-file=no %s 2> %t/output.txt
+# RUN: julia --image-codegen -t1,0 --startup-file=no %s 2> %t/output.txt
 # RUN: FileCheck %s < %t/output.txt
 
 # COM: checks that global variables compiled in imaging codegen

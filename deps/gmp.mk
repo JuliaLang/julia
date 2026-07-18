@@ -24,7 +24,7 @@ GMP_CONFIGURE_OPTS += CFLAGS="-fPIC"
 endif
 
 $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$(notdir $@)
+	$(JLDOWNLOAD) $@ https://ftpmirror.gnu.org/gnu/gmp/$(notdir $@)
 
 $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
@@ -72,7 +72,7 @@ $(eval $(call staged-install, \
 
 clean-gmp:
 	-rm -f $(BUILDDIR)/gmp-$(GMP_VER)/build-configured $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/gmp-$(GMP_VER) clean
+	-if [ -d $(BUILDDIR)/gmp-$(GMP_VER) ]; then $(MAKE) -C $(BUILDDIR)/gmp-$(GMP_VER) clean; fi
 
 distclean-gmp:
 	rm -rf $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2 \

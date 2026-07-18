@@ -38,7 +38,7 @@ the following information about field defined-ness:
 - `undefs[i] === nothing` indicates the corresponding element in `fields` may be undefined
 - `undefs[i] === false` indicates the corresponding element in `fields` is guaranteed to be defined
 - `undefs[i] === true` indicates the corresponding element in `fields` is guaranteed to be undefined
-If `field[i]` is of type `Union{}`, it means the `i`-th field is never be initialized and
+If `field[i]` is of type `Union{}`, it means the `i`-th field will never be initialized and
 thus never be defined. In this case, `undefs[i]` should always be `true`.
 
 The same applies if `typ` is a `Tuple`, and because of how `Tuple` elements are initialized,
@@ -67,14 +67,27 @@ end
 
 # Legacy constructor
 function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
-    return Core.PartialStruct(typ, partialstruct_init_undefs(typ, fields), fields)
+    undefs = partialstruct_init_undefs(typ, fields)
+    undefs === nothing && error("This object never exists at runtime")
+    return Core.PartialStruct(typ, undefs, fields)
 end
 
-partialstruct_init_undefs(@nospecialize(typ), fields::Vector{Any}) = partialstruct_init_undefs(typ, length(fields))
-function partialstruct_init_undefs(@nospecialize(typ), n::Int)
-    undefs = Union{Nothing,Bool}[nothing for _ in 1:n]
-    for i in 1:min(datatype_min_ninitialized(typ), n)
+function partialstruct_init_undefs(@nospecialize(typ), fields::Vector{Any})
+    nf = length(fields)
+    minf = datatype_min_ninitialized(typ)
+    for i = 1:minf
+        if fields[i] === Union{}
+            return nothing # disallow runtime-invalid `PartialStruct`
+        end
+    end
+    undefs = Union{Nothing,Bool}[nothing for _ in 1:nf]
+    for i in 1:minf
         undefs[i] = false
+    end
+    for i = minf+1:nf
+        if fields[i] === Union{}
+            undefs[i] = true
+        end
     end
     return undefs
 end
@@ -101,3 +114,13 @@ Core.InterConditional
 
 Core.InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     InterConditional(slot_id(var), thentype, elsetype)
+
+"""
+    alias::InterMustAlias
+
+This lattice element is used in a very similar way as `InterConditional`, but corresponds to `MustAlias`.
+"""
+Core.InterMustAlias
+
+InterMustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
+    InterMustAlias(slot_id(var), vartyp, fldidx, fldtyp)

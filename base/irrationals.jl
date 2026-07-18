@@ -171,18 +171,36 @@ function <(x::Rational{T}, y::AbstractIrrational) where T
         return x < ry
     end
 end
-<(x::AbstractIrrational, y::Rational{BigInt}) = big(x) < y
-<(x::Rational{BigInt}, y::AbstractIrrational) = x < big(y)
+function <(x::AbstractIrrational, y::Rational{BigInt})
+    Float64(x) != Float64(y) && return Float64(x) < Float64(y)
+    p = precision(BigFloat) + 32
+    @assume_effects :terminates_locally while true
+        xf, yf = BigFloat(x; precision=p), BigFloat(y; precision=p)
+        xf != yf && return xf < yf
+        p *= 2
+    end
+end
+<(x::Rational{BigInt}, y::AbstractIrrational) = !(y < x)
 
 <=(x::AbstractIrrational, y::Rational) = x < y
 <=(x::Rational, y::AbstractIrrational) = x < y
+
+cmp(::Irrational{s}, ::Irrational{s}) where {s} = 0
+cmp(x::AbstractIrrational, y::AbstractIrrational) = x < y ? -1 : 1
+cmp(x::AbstractIrrational, y::Real) = x < y ? -1 : 1
+cmp(x::Real, y::AbstractIrrational) = x < y ? -1 : 1
+
+cmp(<, ::Irrational{s}, ::Irrational{s}) where {s} = 0
+cmp(<, x::AbstractIrrational, y::AbstractIrrational) = x < y ? -1 : 1
+cmp(<, x::AbstractIrrational, y::Real) = x < y ? -1 : 1
+cmp(<, x::Real, y::AbstractIrrational) = x < y ? -1 : 1
 
 isfinite(::AbstractIrrational) = true
 isinteger(::AbstractIrrational) = false
 iszero(::AbstractIrrational) = false
 isone(::AbstractIrrational) = false
 
-hash(x::Irrational, h::UInt) = 3*objectid(x) - h
+hash(x::Irrational, h::UInt) = 3 *% h -% objectid(x)
 
 widen(::Type{T}) where {T<:Irrational} = T
 
@@ -199,6 +217,8 @@ for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::AbstractIrrational, y::AbstractIrrational) = $op(Float64(x),Float64(y))
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
+
+^(x::AbstractIrrational, y::Integer) = float(x)^y
 
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
@@ -253,7 +273,7 @@ function irrational(sym, val, def)
     bigconvert = isa(def,Symbol) ? quote
         function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=Rounding.rounding_raw(BigFloat); precision=precision(BigFloat))
             c = BigFloat(;precision=precision)
-            ccall(($(string("mpfr_const_", def)), :libmpfr),
+            ccall(($(string("mpfr_const_", def)), Base.MPFR.libmpfr),
                   Cint, (Ref{BigFloat}, MPFR.MPFRRoundingMode), c, r)
             return c
         end

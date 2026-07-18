@@ -36,17 +36,7 @@ $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-freebsd-elfw.patch-applied: $(LIBTRACY
 		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-freebsd-elfw.patch
 	echo 1 > $@
 
-$(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-sampling.patch-applied: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-freebsd-elfw.patch-applied
-	cd $(LIBTRACYCLIENT_BUILDDIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-no-sampling.patch
-	echo 1 > $@
-
-$(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-plot-config.patch-applied: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-sampling.patch-applied
-	cd $(LIBTRACYCLIENT_BUILDDIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-plot-config.patch
-	echo 1 > $@
-
-$(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-plot-config.patch-applied
+$(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-freebsd-elfw.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		$(CMAKE) . $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LIBTRACYCLIENT_CMAKE) \
@@ -67,7 +57,7 @@ $(eval $(call staged-install, \
 
 clean-libtracyclient:
 	rm -rf $(LIBTRACYCLIENT_BUILDDIR)/build-configured $(LIBTRACYCLIENT_BUILDDIR)/build-compiled
-	-$(MAKE) -C $(LIBTRACYCLIENT_BUILDDIR) clean
+	-if [ -d $(LIBTRACYCLIENT_BUILDDIR) ]; then $(MAKE) -C $(LIBTRACYCLIENT_BUILDDIR) clean; fi
 
 get-libtracyclient: $(LIBTRACYCLIENT_SRC_FILE)
 extract-libtracyclient: $(LIBTRACYCLIENT_BUILDDIR)/source-extracted

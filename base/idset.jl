@@ -10,6 +10,9 @@
 In the example below, the values are all `isequal` so they get overwritten in the ordinary `Set`.
 The `IdSet` compares by `===` and so preserves the 3 different values.
 
+!!! compat "Julia 1.11"
+    Exported in Julia 1.11 and later.
+
 # Examples
 ```jldoctest; filter = r"\\n\\s*(1|1\\.0|true)"
 julia> Set(Any[true, 1, 1.0])
@@ -49,7 +52,7 @@ function push!(s::IdSet, @nospecialize(x))
     else
         if s.max < length(s.list)
             idx = s.max
-            @assert !isassigned(s.list, idx + 1)
+            @assert !isassigned(s.list, idx + 1) "bucket is already occupied"
             s.list[idx + 1] = x
             s.max = idx + 1
         else
@@ -58,7 +61,7 @@ function push!(s::IdSet, @nospecialize(x))
             idx = newidx[]
             s.max = idx < 0 ? -idx : idx + 1
         end
-        @assert s.list[s.max] === x
+        @assert s.list[s.max] === x "unexpected object in bucket"
         setfield!(s, :idxs, ccall(:jl_idset_put_idx, Any, (Any, Any, Int), s.list, s.idxs, idx))
         s.count += 1
     end
@@ -78,7 +81,7 @@ pop!(s::IdSet, @nospecialize(x)) = _pop!(s, x) == -1 ? throw(KeyError(x)) : x
 pop!(s::IdSet, @nospecialize(x), @nospecialize(default)) = _pop!(s, x) == -1 ? default : x
 delete!(s::IdSet, @nospecialize(x)) = (_pop!(s, x); s)
 
-function sizehint!(s::IdSet, newsz)
+function sizehint!(s::IdSet, newsz::Integer)
     # TODO: grow/compact list and perform rehash, if profitable?
     # TODO: shrink?
     # s.list = resize(s.list, newsz)
@@ -92,8 +95,17 @@ function sizehint!(s::IdSet, newsz)
     nothing
 end
 
+function _zero!(a::Memory{<:BitInteger})
+    t = @_gc_preserve_begin a
+    p = unsafe_convert(Ptr{Cvoid}, a)
+    T = eltype(a)
+    memset(p, 0x0, (sizeof(T) * length(a)) % UInt)
+    @_gc_preserve_end t
+    return a
+end
+
 function empty!(s::IdSet)
-    fill!(s.idxs, 0x00)
+    _zero!(s.idxs)
     list = s.list
     for i = 1:s.max
         _unsetindex!(list, i)

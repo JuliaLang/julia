@@ -315,7 +315,7 @@ end
     @test timedwait(alwaysfalse, 0) === :timed_out
     @test_throws ArgumentError timedwait(alwaystrue, 0; pollint=0)
 
-    # Allowing a smaller positive `pollint` results in `timewait` hanging
+    # Allowing a smaller positive `pollint` results in `timedwait` hanging
     @test_throws ArgumentError timedwait(alwaystrue, 0, pollint=1e-4)
 
     # Callback passed in raises an exception
@@ -463,15 +463,14 @@ end
         cb = first(async.cond.waitq)
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-        @test isempty(Base.Workqueue)
         Base.process_events() # schedule event
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
-        @test length(Base.Workqueue) == 1
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         @test tc[] == 0
         yield() # consume event
         @test tc[] == 1
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        Base.process_events()
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
         yield() # consume event
         @test tc[] == 2

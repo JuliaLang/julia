@@ -65,6 +65,7 @@ end
     run_gctest("gc/linkedlist.jl")
     run_gctest("gc/objarray.jl")
     run_gctest("gc/chunks.jl")
+    run_gctest("gc/copyto.jl")
 end
 
 #FIXME: Issue #57103 disabling tests for MMTk, since
@@ -81,6 +82,15 @@ end
 
 @testset "Full GC reasons" begin
     full_sweep_reasons_test()
+end
+
+@testset "GC Always Full" begin
+    prog = "using Test;\n
+        for _ in 1:10; GC.gc(); end;\n
+        reasons = Base.full_sweep_reasons();\n
+        @test reasons[:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL] >= 10;"
+    cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no --gc-sweep-always-full -e $prog`
+    @test success(cmd)
 end
 end
 

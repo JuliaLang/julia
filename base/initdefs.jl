@@ -30,10 +30,45 @@ exit() = exit(0)
 
 const roottask = current_task()
 
+const _foreground_task = Lockable(Ref{Union{Task, Nothing}}(nothing))
+
+"""
+    Base.foreground_task() -> Union{Task, Nothing}
+
+Return the task currently designated as the "foreground" task — typically the task
+that owns interactive stdin (e.g. a REPL command-execution task). Returns `nothing`
+if no task has been registered as foreground.
+"""
+foreground_task() = lock(getindex, _foreground_task)
+
+"""
+    Base.@as_foreground_task expr
+
+Evaluate `expr` with [`current_task()`](@ref) registered as the foreground task
+(see [`foreground_task`](@ref)), restoring the previous foreground task on exit.
+Used to mark the section of code where a particular task "owns" interactive stdin
+so that other components (e.g. the precompile keyboard menu) can defer to it.
+"""
+macro as_foreground_task(expr)
+    quote
+        local ref = $(GlobalRef(@__MODULE__, :_foreground_task))
+        local prev = lock(ref) do r
+            local old = r[]
+            r[] = current_task()
+            old
+        end
+        try
+            $(esc(expr))
+        finally
+            lock(r -> r[] = prev, ref)
+        end
+    end
+end
+
 is_interactive::Bool = false
 
 """
-    isinteractive() -> Bool
+    isinteractive()::Bool
 
 Determine whether Julia is running an interactive session.
 """
@@ -97,7 +132,7 @@ const DEPOT_PATH = String[]
 function append_bundled_depot_path!(DEPOT_PATH)
     path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path = abspath(Sys.BINDIR, DATAROOTDIR, "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     return DEPOT_PATH
 end
@@ -165,8 +200,7 @@ the [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) environment variable if set;
 otherwise it defaults to `["@", "@v#.#", "@stdlib"]`. Entries starting with `@`
 have special meanings:
 
-- `@` refers to the "current active environment", the initial value of which is
-  initially determined by the [`JULIA_PROJECT`](@ref JULIA_PROJECT) environment
+- `@` refers to the "current active environment", whose value is determined by the [`JULIA_PROJECT`](@ref JULIA_PROJECT) environment
   variable or the `--project` command-line option.
 
 - `@stdlib` expands to the absolute path of the current Julia installation's
@@ -262,13 +296,29 @@ end
 
 function init_active_project()
     project = (JLOptions().project != C_NULL ?
-        unsafe_string(Base.JLOptions().project) :
+        unsafe_string(JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
     set_active_project(
         project === nothing ? nothing :
         project == "" ? nothing :
         startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
     )
+end
+
+function init_named_env!(path)
+    try
+        mkpath(dirname(path))
+        io = open(path, "w")
+        try
+            print(io, "syntax.julia_version = \"",VERSION,"\"")
+        finally
+            close(io)
+        end
+        return path
+    catch e
+        @warn "Failed to initialize named environment at $path: $e"
+        return nothing
+    end
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
@@ -284,22 +334,14 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
         if startswith(env, "@script")
-            if @isdefined(PROGRAM_FILE)
-                dir = dirname(PROGRAM_FILE)
-            else
-                cmds = unsafe_load_commands(JLOptions().commands)
-                if any(cmd::Pair{Char, String}->cmd_suppresses_program(first(cmd)), cmds)
-                    # Usage error. The user did not pass a script.
-                    return nothing
-                end
-                dir = dirname(ARGS[1])
-            end
-            if env == "@script"  # complete match, not startswith, so search upwards
-                return current_project(dir)
-            else
-                # starts with, so assume relative path is after
-                return abspath(replace(env, "@script" => dir))
-            end
+            program_file = JLOptions().program_file
+            program_file = program_file != C_NULL ? unsafe_string(program_file) : nothing
+            isnothing(program_file) && return nothing # User did not pass a script
+
+            # Expand trailing relative path
+            dir = dirname(program_file)
+            dir = env != "@script" ? (dir * env[length("@script")+1:end]) : dir
+            return current_project(dir)
         end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
@@ -315,7 +357,8 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
             end
         end
         isempty(DEPOT_PATH) && return nothing
-        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+        new_named_env_path = abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+        return init_named_env!(new_named_env_path)
     end
     # otherwise, it's a path
     path = abspath(env)
@@ -372,13 +415,37 @@ function set_active_project(projfile::Union{AbstractString,Nothing})
     ACTIVE_PROJECT[] = projfile
     for f in active_project_callbacks
         try
-            Base.invokelatest(f)
+            invokelatest(f)
         catch
             @error "active project callback $f failed" maxlog=1
         end
     end
 end
 
+"""
+    active_manifest()
+    active_manifest(project_file::AbstractString)
+
+Return the path of the active manifest file, or the manifest file that would be used for a given `project_file`.
+
+In a stacked environment (where multiple environments exist in the load path), this returns the manifest
+file for the primary (active) environment only, not the manifests from other environments in the stack.
+See the manual section on [Environment stacks](@ref) for more details on how stacked environments work.
+
+See [`Project environments`](@ref project-environments) for details on the difference between a project and a manifest, and the naming
+options and their priority in package loading.
+
+See also [`Base.active_project`](@ref), [`Base.set_active_project`](@ref).
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+"""
+function active_manifest(project_file::Union{AbstractString,Nothing}=nothing; search_load_path::Bool=true)
+    # If `project_file` was specified, use that, otherwise get the active project:
+    project_file = !isnothing(project_file) ? project_file : active_project(search_load_path)
+    project_file === nothing && return nothing
+    return project_file_manifest_path(project_file)
+end
 
 """
     load_path()
@@ -433,7 +500,9 @@ This situation may occur if you are registering exit hooks from background Tasks
 may still be executing concurrently during shutdown.
 """
 function atexit(f::Function)
-    Base.@lock _atexit_hooks_lock begin
+    # HACK: if generating output, hint that we might want to compile `f`, so that it is available for the no-codegen test
+    generating_output() && (precompile(f, (Cint,)) || precompile(f, ()))
+    @lock _atexit_hooks_lock begin
         _atexit_hooks_finished && error("cannot register new atexit hook; already exiting.")
         pushfirst!(atexit_hooks, f)
         return nothing
@@ -502,10 +571,13 @@ end
 ## hook for disabling threaded libraries ##
 
 library_threading_enabled::Bool = true
-const disable_library_threading_hooks = []
+
+# Base.OncePerProcess ensures that any registered hooks do not outlive the session.
+# (even if they are registered during the sysimage build process by top-level code)
+const disable_library_threading_hooks = OncePerProcess(Vector{Any})
 
 function at_disable_library_threading(f)
-    push!(disable_library_threading_hooks, f)
+    push!(disable_library_threading_hooks(), f)
     if !library_threading_enabled
         disable_library_threading()
     end
@@ -514,8 +586,8 @@ end
 
 function disable_library_threading()
     global library_threading_enabled = false
-    while !isempty(disable_library_threading_hooks)
-        f = pop!(disable_library_threading_hooks)
+    while !isempty(disable_library_threading_hooks())
+        f = pop!(disable_library_threading_hooks())
         try
             f()
         catch err

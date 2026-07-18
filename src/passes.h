@@ -43,6 +43,11 @@ struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
     static bool isRequired() { return true; }
 };
 
+struct ExpandAtomicModifyPass : PassInfoMixin<ExpandAtomicModifyPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+
+
 // Module Passes
 struct CPUFeaturesPass : PassInfoMixin<CPUFeaturesPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
@@ -78,7 +83,8 @@ struct RemoveAddrspacesPass : PassInfoMixin<RemoveAddrspacesPass> {
 
 struct LowerPTLSPass : PassInfoMixin<LowerPTLSPass> {
     bool imaging_mode;
-    LowerPTLSPass(bool imaging_mode=false) JL_NOTSAFEPOINT : imaging_mode(imaging_mode) {}
+    bool tls_getters;
+    LowerPTLSPass(bool imaging_mode=false, bool tls_getters=false) JL_NOTSAFEPOINT : imaging_mode(imaging_mode), tls_getters(tls_getters) {}
 
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }

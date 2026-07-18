@@ -2,6 +2,9 @@
 
 using Test, Random, LinearAlgebra
 
+isdefined(Main, :StridedArrays) || @eval Main include("testhelpers/StridedArrays.jl")
+using .Main.StridedArrays
+
 ######## Utilities ###########
 
 # Generate an array similar to A[indx1, indx2, ...], but only call
@@ -92,21 +95,33 @@ function single_stride_dim(A::Array)
 end
 single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 
+function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
+    A_cconv = Base.cconvert(Ptr{T}, A)
+    GC.@preserve A_cconv begin
+        A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
+        for d in 1:N
+            stride_in_bytes = stride(A, d) * Base.elsize(typeof(A))
+            first_idx = first(axes(A, d))
+            A_ptr += (I[d] - first_idx) * stride_in_bytes
+        end
+        unsafe_load(A_ptr)
+    end
+end
+
 # Testing equality of AbstractArrays, using several different methods to access values
 function test_cartesian(@nospecialize(A), @nospecialize(B))
-    isgood = true
     for (IA, IB) in zip(CartesianIndices(A), CartesianIndices(B))
         @test A[IA] == B[IB]
         if A isa StridedArray
             v1 = GC.@preserve A unsafe_load(pointer(A.parent, sum((0,(strides(A) .* (IA.I .- 1))...))+Base.first_index(A)))
-            @test v1 == B[IB]
+            v2 = unsafe_strided_getindex(A, Tuple(IA)...)
+            @test v1 == v2 == B[IB]
         end
     end
 end
 
 function test_linear(@nospecialize(A), @nospecialize(B))
     @test length(A) == length(B)
-    isgood = true
     for (iA, iB) in zip(1:length(A), 1:length(B))
         @test A[iA] == B[iB]
         if A isa StridedArray
@@ -381,6 +396,8 @@ end
     sA = view(A, 1:2, 3, [1 3; 4 2])
     @test ndims(sA) == 3
     @test axes(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
+    @test axes(similar(typeof(A),axes(A))) == axes(A)
+    @test eltype(similar(typeof(A),axes(A))) == eltype(A)
 end
 
 @testset "logical indexing #4763" begin
@@ -1097,4 +1114,100 @@ end
     @test Base.mightalias(V1, permutedims(V1))
     @test Base.mightalias(permutedims(V1), V1)
     @test Base.mightalias(permutedims(V1), permutedims(V1))
+end
+
+@testset "aliasing with PermutedDimsArray" begin
+    A = rand(3, 3)
+    P = PermutedDimsArray(A, (2, 1))
+    B = rand(3, 3)
+    Q = PermutedDimsArray(B, (2, 1))
+    @test Base.mightalias(A, P)
+    @test Base.mightalias(P, A)
+    @test !Base.mightalias(A, Q)
+    @test !Base.mightalias(P, Q)
+
+    A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+    P = PermutedDimsArray(A, (2, 1))
+    expected = collect(P)
+    copyto!(A, P)
+    @test A == expected
+
+    A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+    P = PermutedDimsArray(A, (2, 1))
+    expected = collect(A)
+    copyto!(P, A)
+    @test P == expected
+
+    M = fill(-1.0, 4, 4)
+    P = PermutedDimsArray(view(M, 1:2, 1:2), (2, 1))
+    @test_throws BoundsError copyto!(P, ones(Int, 3, 3))
+    @test all(==(-1.0), M[3:4, :])
+    @test all(==(-1.0), M[:, 3:4])
+end
+
+@testset "issue #61554" begin
+    P = PermutedDimsArray(zeros(2, 2), (2, 1))
+    copyto!(P, [1.0, 2.0, 3.0, 4.0])
+    @test collect(P) == [1.0 3.0; 2.0 4.0]
+    @test_throws BoundsError copyto!(P, [1.0, 2.0, 3.0, 4.0, 5.0])
+end
+
+@test @views quote var"begin" + var"end" end isa Expr
+
+@testset "@views handling of assignment" begin
+    @test @macroexpand(@views x[a:b] = c) == :(x[a:b] = c)
+    # Assignments should still work
+    let array = [1, 2, 3, 4, 5, 6, 7, 8]
+        @views array[begin:2] = [-1, -2]
+        @test array == [-1, -2, 3, 4, 5, 6, 7, 8]
+        @views array[7:end] = [-7, -8]
+        @test array == [-1, -2, 3, 4, 5, 6, -7, -8]
+        @views array[begin + 2:end - 4] = [-3, -4]
+        @test array == [-1, -2, -3, -4, 5, 6, -7, -8]
+        @views identity(array)[begin + 4:end - 2] = [-5, -6]
+        @test array == [-1, -2, -3, -4, -5, -6, -7, -8]
+
+        @views array[begin:2] .= 100
+        @test array == [100, 100, -3, -4, -5, -6, -7, -8]
+        @views array[7:end] .= 200
+        @test array == [100, 100, -3, -4, -5, -6, 200, 200]
+        @views array[begin + 2:end - 4] .= 300
+        @test array == [100, 100, 300, 300, -5, -6, 200, 200]
+        @views identity(array)[begin + 4:end - 2] .= 400
+        @test array == [100, 100, 300, 300, 400, 400, 200, 200]
+
+        @views identity(array)[begin:end] .-= 1
+        @test array == [99, 99, 299, 299, 399, 399, 199, 199]
+
+        @views identity(array)[begin:end] += [1, 2, 3, 4, 5, 6, 7, 8]
+        @test array == [100, 101, 302, 303, 404, 405, 206, 207]
+    end
+    # Nested getindex in assignment should be transformed
+    let array = [1, 2, 3, 4, 5, 6, 7, 8], array2 = [1, 2, 3, 4, 5, 6, 7, 8]
+        array[begin + 1:end - 2][2] = -1
+        array[begin + 1:end - 2][end] = -2
+        @test array == [1, 2, 3, 4, 5, 6, 7, 8]
+
+        @views array[begin + 1:end - 2][2] = -1
+        @views array[begin + 1:end - 2][end] = -2
+        @test array == [1, 2, -1, 4, 5, -2, 7, 8]
+
+        function swap_ele(ary, i, v)
+            res = ary[i]
+            ary[i] = v
+            return res
+        end
+        array2[swap_ele(array[begin:end], 1, -3):swap_ele(array[begin:end], 7, -4)] = [-1, -2, -3, -4, -5, -6, -7]
+        @test array == [1, 2, -1, 4, 5, -2, 7, 8]
+        @test array2 == [-1, -2, -3, -4, -5, -6, -7, 8]
+        @views array2[swap_ele(array[begin:end], 1, -3):swap_ele(array[begin:end], 7, -4)] = [-10, 2, -30, 4, -50, 6, -70]
+        @test array == [-3, 2, -1, 4, 5, -2, -4, 8]
+        @test array2 == [-10, 2, -30, 4, -50, 6, -70, 8]
+    end
+end
+
+# issue #57003
+@testset "copyto! @inbounds propagation" begin
+    @test @inbounds(copyto!(Vector{Int}(undef, 10), 1, collect(1:10), 1, 10)) == 1:10
+    @test_throws BoundsError copyto!(Vector{Int}(undef, 5), 1, collect(1:10), 1, 10)
 end

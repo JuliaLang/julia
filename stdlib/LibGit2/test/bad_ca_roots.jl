@@ -12,20 +12,24 @@ const CAN_SET_CA_ROOTS_PATH = !Sys.isapple() && !Sys.iswindows()
 # Given this is a sub-processed test file, not using @testsets avoids
 # leaking the report print into the Base test runner report
 begin # empty CA roots file
-    # these fail for different reasons on different platforms:
-    # - on Apple & Windows you cannot set the CA roots path location
-    # - on Linux & FreeBSD you you can but these are invalid files
+    # different behavior on different platforms:
+    # - on Apple & Windows you cannot set the CA roots path location; don't error
+    # - on Linux & FreeBSD you can but these are invalid files
+
     ENV["JULIA_SSL_CA_ROOTS_PATH"] = "/dev/null"
-    @test_throws LibGit2.GitError LibGit2.ensure_initialized()
-    ENV["JULIA_SSL_CA_ROOTS_PATH"] = tempname()
-    @test_throws LibGit2.GitError LibGit2.ensure_initialized()
-    # test that it still fails if called a second time
-    @test_throws LibGit2.GitError LibGit2.ensure_initialized()
-    if !CAN_SET_CA_ROOTS_PATH
-        # test that this doesn't work on macOS & Windows
-        ENV["JULIA_SSL_CA_ROOTS_PATH"] = NetworkOptions.bundled_ca_roots()
+    if CAN_SET_CA_ROOTS_PATH
         @test_throws LibGit2.GitError LibGit2.ensure_initialized()
-        delete!(ENV, "JULIA_SSL_CA_ROOTS_PATH")
+    else
+        @test LibGit2.ensure_initialized() === nothing
+    end
+
+    ENV["JULIA_SSL_CA_ROOTS_PATH"] = tempname()
+    if CAN_SET_CA_ROOTS_PATH
+        @test_throws LibGit2.GitError LibGit2.ensure_initialized()
+        # test that it still fails if called a second time
+        @test_throws LibGit2.GitError LibGit2.ensure_initialized()
+    else
+        @test LibGit2.ensure_initialized() === nothing
         @test LibGit2.ensure_initialized() === nothing
     end
 end

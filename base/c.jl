@@ -2,20 +2,6 @@
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal
-
-"""
-    cglobal((symbol, library) [, type=Cvoid])
-
-Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
-in [`ccall`](@ref).
-Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is
-supplied.
-The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
-respectively.
-"""
-cglobal
-
 """
     CFunction struct
 
@@ -203,11 +189,11 @@ function exit_on_sigint(on::Bool)
     ccall(:jl_exit_on_sigint, Cvoid, (Cint,), on)
 end
 
-function _ccallable(rt::Type, sigt::Type)
-    ccall(:jl_extern_c, Cvoid, (Any, Any), rt, sigt)
+function _ccallable(name::Union{Nothing, String}, rt::Type, sigt::Type)
+    ccall(:jl_extern_c, Cvoid, (Any, Any, Any), name, rt, sigt)
 end
 
-function expand_ccallable(rt, def)
+function expand_ccallable(name, rt, def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
         if sig.head === :(::)
@@ -226,16 +212,16 @@ function expand_ccallable(rt, def)
             else
                 f = :(typeof($f))
             end
-            at = map(sig.args[2:end]) do a
-                if isa(a,Expr) && a.head === :(::)
-                    a.args[end]
-                else
-                    :Any
-                end
-            end
+            at = Any[let a = sig.args[i]
+                    if isa(a,Expr) && a.head === :(::)
+                        a.args[end]
+                    else
+                        :Any
+                    end
+                end for i in 2:length(sig.args)]
             return quote
                 @__doc__ $(esc(def))
-                _ccallable($(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map(esc, at)...)))
+                _ccallable($name, $(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map!(esc, at, at)...)))
             end
         end
     end
@@ -243,16 +229,22 @@ function expand_ccallable(rt, def)
 end
 
 """
-    @ccallable(def)
+    @ccallable ["name"] function f(...)::RetType ... end
 
 Make the annotated function be callable from C using its name. This can, for example,
-be used to expose functionality as a C-API when creating a custom Julia sysimage.
+be used to expose functionality as a C API when creating a custom Julia sysimage.
+
+If the first argument is a string, it is used as the external name of the function.
 """
 macro ccallable(def)
-    expand_ccallable(nothing, def)
+    expand_ccallable(nothing, nothing, def)
 end
 macro ccallable(rt, def)
-    expand_ccallable(rt, def)
+    if rt isa String
+        expand_ccallable(rt, nothing, def)
+    else
+        expand_ccallable(nothing, rt, def)
+    end
 end
 
 # @ccall implementation
@@ -307,11 +299,15 @@ function ccall_macro_parse(exprs)
     # get the function symbols
     func = let f = call.args[1]
         if isexpr(f, :.)
-            :(($(f.args[2]), $(f.args[1])))
+            Expr(:tuple, f.args[2], f.args[1])
         elseif isexpr(f, :$)
-            f
+            func = f.args[1]
+            if isa(func, String) || (isa(func, QuoteNode) && !isa(func.value, Ptr)) || isa(func, Tuple) || isexpr(func, :tuple)
+                throw(ArgumentError("interpolated value should be a variable or expression, not a literal name or tuple"))
+            end
+            func
         elseif f isa Symbol
-            QuoteNode(f)
+            Expr(:tuple, QuoteNode(f))
         else
             throw(ArgumentError("@ccall function name must be a symbol, a `.` node (e.g. `libc.printf`) or an interpolated function pointer (with `\$`)"))
         end
@@ -343,7 +339,7 @@ function ccall_macro_parse(exprs)
     end
     # add any varargs if necessary
     nreq = 0
-    if !isnothing(varargs)
+    if varargs !== nothing
         if length(args) == 0
             throw(ArgumentError("C ABI prohibits vararg without one required argument"))
         end
@@ -357,33 +353,13 @@ end
 
 
 function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, nreq)
-    statements = []
-
-    # if interpolation was used, ensure the value is a function pointer at runtime.
-    if isexpr(func, :$)
-        push!(statements, Expr(:(=), :func, esc(func.args[1])))
-        name = QuoteNode(func.args[1])
-        func = :func
-        check = quote
-            if !isa(func, Ptr{Cvoid})
-                name = $name
-                throw(ArgumentError(LazyString("interpolated function `", name, "` was not a Ptr{Cvoid}, but ", typeof(func))))
-            end
-        end
-        push!(statements, check)
-    else
-        func = esc(func)
-    end
-    cconv = nothing
     if convention isa Tuple
         cconv = Expr(:cconv, (convention..., gc_safe), nreq)
     else
         cconv = Expr(:cconv, (convention, UInt16(0), gc_safe), nreq)
     end
-
-    return Expr(:block, statements...,
-                Expr(:call, :ccall, func, cconv, esc(rettype),
-                     Expr(:tuple, map(esc, types)...), map(esc, args)...))
+    return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
+                 Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
 end
 
 """
@@ -435,16 +411,23 @@ The string literal could also be used directly before the function
 name, if desired `"libglib-2.0".g_uri_escape_string(...`
 
 It's possible to declare the ccall as `gc_safe` by using the `gc_safe = true` option:
+
     @ccall gc_safe=true strlen(s::Cstring)::Csize_t
+
 This allows the garbage collector to run concurrently with the ccall, which can be useful whenever
 the `ccall` may block outside of julia.
-WARNING: This option should be used with caution, as it can lead to undefined behavior if the ccall
-calls back into the julia runtime. (`@cfunction`/`@ccallables` are safe however)
+
+!!! warning
+    This option should be used with caution, as it can lead to undefined behavior if the ccall
+    calls back into the julia runtime. (`@cfunction`/`@ccallable` are safe however)
+
+!!! compat "Julia 1.12"
+    The `gc_safe` argument requires Julia 1.12 or higher.
 """
 macro ccall(exprs...)
     return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)
 end
 
-macro ccall_effects(effects::UInt16, expr)
-    return ccall_macro_lower((:ccall, effects), ccall_macro_parse(expr)...)
+macro ccall_effects(effects::UInt16, exprs...)
+    return ccall_macro_lower((:ccall, effects), ccall_macro_parse(exprs)...)
 end

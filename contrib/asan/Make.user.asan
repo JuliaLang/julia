@@ -3,7 +3,6 @@ BINDIR=$(TOOLCHAIN)/usr/bin
 TOOLDIR=$(TOOLCHAIN)/usr/tools
 
 # use our new toolchain
-USECLANG=1
 override CC=$(TOOLDIR)/clang
 override CXX=$(TOOLDIR)/clang++
 override PATCHELF=$(TOOLDIR)/patchelf

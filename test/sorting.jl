@@ -12,7 +12,7 @@ using .Main.OffsetArrays
 @testset "Base.Sort docstrings" begin
     undoc = Docs.undocumented_names(Base.Sort)
     @test_broken isempty(undoc)
-    @test undoc == [:Algorithm, :SMALL_THRESHOLD, :Sort]
+    @test undoc == [:Algorithm, :Sort]
 end
 
 @testset "Order" begin
@@ -108,6 +108,14 @@ end
     end
     @test_throws MethodError sort((1,2,3.0))
     @test Base.infer_return_type(sort, Tuple{Tuple{Vararg{Int}}}) == Tuple{Vararg{Int}}
+end
+
+@testset "KeySet and ValueIterator" begin
+    x = Dict(rand() => randstring() for _ in 1:10)
+    x0 = deepcopy(x)
+    @test issorted(sort(keys(x))::Vector{Float64})
+    @test issorted(sort(values(x))::Vector{String})
+    @test x == x0
 end
 
 @testset "partialsort" begin
@@ -800,6 +808,16 @@ end
     end
 end
 
+@testset "partialsort(x; scratch)" begin
+    for n in [1,10,100,1000]
+        v = rand(n)
+        scratch = [0.0]
+        k = n ÷ 2 + 1
+        @test partialsort(v, k) == partialsort(v, k; scratch)
+        @test partialsort!(copy(v), k) == partialsort!(copy(v), k; scratch)
+    end
+end
+
 @testset "sorting preserves identity" begin
     a = BigInt.([2, 2, 2, 1, 1, 1]) # issue #39620
     sort!(a)
@@ -1075,7 +1093,7 @@ function Base.Sort._sort!(v::AbstractVector, ::NonScalarIndexingOfWithoutMissing
     out
 end
 
-@testset "Non-scaler indexing of WithoutMissingVector" begin
+@testset "Non-scalar indexing of WithoutMissingVector" begin
     @testset "Unit test" begin
         wmv = Base.Sort.WithoutMissingVector(Union{Missing, Int}[1, 7, 2, 9])
         @test wmv[[1, 3]] == [1, 2]
@@ -1120,6 +1138,11 @@ end
             @test partialsort(x, i) == sx[i]
         end
     end
+end
+
+@testset "partialsort! for UnwrappableSubArray with non-zero offset on 1.11 (#59569)" begin
+    a = reshape(6000:-1:1, 1000, :) |> collect;
+    @test partialsort!(view(copy(a), :, 6), 500:501) == [500, 501]
 end
 
 # This testset is at the end of the file because it is slow.

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-irshow_was_loaded() = invokelatest(isdefined, Compiler.IRShow, :debuginfo_firstline)
+irshow_was_loaded() = invokelatest(isdefinedglobal, Compiler.IRShow, :debuginfo_firstline)
 function maybe_show_ir(ir::IRCode)
     if irshow_was_loaded()
         # ensure we use I/O that does not yield, as this gets called during compilation
@@ -25,13 +25,16 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-is_toplevel_expr_head(head::Symbol) = head === :global || head === :method || head === :thunk
-is_value_pos_expr_head(head::Symbol) = head === :static_parameter
+is_toplevel_expr_head(head::Symbol) = head === :method || head === :thunk
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int,
     allow_frontend_forms::Bool, @nospecialize(raise_error))
     if isa(op, SSAValue)
         op.id > 0 || @verify_error "Def ($(op.id)) is invalid in final IR"
         if op.id > length(ir.stmts)
+            if op.id - length(ir.stmts) > length(ir.new_nodes.info)
+                @verify_error "Def ($(op.id)) points to non-existent new node"
+                raise_error()
+            end
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
         else
             def_bb = block_for_inst(ir.cfg, op.id)
@@ -73,15 +76,13 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         end
     elseif isa(op, Expr)
         # Only Expr(:boundscheck) is allowed in value position
-        if isforeigncall && arg_idx == 1 && op.head === :call
-            # Allow a tuple in symbol position for foreigncall - this isn't actually
-            # a real call - it's interpreted in global scope by codegen. However,
-            # we do need to keep this a real use, because it could also be a pointer.
-        elseif !is_value_pos_expr_head(op.head)
-            if !allow_frontend_forms || op.head !== :opaque_closure_method
-                @verify_error "Expr not allowed in value position"
-                raise_error()
-            end
+        if isforeigncall && arg_idx == 1 && op.head === :tuple
+            # Allow a tuple literal in symbol position for foreigncall - this
+            # is syntax for a literal value or globalref - it is interpreted in
+            # global scope by codegen.
+        elseif !allow_frontend_forms || op.head !== :opaque_closure_method
+            @verify_error "Expr not allowed in value position"
+            raise_error()
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         @verify_error "At statement %$use_idx: Left over SSA marker ($op)"
@@ -334,16 +335,14 @@ function verify_ir(ir::IRCode, print::Bool=true,
         end
 
         if is_phinode_block && !is_valid_phiblock_stmt(stmt)
-            if !isa(stmt, Expr) || !is_value_pos_expr_head(stmt.head)
-                # Go back and check that all non-PhiNodes are valid value-position
-                for validate_idx in firstidx:(lastphi-1)
-                    validate_stmt = ir[SSAValue(validate_idx)][:stmt]
-                    isa(validate_stmt, PhiNode) && continue
-                    check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0,
-                        allow_frontend_forms, raise_error)
-                end
-                is_phinode_block = false
+            # Go back and check that all non-PhiNodes are valid value-position
+            for validate_idx in firstidx:(lastphi-1)
+                validate_stmt = ir[SSAValue(validate_idx)][:stmt]
+                isa(validate_stmt, PhiNode) && continue
+                check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0,
+                         allow_frontend_forms, raise_error)
             end
+            is_phinode_block = false
         end
         if isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
@@ -377,9 +376,12 @@ function verify_ir(ir::IRCode, print::Bool=true,
                         @verify_error "malformed isdefined"
                         raise_error()
                     end
-                    if stmt.args[1] isa GlobalRef
-                        # undefined GlobalRef is OK in isdefined
-                        continue
+                    let v = stmt.args[1]
+                        # a GlobalRef or static_parameter isdefined check does
+                        # not evaluate its argument
+                        if v isa GlobalRef || isexpr(v, :static_parameter)
+                            continue
+                        end
                     end
                 elseif stmt.head === :throw_undef_if_not
                     if length(stmt.args) > 3
@@ -395,18 +397,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     # blocks, which isn't allowed for regular SSA values, so
                     # we skip the validation below.
                     continue
-                elseif stmt.head === :foreigncall
+                elseif stmt.head === :foreigncall || stmt.head === :foreignglobal
                     isforeigncall = true
-                elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
-                        isexpr(stmt.args[1], :static_parameter)
-                    # a GlobalRef or static_parameter isdefined check does not evaluate its argument
-                    continue
-                elseif stmt.head === :call
-                    f = stmt.args[1]
-                    if f isa GlobalRef && f.name === :cglobal
-                        # TODO: these are not yet linearized
-                        continue
-                    end
                 elseif stmt.head === :leave
                     for i in 1:length(stmt.args)
                         arg = stmt.args[i]

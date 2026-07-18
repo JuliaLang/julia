@@ -12,7 +12,7 @@ A structured representation of a terminfo file, without any knowledge of
 particular capabilities, solely based on `term(5)`.
 
 !!! warning
-  This is not part of the public API, and thus subject to change without notice.
+    This is not part of the public API, and thus subject to change without notice.
 
 # Fields
 
@@ -44,19 +44,16 @@ end
 A parsed terminfo paired with capability information.
 
 !!! warning
-  This is not part of the public API, and thus subject to change without notice.
+    This is not part of the public API, and thus subject to change without notice.
 
 # Fields
 
 - `names::Vector{String}`: The names this terminal is known by.
-- `flags::Int`: The number of flags specified.
-- `numbers::BitVector`: A mask indicating which of `TERM_NUMBERS` have been
-  specified.
-- `strings::BitVector`: A mask indicating which of `TERM_STRINGS` have been
-  specified.
-- `extensions::Vector{Symbol}`: A list of extended capability variable names.
-- `capabilities::Dict{Symbol, Union{Bool, Int, String}}`: The capability values
-  themselves.
+- `flags::Dict{Symbol, Bool}`: A mapping of flag capability names to their values.
+- `numbers::Dict{Symbol, Int}`: A mapping of number capability names to their values.
+- `strings::Dict{Symbol, String}`: A mapping of string capability names to their values.
+- `extensions::Union{Nothing, Set{Symbol}}`: The set of extended capability names, or `nothing` if there are no extensions.
+- `aliases::Dict{Symbol, Symbol}`: A mapping of alias names to their corresponding capability names in any of the above categories.
 
 See also: `TermInfoRaw` and `TermCapability`.
 """
@@ -69,7 +66,7 @@ struct TermInfo
     aliases::Dict{Symbol, Symbol}
 end
 
-TermInfo() = TermInfo([], Dict(), Dict(), Dict(), nothing, Dict())
+TermInfo() = TermInfo(String[], Dict{Symbol, Bool}(), Dict{Symbol, Int}(), Dict{Symbol, String}(), nothing, Dict{Symbol, Symbol}())
 
 function read(data::IO, ::Type{TermInfoRaw})
     # Parse according to `term(5)`
@@ -303,16 +300,24 @@ end
 """
 The terminfo of the current terminal.
 """
-current_terminfo::TermInfo = TermInfo()
+const current_terminfo = OncePerProcess{TermInfo}() do
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    terminfo = load_terminfo(term_env)
+    # Ensure setaf is set for xterm terminals
+    if !haskey(terminfo, :setaf) && startswith(term_env, "xterm")
+        # For xterm-like terminals without setaf, add a reasonable default
+        terminfo.strings[:setaf] = "\e[3%p1%dm"
+    end
+    return terminfo
+end
 
 # Legacy/TTY methods and the `:color` parameter
 
 if Sys.iswindows()
-    ttyhascolor(term_type = nothing) = true
+    ttyhascolor() = true
 else
-    function ttyhascolor(term_type = get(ENV, "TERM", ""))
-        startswith(term_type, "xterm") ||
-            haskey(current_terminfo, :setaf)
+    function ttyhascolor()
+        haskey(current_terminfo(), :setaf)
     end
 end
 
@@ -323,8 +328,8 @@ Return a boolean signifying whether the current terminal supports 24-bit colors.
 
 Multiple conditions are taken as signifying truecolor support, specifically any of the following:
 - The `COLORTERM` environment variable is set to `"truecolor"` or `"24bit"`
-- The current terminfo sets the [`RGB`[^1]
-  capability](https://invisible-island.net/ncurses/man/user_caps.5.html#h3-Recognized-Capabilities)
+- The current terminfo sets the [`RGB`
+  capability](https://invisible-island.net/ncurses/man/user_caps.5.html#h3-Recognized-Capabilities)[^1]
   (or the legacy `Tc` capability[^2]) flag
 - The current terminfo provides `setrgbf` and `setrgbb` strings[^3]
 - The current terminfo has a `colors` number greater that `256`, on a unix system
@@ -352,9 +357,9 @@ Multiple conditions are taken as signifying truecolor support, specifically any 
 function ttyhastruecolor()
     # Lasciate ogne speranza, voi ch'intrate
     get(ENV, "COLORTERM", "") ∈ ("truecolor", "24bit") ||
-        get(current_terminfo, :RGB, false) || get(current_terminfo, :Tc, false) ||
-        (haskey(current_terminfo, :setrgbf) && haskey(current_terminfo, :setrgbb)) ||
-        @static if Sys.isunix() get(current_terminfo, :colors, 0) > 256 else false end ||
+        get(current_terminfo(), :RGB, false) || get(current_terminfo(), :Tc, false) ||
+        (haskey(current_terminfo(), :setrgbf) && haskey(current_terminfo(), :setrgbb)) ||
+        @static if Sys.isunix() get(current_terminfo(), :colors, 0) > 256 else false end ||
         (Sys.iswindows() && Sys.windows_version() ≥ v"10.0.14931") || # See <https://devblogs.microsoft.com/commandline/24-bit-color-in-the-windows-console/>
         something(tryparse(Int, get(ENV, "VTE_VERSION", "")), 0) >= 3600 || # Per GNOME bug #685759 <https://bugzilla.gnome.org/show_bug.cgi?id=685759>
         haskey(ENV, "XTERM_VERSION") ||

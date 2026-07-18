@@ -4,7 +4,7 @@
 # RUN: cat %t/module.ll | FileCheck %s
 
 ## Notes:
-# This script uses the `emit` function (defined llvmpasses.jl) to emit either
+# This script uses the `emit` function (defined in llvmpasses.jl) to emit either
 # optimized or unoptimized LLVM IR. Each function is emitted individually and
 # `llvm-link` is used to create a single module that can be passed to opt.
 # The order in which files are emitted and linked is important since `lit` will
@@ -149,10 +149,9 @@ emit(f5, A)
 # CHECK: %ptls_load
 # CHECK: %safepoint
 # CHECK: %"e::E.f"
+# CHECK: @"+Main.Base.RefValue
 # CHECK: %"e::E.f.tag_addr"
 # CHECK: %"e::E.f.tag"
-# CHECK: @"+Main.Base.RefValue
-# CHECK: %gc_slot_addr_0
 # CHECK: @"jl_sym#g
 # CHECK: @"jl_sym#h
 emit(f6, E)

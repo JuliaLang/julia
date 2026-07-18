@@ -53,7 +53,18 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
 {
     // Use pass by reference for all structs
     if (dt->layout->nfields > 0 || dt->layout->npointers) {
+        // Avoid using i128 directly as a byval type since LLVM gives it 16-byte
+        // stack alignment on x86-32, while the C ABI uses 4-byte alignment.
+        if (Ty->isIntegerTy() && Ty->getIntegerBitWidth() > 64)
+            Ty = ArrayType::get(Type::getInt32Ty(ctx), jl_datatype_size(dt) / 4);
         ab.addByValAttr(Ty);
+        return true;
+    }
+    // Large primitive types (like Int128) must also be passed by reference
+    // to avoid i128's 16-byte stack alignment in LLVM.
+    size_t size = jl_datatype_size(dt);
+    if (jl_is_primitivetype(dt) && size > 8) {
+        ab.addByValAttr(ArrayType::get(Type::getInt32Ty(ctx), size / 4));
         return true;
     }
     return false;

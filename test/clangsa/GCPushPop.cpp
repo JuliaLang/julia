@@ -8,19 +8,26 @@
 void missingPop() {
   jl_value_t *x = NULL;
   JL_GC_PUSH1(&x); // expected-note{{GC frame changed here}}
-} // expected-warning{{Non-popped GC frame present at end of function}}
-  // expected-note@-1{{Non-popped GC frame present at end of function}}
+} // expected-warning@-1{{Non-popped GC frame present at end of function}}
+  // expected-note@-2{{Non-popped GC frame present at end of function}}
 
 
 void missingPop2() {
   jl_value_t **x;
   JL_GC_PUSHARGS(x, 2); // expected-note{{GC frame changed here}}
-} // expected-warning{{Non-popped GC frame present at end of function}}
-  // expected-note@-1{{Non-popped GC frame present at end of function}}
+} // expected-warning@-1{{Non-popped GC frame present at end of function}}
+  // expected-note@-2{{Non-popped GC frame present at end of function}}
 
 void superfluousPop() {
   JL_GC_POP(); // expected-warning{{JL_GC_POP without corresponding push}}
 }              // expected-note@-1{{JL_GC_POP without corresponding push}}
+
+extern void JL_NORETURN no_return_error(void);
+void noreturnAfterPush() {
+  jl_value_t *x = NULL;
+  JL_GC_PUSH1(&x);
+  no_return_error();
+}
 
 // From gc.c, jl_gc_push_arraylist creates a custom stack frame.
 extern void jl_gc_push_arraylist(jl_ptls_t ptls, arraylist_t *list);

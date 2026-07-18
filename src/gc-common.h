@@ -7,6 +7,9 @@
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
+#ifndef MADV_HUGEPAGE
+#define MADV_HUGEPAGE 14 //  Compatibility for kernels < 2.6.38 (as in numpy implementation)
+#endif
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
 #define MAP_ANONYMOUS MAP_ANON
 #endif
@@ -28,6 +31,7 @@ extern "C" {
 // GC Big objects
 // =========================================================================== //
 
+// layout for big (>2k) objects
 JL_EXTENSION typedef struct _bigval_t {
     struct _bigval_t *next;
     struct _bigval_t *prev;
@@ -77,10 +81,6 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
             ((ty)(cb->func)) args; \
         } \
     } while (0)
-
-#ifdef __cplusplus
-}
-#endif
 
 // =========================================================================== //
 // malloc wrappers, aligned allocation
@@ -134,6 +134,7 @@ STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 #endif
 #define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
 #define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
+#define malloc_page_align(sz) jl_malloc_aligned(sz, jl_getpagesize())
 
 // =========================================================================== //
 // Pointer tagging
@@ -193,10 +194,10 @@ extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 
 void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT;
-void run_finalizer(jl_task_t *ct, void *o, void *ff);
-void run_finalizers(jl_task_t *ct, int finalizers_thread);
-JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o);
+void run_finalizer(jl_task_t *ct, void *o, void *ff) JL_CANSAFEPOINT;
+void run_finalizers(jl_task_t *ct, int finalizers_thread) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o) JL_CANSAFEPOINT;
 
 
 // =========================================================================== //
@@ -221,5 +222,12 @@ extern int gc_logging_enabled;
 
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT;
+
+int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
+int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // JL_GC_COMMON_H

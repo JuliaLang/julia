@@ -11,3 +11,15 @@ Serialization.serialize
 Serialization.deserialize
 Serialization.writeheader
 ```
+
+### Recommended File Extension
+
+While the Serialization module does not mandate a specific file extension, the Julia community commonly uses the `.jls` extension for serialized Julia files.
+
+Example:
+
+```julia
+open("model.jls", "w") do io
+    serialize(io, my_model)
+end
+```

@@ -335,6 +335,8 @@ end
     @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
     @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
+    # Test bad arguments for comprehensions
+    @test_throws ArgumentError @macroexpand(@threads [i for i in 1:10] 2) # wrong number of args
 end
 
 @testset "rand_ptls underflow" begin
@@ -447,6 +449,12 @@ let once = OncePerProcess(() -> return [nothing])
     @atomic once.state = 0x01
     @test x === once()
 end
+let once1 = OncePerProcess(BigFloat), once2 = OncePerProcess{BigFloat}(BigFloat)
+    # Using a type as a constructor should create a OncePerProcess with
+    # Type{...} as its initializer (rather than DataType)
+    @test typeof(once1) <: OncePerProcess{BigFloat,Type{BigFloat}}
+    @test typeof(once2) <: OncePerProcess{BigFloat,Type{BigFloat}}
+end
 let once = OncePerProcess{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("OncePerProcess initializer failed previously") once()
@@ -551,6 +559,12 @@ let e = Base.Event(true),
     @test_throws ArgumentError once[-1]
 
 end
+let once1 = OncePerThread(BigFloat), once2 = OncePerThread{BigFloat}(BigFloat)
+    # Using a type as a constructor should create a OncePerThread with
+    # Type{...} as its initializer (rather than DataType)
+    @test typeof(once1) <: OncePerThread{BigFloat,Type{BigFloat}}
+    @test typeof(once2) <: OncePerThread{BigFloat,Type{BigFloat}}
+end
 let once = OncePerThread{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("OncePerThread initializer failed previously") once()
@@ -563,7 +577,31 @@ let once = OncePerTask(() -> return [nothing])
     delete!(task_local_storage(), once)
     @test x !== once() === once()
 end
+let once1 = OncePerTask(BigFloat), once2 = OncePerTask{BigFloat}(BigFloat)
+    # Using a type as a constructor should create a OncePerTask with
+    # Type{...} as its initializer (rather than DataType)
+    @test typeof(once1) <: OncePerTask{BigFloat,Type{BigFloat}}
+    @test typeof(once2) <: OncePerTask{BigFloat,Type{BigFloat}}
+end
 let once = OncePerTask{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("expected") once()
+end
+
+# Exercise `save_stack`/`restore_stack` under GC pressure: a missing write-barrier
+# when storing the freshly-allocated copy-stack buffer into `lastt->ctx.stkbuf`
+# let the GC collect the buffer while the (old) task still referenced it.
+let code = """
+    function f(x)
+        x in (0, 1) && return x
+        a = Threads.@spawn f(x - 2)
+        b = Threads.@spawn f(x - 1)
+        return fetch(a) + fetch(b)
+    end
+    print(@sync f(25))
+    """
+    cmd = addenv(`$(Base.julia_cmd()) --depwarn=error --startup-file=no -t4 -e $code`,
+                 "JULIA_COPY_STACKS" => "1")
+    # JULIA_COPY_STACKS is broken on Windows (#35147)
+    @test read(cmd, String) == "75025" skip=Sys.iswindows()
 end

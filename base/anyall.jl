@@ -3,7 +3,7 @@
 ## all & any
 
 """
-    any(itr) -> Bool
+    any(itr)::Bool
 
 Test whether any elements of a boolean collection are `true`, returning `true` as
 soon as the first `true` value in `itr` is encountered (short-circuiting). To
@@ -13,7 +13,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), [`||`](@ref).
+See also [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -41,7 +41,7 @@ missing
 any(itr) = any(identity, itr)
 
 """
-    all(itr) -> Bool
+    all(itr)::Bool
 
 Test whether all elements of a boolean collection are `true`, returning `false` as
 soon as the first `false` value in `itr` is encountered (short-circuiting). To
@@ -51,7 +51,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), [`&&`](@ref), [`allunique`](@ref).
+See also [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), [`&&`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest
@@ -80,7 +80,7 @@ missing
 all(itr) = all(identity, itr)
 
 """
-    any(p, itr) -> Bool
+    any(p, itr)::Bool
 
 Determine whether predicate `p` returns `true` for any elements of `itr`, returning
 `true` as soon as the first item in `itr` for which `p` returns `true` is encountered
@@ -147,7 +147,7 @@ function _any(::typeof(identity), itr::Tuple{Vararg{Bool}}, ::Colon)
 end
 
 # Specialized versions of any(f, ::Tuple)
-# We fall back to the for loop implementation all elements have the same type or
+# We fall back to the for loop implementation if all elements have the same type or
 # if the tuple is too large.
 function any(f, itr::Tuple)
     if itr isa NTuple || length(itr) > 32
@@ -168,7 +168,7 @@ end
 @inline _any_tuple(f, anymissing) = anymissing ? missing : false
 
 """
-    all(p, itr) -> Bool
+    all(p, itr)::Bool
 
 Determine whether predicate `p` returns `true` for all elements of `itr`, returning
 `false` as soon as the first item in `itr` for which `p` returns `false` is encountered

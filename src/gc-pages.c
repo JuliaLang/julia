@@ -40,7 +40,7 @@ void jl_gc_init_page(void)
 
 // Try to allocate a memory block for multiple pages
 // Return `NULL` if allocation failed. Result is aligned to `GC_PAGE_SZ`.
-char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
+static char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 {
     size_t pages_sz = GC_PAGE_SZ * pg_cnt;
 #ifdef _OS_WINDOWS_
@@ -66,13 +66,13 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 }
 
 // Allocate the memory for a new page. Starts with `block_pg_cnt` number
-// of pages. Decrease 4x every time so that there are enough space for a few.
+// of pages. Decrease 4x every time so that there is enough space for a few
 // more chunks (or other allocations). The final page count is recorded
 // and will be used as the starting count next time. If the page count is
 // smaller `MIN_BLOCK_PG_ALLOC` a `jl_memory_exception` is thrown.
 // Assumes `gc_pages_lock` is acquired, the lock is released before the
 // exception is thrown.
-char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT
+STATIC_INLINE char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT_LEAVE_ENTER
 {
     unsigned pg_cnt = block_pg_cnt;
     char *mem = NULL;
@@ -138,24 +138,39 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
         gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
-    // must map a new set of pages
-    char *data = jl_gc_try_alloc_pages();
-    meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
-    for (int i = 0; i < block_pg_cnt; i++) {
-        jl_gc_pagemeta_t *pg = &meta[i];
-        pg->data = data + GC_PAGE_SZ * i;
-        gc_alloc_map_maybe_create(pg->data);
-        if (i == 0) {
-            gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
+    {
+        // must map a new set of pages
+        char *data = jl_gc_try_alloc_pages();
+        meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
+        for (int i = 0; i < block_pg_cnt; i++) {
+            jl_gc_pagemeta_t *pg = &meta[i];
+            pg->data = data + GC_PAGE_SZ * i;
+            gc_alloc_map_maybe_create(pg->data);
+            if (i == 0) {
+                gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
+            }
+            else {
+                push_lf_back(&global_page_pool_clean, pg);
+            }
         }
-        else {
-            push_lf_back(&global_page_pool_clean, pg);
-        }
+        uv_mutex_unlock(&gc_pages_lock);
     }
-    uv_mutex_unlock(&gc_pages_lock);
 exit:
 #ifdef _OS_WINDOWS_
-    VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
+    // The page was previously only reserved (jl_gc_try_alloc_pages_) or has been
+    // decommitted (jl_gc_free_page), so it needs to be committed before use. This
+    // charges the page against the system commit limit and can fail when that is
+    // exhausted; returning it anyway would hand out memory that raises an access
+    // violation on first touch, so undo and report out-of-memory instead (as
+    // jl_gc_try_alloc_pages does when the reservation itself fails).
+    if (VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE) == NULL) {
+        gc_alloc_map_set(meta->data, GC_PAGE_FREED);
+        push_lf_back(&global_page_pool_freed, meta);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -(int64_t)GC_PAGE_SZ);
+        SetLastError(last_error);
+        errno = last_errno;
+        jl_throw(jl_memory_exception);
+    }
     SetLastError(last_error);
 #endif
     errno = last_errno;
@@ -163,7 +178,7 @@ exit:
 }
 
 // return a page to the freemap allocator
-void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     void *p = pg->data;
     gc_alloc_map_set((char*)p, GC_PAGE_FREED);

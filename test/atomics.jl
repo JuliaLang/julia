@@ -57,9 +57,8 @@ swap(x, y) = y
 struct UndefComplex{T}
     re::T
     im::T
-    UndefComplex{T}() where {T} = new{T}()
 end
-Base.convert(T::Type{<:UndefComplex}, S) = T()
+Base.convert(T::Type{<:UndefComplex}, S) = T(S, 0)
 
 let T1 = Refxy{NTuple{3,UInt8}},
     T2 = ARefxy{NTuple{3,UInt8}}
@@ -111,6 +110,7 @@ Base.show(io::IO, x::Int24) = print(io, "Int24(", Core.Intrinsics.zext_int(Int, 
 ## Fields
 
 @noinline function _test_field_operators(r)
+    GC.gc(false)
     r = r[]
     TT = fieldtype(typeof(r), :x)
     T = typeof(getfield(r, :x))
@@ -147,6 +147,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
 
 @noinline function _test_field_orderings(r, x, y)
     @nospecialize x y
+    GC.gc(false)
     r = r[]
     TT = fieldtype(typeof(r), :x)
 
@@ -328,8 +329,9 @@ test_field_orderings(ARefxy{Any}(true, false), true, false)
 test_field_orderings(ARefxy{Union{Nothing,Missing}}(nothing, missing), nothing, missing)
 test_field_orderings(ARefxy{Union{Nothing,Int}}(nothing, 123_1), nothing, 123_1)
 test_field_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
-test_field_orderings(Complex{Real}(10, 30), Complex{Real}(20, 40))
+test_field_orderings(Complex{Real}(10.5, 30.5), Complex{Real}(20.5, 40.5))
 test_field_orderings(Complex{Rational{Integer}}(10, 30), Complex{Rational{Integer}}(20, 40))
+test_field_orderings(Pair{NTuple{3,Float64},NTuple{3,Real}}((10.5,11.5,12.5), (30.5,40.5,50.5)), Pair{NTuple{3,Float64},NTuple{3,Real}}((110.5,111.5,112.5), (130.5,140.5,150.5)))
 test_field_orderings(10.0, 20.0)
 test_field_orderings(NaN, Inf)
 
@@ -383,7 +385,7 @@ test_once_undef(ARefxy{UndefComplex{UndefComplex{Any}}})
 
 @test_throws ErrorException @macroexpand @atomic foo()
 @test_throws ErrorException @macroexpand @atomic foo += bar
-@test_throws ErrorException @macroexpand @atomic foo += bar
+@test_throws ErrorException @macroexpand @atomic foo +%= bar
 @test_throws ErrorException @macroexpand @atomic foo = bar
 @test_throws ErrorException @macroexpand @atomic foo()
 @test_throws ErrorException @macroexpand @atomic foo(bar)
@@ -407,6 +409,13 @@ let a = ARefxy(1, -1)
     @test 5 === @atomic a.x += 2
     @test 4 === @atomic :monotonic a.x -= 1
     @test 12 === @atomic :monotonic a.x *= 3
+
+    # Wrapping update operators lower through the atomic update path too.
+    @test typemax(Int) === @atomic :monotonic a.x = typemax(Int)
+    @test typemin(Int) === @atomic a.x +%= 1
+    @test typemax(Int) === @atomic :monotonic a.x -%= 1
+    @test -2 === @atomic :monotonic a.x *%= 2
+    @test 12 === @atomic :monotonic a.x = 12
 
     @test 12 === @atomic a.x
     @test (12 => 13) === @atomic a.x + 1
@@ -473,6 +482,13 @@ function _test_atomic_get_set_swap_modify(T, x, y, z)
             end
         end
     end
+end
+
+let mem = AtomicMemory{Int}(undef, 1)
+    @atomic mem[1] = typemax(Int)
+    @test (@atomic mem[1] +%= 1) == typemin(Int)
+    @test (@atomic :monotonic mem[1] -%= 1) == typemax(Int)
+    @test (@atomic :monotonic mem[1] *%= 2) == -2
 end
 
 function _test_atomic_setonce_replace(T, initial, desired)
@@ -705,7 +721,7 @@ test_global_orderings(Any, true, false)
 test_global_orderings(Union{Nothing,Missing}, nothing, missing)
 test_global_orderings(Union{Nothing,Int}, nothing, 123_1)
 test_global_orderings(Complex{Int128}, Complex{Int128}(10, 30), Complex{Int128}(20, 40))
-test_global_orderings(Complex{Real}, Complex{Real}(10, 30), Complex{Real}(20, 40))
+test_global_orderings(Complex{Real}, Complex{Real}(10.5, 30.5), Complex{Real}(20.5, 40.5))
 test_global_orderings(Float64, 10.0, 20.0)
 test_global_orderings(Float64, NaN, Inf)
 
@@ -791,6 +807,12 @@ let a = @__MODULE__
     @test 4 === @atomic :monotonic a.x -= 1
     @test 12 === @atomic :monotonic a.x *= 3
 
+    @test typemax(Int) === @atomic :monotonic a.x = typemax(Int)
+    @test typemin(Int) === @atomic a.x +%= 1
+    @test typemax(Int) === @atomic :monotonic a.x -%= 1
+    @test -2 === @atomic :monotonic a.x *%= 2
+    @test 12 === @atomic :monotonic a.x = 12
+
     @test 12 === @atomic a.x
     @test (12 => 13) === @atomic a.x + 1
     @test (13 => 15) === @atomic :monotonic a.x + 2
@@ -823,7 +845,7 @@ end
 ## Memory
 
 using InteractiveUtils
-using Core: memoryrefget, memoryrefset!, memoryrefswap!, memoryrefreplace!, memoryrefmodify!, memoryrefsetonce!, memoryref_isassigned
+using Core: memoryrefget, memoryrefset!, memoryrefunset!, memoryrefswap!, memoryrefreplace!, memoryrefmodify!, memoryrefsetonce!, memoryref_isassigned
 
 @noinline function _test_memory_operators(r)
     r = r[]
@@ -1024,15 +1046,17 @@ test_memory_operators(Float64)
 end
 @noinline function test_memory_orderings(T::Type, x, y)
     @nospecialize
-    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
-    memoryrefset!(xr, x, :unordered, true) # @atomic xr[] = x
-    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 2), 2)
+    memoryrefset!(xr, x, :unordered, true) # @atomic xr[2] = x
+    yr = GenericMemoryRef(Memory{T}(undef, 2), 2)
     yr[] = y
+    GC.gc(false)
     _test_memory_orderings(Ref(xr), Ref(yr), x, y)
-    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
-    memoryrefset!(xr, x, :unordered, true) # @atomic xr[] = x
-    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 2), 2)
+    memoryrefset!(xr, x, :unordered, true) # @atomic xr[2] = x
+    yr = GenericMemoryRef(Memory{T}(undef, 2), 2)
     yr[] = y
+    GC.gc(false)
     _test_memory_orderings(Ref{Any}(xr), Ref{Any}(yr), x, y)
     nothing
 end
@@ -1047,7 +1071,8 @@ test_memory_orderings(Any, true, false)
 test_memory_orderings(Union{Nothing,Missing}, nothing, missing)
 test_memory_orderings(Union{Nothing,Int}, nothing, 123_1)
 test_memory_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
-test_memory_orderings(Complex{Real}(10, 30), Complex{Real}(20, 40))
+test_memory_orderings(Complex{Real}(10.5, 30.5), Complex{Real}(20.5, 40.5))
+test_memory_orderings(Pair{NTuple{3,Float64},NTuple{3,Real}}((10.5,11.5,12.5), (30.5,40.5,50.5)), Pair{NTuple{3,Float64},NTuple{3,Real}}((110.5,111.5,112.5), (130.5,140.5,150.5)))
 test_memory_orderings(10.0, 20.0)
 test_memory_orderings(NaN, Inf)
 
@@ -1077,6 +1102,201 @@ test_memory_undef(Union{Nothing,Integer})
 test_memory_undef(UndefComplex{Any})
 test_memory_undef(UndefComplex{UndefComplex{Any}})
 
+# memoryrefunset! — every scenario below is exercised twice: once with `Ref(r)`
+# (the memref's type stays concrete, so emit_f_opmemory in src/codegen.cpp lowers
+# the call inline), and once with `Ref{Any}(r)` (the memref's static type is Any,
+# so codegen bails and the call falls through to jl_f_memoryrefunset in
+# src/builtins.c → jl_memoryrefunset in src/genericmemory.c). The two paths share
+# their per-layout logic; running both ensures they stay in lockstep across every
+# supported Memory layout.
+
+# memoryrefunset! on undefable element types: slot becomes undefined after clearing
+@noinline function _test_memory_unset(r)
+    r = r[]
+    @test memoryref_isassigned(r, :sequentially_consistent, true)
+    @test memoryrefunset!(r, :sequentially_consistent, true) === nothing
+    @test !memoryref_isassigned(r, :sequentially_consistent, true)
+    @test_throws UndefRefError memoryrefget(r, :sequentially_consistent, true)
+    # repeated unset on an already-cleared slot is a no-op
+    @test memoryrefunset!(r, :sequentially_consistent, true) === nothing
+    @test !memoryref_isassigned(r, :sequentially_consistent, true)
+    nothing
+end
+@noinline function test_memory_unset(T::Type)
+    x = convert(T, 12345_10)
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(r, x, :unordered, true)
+    _test_memory_unset(Ref(r))
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(r, x, :unordered, true)
+    _test_memory_unset(Ref{Any}(r))
+    nothing
+end
+test_memory_unset(Any)
+test_memory_unset(BigInt)
+test_memory_unset(Union{Nothing,Integer})
+test_memory_unset(UndefComplex{Any})
+test_memory_unset(UndefComplex{UndefComplex{Any}})
+
+# memoryrefunset! on non-atomic memory
+@noinline function _test_memory_unset_notatomic(r)
+    r = r[]
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test memoryrefunset!(r, :not_atomic, true) === nothing
+    @test !memoryref_isassigned(r, :not_atomic, true)
+    @test_throws UndefRefError memoryrefget(r, :not_atomic, true)
+    nothing
+end
+@noinline function test_memory_unset_notatomic(T::Type)
+    x = convert(T, 12345_10)
+    r = GenericMemoryRef(Memory{T}(undef, 1))
+    memoryrefset!(r, x, :not_atomic, true)
+    _test_memory_unset_notatomic(Ref(r))
+    r = GenericMemoryRef(Memory{T}(undef, 1))
+    memoryrefset!(r, x, :not_atomic, true)
+    _test_memory_unset_notatomic(Ref{Any}(r))
+    nothing
+end
+test_memory_unset_notatomic(Any)
+test_memory_unset_notatomic(BigInt)
+test_memory_unset_notatomic(UndefComplex{Any})
+test_memory_unset_notatomic(UndefComplex{UndefComplex{Any}})
+
+# memoryrefunset! on bits-only memory or isbits-union memory: no-op since the
+# slot has no GC pointers to clear (first_ptr < 0 for plain bits, isunion for the
+# union case). Both layouts hit the early-return branches in jl_memoryrefunset
+# and the matching `isunion || layout->first_ptr < 0` short-circuit in codegen.
+@noinline function _test_memory_unset_noop(r, val)
+    @nospecialize val
+    r = r[]
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test memoryrefunset!(r, :not_atomic, true) === nothing
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test memoryrefget(r, :not_atomic, true) === val
+    nothing
+end
+@noinline function test_memory_unset_noop(T::Type, val)
+    @nospecialize val
+    r = GenericMemoryRef(Memory{T}(undef, 1)); r[] = val
+    _test_memory_unset_noop(Ref(r), val)
+    r = GenericMemoryRef(Memory{T}(undef, 1)); r[] = val
+    _test_memory_unset_noop(Ref{Any}(r), val)
+    nothing
+end
+test_memory_unset_noop(Int, 42)
+test_memory_unset_noop(Float64, 3.14)
+test_memory_unset_noop(Complex{Int32}, Complex{Int32}(1, 2))
+test_memory_unset_noop(Union{Int8,Float64}, 1.5)
+
+# memoryrefunset! ordering validation, mirroring the memoryrefset! patterns
+@noinline function _test_memory_unset_orderings(xr, yr)
+    xr = xr[]
+    yr = yr[]
+    # atomic memory: invalid orderings and non-atomic order should error
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(xr, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: atomic memory cannot be written non-atomically") memoryrefunset!(xr, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(xr, :acquire, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(xr, :acquire_release, true)
+    # atomic memory: valid store orderings clear the slot
+    @test memoryref_isassigned(xr, :unordered, true)
+    @test memoryrefunset!(xr, :unordered, true) === nothing
+    @test !memoryref_isassigned(xr, :unordered, true)
+    @test memoryrefunset!(xr, :monotonic, true) === nothing
+    @test memoryrefunset!(xr, :release, true) === nothing
+    @test memoryrefunset!(xr, :sequentially_consistent, true) === nothing
+
+    # non-atomic memory: invalid orderings and atomic orders should error
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(yr, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :unordered, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :monotonic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(yr, :acquire, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(yr, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :sequentially_consistent, true)
+    # non-atomic memory: :not_atomic is the only valid ordering
+    @test memoryref_isassigned(yr, :not_atomic, true)
+    @test memoryrefunset!(yr, :not_atomic, true) === nothing
+    @test !memoryref_isassigned(yr, :not_atomic, true)
+    nothing
+end
+@noinline function test_memory_unset_orderings(T::Type, x)
+    @nospecialize x
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(xr, x, :unordered, true)
+    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    yr[] = x
+    GC.gc(false)
+    _test_memory_unset_orderings(Ref(xr), Ref(yr))
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(xr, x, :unordered, true)
+    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    yr[] = x
+    GC.gc(false)
+    _test_memory_unset_orderings(Ref{Any}(xr), Ref{Any}(yr))
+    nothing
+end
+test_memory_unset_orderings(Any, 12345_10)
+test_memory_unset_orderings(BigInt, big(12345_10))
+test_memory_unset_orderings(Union{Nothing,Integer}, 12345_10)
+
+# memoryrefunset! out-of-bounds: must throw BoundsError on empty memory unless @inbounds
+@noinline function _test_memory_unset_oob(r)
+    r = r[]
+    @test_throws BoundsError memoryrefunset!(r, :not_atomic, true)
+    nothing
+end
+let r = GenericMemoryRef(Memory{Any}(undef, 0))
+    _test_memory_unset_oob(Ref(r))
+    _test_memory_unset_oob(Ref{Any}(r))
+end
+
+# memoryrefunset! on a struct with multiple inline-allocated pointers must clear
+# *every* pointer in the slot, not just the one checked by memoryref_isassigned
+# (which only inspects first_ptr). Read the raw memory directly to verify.
+struct TwoInlinePtr;   a::Any; b::Any;         end
+struct ThreeInlinePtr; a::Any; b::Any; c::Any; end
+function raw_element_ptrs(mem::GenericMemory)
+    elsz = sizeof(eltype(mem))
+    nptrs = elsz ÷ sizeof(Ptr{Cvoid})
+    # Locked AtomicMemory slots are larger than sizeof(eltype): each slot is prefixed
+    # by a mutex word padded to JL_SMALL_BYTE_ALIGNMENT. Skip that prefix.
+    slot_overhead = length(mem) > 0 ? (sizeof(mem) ÷ length(mem) - elsz) : 0
+    base = Ptr{UInt}(pointer(mem)) + slot_overhead
+    return ntuple(i -> unsafe_load(base, i), nptrs)
+end
+# Ordering is passed via Val so the codegen path still sees a constant symbol
+# (emit_f_opmemory requires `ord.constant` to be set).
+@noinline function _test_memory_unset_multiptr(rref, mem, ::Val{ordering}) where {ordering}
+    r = rref[]
+    @test all(!iszero, raw_element_ptrs(mem))
+    @test memoryref_isassigned(r, ordering, true)
+    @test memoryrefunset!(r, ordering, true) === nothing
+    @test !memoryref_isassigned(r, ordering, true)
+    @test_throws UndefRefError memoryrefget(r, ordering, true)
+    @test all(iszero, raw_element_ptrs(mem))
+    nothing
+end
+function test_memory_unset_multiptr(::Type{T}, ::Type{MemT}, ::Val{ordering}) where {T, MemT<:GenericMemory{<:Any,T}, ordering}
+    mem = MemT(undef, 1)
+    objs = Any[Ref(i) for i in 1:fieldcount(T)]
+    r = GenericMemoryRef(mem)
+    memoryrefset!(r, T(objs...), ordering, true)
+    GC.@preserve objs _test_memory_unset_multiptr(Ref(r), mem, Val(ordering))
+    mem = MemT(undef, 1)
+    objs = Any[Ref(i) for i in 1:fieldcount(T)]
+    r = GenericMemoryRef(mem)
+    memoryrefset!(r, T(objs...), ordering, true)
+    GC.@preserve objs _test_memory_unset_multiptr(Ref{Any}(r), mem, Val(ordering))
+    nothing
+end
+# non-atomic memory: clears via memset
+test_memory_unset_multiptr(TwoInlinePtr,   Memory{TwoInlinePtr},         Val(:not_atomic))
+test_memory_unset_multiptr(ThreeInlinePtr, Memory{ThreeInlinePtr},       Val(:not_atomic))
+# atomic memory with element size <= MAX_POINTERATOMIC_SIZE: clears via jl_atomic_store_bits
+test_memory_unset_multiptr(TwoInlinePtr,   AtomicMemory{TwoInlinePtr},   Val(:unordered))
+# atomic memory with element size > MAX_POINTERATOMIC_SIZE: clears via lock + memset
+test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:unordered))
+
 @noinline function _test_once_undef(r)
     r = r[]
     TT = eltype(r)
@@ -1099,3 +1319,26 @@ test_once_undef(Any)
 test_once_undef(Union{Nothing,Integer})
 test_once_undef(UndefComplex{Any})
 test_once_undef(UndefComplex{UndefComplex{Any}})
+
+mutable struct Atomic57190
+    @atomic x::Int
+end
+
+
+function add_one57190!()
+    @atomic (Atomic57190(0).x) += 1
+end
+
+@test add_one57190!() == 1
+
+# Test atomic Float16 operations at all optimization levels (GlobalISel miscompile on AArch64)
+# See https://github.com/JuliaLang/julia/pull/54140#issuecomment-2855794363
+for opt in 0:3
+    @test success(run(```$(Base.julia_cmd()) --startup-file=no -O$opt -e '
+        a = Threads.Atomic{Float16}(Float16(0))
+        a[] = Float16(1.5)
+        @assert a[] === Float16(1.5) "atomic Float16 store failed: got \$(a[]) expected 1.5 (opt level = -O$(Base.JLOptions().opt_level))"
+        a[] = Float16(3.25)
+        @assert a[] === Float16(3.25) "atomic Float16 store failed: got \$(a[]) expected 3.25 (opt level = -O$(Base.JLOptions().opt_level))"
+    '```))
+end

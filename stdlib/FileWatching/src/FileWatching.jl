@@ -171,8 +171,12 @@ function uv_fspollcb(req::Ptr{Cvoid})
                             uv_jl_fspollcb = @cfunction(uv_fspollcb, Cvoid, (Ptr{Cvoid},))
                             err = ccall(:uv_fs_stat, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
                                 eventloop(), pfw.stat_req, pfw.file, uv_jl_fspollcb::Ptr{Cvoid})
-                            err == 0 || notify(pfw.notify, _UVError("PollingFileWatcher (start)", err), error=true) # likely just ENOMEM
-                            pfw.active = true
+                            if err == 0
+                                pfw.active = true
+                            else
+                                unpreserve_handle(pfw)
+                                notify(pfw.notify, _UVError("PollingFileWatcher (start)", err), error=true) # likely just ENOMEM
+                            end
                         end
                     end
                 finally
@@ -488,11 +492,10 @@ end
 
 function getproperty(fdw::FDWatcher, s::Symbol)
     # support deprecated field names
-    s === :readable && return fdw.mask.readable
-    s === :writable && return fdw.mask.writable
+    s === :readable && return getfield(fdw, :mask).readable
+    s === :writable && return getfield(fdw, :mask).writable
     return getfield(fdw, s)
 end
-
 
 close(t::_FDWatcher, mask::FDEvent) = close(t, mask.readable, mask.writable)
 function close(t::_FDWatcher, readable::Bool, writable::Bool)
@@ -517,17 +520,19 @@ end
 
 function uvfinalize(uv::Union{FileMonitor, FolderMonitor})
     iolock_begin()
-    if uv.handle != C_NULL
-        disassociate_julia_struct(uv) # close (and free) without notify
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
+    handle = @atomicswap :monotonic uv.handle = C_NULL
+    if handle != C_NULL
+        disassociate_julia_struct(handle) # close (and free) without notify
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), handle)
     end
     iolock_end()
 end
 
 function close(t::Union{FileMonitor, FolderMonitor})
     iolock_begin()
-    if t.handle != C_NULL
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
+    handle = @atomic :monotonic t.handle
+    if handle != C_NULL && ccall(:uv_is_closing, Cint, (Ptr{Cvoid},), handle) == 0
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), handle)
     end
     iolock_end()
 end
@@ -576,8 +581,8 @@ function _uv_hook_close(uv::FolderMonitor)
     nothing
 end
 
-isopen(fm::FileMonitor) = fm.handle != C_NULL
-isopen(fm::FolderMonitor) = fm.handle != C_NULL
+isopen(fm::FileMonitor) = (@atomic :monotonic fm.handle) != C_NULL
+isopen(fm::FolderMonitor) = (@atomic :monotonic fm.handle) != C_NULL
 isopen(pfw::PollingFileWatcher) = !pfw.closed
 isopen(pfw::_FDWatcher) = pfw.refcount != (0, 0)
 isopen(pfw::FDWatcher) = !pfw.mask.timedout
@@ -740,12 +745,12 @@ function wait(pfw::PollingFileWatcher)
 end
 
 function wait(m::FileMonitor)
-    m.handle == C_NULL && throw(EOFError())
+    (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
     preserve_handle(m)
     lock(m.notify)
     try
         while true
-            m.handle == C_NULL && throw(EOFError())
+            (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
             events = @atomicswap :not_atomic m.events = 0
             events == 0 || return FileEvent(events)
             if m.ioerrno != 0
@@ -760,11 +765,11 @@ function wait(m::FileMonitor)
 end
 
 function wait(m::FolderMonitor)
-    m.handle == C_NULL && throw(EOFError())
+    (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
     preserve_handle(m)
     lock(m.notify)
     evt = try
-            m.handle == C_NULL && throw(EOFError())
+            (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
             while isempty(m.channel)
                 wait(m.notify)
             end
@@ -800,19 +805,19 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
     fdw = _FDWatcher(s, mask)
     local timer
     # we need this flag to explicitly track whether we call `close` already, to update the internal refcount correctly
-    timedout = false # TODO: make this atomic
+    timedout = Threads.Atomic{Bool}(false)
     try
         if timeout_s >= 0
             # delay creating the timer until shortly before we start the poll wait
             timer = Timer(timeout_s) do t
-                timedout && return
-                timedout = true
+                timedout[] && return
+                timedout[] = true
                 close(fdw, mask)
             end
             try
                 while true
                     events = _wait(fdw, mask)
-                    if timedout || !events.timedout
+                    if timedout[] || !events.timedout
                         @lock fdw.notify fdw.events &= ~events.events
                         return events
                     end
@@ -826,8 +831,8 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
         end
     finally
         if @isdefined(timer)
-            if !timedout
-                timedout = true
+            if !timedout[]
+                timedout[] = true
                 close(timer)
                 close(fdw, mask)
             end
@@ -922,11 +927,11 @@ function watch_folder(s::String, timeout_s::Real=-1)
         end
     end
     # inline a copy of `wait` with added support for checking timer
-    fm.handle == C_NULL && throw(EOFError())
+    (@atomic :monotonic fm.handle) == C_NULL && throw(EOFError())
     preserve_handle(fm)
     lock(fm.notify)
     evt = try
-            fm.handle == C_NULL && throw(EOFError())
+            (@atomic :monotonic fm.handle) == C_NULL && throw(EOFError())
             while isempty(fm.channel)
                 if @isdefined(timer)
                     isopen(timer) || return "" => FileEvent() # timeout

@@ -1,0 +1,6 @@
+# -*- makefile -*-
+
+## jll artifact
+# Bundled compiler-rt builtins archive (libclang_rt.osx.a on macOS)
+COMPILERRT_JLL_NAME := LLVMCompilerRT
+COMPILERRT_JLL_VER := 17.0.6+0

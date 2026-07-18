@@ -105,8 +105,8 @@ void jl_safepoint_init(void)
         addr = NULL;
 #endif
     if (addr == NULL) {
-        jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
-        jl_gc_debug_critical_error();
+        ios_printf(ios_safe_stderr, "could not allocate GC synchronization page\n");
+        jl_gc_debug_fprint_critical_error(ios_safe_stderr);
         abort();
     }
 //    // If we able to skip past the faulting safepoint instruction conditionally,
@@ -126,7 +126,7 @@ void jl_safepoint_init(void)
     jl_safepoint_pages = addr;
 }
 
-void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
+extern void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads) JL_CANSAFEPOINT
 {
     JL_TIMING(GC, GC_Stop);
 #ifdef USE_TRACY
@@ -172,7 +172,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
                         size_t bt_size = jl_try_record_thread_backtrace(ptls2, ptls->bt_data, JL_MAX_BT_SIZE);
                         // Print the backtrace of the straggler
                         for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(ptls->bt_data + i)) {
-                            jl_print_bt_entry_codeloc(ptls->bt_data + i);
+                            jl_fprint_bt_entry_codeloc(ios_safe_stderr, ptls->bt_data + i);
                         }
                     }
                 }
@@ -227,15 +227,11 @@ void jl_safepoint_end_gc(void)
     jl_safepoint_disable(2);
     jl_safepoint_disable(1);
     jl_atomic_store_release(&jl_gc_running, 0);
-#  ifdef _OS_DARWIN_
-    // This wakes up other threads on mac.
-    jl_mach_gc_end();
-#  endif
     uv_mutex_unlock(&safepoint_lock);
     uv_cond_broadcast(&safepoint_cond_end);
 }
 
-void jl_set_gc_and_wait(jl_task_t *ct) // n.b. not used on _OS_DARWIN_
+void jl_set_gc_and_wait(jl_task_t *ct)
 {
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
@@ -254,7 +250,7 @@ void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT
 {
     if (ct) {
         JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
-        // The thread should have set this is already
+        // The thread should have set this already
         assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_UNSAFE);
     }
     // Use normal volatile load in the loop for speed until GC finishes.
@@ -298,9 +294,8 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
     uv_mutex_unlock(&ct->ptls->sleep_lock);
 }
 // This takes the sleep lock and puts the thread in GC_SAFE
-int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
+void jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
 {
-    int8_t gc_state = jl_gc_safe_enter(ptls);
     uv_mutex_lock(&ptls->sleep_lock);
     if (jl_atomic_load_relaxed(&ptls->suspend_count)) {
         // This dance with the locks is because we are not allowed to hold both these locks at the same time
@@ -314,7 +309,6 @@ int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
         uv_mutex_unlock(&safepoint_lock);
         uv_mutex_lock(&ptls->sleep_lock);
     }
-    return gc_state;
 }
 
 // n.b. suspended threads may still run in the GC or GC safe regions
@@ -391,9 +385,6 @@ int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
         else
             jl_atomic_store_relaxed(&ptls2->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size * 2 + sizeof(void*)));
         uv_cond_signal(&ptls2->wake_signal);
-#ifdef _OS_DARWIN_
-        jl_safepoint_resume_thread_mach(ptls2, tid);
-#endif
         uv_cond_broadcast(&safepoint_cond_begin);
     }
     if (suspend_count != 0) {

@@ -27,3 +27,11 @@ $ make -C doc doctest=true
 ```
 
 from the root directory.
+
+## Customizing Doctest Execution
+
+By default, doctests are run using the in-tree Julia executable.
+This behavior can be changed by setting the `JULIA_EXECUTABLE` Makefile variable.
+
+> [!WARNING]
+> Using a custom `JULIA_EXECUTABLE` will not pick up changes to docstrings for Base or any standard library built into the system image. To see the list of standard libraries that are part of the system image, you can run the `contrib/print_sorted_stdlibs.jl` script (e.g., `julia contrib/print_sorted_stdlibs.jl --only-sysimg`).

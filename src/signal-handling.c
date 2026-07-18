@@ -28,8 +28,8 @@ volatile int profile_running = 0;
 volatile int profile_all_tasks = 0;
 static const uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
-JL_DLLEXPORT void jl_profile_stop_timer(void);
-JL_DLLEXPORT int jl_profile_start_timer(uint8_t);
+JL_DLLEXPORT void jl_profile_stop_timer(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_profile_start_timer(uint8_t) JL_NOTSAFEPOINT;
 
 ///////////////////////
 // Utility functions //
@@ -77,7 +77,7 @@ JL_DLLEXPORT int jl_profile_is_running(void)
     return profile_running;
 }
 
-// Any function that acquires this lock must be either a unmanaged thread
+// Any function that acquires this lock must be either an unmanaged thread
 // or in the GC safe region and must NOT allocate anything through the GC
 // while holding this lock.
 // Certain functions in this file might be called from an unmanaged thread
@@ -102,7 +102,7 @@ void jl_init_profile_lock(void)
 #endif
 }
 
-uintptr_t jl_lock_profile_rd_held(void)
+static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 {
 #ifndef _OS_WINDOWS_
     return (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
@@ -113,41 +113,77 @@ uintptr_t jl_lock_profile_rd_held(void)
 
 void jl_lock_profile(void)
 {
+    int got = jl_trylock_profile();
+    assert(got); (void)got;
+}
+
+int jl_trylock_profile(void)
+{
     uintptr_t held = jl_lock_profile_rd_held();
-    if (held++ == 0)
+    if (held == -1)
+        return 0;
+    if (held == 0) {
+        held = -1;
+#ifndef _OS_WINDOWS_
+        pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+#else
+        TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
+#endif
         uv_rwlock_rdlock(&debuginfo_asyncsafe);
+        held = 0;
+    }
+    held++;
 #ifndef _OS_WINDOWS_
     pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 #else
     TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
 #endif
+    return 1;
 }
 
-JL_DLLEXPORT void jl_unlock_profile(void)
+JL_DLLEXPORT void jl_unlock_profile(void) JL_NO_SAFEPOINT_ANALYSIS
 {
     uintptr_t held = jl_lock_profile_rd_held();
-    assert(held);
-    if (--held == 0)
-        uv_rwlock_rdunlock(&debuginfo_asyncsafe);
+    assert(held && held != -1);
+    held--;
 #ifndef _OS_WINDOWS_
     pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 #else
     TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
 #endif
+    if (held == 0)
+        uv_rwlock_rdunlock(&debuginfo_asyncsafe);
 }
 
-void jl_lock_profile_wr(void)
+int jl_lock_profile_wr(void)
 {
+    uintptr_t held = jl_lock_profile_rd_held();
+    if (held)
+        return 0;
+    held = -1;
+#ifndef _OS_WINDOWS_
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+#else
+    TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
+#endif
     uv_rwlock_wrlock(&debuginfo_asyncsafe);
+    return 1;
 }
 
-void jl_unlock_profile_wr(void)
+void jl_unlock_profile_wr(void) JL_NO_SAFEPOINT_ANALYSIS
 {
+    uintptr_t held = jl_lock_profile_rd_held();
+    assert(held == -1);
+    held = 0;
+#ifndef _OS_WINDOWS_
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+#else
+    TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
+#endif
     uv_rwlock_wrunlock(&debuginfo_asyncsafe);
 }
 
 
-#ifndef _OS_WINDOWS_
 static uint64_t profile_cong_rng_seed = 0;
 static int *profile_round_robin_thread_order = NULL;
 static int profile_round_robin_thread_order_size = 0;
@@ -178,10 +214,9 @@ static int *profile_get_randperm(int size)
     jl_shuffle_int_array_inplace(profile_round_robin_thread_order, size, &profile_cong_rng_seed);
     return profile_round_robin_thread_order;
 }
-#endif
 
 
-JL_DLLEXPORT int jl_profile_is_buffer_full(void)
+JL_DLLEXPORT int jl_profile_is_buffer_full(void) JL_NOTSAFEPOINT
 {
     // Declare buffer full if there isn't enough room to sample even just the
     // thread metadata and one max-sized frame. The `+ 6` is for the two block
@@ -189,13 +224,10 @@ JL_DLLEXPORT int jl_profile_is_buffer_full(void)
     return profile_bt_size_cur + ((JL_BT_MAX_ENTRY_SIZE + 1) + 6) > profile_bt_size_max;
 }
 
-NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
-NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
-
 #define PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE (0)
 #define PROFILE_TASK_DEBUG_FORCE_STOP_THREAD_FAILURE (0)
 
-void jl_profile_task(void)
+void jl_profile_task(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
 {
     if (jl_profile_is_buffer_full()) {
         // Buffer full: Delete the timer
@@ -210,24 +242,26 @@ void jl_profile_task(void)
     }
     got_mutex = 1;
 
-    arraylist_t *tasks = jl_get_all_tasks_arraylist();
-    uint64_t seed = jl_rand();
-    const int n_max_random_attempts = 4;
-    // randomly select a task that is not done
-    for (int i = 0; i < n_max_random_attempts; i++) {
-        t = (jl_task_t*)tasks->items[cong(tasks->len, &seed)];
-        assert(t == NULL || jl_is_task(t));
-        if (t == NULL) {
-            continue;
+    {
+        arraylist_t *tasks = jl_get_all_tasks_arraylist();
+        uint64_t seed = jl_rand();
+        const int n_max_random_attempts = 4;
+        // randomly select a task that is not done
+        for (int i = 0; i < n_max_random_attempts; i++) {
+            t = (jl_task_t*)tasks->items[cong(tasks->len, &seed)];
+            assert(t == NULL || jl_is_task(t));
+            if (t == NULL) {
+                continue;
+            }
+            int t_state = jl_atomic_load_relaxed(&t->_state);
+            if (t_state == JL_TASK_STATE_DONE) {
+                continue;
+            }
+            break;
         }
-        int t_state = jl_atomic_load_relaxed(&t->_state);
-        if (t_state == JL_TASK_STATE_DONE) {
-            continue;
-        }
-        break;
+        arraylist_free(tasks);
+        free(tasks);
     }
-    arraylist_free(tasks);
-    free(tasks);
 
 collect_backtrace:
 
@@ -240,7 +274,7 @@ collect_backtrace:
         return;
     }
 
-    jl_record_backtrace_result_t r = {0, INT16_MAX};
+    jl_record_backtrace_result_t r = {0, -1};
     jl_bt_element_t *bt_data_prof = (jl_bt_element_t*)(profile_bt_data_prof + profile_bt_size_cur);
     size_t bt_size_max = profile_bt_size_max - profile_bt_size_cur - 1;
     if (t == NULL || PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE) {
@@ -261,7 +295,7 @@ collect_backtrace:
     profile_bt_size_cur += r.bt_size;
 
     // store threadid but add 1 as 0 is preserved to indicate end of block
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = (uintptr_t)r.tid + 1;
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = r.tid == -1 ? -1 : (uintptr_t)r.tid + 1;
 
     // store task id (never null)
     profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)t;
@@ -325,7 +359,7 @@ static int jl_ignore_sigint(void)
     // On Unix, we get the SIGINT before the debugger which makes it very
     // hard to interrupt a running process in the debugger with `Ctrl-C`.
     // Manually raise a `SIGINT` on current thread with the signal temporarily
-    // unblocked and use it's behavior to decide if we need to handle the signal.
+    // unblocked and use its behavior to decide if we need to handle the signal.
 #ifndef _OS_WINDOWS_
     jl_sigint_passed = 0;
     pthread_sigmask(SIG_UNBLOCK, &jl_sigint_sset, NULL);
@@ -350,7 +384,7 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 }
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
-void jl_show_sigill(void *_ctx);
+static void jl_fprint_sigill(ios_t *s, void *_ctx);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
     || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
     || (defined(_OS_LINUX_) && defined(_CPU_ARM_)) \
@@ -392,13 +426,16 @@ JL_DLLEXPORT void jl_set_peek_cond(uv_async_t *cond)
     JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
 }
 
-static void jl_check_profile_autostop(void)
+static void jl_check_profile_autostop(void) JL_NOTSAFEPOINT
 {
     if (profile_show_peek_cond_loc != NULL && profile_autostop_time != -1.0 && jl_hrtime() > profile_autostop_time) {
         profile_autostop_time = -1.0;
         jl_profile_stop_timer();
+        // Disable trace compilation when profile collection ends
+        jl_force_trace_compile_timing_disable();
         jl_safe_printf("\n==============================================================\n");
-        jl_safe_printf("Profile collected. A report will print at the next yield point\n");
+        jl_safe_printf("Profile collected. A report will print at the next yield point.\n");
+        jl_safe_printf("Disabling --trace-compile\n");
         jl_safe_printf("==============================================================\n\n");
         JL_LOCK_NOGC(&profile_show_peek_cond_lock);
         if (profile_show_peek_cond_loc != NULL)
@@ -410,6 +447,113 @@ static void jl_check_profile_autostop(void)
 static void stack_overflow_warning(void)
 {
     jl_safe_printf("Warning: detected a stack overflow; program state may be corrupted, so further execution might be unreliable.\n");
+}
+
+// Async-signal-safe replacement for libc strsignal(). We call this from fatal-signal
+// handlers, and glibc's strsignal() is not async-signal-safe: it routes through gettext
+// (to localize the description), which calls malloc(). If the interrupted thread already
+// held the malloc arena lock, that reentrant malloc() self-deadlocks. A fixed table of
+// string literals avoids gettext/malloc entirely and is portable across libc flavors
+// (musl/BSD/macOS lack glibc's sigdescr_np/sigabbrev_np). Cases are #ifdef-guarded so this
+// compiles wherever a given signal is (or is not) defined.
+static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
+{
+    switch (sig) {
+#ifdef SIGHUP
+    case SIGHUP:     return "Hangup";
+#endif
+#ifdef SIGINT
+    case SIGINT:     return "Interrupt";
+#endif
+#ifdef SIGQUIT
+    case SIGQUIT:    return "Quit";
+#endif
+#ifdef SIGILL
+    case SIGILL:     return "Illegal instruction";
+#endif
+#ifdef SIGTRAP
+    case SIGTRAP:    return "Trace/breakpoint trap";
+#endif
+#ifdef SIGABRT
+    case SIGABRT:    return "Aborted";
+#endif
+#if defined(SIGABRT_COMPAT) && (!defined(SIGABRT) || SIGABRT_COMPAT != SIGABRT)
+    case SIGABRT_COMPAT: return "Aborted";
+#endif
+#ifdef SIGBUS
+    case SIGBUS:     return "Bus error";
+#endif
+#ifdef SIGFPE
+    case SIGFPE:     return "Floating point exception";
+#endif
+#ifdef SIGKILL
+    case SIGKILL:    return "Killed";
+#endif
+#ifdef SIGUSR1
+    case SIGUSR1:    return "User defined signal 1";
+#endif
+#ifdef SIGSEGV
+    case SIGSEGV:    return "Segmentation fault";
+#endif
+#ifdef SIGUSR2
+    case SIGUSR2:    return "User defined signal 2";
+#endif
+#ifdef SIGPIPE
+    case SIGPIPE:    return "Broken pipe";
+#endif
+#ifdef SIGALRM
+    case SIGALRM:    return "Alarm clock";
+#endif
+#ifdef SIGTERM
+    case SIGTERM:    return "Terminated";
+#endif
+#ifdef SIGBREAK
+    case SIGBREAK:   return "Break";
+#endif
+#ifdef SIGSTKFLT
+    case SIGSTKFLT:  return "Stack fault";
+#endif
+#ifdef SIGCHLD
+    case SIGCHLD:    return "Child exited";
+#endif
+#ifdef SIGCONT
+    case SIGCONT:    return "Continued";
+#endif
+#ifdef SIGSTOP
+    case SIGSTOP:    return "Stopped (signal)";
+#endif
+#ifdef SIGTSTP
+    case SIGTSTP:    return "Stopped";
+#endif
+#ifdef SIGTTIN
+    case SIGTTIN:    return "Stopped (tty input)";
+#endif
+#ifdef SIGTTOU
+    case SIGTTOU:    return "Stopped (tty output)";
+#endif
+#ifdef SIGURG
+    case SIGURG:     return "Urgent I/O condition";
+#endif
+#ifdef SIGXCPU
+    case SIGXCPU:    return "CPU time limit exceeded";
+#endif
+#ifdef SIGXFSZ
+    case SIGXFSZ:    return "File size limit exceeded";
+#endif
+#ifdef SIGVTALRM
+    case SIGVTALRM:  return "Virtual timer expired";
+#endif
+#ifdef SIGPROF
+    case SIGPROF:    return "Profiling timer expired";
+#endif
+#ifdef SIGWINCH
+    case SIGWINCH:   return "Window changed";
+#endif
+#ifdef SIGSYS
+    case SIGSYS:     return "Bad system call";
+#endif
+    default:         return "Unknown signal";
+    }
 }
 
 #if defined(_WIN32)
@@ -450,7 +594,7 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
 #endif
 }
 
-void jl_show_sigill(void *_ctx)
+static void jl_fprint_sigill(ios_t *s, void *_ctx)
 {
     char *pc = (char*)jl_get_pc_from_ctx(_ctx);
     // unsupported platform
@@ -461,31 +605,31 @@ void jl_show_sigill(void *_ctx)
     size_t len = jl_safe_read_mem(pc, (char*)inst, sizeof(inst));
     // ud2
     if (len >= 2 && inst[0] == 0x0f && inst[1] == 0x0b) {
-        jl_safe_printf("Unreachable reached at %p\n", (void*)pc);
+        jl_safe_fprintf(s, "Unreachable reached at %p\n", (void*)pc);
     }
     else {
-        jl_safe_printf("Invalid instruction at %p: ", (void*)pc);
+        jl_safe_fprintf(s, "Invalid instruction at %p: ", (void*)pc);
         for (int i = 0;i < len;i++) {
             if (i == 0) {
-                jl_safe_printf("0x%02" PRIx8, inst[i]);
+                jl_safe_fprintf(s, "0x%02" PRIx8, inst[i]);
             }
             else {
-                jl_safe_printf(", 0x%02" PRIx8, inst[i]);
+                jl_safe_fprintf(s, ", 0x%02" PRIx8, inst[i]);
             }
         }
-        jl_safe_printf("\n");
+        jl_safe_fprintf(s, "\n");
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     uint32_t inst = 0;
     size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
     if (len < 4)
-        jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
+        jl_safe_fprintf(s, "Fault when reading instruction: %d bytes read\n", (int)len);
     if (inst == 0xd4200020) { // brk #0x1
         // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
-        jl_safe_printf("Unreachable reached at %p\n", pc);
+        jl_safe_fprintf(s, "Unreachable reached at %p\n", pc);
     }
     else {
-        jl_safe_printf("Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
+        jl_safe_fprintf(s, "Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
@@ -494,31 +638,31 @@ void jl_show_sigill(void *_ctx)
         uint16_t inst[2] = {0, 0};
         size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
         if (len < 2)
-            jl_safe_printf("Fault when reading Thumb instruction: %d bytes read\n", (int)len);
+            jl_safe_fprintf(s, "Fault when reading Thumb instruction: %d bytes read\n", (int)len);
         // LLVM and GCC uses different code for the trap...
         if (inst[0] == 0xdefe || inst[0] == 0xdeff) {
             // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
-            jl_safe_printf("Unreachable reached in Thumb mode at %p: 0x%04" PRIx16 "\n",
-                           (void*)pc, inst[0]);
+            jl_safe_fprintf(s, "Unreachable reached in Thumb mode at %p: 0x%04" PRIx16 "\n",
+                            (void*)pc, inst[0]);
         }
         else {
-            jl_safe_printf("Invalid Thumb instruction at %p: 0x%04" PRIx16 ", 0x%04" PRIx16 "\n",
-                           (void*)pc, inst[0], inst[1]);
+            jl_safe_fprintf(s, "Invalid Thumb instruction at %p: 0x%04" PRIx16 ", 0x%04" PRIx16 "\n",
+                            (void*)pc, inst[0], inst[1]);
         }
     }
     else {
         uint32_t inst = 0;
         size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
         if (len < 4)
-            jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
+            jl_safe_fprintf(s, "Fault when reading instruction: %d bytes read\n", (int)len);
         // LLVM and GCC uses different code for the trap...
         if (inst == 0xe7ffdefe || inst == 0xe7f000f0) {
             // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
-            jl_safe_printf("Unreachable reached in ARM mode at %p: 0x%08" PRIx32 "\n",
-                           (void*)pc, inst);
+            jl_safe_fprintf(s, "Unreachable reached in ARM mode at %p: 0x%08" PRIx32 "\n",
+                            (void*)pc, inst);
         }
         else {
-            jl_safe_printf("Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
+            jl_safe_fprintf(s, "Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
         }
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
@@ -541,13 +685,11 @@ void jl_show_sigill(void *_ctx)
 #endif
 }
 
-void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-
 // make it invalid for a task to return from this point to its stack
-// this is generally quite an foolish operation, but does free you up to do
+// this is generally quite a foolish operation, but does free you up to do
 // arbitrary things on this stack now without worrying about corrupt state that
 // existed already on it
-void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
+void jl_task_frame_noreturn(jl_task_t *ct)
 {
     jl_set_safe_restore(NULL);
     if (ct) {
@@ -557,8 +699,10 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         // Force all locks to drop. Is this a good idea? Of course not. But the alternative would probably deadlock instead of crashing.
         jl_ptls_t ptls = ct->ptls;
         small_arraylist_t *locks = &ptls->locks;
+#ifndef __clang_safetyanalysis__
         for (size_t i = locks->len; i > 0; i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
+#endif
         locks->len = 0;
         ptls->in_pure_callback = 0;
         ptls->in_finalizer = 0;
@@ -572,13 +716,13 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
 }
 
 // what to do on a critical error on a thread
-void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct)
+void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *context, jl_task_t *ct)
 {
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
     size_t i, n = ct ? *bt_size : 0;
     if (sig) {
-        // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
+        // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jl_fprint_backtrace in jl_exit)
         // and also resets the state of ct and ptls so that some code can run on this task again
         jl_task_frame_noreturn(ct);
 #ifndef _OS_WINDOWS_
@@ -602,21 +746,24 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
         if (si_code)
-            jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, jl_strsignal(sig));
         else
-            jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, jl_strsignal(sig));
+        if (sig == SIGQUIT) {
+            jl_print_task_backtraces(0);
+        }
     }
-    jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
+    jl_safe_fprintf(s, "in expression starting at %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
     if (context && ct) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
         // is properly rooted.
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
     }
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
-        jl_print_bt_entry_codeloc(bt_data + i);
+        jl_fprint_bt_entry_codeloc(s, bt_data + i);
     }
-    jl_gc_debug_print_status();
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_status(s);
+    jl_gc_debug_fprint_critical_error(s);
 }
 
 #ifdef __cplusplus

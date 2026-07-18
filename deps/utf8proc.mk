@@ -5,7 +5,7 @@ $(eval $(call git-external,utf8proc,UTF8PROC,,,$(BUILDDIR)))
 
 UTF8PROC_OBJ_LIB    := $(build_libdir)/libutf8proc.a
 UTF8PROC_OBJ_HEADER := $(build_includedir)/utf8proc.h
-UTF8PROC_CFLAGS     := -O2 $(SANITIZE_OPTS)
+UTF8PROC_CFLAGS     := -O2 $(SANITIZE_OPTS) $(LINKER_GC_CFLAGS)
 UTF8PROC_MFLAGS     := CC="$(CC)" CFLAGS="$(CFLAGS) $(UTF8PROC_CFLAGS)" PICFLAG="$(fPIC)" AR="$(AR)"
 UTF8PROC_BUILDDIR   := $(BUILDDIR)/$(UTF8PROC_SRC_DIR)
 
@@ -29,8 +29,8 @@ $(eval $(call staged-install, \
 	UTF8PROC_INSTALL,,,))
 
 clean-utf8proc:
-	-rm -f $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(UTF8PROC_SRC_DIR) clean
+	-rm -f $(UTF8PROC_BUILDDIR)/build-compiled
+	-if [ -d $(UTF8PROC_BUILDDIR) ]; then $(MAKE) -C $(UTF8PROC_BUILDDIR) clean; fi
 
 get-utf8proc: $(UTF8PROC_SRC_FILE)
 extract-utf8proc: $(UTF8PROC_BUILDDIR)/source-extracted

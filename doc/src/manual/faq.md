@@ -74,35 +74,6 @@ If memory usage is your concern, you can always replace objects with ones that c
 with `A = nothing`. The memory will be released the next time the garbage collector runs; you can force
 this to happen with [`GC.gc()`](@ref Base.GC.gc). Moreover, an attempt to use `A` will likely result in an error, because most methods are not defined on type `Nothing`.
 
-### How can I modify the declaration of a type in my session?
-
-Perhaps you've defined a type and then realize you need to add a new field. If you try this at
-the REPL, you get the error:
-
-```
-ERROR: invalid redefinition of constant MyType
-```
-
-Types in module `Main` cannot be redefined.
-
-While this can be inconvenient when you are developing new code, there's an excellent workaround.
- Modules can be replaced by redefining them, and so if you wrap all your new code inside a module
-you can redefine types and constants. You can't import the type names into `Main` and then expect
-to be able to redefine them there, but you can use the module name to resolve the scope. In other
-words, while developing you might use a workflow something like this:
-
-```julia
-include("mynewcode.jl")              # this defines a module MyModule
-obj1 = MyModule.ObjConstructor(a, b)
-obj2 = MyModule.somefunction(obj1)
-# Got an error. Change something in "mynewcode.jl"
-include("mynewcode.jl")              # reload the module
-obj1 = MyModule.ObjConstructor(a, b) # old objects are no longer valid, must reconstruct
-obj2 = MyModule.somefunction(obj1)   # this time it worked!
-obj3 = MyModule.someotherfunction(obj2, c)
-...
-```
-
 ## [Scripting](@id man-scripting)
 
 ### How do I check if the current file is being run as the main script?
@@ -112,7 +83,7 @@ functionality like command line argument handling. A way to determine that a fil
 this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
 However, it is recommended to not write files that double as a script and as an importable library.
-If one needs functionality both available as a library and a script, it is better to write is as a library, then import the functionality into a distinct script.
+If one needs functionality both available as a library and a script, it is better to write it as a library, then import the functionality into a distinct script.
 
 ### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
@@ -391,6 +362,12 @@ julia> twothreearr()
  3
 ```
 
+### Is a function that ends with `!` allowed to allocate?
+
+Yes! A function name ending with `!` indicates that the function mutates at
+least one of its arguments (typically the first argument). However, it may
+still allocate a scratch space to expedite computation or produce that result.
+
 ## Types, type declarations, and constructors
 
 ### [What does "type-stable" mean?](@id man-type-stability)
@@ -569,9 +546,9 @@ way that is compatible with C and Fortran. Saturated integer arithmetic, however
 The first and most obvious issue is that this is not the way machine integer arithmetic works,
 so implementing saturated operations requires emitting instructions after each machine integer
 operation to check for underflow or overflow and replace the result with [`typemin(Int)`](@ref)
-or [`typemax(Int)`](@ref) as appropriate. This alone expands each integer operation from a single,
-fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets
-worse – saturating integer arithmetic isn't associative. Consider this Matlab computation:
+or [`typemax(Int)`](@ref) as appropriate. This expands each integer operation from a single, fast
+instruction into a few instructions. But it gets worse – saturating integer arithmetic isn't
+associative. Consider this Matlab computation:
 
 ```
 >> n = int64(2)^62
@@ -610,7 +587,7 @@ ans =
 Oops. Adding a `>>>` operator to Matlab wouldn't help, because saturation that occurs when adding
 `n` and `2n` has already destroyed the information necessary to compute the correct midpoint.
 
-Not only is lack of associativity unfortunate for programmers who cannot rely it for techniques
+Not only is lack of associativity unfortunate for programmers who cannot rely on it for techniques
 like this, but it also defeats almost anything compilers might want to do to optimize integer
 arithmetic. For example, since Julia integers use normal machine integer arithmetic, LLVM is free
 to aggressively optimize simple little functions like `f(k) = 5k-1`. The machine code for this
@@ -807,7 +784,7 @@ ERROR: MethodError: no method matching foo(::Vector{Int64})
 The function `foo` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
-  foo(!Matched::Vector{Real})
+  foo(::Vector{!Matched{Real}})
    @ Main none:1
 
 Stacktrace:
@@ -1076,22 +1053,21 @@ However, upgrading to the next Stable release will always be possible as each re
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.
 The current LTS version of Julia is versioned according to SemVer as v1.6.x;
-this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.6.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
+this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.6.x series will no longer receive regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
 As a package developer, you may prefer to develop for the LTS version, to maximize the number of users who can use your package.
 As per SemVer, code written for v1.0 will continue to work for all future LTS and Stable versions.
 In general, even if targeting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).
 
 You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don't mind if the version available today occasionally doesn't actually work.
 As the name implies, releases to the nightly version are made roughly every night (depending on build infrastructure stability).
-In general nightly released are fairly safe to use—your code will not catch on fire.
-However, they may be occasional regressions and or issues that will not be found until more thorough pre-release testing.
+In general nightly releases are fairly safe to use—your code will not catch on fire.
+However, there may be occasional regressions and/or issues that will not be found until more thorough pre-release testing.
 You may wish to test against the nightly version to ensure that such regressions that affect your use case are caught before a release is made.
 
 Finally, you may also consider building Julia from source for yourself. This option is mainly for those individuals who are comfortable at the command line, or interested in learning.
 If this describes you, you may also be interested in reading our [guidelines for contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
-Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
-Note that not all versions of Julia are available for all platforms.
+The [`juliaup` install manager](https://julialang.org/install/) has pre-defined channels named `release` and `lts` for the latest stable release and the current LTS release, as well as version-specific channels.
 
 ### How can I transfer the list of installed packages after updating my version of Julia?
 

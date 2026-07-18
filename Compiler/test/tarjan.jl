@@ -2,6 +2,7 @@
 
 using Test
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using .Compiler: CFGReachability, DomTree, CFG, BasicBlock, StmtRange, dominates,
@@ -85,7 +86,7 @@ function test_reachability(V, E; deletions = 2E ÷ 3, all_checks=false)
 
         if all_checks # checks for internal data structures - O(E^2)
 
-            # Nodes should be mutually reachable iff they are in the same SCompiler.
+            # Nodes should be mutually reachable iff they are in the same SCC.
             scc = reachability.scc
             reachable_nodes = BitSet(v for v = 1:V if !bb_unreachable(reachability, v))
             for i ∈ reachable_nodes

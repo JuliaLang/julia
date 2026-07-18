@@ -89,6 +89,19 @@ end
     @test NTuple{20,Float64}(Iterators.countfrom(2)) === (2.,3.,4.,5.,6.,7.,8.,9.,10.,11.,12.,13.,14.,15.,16.,17.,18.,19.,20.,21.)
     @test_throws ArgumentError NTuple{20,Int}([1,2])
 
+    # long tuples (>=32 elements) constructed from indexable inputs hit a fast path
+    let v = collect(1.0:40.0)
+        @test NTuple{40,Float64}(v) === ntuple(i -> Float64(i), Val(40))
+        @test NTuple{40,Int}(v) === ntuple(i -> i, Val(40))
+        # over-long input is silently truncated to match the iterator-based fallback
+        @test NTuple{40,Float64}(collect(1.0:41.0)) === ntuple(i -> Float64(i), Val(40))
+        @test_throws ArgumentError NTuple{40,Float64}(collect(1.0:39.0))
+    end
+    let m = Memory{Float64}(undef, 40); m .= 1.0:40.0
+        @test NTuple{40,Float64}(m) === ntuple(i -> Float64(i), Val(40))
+        @test_throws ArgumentError NTuple{40,Float64}(Memory{Float64}(undef, 39))
+    end
+
     @test Tuple{Vararg{Float32}}(Float64[1,2,3]) === (1.0f0, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Float32}}(Float64[1,2,3]) === (1, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
@@ -208,13 +221,13 @@ end
     @test iterate(t, y3[2]) === nothing
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
-    @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
+    @test_throws DimensionMismatch eachindex((2,5,"foo"), (1,2,5,7))
 
     @test Core.Compiler.is_nothrow(Base.infer_effects(iterate, (Tuple{Int,Int,Int}, Int)))
 end
 
 
-@testset "elelement/value/key types" begin
+@testset "element/value/key types" begin
     @test eltype((1,2,3)) === Int
     @test eltype((1.0,2.0,3.0)) <: AbstractFloat
     @test eltype((true, false)) === Bool
@@ -229,6 +242,18 @@ end
         typejoin(Int, Float64, Bool)
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+
+    # Single-element tuple with a non-concrete element type must return the type
+    # itself, not the internal where-binding env entry (svec(E<:T, ::Bool))
+    let Abs = Integer
+        @test eltype(Tuple{Abs}) === Abs
+        @test eltype(Tuple{Vector{T} where T<:Integer}) === Vector{T} where T<:Integer
+        @test eltype(Tuple{Any}) === Any
+        # downstream: pairs over a NamedTuple whose field type is a UnionAll
+        local NT = @NamedTuple{x::(Vector{T} where T<:Integer)}
+        @test eltype(NT) === Vector{T} where T<:Integer
+        @test pairs(NT(([1],))) isa Base.Pairs
+    end
 
     @test valtype((1,2,3)) === eltype((1,2,3))
     @test valtype(Tuple{Int, Missing}) === eltype(Tuple{Int, Missing})
@@ -369,9 +394,9 @@ end
     @test !isless((1,2), (1,2))
     @test !isless((2,1), (1,2))
 
-    @test hash(()) === Base.tuplehash_seed
-    @test hash((1,)) === hash(1, Base.tuplehash_seed)
-    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed))
+    @test hash(()) === Base.tuplehash_seed ⊻ Base.HASH_SEED
+    @test hash((1,)) === hash(1, Base.tuplehash_seed ⊻ Base.HASH_SEED)
+    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed ⊻ Base.HASH_SEED))
 
     # Test Any32 methods
     t = ntuple(identity, 32)
@@ -393,7 +418,7 @@ end
     @test !isless((t...,1,2), (t...,1,2))
     @test !isless((t...,2,1), (t...,1,2))
 
-    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,(),UInt(0)])
+    @test hash(t) === foldr(hash, vcat(1:32, (), Base.HASH_SEED))
 end
 
 @testset "functions" begin
@@ -538,6 +563,14 @@ end
     # issue #55790
     for n in 1:32
         @test typeof(ntuple(identity, UInt64(n))) == NTuple{n, Int}
+    end
+
+    @test Tuple == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{Any, Any})
+    @test Tuple{Vararg{Int}} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{typeof(identity), Any})
+
+    for n in 0:15
+        @test NTuple{n, Any} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{Any, Val{n}})
+        @test NTuple{n, Int} == Base.infer_return_type(((f, n) -> ntuple(f, n)), Tuple{typeof(identity), Val{n}})
     end
 end
 
@@ -807,6 +840,29 @@ namedtup = (;a=1, b=2, c=3)
         NamedTuple{(:c,), Tuple{Int}},
     }
 
+@testset "`Base.split_rest(::Tuple, ::Vararg)` return type inference" begin
+    let f(t) = Base.split_rest(t, 3)
+        tuple_types_of_length(n::Int) = (NTuple{n, Any}, NTuple{n}, NTuple{n, Float32})
+        @testset "inferred return type must subtype `NTuple{2, Tuple}`" begin
+            for T in (
+                Tuple, Tuple{Vararg{Float32}},  # any length
+                Tuple{Any, Vararg{Any}}, (Tuple{T, Vararg{T}} where {T}), Tuple{Float32, Vararg{Float32}},  # length greater than one
+                tuple_types_of_length(5)...,  # length five
+            )
+                @test Base.infer_return_type(f, Tuple{T}) <: NTuple{2, Tuple}
+                for S in (Tuple{T, Any, Any}, Tuple{T, Any}, Tuple{T, Int, Any}, Tuple{T, Int}, Tuple{T, Int, Int})
+                    @test Base.infer_return_type(Base.split_rest, S) <: NTuple{2, Tuple}
+                end
+            end
+        end
+        @testset "with exactly-known length: `5 == 2 + 3`" begin
+            for T in tuple_types_of_length(5)
+                @test Base.infer_return_type(f, Tuple{T}) <: Tuple{Tuple{Any, Any}, Tuple{Any, Any, Any}}
+            end
+        end
+    end
+end
+
 # Make sure that tuple iteration is foldable
 @test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
 @test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple}))
@@ -850,3 +906,14 @@ end
         end
     end
 end
+
+@testset "isassigned" begin
+    t = (1, 2, 3)
+    @test isassigned(t, 0) === false
+    @test isassigned(t, 1) === true
+    @test isassigned(t, 3) === true
+    @test isassigned(t, 4) === false
+end
+
+@test NTuple == Base.infer_return_type(reverse, Tuple{NTuple})
+@test Tuple{Vararg{Int}} == Base.infer_return_type(reverse, Tuple{Tuple{Vararg{Int}}})

@@ -4,7 +4,7 @@ LIBUV_GIT_URL:=https://github.com/JuliaLang/libuv.git
 LIBUV_TAR_URL=https://api.github.com/repos/JuliaLang/libuv/tarball/$1
 $(eval $(call git-external,libuv,LIBUV,configure,,$(SRCCACHE)))
 
-UV_CFLAGS := -O2
+UV_CFLAGS := -O2 -DBUILDING_UV_SHARED=1
 
 UV_FLAGS := LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
 UV_FLAGS += CFLAGS="$(CFLAGS) $(UV_CFLAGS) $(SANITIZE_OPTS)"
@@ -60,7 +60,7 @@ $(eval $(call staged-install, \
 
 clean-libuv:
 	rm -rf $(LIBUV_BUILDDIR)/build-configured $(LIBUV_BUILDDIR)/build-compiled
-	-$(MAKE) -C $(LIBUV_BUILDDIR) clean
+	-if [ -d $(LIBUV_BUILDDIR) ]; then $(MAKE) -C $(LIBUV_BUILDDIR) clean; fi
 
 
 get-libuv: $(LIBUV_SRC_FILE)

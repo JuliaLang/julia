@@ -34,7 +34,7 @@ function isorphan(repo::GitRepo)
 end
 
 """
-    LibGit2.head(repo::GitRepo) -> GitReference
+    LibGit2.head(repo::GitRepo)::GitReference
 
 Return a `GitReference` to the current HEAD of `repo`.
 """
@@ -76,7 +76,7 @@ function shortname(ref::GitReference)
 end
 
 """
-    LibGit2.reftype(ref::GitReference) -> Cint
+    LibGit2.reftype(ref::GitReference)::Cint
 
 Return a `Cint` corresponding to the type of `ref`:
   * `0` if the reference is invalid
@@ -206,7 +206,7 @@ end
 peel(ref::GitReference) = peel(GitObject, ref)
 
 """
-    LibGit2.ref_list(repo::GitRepo) -> Vector{String}
+    LibGit2.ref_list(repo::GitRepo)::Vector{String}
 
 Get a list of all reference names in the `repo` repository.
 """
@@ -252,7 +252,7 @@ function delete_branch(branch::GitReference)
 end
 
 """
-    LibGit2.head!(repo::GitRepo, ref::GitReference) -> GitReference
+    LibGit2.head!(repo::GitRepo, ref::GitReference)::GitReference
 
 Set the HEAD of `repo` to the object pointed to by `ref`.
 """
@@ -265,7 +265,7 @@ function head!(repo::GitRepo, ref::GitReference)
 end
 
 """
-    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false) -> Union{GitReference, Nothing}
+    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false)::Union{GitReference, Nothing}
 
 Determine if the branch specified by `branch_name` exists in the repository `repo`.
 If `remote` is `true`, `repo` is assumed to be a remote git repository. Otherwise, it
@@ -296,7 +296,7 @@ function lookup_branch(repo::GitRepo,
 end
 
 """
-    upstream(ref::GitReference) -> Union{GitReference, Nothing}
+    upstream(ref::GitReference)::Union{GitReference, Nothing}
 
 Determine if the branch containing `ref` has a specified upstream branch.
 

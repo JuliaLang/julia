@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base.StackTraces: StackFrame
+
 nested_error_expr = quote
     try
         __not_a_binding__
@@ -56,4 +58,35 @@ end
 @testset "defining `ans` and `err`" begin
     @test eval(:(ans = 1)) == 1
     @test eval(:(err = 1)) == 1
+end
+
+@testset "scrub REPL-related frames" begin
+    repl_bt = [StackFrame(:foo, "foo.jl", 1),
+          StackFrame(:__repl_entry_anysuffix, "client.jl", 2),
+          StackFrame(:bar, "bar.jl", 3)]
+    scrubbed_repl_bt = Base.scrub_repl_backtrace(repl_bt)
+
+    nonrepl_bt = [StackFrame(:foo, "foo.jl", 1),
+          StackFrame(:baz, "baz.jl", 2),
+          StackFrame(:bar, "bar.jl", 3)]
+    scrubbed_nonrepl_bt = Base.scrub_repl_backtrace(nonrepl_bt)
+
+    @test length(scrubbed_repl_bt) == 1
+    @test scrubbed_repl_bt[1].func == :foo
+    @test length(scrubbed_nonrepl_bt) == 3
+
+    errio = IOBuffer()
+    lower_errexpr = :(@bad)
+    Base.eval_user_input(errio, lower_errexpr, false)
+    outstr = String(take!(errio))
+    @test occursin("ERROR: LoadError: UndefVarError: `@bad`", outstr)
+    @test !occursin("_repl_entry", outstr)
+    @test !occursin(r"\.[/\\]client.jl", outstr)
+
+    errexpr = :(error("fail"))
+    Base.eval_user_input(errio, errexpr, false)
+    outstr = String(take!(errio))
+    @test occursin("ERROR: fail", outstr)
+    @test !occursin("_repl_entry", outstr)
+    @test !occursin(r"\.[/\\]client.jl", outstr)
 end

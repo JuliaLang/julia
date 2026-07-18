@@ -3,6 +3,7 @@
 ## General I/O
 
 ```@docs
+IO
 Base.stdout
 Base.stderr
 Base.stdin
@@ -12,6 +13,7 @@ Base.open
 Base.IOStream
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)
+Base.takestring!
 Base.Pipe
 Base.link_pipe!
 Base.fdio
@@ -115,9 +117,9 @@ PNG images in a window can register this capability with Julia, so that calling 
 types with PNG representations will automatically display the image using the module's window.
 
 In order to define a new display backend, one should first create a subtype `D` of the abstract
-class [`AbstractDisplay`](@ref). Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
+type [`AbstractDisplay`](@ref). Then, for each MIME type (`mime` string) that can be displayed on `D`, one should
 define a function `display(d::D, ::MIME"mime", x) = ...` that displays `x` as that MIME type,
-usually by calling [`show(io, mime, x)`](@ref) or [`repr(io, mime, x)`](@ref).
+usually by calling [`show(io, mime, x)`](@ref) or [`repr(mime, x)`](@ref).
 A [`MethodError`](@ref) should be thrown if `x` cannot be displayed
 as that MIME type; this is automatic if one calls `show` or `repr`. Finally, one should define a function
 `display(d::D, x)` that queries [`showable(mime, x)`](@ref) for the `mime` types supported by `D`

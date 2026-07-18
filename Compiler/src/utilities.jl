@@ -4,7 +4,7 @@
 # generic #
 ###########
 
-if !@isdefined(var"@timeit")
+if !@isdefined(var"@zone")
     # This is designed to allow inserting timers when loading a second copy
     # of inference for performing performance experiments.
     macro timeit(args...)
@@ -21,7 +21,7 @@ function contains_is(itr, @nospecialize(x))
     return false
 end
 
-anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
+anymap(f::Function, a::Vector{Any}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 ############
 # inlining #
@@ -158,10 +158,8 @@ end
 
 function get_compileable_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return nothing
-    mt = ccall(:jl_method_get_table, Any, (Any,), method)
-    mt === nothing && return nothing
-    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
-        mt, atype, sparams, method, #=int return_if_compileable=#1)
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+        atype, sparams, method, #=int return_if_compileable=#1)
 end
 
 
@@ -169,19 +167,18 @@ isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method)
     !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
 isa_compileable_sig(m::MethodInstance) = (def = m.def; !isa(def, Method) || isa_compileable_sig(m.specTypes, m.sparam_vals, def))
-isa_compileable_sig(m::ABIOverride) = false
+isa_compileable_sig(::ABIOverride) = false
 
-has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
 
 """
-    is_declared_inline(method::Method) -> Bool
+    is_declared_inline(method::Method)::Bool
 
 Check if `method` is declared as `@inline`.
 """
 is_declared_inline(method::Method) = _is_declared_inline(method, true)
 
 """
-    is_declared_noinline(method::Method) -> Bool
+    is_declared_noinline(method::Method)::Bool
 
 Check if `method` is declared as `@noinline`.
 """
@@ -195,14 +192,14 @@ function _is_declared_inline(method::Method, inline::Bool)
 end
 
 """
-    is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
+    is_aggressive_constprop(method::Union{Method,CodeInfo})::Bool
 
 Check if `method` is declared as `Base.@constprop :aggressive`.
 """
 is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x01
 
 """
-    is_no_constprop(method::Union{Method,CodeInfo}) -> Bool
+    is_no_constprop(method::Union{Method,CodeInfo})::Bool
 
 Check if `method` is declared as `Base.@constprop :none`.
 """
@@ -217,7 +214,7 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
     if isa(ft, Const)
         return ft.val
     elseif isconstType(ft)
-        return ft.parameters[1]
+        return type_parameter(ft)
     elseif issingletontype(ft)
         return ft.instance
     end
@@ -225,12 +222,10 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 end
 
 @nospecializeinfer function maybe_singleton_const(@nospecialize(t))
-    if isa(t, DataType)
-        if issingletontype(t)
-            return Const(t.instance)
-        elseif isconstType(t)
-            return Const(t.parameters[1])
-        end
+    if isa(t, DataType) && issingletontype(t)
+        return Const(t.instance)
+    elseif isconstType(t)
+        return Const(type_parameter(t))
     end
     return t
 end
@@ -270,8 +265,60 @@ function foreach_anyssa(@specialize(f), @nospecialize(stmt))
     end
 end
 
+# Uses of each SSA value, in compressed-sparse-row form: the uses of ssa `i` are
+# `data[offsets[i]:offsets[i+1]-1]`. Entries are use occurrences, not distinct
+# statement indices, so a statement using the same value twice lists its line
+# twice; harmless for the consumers (`isempty` and idempotent block re-enqueue).
+struct SSAUses
+    offsets::Vector{Int}
+    data::Vector{Int}
+end
+
+# Non-escaping view over one value's uses; supports `isempty` and iteration.
+struct SSAUseList
+    data::Vector{Int}
+    start::Int
+    stop::Int
+end
+
+@inline function getindex(uses::SSAUses, i::Int)
+    offsets = uses.offsets
+    return SSAUseList(uses.data, offsets[i], offsets[i+1] - 1)
+end
+
+@inline isempty(l::SSAUseList) = l.stop < l.start
+@inline length(l::SSAUseList) = l.stop - l.start + 1
+@inline function iterate(l::SSAUseList, i::Int = l.start)
+    i > l.stop && return nothing
+    return (l.data[i], i + 1)
+end
+
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
-    uses = BitSet[ BitSet() for i = 1:nvals ]
+    # count uses per value
+    counts = zeros(Int, nvals)
+    foreach_ssavalue_use(body) do id::Int, _line::Int
+        counts[id] += 1
+    end
+    # prefix-sum the counts into row pointers
+    offsets = Vector{Int}(undef, nvals + 1)
+    tot = 1
+    for i = 1:nvals
+        offsets[i] = tot
+        tot += counts[i]
+    end
+    offsets[nvals + 1] = tot
+    # scatter line numbers into `data`, reusing `counts` as write cursors
+    data = Vector{Int}(undef, tot - 1)
+    fill!(counts, 0)
+    foreach_ssavalue_use(body) do id::Int, line::Int
+        data[offsets[id] + counts[id]] = line
+        counts[id] += 1
+    end
+    return SSAUses(offsets, data)
+end
+
+# Call `f(ssa_id, line)` for each SSA value used as an operand in `body`.
+function foreach_ssavalue_use(@specialize(f), body::Vector{Any})
     for line in 1:length(body)
         e = body[line]
         if isa(e, ReturnNode)
@@ -281,17 +328,17 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
             e = e.cond
         end
         if isa(e, SSAValue)
-            push!(uses[e.id], line)
+            f(e.id, line)
         elseif isa(e, Expr)
-            find_ssavalue_uses!(uses, e, line)
+            foreach_ssavalue_use(f, e, line)
         elseif isa(e, PhiNode)
-            find_ssavalue_uses!(uses, e, line)
+            foreach_ssavalue_use(f, e, line)
         end
     end
-    return uses
+    return nothing
 end
 
-function find_ssavalue_uses!(uses::Vector{BitSet}, e::Expr, line::Int)
+function foreach_ssavalue_use(@specialize(f), e::Expr, line::Int)
     head = e.head
     is_meta_expr_head(head) && return
     skiparg = (head === :(=))
@@ -299,22 +346,24 @@ function find_ssavalue_uses!(uses::Vector{BitSet}, e::Expr, line::Int)
         if skiparg
             skiparg = false
         elseif isa(a, SSAValue)
-            push!(uses[a.id], line)
+            f(a.id, line)
         elseif isa(a, Expr)
-            find_ssavalue_uses!(uses, a, line)
+            foreach_ssavalue_use(f, a, line)
         end
     end
+    return nothing
 end
 
-function find_ssavalue_uses!(uses::Vector{BitSet}, e::PhiNode, line::Int)
+function foreach_ssavalue_use(@specialize(f), e::PhiNode, line::Int)
     values = e.values
     for i = 1:length(values)
         isassigned(values, i) || continue
         val = values[i]
         if isa(val, SSAValue)
-            push!(uses[val.id], line)
+            f(val.id, line)
         end
     end
+    return nothing
 end
 
 # using a function to ensure we can infer this
@@ -329,7 +378,7 @@ end
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 
-function coverage_enabled(m::Module)
+function instrumentation_enabled(m::Module, only_if_affects_optimizer::Bool)
     generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
     if cov == 1 # user
@@ -339,6 +388,17 @@ function coverage_enabled(m::Module)
         return true
     elseif cov == 2 # all
         return true
+    end
+    if !only_if_affects_optimizer
+        log = JLOptions().malloc_log
+        if log == 1 # user
+            m = moduleroot(m)
+            m === Core && return false
+            isdefined(Main, :Base) && m === Main.Base && return false
+            return true
+        elseif log == 2 # all
+            return true
+        end
     end
     return false
 end
@@ -351,3 +411,5 @@ function inbounds_option()
 end
 
 is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+
+_time_ns() = ccall(:jl_hrtime, UInt64, ())

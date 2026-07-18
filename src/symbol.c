@@ -35,10 +35,11 @@ static size_t symbol_nbytes(size_t len) JL_NOTSAFEPOINT
 static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     size_t nb = symbol_nbytes(len);
+    jl_task_t *ct = jl_current_task;
     // jl_sym_t is an object and needs to be allocated with jl_gc_permobj
     // but its type is set below with jl_set_typetagof since
     // jl_symbol_type might not have been initialized
-    jl_sym_t *sym = (jl_sym_t*)jl_gc_permobj(nb, NULL, sizeof(void*));
+    jl_sym_t *sym = (jl_sym_t*)jl_gc_permobj(ct->ptls, nb, NULL, sizeof(void*));
     jl_set_typetagof(sym, jl_symbol_tag, GC_OLD_MARKED);
     jl_atomic_store_relaxed(&sym->left, NULL);
     jl_atomic_store_relaxed(&sym->right, NULL);

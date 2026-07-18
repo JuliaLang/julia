@@ -18,7 +18,7 @@ On Windows Julia can be installed directly from the Windows store
 exactly the same version by executing
 
 ```
-winget install julia -s msstore
+winget install --name Julia --id 9NJNWW8PVKMN -e -s msstore
 ```
 
 in any shell.
@@ -75,13 +75,18 @@ If the Windows Store is blocked on a system, we have an alternative
 [MSIX App Installer](https://learn.microsoft.com/en-us/windows/msix/app-installer/app-installer-file-overview)
 based setup. To use the App Installer version, download
 [this](https://install.julialang.org/Julia.appinstaller) file and open it by
-double clicking on it.
+double clicking on it. One can also install exactly the same version by executing
+the PowerShell command
+
+```
+Add-AppxPackage -AppInstallerFile https://install.julialang.org/Julia.appinstaller
+```
 
 ### MSI Installer (Windows)
 
 If neither the Windows Store nor the App Installer version work on your Windows
 system, you can also use a MSI based installer. Note that this installation
-methods comes with serious limitations and is generally not recommended unless
+method comes with serious limitations and is generally not recommended unless
 no other method works. For example, there is no automatic update mechanism for
 Juliaup with this installation method. The 64 bit version of the MSI installer
 can be downloaded from [here](https://install.julialang.org/Julia-x64.msi) and

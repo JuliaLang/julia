@@ -1,10 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using Test
 
-using .Compiler: CFG, BasicBlock, NewSSAValue
+using .Compiler: BasicBlock, CFG, NewSSAValue
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -108,6 +109,21 @@ let cfg = CFG(BasicBlock[
     @test length(compact.cfg_transform.result_bbs) == 4 && 0 in compact.cfg_transform.result_bbs[3].preds
 end
 
+# Test that removing a self-edge during compaction only scans compacted phi statements.
+let code = Any[
+        # Block 1
+        Compiler.GotoNode(2),
+        # Block 2
+        Core.PhiNode(Int32[1, 3], Any[1, 2]),
+        Compiler.GotoIfNot(true, 2),
+        # Block 3
+        Compiler.ReturnNode(0),
+    ]
+    ir = make_ircode(code)
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+end
+
 # Issue #32579 - Optimizer bug involving type constraints
 function f32579(x::Int, b::Bool)
     if b
@@ -154,11 +170,10 @@ let code = Any[
     @test Compiler.verify_ir(ir) === nothing
 end
 
-# Test that the verifier doesn't choke on cglobals (which aren't linearized)
+# Test that the verifier accepts a syntactic-tuple first argument to :foreignglobal (cglobal)
 let code = Any[
-        Expr(:call, GlobalRef(Main, :cglobal),
-                    Expr(:call, Core.tuple, :(:c)), Nothing),
-                    Compiler.ReturnNode()
+        Expr(:foreignglobal, Expr(:tuple, QuoteNode(:c))),
+        Compiler.ReturnNode()
     ]
     ir = make_ircode(code)
     @test Compiler.verify_ir(ir) === nothing
@@ -167,6 +182,16 @@ end
 # Test that GlobalRef in value position is non-canonical
 let code = Any[
         Expr(:call, GlobalRef(Main, :something_not_defined_please))
+        ReturnNode(SSAValue(1))
+    ]
+    ir = make_ircode(code; verify=false)
+    ir = Compiler.compact!(ir, true)
+    @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
+end
+
+# Test that static_parameter in value position is non-canonical
+let code = Any[
+        Expr(:call, identity, Expr(:static_parameter, 1))
         ReturnNode(SSAValue(1))
     ]
     ir = make_ircode(code; verify=false)
@@ -298,17 +323,6 @@ let code = Any[
     oc = Core.OpaqueClosure(ir)
     @test oc(false, 1, 1) == 2
     @test_throws "potential throw" oc(true, 1, 1)
-
-    let buf = IOBuffer()
-        oc = Core.OpaqueClosure(ir; slotnames=Symbol[:ocfunc, :x, :y, :z])
-        try
-            oc(true, 1, 1)
-        catch
-            Base.show_backtrace(buf, catch_backtrace())
-        end
-        s = String(take!(buf))
-        @test occursin("(x::Bool, y::$Int, z::$Int)", s)
-    end
 end
 
 # Test dynamic update of domtree with edge insertions and deletions in the
@@ -356,7 +370,7 @@ let cfg = CFG(BasicBlock[
     Compiler.cfg_delete_edge!(cfg, 6, 5)
     Compiler.domtree_delete_edge!(domtree, cfg.blocks, 6, 5)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 2, 4]
-    # Add edge back (testing second case for insertion)
+    # Add edge back (testing last case for insertion)
     Compiler.cfg_insert_edge!(cfg, 6, 5)
     Compiler.domtree_insert_edge!(domtree, cfg.blocks, 6, 5)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
@@ -418,7 +432,7 @@ end
     @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
     @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = 3))) isa
           Compiler.IRCode
-    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = "SROA"))) isa
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = "CC: SROA"))) isa
           Compiler.IRCode
 
     function demo(f)
@@ -428,7 +442,7 @@ end
     end
     @test first(only(Base.code_ircode(demo))) isa Compiler.IRCode
     @test first(only(Base.code_ircode(demo; optimize_until = 3))) isa Compiler.IRCode
-    @test first(only(Base.code_ircode(demo; optimize_until = "SROA"))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = "CC: SROA"))) isa Compiler.IRCode
 end
 
 # slots after SSA conversion
@@ -441,12 +455,12 @@ end
 let # #self#, a, b, c, d
     unopt = code_typed1(f_with_slots, (Int,Int); optimize=false)
     @test length(unopt.slotnames) == length(unopt.slotflags) == length(unopt.slottypes) == 5
-    ir_withslots = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="convert")))
+    ir_withslots = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="CC: CONVERT")))
     @test length(ir_withslots.argtypes) == 5
     # #self#, a, b
     opt = code_typed1(f_with_slots, (Int,Int); optimize=true)
     @test length(opt.slotnames) == length(opt.slotflags) == length(opt.slottypes) == 3
-    ir_ssa = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="slot2reg")))
+    ir_ssa = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="CC: SLOT2REG")))
     @test length(ir_ssa.argtypes) == 3
 end
 
@@ -458,7 +472,7 @@ let
             @test stmt.cond === v
         elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
             @test stmt.val === v
-        elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue)
+        elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue) || isa(stmt, Argument)
             @test stmt === v
         elseif isa(stmt, PiNode)
             @test stmt.val === v && stmt.typ === typeof(stmt)
@@ -507,6 +521,7 @@ let
         GotoNode(5),
         SSAValue(7),
         NewSSAValue(9),
+        Argument(1),
         ReturnNode(SSAValue(11)),
     ]
 
@@ -597,9 +612,10 @@ import Core: SSAValue
 import .Compiler: NewInstruction, insert_node!
 
 # insert_node! for pending node
-let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+let ir = Base.code_ircode((Int,Int); optimize_until="CC: INLINING") do a, b
         a^b
     end |> only |> first
+    ir = Compiler.compact!(ir)
     nstmts = length(ir.stmts)
     invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
     @test invoke !== nothing
@@ -658,9 +674,10 @@ let code = Any[
 end
 
 # insert_node! with new instruction with flag computed
-let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+let ir = Base.code_ircode((Int,Int); optimize_until="CC: INLINING") do a, b
         a^b
     end |> only |> first
+    ir = Compiler.compact!(ir)
     invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
     @test invoke_idx !== nothing
     invoke_expr = ir.stmts.stmt[invoke_idx]
@@ -722,7 +739,7 @@ end
         @test any(j -> isa(unopt.code[j], Core.Const) && unopt.ssavaluetypes[j] == Union{}, 1:length(unopt.code))
 
         # Any GotoIfNot destinations after IRCode conversion should not be statically unreachable
-        ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="convert")))
+        ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="CC: CONVERT")))
         for i = 1:length(ircode.stmts)
             expr = ircode.stmts[i][:stmt]
             if isa(expr, GotoIfNot)
@@ -812,9 +829,75 @@ end
 global global_error_switch = false
 @test f_must_throw_phinode_edge() == 1
 
-# Test roundtrip of debuginfo compression
-let cl = Int32[32, 1, 1, 1000, 240, 230]
-    str = ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), 378, cl, 2)::String;
-    cl2 = ccall(:jl_uncompress_codelocs, Any, (Any, Int), str, 2)
-    @test cl == cl2
+# Test that IRShow debuginfo printing works with IRCode owned by the active Compiler module.
+function irshow_debuginfo_smoke(x)
+    y = x + 1
+    return y
 end
+let ir = first(only(Base.code_ircode(irshow_debuginfo_smoke, (Int,))))
+    output = sprint(Compiler.IRShow.show_ir, ir,
+                    Compiler.IRShow.default_config(ir; debuginfo=:source_inline))
+    @test occursin("return", output)
+end
+
+function roundtrip_di(codelocs, firstline, nstmts)
+    str = ccall(:jl_compress_codelocs,
+                Any, (Int32, Any, Int), firstline, codelocs, nstmts)::String;
+    di = Core.DebugInfo(:foo, nothing, Core.svec(), str)
+    return ccall(:jl_uncompress_codelocs, Any, (Any, Int), di, nstmts)
+end
+
+# Test roundtrip of debuginfo compression
+let cl = Int32[32, 1, 1, 1000, 240, 230, 0, 0, 0]
+    @test roundtrip_di(cl, -1, 3) == cl
+    @test roundtrip_di(cl, 0, 3) == cl
+    @test roundtrip_di(cl, 1, 3) == cl
+    @test roundtrip_di(cl, 32, 3) == cl
+    @test roundtrip_di(cl, 33, 3) == cl
+end
+let cl = Int32[0,0,0,255,0,0,256,0,0,257,0,0]
+    @test roundtrip_di(cl, -1, 4) == cl
+    @test roundtrip_di(cl, 0, 4) == cl
+    @test roundtrip_di(cl, 1, 4) == cl
+    @test roundtrip_di(cl, 32, 4) == cl
+    @test roundtrip_di(cl, 33, 4) == cl
+end
+
+@test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")
+@test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = typemax(Int))
+
+#57153 check that the CFG has a #0 block predecessor and that we don't fail to compile code that observes that
+function _worker_task57153()
+    while true
+        r = let
+        try
+            if @noinline rand(Bool)
+                return nothing
+            end
+            q, m
+        finally
+            missing
+        end
+        end
+        r[1]::Bool
+    end
+end
+let ir = Base.code_ircode(_worker_task57153, (), optimize_until="CC: COMPACT_2")[1].first
+    @test findfirst(x->x==0, ir.cfg.blocks[1].preds) !== nothing
+end
+
+# Tests that CFG edge cleanup during compaction doesn't corrupt iteration codegen.
+Trips_60660 = let
+    Ts = (Float64, Float32)
+    [(Ta, Tb, Tc) for Ta in Ts for Tb in Ts for Tc in Ts]
+end
+@test Trips_60660 == [
+    (Float64, Float64, Float64),
+    (Float64, Float64, Float32),
+    (Float64, Float32, Float64),
+    (Float64, Float32, Float32),
+    (Float32, Float64, Float64),
+    (Float32, Float64, Float32),
+    (Float32, Float32, Float64),
+    (Float32, Float32, Float32),
+]

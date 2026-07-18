@@ -197,7 +197,7 @@ broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
     # Vararg type signature to specialize on args count. This is necessary for performance
-    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    # and inexpensive because this should only ever get called with 1+N = length(bc.args)
     broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a && bcf.f(args...), a, bcf.args...)
 end
 struct OrOr end
@@ -206,7 +206,7 @@ broadcasted(::OrOr, a, b) = broadcasted((a, b) -> a || b, a, b)
 function broadcasted(::OrOr, a, bc::Broadcasted)
     bcf = flatten(bc)
     # Vararg type signature to specialize on args count. This is necessary for performance
-    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    # and inexpensive because this should only ever get called with 1+N = length(bc.args)
     broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a || bcf.f(args...), a, bcf.args...)
 end
 
@@ -264,6 +264,17 @@ Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = LinearIndices(axes(bc)
 
 Base.ndims(bc::Broadcasted) = ndims(typeof(bc))
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(argtype(BC))
+function Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N}
+    N isa Int ? N : _maxndims(argtype(BC))
+end
+_maxndims(::Type{Tuple{}}) = 0
+_maxndims(::Type{Tuple{T}}) where {T} = T <: Tuple ? 1 : Int(ndims(T))::Int
+function _maxndims(Args::Type{<:Tuple{T,Vararg}}) where {T}
+    m = T <: Tuple ? 1 : Int(ndims(T))::Int
+    n = _maxndims(Base.tuple_type_tail(Args))
+    max(m, n)
+end
 
 Base.size(bc::Broadcasted) = map(length, axes(bc))
 Base.length(bc::Broadcasted) = prod(size(bc))
@@ -280,20 +291,6 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
 end
 
 Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
-Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims_broadcasted(BC)
-# the `AbstractArrayStyle` type parameter is required to be either equal to `Any` or be an `Int` value
-Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{Any},Nothing}}) = _maxndims_broadcasted(BC)
-Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N} = N::Int
-
-function _maxndims_broadcasted(BC::Type{<:Broadcasted})
-    _maxndims(fieldtype(BC, :args))
-end
-_maxndims(::Type{T}) where {T<:Tuple} = reduce(max, ntuple(n -> (F = fieldtype(T, n); F <: Tuple ? 1 : ndims(F)), Base._counttuple(T)))
-_maxndims(::Type{<:Tuple{T}}) where {T} = T <: Tuple ? 1 : ndims(T)
-function _maxndims(::Type{<:Tuple{T, S}}) where {T, S}
-    return max(T <: Tuple ? 1 : ndims(T), S <: Tuple ? 1 : ndims(S))
-end
-
 Base.IteratorEltype(::Type{<:Broadcasted}) = Base.EltypeUnknown()
 
 ## Instantiation fills in the "missing" fields in Broadcasted.
@@ -374,7 +371,7 @@ cat_nested_args(t::Tuple) = (cat_nested(t[1])..., cat_nested_args(tail(t))...)
 cat_nested(a) = (a,)
 
 """
-    make_makeargs(t::Tuple) -> Tuple{Vararg{Function}}
+    make_makeargs(t::Tuple)::Tuple{Vararg{Function}}
 
 Each element of `t` is one (consecutive) node in a broadcast tree.
 The returned `Tuple` are functions which take in the (whole) flattened
@@ -414,7 +411,7 @@ prepare_args(::Tuple{}, ::Tuple) = ()
 ## logic for deciding the BroadcastStyle
 
 """
-    combine_styles(cs...) -> BroadcastStyle
+    combine_styles(cs...)::BroadcastStyle
 
 Decides which `BroadcastStyle` to use for any number of value arguments.
 Uses [`BroadcastStyle`](@ref) to get the style for each argument, and uses
@@ -439,7 +436,7 @@ combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
 """
-    result_style(s1::BroadcastStyle[, s2::BroadcastStyle]) -> BroadcastStyle
+    result_style(s1::BroadcastStyle[, s2::BroadcastStyle])::BroadcastStyle
 
 Takes one or two `BroadcastStyle`s and combines them using [`BroadcastStyle`](@ref) to
 determine a common `BroadcastStyle`.
@@ -488,7 +485,7 @@ end
 # Indices utilities
 
 """
-    combine_axes(As...) -> Tuple
+    combine_axes(As...)::Tuple
 
 Determine the result axes for broadcasting across all values in `As`.
 
@@ -505,9 +502,9 @@ julia> Broadcast.combine_axes(1, 1, 1)
 combine_axes(A) = axes(A)
 
 """
-    broadcast_shape(As...) -> Tuple
+    broadcast_shape(As...)::Tuple
 
-Determine the result axes for broadcasting across all axes (size Tuples) in `As`.
+Determine the result axes for broadcasting across all axes (size `Tuple`s) in `As`.
 
 ```jldoctest
 julia> Broadcast.broadcast_shape((1,2), (2,1))
@@ -577,7 +574,7 @@ Two methods are supported, both allowing for `I` to be specified as either a [`C
 an `Int`.
 
 * `newindex(argument, I)` dynamically constrains `I` based upon the axes of `argument`.
-* `newindex(I, keep, default)` constrains `I` using the pre-computed tuples `keeps` and `defaults`.
+* `newindex(I, keep, default)` constrains `I` using the pre-computed tuples `keep` and `default`.
     * `keep` is a tuple of `Bool`s, where `keep[d] == true` means that dimension `d` in `I` should be preserved as is
     * `default` is a tuple of Integers, specifying what index to use in dimension `d` when `keep[d] == false`.
     Any remaining indices in `I` beyond the length of the `keep` tuple are truncated. The `keep` and `default`
@@ -585,15 +582,17 @@ an `Int`.
 """
 Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = to_index(_newindex(axes(arg), I.I))
 Base.@propagate_inbounds newindex(arg, I::Integer) = to_index(_newindex(axes(arg), (I,)))
-Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1]) == 1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
+Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1]) == 1, ax[1][begin], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
-Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
+Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][begin], _newindex(tail(ax), ())...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = to_index(_newindex(I.I, keep, Idefault))
-@inline newindex(i::Integer, keep::Tuple, idefault) = ifelse(keep[1], i, idefault[1])
-@inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
+@inline newindex(I::CartesianIndex{1}, keep, Idefault) = newindex(I.I[1], keep, Idefault)
+@inline newindex(i::Integer, keep::Tuple, idefault) = CartesianIndex(ifelse(keep[1], Int(i), Int(idefault[1])), idefault[2])
+@inline newindex(i::Integer, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
+@inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex()
 @inline _newindex(I, keep, Idefault) =
     (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
 @inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I
@@ -631,11 +630,15 @@ to_index(::Tuple{}) = CartesianIndex()
 to_index(Is::Tuple{Any}) = Is[1]
 to_index(Is::Tuple) = CartesianIndex(Is)
 
-@inline Base.checkbounds(bc::Broadcasted, I::CartesianIndex) =
-    Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
+@inline function Base.checkbounds(bc::Broadcasted, I::CartesianIndex)
+    Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, I)
+    nothing
+end
 
-@inline Base.checkbounds(bc::Broadcasted, I::Integer) =
-    Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, (I,))
+@inline function Base.checkbounds(bc::Broadcasted, I::Integer)
+    Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, I)
+    nothing
+end
 
 
 """
@@ -698,6 +701,8 @@ Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 
 @inline _broadcast_getindex_evalf(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)  # not propagate_inbounds
 
+const BroadcastScalars = Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}
+
 """
     Broadcast.broadcastable(x)
 
@@ -726,7 +731,7 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}) = Ref(x)
+broadcastable(x::BroadcastScalars) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
@@ -829,7 +834,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 
 ```
 """
-broadcast(f::Tf, As...) where {Tf} = materialize(broadcasted(f, As...))
+@inline broadcast(f::Tf, As...) where {Tf} = materialize(broadcasted(f, As...))
 
 # special cases defined for performance
 @inline broadcast(f, x::Number...) = f(x...)
@@ -873,9 +878,9 @@ broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = (materialize!(dest, br
 """
     broadcast_preserving_zero_d(f, As...)
 
-Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it returns a 0-dimensional container
+Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it returns a 0-dimensional container.
 
-Broadcast automatically unwraps zero-dimensional results to be just the element itself,
+`broadcast` automatically unwraps zero-dimensional results to be just the element itself,
 but in some cases it is necessary to always return a container — even in the 0-dimensional case.
 """
 @inline function broadcast_preserving_zero_d(f, As...)
@@ -889,7 +894,7 @@ end
 """
     Broadcast.materialize(bc)
 
-Take a lazy `Broadcasted` object and compute the result
+Take a lazy `Broadcasted` object and compute the result.
 """
 @inline materialize(bc::Broadcasted) = copy(instantiate(bc))
 materialize(x) = x
@@ -901,8 +906,14 @@ end
 @inline function materialize!(dest, bc::Broadcasted{<:Any})
     return materialize!(combine_styles(dest, bc), dest, bc)
 end
+
 @inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{<:Any})
     return copyto!(dest, instantiate(Broadcasted(bc.style, bc.f, bc.args, axes(dest))))
+end
+
+materialize!(dest::Union{BroadcastScalars,Number,AbstractChar}, bc::Broadcasted{<:Any}) = _throw_unwritable_dest(dest)
+@noinline function _throw_unwritable_dest(@nospecialize dest)
+    throw(ArgumentError(LazyString("cannot broadcast-assign (`.=`) into a value of type ", typeof(dest))))
 end
 
 ## general `copy` methods
@@ -1309,6 +1320,10 @@ If you want to *avoid* adding dots for selected function calls in
 `@. sqrt(abs(\$sort(x)))` is equivalent to `sqrt.(abs.(sort(x)))`
 (no dot for `sort`).
 
+Note that the postfix `'` and infix `:` operators don't have a broadcasted
+version (`.'` and `.:` are not valid operators), and are not affected by `@.`.
+The dot operator for property access as in `a.x` is also unaffected.
+
 (`@.` is equivalent to a call to `@__dot__`.)
 
 # Examples
@@ -1321,6 +1336,18 @@ julia> @. y = x + 3 * sin(x)
  4.727892280477045
  3.4233600241796016
 ```
+
+The postfix `'` being unaffected by `@.` can be convenient to broadcast vectors
+along different dimensions:
+
+```jldoctest
+julia> @. (10:10:30) + (1:4)'
+3×4 Matrix{Int64}:
+ 11  12  13  14
+ 21  22  23  24
+ 31  32  33  34
+```
+
 """
 macro __dot__(x)
     esc(__dot__(x))

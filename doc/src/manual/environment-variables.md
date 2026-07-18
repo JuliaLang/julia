@@ -205,7 +205,21 @@ If set to `true`, this indicates to the package server that any package operatio
 
 ### [`JULIA_NUM_PRECOMPILE_TASKS`](@id JULIA_NUM_PRECOMPILE_TASKS)
 
-The number of parallel tasks to use when precompiling packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+The number of parallel tasks (worker subprocesses) to use when precompiling
+packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+
+### [`JULIA_PRECOMPILE_THREADS`](@id JULIA_PRECOMPILE_THREADS)
+
+An unsigned integer that sets the total CPU-thread budget shared across all
+parallel precompile worker subprocesses, keeping the combined number of active
+threads bounded no matter how many workers run. Defaults to one more than the
+number of effective CPU threads.
+
+Unlike [`JULIA_NUM_PRECOMPILE_TASKS`](@ref JULIA_NUM_PRECOMPILE_TASKS) (which caps
+worker *processes*) and [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) (which
+pins a *per-worker* thread count), this is the shared total. Setting
+`JULIA_IMAGE_THREADS` bypasses the budget, so `JULIA_PRECOMPILE_THREADS` then has
+no effect.
 
 ### [`JULIA_PKG_DEVDIR`](@id JULIA_PKG_DEVDIR)
 
@@ -389,10 +403,15 @@ ignored if the module is a small module. If left unspecified, the smaller
 of the value of [`JULIA_CPU_THREADS`](@ref JULIA_CPU_THREADS) or half the
 number of logical CPU cores is used in its place.
 
+During parallel package precompilation, workers instead coordinate their CPU
+usage through a shared token pool sized by
+[`JULIA_PRECOMPILE_THREADS`](@ref JULIA_PRECOMPILE_THREADS), so their combined
+thread count stays bounded. Setting `JULIA_IMAGE_THREADS` overrides that
+coordination and pins the given codegen-thread count for every worker.
+
 ### [`JULIA_IMAGE_TIMINGS`](@id JULIA_IMAGE_TIMINGS)
 
-A boolean value that determines if detailed timing information is printed during
-during image compilation. Defaults to 0.
+A boolean value that determines if detailed timing information is printed during image compilation. Defaults to 0.
 
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
@@ -479,9 +498,15 @@ stored in memory.
 
 Valid values for [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) can be obtained by executing `julia -C help`.
 
+To get the CPU target string that was used to build the current system image,
+use [`Sys.sysimage_target()`](@ref). This can be useful for reproducing
+the same system image or understanding what CPU features were enabled during compilation.
+
 Setting [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) is important for heterogeneous compute systems where processors of
 distinct types or features may be present. This is commonly encountered in high performance
-computing (HPC) clusters since the component nodes may be using distinct processors.
+computing (HPC) clusters since the component nodes may be using distinct processors. In this case,
+you may want to use the `sysimage` CPU target to maintain the same configuration as the sysimage.
+See below for more details.
 
 The CPU target string is a list of strings separated by `;` each string starts with a CPU
 or architecture name and followed by an optional list of features separated by `,`.
@@ -489,14 +514,26 @@ A `generic` or empty CPU name means the basic required feature set of the target
 which is at least the architecture the C/C++ runtime is compiled with. Each string
 is interpreted by LLVM.
 
+!!! note
+    Package images can only target the same or more specific CPU features than
+    their base system image.
+
 A few special features are supported:
-1. `clone_all`
+
+1. `sysimage`
+
+     A special keyword that can be used as a CPU target name, which will be replaced
+     with the CPU target string that was used to build the current system image. This allows
+     you to specify CPU targets that build upon or extend the current sysimage's target, which
+     is particularly helpful for creating package images that are as flexible as the sysimage.
+
+2. `clone_all`
 
      This forces the target to have all functions in sysimg cloned.
      When used in negative form (i.e. `-clone_all`), this disables full clone that's
      enabled by default for certain targets.
 
-2. `base([0-9]*)`
+3. `base([0-9]*)`
 
      This specifies the (0-based) base target index. The base target is the target
      that the current target is based on, i.e. the functions that are not being cloned
@@ -504,11 +541,11 @@ A few special features are supported:
      fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
      The index can only be smaller than the current index.
 
-3. `opt_size`
+4. `opt_size`
 
      Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
 
-4. `min_size`
+5. `min_size`
 
      Optimize only for size. Clang's `-Oz`.
 
@@ -518,6 +555,15 @@ A few special features are supported:
 ### [`JULIA_DEBUG`](@id JULIA_DEBUG)
 
 Enable debug logging for a file or module, see [`Logging`](@ref man-logging) for more information.
+
+### CI Debug Environment Variables
+
+Julia automatically enables verbose debugging options when certain continuous integration (CI) debug environment variables are set. This improves the debugging experience when CI jobs are re-run with debug logging enabled, by automatically:
+
+- Enabling `--trace-eval` (location mode) to show expressions being evaluated
+- Setting `JULIA_TEST_VERBOSE=true` to enable verbose test output
+
+This allows developers to get detailed debugging information from CI runs without modifying their scripts or workflow files.
 
 ### [`JULIA_PROFILE_PEEK_HEAP_SNAPSHOT`](@id JULIA_PROFILE_PEEK_HEAP_SNAPSHOT)
 
@@ -529,17 +575,6 @@ See [Triggered During Execution](@ref).
 Allows you to enable or disable zones for a specific Julia run.
 For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable
 the `INFERENCE` zones. See [Dynamically Enabling and Disabling Zones](@ref).
-
-### [`JULIA_GC_NO_GENERATIONAL`](@id JULIA_GC_NO_GENERATIONAL)
-
-If set to anything besides `0`, then the Julia garbage collector never performs
-"quick sweeps" of memory.
-
-!!! note
-
-    This environment variable only has an effect if Julia was compiled with
-    garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
-    in the build configuration).
 
 ### [`JULIA_GC_WAIT_FOR_DEBUGGER`](@id JULIA_GC_WAIT_FOR_DEBUGGER)
 

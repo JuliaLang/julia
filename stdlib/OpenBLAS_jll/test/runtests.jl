@@ -13,5 +13,5 @@ else
 end
 
 @testset "OpenBLAS_jll" begin
-    @test dlsym(OpenBLAS_jll.libopenblas_handle, @blasfunc(openblas_set_num_threads); throw_error=false) !== nothing
+    @test dlsym(OpenBLAS_jll.libopenblas, @blasfunc(openblas_set_num_threads); throw_error=false) !== nothing
 end

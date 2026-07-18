@@ -12,7 +12,7 @@ the same, so they get overwritten. The `IdDict` hashes by object-id, and thus
 preserves the 3 different keys.
 
 # Examples
-```julia-repl
+```jldoctest; filter = r"  \\S+ +=> \\S+" => "  KEY => VALUE"
 julia> Dict(true => "yes", 1 => "no", 1.0 => "maybe")
 Dict{Real, String} with 1 entry:
   1.0 => "maybe"
@@ -32,6 +32,9 @@ mutable struct IdDict{K,V} <: AbstractDict{K,V}
 
     function IdDict{K,V}(itr) where {K, V}
         d = IdDict{K,V}()
+        if IteratorSize(itr) isa Union{HasLength, HasShape}
+            sizehint!(d, length(itr))
+        end
         for (k,v) in itr; d[k] = v; end
         d
     end
@@ -58,12 +61,12 @@ IdDict(kv) = dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
 
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
-function rehash!(d::IdDict, newsz = length(d.ht)%UInt)
+function rehash!(d::IdDict, newsz::Integer = length(d.ht)%UInt)
     d.ht = ccall(:jl_idtable_rehash, Memory{Any}, (Any, Csize_t), d.ht, newsz)
     d
 end
 
-function sizehint!(d::IdDict, newsz)
+function sizehint!(d::IdDict, newsz::Integer)
     newsz = _tablesz(newsz*2)  # *2 for keys and values in same array
     oldsz = length(d.ht)
     # grow at least 25%

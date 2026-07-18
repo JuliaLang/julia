@@ -183,7 +183,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
     screenwidth -= length(pre)::Int + length(post)::Int
     presp = repeat(" ", length(pre)::Int)  # indent each row to match pre string
     postsp = ""
-    @assert textwidth(hdots) == textwidth(ddots)
+    @assert textwidth(hdots) == textwidth(ddots) "hdots and ddots must have same textwidth"
     sepsize = length(sep)::Int
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
@@ -290,48 +290,56 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
     reached_last_d = false
     for I in Is
         idxs = I.I
-        if limit
-            for i = 1:nd
-                ii = idxs[i]
-                ind = tailinds[i]
-                if length(ind) > 10
-                    if ii == ind[firstindex(ind)+3] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
-                        for j=i+1:nd
-                            szj = length(axs[j+2])
-                            indj = tailinds[j]
-                            if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
-                                @goto skip
+        @label entry begin
+            if limit
+                for i = 1:nd
+                    ii = idxs[i]
+                    ind = tailinds[i]
+                    if length(ind) > 10
+                        all_first = true
+                        for d = 1:i-1
+                            if idxs[d] != first(tailinds[d])
+                                all_first = false
+                                break
                             end
                         end
-                        print(io, ";"^(i+2))
-                        print(io, " \u2026 ")
-                        show_full && print(io, "\n\n")
-                        @goto skip
-                    end
-                    if ind[firstindex(ind)+2] < ii <= ind[end-3]
-                        @goto skip
+                        if ii == ind[firstindex(ind)+3] && all_first
+                            for j=i+1:nd
+                                szj = length(axs[j+2])
+                                indj = tailinds[j]
+                                if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
+                                    break entry
+                                end
+                            end
+                            print(io, ";"^(i+2))
+                            print(io, " \u2026 ")
+                            show_full && print(io, "\n\n")
+                            break entry
+                        end
+                        if ind[firstindex(ind)+2] < ii <= ind[end-3]
+                            break entry
+                        end
                     end
                 end
             end
-        end
-        if show_full
-            _show_nd_label(io, a, idxs)
-        end
-        slice = view(a, axs[1], axs[2], idxs...)
-        if show_full
-            print_matrix(io, slice)
-            print(io, idxs == map(last,tailinds) ? "" : "\n\n")
-        else
-            idxdiff = lastidxs .- idxs .< 0
-            if any(idxdiff)
-                lastchangeindex = 2 + findlast(idxdiff)
-                print(io, ";"^lastchangeindex)
-                lastchangeindex == ndims(a) && (reached_last_d = true)
-                print(io, " ")
+            if show_full
+                _show_nd_label(io, a, idxs)
             end
-            print_matrix(io, slice)
+            slice = view(a, axs[1], axs[2], idxs...)
+            if show_full
+                print_matrix(io, slice)
+                print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+            else
+                idxdiff = lastidxs .- idxs .< 0
+                if any(idxdiff)
+                    lastchangeindex = 2 + findlast(idxdiff)
+                    print(io, ";"^lastchangeindex)
+                    lastchangeindex == ndims(a) && (reached_last_d = true)
+                    print(io, " ")
+                end
+                print_matrix(io, slice)
+            end
         end
-        @label skip
         lastidxs = idxs
     end
     if !show_full
@@ -361,7 +369,7 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # typeinfo aware
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function show(io::IO, ::MIME"text/plain", X::AbstractArray)
-    if isempty(X) && (get(io, :compact, false)::Bool || X isa Vector)
+    if isempty(X) && (get(io, :compact, false)::Bool || X isa AbstractVector)
         return show(io, X)
     end
     # 1) show summary before setting :compact
@@ -414,7 +422,7 @@ _show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
     _show_nonempty(io, inferencebarrier(X), prefix, false, axes(X))
 
 function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
-    @assert !isempty(X)
+    @assert !isempty(X) "X should be non-empty"
     limit = get(io, :limit, false)::Bool
     indr, indc = axs
     nr, nc = length(indr), length(indc)
@@ -488,9 +496,12 @@ function show(io::IO, X::AbstractArray)
     if !implicit
         io = IOContext(io, :typeinfo => eltype(X))
     end
-    isempty(X) ?
-        _show_empty(io, X) :
-        _show_nonempty(io, X, prefix)
+    if isempty(X)
+        return _show_empty(io, X)
+    end
+    show_circular(io, X) && return
+    recur_io = IOContext(io, :SHOWN_SET => X)
+    _show_nonempty(recur_io, X, prefix)
 end
 
 ### 0-dimensional arrays (#31481)

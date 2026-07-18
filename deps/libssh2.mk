@@ -17,11 +17,9 @@ endif
 
 ifeq ($(OS),WINNT)
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=WinCNG -DENABLE_ZLIB_COMPRESSION=OFF
-ifeq ($(BUILD_OS),WINNT)
-LIBSSH2_OPTS += -G"MSYS Makefiles"
-endif
 else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=OpenSSL -DENABLE_ZLIB_COMPRESSION=OFF
+LIBSSH2_OPTS += -DOPENSSL_ROOT_DIR=$(build_prefix)
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
@@ -34,10 +32,48 @@ endif
 
 LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2025-15661.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2025-15661.patch
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55199.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2025-15661.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55199.patch
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55200.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55199.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55200.patch
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-58050-3449752.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-55200.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-58050-3449752.patch
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-58051-a9758da.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-58050-3449752.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-58051-a9758da.patch
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-unconst-backport.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-58051-a9758da.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-unconst-backport.patch
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-patched: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-unconst-backport.patch-applied
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
+	$(CMAKE) $(CMAKE_GENERATOR_COMMAND) $(dir $<) $(LIBSSH2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
@@ -57,7 +93,7 @@ $(eval $(call staged-install, \
 
 clean-libssh2:
 	-rm -f $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean
+	-if [ -d $(BUILDDIR)/$(LIBSSH2_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean; fi
 
 
 get-libssh2: $(LIBSSH2_SRC_FILE)

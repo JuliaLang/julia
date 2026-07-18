@@ -17,7 +17,7 @@
 #include "gc-tls-common.h"
 #include "julia_atomics.h"
 #ifndef _OS_WINDOWS_
-#include "pthread.h"
+#include <pthread.h>
 #endif
 // threading ------------------------------------------------------------------
 
@@ -39,61 +39,53 @@ JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT;
 #define JULIA_DEBUG_SLEEPWAKE(x)
 
 //  Options for task switching algorithm (in order of preference):
-// JL_HAVE_ASM -- mostly setjmp
-// JL_HAVE_ASM && JL_HAVE_UNW_CONTEXT -- libunwind-based
-// JL_HAVE_UNW_CONTEXT -- libunwind-based
-// JL_HAVE_UCONTEXT -- posix standard API, requires syscall for resume
+// JL_TASK_SWITCH_ASM -- mostly setjmp
+// JL_TASK_SWITCH_ASM && JL_TASK_SWITCH_LIBUNWIND -- libunwind-based
+// JL_TASK_SWITCH_LIBUNWIND -- libunwind-based
+// JL_TASK_SWITCH_WINDOWS -- implementation for Windows
 
 #ifdef _OS_WINDOWS_
-#define JL_HAVE_UCONTEXT
+#define JL_TASK_SWITCH_WINDOWS
 typedef win32_ucontext_t jl_stack_context_t;
 typedef jl_stack_context_t _jl_ucontext_t;
 
-#elif defined(_OS_OPENBSD_)
-#define JL_HAVE_UNW_CONTEXT
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
-typedef unw_context_t _jl_ucontext_t;
+#else
+
+#if defined(_OS_OPENBSD_)
+#define JL_TASK_SWITCH_LIBUNWIND
+#endif
+
 typedef struct {
     jl_jmp_buf uc_mcontext;
 } jl_stack_context_t;
 
-#else
-typedef struct {
-    jl_jmp_buf uc_mcontext;
-} jl_stack_context_t;
-#if !defined(JL_HAVE_UCONTEXT) && \
-    !defined(JL_HAVE_ASM) && \
-    !defined(JL_HAVE_UNW_CONTEXT)
+#if !defined(JL_TASK_SWITCH_ASM) && \
+    !defined(JL_TASK_SWITCH_LIBUNWIND)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
      defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_))
-#define JL_HAVE_ASM
+#define JL_TASK_SWITCH_ASM
 #endif
 #if 0
 // very slow, but more debugging
 //#elif defined(_OS_DARWIN_)
-//#define JL_HAVE_UNW_CONTEXT
+//#define JL_TASK_SWITCH_LIBUNWIND
 //#elif defined(_OS_LINUX_)
-//#define JL_HAVE_UNW_CONTEXT
-#elif !defined(JL_HAVE_ASM)
-#define JL_HAVE_UNW_CONTEXT // optimistically?
+//#define JL_TASK_SWITCH_LIBUNWIND
+#elif !defined(JL_TASK_SWITCH_ASM)
+#define JL_TASK_SWITCH_LIBUNWIND // optimistically?
 #endif
 #endif
 
-#if !defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)
-typedef jl_stack_context_t _jl_ucontext_t;
-#endif
+#if defined(JL_TASK_SWITCH_LIBUNWIND)
 #pragma GCC visibility push(default)
-#if defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 typedef unw_context_t _jl_ucontext_t;
-#endif
-#if defined(JL_HAVE_UCONTEXT)
-#include <ucontext.h>
-typedef ucontext_t _jl_ucontext_t;
-#endif
 #pragma GCC visibility pop
+#elif defined(JL_TASK_SWITCH_ASM)
+typedef jl_stack_context_t _jl_ucontext_t;
+#endif
+
 #endif
 
 typedef struct {
@@ -149,13 +141,13 @@ typedef struct _jl_tls_states_t {
     //              finish.
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
-    //              execute at the same time with the GC.
+    //              executed at the same time with the GC.
 #define JL_GC_PARALLEL_COLLECTOR_THREAD 3
     // gc_state = 3 means the thread is a parallel collector thread (i.e. never runs Julia code)
 #define JL_GC_CONCURRENT_COLLECTOR_THREAD 4
     // gc_state = 4 means the thread is a concurrent collector thread (background sweeper thread that never runs Julia code)
     _Atomic(int8_t) gc_state; // read from foreign threads
-    // execution of certain certain impure
+    // execution of certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
     // as it may make compilation undecidable
@@ -195,6 +187,13 @@ typedef struct _jl_tls_states_t {
     void *signal_stack;
     size_t signal_stack_size;
 #endif
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)
+    // Saved context from jl_call_in_ctx for stack unwinding
+    uintptr_t signal_ctx_pc;
+    uintptr_t signal_ctx_sp;
+    void (*signal_ctx_fptr)(void);
+    uintptr_t signal_ctx_arg;
+#endif
     jl_thread_t system_id;
     _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;
@@ -225,9 +224,6 @@ typedef struct _jl_tls_states_t {
 
 #define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
 
-// all values are callable as Functions
-typedef jl_value_t jl_function_t;
-
 typedef struct _jl_timing_block_t jl_timing_block_t;
 typedef struct _jl_timing_event_t jl_timing_event_t;
 typedef struct _jl_excstack_t jl_excstack_t;
@@ -242,7 +238,7 @@ typedef struct _jl_task_t {
     jl_value_t *donenotify;
     jl_value_t *result;
     jl_value_t *scope;
-    jl_function_t *start;
+    jl_value_t *start;
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     uint16_t priority;
@@ -359,13 +355,16 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
 {
     return jl_gc_state_set(ptls, state, jl_atomic_load_relaxed(&ptls->gc_state));
 }
-#ifdef __clang_gcanalyzer__
+
 // these might not be a safepoint (if they are no-op safe=>safe transitions), but we have to assume it could be (statically)
-// however mark a delineated region in which safepoints would be not permissible
-int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT_LEAVE;
-void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_ENTER;
-int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
-void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE;
+// however mark a delineated region in which safepoints would be permissible: a
+// gc-unsafe region is entered (jl_gc_unsafe_enter / jl_gc_safe_leave) and left
+// (jl_gc_unsafe_leave / jl_gc_safe_enter) as the thread toggles gc-unsafe state.
+#if defined(__clang_gcanalyzer__) || defined(__clang_safetyanalysis__)
+int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_CANSAFEPOINT_ENTER;
+void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_CANSAFEPOINT_LEAVE;
+int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
+void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_CANSAFEPOINT_ENTER;
 #else
 #define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_UNSAFE)
 #define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_UNSAFE))
@@ -373,14 +372,15 @@ void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE;
 #define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
 #endif
 
-JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
+JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
-JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
+JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct) JL_CANSAFEPOINT;
 extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
+JL_DLLEXPORT int jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize);
 JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize);
