@@ -27,6 +27,8 @@ given editor. It should take four arguments, as follows:
 * `path` - the path to the source file to open
 * `line` - the line number to open the editor at
 * `column` - the column number to open the editor at
+* `wait=wait` - boolean flag to wait for the editor to close before resuming
+    This defaults to the outer function's `wait` keyword argument's value.
 
 Editors which cannot open to a specific line with a command or a specific column
 may ignore the `line` and/or `column` argument. The `fn` callback must return
@@ -82,7 +84,7 @@ already work:
 The following defines the usage of terminal-based `emacs`:
 
     define_editor(
-        r"\\bemacs\\b.*\\s(-nw|--no-window-system)\\b", wait=true) do cmd, path, line
+        r"\\bemacs\\b.*\\s(-nw|--no-window-system)\\b"; wait=true) do cmd, path, line
         `\$cmd +\$line \$path`
     end
 
@@ -90,7 +92,7 @@ The following defines the usage of terminal-based `emacs`:
     `define_editor` was introduced in Julia 1.4.
 """
 function define_editor(fn::Function, pattern; wait::Bool=false)
-    callback = function (cmd::Cmd, path::AbstractString, line::Integer, column::Integer)
+    callback = function (cmd::Cmd, path::AbstractString, line::Integer, column::Integer; wait::Bool=wait)
         editor_matches(pattern, cmd) || return false
         editor = if !applicable(fn, cmd, path, line, column)
             # Be backwards compatible with editors that did not define the newly added column argument
@@ -217,10 +219,21 @@ function editor()
 end
 
 """
-    edit(path::AbstractString, line::Integer=0, column::Integer=0)
+    edit(path::AbstractString, line::Integer=0, column::Integer=0; wait::Union{Bool, Nothing}=nothing)
 
 Edit a file or directory optionally providing a line number to edit the file at.
-Return to the `julia` prompt when you quit the editor. The editor can be changed
+
+`wait` can be `true`, `false` or `nothing`.
+
+- `wait = true`: return to the `julia` prompt when you quit the editor,
+- `wait = false`: return immediately while opening editor in a background task,
+- `wait = nothing`: default to whether to wait or not based on predefined editor callbacks.
+
+!!! warning
+    The values `true` or `false` for `wait` is not supported by all editors and
+    must be used on a case by case basis.
+
+The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
 !!! compat "Julia 1.9"
@@ -228,7 +241,7 @@ by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
 See also [`InteractiveUtils.define_editor`](@ref).
 """
-function edit(path::AbstractString, line::Integer=0, column::Integer=0)
+function edit(path::AbstractString, line::Integer=0, column::Integer=0; wait::Union{Bool,Nothing}=nothing)
     path isa String || (path = convert(String, path))
     if endswith(path, ".jl")
         p = find_source_file(path)
@@ -237,9 +250,17 @@ function edit(path::AbstractString, line::Integer=0, column::Integer=0)
     cmd = editor()
     for callback in EDITOR_CALLBACKS
         if !applicable(callback, cmd, path, line, column)
-            callback(cmd, path, line) && return
+            if isnothing(wait)
+                callback(cmd, path, line) && return
+            else
+                callback(cmd, path, line; wait) && return
+            end
         else
-            callback(cmd, path, line, column) && return
+            if isnothing(wait)
+                callback(cmd, path, line, column) && return
+            else
+                callback(cmd, path, line, column; wait) && return
+            end
         end
     end
     # shouldn't happen unless someone has removed fallback entry
