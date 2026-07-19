@@ -458,7 +458,7 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time) JL_N
                             julia_double_to_half(orig_time + time * 1e-9));
 }
 
-static void jl_emit_codeinsts_chunk(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
+static void jl_emit_codeinsts_chunk(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len) JL_CANSAFEPOINT
 {
     const char *name = name_from_method_instance(jl_get_ci_mi(codeinsts[len - 1]));
     auto ctx = std::make_unique<LLVMContext>();
