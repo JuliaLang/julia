@@ -105,13 +105,38 @@ distclean-csl: clean-csl
 else
 $(eval $(call bb-install,csl,CSL,true))
 ifeq ($(OS),WINNT)
+GCC_VERSION = 13
 install-csl:
 	mkdir -p $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc_s.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libmsvcrt.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc_s.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmsvcrt.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmsvcrt-os.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmingwex.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libkernel32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmingw32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmoldname.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libntdll.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libpsapi.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libws2_32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libiphlpapi.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libwinmm.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libdbghelp.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libuserenv.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libsecur32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libole32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libuuid.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libadvapi32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libshell32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libuser32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libpthread.dll.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crt2.o $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crt2u.o $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/dllcrt2.o $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtbegin.o $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtend.o $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_libdir)/
 endif
 endif
 ifeq ($(OS),WINNT)
@@ -120,6 +145,30 @@ uninstall-gcc-libraries:
 	-rm -f $(build_private_libdir)/libgcc_s.a
 	-rm -f $(build_private_libdir)/libgcc.a
 	-rm -f $(build_private_libdir)/libmsvcrt.a
+	-rm -f $(build_private_libdir)/libmsvcrt-os.a
+	-rm -f $(build_private_libdir)/libmingwex.a
+	-rm -f $(build_private_libdir)/libkernel32.a
+	-rm -f $(build_private_libdir)/libmingw32.a
+	-rm -f $(build_private_libdir)/libmoldname.a
+	-rm -f $(build_private_libdir)/libntdll.a
+	-rm -f $(build_private_libdir)/libpsapi.a
+	-rm -f $(build_private_libdir)/libws2_32.a
+	-rm -f $(build_private_libdir)/libiphlpapi.a
+	-rm -f $(build_private_libdir)/libwinmm.a
+	-rm -f $(build_private_libdir)/libdbghelp.a
+	-rm -f $(build_private_libdir)/libuserenv.a
+	-rm -f $(build_private_libdir)/libsecur32.a
+	-rm -f $(build_private_libdir)/libole32.a
+	-rm -f $(build_private_libdir)/libuuid.a
+	-rm -f $(build_private_libdir)/libadvapi32.a
+	-rm -f $(build_private_libdir)/libshell32.a
+	-rm -f $(build_private_libdir)/libuser32.a
+	-rm -f $(build_private_libdir)/libpthread.dll.a
 	-rm -f $(build_private_libdir)/libssp.dll.a
+	-rm -f $(build_private_libdir)/crt2.o
+	-rm -f $(build_private_libdir)/crt2u.o
+	-rm -f $(build_private_libdir)/dllcrt2.o
+	-rm -f $(build_private_libdir)/crtbegin.o
+	-rm -f $(build_private_libdir)/crtend.o
 	-rm -f $(build_libdir)/libssp.dll.a
 endif
