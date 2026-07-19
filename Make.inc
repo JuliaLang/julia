@@ -1506,11 +1506,6 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.35|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # or not.  See `deps/csl.mk` for more detail.
 BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT
 
-# TEMPORARY: the pinned libuv gained new APIs (uv_cancel of write requests,
-# uv_write_nwritten) that no published LibUV_jll provides yet; force the
-# source build until a JLL built from the pinned commit is available.
-USE_BINARYBUILDER_LIBUV := 0
-
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
