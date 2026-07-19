@@ -292,8 +292,35 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia-internal-debug.dll.a $(DESTDIR)$(libdir)/
 endif
-	-$(INSTALL_M) $(wildcard $(build_private_libdir)/*.a) $(DESTDIR)$(private_libdir)/
-	-rm -f $(DESTDIR)$(private_libdir)/sys-o.a
+# Copy over C runtime files used by Base.Linking and direct Windows links
+	$(INSTALL_M) $(build_private_libdir)/libgcc.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libgcc_s.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libmsvcrt.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libmsvcrt-os.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libmingwex.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libkernel32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libmingw32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libmoldname.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libntdll.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libpsapi.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libws2_32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libiphlpapi.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libwinmm.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libdbghelp.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libuserenv.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libsecur32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libole32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libuuid.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libadvapi32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libshell32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libuser32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libpthread.dll.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libssp.dll.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/crt2.o $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/crt2u.o $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/dllcrt2.o $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/crtbegin.o $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/crtend.o $(DESTDIR)$(private_libdir)/
 
 	# We have a single exception; we want 7z.dll to live in private_libexecdir,
 	# not bindir, so that 7z.exe can find it.
@@ -353,6 +380,7 @@ endif
 			fi \
 		done \
 	done
+
 endif
 	# Install `7z` into private_libexecdir
 	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(private_libexecdir)/
