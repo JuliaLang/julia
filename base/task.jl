@@ -309,7 +309,7 @@ function _wait(t::Task)
         lock(donenotify)
         try
             while !istaskdone(t)
-                wait(donenotify)
+                wait(donenotify; waitee=t)
             end
         finally
             unlock(donenotify)
@@ -317,6 +317,8 @@ function _wait(t::Task)
     end
     nothing
 end
+
+waitqueue(t::Task) = ILLRef((t.donenotify::ThreadSynchronizer).waitq, t)
 
 # have `waiter` wait for `t`
 function _wait2(t::Task, waiter::Task)
@@ -336,7 +338,9 @@ function _wait2(t::Task, waiter::Task)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
         if !istaskdone(t)
-            push!(donenotify.waitq, waiter)
+            w = _cached_wait_entry(waiter)
+            @atomic :release waiter.waiting_on = w
+            push!(waitqueue(t), w)
             unlock(donenotify)
             return nothing
         else
@@ -524,7 +528,13 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
             waiter = waiter_tasks[i]
             waiter === sentinel && continue
             donenotify = tasks[i].donenotify::ThreadSynchronizer
-            @lock donenotify list_deletefirst!(donenotify.waitq, waiter)
+            lock(donenotify)
+            # Claim the never-started waiter's wake so that a concurrent
+            # completion notify skips it, then unlink its registration (a
+            # no-op if a notify already popped it).
+            w = @atomicswap waiter.waiting_on = nothing
+            w isa WaitEntry && list_deletefirst!(waitqueue(tasks[i]), w)
+            unlock(donenotify)
         end
         done_tasks = tasks[done_mask]
         if throwexc && exception
@@ -856,8 +866,9 @@ function task_done_hook(t::Task)
         lock(donenotify)
         try
             if !isempty(donenotify.waitq)
-                handled = true
-                notify(donenotify)
+                # only wakes whose claim was won count as having consumed the
+                # result (a stale, already-claimed registration does not)
+                handled = notify(donenotify) > 0
             end
         finally
             unlock(donenotify)
@@ -899,12 +910,17 @@ mutable struct IntrusiveLinkedListSynchronized{T}
     lock::Threads.SpinLock
     IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
 end
+# The elements record this synchronized wrapper (not the inner list) as their
+# `queue` identity, so that an asynchronous deletion (e.g. `schedule(t, exc,
+# error=true)` yanking a task out of a sticky workqueue) dispatches back here
+# and takes the lock instead of mutating the inner list unsynchronized.
+waitqueue(W::IntrusiveLinkedListSynchronized) = ILLRef(W.queue, W)
 isempty(W::IntrusiveLinkedListSynchronized) = isempty(W.queue)
 length(W::IntrusiveLinkedListSynchronized) = length(W.queue)
 function push!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
-        push!(W.queue, t)
+        push!(waitqueue(W), t)
     finally
         unlock(W.lock)
     end
@@ -913,7 +929,7 @@ end
 function pushfirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
-        pushfirst!(W.queue, t)
+        pushfirst!(waitqueue(W), t)
     finally
         unlock(W.lock)
     end
@@ -922,7 +938,7 @@ end
 function pop!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
-        return pop!(W.queue)
+        return pop!(waitqueue(W))
     finally
         unlock(W.lock)
     end
@@ -930,7 +946,7 @@ end
 function popfirst!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
-        return popfirst!(W.queue)
+        return popfirst!(waitqueue(W))
     finally
         unlock(W.lock)
     end
@@ -938,7 +954,7 @@ end
 function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
-        list_deletefirst!(W.queue, t)
+        list_deletefirst!(waitqueue(W), t)
     finally
         unlock(W.lock)
     end
@@ -1072,7 +1088,14 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
-        q = t.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
+        # If `t` is registered on a wait queue, claim its wake so that a
+        # concurrent or later `notify` skips its registration (the entry
+        # itself stays linked; the resumed task's wait cleanup unlinks it).
+        @atomicswap t.waiting_on = nothing
+        # A parked task is never in a workqueue and wait registrations do not
+        # go through `t.queue`, so any queue here is a sticky workqueue.
+        q = t.queue
+        q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
         setfield!(t, :result, arg)
         setfield!(t, :_isexception, true)
     else
@@ -1098,7 +1121,7 @@ function yield()
     try
         wait()
     catch
-        q = ct.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
         rethrow()
     end
 end

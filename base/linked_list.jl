@@ -1,11 +1,27 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct IntrusiveLinkedList{T}
-    # Invasive list requires that T have a field `.next >: U{T, Nothing}` and `.queue >: U{ILL{T}, Nothing}`
+    # Invasive list requires that T have a field `.next >: U{T, Nothing}` and `.queue::Any`
     head::Union{T, Nothing}
     tail::Union{T, Nothing}
     IntrusiveLinkedList{T}() where {T} = new{T}(nothing, nothing)
 end
+
+# A reference to an intrusive list together with the identity recorded in the
+# elements' `queue` field while they are enqueued (the element's "which queue am
+# I on" witness). Plain lists use the list object itself as the identity; lists
+# that are owned by some other object (a synchronized workqueue wrapper, a
+# condition, a waited-on object) record that owner instead, so that code
+# holding only the element can identify the owner - and thus the lock
+# protecting the list - from the element alone.
+struct ILLRef{T}
+    list::IntrusiveLinkedList{T}
+    waitee::Any # Invariant: waitqueue(waitee).list === list
+end
+
+# waitqueue(x) returns the ILLRef for the queue of waiters registered on `x`.
+# Methods are added for each waitee type (conditions, tasks, workqueues, ...).
+function waitqueue end
 
 #const list_append!! = append!
 #const list_deletefirst! = delete!
@@ -49,9 +65,13 @@ function list_append!!(q::IntrusiveLinkedList{T}, q2::IntrusiveLinkedList{T}) wh
     return q
 end
 
-function push!(q::IntrusiveLinkedList{T}, val::T) where T
+isempty(qr::ILLRef) = isempty(qr.list)
+length(qr::ILLRef) = length(qr.list)
+
+function push!(qr::ILLRef{T}, val::T) where T
     val.queue === nothing || error("val already in a list")
-    val.queue = q
+    val.queue = qr.waitee
+    q = qr.list
     tail = q.tail
     if tail === nothing
         q.head = q.tail = val
@@ -62,9 +82,10 @@ function push!(q::IntrusiveLinkedList{T}, val::T) where T
     return q
 end
 
-function pushfirst!(q::IntrusiveLinkedList{T}, val::T) where T
+function pushfirst!(qr::ILLRef{T}, val::T) where T
     val.queue === nothing || error("val already in a list")
-    val.queue = q
+    val.queue = qr.waitee
+    q = qr.list
     head = q.head
     if head === nothing
         q.head = q.tail = val
@@ -75,21 +96,34 @@ function pushfirst!(q::IntrusiveLinkedList{T}, val::T) where T
     return q
 end
 
-function pop!(q::IntrusiveLinkedList{T}) where {T}
-    val = q.tail::T
-    list_deletefirst!(q, val) # expensive!
+function pop!(qr::ILLRef{T}) where {T}
+    val = qr.list.tail::T
+    _list_deletefirst!(qr.list, val) # expensive!
     return val
 end
 
-function popfirst!(q::IntrusiveLinkedList{T}) where {T}
-    val = q.head::T
-    list_deletefirst!(q, val) # cheap
+function popfirst!(qr::ILLRef{T}) where {T}
+    val = qr.list.head::T
+    _list_deletefirst!(qr.list, val) # cheap
     return val
 end
+
+# Delete `val` from the list, but only if it is actually in it, as witnessed by
+# `val.queue` holding the ILLRef's waitee. This makes deletion a no-op if `val`
+# was concurrently popped, which various cleanup paths rely upon.
+function list_deletefirst!(qr::ILLRef{T}, val::T) where T
+    val.queue === qr.waitee || return qr.list
+    return _list_deletefirst!(qr.list, val)
+end
+
+push!(q::IntrusiveLinkedList{T}, val::T) where T = push!(ILLRef(q, q), val)
+pushfirst!(q::IntrusiveLinkedList{T}, val::T) where T = pushfirst!(ILLRef(q, q), val)
+pop!(q::IntrusiveLinkedList{T}) where T = pop!(ILLRef(q, q))
+popfirst!(q::IntrusiveLinkedList{T}) where T = popfirst!(ILLRef(q, q))
+list_deletefirst!(q::IntrusiveLinkedList{T}, val::T) where T = list_deletefirst!(ILLRef(q, q), val)
 
 # this function assumes `val` is found in `q`
-function list_deletefirst!(q::IntrusiveLinkedList{T}, val::T) where T
-    val.queue === q || return
+function _list_deletefirst!(q::IntrusiveLinkedList{T}, val::T) where T
     head = q.head::T
     if head === val
         if q.tail::T === val

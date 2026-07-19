@@ -54,6 +54,66 @@ islocked(::AlwaysLockedST) = true
 
 ## condition variables
 
+# A task's registration on a wait queue. All fields are plain: `next` and
+# `queue` are protected by the waitee's lock (`queue` holds the queue's
+# identity - see `waitqueue` - while the entry is enqueued, acting as the
+# "am I registered, and on what" witness, and `nothing` otherwise); `task`
+# is written by the owning task before enqueueing, so it is ordered by the
+# same lock for lock-holding readers.
+#
+# The wake-claim protocol: a parked task `t` points to its current
+# registration through the atomic field `t.waiting_on`. Whoever wants to wake
+# it must first claim the wake by atomically clearing that field:
+#
+#   - `notify` (holding the waitee's lock) pops an entry `w` and claims via
+#     CAS(t.waiting_on, w => nothing). The expected-value CAS makes stale
+#     entries harmless: if `t` was interrupted and has since registered
+#     elsewhere, the CAS fails and the popped corpse is simply dropped.
+#   - an interrupter (`schedule(t, exc, error=true)`) claims via an
+#     unconditional swap: it is directed at the *task*, not at any particular
+#     wait, so claiming whatever `t` is currently registered on is correct.
+#     The claimed entry stays linked - the interrupter may not touch the queue
+#     without its lock - and is unlinked lazily, either by the interrupted
+#     task's own wait cleanup or by the `notify` that pops and drops it.
+#   - wake sources directed at one *specific* wait (e.g. the timeout task of
+#     `Experimental.wait_with_timeout`) must register the wait with a fresh,
+#     single-use entry: single-use-ness is what guarantees their
+#     expected-value CAS cannot mistakenly claim a later, unrelated wait.
+#
+# Entries are heap objects (rather than links folded into the Task) so that a
+# task whose interrupted wait left a stale registration behind can immediately
+# register anew - e.g. park on a lock during its cleanup - with a fresh entry.
+# To keep the common park allocation-free, each task caches one entry
+# (`t.cached_wait_entry`) and reuses it whenever it is free, i.e. not still
+# linked into some queue (`w.queue === nothing`, always a synchronized read
+# for the owning task since the unlinker either is the task itself or
+# subsequently scheduled it).
+mutable struct WaitEntry
+    task::Union{Task, Nothing}
+    next::Union{WaitEntry, Nothing}
+    queue::Any
+    WaitEntry(task::Union{Task, Nothing}) = new(task, nothing, nothing)
+end
+
+# Return the cached entry of `waiter` if it is free, else a fresh (and newly
+# cached) one.
+function _cached_wait_entry(waiter::Task)
+    w = waiter.cached_wait_entry
+    if w isa WaitEntry && w.queue === nothing
+        w.task = waiter
+    else
+        w = WaitEntry(waiter)
+        waiter.cached_wait_entry = w
+    end
+    return w
+end
+
+# Claim the wake of the wait that `w` was registered for (returns whether the
+# claim succeeded). `w` must be an entry armed for `t` by `_wait2`.
+function claim_wait(t::Task, w::WaitEntry)
+    return (@atomicreplace t.waiting_on w => nothing).success
+end
+
 """
     GenericCondition
 
@@ -61,13 +121,21 @@ Abstract implementation of a condition object
 for synchronizing task objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
-    waitq::IntrusiveLinkedList{Task}
+    waitq::IntrusiveLinkedList{WaitEntry}
     lock::L
 
-    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), L())
-    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), l)
-    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{Task}(), l)
+    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{WaitEntry}(), L())
+    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{WaitEntry}(), l)
+    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{WaitEntry}(), l)
 end
+
+# The queue identity recorded in entries (the membership witness) must be a
+# mutable, identity-stable object: an immutable waitee would be re-boxed on
+# every park, allocating in the steady state. Plain condition waits therefore
+# use the waitq list itself as the identity; waits on behalf of a richer
+# (mutable) waitee - e.g. waiting on a Task via its donenotify - record that
+# waitee instead (see `waitqueue(::Task)`).
+waitqueue(c::GenericCondition) = ILLRef(c.waitq, c.waitq)
 
 show(io::IO, c::GenericCondition) = print(io, GenericCondition, "(", c.lock, ")")
 
@@ -79,14 +147,19 @@ islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
-# have waiter wait for c
-function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
+# have waiter wait for c: register `waiter` on c's wait queue (with `waitee`
+# recorded as the queue identity) and arm the registration for a wake.
+# Returns the registration entry.
+function _wait2(c::GenericCondition, waiter::Task, first::Bool=false;
+                waitee=c.waitq, entry::Union{WaitEntry, Nothing}=nothing)
     ct = current_task()
     assert_havelock(c)
+    w = entry === nothing ? _cached_wait_entry(waiter) : entry
+    @atomic :release waiter.waiting_on = w
     if first
-        pushfirst!(c.waitq, waiter)
+        pushfirst!(ILLRef(c.waitq, waitee), w)
     else
-        push!(c.waitq, waiter)
+        push!(ILLRef(c.waitq, waitee), w)
     end
     # since _wait2 is similar to schedule, we should observe the sticky bit now
     if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
@@ -99,7 +172,7 @@ function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
         tid = Threads.threadid()
         ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
     end
-    return
+    return w
 end
 
 """
@@ -133,18 +206,28 @@ Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notif
 If the keyword `first` is set to `true`, the waiter will be put _first_
 in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
 """
-function wait(c::GenericCondition; first::Bool=false)
+function wait(c::GenericCondition; first::Bool=false, waitee=c.waitq)
     ct = current_task()
-    _wait2(c, ct, first)
+    assert_havelock(c)
+    w = _wait2(c, ct, first; waitee)
     token = unlockall(c.lock)
-    try
-        return wait()
+    ret = try
+        wait()
     catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
-        rethrow()
-    finally
+        # We were resumed without a wake having been delivered through our
+        # registration: either an interrupter claimed it (leaving the entry
+        # linked for us to clean up), or we got a raw `throwto`. Disarm the
+        # registration first - before the relock below can register a new
+        # wait - then unlink our entry (a no-op if a `notify` already popped
+        # and dropped it).
+        @atomicreplace ct.waiting_on w => nothing
         relockall(c.lock, token)
+        list_deletefirst!(ILLRef(c.waitq, waitee), w)
+        rethrow()
     end
+    # a normal wake implies our claim was won and our entry already unlinked
+    relockall(c.lock, token)
+    return ret
 end
 
 """
@@ -161,7 +244,15 @@ function notify(c::GenericCondition, @nospecialize(arg), all, error)
     assert_havelock(c)
     cnt = 0
     while !isempty(c.waitq)
-        t = popfirst!(c.waitq)
+        w = popfirst!(waitqueue(c))
+        # An entry whose wake was already claimed by an interrupter does not
+        # count as woken: drop it and continue to the next waiter (the
+        # interrupted task resumes via whatever its claimer scheduled and
+        # will find its entry already unlinked).
+        t = w.task
+        if !(t isa Task && claim_wait(t, w))
+            continue
+        end
         schedule(t, arg, error=error)
         cnt += 1
         all || break

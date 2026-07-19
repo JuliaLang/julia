@@ -6,6 +6,15 @@ using Base.Threads
 
 include("print_process_affinity.jl") # import `uv_thread_getaffinity`
 
+# whether `t` currently has an armed wait registration on `waitee` (plain
+# condition waits record the condition's waitq list as the queue identity)
+function parked_on(t::Task, @nospecialize(waitee))
+    w = @atomic t.waiting_on
+    w isa Base.WaitEntry || return false
+    id = waitee isa Base.GenericCondition ? waitee.waitq : waitee
+    return w.queue === id
+end
+
 # simple sanity tests for locks under cooperative concurrent access
 let lk = ReentrantLock()
     c1 = Event()
@@ -17,15 +26,154 @@ let lk = ReentrantLock()
     wait(c1)
     wait(c2)
     # wait for the task to park in the queue (it may be spinning)
-    @test timedwait(() -> t1.queue === lk.cond_wait.waitq, 1.0) == :ok
-    @test t2.queue !== lk.cond_wait.waitq
+    @test timedwait(() -> parked_on(t1, lk.cond_wait), 10.0) == :ok
+    @test !parked_on(t2, lk.cond_wait)
     @test istaskdone(t2)
     @test !fetch(t2)
     unlock(lk)
-    @test t1.queue === lk.cond_wait.waitq
+    @test parked_on(t1, lk.cond_wait)
     unlock(lk)
-    @test t1.queue !== lk.cond_wait.waitq
+    @test timedwait(() -> istaskdone(t1), 10.0) == :ok
+    @test !parked_on(t1, lk.cond_wait)
     @test fetch(t1)
+end
+
+# the wake-claim protocol: an interrupted waiter's stale registration is
+# skipped by notify and collected lazily; a task whose interrupted wait
+# left a stale registration behind can immediately park elsewhere
+@testset "wait registration claim protocol" begin
+    # interrupting a parked waiter claims its wake, so a later notify skips
+    # the stale entry instead of double-waking the task
+    let cond = Threads.Condition()
+        t = @async begin
+            lock(cond)
+            try
+                wait(cond)
+            finally
+                unlock(cond)
+            end
+        end
+        yield() # let t park
+        @test parked_on(t, cond)
+        @test !isempty(cond.waitq)
+        schedule(t, ErrorException("interrupt"), error=true)
+        # t has not run yet: its (claimed) entry is still linked
+        @test !parked_on(t, cond)
+        lock(cond)
+        @test notify(cond) == 0 # stale entry skipped, not woken twice
+        unlock(cond)
+        yield() # let t run its cleanup
+        @test istaskfailed(t)
+        @test isempty(cond.waitq)
+    end
+    # same, but the interrupted task cleans up its own entry first
+    let cond = Threads.Condition()
+        t = @async begin
+            lock(cond)
+            try
+                wait(cond)
+            finally
+                unlock(cond)
+            end
+        end
+        yield()
+        @test parked_on(t, cond)
+        schedule(t, ErrorException("interrupt"), error=true)
+        yield()
+        @test istaskfailed(t)
+        @test isempty(cond.waitq)
+        lock(cond)
+        @test notify(cond) == 0
+        unlock(cond)
+    end
+    # a task interrupted while waiting on a Threads.Condition must be able to
+    # park on the condition's (contended) lock during its cleanup, while its
+    # stale registration is still linked: the busy cached entry forces a
+    # fresh registration
+    let cond = Threads.Condition()
+        lock(cond) # hold the condition's lock so t's cleanup relock parks
+        t = @async begin
+            lock(cond)
+            try
+                wait(cond)
+            finally
+                unlock(cond)
+            end
+        end
+        # let t park on the condition (we must release the lock for that)
+        unlock(cond)
+        @test timedwait(() -> parked_on(t, cond), 10.0) == :ok
+        lock(cond)
+        schedule(t, ErrorException("interrupt"), error=true)
+        # t resumes and parks on the ReentrantLock we hold, with a fresh
+        # entry, while its stale claimed registration is still on cond
+        @test timedwait(() -> parked_on(t, cond.lock.cond_wait), 10.0) == :ok
+        @test !isempty(cond.waitq) # the stale entry
+        unlock(cond)
+        @test timedwait(() -> istaskdone(t), 10.0) == :ok
+        @test istaskfailed(t)
+        @test isempty(cond.waitq) # collected by t's cleanup
+    end
+    # a task waiting on another task can be interrupted, and the waited-on
+    # task's completion then does not count the stale registration as handled
+    let e = Event()
+        target = @async wait(e)
+        t = @async wait(target)
+        yield()
+        @test parked_on(t, target)
+        schedule(t, ErrorException("interrupt"), error=true)
+        yield()
+        @test istaskfailed(t)
+        notify(e)
+        @test timedwait(() -> istaskdone(target), 10.0) == :ok
+    end
+end
+
+# the cached WaitEntry makes the steady-state park/wake cycle allocation-free:
+# the same entry object is recycled across parks, and nothing on the park or
+# notify path allocates (in particular, the queue-identity witness must be a
+# mutable object - storing an immutable waitee would re-box it every park)
+@testset "wait registration recycling is allocation-free" begin
+    ping = Event(true)
+    pong = Event(true)
+    n = 500
+    t = Threads.@spawn for i in 1:(n + 20)
+        wait(ping)
+        notify(pong)
+    end
+    driver() = (notify(ping); wait(pong))
+    for i in 1:20 # warmup: compile and populate both tasks' cached entries
+        driver()
+    end
+    w_spawned = t.cached_wait_entry
+    w_driver = current_task().cached_wait_entry
+    @test w_spawned isa Base.WaitEntry
+    @test w_driver isa Base.WaitEntry
+    measure() = @allocated for i in 1:n
+        driver()
+    end
+    allocated = measure()
+    wait(t)
+    # the cached entries were recycled, not replaced
+    @test t.cached_wait_entry === w_spawned
+    @test current_task().cached_wait_entry === w_driver
+    @test (w_driver::Base.WaitEntry).queue === nothing # free between parks
+    if Base.JLOptions().code_coverage == 0
+        @test allocated == 0
+    end
+end
+
+@testset "unbuffered channel: interrupted taker is skipped" begin
+    ch = Channel{Int}(0)
+    t1 = @async take!(ch)
+    yield() # t1 parks as a taker
+    @test parked_on(t1, ch.cond_take)
+    schedule(t1, ErrorException("interrupt"), error=true)
+    t2 = @async take!(ch)
+    yield() # t2 parks as a taker, behind t1's stale entry
+    put!(ch, 42) # must skip t1's claimed entry and hand off to t2
+    @test fetch(t2) == 42
+    @test istaskfailed(t1)
 end
 
 let e = Event(), started1 = Event(false), started2 = Event(false)

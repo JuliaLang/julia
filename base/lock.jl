@@ -247,12 +247,19 @@ end
 
 function wait_no_relock(c::GenericCondition)
     ct = current_task()
-    _wait2(c, ct)
-    unlockall(c.lock)
+    w = _wait2(c, ct)
+    token = unlockall(c.lock)
     try
         return wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        # We were resumed without a wake having been delivered through our
+        # registration (an interrupter claimed it, or a raw `throwto`).
+        # Disarm it, then unlink our entry, which requires the waitee lock -
+        # for lock parking this is a leaf spinlock, so no re-parking here.
+        @atomicreplace ct.waiting_on w => nothing
+        lock(c.lock)
+        list_deletefirst!(waitqueue(c), w)
+        unlock(c.lock)
         rethrow()
     end
 end

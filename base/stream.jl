@@ -459,7 +459,7 @@ function closewrite(s::LibuvStream)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::StickyWorkqueue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we won't get spurious notifications later
@@ -1092,7 +1092,7 @@ function uv_write_wait(uvw::Ptr{Cvoid})
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::StickyWorkqueue, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
