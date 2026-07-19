@@ -230,6 +230,33 @@ typedef struct _jl_excstack_t jl_excstack_t;
 
 typedef struct _jl_handler_t jl_handler_t;
 
+// Cancellation token source: a node in the level-triggered cancellation tree
+// (`Core.CancellationTokenSource`). Cancelling a node cancels its whole
+// subtree; the state is monotonic and never de-escalates. The layout must be
+// kept in sync with the registration in jltypes.c.
+typedef struct _jl_cancel_source_t {
+    JL_DATA_TYPE
+    // Graph links. `parents` - `nothing` (a root), a single parent source,
+    // or a SimpleVector of parent sources (a "linked" source, making the
+    // structure a DAG) - is const after construction, so lock-free ancestor
+    // walks (e.g. subtree-membership tests on the cancellation path) are
+    // safe. `children` - `nothing`, or a `Vector{WeakRef}` of child
+    // sources, guarded by this node's `_lock` - holds children *weakly*: a
+    // child stays linked for exactly as long as it is reachable (a token or
+    // a registered observer keeps it alive), and is pruned after it has
+    // been garbage collected.
+    jl_value_t *parents;     // Union{Nothing, CancellationTokenSource, SimpleVector}
+    jl_value_t *children;    // Union{Nothing, Vector{WeakRef}}
+    // 0x00 = live; (0x80 | sev) = cancelled at severity sev (0x0 SAFE,
+    // 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL). Monotonic (CAS-max).
+    _Atomic(uint8_t) state;
+    _Atomic(uint8_t) _lock;  // spinlock guarding `children`
+    // Bitmask (1 << sev) of severities whose delivery some task observed;
+    // feeds the ^C episode state machine.
+    _Atomic(uint8_t) delivered;
+} jl_cancel_source_t;
+
+
 typedef struct _jl_task_t {
     JL_DATA_TYPE
     jl_value_t *next; // invasive linked list for scheduler

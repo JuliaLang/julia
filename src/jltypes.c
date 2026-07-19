@@ -4161,6 +4161,29 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_namedtuple_type))->layout = NULL;
     jl_namedtuple_typename = ntt->name;
 
+    jl_cancel_source_type = (jl_datatype_t*)
+        jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
+                        jl_emptysvec,
+                        jl_perm_symsvec(5,
+                                        "parents",
+                                        "children",
+                                        "state",
+                                        "_lock",
+                                        "delivered"),
+                        jl_svec(5,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint8_type),
+                        jl_emptysvec,
+                        0, 1, 5);
+    // Field 1 (parents) is const; fields 3-5 (state, _lock, delivered) are atomic
+    const static uint32_t cancel_source_constfields[1]  = { 0b00001 };
+    const static uint32_t cancel_source_atomicfields[1] = { 0b11100 };
+    jl_cancel_source_type->name->constfields = cancel_source_constfields;
+    jl_cancel_source_type->name->atomicfields = cancel_source_atomicfields;
+
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"),
                         NULL,

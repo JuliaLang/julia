@@ -1757,6 +1757,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
 #define jl_is_mcache(v)      jl_typetagis(v,jl_methcache_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
+#define jl_is_cancel_source(v) jl_typetagis(v,jl_cancel_source_type)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))

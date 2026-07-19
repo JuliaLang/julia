@@ -2729,6 +2729,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
+    add_builtin("CancellationTokenSource", (jl_value_t*)jl_cancel_source_type);
 
     add_builtin("AddrSpace", (jl_value_t*)jl_addrspace_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);

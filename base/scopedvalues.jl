@@ -94,9 +94,11 @@ Base.eltype(::AbstractScopedValue{T}) where {T} = T
 
 hasdefault(val::ScopedValue) = val.hasdefault
 hasdefault(val::LazyScopedValue) = true
+hasdefault(val::Base.CancelTokenKey) = true
 
 getdefault(val::ScopedValue) = val.hasdefault ? val.default : throw(KeyError(val))
 getdefault(val::LazyScopedValue) = val.getdefault()
+getdefault(val::Base.CancelTokenKey) = nothing
 
 """
     isassigned(val::ScopedValue)
