@@ -295,7 +295,24 @@ types exist in lowered form:
 
   * `GlobalRef`
 
-    Refers to global variable `name` in module `mod`.
+    Refers to global variable `name` in module `mod`. A `GlobalRef` appears in the IR as a
+    *symbolic* reference to a binding that has not (yet) been resolved to a particular binding
+    partition; the optimizer may rewrite it to a `Core.BindingPartition` (see below) once
+    inference has resolved which partition the read observes.
+
+  * `Core.BindingPartition`
+
+    The resolved form of a `GlobalRef`, valid in every position a `GlobalRef` value read is.
+    It names one *binding partition* — a contiguous range of world ages over which a binding's
+    meaning (constant value, declared type, import target, ...) is fixed — rather than just a
+    module and name. During optimization, `reformulate_globals_pass!` rewrites resolved global
+    reads to this form and records an invalidation edge, so that a later redefinition of the
+    binding reaches and invalidates this code. Because the partition is frozen at inference
+    time, codegen and the interpreter can read (or store to) the owning binding directly,
+    without scanning partitions across a world range at run time. A `BindingPartition` recovers
+    its owning `Core.Binding` (and thus its `name`/`mod` and current value) by walking the
+    circular partition chain to its end. When printed inside a `CodeInfo` (i.e. with `:compact`
+    set) it displays as the owning `GlobalRef`, matching how the read it replaced used to appear.
 
   * `SSAValue`
 
@@ -327,7 +344,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `=`
 
-    Assignment. In the IR, the first argument is always a `SlotNumber` or a `GlobalRef`.
+    Assignment. In the IR, the first argument is always a `SlotNumber`, a `GlobalRef`, or a
+    `Core.BindingPartition`. A `Core.BindingPartition` left-hand side is the reformulated form
+    of a default-order `setglobal!` (see `Core.BindingPartition` above and `setglobal_partition`
+    below): the optimizer rewrites `setglobal!(mod, name, value)` on a resolved, owned typed
+    global to `Expr(:(=), partition, value)`, which prints as `mod.name = value`.
 
   * `method`
 
@@ -420,6 +441,45 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `const`
 
     Declares a (global) variable as constant.
+
+  * `getglobal_partition`
+
+    A resolved global *read* that must preserve a non-default memory order. The optimizer's
+    `reformulate_globals_pass!` emits this (rather than a bare `Core.BindingPartition`) when the
+    read carries an explicit atomic order, so the backends apply the requested load ordering and
+    reject an invalid or non-atomic order. The fields are:
+
+      * `args[1]` : the `Core.BindingPartition` naming the binding to read.
+
+      * `args[2]` : the memory order, a `Symbol` (never `:unordered`; a default/unordered read is
+        emitted as a bare `Core.BindingPartition` instead).
+
+    Like a bare `Core.BindingPartition`, the owning binding is recovered from the partition
+    chain and its current value is read (raising an `UndefVarError` if unset).
+
+  * `setglobal_partition`
+
+    A resolved global *write* — the reformulated form of `setglobal!`/`swapglobal!`/
+    `replaceglobal!`/`setglobalonce!` on a resolved, owned typed global, produced by
+    `reformulate_globals_pass!`. A plain default-order `setglobal!` is instead reformulated to an
+    `Expr(:(=), partition, value)`; this node is used when a stronger memory order is requested,
+    or when the operation returns a value or performs a compare (swap/replace/setglobalonce). The
+    fields are:
+
+      * `args[1]` : the `Core.BindingPartition` naming the binding to store to.
+
+      * `args[2]` : `op`, the builtin function performing the store (e.g. `Core.setglobal!`,
+        `Core.swapglobal!`, `Core.replaceglobal!`, `Core.setglobalonce!`).
+
+      * `args[3]` : `order`, the store memory order (or `nothing` for the default).
+
+      * `args[4]` : `failorder`, the memory order on the comparison-failure path (for
+        `replaceglobal!`/`setglobalonce!`; `nothing` otherwise).
+
+      * `args[5]` : `value`, the value to store.
+
+      * `args[6]` : `cmp`, the expected value to compare against (for `replaceglobal!`; unused
+        otherwise).
 
   * `new`
 
