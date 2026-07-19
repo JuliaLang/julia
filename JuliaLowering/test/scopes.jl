@@ -435,6 +435,13 @@ function resolve_and_get_bindings(
     return ctx3.bindings.info
 end
 
+@testset "internal keyword body bindings" begin
+    bindings = resolve_and_get_bindings(Module(), :(f(; x=1) = x))
+    kw_body_bindings = filter(b -> startswith(b.name, "#kw_body#"), bindings)
+    @test !isempty(kw_body_bindings)
+    @test all(b -> b.is_internal, kw_body_bindings)
+end
+
 @testset "is_ambiguous_local" begin
     # Assignment in for loop within begin block after toplevel assignment
     let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end))
