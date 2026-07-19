@@ -100,6 +100,9 @@ include("set.jl")
 include("io.jl")
 include("iobuffer.jl")
 
+# Dynamic scopes (types only; the ScopedValues API is included much later)
+include("scope.jl")
+
 # Concurrency (part 1)
 include("linked_list.jl")
 include("condition.jl")
