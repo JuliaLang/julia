@@ -246,20 +246,28 @@ end
 end
 
 @testset "Line number correction" begin
-    @profile busywait(1, 20)
-    _, fdict0 = Profile.flatten(Profile.retrieve()...)
-    Base.update_stackframes_callback[] = function(list)
-        modify((sf, n)) = sf.func === :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
-        map!(modify, list, list)
-    end
-    _, fdictc = Profile.flatten(Profile.retrieve()...)
-    Base.update_stackframes_callback[] = identity
     function getline(sfs)
         for sf in sfs
             sf.func === :busywait && return sf.line
         end
         nothing
     end
+    # busywait stops once any sample lands, and in a multi-threaded process
+    # (e.g. the tier worker thread) that sample can be of another thread, so
+    # retry until the buffer actually contains a busywait frame
+    local fdict0
+    for _ in 1:20
+        Profile.clear()
+        @profile busywait(1, 20)
+        _, fdict0 = Profile.flatten(Profile.retrieve()...)
+        getline(values(fdict0)) !== nothing && break
+    end
+    Base.update_stackframes_callback[] = function(list)
+        modify((sf, n)) = sf.func === :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        map!(modify, list, list)
+    end
+    _, fdictc = Profile.flatten(Profile.retrieve()...)
+    Base.update_stackframes_callback[] = identity
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
 end
 
