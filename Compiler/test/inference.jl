@@ -6611,4 +6611,22 @@ end
     jetls618(1,2,3), jetls618(1,2,3,4)
 end == Tuple{Int,Int}
 
+# `return_type_tfunc` must not fold a provisional `Bottom` bestguess from a frame in
+# the currently-active cycle into `Const(Union{})`: the reified bottom cannot be
+# retracted by the join-based fixed-point state once the callee converges to a
+# non-`Bottom` type, leaving spurious `Vector{Union{}}`-like components in the final
+# result depending on which specialization happened to be inferred first.
+struct TreeRTCycle
+    children::Union{Nothing,Vector{TreeRTCycle}}
+end
+frec_rt_cycle(t::TreeRTCycle) =
+    TreeRTCycle(t.children === nothing ? nothing : map(frec_rt_cycle, t.children))
+# Compile `frec_rt_cycle` as the entry first via an actual call: the
+# `Base._return_type` query inside the `map` machinery then runs while
+# `frec_rt_cycle`'s bestguess is still `Union{}`.
+@test frec_rt_cycle(TreeRTCycle(nothing)) isa TreeRTCycle
+let rt = only(Base.return_types(map, (typeof(frec_rt_cycle), Vector{TreeRTCycle})))
+    @test !any(T -> T === Vector{Union{}}, Compiler.uniontypes(rt))
+end
+
 end # module inference
