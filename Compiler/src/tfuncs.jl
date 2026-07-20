@@ -3119,7 +3119,19 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             return CallMeta(Const(typeof(rt.val)), Union{}, RT_CALL_EFFECTS, info)
         end
         rt = widenconst(rt)
-        if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
+        if rt === Bottom && isa(sv, InferenceState) && !isempty(callers_in_cycle(sv))
+            # During a cycle `rt` may be the provisional bestguess of a frame that is
+            # still being inferred and can improve to a non-`Bottom` type once the
+            # cycle converges. Folding it into `Const(Union{})` here would reify the
+            # provisional `Bottom` as a certain answer that the join-based state of
+            # the fixed-point iteration (frame bestguess, block entry states) can
+            # never retract, leaving spurious `Core.TypeofBottom`-parameterized
+            # components (e.g. `Vector{Union{}}`) in the converged result, in an
+            # inference-order-dependent way.
+            # N.B. `Type{<:rt}` is not conservative enough for this case, since
+            # `Type{<:Union{}}` is equivalent to `Const(Union{})`.
+            return CallMeta(Type, Union{}, RT_CALL_EFFECTS, info)
+        elseif rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
             # output cannot be improved so it is known for certain
             return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
         elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
