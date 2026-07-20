@@ -1471,18 +1471,18 @@ JL_CALLABLE(jl_f_isdefinedglobal)
 {
     jl_module_t *m = NULL;
     jl_sym_t *s = NULL;
-    JL_NARGS(isdefined, 2, 3);
+    JL_NARGS(isdefined, 2, 4);
     int allow_import = 1;
     enum jl_memory_order order = jl_memory_order_unspecified;
     JL_TYPECHK(isdefined, module, args[0]);
     JL_TYPECHK(isdefined, symbol, args[1]);
-    if (nargs == 3) {
+    if (nargs >= 3) {
         JL_TYPECHK(isdefined, bool, args[2]);
         allow_import = jl_unbox_bool(args[2]);
     }
     if (nargs == 4) {
         JL_TYPECHK(isdefined, symbol, args[3]);
-        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 0);
     }
     m = (jl_module_t*)args[0];
     s = (jl_sym_t*)args[1];
