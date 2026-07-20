@@ -3870,11 +3870,30 @@ world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
 # Like `walk_binding_partition` but drops the WorldRange tracking — IR-only callers
 # don't use it.
-@inline function walk_to_leaf_partition(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
-    while is_some_binding_imported(binding_kind(partition))
+# Walk imports to the leaf partition, also reporting whether `getglobal` would
+# deprecation-warn for the access: the deprecation flag is ORed across the walk but
+# suppressed once an explicit import is passed (the `import`/`using: x` site warns
+# instead). Mirrors the runtime `jl_walk_binding_inplace_depwarn`, and returns the same
+# leaf `(binding, partition)` as `walk_to_leaf_partition` (the identical stop condition)
+# so the emitted `depwarn_partition` names the same leaf `getglobal` would.
+@inline function walk_to_leaf_partition_depwarn(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
+    passed_explicit = false
+    depwarn = false
+    while true
+        kind = binding_kind(partition)
+        if !passed_explicit
+            depwarn |= (partition.kind & PARTITION_FLAG_DEPWARN) != 0
+        end
+        is_some_binding_imported(kind) || break
+        is_some_explicit_imported(kind) && (passed_explicit = true)
         binding = partition_restriction(partition)::Core.Binding
         partition = lookup_binding_partition(world, binding)
     end
+    return (binding, partition, depwarn)
+end
+
+@inline function walk_to_leaf_partition(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
+    binding, partition, _ = walk_to_leaf_partition_depwarn(binding, partition, world)
     return (binding, partition)
 end
 

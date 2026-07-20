@@ -1265,8 +1265,13 @@ end
 #
 # Results are memoized per function in `cache` (`nothing` => "leave as a runtime read"), so a
 # binding is resolved once and its edge pushed once regardless of how many times it is read.
+# Result of resolving a read: the leaf partition to freeze, plus whether `getglobal`
+# would deprecation-warn for this access (computed over the whole walk, not just the
+# leaf; see `_resolve_read`). The `Bool` drives the explicit `depwarn_partition` emission.
+const ResolvedRead = Pair{Core.BindingPartition,Bool}
+
 function _reformulate_read(g::GlobalRef, world::UInt, edges::Vector{Any},
-                           cache::IdDict{Core.Binding,Union{Core.BindingPartition,Nothing}})
+                           cache::IdDict{Core.Binding,Union{ResolvedRead,Nothing}})
     binding = convert(Core.Binding, g)
     haskey(cache, binding) && return cache[binding]
     p = _resolve_read(g, binding, world)
@@ -1280,10 +1285,14 @@ function _resolve_read(g::GlobalRef, binding::Core.Binding, world::UInt)
     # `GlobalRef` for codegen to embed directly, with no `BindingPartition` and no edge.
     world1_const(g) && return nothing
     partition = lookup_binding_partition(world, binding)
-    _, leaf = walk_to_leaf_partition(binding, partition, world)
+    # Resolve the leaf and whether `getglobal` would depwarn for this access in one walk
+    # (`depwarn` is decided over the whole walk, not just the leaf flag; see
+    # `walk_to_leaf_partition_depwarn`), so the emitted `depwarn_partition` matches the
+    # `getglobal` this read replaces -- including which leaf binding it names.
+    _, leaf, depwarn = walk_to_leaf_partition_depwarn(binding, partition, world)
     kind = binding_kind(leaf)
     (is_defined_const_binding(kind) || kind === PARTITION_KIND_GLOBAL) || return nothing
-    return leaf
+    return ResolvedRead(leaf, depwarn)
 end
 
 # The store counterpart of `_reformulate_read`: resolve `g`'s own binding at the inference
@@ -1310,16 +1319,15 @@ end
 # name operand is a definition target rather than a read (`:(=)` left-hand sides are
 # likewise not exposed by `userefs`).
 # The reformulated read forms (`Core.getglobal_partition` and a bare `Core.BindingPartition`)
-# are side-effect free. When the resolved leaf is a deprecated binding, emit the deprecation
-# warning as an explicit `Core.depwarn_partition(p)` statement inserted before the read (this
-# replaces the inline depwarn codegen/interpreter used to attach to the read itself). The call
-# is modeled as effectful (`builtin_effects`) so it survives DCE. Definedness queries
+# are side-effect free. When `getglobal` would deprecation-warn for the access (decided over
+# the whole import walk by `_resolve_read`, not just the leaf's flag), emit that warning as an
+# explicit `Core.depwarn_partition(p)` statement inserted before the read (replacing the inline
+# depwarn codegen/interpreter used to attach to the read itself). The call is modeled as
+# effectful (`builtin_effects`) so it survives DCE. Definedness queries
 # (`isdefinedglobal_partition`) never warn, so they do not use this.
 function _emit_depwarn_partition!(ir::IRCode, idx::Int, p::Core.BindingPartition)
-    if (p.kind & PARTITION_FLAG_DEPWARN) != 0
-        insert_node!(ir, idx, NewInstruction(
-            Expr(:call, GlobalRef(Core, :depwarn_partition), QuoteNode(p)), Nothing))
-    end
+    insert_node!(ir, idx, NewInstruction(
+        Expr(:call, GlobalRef(Core, :depwarn_partition), QuoteNode(p)), Nothing))
     return nothing
 end
 
@@ -1328,7 +1336,7 @@ function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
     # concurrent redefinition cannot make the pass freeze a partition from a future world.
     world = get_inference_world(opt.inlining.interp)
     edges = opt.inlining.edges
-    read_cache = IdDict{Core.Binding,Union{Core.BindingPartition,Nothing}}()
+    read_cache = IdDict{Core.Binding,Union{ResolvedRead,Nothing}}()
     write_cache = IdDict{Core.Binding,Union{Core.BindingPartition,Nothing}}()
     for idx = 1:length(ir.stmts)
         inst = ir[SSAValue(idx)]
@@ -1339,15 +1347,16 @@ function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
         end
         r = recognize_global_read(stmt, ir)
         if r !== nothing
-            p = _reformulate_read(r.first, world, edges, read_cache)
-            if p !== nothing
+            rr = _reformulate_read(r.first, world, edges, read_cache)
+            if rr !== nothing
+                p = rr.first
                 # A read with a non-default order keeps the order by calling the
                 # `Core.getglobal_partition` builtin, so the backends apply the requested
                 # load ordering and reject an invalid/non-atomic order. A default
                 # (`:unordered`) read is a bare partition, read unordered. The partition is
                 # `QuoteNode`-wrapped so it is passed as the partition object rather than
-                # read as a global.
-                _emit_depwarn_partition!(ir, idx, p)
+                # read as a global. `rr.second` says whether `getglobal` would depwarn.
+                rr.second && _emit_depwarn_partition!(ir, idx, p)
                 inst[:stmt] = r.second !== :unordered ?
                     Expr(:call, GlobalRef(Core, :getglobal_partition), QuoteNode(p), QuoteNode(r.second)) : p
                 continue
@@ -1386,9 +1395,10 @@ function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
         # binding stays a runtime `isdefinedglobal`.
         d = recognize_global_isdefined(stmt, ir)
         if d !== nothing
-            p = _reformulate_read(d.first, world, edges, read_cache)
-            if p !== nothing
-                inst[:stmt] = Expr(:call, GlobalRef(Core, :isdefinedglobal_partition), QuoteNode(p), QuoteNode(d.second))
+            rr = _reformulate_read(d.first, world, edges, read_cache)
+            if rr !== nothing
+                # `isdefinedglobal` never deprecation-warns, so `rr.second` is ignored here.
+                inst[:stmt] = Expr(:call, GlobalRef(Core, :isdefinedglobal_partition), QuoteNode(rr.first), QuoteNode(d.second))
                 continue
             end
         end
@@ -1400,9 +1410,10 @@ function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
         for ur in urs
             use = ur[]
             if isa(use, GlobalRef)
-                p = _reformulate_read(use, world, edges, read_cache)
-                if p !== nothing
-                    _emit_depwarn_partition!(ir, idx, p)
+                rr = _reformulate_read(use, world, edges, read_cache)
+                if rr !== nothing
+                    p = rr.first
+                    rr.second && _emit_depwarn_partition!(ir, idx, p)
                     ur[] = p
                     changed = true
                 end
