@@ -1397,6 +1397,22 @@ JL_CALLABLE(jl_f_isdefined)
 
 // module bindings
 
+// Shared body of `getglobal` and `getglobal_partition`: apply the memory-order fences of
+// `order` around a relaxed read of the already-resolved leaf partition `bpart`. Returns
+// the value, or NULL when the binding is currently undefined -- the caller raises
+// UndefVarError naming whichever binding it wishes to report.
+static jl_value_t *getglobal_value(jl_binding_partition_t *bpart, enum jl_memory_order order)
+{
+    if (order == jl_memory_order_notatomic)
+        jl_atomic_error("getglobal: module binding cannot be read non-atomically");
+    else if (order >= jl_memory_order_seq_cst)
+        jl_fence();
+    jl_value_t *v = jl_get_binding_partition_value(bpart); // relaxed load
+    if (order >= jl_memory_order_acquire)
+        jl_fence();
+    return v;
+}
+
 JL_CALLABLE(jl_f_getglobal)
 {
     enum jl_memory_order order = jl_memory_order_monotonic;
@@ -1409,13 +1425,13 @@ JL_CALLABLE(jl_f_getglobal)
     jl_sym_t *sym = (jl_sym_t*)args[1];
     JL_TYPECHK(getglobal, module, (jl_value_t*)mod);
     JL_TYPECHK(getglobal, symbol, (jl_value_t*)sym);
-    if (order == jl_memory_order_notatomic)
-        jl_atomic_error("getglobal: module binding cannot be read non-atomically");
-    else if (order >= jl_memory_order_seq_cst)
-        jl_fence();
-    jl_value_t *v = jl_eval_global_var(mod, sym, jl_current_task->world_age); // relaxed load
-    if (order >= jl_memory_order_acquire)
-        jl_fence();
+    // Resolve the leaf partition (issuing `getglobal`'s deprecation warning), then read it
+    // through the shared `getglobal_partition` core.
+    jl_binding_t *b = jl_get_module_binding(mod, sym, 1);
+    jl_binding_partition_t *bpart = jl_get_binding_leaf_partition_depwarn(b, jl_current_task->world_age);
+    jl_value_t *v = getglobal_value(bpart, order);
+    if (v == NULL)
+        jl_undefined_var_error(sym, (jl_value_t*)mod);
     return v;
 }
 
@@ -1580,23 +1596,23 @@ JL_CALLABLE(jl_f_setglobalonce)
 }
 
 // getglobal_partition(partition::Core.BindingPartition, order::Symbol)
-// Recovers the owning binding from the partition and calls the `getglobal` builtin
-// directly (not through `jl_apply`, avoiding the generic-dispatch overhead) so the
-// requested memory order gets that builtin's validation and fences. The recovered
-// module/name and the incoming order symbol are all reachable through the (rooted)
-// arguments, so the stack array needs no extra GC root.
+// Reads the value directly from the already-resolved leaf `partition` (no `jl_apply`, no
+// re-resolution from module/name, and no deprecation warning -- inference emits a separate
+// `depwarn_partition` for that), applying the requested memory order's validation/fences.
 JL_CALLABLE(jl_f_getglobal_partition)
 {
     JL_NARGS(getglobal_partition, 2, 2);
     if (!jl_is_binding_partition(args[0]))
         jl_type_error("getglobal_partition", (jl_value_t*)jl_binding_partition_type, args[0]);
+    JL_TYPECHK(getglobal_partition, symbol, args[1]);
     jl_binding_partition_t *bpart = (jl_binding_partition_t*)args[0];
-    jl_binding_t *bnd = jl_binding_partition_owner(bpart);
-    jl_value_t *argv[3];
-    argv[0] = (jl_value_t*)bnd->globalref->mod;
-    argv[1] = (jl_value_t*)bnd->globalref->name;
-    argv[2] = args[1]; // order symbol (always explicit here)
-    return jl_f_getglobal(NULL, argv, 3);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 1, 0);
+    jl_value_t *v = getglobal_value(bpart, order);
+    if (v == NULL) {
+        jl_binding_t *bnd = jl_binding_partition_owner(bpart);
+        jl_undefined_var_error(bnd->globalref->name, (jl_value_t*)bnd->globalref->mod);
+    }
+    return v;
 }
 
 // setglobal_partition(partition, op, order, failorder, value, cmp)
@@ -1650,25 +1666,35 @@ JL_CALLABLE(jl_f_setglobal_partition)
 }
 
 // isdefinedglobal_partition(partition, order)
-// Recovers the owning binding from the partition and calls the `isdefinedglobal`
-// builtin directly (not through `jl_apply`, avoiding the generic-dispatch overhead;
-// always with `allow_import=true`: the partition is already the walked leaf) so the
-// memory order gets that builtin's validation. Returns whether the binding is defined.
-// The recovered module/name and the incoming order symbol are all reachable through
-// the (rooted) arguments, so the stack array needs no extra GC root.
+// Queries definedness directly on the already-resolved leaf `partition` (no `jl_apply`,
+// no re-resolution from module/name; the partition is already the walked leaf, so this
+// is the `allow_import=true` query), after validating the requested memory order.
 JL_CALLABLE(jl_f_isdefinedglobal_partition)
 {
     JL_NARGS(isdefinedglobal_partition, 2, 2);
     if (!jl_is_binding_partition(args[0]))
         jl_type_error("isdefinedglobal_partition", (jl_value_t*)jl_binding_partition_type, args[0]);
-    jl_binding_partition_t *bpart = (jl_binding_partition_t*)args[0];
-    jl_binding_t *bnd = jl_binding_partition_owner(bpart);
-    jl_value_t *argv[4];
-    argv[0] = (jl_value_t*)bnd->globalref->mod;
-    argv[1] = (jl_value_t*)bnd->globalref->name;
-    argv[2] = jl_true; // allow_import (the partition is already the walked leaf)
-    argv[3] = args[1]; // order symbol; `isdefinedglobal` validates and applies it
-    return jl_f_isdefinedglobal(NULL, argv, 4);
+    JL_TYPECHK(isdefined, symbol, args[1]);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 1, 0);
+    if (order < jl_memory_order_unordered)
+        jl_atomic_error("isdefined: module binding cannot be accessed non-atomically");
+    int bound = jl_get_binding_partition_boundp((jl_binding_partition_t*)args[0]); // seq_cst
+    return bound ? jl_true : jl_false;
+}
+
+// depwarn_partition(partition::Core.BindingPartition)
+// Emit the deprecation warning (if any) for the binding owning `partition`. Because the
+// `getglobal_partition` read is now side-effect free, inference emits this as an explicit
+// statement before a reformulated read of a deprecated binding (mirroring what codegen
+// used to inline), so the warning still fires; the runtime gate is `jl_options.depwarn`.
+JL_CALLABLE(jl_f_depwarn_partition)
+{
+    JL_NARGS(depwarn_partition, 1, 1);
+    if (!jl_is_binding_partition(args[0]))
+        jl_type_error("depwarn_partition", (jl_value_t*)jl_binding_partition_type, args[0]);
+    jl_binding_t *bnd = jl_binding_partition_owner((jl_binding_partition_t*)args[0]);
+    jl_binding_deprecation_check(bnd);
+    return jl_nothing;
 }
 
 // declare_global(module::Module, name::Symbol, [strong::Bool=false, [ty::Type]])

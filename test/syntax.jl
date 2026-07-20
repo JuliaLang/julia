@@ -4116,6 +4116,12 @@ module ExtendedIsDefined
         @test !Core.isdefinedglobal(@__MODULE__, :x2, false)
         @test !Core.isdefinedglobal(@__MODULE__, :x3, false)
         @test !Core.isdefinedglobal(@__MODULE__, :x4, false)
+
+        # the 4-argument (order) form (this dynamic call once threw "too many arguments")
+        @test Core.isdefinedglobal(@__MODULE__, :x1, true, :monotonic)
+        @test Core.isdefinedglobal(@__MODULE__, :x1, false, :acquire)
+        @test !Core.isdefinedglobal(@__MODULE__, :x2, false, :sequentially_consistent)
+        @test_throws ConcurrencyViolationError Core.isdefinedglobal(@__MODULE__, :x1, true, :not_atomic)
     end
 
     @eval begin

@@ -2876,6 +2876,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     apply_type,
     compilerbarrier,
     Core.current_scope,
+    Core.depwarn_partition,
     donotdelete,
     Core.finalizer,
     Core.get_binding_type,
@@ -2967,6 +2968,12 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     elseif f === Core.isdefinedglobal_partition
         length(argtypes) == 2 || return EFFECTS_THROWS
         return generic_isdefinedglobal_effects
+    elseif f === Core.depwarn_partition
+        length(argtypes) == 1 || return EFFECTS_THROWS
+        # A deprecation warning is an observable side effect (printing to stderr, and
+        # throwing under `--depwarn=error`), so this call must never be removed as unused.
+        return Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, effect_free=ALWAYS_FALSE,
+                       nothrow=false, inaccessiblememonly=ALWAYS_FALSE)
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_get_binding_type
@@ -3632,6 +3639,9 @@ end
 add_tfunc(Core.getglobal_partition, 2, 2, getglobal_partition_tfunc, 0)
 add_tfunc(Core.setglobal_partition, 6, 6, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(Core.isdefinedglobal_partition, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Bool), 1)
+# `depwarn_partition` is the explicit deprecation-warning side effect that
+# `reformulate_globals_pass!` emits alongside a reformulated read of a deprecated binding.
+add_tfunc(Core.depwarn_partition, 1, 1, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 1)
 add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Type), 0)
 
 # foreigncall

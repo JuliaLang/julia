@@ -3566,6 +3566,8 @@ static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, j
 // the `:getglobal_partition` reformulation in the optimizer). Inference has
 // recorded an invalidation edge to the binding, so it is safe to freeze the
 // partition here; codegen performs no partition or world-range scan of its own.
+// This read is side-effect free: any deprecation warning is emitted separately by
+// inference as an explicit `depwarn_partition` statement (see `emit_depwarn_partition`).
 static jl_cgval_t emit_globalref_partition(jl_codectx_t &ctx, jl_binding_partition_t *bpart, AtomicOrdering order=AtomicOrdering::Unordered) JL_CANSAFEPOINT
 {
     // The reformulated node carries only the (leaf) partition; recover its owning
@@ -3574,12 +3576,7 @@ static jl_cgval_t emit_globalref_partition(jl_codectx_t &ctx, jl_binding_partiti
     jl_module_t *mod = bnd->globalref->mod;
     jl_sym_t *name = bnd->globalref->name;
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    int maybe_depwarn = bpart->kind & PARTITION_FLAG_DEPWARN;
     if (jl_bkind_is_real_constant(kind) || kind == PARTITION_KIND_UNDEF_CONST) {
-        if (maybe_depwarn) {
-            Value *bp = julia_binding_gv(ctx, bnd);
-            ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
-        }
         jl_value_t *constval = bpart->restriction;
         if (!constval) {
             undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
@@ -3592,9 +3589,6 @@ static jl_cgval_t emit_globalref_partition(jl_codectx_t &ctx, jl_binding_partiti
         return mark_julia_const(ctx, constval);
     }
     Value *bp = julia_binding_gv(ctx, bnd);
-    if (maybe_depwarn) {
-        ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
-    }
     if (kind != PARTITION_KIND_GLOBAL) {
         // A declared-but-untyped/guard partition that inference nonetheless
         // resolved: read the current value from the binding at runtime.
@@ -5228,6 +5222,19 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             return true;
         }
         *ret = emit_isdefinedglobal_partition(ctx, (jl_binding_partition_t*)part.constant, order);
+        return true;
+    }
+
+    else if (f == BUILTIN(depwarn_partition) && nargs == 1) {
+        // depwarn_partition(partition): the partition object is carried as a constant by
+        // inference. Emit the (runtime-gated) deprecation check inline, mirroring what the
+        // read path used to inline. Without the constant, fall back to a generic builtin call.
+        const jl_cgval_t &part = argv[1];
+        if (!part.constant || !jl_is_binding_partition(part.constant))
+            return false;
+        jl_binding_t *bnd = jl_binding_partition_owner((jl_binding_partition_t*)part.constant);
+        emit_depwarn_check(ctx, bnd);
+        *ret = ghostValue(ctx, jl_nothing_type);
         return true;
     }
 

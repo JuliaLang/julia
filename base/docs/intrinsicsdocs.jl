@@ -253,3 +253,15 @@ can check the frozen partition's slot inline (a defined constant is always defin
 binding is recovered from the partition chain.
 """
 Core.isdefinedglobal_partition
+
+"""
+    Core.depwarn_partition(partition::Core.BindingPartition)
+
+Emit the deprecation warning (if any) for the binding owning a resolved binding `partition`,
+gated at runtime by `--depwarn` (and throwing under `--depwarn=error`). Compiler-internal: since
+the reformulated read (`Core.getglobal_partition` / a bare `Core.BindingPartition`) is
+side-effect free, the optimizer's `reformulate_globals_pass!` emits this as a separate statement
+before a read of a deprecated binding so the warning still fires. The owning binding is recovered
+from the partition chain.
+"""
+Core.depwarn_partition

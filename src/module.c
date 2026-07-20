@@ -936,6 +936,62 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t w
     return jl_atomic_load_relaxed(&b->value);
 }
 
+// Read the value of an already-resolved leaf binding partition `bpart` (its owning
+// binding recovered from the circular partition chain), performing neither an import
+// walk nor a deprecation warning. Returns NULL if the binding is currently undefined
+// (a guard partition). This is the relaxed load used by the `getglobal_partition`
+// builtin; callers apply the requested memory-order fences and raise UndefVarError.
+JL_DLLEXPORT jl_value_t *jl_get_binding_partition_value(jl_binding_partition_t *bpart)
+{
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (jl_bkind_is_some_guard(kind))
+        return NULL;
+    jl_binding_t *b = jl_binding_partition_owner(bpart);
+    if (jl_bkind_is_some_constant(kind)) {
+        check_backdated_binding(b, kind);
+        return bpart->restriction;
+    }
+    assert(!jl_bkind_is_some_import(kind));
+    return jl_atomic_load_relaxed(&b->value);
+}
+
+// Definedness query on an already-resolved leaf binding partition `bpart`, matching the
+// tail of `jl_boundp` (seq_cst) without an import walk. Used by the
+// `isdefinedglobal_partition` builtin.
+JL_DLLEXPORT int jl_get_binding_partition_boundp(jl_binding_partition_t *bpart)
+{
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (jl_bkind_is_some_guard(kind))
+        return 0;
+    if (jl_bkind_is_defined_constant(kind)) {
+        if (__unlikely(kind == PARTITION_KIND_BACKDATED_CONST))
+            return !(jl_current_task->ptls->in_pure_callback || jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR);
+        // N.B.: No backdated admonition for isdefined
+        return 1;
+    }
+    jl_binding_t *b = jl_binding_partition_owner(bpart);
+    return jl_atomic_load(&b->value) != NULL;
+}
+
+// Resolve `b`'s access to its leaf binding partition in `world`, following imports and
+// issuing `getglobal`'s deprecation warning (suppressed through explicit imports, as
+// `jl_get_binding_value_depwarn` does). Returns the leaf partition; its owning binding
+// is recoverable via `jl_binding_partition_owner`.
+JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_leaf_partition_depwarn(jl_binding_t *b, size_t world)
+{
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+    if (jl_options.depwarn) {
+        int needs_depwarn = 0;
+        jl_walk_binding_inplace_depwarn(&b, &bpart, world, &needs_depwarn);
+        if (needs_depwarn)
+            jl_binding_deprecation_warning(b);
+    }
+    else {
+        jl_walk_binding_inplace(&b, &bpart, world);
+    }
+    return bpart;
+}
+
 static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) JL_CANSAFEPOINT
 {
     assert(b); // alloc=1 parameter ensured that jl_get_module_binding returns a valid binding

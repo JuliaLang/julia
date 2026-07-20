@@ -28,6 +28,7 @@ extern "C" {
     XX(apply_type,"apply_type") \
     XX(compilerbarrier,"compilerbarrier") \
     XX(current_scope,"current_scope") \
+    XX(depwarn_partition,"depwarn_partition") \
     XX(donotdelete,"donotdelete") \
     XX(fieldtype,"fieldtype") \
     XX(finalizer,"finalizer") \

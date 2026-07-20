@@ -1309,6 +1309,20 @@ end
 # and reads nested as operands are rewritten uniformly; only `:method` is skipped, whose
 # name operand is a definition target rather than a read (`:(=)` left-hand sides are
 # likewise not exposed by `userefs`).
+# The reformulated read forms (`Core.getglobal_partition` and a bare `Core.BindingPartition`)
+# are side-effect free. When the resolved leaf is a deprecated binding, emit the deprecation
+# warning as an explicit `Core.depwarn_partition(p)` statement inserted before the read (this
+# replaces the inline depwarn codegen/interpreter used to attach to the read itself). The call
+# is modeled as effectful (`builtin_effects`) so it survives DCE. Definedness queries
+# (`isdefinedglobal_partition`) never warn, so they do not use this.
+function _emit_depwarn_partition!(ir::IRCode, idx::Int, p::Core.BindingPartition)
+    if (p.kind & PARTITION_FLAG_DEPWARN) != 0
+        insert_node!(ir, idx, NewInstruction(
+            Expr(:call, GlobalRef(Core, :depwarn_partition), QuoteNode(p)), Nothing))
+    end
+    return nothing
+end
+
 function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
     # Resolve accesses at the inference world, as inference did (`binding_world_hints`), so a
     # concurrent redefinition cannot make the pass freeze a partition from a future world.
@@ -1333,6 +1347,7 @@ function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
                 # (`:unordered`) read is a bare partition, read unordered. The partition is
                 # `QuoteNode`-wrapped so it is passed as the partition object rather than
                 # read as a global.
+                _emit_depwarn_partition!(ir, idx, p)
                 inst[:stmt] = r.second !== :unordered ?
                     Expr(:call, GlobalRef(Core, :getglobal_partition), QuoteNode(p), QuoteNode(r.second)) : p
                 continue
@@ -1387,6 +1402,7 @@ function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
             if isa(use, GlobalRef)
                 p = _reformulate_read(use, world, edges, read_cache)
                 if p !== nothing
+                    _emit_depwarn_partition!(ir, idx, p)
                     ur[] = p
                     changed = true
                 end
