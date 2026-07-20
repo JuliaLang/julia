@@ -584,7 +584,6 @@ function serialize(s::AbstractSerializer, src::Core.CancellationTokenSource)
         serialize(s, Base._cancel_parent(src, i))
     end
     serialize(s, @atomic src.state)
-    serialize(s, @atomic src.delivered)
     nothing
 end
 
@@ -597,11 +596,9 @@ function deserialize(s::AbstractSerializer, ::Type{Core.CancellationTokenSource}
     src = Core._new_cancel_source(parents...)::Core.CancellationTokenSource
     deserialize_cycle(s, src)
     state = deserialize(s)::UInt8
-    delivered = deserialize(s)::UInt8
     # CAS-max with whatever the relinking inherited from the parents;
     # severities only ever escalate
     state != 0x00 && Base._raise_state!(src, state & Base.SEVERITY_MASK)
-    delivered != 0x00 && (@atomic :monotonic src.delivered |= delivered)
     return src
 end
 

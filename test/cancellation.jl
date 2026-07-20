@@ -192,24 +192,13 @@ end
         end
     end
 
-    # a delivered cancellation is recorded on the source and its ancestors
-    proot = CancellationTokenSource()
-    pchild = CancellationTokenSource(CancellationToken(proot))
-    cancel!(pchild)
-    @test_throws CancellationRequest with(() -> Base.@cancel_check,
-                                          CANCEL_TOKEN => CancellationToken(pchild))
-    @test (@atomic pchild.delivered) != 0x00
-    # ancestors are acknowledged unconditionally (the ^C episode machinery
-    # reads the bit on the episode source even when the delivery hit a
-    # nested scope's source)
-    @test (@atomic proot.delivered) != 0x00
-    # ...and against a nested source it propagates to the cancelled ancestors
+    # a cancellation against a nested source also throws from the nested
+    # scope's cancellation points
     qroot = CancellationTokenSource()
     qchild = CancellationTokenSource(CancellationToken(qroot))
     cancel!(qroot)
     @test_throws CancellationRequest with(() -> Base.@cancel_check,
                                           CANCEL_TOKEN => CancellationToken(qchild))
-    @test (@atomic qroot.delivered) != 0x00
 end
 
 @testset "cooperative cancellation of running tasks" begin

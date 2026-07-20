@@ -4170,22 +4170,19 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_cancel_source_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(4,
+                        jl_perm_symsvec(3,
                                         "child_head",
                                         "state",
-                                        "delivered",
                                         "nparents"),
-                        jl_svec(4,
+                        jl_svec(3,
                                 jl_any_type, // Union{Nothing, CancellationTokenSource}, weak
-                                jl_uint8_type,
                                 jl_uint8_type,
                                 jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 4);
-    // Field 4 (nparents) is const; fields 1-3 (child_head, state, delivered)
-    // are atomic
-    const static uint32_t cancel_source_constfields[1]  = { 0b1000 };
-    const static uint32_t cancel_source_atomicfields[1] = { 0b0111 };
+                        0, 1, 3);
+    // Field 3 (nparents) is const; fields 1-2 (child_head, state) are atomic
+    const static uint32_t cancel_source_constfields[1]  = { 0b100 };
+    const static uint32_t cancel_source_atomicfields[1] = { 0b011 };
     jl_cancel_source_type->name->constfields = cancel_source_constfields;
     jl_cancel_source_type->name->atomicfields = cancel_source_atomicfields;
     XX(cancel_source);

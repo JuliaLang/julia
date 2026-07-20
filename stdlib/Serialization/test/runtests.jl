@@ -755,16 +755,14 @@ end
     # ...without affecting the original graph
     @test !Base.iscancelled(root) && !Base.iscancelled(child)
 
-    # cancellation state and delivered bits round-trip
+    # cancellation state round-trips
     src = CancellationTokenSource()
     cancel!(src, Base.CANCEL_REQUEST_ABANDON_EXTERNAL)
-    @atomic src.delivered |= 0x08
     buf = IOBuffer()
     serialize(buf, src)
     seekstart(buf)
     s2 = deserialize(buf)
     @test Base.cancel_severity(s2) === Base.CANCEL_REQUEST_ABANDON_EXTERNAL
-    @test (@atomic s2.delivered) & 0x08 != 0x00
 
     # deserializing under an already-cancelled parent is born cancelled
     p = CancellationTokenSource()

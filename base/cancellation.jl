@@ -143,7 +143,7 @@ iscancelled(tok::CancellationToken) = iscancelled(tok.source)
 ## Source construction and tree linkage
 #
 # A source is a variable-sized object: its fixed fields (`child_head`,
-# `state`, `delivered`, `nparents`) are followed by `nparents` {parent,
+# `state`, `nparents`) are followed by `nparents` {parent,
 # next, pprev} link entries (see `jl_cancel_source_t` in julia_threads.h).
 # The `parent` slots are strong, const references - a child keeps its
 # parents alive - while `child_head` and the `next`/`pprev` slots form
@@ -228,54 +228,13 @@ function _raise_state!(src::CancellationTokenSource, sev::UInt8)
     end
 end
 
-## Delivery bookkeeping
+## Cancellation
 #
 # Cancellation is uniformly level-triggered: while the governing token is
 # cancelled, every cancellation point throws the `CancellationRequest`.
 # There is no per-task acknowledgement state; code that must keep running
 # under a cancelled scope shields itself by scoping `CANCEL_TOKEN => nothing`
 # over the block.
-
-# Record that a cancellation of `src` at severity `sev` was delivered to
-# (observed by) some task, i.e. thrown at one of its cancellation points.
-# Feeds the (upcoming) ^C episode state machine ("was the request ever
-# seen?"), so the bits are propagated to every ancestor: a delivery against a
-# nested scope's source acknowledges the episode source too - otherwise the
-# SIGINT classifier would misread a successfully delivered cancellation as
-# unacknowledged and escalate a repeat ^C to abandonment.
-function _mark_delivered!(src::CancellationTokenSource, sev::UInt8)
-    bit = 0x01 << sev
-    # fast path: no parents (the common episode-source case)
-    @atomic :monotonic src.delivered |= bit
-    src.nparents == 0x0000 && return nothing
-    # Iterative ancestor walk (a Vector worklist - deep chains must not
-    # recurse - deduplicated so a reconverging linked graph is marked once
-    # per node). Delivery is rare; the allocation is fine.
-    pending = CancellationTokenSource[]
-    seen = IdSet{CancellationTokenSource}()
-    push!(seen, src)
-    _push_parents!(pending, seen, src)
-    while !isempty(pending)
-        node = pop!(pending)
-        @atomic :monotonic node.delivered |= bit
-        _push_parents!(pending, seen, node)
-    end
-    return nothing
-end
-
-function _push_parents!(pending::Vector{CancellationTokenSource},
-                        seen::IdSet{CancellationTokenSource}, src::CancellationTokenSource)
-    for i in 1:Int(src.nparents)
-        p = _cancel_parent(src, i)
-        if !(p in seen)
-            push!(seen, p)
-            push!(pending, p)
-        end
-    end
-    return nothing
-end
-
-## Cancellation
 
 """
     cancel!(src::CancellationTokenSource,
@@ -362,7 +321,6 @@ end
     # fast path happened to observe
     st = @atomic :acquire src.state
     sev = st & SEVERITY_MASK
-    _mark_delivered!(src, sev)
     throw(CancellationRequest(sev))
 end
 
