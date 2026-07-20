@@ -4673,20 +4673,23 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (f == BUILTIN(invoke_in_world) && nargs >= 2 &&
-             argv[1].typ == (jl_value_t*)jl_ulong_type) {
-        // Equivalent to jl_f_invoke_in_world, but emitted inline so that the
-        // world argument does not need to be boxed:
+    else if ((f == BUILTIN(invokelatest) && nargs >= 1) ||
+             (f == BUILTIN(invoke_in_world) && nargs >= 2 &&
+              argv[1].typ == (jl_value_t*)jl_ulong_type)) {
+        // Equivalent to jl_f_invokelatest / jl_f_invoke_in_world, but emitted
+        // inline so that the call through the builtin fptr is avoided and the
+        // world argument (if any) does not need to be boxed:
         //   size_t last_age = ct->world_age;
         //   if (!ct->ptls->in_pure_callback) {
         //       size_t world_counter = jl_atomic_load_acquire(&jl_world_counter);
+        //       // invokelatest has no world argument and always uses world_counter
         //       ct->world_age = world < world_counter ? world : world_counter;
         //   }
-        //   ret = jl_apply_generic(args[1], &args[2], nargs - 2);
+        //   ret = jl_apply_generic(args[i], &args[i+1], nargs - i - 1);
         //   ct->world_age = last_age;
         // If the applied call throws, the world age is restored by
-        // jl_eh_restore_state at the enclosing catch, as for the builtin.
-        Value *world = emit_unbox(ctx, ctx.types().T_size, argv[1]);
+        // jl_eh_restore_state at the enclosing catch, as for the builtins.
+        size_t fidx = (f == BUILTIN(invoke_in_world)) ? 2 : 1; // index of the applied function in argv
         Value *world_age_field = get_tls_world_age_field(ctx);
         jl_aliasinfo_t ai = ctx.alias().gcframe;
         Instruction *last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
@@ -4701,11 +4704,15 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         LoadInst *world_counter = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
             prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
         world_counter->setOrdering(AtomicOrdering::Acquire);
-        Value *clamped = ctx.builder.CreateSelect(
-            ctx.builder.CreateICmpULT(world, world_counter), world, world_counter);
-        Value *new_age = ctx.builder.CreateSelect(not_pure, clamped, last_age);
+        Value *target_world = world_counter;
+        if (f == BUILTIN(invoke_in_world)) {
+            Value *world = emit_unbox(ctx, ctx.types().T_size, argv[1]);
+            target_world = ctx.builder.CreateSelect(
+                ctx.builder.CreateICmpULT(world, world_counter), world, world_counter);
+        }
+        Value *new_age = ctx.builder.CreateSelect(not_pure, target_world, last_age);
         ai.decorateInst(ctx.builder.CreateAlignedStore(new_age, world_age_field, ctx.types().alignof_ptr));
-        Value *r = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv.drop_front(2), nargs - 1, julia_call);
+        Value *r = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv.drop_front(fidx), nargs - fidx + 1, julia_call);
         ai.decorateInst(ctx.builder.CreateAlignedStore(last_age, world_age_field, ctx.types().alignof_ptr));
         *ret = mark_julia_type(ctx, r, true, rt);
         return true;
