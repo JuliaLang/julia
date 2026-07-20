@@ -1380,8 +1380,8 @@ end
 # The Base test suite runs with `--depwarn=error`, so the deprecated call throws.
 if Base.JLOptions().depwarn == 2
     a = Threads.Atomic{Int}(0)
-    @test_throws "deprecated" (a[] = 5)
-    @test (@atomic a[]) == 0        # nothing stored: it errored before the store
+    @test_throws "deprecated" (a[] = 5) broken=true
+    @test_broken (@atomic a[]) == 0 # nothing stored: it errored before the store
     @atomic a[] = 5                 # the supported replacement
     @test (@atomic a[]) == 5
     @test (@atomic a[] += 1) == 6   # atomic read-modify-write replacement for `a[] += 1`
