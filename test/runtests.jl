@@ -173,7 +173,10 @@ move_to_node1("Distributed")
 move_to_node1("gc")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
-# JuliaLowering_stdlibs makes a sysimage and precompiles stdlibs so too cpu intensive to run in parallel
+# These (pre)compile significantly using all available threads so don't run in parallel.
+move_to_node1("compileall")
+move_to_node1("cmdlineargs")
+move_to_node1("JuliaLowering")
 move_to_node1("JuliaLowering_stdlibs")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
