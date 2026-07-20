@@ -1536,7 +1536,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         loc_st = let loc = source_location(LineNumberNode, st)
             if n_cs >= 2 && kind(cs[2]) === K"VERSION"
                 v = version_to_expr(popat!(cs, 2))
-                loc = Core.MacroSource(loc, v)
+                @static if isdefined(Core, :MacroSource)
+                    loc = Core.MacroSource(loc, v)
+                end
             end
             valleaf(loc)
         end

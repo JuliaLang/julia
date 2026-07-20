@@ -49,7 +49,7 @@ static FILE *getLogFile()
         return nullptr;
     FILE *F = fopen(Path, "a");
     if (!F) {
-        jl_printf(JL_STDERR, "objcache: failed to open log file %s\n", Path);
+        jl_safe_printf("objcache: failed to open log file %s\n", Path);
         return nullptr;
     }
     return F;
@@ -57,7 +57,7 @@ static FILE *getLogFile()
 
 static FILE *LogFile = getLogFile();
 
-static std::optional<std::string> getCachePath()
+static std::optional<std::string> getCachePath() JL_CANSAFEPOINT
 {
     // Useful to be able to override the objcache path for testing, or to use
     // the cache during bootstrapping.
@@ -307,9 +307,9 @@ static std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key) JL_NOTSAF
     return {Time, Hash};
 }
 
-std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
+std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile) JL_CANSAFEPOINT_ENTER_LEAVE
 {
-    auto doCompile = [&]() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE
+    auto doCompile = [&]() JL_CANSAFEPOINT_ENTER_LEAVE
         -> std::unique_ptr<llvm::MemoryBuffer> {
 #ifndef __clang_gcanalyzer__
         return Compile();

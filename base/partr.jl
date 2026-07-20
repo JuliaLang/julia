@@ -119,6 +119,9 @@ function multiq_size(tpid::Int8)
     end
 
     @lock heaps_lock[tp] begin
+        # Re-read under the lock; growing from a stale copy would replace the
+        # current heaps and orphan tasks concurrently inserted into them (#62144).
+        tpheaps = heaps[tp]
         heap_p = UInt32(length(tpheaps))
         nt = UInt32(Threads._nthreads_in_pool(tpid))
         if heap_c * nt <= heap_p
@@ -216,7 +219,7 @@ function multiq_deletemin()
             task_tid = ccall(:jl_get_task_tid, Int16, (Any,), task)
             unlock(heap.lock)
             if task_tid != Int16(-1)
-                ccall(:jl_wakeup_thread, Cvoid, (Int16,), task_tid)
+                ccall(:jl_wakeup_thread, Cint, (Int16,), task_tid)
             end
             continue
         end

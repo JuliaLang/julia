@@ -56,7 +56,7 @@ static char *jl_array_typetagdata(jl_array_t *a) JL_NOTSAFEPOINT
     return jl_genericmemory_typetagdata(a->ref.mem) + (uintptr_t)a->ref.ptr_or_offset;
 }
 
-STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem, const jl_datatype_layout_t *layout, uint32_t ndims, size_t *dims)
+STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem, const jl_datatype_layout_t *layout, uint32_t ndims, size_t *dims) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     size_t i;
@@ -72,7 +72,7 @@ STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem,
     return a;
 }
 
-STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
+STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *dims) JL_CANSAFEPOINT
 {
     size_t nel;
     if (jl_array_validate_dims(&nel, ndims, dims))

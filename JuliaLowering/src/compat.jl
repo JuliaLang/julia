@@ -57,10 +57,13 @@ function is_expr_value(st::SyntaxTree)
     return JuliaSyntax.is_literal(k) || k === K"Value"
 end
 
-# Most of the complexity here is LineNumberNode absorption logic: linenodes are
-# always considered provenance if unquoted, then removed in certain forms.  If
-# `src` is not an linenode, it is assumed to be a better provenance source, so
-# linenodes in `e` are not used for provenance (but still removed).
+# Adding more cases to this function is almost certainly wrong, since this
+# operates on arbitrary heads and arguments throughout macro expansion, not
+# well-formed syntax after expansion is done.  Most of the complexity here is
+# LineNumberNode absorption logic: linenodes are always considered provenance if
+# unquoted, then removed in certain forms.  If `src` is not an linenode, it is
+# assumed to be a better provenance source, so linenodes in `e` are not used for
+# provenance (but still removed).
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
     st = if e isa Symbol
         setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
@@ -119,6 +122,12 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
     return st._id, src
 end
 
+# @__doc__ is brittle
+_is_meta_doc_block(st) = @stm st begin
+    [K"block" [K"meta" [K"Identifier"]] _] -> st[1][1].name_val::String == "doc"
+    _ -> false
+end
+
 # `suppress_linenodes` is true if `st`'s parent knows `st` is an exception to
 # normal linenode rules.  It only applies to `st`, and not transitively to its
 # children.
@@ -156,7 +165,8 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
         # Macro authors are responsible for handling any linenodes that follow
         # the rules above (but the presence of optional linenodes can't be
         # counted upon).
-        need_lnns = head in (:block, :toplevel) && !suppress_linenodes
+        need_lnns = head in (:block, :toplevel) && !suppress_linenodes &&
+            !_is_meta_doc_block(st)
         for (i, c) in enumerate(children(st))
             need_lnns && push!(out.args, source_location(LineNumberNode, c))
             let suppress_c = i == 1 && (k == K"for" || k == K"let")
@@ -375,6 +385,58 @@ function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol
     end
 end
 
+# flisp bug; underscore sparams are sometimes readable (see #60626).  Should
+# return `st` unchanged 99% of the time.
+function force_readable_sparams(st)
+    kind(st) === K"where" && is_flisp_compat(st) || return st
+    sig, wheres = let (sig0, wheres0) = flatten_wheres(st)
+        sig0, mapsyntax(typevar_bounds, wheres0)
+    end
+    any(w->is_flisp_compat(w) && is_writeonly_est_name(w[1].name_val::String),
+        wheres) || return st
+
+    g = st._graph
+    seen = Set{String}()
+    lt = @ast g st "<:"::K"Identifier"
+    for i in eachindex(wheres)
+        n = wheres[i][1]
+        n_str = n.name_val::String
+        lb = _mangle_writeonly(wheres[i][2], seen)
+        ub = _mangle_writeonly(wheres[i][3], seen)
+        is_flisp_compat(n) && is_writeonly_est_name(n_str) && push!(seen, n_str)
+        wheres[i] = @ast g st [K"comparison" lb lt _mangle_writeonly(n, seen) lt ub]
+    end
+    mangle = args->mapsyntax(a->_mangle_writeonly_argt(a, seen), args)
+    sig2 = @stm sig begin
+        [K"::" [K"call" as...] t] -> @ast g sig [K"::" [K"call" mangle(as)...] t]
+        [K"call" as...] -> @ast g sig [K"call" mangle(as)...]
+        [K"tuple" as...] -> @ast g sig [K"tuple" mangle(as)...]
+    end
+    @ast g st [K"where" sig2 wheres...]
+end
+_mangle_writeonly_argt(st, seen) = let g = st._graph; @stm st begin
+    [K"parameters" _...] -> mapchildren(c->_mangle_writeonly_argt(c, seen), g, st)
+    [K"kw" x v] -> @ast g st [K"kw" _mangle_writeonly_argt(x, seen) v]
+    [K"=" x v] -> @ast g st [K"=" _mangle_writeonly_argt(x, seen) v]
+    [K"..." x] -> @ast g st [K"..." _mangle_writeonly_argt(x, seen)]
+    [K"::" x t] -> @ast g st [K"::" x _mangle_writeonly(t, seen)]
+    [K"::" t] -> @ast g st [K"::" _mangle_writeonly(t, seen)]
+    [K"overlay" mt x] -> @ast g st [K"overlay" mt _mangle_writeonly(x, seen)]
+    _ -> st
+end; end
+function _mangle_writeonly(st, seen)
+    g = st._graph
+    k = kind(st)
+    if k === K"Identifier" && !hasattr(st, :mod) && is_flisp_compat(st)
+        n = st.name_val::String
+        !(n in seen) ? st : @ast g st (string(n, "FIXME#60626")::K"Identifier")
+    elseif is_leaf(st) || is_quoted(st) || k === K"->" || k === K"function"
+        st
+    else
+        mapchildren(c->_mangle_writeonly(c, seen), g, st)
+    end
+end
+
 # nothing if not found, or symbol if 0-arg [no]specialize, or dict arg->meta
 function collect_body_arg_meta(st)
     out = nothing
@@ -513,6 +575,7 @@ function est_to_dst(st::SyntaxTree)
         ([K"=" l r], when=(is_eventually_call(l))) -> let
             # no fix_arglist needed, since this func can't be anonymous
             l = apply_arglist_meta(l, collect_body_arg_meta(r))
+            l = force_readable_sparams(l)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
@@ -523,6 +586,7 @@ function est_to_dst(st::SyntaxTree)
         end
         [K"function" l r] -> let
             l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
+            l = force_readable_sparams(l)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
@@ -533,6 +597,7 @@ function est_to_dst(st::SyntaxTree)
         end
         [K"->" l r] -> let
             l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
+            l = force_readable_sparams(l)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
@@ -574,6 +639,8 @@ function est_to_dst(st::SyntaxTree)
          when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
              newleaf(g, st, K"nothing")
+        ([K"meta" s gen], when=get(s, :name_val, "")::String == "generated") ->
+            @ast g st [K"meta" setattr(s, :kind, K"Symbol") rec(gen)]
         [K"meta" syms...] ->
             @ast g st [K"meta" mapsyntax(
                 s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
@@ -584,6 +651,7 @@ function est_to_dst(st::SyntaxTree)
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
+        [K"lambda" args sps body] -> mknode(st, [args._id, sps._id, rec(body)._id])
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_expr::K"Value"
             [K"inert"(st[1]) ex]
@@ -609,15 +677,12 @@ function est_to_dst(st::SyntaxTree)
         end
         ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
         [K"cfunction" typ fptr rt at sym] -> let
-            # Identifier callables are scope-resolved against the outermost
-            # lowering layer (which corresponds to the method module used by
-            # `method.c`'s `jl_toplevel_eval`), so the IR carries a binding
-            # reference matching `@cfunction`'s runtime resolution. Other
-            # forms (e.g. function definitions) stay inert.
+            # A symbol in fptr[1] does not observe hygiene or local scopes, but
+            # treating this as a binding is better for e.g. JETLS.
             out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
-                          kind(fptr[1]) == K"Identifier"
-                ident = mkleaf(fptr[1])
-                # TODO: relayer if unhygienic
+                    kind(fptr[1]) == K"Identifier"
+                sc = fptr[1].context::SyntaxContext
+                ident = setattr!(mkleaf(fptr[1]), :mod, base_layer(sc).mod)
                 @ast g fptr [K"static_eval"(fptr) ident]
             else
                 rec(fptr)

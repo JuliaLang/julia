@@ -677,7 +677,7 @@ JL_CALLABLE(jl_f_current_scope)
 
 // apply ----------------------------------------------------------------------
 
-static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_t oldalloc)
+static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_t oldalloc) JL_CANSAFEPOINT
 {
     size_t j;
     jl_svec_t *newheap = jl_alloc_svec_uninit(newalloc);
@@ -689,7 +689,7 @@ static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_
     return newheap;
 }
 
-STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra)
+STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t **arg_heap, size_t *n_alloc, size_t newalloc, size_t extra) JL_CANSAFEPOINT
 {
     size_t oldalloc = *n_alloc;
     if (oldalloc >= newalloc)
@@ -706,7 +706,7 @@ STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
 }
 
 
-static jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
+static jl_value_t *jl_arrayref(jl_array_t *a, size_t i) JL_CANSAFEPOINT
 {
     return jl_memoryrefget(jl_memoryrefindex(a->ref, i), 0);
 }
@@ -995,7 +995,7 @@ JL_CALLABLE(jl_f__call_in_world_total)
 
 // tuples ---------------------------------------------------------------------
 
-static jl_value_t *arg_tuple(jl_value_t *a1, jl_value_t **args, size_t nargs)
+static jl_value_t *arg_tuple(jl_value_t *a1, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
     size_t i;
     jl_datatype_t *tt = jl_inst_arg_tuple_type(a1, args, nargs, 0);
@@ -1057,7 +1057,7 @@ enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, char loading, 
     return mo;
 }
 
-static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st, jl_value_t *v, jl_value_t *arg, int mutabl)
+static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st, jl_value_t *v, jl_value_t *arg, int mutabl) JL_CANSAFEPOINT
 {
     if (mutabl) {
         if (st == jl_module_type)
@@ -1242,7 +1242,7 @@ JL_CALLABLE(jl_f_setfieldonce)
     return success ? jl_true : jl_false;
 }
 
-static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
+static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_CANSAFEPOINT
 {
     if (jl_is_unionall(t)) {
         jl_value_t *u = t;
@@ -2221,7 +2221,7 @@ JL_CALLABLE(jl_f__primitivetype)
     return dt->name->wrapper;
 }
 
-static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
+static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super) JL_CANSAFEPOINT
 {
     // Check context-specific conditions first, before jl_check_valid_supertype
     // which calls jl_subtype and would crash walking the supertype chain of a
@@ -2319,7 +2319,7 @@ JL_CALLABLE(jl_f__svec_ref)
     return jl_svecref(s, idx-1);
 }
 
-static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
+static int equiv_field_types(jl_value_t *old, jl_value_t *ft) JL_CANSAFEPOINT
 {
     size_t nf = jl_svec_len(ft);
     if (jl_svec_len(old) != nf)
@@ -2492,7 +2492,7 @@ have_type:
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical
-static int equiv_type(jl_value_t *ta, jl_value_t *tb)
+static int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
 {
     jl_datatype_t *dta = (jl_datatype_t*)jl_unwrap_unionall(ta);
     if (!jl_is_datatype(dta))
@@ -2631,7 +2631,7 @@ static void add_intrinsic_properties(enum intrinsic f, unsigned nargs, void (*pf
     runtime_fp[f] = pfunc;
 }
 
-static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) JL_GC_DISABLED
+static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     jl_value_t *i = jl_permbox32(jl_intrinsic_type, jl_intrinsic_tag, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
@@ -2669,7 +2669,7 @@ void jl_init_intrinsic_functions(void)
 #undef ALIAS
 }
 
-static void add_builtin(const char *name, jl_value_t *v)
+static void add_builtin(const char *name, jl_value_t *v) JL_CANSAFEPOINT
 {
     jl_set_initial_const(jl_core_module, jl_symbol(name), v, 0);
 }

@@ -55,9 +55,15 @@ struct macroctx_stack {
     struct macroctx_stack *parent;
 };
 
-static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
-static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
-static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel, size_t world, int throw_load_error);
+static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod) JL_CANSAFEPOINT;
+static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v) JL_CANSAFEPOINT;
+static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel, size_t world, int throw_load_error) JL_CANSAFEPOINT;
+
+#ifdef __clang_gcanalyzer__
+// this definition causes bugs in the new gc-analyzer (because it tracks e->args instead of e)
+#undef jl_exprargset
+extern void jl_exprargset(jl_array_t *a, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
+#endif
 
 static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
 {
@@ -72,7 +78,7 @@ static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
     return jl_symbol(symbol_name(fl_ctx, s));
 }
 
-static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_CANSAFEPOINT
 {
     // tells whether a var is defined in and *by* the current module
     argcount(fl_ctx, "defined-julia-global", nargs, 1);
@@ -92,7 +98,7 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
 // If the top of the stack is NIL, we simply return the current module's counter.
 // This ensures that precompile statements are a bit more stable across different versions
 // of a codebase. see #53719
-static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_CANSAFEPOINT
 {
     argcount(fl_ctx, "julia-module-unique-name", nargs, 1);
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
@@ -151,11 +157,11 @@ static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nar
     return fl_ctx->F;
 }
 
-static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
+static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod) JL_CANSAFEPOINT;
 
-static const builtinspec_t julia_flisp_ast_ext[] = {
-    { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
-    { "current-julia-module-counter", fl_module_unique_name },
+static const builtinspec_t julia_flisp_ast_ext[] = { // TODO: can we kill these safepoint?
+    { "defined-julia-global", fl_defined_julia_global }, // NOLINT(julia-first-decl-annotations)
+    { "current-julia-module-counter", fl_module_unique_name }, // NOLINT(julia-first-decl-annotations)
     { "julia-scalar?", fl_julia_scalar },
     { NULL, NULL }
 };
@@ -207,15 +213,21 @@ static jl_ast_context_t *jl_ast_ctx_enter(jl_module_t *m) JL_GLOBALLY_ROOTED JL_
     return ctx;
 }
 
-static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
+static void jl_ast_ctx_leave_(jl_ast_context_t *ctx) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&flisp_lock);
     ctx->module = NULL;
     ctx->next = jl_ast_ctx_freed;
     jl_ast_ctx_freed = ctx;
     uv_mutex_unlock(&flisp_lock);
+}
+
+static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
+{
+    jl_ast_ctx_leave_(ctx);
     JL_SIGATOMIC_END();
 }
+
 
 void jl_init_flisp(void)
 {
@@ -223,9 +235,7 @@ void jl_init_flisp(void)
         return;
     uv_mutex_init(&flisp_lock);
     jl_init_ast_ctx(&jl_ast_main_ctx);
-    // To match the one in jl_ast_ctx_leave
-    JL_SIGATOMIC_BEGIN();
-    jl_ast_ctx_leave(&jl_ast_main_ctx);
+    jl_ast_ctx_leave_(&jl_ast_main_ctx);
 }
 
 void jl_init_common_symbols(void)
@@ -345,7 +355,7 @@ void jl_lisp_prompt(void)
     jl_ast_ctx_leave(ctx);
 }
 
-JL_DLLEXPORT void fl_show_profile(void)
+JL_DLLEXPORT void fl_show_profile(void) JL_CANSAFEPOINT
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -353,7 +363,7 @@ JL_DLLEXPORT void fl_show_profile(void)
     jl_ast_ctx_leave(ctx);
 }
 
-JL_DLLEXPORT void fl_clear_profile(void)
+JL_DLLEXPORT void fl_clear_profile(void) JL_CANSAFEPOINT
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -361,7 +371,7 @@ JL_DLLEXPORT void fl_clear_profile(void)
     jl_ast_ctx_leave(ctx);
 }
 
-JL_DLLEXPORT void fl_profile(const char *fname)
+JL_DLLEXPORT void fl_profile(const char *fname) JL_CANSAFEPOINT
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -369,7 +379,7 @@ JL_DLLEXPORT void fl_profile(const char *fname)
     jl_ast_ctx_leave(ctx);
 }
 
-static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod)
+static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod) JL_CANSAFEPOINT
 {
     jl_value_t *v = NULL;
     JL_GC_PUSH1(&v);
@@ -382,7 +392,7 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
         //jlbacktrace();
         jl_expr_t *ex = jl_exprn(jl_error_sym, 1);
         v = (jl_value_t*)ex;
-        jl_array_ptr_set(ex->args, 0, jl_cstr_to_string("invalid AST"));
+        jl_exprargset(ex, 0, jl_cstr_to_string("invalid AST"));
     }
     JL_GC_POP();
     return v;
@@ -390,7 +400,7 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
 
 extern int64_t conv_to_int64(void *data, numerictype_t tag);
 
-static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod)
+static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod) JL_CANSAFEPOINT
 {
     if (fl_isnumber(fl_ctx, e)) {
         int64_t i64;
@@ -580,7 +590,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
     jl_error("malformed tree");
 }
 
-static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_valid);
+static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_valid) JL_CANSAFEPOINT;
 
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 {
@@ -595,7 +605,7 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
     return temp;
 }
 
-static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv, int check_valid)
+static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv, int check_valid) JL_CANSAFEPOINT
 {
     value_t temp;
     for (long i = jl_array_nrows(a) - 1; i >= 0; i--) {
@@ -606,7 +616,7 @@ static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv, int 
     }
 }
 
-static value_t julia_to_list2(fl_context_t *fl_ctx, jl_value_t *a, jl_value_t *b, int check_valid)
+static value_t julia_to_list2(fl_context_t *fl_ctx, jl_value_t *a, jl_value_t *b, int check_valid) JL_CANSAFEPOINT
 {
     value_t sa = julia_to_scm_(fl_ctx, a, check_valid);
     fl_gc_handle(fl_ctx, &sa);
@@ -747,7 +757,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_vali
 // `filename`. Return an svec of (parsed_expr, final_offset)
 JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
                                      jl_value_t *filename, size_t lineno,
-                                     size_t offset, jl_value_t *options)
+                                     size_t offset, jl_value_t *options) JL_CANSAFEPOINT
 {
     JL_TIMING(PARSING, PARSING);
     jl_timing_show_filename(jl_string_data(filename), JL_TIMING_DEFAULT_BLOCK);
@@ -800,7 +810,7 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
 }
 
 // returns either an expression or a thunk
-static jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule)
+static jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule) JL_CANSAFEPOINT
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -1005,7 +1015,7 @@ static int need_esc_node(jl_value_t *e) JL_NOTSAFEPOINT
     return jl_isa_ast_node(e);
 }
 
-static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, jl_value_t **lineinfo, size_t world, int throw_load_error)
+static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, jl_value_t **lineinfo, size_t world, int throw_load_error) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     JL_TIMING(MACRO_INVOCATION, MACRO_INVOCATION);
@@ -1180,7 +1190,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     return expr;
 }
 
-JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule, int recursive, int inplace, int expand_scope)
+JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule, int recursive, int inplace, int expand_scope) JL_CANSAFEPOINT
 {
     JL_TIMING(LOWERING, LOWERING);
     JL_GC_PUSH1(&expr);
@@ -1195,7 +1205,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule,
 
 // warn: Print any lowering warnings returned; otherwise ignore
 JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
-                                     const char *filename, int line, size_t world, bool_t warn)
+                                     const char *filename, int line, size_t world, bool_t warn) JL_CANSAFEPOINT
 {
     JL_TIMING(LOWERING, LOWERING);
     jl_timing_show_location(filename, line, inmodule, JL_TIMING_DEFAULT_BLOCK);

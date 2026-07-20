@@ -376,7 +376,7 @@ end
                 # Encode the syntax version into `loc` so that the argument order
                 # matches what ordinary macros expect.
                 # Core.MacroSource was added in Julia 1.13+; fall back to plain loc on older versions.
-                if isdefined(Core, :MacroSource)
+                @static if isdefined(Core, :MacroSource)
                     loc = Core.MacroSource(loc, popat!(args, 2))
                 else
                     popat!(args, 2)  # discard the version argument

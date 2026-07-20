@@ -984,7 +984,8 @@ uu_iintrinsic(name, u)
 static inline
 jl_value_t *jl_iintrinsic_1(jl_value_t *a, const char *name,
                             char (*getsign)(void*, unsigned),
-                            jl_value_t *(*lambda1)(jl_value_t*, void*, unsigned, unsigned, const void*), const void *list)
+                            jl_value_t *(*lambda1)(jl_value_t*, void*, unsigned, unsigned, const void*) JL_CANSAFEPOINT,
+                            const void *list) JL_CANSAFEPOINT
 {
     jl_value_t *ty = jl_typeof(a);
     if (!jl_is_primitivetype(ty))
@@ -1012,7 +1013,7 @@ jl_value_t *jl_iintrinsic_1(jl_value_t *a, const char *name,
     return newv;
 }
 
-static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist)
+static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist) JL_CANSAFEPOINT
 {
     intrinsic_1_t op = select_intrinsic_1(osize2, (const intrinsic_1_t*)voidlist);
     void *pr = alloca(osize2);
@@ -1020,7 +1021,7 @@ static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsig
     return jl_new_bits(ty, pr);
 }
 
-static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist)
+static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     intrinsic_u1_t op = select_intrinsic_u1(osize2, (const intrinsic_u1_t*)voidlist);
@@ -1047,7 +1048,7 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
     return jl_intrinsic_cvt(ty, a, #name, LLVMOP); \
 }
 
-static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const char *name, intrinsic_cvt_t op)
+static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const char *name, intrinsic_cvt_t op) JL_CANSAFEPOINT
 {
     JL_TYPECHKS(name, datatype, ty);
     if (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty))
@@ -1069,7 +1070,7 @@ un_fintrinsic_bfloat(OP, jl_##name##bf16) \
 un_fintrinsic_half(OP, jl_##name##16) \
 un_fintrinsic_ctype(OP, jl_##name##32, float) \
 un_fintrinsic_ctype(OP, jl_##name##64, double) \
-JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
+JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) JL_CANSAFEPOINT \
 { \
     return jl_fintrinsic_1(ty, a, #name, jl_##name##bf16, jl_##name##16, jl_##name##32, jl_##name##64); \
 }
@@ -1083,7 +1084,7 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 
 typedef void (*fintrinsic_op1)(unsigned, jl_value_t*, void*, void*) JL_NOTSAFEPOINT;
 
-static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name, fintrinsic_op1 bfloatop, fintrinsic_op1 halfop, fintrinsic_op1 floatop, fintrinsic_op1 doubleop)
+static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name, fintrinsic_op1 bfloatop, fintrinsic_op1 halfop, fintrinsic_op1 floatop, fintrinsic_op1 doubleop) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_datatype_t *aty = (jl_datatype_t *)jl_typeof(a);
@@ -1191,8 +1192,9 @@ checked_iintrinsic(name, u, jl_intrinsiclambda_checkeddiv)
 static inline
 jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
                             char (*getsign)(void*, unsigned),
-                            jl_value_t *(*lambda2)(jl_value_t*, void*, void*, unsigned, unsigned, const void*),
-                            const void *list, int cvtb)
+                            jl_value_t *(*lambda2)(jl_value_t*, void*, void*, unsigned, unsigned, const void*) JL_CANSAFEPOINT,
+                            const void *list,
+                            int cvtb) JL_CANSAFEPOINT
 {
     jl_value_t *ty = jl_typeof(a);
     jl_value_t *tyb = jl_typeof(b);
@@ -1228,7 +1230,7 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     return newv;
 }
 
-static inline jl_value_t *jl_intrinsiclambda_2(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
+static inline jl_value_t *jl_intrinsiclambda_2(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist) JL_CANSAFEPOINT
 {
     void *pr = alloca(sz2);
     intrinsic_2_t op = select_intrinsic_2(sz2, (const intrinsic_2_t*)voidlist);
@@ -1243,7 +1245,7 @@ static inline jl_value_t *jl_intrinsiclambda_cmp(jl_value_t *ty, void *pa, void 
     return cmp ? jl_true : jl_false;
 }
 
-static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
+static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist) JL_CANSAFEPOINT
 {
     jl_value_t *params[2];
     params[0] = ty;
@@ -1260,7 +1262,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     *ao = (char)ovflw;
     return newv;
 }
-static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
+static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist) JL_CANSAFEPOINT
 {
     void *pr = alloca(sz2);
     intrinsic_checked_t op = select_intrinsic_checked(sz2, (const intrinsic_checked_t*)voidlist);

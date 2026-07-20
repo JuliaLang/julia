@@ -367,3 +367,11 @@ f() += y
 LoweringError:
 (if false end, b) += 2
 #└──────────┘ ── invalid syntax in left-hand side of assignment
+
+########################################
+# Error: Updating assignment to ssavalue (JuliaLang/julia#30062)
+f(), x += 10, 20
+#---------------------
+LoweringError:
+f(), x += 10, 20
+└────┘ ── invalid multiple assignment location
