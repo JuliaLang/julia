@@ -40,9 +40,22 @@ end
     @test_throws ArgumentError cancel!(CancellationTokenSource(), CancellationRequest(0x1))
     @test_throws ArgumentError cancel!(CancellationTokenSource(), CancellationRequest(0x7f))
 
-    # children are held weakly: a child that becomes unreachable simply
-    # drops out of the tree, while an escaped token keeps its source
-    # attached (cancellation still reaches whoever can observe it)
+    # walk a source's (weak, intrusive) child list
+    function live_children(src::CancellationTokenSource)
+        kids = CancellationTokenSource[]
+        c = @atomic src.child_head
+        while c !== nothing
+            c = c::CancellationTokenSource
+            push!(kids, c)
+            c = Base._cancel_next_child(src, c)
+        end
+        return kids
+    end
+
+    # children are held weakly: a child that becomes unreachable is spliced
+    # out of its parents' child lists by the GC, while an escaped token
+    # keeps its source attached (cancellation still reaches whoever can
+    # observe it)
     @noinline function make_children(root)
         CancellationTokenSource(CancellationToken(root)) # unreachable after return
         c = CancellationTokenSource(CancellationToken(root))
@@ -51,19 +64,21 @@ end
     root2 = CancellationTokenSource()
     kept = CancellationTokenSource(CancellationToken(root2))
     escaped_tok = make_children(root2)
-    GC.gc()
-    cancel!(root2) # the walk prunes the collected child
+    GC.gc() # splices the collected child out of root2's list
+    cancel!(root2)
     @test Base.iscancelled(kept)
     @test Base.iscancelled(escaped_tok)
-    kids = root2.children::Vector{WeakRef}
-    @test length(kids) == 2 # kept + escaped; the dead child was pruned
-    @test all(w -> w.value !== nothing, kids)
+    kids = live_children(root2)
+    @test length(kids) == 2 # kept + escaped; the dead child was spliced out
+    @test kept in kids && escaped_tok.source in kids
 
     # linked sources: a source with several parents is cancelled by any of
     # them (the graph is a DAG, not just a tree)
     la = CancellationTokenSource()
     lb = CancellationTokenSource()
     linked = CancellationTokenSource(CancellationToken(la), CancellationToken(lb))
+    @test linked.nparents == 2
+    @test Base._cancel_parent(linked, 1) === la && Base._cancel_parent(linked, 2) === lb
     @test !Base.iscancelled(CancellationToken(linked))
     @test cancel!(lb)
     @test Base.iscancelled(CancellationToken(linked))
@@ -91,8 +106,23 @@ end
 
     # duplicate parents collapse to the single-parent form
     dup = CancellationTokenSource(CancellationToken(droot), CancellationToken(droot))
-    @test dup.parents === droot
+    @test dup.nparents == 1
+    @test Base._cancel_parent(dup, 1) === droot
     @test Base.iscancelled(CancellationToken(dup)) # born under the cancelled root
+
+    # attachment and GC splicing keep the sibling lists consistent across
+    # many children coming and going
+    sroot = CancellationTokenSource()
+    skeep = CancellationTokenSource[]
+    for i in 1:1000
+        c = CancellationTokenSource(CancellationToken(sroot))
+        i % 7 == 0 && push!(skeep, c)
+        i % 250 == 0 && GC.gc(false)
+    end
+    GC.gc()
+    @test length(live_children(sroot)) >= length(skeep)
+    cancel!(sroot)
+    @test all(Base.iscancelled, skeep)
 
     # deep chains cancel without recursion depth issues
     deep_root = CancellationTokenSource()

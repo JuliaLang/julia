@@ -685,6 +685,14 @@ static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
  * safepoints will be caught by the GC analyzer.
  */
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty) JL_CANSAFEPOINT;
+// Informs the collector that `v` (freshly allocated) requires weak
+// processing when it dies - collector-side bookkeeping beyond freeing the
+// memory, dispatched on the object's type (currently: unlinking a
+// cancellation token source from its parents' child lists). How the
+// collector finds such dead objects is implementation-defined: the stock GC
+// flags the page so its sweep inspects dead cells there; MMTk registers the
+// object for a post-mark registry scan.
+void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT;
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__
 #  define jl_gc_alloc(ptls, sz, ty)  \

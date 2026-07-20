@@ -572,6 +572,12 @@ function serialize(s::AbstractSerializer, mc::Core.MethodCache)
     error("cannot serialize MethodCache objects")
 end
 
+function serialize(s::AbstractSerializer, src::Core.CancellationTokenSource)
+    # variable-sized, with intrusive weak child lists the generic
+    # field-by-field path would corrupt
+    error("cannot serialize CancellationTokenSource objects")
+end
+
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return

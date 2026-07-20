@@ -1632,6 +1632,127 @@ JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
 }
 
 
+// cancellation token sources -----------------------------------------------
+
+// CAS-max the source's state to (0x80 | sev); returns whether the state was
+// raised. Mirrors `Base._raise_state!`.
+static int cancel_source_raise_state(jl_cancel_source_t *src, uint8_t sev) JL_NOTSAFEPOINT
+{
+    uint8_t old = jl_atomic_load_relaxed(&src->state);
+    while (1) {
+        if (old != 0 && (old & 0x3f) >= sev)
+            return 0;
+        if (jl_atomic_cmpswap(&src->state, &old, (uint8_t)(0x80 | sev)))
+            return 1;
+    }
+}
+
+// Create a new cancellation token source underneath the given (distinct)
+// parent sources - none makes a root - and link it into each parent's
+// (intrusive, weak) child list. The child inherits the parents'
+// cancellation state: a node attached under an already-cancelled parent is
+// born cancelled, at the highest severity among its parents.
+JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
+{
+    jl_task_t *ct = jl_current_task;
+    if (np > UINT16_MAX)
+        jl_error("CancellationTokenSource: too many parents");
+    for (size_t i = 0; i < np; i++) {
+        jl_value_t *p = parents[i];
+        if (!jl_is_cancel_source(p))
+            jl_type_error("CancellationTokenSource", (jl_value_t*)jl_cancel_source_type, p);
+        // Duplicate parents would create two link entries whose `parent`
+        // halves are identical, breaking the sibling-list traversal (which
+        // locates the entry by scanning for the parent).
+        for (size_t j = 0; j < i; j++) {
+            if (parents[j] == p)
+                jl_error("CancellationTokenSource: duplicate parent");
+        }
+    }
+    jl_cancel_source_t *src = (jl_cancel_source_t*)jl_gc_alloc(
+        ct->ptls, sizeof(jl_cancel_source_t) + np * sizeof(jl_cancel_parent_link_t),
+        jl_cancel_source_type);
+    jl_set_typetagof(src, jl_cancel_source_tag, 0);
+    if (np > 0) {
+        // a linked source must be unlinked from its parents' sibling lists
+        // when it dies (a root is never on any list and needs nothing)
+        jl_gc_set_needs_weak_processing(ct->ptls, (jl_value_t*)src);
+    }
+    jl_atomic_store_relaxed(&src->child_head, jl_nothing);
+    jl_atomic_store_relaxed(&src->state, 0);
+    jl_atomic_store_relaxed(&src->delivered, 0);
+    src->nparents = (uint16_t)np;
+    // Initialize every link entry before publishing the node under *any*
+    // parent: a concurrent cancellation walk that reaches the node through
+    // one parent scans all of its entries.
+    jl_cancel_parent_link_t *links = jl_cancel_source_links(src);
+    for (size_t i = 0; i < np; i++) {
+        links[i].parent = (jl_cancel_source_t*)parents[i];
+        jl_atomic_store_relaxed(&links[i].next, jl_nothing);
+        links[i].pprev = NULL;
+    }
+    // No safepoint is permitted from here to the return: the collector's
+    // unlink pass must never observe a registered-but-unpublished (or
+    // published-but-unregistered) node or a half-updated (`pprev` not yet
+    // fixed up) list, and the `next` values staged by the CAS loop below
+    // are weak references that a collection could invalidate.
+    int cancelled = 0;
+    uint8_t sev = 0;
+    for (size_t i = 0; i < np; i++) {
+        jl_cancel_source_t *p = links[i].parent;
+        // Prepend to p's child list. No write barrier: the edge is weak and
+        // never traced.
+        links[i].pprev = &p->child_head;
+        jl_value_t *head = jl_atomic_load_relaxed(&p->child_head);
+        while (1) {
+            jl_atomic_store_relaxed(&links[i].next, head);
+            if (jl_atomic_cmpswap(&p->child_head, &head, (jl_value_t*)src))
+                break;
+        }
+        if (head != jl_nothing) {
+            // Fix the displaced head's back-pointer. Only this constructor
+            // may write it (the CAS made us the unique predecessor), and no
+            // safepoint separates the CAS from this store.
+            jl_cancel_parent_link_t *hl = jl_cancel_source_link((jl_cancel_source_t*)head, p);
+            assert(hl != NULL);
+            hl->pprev = &links[i].next;
+        }
+        // Level-triggered attachment: the seq_cst publication above and the
+        // seq_cst load below pair with `cancel!`'s (state write; fence;
+        // child_head read) so that either the canceller's walk observes this
+        // node, or this load observes the cancelled state.
+        uint8_t pst = jl_atomic_load(&p->state);
+        if (pst != 0) {
+            cancelled = 1;
+            uint8_t psev = pst & 0x3f;
+            if (psev > sev)
+                sev = psev;
+        }
+    }
+    if (cancelled)
+        cancel_source_raise_state(src, sev);
+    return (jl_value_t*)src;
+}
+
+// The i-th (0-based) parent of `src` (a strong, const link).
+JL_DLLEXPORT jl_value_t *jl_cancel_source_parent(jl_cancel_source_t *src, size_t i)
+{
+    if (i >= src->nparents)
+        jl_bounds_error_int((jl_value_t*)src, i + 1);
+    return (jl_value_t*)jl_cancel_source_links(src)[i].parent;
+}
+
+// The sibling after `child` on `parent`'s child list (`nothing` at the
+// end). `child` must currently be a child of `parent`.
+JL_DLLEXPORT jl_value_t *jl_cancel_source_next_child(jl_cancel_source_t *parent, jl_cancel_source_t *child)
+{
+    jl_cancel_parent_link_t *link = jl_cancel_source_link(child, parent);
+    if (link == NULL)
+        jl_error("CancellationTokenSource: not a child of the given parent");
+    return jl_atomic_load(&link->next);
+}
+
+
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_)
 extern DWORD32 __readgsdword(int);

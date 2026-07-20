@@ -976,6 +976,11 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     if (t == jl_task_type) {
         jl_error("Task cannot be serialized");
     }
+    if (t == jl_cancel_source_type) {
+        // Variable-sized, with weak intrusive child lists the serializer
+        // does not know how to relink on load.
+        jl_error("CancellationTokenSource cannot be serialized");
+    }
     if (s->incremental && needs_uniquing(v, s->query_cache) && t == jl_binding_type) {
         jl_binding_t *b = (jl_binding_t*)v;
         if (b->globalref == NULL)

@@ -675,6 +675,14 @@ JL_CALLABLE(jl_f_current_scope)
     return jl_current_task->scope;
 }
 
+JL_CALLABLE(jl_f__new_cancel_source)
+{
+    // each argument is a parent CancellationTokenSource (checked, along
+    // with distinctness, by jl_new_cancel_source); no arguments makes a
+    // root source
+    return jl_new_cancel_source(args, nargs);
+}
+
 // apply ----------------------------------------------------------------------
 
 static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_t oldalloc) JL_CANSAFEPOINT

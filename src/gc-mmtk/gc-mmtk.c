@@ -197,6 +197,7 @@ void jl_start_gc_threads(void) {
 void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT {
     jl_thread_heap_common_t *heap = &ptls->gc_tls_common.heap;
     small_arraylist_new(&heap->weak_refs, 0);
+    small_arraylist_new(&heap->weak_processing_list, 0);
     small_arraylist_new(&heap->live_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&heap->free_stacks[i], 0);
@@ -649,6 +650,57 @@ static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPO
         free(d);
     gc_num.freed += freed_bytes;
     gc_num.freecall++;
+}
+
+void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    // MMTk never visits individual dead objects (lines/blocks are
+    // reclaimed wholesale), so dead objects requiring weak processing are
+    // found by scanning this registry instead.
+    small_arraylist_push(&ptls->gc_tls_common.heap.weak_processing_list, v);
+}
+
+// Process the dead entries of the weak_processing_list registries -
+// currently: unlink collected cancellation sources from their parents'
+// (weak, intrusive, doubly-linked) child lists, with O(1) hlist unlinks
+// whose fix-up writes land only in live or dying-this-cycle memory (see
+// the stock GC's sweep_weak_processing for the invariants). Runs from the
+// SweepVMSpecific work packet, after the mark closure (including finalizer
+// resurrection) and before the memory of dead objects is reused, so dead
+// entries' links are still intact.
+JL_DLLEXPORT void jl_gc_sweep_weak_processing(void) JL_NOTSAFEPOINT
+{
+    void *iter = mmtk_new_mutator_iterator();
+    jl_ptls_t ptls2 = (jl_ptls_t)mmtk_get_next_mutator_tls(iter);
+    while (ptls2 != NULL) {
+        size_t n = 0;
+        size_t l = ptls2->gc_tls_common.heap.weak_processing_list.len;
+        void **lst = ptls2->gc_tls_common.heap.weak_processing_list.items;
+        for (size_t i = 0; i < l; i++) {
+            // dispatch on the object's type once more kinds of
+            // weakly-processed objects exist
+            jl_cancel_source_t *s = (jl_cancel_source_t*)lst[i];
+            if (mmtk_is_live_object(s)) {
+                lst[n++] = s;
+                continue;
+            }
+            jl_cancel_parent_link_t *links = jl_cancel_source_links(s);
+            for (size_t j = 0; j < s->nparents; j++) {
+                jl_value_t *next = jl_atomic_load_relaxed(&links[j].next);
+                _Atomic(jl_value_t*) *pprev = links[j].pprev;
+                jl_atomic_store_relaxed(pprev, next);
+                if (next != (jl_value_t*)jl_nothing) {
+                    jl_cancel_parent_link_t *nl =
+                        jl_cancel_source_link((jl_cancel_source_t*)next, links[j].parent);
+                    assert(nl != NULL);
+                    nl->pprev = pprev;
+                }
+            }
+        }
+        ptls2->gc_tls_common.heap.weak_processing_list.len = n;
+        ptls2 = (jl_ptls_t)mmtk_get_next_mutator_tls(iter);
+    }
+    mmtk_close_mutator_iterator(iter);
 }
 
 JL_DLLEXPORT void jl_gc_mmtk_sweep_malloced_memory(void) JL_NOTSAFEPOINT

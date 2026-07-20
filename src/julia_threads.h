@@ -232,29 +232,97 @@ typedef struct _jl_handler_t jl_handler_t;
 
 // Cancellation token source: a node in the level-triggered cancellation tree
 // (`Core.CancellationTokenSource`). Cancelling a node cancels its whole
-// subtree; the state is monotonic and never de-escalates. The layout must be
-// kept in sync with the registration in jltypes.c.
-typedef struct _jl_cancel_source_t {
+// subtree; the state is monotonic and never de-escalates.
+//
+// The object is variable-sized: the fixed fields below are followed by
+// `nparents` parent links (`jl_cancel_parent_link_t`). Together with the
+// per-node `child_head` field these links arrange the sources in a DAG,
+// with each node's children kept on intrusive singly-linked sibling lists:
+// node C is a child of P iff C has a link entry whose `parent` is P, and
+// that entry's `next` points to P's next child (the one attached before C).
+// Iterating P's children therefore starts at `P->child_head` and, at each
+// node, scans that node's link entries for the one belonging to P - a
+// linear scan, but child iteration only happens on the (slow) cancellation
+// path.
+//
+// GC treatment (the layout is special-cased in the collectors): the
+// `parent` half of each link is a strong reference - a child keeps its
+// parents alive, so that cancellation of a still-reachable ancestor always
+// reaches the whole subtree - and is const after construction, so lock-free
+// ancestor walks are safe. The child-list links (`child_head` and the
+// `next`/`pprev` fields of each link) are *weak*, with unlink-on-death
+// semantics rather than WeakRef's clear-on-death: a child stays linked for
+// exactly as long as it is reachable, and when it is collected the GC
+// unlinks it from each parent's sibling list before the world restarts
+// (stock GC: detected per-dead-object by the sweep, which reads every dead
+// cell's header anyway, and unlinked by sweep_weak_processing; MMTk:
+// detected by scanning a registry, see jl_gc_sweep_weak_processing). At any
+// mutator-observable point the lists therefore contain only live objects.
+// The lists are doubly linked in the hlist style - `pprev` points at
+// whichever slot currently points at this node (the parent's `child_head`
+// or the previous sibling's `next`) - so unlinking a dead source is O(1)
+// and the stock collector's total work is proportional to the number of
+// sources that actually died.
+//
+// Concurrency: the lists are lock-free. Mutators only ever *prepend* (at
+// construction, via CAS on `child_head`); removal happens only inside the
+// collector with the world stopped. `pprev` is written by the constructor
+// (its own entry, and the fix-up of the previous head's entry immediately
+// after the publishing CAS, with no intervening safepoint - so the
+// collector never observes a half-updated list) and read only by the
+// collector; cancellation walks follow `next` alone. The seq_cst ordering
+// dance between attaching (publish link, then read the parent's state) and
+// cancelling (write the state, then walk the links) is what makes
+// attachment level-triggered; see jl_new_cancel_source and `cancel!`.
+typedef struct _jl_cancel_source_t jl_cancel_source_t;
+
+typedef struct {
+    // Strong, const after construction.
+    jl_cancel_source_t *parent;
+    // Weak (unlinked by the GC): next sibling under `parent`;
+    // `jl_nothing`-terminated. Union{Nothing, CancellationTokenSource}.
+    _Atomic(jl_value_t*) next;
+    // Weak back-pointer: the slot through which this node is reachable on
+    // `parent`'s child list. Collector- and constructor-private.
+    _Atomic(jl_value_t*) *pprev;
+} jl_cancel_parent_link_t;
+
+struct _jl_cancel_source_t {
     JL_DATA_TYPE
-    // Graph links. `parents` - `nothing` (a root), a single parent source,
-    // or a SimpleVector of parent sources (a "linked" source, making the
-    // structure a DAG) - is const after construction, so lock-free ancestor
-    // walks (e.g. subtree-membership tests on the cancellation path) are
-    // safe. `children` - `nothing`, or a `Vector{WeakRef}` of child
-    // sources, guarded by this node's `_lock` - holds children *weakly*: a
-    // child stays linked for exactly as long as it is reachable (a token or
-    // a registered observer keeps it alive), and is pruned after it has
-    // been garbage collected.
-    jl_value_t *parents;     // Union{Nothing, CancellationTokenSource, SimpleVector}
-    jl_value_t *children;    // Union{Nothing, Vector{WeakRef}}
+    // Weak (spliced by the GC): most recently attached live child;
+    // `jl_nothing`-terminated. Union{Nothing, CancellationTokenSource}.
+    _Atomic(jl_value_t*) child_head;
     // 0x00 = live; (0x80 | sev) = cancelled at severity sev (0x0 SAFE,
     // 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL). Monotonic (CAS-max).
     _Atomic(uint8_t) state;
-    _Atomic(uint8_t) _lock;  // spinlock guarding `children`
     // Bitmask (1 << sev) of severities whose delivery some task observed;
     // feeds the ^C episode state machine.
     _Atomic(uint8_t) delivered;
-} jl_cancel_source_t;
+    // Number of parent links following the fixed fields. Const.
+    uint16_t nparents;
+    // jl_cancel_parent_link_t links[nparents];  (see jl_cancel_source_links)
+};
+
+// The fixed-field layout above must be kept in sync with the registration
+// in jltypes.c; the trailing links are invisible to the field system.
+static inline jl_cancel_parent_link_t *jl_cancel_source_links(jl_cancel_source_t *src) JL_NOTSAFEPOINT
+{
+    // The struct size is already pointer-aligned on all supported platforms.
+    return (jl_cancel_parent_link_t*)((char*)src + sizeof(jl_cancel_source_t));
+}
+
+// The link entry connecting `child` to `parent` (which must be one of its
+// parents).
+static inline jl_cancel_parent_link_t *jl_cancel_source_link(jl_cancel_source_t *child,
+                                                             jl_cancel_source_t *parent) JL_NOTSAFEPOINT
+{
+    jl_cancel_parent_link_t *links = jl_cancel_source_links(child);
+    for (size_t i = 0; i < child->nparents; i++) {
+        if (links[i].parent == parent)
+            return &links[i];
+    }
+    return NULL;
+}
 
 
 typedef struct _jl_task_t {

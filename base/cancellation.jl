@@ -141,11 +141,31 @@ iscancelled(src::CancellationTokenSource) = (@atomic :monotonic src.state) != 0x
 iscancelled(tok::CancellationToken) = iscancelled(tok.source)
 
 ## Source construction and tree linkage
+#
+# A source is a variable-sized object: its fixed fields (`child_head`,
+# `state`, `delivered`, `nparents`) are followed by `nparents` {parent,
+# next, pprev} link entries (see `jl_cancel_source_t` in julia_threads.h).
+# The `parent` slots are strong, const references - a child keeps its
+# parents alive - while `child_head` and the `next`/`pprev` slots form
+# intrusive per-parent sibling lists of *weak* references: when a source is
+# collected, the sweep - which visits every dead object anyway - detects it
+# and unlinks it from its parents' lists in O(1) via the `pprev`
+# back-pointer, so there is no explicit detach operation, the collector's
+# work is proportional to the number of sources that actually died, and, at
+# any point the mutator can observe, the lists contain only live sources.
+#
+# The lists are lock-free: mutators only ever prepend (in the C constructor
+# `jl_new_cancel_source`, via CAS on `child_head`); removal happens only
+# inside the collector with the world stopped. Construction and cancellation
+# synchronize with seq_cst operations so that attachment is level-triggered:
+# either the canceller's walk observes the new child, or the constructor
+# observes the cancelled state (and the child is born cancelled).
 
-@eval function _new_cancel_source(parents::Union{Nothing, CancellationTokenSource, Core.SimpleVector})
-    return $(Expr(:new, :CancellationTokenSource,
-                  :parents, nothing, 0x00, 0x00, 0x00))
-end
+# Construction is the builtin `Core._new_cancel_source(parents...)`
+# (jl_new_cancel_source): it allocates the object with one link entry per
+# argument and performs the linking and state inheritance in C, where the
+# absence of safepoints between publishing a link and reading the parent's
+# state can be guaranteed.
 
 """
     CancellationTokenSource() -> CancellationTokenSource
@@ -168,81 +188,42 @@ out of the graph; there is no explicit detach operation.
 Use [`CancellationToken`](@ref)`(src)` for the observe view, and
 [`cancel!`](@ref)`(src)` to request cancellation.
 """
-function CancellationTokenSource(parent::CancellationToken)
-    src = _new_cancel_source(parent.source)
-    attach_child!(parent.source, src)
-    return src
-end
+CancellationTokenSource(parent::CancellationToken) =
+    Core._new_cancel_source(parent.source)::CancellationTokenSource
 function CancellationTokenSource(parent::CancellationToken, rest::CancellationToken...)
     srcs = CancellationTokenSource[parent.source]
     for tok in rest
         any(s -> s === tok.source, srcs) || push!(srcs, tok.source)
     end
-    length(srcs) == 1 && return CancellationTokenSource(parent)
-    child = _new_cancel_source(Core.svec(srcs...))
-    for p in srcs
-        attach_child!(p, child)
-    end
-    return child
+    return Core._new_cancel_source(srcs...)::CancellationTokenSource
 end
-CancellationTokenSource(::Nothing) = _new_cancel_source(nothing)
-CancellationTokenSource() = _new_cancel_source(nothing)
+CancellationTokenSource(::Nothing) = Core._new_cancel_source()::CancellationTokenSource
+CancellationTokenSource() = Core._new_cancel_source()::CancellationTokenSource
 
-# Spinlock on a source's `_lock` byte. These are leaf locks: no code may
-# block, allocate unboundedly, or take another source's lock while holding
-# one, except for the parent->child order used by the cancellation walk.
-function _lock_source(src::CancellationTokenSource)
-    while true
-        (@atomicreplace :acquire :monotonic src._lock 0x00 => 0x01).success && return
-        while (@atomic :monotonic src._lock) != 0x00
-            ccall(:jl_cpu_suspend, Cvoid, ())
-            ccall(:jl_gc_safepoint, Cvoid, ())
-        end
-    end
-end
-_unlock_source(src::CancellationTokenSource) = (@atomic :release src._lock = 0x00; nothing)
+# The i-th (1-based) parent of `src`. Parent links are strong and const, so
+# these reads need no synchronization.
+_cancel_parent(src::CancellationTokenSource, i::Int) =
+    ccall(:jl_cancel_source_parent, Any, (Any, Csize_t), src, i - 1)::CancellationTokenSource
 
-# Link `child` under `parent`. The child inherits the parent's cancellation
-# state at link time (a node attached under an already-cancelled parent is
-# born cancelled) - together with `cancel!` marking each node *before*
-# draining it, this makes registration level-triggered under concurrent
-# cancellation.
-function attach_child!(parent::CancellationTokenSource, child::CancellationTokenSource)
-    wr = WeakRef(child) # allocated outside the spinlock
-    _lock_source(parent)
-    pst = @atomic :monotonic parent.state
-    if pst != 0x00
-        _raise_state!(child, pst & SEVERITY_MASK)
-    end
-    kids = parent.children
-    if kids === nothing
-        kids = WeakRef[]
-        parent.children = kids
-    else
-        kids = kids::Vector{WeakRef}
-        # Amortized pruning: whenever the list length reaches a power of two,
-        # drop entries whose child has been garbage collected. This bounds
-        # the list at roughly twice the live-child count with O(1) amortized
-        # attach cost, without any explicit detach operation.
-        n = length(kids)
-        if n >= 8 && (n & (n - 1)) == 0
-            filter!(w -> w.value !== nothing, kids)
-        end
-    end
-    push!(kids, wr)
-    _unlock_source(parent)
-    return child
-end
+# The sibling after `child` on `parent`'s child list (`nothing` at its end).
+# Weak, but safe to traverse from Julia: the returned reference is rooted the
+# moment the ccall returns, and the GC's splice pass keeps the lists free of
+# collected entries at every safepoint, so a traversal (re-)started from a
+# rooted node only ever sees live sources.
+_cancel_next_child(parent::CancellationTokenSource, child::CancellationTokenSource) =
+    ccall(:jl_cancel_source_next_child, Any, (Any, Any), parent, child)::Union{Nothing, CancellationTokenSource}
 
 # CAS-max the source's state to (STATE_CANCELLED_BIT | sev). Returns true if
 # the state was raised, false if it was already at (or above) the severity.
+# seq_cst: pairs with the (child-list publication; state read) sequence in
+# `jl_new_cancel_source` - see the walk in `_cancel_walk_node!`.
 function _raise_state!(src::CancellationTokenSource, sev::UInt8)
     old = @atomic :monotonic src.state
     while true
         if old != 0x00 && (old & SEVERITY_MASK) >= sev
             return false
         end
-        old, success = @atomicreplace :acquire_release :monotonic src.state old => (STATE_CANCELLED_BIT | sev)
+        old, success = @atomicreplace :sequentially_consistent :monotonic src.state old => (STATE_CANCELLED_BIT | sev)
         success && return true
     end
 end
@@ -266,39 +247,29 @@ function _mark_delivered!(src::CancellationTokenSource, sev::UInt8)
     bit = 0x01 << sev
     # fast path: no parents (the common episode-source case)
     @atomic :monotonic src.delivered |= bit
-    p = src.parents
-    p === nothing && return nothing
+    src.nparents == 0x0000 && return nothing
     # Iterative ancestor walk (a Vector worklist - deep chains must not
     # recurse - deduplicated so a reconverging linked graph is marked once
     # per node). Delivery is rare; the allocation is fine.
     pending = CancellationTokenSource[]
     seen = IdSet{CancellationTokenSource}()
     push!(seen, src)
-    _push_parents!(pending, seen, p)
+    _push_parents!(pending, seen, src)
     while !isempty(pending)
         node = pop!(pending)
         @atomic :monotonic node.delivered |= bit
-        np = node.parents
-        np === nothing || _push_parents!(pending, seen, np)
+        _push_parents!(pending, seen, node)
     end
     return nothing
 end
 
 function _push_parents!(pending::Vector{CancellationTokenSource},
-                        seen::IdSet{CancellationTokenSource}, @nospecialize(p))
-    if p isa CancellationTokenSource
+                        seen::IdSet{CancellationTokenSource}, src::CancellationTokenSource)
+    for i in 1:Int(src.nparents)
+        p = _cancel_parent(src, i)
         if !(p in seen)
             push!(seen, p)
             push!(pending, p)
-        end
-    elseif p isa Core.SimpleVector
-        for i in 1:length(p)
-            c = p[i]
-            c isa CancellationTokenSource || continue
-            if !(c in seen)
-                push!(seen, c)
-                push!(pending, c)
-            end
         end
     end
     return nothing
@@ -335,7 +306,7 @@ function cancel!(src::CancellationTokenSource,
     # task's next cancellation point observes our state write.
     Threads.atomic_fence_heavy()
     # Mark the subtree: each node is marked before its children so a
-    # concurrent attach_child! is level-triggered.
+    # concurrent construction of a child source is level-triggered.
     _cancel_walk!(src, sev)
     return true
 end
@@ -353,8 +324,6 @@ end
 
 function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
                             pending::Vector{CancellationTokenSource})
-    children = nothing
-    _lock_source(node)
     # Advance at least to the node's current severity: a concurrent higher-
     # severity cancel! may have raised the state after this walk's own
     # transition; its walk skips children this one already advanced, so this
@@ -362,32 +331,24 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
     st = @atomic :acquire node.state
     stsev = st & SEVERITY_MASK
     sev < stsev && (sev = stsev)
-    # Snapshot the live children (compacting away collected ones) and queue
-    # the ones whose state this walk advanced; a child whose state was
-    # already at (or above) this severity has been walked - or is being
-    # walked - by whoever advanced it, so revisiting it would make a
-    # reconverging graph exponential.
-    kids = node.children
-    if kids !== nothing
-        kids = kids::Vector{WeakRef}
-        n = length(kids)
-        i = 1
-        for j in 1:n
-            c = kids[j].value
-            c === nothing && continue
-            kids[i] = kids[j]
-            i += 1
-            c = c::CancellationTokenSource
-            if _raise_state!(c, sev)
-                children = (c, children)
-            end
+    # Walk the node's (weak, intrusive) child list, queueing the children
+    # whose state this walk advanced; a child whose state was already at (or
+    # above) this severity has been walked - or is being walked - by whoever
+    # advanced it, so revisiting it would make a reconverging graph
+    # exponential. The seq_cst `child_head` read below (paired with the
+    # seq_cst state write that queued `node`) closes the race against a
+    # concurrent attach: a child that this read misses was published after
+    # our state write, so its constructor observes that write and the child
+    # is born at (at least) this severity. Children attached concurrently
+    # *during* the walk are prepended before the list positions already
+    # traversed and are likewise born cancelled.
+    c = @atomic node.child_head
+    while c !== nothing
+        c = c::CancellationTokenSource
+        if _raise_state!(c, sev)
+            push!(pending, c)
         end
-        i <= n && resize!(kids, i - 1)
-    end
-    _unlock_source(node)
-    while children !== nothing
-        (c, children) = children::Tuple{CancellationTokenSource, Any}
-        push!(pending, c)
+        c = _cancel_next_child(node, c)
     end
     return nothing
 end

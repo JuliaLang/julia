@@ -184,6 +184,20 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                 process_slot(closure, slot);
                 obj8_begin = obj8_begin.shift::<u8>(1);
             }
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_cancel_source_tag as usize) << 4) {
+            // Variable-sized cancellation token source: `nparents` {parent,
+            // next, pprev} link entries follow the fixed fields. Only the
+            // (strong) `parent` slot of each entry is traced; `child_head`
+            // and the `next`/`pprev` slots are weak references with
+            // unlink-on-death semantics (see jl_gc_sweep_weak_processing)
+            // and must not be traced.
+            let cs = obj.to_ptr::<jl_cancel_source_t>();
+            let np = (*cs).nparents as usize;
+            let mut slot = obj + std::mem::size_of::<jl_cancel_source_t>();
+            for _ in 0..np {
+                process_slot(closure, slot);
+                slot = slot + std::mem::size_of::<jl_cancel_parent_link_t>();
+            }
         } else if vtag_usize == ((jl_small_typeof_tags_jl_string_tag as usize) << 4)
             && PRINT_OBJ_TYPE
         {

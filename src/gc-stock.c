@@ -384,6 +384,77 @@ static void clear_weak_refs(void) JL_NOTSAFEPOINT
     }
 }
 
+// weak processing (currently: cancellation token source child lists)
+//
+// A collected cancellation source must leave its parents' (weak,
+// intrusive, doubly-linked) child lists. There is no registry to scan:
+// the sweep - which visits every dead cell's header anyway - detects dead
+// sources that are still linked (`gc_is_dead_linked_cancel_source`, gated
+// by the page's has_weak_processing flag), *keeps* their cells for this
+// cycle instead of freeing them, and queues them on the sweeping thread's
+// `weak_processing_objs` list. After all sweeping, still inside the
+// stop-the-world window,
+// sweep_weak_processing() performs the O(1) hlist unlinks: every slot
+// it writes lives either in an object that survived this cycle (a correct
+// fix-up) or in a fellow kept corpse (intact, harmlessly stale) - sibling
+// lists only ever contain cancellation sources, and every dead one was
+// kept - so unlinks of adjacent dead nodes compose in any order. The
+// cleared back-pointers (`pprev == NULL`) make the next sweep that visits
+// the corpse free it normally. Total cost is strictly proportional to the
+// number of sources that died.
+
+// Is `v` (a dead cell whose header is known valid) a cancellation source
+// that is still linked into some parent's child list?
+STATIC_INLINE int gc_is_dead_linked_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT
+{
+    // constant compare: cancellation sources carry a small type tag
+    if (__likely((v->header & ~(uintptr_t)0xf) != (jl_cancel_source_tag << 4)))
+        return 0;
+    jl_cancel_source_t *s = (jl_cancel_source_t*)jl_valueof(v);
+    return s->nparents > 0 && jl_cancel_source_links(s)[0].pprev != NULL;
+}
+
+void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    (void)ptls;
+    jl_gc_pagemeta_t *pg = page_metadata(v);
+    if (pg != NULL)
+        pg->has_weak_processing = 1;
+    // big objects are always swept per-object; no flag needed
+}
+
+static void sweep_weak_processing(void) JL_NOTSAFEPOINT
+{
+    assert(gc_n_threads != 0);
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        small_arraylist_t *lst = &ptls2->gc_tls.weak_processing_objs;
+        for (size_t i = 0; i < lst->len; i++) {
+            // dispatch on the object's type once more kinds of
+            // weakly-processed objects exist; today these are all
+            // cancellation token sources
+            jl_cancel_source_t *s = (jl_cancel_source_t*)lst->items[i];
+            jl_cancel_parent_link_t *links = jl_cancel_source_links(s);
+            for (size_t j = 0; j < s->nparents; j++) {
+                jl_value_t *next = jl_atomic_load_relaxed(&links[j].next);
+                _Atomic(jl_value_t*) *pprev = links[j].pprev;
+                assert(pprev != NULL);
+                jl_atomic_store_relaxed(pprev, next);
+                if (next != (jl_value_t*)jl_nothing) {
+                    jl_cancel_parent_link_t *nl =
+                        jl_cancel_source_link((jl_cancel_source_t*)next, links[j].parent);
+                    assert(nl != NULL);
+                    nl->pprev = pprev;
+                }
+                links[j].pprev = NULL;
+            }
+        }
+        lst->len = 0;
+    }
+}
+
 static void sweep_weak_refs(void) JL_NOTSAFEPOINT
 {
     assert(gc_n_threads != 0);
@@ -509,6 +580,14 @@ static bigval_t *sweep_list_of_young_bigvals(bigval_t *young) JL_NOTSAFEPOINT
                 gc_big_object_link(old, v);
             }
             v->bits.gc = bits;
+        }
+        else if (__unlikely(gc_is_dead_linked_cancel_source((jl_taggedvalue_t*)&v->header))) {
+            // keep the corpse on the list for this cycle; it is queued for
+            // the post-sweep unlink pass and freed by the next sweep (see
+            // sweep_weak_processing)
+            small_arraylist_push(&jl_current_task->ptls->gc_tls.weak_processing_objs,
+                                 jl_valueof((jl_taggedvalue_t*)&v->header));
+            last_node = v;
         }
         else {
             sweep_unlink_and_free(v);
@@ -685,6 +764,7 @@ STATIC_INLINE jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     pg->has_young = 0;
     pg->has_marked = 0;
+    pg->has_weak_processing = 0;
     pg->prev_nold = 0;
     pg->nold = 0;
     pg->fl_begin_offset = UINT16_MAX;
@@ -870,11 +950,16 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
     // avoid loading a global variable in the hot path
     int page_profile_enabled = gc_page_profile_is_enabled();
     gc_page_serializer_init(s, pg);
+    jl_ptls_t ptls = jl_current_task->ptls;
 
     int re_use_page = 1;
     int freedall = 1;
     int pg_skpd = 1;
-    if (!pg->has_marked) {
+    // A fully-dead page that may hold objects requiring weak processing
+    // cannot be freed wholesale: its cells must be visited so that those
+    // dead objects get their processing (e.g. a still-linked cancellation
+    // source being kept and queued for unlinking).
+    if (!pg->has_marked && !pg->has_weak_processing) {
         re_use_page = 0;
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
         gc_page_profile_write_empty_page(s, page_profile_enabled);
@@ -896,6 +981,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
     {   // scope to avoid clang goto errors
         int has_marked = 0;
         int has_young = 0;
+        int has_weakproc = pg->has_weak_processing;
         int16_t prev_nold = 0;
         int pg_nfree = 0;
         jl_taggedvalue_t *fl = NULL;
@@ -921,10 +1007,26 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
             int bits = v->bits.gc;
             // if an object is past `lim_newpages` then we can guarantee it's garbage
             if (!gc_marked(bits) || (char*)v >= lim_newpages) {
-                *pfl = v;
-                pfl = &v->next;
-                pfl_begin = (pfl_begin != NULL) ? pfl_begin : pfl;
-                pg_nfree++;
+                // A dead cancellation source that is still linked into its
+                // parents' child lists is kept for this cycle and queued
+                // for the post-sweep unlink pass; the cleared back-pointers
+                // let the next sweep that visits it free it normally. Cells
+                // past `lim_newpages` were never allocated - their headers
+                // are garbage and must not be inspected.
+                if (__unlikely(has_weakproc && (char*)v < lim_newpages &&
+                               gc_is_dead_linked_cancel_source(v))) {
+                    small_arraylist_push(&ptls->gc_tls.weak_processing_objs, jl_valueof(v));
+                    // treat as young so a quick sweep revisits (and frees)
+                    // the corpse promptly
+                    has_young = 1;
+                    freedall = 0;
+                }
+                else {
+                    *pfl = v;
+                    pfl = &v->next;
+                    pfl_begin = (pfl_begin != NULL) ? pfl_begin : pfl;
+                    pg_nfree++;
+                }
             }
             else { // marked young or old
                 if (current_sweep_full || bits == GC_MARKED) { // old enough
@@ -973,7 +1075,6 @@ done:
     }
     gc_page_profile_write_to_file(s);
     gc_time_count_page(freedall, pg_skpd);
-    jl_ptls_t ptls = jl_current_task->ptls;
     // Note that we aggregate the `pool_live_bytes` over all threads before returning this
     // value to the user. It doesn't matter how the `pool_live_bytes` are partitioned among
     // the threads as long as the sum is correct. Let's add the `pool_live_bytes` to the current thread
@@ -2397,6 +2498,27 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                         gc_ptr_queue_push(mq, new_obj);
                 }
             }
+            else if (vtag == jl_cancel_source_tag << 4) {
+                // Variable-sized: `nparents` link entries follow the fixed
+                // fields. The `parent` slot of each entry is a strong
+                // reference; `child_head` and the `next`/`pprev` slots are
+                // weak (unlinked on death by sweep_weak_processing) and
+                // must not be traced.
+                jl_cancel_source_t *cs = (jl_cancel_source_t*)new_obj;
+                size_t np = cs->nparents;
+                size_t dtsz = sizeof(jl_cancel_source_t) + np * sizeof(jl_cancel_parent_link_t);
+                if (update_meta)
+                    gc_setmark(ptls, o, bits, dtsz);
+                if (np > 0) {
+                    jl_value_t **objary_begin = (jl_value_t**)jl_cancel_source_links(cs);
+                    // stride over the link entries, visiting only the
+                    // (strong) `parent` slot of each
+                    uint32_t step = sizeof(jl_cancel_parent_link_t) / sizeof(jl_value_t*);
+                    jl_value_t **objary_end = objary_begin + step * np;
+                    uintptr_t nptr = (np << 2) | (bits & GC_OLD);
+                    gc_mark_objarray(ptls, new_obj, objary_begin, objary_end, step, nptr);
+                }
+            }
             else if (vtag == jl_string_tag << 4) {
                 size_t dtsz = jl_string_len(new_obj) + sizeof(size_t) + 1;
                 if (update_meta)
@@ -3249,6 +3371,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_scrub();
         gc_verify_tags();
         gc_sweep_pool();
+        // Process the dead weakly-processed objects found (and kept) by the
+        // big-object and pool sweeps above - i.e. unlink dead cancellation
+        // sources from their parents' child lists. Must run before the
+        // world restarts, while the memory of every dead list neighbor is
+        // still intact.
+        sweep_weak_processing();
     }
 
     JL_PROBE_GC_SWEEP_END();
@@ -3430,6 +3558,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
             jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
             if (common_heap->weak_refs.len == 0)
                 small_arraylist_free(&common_heap->weak_refs);
+            if (common_heap->weak_processing_list.len == 0)
+                small_arraylist_free(&common_heap->weak_processing_list);
             if (common_heap->live_tasks.len == 0)
                 small_arraylist_free(&common_heap->live_tasks);
             if (heap->remset.len == 0)
@@ -3438,6 +3568,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
                 arraylist_free(&ptls2->finalizers);
             if (ptls2->gc_tls.sweep_objs.len == 0)
                 arraylist_free(&ptls2->gc_tls.sweep_objs);
+            if (ptls2->gc_tls.weak_processing_objs.len == 0)
+                small_arraylist_free(&ptls2->gc_tls.weak_processing_objs);
         }
     }
 
@@ -3613,6 +3745,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
         p[i].newpages = NULL;
     }
     small_arraylist_new(&common_heap->weak_refs, 0);
+    small_arraylist_new(&common_heap->weak_processing_list, 0);
     small_arraylist_new(&common_heap->live_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&common_heap->free_stacks[i], 0);
@@ -3623,6 +3756,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     arraylist_new(&heap->remset, 0);
     arraylist_new(&ptls->finalizers, 0);
     arraylist_new(&ptls->gc_tls.sweep_objs, 0);
+    small_arraylist_new(&ptls->gc_tls.weak_processing_objs, 0);
 
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_tls.gc_cache;
     gc_cache->perm_scanned_bytes = 0;

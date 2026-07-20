@@ -119,6 +119,13 @@ typedef struct _jl_gc_pagemeta_t {
     // still be old dead objects in the page and `nold` and `prev_nold`
     // should be used to determine if the page needs to be swept
     uint8_t has_young;
+    // Whether any object requiring weak processing on death (see
+    // jl_gc_set_needs_weak_processing) was ever allocated in this page:
+    // such pages must not be freed wholesale when fully dead, and their
+    // dead cells must be inspected by the sweep so those objects get their
+    // processing (currently: linked cancellation token sources, see
+    // gc_is_dead_linked_cancel_source)
+    uint8_t has_weak_processing;
     // Number of old objects in the page
     uint16_t nold;
     // Number of old objects in the page at the end of the previous full sweep

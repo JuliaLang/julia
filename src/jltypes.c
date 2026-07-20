@@ -4161,28 +4161,35 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_namedtuple_type))->layout = NULL;
     jl_namedtuple_typename = ntt->name;
 
+    // Variable-sized (see jl_cancel_source_t): the declared fields cover only
+    // the fixed part; `nparents` parent links follow them. The GCs
+    // special-case both the size and the scanning of this layout (the
+    // declared fields contain no boxed values as far as the field system is
+    // concerned - `child_head` is a weak reference the marker must not
+    // trace).
     jl_cancel_source_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(5,
-                                        "parents",
-                                        "children",
+                        jl_perm_symsvec(4,
+                                        "child_head",
                                         "state",
-                                        "_lock",
-                                        "delivered"),
-                        jl_svec(5,
-                                jl_any_type,
-                                jl_any_type,
+                                        "delivered",
+                                        "nparents"),
+                        jl_svec(4,
+                                jl_any_type, // Union{Nothing, CancellationTokenSource}, weak
                                 jl_uint8_type,
                                 jl_uint8_type,
-                                jl_uint8_type),
+                                jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 5);
-    // Field 1 (parents) is const; fields 3-5 (state, _lock, delivered) are atomic
-    const static uint32_t cancel_source_constfields[1]  = { 0b00001 };
-    const static uint32_t cancel_source_atomicfields[1] = { 0b11100 };
+                        0, 1, 4);
+    // Field 4 (nparents) is const; fields 1-3 (child_head, state, delivered)
+    // are atomic
+    const static uint32_t cancel_source_constfields[1]  = { 0b1000 };
+    const static uint32_t cancel_source_atomicfields[1] = { 0b0111 };
     jl_cancel_source_type->name->constfields = cancel_source_constfields;
     jl_cancel_source_type->name->atomicfields = cancel_source_atomicfields;
+    XX(cancel_source);
+    assert(jl_datatype_size(jl_cancel_source_type) == sizeof(jl_cancel_source_t));
 
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"),
