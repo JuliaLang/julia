@@ -2325,6 +2325,7 @@ static Value *get_tls_world_age_field(jl_codectx_t &ctx);
 static LoadInst *emit_tls_world_age_load(jl_codectx_t &ctx);
 static StoreInst *emit_tls_world_age_store(jl_codectx_t &ctx, Value *world);
 static LoadInst *emit_world_counter_load(jl_codectx_t &ctx, AtomicOrdering order = AtomicOrdering::Acquire);
+static LoadInst *emit_in_pure_callback_load(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
                              ArrayRef<jl_cgval_t> args, size_t nargs, JuliaFunction<> *trampoline) JL_CANSAFEPOINT;
@@ -4695,13 +4696,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         size_t fidx = (f == BUILTIN(invoke_in_world)) ? 2 : 1; // index of the applied function in argv
         Instruction *last_age = emit_tls_world_age_load(ctx);
         last_age->setName("last_age");
-        Type *T_int16 = getInt16Ty(ctx.builder.getContext());
-        jl_aliasinfo_t ai_const = ctx.alias().constant;
-        Value *offset = ConstantInt::get(ctx.types().T_size, offsetof(jl_tls_states_t, in_pure_callback) / sizeof(int16_t));
-        Value *field_ptr = ctx.builder.CreateInBoundsGEP(T_int16, get_current_ptls(ctx), offset);
-        Instruction *in_pure_callback = ai_const.decorateInst(ctx.builder.CreateAlignedLoad(
-                T_int16, field_ptr, Align(sizeof(int16_t)), "in_pure_callback"));
-        Value *not_pure = ctx.builder.CreateICmpEQ(in_pure_callback, ConstantInt::get(T_int16, 0));
+        LoadInst *in_pure_callback = emit_in_pure_callback_load(ctx);
+        Value *not_pure = ctx.builder.CreateICmpEQ(in_pure_callback,
+                ConstantInt::get(in_pure_callback->getType(), 0));
         LoadInst *world_counter = emit_world_counter_load(ctx);
         Value *target_world = world_counter;
         if (f == BUILTIN(invoke_in_world)) {
@@ -7482,6 +7479,17 @@ static Value *get_current_task(jl_codectx_t &ctx)
 static Value *get_current_ptls(jl_codectx_t &ctx)
 {
     return get_current_ptls_from_task(ctx.builder, get_current_task(ctx), ctx.tbaa().tbaa_gcframe);
+}
+
+// Load `ptls->in_pure_callback`
+static LoadInst *emit_in_pure_callback_load(jl_codectx_t &ctx)
+{
+    Type *T_int16 = getInt16Ty(ctx.builder.getContext());
+    Value *field_ptr = emit_ptrgep(ctx, get_current_ptls(ctx),
+            offsetof(jl_tls_states_t, in_pure_callback), "in_pure_callback_ptr");
+    jl_aliasinfo_t ai = ctx.alias().gcframe;
+    return cast<LoadInst>(ai.decorateInst(ctx.builder.CreateAlignedLoad(
+            T_int16, field_ptr, Align(sizeof(int16_t)), "in_pure_callback")));
 }
 
 // Get the address of the world age of the current task.
