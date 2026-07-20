@@ -276,8 +276,6 @@ void jl_init_common_symbols(void)
     jl_opaque_closure_method_sym = jl_symbol("opaque_closure_method");
     jl_const_sym = jl_symbol("const");
     jl_global_sym = jl_symbol("global");
-    jl_getglobal_partition_sym = jl_symbol("getglobal_partition");
-    jl_setglobal_partition_sym = jl_symbol("setglobal_partition");
     jl_local_sym = jl_symbol("local");
     jl_thunk_sym = jl_symbol("thunk");
     jl_toplevel_sym = jl_symbol("toplevel");

@@ -36,8 +36,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :export => 1:typemax(Int),
     :public => 1:typemax(Int),
     :latestworld => 0:0,
-    :getglobal_partition => 2:2, # partition, order (partition recovers its own binding)
-    :setglobal_partition => 6:6, # partition, op, order, failorder, value, extra(cmp|nothing) (partition recovers its own binding)
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this

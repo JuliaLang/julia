@@ -113,28 +113,38 @@ let m = Meta.@lower 1 + 1
     @test isempty(current_exceptions())
 end
 
-# The interpreter must enforce the same memory-order rules as codegen on the
-# reformulated global-access nodes (`:getglobal_partition`/`:setglobal_partition`
-# produced by `reformulate_globals_pass!`): an invalid or `:not_atomic` order
-# throws `ConcurrencyViolationError`, and a valid explicit order keeps the
-# builtin's semantics (return value, fences).
+# The interpreter must enforce the same memory-order rules as codegen on the reformulated
+# global accesses (`Core.getglobal_partition`/`Core.setglobal_partition` builtin calls
+# produced by `reformulate_globals_pass!`): an invalid or `:not_atomic` order throws
+# `ConcurrencyViolationError`, and a valid explicit order keeps the builtin's semantics
+# (return value, fences).
+iscall_gr(x, name) = Meta.isexpr(x, :call) && x.args[1] == GlobalRef(Core, name)
 global exec_gp_g::Int = 1
 exec_gp_badread() = getglobal(@__MODULE__, :exec_gp_g, :not_atomic)
 exec_gp_badwrite() = setglobal!(@__MODULE__, :exec_gp_g, 5, :not_atomic)
 exec_gp_goodswap() = swapglobal!(@__MODULE__, :exec_gp_g, 7, :sequentially_consistent)
 let ci = code_typed(exec_gp_badread, ())[1][1]
-    @assert any(x -> Meta.isexpr(x, :getglobal_partition), ci.code)
+    @assert any(x -> iscall_gr(x, :getglobal_partition), ci.code)
     @test_throws ConcurrencyViolationError exec_gp_badread() # compiled
     @test_throws ConcurrencyViolationError Core.eval(@__MODULE__, Expr(:thunk, ci)) # interpreted
 end
 let ci = code_typed(exec_gp_badwrite, ())[1][1]
-    @assert any(x -> Meta.isexpr(x, :setglobal_partition), ci.code)
+    @assert any(x -> iscall_gr(x, :setglobal_partition), ci.code)
     @test_throws ConcurrencyViolationError exec_gp_badwrite() # compiled
     @test_throws ConcurrencyViolationError Core.eval(@__MODULE__, Expr(:thunk, ci)) # interpreted
     @test exec_gp_g === 1 # the failed store must not have written
 end
 let ci = code_typed(exec_gp_goodswap, ())[1][1]
-    @assert any(x -> Meta.isexpr(x, :setglobal_partition), ci.code)
+    @assert any(x -> iscall_gr(x, :setglobal_partition), ci.code)
     @test Core.eval(@__MODULE__, Expr(:thunk, ci)) === 1 # interpreted swap returns the old value
     @test exec_gp_g === 7
+end
+# A resolved `isdefinedglobal` with a memory order reformulates to the
+# `Core.isdefinedglobal_partition` builtin and stays correct compiled and interpreted.
+global exec_gp_def::Int = 3
+exec_gp_isdef() = isdefinedglobal(@__MODULE__, :exec_gp_def, true, :acquire)
+let ci = code_typed(exec_gp_isdef, ())[1][1]
+    @assert any(x -> iscall_gr(x, :isdefinedglobal_partition), ci.code)
+    @test exec_gp_isdef() === true # compiled
+    @test Core.eval(@__MODULE__, Expr(:thunk, ci)) === true # interpreted
 end

@@ -2414,9 +2414,9 @@ let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
 end
 
 
-# `statement_cost` must price the reformulated global accesses like the calls they
-# replace: `getglobal` reads are free, and the stores cost the store builtins'
-# registered tfunc cost (both as `:setglobal_partition` and as the `:(=)` form).
+# `statement_cost` prices the reformulated global-access builtin calls via their registered
+# tfunc cost: `getglobal_partition` reads are free (matching plain `getglobal`), and the
+# `setglobal_partition` store matches the store builtins' tfunc cost, as does the `:(=)` form.
 let m = Module()
     Core.eval(m, :(global gcost::Int = 0))
     b = convert(Core.Binding, GlobalRef(m, :gcost))
@@ -2424,10 +2424,14 @@ let m = Module()
     src = code_typed(() -> nothing, ())[1][1]
     params = Compiler.OptimizationParams()
     sptypes = Compiler.VarState[]
-    setglobal_cost = Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal!)]
-    @test Compiler.statement_cost(Expr(:getglobal_partition, part, :acquire), -1, src, sptypes, params) == 0
-    store_cost = Compiler.statement_cost(Expr(:setglobal_partition, part, Core.setglobal!, nothing, nothing, 0, nothing), -1, src, sptypes, params)
+    getcall = Expr(:call, GlobalRef(Core, :getglobal_partition), QuoteNode(part), QuoteNode(:acquire))
+    setcall = Expr(:call, GlobalRef(Core, :setglobal_partition), QuoteNode(part),
+                   QuoteNode(Core.setglobal!), QuoteNode(nothing), QuoteNode(nothing), 0, nothing)
+    @test Compiler.statement_cost(getcall, -1, src, sptypes, params) ==
+          Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.getglobal_partition)] == 0
+    store_cost = Compiler.statement_cost(setcall, -1, src, sptypes, params)
     assign_cost = Compiler.statement_cost(Expr(:(=), part, 0), -1, src, sptypes, params)
-    @test store_cost == assign_cost == setglobal_cost
+    @test store_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal_partition)]
+    @test assign_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal!)]
 end
 end # module inline_tests

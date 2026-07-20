@@ -3712,19 +3712,20 @@ static jl_cgval_t emit_globalop_partition(jl_codectx_t &ctx, jl_binding_t *bnd, 
     return emit_globalop(ctx, mod, sym, rval, cmp, Order, FailOrder, op, modifyop, false);
 }
 
-// Codegen for the `:setglobal_partition` node produced by inference:
-//   (binding, partition, op_builtin, order, failorder, value, cmp_or_nothing)
+// Codegen for the `setglobal_partition` builtin produced by inference:
+//   setglobal_partition(partition, op_builtin, order, failorder, value, cmp_or_nothing)
 // `op_builtin` is the resolved store builtin (`setglobal!`/`swapglobal!`/
 // `replaceglobal!`/`setglobalonce!`); `modifyglobal!` is intentionally not
-// reformulated and stays on the runtime path.
-static jl_cgval_t emit_setglobal_partition(jl_codectx_t &ctx, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
+// reformulated and stays on the runtime path. `opf`/`order_arg`/`failorder_arg`
+// are the (constant) op builtin and order Symbols/`nothing`; `value`/`cmpval` are
+// the already-emitted operands.
+static jl_cgval_t emit_setglobal_partition(jl_codectx_t &ctx, jl_binding_partition_t *bpart, jl_value_t *opf,
+                                           jl_value_t *order_arg, jl_value_t *failorder_arg,
+                                           const jl_cgval_t &value, const jl_cgval_t &cmpval) JL_CANSAFEPOINT
 {
-    assert(nargs == 6);
-    // The node carries only the (leaf) partition; recover its owning binding by
+    // The builtin carries only the (leaf) partition; recover its owning binding by
     // walking the circular partition chain.
-    jl_binding_partition_t *bpart = (jl_binding_partition_t*)args[0];
     jl_binding_t *bnd = jl_binding_partition_owner(bpart);
-    jl_value_t *opf = args[1];
     StoreKind op;
     bool has_cmp = false;
     if (opf == BUILTIN(setglobal))
@@ -3739,14 +3740,14 @@ static jl_cgval_t emit_setglobal_partition(jl_codectx_t &ctx, jl_value_t **args,
         assert(opf == BUILTIN(setglobalonce));
         op = StoreKind::SetOnce;
     }
-    // args[2]/args[3] are either an explicit order Symbol or `nothing` (meaning
-    // "use the default"), mirroring `emit_f_opglobal`: the default store order is
-    // release, and the default fail order equals the success order. Only an
-    // explicit order symbol is parsed/validated (as a store or load order resp.).
-    enum jl_memory_order order = args[2] == jl_nothing ? jl_memory_order_release :
-        jl_get_atomic_order((jl_sym_t*)args[2], op != StoreKind::Set, true);
-    enum jl_memory_order fail_order = args[3] == jl_nothing ? order :
-        jl_get_atomic_order((jl_sym_t*)args[3], true, false);
+    // order_arg/failorder_arg are either an explicit order Symbol or `nothing`
+    // (meaning "use the default"), mirroring `emit_f_opglobal`: the default store
+    // order is release, and the default fail order equals the success order. Only
+    // an explicit order symbol is parsed/validated (as a store or load order resp.).
+    enum jl_memory_order order = order_arg == jl_nothing ? jl_memory_order_release :
+        jl_get_atomic_order((jl_sym_t*)order_arg, op != StoreKind::Set, true);
+    enum jl_memory_order fail_order = failorder_arg == jl_nothing ? order :
+        jl_get_atomic_order((jl_sym_t*)failorder_arg, true, false);
     const char *fname = store_kind_name(op, "global");
     if (order == jl_memory_order_invalid || fail_order == jl_memory_order_invalid || fail_order > order) {
         emit_atomic_error(ctx, "invalid atomic ordering");
@@ -3764,12 +3765,12 @@ static jl_cgval_t emit_setglobal_partition(jl_codectx_t &ctx, jl_value_t **args,
         emit_atomic_error(ctx, msg.c_str());
         return jl_cgval_t(); // unreachable
     }
-    jl_cgval_t rval = emit_expr(ctx, args[4]);
+    jl_cgval_t rval = value;
     if (rval.typ == jl_bottom_type)
         return jl_cgval_t();
     jl_cgval_t cmp;
     if (has_cmp) {
-        cmp = emit_expr(ctx, args[5]);
+        cmp = cmpval;
         if (cmp.typ == jl_bottom_type)
             return jl_cgval_t();
     }
@@ -4280,6 +4281,30 @@ static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_
         });
     isdef = ctx.builder.CreateTrunc(isdef, getInt1Ty(ctx.builder.getContext()));
     return mark_julia_type(ctx, isdef, false, jl_bool_type);
+}
+
+// Emit a definedness query on a binding whose leaf partition was resolved by inference
+// (see the `:isdefinedglobal_partition` reformulation). Inference recorded an invalidation
+// edge, so the resolved partition can be frozen: a real constant is always defined, and a
+// typed global is an ordered null-check load of its own value slot. Any other kind defers
+// to the runtime definedness query.
+static jl_cgval_t emit_isdefinedglobal_partition(jl_codectx_t &ctx, jl_binding_partition_t *bpart, enum jl_memory_order order) JL_CANSAFEPOINT
+{
+    jl_binding_t *bnd = jl_binding_partition_owner(bpart);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (jl_bkind_is_real_constant(kind))
+        return mark_julia_const(ctx, jl_true);
+    if (kind == PARTITION_KIND_GLOBAL) {
+        Value *bp = julia_binding_gv(ctx, bnd);
+        bp = julia_binding_pvalue(ctx, bp);
+        LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+        ai.decorateInst(v);
+        v->setOrdering(get_llvm_atomic_order(order));
+        Value *isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
+        return mark_julia_type(ctx, isnull, false, jl_bool_type);
+    }
+    return emit_isdefinedglobal(ctx, bnd->globalref->mod, bnd->globalref->name, 1, order);
 }
 
 static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
@@ -5135,6 +5160,75 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
 
         return false;
+    }
+
+    else if (f == BUILTIN(getglobal_partition) && nargs == 2) {
+        // getglobal_partition(partition, order): the partition object and order
+        // Symbol are carried as constants by inference. Without them, fall back to
+        // a generic builtin call (the runtime builtin handles it).
+        const jl_cgval_t &part = argv[1];
+        const jl_cgval_t &ord = argv[2];
+        if (!part.constant || !jl_is_binding_partition(part.constant) ||
+            !ord.constant || !jl_is_symbol(ord.constant))
+            return false;
+        jl_binding_partition_t *bpart = (jl_binding_partition_t*)part.constant;
+        enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
+        // Guard the order here rather than in inference: a module binding must be read
+        // atomically, so reject an invalid or non-atomic order (mirroring `getglobal`).
+        if (order == jl_memory_order_invalid) {
+            emit_atomic_error(ctx, "invalid atomic ordering");
+            *ret = jl_cgval_t(); // unreachable
+            return true;
+        }
+        if (order == jl_memory_order_notatomic) {
+            emit_atomic_error(ctx, "getglobal: module binding cannot be read non-atomically");
+            *ret = jl_cgval_t(); // unreachable
+            return true;
+        }
+        *ret = emit_globalref_partition(ctx, bpart, get_llvm_atomic_order(order));
+        return true;
+    }
+
+    else if (f == BUILTIN(setglobal_partition) && nargs == 6) {
+        // setglobal_partition(partition, op, order, failorder, value, cmp): the
+        // partition, op builtin, and order/failorder are carried as constants by
+        // inference. Without them, fall back to a generic builtin call.
+        const jl_cgval_t &part = argv[1];
+        const jl_cgval_t &opf = argv[2];
+        const jl_cgval_t &ord = argv[3];
+        const jl_cgval_t &failord = argv[4];
+        if (!part.constant || !jl_is_binding_partition(part.constant) ||
+            !opf.constant || !ord.constant || !failord.constant)
+            return false;
+        *ret = emit_setglobal_partition(ctx, (jl_binding_partition_t*)part.constant, opf.constant,
+                                        ord.constant, failord.constant, argv[5], argv[6]);
+        return true;
+    }
+
+    else if (f == BUILTIN(isdefinedglobal_partition) && nargs == 2) {
+        // isdefinedglobal_partition(partition, order): the partition object and order
+        // Symbol are carried as constants by inference. Without them, fall back to a
+        // generic builtin call (the runtime builtin handles it).
+        const jl_cgval_t &part = argv[1];
+        const jl_cgval_t &ord = argv[2];
+        if (!part.constant || !jl_is_binding_partition(part.constant) ||
+            !ord.constant || !jl_is_symbol(ord.constant))
+            return false;
+        enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
+        // A module binding must be accessed atomically, so reject an invalid or non-atomic
+        // order (mirroring `getglobal_partition`).
+        if (order == jl_memory_order_invalid) {
+            emit_atomic_error(ctx, "invalid atomic ordering");
+            *ret = jl_cgval_t(); // unreachable
+            return true;
+        }
+        if (order == jl_memory_order_notatomic) {
+            emit_atomic_error(ctx, "isdefinedglobal: module binding cannot be accessed non-atomically");
+            *ret = jl_cgval_t(); // unreachable
+            return true;
+        }
+        *ret = emit_isdefinedglobal_partition(ctx, (jl_binding_partition_t*)part.constant, order);
+        return true;
     }
 
     else if ((f == BUILTIN(setglobal) && (nargs == 3 || nargs == 4)) ||
@@ -6856,27 +6950,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             allow_import = args[1] == jl_true;
         }
         return emit_isdefined(ctx, args[0], allow_import);
-    }
-    else if (head == jl_getglobal_partition_sym) {
-        // A read whose atomic order is stronger than the default; the order symbol is
-        // carried explicitly (a plain `Core.BindingPartition` value covers the default).
-        assert(nargs == 2);
-        jl_binding_partition_t *bpart = (jl_binding_partition_t*)args[0];
-        enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)args[1], true, false);
-        // Guard the order here rather than in inference: a module binding must be read
-        // atomically, so reject an invalid or non-atomic order (mirroring `getglobal`).
-        if (order == jl_memory_order_invalid) {
-            emit_atomic_error(ctx, "invalid atomic ordering");
-            return jl_cgval_t();
-        }
-        if (order == jl_memory_order_notatomic) {
-            emit_atomic_error(ctx, "getglobal: module binding cannot be read non-atomically");
-            return jl_cgval_t();
-        }
-        return emit_globalref_partition(ctx, bpart, get_llvm_atomic_order(order));
-    }
-    else if (head == jl_setglobal_partition_sym) {
-        return emit_setglobal_partition(ctx, args, nargs);
     }
     else if (head == jl_throw_undef_if_not_sym) {
         assert(nargs == 2);

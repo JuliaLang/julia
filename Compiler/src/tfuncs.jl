@@ -2667,6 +2667,9 @@ const _EFFECT_FREE_BUILTINS = [
     throw,
     Core.throw_methoderror,
     getglobal,
+    Core.getglobal_partition,
+    Core.setglobal_partition,
+    Core.isdefinedglobal_partition,
     compilerbarrier,
     Core._svec_len,
     Core._svec_ref,
@@ -2948,6 +2951,22 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_getglobal
         return generic_getglobal_effects
+    elseif f === Core.getglobal_partition
+        length(argtypes) == 2 || return EFFECTS_THROWS
+        partition = argtypes[1]
+        if isa(partition, Const) && isa(partition.val, Core.BindingPartition)
+            p = partition.val
+            # Same effects as the read this partition encodes, but the explicit memory order
+            # may be invalid or non-atomic, so it is not `nothrow`.
+            return Effects(abstract_eval_partition_load(nothing, partition_owner(p), p).effects; nothrow=false)
+        end
+        return generic_getglobal_effects
+    elseif f === Core.setglobal_partition
+        length(argtypes) == 6 || return EFFECTS_THROWS
+        return setglobal!_effects
+    elseif f === Core.isdefinedglobal_partition
+        length(argtypes) == 2 || return EFFECTS_THROWS
+        return generic_isdefinedglobal_effects
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_get_binding_type
@@ -3599,6 +3618,20 @@ add_tfunc(swapglobal!, 3, 4, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(modifyglobal!, 4, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(replaceglobal!, 4, 6, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(setglobalonce!, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
+# `getglobal_partition`/`setglobal_partition` are the resolved forms of an ordered global
+# read/store produced by `reformulate_globals_pass!`; the partition is a `Const` argument
+# (a `QuoteNode`-wrapped `Core.BindingPartition`). The read type is exact from the partition;
+# the store type is left conservative (the precise type was recorded on the statement before
+# reformulation, and re-inference only refines).
+@nospecs function getglobal_partition_tfunc(𝕃::AbstractLattice, partition, order)
+    isa(partition, Const) || return Any
+    p = partition.val
+    isa(p, Core.BindingPartition) || return Any
+    return partition_rt(p)
+end
+add_tfunc(Core.getglobal_partition, 2, 2, getglobal_partition_tfunc, 0)
+add_tfunc(Core.setglobal_partition, 6, 6, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
+add_tfunc(Core.isdefinedglobal_partition, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Bool), 1)
 add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Type), 0)
 
 # foreigncall

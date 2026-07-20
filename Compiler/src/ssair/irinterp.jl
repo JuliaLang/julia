@@ -196,10 +196,8 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             return false
         elseif head === :leave
             return false
-        elseif head === :getglobal_partition ||
-               head === :setglobal_partition ||
-               head === :(=)
-            # reformulated global accesses are not refinable
+        elseif head === :(=)
+            # a reformulated default global store is not refinable
             return false
         else
             Core.println(stmt)

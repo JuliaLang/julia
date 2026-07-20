@@ -34,6 +34,7 @@ extern "C" {
     XX(get_binding_type,"get_binding_type") \
     XX(getfield,"getfield") \
     XX(getglobal,"getglobal") \
+    XX(getglobal_partition,"getglobal_partition") \
     XX(declare_global,"declare_global") \
     XX(ifelse,"ifelse") \
     XX(intrinsic_call,"intrinsic_call") \
@@ -44,6 +45,7 @@ extern "C" {
     XX(isa,"isa") \
     XX(isdefined,"isdefined") \
     XX(isdefinedglobal,"isdefinedglobal") \
+    XX(isdefinedglobal_partition,"isdefinedglobal_partition") \
     XX(issubtype,"<:") \
     XX(memorynew,"memorynew") \
     XX(memoryrefnew,"memoryrefnew") \
@@ -66,6 +68,7 @@ extern "C" {
     XX(setfield,"setfield!") \
     XX(setfieldonce,"setfieldonce!") \
     XX(setglobal,"setglobal!") \
+    XX(setglobal_partition,"setglobal_partition") \
     XX(setglobalonce,"setglobalonce!") \
     XX(sizeof,"sizeof") \
     XX(svec,"svec") \

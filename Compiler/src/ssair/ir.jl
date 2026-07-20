@@ -664,7 +664,7 @@ function is_relevant_expr(e::Expr)
                       :foreigncall, :foreignglobal, :isdefined, :copyast,
                       :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
-                      :leave, :getglobal_partition, :setglobal_partition,
+                      :leave,
                       :new_opaque_closure)
 end
 

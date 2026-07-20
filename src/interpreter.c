@@ -273,65 +273,6 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_invoke_modify_sym) {
         return do_call(args + 1, nargs - 1, s);
     }
-    else if (head == jl_getglobal_partition_sym) {
-        // Reformulated global read (see the optimizer's `:getglobal_partition`
-        // pass). Recover the owning (leaf) binding from the partition's circular
-        // chain and dispatch to the `getglobal` builtin, so the requested memory
-        // order gets the builtin's validation and fences (codegen guards the node
-        // identically; the optimizer deliberately validates nothing).
-        assert(nargs == 2 && "malformed IR");
-        jl_binding_partition_t *bpart = (jl_binding_partition_t*)args[0];
-        jl_binding_t *bnd = jl_binding_partition_owner(bpart);
-        jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 4);
-        argv[0] = BUILTIN(getglobal);
-        argv[1] = (jl_value_t*)bnd->globalref->mod;
-        argv[2] = (jl_value_t*)bnd->globalref->name;
-        argv[3] = args[1]; // order symbol (always explicit here)
-        jl_value_t *v = jl_apply(argv, 4);
-        JL_GC_POP();
-        return v;
-    }
-    else if (head == jl_setglobal_partition_sym) {
-        // Reformulated global store (see the optimizer's `:setglobal_partition`
-        // pass). Recover the owning (leaf) binding from the partition's circular
-        // chain and dispatch to the store builtin in `opf` (one of setglobal!/
-        // swapglobal!/replaceglobal!/setglobalonce!), so the memory orders get the
-        // builtin's validation and fences, and later IR consumes the builtin's
-        // return value (val / old value / (old, success) / Bool respectively).
-        assert(nargs == 6 && "malformed IR");
-        jl_binding_partition_t *bpart = (jl_binding_partition_t*)args[0];
-        jl_binding_t *bnd = jl_binding_partition_owner(bpart);
-        jl_value_t *opf = args[1];
-        jl_value_t *order = args[2];     // Symbol, or jl_nothing for the default
-        jl_value_t *failorder = args[3]; // Symbol, or jl_nothing for the default
-        jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 7);
-        size_t na = 0;
-        argv[na++] = opf;
-        argv[na++] = (jl_value_t*)bnd->globalref->mod;
-        argv[na++] = (jl_value_t*)bnd->globalref->name;
-        if (opf == BUILTIN(replaceglobal)) {
-            // replaceglobal!(mod, name, expected, desired[, order[, failorder]])
-            argv[na++] = eval_value(args[5], s); // expected (cmp)
-            argv[na++] = eval_value(args[4], s); // desired (value)
-        }
-        else {
-            // setglobal!/swapglobal!/setglobalonce!(mod, name, val[, order[, failorder]])
-            argv[na++] = eval_value(args[4], s); // value
-        }
-        // Append order/failorder only when the node carries an explicit Symbol;
-        // jl_nothing means "use the builtin's default", so omit the trailing arg
-        // (a failorder is only carried alongside an order).
-        if (order != jl_nothing) {
-            argv[na++] = order;
-            if (failorder != jl_nothing)
-                argv[na++] = failorder;
-        }
-        jl_value_t *ret = jl_apply(argv, na);
-        JL_GC_POP();
-        return ret;
-    }
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;

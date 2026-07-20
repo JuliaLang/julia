@@ -2010,7 +2010,6 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(generated_only_sym) \
     XX(generated_sym) \
     XX(getfield_undefref_sym) \
-    XX(getglobal_partition_sym) \
     XX(global_sym) \
     XX(globalref_sym) \
     XX(goto_ifnot_sym) \
@@ -2059,7 +2058,6 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(release_sym) \
     XX(return_sym) \
     XX(sequentially_consistent_sym) \
-    XX(setglobal_partition_sym) \
     XX(slot_sym) \
     XX(specialize_sym) \
     XX(splatnew_sym) \

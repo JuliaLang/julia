@@ -1139,9 +1139,9 @@ function recognize_global_read(@nospecialize(stmt), ir::IRCode)
         s = _global_const_arg(argextype(stmt.args[3], ir))
         if isa(M, Module) && isa(s, Symbol)
             order = na == 4 ? _global_const_arg(argextype(stmt.args[4], ir)) : :monotonic
-            # The order need not be validated here: both backends reject an invalid or
-            # non-atomic order on the `:getglobal_partition` node (codegen inline, the
-            # interpreter by dispatching to the `getglobal` builtin).
+            # The order need not be validated here: the `Core.getglobal_partition` builtin
+            # rejects an invalid or non-atomic order (codegen inline, and the runtime builtin
+            # by dispatching to `getglobal`).
             isa(order, Symbol) && return Pair{GlobalRef,Symbol}(GlobalRef(M, s), order)
         end
     elseif f === Core.getfield && na == 3
@@ -1213,6 +1213,37 @@ function recognize_global_write(@nospecialize(stmt), ir::IRCode)
         ok, order = _opt_order(stmt, 5, ir); ok || return nothing
         ok, failorder = _opt_order(stmt, 6, ir); ok || return nothing
         return GlobalWriteInfo(g, Core.setglobalonce!, order, failorder, stmt.args[4], nothing)
+    end
+    return nothing
+end
+
+# Recognize a definedness query on a global binding: `isdefinedglobal(M, s[, allow_import[, order]])`
+# or `isdefined(M::Module, s)`, with a constant module+symbol. Only an `allow_import === true`
+# query reformulates (it walks imports to the leaf, matching the resolution below); a constant
+# `order` (default `:unordered`) is carried. Returns the `GlobalRef` and order, or `nothing`.
+function recognize_global_isdefined(@nospecialize(stmt), ir::IRCode)
+    isa(stmt, Expr) && stmt.head === :call || return nothing
+    na = length(stmt.args)
+    f = _global_call_singleton(stmt.args[1], ir)
+    if f === Core.isdefinedglobal && (3 <= na <= 5)
+        M = _global_const_arg(argextype(stmt.args[2], ir))
+        s = _global_const_arg(argextype(stmt.args[3], ir))
+        (isa(M, Module) && isa(s, Symbol)) || return nothing
+        if na >= 4
+            _global_const_arg(argextype(stmt.args[4], ir)) === true || return nothing
+        end
+        order = :unordered
+        if na == 5
+            o = _global_const_arg(argextype(stmt.args[5], ir))
+            isa(o, Symbol) || return nothing
+            order = o
+        end
+        return Pair{GlobalRef,Symbol}(GlobalRef(M, s), order)
+    elseif f === Core.isdefined && na == 3
+        M = _global_const_arg(argextype(stmt.args[2], ir))
+        s = _global_const_arg(argextype(stmt.args[3], ir))
+        (isa(M, Module) && isa(s, Symbol)) || return nothing
+        return Pair{GlobalRef,Symbol}(GlobalRef(M, s), :unordered)
     end
     return nothing
 end
@@ -1296,12 +1327,14 @@ function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
         if r !== nothing
             p = _reformulate_read(r.first, world, edges, read_cache)
             if p !== nothing
-                # A read with a non-default order keeps the order via a
-                # `:getglobal_partition` node, so the backends apply the requested load
-                # ordering and reject an invalid/non-atomic order. A default
-                # (`:unordered`) read is a bare partition, read unordered.
+                # A read with a non-default order keeps the order by calling the
+                # `Core.getglobal_partition` builtin, so the backends apply the requested
+                # load ordering and reject an invalid/non-atomic order. A default
+                # (`:unordered`) read is a bare partition, read unordered. The partition is
+                # `QuoteNode`-wrapped so it is passed as the partition object rather than
+                # read as a global.
                 inst[:stmt] = r.second !== :unordered ?
-                    Expr(:getglobal_partition, p, r.second) : p
+                    Expr(:call, GlobalRef(Core, :getglobal_partition), QuoteNode(p), QuoteNode(r.second)) : p
                 continue
             end
             # fall through: a read left on the runtime path may still contain
@@ -1321,10 +1354,26 @@ function reformulate_globals_pass!(ir::IRCode, opt::OptimizationState)
                 # A default-order `setglobal!` mirrors a bare `Core.BindingPartition` read:
                 # emit `BindingPartition = value` (which prints as `Mod.name = value`). A
                 # stronger order, or swap/replace/setglobalonce (which return values /
-                # compare), keeps the explicit `:setglobal_partition` node.
+                # compare), calls the `Core.setglobal_partition` builtin, carrying the store
+                # builtin and orders. The partition/op/orders are `QuoteNode`-wrapped so they
+                # are passed as objects; `value`/`cmp` stay as the original operands.
                 inst[:stmt] = (w.op === Core.setglobal! && w.order === nothing) ?
                     Expr(:(=), part, w.value) :
-                    Expr(:setglobal_partition, part, w.op, w.order, w.failorder, w.value, w.cmp)
+                    Expr(:call, GlobalRef(Core, :setglobal_partition), QuoteNode(part),
+                         QuoteNode(w.op), QuoteNode(w.order), QuoteNode(w.failorder), w.value, w.cmp)
+                continue
+            end
+        end
+        # A resolved definedness query freezes the same leaf a read would (defined const or
+        # typed global, `_reformulate_read`), recording an edge, and calls the
+        # `Core.isdefinedglobal_partition` builtin so codegen emits an inline ordered check
+        # of that binding's slot rather than a runtime query. A world-1 constant / unresolved
+        # binding stays a runtime `isdefinedglobal`.
+        d = recognize_global_isdefined(stmt, ir)
+        if d !== nothing
+            p = _reformulate_read(d.first, world, edges, read_cache)
+            if p !== nothing
+                inst[:stmt] = Expr(:call, GlobalRef(Core, :isdefinedglobal_partition), QuoteNode(p), QuoteNode(d.second))
                 continue
             end
         end
@@ -1738,14 +1787,6 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         rhs = ex.args[2]
         isa(rhs, Expr) && (cost += statement_cost(rhs, -1, src, sptypes, params))
         return cost
-    elseif head === :getglobal_partition
-        # The reformulated `getglobal` read (see `reformulate_globals_pass!`); a plain
-        # `getglobal` call costs 0 above, so match that.
-        return 0
-    elseif head === :setglobal_partition
-        # The reformulated `setglobal!`/`swapglobal!`/`replaceglobal!`/`setglobalonce!` store;
-        # all of those builtins register the same tfunc cost (`GLOBAL_STORE_COST`).
-        return GLOBAL_STORE_COST
     elseif head === :copyast
         return 100
     end
