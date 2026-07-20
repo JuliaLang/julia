@@ -341,7 +341,6 @@ function enqueue_specialization!(all::Bool, worklist, mi::MethodInstance)
 end
 
 # Main unified compilation and emission function
-# This replaces the functionality from jl_precompile
 function compile_and_emit_native(worlds::Vector{UInt},
                                  trim_mode::UInt8,
                                  external_linkage::Bool,
@@ -350,6 +349,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
                                  all::Bool,
                                  module_init_order::Vector{Any}, # Vector{Module}
                                  ext_foreign_cis::Vector{Any}) # Vector{CodeInstance}
+    @nospecialize
     latestworld = worlds[end]
 
     # Step 1: Precompile all __init__ methods that will be required
@@ -375,18 +375,20 @@ function compile_and_emit_native(worlds::Vector{UInt},
         if newmodules === nothing
             infer_all_method_defs!(all, newmethods, latestworld, specialization_worklist)
         else
-            # Compute new_ext_cis using queue_external_cis with global newly_inferred
-            new_ext = ccall(:jl_compute_new_ext, Any, ())
-            if new_ext !== nothing
-                for i in 1:length(new_ext::Vector{Any})
-                    ci = new_ext[i]
+            # Compute new_used using queue_used with global newly_inferred
+            new_used = ccall(:jl_compute_new_used_ci, Any, ())
+            if new_used !== nothing
+                for i in 1:length(new_used::Vector{Any})
+                    ci = new_used[i]
                     if ci isa MethodInstance
                         push!(specialization_worklist, ci)
                     elseif ci isa CodeInstance
                         if ci.owner !== nothing
                             # enqueue_specialization will skip over CIs from foreign interpreters
                             # and currently will visit at most one (do_compile) CI per method instance
-                            push!(ext_foreign_cis, ci)
+                            if ci.max_world === typemax(UInt)
+                                push!(ext_foreign_cis, ci)
+                            end
                         else
                             enqueue_specialization!(all, specialization_worklist, get_ci_mi(ci))
                         end
@@ -426,7 +428,10 @@ function compile_and_emit_native(worlds::Vector{UInt},
     end
 
     # Step 4: Perform type inference on tocompile to create codeinfos
-    codeinfos = try
+    # Returns svec(codeinfos, cis): the interleaved CodeInstance/CodeInfo work
+    # list for codegen, plus the ordered CodeInstances to place in the method
+    # caches of the output image.
+    result = try
         typeinf_ext_toplevel(tocompile, worlds, trim_mode)
     catch exc
         # Handle trimming failures
@@ -436,7 +441,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
         invokelatest(invokelatest(getglobal, Base, :exit), 1)
     end
 
-    return codeinfos
+    return result
 
 end
 

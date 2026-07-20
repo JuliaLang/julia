@@ -78,7 +78,7 @@ function Base.:(==)() end
 3   (call core.TypeEqOf %₂)
 4   (call core.svec %₃)
 5   (call core.svec)
-6   SourceLocation::1:10
+6   SourceLocation::1:1
 7   (call core.svec %₄ %₅ %₆)
 8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read)]

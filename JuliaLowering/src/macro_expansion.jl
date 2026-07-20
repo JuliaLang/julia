@@ -207,7 +207,7 @@ function _macrocall_expr_location(st::SyntaxTree)
         end
     elseif kind(st[2]) === K"VERSION"
         loc = source_location(LineNumberNode, st)
-        isdefined(Core, :MacroSource) ? Core.MacroSource(loc, st[2].value) : loc
+        @static isdefinedglobal(Core, :MacroSource) ? Core.MacroSource(loc, st[2].value) : loc
     else
         LineNumberNode(0, :none)
     end

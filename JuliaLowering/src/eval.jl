@@ -169,6 +169,17 @@ function codeinfo_has_image_globalref(@nospecialize(e))
     end
 end
 
+function codeinfo_has_fcall(@nospecialize(e))
+    if e isa Expr
+        if e.head === :(=)
+            return codeinfo_has_fcall(e.args[2])
+        end
+        return e.head === :foreigncall || e.head === :foreignglobal ||
+            e.head === :cfunction
+    end
+    return false
+end
+
 const _CodeInfo_need_ver = v"1.12.0-DEV.512"
 @static if VERSION < _CodeInfo_need_ver
     function _CodeInfo(args...)
@@ -550,8 +561,7 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     ssaflags = compute_ssaflags(ex[1])
     propagate_inbounds =
         get(meta, :propagate_inbounds, false)
-    # TODO: Set true if there's a foreigncall
-    has_fcall = false
+    has_fcall = any(codeinfo_has_fcall, stmts)
     nospecializeinfer =
         get(meta, :nospecializeinfer, false)
     inlining =
@@ -626,9 +636,7 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"globalref"
         GlobalRef(ex.mod::Module, Symbol(ex.name_val::String))
     elseif k == K"Identifier"
-        # Implicitly refers to name in parent module
-        # TODO: Should we even have plain identifiers at this point or should
-        # they all effectively be resolved into GlobalRef earlier?
+        # TODO: assert false (only reachable from simdloop?)
         Symbol(ex.name_val::String)
     elseif k == K"SourceLocation"
         QuoteNode(source_location(LineNumberNode, ex))

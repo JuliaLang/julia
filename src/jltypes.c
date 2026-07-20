@@ -56,7 +56,7 @@ static int typeenv_has_ne(jl_typeenv_t *env, jl_tvar_t *v) JL_NOTSAFEPOINT
 }
 
 
-static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
+static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAFEPOINT
 {
     while (1) {
         if (jl_is_typevar(v))
@@ -184,7 +184,7 @@ JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v) JL_NOTSAFEPOINT
     return has_free_typevars(v, NULL);
 }
 
-static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out)
+static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out) JL_CANSAFEPOINT
 {
     while (1) {
         if (jl_is_typevar(v)) {
@@ -608,7 +608,7 @@ static int count_union_components(jl_value_t **types, size_t n, int widen)
     return c;
 }
 
-static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx, int widen)
+static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx, int widen) JL_CANSAFEPOINT
 {
     size_t i;
     for (i = 0; i < n; i++) {
@@ -689,7 +689,7 @@ int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
 
 // merge Union{Tuple{}, Tuple{T}, Tuple{T, T, Vararg{T}}} into Tuple{Vararg{T}}
 // assumes temp is already sorted by number of type parameters
-STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt)
+STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt) JL_CANSAFEPOINT
 {
     for (size_t i = nt-1; i > 0; i--) {
         // match types of form Tuple{T, ..., Vararg{T}}
@@ -784,7 +784,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     return tu;
 }
 
-static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
+static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT
 {
     assert(hasfree == (jl_has_free_typevars(a) | (jl_has_free_typevars(b) << 1)));
     int subab = 0, subba = 0;
@@ -1056,7 +1056,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 
 // --- type instantiation and cache ---
 
-static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
+static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n) JL_CANSAFEPOINT
 {
     size_t j;
     // TODO: This shouldn't be necessary
@@ -1086,7 +1086,7 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
 
 // These `value` functions return the same values as the primary functions,
 // but operate on the typeof/Typeof each object in an array
-static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key, size_t n, int leaf)
+static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key, size_t n, int leaf) JL_CANSAFEPOINT
 {
     size_t j;
     // TODO: This shouldn't be necessary
@@ -1130,7 +1130,7 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
 static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED;
 
 /* returns val if key is in hash, otherwise NULL */
-static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t n, uint_t hv)
+static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t n, uint_t hv) JL_CANSAFEPOINT
 {
     size_t sz = jl_svec_len(cache);
     if (sz == 0)
@@ -1153,7 +1153,7 @@ static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t
 }
 
 /* returns val if key is in hash, otherwise NULL */
-static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, jl_value_t **key, size_t n, uint_t hv, int leaf)
+static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, jl_value_t **key, size_t n, uint_t hv, int leaf) JL_CANSAFEPOINT
 {
     size_t sz = jl_svec_len(cache);
     if (sz == 0)
@@ -1178,7 +1178,7 @@ static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, j
 // look up a type in a cache by binary or linear search.
 // if found, returns the index of the found item. if not found, returns
 // ~n, where n is the index where the type should be inserted.
-static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t n)
+static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t n) JL_CANSAFEPOINT
 {
     if (n == 0)
         return -1;
@@ -1195,7 +1195,7 @@ static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t
     return ~cl;
 }
 
-static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, jl_value_t **key, size_t n)
+static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, jl_value_t **key, size_t n) JL_CANSAFEPOINT
 {
     if (n == 0)
         return -1;
@@ -1212,7 +1212,7 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
     return ~cl;
 }
 
-static jl_value_t *lookup_type(jl_typename_t *tn JL_PROPAGATES_ROOT, jl_value_t **key, size_t n)
+static jl_value_t *lookup_type(jl_typename_t *tn JL_PROPAGATES_ROOT, jl_value_t **key, size_t n) JL_CANSAFEPOINT
 {
     JL_TIMING(TYPE_CACHE_LOOKUP, TYPE_CACHE_LOOKUP);
     if (tn == jl_type_typename) {
@@ -1233,7 +1233,7 @@ static jl_value_t *lookup_type(jl_typename_t *tn JL_PROPAGATES_ROOT, jl_value_t 
     }
 }
 
-static jl_value_t *lookup_typevalue(jl_typename_t *tn, jl_value_t *key1, jl_value_t **key, size_t n, int leaf)
+static jl_value_t *lookup_typevalue(jl_typename_t *tn, jl_value_t *key1, jl_value_t **key, size_t n, int leaf) JL_CANSAFEPOINT
 {
     JL_TIMING(TYPE_CACHE_LOOKUP, TYPE_CACHE_LOOKUP);
     unsigned hv = typekeyvalue_hash(tn, key1, key, n, leaf);
@@ -1277,7 +1277,7 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
     return 0;
 }
 
-static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
+static void cache_insert_type_set(jl_datatype_t *val, uint_t hv) JL_CANSAFEPOINT
 {
     jl_svec_t *a = jl_atomic_load_relaxed(&val->name->cache);
     while (1) {
@@ -1327,7 +1327,7 @@ jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
     }
 }
 
-static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at)
+static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at) JL_CANSAFEPOINT
 {
     jl_svec_t *cache = jl_atomic_load_relaxed(&type->name->linearcache);
     assert(jl_is_svec(cache));
@@ -1476,7 +1476,7 @@ int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT
 
 // type instantiation
 
-static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub)
+static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub) JL_CANSAFEPOINT
 {
     jl_value_t *lb = t, *ub = t;
     if (jl_is_typevar(t) || jl_has_free_typevars(t)) {
@@ -1497,12 +1497,12 @@ struct _jl_typestack_t;
 typedef struct _jl_typestack_t jl_typestack_t;
 
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
-                                       jl_typestack_t *stack, jl_typeenv_t *env, int check, int nothrow);
+                                       jl_typestack_t *stack, jl_typeenv_t *env, int check, int nothrow) JL_CANSAFEPOINT;
 
 // Build an environment mapping a TypeName's parameters to parameter values.
 // This is the environment needed for instantiating a type's supertype and field types.
 static jl_value_t *inst_datatype_env(jl_value_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
-                                     jl_typestack_t *stack, jl_typeenv_t *env, int c)
+                                     jl_typestack_t *stack, jl_typeenv_t *env, int c) JL_CANSAFEPOINT
 {
     if (jl_is_datatype(dt))
         return inst_datatype_inner((jl_datatype_t*)dt, p, iparams, ntp, stack, env, 1, 0);
@@ -1645,8 +1645,8 @@ JL_EXTENSION struct _jl_typestack_t {
     struct _jl_typestack_t *prev;
 };
 
-static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow);
-static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack, int cacheable);
+static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow) JL_CANSAFEPOINT;
+static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack, int cacheable) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p)
 {
@@ -1849,7 +1849,7 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
 }
 
 static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, size_t ntp,
-                                     jl_value_t **iparams)
+                                     jl_value_t **iparams) JL_CANSAFEPOINT
 {
     // if an identical instantiation is already in process somewhere up the
     // stack, return it. this computes a fixed point for recursive types.
@@ -2131,7 +2131,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
 }
 
-static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, size_t np, int nothrow)
+static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, size_t np, int nothrow) JL_CANSAFEPOINT
 {
     jl_value_t *wrapper = tn->wrapper;
     jl_value_t **bounds;
@@ -2269,7 +2269,7 @@ static int may_substitute_ub(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPOINT
     return _may_substitute_ub(v, var, 0, &cov_count);
 }
 
-static jl_value_t *normalize_unionalls(jl_value_t *t)
+static jl_value_t *normalize_unionalls(jl_value_t *t) JL_CANSAFEPOINT
 {
     if (jl_is_uniontype(t)) {
         jl_uniontype_t *u = (jl_uniontype_t*)t;
@@ -2321,7 +2321,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t)
 }
 
 // used to expand an NTuple to a flat representation
-static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *t, int check, int nothrow)
+static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *t, int check, int nothrow) JL_CANSAFEPOINT
 {
     jl_value_t *p = NULL;
     JL_GC_PUSH1(&p);
@@ -2350,7 +2350,7 @@ static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *t, int check, int not
     return p;
 }
 
-static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack);
+static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack) JL_CANSAFEPOINT;
 
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                        jl_typestack_t *stack, jl_typeenv_t *env, int check, int nothrow)
@@ -2717,7 +2717,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     return (jl_value_t*)ndt;
 }
 
-static jl_value_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params, int check)
+static jl_value_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params, int check) JL_CANSAFEPOINT
 {
     return inst_datatype_inner(jl_anytuple_type, params, p, np, NULL, NULL, check, 0);
 }
@@ -2799,7 +2799,7 @@ static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *s
     return np;
 }
 
-static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow)
+static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow) JL_CANSAFEPOINT
 {
     jl_datatype_t *tt = (jl_datatype_t*)t;
     jl_svec_t *tp = tt->parameters;
@@ -3053,7 +3053,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
     return t;
 }
 
-static jl_value_t *instantiate_with(jl_value_t *t, jl_value_t **env, size_t n, jl_typeenv_t *te)
+static jl_value_t *instantiate_with(jl_value_t *t, jl_value_t **env, size_t n, jl_typeenv_t *te) JL_CANSAFEPOINT
 {
     if (n > 0) {
         jl_typeenv_t en = { (jl_tvar_t*)env[0], env[1], te };
@@ -3143,19 +3143,6 @@ jl_value_t *jl_wrap_TypeEgal(jl_value_t *t)
     ((jl_typeeq_t*)te)->T = t;
     JL_GC_POP();
     return te;
-}
-
-// The most specific type containing the value `v`, matching the per-argument
-// key `jl_inst_arg_tuple_type` uses: egality-pinned closed type values, equality
-// keys (`Type{v}`) for free-typevar types (#61242), `typeof` otherwise.
-JL_DLLEXPORT jl_value_t *jl_arg_slot_type(jl_value_t *v)
-{
-    if (jl_is_type(v)) {
-        if (jl_has_free_typevars(v))
-            return (jl_value_t*)jl_wrap_Type(v);
-        return jl_wrap_TypeEgal(v);
-    }
-    return jl_typeof(v);
 }
 
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow)
@@ -3303,7 +3290,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 
 // initialization -------------------------------------------------------------
 
-static jl_tvar_t *tvar(const char *name)
+static jl_tvar_t *tvar(const char *name) JL_CANSAFEPOINT
 {
     return jl_new_typevar(jl_symbol(name), (jl_value_t*)jl_bottom_type,
                           (jl_value_t*)jl_any_type);
@@ -4324,7 +4311,7 @@ void jl_init_types(void) JL_GC_DISABLED
     export_jl_sysimg_globals();
 }
 
-static jl_value_t *core(const char *name) JL_GLOBALLY_ROOTED
+static jl_value_t *core(const char *name) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED
 {
     return jl_get_global(jl_core_module, jl_symbol(name));
 }

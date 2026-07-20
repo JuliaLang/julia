@@ -103,7 +103,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 #endif
 }
 
-static void jl_prep_sanitizers(void)
+static void jl_prep_sanitizers(void) JL_NOTSAFEPOINT
 {
 #if !defined(_OS_WINDOWS_)
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
@@ -155,7 +155,7 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
     return rv;
 }
 
-static void jl_close_item_atexit(uv_handle_t *handle)
+static void jl_close_item_atexit(uv_handle_t *handle) JL_CANSAFEPOINT
 {
     if (handle->type != UV_FILE && uv_is_closing(handle))
         return;
@@ -226,7 +226,7 @@ JL_DLLEXPORT void jl_raise(int signo)
 #endif
 }
 
-JL_DLLEXPORT void jl_atexit_hook(int exitcode)
+JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
 {
     uv_tty_reset_mode();
 
@@ -309,10 +309,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                     //error handling -- continue cleanup, as much as possible
                     assert(item);
                     uv_unref(item->h);
-                    jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
-                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
-                    jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-                    jl_fprint_backtrace(ios_safe_stderr);
+                    ios_printf(ios_stderr, "error during exit cleanup: close: ");
+                    jl_static_show((JL_STREAM*)ios_stderr, jl_current_exception(ct));
+                    ios_printf(ios_stderr, "\n");
+                    jl_fprint_backtrace(ios_stderr);
                     item = next_shutdown_queue_item(item);
                 }
             }
@@ -435,7 +435,7 @@ static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
 }
 #endif
 
-static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
+static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable) JL_NOTSAFEPOINT
 {
     void *handle;
     int err;
@@ -510,7 +510,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     return handle;
 }
 
-static void init_stdio(void)
+static void init_stdio(void) JL_NOTSAFEPOINT
 {
     JL_STDIN  = (uv_stream_t*)init_stdio_handle("stdin", UV_STDIN_FD, 1);
     JL_STDOUT = (uv_stream_t*)init_stdio_handle("stdout", UV_STDOUT_FD, 0);
@@ -554,7 +554,7 @@ extern jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t global_roots_lock;
 extern jl_mutex_t profile_show_peek_cond_lock;
 
-static void restore_fp_env(void)
+static void restore_fp_env(void) JL_NOTSAFEPOINT
 {
     if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
         jl_error("Failed to configure floating point environment");
@@ -566,7 +566,7 @@ static void restore_fp_env(void)
         "See: https://github.com/JuliaLang/julia/issues/50278");
     }
 }
-static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, jl_task_t *ct)
+static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, jl_task_t *ct) JL_CANSAFEPOINT
 {
     JL_TIMING(JULIA_INIT, JULIA_INIT);
 
@@ -680,7 +680,7 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
 #endif
 };
 
-static void init_global_mutexes(void) {
+static void init_global_mutexes(void) JL_NOTSAFEPOINT {
     JL_MUTEX_INIT(&jl_modules_mutex, "jl_modules_mutex");
     JL_MUTEX_INIT(&precomp_statement_out_lock, "precomp_statement_out_lock");
     JL_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
@@ -746,6 +746,10 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     // have to dlclose() these handles.
     jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1, 0);
     jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_options, /* throw_err */ 1, 0);
+#ifdef __clang_gcanalyzer__
+    #define jl_dlopen jl_dlopen_noload
+    JL_DLLEXPORT jl_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
+#endif
 #ifdef _OS_WINDOWS_
     /* If this parameter is NULL, GetModuleHandle returns a handle to the file
        used to create the calling process (.exe file). */
@@ -761,6 +765,9 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_exe_handle = jl_dlopen(NULL, JL_RTLD_NOW | JL_RTLD_NOLOAD | JL_RTLD_LOCAL | JL_RTLD_FIRST);
     // RTLD_DEFAULT is mandatory on POSIX
     jl_RTLD_DEFAULT_handle = RTLD_DEFAULT;
+#endif
+#ifdef __clang_safetyanalysis__
+    #undef jl_dlopen
 #endif
 
     jl_init_rand();

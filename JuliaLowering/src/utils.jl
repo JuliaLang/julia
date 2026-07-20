@@ -381,3 +381,31 @@ function flatten_blocks(st::SyntaxTree)
         mapchildren(flatten_blocks, st._graph, st)
     end
 end
+
+# Hack.  Used for assignment to variables with `decl`, since the type may change
+# between assignments.  flisp: renumber-assigned-ssavalues
+function renumber_assigned_ssavalues(ctx, st)
+    ssamap = Dict{IdTag, IdTag}()
+    _find_assigned_ssavars!(ctx, ssamap, st)
+    isempty(ssamap) && return st
+    _replace_binding_ids(ctx, ssamap, st)
+end
+function _find_assigned_ssavars!(ctx, ssamap, st)
+    (is_leaf(st) || is_quoted(st)) && return
+    if kind(st) == K"=" && kind(st[1]) == K"BindingId"
+        b = get_binding(ctx, st[1])
+        b.is_ssa || return
+        ssamap[b.id] = _binding_id(ssavar(ctx, st[1], b.name))
+    end
+    foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))
+end
+function _replace_binding_ids(ctx, ssamap, st)
+    if kind(st) == K"BindingId"
+        id = get(ssamap, _binding_id(st), nothing)
+        isnothing(id) ? st : setattr!(newleaf(ctx, st, K"BindingId"), :var_id, id)
+    elseif is_leaf(st) || is_quoted(st)
+        st
+    else
+        mapchildren(e->_replace_binding_ids(ctx, ssamap, e), ctx, st)
+    end
+end

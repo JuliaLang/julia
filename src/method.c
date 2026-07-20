@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
+static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at) JL_CANSAFEPOINT
 {
     if (jl_is_svec(rt))
         jl_errorf("%s: missing return type", where);
@@ -45,7 +45,7 @@ void jl_add_scanned_method(jl_module_t *m, jl_method_t *meth)
     JL_UNLOCK(&m->lock);
 }
 
-JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
+JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src) JL_CANSAFEPOINT
 {
     if (!jl_atomic_fetch_or(&m->did_scan_source, 1)) {
         jl_code_info_t *code = NULL;
@@ -73,7 +73,7 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
     }
 }
 
-static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const char *kind)
+static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const char *kind) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_value_t *fptr = jl_exprarg(e, 0);
@@ -157,7 +157,7 @@ static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const cha
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
-                                              int binding_effects)
+                                              int binding_effects) JL_CANSAFEPOINT
 {
     if (jl_is_symbol(expr)) {
         jl_errorf("Found raw symbol %s in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.",
@@ -331,7 +331,7 @@ static jl_value_t *expr_arg1(jl_value_t *expr) {
     return jl_array_ptr_ref(args, 0);
 }
 
-static jl_value_t *alloc_edges(arraylist_t *edges_list)
+static jl_value_t *alloc_edges(arraylist_t *edges_list) JL_CANSAFEPOINT
 {
     jl_value_t *jledges = (jl_value_t*)jl_alloc_svec(edges_list->len);
     jl_value_t *jledges2 = NULL;
@@ -362,7 +362,7 @@ static jl_value_t *alloc_edges(arraylist_t *edges_list)
     return jledges;
 }
 
-static void add_edge(arraylist_t *edges_list, arraylist_t *inlinestack, int32_t *p_to, int32_t *p_pc)
+static void add_edge(arraylist_t *edges_list, arraylist_t *inlinestack, int32_t *p_to, int32_t *p_pc) JL_CANSAFEPOINT
 {
     jl_value_t *locinfo = (jl_value_t*)arraylist_pop(inlinestack);
     jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 0);
@@ -404,7 +404,7 @@ static void add_edge(arraylist_t *edges_list, arraylist_t *inlinestack, int32_t 
     *p_pc = (i - 2) / 3 + 1;
 }
 
-static jl_debuginfo_t *jl_linetable_to_debuginfo(jl_array_t *codelocs_any, jl_array_t *linetable)
+static jl_debuginfo_t *jl_linetable_to_debuginfo(jl_array_t *codelocs_any, jl_array_t *linetable) JL_CANSAFEPOINT
 {
     size_t nlocs = jl_array_nrows(codelocs_any);
     jl_value_t *toplocinfo = jl_array_ptr_ref(linetable, 0);
@@ -715,7 +715,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
 
 // invoke (compiling if necessary) the jlcall function pointer for a method template
 static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
-        size_t world, jl_svec_t *sparam_vals, jl_value_t **args, uint32_t nargs)
+        size_t world, jl_svec_t *sparam_vals, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT
 {
     size_t n_sparams = jl_svec_len(sparam_vals);
     jl_value_t **gargs;
@@ -929,7 +929,7 @@ jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_s
     return new_linfo;
 }
 
-JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
+JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src) JL_CANSAFEPOINT
 {
     uint8_t j;
     uint8_t called = 0;
@@ -1438,7 +1438,7 @@ static uint64_t current_root_id(jl_array_t *root_blocks)
 }
 
 // Add a new block of `len` roots with key `modid` (module id)
-static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
+static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len) JL_CANSAFEPOINT
 {
     assert(jl_is_array(root_blocks));
     jl_array_grow_end(root_blocks, 2);
@@ -1449,7 +1449,7 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
 }
 
 // Allocate storage for roots
-static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
+static void prepare_method_for_roots(jl_method_t *m, uint64_t modid) JL_CANSAFEPOINT
 {
     if (!m->roots) {
         jl_gc_write(m, m->roots, jl_array_t, jl_alloc_vec_any(0));

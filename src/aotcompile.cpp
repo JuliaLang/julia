@@ -172,6 +172,10 @@ typedef struct {
     std::map<jl_code_instance_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
     SmallVector<void*, 0> jl_value_to_llvm;
     SmallVector<jl_code_instance_t*, 0> jl_external_to_llvm;
+    // ordered list of CodeInstances emitted for this image, in the order they
+    // were presented in `codeinfos`; consumed by staticdata.c to rewrite each
+    // MethodInstance's `cache` field into a `next`-linked list
+    SmallVector<jl_code_instance_t*, 0> jl_ci_order;
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -204,6 +208,24 @@ jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t
     for (auto &ci : map) {
         data[i++] = ci.first;
     }
+}
+
+// get the ordered list of CodeInstances that were emitted for this image, in
+// the order they appeared in `codeinfos`. staticdata.c uses this to rewrite the
+// `cache` field of each MethodInstance into a `next`-linked list.
+extern "C" JL_DLLEXPORT_CODEGEN void
+jl_get_llvm_mi_cache_order_impl(void *native_code, size_t *num_elements, jl_code_instance_t **data)
+{
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &order = desc->jl_ci_order;
+
+    if (data == NULL) {
+        *num_elements = order.size();
+        return;
+    }
+
+    assert(*num_elements == order.size());
+    memcpy(data, order.data(), *num_elements * sizeof(jl_code_instance_t *));
 }
 
 // get the list of global variables managed by the compiler
@@ -429,7 +451,7 @@ public:
     egal_set(egal_set&) = delete;
     egal_set(egal_set&&) = delete;
     egal_set() = default;
-    void insert(jl_value_t *val)
+    void insert(jl_value_t *val) JL_CANSAFEPOINT
     {
         // list/keyset are GC-rooted by the caller via JL_GC_PUSH
         JL_GC_PROMISE_ROOTED(val);
@@ -452,7 +474,7 @@ public:
 using ::egal_set;
 typedef DenseMap<jl_code_instance_t*, jl_llvm_functions_t> jl_compiled_functions_t;
 
-static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi)
+static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi) JL_CANSAFEPOINT
 {
     jl_method_t *m = mi->def.method;
     if (!jl_is_method(m))
@@ -471,14 +493,14 @@ static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi
     JL_UNLOCK(&m->writelock);
 }
 
-static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots)
+static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots) JL_CANSAFEPOINT
 {
     for (size_t i = 0; i < jl_array_dim0(out.temporary_roots); i++) {
         jl_value_t *val = jl_array_ptr_ref(out.temporary_roots, i);
         auto ref = out.global_targets.find((void*)val);
         if (ref == out.global_targets.end())
             continue;
-        auto get_global_root = [val, &method_roots]() {
+        auto get_global_root = [val, &method_roots]() JL_CANSAFEPOINT {
             if (jl_is_globally_rooted(val))
                 return val;
             jl_value_t *mval = method_roots.get(val);
@@ -501,7 +523,7 @@ static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots)
     }
 }
 
-static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Function *func, Function *specfunc, bool target_specsig)
+static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Function *func, Function *specfunc, bool target_specsig) JL_CANSAFEPOINT
 {
     std::string gf_thunk_name;
     if (specfunc)
@@ -513,7 +535,7 @@ static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, 
     return F;
 }
 
-static void generate_cfunc_thunks(jl_codegen_output_t &out)
+static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
     DenseMap<jl_method_instance_t*, jl_code_instance_t*> compiled_mi;
     for (auto &[ci, _] : out.ci_funcs) {
@@ -530,7 +552,7 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out)
         JL_GC_PROMISE_ROOTED(declrt);
         Function *unspec = aot_abi_converter(out, cfunc.abi, nullptr, nullptr, nullptr, false);
         jl_code_instance_t *codeinst = nullptr;
-        auto assign_fptr = [&out, &cfunc, &codeinst, &unspec](Function *f) {
+        auto assign_fptr = [&out, &cfunc, &codeinst, &unspec](Function *f) JL_CANSAFEPOINT {
             ConstantArray *init = cast<ConstantArray>(cfunc.cfuncdata->getInitializer());
             SmallVector<Constant*,8> initvals;
             for (unsigned i = 0; i < init->getNumOperands(); ++i)
@@ -644,16 +666,23 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     fargs[4] = worklist ? (jl_value_t*)worklist : jl_nothing; // worklist (or nothing)
     fargs[5] = mod_array ? (jl_value_t*)mod_array : jl_nothing; // mod_array (or nothing)
     fargs[6] = jl_box_bool(all);
-    fargs[7] = module_init_order ? (jl_value_t*)module_init_order : jl_nothing; // module_init_order (or nothing)
+    fargs[7] = (jl_value_t*)module_init_order; // module_init_order
     fargs[8] = ext_foreign_cis ? (jl_value_t*)ext_foreign_cis : jl_nothing; // ext_foreign_cis (or nothing)
     size_t last_age = ct->world_age;
     ct->world_age = jl_typeinf_world;
     fargs[0] = jl_apply(fargs, 9);
     fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = fargs[8] = NULL;
     ct->world_age = last_age;
-    jl_value_t *codeinfos = fargs[0];
+    // the bridge returns svec(codeinfos, ci_order): the interleaved
+    // CodeInstance/CodeInfo work list to emit, and the ordered CodeInstances to
+    // store in the method caches of the output image
+    jl_value_t *result = fargs[0];
+    assert(jl_is_svec(result) && jl_svec_len(result) == 2);
+    jl_value_t *codeinfos = jl_svecref(result, 0);
+    jl_value_t *ci_order = jl_svecref(result, 1);
     JL_TYPECHK(jl_create_native, array_any, codeinfos);
-    auto data = (jl_native_code_desc_t *)jl_emit_native((jl_array_t*)codeinfos, llvmmod, NULL, external_linkage ? 1 : 0);
+    JL_TYPECHK(jl_create_native, array_any, ci_order);
+    auto data = (jl_native_code_desc_t *)jl_emit_native((jl_array_t*)codeinfos, (jl_array_t*)ci_order, llvmmod, NULL, external_linkage ? 1 : 0);
     JL_GC_POP();
 
     // move everything inside, now that we've merged everything
@@ -808,7 +837,7 @@ static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_
 }
 
 // Static version of JuliaOJIT::linkOutput
-static void aot_link_output(jl_codegen_output_t &out)
+static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
     for (auto &[call, target] : out.call_targets) {
         auto [ci, api] = call;
@@ -848,13 +877,25 @@ static void aot_link_output(jl_codegen_output_t &out)
 }
 
 static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
-                                      const jl_cgparams_t *cgparams, int external_linkage)
+                                      jl_array_t *ci_order, const jl_cgparams_t *cgparams,
+                                      int external_linkage) JL_CANSAFEPOINT
 {
     jl_cgparams_t target_cgparams = *cgparams;
     target_cgparams.sanitize_memory = jl_options.target_sanitize_memory;
     target_cgparams.sanitize_thread = jl_options.target_sanitize_thread;
     target_cgparams.sanitize_address = jl_options.target_sanitize_address;
     auto &out = *data->out;
+    // record the caller-provided ordering of CodeInstances to store in the
+    // image's method caches (see jl_get_llvm_mi_cache_order / jl_rewrite_mi_caches)
+    if (ci_order) {
+        size_t nci = jl_array_nrows(ci_order);
+        data->jl_ci_order.reserve(nci);
+        for (size_t k = 0; k < nci; k++) {
+            jl_value_t *ci = jl_array_ptr_ref(ci_order, k);
+            assert(jl_is_code_instance(ci));
+            data->jl_ci_order.push_back((jl_code_instance_t*)ci);
+        }
+    }
     // compile all methods for the current world and type-inference world
     DenseMap<jl_code_instance_t *, jl_code_info_t *> ci_infos;
     egal_set method_roots;
@@ -959,7 +1000,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
 // also be used by extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
+void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
@@ -979,9 +1020,9 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
         data->TSM_ref = &data->TSM;
     }
 
-    data->TSM_ref->withModuleDo([&](Module &M) {
+    data->TSM_ref->withModuleDo([&](Module &M) JL_CANSAFEPOINT {
         data->out = std::make_unique<jl_codegen_output_t>(M);
-        jl_emit_native_to_output(data, codeinfos, cgparams, external_linkage);
+        jl_emit_native_to_output(data, codeinfos, ci_order, cgparams, external_linkage);
     });
 
     return (void *)data;
@@ -2562,7 +2603,7 @@ void jl_dump_native_impl(void *native_code,
 
 
 // sometimes in GDB you want to find out what code would be created from a mi
-extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instance_t *mi)
+extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instance_t *mi) JL_CANSAFEPOINT
 {
     jl_llvmf_dump_t llvmf_dump;
     size_t world = jl_current_task->world_age;

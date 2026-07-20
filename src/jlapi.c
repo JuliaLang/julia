@@ -89,8 +89,10 @@ JL_DLLEXPORT jl_value_t *jl_set_ARGS(int argc, char **argv)
 }
 
 JL_DLLEXPORT void jl_init_with_image_handle(void *handle) {
+#if !defined(__clang_safetyanalysis__) && !defined(__clang_gcanalyzer__)
     if (jl_is_initialized())
         return;
+#endif
 
     const char *image_path = jl_pathname_for_handle(handle);
     jl_options.image_file = image_path;
@@ -119,8 +121,10 @@ JL_DLLEXPORT void jl_init_with_image_handle(void *handle) {
 JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
                                           const char *image_path)
 {
+#if !defined(__clang_safetyanalysis__) && !defined(__clang_gcanalyzer__)
     if (jl_is_initialized())
         return;
+#endif
     if (image_path != NULL)
         jl_options.image_file = image_path;
     else
@@ -136,7 +140,7 @@ JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
 
 // Deprecated function, kept for backward compatibility
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                    const char *image_path)
+                                    const char *image_path) JL_CANSAFEPOINT_ENTER
 {
     jl_init_with_image_file(julia_bindir, image_path);
 }
@@ -591,7 +595,7 @@ JL_DLLEXPORT int8_t jl_is_memdebug(void) JL_NOTSAFEPOINT {
  *
  * @return A pointer to `jl_value_t` representing the directory path as a Julia string.
  */
-JL_DLLEXPORT jl_value_t *jl_get_julia_bindir(void)
+JL_DLLEXPORT jl_value_t *jl_get_julia_bindir(void) JL_CANSAFEPOINT
 {
     return jl_cstr_to_string(jl_options.julia_bindir);
 }
@@ -601,7 +605,7 @@ JL_DLLEXPORT jl_value_t *jl_get_julia_bindir(void)
  *
  * @return A pointer to `jl_value_t` representing the full path as a Julia string.
  */
-JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void)
+JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void) JL_CANSAFEPOINT
 {
     return jl_cstr_to_string(jl_options.julia_bin);
 }
@@ -611,7 +615,7 @@ JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void)
  *
  * @return A pointer to `jl_value_t` representing the system image file path as a Julia string.
  */
-JL_DLLEXPORT jl_value_t *jl_get_image_file(void)
+JL_DLLEXPORT jl_value_t *jl_get_image_file(void) JL_CANSAFEPOINT
 {
     return jl_cstr_to_string(jl_options.image_file);
 }
@@ -711,7 +715,7 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
  * @param v A pointer to `jl_value_t` representing the Julia value.
  * @return A pointer to `jl_value_t` representing the field types.
  */
-JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
+JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v) JL_CANSAFEPOINT
 {
     return (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)v);
 }
@@ -729,7 +733,7 @@ JL_DLLEXPORT int ijl_egal(jl_value_t *a, jl_value_t *b)
 }
 
 
-#ifndef __clang_gcanalyzer__
+#if !defined(__clang_gcanalyzer__) && !defined(__clang_analyzer__)
 /**
  * @brief Enter a state where concurrent garbage collection (GC) is considered unsafe.
  *
@@ -933,7 +937,7 @@ JL_DLLEXPORT int jl_set_fenv_rounding(int i)
     return fesetround(i);
 }
 
-static int exec_program(char *program)
+static int exec_program(char *program) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     JL_TRY {
@@ -966,7 +970,7 @@ static int exec_program(char *program)
     return 0;
 }
 
-static NOINLINE int true_main(int argc, char *argv[])
+static NOINLINE int true_main(int argc, char *argv[]) JL_CANSAFEPOINT
 {
     jl_set_ARGS(argc, argv);
 
@@ -1098,7 +1102,7 @@ static void rr_detach_teleport(void) JL_NOTSAFEPOINT {
  * @param argv Array of command-line arguments.
  * @return An integer indicating the exit status of the REPL session.
  */
-JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_NOTSAFEPOINT_ENTER
+JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTER_LEAVE
 {
 #ifdef USE_TRACY
     if (getenv("JULIA_WAIT_FOR_TRACY"))
@@ -1141,13 +1145,17 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_NOTSAFEPOINT_ENTE
 
     jl_init_(sysimage);
 
+    int ret;
     if (lisp_prompt) {
         jl_current_task->world_age = jl_get_world_counter();
         jl_lisp_prompt();
-        return 0;
+        ret = 0;
+        jl_gc_safe_enter(jl_current_task->ptls); // park in gc-safe for analyzer, skipping atexit hook
     }
-    int ret = true_main(argc, (char**)new_argv);
-    jl_atexit_hook(ret);
+    else {
+        ret = true_main(argc, (char**)new_argv);
+        jl_atexit_hook(ret);
+    }
     return ret;
 }
 

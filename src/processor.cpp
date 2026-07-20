@@ -359,7 +359,7 @@ static void init_jit_targets(const char *cpu_target, bool imaging) JL_NOTSAFEPOI
 // Shared: deserialize image targets, match against a resolved target.
 // Returns {target_index, vreg_size} or {UINT32_MAX, 0} on failure.
 static std::pair<uint32_t, int> match_image_targets(
-        const void *id, const tp::LLVMTargetSpec &target, jl_value_t **rejection_reason)
+        const void *id, const tp::LLVMTargetSpec &target, jl_value_t **rejection_reason) JL_CANSAFEPOINT
 {
     auto image_targets = tp::deserialize_targets((const uint8_t *)id);
     CF_DEBUG("[cpufeatures]   image has %zu target(s)\n", image_targets.size());
@@ -379,7 +379,7 @@ static std::pair<uint32_t, int> match_image_targets(
     return {(uint32_t)match.best_idx, match.vreg_size};
 }
 
-static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **rejection_reason)
+static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **rejection_reason) JL_CANSAFEPOINT
 {
     const char *cpu_target = (const char *)ctx;
     CF_DEBUG("[cpufeatures] match_sysimg_target: cpu_target='%s'\n",
@@ -465,7 +465,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
     return match_result.first;
 }
 
-static uint32_t match_pkgimg_target(void *ctx, const void *id, jl_value_t **rejection_reason)
+static uint32_t match_pkgimg_target(void *ctx, const void *id, jl_value_t **rejection_reason) JL_CANSAFEPOINT
 {
     auto &target = jit_targets.front();
     auto result = match_image_targets(id, target, rejection_reason);

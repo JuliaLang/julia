@@ -20,7 +20,6 @@
     XX(jl_apply_type) \
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
-    XX(jl_arg_slot_type) \
     XX(jl_argument_datatype) \
     XX(jl_argument_datatypename) \
     XX(jl_array_del_end) \
@@ -534,6 +533,7 @@
     YY(jl_get_llvm_gv_inits) \
     YY(jl_get_llvm_external_fns) \
     YY(jl_get_llvm_cis) \
+    YY(jl_get_llvm_mi_cache_order) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \

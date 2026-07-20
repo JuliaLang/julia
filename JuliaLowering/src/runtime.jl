@@ -18,14 +18,18 @@ end
 
 # Re-dispatch `f(args...)` at the pinned lowering world (see `jl_lowering_world`)
 @inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
-    w = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
-    if w == 0
-        # Fallback when the Base lowering hook is not set up
-        w = Base.tls_world_age()
-        # FIXME: as a side effect, enabling the Base lowering hook now affects
-        #        JuliaLowering execution not passing through the hook
+    @static if VERSION >= v"1.14.0-DEV.2635"
+        w = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
+        if w == 0
+            # Fallback when the Base lowering hook is not set up
+            w = Base.tls_world_age()
+            # FIXME: as a side effect, enabling the Base lowering hook now affects
+            #        JuliaLowering execution not passing through the hook
+        end
+        return _invoke_in_world(w, f, args...)
+    else
+        f(args...)
     end
-    return _invoke_in_world(w, f, args...)
 end
 
 # Return the current exception. In JuliaLowering we use this rather than the
@@ -101,9 +105,13 @@ end
 
 #--------------------------------------------------
 # Functions called by closure conversion
-function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, field_is_box)
+function eval_closure_type(mod::Module, closure_type_name::Symbol,
+                           capt_sp, field_names, field_is_box)
     type_params = Core.TypeVar[]
     field_types = []
+    for name in capt_sp
+        push!(type_params, Core.TypeVar(name))
+    end
     for (name, isbox) in zip(field_names, field_is_box)
         if !isbox
             T = Core.TypeVar(Symbol(name, "_type"))
@@ -126,13 +134,27 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, 
 end
 
 # Interpolate captured local variables into the CodeInfo for a global method
-function replace_captured_locals!(codeinfo::Core.CodeInfo, locals::Core.SimpleVector)
-    for (i, ex) in enumerate(codeinfo.code)
-        if Meta.isexpr(ex, :captured_local)
-            codeinfo.code[i] = locals[ex.args[1]::Int]
-        end
+function replace_captured_locals(ci_in::Core.CodeInfo, locals::Core.SimpleVector)
+    ci = copy(ci_in)
+    for (i, ex) in enumerate(ci.code)
+        ci.code[i] = _replace_captured_locals(ex, locals)
     end
-    codeinfo
+    ci
+end
+function _replace_captured_locals(@nospecialize(e), locals)
+    if e isa Expr
+        if e.head === :captured_local
+            v = locals[e.args[1]::Int]
+            isa_lowering_ast_node(v) ? QuoteNode(v) : v
+        else
+            # could possibly limit to foreigncall
+            Expr(e.head, map(a->_replace_captured_locals(a, locals), e.args)...)
+        end
+    elseif e isa QuoteNode
+        QuoteNode(_replace_captured_locals(e.value, locals))
+    else
+        e
+    end
 end
 
 #--------------------------------------------------
@@ -245,11 +267,12 @@ struct GeneratedFunctionStub
     spnames::Core.SimpleVector
 end
 
-function _gen_args_from_syms(ctx, src, args)
+function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList(ctx.graph)
     for a in args
         id = newleaf(syntax_graph(ctx), src, K"Identifier", string(a))
         id = _est_to_dst_ident(id) # support placeholders
+        id = setattr!(id, :context, sc)
         push!(out, id)
     end
     out
@@ -308,8 +331,8 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method, graph,
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
     ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.argnames)...]
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.spnames)...]
+        [K"block" _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
+        [K"block" _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
         ex2
     ]
     ctx3, ex3 = resolve_scopes(ctx2, ex2)

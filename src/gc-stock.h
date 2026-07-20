@@ -575,7 +575,7 @@ STATIC_INLINE void gc_record_full_sweep_reason(int reason) JL_NOTSAFEPOINT
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
 void gc_collect_neighbors(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void jl_gc_debug_init(void);
+void jl_gc_debug_init(void) JL_NOTSAFEPOINT;
 
 // GC permanent allocation
 extern uv_mutex_t gc_perm_lock;

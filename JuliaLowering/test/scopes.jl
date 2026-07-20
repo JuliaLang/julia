@@ -240,6 +240,16 @@ distraction_scope_end === "resolve me!"
 
 end
 
+@test JuliaLowering.include_string(test_mod, """
+global g_shadow_sp_bound = Number
+function f_g_shadow_sp_bound(x::g_shadow_sp_bound) where {
+        g_shadow_sp_bound<:g_shadow_sp_bound
+    }
+    (x, g_shadow_sp_bound)
+end
+f_g_shadow_sp_bound(1)
+""") == (1, Int)
+
 # For each distinct outer scope, declaration scope, and assignment scope, and
 # each kind of variable (lhs_names) in the declaration scope, set the same name
 # to true from the inner scope
@@ -1116,4 +1126,15 @@ end
         Base.delete_binding(mod, :old_hyg_struct_tv_G)
         Base.delete_binding(test_mod, :old_hyg_struct_tv_G)
     end
+end
+
+@testset "@isdefined sees imported globals" begin
+    # implicit Core/Base visibility and `using`-provided names count as defined
+    # at module scope
+    m = Module(:IsdefM)
+    @test JuliaLowering.include_string(m, "@isdefined Core") === true
+    @test JuliaLowering.include_string(m, "@isdefined Base") === true
+    @test JuliaLowering.include_string(m, "@isdefined sin") === true
+    @test JuliaLowering.include_string(m, "@isdefined not_a_thing_anywhere") === false
+    @test JuliaLowering.include_string(m, "f() = @isdefined(Core); f()") === true
 end

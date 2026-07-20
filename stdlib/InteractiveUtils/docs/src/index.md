@@ -23,6 +23,7 @@ InteractiveUtils.less(::AbstractString)
 InteractiveUtils.less(::Any)
 InteractiveUtils.@less
 InteractiveUtils.@which
+InteractiveUtils.@methods
 InteractiveUtils.@functionloc
 InteractiveUtils.@code_lowered
 InteractiveUtils.@code_typed

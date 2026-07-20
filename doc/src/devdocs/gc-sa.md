@@ -3,13 +3,8 @@
 ## Running the analysis
 
 The analyzer plugin that drives the analysis ships with julia. Its
-source code can be found in `src/clangsa`. Running it requires
-the clang dependency to be built. Set the `BUILD_LLVM_CLANG` variable
-in your Make.user in order to build an appropriate version of clang.
-You may also want to use the prebuilt binaries using the
-`USE_BINARYBUILDER_LLVM` options.
-
-Alternatively (or if these do not suffice), try
+source code can be found in `src/clangsa`. Running it uses the
+the optional clang dependency from `deps`. This can be installed by running:
 
 ```sh
 make -C src install-analysis-deps
@@ -18,7 +13,8 @@ make -C src install-analysis-deps
 from Julia's toplevel directory.
 
 
-Afterwards, running the analysis over the source tree is as simple as running `make -C src analyzegc`.
+Afterwards, running the analysis over the source tree is as simple as running
+`make -C src analyzegc`.
 
 ## General Overview
 
@@ -104,24 +100,21 @@ These annotations are found in src/support/analyzer_annotations.h.
 They are only active when the analyzer is being used and expand either
 to nothing (for prototype annotations) or to no-ops (for function like annotations).
 
-### `JL_NOTSAFEPOINT`
+### `JL_CANSAFEPOINT`
 
 This is perhaps the most common annotation, and should be placed on any function
-that is known not to possibly lead to reaching a GC safepoint. In general, it is
-only safe for such a function to perform arithmetic, memory accesses and calls to
-functions either annotated `JL_NOTSAFEPOINT` or otherwise known not to be safepoints (e.g.
-function in the C standard library, which are hardcoded as such in the analyzer)
+that needs to interact with a GC safepoint. It has a few variants also, to express
+when the function expects to be called in an gc-safe region for example.
 
-It is valid to keep values unrooted across calls to any function annotated with this
-attribute:
+It is valid to keep values unrooted across calls to any unannotated function:
 
 Usage Example:
 ```c
-void jl_get_one() JL_NOTSAFEPOINT {
+void jl_get_one() {
   return 1;
 }
 
-jl_value_t *example() {
+jl_value_t *example() JL_CANSAFEPOINT {
   jl_value_t *val = jl_alloc_whatever();
   // This is valid, even though `val` is unrooted, because
   // jl_get_one is not a safepoint
@@ -143,9 +136,9 @@ The `ROOTS_TEMPORARILY` annotation provides the stronger guarantee that,
 not only may the value be unrooted when passed, it will also be preserved
 across any internal safepoints by the callee.
 
-Note that `JL_NOTSAFEPOINT` essentially implies `JL_MAYBE_UNROOTED`/`JL_ROOTS_TEMPORARILY`,
-because the rootedness of an argument is irrelevant if the function contains
-no safepoints.
+Note that not annotating with `JL_CANSAFEPOINT` essentially implies
+`JL_MAYBE_UNROOTED`/`JL_ROOTS_TEMPORARILY`, because the rootedness of an
+argument is irrelevant if the function contains no safepoints.
 
 One additional point to note is that these annotations apply on both the
 caller and the callee side. On the caller side, they lift rootedness

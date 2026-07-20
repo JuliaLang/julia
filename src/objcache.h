@@ -35,7 +35,7 @@ public:
     ObjCache() = default;
     ~ObjCache() JL_NOTSAFEPOINT;
     std::unique_ptr<llvm::MemoryBuffer>
-    get(llvm::Module &M, CompileFn Compile) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    get(llvm::Module &M, CompileFn Compile) JL_CANSAFEPOINT_ENTER_LEAVE;
     bool isEnabled() const JL_NOTSAFEPOINT;
     void shutdown() JL_NOTSAFEPOINT;
 
@@ -43,7 +43,7 @@ public:
 
 protected:
     void writerThread();
-    void initDB() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    void initDB() JL_CANSAFEPOINT_ENTER_LEAVE;
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
     bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
     size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);

@@ -48,7 +48,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
 6   (call core.svec)
-7   SourceLocation::1:7
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.@add_one %₈
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
@@ -71,7 +71,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ JuliaLowering.MacroContext core.Any)
 6   (call core.svec)
-7   SourceLocation::1:7
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.@foo %₈
     slots: [slot₁/#self#(!read) slot₂/__context__ slot₃/ex(!read) slot₄/ctx(!read,single_assign)]
@@ -211,7 +211,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   SourceLocation::1:10
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.foo %₈
     slots: [slot₁/#self#(!read) slot₂/a(nospecialize,!read)]
@@ -234,7 +234,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any)
 6   (call core.svec)
-7   SourceLocation::1:10
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.foo %₈
     slots: [slot₁/#self#(!read) slot₂/a(nospecialize) slot₃/b]
@@ -259,7 +259,7 @@ end
 4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any core.Any)
 6   (call core.svec)
-7   SourceLocation::1:10
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.foo %₈
     slots: [slot₁/#self#(!read) slot₂/x(nospecialize) slot₃/y slot₄/z(nospecialize)]
