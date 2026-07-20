@@ -728,21 +728,28 @@ end
         RHasUInt17(Core.Intrinsics.trunc_int(RUInt17, UInt32(1)), 0x02),
     )
 
-    # Dense odd-bit arrays use byte-rounded element storage and reject byte reinterpretation.
-    values = Core.Intrinsics.trunc_int.(RUInt63, UInt64[1, 2, 3])
-    memory = Memory{RUInt63}(undef, 3)
-    memory .= values
-    @test Core.Intrinsics.zext_int.(UInt64, memory) == UInt64[1, 2, 3]
-    memory[2] = Core.Intrinsics.trunc_int(RUInt63, UInt64(4))
-    @test Core.Intrinsics.zext_int(UInt64, memory[2]) == 4
+    # Dense odd-bit arrays use allocation-size strides and reject byte reinterpretation.
+    for (T, W, storage_size, allocation_size) in (
+        (RUInt23, UInt32, 3, 4),
+        (RUInt63, UInt64, 8, 8),
+    )
+        values = Core.Intrinsics.trunc_int.(T, W[1, 2, 3])
+        memory = Memory{T}(undef, 3)
+        memory .= values
+        @test sizeof(T) == storage_size
+        @test Base.elsize(memory) == allocation_size
+        @test Core.Intrinsics.zext_int.(W, memory) == W[1, 2, 3]
+        memory[2] = Core.Intrinsics.trunc_int(T, W(4))
+        @test Core.Intrinsics.zext_int(W, memory[2]) == 4
 
-    array = Array(memory)
-    @test Base.elsize(array) == sizeof(RUInt63)
-    @test Core.Intrinsics.zext_int.(UInt64, array) == UInt64[1, 4, 3]
-    array[3] = Core.Intrinsics.trunc_int(RUInt63, UInt64(5))
-    @test Core.Intrinsics.zext_int(UInt64, array[3]) == 5
+        array = Array(memory)
+        @test Base.elsize(array) == allocation_size
+        @test Core.Intrinsics.zext_int.(W, array) == W[1, 4, 3]
+        array[3] = Core.Intrinsics.trunc_int(T, W(5))
+        @test Core.Intrinsics.zext_int(W, array[3]) == 5
 
-    @test_throws ArgumentError reinterpret(UInt8, memory)
-    @test_throws ArgumentError reinterpret(UInt8, array)
-    @test_throws ArgumentError reinterpret(RUInt63, zeros(UInt8, 8))
+        @test_throws ArgumentError reinterpret(UInt8, memory)
+        @test_throws ArgumentError reinterpret(UInt8, array)
+        @test_throws ArgumentError reinterpret(T, zeros(UInt8, storage_size))
+    end
 end
