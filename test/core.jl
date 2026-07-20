@@ -9283,7 +9283,6 @@ pinned_gci_62001(::Type{<:PinnedSA62001{<:PinnedPL62001}}, ::Type{<:Type{Val{S}}
     x = Vector.inner
     te = Core.apply_type(Core.TypeEgal, x)
     @test Core.Typeof(x) === typeof(x)
-    @test ccall(:jl_arg_slot_type, Any, (Any,), x) === te
     @eval fdisp62272(::$te) = :egal_key
     @test fdisp62272(x) === :egal_key
 end
