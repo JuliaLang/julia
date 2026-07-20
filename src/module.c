@@ -353,9 +353,24 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_GLOBAL;
             } else if (jl_bkind_is_defined_constant(kind)) {
                 assert(tempbpart->restriction);
-                imp_resolution.binding_or_const = tempbpart->restriction;
+                if (tempbpart_flags & PARTITION_FLAG_DEPRECATED) {
+                    // A deprecated constant: resolve like a global/backdated const (point at
+                    // the owning binding) instead of absorbing the value into an
+                    // `IMPLICIT_CONST` partition -- which would drop the deprecation flag and
+                    // silently stop the depwarn walk here. Deferring to the owner keeps the
+                    // deprecation on the leaf the walk reaches, so access through `using`
+                    // warns like a deprecated global and like a direct access (an explicit
+                    // `using M: x`/`import M: x` still suppresses it). Encoding the state in
+                    // the kind also makes (un)deprecation force a fresh resolution. The leaf
+                    // is still a defined const, so the value is const-folded as before.
+                    imp_resolution.binding_or_const = (jl_value_t *)tempb;
+                    imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_GLOBAL;
+                }
+                else {
+                    imp_resolution.binding_or_const = tempbpart->restriction;
+                    imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
+                }
                 imp_resolution.debug_only_ultimate_binding = tempb;
-                imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
             } else if (kind == PARTITION_KIND_FAILED) {
                 imp_resolution.binding_or_const = NULL;
                 imp_resolution.debug_only_ultimate_binding = tempb;
@@ -441,19 +456,24 @@ static void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t *
     *pbpart = bpart;
 }
 
-static void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world, int *depwarn) JL_CANSAFEPOINT
+// Walk imports to the leaf while reporting whether any partition along the way carries a
+// deprecation `flag` (`PARTITION_FLAG_DEPWARN` for the access warning, or
+// `PARTITION_FLAG_DEPRECATED` for `isdeprecated`), suppressed once an explicit import is
+// passed (the `import`/`using: x` site is what should be fixed). Keeping the single walk
+// used by both the access-warning and `isdeprecated` paths ensures they agree.
+static void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world, size_t flag, int *found) JL_CANSAFEPOINT
 {
     int passed_explicit = 0;
     jl_binding_partition_t *bpart = *pbpart;
     while (1) {
         enum jl_partition_kind kind = jl_binding_kind(bpart);
         if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
-            if (!passed_explicit && depwarn)
-                *depwarn |= bpart->kind & PARTITION_FLAG_DEPWARN;
+            if (!passed_explicit && found)
+                *found |= bpart->kind & flag;
             break;
         }
-        if (!passed_explicit && depwarn)
-            *depwarn |= bpart->kind & PARTITION_FLAG_DEPWARN;
+        if (!passed_explicit && found)
+            *found |= bpart->kind & flag;
         if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
             passed_explicit = 1;
         *bnd = (jl_binding_t*)bpart->restriction;
@@ -982,7 +1002,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_leaf_partition_depwarn(jl_bi
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     if (jl_options.depwarn) {
         int needs_depwarn = 0;
-        jl_walk_binding_inplace_depwarn(&b, &bpart, world, &needs_depwarn);
+        jl_walk_binding_inplace_depwarn(&b, &bpart, world, PARTITION_FLAG_DEPWARN, &needs_depwarn);
         if (needs_depwarn)
             jl_binding_deprecation_warning(b);
     }
@@ -998,7 +1018,7 @@ static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) J
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     if (jl_options.depwarn) {
         int needs_depwarn = 0;
-        jl_walk_binding_inplace_depwarn(&b, &bpart, world, &needs_depwarn);
+        jl_walk_binding_inplace_depwarn(&b, &bpart, world, PARTITION_FLAG_DEPWARN, &needs_depwarn);
         if (needs_depwarn)
             jl_binding_deprecation_warning(b);
     }
@@ -1322,8 +1342,12 @@ JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *
             /* with #22763, external packages wanting to replace
                 deprecated Base bindings should simply export the new
                 binding */
+            // No trailing punctuation/newline here: `jl_binding_dep_message` appends the
+            // binding's message (`, use X instead.`) and the newline, so it reads as one
+            // sentence (mirroring `jl_binding_deprecation_warning`) instead of stranding
+            // the leading-comma message on its own line.
             jl_printf(JL_STDERR,
-                        "WARNING: importing deprecated binding %s.%s into %s%s%s.\n",
+                        "WARNING: importing deprecated binding %s.%s into %s%s%s",
                         jl_symbol_name(from->name), jl_symbol_name(s),
                         jl_symbol_name(to->name),
                         asname == s ? "" : " as ",
@@ -2035,7 +2059,16 @@ JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var) JL_CANS
     jl_binding_t *b = jl_get_module_binding(m, var, 0);
     if (!b)
         return 0;
-    return should_depwarn(b, PARTITION_FLAG_DEPRECATED);
+    // Walk imports so this agrees with the access warning: a binding reached through an
+    // implicit `using` of a deprecated binding is deprecated too (a deprecated constant now
+    // resolves via `IMPLICIT_GLOBAL`, so it must be walked), while an explicit import
+    // suppresses it. Otherwise `getglobal` could throw under `--depwarn=error` on a binding
+    // that `isdeprecated` reported as not deprecated (e.g. `InteractiveUtils.subtypes`).
+    size_t world = jl_current_task->world_age;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+    int deprecated = 0;
+    jl_walk_binding_inplace_depwarn(&b, &bpart, world, PARTITION_FLAG_DEPRECATED, &deprecated);
+    return deprecated != 0;
 }
 
 void jl_binding_deprecation_warning(jl_binding_t *b)
