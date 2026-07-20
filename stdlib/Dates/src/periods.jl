@@ -135,6 +135,7 @@ const PERIOD_TYPES = (OTHER_PERIOD_TYPES..., FIXED_PERIOD_TYPES...)
 # convertible among themselves but not to a fixed number of days.
 const FixedPeriod = Union{FIXED_PERIOD_TYPES...}
 const OtherPeriod = Union{OTHER_PERIOD_TYPES...}
+const BuiltInPeriod = Union{FixedPeriod, OtherPeriod}
 
 # Stores multiple periods in greatest to least order by type, not values,
 # canonicalized to eliminate zero periods, merge equal period types,
@@ -381,8 +382,8 @@ Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = isequal(x.periods, y.period
 # without ever constructing a `CompoundPeriod`.
 
 # Total value of the periods in `ps` whose type is exactly `P`.
-@inline _sumperiods(::Type{P}, ::Tuple{}) where {P<:Period} = 0
-@inline _sumperiods(::Type{P}, ps::Tuple) where {P<:Period} =
+@inline _sumperiods(::Type{P}, ::Tuple{}) where {P<:BuiltInPeriod} = 0
+@inline _sumperiods(::Type{P}, ps::Tuple) where {P<:BuiltInPeriod} =
     (first(ps) isa P ? value(first(ps)) : 0) + _sumperiods(P, Base.tail(ps))
 
 @inline _addperiods(x::TimeType, ::Tuple{}, ::Tuple) = x
@@ -397,8 +398,15 @@ end
 
 # `PERIOD_TYPES` is a compile-time constant, so its element types stay known to the
 # compiler and `_addperiods` unrolls and constant-folds.
-(+)(x::TimeType, p1::Period, p2::Period, ps::Period...) =
+(+)(x::TimeType, p1::BuiltInPeriod, p2::BuiltInPeriod, ps::BuiltInPeriod...) =
     _addperiods(x, PERIOD_TYPES, (p1, p2, ps...))
+
+# Fallback for custom `Period`s. Collecting the periods into a single `CompoundPeriod`
+# groups equal types and sorts them coarsest-to-finest (by `tons ∘ oneunit`, the same
+# order key the built-in fast path is checked against), so custom subtypes are preserved
+# and applied in the same order as the fast path and as `dt + CompoundPeriod(...)`.
+(+)(x::TimeType, p1::Period, p2::Period, ps::Period...) =
+    x + CompoundPeriod(Period[p1, p2, ps...])
 
 function (+)(x::TimeType, y::CompoundPeriod)
     for p in y.periods
