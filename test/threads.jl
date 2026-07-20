@@ -84,8 +84,13 @@ let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no th
             (4, 0)) # try a couple times to trigger bad races
         new_env = copy(ENV)
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
-        run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr))
         threads_config = "$test_nthreads,$test_nthreadsi"
+        if Sys.iswindows() && Sys.WORD_SIZE == 32
+            # win32 CI has hung silently in this child; let it dump itself
+            new_env["JULIA_THREADS_EXEC_WATCHDOG"] = "1500"
+        end
+        println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config starting")
+        run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr))
         # threads set via env var
         @test chomp(read(setenv(cmd2, new_env), String)) == threads_config
         # threads set via -t

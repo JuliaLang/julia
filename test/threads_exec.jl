@@ -8,6 +8,20 @@ using LinearAlgebra: peakflops
 # for cfunction_closure
 include("testenv.jl")
 
+# In-process watchdog for platforms where the harness cannot request a task
+# dump from outside (win32 CI hangs silently for the whole job timeout):
+# print every task's backtrace and kill the job once the deadline passes.
+if haskey(ENV, "JULIA_THREADS_EXEC_WATCHDOG")
+    let deadline = parse(Float64, ENV["JULIA_THREADS_EXEC_WATCHDOG"])
+        Threads.@spawn begin
+            sleep(deadline)
+            Core.print(Core.stderr, "threads_exec watchdog expired, dumping tasks\n")
+            ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0)
+            ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+        end
+    end
+end
+
 function killjob(d)
     Core.print(Core.stderr, d)
     if Sys.islinux()
