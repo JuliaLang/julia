@@ -85,9 +85,11 @@ islocked(::AlwaysLockedST) = true
 # register anew - e.g. park on a lock during its cleanup - with a fresh entry.
 # To keep the common park allocation-free, each task caches one entry
 # (`t.cached_wait_entry`) and reuses it whenever it is free, i.e. not still
-# linked into some queue (`w.queue === nothing`, always a synchronized read
-# for the owning task since the unlinker either is the task itself or
-# subsequently scheduled it).
+# linked into some queue (`w.queue === nothing`). Reuse requires the owning
+# task to be synchronized with the unlinker: either the task unlinked the entry
+# itself, or the unlinker subsequently scheduled it. Interrupted-wait cleanup
+# temporarily removes its entry from the cache before relocking, since another
+# task may unlink that stale entry without being the task that scheduled us.
 mutable struct WaitEntry
     task::Union{Task, Nothing}
     next::Union{WaitEntry, Nothing}
@@ -105,6 +107,17 @@ function _cached_wait_entry(waiter::Task)
         w = WaitEntry(waiter)
         waiter.cached_wait_entry = w
     end
+    return w
+end
+
+@noinline function _wait_registration_error()
+    throw(ConcurrencyViolationError("Task is already registered on a wait queue"))
+end
+
+# Publish `w` as `waiter`'s only armed wait registration.
+function _arm_wait(waiter::Task, w::WaitEntry)
+    armed = @atomicreplace :release :monotonic waiter.waiting_on nothing => w
+    armed.success || _wait_registration_error()
     return w
 end
 
@@ -155,7 +168,7 @@ function _wait2(c::GenericCondition, waiter::Task, first::Bool=false;
     ct = current_task()
     assert_havelock(c)
     w = entry === nothing ? _cached_wait_entry(waiter) : entry
-    @atomic :release waiter.waiting_on = w
+    _arm_wait(waiter, w)
     if first
         pushfirst!(ILLRef(c.waitq, waitee), w)
     else
@@ -221,8 +234,18 @@ function wait(c::GenericCondition; first::Bool=false, waitee=c.waitq)
         # wait - then unlink our entry (a no-op if a `notify` already popped
         # and dropped it).
         @atomicreplace ct.waiting_on w => nothing
+        # Do not reuse `w` while relocking: a notifier may have popped this
+        # stale entry without scheduling us and may still retain its identity
+        # for the wake-claim CAS. If relocking does not need to park and cache
+        # a replacement, restore `w` once cleanup under the old lock makes it
+        # safe to reuse again.
+        was_cached = ct.cached_wait_entry === w
+        was_cached && (ct.cached_wait_entry = nothing)
         relockall(c.lock, token)
         list_deletefirst!(ILLRef(c.waitq, waitee), w)
+        if was_cached && ct.cached_wait_entry === nothing
+            ct.cached_wait_entry = w
+        end
         rethrow()
     end
     # a normal wake implies our claim was won and our entry already unlinked
@@ -267,7 +290,13 @@ notify_error(c::GenericCondition, err) = notify(c, err, true, true)
 
 Return `true` if no tasks are waiting on the condition, `false` otherwise.
 """
-isempty(c::GenericCondition) = isempty(c.waitq)
+function isempty(c::GenericCondition)
+    for w in c.waitq
+        t = w.task
+        t isa Task && (@atomic t.waiting_on) === w && return false
+    end
+    return true
+end
 
 
 # default (Julia v1.0) is currently single-threaded

@@ -337,13 +337,14 @@ function _wait2(t::Task, waiter::Task)
         end
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
-        if !istaskdone(t)
-            w = _cached_wait_entry(waiter)
-            @atomic :release waiter.waiting_on = w
-            push!(waitqueue(t), w)
-            unlock(donenotify)
-            return nothing
-        else
+        try
+            if !istaskdone(t)
+                w = _cached_wait_entry(waiter)
+                _arm_wait(waiter, w)
+                push!(waitqueue(t), w)
+                return nothing
+            end
+        finally
             unlock(donenotify)
         end
     end

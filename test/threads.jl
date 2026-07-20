@@ -42,6 +42,72 @@ end
 # skipped by notify and collected lazily; a task whose interrupted wait
 # left a stale registration behind can immediately park elsewhere
 @testset "wait registration claim protocol" begin
+    # A task can have only one armed wait registration at a time.
+    let
+        c1 = Threads.Condition()
+        c2 = Threads.Condition()
+        t = @task :done
+        lock(c1)
+        lock(c2)
+        try
+            w = Base._wait2(c1, t)
+            @test_throws ConcurrencyViolationError Base._wait2(c2, t)
+            @test (@atomic t.waiting_on) === w
+            @test length(c1.waitq) == 1
+            @test isempty(c2.waitq)
+            @test notify(c1) == 1
+            @test notify(c2) == 0
+        finally
+            unlock(c2)
+            unlock(c1)
+        end
+        @test fetch(t) === :done
+    end
+    let
+        target1 = @task nothing
+        target2 = @task nothing
+        waiter = @task nothing
+        Base._wait2(target1, waiter)
+        w = @atomic waiter.waiting_on
+        @test_throws ConcurrencyViolationError Base._wait2(target2, waiter)
+        @test (@atomic waiter.waiting_on) === w
+        @test length((target1.donenotify::Base.ThreadSynchronizer).waitq) == 1
+        donenotify2 = target2.donenotify::Base.ThreadSynchronizer
+        @test isempty(donenotify2.waitq)
+        gotlock = trylock(donenotify2)
+        # Release either our probe or the lock leaked by a regression.
+        unlock(donenotify2)
+        @test gotlock
+        schedule(target1)
+        schedule(target2)
+        wait(target1)
+        wait(target2)
+        wait(waiter)
+    end
+    # Claimed entries do not count as waiters while awaiting lazy removal.
+    let
+        cond = Threads.Condition()
+        stale = @task nothing
+        live = @task nothing
+        lock(cond)
+        try
+            w_stale = Base._wait2(cond, stale)
+            @test !isempty(cond)
+            @test Base.claim_wait(stale, w_stale)
+            @test !isempty(cond.waitq)
+            @test isempty(cond)
+            w_live = Base._wait2(cond, live)
+            @test !isempty(cond)
+            @test Base.claim_wait(live, w_live)
+            @test isempty(cond)
+            notified = notify(cond)
+            @test notified == 0
+            @test isempty(cond.waitq)
+        finally
+            notify(cond)
+            unlock(cond)
+        end
+    end
     # interrupting a parked waiter claims its wake, so a later notify skips
     # the stale entry instead of double-waking the task
     let cond = Threads.Condition()
@@ -113,6 +179,40 @@ end
         @test timedwait(() -> istaskdone(t), 10.0) == :ok
         @test istaskfailed(t)
         @test isempty(cond.waitq) # collected by t's cleanup
+    end
+    # A stale entry popped before interrupted-wait cleanup must not be reused
+    # while its old notifier could still retain its identity for a wake claim.
+    let cond = Threads.Condition()
+        ready = Event()
+        t = @async begin
+            lock(cond)
+            try
+                notify(ready)
+                wait(cond)
+            finally
+                unlock(cond)
+            end
+        end
+        wait(ready)
+        @test parked_on(t, cond)
+        w = @atomic t.waiting_on
+        @test w isa Base.WaitEntry
+        schedule(t, ErrorException("interrupt"), error=true)
+        lock(cond)
+        try
+            @test popfirst!(Base.waitqueue(cond)) === w
+            @test (w::Base.WaitEntry).queue === nothing
+            for _ in 1:1000
+                parked_on(t, cond.lock.cond_wait) && break
+                yield()
+            end
+            @test parked_on(t, cond.lock.cond_wait)
+            @test (@atomic t.waiting_on) !== w
+        finally
+            unlock(cond)
+        end
+        wait(t; throw=false)
+        @test istaskfailed(t)
     end
     # a task waiting on another task can be interrupted, and the waited-on
     # task's completion then does not count the stale registration as handled
