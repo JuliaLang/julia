@@ -173,7 +173,7 @@ move_to_node1("Distributed")
 move_to_node1("gc")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
-# These (pre)compile significantly using all available threads so don't run in parallel.
+# Run (pre)compilation-heavy tests serially to avoid oversubscription
 move_to_node1("compileall")
 move_to_node1("cmdlineargs")
 move_to_node1("JuliaLowering")
@@ -334,6 +334,9 @@ cd(@__DIR__) do
         # Which worker each in-flight test is running on
         running_on = Dict{String, Int}()
 
+        # Serial tests run on node 1 rather than a tracked worker.
+        current_node1_test = Ref{Union{Nothing,String}}(nothing)
+
         Sys.iswindows() || atexit() do
             # This `atexit()` is a desperate attempt to collect .core dumps from
             # any hung workers, if the CI test infrastructure decides to tear us
@@ -389,7 +392,7 @@ cd(@__DIR__) do
             end
             Base.errormonitor(stdin_monitor)
         end
-        oversub_timer = let ncpu = length(Sys.cpu_info())
+        oversub_timer = let host_cpus = length(Sys.cpu_info()), test_cpus = n
             prev_cputime, _ = proc_cpu_times()  # baseline so the first tick reports one interval
             prev_t = time()
             Timer(oversub_interval, interval=oversub_interval) do timer
@@ -398,11 +401,14 @@ cd(@__DIR__) do
                 dt = max(time() - prev_t, 1.0)
                 # Summed CPU% (100 == one core) accrued over each worker's process subtree
                 # during the interval, so subprocesses a test spawns count toward it.
-                subtree_pct = function (root)
+                subtree_pct = function (roots)
                     total = 0.0
-                    stack = [root]
+                    stack = collect(roots)
+                    seen = Set{Int}()
                     while !isempty(stack)
                         p = pop!(stack)
+                        p in seen && continue
+                        push!(seen, p)
                         haskey(cputime, p) || continue
                         d = cputime[p] - get(prev_cputime, p, 0.0)
                         d > 0 && (total += d)
@@ -410,25 +416,40 @@ cd(@__DIR__) do
                     end
                     return 100 * total / dt
                 end
-                if load1 > ncpu * oversub_factor
-                    names = sort!(collect(keys(running_tests)))
-                    # Load, capacity and usage all in the same unit (100% == one core) so
-                    # "owned" can be compared to total load. "owned" is this process's whole
-                    # subtree (workers, their subprocesses, and serial node1-test
-                    # subprocesses this process spawns directly), not just the tracked
-                    # per-test workers, which are empty during the serial node1 phase.
-                    pcts = [haskey(running_test_pids, t) ? subtree_pct(running_test_pids[t]) : nothing for t in names]
-                    self_d = get(cputime, getpid(), 0.0) - get(prev_cputime, getpid(), 0.0)
-                    self_pct = 100 * max(self_d, 0.0) / dt
-                    owned = subtree_pct(getpid())
-                    active = join((p === nothing ? t : string(t, " (", round(Int, p), "%)")
+
+                names = sort!(collect(keys(running_tests)))
+                pcts = [haskey(running_test_pids, t) ?
+                    subtree_pct((running_test_pids[t],)) : nothing for t in names]
+                self_d = get(cputime, getpid(), 0.0) - get(prev_cputime, getpid(), 0.0)
+                self_pct = 100 * max(self_d, 0.0) / dt
+                # Include tracked workers as roots because rr may reparent them outside
+                # the coordinator's process subtree.
+                roots = [getpid()]
+                append!(roots, (running_test_pids[t] for t in names
+                                if haskey(running_test_pids, t)))
+                owned = subtree_pct(roots)
+                host_overloaded = load1 > host_cpus * oversub_factor
+                suite_overloaded = owned > test_cpus * 100 * oversub_factor
+                if host_overloaded || suite_overloaded
+                    active = join((p === nothing ? t :
+                        string(t, " (", round(p / 100; digits=1), " cores)")
                         for (t, p) in zip(names, pcts)), ", ")
+                    node1 = current_node1_test[]
+                    running = isempty(active) ?
+                        (node1 === nothing ? "" : "; node1: $node1") :
+                        "; running: $active"
                     @lock print_lock begin
-                        printstyled("⚠ oversubscription: load ", round(Int, load1 * 100),
-                            "% vs ", ncpu * 100, "% capacity; owned ", round(Int, owned),
-                            "% (self ", round(Int, self_pct), "%, ", length(names), "/",
-                            nworkers(), " workers active)",
-                            isempty(active) ? "" : "; running: $active", "\n"; color=:yellow)
+                        host_overloaded && printstyled(
+                            "⚠ host oversubscription: load average ",
+                            round(load1; digits=1), " vs ", host_cpus,
+                            " CPU threads", running, "\n"; color=:yellow)
+                        suite_overloaded && printstyled(
+                            "⚠ test-suite oversubscription: ",
+                            round(owned / 100; digits=1), " CPU cores vs ",
+                            test_cpus, "-core budget (self ",
+                            round(self_pct / 100; digits=1), " cores, ",
+                            length(names), "/", test_cpus, " workers active)",
+                            running, "\n"; color=:yellow)
                     end
                 end
                 prev_cputime = cputime
@@ -538,6 +559,7 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
+            current_node1_test[] = t
             before = time()
             resp, duration = try
                     r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
@@ -545,6 +567,8 @@ cd(@__DIR__) do
                 catch e
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
+                finally
+                    current_node1_test[] = nothing
                 end
             if length(resp) == 1
                 print_testworker_errored(t, 1, resp[1])
