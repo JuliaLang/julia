@@ -559,12 +559,152 @@ function last(v::AbstractVector, n::Integer)
     v[range(stop=lastindex(v), length=min(n, checked_length(v)))]
 end
 
+## strided array traits
+
+"""
+    is_ptr_loadable(type)::Bool
+
+Return `true` if a pointer to an `isbits` element in the array type can be used to load that element. Otherwise return `false`.
+
+Do not assume `is_ptr_loadable` arrays are strided.
+
+See also: [`is_ptr_storable`](@ref).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+is_ptr_loadable(::Type{<:AbstractArray}) = false
+is_ptr_loadable(::Type{<:Array}) = true
+is_ptr_loadable(::Type{<:Memory}) = true
+is_ptr_loadable(::Type{Union{}}) = false
+is_ptr_loadable(A::AbstractArray) = is_ptr_loadable(typeof(A))
+
+"""
+    is_ptr_storable(type)::Bool
+
+Return `true` if a pointer to an `isbits` element in the array type can be used to store a new element. Otherwise return `false`.
+
+Do not assume `is_ptr_storable` arrays are strided.
+
+See also: [`is_ptr_loadable`](@ref).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+is_ptr_storable(::Type{<:AbstractArray}) = false
+is_ptr_storable(::Type{<:Array}) = true
+is_ptr_storable(::Type{<:Memory}) = true
+is_ptr_storable(::Type{Union{}}) = false
+is_ptr_storable(A::AbstractArray) = is_ptr_storable(typeof(A))
+
+"""
+    Base.is_contiguous(type)::Bool
+
+Return `true` if arrays of this array type follow the
+[strided array interface](@ref man-interface-strided-arrays) and additionally store
+isbits elements in memory in the same layout as an [`Array`](@ref) of the same element
+type and size: contiguously, in column-major order, with an element spacing of
+`Base.elsize(Array{T})` bytes.
+
+Array types with this trait get default [`strides`](@ref) and [`Base.elsize`](@ref)
+definitions, and are [`is_vec_strided`](@ref Base.is_vec_strided) and
+[`is_strided`](@ref Base.is_strided) by default.
+
+Defaults to `false`.
+
+This function is for specializing on new array types; to check the trait, use
+[`Base.has_contiguous_layout`](@ref) instead.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+is_contiguous(::Type{<:AbstractArray}) = false
+is_contiguous(::Type{<:Array}) = true
+is_contiguous(::Type{<:Memory}) = true
+is_contiguous(::Type{Union{}}) = false
+
+"""
+    Base.is_vec_strided(type)::Bool
+
+Return `true` if arrays of this array type follow the
+[strided array interface](@ref man-interface-strided-arrays) and additionally isbits
+elements are evenly spaced in memory in column-major order.
+
+Array types with this trait are [`is_strided`](@ref Base.is_strided) by default.
+
+Defaults to [`Base.is_contiguous`](@ref) of the type.
+
+This function is for specializing on new array types; to check the trait, use
+[`Base.has_vec_strided_layout`](@ref) instead.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+is_vec_strided(::Type{A}) where {A<:AbstractArray} = is_contiguous(A)::Bool
+is_vec_strided(::Type{Union{}}) = false
+
+"""
+    Base.is_strided(type)::Bool
+    Base.is_strided(A::AbstractArray)::Bool
+
+Return `true` if arrays of this array type follow the
+[strided array interface](@ref man-interface-strided-arrays). Otherwise return `false`.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+is_strided(::Type{A}) where {A<:AbstractArray} = is_vec_strided(A)::Bool
+is_strided(::Type{Union{}}) = false
+is_strided(A::AbstractArray) = is_strided(typeof(A))
+
+"""
+    Base.has_contiguous_layout(type)::Bool
+
+Check the [`Base.is_contiguous`](@ref) trait. Unlike `is_contiguous`, which is only
+for specializing, this also returns `true` for strided zero-dimensional arrays, which
+have the layout of an `Array` trivially.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+has_contiguous_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = is_strided(A)::Bool
+has_contiguous_layout(::Type{A}) where {A<:AbstractArray} = is_contiguous(A)::Bool
+has_contiguous_layout(::Type{Union{}}) = false
+
+"""
+    Base.has_vec_strided_layout(type)::Bool
+
+Check the [`Base.is_vec_strided`](@ref) trait. Unlike `is_vec_strided`, which is only
+for specializing, this also returns `true` for strided zero- and one-dimensional arrays,
+which are vector strided trivially.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = is_strided(A)::Bool
+has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,1}} = is_strided(A)::Bool
+has_vec_strided_layout(::Type{A}) where {A<:AbstractArray} = is_vec_strided(A)::Bool
+has_vec_strided_layout(::Type{Union{}}) = false
+
+
+function elsize(::Type{A}) where {T,A<:AbstractArray{T}}
+    if has_contiguous_layout(A)
+        elsize(Array{T})
+    else
+        throw(MethodError(elsize, (A,)))
+    end
+end
+
+@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * Int(d), sz...)...)
+size_to_strides(s, d) = (s,)
+size_to_strides(s) = ()
+
 """
     strides(A)
 
 Return a tuple of the memory strides in each dimension.
 
-See also [`stride`](@ref).
+See also [`stride`](@ref) and [`is_strided`](@ref).
 
 # Examples
 ```jldoctest
@@ -574,7 +714,13 @@ julia> strides(A)
 (1, 3, 12)
 ```
 """
-function strides end
+function strides(x::A) where {A<:AbstractArray}
+    if has_contiguous_layout(A)
+        size_to_strides(1, size(x)...)
+    else
+        throw(MethodError(strides, (x,)))
+    end
+end
 
 """
     stride(A, k::Integer)
@@ -605,10 +751,6 @@ function stride(A::AbstractArray, k::Integer)
     end
     return s
 end
-
-@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
-size_to_strides(s, d) = (s,)
-size_to_strides(s) = ()
 
 function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
     @boundscheck checkbounds(A, I...)

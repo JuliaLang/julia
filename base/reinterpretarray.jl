@@ -196,6 +196,34 @@ strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = siz
 stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
     k ≤ ndims(A) ? strides(A)[k] : length(A)
 
+function is_ptr_loadable(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P}
+    is_ptr_loadable(P) && array_subpadding(T, S)
+end
+function is_ptr_storable(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P}
+    is_ptr_storable(P) && array_subpadding(S, T)
+end
+function is_strided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S,P,IsReshaped}
+    if !is_strided(P) || sizeof(T) != elsize(Array{T}) || sizeof(S) != elsize(Array{S})
+        return false
+    end
+    if has_contiguous_layout(P)
+        return true
+    end
+    els::Int, elp::Int = sizeof(T), sizeof(S)
+    if els == elp
+        return true
+    end
+    if IsReshaped && els < elp
+        return true
+    end
+    # Unknown if parent is contiguous in the 1st dimension.
+    return false
+end
+# A reinterpret array stores elements packed at `sizeof(T)` spacing, which only
+# matches the `Array{T}` layout if `T` has no alignment padding.
+is_contiguous(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P} =
+    has_contiguous_layout(P) && sizeof(T) == elsize(Array{T}) && sizeof(S) == elsize(Array{S})
+
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
     stp = strides(parent(a))
@@ -217,8 +245,6 @@ end
         throw(ArgumentError("Parent's strides could not be exactly divided!"))
     map(first, drs)
 end
-
-_checkcontiguous(::Type{Bool}, A::ReinterpretArray) = _checkcontiguous(Bool, parent(A))
 
 similar(a::ReinterpretArray, T::Type, d::Dims) = similar(a.parent, T, d)
 similar(::Type{TA}, dims::Dims) where {T,N,O,P,TA<:ReinterpretArray{T,N,O,P}} = similar(P, dims)

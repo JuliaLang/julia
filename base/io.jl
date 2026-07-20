@@ -851,10 +851,17 @@ end
 write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
-function write(s::IO, A::AbstractArray)
-    if !isbitstype(eltype(A))
+function write(s::IO, A::T) where {T<:AbstractArray}
+    if !isbitstype(eltype(T))
         error("`write` is not supported on non-isbits arrays")
     end
+    if is_ptr_loadable(T) && is_strided(T)
+        _write_array_strided(s, A)
+    else
+        _write_array_fallback(s, A)
+    end
+end
+function _write_array_fallback(s::IO, A::AbstractArray)
     nb = 0
     r = Ref{eltype(A)}()
     for a in A
@@ -863,34 +870,37 @@ function write(s::IO, A::AbstractArray)
     end
     return nb
 end
-
-function write(s::IO, A::StridedArray)
-    if !isbitstype(eltype(A))
-        error("`write` is not supported on non-isbits arrays")
+function _write_array_strided(s::IO, A::AT) where {T, AT<:AbstractArray{T}}
+    el_size = elsize(AT)
+    array_elsize = elsize(Array{T})
+    A_cconv = cconvert(Ptr{T}, A)
+    if has_contiguous_layout(AT)
+        return GC.@preserve A_cconv unsafe_write(s, unsafe_convert(Ptr{T}, A_cconv), array_elsize * length(A))
     end
-    _checkcontiguous(Bool, A) &&
-        return GC.@preserve A unsafe_write(s, pointer(A), elsize(A) * length(A))
     sz::Dims = size(A)
     st::Dims = strides(A)
     msz, mst, n = merge_adjacent_dim(sz, st)
-    mst == 1 || return invoke(write, Tuple{IO, AbstractArray}, s, A)
-    n == ndims(A) &&
-        return GC.@preserve A unsafe_write(s, pointer(A), elsize(A) * length(A))
+    mst_bytes = mst * el_size
+    mst_bytes == array_elsize || return _write_array_fallback(s, A)
+    if n == ndims(A)
+        return GC.@preserve A_cconv unsafe_write(s, unsafe_convert(Ptr{T}, A_cconv), mst_bytes * msz)
+    end
     sz′, st′ = tail(sz), tail(st)
     while n > 1
         sz′ = (tail(sz′)..., 1)
         st′ = (tail(st′)..., 0)
         n -= 1
     end
-    GC.@preserve A begin
+    GC.@preserve A_cconv begin
         nb = 0
         iter = CartesianIndices(sz′)
+        p_start = unsafe_convert(Ptr{T}, A_cconv)
         for I in iter
-            p = pointer(A)
+            local p = p_start
             for i in 1:length(sz′)
-                p += elsize(A) * st′[i] * (I[i] - 1)
+                p += el_size * st′[i] * (I[i] - 1)
             end
-            nb += unsafe_write(s, p, elsize(A) * msz)
+            nb += unsafe_write(s, p, mst_bytes * msz)
         end
         return nb
     end
@@ -942,35 +952,41 @@ end
 read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
-function read!(s::IO, A::AbstractArray{T}) where {T}
-    if isbitstype(T) && _checkcontiguous(Bool, A)
-        GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
+function read!(s::IO, A::AT) where {T, AT<:AbstractArray{T}}
+    if !isbitstype(T)
+        for i in eachindex(A)
+            A[i] = read(s, T)
+        end
     else
-        if isbitstype(T)
-            r = Ref{T}()
-            for i in eachindex(A)
-                @noinline unsafe_read(s, r, Core.sizeof(r)) # r must be heap-allocated
-                A[i] = r[]
-            end
+        if is_ptr_storable(AT) && is_strided(AT)
+            _read_array_strided!(s, A)
         else
-            for i in eachindex(A)
-                A[i] = read(s, T)
-            end
+            _read_array_fallback!(s, A)
         end
     end
-    return A
+    A
 end
-
-function read!(s::IO, A::StridedArray{T}) where {T}
-    if !isbitstype(T) || _checkcontiguous(Bool, A)
-        return invoke(read!, Tuple{IO, AbstractArray}, s, A)
+function _read_array_fallback!(s::IO, A::AbstractArray{T}) where {T}
+    r = Ref{T}()
+    for i in eachindex(A)
+        @noinline unsafe_read(s, r, Core.sizeof(r)) # r must be heap-allocated
+        A[i] = r[]
+    end
+end
+function _read_array_strided!(s::IO, A::AT) where {T, AT<:AbstractArray{T}}
+    el_size = elsize(AT)
+    array_elsize = elsize(Array{T})
+    A_cconv = cconvert(Ptr{T}, A)
+    if has_contiguous_layout(AT)
+        return GC.@preserve A_cconv unsafe_read(s, unsafe_convert(Ptr{T}, A_cconv), array_elsize * length(A))
     end
     sz::Dims = size(A)
     st::Dims = strides(A)
     msz, mst, n = merge_adjacent_dim(sz, st)
-    mst == 1 || return invoke(read!, Tuple{IO, AbstractArray}, s, A)
+    mst_bytes = mst * el_size
+    mst_bytes == array_elsize || return _read_array_fallback!(s, A)
     if n == ndims(A)
-        GC.@preserve A unsafe_read(s, pointer(A), elsize(A) * length(A))
+        GC.@preserve A_cconv unsafe_read(s, unsafe_convert(Ptr{T}, A_cconv), mst_bytes * msz)
     else
         sz′, st′ = tail(sz), tail(st)
         while n > 1
@@ -978,18 +994,18 @@ function read!(s::IO, A::StridedArray{T}) where {T}
             st′ = (tail(st′)..., 0)
             n -= 1
         end
-        GC.@preserve A begin
+        GC.@preserve A_cconv begin
             iter = CartesianIndices(sz′)
+            p_start = unsafe_convert(Ptr{T}, A_cconv)
             for I in iter
-                p = pointer(A)
+                local p = p_start
                 for i in 1:length(sz′)
-                    p += elsize(A) * st′[i] * (I[i] - 1)
+                    p += el_size * st′[i] * (I[i] - 1)
                 end
-                unsafe_read(s, p, elsize(A) * msz)
+                unsafe_read(s, p, mst_bytes * msz)
             end
         end
     end
-    return A
 end
 
 function read(io::IO, ::Type{Char})

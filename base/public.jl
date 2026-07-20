@@ -35,6 +35,11 @@ public
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,
+    is_strided,
+    is_vec_strided,
+    is_contiguous,
+    has_vec_strided_layout,
+    has_contiguous_layout,
 
 # collections
     IteratorEltype,
