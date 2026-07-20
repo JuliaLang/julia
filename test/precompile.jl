@@ -3605,4 +3605,31 @@ precompile_test_harness("include mapexpr persistence") do dir
     @test length(mapexprs) == 3
 end
 
+precompile_test_harness("cancellation source relinking") do dir
+    write(joinpath(dir, "CancelRelink.jl"),
+          """
+          module CancelRelink
+              using Base: CancellationToken, CancellationTokenSource
+              const ROOT = CancellationTokenSource()
+              const LEFT = CancellationTokenSource(CancellationToken(ROOT))
+              const RIGHT = CancellationTokenSource(CancellationToken(ROOT))
+              const CHILD = CancellationTokenSource(CancellationToken(LEFT), CancellationToken(RIGHT))
+          end
+          """)
+    Base.compilecache(Base.PkgId("CancelRelink"))
+    @eval using CancelRelink
+    invokelatest() do
+        # the sources were serialized into the package image with their weak
+        # child lists dropped; loading must have relinked them under their
+        # parents so that cancellation still propagates through the diamond
+        @test CancelRelink.CHILD.nparents == 2
+        @test Base._cancel_parent(CancelRelink.CHILD, 1) === CancelRelink.LEFT
+        @test !Base.iscancelled(CancelRelink.CHILD)
+        Base.cancel!(CancelRelink.ROOT)
+        @test Base.iscancelled(CancelRelink.LEFT)
+        @test Base.iscancelled(CancelRelink.RIGHT)
+        @test Base.iscancelled(CancelRelink.CHILD)
+    end
+end
+
 finish_precompile_test!()

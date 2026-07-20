@@ -572,10 +572,37 @@ function serialize(s::AbstractSerializer, mc::Core.MethodCache)
     error("cannot serialize MethodCache objects")
 end
 
+# Only the (strong) parent links and the state bytes are serialized; the
+# weak intrusive child lists are rebuilt on deserialization by relinking
+# the source under its parents as if it were newly constructed (which also
+# re-inherits the parents' current cancellation state).
 function serialize(s::AbstractSerializer, src::Core.CancellationTokenSource)
-    # variable-sized, with intrusive weak child lists the generic
-    # field-by-field path would corrupt
-    error("cannot serialize CancellationTokenSource objects")
+    serialize_cycle_header(s, src) && return
+    np = Int(src.nparents)
+    serialize(s, np)
+    for i in 1:np
+        serialize(s, Base._cancel_parent(src, i))
+    end
+    serialize(s, @atomic src.state)
+    serialize(s, @atomic src.delivered)
+    nothing
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.CancellationTokenSource})
+    np = deserialize(s)::Int
+    parents = Vector{Any}(undef, np)
+    for i in 1:np
+        parents[i] = deserialize(s)::Core.CancellationTokenSource
+    end
+    src = Core._new_cancel_source(parents...)::Core.CancellationTokenSource
+    deserialize_cycle(s, src)
+    state = deserialize(s)::UInt8
+    delivered = deserialize(s)::UInt8
+    # CAS-max with whatever the relinking inherited from the parents;
+    # severities only ever escalate
+    state != 0x00 && Base._raise_state!(src, state & Base.SEVERITY_MASK)
+    delivered != 0x00 && (@atomic :monotonic src.delivered |= delivered)
+    return src
 end
 
 

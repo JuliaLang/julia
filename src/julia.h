@@ -2539,6 +2539,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t) JL_CANSAFE
 JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t nparents) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_cancel_source_parent(jl_cancel_source_t *src, size_t i);
 JL_DLLEXPORT jl_value_t *jl_cancel_source_next_child(jl_cancel_source_t *parent, jl_cancel_source_t *child) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_cancel_source_relink(jl_cancel_source_t *src) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_CANSAFEPOINT_ENTER_LEAVE;
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;

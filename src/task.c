@@ -1647,6 +1647,52 @@ static int cancel_source_raise_state(jl_cancel_source_t *src, uint8_t sev) JL_NO
     }
 }
 
+// Link `src` - whose link entries have `parent` filled in and `next`/`pprev`
+// reset - into each parent's (intrusive, weak) child list and inherit the
+// parents' cancellation state: a node attached under an already-cancelled
+// parent is born cancelled, at the highest severity among its parents.
+// Shared between construction and image reload.
+static void cancel_source_attach(jl_cancel_source_t *src) JL_NOTSAFEPOINT
+{
+    jl_cancel_parent_link_t *links = jl_cancel_source_links(src);
+    size_t np = src->nparents;
+    int cancelled = 0;
+    uint8_t sev = 0;
+    for (size_t i = 0; i < np; i++) {
+        jl_cancel_source_t *p = links[i].parent;
+        // Prepend to p's child list. No write barrier: the edge is weak and
+        // never traced.
+        links[i].pprev = &p->child_head;
+        jl_value_t *head = jl_atomic_load_relaxed(&p->child_head);
+        while (1) {
+            jl_atomic_store_relaxed(&links[i].next, head);
+            if (jl_atomic_cmpswap(&p->child_head, &head, (jl_value_t*)src))
+                break;
+        }
+        if (head != jl_nothing) {
+            // Fix the displaced head's back-pointer. Only this attacher may
+            // write it (the CAS made us the unique predecessor), and no
+            // safepoint separates the CAS from this store.
+            jl_cancel_parent_link_t *hl = jl_cancel_source_link((jl_cancel_source_t*)head, p);
+            assert(hl != NULL);
+            hl->pprev = &links[i].next;
+        }
+        // Level-triggered attachment: the seq_cst publication above and the
+        // seq_cst load below pair with `cancel!`'s (state write; fence;
+        // child_head read) so that either the canceller's walk observes this
+        // node, or this load observes the cancelled state.
+        uint8_t pst = jl_atomic_load(&p->state);
+        if (pst != 0) {
+            cancelled = 1;
+            uint8_t psev = pst & 0x3f;
+            if (psev > sev)
+                sev = psev;
+        }
+    }
+    if (cancelled)
+        cancel_source_raise_state(src, sev);
+}
+
 // Create a new cancellation token source underneath the given (distinct)
 // parent sources - none makes a root - and link it into each parent's
 // (intrusive, weak) child list. The child inherits the parents'
@@ -1694,44 +1740,23 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
     // No safepoint is permitted from here to the return: the collector's
     // unlink pass must never observe a registered-but-unpublished (or
     // published-but-unregistered) node or a half-updated (`pprev` not yet
-    // fixed up) list, and the `next` values staged by the CAS loop below
-    // are weak references that a collection could invalidate.
-    int cancelled = 0;
-    uint8_t sev = 0;
-    for (size_t i = 0; i < np; i++) {
-        jl_cancel_source_t *p = links[i].parent;
-        // Prepend to p's child list. No write barrier: the edge is weak and
-        // never traced.
-        links[i].pprev = &p->child_head;
-        jl_value_t *head = jl_atomic_load_relaxed(&p->child_head);
-        while (1) {
-            jl_atomic_store_relaxed(&links[i].next, head);
-            if (jl_atomic_cmpswap(&p->child_head, &head, (jl_value_t*)src))
-                break;
-        }
-        if (head != jl_nothing) {
-            // Fix the displaced head's back-pointer. Only this constructor
-            // may write it (the CAS made us the unique predecessor), and no
-            // safepoint separates the CAS from this store.
-            jl_cancel_parent_link_t *hl = jl_cancel_source_link((jl_cancel_source_t*)head, p);
-            assert(hl != NULL);
-            hl->pprev = &links[i].next;
-        }
-        // Level-triggered attachment: the seq_cst publication above and the
-        // seq_cst load below pair with `cancel!`'s (state write; fence;
-        // child_head read) so that either the canceller's walk observes this
-        // node, or this load observes the cancelled state.
-        uint8_t pst = jl_atomic_load(&p->state);
-        if (pst != 0) {
-            cancelled = 1;
-            uint8_t psev = pst & 0x3f;
-            if (psev > sev)
-                sev = psev;
-        }
-    }
-    if (cancelled)
-        cancel_source_raise_state(src, sev);
+    // fixed up) list, and the `next` values staged by the CAS loops in
+    // cancel_source_attach are weak references that a collection could
+    // invalidate.
+    cancel_source_attach(src);
     return (jl_value_t*)src;
+}
+
+// Re-attach a deserialized (image-resident) cancellation source to its
+// parents, exactly as if it had just been constructed: its serialized
+// child links were dropped by the serializer, and its parents' *current*
+// cancellation state must be (re)inherited - a parent may have been
+// cancelled between serialization and load. Image objects are never
+// collected, so unlike jl_new_cancel_source there is no sweep-support
+// registration.
+JL_DLLEXPORT void jl_cancel_source_relink(jl_cancel_source_t *src)
+{
+    cancel_source_attach(src);
 }
 
 // The i-th (0-based) parent of `src` (a strong, const link).

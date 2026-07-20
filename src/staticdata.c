@@ -884,6 +884,16 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     else if (jl_is_module(v)) {
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
     }
+    else if (jl_is_cancel_source(v)) {
+        // Only the (strong) parent links are serialized; the weak child
+        // lists (`child_head` and the link entries' `next`/`pprev`) are
+        // dropped and rebuilt on load by relinking each source under its
+        // parents as if newly allocated (see jl_cancel_source_relink).
+        jl_cancel_source_t *cs = (jl_cancel_source_t*)v;
+        jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
+        for (size_t i = 0; i < cs->nparents; i++)
+            jl_queue_for_serialization_(s, (jl_value_t*)links[i].parent, 1, immediate);
+    }
     else if (layout->nfields > 0) {
         if (jl_options.trim) {
             if (jl_is_method(v)) {
@@ -975,11 +985,6 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     // check early from errors, so we have a little bit of contextual state for debugging them
     if (t == jl_task_type) {
         jl_error("Task cannot be serialized");
-    }
-    if (t == jl_cancel_source_type) {
-        // Variable-sized, with weak intrusive child lists the serializer
-        // does not know how to relink on load.
-        jl_error("CancellationTokenSource cannot be serialized");
     }
     if (s->incremental && needs_uniquing(v, s->query_cache) && t == jl_binding_type) {
         jl_binding_t *b = (jl_binding_t*)v;
@@ -1593,6 +1598,29 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         else if (jl_is_string(v)) {
             ios_write(f, (char*)v, sizeof(void*) + jl_string_len(v));
             write_uint8(f, '\0'); // null-terminated strings for easier C-compatibility
+        }
+        else if (jl_is_cancel_source(v)) {
+            // Variable-sized: the fixed fields are followed by `nparents`
+            // {parent, next, pprev} link entries. The weak child links
+            // (`child_head` and the `next`/`pprev` slots) are reset rather
+            // than serialized: on load the source is relinked under its
+            // parents as if newly allocated (see the fixup below), which
+            // also re-inherits their current cancellation state.
+            assert(f == s->s);
+            jl_cancel_source_t *cs = (jl_cancel_source_t*)v;
+            write_pointerfield(s, jl_nothing); // child_head (weak; reset)
+            write_uint8(f, jl_atomic_load_relaxed(&cs->state));
+            write_uint8(f, jl_atomic_load_relaxed(&cs->delivered));
+            ios_write(f, (char*)&cs->nparents, sizeof(uint16_t));
+            write_padding(f, sizeof(jl_cancel_source_t) - sizeof(void*) - 2 * sizeof(uint8_t) - sizeof(uint16_t));
+            jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
+            for (size_t i = 0; i < cs->nparents; i++) {
+                write_pointerfield(s, (jl_value_t*)links[i].parent);
+                write_pointerfield(s, jl_nothing); // next (weak; reset)
+                write_pointer(f);                  // pprev (reset; set by relink)
+            }
+            // relink under the parents on load
+            arraylist_push(&s->fixup_objs, (void*)reloc_offset);
         }
         else if (jl_is_foreign_type(t) == 1) {
             abort(); // unreachable
@@ -4222,6 +4250,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                     }
                 }
             }
+        }
+        else if (jl_is_cancel_source(obj)) {
+            // relink under its parents, as if newly allocated (the weak
+            // child links were dropped at serialization)
+            jl_cancel_source_relink((jl_cancel_source_t*)obj);
         }
         else {
             abort();

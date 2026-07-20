@@ -309,6 +309,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_module_tag:
         case jl_bool_tag:
         case jl_nothing_tag:
+        case jl_cancel_source_tag: // mutable: identity (a == b checked above)
             return 0;
         case jl_simplevector_tag:
             return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
