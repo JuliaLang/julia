@@ -3632,4 +3632,38 @@ precompile_test_harness("cancellation source relinking") do dir
     end
 end
 
+precompile_test_harness("cancellation relink under cancelled external parent") do dir
+    write(joinpath(dir, "CancelExtA.jl"),
+          """
+          module CancelExtA
+              using Base: CancellationTokenSource
+              const A_ROOT = CancellationTokenSource()
+          end
+          """)
+    write(joinpath(dir, "CancelExtB.jl"),
+          """
+          module CancelExtB
+              using CancelExtA
+              using Base: CancellationToken, CancellationTokenSource
+              const B_MID = CancellationTokenSource(CancellationToken(CancelExtA.A_ROOT))
+              const B_CHILD = CancellationTokenSource(CancellationToken(B_MID))
+          end
+          """)
+    Base.compilecache(Base.PkgId("CancelExtA"))
+    Base.compilecache(Base.PkgId("CancelExtB"))
+    @eval using CancelExtA
+    invokelatest() do
+        Base.cancel!(CancelExtA.A_ROOT)
+    end
+    @eval using CancelExtB
+    invokelatest() do
+        # CancelExtB's sources re-attached at load time under the already-
+        # cancelled A_ROOT: B_MID is born cancelled during its relink, and
+        # that state must reach B_CHILD regardless of the order in which
+        # the image's fixups relinked the two
+        @test Base.iscancelled(CancelExtB.B_MID)
+        @test Base.iscancelled(CancelExtB.B_CHILD)
+    end
+end
+
 finish_precompile_test!()

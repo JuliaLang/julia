@@ -614,6 +614,12 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
+    if (jl_is_cancel_source(x)) {
+        // variable-sized: one link entry per parent follows the fixed fields
+        jl_cancel_source_t *cs = (jl_cancel_source_t*)x;
+        return jl_box_long(sizeof(jl_cancel_source_t) +
+                           cs->nparents * sizeof(jl_cancel_parent_link_t));
+    }
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);

@@ -202,6 +202,20 @@ function (ss::SummarySize)(obj::Module)
     return size
 end
 
+function (ss::SummarySize)(obj::Core.CancellationTokenSource)
+    key = pointer_from_objref(obj)
+    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    # Variable-sized: Core.sizeof includes the trailing parent link entries.
+    # Traverse the (strong) parent references; the child list is weak - a
+    # source does not keep its children alive - so it is deliberately not
+    # followed.
+    size::Int = ss.count ? 1 : Core.sizeof(obj)
+    for i in 1:Int(obj.nparents)
+        size += ss(_cancel_parent(obj, i))::Int
+    end
+    return size
+end
+
 function (ss::SummarySize)(obj::Task)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     size::Int = (ss.count ? 1 : Core.sizeof(obj))

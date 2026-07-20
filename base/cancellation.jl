@@ -251,6 +251,12 @@ state.
 Computations governed by a token of the subtree observe the cancellation at
 their cancellation points (see [`@cancel_check`](@ref)), which throw a
 [`CancellationRequest`](@ref).
+
+When `cancel!` returns, every source currently in the subtree has been
+advanced to (at least) the requested severity by this very call - even a
+call that returns `false` performs the full walk, so that a repeated
+`cancel!` also repairs a subtree whose earlier cancellation was cut short
+(say, by the cancelling task itself being torn down mid-walk).
 """
 function cancel!(src::CancellationTokenSource,
                  request::CancellationRequest=CANCEL_REQUEST_SAFE)
@@ -258,53 +264,64 @@ function cancel!(src::CancellationTokenSource,
     if !(sev == 0x0 || sev == 0x3 || sev == 0x4)
         throw(ArgumentError("invalid cancellation severity $(repr(request.request))"))
     end
-    _raise_state!(src, sev) || return false
+    raised = _raise_state!(src, sev)
     # Pairs with the compiler-order-only publication of per-task token
     # bindings at compiled cancellation points (upcoming): after this fence,
     # either the canceller observes the binding of a running task, or the
     # task's next cancellation point observes our state write.
     Threads.atomic_fence_heavy()
     # Mark the subtree: each node is marked before its children so a
-    # concurrent construction of a child source is level-triggered.
+    # concurrent construction of a child source is level-triggered. The walk
+    # does not depend on `raised`: when a concurrent equal-severity cancel!
+    # wins the state transition, its walk may still be in flight (or may
+    # never finish), so the loser must provide the on-return guarantee with
+    # its own traversal.
     _cancel_walk!(src, sev)
-    return true
+    return raised
 end
 
 function _cancel_walk!(src::CancellationTokenSource, sev::UInt8)
     # Iterative worklist (no recursion): a deep source chain must not
-    # overflow the canceller's stack, and a reconverging ("linked") graph
-    # must visit each node once, not once per path.
+    # overflow the canceller's stack. The visited set - rather than pruning
+    # on nodes whose state some walk already advanced - makes a reconverging
+    # ("linked") graph linear in edges while keeping the walk self-contained:
+    # this call visits every reachable node itself instead of trusting
+    # another (possibly interrupted) walk to have done so.
+    visited = IdSet{CancellationTokenSource}()
+    push!(visited, src)
     pending = CancellationTokenSource[src]
     while !isempty(pending)
-        _cancel_walk_node!(pop!(pending), sev, pending)
+        _cancel_walk_node!(pop!(pending), sev, pending, visited)
     end
     return nothing
 end
 
 function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
-                            pending::Vector{CancellationTokenSource})
+                            pending::Vector{CancellationTokenSource},
+                            visited::IdSet{CancellationTokenSource})
     # Advance at least to the node's current severity: a concurrent higher-
     # severity cancel! may have raised the state after this walk's own
-    # transition; its walk skips children this one already advanced, so this
-    # walk must carry the escalated severity onward.
+    # transition, and this walk may reach parts of the subtree before that
+    # one does, so it carries the escalated severity onward (best effort;
+    # the escalator's own walk is what guarantees its severity).
     st = @atomic :acquire node.state
     stsev = st & SEVERITY_MASK
     sev < stsev && (sev = stsev)
-    # Walk the node's (weak, intrusive) child list, queueing the children
-    # whose state this walk advanced; a child whose state was already at (or
-    # above) this severity has been walked - or is being walked - by whoever
-    # advanced it, so revisiting it would make a reconverging graph
-    # exponential. The seq_cst `child_head` read below (paired with the
-    # seq_cst state write that queued `node`) closes the race against a
-    # concurrent attach: a child that this read misses was published after
-    # our state write, so its constructor observes that write and the child
-    # is born at (at least) this severity. Children attached concurrently
-    # *during* the walk are prepended before the list positions already
-    # traversed and are likewise born cancelled.
+    # Walk the node's (weak, intrusive) child list. The seq_cst `child_head`
+    # read below (paired with the seq_cst state CAS in `cancel!` - the read
+    # it performs is seq_cst even when the transition was lost) closes the
+    # race against a concurrent attach: a child that this read misses was
+    # published after the state write that made this walk reach `node`, so
+    # its constructor observes a cancelled parent and the child is born at
+    # (at least) this severity. Children attached concurrently *during* the
+    # walk are prepended before the list positions already traversed and are
+    # likewise born cancelled.
     c = @atomic node.child_head
     while c !== nothing
         c = c::CancellationTokenSource
-        if _raise_state!(c, sev)
+        _raise_state!(c, sev)
+        if !(c in visited)
+            push!(visited, c)
             push!(pending, c)
         end
         c = _cancel_next_child(node, c)

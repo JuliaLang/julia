@@ -146,6 +146,70 @@ end
     @test inherited === tok
 end
 
+@testset "cancel! repairs partially-cancelled subtrees" begin
+    # Simulate a cancel! whose subtree walk never ran (e.g. the cancelling
+    # task torn down mid-walk): the state is raised, but no child is.
+    root = CancellationTokenSource()
+    child = CancellationTokenSource(CancellationToken(root))
+    @test Base._raise_state!(root, 0x0)
+    @test !Base.iscancelled(child)
+    # A repeated cancel! loses the state transition (returns false) but
+    # must still perform the subtree walk itself.
+    @test !cancel!(root)
+    @test Base.iscancelled(child)
+end
+
+@testset "cancellation source GC with dying parents" begin
+    # Parents dying in the same cycle as their children: the unlink pass
+    # writes into the dead parents' memory, which the sweep must keep
+    # valid through the cycle.
+    for _ in 1:5
+        for _ in 1:1000
+            r = CancellationTokenSource()
+            m = CancellationTokenSource(CancellationToken(r))
+            CancellationTokenSource(CancellationToken(m))
+        end
+        GC.gc()
+    end
+    GC.gc()
+    GC.gc() # pages now hold no sources: the sweep flag must clear, not pin them
+    # big-object sources (many parents) take the deferred-free path
+    let
+        parents = [CancellationTokenSource() for _ in 1:100]
+        cancel!(parents[1])
+        big = CancellationTokenSource(map(CancellationToken, parents)...)
+        @test Base.iscancelled(big)
+        parents = nothing
+        big = nothing
+    end
+    GC.gc()
+    GC.gc()
+    # a survivor amid heavy churn stays correctly linked throughout
+    root = CancellationTokenSource()
+    keep = CancellationTokenSource(CancellationToken(root))
+    for _ in 1:10_000
+        CancellationTokenSource(CancellationToken(root))
+    end
+    GC.gc()
+    GC.gc()
+    cancel!(root)
+    @test Base.iscancelled(keep)
+end
+
+@testset "cancellation source memory accounting" begin
+    a = CancellationTokenSource()
+    b = CancellationTokenSource()
+    base = Core.sizeof(a)
+    linksz = 3 * sizeof(Ptr{Cvoid})
+    c2 = CancellationTokenSource(CancellationToken(a), CancellationToken(b))
+    @test Core.sizeof(c2) == base + 2 * linksz
+    # summarysize charges the link tail and the (strong) parents, but not
+    # the (weak) children
+    @test Base.summarysize(c2) == base + 2 * linksz + 2 * base
+    @test Base.summarysize(c2; count=true) == 3
+    @test Base.summarysize(a) == base # a's children are weak: c2 not charged
+end
+
 @testset "cancellation points" begin
     # @cancel_check with no scoped token is a no-op
     @test with(() -> (Base.@cancel_check; :ran), CANCEL_TOKEN => nothing) === :ran

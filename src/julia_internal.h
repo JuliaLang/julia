@@ -693,6 +693,11 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty) JL_CAN
 // flags the page so its sweep inspects dead cells there; MMTk registers the
 // object for a post-mark registry scan.
 void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT;
+// Declare that `v` may be *written* by the GC's weak-processing pass in the
+// cycle in which it dies (e.g. a parent whose intrusive child list dead
+// children splice themselves out of), so its memory must not be reclaimed
+// before that pass has run.
+void jl_gc_set_weak_processing_target(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT;
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__
 #  define jl_gc_alloc(ptls, sz, ty)  \

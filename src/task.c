@@ -1723,6 +1723,11 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
         // a linked source must be unlinked from its parents' sibling lists
         // when it dies (a root is never on any list and needs nothing)
         jl_gc_set_needs_weak_processing(ct->ptls, (jl_value_t*)src);
+        // and the unlink writes into each parent's `child_head`/sibling
+        // slots, so a parent that dies in the same cycle as its children
+        // must keep its memory until the unlink pass has run
+        for (size_t i = 0; i < np; i++)
+            jl_gc_set_weak_processing_target(ct->ptls, parents[i]);
     }
     jl_atomic_store_relaxed(&src->child_head, jl_nothing);
     jl_atomic_store_relaxed(&src->state, 0);
@@ -1746,16 +1751,49 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
     return (jl_value_t*)src;
 }
 
+// Push a (re)inherited cancelled state down `src`'s already-attached
+// children. Image fixups relink sources in no particular order, so a child
+// may re-attach to `src` *before* `src` itself is relinked - and thereby
+// miss a cancelled state that `src` only inherits during its own relink
+// (from an already-cancelled parent). Mirrors `Base._cancel_walk!`: each
+// node's children are advanced to (at least) the node's own severity,
+// recursing only where a state was actually raised (which bounds the walk
+// on reconverging graphs).
+static void cancel_source_propagate_state(jl_cancel_source_t *src) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&src->state) == 0)
+        return;
+    arraylist_t wl;
+    arraylist_new(&wl, 0);
+    arraylist_push(&wl, src);
+    while (wl.len > 0) {
+        jl_cancel_source_t *n = (jl_cancel_source_t*)wl.items[--wl.len];
+        uint8_t sev = jl_atomic_load(&n->state) & 0x3f;
+        jl_value_t *c = jl_atomic_load(&n->child_head);
+        while (c != (jl_value_t*)jl_nothing) {
+            jl_cancel_source_t *cs = (jl_cancel_source_t*)c;
+            if (cancel_source_raise_state(cs, sev))
+                arraylist_push(&wl, cs);
+            jl_cancel_parent_link_t *link = jl_cancel_source_link(cs, n);
+            assert(link != NULL);
+            c = jl_atomic_load(&link->next);
+        }
+    }
+    arraylist_free(&wl);
+}
+
 // Re-attach a deserialized (image-resident) cancellation source to its
 // parents, exactly as if it had just been constructed: its serialized
 // child links were dropped by the serializer, and its parents' *current*
 // cancellation state must be (re)inherited - a parent may have been
-// cancelled between serialization and load. Image objects are never
-// collected, so unlike jl_new_cancel_source there is no sweep-support
-// registration.
-JL_DLLEXPORT void jl_cancel_source_relink(jl_cancel_source_t *src)
+// cancelled between serialization and load. A state raised this way is
+// propagated down any children that re-attached before us (fixup order is
+// arbitrary). Image objects are never collected, so unlike
+// jl_new_cancel_source there is no sweep-support registration.
+JL_DLLEXPORT void jl_cancel_source_relink(jl_cancel_source_t *src) JL_NOTSAFEPOINT
 {
     cancel_source_attach(src);
+    cancel_source_propagate_state(src);
 }
 
 // The i-th (0-based) parent of `src` (a strong, const link).
