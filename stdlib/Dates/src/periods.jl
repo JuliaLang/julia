@@ -382,12 +382,12 @@ Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = isequal(x.periods, y.period
 # without ever constructing a `CompoundPeriod`.
 
 # Total value of the periods in `ps` whose type is exactly `P`.
-@inline _sumperiods(::Type{P}, ::Tuple{}) where {P<:BuiltInPeriod} = 0
-@inline _sumperiods(::Type{P}, ps::Tuple) where {P<:BuiltInPeriod} =
+Base.@constprop :aggressive _sumperiods(::Type{P}, ::Tuple{}) where {P<:BuiltInPeriod} = 0
+Base.@constprop :aggressive _sumperiods(::Type{P}, ps::Tuple) where {P<:BuiltInPeriod} =
     (first(ps) isa P ? value(first(ps)) : 0) + _sumperiods(P, Base.tail(ps))
 
-@inline _addperiods(x::TimeType, ::Tuple{}, ::Tuple) = x
-@inline function _addperiods(x::TimeType, types::Tuple, ps::Tuple)
+Base.@constprop :aggressive _addperiods(x::TimeType, ::Tuple{}, ::Tuple) = x
+Base.@constprop :aggressive function _addperiods(x::TimeType, types::Tuple, ps::Tuple)
     P = first(types)
     s = _sumperiods(P, ps)
     # Types with a zero total are skipped, so absent types produce no code and a zero
@@ -396,8 +396,9 @@ Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = isequal(x.periods, y.period
     return _addperiods(x, Base.tail(types), ps)
 end
 
-# `PERIOD_TYPES` is a compile-time constant, so its element types stay known to the
-# compiler and `_addperiods` unrolls and constant-folds.
+# `PERIOD_TYPES` is a compile-time constant. Its element type is only `DataType`, so the
+# per-type value `first(types)` is recovered through constant propagation; `@constprop
+# :aggressive` makes `_addperiods` unroll and fold to concrete period constructions.
 (+)(x::TimeType, p1::BuiltInPeriod, p2::BuiltInPeriod, ps::BuiltInPeriod...) =
     _addperiods(x, PERIOD_TYPES, (p1, p2, ps...))
 
