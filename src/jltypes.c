@@ -60,7 +60,7 @@ static int typeenv_has_ne(jl_typeenv_t *env, jl_tvar_t *v) JL_NOTSAFEPOINT
 struct _jl_typestack_t;
 typedef struct _jl_typestack_t jl_typestack_t;
 
-static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow);
+static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow) JL_CANSAFEPOINT;
 
 // sentinel `val` for a jl_typeenv_t entry marking a variable that is being
 // translated into a de Bruijn reference by jl_type_unionall.
