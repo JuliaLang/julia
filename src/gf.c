@@ -4298,6 +4298,10 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
                 last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
                 if (tt == NULL) {
                     tt = arg_type_tuple(F, args, nargs);
+                    // arg_type_tuple can allocate and hit a safepoint; a GC there may
+                    // grow/replace mc->leafcache, freeing the memory `leafcache` still
+                    // points at. Reload before dereferencing it in lookup_leafcache.
+                    leafcache = jl_atomic_load_relaxed(&mc->leafcache);
                     entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
                 }
             }
