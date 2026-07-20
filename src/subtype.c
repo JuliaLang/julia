@@ -1628,6 +1628,15 @@ static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var, int covarian
     return !jl_has_typevar(t, var);
 }
 
+// Test whether every occurrence of `var` in `t` is covariant, treating the top
+// level of `t` as a covariant position. Exposed for the compiler, which uses the
+// same notion of covariance to reason about when a `∀` variable's union upper
+// bound distributes over its arms (see `subtype_unionall`).
+JL_DLLEXPORT int jl_var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var) JL_NOTSAFEPOINT
+{
+    return var_occurs_covariant_only(t, var, 1);
+}
+
 // A (closed) type value bound only through equality (`Type{X}`) positions is
 // only known up to `==` (#61323); record it as a pinned (lb == ub) typevar
 // marker. A BOUND_EQ channel still marks it *defined* (constrained) for every
