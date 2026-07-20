@@ -1756,9 +1756,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             field_ptr, Align(sizeof(int16_t)), "in_pure_callback"));
         Value *cond = ctx.builder.CreateICmpEQ(in_pure_callback, ConstantInt::get(T_int16, 0));
 
-        Value *world_counter = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-            prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
-        cast<LoadInst>(world_counter)->setOrdering(AtomicOrdering::Acquire);
+        Value *world_counter = emit_world_counter_load(ctx);
         Value *ret = ctx.builder.CreateSelect(cond, world_counter, ConstantInt::get(ctx.types().T_size, ~(size_t)0));
         return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
     }

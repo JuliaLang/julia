@@ -2225,6 +2225,9 @@ static Value *get_current_ptls(jl_codectx_t &ctx);
 static Value *get_tls_world_age(jl_codectx_t &ctx);
 static Value *get_scope_field(jl_codectx_t &ctx);
 static Value *get_tls_world_age_field(jl_codectx_t &ctx);
+static LoadInst *emit_tls_world_age_load(jl_codectx_t &ctx);
+static StoreInst *emit_tls_world_age_store(jl_codectx_t &ctx, Value *world);
+static LoadInst *emit_world_counter_load(jl_codectx_t &ctx, AtomicOrdering order = AtomicOrdering::Acquire);
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
                              ArrayRef<jl_cgval_t> args, size_t nargs, JuliaFunction<> *trampoline) JL_CANSAFEPOINT;
@@ -4550,10 +4553,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         // If the applied call throws, the world age is restored by
         // jl_eh_restore_state at the enclosing catch, as for the builtins.
         size_t fidx = (f == BUILTIN(invoke_in_world)) ? 2 : 1; // index of the applied function in argv
-        Value *world_age_field = get_tls_world_age_field(ctx);
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-        Instruction *last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
-                ctx.types().T_size, world_age_field, ctx.types().alignof_ptr, "last_age"));
+        Instruction *last_age = emit_tls_world_age_load(ctx);
+        last_age->setName("last_age");
         Type *T_int16 = getInt16Ty(ctx.builder.getContext());
         jl_aliasinfo_t ai_const = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         Value *offset = ConstantInt::get(ctx.types().T_size, offsetof(jl_tls_states_t, in_pure_callback) / sizeof(int16_t));
@@ -4561,9 +4562,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         Instruction *in_pure_callback = ai_const.decorateInst(ctx.builder.CreateAlignedLoad(
                 T_int16, field_ptr, Align(sizeof(int16_t)), "in_pure_callback"));
         Value *not_pure = ctx.builder.CreateICmpEQ(in_pure_callback, ConstantInt::get(T_int16, 0));
-        LoadInst *world_counter = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-            prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
-        world_counter->setOrdering(AtomicOrdering::Acquire);
+        LoadInst *world_counter = emit_world_counter_load(ctx);
         Value *target_world = world_counter;
         if (f == BUILTIN(invoke_in_world)) {
             Value *world = emit_unbox(ctx, ctx.types().T_size, argv[1]);
@@ -4571,9 +4570,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 ctx.builder.CreateICmpULT(world, world_counter), world, world_counter);
         }
         Value *new_age = ctx.builder.CreateSelect(not_pure, target_world, last_age);
-        ai.decorateInst(ctx.builder.CreateAlignedStore(new_age, world_age_field, ctx.types().alignof_ptr));
+        emit_tls_world_age_store(ctx, new_age);
         Value *r = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv.drop_front(fidx), nargs - fidx + 1, julia_call);
-        ai.decorateInst(ctx.builder.CreateAlignedStore(last_age, world_age_field, ctx.types().alignof_ptr));
+        emit_tls_world_age_store(ctx, last_age);
         *ret = mark_julia_type(ctx, r, true, rt);
         return true;
     }
@@ -6744,18 +6743,6 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     return std::make_pair(F, specF);
 }
 
-static void emit_latestworld(jl_codectx_t &ctx)
-{
-    auto world_age_field = get_tls_world_age_field(ctx);
-    LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-        prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr,
-        /*isVolatile*/false);
-    world->setOrdering(AtomicOrdering::Acquire);
-    StoreInst *store_world = ctx.builder.CreateAlignedStore(world, world_age_field,
-        ctx.types().alignof_ptr, /*isVolatile*/false);
-    (void)store_world;
-}
-
 // `expr` is not actually clobbered in JL_TRY
 JL_GCC_IGNORE_START("-Wclobbered")
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_0based)
@@ -7123,7 +7110,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         return jl_cgval_t((jl_value_t*)jl_nothing_type);
     }
     else if (head == jl_latestworld_sym && !jl_is_method(ctx.linfo->def.method)) {
-        emit_latestworld(ctx);
+        emit_tls_world_age_store(ctx, emit_world_counter_load(ctx));
         return jl_cgval_t((jl_value_t*)jl_nothing_type);
     }
     else {
@@ -7169,11 +7156,37 @@ static Value *get_current_ptls(jl_codectx_t &ctx)
     return get_current_ptls_from_task(ctx.builder, get_current_task(ctx), ctx.tbaa().tbaa_gcframe);
 }
 
-// Get the address of the world age of the current task
+// Get the address of the world age of the current task.
+// All memory accesses to this field must be tagged tbaa_gcframe (or left untagged).
 static Value *get_tls_world_age_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx);
     return emit_ptrgep(ctx, ct, offsetof(jl_task_t, world_age), "world_age");
+}
+
+// Load the world age of the current task at the current insert point.
+static LoadInst *emit_tls_world_age_load(jl_codectx_t &ctx)
+{
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+    return cast<LoadInst>(ai.decorateInst(ctx.builder.CreateAlignedLoad(
+            ctx.types().T_size, get_tls_world_age_field(ctx), ctx.types().alignof_ptr)));
+}
+
+// Store the world age of the current task at the current insert point.
+static StoreInst *emit_tls_world_age_store(jl_codectx_t &ctx, Value *world)
+{
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+    return cast<StoreInst>(ai.decorateInst(ctx.builder.CreateAlignedStore(
+            world, get_tls_world_age_field(ctx), ctx.types().alignof_ptr)));
+}
+
+// Load the global world counter `jl_world_counter` at the current insert point
+static LoadInst *emit_world_counter_load(jl_codectx_t &ctx, AtomicOrdering order)
+{
+    LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
+        prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
+    world->setOrdering(order);
+    return world;
 }
 
 // Get the value of the world age of the current task
@@ -7187,9 +7200,7 @@ static Value *get_tls_world_age(jl_codectx_t &ctx)
         ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
         ctx.builder.SetCurrentDebugLocation(ctx.topalloca->getStableDebugLoc());
     }
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-    auto *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_tls_world_age_field(ctx), ctx.types().alignof_ptr);
-    ai.decorateInst(world);
+    auto *world = emit_tls_world_age_load(ctx);
     if (!toplevel)
         ctx.world_age_at_entry = world;
     return world;
@@ -7694,7 +7705,7 @@ std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code
 // if (last_world_v != jl_world_counter)
 //   fptr = compute_new_fptr(&last_world_v)
 // return fptr()
-static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_t *sigt, ArrayRef<jl_cgval_t> inputargs, size_t nargs, Value *world_age_field) JL_CANSAFEPOINT
+static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_t *sigt, ArrayRef<jl_cgval_t> inputargs, size_t nargs) JL_CANSAFEPOINT
 {
     jl_cgval_t retval;
     if (sigt) {
@@ -7726,10 +7737,8 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         last_world_v->setOrdering(AtomicOrdering::Acquire);
         LoadInst *callee = ctx.builder.CreateAlignedLoad(T_ptr, cfuncdata, ctx.types().alignof_ptr);
         callee->setOrdering(AtomicOrdering::Acquire);
-        LoadInst *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-            prepare_global_in(M, jlgetworld_global), ctx.types().alignof_ptr);
-        world_v->setOrdering(AtomicOrdering::Monotonic);
-        ctx.builder.CreateStore(world_v, world_age_field);
+        LoadInst *world_v = emit_world_counter_load(ctx, AtomicOrdering::Monotonic);
+        emit_tls_world_age_store(ctx, world_v);
         Value *age_not_ok = ctx.builder.CreateICmpNE(last_world_v, world_v);
         Value *target = emit_guarded_test(ctx, age_not_ok, callee, [&] () {
                 Function *getcaller = prepare_call(jlgetabiconverter_func);
@@ -7855,10 +7864,7 @@ static Function *gen_cfun_wrapper(
     ctx.builder.SetCurrentDebugLocation(noDbg);
     allocate_gc_frame(ctx, b0, true);
 
-    auto world_age_field = get_tls_world_age_field(ctx);
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-    ctx.world_age_at_entry = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
+    ctx.world_age_at_entry = emit_tls_world_age_load(ctx);
 
     // first emit code to record the arguments
     Function::arg_iterator AI = cw->arg_begin();
@@ -8018,7 +8024,7 @@ static Function *gen_cfun_wrapper(
     assert(AI == cw->arg_end());
 
     // Create the call
-    jl_cgval_t retval = emit_abi_call(ctx, declrt, sigt, inputargs, nargs + 1, world_age_field);
+    jl_cgval_t retval = emit_abi_call(ctx, declrt, sigt, inputargs, nargs + 1);
     bool jlfunc_sret = retval.V && isa<AllocaInst>(retval.V) && !retval.TIndex && retval.inline_roots.empty();
 
     // Prepare the return value
@@ -8051,7 +8057,7 @@ static Function *gen_cfun_wrapper(
         r = NULL;
     }
 
-    ctx.builder.CreateStore(ctx.world_age_at_entry, world_age_field);
+    emit_tls_world_age_store(ctx, ctx.world_age_at_entry);
     ctx.builder.CreateRet(r);
 
     ctx.builder.SetCurrentDebugLocation(noDbg);
@@ -9139,12 +9145,8 @@ static jl_llvm_functions_t
         emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
     Value *last_age = NULL;
-    Value *world_age_field = NULL;
     if (ctx.is_opaque_closure) {
-        world_age_field = get_tls_world_age_field(ctx);
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-        last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
-                   ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
+        last_age = emit_tls_world_age_load(ctx);
     }
 
     // step 7. allocate local variables slots
@@ -9342,7 +9344,7 @@ static jl_llvm_functions_t
                 nullptr, nullptr, false, AtomicOrdering::NotAtomic, false, alignof_ptr.value());
             assert(ctx.world_age_at_entry == nullptr);
             ctx.world_age_at_entry = closure_world.V; // The tls world in a OC is the world of the closure
-            emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, alignof_ptr, alignof_ptr);
+            emit_unbox_store(ctx, closure_world, get_tls_world_age_field(ctx), ctx.tbaa().tbaa_gcframe, alignof_ptr, alignof_ptr);
 
             if (s == jl_unused_sym || vi.value.constant)
                 continue;
@@ -9888,7 +9890,7 @@ static jl_llvm_functions_t
             // N.B.: For toplevel thunks, we expect world age restore to be handled
             // by the interpreter which invokes us.
             if (ctx.is_opaque_closure)
-                ctx.builder.CreateStore(last_age, world_age_field);
+                emit_tls_world_age_store(ctx, last_age);
             assert(type_is_ghost(retty) || returninfo.cc == jl_returninfo_t::SRet ||
                 retval->getType() == ctx.f->getReturnType());
             ctx.builder.CreateRet(retval);
