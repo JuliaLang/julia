@@ -2165,3 +2165,79 @@ end
         rm(tmpdir; recursive=true, force=true)
     end
 end
+
+@testset "stale developed-package manifest dependency hint" begin
+    devuuid = "22222222-2222-2222-2222-222222222222"
+    depuuid = "11111111-1111-1111-1111-111111111111"
+
+    # Build an environment whose manifest lists a developed package `DevPkg`
+    # (referenced by `path`) whose deps stanza omits `DepPkg`, while `DevPkg`'s
+    # own Project.toml declares `DepPkg`. This is the stale-manifest situation.
+    function make_env(tmp; manifest_deps::String, project_deps::String)
+        devdir = joinpath(tmp, "DevPkg")
+        mkpath(joinpath(devdir, "src"))
+        write(joinpath(devdir, "Project.toml"), """
+            name = "DevPkg"
+            uuid = "$devuuid"
+
+            [deps]
+            $project_deps
+            """)
+        write(joinpath(devdir, "src", "DevPkg.jl"), "module DevPkg end")
+
+        env = joinpath(tmp, "env")
+        mkpath(env)
+        write(joinpath(env, "Project.toml"), """
+            [deps]
+            DevPkg = "$devuuid"
+            """)
+        write(joinpath(env, "Manifest.toml"), """
+            julia_version = "$(VERSION)"
+            manifest_format = "2.0"
+
+            [[deps.DevPkg]]
+            $manifest_deps
+            uuid = "$devuuid"
+            path = "../DevPkg"
+            """)
+        return env, devdir
+    end
+
+    where = Base.PkgId(Base.UUID(devuuid), "DevPkg")
+    old_load_path = copy(LOAD_PATH)
+    try
+        # Positive: manifest resolved before `DepPkg` was added; Project.toml has it.
+        mktempdir() do tmp
+            env, devdir = make_env(tmp;
+                manifest_deps = "deps = [\"Dates\"]",
+                project_deps  = "DepPkg = \"$depuuid\"")
+            copy!(LOAD_PATH, [env])
+            hint = Base.stale_manifest_dep_hint(where, :DepPkg)
+            @test hint !== nothing
+            @test occursin("Pkg.resolve()", hint)
+            @test occursin(joinpath(env, "Manifest.toml"), hint)
+            @test occursin(devdir, hint)
+        end
+
+        # Negative: the manifest already lists `DepPkg`, so nothing is stale.
+        mktempdir() do tmp
+            env, _ = make_env(tmp;
+                manifest_deps = "deps = [\"DepPkg\"]",
+                project_deps  = "DepPkg = \"$depuuid\"")
+            copy!(LOAD_PATH, [env])
+            @test Base.stale_manifest_dep_hint(where, :DepPkg) === nothing
+        end
+
+        # Negative: the dependency is not declared in DevPkg's Project.toml either,
+        # so `Pkg.resolve()` would not help and the generic message is right.
+        mktempdir() do tmp
+            env, _ = make_env(tmp;
+                manifest_deps = "deps = [\"Dates\"]",
+                project_deps  = "DepPkg = \"$depuuid\"")
+            copy!(LOAD_PATH, [env])
+            @test Base.stale_manifest_dep_hint(where, :NotADep) === nothing
+        end
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
+end

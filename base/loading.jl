@@ -2633,11 +2633,15 @@ function __require(into::Module, mod::Symbol)
 
                 throw(ArgumentError("Package $mod not found in current path$hint_message.$install_message"))
             else
+                stale_hint = stale_manifest_dep_hint(where, mod)
                 manifest_warnings = collect_manifest_warnings()
+                # If we can pinpoint a stale developed-package manifest, lead with
+                # that specific fix rather than the generic checklist below.
+                extra = stale_hint === nothing ? "" : stale_hint
                 throw(ArgumentError("""
                 Cannot load (`using/import`) module $mod into module $into in package $(where.name)
                 because package $(where.name) does not have $mod in its dependencies:
-                $manifest_warnings- You may have a partially installed environment. Try `Pkg.instantiate()`
+                $extra$manifest_warnings- You may have a partially installed environment. Try `Pkg.instantiate()`
                   to ensure all packages in the environment are installed.
                 - Or, if you have $(where.name) checked out for development and have
                   added $mod as a dependency but haven't updated your primary
@@ -2706,6 +2710,68 @@ function collect_manifest_warnings()
         """
     end
     return msg
+end
+
+# When `where` fails to load `mod`, the most common cause for a developed
+# package is a stale manifest: `where`'s Project.toml declares `mod`, but the
+# manifest entry for `where` in the active environment was resolved before that
+# dependency was added, so the loader does not see it. Detect exactly that case
+# and return a targeted hint naming the offending manifest, or `nothing` if this
+# specific situation does not apply (in which case the generic message is used).
+# This is best-effort diagnostics: any failure here must never mask the original
+# load error, so the whole body is guarded.
+function stale_manifest_dep_hint(where::PkgId, mod::Symbol)
+    where.uuid === nothing && return nothing
+    modname = String(mod)
+    try
+        for env in load_path()
+            project_file = env_project_file(env)
+            project_file isa String || continue
+            manifest_file = project_file_manifest_path(project_file)
+            manifest_file isa String || continue
+            d = get_deps(parsed_toml(manifest_file))
+            entries = get(d, where.name, nothing)::Union{Nothing, Vector{Any}}
+            entries === nothing && continue
+            for entry in entries
+                entry = entry::Dict{String, Any}
+                uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                (uuid === nothing || UUID(uuid) !== where.uuid) && continue
+                # `where` is present in this manifest. If it already lists `mod`
+                # as a dependency the problem lies elsewhere; leave it alone.
+                deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+                dep_stanza_get(deps, modname) === nothing || return nothing
+                # Only developed (path-referenced) packages can be repaired by a
+                # plain `Pkg.resolve()`; registered ones would need `Pkg.instantiate`.
+                path = get(entry, "path", nothing)::Union{String, Nothing}
+                path === nothing && return nothing
+                pkgdir = normpath(abspath(dirname(manifest_file), path))
+                # Confirm the developed package's Project.toml actually declares
+                # `mod`; otherwise the fix really is to add the dependency there.
+                for proj in project_names
+                    dev_project = joinpath(pkgdir, proj)
+                    isfile_casesensitive(dev_project) || continue
+                    pd = parsed_toml(dev_project)
+                    projdeps = get(pd, "deps", nothing)::Union{Dict{String, Any}, Nothing}
+                    if projdeps !== nothing && haskey(projdeps, modname)
+                        return """
+                        - The developed package $(where.name) (at $(pkgdir)) declares $mod in its
+                          Project.toml, but the manifest at
+                            $(manifest_file)
+                          is out of date and does not list it. Run `Pkg.resolve()` with that
+                          environment active to update the manifest:
+                            julia --project=$(dirname(manifest_file)) -e 'using Pkg; Pkg.resolve()'
+                        """
+                    end
+                    return nothing
+                end
+                return nothing
+            end
+        end
+    catch
+        # Diagnostics must never replace the real error with a new one.
+        return nothing
+    end
+    return nothing
 end
 
 function require(uuidkey::PkgId)
