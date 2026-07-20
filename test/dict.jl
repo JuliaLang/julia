@@ -1127,6 +1127,105 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     GC.@preserve A B C D nothing
 end
 
+@testset "WeakIdDict" begin
+    A = [1]
+    B = [2]
+    C = [3]
+    a = Ref(2)
+    b = Ref(3)
+    c = Ref(4)
+
+    # construction (values must be mutable, so Refs stand in for them)
+    wid = Base.WeakIdDict()
+    wid[A] = a
+    wid[B] = b
+    wid[C] = c
+    @test Base.WeakIdDict(A=>a, B=>b, C=>c) == wid
+    @test isa(Base.WeakIdDict(A=>a, B=>b, C=>c), Base.WeakIdDict{Vector{Int},Base.RefValue{Int}})
+    @test Base.WeakIdDict(k=>v for (k,v) in [(A,a), (B,b), (C,c)]) == wid
+    @test Base.WeakIdDict([(A,a), (B,b), (C,c)]) == wid
+    @test copy(wid) == wid
+
+    # keyed by identity, not equality
+    A2 = [1]
+    @test !haskey(wid, A2)
+    @test get(wid, A2, nothing) === nothing
+    wid[A2] = Ref(5)
+    @test wid[A][] == 2
+    @test wid[A2][] == 5
+    @test length(wid) == 4
+    delete!(wid, A2)
+
+    @test wid[A] === a
+    @test get(wid, A, c) === a
+    @test getkey(wid, A, nothing) === A
+    @test getkey(wid, A2, 321) === 321
+    @test length(wid) == 3
+    @test !isempty(wid)
+    @test pop!(wid, C) === c
+    @test length(wid) == 2
+    @test pop!(wid, C, c) === c
+    @test C ∉ keys(wid)
+    @test length(wid) == 2
+    @test get!(wid, C, c) === c
+    @test get!(wid, C, b) === c
+    @test get!(() -> b, wid, [4]) === b
+    @test length(wid) == 4
+
+    wid = empty!(wid)
+    @test wid == empty(wid)
+    @test typeof(wid) == typeof(empty(wid))
+    @test length(wid) == 0
+    @test isempty(wid)
+    @test isa(wid, Base.WeakIdDict)
+    @test_throws ArgumentError Base.WeakIdDict([1, 2, 3])
+
+    # a collected value makes its entry vanish (assert only once the value is
+    # observably gone, so the test cannot fail on a conservatively-rooted ref)
+    widgc = Base.WeakIdDict{Vector{Int},Base.RefValue{Int}}()
+    vref = (@noinline function (d, k)
+        v = Ref(1)
+        d[k] = v
+        return WeakRef(v)
+    end)(widgc, A)
+    GC.gc()
+    GC.gc()
+    if vref.value === nothing
+        @test !haskey(widgc, A)
+        @test length(widgc) == 0
+    end
+    delete!(widgc, A)
+    @test get!(() -> b, widgc, A) === b # re-mint after collection
+    @test length(widgc) == 1
+
+    # a collected key makes its entry vanish (swept on later mutations)
+    kref = (@noinline function (d)
+        k = [99]
+        d[k] = Ref(1)
+        return WeakRef(k)
+    end)(widgc)
+    GC.gc()
+    GC.gc()
+    if kref.value === nothing
+        @test length(widgc) == 1 # only the (A => b) entry from above survives
+    end
+
+    # nothing is not a valid key or value
+    @test !haskey(widgc, nothing)
+    @test_throws KeyError(nothing) widgc[nothing]
+    @test_throws KeyError(nothing) get(widgc, nothing, 1)
+    @test_throws KeyError(nothing) get(() -> 1, widgc, nothing)
+    @test_throws KeyError(nothing) pop!(widgc, nothing)
+    @test getkey(widgc, nothing, 321) === 321
+    @test pop!(widgc, nothing, 321) === 321
+    @test delete!(widgc, nothing) === widgc
+    @test_throws ArgumentError widgc[nothing] = Ref(1)
+    @test_throws ArgumentError get!(widgc, nothing, Ref(1))
+    @test_throws ArgumentError widgc[[5]] = nothing
+
+    GC.@preserve A B C a b c nothing
+end
+
 import Base.PersistentDict
 @testset "PersistentDict" begin
     @testset "HAMT HashState" begin

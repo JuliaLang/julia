@@ -3178,7 +3178,8 @@ function expand_abstract_or_primitive_type(ctx, ex)
                     ]
                 ]
                 [K"=" name newtype_var]
-                [K"call" "_setsuper!"::K"core" newtype_var supertype]
+                [K"call" "_setsuper!"::K"core" newtype_var supertype
+                    [K"call" "svec"::K"core" typevar_names...]]
                 [K"call" "_typebody!"::K"core" false::K"Bool" name]
             ]
         ]
@@ -3902,7 +3903,8 @@ function expand_struct_def(ctx, ex, docs)
                     ]
                 ]
                 [K"=" struct_name newtype_var]
-                [K"call"(supertype) "_setsuper!"::K"core" newtype_var supertype]
+                [K"call"(supertype) "_setsuper!"::K"core" newtype_var supertype
+                    [K"call"(type_sig) "svec"::K"core" typevar_names...]]
                 [K"=" hasprev
                       [K"&&" [K"call" "isdefinedglobal"::K"core"
                               struct_mod::K"Value"
@@ -3930,6 +3932,9 @@ function expand_struct_def(ctx, ex, docs)
                       prev
                       newtype_var
                       [K"call" "svec"::K"core" insert_struct_shim(ctx, field_types, struct_name)...]
+                      # the type parameters: field-type TypeVars are rebound as
+                      # positional references to the wrapper's binders
+                      [K"call" "svec"::K"core" typevar_names...]
                    ]]
                 [K"constdecl"
                     struct_globalref

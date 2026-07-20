@@ -583,6 +583,7 @@ print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
+    x === Type && return true # its body is the `TypeEq` kind, not a DataType
     b = unwrap_unionall(x)
     return isa(b, DataType) && b.name.wrapper === x
 end
@@ -597,20 +598,27 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
-modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
-modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
-function modulesof!(s::Set{Module}, x::Type)
+# `seen` guards against typevars with cyclic bounds (e.g. from intersection
+# results), which would otherwise recurse forever through `x.ub`
+function modulesof!(s::Set{Module}, x::TypeVar, seen::IdSet{TypeVar}=IdSet{TypeVar}())
+    x in seen && return s
+    push!(seen, x)
+    modulesof!(s, x.ub, seen)
+end
+modulesof!(s::Set{Module}, x::Core.TypeVarRef, seen::IdSet{TypeVar}=IdSet{TypeVar}()) = s # detached reference: no module
+modulesof!(s::Set{Module}, x::TypeEq, seen::IdSet{TypeVar}=IdSet{TypeVar}()) = modulesof!(s, type_parameter(x), seen)
+modulesof!(s::Set{Module}, x::Core.TypeEgal, seen::IdSet{TypeVar}=IdSet{TypeVar}()) = modulesof!(s, type_parameter(x), seen)
+function modulesof!(s::Set{Module}, x::Type, seen::IdSet{TypeVar}=IdSet{TypeVar}())
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, parentmodule(x))
     elseif x isa TypeEq
-        modulesof!(s, x)
+        modulesof!(s, x, seen)
     elseif x isa Core.TypeEgal
-        modulesof!(s, x)
+        modulesof!(s, x, seen)
     elseif x isa Union
-        modulesof!(s, x.a)
-        modulesof!(s, x.b)
+        modulesof!(s, x.a, seen)
+        modulesof!(s, x.b, seen)
     end
     s
 end
@@ -633,18 +641,19 @@ end
 # Return a copy of the type alias `alias` with every bounded binder replaced by
 # an unbounded one, so that `typeintersect_env` can match an open `x` (whose free
 # typevars are not yet known to satisfy the alias' bounds) against the alias.
-# The binders are rewritten from the innermost outward, so that a bound that
-# references an outer binder is rewritten consistently with that binder.
+# Only the binder nodes' bounds change; the positional references to them (in
+# the body and in other bounds) are untouched, so each node rebuilds in place.
 function unbounded_typealias(@nospecialize(alias))
     alias isa UnionAll || return alias
-    body = unbounded_typealias(alias.body)
-    var = alias.var
-    if var.lb === Union{} && var.ub === Any
-        body === alias.body && return alias
-        return UnionAll(var, body)
+    body = unbounded_typealias(getfield(alias, :inner))
+    if body === getfield(alias, :inner) &&
+       getfield(alias, :lb) === Union{} && getfield(alias, :ub) === Any
+        return alias
     end
-    newvar = TypeVar(var.name)
-    return UnionAll(newvar, UnionAll(var, body){newvar})
+    # raw rebuild: a binder that occurred only in the (removed) bounds of a
+    # later binder must survive, so that the alias' arity is preserved for
+    # `typeintersect_env`'s environment
+    return unionall_raw(getfield(alias, :name), Union{}, Any, body)
 end
 
 # Reconstruct the closed type that the (possibly open) `x` is a piece of, by
@@ -670,6 +679,19 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
     mods = modulesof!(Set{Module}(), x)
     replace!(mods, Core=>Base)
     properx = reapply_unionall_env(io, x)
+    # Open the outer binders once, so that every intersection below expresses
+    # its environment in terms of this single set of TypeVars. `make_wheres`
+    # and the `:unionall_env` printing context match binders against the
+    # environment by object identity, so the env entries, the returned binder
+    # list, and the free typevars nested inside env entries must all come from
+    # the same opening.
+    xvars = TypeVar[]
+    xb = x
+    while xb isa UnionAll
+        v, xb = unionall_open(xb)
+        push!(xvars, v)
+    end
+    free_before = find_free_typevars(xb)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     for mod in mods
         for name in unsorted_names(mod)
@@ -677,8 +699,7 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
                 alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && properx <: alias
                     if alias isa UnionAll
-                        free_before = find_free_typevars(x)
-                        (ti, env) = typeintersect_env(x, unbounded_typealias(alias))
+                        (ti, env) = typeintersect_env(xb, unbounded_typealias(alias))
                         # ti === Union{} && continue # impossible, since we already checked that x <: alias
                         env = env::SimpleVector
                         # unwrap `svec(tvar, constrained)` env markers down to the TypeVar
@@ -702,7 +723,7 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
                             end
                         applied = rewrap_free_typevars(applied, free_before)
                         has_other_free_typevars(applied, free_before) && continue
-                        applied == x || continue # it couldn't figure out the parameter matching
+                        applied == xb || continue # it couldn't figure out the parameter matching
                     elseif alias === x
                         env = Core.svec()
                     else
@@ -714,7 +735,7 @@ function make_typealias(@nospecialize(x::Type), io::Union{IO,Nothing}=nothing)
         end
     end
     if length(aliases) == 1 # TODO: select the type with the "best" (shortest?) environment
-        return aliases[1]
+        return (aliases[1][1], aliases[1][2], xvars)
     end
 end
 
@@ -735,18 +756,36 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
     return true
 end
 
-function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector)
+function show_typeparams(io::IO, env::SimpleVector, wrapper::Type, wheres::Vector)
     n = length(env)
+    # instantiate each binder's bounds with the actual leading parameters (by
+    # progressive partial application of the wrapper), so that a parameter that
+    # merely restates its binder can be compared structurally and elided
+    origb = Vector{Any}(undef, n)
+    let w = wrapper
+        for i = 1:n
+            if w isa UnionAll
+                origb[i] = (w.lb, w.ub)
+                w = try
+                    w{env[i]}
+                catch
+                    nothing
+                end
+            else
+                origb[i] = nothing
+            end
+        end
+    end
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
-        return o isa TypeVar &&
-            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o.ub) != 0 &&
-            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o.lb) != 0
+        o isa Tuple{Any,Any} || return false
+        return ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o[2]) != 0 &&
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o[1]) != 0
     end
     for i = n:-1:1
         p = env[i]
         if p isa TypeVar
-            if i == n && egal_var(p, orig[i]) && show_can_elide(p, wheres, elide, env, i)
+            if i == n && egal_var(p, origb[i]) && show_can_elide(p, wheres, elide, env, i)
                 n -= 1
                 elide -= 1
             elseif p.lb === Union{} && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
@@ -803,34 +842,31 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
     for p in wheres
         io = IOContext(io, :unionall_env => p)
     end
-    orig = getfield(name.mod, name.name)
-    vars = TypeVar[]
-    while orig isa UnionAll
-        push!(vars, orig.var)
-        orig = orig.body
-    end
-    show_typeparams(io, env, Core.svec(vars...), wheres)
+    show_typeparams(io, env, getfield(name.mod, name.name), wheres)
     nothing
 end
 
-function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
+# Assemble the `where` list for an alias application: `xvars` are the binders
+# of the aliased type, from the same opening that produced `env` (so the env
+# entries reference these TypeVar objects by identity).
+function make_wheres(io::IO, env::SimpleVector, xvars::Vector{TypeVar})
     seen = IdSet()
     wheres = TypeVar[]
-    # record things printed by the context
+    # skip things already printed by the context
     if io isa IOContext
         for (key, val) in io.dict
-            if key === :unionall_env && val isa TypeVar && has_typevar(x, val)
+            if key === :unionall_env && val isa TypeVar &&
+               any(@nospecialize(e) -> e === val || has_typevar(e, val), env)
                 push!(seen, val)
             end
         end
     end
-    # record things in x to print outermost
-    while x isa UnionAll
-        if !(x.var in seen)
-            push!(seen, x.var)
-            push!(wheres, x.var)
+    # record the binders of x to print outermost
+    for v in xvars
+        if !(v in seen)
+            push!(seen, v)
+            push!(wheres, v)
         end
-        x = x.body
     end
     # record remaining things in env to print innermost
     for i = length(env):-1:1
@@ -860,7 +896,7 @@ end
 function show_typealias(io::IO, @nospecialize(x::Type))
     alias = make_typealias(x, io)
     alias === nothing && return false
-    wheres = make_wheres(io, alias[2], x)
+    wheres = make_wheres(io, alias[2], alias[3])
     show_typealias(io, alias[1], x, alias[2], wheres)
     show_wheres(io, wheres)
     return true
@@ -971,7 +1007,7 @@ function show_unionaliases(io::IO, x::Union)
     if first && !tvar && length(aliases) == 1
         alias = aliases[1]
         env = alias[2]::SimpleVector
-        wheres = make_wheres(io, env, x)
+        wheres = make_wheres(io, env, TypeVar[])
         show_typealias(io, alias[1], x, env, wheres)
         show_wheres(io, wheres)
     else
@@ -979,7 +1015,7 @@ function show_unionaliases(io::IO, x::Union)
             print(io, first ? "Union{" : ", ")
             first = false
             env = alias[2]::SimpleVector
-            wheres = make_wheres(io, env, x)
+            wheres = make_wheres(io, env, TypeVar[])
             show_typealias(io, alias[1], x, env, wheres)
             show_wheres(io, wheres)
         end
@@ -1051,7 +1087,11 @@ function _show_type(io::IO, @nospecialize(x::Type))
         show_typeegal(io, x)
         return
     elseif print_without_params(x)
-        show_type_name(io, (unwrap_unionall(x)::DataType).name)
+        if x === Type
+            print(io, "Type") # `Core.Type`, whose body is the `TypeEq` kind
+        else
+            show_type_name(io, (unwrap_unionall(x)::DataType).name)
+        end
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
         return
@@ -1077,7 +1117,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
     wheres = TypeVar[]
     let io = IOContext(io)
         while x isa UnionAll
-            var = x.var
+            var, xbody = unionall_open(x)
             if var.name === :_ || io_has_tvar_name(io, var.name, x)
                 counter = 1
                 while true
@@ -1090,7 +1130,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
                     counter += 1
                 end
             else
-                x = x.body
+                x = xbody
             end
             push!(wheres, var)
             io = IOContext(io, :unionall_env => var)
@@ -1305,7 +1345,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     end
 
     show_type_name(io, x.name)
-    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+    show_typeparams(io, parameters, x.name.wrapper, wheres)
 end
 
 function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
@@ -2611,9 +2651,9 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     io = IOContext(buf, out)
     env_io = io
     while isa(sig, UnionAll)
-        push!(tv, sig.var)
-        env_io = IOContext(env_io, :unionall_env => sig.var)
-        sig = sig.body
+        v, sig = unionall_open(sig)
+        push!(tv, v)
+        env_io = IOContext(env_io, :unionall_env => v)
     end
     n = 1
     sig = (sig::DataType).parameters

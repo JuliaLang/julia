@@ -733,3 +733,30 @@ end
     @test new_d[:m] isa Memory
     @test new_d[:m][5] == 125
 end
+
+@testset "UnionAll round-trips keep their binders" begin
+    function roundtrip62272(@nospecialize x)
+        io = IOBuffer()
+        serialize(io, x)
+        seekstart(io)
+        return deserialize(io)
+    end
+    for x in Any[Vector,
+                 Array,
+                 Array{Int, N} where N,
+                 Pair{T, S} where {T, S <: T},
+                 Array{T, N} where {T <: Real, N},
+                 Ref{T} where T <: Real,
+                 Dict{K, V} where {K <: Symbol, V <: K},
+                 Vector{T} where T >: Int]
+        y = roundtrip62272(x)
+        @test y == x
+        @test x <: y && y <: x
+    end
+    # a renamed binder is egal-distinct from the canonical wrapper and must
+    # not be collapsed onto it
+    let y = roundtrip62272(Vector{Q} where Q)
+        @test y isa UnionAll && y.name === :Q
+        @test y == Vector
+    end
+end

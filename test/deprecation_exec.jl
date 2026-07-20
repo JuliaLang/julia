@@ -137,7 +137,7 @@ begin # @deprecate
     @noinline deprecated_parentmodule(T) = parentmodule(T)
     @noinline deprecated_isabstracttype(T) = isabstracttype(T)
     deprecated_type_ref = Ref{Any}(Type{Int})
-    @test @test_warn "calling `typename` on `Type` is deprecated" deprecated_typename(deprecated_type_ref[]) === TypeEq.name
+    @test @test_warn "calling `typename` on `Type` is deprecated" deprecated_typename(deprecated_type_ref[]) === Core.AnyType.name
     @test @test_warn "calling `nameof` on `Type` is deprecated" deprecated_nameof(deprecated_type_ref[]) === :Type
     @test @test_warn "calling `parentmodule` on `Type` is deprecated" deprecated_parentmodule(deprecated_type_ref[]) === Core
     @test @test_warn "calling `isabstracttype` on a `Type{...}` is deprecated" deprecated_isabstracttype(deprecated_type_ref[]) === true
@@ -228,4 +228,30 @@ begin #@deprecated error message
         "invalid usage of @deprecate",
         @eval @deprecate Foo{T} where {T <: Int} g true
     )
+end
+
+begin # UnionAll legacy property compatibility
+    # the layout is positional (a de Bruijn `inner` field), but the legacy
+    # two-field view keeps working through computed `var`/`body` properties
+    @test propertynames(Vector) == (:var, :body)
+    v = Vector.var
+    @test v isa TypeVar
+    @test v.name === :T && v.lb === Union{} && v.ub === Any
+    @test Vector.var === v # the minted variable is canonical
+    @test Vector.body === Vector.body
+    @test Vector.body.parameters[1] === v
+    @test UnionAll(Vector.var, Vector.body) === Vector
+    # nested binders and dependent bounds compose by identity
+    @test Array.body.var.name === :N
+    @test Array.body.body.parameters[1] === Array.var
+    @test Array.body.body.parameters[2] === Array.body.var
+    w = Tuple{S, T} where S<:T where T
+    @test w.body.var.ub === w.var
+    @test UnionAll(w.var, UnionAll(w.body.var, w.body.body)) === w
+    # the variable cache keys on egal, so equal spellings share the binder,
+    # while differently-named binders keep their own names
+    @test (Vector{T} where T) === Vector
+    @test (Vector{T} where T).var === Vector.var
+    @test (Vector{S} where S).var !== Vector.var
+    @test (Vector{S} where S).var.name === :S
 end

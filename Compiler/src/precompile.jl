@@ -38,7 +38,8 @@ function compile_all_tvar_union(methsig)
     end
 
     sigbody = methsig
-    env = Vector{Any}(undef, 2 * tvarslen)
+    uppers = Vector{Any}(undef, tvarslen) # per-binder resolved upper bound
+    vals = Vector{Any}(undef, tvarslen)   # current choice per binder
     idx = Vector{Int}(undef, tvarslen)
 
     # Initialize environment
@@ -47,21 +48,23 @@ function compile_all_tvar_union(methsig)
             return false
         end
         idx[i] = 1
-        var = sigbody.var
-        env[2*i - 1] = var
 
-        # Get upper bound
-        tv = var
-        while isa(tv, TypeVar)
-            tv = tv.ub
+        # Get the upper bound, resolving a bound that references an earlier
+        # binder to that binder's (already resolved) upper bound
+        ub = sigbody.ub
+        while ub isa TypeVarRef
+            d = ub.depth
+            d < i || return false # a detached reference cannot be enumerated
+            ub = uppers[i - d]
         end
 
-        if isa(tv, DataType) && isabstracttype(tv) && !isa(tv, Type)
+        if isa(ub, DataType) && isabstracttype(ub) && !isa(ub, Type)
             return false  # Any as TypeVar is common and not useful here
         end
 
-        env[2*i] = tv
-        sigbody = sigbody.body
+        uppers[i] = ub
+        vals[i] = ub
+        sigbody = sigbody.inner
     end
 
     all_success = true
@@ -71,15 +74,11 @@ function compile_all_tvar_union(methsig)
         # Generate all combinations
         for i in 1:tvarslen
             incr = true
-            tv = env[2*i - 1]
-            while isa(tv, TypeVar)
-                tv = tv.ub
-            end
-
-            if isa(tv, Union)
-                l = count_union_components(tv)
+            ub = uppers[i]
+            if isa(ub, Union)
+                l = count_union_components(ub)
                 j = idx[i]
-                env[2*i] = nth_union_component(tv, j)
+                vals[i] = nth_union_component(ub, j)
                 j += 1
 
                 if incr
@@ -93,10 +92,14 @@ function compile_all_tvar_union(methsig)
             end
         end
 
-        # Try to instantiate and compile
+        # Try to instantiate and compile, applying the chosen values to the
+        # binders outermost-in
         sig = try
-                ccall(:jl_instantiate_type_with, Any, (Any, Ptr{Any}, Cint),
-                        sigbody, env, tvarslen)
+                s = methsig
+                for i in 1:tvarslen
+                    s = (s::UnionAll){vals[i]}
+                end
+                s
             catch
                 nothing
             end

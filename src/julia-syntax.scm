@@ -992,21 +992,13 @@
                             (call (core svec) ,@(map quotify field-names))
                             (call (core svec) ,@attrs)
                             ,mut ,min-initialized))
-            (call (core _setsuper!) ,name ,super)
+            (call (core _setsuper!) ,name ,super (call (core svec) ,@params))
             (= ,hasprev (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false)) (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name)))
             (= ,prev (if ,hasprev (globalref (thismodule) ,name) (false)))
-            (if ,hasprev
-                ;; if this is compatible with an old definition, use the old parameters, but the
-                ;; new object. This will fail to capture recursive cases, but the call to typebody!
-                ;; below is permitted to choose either type definition to put into the binding table
-                (block ,@(if (pair? params)
-                              `((= (tuple ,@params) (|.|
-                                                    ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
-                                                            prev
-                                                            params)
-                                                    (quote parameters))))
-                              '())))
-            (= ,newdef (call (core _typebody!) ,prev ,name (call (core svec) ,@(insert-struct-shim field-types name))))
+            ;; n.b. field types are stored in de Bruijn form (the definition's TypeVars
+            ;; are translated positionally by _typebody!), so a compatible previous
+            ;; definition is recognized structurally without reusing its typevars
+            (= ,newdef (call (core _typebody!) ,prev ,name (call (core svec) ,@(insert-struct-shim field-types name)) (call (core svec) ,@params)))
             (const (globalref (thismodule) ,name) ,newdef)
             (latestworld)
             (null))))
@@ -1037,7 +1029,7 @@
        ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
        (toplevel-only abstract_type)
        (= ,name (call (core _abstracttype) (thismodule) (inert ,name) (call (core svec) ,@params)))
-       (call (core _setsuper!) ,name ,super)
+       (call (core _setsuper!) ,name ,super (call (core svec) ,@params))
        (call (core _typebody!) (false) ,name)
        (if (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
@@ -1058,7 +1050,7 @@
        ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
        (toplevel-only primitive_type)
        (= ,name (call (core _primitivetype) (thismodule) (inert ,name) (call (core svec) ,@params) ,n))
-       (call (core _setsuper!) ,name ,super)
+       (call (core _setsuper!) ,name ,super (call (core svec) ,@params))
        (call (core _typebody!) (false) ,name)
        (if (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
@@ -3800,9 +3792,9 @@ f(x) = yt(x)
                             (call (core svec) ,@(map quotify fields))
                             (call (core svec))
                             (false) ,(length fields)))
-                (call (core _setsuper!) ,s ,super)
+                (call (core _setsuper!) ,s ,super (call (core svec) ,@P))
                 (const (globalref (thismodule) ,name) ,s)
-                (call (core _typebody!) (false) ,s (call (core svec) ,@types))
+                (call (core _typebody!) (false) ,s (call (core svec) ,@types) (call (core svec) ,@P))
                 (return (null)))))))))
 
 ;; better versions of above, but they get handled wrong in many places

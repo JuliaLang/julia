@@ -985,7 +985,26 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **en
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals) JL_CANSAFEPOINT;
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val) JL_CANSAFEPOINT;
 jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int nothrow) JL_CANSAFEPOINT;
-jl_unionall_t *jl_rename_unionall(jl_unionall_t *u) JL_CANSAFEPOINT;
+// substitute the dangling TypeVarRef with root-index `idx` in `t` by `val`
+jl_value_t *jl_substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_substitute_tvarref_nothrow(jl_value_t *t, size_t idx, jl_value_t *val) JL_CANSAFEPOINT;
+// translate free occurrences of vars[j] (outermost binder first) into de Bruijn
+// references with root index (nvars - j)
+jl_value_t *jl_translate_vars_to_refs(jl_value_t *t, jl_svec_t *vars, size_t nvars) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
+// translate free occurrences of `var` into de Bruijn references with root index `baseidx`
+jl_value_t *jl_translate_var_to_ref(jl_value_t *t, jl_tvar_t *var, size_t baseidx) JL_CANSAFEPOINT;
+jl_value_t *jl_instantiate_unionall_nothrow(jl_unionall_t *u, jl_value_t *p, int nothrow) JL_CANSAFEPOINT;
+// shift every dangling TypeVarRef in `t` by `inc` (may be negative; caller must
+// ensure no index underflows the binder depth)
+jl_value_t *jl_shift_dangling_refs(jl_value_t *t, ssize_t inc) JL_CANSAFEPOINT;
+// whether a TypeVarRef with root-index `idx` (adjusted under binders) occurs in `t`
+JL_DLLEXPORT int jl_tvarref_occurs(jl_value_t *t, size_t idx) JL_NOTSAFEPOINT;
+// rewrap `t` (derived from `u->body` at the same binder depth) in a copy of `u`'s
+// binder, dropping the binder (with a downward shift) if it is unused
+JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_one(jl_value_t *t, jl_unionall_t *u) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_new_unionall_raw(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub, jl_value_t *body) JL_CANSAFEPOINT;
+int jl_tvarref_always_occurs_cov_top(jl_value_t *body) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;
@@ -1000,6 +1019,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
 JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t) JL_CANSAFEPOINT;  // x -> Type{x}
 JL_DLLEXPORT jl_value_t *jl_wrap_TypeEgal(jl_value_t *t) JL_CANSAFEPOINT;  // x -> TypeEgal{x} (egality, no free typevars)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_translate_sparams_to_refs(jl_value_t *t, jl_svec_t *vars) JL_CANSAFEPOINT;
 void jl_reinstantiate_inner_types(jl_datatype_t *t) JL_CANSAFEPOINT;
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
 jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v) JL_CANSAFEPOINT;
@@ -1316,6 +1336,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_
 void jl_init_serializer(void) JL_CANSAFEPOINT;
 void jl_init_uv(void) JL_NOTSAFEPOINT;
 void jl_init_box_caches(void) JL_NOTSAFEPOINT;
+void jl_init_tvarref_cache(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_options(void);
 
 void jl_set_base_ctx(char *__stk);
@@ -2123,7 +2144,16 @@ JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also
 JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also in flisp.h
 jl_value_t *simple_union(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi) JL_CANSAFEPOINT;
-int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT;
+// positional sibling of `jl_typeenv_t`: the chain of enclosing `where` binder
+// nodes, innermost first. The entry `depth` links up describes the binder a
+// `TypeVarRef(depth)` at the chain's position resolves to; the entry's bounds
+// are expressed outside that binder (`depth` frames out from the position).
+typedef struct _jl_binderenv_t {
+    jl_unionall_t *u;
+    struct _jl_binderenv_t *prev;
+} jl_binderenv_t;
+int simple_subtype(jl_value_t *a, jl_value_t *b, jl_binderenv_t *env, int hasfree, int isUnion) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_type_union_env(jl_value_t **ts, size_t n, jl_binderenv_t *env) JL_CANSAFEPOINT;
 void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;

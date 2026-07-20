@@ -590,6 +590,10 @@ function get(cache::OverlayCodeCache, mi::MethodInstance, default)
         cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
         cached_result.overridden_by_const === nothing || continue
         isdefined(cached_result, :ci) || continue
+        # a cycle member whose only consumer resolved before the cycle finished
+        # never had its edge recorded; it cannot be handed out as a call result
+        # (the inliner requires the edge), so fall through to the global cache
+        isdefined(cached_result, :ci_as_edge) || continue
         ci = cached_result.ci
         isdefined(ci, :inferred) || continue
         return cached_result

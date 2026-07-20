@@ -31,7 +31,8 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
     }
     else if (jl_is_unionall(t)) {
         jl_unionall_t *ua = (jl_unionall_t*)t;
-        return must_be_new_dt((jl_value_t*)ua->var, news, image_base, sizeof_sysimg) ||
+        return must_be_new_dt(ua->lb, news, image_base, sizeof_sysimg) ||
+               must_be_new_dt(ua->ub, news, image_base, sizeof_sysimg) ||
                must_be_new_dt(ua->body, news, image_base, sizeof_sysimg);
     }
     else if (jl_is_typevar(t)) {
@@ -247,7 +248,8 @@ static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOIN
     }
     else if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
-        result = type_in_worklist((jl_value_t*)ua->var, cache) ||
+        result = type_in_worklist(ua->lb, cache) ||
+                 type_in_worklist(ua->ub, cache) ||
                  type_in_worklist(ua->body, cache);
     }
     else if (jl_is_typevar(v)) {

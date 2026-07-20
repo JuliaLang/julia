@@ -701,7 +701,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // During typegroup resolution, isconcretetype may be temporarily 0, but we should
         // still compute the layout if the type doesn't actually have free type vars.
         // jl_has_fixed_layout may return 0 due to conservative checks on Tuple fields.
-        if (!st->isconcretetype && !jl_has_fixed_layout(st) && jl_has_free_typevars((jl_value_t*)st)) {
+        if (!st->isconcretetype && !jl_has_fixed_layout(st) &&
+            (jl_has_free_typevars((jl_value_t*)st) || st->hasescapingrefs)) {
             assert(st == w); // otherwise caller should not have requested this layout
             return;
         }
@@ -926,14 +927,43 @@ static void jl_process_field_attrs(jl_svec_t *fattrs, jl_svec_t *fnames, int mut
 }
 
 // Create UnionAll wrapper chain for parametric types
-// wrapper should initially point to the DataType, will be updated to final wrapper
+// wrapper should initially point to the (declared, TypeVar-parameterized) DataType,
+// and is updated to the final wrapper. The declared DataType is rebuilt in de Bruijn
+// form as the wrapper's body (the "template"); the declared object itself becomes
+// internal scaffolding whose TypeVars only serve the translation.
 // Caller must handle GC rooting of wrapper across this call
 static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_value_t **wrapper) JL_CANSAFEPOINT
 {
     jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     int np = jl_svec_len(parameters);
+    if (np == 0)
+        return;
+    // rebuild the declared datatype with de Bruijn parameters (instantiating its
+    // super and field types along the way, when present); the declared object
+    // stays reachable through tn->wrapper during this call
+    *wrapper = jl_translate_vars_to_refs(*wrapper, parameters, np);
     for (int i = np - 1; i >= 0; i--) {
-        *wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), *wrapper);
+        jl_value_t *p = jl_svecref(parameters, i);
+        if (!jl_is_typevar(p)) {
+            // bootstrap: `jl_anytuple_type` passes its lone Vararg parameter
+            // through here, building a throwaway wrapper that jl_init_types
+            // replaces right after creation. Do not read TypeVar fields from
+            // the Vararg's slots (`lb` would alias its NULL `N` and `ub` would
+            // read past the object); use trivial bounds instead.
+            *wrapper = jl_new_unionall_raw(jl_symbol("T"), jl_bottom_type,
+                                           (jl_value_t*)jl_any_type, *wrapper);
+            jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
+            continue;
+        }
+        jl_tvar_t *v = (jl_tvar_t*)p;
+        jl_value_t *lb = NULL, *ub = NULL;
+        JL_GC_PUSH2(&lb, &ub);
+        // the binder's bounds live outside its own scope and may reference the
+        // earlier (outer) parameters
+        lb = jl_translate_vars_to_refs(v->lb, parameters, i);
+        ub = jl_translate_vars_to_refs(v->ub, parameters, i);
+        *wrapper = jl_new_unionall_raw(v->name, lb, ub, *wrapper);
+        JL_GC_POP();
         jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     }
 }
@@ -981,15 +1011,46 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     tn->atomicfields = atomicfields;
     tn->constfields = constfields;
 
-    if (t->name->wrapper == NULL) {
-        jl_value_t *wrapper = (jl_value_t*)t;
-        jl_setup_type_wrapper(tn, parameters, &wrapper);
-        if (!mutabl && !abstract && ftypes != NULL)
-            tn->mayinlinealloc = 1;
-    }
+    if (!mutabl && !abstract && ftypes != NULL && t->name->wrapper == NULL)
+        tn->mayinlinealloc = 1;
     jl_precompute_memoized_dt(t, 0);
 
-    if (!abstract && t->types != NULL)
+    if (t->name->wrapper == NULL) {
+        jl_value_t *wrapper = (jl_value_t*)t;
+        JL_GC_PUSH1(&wrapper);
+        jl_setup_type_wrapper(tn, parameters, &wrapper);
+        // the canonical version of a parametric type is the (de Bruijn) template
+        // inside its wrapper; the declared TypeVar-parameterized object was just
+        // scaffolding for the translation
+        t = (jl_datatype_t*)jl_unwrap_unionall(wrapper);
+        JL_GC_POP();
+        // If field types were supplied here (deserialization and other direct
+        // callers; lowering passes an empty list and supplies them later via
+        // `_typebody!`), the rebuilt template must carry them in de Bruijn
+        // form: nothing further is coming to set them. Plain translation does
+        // not recurse into nested fragments, so this cannot diverge on
+        // self-referential field types.
+        if (t->types == NULL && ftypes != NULL) {
+            size_t nf = jl_svec_len(ftypes), i;
+            if (nf == 0) {
+                jl_gc_write(t, t->types, jl_svec_t, jl_emptysvec);
+            }
+            else {
+                jl_svec_t *tft = jl_alloc_svec(nf);
+                JL_GC_PUSH1(&tft);
+                for (i = 0; i < nf; i++) {
+                    jl_value_t *fti = jl_translate_vars_to_refs(jl_svecref(ftypes, i), parameters,
+                                                                jl_svec_len(parameters));
+                    jl_svecset(tft, i, fti);
+                }
+                jl_gc_write(t, t->types, jl_svec_t, tft);
+                JL_GC_POP();
+            }
+        }
+    }
+
+    // n.b. the layout is computed on the template, after the wrapper exists
+    if (!abstract && t->types != NULL && t->layout == NULL)
         jl_compute_field_offsets(t);
 
     JL_GC_POP();
@@ -1608,6 +1669,7 @@ JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x)
 
 void jl_init_box_caches(void)
 {
+    jl_init_tvarref_cache();
     int64_t i;
     for (i = 0; i < NBOX_C; i++) {
         boxed_int32_cache[i]  = jl_permbox32(jl_int32_type, jl_int32_tag, i-NBOX_C/2);
@@ -2531,14 +2593,33 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
         return result;
     }
 
-    // Regular UnionAll -> resolve body if needed
+    // Regular UnionAll -> resolve bounds and body if needed
     if (jl_is_unionall(t)) {
         jl_unionall_t *ua = (jl_unionall_t*)t;
-        jl_value_t *body = resolve_type_refs(ua->body, subst_map);
-        if (body == ua->body)
-            return t;
-        JL_GC_PUSH1(&body);
-        jl_value_t *result = jl_type_unionall(ua->var, body);
+        jl_value_t *lb = NULL, *ub = NULL, *body = NULL;
+        JL_GC_PUSH3(&lb, &ub, &body);
+        lb = resolve_type_refs(ua->lb, subst_map);
+        ub = resolve_type_refs(ua->ub, subst_map);
+        body = resolve_type_refs(ua->body, subst_map);
+        jl_value_t *result = t;
+        if (lb != ua->lb || ub != ua->ub || body != ua->body)
+            result = jl_new_unionall_raw(ua->name, lb, ub, body);
+        JL_GC_POP();
+        return result;
+    }
+
+    // Vararg -> resolve the element type and length: unlike the deferred
+    // `TypeApp` spelling, an eagerly-built `NTuple{n, X}` keeps its
+    // placeholder inside a materialized `Vararg`
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        jl_value_t *T = NULL, *N = NULL;
+        JL_GC_PUSH2(&T, &N);
+        T = vm->T ? resolve_type_refs(vm->T, subst_map) : NULL;
+        N = vm->N ? resolve_type_refs(vm->N, subst_map) : NULL;
+        jl_value_t *result = t;
+        if (T != vm->T || N != vm->N)
+            result = (jl_value_t*)jl_wrap_vararg(T, N, 0, 0);
         JL_GC_POP();
         return result;
     }
@@ -2604,14 +2685,19 @@ void jl_check_valid_supertype(jl_value_t *super, const char *type_name)
     if (jl_is_unionall(super)) {
         // delegate to the body first for a more accurate error
         // when parameterizing would not salvage the definition
+        // (open the binders so the message shows named variables)
         jl_value_t *body = super;
-        while (jl_is_unionall(body))
-            body = ((jl_unionall_t*)body)->body;
+        JL_GC_PUSH1(&body);
+        while (jl_is_unionall(body)) {
+            jl_tvar_t *v = NULL;
+            body = jl_unionall_open((jl_unionall_t*)body, &v);
+        }
         jl_check_valid_supertype(body, type_name);
         ios_t buf;
         ios_mem(&buf, 64);
         jl_static_show((JL_STREAM*)&buf, body);
         ios_putc('\0', &buf);
+        JL_GC_POP();
         jl_errorf("invalid subtyping in definition of %s: supertype `%s` has unbound type parameters.",
                   type_name, buf.buf);
     }
@@ -2748,8 +2834,9 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_value_t *super = jl_svecref(info, 5);
             if (super != jl_nothing && super != NULL) {
                 const char *type_name = jl_symbol_name(tv->name);
+                jl_svec_t *params = (jl_svec_t*)jl_svecref(info, 0);
                 jl_value_t *resolved_super = NULL;
-                JL_GC_PUSH3(&tv, &super, &resolved_super);
+                JL_GC_PUSH4(&tv, &super, &resolved_super, &params);
                 resolved_super = resolve_type_refs(super, &subst_map);
                 // Check self-subtyping before jl_check_valid_supertype, which
                 // calls jl_subtype and would crash on types with super == NULL.
@@ -2757,7 +2844,11 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     datatypes[i]->name == ((jl_datatype_t*)resolved_super)->name)
                     jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
                 jl_check_valid_supertype(resolved_super, type_name);
-                jl_gc_write(datatypes[i], datatypes[i]->super, jl_datatype_t, (jl_datatype_t*)resolved_super);
+                // the supertype is stored on the (de Bruijn) template, with the
+                // definition's TypeVars rebound as references
+                resolved_super = jl_translate_vars_to_refs(resolved_super, params, jl_svec_len(params));
+                jl_datatype_t *tmpl = unwrap_to_datatype(results[i]);
+                jl_gc_write(tmpl, tmpl->super, jl_datatype_t, (jl_datatype_t*)resolved_super);
                 JL_GC_POP();
             }
         }
@@ -2791,6 +2882,16 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             }
             jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
             jl_check_field_types(ftypes, tv->name);
+            // rebind the definition's TypeVars as de Bruijn references before
+            // storing the field types on the template
+            jl_svec_t *params = (jl_svec_t*)jl_svecref(info, 0);
+            size_t np = jl_svec_len(params);
+            if (np > 0) {
+                for (size_t j = 0; j < nf; j++) {
+                    jl_value_t *ft = jl_translate_vars_to_refs(jl_svecref(ftypes, j), params, np);
+                    jl_svecset(ftypes, j, ft);
+                }
+            }
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
             jl_gc_write(dt, dt->types, jl_svec_t, ftypes);
             JL_GC_POP();

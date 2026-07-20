@@ -611,7 +611,7 @@ end
         return Core.svec(type_parameter(x))
     elseif s === :name
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
-        return TypeEq.name
+        return Core.AnyType.name
     elseif s === :hash
         depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
@@ -621,7 +621,7 @@ end
 
 @noinline function typename(x::TypeEq)
     depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
-    return TypeEq.name
+    return Core.AnyType.name
 end
 
 @noinline function nameof(x::TypeEq)
@@ -645,7 +645,7 @@ end
         return Core.svec(type_parameter(x))
     elseif s === :name
         depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
-        return TypeEq.name
+        return Core.AnyType.name
     elseif s === :hash
         depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
@@ -655,7 +655,7 @@ end
 
 @noinline function typename(x::Core.TypeEgal)
     depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
-    return TypeEq.name
+    return Core.AnyType.name
 end
 
 @noinline function nameof(x::Core.TypeEgal)
@@ -695,5 +695,53 @@ end
     ss = @inbounds raw_substring(s, i + 1, j)
     SubString{T}(ss)
 end
+
+# --- compatibility properties for the legacy two-field UnionAll layout ---
+# The stored representation is positional: the wrapped type lives in the
+# `inner` field and refers to the binder with `Core.TypeVarRef` indices, and
+# no TypeVar object exists until one is asked for. Legacy code that walks
+# `u.var`/`u.body` keeps working through these properties: `var` materializes
+# a canonical TypeVar for the binder, and `body` is the wrapped type with the
+# binder's references substituted by that variable, so the identities compose
+# the way they used to (`u.body` mentions `u.var`, and
+# `UnionAll(u.var, u.body) == u`).
+
+# The minted variable is memoized so that its identity is stable for as long
+# as anything can still observe it: repeated accesses, and the substituted
+# `u.body` forms derived from it, agree on the same TypeVar object. Once every
+# reference to the variable is gone, its identity is unobservable and the
+# entry can be collected; the cache is weak on both sides, so it neither pins
+# a TypeVar for every UnionAll ever inspected nor keeps the UnionAll itself
+# alive. Since alpha-equivalent UnionAlls are interned to the same object, all
+# spellings of a binder share one canonical variable.
+const _unionall_var_cache = WeakIdDict{UnionAll,TypeVar}()
+
+function unionall_var(u::UnionAll)
+    get!(_unionall_var_cache, u) do
+        # raw construction: the binder's stored bounds are used verbatim (a
+        # detached inner node's bounds may contain dangling references, which
+        # the normalizing TypeVar constructor would reject)
+        ccall(:jl_new_typevar_raw, Ref{TypeVar}, (Any, Any, Any),
+              getfield(u, :name), getfield(u, :lb), getfield(u, :ub))
+    end
+end
+
+# `u.body` needs no cache of its own: instantiation is interned, so with a
+# stable `u.var` the substituted body is identity-stable too
+unionall_body(u::UnionAll) = u{unionall_var(u)}
+
+function getproperty(u::UnionAll, s::Symbol)
+    @inline
+    s === :var && return unionall_var(u)
+    s === :body && return unionall_body(u)
+    return getfield(u, s)
+end
+function getproperty(u::UnionAll, s::Symbol, order::Symbol)
+    @inline
+    (s === :var || s === :body) && return getproperty(u, s)
+    return getfield(u, s, order)
+end
+propertynames(u::UnionAll, private::Bool=false) =
+    private ? (:var, :body, fieldnames(UnionAll)...) : (:var, :body)
 
 # END 1.14 deprecations

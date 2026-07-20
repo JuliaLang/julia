@@ -730,9 +730,9 @@ parameters, however, some callers would like to ignore this corner case.
 function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, type_constrains::Bool=false)
     typ === var && return true
     while typ isa UnionAll
-        covariant && constrains_param(var, typ.var.ub, covariant, type_constrains) && return true
-        # typ.var.lb doesn't constrain var
-        typ = typ.body
+        covariant && constrains_param(var, typ.ub, covariant, type_constrains) && return true
+        # typ.lb doesn't constrain var
+        typ = typ.inner
     end
     if typ isa Union
         # for unions, verify that both options would constrain var
@@ -776,6 +776,64 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
     return false
 end
 
+# positional twin of `constrains_param`: does the binder `d` levels out (whose
+# declared upper bound is `Any` iff `ub_is_any`) get constrained by `typ`?
+function constrains_ref(d::Int, ub_is_any::Bool, @nospecialize(typ), covariant::Bool, type_constrains::Bool=false)
+    typ isa TypeVarRef && return typ.depth == d
+    while typ isa UnionAll
+        covariant && constrains_ref(d, ub_is_any, typ.ub, covariant, type_constrains) && return true
+        # typ.lb doesn't constrain the binder
+        typ = typ.inner
+        d += 1
+    end
+    if typ isa Union
+        # for unions, verify that both options would constrain the binder
+        ba = constrains_ref(d, ub_is_any, typ.a, covariant, type_constrains)
+        bb = constrains_ref(d, ub_is_any, typ.b, covariant, type_constrains)
+        (ba && bb) && return true
+    elseif isType(typ)
+        p = type_parameter(typ)
+        if p isa TypeVarRef && p.depth == d && ub_is_any
+            # Types with free type parameters are <: Type cause the binder
+            # to be unconstrained because Type{T} with free typevars is illegal
+            return type_constrains
+        end
+        constrains_ref(d, ub_is_any, p, false, type_constrains) && return true
+    elseif typ isa DataType
+        # return true if any param constrains the binder
+        fc = length(typ.parameters)
+        if fc > 0
+            if typ.name === Tuple.name
+                # vararg tuple needs special handling
+                for i in 1:(fc - 1)
+                    p = typ.parameters[i]
+                    constrains_ref(d, ub_is_any, p, covariant, type_constrains) && return true
+                end
+                lastp = typ.parameters[fc]
+                vararg = lastp
+                dv = d
+                while vararg isa UnionAll
+                    # keep the reference depth relative to its position
+                    vararg = vararg.inner
+                    dv += 1
+                end
+                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
+                    constrains_ref(dv, ub_is_any, vararg.N, covariant, type_constrains) && return true
+                    # T = vararg.parameters[1] doesn't constrain the binder
+                else
+                    constrains_ref(d, ub_is_any, lastp, covariant, type_constrains) && return true
+                end
+            else
+                for i in 1:fc
+                    p = typ.parameters[i]
+                    constrains_ref(d, ub_is_any, p, false, type_constrains) && return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 const EMPTY_SPTYPES = VarState[]
 
 function type_sptype_to_egal(@nospecialize(ty))
@@ -792,21 +850,38 @@ function type_value_to_egal(@nospecialize(v), @nospecialize(fallback))
 end
 
 # Compute the abstract value `ty` for a sparam whose inferred env entry carries
-# a TypeVar (either the sig's own `vᵢ` for unspecialized MIs, or a possibly
-# narrowed `output_tvar` from subtyping). First try to sharpen via
+# a TypeVar. The sig's binder is identified positionally: `d` is its reference
+# depth as seen from the sig's innermost body (whose parameters are
+# `sigtypes`). `output_tvar` is the variable the produced lattice element
+# carries (a possibly narrowed env TypeVar from subtyping, or the materialized
+# binder variable for unspecialized MIs). First try to sharpen via
 # `arg::Type{vᵢ}` / `Vararg{_,vᵢ}` patterns in `sigtypes`; otherwise fall back
 # to `Type{output_tvar}` rewrapped against free typevars of `specTypes`.
-function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.SimpleVector,
-                         @nospecialize(specTypes), v_egal::Bool=false)
+function sptype_for_ref(d::Int, output_tvar::TypeVar, sigtypes::Core.SimpleVector,
+                        @nospecialize(specTypes), v_egal::Bool=false)
     for j = 1:length(sigtypes)
         sⱼ = sigtypes[j]
-        if isType(sⱼ) && type_parameter(sⱼ) === vᵢ
+        if isType(sⱼ) && (p = type_parameter(sⱼ); p isa TypeVarRef && p.depth == d)
             # `arg::Type{T}` pins the sparam to the arg's type
             return fieldtype(specTypes, j)
-        elseif (va = va_from_vatuple(sⱼ)) !== nothing
+        else
             # `::Tuple{.., Vararg{_,vᵢ}}` means `vᵢ` is the Int length
-            if isdefined(va, :N) && va.N === vᵢ
-                return Int
+            # (references inside the argument stay relative to its position)
+            sⱼu = sⱼ
+            dj = d
+            while sⱼu isa UnionAll
+                sⱼu = sⱼu.inner
+                dj += 1
+            end
+            if sⱼu isa DataType
+                n = length(sⱼu.parameters)
+                if n > 0
+                    va = sⱼu.parameters[n]
+                    if isvarargtype(va) && isdefined(va, :N) &&
+                       (vN = va.N; vN isa TypeVarRef && vN.depth == dj)
+                        return Int
+                    end
+                end
             end
         end
     end
@@ -836,20 +911,35 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
     return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
 end
 
-function type_arg_parameter(@nospecialize(t))
-    t = unwrap_unionall(t)
-    isType(t) || return nothing
-    return type_parameter(t)
+# the binder of the sig at (1-based, outermost-first) index `k`
+function nth_binder(@nospecialize(sig), k::Int)
+    while k > 1
+        sig = (sig::UnionAll).inner
+        k -= 1
+    end
+    return sig::UnionAll
 end
 
-function has_invariant_sparam_occurrence(@nospecialize(t), v::TypeVar)
-    t = unwrap_unionall(t)
+# does the binder `d` levels out occur invariantly (in a non-Tuple parameter
+# list) in `t`?
+function has_invariant_ref_occurrence(@nospecialize(t), d::Int)
+    while t isa UnionAll
+        t = t.inner
+        d += 1
+    end
     t isa DataType || return false
     t.name === Tuple.name && return false
     for p in t.parameters
-        has_typevar(p, v) && return true
+        tvarref_occurs(p, d) && return true
     end
     return false
+end
+
+# does the (raw) declared upper bound of the sig's binder `k` mention the
+# sig's binder `i` invariantly? (the bound sits under binders `1..k-1`)
+function binder_bound_mentions_invariantly(@nospecialize(sig), k::Int, i::Int)
+    k > i || return false
+    return has_invariant_ref_occurrence(nth_binder(sig, k).ub, k - i)
 end
 
 # TODO: This analysis should move into subtyping, which already has this
@@ -857,34 +947,53 @@ end
 # matched position determines the value by identity. Propagate that outwards
 # (alongside the `svec(tvar, constrained)` markers) instead of re-deriving it
 # syntactically here.
-function sparam_definitely_egal_from_spec(v::TypeVar, sigtypes::Core.SimpleVector,
+function sparam_definitely_egal_from_spec(i::Int, nvals::Int, sig::UnionAll,
+                                          sigtypes::Core.SimpleVector,
                                           @nospecialize(specTypes))
     spec = unwrap_unionall(specTypes)
     spec isa DataType || return false
-    for i = 1:min(length(sigtypes), length(spec.parameters))
-        sigarg = sigtypes[i]
-        specarg = spec.parameters[i]
-        sigarg_unwrapped = unwrap_unionall(sigarg)
-        if sigarg_unwrapped === v
-            isdispatchelem(specarg) && return true
-            continue
+    d = nvals - i + 1 # binder `i` as seen from the sig's innermost body
+    for j = 1:min(length(sigtypes), length(spec.parameters))
+        sigarg = sigtypes[j]
+        specarg = spec.parameters[j]
+        sigarg_unwrapped = sigarg
+        nsj = 0
+        while sigarg_unwrapped isa UnionAll
+            sigarg_unwrapped = sigarg_unwrapped.inner
+            nsj += 1
         end
-        if sigarg_unwrapped isa TypeVar && has_invariant_sparam_occurrence(sigarg_unwrapped.ub, v)
+        if sigarg_unwrapped isa TypeVarRef
+            dj = sigarg_unwrapped.depth
+            if dj == d + nsj
+                isdispatchelem(specarg) && return true
+                continue
+            end
+            # the argument is (an alpha-copy of) another binder `k`: an
+            # invariant occurrence of binder `i` in `k`'s declared bound pins it
+            k = nvals + nsj - dj + 1
+            if 1 <= k <= nvals && binder_bound_mentions_invariantly(sig, k, i)
+                return true
+            end
+        end
+        if has_invariant_ref_occurrence(sigarg, d)
             return true
         end
-        if has_invariant_sparam_occurrence(sigarg, v)
-            return true
+        # a `Type{...}` argument: the same rules apply to its parameter
+        if isType(sigarg_unwrapped)
+            sig_type_arg = type_parameter(sigarg_unwrapped)
+            if sig_type_arg isa TypeVarRef
+                dj = sig_type_arg.depth
+                if dj == d + nsj
+                    specarg isa Core.TypeEgal && return true
+                    continue
+                end
+                k = nvals + nsj - dj + 1
+                if 1 <= k <= nvals && binder_bound_mentions_invariantly(sig, k, i)
+                    return true
+                end
+            end
+            has_invariant_ref_occurrence(sig_type_arg, d + nsj) && return true
         end
-        sig_type_arg = type_arg_parameter(sigarg)
-        sig_type_arg === nothing && continue
-        if sig_type_arg === v
-            specarg isa Core.TypeEgal && return true
-            continue
-        end
-        if sig_type_arg isa TypeVar && has_invariant_sparam_occurrence(sig_type_arg.ub, v)
-            return true
-        end
-        has_invariant_sparam_occurrence(sig_type_arg, v) && return true
     end
     return false
 end
@@ -907,8 +1016,12 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     spvals = mi.sparam_vals
     nvals = length(spvals)
     sptypes = Vector{VarState}(undef, nvals)
+    # binders are identified positionally: binder `i` has reference depth
+    # `nvals - i + 1` as seen from the sig's innermost body
+    sigtypes = (unwrap_unionall(sig)::DataType).parameters
     temp = sig
     for i = 1:nvals
+        u = temp::UnionAll
         v = spvals[i]
         undef = true
         # An `svec(inner, constrained)` marker from subtyping/intersection
@@ -941,11 +1054,12 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             undef = false
             v_egal = false
         elseif v_tvar !== nothing || has_free_typevars(v)
-            vᵢ = (temp::UnionAll).var
-            sigtypes = (unwrap_unionall(temp)::DataType).parameters
+            # the occurrence scans are positional (an occurrence may also live
+            # in a later binder's declared bound, `SA <: Wrapper{vᵢ}`, which
+            # `sparam_definitely_egal_from_spec` inspects on the sig directly)
             if v_tvar !== nothing
-                v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
-                ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes, v_egal)
+                v_egal = sparam_definitely_egal_from_spec(i, nvals, sig::UnionAll, sigtypes, mi.specTypes)
+                ty = sptype_for_ref(nvals - i + 1, v_tvar, sigtypes, mi.specTypes, v_egal)
             else
                 ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
                 v_egal = false
@@ -966,62 +1080,41 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             ty = type_sptype_to_egal(ty)
         end
         sptypes[i] = VarState(ty, typemin(Int), undef)
-        temp = (temp::UnionAll).body
+        temp = u.inner
     end
     return sptypes
 end
 
 # Separate path for unspecialized MIs (empty `sparam_vals`): no subtyping has
 # run, so we can't rely on the svec-wrapped env entries produced by
-# intersection. Every sparam is represented by its raw method-sig TypeVar, and
-# `undef` is determined by the static `constrains_param` check.
+# intersection. Every sparam is represented by its (materialized) method-sig
+# TypeVar, and `undef` is determined by the static `constrains_ref` check.
 function sptypes_from_unspecialized(@nospecialize sig)
     isa(sig, UnionAll) || return EMPTY_SPTYPES
+    @assert !has_free_typevars(sig)
     nvals = 0
     let sig′ = sig
         while isa(sig′, UnionAll)
             nvals += 1
-            sig′ = sig′.body
+            sig′ = sig′.inner
         end
     end
     sptypes = Vector{VarState}(undef, nvals)
+    sigtypes = (unwrap_unionall(sig)::DataType).parameters
+    vars = Core.svec()
     temp = sig
     for i = 1:nvals
-        vᵢ = (temp::UnionAll).var
-        ty = sptype_for_tvar(vᵢ, vᵢ,
-                             (unwrap_unionall(temp)::DataType).parameters,
-                             sig)
-        undef = !(let sig=sig
-            @assert !has_free_typevars(sig)
-            vᵢ.lb === Bottom && constrains_param(vᵢ, sig, #=covariant=#true)
-        end)
+        u = temp::UnionAll
+        # only the binder's variable is materialized (it appears in the
+        # produced lattice element); no body is instantiated
+        vᵢ = ccall(:jl_unionall_bind_var, Ref{TypeVar}, (Any, Any, Csize_t), u, vars, i - 1)
+        vars = Core.svec(vars..., vᵢ)
+        ty = sptype_for_ref(nvals - i + 1, vᵢ, sigtypes, sig)
+        undef = !(u.lb === Bottom && constrains_ref(1, u.ub === Any, u.inner, #=covariant=#true))
         sptypes[i] = VarState(ty, typemin(Int), undef)
-        temp = (temp::UnionAll).body
+        temp = u.inner
     end
     return sptypes
-end
-
-function sp_at_idx(sig::UnionAll, idx::Int)
-    while idx != 1
-        sig = sig.body::UnionAll
-        idx -= 1
-    end
-    return sig.var
-end
-
-function va_from_vatuple(@nospecialize(t))
-    @_foldable_meta
-    t = unwrap_unionall(t)
-    if isa(t, DataType)
-        n = length(t.parameters)
-        if n > 0
-            va = t.parameters[n]
-            if isvarargtype(va)
-               return va
-            end
-        end
-    end
-    return nothing
 end
 
 _topmod(sv::InferenceState) = _topmod(frame_module(sv))

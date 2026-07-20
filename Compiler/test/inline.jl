@@ -2103,7 +2103,7 @@ end
 
 # inlining of `TypeName`
 @test fully_eliminated() do
-    Ref.body.name
+    Ref.inner.name
 end
 
 # Regression for finalizer inlining with more complex control flow

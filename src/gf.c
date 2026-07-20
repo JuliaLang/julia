@@ -143,13 +143,54 @@ static int8_t jl_cachearg_offset(void)
 /// ----- Insertion logic for special entries ----- ///
 
 
+// The specializations cache is keyed by `jl_types_equal`, which identifies
+// spellings that are not structurally identical whenever binders are involved
+// (an existential over a covariant position can be written with the `where`
+// inside or outside the tuple, e.g. `Tuple{Type{Memory{T}} where T, ...}` ==
+// `Tuple{Type{Memory{T}}, ...} where T`). The structural type hash
+// distinguishes such spellings, so it can only key this cache for signatures
+// that contain no binders at all; everything else falls back to the
+// linear-scan class (hash 0), as it did when the hash of any type mentioning
+// a type variable was itself 0.
+static int speccache_unhashable(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (jl_is_unionall(t) || jl_is_tvarref(t) || jl_is_typevar(t))
+        return 1;
+    if (jl_is_uniontype(t))
+        return speccache_unhashable(((jl_uniontype_t*)t)->a) ||
+               speccache_unhashable(((jl_uniontype_t*)t)->b);
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *v = (jl_vararg_t*)t;
+        return (v->T && speccache_unhashable(v->T)) ||
+               (v->N && speccache_unhashable(v->N));
+    }
+    if (jl_is_typeeq(t))
+        return speccache_unhashable(jl_typeeq_T(t));
+    if (jl_is_typeegal(t))
+        return speccache_unhashable(jl_typeegal_T(t));
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        size_t i, np = jl_nparams(dt);
+        for (i = 0; i < np; i++) {
+            if (speccache_unhashable(jl_tparam(dt, i)))
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static uint_t speccache_hash_sig(jl_value_t *sig) JL_NOTSAFEPOINT
+{
+    jl_value_t *usig = jl_is_unionall(sig) ? jl_unwrap_unionall(sig) : sig;
+    if (speccache_unhashable(usig))
+        return 0;
+    return ((jl_datatype_t*)usig)->hash;
+}
+
 uint_t speccache_hash(size_t idx, jl_value_t *data)
 {
     jl_method_instance_t *ml = (jl_method_instance_t*)jl_svecref(data, idx); // This must always happen inside the lock
-    jl_value_t *sig = ml->specTypes;
-    if (jl_is_unionall(sig))
-        sig = jl_unwrap_unionall(sig);
-    return ((jl_datatype_t*)sig)->hash;
+    return speccache_hash_sig(ml->specTypes);
 }
 
 static int speccache_eq(size_t idx, const void *ty, jl_value_t *data, uint_t hv) JL_CANSAFEPOINT
@@ -160,7 +201,7 @@ static int speccache_eq(size_t idx, const void *ty, jl_value_t *data, uint_t hv)
     jl_value_t *sig = ml->specTypes;
     if (ty == sig)
         return 1;
-    uint_t h2 = ((jl_datatype_t*)(jl_is_unionall(sig) ? jl_unwrap_unionall(sig) : sig))->hash;
+    uint_t h2 = speccache_hash_sig(sig);
     if (h2 != hv)
         return 0;
     return jl_types_equal(sig, (jl_value_t*)ty);
@@ -191,7 +232,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
         return jl_atomic_load_relaxed(&m->unspecialized); // handle builtin methods
     jl_value_t *ut = jl_is_unionall(type) ? jl_unwrap_unionall(type) : type;
     JL_TYPECHK(specializations, datatype, ut);
-    uint_t hv = ((jl_datatype_t*)ut)->hash;
+    uint_t hv = speccache_hash_sig(type);
     jl_genericmemory_t *speckeyset = NULL;
     jl_value_t *specializations = NULL;
     size_t i = -1, cl = 0, lastcl;
@@ -253,9 +294,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
         JL_GC_PUSH1(&mi);
         if (!jl_is_svec(specializations)) {
             jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
-            jl_value_t *type = mi->specTypes;
-            jl_value_t *ut = jl_is_unionall(type) ? jl_unwrap_unionall(type) : type;
-            uint_t hv = ((jl_datatype_t*)ut)->hash;
+            uint_t hv = speccache_hash_sig(mi->specTypes);
             cl = 7;
             i = cl - 1;
             specializations = (jl_value_t*)jl_svec_fill(cl, jl_nothing);
@@ -815,8 +854,8 @@ JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,
 
 enum top_typename_facts {
     EXACTLY_ANY = 1 << 0,
-    HAVE_TYPE = 1 << 1,
-    EXACTLY_TYPE = 1 << 2,
+    HAVE_ANYTYPE = 1 << 1,
+    EXACTLY_ANYTYPE = 1 << 2,
     HAVE_FUNCTION = 1 << 3,
     EXACTLY_FUNCTION = 1 << 4,
     HAVE_KWCALL = 1 << 5,
@@ -824,122 +863,188 @@ enum top_typename_facts {
     SHORT_TUPLE = 1 << 7,
 };
 
-static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CANSAFEPOINT, jl_value_t *a JL_PROPAGATES_ROOT, int n, unsigned *facts, void *env) JL_CANSAFEPOINT
+// The missing-match backedge table is bucketed by canonical typename keys.
+// The canonical key of a value `v` is the typename of the outermost proper
+// supertype of `typeof(v)` below `Any` — except that function types key by
+// their own typename (with the `Function` typename bucket as the umbrella
+// above them), and type objects key by their *payload class* in addition to
+// the `AnyType` typename umbrella (the supertype-chain root shared by every
+// kind), so that pinned uses (a `Type{Int}` call site) and bounded methods
+// (`(::Type{<:Number})(...)`) meet in the same bucket (`Number`).
+//
+// This walks the type of the `n`th argument slot of `a`, calling
+// `f(name, 1, env)` for each canonical key of the slot's possible values,
+// and accumulates in `facts` the slot classes that have no enumerable
+// canonical key (`Any`, `Function`, all of `Type`, kwcall) for
+// `jl_foreach_top_typename_for` below to handle. `n > 0` is the argument
+// position to scan, `n == 0` a slot's value type, and `n == -1` the payload
+// *bound* of a `Type` slot: reaching `Any` or `Function` there means the
+// payload is unconstrained and the slot covers every type object of that
+// flavor (EXACTLY_ANYTYPE). A pinned `Type{Any}` (a single-member class, very
+// much unlike `Type{<:Any}`) deliberately never takes that widening.
+// `binders` carries the declared bounds of the `where` binders crossed on
+// the way in: a bound-variable occurrence is walked as its binder's declared
+// bound, which itself lives outside that binder and so resolves through the
+// outer chain (covering dependent bounds).
+typedef struct top_typename_binders_t {
+    jl_value_t *ub;
+    struct top_typename_binders_t *prev;
+} top_typename_binders_t;
+
+static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CANSAFEPOINT, jl_value_t *a JL_PROPAGATES_ROOT, int n,
+                                     top_typename_binders_t *binders, unsigned *facts, void *env) JL_CANSAFEPOINT
 {
-    arraylist_t workqueue;
-    arraylist_new(&workqueue, 0);
-
-    // Push initial work item as jl_value_t* then int (cast to void*)
-    arraylist_push(&workqueue, a);
-    arraylist_push(&workqueue, (void*)(uintptr_t)n);
-
-    while (workqueue.len > 0) {
-        // Pop int n then jl_value_t* a (reverse order)
-        int current_n = (int)(uintptr_t)arraylist_pop(&workqueue);
-        jl_value_t *current_a = (jl_value_t*)arraylist_pop(&workqueue);
-        JL_GC_PROMISE_ROOTED(current_a);
-
-        if (jl_is_some_Type(current_a)) {
-            *facts |= HAVE_TYPE;
-            arraylist_push(&workqueue, jl_some_Type_T(current_a));
-            arraylist_push(&workqueue, (void*)(uintptr_t)-1);
-        }
-        else if (jl_is_datatype(current_a)) {
-            if (current_n <= 0) {
-                jl_datatype_t *dt = ((jl_datatype_t*)current_a);
-                if (dt == jl_function_type) {
-                    if (current_n == -1) // key Type{>:Function} as Type instead of Function
-                        *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
-                    else
-                        *facts |= HAVE_FUNCTION | EXACTLY_FUNCTION;
-                }
-                else if (dt == jl_any_type) {
-                    if (current_n == -1) // key Type{>:Any} and kinds as Type instead of Any
-                        *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
-                    else
-                        *facts |= EXACTLY_ANY;
-                }
-                else if (dt == jl_kwcall_type) {
-                    if (current_n == -1) // key Type{>:typeof(kwcall)} as exactly kwcall
-                        *facts |= EXACTLY_KWCALL;
-                    else
-                        *facts |= HAVE_KWCALL;
-                }
-                else {
-                    while (1) {
-                        jl_datatype_t *super = dt->super;
-                        if (super == jl_function_type) {
-                            *facts |= HAVE_FUNCTION;
-                            break;
-                        }
-                        if (super == jl_any_type || super->super == dt)
-                            break;
-                        dt = super;
-                    }
-                    f(dt->name, 1, env);
-                }
-            }
-            else if (jl_is_tuple_type(current_a)) {
-                if (jl_nparams(current_a) >= current_n) {
-                    arraylist_push(&workqueue, jl_tparam(current_a, current_n - 1));
-                    arraylist_push(&workqueue, (void*)(uintptr_t)0);
-                }
+    if (jl_is_unionall(a)) {
+        top_typename_binders_t bind = { ((jl_unionall_t*)a)->ub, binders };
+        foreach_top_nth_typename(f, ((jl_unionall_t*)a)->body, n, &bind, facts, env);
+    }
+    else if (jl_is_tvarref(a)) {
+        size_t d = jl_tvarref_depth(a);
+        top_typename_binders_t *b = binders;
+        while (b != NULL && --d > 0)
+            b = b->prev;
+        if (b != NULL)
+            foreach_top_nth_typename(f, b->ub, n, b->prev, facts, env);
+    }
+    else if (jl_is_typevar(a)) {
+        foreach_top_nth_typename(f, ((jl_tvar_t*)a)->ub, n, binders, facts, env);
+    }
+    else if (jl_is_uniontype(a)) {
+        // (calls are not de-duplicated between the arms)
+        foreach_top_nth_typename(f, ((jl_uniontype_t*)a)->a, n, binders, facts, env);
+        foreach_top_nth_typename(f, ((jl_uniontype_t*)a)->b, n, binders, facts, env);
+    }
+    else if (jl_is_some_Type(a)) {
+        *facts |= HAVE_ANYTYPE;
+        jl_value_t *p = jl_some_Type_T(a);
+        // a pinned special payload (`Type{Any}`, `Type{Function}`,
+        // `Type{typeof(Core.kwcall)}`) names a single egal class that the
+        // `AnyType` umbrella bucket already covers; every other payload is
+        // keyed by its class (a variable or reference payload stands for
+        // its bound and can reach the widening leaves below)
+        if (p != (jl_value_t*)jl_any_type && p != (jl_value_t*)jl_function_type &&
+            p != (jl_value_t*)jl_kwcall_type)
+            foreach_top_nth_typename(f, p, -1, binders, facts, env);
+    }
+    else if (jl_is_datatype(a)) {
+        if (n <= 0) {
+            jl_datatype_t *dt = (jl_datatype_t*)a;
+            if (dt == jl_function_type) {
+                if (n == -1) // key a `Type{<:Function}` payload bound as the AnyType umbrella instead of Function
+                    *facts |= EXACTLY_ANYTYPE; // HAVE_ANYTYPE is already set
                 else
-                    *facts |= SHORT_TUPLE;
+                    *facts |= HAVE_FUNCTION | EXACTLY_FUNCTION;
+            }
+            else if (dt == jl_any_type) {
+                if (n == -1) // key a `Type{<:Any}` payload bound as the AnyType umbrella instead of Any
+                    *facts |= EXACTLY_ANYTYPE; // HAVE_ANYTYPE is already set
+                else
+                    *facts |= EXACTLY_ANY;
+            }
+            else if (dt == jl_kwcall_type) {
+                if (n == -1) // key a `Type{>:typeof(kwcall)}` payload bound as exactly kwcall
+                    *facts |= EXACTLY_KWCALL;
+                else
+                    *facts |= HAVE_KWCALL;
+            }
+            else if (jl_is_kind((jl_value_t*)dt) || dt == jl_anytype_type) {
+                // instances of a kind are type objects, whose canonical keys
+                // are payload-class keys the kind itself cannot enumerate
+                // (the object `Int` keys as `Number` through a `Type{Int}`
+                // slot and must key the same here); cover them through the
+                // `AnyType` umbrella and its whole-table fallback
+                *facts |= HAVE_ANYTYPE | EXACTLY_ANYTYPE;
+            }
+            else {
+                while (1) {
+                    // through the acquiring accessor: a fragment's deferred
+                    // supertype may be lazily published by another thread
+                    jl_datatype_t *super = jl_datatype_compute_super(dt);
+                    if (super == NULL) {
+                        // definition still in progress: the top of the chain
+                        // is unknowable, so a canonical key cannot be chosen
+                        // (a mid-chain key would never be looked at again);
+                        // widen to the whole slot class instead
+                        *facts |= (n == -1 ? EXACTLY_ANYTYPE : EXACTLY_ANY);
+                        return;
+                    }
+                    if (super == jl_function_type) {
+                        *facts |= HAVE_FUNCTION;
+                        break;
+                    }
+                    // stop below `Any`; the two-step check also terminates the
+                    // self-referential supertype loops of the kind types
+                    if (super == jl_any_type || super->super == dt)
+                        break;
+                    dt = super;
+                }
+                f(dt->name, 1, env);
             }
         }
-        else if (jl_is_typevar(current_a)) {
-            arraylist_push(&workqueue, ((jl_tvar_t*)current_a)->ub);
-            arraylist_push(&workqueue, (void*)(uintptr_t)current_n);
-        }
-        else if (jl_is_unionall(current_a)) {
-            arraylist_push(&workqueue, ((jl_unionall_t*)current_a)->body);
-            arraylist_push(&workqueue, (void*)(uintptr_t)current_n);
-        }
-        else if (jl_is_uniontype(current_a)) {
-            jl_uniontype_t *u = (jl_uniontype_t*)current_a;
-            // Add both union branches to workqueue (push a second to visit first)
-            arraylist_push(&workqueue, u->b);
-            arraylist_push(&workqueue, (void*)(uintptr_t)current_n);
-            arraylist_push(&workqueue, u->a);
-            arraylist_push(&workqueue, (void*)(uintptr_t)current_n);
+        else if (jl_is_tuple_type(a)) {
+            if (jl_nparams(a) >= n)
+                foreach_top_nth_typename(f, jl_tparam(a, n - 1), 0, binders, facts, env);
+            else
+                *facts |= SHORT_TUPLE;
         }
     }
-
-    arraylist_free(&workqueue);
 }
 
-// Inspect type `argtypes` for all backedge keys that might be relevant to it, splitting it
-// up on some commonly observed patterns to make a better distribution.
-// (It could do some of that balancing automatically, but for now just hard-codes kwcall.)
-// Along the way, record some facts about what was encountered, so that those additional
-// calls can be added later if needed for completeness.
-// The `int explct` argument instructs the caller if the callback is due to an exactly
-// encountered type or if it rather encountered a subtype.
-// This is not capable of walking to all top-typenames for an explicitly encountered
-// Function or Any, so the caller has a fallback that can scan the entire table in that case.
-// We do not de-duplicate calls when encountering a Union.
-static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*) JL_CANSAFEPOINT, jl_value_t *argtypes JL_PROPAGATES_ROOT, int all_subtypes, void *env) JL_CANSAFEPOINT
+// Call `f(tn, canonical, env)` for the backedge-table keys relevant to
+// `argtypes`, scanning the first argument slot (and the third for kwcall,
+// hard-coding the one split that matters for bucket distribution). The
+// callback's `canonical` flag says the key is one of the slot's canonical
+// keys (see `foreach_top_nth_typename`): registering an edge stores it under
+// its canonical keys only, while invalidation visits every reported key,
+// canonical or not. Duplicate calls are possible (union arms are not
+// de-duplicated); consumers must tolerate them.
+// Returns 0 without visiting the umbrella keys when `all_subtypes` is set
+// and the slot is too broad to enumerate (it covers all of `Any`, `Function`,
+// or `Type`): a caller invalidating backedges must then scan the entire
+// table, because edges canonically keyed under any typename of that class
+// may be affected.
+//
+// Correctness invariant: for a call signature S, whose missing-match edge is
+// registered under the keys reported canonical for S, and a method signature
+// M, whose insertion visits every key reported for M (or every bucket on a 0
+// return), a nonempty intersection of S and M must lead invalidation to the
+// edge: some canonical key of S must be visited for M. This decomposes into
+// per-signature obligations discharged by the scan:
+//  1. value coverage: every value a slot admits has its canonical key — a
+//     pure function of the value — or that value's class umbrella
+//     (`Function`, `Type`, `Any`, kwcall) among the slot's canonical keys;
+//  2. umbrella visitation: the visit set contains the umbrella of every
+//     class the slot touches (HAVE_* facts; the `Any` bucket is always
+//     visited), or degenerates to the whole table (the 0 return);
+//  3. key stability: the same value reachable through differently-shaped
+//     slots lands on the same canonical key. This is why a kind-typed slot
+//     (`(::DataType)(...)`) must widen to the `AnyType` umbrella rather than
+//     key by the kind's own supertype chain: the type object `Int` keys as
+//     `Number` when reached through a `Type{Int}` call site.
+// An intersecting pair then shares an admitted value v: either both sides
+// name canon(v) (1 + 3), or one side widened to v's class umbrella, which
+// the other side's scan visits (2).
+static int jl_foreach_top_typename_for(void (*f)(jl_typename_t *tn, int canonical, void *env) JL_CANSAFEPOINT, jl_value_t *argtypes JL_PROPAGATES_ROOT, int all_subtypes, void *env) JL_CANSAFEPOINT
 {
     unsigned facts = 0;
-    foreach_top_nth_typename(f, argtypes, 1, &facts, env);
+    foreach_top_nth_typename(f, argtypes, 1, NULL, &facts, env);
     if (facts & HAVE_KWCALL) {
         // split kwcall on the 3rd argument instead, using the same logic
         unsigned kwfacts = 0;
-        foreach_top_nth_typename(f, argtypes, 3, &kwfacts, env);
+        foreach_top_nth_typename(f, argtypes, 3, NULL, &kwfacts, env);
         // copy kwfacts to original facts
         if (kwfacts & SHORT_TUPLE)
             kwfacts |= (all_subtypes ? EXACTLY_ANY : EXACTLY_KWCALL);
         facts |= kwfacts;
     }
-    if (all_subtypes && (facts & (EXACTLY_FUNCTION | EXACTLY_TYPE | EXACTLY_ANY)))
+    if (all_subtypes && (facts & (EXACTLY_FUNCTION | EXACTLY_ANYTYPE | EXACTLY_ANY)))
         // flag that we have an explicit match that is necessitating a full table scan
         return 0;
     // or inform caller of only which supertypes are applicable
     if (facts & HAVE_FUNCTION)
         f(jl_function_type->name, facts & EXACTLY_FUNCTION ? 1 : 0, env);
-    if (facts & HAVE_TYPE)
-        f(jl_type_typename, facts & EXACTLY_TYPE ? 1 : 0, env);
+    if (facts & HAVE_ANYTYPE)
+        f(jl_anytype_type->name, facts & EXACTLY_ANYTYPE ? 1 : 0, env);
     if (facts & (HAVE_KWCALL | EXACTLY_KWCALL))
         f(jl_kwcall_type->name, facts & EXACTLY_KWCALL ? 1 : 0, env);
     f(jl_any_type->name, facts & EXACTLY_ANY ? 1 : 0, env);
@@ -1129,7 +1234,7 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams) JL_
     jl_value_t *vm = jl_tparam(unw, jl_nparams(unw) - 1);
     assert(jl_is_vararg(vm));
     int nsp = jl_svec_len(sparams);
-    if (nsp > 0 && jl_has_free_typevars(vm)) {
+    if (nsp > 0 && (jl_has_free_typevars(vm) || jl_has_dangling_tvarrefs(vm))) {
         jl_value_t *Nroot = NULL;
         JL_GC_PUSH2(&vm, &Nroot);
         assert(jl_subtype_env_size(decl) == nsp);
@@ -1167,6 +1272,14 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams) JL_
     return vm;
 }
 
+// does this declared (method-signature) slot depend on the method's typevars?
+// Under the de Bruijn representation such slots carry dangling TypeVarRefs
+// rather than free TypeVars.
+static int slot_has_bound_vars(jl_value_t *decl_i) JL_NOTSAFEPOINT
+{
+    return jl_has_free_typevars(decl_i) || jl_has_dangling_tvarrefs(decl_i);
+}
+
 static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               int intersections, size_t world, int cache_result_recursion,
@@ -1184,7 +1297,7 @@ static void egal_normalize_slot(jl_tupletype_t *tt, size_t i, jl_value_t *decl_i
 {
     jl_value_t *elt = jl_tparam(tt, i);
     if (jl_is_typeegal(elt) && !jl_has_free_typevars(elt) &&
-        jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i)) {
+        jl_is_typeeq(decl_i) && !slot_has_bound_vars(decl_i)) {
         if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
         jl_svecset(*newparams, i, jl_wrap_Type(jl_some_Type_T(elt)));
     }
@@ -1275,7 +1388,7 @@ static void jl_compilation_sig(
             // and the result of matching the type signature
             // needs to be restricted to the concrete type 'kind'
             jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
-            if (!jl_has_free_typevars(decl_i) &&
+            if (!slot_has_bound_vars(decl_i) &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 // if we can prove the match was against the kind (not a Type)
                 // it's simpler (and thus better) to put that cache instead
@@ -1307,7 +1420,7 @@ static void jl_compilation_sig(
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
                 (definition->nospecialize & (1 << (i_arg - 1)))) {
-            if (!jl_has_free_typevars(decl_i) && !jl_is_kind(decl_i)) {
+            if (!slot_has_bound_vars(decl_i) && !jl_is_kind(decl_i)) {
                 if (decl_i != elt) {
                     if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                     // n.b. it is possible here that !(elt <: decl_i), if elt was something unusual from intersection
@@ -1329,7 +1442,7 @@ static void jl_compilation_sig(
             jl_svecset(*newparams, i, jl_type_type);
         }
         else if (jl_is_some_Type(elt)) { // elt isa Type{T} / TypeEgal{T}
-            if (!jl_has_free_typevars(decl_i) && very_general_type(type_i)) {
+            if (!slot_has_bound_vars(decl_i) && very_general_type(type_i)) {
                 /*
                   Here's a fairly simple heuristic: if this argument slot's
                   declared type is general (Type or Any),
@@ -1357,7 +1470,7 @@ static void jl_compilation_sig(
             }
             else if (jl_is_some_Type(jl_some_Type_T(elt)) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
-                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !jl_has_free_typevars(decl_i))) {
+                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !slot_has_bound_vars(decl_i))) {
                 /*
                   actual argument was Type{...}, we computed its type as
                   Type{Type{...}}. we like to avoid unbounded nesting here, so
@@ -1383,7 +1496,7 @@ static void jl_compilation_sig(
         }
 
         int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
-                              !jl_has_free_typevars(decl_i) &&
+                              !slot_has_bound_vars(decl_i) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
         if (notcalled_func && (jl_subtype((jl_value_t*)jl_function_type, type_i))) {
             // and attempt to despecialize types marked as a supertype of Function (i.e.
@@ -1525,7 +1638,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
                 (definition->nospecialize & (1 << (i_arg - 1)))) {
-            if (!jl_has_free_typevars(decl_i) && !jl_is_kind(decl_i)) {
+            if (!slot_has_bound_vars(decl_i) && !jl_is_kind(decl_i)) {
                 if (jl_egal(elt, decl_i))
                     continue;
                 JL_GC_POP();
@@ -1541,7 +1654,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         // its `Type`, so the equality spelling is exact (and `TypeEgal{Union{}}`
         // cannot be spelled; it normalizes to `typeof(Union{})`).
         if (!jl_is_vararg(jl_tparam(type, i)) && !jl_has_free_typevars(elt)) {
-            int decl_concrete = jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i);
+            int decl_concrete = jl_is_typeeq(decl_i) && !slot_has_bound_vars(decl_i);
             if ((jl_is_typeeq(elt) && !decl_concrete && jl_typeeq_T(elt) != jl_bottom_type) ||
                 (jl_is_typeegal(elt) && decl_concrete)) {
                 JL_GC_POP();
@@ -1573,7 +1686,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         // jl_type_type)` path; an `AnyType` elt must not reach `jl_some_Type_T` below
         if (jl_is_some_Type(jl_unwrap_unionall(elt)) || elt == (jl_value_t*)jl_anytype_type) {
             int iscalled = (i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)))) ||
-                           jl_has_free_typevars(decl_i);
+                           slot_has_bound_vars(decl_i);
             if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) {
                 if (!iscalled && very_general_type(type_i))
                     continue;
@@ -1600,7 +1713,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 JL_GC_POP();
                 return 0; // Type{Union{}} gets normalized to typeof(Union{})
             }
-            if (!jl_has_free_typevars(decl_i) &&
+            if (!slot_has_bound_vars(decl_i) &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 JL_GC_POP();
                 return 0; // gets turned into a kind
@@ -1608,7 +1721,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 
             else if (jl_is_some_Type(jl_some_Type_T(elt)) &&
                      // give up on specializing static parameters for Type{Type{Type{...}}}
-                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !jl_has_free_typevars(decl_i))) {
+                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !slot_has_bound_vars(decl_i))) {
                 /*
                   actual argument was Type{...}, we computed its type as
                   Type{Type{...}}. we must avoid unbounded nesting here, so
@@ -1638,7 +1751,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         }
 
         int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
-                              !jl_has_free_typevars(decl_i) &&
+                              !slot_has_bound_vars(decl_i) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
         if (notcalled_func && jl_subtype((jl_value_t*)jl_function_type, type_i)) {
             // and attempt to despecialize types marked as a supertype of Function (i.e.
@@ -2624,19 +2737,19 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
 }
 
 
-static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*) JL_CANSAFEPOINT, jl_value_t *argtypes JL_PROPAGATES_ROOT, int all_subtypes, void *env) JL_CANSAFEPOINT;
+static int jl_foreach_top_typename_for(void (*f)(jl_typename_t *tn, int canonical, void *env) JL_CANSAFEPOINT, jl_value_t *argtypes JL_PROPAGATES_ROOT, int all_subtypes, void *env) JL_CANSAFEPOINT;
 
 struct _typename_add_backedge {
     jl_value_t *typ;
     jl_value_t *caller;
 };
 
-static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
+static void _typename_add_backedge(jl_typename_t *tn, int canonical, void *env0) JL_CANSAFEPOINT
 {
     struct _typename_add_backedge *env = (struct _typename_add_backedge*)env0;
     JL_GC_PROMISE_ROOTED(env->typ);
     JL_GC_PROMISE_ROOTED(env->caller);
-    if (!explct)
+    if (!canonical)
         return;
     jl_genericmemory_t *allbackedges = jl_method_table->backedges;
     jl_array_t *backedges = (jl_array_t*)jl_eqtable_get(allbackedges, (jl_value_t*)tn, NULL);
@@ -2702,7 +2815,7 @@ struct _typename_invalidate_backedge {
     int invalidated;
 };
 
-static void _typename_invalidate_backedges(jl_typename_t *tn, int explct, void *env0) JL_CANSAFEPOINT
+static void _typename_invalidate_backedges(jl_typename_t *tn, int canonical, void *env0) JL_CANSAFEPOINT
 {
     struct _typename_invalidate_backedge *env = (struct _typename_invalidate_backedge*)env0;
     JL_GC_PROMISE_ROOTED(env->type);

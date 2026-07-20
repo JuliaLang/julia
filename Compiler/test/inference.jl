@@ -27,6 +27,121 @@ end
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}
 
+# a binder whose occurrences were all widened away is dropped by the
+# constructor, so repeated widening converges instead of accumulating
+# vacuous binders
+let t = Type{Vector{T}} where T
+    for _ in 1:3
+        t′ = Compiler.limit_type_size(t, Any, Any, 1, 4)
+        @test Compiler.unionall_depth(t′) <= Compiler.unionall_depth(t)
+        t = t′
+    end
+    @test Compiler.limit_type_size(t, Any, Any, 1, 4) === t
+end
+
+# The local-cache overlay must not serve an `InferenceResult` whose requesting
+# future was never resolved: such an entry has a filled `CodeInstance` but no
+# recorded call edge, and the inliner requires the edge (`ci_as_edge`). The
+# lookup falls through to the global cache instead.
+overlay_edgeless62272(x::Int) = x + 1
+let
+    precompile(overlay_edgeless62272, (Int,))
+    interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    mi = Base.method_instance(overlay_edgeless62272, (Int,))
+    ci = get(Compiler.code_cache(interp), mi, nothing)
+    @test ci isa Core.CodeInstance
+    result = Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp))
+    result.ci = ci
+    push!(Compiler.get_inference_cache(interp), result)
+    got = get(Compiler.code_cache(interp), mi, nothing)
+    @test got isa Core.CodeInstance
+end
+
+# End-to-end reproducer for the same bug: a `@generated` function body
+# publishes a global CodeInstance for an in-progress cycle member by
+# precompiling a wrapper of the cycle mid-inference (the wrapper's edge takes
+# the engine's same-thread self-cycle path, so the nested session re-infers
+# the cycle for itself and caches it). At the outer cycle's `promotecache!`,
+# `is_already_cached` then sees that fresh global entry and demotes the
+# member's result to the local cache — but its consuming edge task already
+# drained mid-cycle without recording `ci_as_edge`, so the demoted entry is
+# edge-less. The second call edge below must not be served that entry.
+edgeless62272_bump() = 0
+edgeless62272_a(x::Int) = x <= 0 ? edgeless62272_bump() : edgeless62272_req(x - 1)
+edgeless62272_req(x::Int) = x <= 0 ? 1 : edgeless62272_v(x - 1) + 1
+edgeless62272_v(x::Int) = x <= 0 ? 2 : edgeless62272_w(x - 1) + 2
+edgeless62272_trigger(x::Int) = edgeless62272_v(x)
+@generated function edgeless62272_gencache(x)
+    # Precompiling the wrapper (not `edgeless62272_v` itself, which
+    # `jl_type_infer` refuses to re-enter while the outer session holds its
+    # engine reservation) publishes a global CodeInstance for the cycle member
+    # mid-inference. `precompile`'s world argument defaults to the latest
+    # world even in this pure-callback context; the nested compile must run
+    # after the `edgeless62272_bump` redefinition below or its result is born
+    # invalidated (a direct call would stay pinned to the generator's
+    # definition world and only publish a stale entry).
+    precompile(edgeless62272_trigger, (Int,))
+    return :(x)
+end
+# the generated call sits after the cycle-closing `edgeless62272_a` call so
+# the nested publication happens only once the outer cycle is fully formed
+edgeless62272_w(x::Int) = x <= 0 ? 3 : (r = edgeless62272_a(x - 1); edgeless62272_gencache(x); r + 3)
+function edgeless62272_root(x::Int)
+    y = edgeless62272_a(x)
+    z = edgeless62272_v(x)
+    return y + z
+end
+# invalidate so all cycle frames' valid_worlds start at the current world,
+# matching the validity range of the mid-inference publication
+edgeless62272_bump() = 1
+@test code_typed(edgeless62272_root, (Int,)) isa Vector
+
+# The same bug through the shape of the originally-observed failure: no
+# generated function; instead a constant `@assume_effects :foldable` call is
+# concretely evaluated mid-inference. Its execution hits a dynamic dispatch
+# that inference could not analyze, compiling the wrapper `..._trigger`,
+# whose nested inference session re-infers the in-progress cycle (the
+# reserved members take the engine's same-thread self-cycle path) and
+# publishes a global CodeInstance for the cycle member `..._v` — the same
+# demotion setup as above through purely ordinary calls.
+edgeless62272c_bump() = 0
+edgeless62272c_a(x::Int) = x <= 0 ? edgeless62272c_bump() : edgeless62272c_req(x - 1)
+edgeless62272c_req(x::Int) = x <= 0 ? 1 : edgeless62272c_v(x - 1) + 1
+edgeless62272c_v(x::Int) = x <= 0 ? 2 : edgeless62272c_w(x - 1) + 2
+edgeless62272c_trigger(x::Int) = edgeless62272c_v(x)
+const edgeless62272c_hookref = Ref{Any}(edgeless62272c_trigger)
+Base.@assume_effects :foldable edgeless62272c_hook(x::Int) = (edgeless62272c_hookref[](x); x)
+# the hook call sits after the cycle-closing call so the nested publication
+# happens only once the outer cycle is fully formed
+edgeless62272c_w(x::Int) = x <= 0 ? 3 : (r = edgeless62272c_a(x - 1); edgeless62272c_hook(1); r + 3)
+function edgeless62272c_root(x::Int)
+    y = edgeless62272c_a(x)
+    z = edgeless62272c_v(x)
+    return y + z
+end
+# invalidate so all cycle frames' valid_worlds start at the current world,
+# matching the validity range of the mid-inference publication
+edgeless62272c_bump() = 1
+@test code_typed(edgeless62272c_root, (Int,)) isa Vector
+
+# the `.super` branch of `getfield_tfunc` on a kind (`Type{X{T}} where T`)
+# must widen when the wrapper's supertype depends on the parameter: returning
+# the raw template fragment leaks dangling bound-variable references into the
+# lattice, and the ill-formed type then matches no methods (observed in
+# PkgEval as spurious `Union{}` inference and runtime "Unreachable reached"
+# through ColorTypes' trait dispatch)
+@test Base.infer_return_type(supertype, (Type{Vector{A}} where A,)) == DataType
+@test Base.infer_return_type(supertype, (Type{Complex{A}} where A,)) == Type{Number}
+
+# detached bound-variable references are valid lattice elements through the
+# extended (wrapper) lattices, not only through `JLTypeLattice`
+let r = Core.TypeVarRef(1), 𝕃 = Compiler.fallback_lattice
+    @test Compiler.is_valid_lattice_norec(Compiler.JLTypeLattice(), r)
+    @test Compiler.tmeet(𝕃, r, r) === r
+    xt = Core.apply_type(Type, r)
+    @test Compiler.tmeet(𝕃, xt, r) === xt
+end
+
 let comparison = Tuple{X, X} where X<:Tuple
     sig = Tuple{X, X} where X<:comparison
     ref = Tuple{X, X} where X
@@ -326,7 +441,7 @@ function g3182(t::DataType)
     # however the ::Type{T} method should still match at run time.
     return f3182(t)
 end
-@test g3182(Complex.body) == 0
+@test g3182(Complex.inner) == 0
 
 
 # issue #5906
@@ -1672,7 +1787,7 @@ let nfields_tfunc(@nospecialize xs...) =
     # only the egality kind `TypeEgal{X}` pins the value to exactly `X` (#61323)
     @test nfields_tfunc(Type{Type{Int}}) === Int
     @test nfields_tfunc(Core.TypeEgal{Type{Int}}) === Const(nfields(Type{Int}))
-    @test nfields_tfunc(UnionAll) === Const(2)
+    @test nfields_tfunc(UnionAll) === Const(5) # name, lb, ub, body, flags
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Int}) === Int
     @test nfields_tfunc(Core.TypeEgal{Int}) === Const(nfields(DataType))
@@ -3140,10 +3255,10 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(Int), Const(Int), Const(Int)) === Union{}
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(String)) === Union{}
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(AbstractString)) === Union{}
-    @test apply_type_tfunc(𝕃, Const(Issue47089), Type{Ptr}, Type{Ptr{T}} where T) === Base.rewrap_unionall(Type{Issue47089.body.body}, Issue47089)
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Type{Ptr}, Type{Ptr{T}} where T) === Base.rewrap_unionall(Type{Issue47089.inner.inner}, Issue47089)
     # check complexity size limiting
     @test apply_type_tfunc(𝕃, Const(Val), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Val{Pair{A, B}}} where {A, B}
-    @test apply_type_tfunc(𝕃, Const(Pair), Base.rewrap_unionall(Type{Pair.body.body},Pair), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Pair{Pair{A, B}, Pair{C, D}}} where {A, B, C, D}
+    @test apply_type_tfunc(𝕃, Const(Pair), Base.rewrap_unionall(Type{Pair.inner.inner},Pair), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Pair{Pair{A, B}, Pair{C, D}}} where {A, B, C, D}
     @test apply_type_tfunc(𝕃, Const(Val), Type{Union{Int,Pair{Pair{Pair{Pair{A,B},C},D},E}}} where {A,B,C,D,E}) == Type{Val{_A}} where _A
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
@@ -3153,11 +3268,10 @@ end
 @test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
 
 let A = Tuple{A,B,C,D,E,F,G,H} where {A,B,C,D,E,F,G,H}
+    # binders are positional, so renaming is the identity and alpha-equal
+    # spellings are one object
     B = Compiler.rename_unionall(A)
-    for i in 1:8
-        @test A.var != B.var && (i == 1 ? A == B : A != B)
-        A, B = A.body, B.body
-    end
+    @test A === B
 end
 
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
@@ -3362,9 +3476,9 @@ let rt = Base.return_types(splat27434, (NamedTuple{(:x,), Tuple{T}} where T,))
 end
 
 # issue #27078
-f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
+f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.inner) : T
 T27078 = Vector{Vector{T}} where T
-@test f27078(T27078) === T27078.body
+@test f27078(T27078) === T27078.inner
 
 # issue #28070
 g28070(f, args...) = f(args...)
@@ -5831,11 +5945,15 @@ paramtype62001(::Type{V}) where V<:Vector =
     isa(V, UnionAll) ? myeltype62001(Base.unwrap_unionall(V)) : myeltype62001(V)
 # A static parameter may be exactly a TypeVar object from the input.
 typevar_length62001(::Type{NTuple{N, VecElement{T}}}) where {N, T} = N + 32
-let T = Base.unwrap_unionall(Vector).parameters[1]
-    @test myeltype62001(Base.unwrap_unionall(Vector)) === T
+let b = Base.unwrap_unionall(Vector)
+    # under positional binders a detached wrapper body carries bound-variable
+    # references, not TypeVar objects, and as a dispatch key it is pinned to
+    # its own identity: it no longer matches the `Type{Vector{T}}` pattern
+    @test b.parameters[1] isa Core.TypeVarRef
+    @test_throws MethodError myeltype62001(b)
     @test paramtype62001(Vector{Int8}) === Int8
-    @test paramtype62001(Vector) === T
-    @test only(Base.return_types(myeltype62001, (Type{Base.unwrap_unionall(Vector)},))) === TypeVar
+    @test_throws MethodError paramtype62001(Vector)
+    @test isempty(Base.return_types(myeltype62001, (Type{b},)))
 end
 let N = TypeVar(:N), T = TypeVar(:T)
     @test_throws MethodError typevar_length62001(NTuple{N, VecElement{T}})
@@ -5846,8 +5964,9 @@ end
 # forms) rather than invent a fresh existential.
 applysparam62001(::Type{Vector{T}}) where T = Vector{T}
 let v = Base.unwrap_unionall(Vector)
-    @test applysparam62001(v) === v
-    @test only(Base.return_types(applysparam62001, (Type{v},))) == Type{v}
+    # see above: the detached body is not a `Type{Vector{T}}` match
+    @test_throws MethodError applysparam62001(v)
+    @test isempty(Base.return_types(applysparam62001, (Type{v},)))
 end
 # Identityless TypeVar values as type parameters widen to the top kind forms.
 applytypevar62001(tv::TypeVar) = Vector{tv}
