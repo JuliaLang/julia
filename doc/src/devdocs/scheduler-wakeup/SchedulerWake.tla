@@ -50,8 +50,8 @@ CONSTANTS
     Pool,           \* function Threads -> pool id, e.g. (1 :> "A" @@ 2 :> "B")
     Inject0,        \* function pool -> Nat: tasks producers will inject per pool
     UnwindPropagates \* BOOLEAN: does a last-spinner unwind wake a successor?
-                     \* TRUE models the fixed code; FALSE lets TLC exhibit the
-                     \* lost wakeup of an exception unwinding past the slot.
+                     \* TRUE matches the implementation; FALSE omits the wake
+                     \* and loses the wakeup deferred onto the spinner.
 
 VARIABLES
     st,             \* st[t] in {"running", "sleeping"} -- the sleep_check_state
@@ -225,8 +225,7 @@ SpinExit ==
 (* SpinExit the thread never performs the post-publish queue re-check: it      *)
 (* leaves for "outside". If it was the pool's last spinner it must therefore   *)
 (* discharge the wakeup duty a producer deferred onto it -- exactly like        *)
-(* ConsumeSpinner's propagation. UnwindPropagates = FALSE models the bug where *)
-(* the unwind path merely releases the slot.                                   *)
+(* ConsumeSpinner's propagation (UnwindPropagates = FALSE omits it).           *)
 ThrowSpinner ==
     \E t \in Threads :
         /\ pc[t] = "run"
