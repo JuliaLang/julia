@@ -3,13 +3,8 @@
 ## Running the analysis
 
 The analyzer plugin that drives the analysis ships with julia. Its
-source code can be found in `src/clangsa`. Running it requires
-the clang dependency to be build. Set the `BUILD_LLVM_CLANG` variable
-in your Make.user in order to build an appropriate version of clang.
-You may also want to use the prebuilt binaries using the
-`USE_BINARYBUILDER_LLVM` options.
-
-Alternatively (or if these do not suffice), try
+source code can be found in `src/clangsa`. Running it uses the
+the optional clang dependency from `deps`. This can be installed by running:
 
 ```sh
 make -C src install-analysis-deps
@@ -18,7 +13,8 @@ make -C src install-analysis-deps
 from Julia's toplevel directory.
 
 
-Afterwards, running the analysis over the source tree is as simple as running `make -C src analyzegc`.
+Afterwards, running the analysis over the source tree is as simple as running
+`make -C src analyzegc`.
 
 ## General Overview
 
@@ -104,24 +100,21 @@ These annotations are found in src/support/analyzer_annotations.h.
 They are only active when the analyzer is being used and expand either
 to nothing (for prototype annotations) or to no-ops (for function like annotations).
 
-### `JL_NOTSAFEPOINT`
+### `JL_CANSAFEPOINT`
 
 This is perhaps the most common annotation, and should be placed on any function
-that is known not to possibly lead to reaching a GC safepoint. In general, it is
-only safe for such a function to perform arithmetic, memory accesses and calls to
-functions either annotated `JL_NOTSAFEPOINT` or otherwise known not to be safepoints (e.g.
-function in the C standard library, which are hardcoded as such in the analyzer)
+that needs to interact with a GC safepoint. It has a few variants also, to express
+when the function expects to be called in an gc-safe region for example.
 
-It is valid to keep values unrooted across calls to any function annotated with this
-attribute:
+It is valid to keep values unrooted across calls to any unannotated function:
 
 Usage Example:
 ```c
-void jl_get_one() JL_NOTSAFEPOINT {
+void jl_get_one() {
   return 1;
 }
 
-jl_value_t *example() {
+jl_value_t *example() JL_CANSAFEPOINT {
   jl_value_t *val = jl_alloc_whatever();
   // This is valid, even though `val` is unrooted, because
   // jl_get_one is not a safepoint
@@ -143,9 +136,9 @@ The `ROOTS_TEMPORARILY` annotation provides the stronger guarantee that,
 not only may the value be unrooted when passed, it will also be preserved
 across any internal safepoints by the callee.
 
-Note that `JL_NOTSAFEPOINT` essentially implies `JL_MAYBE_UNROOTED`/`JL_ROOTS_TEMPORARILY`,
-because the rootedness of an argument is irrelevant if the function contains
-no safepoints.
+Note that not annotating with `JL_CANSAFEPOINT` essentially implies
+`JL_MAYBE_UNROOTED`/`JL_ROOTS_TEMPORARILY`, because the rootedness of an
+argument is irrelevant if the function contains no safepoints.
 
 One additional point to note is that these annotations apply on both the
 caller and the callee side. On the caller side, they lift rootedness
@@ -169,16 +162,23 @@ void example() {
 }
 ```
 
-### `JL_PROPAGATES_ROOT`
+### `JL_PROPAGATES_ROOT`/`JL_PROPAGATES_ROOT_INDEXED(root, index)`
 
 This annotation is commonly found on accessor functions that return one rootable
 object stored within another. When annotated on a function argument, it tells
 the analyzer that the root for that argument also applies to the value returned
 by the function.
+Use `JL_PROPAGATES_ROOT_INDEXED(root, index)` when the return value is loaded
+from a specific indexed child of the rooting argument, where `root` and `index`
+are zero-based argument indices. The indexed form lets the analyzer model later
+overwrites or clears of that indexed child precisely.
+Non-literal indices conservatively fall back to ordinary root propagation,
+because distinct symbolic index expressions can alias in the analyzer.
 
 Usage Example:
 ```c
-jl_value_t *jl_svecref(jl_svec_t *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+jl_value_t *jl_svecref(jl_svec_t *t JL_PROPAGATES_ROOT, size_t i)
+    JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
 
 size_t example(jl_svec_t *svec) {
   jl_value_t *val = jl_svecref(svec, 1)
@@ -189,22 +189,34 @@ size_t example(jl_svec_t *svec) {
 }
 ```
 
-### `JL_ROOTING_ARGUMENT`/`JL_ROOTED_ARGUMENT`
+### `JL_ROOTED_BY_ARG(n)`/`JL_ROOTED_BY_ARG_INDEXED(root, index)`/`JL_OUT_ROOTED_BY_ARG(n)`/`JL_ROOTED_BY_RETURN`
 
-This is essentially the assignment counterpart to `JL_PROPAGATES_ROOT`.
+These are essentially the assignment counterpart to `JL_PROPAGATES_ROOT`.
 When assigning a value to a field of another value that is already rooted,
 the assigned value will inherit the root of the value it is assigned into.
 
+Use `JL_ROOTED_BY_ARG(n)` on the argument that is being assigned, where `n`
+is the zero-based argument index of the rooting argument. Use
+`JL_ROOTED_BY_ARG_INDEXED(root, index)` when the assigned value is stored in a
+specific indexed child of the rooting argument, where `index` is the zero-based
+argument index of the index argument. Use `JL_OUT_ROOTED_BY_ARG(n)` on an out
+argument when the value written through the out argument is rooted by argument
+`n`. Use `JL_ROOTED_BY_RETURN` on arguments that are rooted by the returned
+value. Variadic arguments cannot be annotated individually, so functions whose
+variadic arguments are rooted by the return value use `JL_ROOTED_VARARGS` on the
+function declaration.
+
 Usage Example:
 ```c
-void jl_svecset(void *t JL_ROOTING_ARGUMENT, size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
+void jl_svecset(void *t, size_t i, void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
+jl_svec_t *jl_svec1(void *a JL_ROOTED_BY_RETURN);
 
 
 size_t example(jl_svec_t *svec) {
   jl_value_t *val = jl_box_long(10000);
-  jl_svecset(svec, val);
-  // This is valid, because the annotations imply that the
-  // jl_svecset propagates the rooted-ness from `svec` to `val`
+  jl_svecset(svec, 0, val);
+  // This is valid, because the annotation implies that jl_svecset
+  // propagates the rooted-ness from `svec` to `val`
   jl_gc_safepoint();
   return jl_unbox_long(val);
 }
@@ -257,7 +269,7 @@ void example() {
 This annotation implies that a given value is always globally rooted.
 It can be applied to global variable declarations, in which case it
 will apply to the value of those variables (or values if the declaration
-if for an array), or to functions, in which case it will apply to the
+is for an array), or to functions, in which case it will apply to the
 return value of such functions (e.g. for functions that always return
 some private, globally rooted value).
 
@@ -269,8 +281,8 @@ jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;
 
 ### `JL_ALWAYS_LEAFTYPE`
 
-This annotations is essentially equivalent to `JL_GLOBALLY_ROOTED`, except that
-is should only be used if those values are globally rooted by virtue of being
+This annotation is essentially equivalent to `JL_GLOBALLY_ROOTED`, except that
+it should only be used if those values are globally rooted by virtue of being
 a leaftype. The rooting of leaftypes is a bit complicated. They are generally
 rooted through `cache` field of the corresponding `TypeName`, which itself is
 rooted by the containing module (so they're rooted as long as the containing

@@ -416,6 +416,14 @@ end
             spec_ascii = FilterSpec(ConditionSet("=foo;=bar"))
             @test matchregions(spec_ascii, "foo bar") == [1:7]
         end
+        @testset "matchregions at end of string" begin
+            # Duplicate terms matching at the end of the string (issue 62341)
+            spec_dup = FilterSpec(ConditionSet("test\\; test\\;"))
+            @test matchregions(spec_dup, "test test;") == [6:10, 6:10]
+            # Overlapping matches extending to the end of the string
+            spec_overlap = FilterSpec(ConditionSet("=st;=test"))
+            @test matchregions(spec_overlap, "test") == [1:4, 3:4]
+        end
         @testset "Strictness comparison" begin
             c1 = ConditionSet("hello world")
             c2 = ConditionSet("hello world more")

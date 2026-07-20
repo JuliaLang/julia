@@ -13,7 +13,7 @@
 
 struct ABI_AArch64Layout : AbiLayout {
 
-Type *get_llvm_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
+Type *get_llvm_vectype(jl_datatype_t *dt, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     // `!dt->name->mutabl && dt->pointerfree && !dt->haspadding && dt->isbitsegal && dt->nfields > 0`
@@ -59,7 +59,7 @@ Type *get_llvm_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
 }
 
 #define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
-Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
+Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     // `!dt->name->mutabl && dt->pointerfree && !dt->haspadding && dt->isbitsegal && dt->nfields == 0`
@@ -85,7 +85,7 @@ Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
             lltype : nullptr);
 }
 
-Type *get_llvm_fp_or_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
+Type *get_llvm_fp_or_vectype(jl_datatype_t *dt, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     if (dt->name->mutabl || dt->layout->npointers || !dt->layout->flags.isbitsegal || dt->layout->flags.haspadding)
@@ -99,13 +99,13 @@ struct ElementType {
     ElementType() : type(nullptr), sz(0) {};
 };
 
-// Whether a type is a homogeneous floating-point aggregates (HFA) or a
+// Whether a type is a homogeneous floating-point aggregate (HFA) or a
 // homogeneous short-vector aggregates (HVA). Returns the element type.
-// An Homogeneous Aggregate is a Composite Type where all of the Fundamental
+// A Homogeneous Aggregate is a Composite Type where all of the Fundamental
 // Data Types of the members that compose the type are the same.
 // Note that it is the fundamental types that are important and not the member
 // types.
-bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, LLVMContext &ctx) const
+bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume:
     //     dt is a pointerfree type, (all members are isbits)
@@ -172,17 +172,17 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, L
     return false;
 }
 
-Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const
+Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
 
-    // An Homogeneous Floating-point Aggregate (HFA) is an Homogeneous Aggregate
+    // A Homogeneous Floating-point Aggregate (HFA) is a Homogeneous Aggregate
     // with a Fundamental Data Type that is a Floating-Point type and at most
     // four uniquely addressable members.
     // An Homogeneous Short-Vector Aggregate (HVA) is an Homogeneous Aggregate
     // with a Fundamental Data Type that is a Short-Vector type and at most four
     // uniquely addressable members.
-    // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
+    // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16-byte vector)
     size_t dsz = jl_datatype_size(dt);
     if (dsz > 64 || !dt->layout || dt->layout->npointers || !dt->layout->flags.isbitsegal || dt->layout->flags.haspadding)
         return NULL;
@@ -193,7 +193,7 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const
     return NULL;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override JL_CANSAFEPOINT
 {
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used
@@ -226,7 +226,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
 //
 // All the out parameters should be default to `false`.
 Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
-                   size_t *rewrite_len, LLVMContext &ctx) const
+                   size_t *rewrite_len, LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     // Based on section 5.4 C of the Procedure Call Standard
     // C.1
@@ -350,7 +350,7 @@ Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     // <handled by C.10 above>
 }
 
-bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override JL_CANSAFEPOINT
 {
     // Section 5.5
     // If the type, T, of the result of a function is such that
@@ -368,7 +368,7 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return onstack;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override JL_CANSAFEPOINT
 {
     if (Type *fptype = get_llvm_fp_or_vectype(dt, ctx))
         return fptype;

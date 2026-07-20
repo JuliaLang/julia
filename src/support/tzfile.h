@@ -84,7 +84,7 @@ struct tzhead {
 ** (with nothing between the newlines if there is no POSIX representation for
 ** such instants).
 **
-** If tz_version is '3' or greater, the above is extended as follows.
+** If tzh_version is '3' or greater, the above is extended as follows.
 ** First, the POSIX TZ string's hour offset may range from -167
 ** through 167 as compared to the POSIX-required 0 through 24.
 ** Second, its DST start time may be January 1 at 00:00 and its stop

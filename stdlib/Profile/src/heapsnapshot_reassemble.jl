@@ -5,7 +5,7 @@ module HeapSnapshot
 """
     assemble_snapshot(filepath::AbstractString, out_file::AbstractString)
 
-Assemble a .heapsnapshot file from the .json files produced by `Profile.take_snapshot`.
+Assemble a .heapsnapshot file from the .json files produced by `Profile.take_heap_snapshot`.
 """
 
 # SoA layout to reduce padding

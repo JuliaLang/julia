@@ -263,7 +263,7 @@ function serialize_testset_result_file(dir::String, testset::Test.DefaultTestSet
     return res_file
 end
 
-# deserilalizes the results files and writes them to collated JSON files of 5000 max results
+# deserializes the results files and writes them to collated JSON files of 5000 max results
 function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     data = Dict{String,Any}[]
     read_files = String[]

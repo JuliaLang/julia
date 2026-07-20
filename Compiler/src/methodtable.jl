@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct MethodLookupResult
-    # Really Vector{Core.MethodMatch}, but it's easier to represent this as
-    # and work with Vector{Any} on the C side.
+    # Really Vector{Core.MethodMatch}, but it's easier to represent this as,
+    # and work with, Vector{Any} on the C side.
     matches::Vector{Any}
     valid_worlds::WorldRange
     ambig::Bool
@@ -32,7 +32,7 @@ end
     struct OverlayMethodTable <: MethodTableView
 
 Overlays the internal method table such that specific queries can be redirected to an
-external table, e.g., to override existing method.
+external table, e.g., to override existing methods.
 """
 struct OverlayMethodTable <: MethodTableView
     world::UInt

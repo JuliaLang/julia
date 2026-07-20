@@ -22,6 +22,18 @@ New language features
 Language changes
 ----------------
 
+  - `Type{T} <: S` now holds only if every type `==` to `T` is an instance of `S`, fixing a
+    long-standing soundness hole where e.g. `Type{Int} <: DataType` held even though types like
+    `Tuple{S} where S<:Int` are `==` (and `isa`) their canonical spelling without being `DataType`s.
+    In particular `Type{T}` is no longer a subtype of any single kind: use a union of kinds instead
+    (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
+    unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
+    ([#33136], [#62141]).
+  - Introduced explicitly wrapping arithmetic operators `+%`, `-%`, `*%` to annotate arithmetic operations
+    that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
+    operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
+    in the default operators ([#50790]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -36,6 +48,12 @@ Compiler/Runtime improvements
     ([#41199], [#47574]).
   - Stack traces now show full method signatures with argument types for inlined
     frames, matching the display of non-inlined frames ([#53925]).
+  - Parallel package precompilation now coordinates CPU usage across both the
+    precompile worker processes and the LLVM threads each spawns to compile its
+    native image, sharing a single thread budget so idle cores are filled during
+    the long tail without oversubscribing the machine when many packages compile
+    at once. The total budget can be set with the new `JULIA_PRECOMPILE_THREADS`
+    environment variable ([#61958]).
 
 Command-line option changes
 ---------------------------
@@ -55,6 +73,9 @@ Multi-threading changes
     (`:static`, `:dynamic`, `:greedy`) are supported. Results preserve element order for `:static`
     and `:dynamic` scheduling; `:greedy` does not guarantee order. Non-indexable iterators are
     also supported. ([#59019])
+  - The task scheduler now avoids O(nthreads) wake overhead on every `@spawn`, significantly reducing
+    threading overhead particularly on highly oversubscribed machines. Benchmarks show up to 1000x
+    reduction in spawn time in such scenarios ([#61826]).
 
 Build system changes
 --------------------
@@ -63,22 +84,40 @@ New library functions
 ---------------------
 
 * `tap(f)` creates a function that calls `f(x)` for side effects and returns `x`. ([#61340]).
+* `Base.set_binding_visibility!` sets the declared visibility (`:none`, `:public`, or
+  `:export`) of a name in a module, allowing an `export` or `public` declaration to be
+  retracted programmatically ([#62131]).
 * `Base.generating_output()` has been made `public` (but not exported) to allow
   checking whether the current process is performing compilation for a
   pkgimage/sysimage ([#61224]).
+- `Base.raw_substring` is an unexported, public constructor to build a `SubString`
+  without checking for valid string indices.
+- `Base.unannotate(::AnnotatedString)` returns the underlying un-annotated string
+  of the input string.
+- `Base.include_mapexprs(mod)` is an unexported, public function returning the non-identity
+  `mapexpr` functions used by `include(mapexpr, …)` calls while loading the package rooted at
+  `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
+  image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
+  original transform when an `include(mapexpr, …)`-ed file is edited.
 
 New library features
 --------------------
 
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
+* `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags
+  to the `IOContext` for final output-string generation ([#61887]).
 * The `StringView` type wraps an `AbstractVector{UInt8}` and interprets it as a UTF-8 encoded string,
   superseding the [StringViews.jl](https://github.com/JuliaStrings/StringViews.jl) package ([#60526]).
-
 * Package precompilation now supports running precompilation in
   a background task and has new interactive keyboard controls:
   `c` to cleanly cancel immediately, `d` to detach, `i` for a profile peek,
   `v` to toggle verbose mode showing elapsed time, CPU%, and memory usage, and `?` for help. ([#60943]).
+* Instances of an `Enum` can now be given their own docstrings within the `@enum` definition ([#61955]).
+* New methods `readdir(path, DirEntry)` and `readdir(::DirEntry, DirEntry)` return directory contents
+  along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
+  etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
+  returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
 
 Standard library changes
 ------------------------
@@ -124,6 +163,8 @@ Standard library changes
 #### InteractiveUtils
 
 * `less`/`@less` and `edit`/`@edit` are now supported for documented variables ([#53539]).
+* A new `@methods` macro lists all methods applicable to a call expression, using the types of
+  the given arguments, e.g. `@methods isvalid('a', 1)` or `@methods isvalid(::AbstractChar, ::Integer)`.
 
 #### Dates
 

@@ -59,7 +59,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     # When the buffer is resized, or a new buffer allocated, this is the maximum size of the buffer.
     # A new GenericIOBuffer may be constructed with an existing data larger than `maxsize`.
-    # When that happensm we must make sure to not have more than `maxsize` bytes in the buffer,
+    # When that happens, we must make sure to not have more than `maxsize` bytes in the buffer,
     # else reallocating will lose data. So, never write to indices > `maxsize + get_offset(io)`
     # This value is always in 0:typemax(Int).
     maxsize::Int
@@ -731,7 +731,7 @@ julia> String(take!(io))
 function take!(io::GenericIOBuffer)
     io.mark = -1
     if io.seekable
-        # If the buffer is seekable, then the previously consumed bytes from ptr+1:size
+        # If the buffer is seekable, then the previously consumed bytes from 1:ptr-1
         # must still be output, as they are not truly gone.
         # Hence, we output all bytes from 1:io.size
         offset = get_offset(io)
@@ -809,7 +809,7 @@ function unsafe_takestring!(io::IOBuffer)
 end
 
 """
-    takestring!(io::IOBuffer) -> String
+    takestring!(io::IOBuffer)::String
 
 Return the content of `io` as a `String`, resetting the buffer to its initial
 state.

@@ -37,7 +37,7 @@ julia> editor[]
 "vim"
 
 julia> with(editor => "emacs") do
-           sval[]
+           editor[]
        end
 "emacs"
 

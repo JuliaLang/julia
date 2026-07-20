@@ -631,7 +631,7 @@ BigInt
 
 The default precision (in number of bits of the significand) and rounding mode of [`BigFloat`](@ref)
 operations can be changed globally by calling [`setprecision`](@ref) and [`setrounding`](@ref),
-and all further calculations will take these changes in account. Alternatively, the precision
+and all further calculations will take these changes into account. Alternatively, the precision
 or the rounding can be changed only within the execution of a particular block of code by using
 the same functions with a `do` block:
 

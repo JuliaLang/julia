@@ -360,7 +360,7 @@ end
 let itr
     itr = Iterators.Stateful(Iterators.map(identity, 1:5))
     @test collect(itr) == 1:5
-    @test collect(itr) == Int[] # Stateful do not preserve shape
+    @test collect(itr) == Int[] # Stateful does not preserve shape
     itr = (i+1 for i in Base.Stateful([1, 2, 3]))
     @test collect(itr) == [2, 3, 4]
     @test collect(itr) == Int[] # Stateful do not preserve shape
@@ -1022,6 +1022,7 @@ end
     @test (@inferred Base.IteratorSize(zip(repeated(0), 1:5 ))) == Base.HasLength()     # for zip of ::IsInfinite and ::HasShape
     @test (@inferred Base.IteratorSize(zip((1,2,3), 1:5) )) == Base.HasLength()         # for zip of ::HasLength and ::HasShape
     @test (@inferred Base.IteratorSize(zip(1:5, (1,2,3)) )) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
+    @test (@inferred Base.IteratorSize(zip(1:4, [1 2; 3 4]))) == Base.HasLength()       # for zip of mismatched ::HasShape
 end
 
 @testset "foldability inference" begin

@@ -382,7 +382,7 @@ s
 
 What does this code do? Hint: it's a trick question. The answer is "it depends." If this code is
 entered interactively, it behaves the same way it does in a function body. But if the code appears
-in a file, it  prints an ambiguity warning and throws an undefined variable error. Let's see it
+in a file, it prints an ambiguity warning and throws an undefined variable error. Let's see it
 working in the REPL first:
 
 ```jldoctest
@@ -753,9 +753,9 @@ to assign a value to a variable that is declared constant the following scenario
   ```
 
 !!! compat "Julia 1.12"
-    Prior to julia 1.12, redefinition of constants was poorly supported. It was restricted to
+    Prior to Julia 1.12, redefinition of constants was poorly supported. It was restricted to
     redefinition of constants of the same type and could lead to observably incorrect behavior
-    or crashes. Constant redefinition is highly discouraged in versions of julia prior to 1.12.
+    or crashes. Constant redefinition is highly discouraged in versions of Julia prior to 1.12.
     See the manual for prior julia versions for further information.
 
 ## [Typed Globals](@id man-typed-globals)

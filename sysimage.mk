@@ -19,10 +19,15 @@ sysbase-debug: $(build_private_libdir)/sysbase-debug.$(SHLIB_EXT)
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
-	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ \
+	@$(call PRINT_LINK, $(call link-dll,$@, \
+		--disable-auto-import --disable-runtime-pseudo-reloc $(WIN_LD_LIBPATHS), \
+		$(WIN_LD_DLL_CRT_START) \
 		$(call whole_archive,$<) \
 		$(if $(findstring -debug,$(notdir $@)),-ljulia-internal-debug -ljulia-debug,-ljulia-internal -ljulia) \
-		$$([ $(OS) = WINNT ] && echo '' $(LIBM) -lssp -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc))
+		$(LIBM) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir), \
+		$(call whole_archive,$<) \
+		$(if $(findstring -debug,$(notdir $@)),-ljulia-internal-debug -ljulia-debug,-ljulia-internal -ljulia)))
 	@$(INSTALL_NAME_CMD)$(notdir $@) $@
 	@$(DSYMUTIL) $@
 

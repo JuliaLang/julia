@@ -95,6 +95,12 @@ precompile_test_harness(false) do dir
               end
               abstract type AbstractAlgebraMap{A} end
               struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
+              # issue #62047: supertype whose parameters reach back through the subtype
+              struct Wrap62047{T} end
+              struct Recur62047{T} <: AbstractAlgebraMap{Wrap62047{Recur62047{T}}} end
+              # two types sharing the identical supertype object
+              struct ShareA62047{T} <: AbstractAlgebraMap{T} end
+              struct ShareB62047{T} <: AbstractAlgebraMap{T} end
 
               global process_state_calls::Int = 0
               const process_state = Base.OncePerProcess{typeof(getpid())}() do
@@ -127,6 +133,7 @@ precompile_test_harness(false) do dir
           """
           module $Foo_module
               import $FooBase_module, $FooBase_module.typeA, $FooBase_module.GAPGroupHomomorphism
+              import $FooBase_module: Wrap62047, Recur62047, ShareA62047, ShareB62047
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
@@ -211,6 +218,10 @@ precompile_test_harness(false) do dir
 
               const GAPType1 = GAPGroupHomomorphism{Nothing, Nothing}
               const GAPType2 = GAPGroupHomomorphism{1, 2}
+
+              # issue #62047
+              const Type62047 = Wrap62047{Recur62047{Int}}
+              const Shared62047 = (ShareA62047{Int}, ShareB62047{Int})
 
               # issue #28297
               mutable struct Result
@@ -1072,8 +1083,9 @@ precompile_test_harness("code caching") do dir
         mi = m.specializations::Core.MethodInstance
         @test hasvalid(mi, world)       # was compiled with the new method
         m = only(methods(MA.fib))
-        mi = m.specializations::Core.MethodInstance
-        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        for mi in Base.specializations(m)
+            @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        end
         @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
@@ -1312,9 +1324,9 @@ precompile_test_harness("invoke") do dir
         end
 
         m = get_method_for_type(M.h, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 1
+        @test m.specializations === Core.svec()
         m = get_method_for_type(M.hnc, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 1
+        @test m.specializations === Core.svec()
         m = only(methods(M.callq))
         @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqnc))
@@ -1968,7 +1980,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, internal_methods, new_method_roots, cache_sizes = sv
+    modules, init_order, internal_methods, extext_methods, new_method_roots, cache_sizes = sv
     for m in internal_methods::Vector{Any}
         m isa Core.MethodInstance || continue
         m = m.func::Method
@@ -1980,6 +1992,76 @@ precompile_test_harness("PkgCacheInspector") do load_path
         ci isa Core.CodeInstance || return false
         mi = ci.def::Core.MethodInstance
         return mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
+    end
+end
+
+precompile_test_harness("custom MethodTable dispatch status") do load_path
+    # Custom method-table methods loaded from a package image need dispatch fast-path bits restored.
+    pkg = :OverlayDispatchStatus
+    write(joinpath(load_path, "OverlayDispatchStatus.jl"),
+        """
+        module OverlayDispatchStatus
+        function f end
+        Base.Experimental.@MethodTable(mt)
+        Base.Experimental.@overlay mt f(x::Int) = x + 1
+        # generic code that resolves `f` through the overlay table when inferred
+        # with an overlay-aware interpreter (like GPU runtime library functions)
+        g(x) = f(x) * 2
+        end
+        """)
+    # A dependent package whose image holds CodeInstances with call edges that
+    # were resolved through the dependency's overlay table: without the dispatch
+    # bits restored on the overlay method, edge revalidation drops these CIs on
+    # image load (the whole cross-session cache of GPUCompiler-style consumers).
+    newinterp_path = abspath(joinpath(@__DIR__, "../Compiler/test/newinterp.jl"))
+    write(joinpath(load_path, "OverlayDispatchStatusUser.jl"),
+        """
+        module OverlayDispatchStatusUser
+        import OverlayDispatchStatus
+
+        module Custom
+            import Base.Compiler: Compiler
+            include($(repr(newinterp_path)))
+            @newinterp OverlayDispatchStatusInterp
+            import OverlayDispatchStatus
+            Compiler.method_table(interp::OverlayDispatchStatusInterp) =
+                Compiler.OverlayMethodTable(Compiler.get_inference_world(interp),
+                                            OverlayDispatchStatus.mt)
+        end
+
+        # a call edge directly to the dependency's overlay method
+        caller(x) = OverlayDispatchStatus.f(x)
+        # an overlay-resolved edge reached through generic code in the dependency
+        chain(x) = OverlayDispatchStatus.g(x)
+
+        let interp = Custom.OverlayDispatchStatusInterp()
+            Base.return_types(caller, (Int,); interp)
+            Base.return_types(chain, (Int,); interp)
+        end
+        end
+        """)
+    Base.compilecache(Base.PkgId(string(pkg)))
+    @eval using $pkg
+    M = invokelatest(getglobal, @__MODULE__, pkg)
+    invokelatest() do
+        ms = Base._methods_by_ftype(Tuple{typeof(M.f), Int}, M.mt, 1, Base.get_world_counter())
+        method = only(ms).method
+        @test method.module === M
+        @test !iszero(method.dispatch_status & Base.ReinferUtils.METHOD_SIG_LATEST_WHICH)
+        @test !iszero(method.dispatch_status & Base.ReinferUtils.METHOD_SIG_LATEST_ONLY)
+    end
+    Base.compilecache(Base.PkgId("OverlayDispatchStatusUser"))
+    @eval using OverlayDispatchStatusUser
+    invokelatest() do
+        U = OverlayDispatchStatusUser
+        owner = U.Custom.OverlayDispatchStatusInterp
+        # dependent CIs with overlay-resolved call edges must survive loading U's image
+        for m in (only(methods(U.caller)),          # edge to the overlay method itself
+                  only(methods(U.chain)),           # edge into dependency generic code
+                  only(methods(M.g)))               # dependency code with the overlay edge
+            mi = only(Base.specializations(m))
+            @test check_presence(mi, owner) !== nothing
+        end
     end
 end
 
@@ -2172,7 +2254,8 @@ precompile_test_harness("Pre-compile Core methods") do load_path
     ji, ofile = Base.compilecache(Base.PkgId("CorePrecompilation"))
     @eval using CorePrecompilation
     invokelatest() do
-        let tt = Tuple{Type{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
+        # the compiled (dispatch) specialization is the `TypeEgal`-keyed one
+        let tt = Tuple{Core.TypeEgal{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
             match = first(Base._methods_by_ftype(tt, -1, Base.get_world_counter())),
             mi = Base.specialize_method(match)
             @test isdefined(mi, :cache)
@@ -2519,8 +2602,13 @@ precompile_test_harness("Package precompilation works without manifest") do load
 end
 
 # Verify that inference / caching was not performed for any macros in the sysimage
-let m = only(methods(Base.var"@big_str"))
-    @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
+let m = only(methods(Base.var"@lazy_str"))
+    for mi in Base.specializations(m)
+        isdefined(mi, :cache) || continue
+        ci = mi.cache
+        @test !isdefined(ci, :inferred)
+        @test !isdefined(ci, :next)
+    end
 end
 
 # Issue #58841 - make sure we don't accidentally throw away code for inference
@@ -2893,6 +2981,132 @@ end
     end
 end
 
+# TypeEq payloads that mention package-image datatypes must be restored as new
+# before restore-side type-cache lookup compares them to cached types.
+@testset "precompile TypeEq references to new datatypes" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        dev_path = joinpath(depot, "dev")
+        mkpath(project_path)
+        mkpath(dev_path)
+
+        trigger_uuid = "10000000-0000-0000-0000-000000000103"
+        parent_uuid = "10000000-0000-0000-0000-000000000104"
+
+        trigger_dir = joinpath(dev_path, "TypeEqTrigger")
+        mkpath(joinpath(trigger_dir, "src"))
+        write(joinpath(trigger_dir, "Project.toml"), """
+            name = "TypeEqTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(trigger_dir, "src", "TypeEqTrigger.jl"), """
+            module TypeEqTrigger
+            macro latestworld_if_toplevel()
+                Expr(Symbol("latestworld-if-toplevel"))
+            end
+            workload() = tuple(values(Dict(:a => 1))...)
+            if ccall(:jl_generating_output, Cint, ()) == 1
+                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+                try
+                    @latestworld_if_toplevel
+                    workload()
+                finally
+                    ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+                end
+            end
+            end
+            """)
+
+        parent_dir = joinpath(dev_path, "TypeEqParent")
+        mkpath(joinpath(parent_dir, "src"))
+        write(joinpath(parent_dir, "Project.toml"), """
+            name = "TypeEqParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(parent_dir, "src", "TypeEqParent.jl"), """
+            module TypeEqParent
+            import Base: range
+
+            abstract type Left{N} end
+            abstract type Right{N} end
+            struct Iter{C}
+                c::C
+            end
+
+            Base.iterate(itr::Iter{C}, state::Int=0) where
+                {N, C <: Union{Left{N},Right{N}}} =
+                    state >= N ? nothing : (0, state + 1)
+            Base.BroadcastStyle(::Type{<:Iter{C}}) where
+                {N, C <: Union{Left{N},Right{N}}} =
+                    Base.BroadcastStyle(NTuple{N,Int})
+            Base.broadcastable(itr::Iter{C}) where
+                {N, C <: Union{Left{N},Right{N}}} =
+                    (itr...,)::NTuple{N,Int}
+
+            comps(c::C) where {N, C <: Union{Left{N},Right{N}}} = Iter(c)
+            range(start::T; stop::T, length::Integer=100) where
+                {N, T <: Union{Left{N},Right{N}}} =
+                    comps(start) .+ comps(stop)
+            range(start::T, stop::T; kwargs...) where
+                {N, T <: Union{Left{N},Right{N}}} =
+                    range(start; stop=stop, kwargs...)
+
+            macro latestworld_if_toplevel()
+                Expr(Symbol("latestworld-if-toplevel"))
+            end
+            function workload()
+                for T in (Float64, Int)
+                    range(one(T), T(2); length=2)
+                end
+            end
+            if ccall(:jl_generating_output, Cint, ()) == 1
+                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+                try
+                    @latestworld_if_toplevel
+                    workload()
+                finally
+                    ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+                end
+            end
+            end
+            """)
+
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            TypeEqParent = "$parent_uuid"
+            TypeEqTrigger = "$trigger_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.TypeEqParent]]
+            path = "../dev/TypeEqParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [[deps.TypeEqTrigger]]
+            path = "../dev/TypeEqTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            @test Base.require(Main, :TypeEqParent) isa Module
+            @test Base.require(Main, :TypeEqTrigger) isa Module
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
 # Issue #61198 - extensions with superset triggers must be in the precompilation dep graph
 @testset "precompilation dep graph includes transitively-triggered extensions" begin
     mkdepottempdir() do depot
@@ -3247,6 +3461,148 @@ end
         output = fetch(log)
         @test !occursin("currently loaded", output)
     end end
+end
+
+# PR #61915: a precompiled value with an inline `Type{Union{}}` field used to abort
+# in `record_memoryrefs_inside` while writing the cache, because the `TypeEq` field
+# type is laid out as the singleton `typeof(Union{})` `DataType`.
+precompile_test_harness("Type{Union{}} inline field") do dir
+    TypeBottomField = :TypeBottomField61915
+    write(joinpath(dir, "$TypeBottomField.jl"),
+          """
+          module $TypeBottomField
+              struct HoldsBottom
+                  t::Type{Union{}}
+                  x::Int
+              end
+              const X = HoldsBottom(Union{}, 7)
+          end
+          """)
+    @test Base.compilecache(Base.PkgId(string(TypeBottomField))) isa Tuple
+    @eval using $TypeBottomField
+    @test (@eval $TypeBottomField.X.x) == 7
+    @test (@eval $TypeBottomField.X.t) === Union{}
+end
+
+# Cache rejection reasons and how they are reported when loading triggers precompilation:
+# caches left behind by another version of Julia collapse into one generic message, while
+# actionable reasons (e.g. changed source) are reported by name without version noise.
+precompile_test_harness("cache rejection reasons") do dir
+    pkgfile = joinpath(dir, "RejectReasons.jl")
+    write(pkgfile,
+          """
+          module RejectReasons
+          end
+          """)
+    cachefile, _ = Base.compilecache(Base.PkgId("RejectReasons"))
+
+    # fresh cache: nothing recorded, nothing reported
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, cachefile; reasons) !== true
+    @test isempty(reasons)
+    @test Base.list_reasons(reasons) == ""
+
+    # a cache left in the depot after updating Julia fails the header check, which
+    # embeds the Julia version and commit (simulated here with junk bytes); that
+    # alone reports only the generic version message
+    oldcache = joinpath(dirname(cachefile), "RejectReasons_oldversion.ji")
+    write(oldcache, fill(0xff, 1024))
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, oldcache; reasons) === true
+    @test reasons == Dict(:incompatible_header => 1)
+    @test Base.list_reasons(reasons) == " (no compatible cache for this version of Julia)"
+
+    # changing the source makes the compatible cache stale for an actionable reason
+    write(pkgfile,
+          """
+          module RejectReasons
+          f() = 1
+          end
+          """)
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, cachefile; reasons) === true
+    @test length(reasons) == 1
+    @test only(keys(reasons)) in (:mtime_changed, :fsize_changed, :content_changed)
+    msg = Base.list_reasons(reasons)
+    @test startswith(msg, " (cache not reused: ")
+
+    # actionable reasons are reported over rejections of other-version caches
+    Base.record_reason(reasons, :incompatible_header)
+    @test Base.list_reasons(reasons) == msg
+
+    # rejections of caches that weren't the ones searched for are never reported
+    @test Base.list_reasons(Dict(:buildid_mismatch => 2)) == ""
+    @test Base.list_reasons(nothing) == ""
+
+    # the full counted list, including internal reasons, is available at debug level
+    @test_logs (:debug, r"Caches not reused: 2 for different build identifier") min_level=Logging.Debug match_mode=:any Base.list_reasons(Dict(:buildid_mismatch => 2))
+end
+
+# `include(mapexpr, …)` records its non-identity `mapexpr` into a per-root-module side-table
+# (`Base.include_mapexprs`) that is serialized into the package image, so the exact transform
+# used at precompile time is recoverable after load (used by revision tools such as Revise).
+precompile_test_harness("include mapexpr persistence") do dir
+    Pkg = :IncludeMapexpr9f2c
+    write(joinpath(dir, "plain.jl"), "p = 1\n")
+    write(joinpath(dir, "named.jl"), "n = 2\n")
+    write(joinpath(dir, "closure.jl"), "c = 2\n")
+    write(joinpath(dir, "submod.jl"), "s = 2\n")
+    write(joinpath(dir, "$Pkg.jl"),
+          """
+          module $Pkg
+              # named-function transform: bump an integer rhs by 40
+              bump40(ex) = (Meta.isexpr(ex, :(=)) && ex.args[2] isa Int && (ex.args[2] = ex.args[2] + 40); ex)
+              # closure capturing state computed at load time -- the case that could NOT be
+              # reconstructed by re-parsing, only by serializing the actual object
+              const OFFSET = 40
+              addoffset = let off = OFFSET
+                  ex -> (Meta.isexpr(ex, :(=)) && ex.args[2] isa Int && (ex.args[2] = ex.args[2] + off); ex)
+              end
+
+              include("plain.jl")               # identity: must NOT be recorded
+              include(bump40, "named.jl")       # include(mapexpr, path)
+              include(addoffset, "closure.jl")  # state-capturing closure
+              module Sub end
+              Base.include(bump40, Sub, "submod.jl")  # include(mapexpr, mod, path)
+          end
+          """)
+    @test Base.compilecache(Base.PkgId(string(Pkg))) isa Tuple
+    @eval using $Pkg
+    M = @eval $Pkg
+
+    # The transforms actually executed (load-time behavior), via the package's own includes
+    @test M.p == 1                # untransformed
+    @test M.n == 42               # bump40
+    @test M.c == 42               # addoffset (closure)
+    @test M.Sub.s == 42           # include(mapexpr, mod, path)
+
+    # A package with only identity includes records nothing (the common, zero-allocation case).
+    NoMx = :IncludeMapexprNone9f2c
+    write(joinpath(dir, "$NoMx.jl"), "module $NoMx\n    include(\"plain.jl\")\nend\n")
+    @test Base.compilecache(Base.PkgId(string(NoMx))) isa Tuple
+    @eval using $NoMx
+    @test Base.include_mapexprs(@eval $NoMx) === nothing
+
+    # The side-table survived precompilation and is keyed by (including_module, abspath)
+    mapexprs = Base.include_mapexprs(M)
+    @test mapexprs isa Dict{Tuple{Module,String},Any}
+    plainpath   = normpath(joinpath(dir, "plain.jl"))
+    namedpath   = normpath(joinpath(dir, "named.jl"))
+    closurepath = normpath(joinpath(dir, "closure.jl"))
+    submodpath  = normpath(joinpath(dir, "submod.jl"))
+    @test !haskey(mapexprs, (M, plainpath))           # identity is never recorded
+    @test haskey(mapexprs, (M, namedpath))
+    @test haskey(mapexprs, (M, closurepath))
+    @test haskey(mapexprs, (M.Sub, submodpath))       # keyed by the including (sub)module
+
+    # The recorded objects are the actual functions, captured state and all: applying the
+    # deserialized closure reproduces the +OFFSET transform. `invokelatest` because the package
+    # (hence these methods) was loaded in this same world.
+    @test Base.invokelatest(mapexprs[(M, namedpath)], Expr(:(=), :z, 2)) == Expr(:(=), :z, 42)
+    @test Base.invokelatest(mapexprs[(M, closurepath)], Expr(:(=), :z, 2)) == Expr(:(=), :z, 42)
+
+    # Exactly the three non-identity includes were recorded (the identity one was not).
+    @test length(mapexprs) == 3
 end
 
 finish_precompile_test!()

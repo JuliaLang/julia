@@ -5,9 +5,9 @@ let
 end
 #---------------------
 1   1
-2   (= slot₁/a %₁)
+2   (= slot₃/c %₁)
 3   (= slot₂/b %₁)
-4   (= slot₃/c %₁)
+4   (= slot₁/a %₁)
 5   (return %₁)
 
 ########################################
@@ -18,9 +18,9 @@ end
 #---------------------
 1   TestMod.f
 2   (call %₁)
-3   (= slot₁/a %₂)
+3   (= slot₃/c %₂)
 4   (= slot₂/b %₂)
-5   (= slot₃/c %₂)
+5   (= slot₁/a %₂)
 6   (return %₂)
 
 ########################################
@@ -48,7 +48,7 @@ end
 1   (method TestMod.b)
 2   latestworld
 3   TestMod.b
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::3:9
@@ -162,6 +162,14 @@ a.(b) = rhs
 LoweringError:
 a.(b) = rhs
 └───┘ ── dotcall syntax not valid here
+
+########################################
+# Error: Invalid lhs in `=`
+a.(b,c) = rhs
+#---------------------
+LoweringError:
+a.(b,c) = rhs
+└─────┘ ── dotcall syntax not valid here
 
 ########################################
 # Error: Invalid lhs in `=`
@@ -359,3 +367,11 @@ f() += y
 LoweringError:
 (if false end, b) += 2
 #└──────────┘ ── invalid syntax in left-hand side of assignment
+
+########################################
+# Error: Updating assignment to ssavalue (JuliaLang/julia#30062)
+f(), x += 10, 20
+#---------------------
+LoweringError:
+f(), x += 10, 20
+└────┘ ── invalid multiple assignment location

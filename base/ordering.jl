@@ -50,7 +50,7 @@ ReverseOrdering() = ReverseOrdering(ForwardOrdering())
 """
     reverse(o::Base.Ordering)
 
-reverses ordering specified by `o`.
+Reverses ordering specified by `o`.
 
 """
 reverse(o::Ordering) = ReverseOrdering(o)

@@ -24,7 +24,7 @@ access the network during the build process, add the following in `Make.user`:
 USE_BINARYBUILDER=0
 ```
 
-Building Julia requires 5GiB if building all dependencies and approximately 4GiB of virtual memory.
+Building Julia requires 5GiB of disk space when building all dependencies and approximately 4GiB of virtual memory.
 
 To perform a parallel build, use `make -j N` and supply the maximum
 number of concurrent processes. If the defaults in the build do not work for you, and
@@ -227,7 +227,7 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
+   * A complete list of patches is available on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance.
@@ -346,6 +346,24 @@ From this point, you should
 
 Then add all the [build dependencies](#required-build-tools-and-external-libraries), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
 
+
+## Building Julia with MMTk GC
+
+Julia allows different GC implementations through a GC interface. GC is currently selected at build time,
+so switching between the stock GC and any other GC implementation requires rebuilding Julia.
+
+MMTk is one of the GCs integrated with this interface. The MMTk binding is built from source as part of the Julia build
+and requires a Rust toolchain. The simplest way to build Julia with MMTk is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk make
+```
+
+An example of a more advanced configuration that customizes the plan / GC type is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk MMTK_PLAN=StickyImmix MMTK_MOVING=0 MMTK_BUILD_MODE=release make
+```
+
+The default MMTk build uses the `StickyImmix` plan (similar to Julia's generational mark sweep), and a release build of the Rust binding. Further build options can be set either on the command line or in `Make.user`. For details, see [Julia + MMTk](../gc-mmtk.md).
 
 ## Update the version number of a dependency
 

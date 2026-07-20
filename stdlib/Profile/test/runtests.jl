@@ -56,7 +56,7 @@ function test_has_task_profiler_sample_in_buffer()
                 data = all[1]
                 startframe = length(data)
                 for i in startframe:-1:1
-                    (startframe - 1) >= i >= (startframe - (Profile.nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+                    (startframe - 1) >= i >= (startframe - (Profile.nmeta + 1)) && continue # skip metadata (it's read ahead below) and extra block end NULL IP
                     if Profile.is_block_end(data, i)
                         thread_sleeping_state = data[i - Profile.META_OFFSET_SLEEPSTATE]
                         @test thread_sleeping_state == 0x3

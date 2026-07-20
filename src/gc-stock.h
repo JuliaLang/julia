@@ -575,7 +575,7 @@ STATIC_INLINE void gc_record_full_sweep_reason(int reason) JL_NOTSAFEPOINT
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
 void gc_collect_neighbors(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void jl_gc_debug_init(void);
+void jl_gc_debug_init(void) JL_NOTSAFEPOINT;
 
 // GC permanent allocation
 extern uv_mutex_t gc_perm_lock;
@@ -607,8 +607,6 @@ void gc_final_pause_end(int64_t t0, int64_t tend);
 void gc_time_pool_start(void) JL_NOTSAFEPOINT;
 void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT;
 void gc_time_pool_end(int sweep_full) JL_NOTSAFEPOINT;
-void gc_time_sysimg_end(uint64_t t0) JL_NOTSAFEPOINT;
-
 void gc_time_big_start(void) JL_NOTSAFEPOINT;
 void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT;
 void gc_time_big_end(void) JL_NOTSAFEPOINT;
@@ -641,7 +639,6 @@ STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
     (void)pg_skpd;
 }
 #define gc_time_pool_end(sweep_full) (void)(sweep_full)
-#define gc_time_sysimg_end(t0) (void)(t0)
 #define gc_time_big_start()
 STATIC_INLINE void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT
 {
@@ -716,9 +713,6 @@ extern int gc_verifying;
 #define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
 #define gc_verifying (0)
 #endif
-
-int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
-int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;

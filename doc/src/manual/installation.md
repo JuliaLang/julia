@@ -86,7 +86,7 @@ Add-AppxPackage -AppInstallerFile https://install.julialang.org/Julia.appinstall
 
 If neither the Windows Store nor the App Installer version work on your Windows
 system, you can also use a MSI based installer. Note that this installation
-methods comes with serious limitations and is generally not recommended unless
+method comes with serious limitations and is generally not recommended unless
 no other method works. For example, there is no automatic update mechanism for
 Juliaup with this installation method. The 64 bit version of the MSI installer
 can be downloaded from [here](https://install.julialang.org/Julia-x64.msi) and

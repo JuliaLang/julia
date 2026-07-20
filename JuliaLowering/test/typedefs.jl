@@ -103,6 +103,98 @@ end
 @test fieldtypes(test_mod.S1{Int,String}) == (Int, String, Any)
 @test supertype(test_mod.S1) == test_mod.A
 
+@testset "atomic/const fields" begin
+    # The parser rejects wrapped const struct fields ("expected assignment after
+    # const") which probably shouldn't be the parser's job.
+    fl_eval(test_mod, :(macro var"const"(x); esc(Expr(:const, x)); end))
+
+    @gensym S
+    @test jl_eval(
+        test_mod,
+        :(begin
+              mutable struct $S
+                  @atomic x::Bool
+                  @const y::Bool
+              end
+              $S(true,false).x
+          end)) == true
+    @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
+    @test_throws "cannot be changed" jl_eval(
+        test_mod, :($S(true,false).y = true))
+
+    @gensym S
+    @test jl_eval(
+        test_mod,
+        :(begin
+              mutable struct $S
+                  begin
+                      begin
+                          @atomic x::Bool
+                      end
+                  end
+                  begin
+                      begin
+                          @const y::Bool
+                      end
+                  end
+              end
+              $S(true,false).x
+          end)) == true
+    @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
+    @test_throws "cannot be changed" jl_eval(
+        test_mod, :($S(true,false).y = true))
+
+    @gensym S
+    @test jl_eval(
+        test_mod,
+        :(begin
+              mutable struct $S
+                  @static if true
+                      # Blocks are expected to be splatted into the struct body
+                      begin
+                          @atomic x::Bool
+                          @const y::Bool
+                      end
+                  else
+                      x::Bool
+                      y::Bool
+                  end
+              end
+              $S(true,false).x
+          end)) == true
+    @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
+    @test_throws "cannot be changed" jl_eval(test_mod, :($S(true,false).y = true))
+end
+
+@testset "placeholder fields" begin
+    @test JuliaLowering.include_string(test_mod, """
+    mutable struct PlaceholderFields
+        _::Int
+        __
+        const ___
+        x
+    end
+    fieldnames(PlaceholderFields)
+    """) === (:_, :__, :___, :x)
+    @test fieldtypes(test_mod.PlaceholderFields) == (Int, Any, Any, Any)
+    let p = test_mod.PlaceholderFields(1.0, 2, 3, 4)
+        @test getfield(p, 1) === 1
+        @test getfield(p, 2) === 2
+        @test getfield(p, 3) === 3
+        @test getfield(p, 4) === 4
+        @test_throws "const field" setfield!(p, 3, 0)
+    end
+
+    # placeholder field types still apply in `new`
+    @test JuliaLowering.include_string(test_mod, """
+    struct PlaceholderNew
+        _::Int
+        PlaceholderNew(x) = new(x)
+    end
+    getfield(PlaceholderNew(3.0), 1)
+    """) === 3
+end
+
 # Inner constructors: one field non-Any
 @test JuliaLowering.include_string(test_mod, """
 struct S2
@@ -266,6 +358,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors1)
+    @test fieldnames(test_mod.DefaultInnerCtors1) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors2
@@ -274,6 +367,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors2)
+    @test fieldnames(test_mod.DefaultInnerCtors2) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors3
@@ -282,6 +376,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors3)
+    @test fieldnames(test_mod.DefaultInnerCtors3) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors4
@@ -293,6 +388,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors4)
+    @test fieldnames(test_mod.DefaultInnerCtors4) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors5
@@ -301,6 +397,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors5)
+    @test fieldnames(test_mod.DefaultInnerCtors5) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors6
@@ -309,6 +406,17 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors6)
+    @test fieldnames(test_mod.DefaultInnerCtors6) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors7
+        field::Int
+        begin; end
+        begin; begin; end; end
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors7)
+    @test fieldnames(test_mod.DefaultInnerCtors7) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct NoDefaultInnerCtors1
@@ -317,6 +425,7 @@ end
         end
     """) === nothing
     test_no_inner_ctor(test_mod.NoDefaultInnerCtors1)
+    @test fieldnames(test_mod.NoDefaultInnerCtors1) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct NoDefaultInnerCtors2
@@ -325,6 +434,7 @@ end
         end
     """) === nothing
     test_no_inner_ctor(test_mod.NoDefaultInnerCtors2)
+    @test fieldnames(test_mod.NoDefaultInnerCtors2) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct NoDefaultInnerCtors3
@@ -333,6 +443,7 @@ end
         end
     """) === nothing
     test_no_inner_ctor(test_mod.NoDefaultInnerCtors3)
+    @test fieldnames(test_mod.NoDefaultInnerCtors3) == (:field,)
     @test length(methods(test_mod.NoDefaultInnerCtors3)) == 1
 
     @test JL.include_string(test_mod, raw"""
@@ -342,6 +453,7 @@ end
         end
     """) === nothing
     test_no_inner_ctor(test_mod.NoDefaultInnerCtors4)
+    @test fieldnames(test_mod.NoDefaultInnerCtors4) == (:field,)
 end
 
 # User defined inner constructors and helper functions for structs without type params
@@ -432,6 +544,18 @@ end
 # Wrong number of args checked by lowering
 @test_throws ArgumentError test_mod.S8((1,), ())
 @test_throws ArgumentError test_mod.S8((1,2,3), ())
+
+# empty-curly `new{}()`
+@test JuliaLowering.include_string(test_mod, """
+struct S_empty_new
+    x::Int
+    S_empty_new() = new{}(5)
+end
+""") === nothing
+let s = test_mod.S_empty_new()
+    @test s isa test_mod.S_empty_new
+    @test s.x === 5
+end
 
 # new() with splats and untyped fields
 @test JuliaLowering.include_string(test_mod, """
@@ -667,3 +791,133 @@ typegroup
 end
 """; version=v"1.14") === nothing
 @test test_mod.TG_SuperA <: AbstractVector{test_mod.TG_SuperB}
+
+# bad test: flisp will scan the struct for assigned fields to throw errors, but
+# runs a `flatten-blocks` pass before collecting the real fields, so
+# assignment-like fields/ctors can sneak through.  As of #59882, the @doc form
+# emits an assignment inside of a block that sneaks through this way.  JL found
+# assignments in the actual field list, so `@doc` hit that case.
+@test jl_eval(test_mod, Expr(:block,
+    Expr(:struct, true, :struct_doc_test, Expr(:block,
+        Expr(:(::), :status, :Int),
+        Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(0), "doc",
+            Expr(:function,
+                Expr(:call, :struct_doc_test, Expr(:(::), :status, :Integer),
+                     Expr(:kw, :headers, Expr(:vect))),
+                Expr(:block, Expr(:call, :new, :status)))))),
+    Expr(:., Expr(:call, :struct_doc_test, 5), QuoteNode(:status)))) == 5
+
+# bad test: flisp does not continue scanning past anything it doesn't recognize
+# as a field
+@test jl_eval(
+    test_mod,
+    :(begin
+          struct struct_eq_assigns_test
+              x::Int
+              struct_eq_assigns_test(x) = new(x)
+              default = 1
+              struct_eq_assigns_test() = new(default)
+          end
+          (struct_eq_assigns_test(5).x, struct_eq_assigns_test().x)
+      end)) == (5, 1)
+
+@testset "(AI) inner ctor with return-type annotation and `where`" begin
+    # Regression: an inner constructor with BOTH an explicit return-type
+    # annotation and a `where` clause used to fail lowering ("No match found"),
+    # because `rewrite_ctor_sig` re-wrapped the `where` a second time — nesting
+    # it inside the `::` — when it recursed through the return-type branch.
+    m = Module()
+    JuliaLowering.include_string(m, """
+        struct Wrap{T}
+            x::T
+            function Wrap{T}(x)::Wrap{T} where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    w = JuliaLowering.include_string(m, "Wrap{Int}(5)")
+    @test w isa m.Wrap{Int}
+    @test w.x === 5
+
+    # The return-type annotation performs `convert` (matching flisp): a
+    # mismatched annotation only fails at construction time, as a MethodError
+    # from the missing `convert`, not as a lowering/type-assert error.
+    JuliaLowering.include_string(m, """
+        struct W2{T}
+            x::T
+            function W2{T}(x)::W2{Int} where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "W2{Int}(3)") isa m.W2{Int}
+    @test_throws MethodError JuliaLowering.include_string(m, "W2{String}(\"hi\")")
+
+    # The `where`-bound typevar scopes over the return-type annotation (`::T`).
+    JuliaLowering.include_string(m, """
+        struct W4{T}
+            x::T
+            function W4{T}(x)::T where {T}
+                return new{T}(x).x
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "W4{Int}(9)") === 9
+
+    # Constructor name without curlies, plus return annotation and `where`.
+    JuliaLowering.include_string(m, """
+        struct B2{T}
+            x::T
+            function B2(x::T)::B2{T} where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "B2(7)") isa m.B2{Int}
+
+    # Multiple `where`-bound typevars with subtype bounds (the shape found in
+    # FlexiChains that first surfaced this bug).
+    JuliaLowering.include_string(m, """
+        struct FS{TKey, TIIdx<:Union{Int,Nothing}, TCIdx<:Union{Int,Nothing}, TSIdx<:Real}
+            _iter::TIIdx
+            _chain::TCIdx
+            _stat::TSIdx
+            function FS{TKey}(iter::TIIdx, chain::TCIdx, stat::TSIdx)::FS{TKey,TIIdx,TCIdx,TSIdx} where {
+                TKey, TIIdx<:Union{Int,Nothing}, TCIdx<:Union{Int,Nothing}, TSIdx<:Real}
+                return new{TKey,TIIdx,TCIdx,TSIdx}(iter, chain, stat)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "FS{Symbol}(1, nothing, 2.0)") isa
+        m.FS{Symbol, Int, Nothing, Float64}
+
+    # Success path of the return-type `convert` (complements the W2 failure case
+    # above): an `::Any` annotation converts by identity, so the constructor
+    # still returns the freshly-built struct.  Combined with `where`.
+    JuliaLowering.include_string(m, """
+        struct WA{T}
+            x::T
+            function WA{T}(x)::Any where {T}
+                return new{T}(x)
+            end
+        end
+    """)
+    @test JuliaLowering.include_string(m, "WA{Int}(5)") isa m.WA{Int}
+end
+
+@testset "(AI) struct fields named with underscores" begin
+    # Bug in _defaultctors giving lowering a K"lambda"
+    m = Module()
+    JuliaLowering.include_string(m, """
+        struct TextItem
+            _::String
+        end
+        struct TwoScores
+            _::Int
+            __::Int
+        end
+    """)
+    @test JuliaLowering.include_string(m, """TextItem("hi")._""") == "hi"
+    t = JuliaLowering.include_string(m, "TwoScores(1, 2)")
+    @test (t._, t.__) == (1, 2)
+end

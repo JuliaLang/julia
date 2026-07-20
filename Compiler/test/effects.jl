@@ -46,6 +46,17 @@ end
     return nothing
 end
 
+# `supertype(::UnionAll)` can throw (its recursion hits `supertype(::Union)` for
+# inputs like `Union{S,T} where {S,T}`), so it must be `:foldable` rather than
+# `:total` and a dead call to it must not be eliminated (issue #61988)
+@test Compiler.is_foldable(Base.infer_effects(supertype, (UnionAll,)))
+@test !Compiler.is_nothrow(Base.infer_effects(supertype, (UnionAll,)))
+@test !fully_eliminated((UnionAll,)) do x
+    supertype(x)
+    return nothing
+end
+@test_throws MethodError (x -> (supertype(x); nothing))(Union{S,T} where {S,T})
+
 # Test that a missing methtable identification gets tainted
 # appropriately
 struct FCallback; f::Union{Nothing, Function}; end
@@ -372,7 +383,7 @@ let effects = Base.infer_effects(f_glob_assign_int, (); optimize=false)
     @test !Compiler.is_effect_free(effects)
     @test Compiler.is_nothrow(effects)
 end
-# effects modeling for for setglobal!
+# effects modeling for setglobal!
 global SETGLOBAL!_NOTHROW::Int = 0
 let effects = Base.infer_effects(; optimize=false) do
         setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)
@@ -1011,6 +1022,19 @@ end
 @test @eval Base.infer_effects() do
     @isdefined($(gensym("some_undef_symbol")))
 end |> !Compiler.is_consistent
+
+# `@isdefined`-guarded read of a slot whose value is a `MustAlias` must still refine
+# the slot's `undef` info
+function isdefined_alias_loop(t::Tuple)
+    local prev
+    s = ""
+    for x in t
+        @isdefined(prev) && (s = prev)
+        prev = x
+    end
+    return s
+end
+@test Compiler.is_nothrow(Base.infer_effects(isdefined_alias_loop, (Tuple{String,String},)))
 
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)

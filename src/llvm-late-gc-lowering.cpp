@@ -53,7 +53,7 @@ CountTrackedPointers::CountTrackedPointers(Type *T, bool ignore_loaded) {
         all = false;
 }
 
-bool hasLoadedTy(Type *T) {
+static bool hasLoadedTy(Type *T) {
     if (isa<PointerType>(T)) {
         if (T->getPointerAddressSpace() == AddressSpace::Loaded)
             return true;
@@ -67,7 +67,7 @@ bool hasLoadedTy(Type *T) {
 }
 
 
-unsigned getCompositeNumElements(Type *T) {
+static unsigned getCompositeNumElements(Type *T) {
     if (auto *ST = dyn_cast<StructType>(T))
         return ST->getNumElements();
     else if (auto *AT = dyn_cast<ArrayType>(T))
@@ -103,7 +103,7 @@ SmallVector<SmallVector<unsigned, 0>, 0> TrackCompositeType(Type *T) {
 }
 
 
-// Walk through simple expressions to until we hit something that requires root numbering
+// Walk through simple expressions until we hit something that requires root numbering
 // If the input value is a scalar (pointer), we may return a composite value as base
 // in which case the second member of the pair is the index of the value in the vector.
 static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCache = true) {
@@ -472,7 +472,7 @@ int LateLowerGCFrame::NumberBase(State &S, Value *CurrentV)
     } else if (isa<Argument>(CurrentV) || isa<AllocaInst>(CurrentV) ||
             (isa<AddrSpaceCastInst>(CurrentV) && !isTrackedValue(CurrentV))) {
         // We know this is rooted in the parent
-        // future note: we could chose to exclude argument of type CalleeRooted here
+        // future note: we could choose to exclude argument of type CalleeRooted here
         Number = -1;
     } else if (!isSpecialPtr(CurrentV->getType())) {
         // Externally rooted somehow hopefully (otherwise there's a bug in the
@@ -929,7 +929,7 @@ static bool isLoadFromConstGV(Value *v, bool &task_local, PhiSet *seen = nullptr
     return false;
 }
 
-// Check if this is can be traced through constant loads to an constant global
+// Check if this can be traced through constant loads to a constant global
 // or otherwise globally rooted value.
 // Almost all `tbaa_const` loads satisfies this with the exception of
 // task local constants which are constant as far as the code is concerned but aren't
@@ -1703,6 +1703,7 @@ void LateLowerGCFrame::ComputeLiveSets(State &S) {
  * greedy coloring gives an optimal coloring. Since our roots are in SSA form,
  * the interference should be chordal.
  */
+namespace {
 struct PEOIterator {
     struct Element {
         unsigned weight;
@@ -1759,6 +1760,7 @@ struct PEOIterator {
         return NextElement;
     }
 };
+}  // anonymous namespace
 
 JL_USED_FUNC static void dumpColorAssignments(const State &S, const ArrayRef<int> &Colors)
 {
@@ -1849,7 +1851,7 @@ static inline void UpdatePtrNumbering(Value *From, Value *To, State *S)
     }
 }
 
-MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
+static MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
     return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
 }
 

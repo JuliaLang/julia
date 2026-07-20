@@ -443,7 +443,7 @@ function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
 
             # match found
             if j == n - 1
-                # restore in case `s` is an OffSetArray
+                # restore in case `s` is an OffsetArray
                 return i+firstindex(s)
             end
 

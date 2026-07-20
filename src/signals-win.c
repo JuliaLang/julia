@@ -27,21 +27,6 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 
-static char *strsignal(int sig)
-{
-    switch (sig) {
-    case SIGINT:         return "SIGINT"; break;
-    case SIGILL:         return "SIGILL"; break;
-    case SIGABRT_COMPAT: return "SIGABRT_COMPAT"; break;
-    case SIGFPE:         return "SIGFPE"; break;
-    case SIGSEGV:        return "SIGSEGV"; break;
-    case SIGTERM:        return "SIGTERM"; break;
-    case SIGBREAK:       return "SIGBREAK"; break;
-    case SIGABRT:        return "SIGABRT"; break;
-    }
-    return "?";
-}
-
 static void jl_try_throw_sigint(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -154,9 +139,9 @@ void restore_signals(void)
     SetConsoleCtrlHandler(NULL, 0);
 }
 
-int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c);
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
 
-static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread)
+static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread) JL_NOTSAFEPOINT
 {
     jl_jmp_buf *saferestore = jl_get_safe_restore();
     if (saferestore) { // restarting jl_ or profile
@@ -360,8 +345,21 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     default:
         jl_safe_fprintf(&summary, "UNKNOWN"); break;
     }
-    jl_safe_fprintf(&summary, " at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_safe_fprintf(&summary, " at 0x%zx", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION ||
+        ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_IN_PAGE_ERROR) {
+        jl_safe_fprintf(&summary, " (%s 0x%zx)",
+                        ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1 ? "writing" :
+                        ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 8 ? "executing" : "reading",
+                        (size_t)ExceptionInfo->ExceptionRecord->ExceptionInformation[1]);
+    }
+    jl_safe_fprintf(&summary, " -- ");
     jl_fprint_native_codeloc(&summary, (uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    // runtime state that distinguishes crash classes (e.g. a NULL task->ptls
+    // from a corrupted pointer) without needing a debugger on the machine
+    jl_safe_fprintf(&summary, "current task: 0x%zx (ptls 0x%zx, eh 0x%zx)\n", (size_t)ct,
+                    (size_t)(ct == NULL ? NULL : (void*)ct->ptls),
+                    (size_t)(ct == NULL ? NULL : (void*)ct->eh));
     ios_write(&full_error, summary.buf, ios_pos(&summary));
     ios_puts("\nSee Application log in Event Viewer for more information.\n", &summary);
 
@@ -431,6 +429,8 @@ static void CALLBACK profile_timeout_cb(PVOID lpParam, BOOLEAN TimerOrWaitFired)
 static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
     (void)timeout;
+    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return 0;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL) // this thread is not alive
         return 0;

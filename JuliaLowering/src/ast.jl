@@ -13,7 +13,7 @@
                 push!(msgs.args, a.args[2])
             else
                 push!(sts.args, a)
-                push!(msgs.args, QuoteNode(a))
+                push!(msgs.args, string(a))
             end
         end
         # just add assertion string to first msg
@@ -49,27 +49,6 @@ end
 Unique symbolic identity for a variable, constant, label, or other entity
 """
 const IdTag = Int
-
-"""
-Id for hygienic scope layers in macro expansion
-"""
-const LayerId = Int
-
-"""
-A `ScopeLayer` is a mechanism for automatic hygienic macros; every identifier
-is assigned to a particular layer and can only match against bindings which are
-themselves part of that layer.
-
-Normal code contains a single scope layer, whereas each macro expansion
-generates a new layer.
-"""
-struct ScopeLayer
-    id::LayerId
-    mod::Module
-    parent_layer::LayerId # Index of parent layer in a macro expansion. Equal to 0 for no parent
-    is_macro_expansion::Bool # FIXME
-    is_internal::Bool
-end
 
 """
 Lexical scope ID
@@ -350,48 +329,6 @@ macro ast(ctx, srcref, tree)
 end
 
 #-------------------------------------------------------------------------------
-function set_scope_layer(ctx, ex, layer_id, force)
-    k = kind(ex)
-    new_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
-
-    ex2 = if k == K"module" || k == K"toplevel" || k == K"inert" || k == K"inert_syntaxtree"
-        mknode(ex, children(ex))
-    elseif k == K"." && numchildren(ex) == 2
-        cs = tree_ids(set_scope_layer(ctx, ex[1], layer_id, force), ex[2])
-        mknode(ex, cs)
-    elseif !is_leaf(ex)
-        mapchildren(e->set_scope_layer(ctx, e, layer_id, force), ctx, ex)
-    else
-        mkleaf(ex)
-    end
-    setattr!(ex2, :scope_layer, new_layer)
-end
-
-"""
-    adopt_scope(ex, ref)
-
-Copy `ex`, adopting the scope layer of `ref`.
-"""
-function adopt_scope(ex::SyntaxTree, scope_layer::LayerId)
-    set_scope_layer(ex._graph, ex, scope_layer, true)
-end
-
-function adopt_scope(ex::SyntaxTree, layer::ScopeLayer)
-    adopt_scope(ex, layer.id)
-end
-
-function adopt_scope(ex::SyntaxTree, ref::SyntaxTree)
-    adopt_scope(ex, ref.scope_layer)
-end
-
-function adopt_scope(exs::SyntaxList, ref)
-    out = SyntaxList(syntax_graph(exs))
-    for e in exs
-        push!(out, adopt_scope(e, ref))
-    end
-    return out
-end
-
 # Type for `meta` attribute, to replace `Expr(:meta)`.
 # It's unclear how much flexibility we need here - is a dict good, or could we
 # just use a struct? Likely this will be sparse. Alternatively we could just
@@ -423,7 +360,7 @@ name_hint(name) = CompileHints(:name_hint, name)
 
 function is_quoted(ex)
     kind(ex) in KSet"Symbol quote top core globalref break inert
-                     inert_syntaxtree meta inbounds inline noinline loopinfo"
+                     syntaxinert meta inbounds inline noinline loopinfo"
 end
 
 function extension_type(ex)
@@ -431,11 +368,6 @@ function extension_type(ex)
     @jl_assert numchildren(ex) >= 1 ex
     @jl_assert kind(ex[1]) == K"Symbol" ex
     ex[1].name_val
-end
-
-function is_sym_decl(x)
-    k = kind(x)
-    k == K"Identifier" || k == K"::"
 end
 
 function is_eventually_call(ex::SyntaxTree)
@@ -537,17 +469,6 @@ function to_symbol(ctx, ex)
     @ast ctx ex ex=>K"Symbol"
 end
 
-function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_ref, 0, false, true)
-    push!(ctx.scope_layers, new_layer)
-    new_layer.id
-end
-
-function new_scope_layer(ctx, mod_ref::SyntaxTree)
-    @jl_assert kind(mod_ref) == K"Identifier" mod_ref
-    new_scope_layer(ctx, ctx.scope_layers[mod_ref.scope_layer].mod)
-end
-
 #-------------------------------------------------------------------------------
 # Context wrapper which helps to construct a list of statements to be executed
 # prior to some expression. Useful when we need to use subexpressions multiple
@@ -581,5 +502,3 @@ with_stmts(ctx::StatementListCtx, stmts) = StatementListCtx(ctx.ctx, stmts)
 function with_stmts(ctx)
     StatementListCtx(ctx, SyntaxList(ctx))
 end
-
-with_stmts(ctx::StatementListCtx) = StatementListCtx(ctx.ctx)

@@ -42,7 +42,7 @@ function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefValue{T})
         p = pointer_from_objref(b.x)
     else
         # If the slot is not leaf type, it could be either immutable or not.
-        # If it is actually an immutable, then we can't take it's pointer directly
+        # If it is actually an immutable, then we can't take its pointer directly
         # Instead, explicitly load the pointer from the `RefValue`,
         # which also ensures this returns same pointer as the one rooted in the `RefValue` object.
         p = atomic_pointerref(Ptr{Ptr{Cvoid}}(pointer_from_objref(b)), :monotonic)

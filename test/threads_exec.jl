@@ -1173,7 +1173,7 @@ end
     end
 end
 
-# @spawn racying with sync_end
+# @spawn racing with sync_end
 
 hidden_spawn(f) = Threads.@spawn f()
 
@@ -1234,6 +1234,33 @@ end
     @test check_sync_end_race() === nothing
 end
 
+@testset "no lost wakeups under bursty spawn (#61820, #50425)" begin
+    # A multiqueue insert wakes one thread in the pool; bursts of tasks spawned
+    # across an idle pool must all still run to completion (regression smoke test
+    # that wake-one does not drop wakeups).
+    for pool in (:default, :interactive)
+        nt = Threads.threadpoolsize(pool)
+        n = 50 * nt
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn pool Threads.atomic_add!(done, 1)
+        end
+        @test timedwait(() -> done[] == n, 60.0) === :ok
+    end
+    # nested spawns must also complete
+    let n = 20 * Threads.threadpoolsize(:default)
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn begin
+                a = Threads.@spawn Threads.atomic_add!(done, 1)
+                b = Threads.@spawn Threads.atomic_add!(done, 1)
+                fetch(a); fetch(b)
+            end
+        end
+        @test timedwait(() -> done[] == 2n, 60.0) === :ok
+    end
+end
+
 # issue #41546, thread-safe package loading
 @testset "package loading" begin
     ntasks = max(threadpoolsize(:default), 4)
@@ -1284,7 +1311,7 @@ end
     end
 end
 
-#Thread safety of threacall
+# Thread safety of threadcall
 function threadcall_threads()
     Threads.@threads for i = 1:8
         ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
@@ -1477,6 +1504,9 @@ end
             Rational{I}(c)
         end
         function is_racy_rational_from_irrational()
+            # `local` is needed to avoid sharing (and racily clobbering) the
+            # outer function's `task`/`ok` while it is fetching them
+            local task, ok
             worker_count = 10 * Threads.nthreads()
             task = ConcurrencyUtilities.run_concurrently_in_new_task(construct, worker_count)
             schedule(task)

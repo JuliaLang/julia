@@ -1367,7 +1367,7 @@ function push! end
 function push!(a::Vector{T}, item) where T
     @inline
     # convert first so we don't grow the array if the assignment won't work
-    # and also to avoid a dynamic dynamic dispatch in the common case that
+    # and also to avoid a dynamic dispatch in the common case that
     # `item` is poorly-typed and `a` is well-typed
     item = item isa T ? item : convert(T, item)::T
     return _push!(a, item)
@@ -1645,7 +1645,7 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
 end
 
 # Fall-back implementation for non-shrinkable collections
-# avoid defining this the normal way to avoid avoid infinite recursion
+# avoid defining this the normal way to avoid infinite recursion
 function Core.kwcall(kwargs::NamedTuple{names}, ::typeof(sizehint!), a, sz) where names
     get(kwargs, :first, false)::Bool
     get(kwargs, :shrink, true)::Bool
@@ -2282,7 +2282,7 @@ end
 
 # This implementation of `midpoint` is performance-optimized but safe
 # only if `lo <= hi`.
-midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
+midpoint(lo::T, hi::T) where T<:Integer = lo +% ((hi -% lo) >>> 0x01)
 midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 
 """

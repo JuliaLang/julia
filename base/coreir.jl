@@ -38,7 +38,7 @@ the following information about field defined-ness:
 - `undefs[i] === nothing` indicates the corresponding element in `fields` may be undefined
 - `undefs[i] === false` indicates the corresponding element in `fields` is guaranteed to be defined
 - `undefs[i] === true` indicates the corresponding element in `fields` is guaranteed to be undefined
-If `field[i]` is of type `Union{}`, it means the `i`-th field is never be initialized and
+If `field[i]` is of type `Union{}`, it means the `i`-th field will never be initialized and
 thus never be defined. In this case, `undefs[i]` should always be `true`.
 
 The same applies if `typ` is a `Tuple`, and because of how `Tuple` elements are initialized,
@@ -118,7 +118,7 @@ Core.InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(el
 """
     alias::InterMustAlias
 
-This lattice element used in a very similar way as `InterConditional`, but corresponds to `MustAlias`.
+This lattice element is used in a very similar way as `InterConditional`, but corresponds to `MustAlias`.
 """
 Core.InterMustAlias
 

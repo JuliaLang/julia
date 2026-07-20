@@ -18,13 +18,12 @@ end
 12  (return %₂)
 
 ########################################
-# Error: Local declarations outside a scope are disallowed
+# Local declarations outside a scope could be disallowed
 # See https://github.com/JuliaLang/julia/issues/57483
 local x
 #---------------------
-LoweringError:
-local x
-└─────┘ ── local declarations have no effect outside a scope
+1   (newvar slot₁/x)
+2   (return core.nothing)
 
 ########################################
 # Local declaration allowed in tail position
@@ -64,18 +63,6 @@ end
 1   (call core.declare_global TestMod :x false)
 2   latestworld
 3   (return core.nothing)
-
-########################################
-# Error: Global declaration not allowed in tail position in functions
-function f()
-    global x
-end
-#---------------------
-LoweringError:
-function f()
-    global x
-#          ╙ ── global declaration doesn't read the variable and can't return a value
-end
 
 ########################################
 # Error: Global declaration not allowed in value position
@@ -131,28 +118,28 @@ const xxx,xxxx,xxxxx = 10,20,30
 const c0 = v0 = v1 = 123
 #---------------------
 1   123
-2   (call core.declare_const TestMod :c0 %₁)
+2   (call core.declare_global TestMod :v1 true)
 3   latestworld
-4   (call core.declare_global TestMod :v0 true)
-5   latestworld
-6   (call core.get_binding_type TestMod :v0)
-7   (= slot₁/tmp %₁)
-8   (call core.isa slot₁/tmp %₆)
-9   (gotoifnot %₈ label₁₁)
-10  (goto label₁₂)
-11  (= slot₁/tmp (call top.convert %₆ slot₁/tmp))
-12  slot₁/tmp
-13  (call core.setglobal! TestMod :v0 %₁₂)
-14  (call core.declare_global TestMod :v1 true)
-15  latestworld
-16  (call core.get_binding_type TestMod :v1)
-17  (= slot₂/tmp %₁)
-18  (call core.isa slot₂/tmp %₁₆)
-19  (gotoifnot %₁₈ label₂₁)
-20  (goto label₂₂)
-21  (= slot₂/tmp (call top.convert %₁₆ slot₂/tmp))
-22  slot₂/tmp
-23  (call core.setglobal! TestMod :v1 %₂₂)
+4   (call core.get_binding_type TestMod :v1)
+5   (= slot₁/tmp %₁)
+6   (call core.isa slot₁/tmp %₄)
+7   (gotoifnot %₆ label₉)
+8   (goto label₁₀)
+9   (= slot₁/tmp (call top.convert %₄ slot₁/tmp))
+10  slot₁/tmp
+11  (call core.setglobal! TestMod :v1 %₁₀)
+12  (call core.declare_global TestMod :v0 true)
+13  latestworld
+14  (call core.get_binding_type TestMod :v0)
+15  (= slot₂/tmp %₁)
+16  (call core.isa slot₂/tmp %₁₄)
+17  (gotoifnot %₁₆ label₁₉)
+18  (goto label₂₀)
+19  (= slot₂/tmp (call top.convert %₁₄ slot₂/tmp))
+20  slot₂/tmp
+21  (call core.setglobal! TestMod :v0 %₂₀)
+22  (call core.declare_const TestMod :c0 %₁)
+23  latestworld
 24  (return %₁)
 
 ########################################
@@ -256,6 +243,14 @@ const x[] = 1
 #     └─┘ ── cannot declare this form constant
 
 ########################################
+# Error: const ref
+const x[2] = 1
+#---------------------
+LoweringError:
+const x[2] = 1
+#     └──┘ ── cannot declare this form constant
+
+########################################
 # Error: const setproperty
 const Main.x = 1
 #---------------------
@@ -344,6 +339,26 @@ let const a = 1
 end
 
 ########################################
+# Error: function-stub in let first arg
+let function foo end
+end
+#---------------------
+LoweringError:
+let function foo end
+#   └──────────────┘ ── expected identifier or assignment
+end
+
+########################################
+# Error: function in let first arg
+let function foo(x); x; end
+end
+#---------------------
+LoweringError:
+let function foo(x); x; end
+#   └─────────────────────┘ ── expected identifier or assignment
+end
+
+########################################
 # Error: Const not supported in function scope
 function (); global g; const g = 1; end
 #---------------------
@@ -362,10 +377,10 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   SourceLocation::1:10
+7   SourceLocation::1:1
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.f %₈
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read) slot₅/x(!read)]
@@ -445,7 +460,7 @@ end
 3   (call core.declare_global TestMod :x false)
 4   latestworld
 5   TestMod.f
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   (call core.svec %₆)
 8   (call core.svec)
 9   SourceLocation::1:10
@@ -475,7 +490,7 @@ end
 5   (call core.declare_global TestMod :x true)
 6   latestworld
 7   TestMod.f
-8   (call core.Typeof %₇)
+8   (call core.TypeEqOf %₇)
 9   (call core.svec %₈)
 10  (call core.svec)
 11  SourceLocation::1:10
@@ -511,7 +526,7 @@ end
 3   (call core.declare_global TestMod :x false)
 4   latestworld
 5   TestMod.f
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   (call core.svec %₆)
 8   (call core.svec)
 9   SourceLocation::1:10
