@@ -1007,7 +1007,6 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 }
 
 static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT
-
 {
     assert(hasfree == (has_free_or_dangling_typevars(a) | (has_free_or_dangling_typevars(b) << 1)));
     int subab = 0, subba = 0;
