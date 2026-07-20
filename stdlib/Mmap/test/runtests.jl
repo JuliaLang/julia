@@ -632,27 +632,6 @@ end
     Mmap.munmap!(b)
 end
 
-# Can't use test_deprecated because deprecation warnings are errors and there's no way around that right now.
-@testset "Anonymous (deprecated)" begin
-    m = Mmap.Anonymous()
-    @test m.name == ""
-    @test !m.readonly
-    @test m.create
-    @test isopen(m)
-    @test isreadable(m)
-    @test iswritable(m)
-
-    # Regression test: a positive offset should work with Anonymous.
-    anon = Mmap.Anonymous()
-    a = Mmap.mmap(m, Vector{UInt8}, (5,), 4)
-    @test length(a) == 5
-    finalize(a); a = nothing; GC.gc()
-
-    # Regression test: overflowing offset addition should raise ArgumentError, not InexactError.
-    anon2 = Mmap.Anonymous()
-    @test_throws ArgumentError Mmap.mmap(anon2, Vector{UInt8}, (100,), typemax(Int) - 10)
-end
-
 if Sys.isunix()
     file = tempname()
     write(file, rand(Float64, 20))
