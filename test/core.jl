@@ -9201,6 +9201,17 @@ let v = Vector{Type{Union{}}}()
     push!(u, 3)
     push!(u, Union{})
     @test u[1] === 3 && u[2] === Union{}
+    # the runtime builtin paths (interpreter, --compile=min, dynamically-called
+    # builtins) must also normalize the layout-aliased union component
+    mref = memoryref(getfield(u, :ref).mem, 2)
+    @test Base.inferencebarrier(Core.memoryrefget)(mref, :not_atomic, false) === Union{}
+end
+struct HasAliasedUnionField9196
+    x::Union{Type{Union{}},Int}
+end
+let a = HasAliasedUnionField9196(Union{}), b = HasAliasedUnionField9196(Union{})
+    @test Base.inferencebarrier(===)(a, b)
+    @test objectid(a) == objectid(b)
 end
 
 # Pinned static-parameter uncertainty markers (`==`-only bindings) must be

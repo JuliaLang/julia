@@ -1431,7 +1431,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                         ptr += lock_size;
                     }
                     n += jl_static_show_x_(out, (jl_value_t*)ptr,
-                            (jl_datatype_t*)(typetagdata ? jl_nth_union_component(el_type, typetagdata[j]) : el_type),
+                            (jl_datatype_t*)(typetagdata ? normalize_typeofbottom_layout_alias(jl_nth_union_component(el_type, typetagdata[j])) : el_type),
                             depth, ctx);
                 }
                 if (j != tlen - 1)
@@ -1526,7 +1526,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                     jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(vt, i);
                     if (jl_is_uniontype(ft)) {
                         uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
-                        ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
+                        ft = (jl_datatype_t*)normalize_typeofbottom_layout_alias(jl_nth_union_component((jl_value_t*)ft, sel));
                     }
                     n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth, ctx);
                 }

@@ -122,7 +122,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                 uint8_t bsel = ((uint8_t*)bo)[idx];
                 if (asel != bsel)
                     return 0;
-                ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
+                ft = (jl_datatype_t*)normalize_typeofbottom_layout_alias(jl_nth_union_component((jl_value_t*)ft, asel));
             }
             else if (ft->layout->first_ptr >= 0) {
                 // If the field is a inline immutable that can be undef
@@ -482,7 +482,7 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(fieldtype)) {
                 uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
-                fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
+                fieldtype = (jl_datatype_t*)normalize_typeofbottom_layout_alias(jl_nth_union_component((jl_value_t*)fieldtype, sel));
             }
             assert(jl_is_datatype(fieldtype) && !fieldtype->name->abstract && !fieldtype->name->mutabl);
             int32_t first_ptr = fieldtype->layout->first_ptr;

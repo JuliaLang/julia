@@ -1546,6 +1546,16 @@ end
 # Test for PR 17803
 @test static_shown(Int128(-1)) == "Int128(0xffffffffffffffffffffffffffffffff)"
 
+# isbits-union elements/fields whose selected component is the layout-aliased
+# Type{Union{}} must not crash static show
+let u = Union{Type{Union{}},Int}[3, Union{}]
+    @test occursin("TypeofBottom", static_shown(u))
+end
+struct HasAliasedUnionFieldShow
+    x::Union{Type{Union{}},Int}
+end
+@test occursin("TypeofBottom", static_shown(HasAliasedUnionFieldShow(Union{})))
+
 # PR #22160
 @test static_shown(:aa) == ":aa"
 @test static_shown(:+) == ":+"
