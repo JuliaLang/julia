@@ -297,7 +297,7 @@ function parse_flat(::Type{T}, data::Vector{Alloc}, C::Bool) where T
         totalbytes += nb
         for frame in r.stacktrace
             !C && frame.from_c && continue
-            key = (T === UInt64 ? ip : frame)
+            key = (T === UInt64 ? frame.pointer : frame)
             idx = get!(lilist_idx, key, length(lilist) + 1)
             if idx > length(lilist)
                 push!(recursive, key)
@@ -343,7 +343,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{Alloc}, C::Bool, recur::Symb
         parent = root
         for i in reverse(eachindex(r.stacktrace))
             frame = r.stacktrace[i]
-            key = (T === UInt64 ? ip : frame)
+            key = (T === UInt64 ? frame.pointer : frame)
             if (recur === :flat && !frame.from_c) || recur === :flatc
                 # see if this frame already has a parent
                 this = get!(build, frame, parent)
