@@ -679,8 +679,14 @@ void jl_install_default_signal_handlers(void)
     // Register the safepoint handler as a first-chance vectored handler (the
     // leading `1`/`FIRST` argument runs it ahead of any other vectored handler)
     // so GC safepoint faults are handled before the debugger's second chance;
-    // the top-level filter below remains the last-resort crash reporter.
-    AddVectoredExceptionHandler(1, jl_safepoint_exception_handler);
+    // the top-level filter below remains the last-resort crash reporter. The
+    // other first-chance-recoverable faults (DivideError, StackOverflowError,
+    // safe-restore, ReadOnlyMemoryError) are still serviced only by that filter
+    // and remain debugger-fragile; moving them into the vectored list is the
+    // broader follow-up tracked in JuliaLang/julia#61313.
+    if (AddVectoredExceptionHandler(1, jl_safepoint_exception_handler) == NULL) {
+        jl_error("fatal error: Couldn't register vectored exception handler");
+    }
     SetUnhandledExceptionFilter(jl_exception_handler);
 }
 
