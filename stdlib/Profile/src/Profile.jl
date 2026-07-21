@@ -654,7 +654,7 @@ function start_timer(all_tasks::Bool=false)
     check_init() # if the profile buffer hasn't been initialized, initialize with default size
     status = ccall(:jl_profile_start_timer, Cint, (Bool,), all_tasks)
     if status < 0
-        error(error_codes[status])
+        error(get(error_codes, status, "cannot start the profiling timer (error $status)"))
     end
 end
 
@@ -671,11 +671,10 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
-error_codes = Dict(
-    -1=>"cannot specify signal action for profiling",
+const error_codes = Dict(
+    -1=> Sys.iswindows() ? "cannot create the profiling thread" : "profiling is not supported on this platform",
     -2=>"cannot create the timer for profiling",
-    -3=>"cannot start the timer for profiling",
-    -4=>"cannot unblock SIGUSR1")
+    -3=>"cannot start the timer for profiling")
 
 
 """
