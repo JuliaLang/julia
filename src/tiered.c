@@ -536,6 +536,29 @@ JL_DLLEXPORT void jl_tier_stop_worker(void) JL_CANSAFEPOINT
     }
 }
 
+// Async-safe debugging dump for wedge watchdogs (see jl_dump_scheduler_state,
+// which calls this): only relaxed atomic reads, trylock probes, and
+// jl_safe_printf, so it cannot itself hang.
+JL_DLLEXPORT void jl_tier_dump_state(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
+{
+    int queue_lock_free = uv_mutex_trylock(&tier_queue_mutex) == 0;
+    size_t qhead = 0, qlen = 0;
+    if (queue_lock_free) {
+        qhead = tier_queue_head;
+        qlen = tier_queue.len;
+        uv_mutex_unlock(&tier_queue_mutex);
+    }
+    jl_safe_printf("tier: worker_running=%d worker_stop=%d pause=%d busy=%d queue_mutex=%s",
+                   jl_atomic_load_relaxed(&tier_worker_running),
+                   jl_atomic_load_relaxed(&tier_worker_stop),
+                   jl_atomic_load_relaxed(&tier_pause),
+                   jl_atomic_load_relaxed(&tier_busy),
+                   queue_lock_free ? "free" : "HELD");
+    if (queue_lock_free)
+        jl_safe_printf(" queue_head=%zu queue_len=%zu", qhead, qlen);
+    jl_safe_printf("\n");
+}
+
 // Quiesce support. The worker runs on its own OS thread, truly concurrent
 // with everything else — including pkgimage/sysimage serialization, which
 // walks and snapshots the same CodeInstances the promotion path mutates

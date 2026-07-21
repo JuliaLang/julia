@@ -2271,6 +2271,8 @@ JL_DLLEXPORT void jl_tier_enqueue_mi(jl_method_instance_t *mi) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_set_debug(int enabled) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_get_stats(uint64_t *calls, uint64_t *wins) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_get_queue_stats(uint64_t *pushes, uint64_t *pops, uint64_t *drops) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_dump_state(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_dump_scheduler_state(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint64_t jl_tier_get_swaps(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_reset_stats(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_tier_enabled(void) JL_NOTSAFEPOINT;
