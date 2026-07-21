@@ -78,9 +78,16 @@ Assemble a `.heapsnapshot` file from the four files produced by
 `Profile.take_heap_snapshot(...; streaming=true)` with prefix `in_prefix`.
 """
 function assemble_snapshot(in_prefix, out_file::AbstractString = in_prefix)
-    open(out_file, "w") do io
-        assemble_snapshot(in_prefix, io)
+    try
+        open(out_file, "w") do io
+            assemble_snapshot(in_prefix, io)
+        end
+    catch
+        # don't leave a partial (or truncated pre-existing) snapshot behind
+        rm(out_file; force=true)
+        rethrow()
     end
+    return nothing
 end
 
 # Manually parse and write the .json files, given that we don't have JSON import/export in
@@ -137,6 +144,13 @@ function assemble_snapshot(in_prefix, io::IO)
             end
         end
     end
+
+    # remove the uber node from the orphans
+    if 0 in orphans
+        delete!(orphans, 0)
+    end
+
+    @assert isempty(orphans) "Orphaned nodes: $(orphans), node count: $(length(nodes)), orphan node count: $(length(orphans))"
 
     _digits_buf = zeros(UInt8, ndigits(typemax(UInt)))
     println(io, @view(preamble[1:end-1]), ",") # remove trailing "}" to reopen the object
@@ -203,13 +217,6 @@ function assemble_snapshot(in_prefix, io::IO)
         end
     end
     print(io, "]}")
-
-    # remove the uber node from the orphans
-    if 0 in orphans
-        delete!(orphans, 0)
-    end
-
-    @assert isempty(orphans) "Orphaned nodes: $(orphans), node count: $(length(nodes)), orphan node count: $(length(orphans))"
 
     return nothing
 end
