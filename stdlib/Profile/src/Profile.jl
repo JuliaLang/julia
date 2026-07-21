@@ -1164,7 +1164,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             builder_key = parent.builder_key
             builder_value = parent.builder_value
             fastkey = searchsortedfirst(builder_key, ip)
-            if fastkey < length(builder_key) && builder_key[fastkey] === ip
+            if fastkey <= length(builder_key) && builder_key[fastkey] === ip
                 # jump forward to the end of the inlining chain
                 # avoiding an extra (slow) lookup of `ip` in `lidict`
                 # and an extra chain of them in `down`
