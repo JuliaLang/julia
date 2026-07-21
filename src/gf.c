@@ -154,12 +154,6 @@ uint_t speccache_hash(size_t idx, jl_value_t *data)
 
 static int speccache_eq(size_t idx, const void *ty, jl_value_t *data, uint_t hv)
 {
-    // The lock-free reader captures m->specializations before it acquires
-    // this keyset entry, so a concurrent grow can pair a fresh index with the
-    // now-stale svec: the index may be past the stale svec's length, or point
-    // at a slot that was only filled in the replacement. Both reads are
-    // ordered (the entry is release-stored after the slot), just against the
-    // wrong array; returning a miss sends the caller to the locked retry.
     if (idx >= jl_svec_len(data))
         return 0; // We got a OOB access, probably due to a data race
     jl_method_instance_t *ml = (jl_method_instance_t*)jl_svecref(data, idx);
