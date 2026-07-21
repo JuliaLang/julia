@@ -16,24 +16,22 @@ JULIA_DEFINE_FAST_TLS
 
 #ifdef _OS_DARWIN_
 // The macOS application bundle (contrib/mac/app) uses `julia-terminal` as its
-// double-clickable entry point (CFBundleExecutable). `julia-terminal` is a hardlink
-// to the julia binary sitting next to it in `bin/`. When the loader is invoked under
-// that name, we don't start the REPL in-process (a Finder-launched bundle has no
-// controlling terminal); instead we relaunch the sibling `julia` binary inside a new
-// Terminal.app window so the user gets an interactive session.
-//
-// A hardlink (rather than a symlink) is what makes this work: LaunchServices resolves
-// a symlinked CFBundleExecutable down to its target, discarding the `julia-terminal`
-// name, whereas a hardlink keeps its own name. That distinct name is also how we avoid
-// hijacking ordinary `julia` invocations (e.g. non-interactive `julia script.jl`).
+// double-clickable entry point (CFBundleExecutable): a copy of this loader placed
+// directly in Contents/MacOS/ (a real Mach-O, as Apple's notary requires of a bundle's
+// main executable -- a symlink, or a binary living under Contents/Resources/ where it is
+// also sealed as a resource, is rejected as an invalid signature). When the loader is
+// invoked under that name, we don't start the REPL in-process (a Finder-launched bundle
+// has no controlling terminal); instead we relaunch the REPL binary from the bundled
+// tree inside a new Terminal.app window so the user gets an interactive session. Keying
+// off the `julia-terminal` name is also how we avoid hijacking ordinary `julia`
+// invocations (e.g. non-interactive `julia script.jl`).
 static void maybe_launch_terminal(void)
 {
     char exe_path[JL_PATH_MAX];
     uint32_t bufsize = sizeof(exe_path);
     if (_NSGetExecutablePath(exe_path, &bufsize) != 0)
         return;
-    // Resolve any intermediate symlinks (the bundle's Contents/MacOS/julia-terminal
-    // is a symlink into bin/) to land on the real `julia-terminal` hardlink.
+    // Resolve any symlinks to get this executable's canonical path.
     char self_path[JL_PATH_MAX];
     if (realpath(exe_path, self_path) == NULL)
         return;
@@ -46,9 +44,25 @@ static void maybe_launch_terminal(void)
     if (strcmp(base, "julia-terminal") != 0)
         return;
 
-    // The real julia binary is the sibling `julia`. Hand it to Terminal.app, which
-    // opens a window and runs the REPL there.
-    strcpy(base, "julia");
+    // Locate the REPL binary to hand to Terminal.app. In the app bundle the main
+    // executable is Contents/MacOS/julia-terminal and the REPL lives in the bundled tree
+    // at ../Resources/julia/bin/julia -- it must run from there so it finds its sysimage,
+    // stdlibs and share/ via its own ../lib and ../share. Rewrite self_path to that path
+    // in place, falling back to a sibling `julia` for any other (non-bundle) layout.
+    base[-1] = '\0';                             // strip "/julia-terminal" -> "...MacOS"
+    char * dir = strrchr(self_path, '/');
+    if (dir != NULL && strcmp(dir + 1, "MacOS") == 0) {
+        static const char rel[] = "/Resources/julia/bin/julia";
+        if ((size_t)(dir - self_path) + sizeof(rel) > sizeof(self_path))
+            return;
+        strcpy(dir, rel);                        // ".../Contents" + "/Resources/julia/bin/julia"
+    }
+    else {
+        static const char rel[] = "/julia";
+        if (strlen(self_path) + sizeof(rel) > sizeof(self_path))
+            return;
+        strcat(self_path, rel);
+    }
     execl("/usr/bin/open", "open", "-a", "Terminal", self_path, (char *)NULL);
     jl_loader_print_stderr("ERROR: Failed to launch Terminal.app!\n");
     exit(1);

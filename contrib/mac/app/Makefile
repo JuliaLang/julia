@@ -46,15 +46,19 @@ dmg/$(APP_NAME): Info.plist.in julia.icns
 	cp julia.icns $@/Contents/Resources/
 	$(MAKE) -C $(JULIAHOME) binary-dist
 	$(TAR) -xzf $(JULIAHOME)/$(JULIA_BINARYDIST_FILENAME).tar.gz -C $@/Contents/Resources/julia --strip-components 1
-	# The app's double-clickable entry point is `julia-terminal`. It is a hardlink to
-	# the bundled julia binary (NOT a symlink: LaunchServices resolves a symlinked
-	# CFBundleExecutable down to its target, discarding the name the loader keys off).
-	# When the loader is invoked under this name it relaunches julia inside Terminal.app
+	# The app's double-clickable entry point is `julia-terminal` (CFBundleExecutable):
+	# a real copy of the julia loader placed directly in Contents/MacOS/. Apple's notary
+	# requires the bundle's main executable to be a regular Mach-O in Contents/MacOS/ --
+	# a symlink, or a binary living under Contents/Resources/ (where it is also sealed as
+	# a resource), is rejected as an invalid signature. When the loader is invoked under
+	# this name it relaunches the REPL from the bundled tree in a new Terminal.app window
 	# (see cli/loader_exe.c) instead of starting the REPL in the windowless bundle
-	# process. Contents/MacOS/julia-terminal is a symlink to that hardlink, so the real
-	# executable keeps its bin/ location and thus its relative rpath to the libraries.
-	ln -f $@/Contents/Resources/julia/bin/julia $@/Contents/Resources/julia/bin/julia-terminal
-	ln -fs ../Resources/julia/bin/julia-terminal $@/Contents/MacOS/julia-terminal
+	# process; the distinct name is also how it avoids hijacking ordinary `julia` runs.
+	# A plain `cp` suffices: the loader is linked with an extra rpath into the bundled
+	# tree (@executable_path/../Resources/julia/lib, see cli/Makefile) precisely so this
+	# copy can resolve @rpath/libjulia from Contents/MacOS/ -- keeping this rule free of
+	# Mach-O tooling so it can run on any host (CI assembles the .app on Linux).
+	cp $@/Contents/Resources/julia/bin/julia $@/Contents/MacOS/julia-terminal
 	find $@/Contents/Resources/julia -type f -exec chmod -w {} \;
 	# Even though the tarball may already be signed, we re-sign here to make it easier to add
 	# unsigned executables (like the app launcher) and whatnot, without needing to maintain lists
