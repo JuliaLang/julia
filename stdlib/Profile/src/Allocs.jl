@@ -192,8 +192,21 @@ end
 
 function load_backtrace(trace::RawBacktrace)::Vector{BTElement}
     out = Vector{BTElement}()
-    for i in 1:trace.size
-        push!(out, unsafe_load(trace.data, i))
+    i = 1
+    while i <= trace.size
+        e = unsafe_load(trace.data, i)
+        if e == typemax(BTElement) # JL_BT_NON_PTR_ENTRY: start of an extended entry
+            # Extended entries (e.g. interpreter frames) hold unrooted object
+            # pointers, not native instruction pointers, so they cannot be
+            # decoded here; skip over them (size is encoded in the descriptor).
+            descriptor = unsafe_load(trace.data, i + 1)
+            ngc = descriptor & 0x7
+            nptr = (descriptor >> 3) & 0x7
+            i += 2 + ngc + nptr
+            continue
+        end
+        push!(out, e)
+        i += 1
     end
 
     return out
