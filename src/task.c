@@ -1656,7 +1656,6 @@ static void cancel_source_attach(jl_cancel_source_t *src) JL_NOTSAFEPOINT
 {
     jl_cancel_parent_link_t *links = jl_cancel_source_links(src);
     size_t np = src->nparents;
-    int cancelled = 0;
     uint8_t sev = 0;
     for (size_t i = 0; i < np; i++) {
         jl_cancel_source_t *p = links[i].parent;
