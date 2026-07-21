@@ -692,6 +692,9 @@ function fetch(;include_meta = true, limitwarn = true)
     if maxlen == 0
         error("The profiling data buffer is not initialized. A profile has not been requested this session.")
     end
+    if is_running()
+        @warn "Profiling is still running; the resulting data may be incomplete. Call `Profile.stop_timer()` before fetching."
+    end
     len = len_data()
     if limitwarn && is_buffer_full()
         @warn """The profile data buffer is full; profiling probably terminated
