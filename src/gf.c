@@ -640,7 +640,8 @@ JL_DLLEXPORT int jl_is_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_co
     jl_value_t *def = ci->def;
     jl_value_t *owner = ci->owner;
     jl_value_t *rettype = ci->rettype;
-    if (jl_egal(codeinst->def, def) &&
+    if ((!jl_atomic_load_relaxed(&codeinst->inferred)) == (!jl_atomic_load_relaxed(&ci->inferred)) &&
+        jl_egal(codeinst->def, def) &&
         jl_egal(codeinst->owner, owner) &&
         jl_egal(codeinst->rettype, rettype)) {
         if (!target_world || jl_atomic_load_relaxed(&codeinst->invoke) != NULL) {
