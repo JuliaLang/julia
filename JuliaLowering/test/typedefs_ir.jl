@@ -173,7 +173,7 @@ abstract type A end
 2   (call core._abstracttype TestMod :A %₁)
 3   (= slot₁/A %₂)
 4   (call core._setsuper! %₂ core.Any)
-5   (call core._typebody! false slot₁/A)
+5   (call core._typebody! slot₁/A)
 6   (call core.declare_global TestMod :A false)
 7   latestworld
 8   (call core.isdefinedglobal TestMod :A false)
@@ -195,7 +195,7 @@ abstract type A <: B end
 3   (= slot₁/A %₂)
 4   TestMod.B
 5   (call core._setsuper! %₂ %₄)
-6   (call core._typebody! false slot₁/A)
+6   (call core._typebody! slot₁/A)
 7   (call core.declare_global TestMod :A false)
 8   latestworld
 9   (call core.isdefinedglobal TestMod :A false)
@@ -221,7 +221,7 @@ abstract type A{X, Y <: X} end
 7   (call core._abstracttype TestMod :A %₆)
 8   (= slot₁/A %₇)
 9   (call core._setsuper! %₇ core.Any)
-10  (call core._typebody! false slot₁/A)
+10  (call core._typebody! slot₁/A)
 11  (call core.declare_global TestMod :A false)
 12  latestworld
 13  (call core.isdefinedglobal TestMod :A false)
@@ -278,7 +278,7 @@ primitive type P 8 end
 2   (call core._primitivetype TestMod :P %₁ 8)
 3   (= slot₁/P %₂)
 4   (call core._setsuper! %₂ core.Any)
-5   (call core._typebody! false slot₁/P)
+5   (call core._typebody! slot₁/P)
 6   (call core.declare_global TestMod :P false)
 7   latestworld
 8   (call core.isdefinedglobal TestMod :P false)
@@ -304,7 +304,7 @@ primitive type P{X,Y} <: Z 32 end
 7   (= slot₁/P %₆)
 8   TestMod.Z
 9   (call core._setsuper! %₆ %₈)
-10  (call core._typebody! false slot₁/P)
+10  (call core._typebody! slot₁/P)
 11  (call core.declare_global TestMod :P false)
 12  latestworld
 13  (call core.isdefinedglobal TestMod :P false)
@@ -327,7 +327,7 @@ primitive type P P_nbits() end
 4   (call core._primitivetype TestMod :P %₁ %₃)
 5   (= slot₁/P %₄)
 6   (call core._setsuper! %₄ core.Any)
-7   (call core._typebody! false slot₁/P)
+7   (call core._typebody! slot₁/P)
 8   (call core.declare_global TestMod :P false)
 9   latestworld
 10  (call core.isdefinedglobal TestMod :P false)

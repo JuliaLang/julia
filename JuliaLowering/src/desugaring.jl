@@ -3182,7 +3182,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
                 ]
                 [K"=" name newtype_var]
                 [K"call" "_setsuper!"::K"core" newtype_var supertype]
-                [K"call" "_typebody!"::K"core" false::K"Bool" name]
+                [K"call" "_typebody!"::K"core" name]
             ]
         ]
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex] ]

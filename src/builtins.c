@@ -2383,27 +2383,6 @@ JL_CALLABLE(jl_f__svec_ref)
     return jl_svecref(s, idx-1);
 }
 
-static int equiv_field_types(jl_value_t *old, jl_value_t *ft) JL_CANSAFEPOINT
-{
-    size_t nf = jl_svec_len(ft);
-    if (jl_svec_len(old) != nf)
-        return 0;
-    size_t i;
-    for (i = 0; i < nf; i++) {
-        jl_value_t *ta = jl_svecref(old, i);
-        jl_value_t *tb = jl_svecref(ft, i);
-        if (jl_has_free_typevars(ta)) {
-            if (!jl_has_free_typevars(tb) || !jl_types_struct_equiv(ta, tb))
-                return 0;
-        }
-        else if (jl_has_free_typevars(tb) || jl_typetagof(ta) != jl_typetagof(tb) ||
-                 !jl_types_equal(ta, tb)) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
 // If a field can reference its enclosing type, then the inlining
 // recursive depth is not statically bounded for some layouts, so we cannot
 // inline it. The only way fields can reference this type (due to
@@ -2466,62 +2445,16 @@ int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int 
 
 JL_CALLABLE(jl_f__typebody)
 {
-    JL_NARGS(_typebody!, 2, 3);
-    jl_value_t *prev = args[0];
-    jl_value_t *tret = args[1];
-    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[1]);
+    JL_NARGS(_typebody!, 1, 2);
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
     JL_TYPECHK(_typebody!, datatype, (jl_value_t*)dt);
-    if (nargs == 3) {
-        jl_value_t *ft = args[2];
+    if (nargs == 2) {
+        jl_value_t *ft = args[1];
         JL_TYPECHK(_typebody!, simplevector, ft);
         size_t nf = jl_svec_len(ft);
         jl_check_field_types((jl_svec_t*)ft, dt->name->name);
-        // Optimization: To avoid lots of unnecessary churning, lowering contains an optimization
-        // that re-uses the typevars of an existing definition (if any exists) for compute the field
-        // types. If such a previous type exists, there are two possibilities:
-        //  1. The field types are identical, we don't need to do anything and can proceed with the
-        //     old type as if it was the new one.
-        //  2. The field types are not identical, in which case we need to rename the typevars
-        //     back to their equivalents in the new type before proceeding.
-        if (prev == jl_false) {
-            if (dt->types != NULL)
-                jl_errorf("Internal Error: Expected type fields to be unset");
-        } else {
-            jl_datatype_t *prev_dt = (jl_datatype_t*)jl_unwrap_unionall(prev);
-            JL_TYPECHK(_typebody!, datatype, (jl_value_t*)prev_dt);
-            // Field types in `ft` reference the new stub `dt`; substitute them
-            // with references to `prev_dt` before comparing, so self-referential
-            // structs (e.g. `next::R`) and types whose fields embed the type as
-            // a parameter (e.g. `v::Vector{T}`) are recognized as equivalent.
-            jl_svec_t *ft_subst = (jl_svec_t*)ft;
-            jl_value_t *sub = NULL;
-            JL_GC_PUSH2(&ft_subst, &sub);
-            for (size_t i = 0; i < nf; i++) {
-                jl_value_t *fld = jl_svecref(ft, i);
-                sub = jl_substitute_datatype(fld, dt, prev_dt);
-                if (sub != fld) {
-                    if (ft_subst == (jl_svec_t*)ft)
-                        ft_subst = jl_svec_copy((jl_svec_t*)ft);
-                    jl_svecset(ft_subst, i, sub);
-                }
-            }
-            int eq = equiv_field_types((jl_value_t*)prev_dt->types, (jl_value_t*)ft_subst);
-            JL_GC_POP();
-            if (eq) {
-                tret = prev;
-                goto have_type;
-            }
-            if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
-                jl_errorf("Internal Error: Types should not have been considered equivalent");
-            for (size_t i = 0; i < nf; i++) {
-                jl_value_t *elt = jl_svecref(ft, i);
-                for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
-                    // Only the last svecset matters for semantics, but we re-use the GC root
-                    elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
-                    jl_svecset(ft, i, elt);
-                }
-            }
-        }
+        if (dt->types != NULL)
+            jl_errorf("Internal Error: Expected type fields to be unset");
         jl_gc_write(dt, dt->types, jl_svec_t, (jl_svec_t*)ft);
         // If a supertype can reference the same type, then we may not be
         // able to compute the layout of the object before needing to
@@ -2551,8 +2484,7 @@ JL_CALLABLE(jl_f__typebody)
     }
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
-have_type:
-    return tret;
+    return args[0];
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical
