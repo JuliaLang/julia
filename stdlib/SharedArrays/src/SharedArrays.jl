@@ -645,6 +645,7 @@ function unshare!(S::SharedArray)
         end
         empty!(S.pids)
         empty!(S.refs)
+        init_loc_flds(S)
         return nothing
     end
 end
