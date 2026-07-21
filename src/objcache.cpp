@@ -72,9 +72,11 @@ static std::optional<std::string> getCachePath() JL_CANSAFEPOINT
     if (!jl_is_string(DepotStr))
         return {};
 
+    // LMDB 1.0 cannot open data files created by LMDB 0.9, so use a
+    // different directory than the LMDB 0.9 based versions of this code.
     return (llvm::Twine(jl_string_ptr(DepotStr)) + "/cache/v" +
             llvm::Twine(JULIA_VERSION_MAJOR) + "." + llvm::Twine(JULIA_VERSION_MINOR) +
-            "/objcache")
+            "/objcache-lmdb1")
         .str();
 }
 
@@ -174,7 +176,16 @@ void ObjCache::initDB()
     checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
     llvm::sys::fs::create_directories(*CachePath);
     if (int Err = mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640)) {
-        if (Err != ENOENT)
+        // These two are expected conditions, not errors: record them so the
+        // REPL banner can explain why the cache is disabled.
+        if (Err == MDB_REMOTE_FS)
+            DisabledNotice = "the cache directory is on a network filesystem";
+        else if (Err == MDB_PIDNS_MISMATCH)
+            DisabledNotice = "it is in use by a process in a different pid namespace";
+        // EPERM/EACCES: sandboxes (e.g. sandbox-exec on macOS CI) may deny
+        // access to the SysV semaphores LMDB uses on Apple platforms; the
+        // cache cannot work in such environments, so disable it quietly.
+        else if (Err != ENOENT && Err != EPERM && Err != EACCES)
             checkMDB(Err);
         mdb_env_close(Env);
         goto cleanup;
@@ -399,6 +410,13 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
 bool ObjCache::isEnabled() const
 {
     return Env;
+}
+
+const char *ObjCache::disabledNotice()
+{
+    if (!Initialized.load(memory_order_acquire))
+        initDB();
+    return DisabledNotice;
 }
 
 void ObjCache::shutdown()

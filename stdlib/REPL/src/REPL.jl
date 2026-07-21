@@ -1812,6 +1812,22 @@ function banner(io::IO = stdout; short = false)
             """)
         end
     end
+    objcache_notice(io)
+    return nothing
+end
+
+# Warn about conditions (that the user can potentially do something about)
+# which forced the compiled-code cache off for this session.
+function objcache_notice(io::IO)
+    notice = ccall(:jl_objcache_disabled_notice, Ptr{UInt8}, ())
+    notice == C_NULL && return nothing
+    msg = "Note: The compiled-code cache is disabled: $(unsafe_string(notice)).\n\n"
+    if get(io, :color, false)::Bool
+        printstyled(io, msg; color=Base.warn_color())
+    else
+        print(io, msg)
+    end
+    return nothing
 end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)

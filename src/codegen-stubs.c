@@ -95,6 +95,11 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
     return 0;
 }
 
+JL_DLLEXPORT const char *jl_objcache_disabled_notice_fallback(void)
+{
+    return NULL;
+}
+
 JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)
 {
 }
