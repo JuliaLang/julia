@@ -294,6 +294,25 @@ function show(io::IO, ::MIME"text/plain", t::Task)
     end
 end
 
+# Compact summary: the default field-recursive show would descend the
+# intrusive child list (unbounded, possibly very deep) via `child_head`.
+function show(io::IO, src::Core.CancellationTokenSource)
+    print(io, "CancellationTokenSource(")
+    sev = cancel_severity(src)
+    if sev === nothing
+        print(io, "active")
+    else
+        r = sev.request
+        print(io, r == 0x0 ? "cancelled" :
+                  r == 0x3 ? "cancelled, abandon external" :
+                  r == 0x4 ? "cancelled, abandon all" :
+                  "cancelled, severity $(repr(r))")
+    end
+    np = Int(src.nparents)
+    np > 0 && print(io, ", ", np, np == 1 ? " parent" : " parents")
+    print(io, ")")
+end
+
 
 print(io::IO, s::Symbol) = (write(io,s); nothing)
 

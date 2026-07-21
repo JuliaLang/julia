@@ -448,8 +448,10 @@ void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPO
 {
     (void)ptls;
     jl_gc_pagemeta_t *pg = page_metadata(v);
+    // relaxed: two mutators may set the flag concurrently for a shared
+    // page (both write 1; the GC only reads it inside the STW sweep)
     if (pg != NULL)
-        pg->has_weak_processing = 1;
+        jl_atomic_store_relaxed(&pg->has_weak_processing, 1);
     // big objects are always swept per-object; no flag needed
 }
 
@@ -818,7 +820,7 @@ STATIC_INLINE jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     pg->has_young = 0;
     pg->has_marked = 0;
-    pg->has_weak_processing = 0;
+    jl_atomic_store_relaxed(&pg->has_weak_processing, 0);
     pg->prev_nold = 0;
     pg->nold = 0;
     pg->fl_begin_offset = UINT16_MAX;
@@ -1082,7 +1084,7 @@ FORCE_INLINE int gc_sweep_page_cells(gc_page_profiler_serializer_t *s, jl_gc_pag
     assert(!freedall || lim_newpages < data + GC_PAGE_SZ || has_weakproc);
     pg->has_marked = has_marked;
     pg->has_young = has_young;
-    pg->has_weak_processing = keep_weakproc;
+    jl_atomic_store_relaxed(&pg->has_weak_processing, keep_weakproc);
     if (pfl_begin) {
         pg->fl_begin_offset = (char*)pfl_begin - data;
         pg->fl_end_offset = (char*)pfl - data;
@@ -1125,7 +1127,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
     // cannot be freed wholesale: its cells must be visited so that those
     // dead objects get their processing (e.g. a still-linked cancellation
     // source being kept and queued for unlinking).
-    if (!pg->has_marked && !pg->has_weak_processing) {
+    if (!pg->has_marked && !jl_atomic_load_relaxed(&pg->has_weak_processing)) {
         re_use_page = 0;
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
         gc_page_profile_write_empty_page(s, page_profile_enabled);
@@ -1147,7 +1149,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
     // unswitched on the page's has_weak_processing flag (constant-folded in
     // each instantiation of gc_sweep_page_cells): flagged pages are rare,
     // and the common sweep loop stays free of the weak-processing checks
-    if (__unlikely(pg->has_weak_processing))
+    if (__unlikely(jl_atomic_load_relaxed(&pg->has_weak_processing)))
         freedall = gc_sweep_page_cells(s, pg, v0, lim, lim_newpages, osize,
                                        page_profile_enabled, ptls, 1);
     else

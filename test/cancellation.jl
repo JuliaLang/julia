@@ -159,6 +159,33 @@ end
     @test Base.iscancelled(child)
 end
 
+@testset "concurrent child construction is level-triggered" begin
+    # A child constructed concurrently with cancel! must end up cancelled,
+    # whichever side wins the race: either the walk sees it in the child
+    # list, or its constructor observes the already-cancelled parent.
+    nspawners = max(Threads.nthreads() - 1, 1)
+    for trial in 1:20
+        root = CancellationTokenSource()
+        tok = CancellationToken(root)
+        go = Threads.Event()
+        tasks = map(1:nspawners) do _
+            Threads.@spawn begin
+                wait(go)
+                kids = CancellationTokenSource[]
+                for _ in 1:500
+                    push!(kids, CancellationTokenSource(tok))
+                end
+                kids
+            end
+        end
+        notify(go)
+        cancel!(root)
+        for t in tasks
+            @test all(Base.iscancelled, fetch(t))
+        end
+    end
+end
+
 @testset "cancellation source GC with dying parents" begin
     # Parents dying in the same cycle as their children: the unlink pass
     # writes into the dead parents' memory, which the sweep must keep

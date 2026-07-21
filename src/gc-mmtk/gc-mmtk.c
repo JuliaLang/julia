@@ -68,6 +68,9 @@ JL_DLLEXPORT void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
 // have exited: their thread-local list is spliced in here so the entries
 // survive mutator destruction. Guarded by orphaned_weak_processing_lock
 // (thread exits may race each other; the sweep runs while no mutator does).
+// The registry stores raw object pointers (and, transitively, the interior
+// `pprev` pointers of the intrusive lists) that are never updated on object
+// movement - sound only while the binding is non-moving.
 static small_arraylist_t orphaned_weak_processing_list;
 static uv_mutex_t orphaned_weak_processing_lock;
 

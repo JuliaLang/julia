@@ -764,7 +764,8 @@ end
     s2 = deserialize(buf)
     @test Base.cancel_severity(s2) === Base.CANCEL_REQUEST_ABANDON_EXTERNAL
 
-    # deserializing under an already-cancelled parent is born cancelled
+    # the copy is independent: cancelling the original after serialization
+    # does not affect the deserialized graph
     p = CancellationTokenSource()
     c = CancellationTokenSource(CancellationToken(p))
     buf = IOBuffer()
@@ -773,4 +774,27 @@ end
     cancel!(p) # does not affect the serialized bytes
     p3, c3 = deserialize(buf)
     @test !Base.iscancelled(c3) # p3 was not cancelled at relink time
+
+    # deserializing under an already-cancelled parent is born cancelled:
+    # a stream may legally record a cancelled parent with an uncancelled
+    # child (e.g. the serializer raced an in-flight cancel! walk); the
+    # child inherits the state when it relinks under the parent
+    p = CancellationTokenSource()
+    c = CancellationTokenSource(CancellationToken(p))
+    Base._raise_state!(p, 0x00) # cancel p without walking to c
+    @test !Base.iscancelled(c)
+    buf = IOBuffer()
+    serialize(buf, c) # parents serialize first, with their state
+    seekstart(buf)
+    c4 = deserialize(buf)
+    @test Base.iscancelled(Base._cancel_parent(c4, 1))
+    @test Base.iscancelled(c4)
+
+    # a corrupt stream cannot inject an out-of-range severity
+    src = CancellationTokenSource()
+    buf = IOBuffer()
+    serialize(buf, src)
+    data = take!(buf)
+    data[end] = 0xbf # state byte: cancelled at (invalid) severity 0x3f
+    @test_throws ArgumentError deserialize(IOBuffer(data))
 end

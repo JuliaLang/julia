@@ -579,7 +579,7 @@ end
 function serialize(s::AbstractSerializer, src::Core.CancellationTokenSource)
     serialize_cycle_header(s, src) && return
     np = Int(src.nparents)
-    serialize(s, np)
+    serialize(s, np % Int64)  # fixed width: streams are word-size independent
     for i in 1:np
         serialize(s, Base._cancel_parent(src, i))
     end
@@ -588,7 +588,7 @@ function serialize(s::AbstractSerializer, src::Core.CancellationTokenSource)
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.CancellationTokenSource})
-    np = deserialize(s)::Int
+    np = Int(deserialize(s)::Int64)
     parents = Vector{Any}(undef, np)
     for i in 1:np
         parents[i] = deserialize(s)::Core.CancellationTokenSource
@@ -596,9 +596,17 @@ function deserialize(s::AbstractSerializer, ::Type{Core.CancellationTokenSource}
     src = Core._new_cancel_source(parents...)::Core.CancellationTokenSource
     deserialize_cycle(s, src)
     state = deserialize(s)::UInt8
-    # CAS-max with whatever the relinking inherited from the parents;
-    # severities only ever escalate
-    state != 0x00 && Base._raise_state!(src, state & Base.SEVERITY_MASK)
+    if state != 0x00
+        sev = state & Base.SEVERITY_MASK
+        # reject severities the API cannot produce rather than letting a
+        # corrupt stream inject an unescalatable bogus level
+        if !(sev == 0x0 || sev == 0x3 || sev == 0x4)
+            throw(ArgumentError("invalid cancellation severity $(repr(sev)) in serialized CancellationTokenSource"))
+        end
+        # CAS-max with whatever the relinking inherited from the parents;
+        # severities only ever escalate
+        Base._raise_state!(src, sev)
+    end
     return src
 end
 

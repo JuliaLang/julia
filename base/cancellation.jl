@@ -58,7 +58,7 @@ token has been cancelled. The `request` field records the severity
 [`CANCEL_REQUEST_ABANDON_ALL`](@ref)) as observed at delivery time; the
 source may escalate afterwards.
 """
-struct CancellationRequest
+struct CancellationRequest <: Exception
     request::UInt8
 end
 
@@ -304,18 +304,25 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
     # transition, and this walk may reach parts of the subtree before that
     # one does, so it carries the escalated severity onward (best effort;
     # the escalator's own walk is what guarantees its severity).
-    st = @atomic :acquire node.state
+    # seq_cst, not acquire: when this walk's `_raise_state!` on `node` was
+    # lost, that call performed only monotonic reads, so this load is the
+    # walk's one seq_cst operation on `node.state` before the `child_head`
+    # read below - the pairing depends on it.
+    st = @atomic :sequentially_consistent node.state
     stsev = st & SEVERITY_MASK
     sev < stsev && (sev = stsev)
-    # Walk the node's (weak, intrusive) child list. The seq_cst `child_head`
-    # read below (paired with the seq_cst state CAS in `cancel!` - the read
-    # it performs is seq_cst even when the transition was lost) closes the
-    # race against a concurrent attach: a child that this read misses was
-    # published after the state write that made this walk reach `node`, so
-    # its constructor observes a cancelled parent and the child is born at
-    # (at least) this severity. Children attached concurrently *during* the
-    # walk are prepended before the list positions already traversed and are
-    # likewise born cancelled.
+    # Walk the node's (weak, intrusive) child list. The level-trigger
+    # guarantee is a store-buffering pairing: the constructor publishes the
+    # child (seq_cst CAS on `child_head`), then reads the parent's state
+    # (seq_cst); the walk performs a seq_cst access of `node.state` - the
+    # winning CAS in `_raise_state!`, or the load above when the raise was
+    # lost (it re-reads the cancelled state, pinning the winner's write into
+    # the seq_cst order) - before the seq_cst `child_head` read below. Thus
+    # a child this read misses was published after the cancelled state
+    # became seq_cst-visible, so its constructor observes a cancelled parent
+    # and the child is born at (at least) this severity. Children attached
+    # concurrently *during* the walk are prepended before the list positions
+    # already traversed and are likewise born cancelled.
     c = @atomic node.child_head
     while c !== nothing
         c = c::CancellationTokenSource

@@ -124,8 +124,11 @@ typedef struct _jl_gc_pagemeta_t {
     // such pages must not be freed wholesale when fully dead, and their
     // dead cells must be inspected by the sweep so those objects get their
     // processing (currently: linked cancellation token sources, see
-    // gc_is_dead_linked_cancel_source)
-    uint8_t has_weak_processing;
+    // gc_is_dead_linked_cancel_source). Atomic: mutators may set it
+    // concurrently for a shared parent's page; all other accesses happen
+    // inside the collection (relaxed suffices - the flag-setter's object
+    // publication, not the flag, carries the ordering)
+    _Atomic(uint8_t) has_weak_processing;
     // Number of old objects in the page
     uint16_t nold;
     // Number of old objects in the page at the end of the previous full sweep
