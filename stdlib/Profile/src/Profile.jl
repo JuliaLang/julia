@@ -142,6 +142,9 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real; limitwarn::Bool = true)
+    # jl_profile_init frees and reallocates the sample buffer, which the sampler
+    # thread may be concurrently writing into
+    is_running() && error("profiling is running; call `Profile.stop_timer()` before calling `Profile.init()`")
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
     buffer_samples = n
     buffer_size_bytes = buffer_samples * sample_size_bytes
