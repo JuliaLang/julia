@@ -293,7 +293,7 @@ function print(io::IO,
         elseif Sys.iswindows() && in(groupby, [:thread, [:task, :thread], [:thread, :task]])
             @warn "Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report"
         end
-        any_nosamples = true
+        any_nosamples = false
         if format === :tree
             Base.print(io, "Overhead ╎ [+additional indent] Count File:Line  Function\n")
             Base.print(io, "=========================================================\n")
