@@ -229,3 +229,60 @@ begin #@deprecated error message
         @eval @deprecate Foo{T} where {T <: Int} g true
     )
 end
+
+# A deprecated binding reached through `using` must warn on access, consistently for
+# constants and globals, matching a direct access and the runtime `getglobal`. Previously
+# the implicit-`using` resolution absorbed a deprecated const's value into an
+# `IMPLICIT_CONST` partition and dropped the deprecation flag, so access through `using`
+# silently skipped the warning (a deprecated global was unaffected -- it warns via the walk
+# to its owner). An explicit `import M: x` still suppresses the warning (the import site is
+# what should be fixed). The constant must still be constant-folded despite the deprecation.
+# Bare `@test` (no `@testset`) as elsewhere in this sub-processed file, so no summary print
+# leaks into the parent test runner.
+module DeprecatedUsingTest
+    using Test
+    module Src
+        export DepC, OkC
+        const _real = 0x1234
+        Base.@deprecate_binding DepC _real false   # DepC: deprecated const, value == _real
+        const OkC = 0x5678                          # control: not deprecated
+    end
+    using .Src                                      # implicit import of DepC, OkC
+
+    read_dep() = DepC
+    read_ok()  = OkC
+    # Const-propagation probes: if the deprecated const still propagates as a compile-time
+    # `Const`, the identity comparison folds and the branch is eliminated, so these infer
+    # `Bool`. If the deprecation regressed the read to a dynamic/widened value, `fold_dep`
+    # would infer `Union{Bool,Nothing}`.
+    fold_dep() = DepC === 0x1234 ? true : nothing
+    fold_ok()  = OkC  === 0x5678 ? true : nothing
+
+    # Access through the implicit `using` warns (compiled read and runtime getglobal),
+    # consistently with a direct access and a deprecated global; the control does not warn.
+    @test (@test_warn "DepC is deprecated" read_dep()) === Src._real
+    @test (@test_warn "DepC is deprecated" getglobal(@__MODULE__, :DepC)) === Src._real
+    @test (@test_nowarn read_ok()) === Src.OkC
+    # Const-propagation is preserved despite the deprecation: the deferred resolution still
+    # lands on the defining const leaf, so the value folds at inference (only the deprecation
+    # side effect is kept). The control folds the same way.
+    @test Base.infer_return_type(fold_dep, Tuple{}) === Bool
+    @test Base.infer_return_type(fold_ok,  Tuple{}) === Bool
+    # `isdeprecated` must agree with the access warning (otherwise consumers that guard with
+    # it, e.g. `InteractiveUtils.subtypes`, would then throw in `getglobal` under
+    # `--depwarn=error`): the deprecated binding reached through the implicit `using` reports
+    # deprecated, the control does not.
+    @test Base.isdeprecated(@__MODULE__, :DepC)
+    @test !Base.isdeprecated(@__MODULE__, :OkC)
+
+    # An explicit selective import warns once at the import site (asserted here so it does
+    # not leak), and then suppresses the deprecation warning on use. The import warning's
+    # deprecation message reads as one sentence (not stranded on its own line).
+    ex = :(module Consumer; import ..Src: DepC; getdep() = DepC; end)
+    @test_warn "importing deprecated binding Src.DepC into Consumer, use _real instead." eval(ex)
+    @Core.latestworld
+    @test (@test_nowarn Consumer.getdep()) === Src._real
+    # The explicit import suppresses the use-site deprecation, so `isdeprecated` reports it
+    # as not deprecated there too -- consistent with `getglobal` not warning.
+    @test !Base.isdeprecated(Consumer, :DepC)
+end
