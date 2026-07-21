@@ -26,7 +26,11 @@ else
     global running_under_rr() = false
 end
 
-const rmwait_timeout = running_under_rr() ? 300 : 30
+# Tiered compilation stretches the worker's exit latency: the exit message
+# waits behind whatever non-yielding stretch the worker is in, and interpreted
+# stretches run many times longer than compiled ones.
+const rmwait_timeout = (running_under_rr() ? 300 : 30) *
+                       (ccall(:jl_tier_enabled, Cint, ()) != 0 ? 4 : 1)
 
 # Run the suite with tiered compilation active so CI exercises the tier
 # machinery. Inherits into test workers and spawned julia subprocesses;

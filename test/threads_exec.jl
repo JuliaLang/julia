@@ -14,6 +14,7 @@ include("testenv.jl")
 if haskey(ENV, "JULIA_THREADS_EXEC_WATCHDOG")
     let deadline = parse(Float64, ENV["JULIA_THREADS_EXEC_WATCHDOG"])
         Threads.@spawn begin
+            Core.print(Core.stderr, "threads_exec watchdog armed\n")
             sleep(deadline)
             Core.print(Core.stderr, "threads_exec watchdog expired, dumping tasks\n")
             ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0)
