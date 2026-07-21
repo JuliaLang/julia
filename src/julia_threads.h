@@ -230,9 +230,9 @@ typedef struct _jl_excstack_t jl_excstack_t;
 
 typedef struct _jl_handler_t jl_handler_t;
 
-// Cancellation token source: a node in the level-triggered cancellation tree
-// (`Core.CancellationTokenSource`). Cancelling a node cancels its whole
-// subtree; the state is monotonic and never de-escalates.
+// Cancellation token source: a node in the level-triggered cancellation
+// DAG (`Core.CancellationTokenSource`). Cancelling a node cancels all of
+// its descendants; the state is monotonic and never de-escalates.
 //
 // The object is variable-sized: the fixed fields below are followed by
 // `nparents` parent links (`jl_cancel_parent_link_t`). Together with the
@@ -248,7 +248,7 @@ typedef struct _jl_handler_t jl_handler_t;
 // GC treatment (the layout is special-cased in the collectors): the
 // `parent` half of each link is a strong reference - a child keeps its
 // parents alive, so that cancellation of a still-reachable ancestor always
-// reaches the whole subtree - and is const after construction, so lock-free
+// reaches all its descendants - and is const after construction, so lock-free
 // ancestor walks are safe. The child-list links (`child_head` and the
 // `next`/`pprev` fields of each link) are *weak*, with unlink-on-death
 // semantics rather than WeakRef's clear-on-death: a child stays linked for
@@ -292,8 +292,9 @@ struct _jl_cancel_source_t {
     // Weak (spliced by the GC): most recently attached live child;
     // `jl_nothing`-terminated. Union{Nothing, CancellationTokenSource}.
     _Atomic(jl_value_t*) child_head;
-    // 0x00 = live; (0x80 | sev) = cancelled at severity sev (0x0 SAFE,
-    // 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL). Monotonic (CAS-max).
+    // 0x00 = uncancelled; otherwise the (nonzero) severity at which the
+    // source is cancelled (0x1 SAFE, 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL).
+    // Monotonic (CAS-max).
     _Atomic(uint8_t) state;
     // Number of parent links following the fixed fields. Const.
     uint16_t nparents;

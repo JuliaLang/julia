@@ -781,7 +781,7 @@ end
     # child inherits the state when it relinks under the parent
     p = CancellationTokenSource()
     c = CancellationTokenSource(CancellationToken(p))
-    Base._raise_state!(p, 0x00) # cancel p without walking to c
+    Base._raise_state!(p, 0x01) # cancel p without walking to c
     @test !Base.iscancelled(c)
     buf = IOBuffer()
     serialize(buf, c) # parents serialize first, with their state
@@ -795,6 +795,6 @@ end
     buf = IOBuffer()
     serialize(buf, src)
     data = take!(buf)
-    data[end] = 0xbf # state byte: cancelled at (invalid) severity 0x3f
+    data[end] = 0xbf # state byte: invalid severity 0xbf
     @test_throws ArgumentError deserialize(IOBuffer(data))
 end

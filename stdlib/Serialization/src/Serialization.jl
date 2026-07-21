@@ -597,15 +597,14 @@ function deserialize(s::AbstractSerializer, ::Type{Core.CancellationTokenSource}
     deserialize_cycle(s, src)
     state = deserialize(s)::UInt8
     if state != 0x00
-        sev = state & Base.SEVERITY_MASK
         # reject severities the API cannot produce rather than letting a
         # corrupt stream inject an unescalatable bogus level
-        if !(sev == 0x0 || sev == 0x3 || sev == 0x4)
-            throw(ArgumentError("invalid cancellation severity $(repr(sev)) in serialized CancellationTokenSource"))
+        if !(state == 0x1 || state == 0x3 || state == 0x4)
+            throw(ArgumentError("invalid cancellation severity $(repr(state)) in serialized CancellationTokenSource"))
         end
         # CAS-max with whatever the relinking inherited from the parents;
         # severities only ever escalate
-        Base._raise_state!(src, sev)
+        Base._raise_state!(src, state)
     end
     return src
 end

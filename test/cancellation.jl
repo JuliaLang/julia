@@ -14,8 +14,8 @@ function cancellable_spawn(f)
     return t, src
 end
 
-@testset "cancellation token tree semantics" begin
-    # cancel! marks the whole subtree, level-triggered
+@testset "cancellation token graph semantics" begin
+    # cancel! marks all descendants, level-triggered
     root = CancellationTokenSource()
     child = CancellationTokenSource(CancellationToken(root))
     grandchild = CancellationTokenSource(CancellationToken(child))
@@ -37,7 +37,7 @@ end
     @test Base.cancel_severity(grandchild) === CANCEL_REQUEST_ABANDON_EXTERNAL
 
     # invalid severities are rejected
-    @test_throws ArgumentError cancel!(CancellationTokenSource(), CancellationRequest(0x1))
+    @test_throws ArgumentError cancel!(CancellationTokenSource(), CancellationRequest(0x2))
     @test_throws ArgumentError cancel!(CancellationTokenSource(), CancellationRequest(0x7f))
 
     # walk a source's (weak, intrusive) child list
@@ -146,15 +146,15 @@ end
     @test inherited === tok
 end
 
-@testset "cancel! repairs partially-cancelled subtrees" begin
-    # Simulate a cancel! whose subtree walk never ran (e.g. the cancelling
+@testset "cancel! repairs partially-cancelled subgraphs" begin
+    # Simulate a cancel! whose descendant walk never ran (e.g. the cancelling
     # task torn down mid-walk): the state is raised, but no child is.
     root = CancellationTokenSource()
     child = CancellationTokenSource(CancellationToken(root))
-    @test Base._raise_state!(root, 0x0)
+    @test Base._raise_state!(root, 0x1)
     @test !Base.iscancelled(child)
     # A repeated cancel! loses the state transition (returns false) but
-    # must still perform the subtree walk itself.
+    # must still perform the full walk itself.
     @test !cancel!(root)
     @test Base.iscancelled(child)
 end
@@ -264,7 +264,7 @@ end
         end
     end
     @test err isa CancellationRequest
-    @test Base.severity(err) == Base.severity(CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test err == CANCEL_REQUEST_ABANDON_EXTERNAL
 
     # the explicit-token form checks the given token, ignoring the scope
     live = CancellationToken(CancellationTokenSource())
@@ -352,5 +352,5 @@ end
     cancel!(src3, CANCEL_REQUEST_ABANDON_EXTERNAL)
     @test timedwait(() -> istaskdone(t3), 30.0) == :ok
     @test t3.result isa CancellationRequest
-    @test Base.severity(t3.result) == Base.severity(CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test t3.result == CANCEL_REQUEST_ABANDON_EXTERNAL
 end

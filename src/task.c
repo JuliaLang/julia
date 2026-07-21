@@ -1634,15 +1634,15 @@ JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
 
 // cancellation token sources -----------------------------------------------
 
-// CAS-max the source's state to (0x80 | sev); returns whether the state was
-// raised. Mirrors `Base._raise_state!`.
+// CAS-max the source's state to `sev` (a nonzero severity); returns whether
+// the state was raised. Mirrors `Base._raise_state!`.
 static int cancel_source_raise_state(jl_cancel_source_t *src, uint8_t sev) JL_NOTSAFEPOINT
 {
     uint8_t old = jl_atomic_load_relaxed(&src->state);
     while (1) {
-        if (old != 0 && (old & 0x3f) >= sev)
+        if (old >= sev)
             return 0;
-        if (jl_atomic_cmpswap(&src->state, &old, (uint8_t)(0x80 | sev)))
+        if (jl_atomic_cmpswap(&src->state, &old, sev))
             return 1;
     }
 }
@@ -1678,18 +1678,14 @@ static void cancel_source_attach(jl_cancel_source_t *src) JL_NOTSAFEPOINT
             hl->pprev = &links[i].next;
         }
         // Level-triggered attachment: the seq_cst publication above and the
-        // seq_cst load below pair with `cancel!`'s (state write; fence;
-        // child_head read) so that either the canceller's walk observes this
-        // node, or this load observes the cancelled state.
+        // seq_cst load below pair with the walk's (seq_cst state access;
+        // child_head read) so that either the canceller's walk observes
+        // this node, or this load observes the cancelled state.
         uint8_t pst = jl_atomic_load(&p->state);
-        if (pst != 0) {
-            cancelled = 1;
-            uint8_t psev = pst & 0x3f;
-            if (psev > sev)
-                sev = psev;
-        }
+        if (pst > sev)
+            sev = pst;
     }
-    if (cancelled)
+    if (sev != 0)
         cancel_source_raise_state(src, sev);
 }
 
@@ -1773,7 +1769,7 @@ static void cancel_source_propagate_state(jl_cancel_source_t *src) JL_NOTSAFEPOI
     ptrhash_put(&visited, src, (void*)1);
     while (wl.len > 0) {
         jl_cancel_source_t *n = (jl_cancel_source_t*)wl.items[--wl.len];
-        uint8_t sev = jl_atomic_load(&n->state) & 0x3f;
+        uint8_t sev = jl_atomic_load(&n->state);
         jl_value_t *c = jl_atomic_load(&n->child_head);
         while (c != (jl_value_t*)jl_nothing) {
             jl_cancel_source_t *cs = (jl_cancel_source_t*)c;

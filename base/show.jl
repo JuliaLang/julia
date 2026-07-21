@@ -303,7 +303,7 @@ function show(io::IO, src::Core.CancellationTokenSource)
         print(io, "active")
     else
         r = sev.request
-        print(io, r == 0x0 ? "cancelled" :
+        print(io, r == 0x1 ? "cancelled" :
                   r == 0x3 ? "cancelled, abandon external" :
                   r == 0x4 ? "cancelled, abandon all" :
                   "cancelled, severity $(repr(r))")

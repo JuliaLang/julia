@@ -4,8 +4,9 @@
 #
 # Cancellation is organized around *cancellation token sources*
 # (`Core.CancellationTokenSource`): level-triggered condition nodes arranged
-# in a tree. Cancelling a source cancels its whole subtree; the cancelled
-# state is monotonic (severities only escalate, never reset). Following the
+# in a DAG (a source may have several parents). Cancelling a source cancels
+# all of its descendants; the cancelled state is monotonic (severities only
+# escalate, never reset). Following the
 # .NET split, a `CancellationToken` is the observe view handed to code that
 # may only *react* to cancellation; the source is the capability to *request*
 # it.
@@ -16,19 +17,12 @@
 # to child tasks without explicit plumbing.
 #
 # This file provides the data model and the cooperative (polling) checks.
-# Delivery — waking tasks parked in blocking operations, interrupting
-# running computations, `cancel` keyword arguments on the blocking APIs, and
-# the ^C machinery — builds on top of it separately.
 #
-# TODO(compiler): a scoped-value lookup is a `Core.current_scope()` read plus
-# a persistent-dict (HAMT) lookup. The optimizer currently only folds
+# A scoped-value lookup is a `Core.current_scope()` read plus a
+# persistent-dict (HAMT) lookup, and the optimizer only folds
 # `current_scope()` when the enclosing `@with` is visible in the same
-# (post-inlining) frame; for inherited scopes the lookup stays in hot loops.
-# Teaching the compiler to CSE/hoist `current_scope()` + `KeyValue.get` for
-# inherited scopes (sound: the scope is enter/leave-balanced and
-# task-private) would make per-iteration `@cancel_check` in tight loops
-# cheap. Until then, hot loops can hoist manually via the
-# `@cancel_check tok` form.
+# (post-inlining) frame - for inherited scopes the lookup stays in hot
+# loops. Hot loops can hoist it manually via the `@cancel_check tok` form.
 
 const CancellationTokenSource = Core.CancellationTokenSource
 
@@ -74,7 +68,7 @@ are currently unable to process cancellation, the request may hang and a more
 aggressive cancellation severity may be required. However, in general _SAFE
 should be tried first.
 """
-const CANCEL_REQUEST_SAFE = CancellationRequest(0x0)
+const CANCEL_REQUEST_SAFE = CancellationRequest(0x1)
 
 """
     CANCEL_REQUEST_ABANDON_EXTERNAL
@@ -106,14 +100,9 @@ frozen in place and never scheduled again.
 """
 const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
 
-# The state byte of a cancelled source is (STATE_CANCELLED_BIT | severity).
-# The 0x40 bit is reserved (status bytes of compiled cancellation points use
-# it to report a pending cooperative-yield request).
-const STATE_CANCELLED_BIT = 0x80
-const STATUS_PREEMPT_BIT = 0x40
-const SEVERITY_MASK = 0x3f
-
-severity(cr::CancellationRequest) = cr.request & SEVERITY_MASK
+# The state byte of a source is 0x00 while uncancelled, and the (nonzero)
+# severity once cancelled - severities start at 0x1 precisely so that the
+# two cases cannot collide.
 
 """
     cancel_severity(src::CancellationTokenSource) -> Union{Nothing, CancellationRequest}
@@ -126,7 +115,7 @@ severity if it has.
 function cancel_severity(src::CancellationTokenSource)
     st = @atomic :acquire src.state
     st == 0x00 && return nothing
-    return CancellationRequest(st & SEVERITY_MASK)
+    return CancellationRequest(st)
 end
 cancel_severity(tok::CancellationToken) = cancel_severity(tok.source)
 
@@ -140,7 +129,7 @@ source stays cancelled).
 iscancelled(src::CancellationTokenSource) = (@atomic :monotonic src.state) != 0x00
 iscancelled(tok::CancellationToken) = iscancelled(tok.source)
 
-## Source construction and tree linkage
+## Source construction and graph linkage
 #
 # A source is a variable-sized object: its fixed fields (`child_head`,
 # `state`, `nparents`) are followed by `nparents` {parent,
@@ -213,17 +202,18 @@ _cancel_parent(src::CancellationTokenSource, i::Int) =
 _cancel_next_child(parent::CancellationTokenSource, child::CancellationTokenSource) =
     ccall(:jl_cancel_source_next_child, Any, (Any, Any), parent, child)::Union{Nothing, CancellationTokenSource}
 
-# CAS-max the source's state to (STATE_CANCELLED_BIT | sev). Returns true if
-# the state was raised, false if it was already at (or above) the severity.
+# CAS-max the source's state to `sev` (a valid, nonzero severity). Returns
+# true if the state was raised, false if it was already at (or above) the
+# severity.
 # seq_cst: pairs with the (child-list publication; state read) sequence in
 # `jl_new_cancel_source` - see the walk in `_cancel_walk_node!`.
 function _raise_state!(src::CancellationTokenSource, sev::UInt8)
     old = @atomic :monotonic src.state
     while true
-        if old != 0x00 && (old & SEVERITY_MASK) >= sev
+        if old >= sev
             return false
         end
-        old, success = @atomicreplace :sequentially_consistent :monotonic src.state old => (STATE_CANCELLED_BIT | sev)
+        old, success = @atomicreplace :sequentially_consistent :monotonic src.state old => sev
         success && return true
     end
 end
@@ -240,7 +230,7 @@ end
     cancel!(src::CancellationTokenSource,
             request::CancellationRequest=CANCEL_REQUEST_SAFE)::Bool
 
-Cancel `src` and its whole subtree at the given severity. Level-triggered
+Cancel `src` and all of its descendants at the given severity. Level-triggered
 and monotonic: observers (including future registrants) see the cancellation
 until the source is discarded, and repeated calls only have an effect when
 they *escalate* the severity ([`CANCEL_REQUEST_SAFE`](@ref) ->
@@ -248,35 +238,35 @@ they *escalate* the severity ([`CANCEL_REQUEST_SAFE`](@ref) ->
 [`CANCEL_REQUEST_ABANDON_ALL`](@ref)). Returns whether the call changed the
 state.
 
-Computations governed by a token of the subtree observe the cancellation at
+Computations governed by a token of `src` or a descendant observe the cancellation at
 their cancellation points (see [`@cancel_check`](@ref)), which throw a
 [`CancellationRequest`](@ref).
 
-When `cancel!` returns, every source currently in the subtree has been
-advanced to (at least) the requested severity by this very call - even a
-call that returns `false` performs the full walk, so that a repeated
-`cancel!` also repairs a subtree whose earlier cancellation was cut short
+When `cancel!` returns, every source currently reachable from `src` has
+been advanced to (at least) the requested severity by this very call - even
+a call that returns `false` performs the full walk, so that a repeated
+`cancel!` also repairs a subgraph whose earlier cancellation was cut short
 (say, by the cancelling task itself being torn down mid-walk).
 """
 function cancel!(src::CancellationTokenSource,
                  request::CancellationRequest=CANCEL_REQUEST_SAFE)
     sev = request.request
-    if !(sev == 0x0 || sev == 0x3 || sev == 0x4)
+    if !(sev == 0x1 || sev == 0x3 || sev == 0x4)
         throw(ArgumentError("invalid cancellation severity $(repr(request.request))"))
     end
     raised = _raise_state!(src, sev)
-    # Pairs with the compiler-order-only publication of per-task token
-    # bindings at compiled cancellation points (upcoming): after this fence,
-    # either the canceller observes the binding of a running task, or the
-    # task's next cancellation point observes our state write.
-    Threads.atomic_fence_heavy()
-    # Mark the subtree: each node is marked before its children so a
+    # Mark the descendants: each node is marked before its children so a
     # concurrent construction of a child source is level-triggered. The walk
     # does not depend on `raised`: when a concurrent equal-severity cancel!
     # wins the state transition, its walk may still be in flight (or may
     # never finish), so the loser must provide the on-return guarantee with
     # its own traversal.
     _cancel_walk!(src, sev)
+    # Heavy fence, after every state write of the walk: lets a delivery
+    # mechanism publish per-task token bindings with compiler ordering only
+    # - either the canceller observes the binding of a running task, or the
+    # task's next cancellation point observes the walk's state writes.
+    Threads.atomic_fence_heavy()
     return raised
 end
 
@@ -301,7 +291,7 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
                             visited::IdSet{CancellationTokenSource})
     # Advance at least to the node's current severity: a concurrent higher-
     # severity cancel! may have raised the state after this walk's own
-    # transition, and this walk may reach parts of the subtree before that
+    # transition, and this walk may reach parts of the graph before that
     # one does, so it carries the escalated severity onward (best effort;
     # the escalator's own walk is what guarantees its severity).
     # seq_cst, not acquire: when this walk's `_raise_state!` on `node` was
@@ -309,8 +299,7 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
     # walk's one seq_cst operation on `node.state` before the `child_head`
     # read below - the pairing depends on it.
     st = @atomic :sequentially_consistent node.state
-    stsev = st & SEVERITY_MASK
-    sev < stsev && (sev = stsev)
+    sev < st && (sev = st)
     # Walk the node's (weak, intrusive) child list. The level-trigger
     # guarantee is a store-buffering pairing: the constructor publishes the
     # child (seq_cst CAS on `child_head`), then reads the parent's state
@@ -344,8 +333,7 @@ end
     # re-read: deliver the severity current at throw time, not the one the
     # fast path happened to observe
     st = @atomic :acquire src.state
-    sev = st & SEVERITY_MASK
-    throw(CancellationRequest(sev))
+    throw(CancellationRequest(st))
 end
 
 """
@@ -364,8 +352,7 @@ token; use it to hoist the token lookup out of a tight loop.
 macro cancel_check()
     quote
         # also a GC safepoint, so that a tight polling loop cannot starve a
-        # concurrent stop-the-world (compiled cancellation points will emit
-        # one as well)
+        # concurrent stop-the-world
         ccall(:jl_gc_safepoint, Cvoid, ())
         checkcancel(default_cancel_source())
         nothing

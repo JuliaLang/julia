@@ -3651,7 +3651,7 @@ precompile_test_harness("cancellation relink under cancelled external parent") d
               # a cancel! interrupted mid-walk (state raised, children not
               # visited) captured in the image: load-time propagation must
               # not treat the already-raised state as having been walked
-              Base._raise_state!(B_CHILD, 0x00)
+              Base._raise_state!(B_CHILD, 0x01)
           end
           """)
     Base.compilecache(Base.PkgId("CancelExtA"))
