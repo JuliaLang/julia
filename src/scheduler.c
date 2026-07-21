@@ -648,6 +648,34 @@ void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
     jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
 }
 
+// Async-safe debugging dump of the sleep/wake protocol state, for watchdogs
+// diagnosing a wedged scheduler (every field is read with relaxed atomics and
+// printed with jl_safe_printf; no locks are taken, so this cannot itself hang).
+JL_DLLEXPORT void jl_dump_scheduler_state(void) JL_NOTSAFEPOINT
+{
+    jl_safe_printf("==== scheduler state\n");
+    jl_safe_printf("n_threads_running=%d _threadedregion=%u io_loop_tid=%u wait_empty=%d\n",
+                   jl_atomic_load_relaxed(&n_threads_running),
+                   jl_atomic_load_relaxed(&_threadedregion),
+                   (unsigned)jl_atomic_load_relaxed(&io_loop_tid),
+                   wait_empty != NULL);
+    jl_task_t *uvlock_owner = jl_atomic_load_relaxed(&jl_uv_mutex.owner);
+    jl_safe_printf("uv_mutex.owner_tid=%d\n",
+                   uvlock_owner == NULL ? -1 : (int)jl_atomic_load_relaxed(&uvlock_owner->tid));
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = allstates[tid];
+        if (ptls2 == NULL)
+            continue;
+        jl_safe_printf("thread %d: sleep_check_state=%d gc_state=%d in_finalizer=%d\n",
+                       tid, (int)jl_atomic_load_relaxed(&ptls2->sleep_check_state),
+                       (int)jl_atomic_load_relaxed(&ptls2->gc_state),
+                       (int)ptls2->in_finalizer);
+    }
+    jl_safe_printf("==== end scheduler state\n");
+}
+
 #ifdef __cplusplus
 }
 #endif
