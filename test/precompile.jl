@@ -3647,6 +3647,11 @@ precompile_test_harness("cancellation relink under cancelled external parent") d
               using Base: CancellationToken, CancellationTokenSource
               const B_MID = CancellationTokenSource(CancellationToken(CancelExtA.A_ROOT))
               const B_CHILD = CancellationTokenSource(CancellationToken(B_MID))
+              const B_GRAND = CancellationTokenSource(CancellationToken(B_CHILD))
+              # a cancel! interrupted mid-walk (state raised, children not
+              # visited) captured in the image: load-time propagation must
+              # not treat the already-raised state as having been walked
+              Base._raise_state!(B_CHILD, 0x00)
           end
           """)
     Base.compilecache(Base.PkgId("CancelExtA"))
@@ -3659,10 +3664,13 @@ precompile_test_harness("cancellation relink under cancelled external parent") d
     invokelatest() do
         # CancelExtB's sources re-attached at load time under the already-
         # cancelled A_ROOT: B_MID is born cancelled during its relink, and
-        # that state must reach B_CHILD regardless of the order in which
-        # the image's fixups relinked the two
+        # that state must reach every descendant regardless of the order in
+        # which the image's fixups relinked them - including through
+        # B_CHILD, whose already-cancelled (but never walked) state must
+        # not prune the propagation
         @test Base.iscancelled(CancelExtB.B_MID)
         @test Base.iscancelled(CancelExtB.B_CHILD)
+        @test Base.iscancelled(CancelExtB.B_GRAND)
     end
 end
 

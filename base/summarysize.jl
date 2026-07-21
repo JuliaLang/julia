@@ -60,6 +60,11 @@ function summarysize(obj;
             if isassigned(x, i)
                 val = x[i]
             end
+        elseif isa(x, Core.CancellationTokenSource)
+            # the strong references of a source are its (hidden, trailing)
+            # parent links, enumerated here rather than via the layout
+            nf = Int(x.nparents)
+            val = _cancel_parent(x, i)
         elseif isa(x, GenericMemory)
             T = eltype(x)
             if allocatedinline(T)
@@ -206,14 +211,15 @@ function (ss::SummarySize)(obj::Core.CancellationTokenSource)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     # Variable-sized: Core.sizeof includes the trailing parent link entries.
-    # Traverse the (strong) parent references; the child list is weak - a
-    # source does not keep its children alive - so it is deliberately not
-    # followed.
-    size::Int = ss.count ? 1 : Core.sizeof(obj)
-    for i in 1:Int(obj.nparents)
-        size += ss(_cancel_parent(obj, i))::Int
+    # The (strong) parent references are traversed through the iterative
+    # frontier (see the branch in `summarysize`), which keeps deep chains
+    # off the stack and honors `exclude`; the child list is weak - a source
+    # does not keep its children alive - so it is deliberately not followed.
+    if Int(obj.nparents) > 0
+        push!(ss.frontier_x, obj)
+        push!(ss.frontier_i, 1)
     end
-    return size
+    return ss.count ? 1 : Core.sizeof(obj)
 end
 
 function (ss::SummarySize)(obj::Task)

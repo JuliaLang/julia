@@ -418,8 +418,11 @@ complete while the surrounding computation is being cancelled.
 
 The current value can be read with `Base.CANCEL_TOKEN[]`, for example to
 hand the governing token across a boundary that does not preserve dynamic
-scope (a `ccall` callback, a queue consumed by unrelated tasks, another
-process).
+scope (a `ccall` callback, a queue consumed by unrelated tasks). Note that
+this only connects code within the same process: *serializing* a token
+(e.g. shipping it to a worker process) copies its source graph - the copy
+reflects the cancellation state as of serialization, and is independent
+thereafter, so cancelling the original does not cancel the copy.
 """
 const CANCEL_TOKEN = CancelTokenKey()
 

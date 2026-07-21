@@ -208,6 +208,16 @@ end
     @test Base.summarysize(c2) == base + 2 * linksz + 2 * base
     @test Base.summarysize(c2; count=true) == 3
     @test Base.summarysize(a) == base # a's children are weak: c2 not charged
+    # the hidden parent references go through the regular traversal policy
+    one = CancellationTokenSource(CancellationToken(a))
+    @test Base.summarysize(one; exclude=CancellationTokenSource) == base + linksz
+    @test Base.summarysize(one; exclude=CancellationTokenSource, count=true) == 1
+    # deep parent chains are traversed iteratively, not by recursion
+    node = CancellationTokenSource()
+    for _ in 1:100_000
+        node = CancellationTokenSource(CancellationToken(node))
+    end
+    @test Base.summarysize(node) >= 100_001 * base + 100_000 * linksz
 end
 
 @testset "cancellation points" begin

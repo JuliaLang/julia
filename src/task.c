@@ -1756,30 +1756,39 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
 // may re-attach to `src` *before* `src` itself is relinked - and thereby
 // miss a cancelled state that `src` only inherits during its own relink
 // (from an already-cancelled parent). Mirrors `Base._cancel_walk!`: each
-// node's children are advanced to (at least) the node's own severity,
-// recursing only where a state was actually raised (which bounds the walk
-// on reconverging graphs).
+// node's children are advanced to (at least) the node's own severity, and
+// the traversal is bounded by a visited set rather than by who won the
+// state transition - a concurrent cancel! that raised a node may never
+// finish visiting that node's descendants, so a lost CAS must not prune
+// the walk.
 static void cancel_source_propagate_state(jl_cancel_source_t *src) JL_NOTSAFEPOINT
 {
     if (jl_atomic_load_relaxed(&src->state) == 0)
         return;
+    htable_t visited;
+    htable_new(&visited, 0);
     arraylist_t wl;
     arraylist_new(&wl, 0);
     arraylist_push(&wl, src);
+    ptrhash_put(&visited, src, (void*)1);
     while (wl.len > 0) {
         jl_cancel_source_t *n = (jl_cancel_source_t*)wl.items[--wl.len];
         uint8_t sev = jl_atomic_load(&n->state) & 0x3f;
         jl_value_t *c = jl_atomic_load(&n->child_head);
         while (c != (jl_value_t*)jl_nothing) {
             jl_cancel_source_t *cs = (jl_cancel_source_t*)c;
-            if (cancel_source_raise_state(cs, sev))
+            cancel_source_raise_state(cs, sev);
+            if (ptrhash_get(&visited, cs) == HT_NOTFOUND) {
+                ptrhash_put(&visited, cs, (void*)1);
                 arraylist_push(&wl, cs);
+            }
             jl_cancel_parent_link_t *link = jl_cancel_source_link(cs, n);
             assert(link != NULL);
             c = jl_atomic_load(&link->next);
         }
     }
     arraylist_free(&wl);
+    htable_free(&visited);
 }
 
 // Re-attach a deserialized (image-resident) cancellation source to its
