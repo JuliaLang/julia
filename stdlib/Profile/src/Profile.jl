@@ -338,7 +338,6 @@ function print(io::IO,
                 end
             end
         elseif groupby === :task
-            threads = 1:typemax(Int)
             taskids = intersect(get_task_ids(data), tasks)
             isempty(taskids) && (any_nosamples = true)
             for taskid in taskids
@@ -348,7 +347,6 @@ function print(io::IO,
                 println(io)
             end
         elseif groupby === :thread
-            tasks = 1:typemax(UInt)
             threadids = intersect(get_thread_ids(data), threads)
             isempty(threadids) && (any_nosamples = true)
             for threadid in threadids
