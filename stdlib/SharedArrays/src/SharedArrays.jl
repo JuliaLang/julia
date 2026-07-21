@@ -637,7 +637,7 @@ function unshare!(S::SharedArray)
         myid() == S.id.whence || throw(ArgumentError("unshare! must be called from the process that created the SharedArray"))
         @sync begin
             for i in eachindex(S.pids)
-                S.pids[i] == myid() && continue
+                S.pidx == i && continue
                 @async remotecall_wait(S.pids[i], S.refs[i]) do r
                     Mmap.munmap!(local_array_by_id(r))
                 end
