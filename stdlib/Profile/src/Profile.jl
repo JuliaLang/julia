@@ -622,8 +622,11 @@ function callers(funcname::String, bt::Vector, lidict::LineInfoFlatDict; filenam
     end
 end
 
-callers(funcname::String, bt::Vector, lidict::LineInfoDict; kwargs...) =
-    callers(funcname, flatten(bt, lidict)...; kwargs...)
+function callers(funcname::String, bt::Vector, lidict::LineInfoDict; kwargs...)
+    # metadata is not part of the lookup dict, so it must be stripped before flattening
+    bt = has_meta(bt) ? strip_meta(bt) : bt
+    return callers(funcname, flatten(bt, lidict)...; kwargs...)
+end
 callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
 callers(func::Function, bt::Vector, lidict::LineInfoFlatDict; kwargs...) =
     callers(string(func), bt, lidict; kwargs...)
