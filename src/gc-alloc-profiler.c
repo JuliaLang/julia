@@ -168,6 +168,29 @@ JL_DLLEXPORT void jl_free_alloc_profile(void)
     alloc_array_clear(&g_combined_allocs);
 }
 
+// == GC root marking ==
+
+static void foreach_type_in_array(alloc_array_t *a, void (*f)(jl_value_t*, void*), void *env) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < a->len; i++) {
+        jl_datatype_t *type = a->data[i].type_address;
+        // skip the sentinel values that are not object pointers
+        if ((uintptr_t)type < 4096 || (uintptr_t)type == jl_buff_tag ||
+            type == jl_gc_unknown_type_tag)
+            continue;
+        f((jl_value_t*)type, env);
+    }
+}
+
+// Called during GC root marking (with the world stopped, so the arrays are
+// stable); keeps the recorded types alive until `jl_free_alloc_profile`.
+void jl_gc_foreach_alloc_profile_root(void (*f)(jl_value_t*, void*), void *env) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < g_alloc_profile.num_profiles; i++)
+        foreach_type_in_array(&g_alloc_profile.per_thread_profiles[i].allocs, f, env);
+    foreach_type_in_array(&g_combined_allocs, f, env);
+}
+
 // == callback called into by the outside ==
 
 void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *type) JL_NOTSAFEPOINT
