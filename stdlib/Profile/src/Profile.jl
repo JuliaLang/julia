@@ -1424,10 +1424,13 @@ end
 function take_heap_snapshot(io::IO, all_one::Bool=false; redact_data::Bool=true)
     # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
     # then reassembling it after we're done.
-    dir = tempdir()
-    prefix = joinpath(dir, "snapshot")
+    prefix = tempname()
     _stream_heap_snapshot(prefix, all_one, redact_data)
-    Profile.HeapSnapshot.assemble_snapshot(prefix, io)
+    try
+        Profile.HeapSnapshot.assemble_snapshot(prefix, io)
+    finally
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
+    end
 end
 function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_data::Bool)
     # Nodes and edges are binary files
