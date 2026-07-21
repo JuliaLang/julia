@@ -420,6 +420,11 @@ function timev_macro_scope()
 end
 @test timev_macro_scope() == 1
 
+# tier suspension: cumulative_compile_time_ns includes the background tier
+# worker, which can log seconds of backlog compilation inside this window
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+ccall(:jl_tier_quiesce, Cvoid, ())
+ccall(:jl_tier_drain, Cvoid, ())
 before_comp, before_recomp = Base.cumulative_compile_time_ns() # no need to turn timing on, @time will do that
 
 # exercise concurrent calls to `@time` for reentrant compilation time measurement.
@@ -443,6 +448,8 @@ after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn t
 # should be approximately 60,000,000 ns, we definitely shouldn't exceed 100x that value
 # failing this probably means an uninitialized variable somewhere
 @test after_comp - before_comp < 6_000_000_000;
+ccall(:jl_tier_resume, Cvoid, ())
+ccall(:jl_tier_resume_parking, Cvoid, ())
 
 end # redirect_stdout
 
