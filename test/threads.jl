@@ -6,13 +6,10 @@ using Base.Threads
 
 include("print_process_affinity.jl") # import `uv_thread_getaffinity`
 
-# whether `t` currently has an armed wait registration on `waitee` (plain
-# condition waits record the condition's waitq list as the queue identity)
+# whether `t` currently has an armed wait registration on `waitee`
 function parked_on(t::Task, @nospecialize(waitee))
     w = @atomic t.waiting_on
-    w isa Base.WaitEntry || return false
-    id = waitee isa Base.GenericCondition ? waitee.waitq : waitee
-    return w.queue === id
+    return w isa Base.WaitEntry && w.queue === waitee
 end
 
 # simple sanity tests for locks under cooperative concurrent access
@@ -108,8 +105,9 @@ end
             unlock(cond)
         end
     end
-    # interrupting a parked waiter claims its wake, so a later notify skips
-    # the stale entry instead of double-waking the task
+    # interrupting a parked waiter claims its wake and (when the waitee's
+    # lock is free) eagerly unlinks its entry, so nothing stale remains and
+    # its cached entry stays reusable
     let cond = Threads.Condition()
         t = @async begin
             lock(cond)
@@ -122,17 +120,21 @@ end
         yield() # let t park
         @test parked_on(t, cond)
         @test !isempty(cond.waitq)
+        w = @atomic t.waiting_on
         schedule(t, ErrorException("interrupt"), error=true)
-        # t has not run yet: its (claimed) entry is still linked
+        # eager unlink: entry gone before t even runs
         @test !parked_on(t, cond)
+        @test isempty(cond.waitq)
+        @test (w::Base.WaitEntry).queue === nothing # freed for reuse
         lock(cond)
-        @test notify(cond) == 0 # stale entry skipped, not woken twice
+        @test notify(cond) == 0
         unlock(cond)
         yield() # let t run its cleanup
         @test istaskfailed(t)
-        @test isempty(cond.waitq)
     end
-    # same, but the interrupted task cleans up its own entry first
+    # if the interrupter cannot take the waitee's lock, the claimed entry is
+    # left linked and collected lazily: a notify skips (and pops) it instead
+    # of double-waking the task
     let cond = Threads.Condition()
         t = @async begin
             lock(cond)
@@ -144,20 +146,28 @@ end
         end
         yield()
         @test parked_on(t, cond)
+        # the lock must be held by a *different* task: a reentrant trylock by
+        # the interrupter itself would succeed and unlink eagerly
+        holder_go = Event()
+        holder = @async (lock(cond); wait(holder_go); unlock(cond))
+        yield() # holder takes cond's lock, parks on holder_go
         schedule(t, ErrorException("interrupt"), error=true)
-        yield()
-        @test istaskfailed(t)
-        @test isempty(cond.waitq)
+        @test !parked_on(t, cond)
+        @test !isempty(cond.waitq) # stale entry awaiting lazy collection
+        notify(holder_go)
+        wait(holder)
         lock(cond)
-        @test notify(cond) == 0
+        @test notify(cond) == 0 # skipped (and popped), not woken twice
+        @test isempty(cond.waitq)
         unlock(cond)
+        yield() # let t finish its cleanup
+        @test istaskfailed(t)
     end
     # a task interrupted while waiting on a Threads.Condition must be able to
     # park on the condition's (contended) lock during its cleanup, while its
     # stale registration is still linked: the busy cached entry forces a
     # fresh registration
     let cond = Threads.Condition()
-        lock(cond) # hold the condition's lock so t's cleanup relock parks
         t = @async begin
             lock(cond)
             try
@@ -166,16 +176,23 @@ end
                 unlock(cond)
             end
         end
-        # let t park on the condition (we must release the lock for that)
-        unlock(cond)
-        @test timedwait(() -> parked_on(t, cond), 10.0) == :ok
-        lock(cond)
+        yield() # let t park on the condition
+        @test parked_on(t, cond)
+        w1 = @atomic t.waiting_on
+        # a different task must hold cond's lock so the interrupter's trylock
+        # unlink fails (leaving the corpse) and t's cleanup relock must park
+        holder_go = Event()
+        holder = @async (lock(cond); wait(holder_go); unlock(cond))
+        yield() # holder takes cond's lock, parks on holder_go
         schedule(t, ErrorException("interrupt"), error=true)
-        # t resumes and parks on the ReentrantLock we hold, with a fresh
-        # entry, while its stale claimed registration is still on cond
+        @test !isempty(cond.waitq) # corpse remains: trylock unlink failed
+        # t resumes and its cleanup relock parks on the ReentrantLock (it may
+        # spin-yield in slowlock first, so poll for the parked state)
         @test timedwait(() -> parked_on(t, cond.lock.cond_wait), 10.0) == :ok
-        @test !isempty(cond.waitq) # the stale entry
-        unlock(cond)
+        @test (@atomic t.waiting_on) !== w1 # cached entry busy -> fresh one
+        @test !isempty(cond.waitq) # corpse still linked while t is reparked
+        notify(holder_go)
+        wait(holder)
         @test timedwait(() -> istaskdone(t), 10.0) == :ok
         @test istaskfailed(t)
         @test isempty(cond.waitq) # collected by t's cleanup
@@ -197,9 +214,12 @@ end
         @test parked_on(t, cond)
         w = @atomic t.waiting_on
         @test w isa Base.WaitEntry
-        schedule(t, ErrorException("interrupt"), error=true)
         lock(cond)
         try
+            # interrupt from a helper task while we hold the lock, so the
+            # interrupter's opportunistic trylock unlink fails and the corpse
+            # stays linked for us (the "notifier") to pop
+            wait(@async schedule(t, ErrorException("interrupt"), error=true))
             @test popfirst!(Base.waitqueue(cond)) === w
             @test (w::Base.WaitEntry).queue === nothing
             for _ in 1:1000

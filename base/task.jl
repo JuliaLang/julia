@@ -1090,9 +1090,13 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
         # If `t` is registered on a wait queue, claim its wake so that a
-        # concurrent or later `notify` skips its registration (the entry
-        # itself stays linked; the resumed task's wait cleanup unlinks it).
-        @atomicswap t.waiting_on = nothing
+        # concurrent or later `notify` skips its registration, then
+        # opportunistically unlink the claimed entry: until `enq_work` below,
+        # `t` cannot run, so the entry cannot be reused and the unlink is
+        # safe. If the waitee's lock is unavailable the entry is left for
+        # lazy collection instead (this path must never block).
+        w = @atomicswap t.waiting_on = nothing
+        w isa WaitEntry && try_unlink_claimed!(w)
         # A parked task is never in a workqueue and wait registrations do not
         # go through `t.queue`, so any queue here is a sticky workqueue.
         q = t.queue

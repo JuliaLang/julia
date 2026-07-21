@@ -74,11 +74,11 @@ mutable struct ReentrantLock <: AbstractLock
     #            |            | potentially never getting woken up).
     @atomic havelock::UInt8
     # offset32 = 28, offset64 = 32
-    cond_wait::ThreadSynchronizer # 2 words
-    # offset32 = 36, offset64 = 48
-    # sizeof32 = 20, sizeof64 = 32
+    cond_wait::ThreadSynchronizer # 1 word (mutable, held by reference)
+    # offset32 = 32, offset64 = 40
+    # sizeof32 = 16, sizeof64 = 24
     # now add padding to make this a full cache line to minimize false sharing between objects
-    _::NTuple{Int === Int32 ? 2 : 3, Int}
+    _::NTuple{Int === Int32 ? 3 : 4, Int}
     # offset32 = 44, offset64 = 72 == sizeof+offset
     # sizeof32 = 28, sizeof64 = 56
 
