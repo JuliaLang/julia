@@ -495,9 +495,9 @@ MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typema
 
 struct AssertionError <: Exception
     msg::AbstractString
-    AssertionError(msg::AbstractString) = new(msg)
+    AssertionError(msg::AbstractString) = (@noinline; new(msg))
 end
-AssertionError() = AssertionError("")
+AssertionError() = (@noinline; AssertionError(""))
 
 struct FieldError <: Exception
     type::DataType
