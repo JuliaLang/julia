@@ -301,20 +301,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             }
             break;
         case EXCEPTION_ACCESS_VIOLATION:
-            if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
-                jl_set_gc_and_wait(ct);
-                // Do not raise sigint on worker thread
-                if (ptls->tid != 0)
-                    return EXCEPTION_CONTINUE_EXECUTION;
-                if (ptls->defer_signal) {
-                    jl_safepoint_defer_sigint();
-                }
-                else if (jl_safepoint_consume_sigint()) {
-                    jl_clear_force_sigint();
-                    jl_throw_in_ctx(ct, jl_interrupt_exception, ExceptionInfo->ContextRecord);
-                }
-                return EXCEPTION_CONTINUE_EXECUTION;
-            }
+            // Safepoint page faults are serviced first-chance by
+            // jl_safepoint_exception_handler (a vectored handler), so they must
+            // never reach this top-level filter.
+            assert(!jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1]));
             if (jl_get_safe_restore()) {
                 jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
