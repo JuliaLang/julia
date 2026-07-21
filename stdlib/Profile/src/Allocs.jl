@@ -237,7 +237,9 @@ Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` argument, the internal buffer of accumulated backtraces
 will be used.
 
-See `Profile.print` for an explanation of the valid keyword arguments.
+See `Profile.print` for an explanation of the valid keyword arguments; of those,
+`format`, `C`, `maxdepth`, `mincount`, `noisefloor`, `sortedby` and `recur` are
+supported here.
 """
 print(; kwargs...) =
     Profile.print(stdout, fetch(); kwargs...)
@@ -258,7 +260,6 @@ function Profile.print(io::IO,
         mincount::Int = 0,
         noisefloor = 0,
         sortedby::Symbol = :filefuncline,
-        groupby::Union{Symbol,AbstractVector{Symbol}} = :none,
         recur::Symbol = :off,
         )
     pf = ProfileFormat(;C, maxdepth, mincount, noisefloor, sortedby, recur)
