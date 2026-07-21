@@ -461,12 +461,12 @@ function retrieve(; kwargs...)
     return (data, getdict(data))
 end
 
-function getdict(data::Vector{UInt})
+function getdict(data::Vector{<:Unsigned})
     dict = LineInfoDict()
     return getdict!(dict, data)
 end
 
-function getdict!(dict::LineInfoDict, data::Vector{UInt})
+function getdict!(dict::LineInfoDict, data::Vector{<:Unsigned})
     # we don't want metadata here as we're just looking up ips
     unique_ips = unique(has_meta(data) ? strip_meta(data) : data)
     n_unique_ips = length(unique_ips)
@@ -486,7 +486,7 @@ function getdict!(dict::LineInfoDict, data::Vector{UInt})
     return dict
 end
 
-function _lookup_corrected(ip::UInt)
+function _lookup_corrected(ip::Unsigned)
     st = lookup(convert(Ptr{Cvoid}, ip))
     # To correct line numbers for moving code, put it in the form expected by
     # Base.update_stackframes_callback[]
