@@ -51,8 +51,19 @@ typedef struct {
 // == Global variables manipulated by callbacks ==
 
 static jl_alloc_profile_t g_alloc_profile;
-int g_alloc_profile_enabled = 0;
+_Atomic(int) g_alloc_profile_enabled = 0;
+// number of threads currently inside `_maybe_record_alloc_to_profile`
+static _Atomic(int) g_recording_threads = 0;
 static alloc_array_t g_combined_allocs; // Will live forever.
+
+// Wait for every in-flight recorder to finish. Must only be called while
+// `g_alloc_profile_enabled` is 0, so that once the count reaches zero no new
+// recorder can start touching the profile arrays.
+static void wait_for_recorders(void) JL_NOTSAFEPOINT
+{
+    while (jl_atomic_load(&g_recording_threads) != 0)
+        jl_cpu_pause();
+}
 
 // === stack stuff ===
 
@@ -86,6 +97,10 @@ static jl_raw_backtrace_t get_raw_backtrace(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate)
 {
+    // stop any already-running profile and wait for in-flight recorders, since
+    // they read the per-thread profile array we may be about to reallocate
+    jl_stop_alloc_profile();
+
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     size_t num_profiles = g_alloc_profile.num_profiles;
     if (num_profiles < nthreads) {
@@ -99,7 +114,7 @@ JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate)
     }
 
     g_alloc_profile.sample_rate = sample_rate;
-    g_alloc_profile_enabled = 1;
+    jl_atomic_store_release(&g_alloc_profile_enabled, 1);
 }
 
 JL_DLLEXPORT jl_profile_allocs_raw_results_t jl_fetch_alloc_profile(void)
@@ -122,7 +137,15 @@ JL_DLLEXPORT jl_profile_allocs_raw_results_t jl_fetch_alloc_profile(void)
 
 JL_DLLEXPORT void jl_stop_alloc_profile(void)
 {
-    g_alloc_profile_enabled = 0;
+    jl_atomic_store(&g_alloc_profile_enabled, 0);
+    // after this returns, no thread is mid-record and none can start recording,
+    // so the profile arrays are safe to read and free
+    wait_for_recorders();
+}
+
+JL_DLLEXPORT int jl_alloc_profile_is_running(void)
+{
+    return jl_atomic_load_acquire(&g_alloc_profile_enabled);
 }
 
 JL_DLLEXPORT void jl_free_alloc_profile(void)
@@ -149,22 +172,34 @@ JL_DLLEXPORT void jl_free_alloc_profile(void)
 
 void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *type) JL_NOTSAFEPOINT
 {
-    size_t thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
-    if (thread_id >= g_alloc_profile.num_profiles)
-        return; // ignore allocations on threads started after the alloc-profile started
+    jl_atomic_fetch_add(&g_recording_threads, 1);
+    // re-check the flag under the recorder count: either we see the stop and
+    // leave, or the stopping thread waits for us to finish (Dekker-style
+    // synchronization; both sides use sequentially consistent operations)
+    if (!jl_atomic_load(&g_alloc_profile_enabled))
+        goto done;
 
-    alloc_array_t *allocs = &g_alloc_profile.per_thread_profiles[thread_id].allocs;
+    {
+        size_t thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
+        if (thread_id >= g_alloc_profile.num_profiles)
+            goto done; // ignore allocations on threads started after the alloc-profile started
 
-    jl_ptls_t ptls = jl_current_task->ptls;
-    double sample_val = (double)cong(UINT64_MAX, &ptls->rngseed) / (double)UINT64_MAX;
-    if (sample_val > g_alloc_profile.sample_rate)
-        return;
+        alloc_array_t *allocs = &g_alloc_profile.per_thread_profiles[thread_id].allocs;
 
-    jl_raw_alloc_t alloc;
-    alloc.type_address = type;
-    alloc.backtrace = get_raw_backtrace();
-    alloc.size = size;
-    alloc.task = (void *)jl_current_task;
-    alloc.timestamp = cycleclock();
-    alloc_array_push(allocs, alloc);
+        jl_ptls_t ptls = jl_current_task->ptls;
+        double sample_val = (double)cong(UINT64_MAX, &ptls->rngseed) / (double)UINT64_MAX;
+        if (sample_val > g_alloc_profile.sample_rate)
+            goto done;
+
+        jl_raw_alloc_t alloc;
+        alloc.type_address = type;
+        alloc.backtrace = get_raw_backtrace();
+        alloc.size = size;
+        alloc.task = (void *)jl_current_task;
+        alloc.timestamp = cycleclock();
+        alloc_array_push(allocs, alloc);
+    }
+
+done:
+    jl_atomic_fetch_add(&g_recording_threads, -1);
 }
