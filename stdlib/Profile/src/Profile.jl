@@ -292,7 +292,7 @@ function print(io::IO,
         print_group(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
-            error(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
+            throw(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
         elseif Sys.iswindows() && in(groupby, [:thread, [:task, :thread], [:thread, :task]])
             @warn "Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report"
         end

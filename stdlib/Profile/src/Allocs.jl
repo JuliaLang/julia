@@ -318,7 +318,7 @@ function parse_flat(::Type{T}, data::Vector{Alloc}, C::Bool) where T
 end
 
 function flat(io::IO, data::Vector{Alloc}, cols::Int, fmt::ProfileFormat)
-    fmt.combine || error(ArgumentError("combine=false"))
+    fmt.combine || throw(ArgumentError("combine=false is not supported for allocation profiles"))
     lilist, n, m, totalbytes = parse_flat(fmt.combine ? StackFrame : UInt64, data, fmt.C)
     filenamemap = Profile.FileNameMap()
     if isempty(lilist)
@@ -402,7 +402,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{Alloc}, C::Bool, recur::Symb
 end
 
 function tree(io::IO, data::Vector{Alloc}, cols::Int, fmt::ProfileFormat)
-    fmt.combine || error(ArgumentError("combine=false"))
+    fmt.combine || throw(ArgumentError("combine=false is not supported for allocation profiles"))
     if fmt.combine
         root = tree!(StackFrameTree{StackFrame}(), data, fmt.C, fmt.recur)
     else
