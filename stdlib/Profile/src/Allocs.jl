@@ -92,8 +92,15 @@ end
 Begin recording allocations with the given sample rate
 A sample rate of 1.0 will record everything; 0.0 will record nothing.
 """
+# The C-side buffers are not safe to mutate/free while another task is reading
+# them (e.g. `clear` frees the backtrace buffers that `fetch` reads), so
+# serialize all API entry points.
+const allocs_lock = Base.ReentrantLock()
+
 function start(; sample_rate::Real)
-    ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
+    @lock allocs_lock begin
+        ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
+    end
 end
 
 """
@@ -102,7 +109,9 @@ end
 Stop recording allocations.
 """
 function stop()
-    ccall(:jl_stop_alloc_profile, Cvoid, ())
+    @lock allocs_lock begin
+        ccall(:jl_stop_alloc_profile, Cvoid, ())
+    end
 end
 
 """
@@ -111,7 +120,9 @@ end
 Clear all previously profiled allocation information from memory.
 """
 function clear()
-    ccall(:jl_free_alloc_profile, Cvoid, ())
+    @lock allocs_lock begin
+        ccall(:jl_free_alloc_profile, Cvoid, ())
+    end
     return nothing
 end
 
@@ -122,8 +133,12 @@ Retrieve the recorded allocations, and decode them into Julia
 objects which can be analyzed.
 """
 function fetch()
-    raw_results = ccall(:jl_fetch_alloc_profile, RawResults, ())
-    return decode(raw_results)
+    # hold the lock through `decode`, which reads the C-side buffers that a
+    # concurrent `clear` would free
+    @lock allocs_lock begin
+        raw_results = ccall(:jl_fetch_alloc_profile, RawResults, ())
+        return decode(raw_results)
+    end
 end
 
 # decoded results
