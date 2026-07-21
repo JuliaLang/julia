@@ -110,9 +110,14 @@ end
         @test_throws "truncated strings file" Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)
         @test !isfile(out_file)
 
-        # missing part files must not leave (or destroy) the output file
+        # a failed assembly must preserve a pre-existing output file
         write(out_file, "pre-existing")
         @test_throws SystemError Profile.HeapSnapshot.assemble_snapshot(joinpath(tmpdir, "nonexistent"), out_file)
-        @test !isfile(out_file)
+        @test read(out_file, String) == "pre-existing"
+        rm(out_file)
+
+        # cleanup_streamed_files tolerates missing part files
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
+        @test Profile.HeapSnapshot.cleanup_streamed_files(prefix) === nothing
     end
 end

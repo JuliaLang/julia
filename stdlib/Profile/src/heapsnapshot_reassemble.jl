@@ -78,14 +78,16 @@ Assemble a `.heapsnapshot` file from the four files produced by
 `Profile.take_heap_snapshot(...; streaming=true)` with prefix `in_prefix`.
 """
 function assemble_snapshot(in_prefix, out_file::AbstractString = in_prefix)
+    # assemble into a temporary sibling and only replace `out_file` on success, so
+    # that a failure doesn't leave a partial snapshot or destroy a pre-existing one
+    tmp_file = tempname(dirname(abspath(out_file)); cleanup=false)
     try
-        open(out_file, "w") do io
+        open(tmp_file, "w") do io
             assemble_snapshot(in_prefix, io)
         end
-    catch
-        # don't leave a partial (or truncated pre-existing) snapshot behind
-        rm(out_file; force=true)
-        rethrow()
+        mv(tmp_file, out_file; force=true)
+    finally
+        rm(tmp_file; force=true)
     end
     return nothing
 end
@@ -232,10 +234,11 @@ end
 Remove files streamed during `take_heap_snapshot` in streaming mode.
 """
 function cleanup_streamed_files(prefix::AbstractString)
-    rm(string(prefix, ".metadata.json"))
-    rm(string(prefix, ".nodes"))
-    rm(string(prefix, ".edges"))
-    rm(string(prefix, ".strings"))
+    # tolerate missing files, e.g. from a failure partway through streaming
+    rm(string(prefix, ".metadata.json"); force=true)
+    rm(string(prefix, ".nodes"); force=true)
+    rm(string(prefix, ".edges"); force=true)
+    rm(string(prefix, ".strings"); force=true)
     return nothing
 end
 

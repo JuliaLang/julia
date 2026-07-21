@@ -1430,10 +1430,11 @@ function take_heap_snapshot(io::IO, all_one::Bool=false; redact_data::Bool=true)
     # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
     # then reassembling it after we're done.
     prefix = tempname()
-    _stream_heap_snapshot(prefix, all_one, redact_data)
     try
+        _stream_heap_snapshot(prefix, all_one, redact_data)
         Profile.HeapSnapshot.assemble_snapshot(prefix, io)
     finally
+        # a failure while streaming may have created only some of the parts
         Profile.HeapSnapshot.cleanup_streamed_files(prefix)
     end
 end
