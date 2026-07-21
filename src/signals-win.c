@@ -259,7 +259,7 @@ static LONG WINAPI jl_safepoint_exception_handler(struct _EXCEPTION_POINTERS *Ex
     if (ExceptionInfo->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION)
         return EXCEPTION_CONTINUE_SEARCH;
     jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->ptls == NULL || ct->ptls->gc_state == JL_GC_STATE_WAITING)
+    if (ct == NULL || ct->ptls == NULL || jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING)
         return EXCEPTION_CONTINUE_SEARCH;
     if (!jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1]))
         return EXCEPTION_CONTINUE_SEARCH;
@@ -283,7 +283,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags != 0)
         return EXCEPTION_CONTINUE_SEARCH;
     jl_task_t *ct = jl_get_current_task();
-    if (ct != NULL && ct->ptls != NULL && ct->ptls->gc_state != JL_GC_STATE_WAITING) {
+    if (ct != NULL && ct->ptls != NULL && jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_WAITING) {
         jl_ptls_t ptls = ct->ptls;
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_INT_DIVIDE_BY_ZERO:
