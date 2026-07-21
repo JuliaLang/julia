@@ -142,8 +142,8 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real; limitwarn::Bool = true)
-    # jl_profile_init frees and reallocates the sample buffer, which the sampler
-    # thread may be concurrently writing into
+    # fast-path check; jl_profile_init also refuses (-2) under its lock, since the
+    # sampler may be concurrently writing into the buffer it would free
     is_running() && error("profiling is running; call `Profile.stop_timer()` before calling `Profile.init()`")
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
     buffer_samples = n
@@ -156,6 +156,8 @@ function init(n::Integer, delay::Real; limitwarn::Bool = true)
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64, 10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers ($(Base.format_bytes(buffer_size_bytes)))")
+    elseif status == -2
+        error("profiling is running; call `Profile.stop_timer()` before calling `Profile.init()`")
     end
 end
 
