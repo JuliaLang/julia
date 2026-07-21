@@ -175,6 +175,8 @@ struct CorruptType end
 struct BufferType end
 struct UnknownType end
 
+# N.B. the pointer is unrooted on the C side, so like `Alloc.task` it may be
+# stale by the time it is fetched if the type is not otherwise reachable
 function load_type(ptr::Ptr{Type})
     if UInt(ptr) < UInt(4096)
         return CorruptType
