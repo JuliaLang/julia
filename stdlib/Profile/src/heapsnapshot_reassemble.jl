@@ -112,8 +112,12 @@ function assemble_snapshot(in_prefix, io::IO)
             node_name_idx = read(nodes_file, UInt)
             id = read(nodes_file, UInt)
             self_size = read(nodes_file, Int)
-            @assert read(nodes_file, Int) == 0 # trace_node_id
-            @assert read(nodes_file, Int8) == 0 # detachedness
+            trace_node_id = read(nodes_file, Int) # always 0 in snapshots Julia produces
+            trace_node_id == 0 ||
+                error("malformed nodes file `$(in_prefix).nodes`: nonzero trace_node_id $(trace_node_id) for node $(i)")
+            detachedness = read(nodes_file, Int8) # always 0 in snapshots Julia produces
+            detachedness == 0 ||
+                error("malformed nodes file `$(in_prefix).nodes`: nonzero detachedness $(detachedness) for node $(i)")
 
             nodes.type[i] = node_type
             nodes.name_idx[i] = node_name_idx
@@ -150,7 +154,8 @@ function assemble_snapshot(in_prefix, io::IO)
         delete!(orphans, 0)
     end
 
-    @assert isempty(orphans) "Orphaned nodes: $(orphans), node count: $(length(nodes)), orphan node count: $(length(orphans))"
+    isempty(orphans) ||
+        error("malformed snapshot `$(in_prefix)`: $(length(orphans)) of $(length(nodes)) nodes have no incoming edges: $(orphans)")
 
     _digits_buf = zeros(UInt8, ndigits(typemax(UInt)))
     println(io, @view(preamble[1:end-1]), ",") # remove trailing "}" to reopen the object
