@@ -988,6 +988,118 @@ STATIC_INLINE void gc_compute_utilization_data_for_size_classes(void) JL_NOTSAFE
     }
 }
 
+// The cell-by-cell scan of gc_sweep_page: rebuilds the page's free list and
+// recomputes its metadata. Force-inlined into two instantiations specialized
+// on the compile-time-constant `has_weakproc` (see the call sites in
+// gc_sweep_page), so the weak-processing checks vanish entirely from the
+// common (unflagged) sweep loop. Returns whether every cell turned out dead.
+FORCE_INLINE int gc_sweep_page_cells(gc_page_profiler_serializer_t *s, jl_gc_pagemeta_t *pg,
+                                     jl_taggedvalue_t *v0, char *lim, char *lim_newpages,
+                                     int osize, int page_profile_enabled, jl_ptls_t ptls,
+                                     const int has_weakproc) JL_NOTSAFEPOINT
+{
+    char *data = pg->data;
+    int freedall = 1;
+    int has_marked = 0;
+    int has_young = 0;
+    // recomputed from the page's live contents: a page keeps its
+    // has_weak_processing flag only while it still holds a live source
+    // that future sweeps must detect (one with parents) or retain (one
+    // with children, whose dying children write into it) - so pages
+    // whose sources are gone return to the wholesale-free fast path
+    // instead of being scanned (and kept) forever
+    int keep_weakproc = 0;
+    int16_t prev_nold = 0;
+    int pg_nfree = 0;
+    jl_taggedvalue_t *fl = NULL;
+    jl_taggedvalue_t **pfl = &fl;
+    jl_taggedvalue_t **pfl_begin = NULL;
+    // collect page profile
+    jl_taggedvalue_t *v = v0;
+    if (page_profile_enabled) {
+        while ((char*)v <= lim) {
+            int bits = v->bits.gc;
+            if (!gc_marked(bits) || (char*)v >= lim_newpages) {
+                gc_page_profile_write_garbage(s, page_profile_enabled);
+            }
+            else {
+                gc_page_profile_write_live_obj(s, v, page_profile_enabled);
+            }
+            v = (jl_taggedvalue_t*)((char*)v + osize);
+        }
+        v = v0;
+    }
+    // sweep the page
+    while ((char*)v <= lim) {
+        int bits = v->bits.gc;
+        // if an object is past `lim_newpages` then we can guarantee it's garbage
+        if (!gc_marked(bits) || (char*)v >= lim_newpages) {
+            // A dead cancellation source that is still linked into its
+            // parents' child lists is kept for this cycle and queued
+            // for the post-sweep unlink pass; the cleared back-pointers
+            // let the next sweep that visits it free it normally. Cells
+            // past `lim_newpages` were never allocated - their headers
+            // are garbage and must not be inspected.
+            if (has_weakproc && __unlikely((char*)v < lim_newpages &&
+                                           gc_is_dead_linked_cancel_source(v))) {
+                small_arraylist_push(&ptls->gc_tls.weak_processing_objs, jl_valueof(v));
+                // treat as young so a quick sweep revisits (and frees)
+                // the corpse promptly
+                has_young = 1;
+                freedall = 0;
+            }
+            else {
+                *pfl = v;
+                pfl = &v->next;
+                pfl_begin = (pfl_begin != NULL) ? pfl_begin : pfl;
+                pg_nfree++;
+            }
+        }
+        else { // marked young or old
+            if (current_sweep_full || bits == GC_MARKED) { // old enough
+                bits = v->bits.gc = GC_OLD; // promote
+            }
+            prev_nold++;
+            has_marked |= gc_marked(bits);
+            freedall = 0;
+            if (has_weakproc && !keep_weakproc && gc_is_cancel_source(v)) {
+                jl_cancel_source_t *src = (jl_cancel_source_t*)jl_valueof(v);
+                if (src->nparents > 0 ||
+                    jl_atomic_load_relaxed(&src->child_head) != (jl_value_t*)jl_nothing)
+                    keep_weakproc = 1;
+            }
+        }
+        v = (jl_taggedvalue_t*)((char*)v + osize);
+    }
+    // gc_scrub_range (active under WITH_GC_DEBUG_ENV) conservatively marks any
+    // pool object found on a task stack, including slots past lim_newpages on the
+    // currently-active bump-pointer page. Those slots are unconditionally treated
+    // as garbage by the sweep (line above: `(char*)v >= lim_newpages`), so
+    // freedall=1 is valid when this is the active newpages page. A page whose
+    // has_weak_processing flag skipped the wholesale-free fast path can also
+    // legitimately turn out fully dead here (it is retained for this cycle -
+    // unlink writes may target it - and freed by the next sweep).
+    assert(!freedall || lim_newpages < data + GC_PAGE_SZ || has_weakproc);
+    pg->has_marked = has_marked;
+    pg->has_young = has_young;
+    pg->has_weak_processing = keep_weakproc;
+    if (pfl_begin) {
+        pg->fl_begin_offset = (char*)pfl_begin - data;
+        pg->fl_end_offset = (char*)pfl - data;
+    }
+    else {
+        pg->fl_begin_offset = UINT16_MAX;
+        pg->fl_end_offset = UINT16_MAX;
+    }
+
+    pg->nfree = pg_nfree;
+    if (current_sweep_full) {
+        pg->nold = 0;
+        pg->prev_nold = prev_nold;
+    }
+    return freedall;
+}
+
 // Walks over a page, reconstruting the free lists if the page contains at least one live object. If not,
 // queues up the page for later decommit (i.e. through `madvise` on Unix).
 static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
@@ -1032,107 +1144,15 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
     }
 
     pg_skpd = 0;
-    {   // scope to avoid clang goto errors
-        int has_marked = 0;
-        int has_young = 0;
-        int has_weakproc = pg->has_weak_processing;
-        // recomputed from the page's live contents: a page keeps its
-        // has_weak_processing flag only while it still holds a live source
-        // that future sweeps must detect (one with parents) or retain (one
-        // with children, whose dying children write into it) - so pages
-        // whose sources are gone return to the wholesale-free fast path
-        // instead of being scanned (and kept) forever
-        int keep_weakproc = 0;
-        int16_t prev_nold = 0;
-        int pg_nfree = 0;
-        jl_taggedvalue_t *fl = NULL;
-        jl_taggedvalue_t **pfl = &fl;
-        jl_taggedvalue_t **pfl_begin = NULL;
-        // collect page profile
-        jl_taggedvalue_t *v = v0;
-        if (page_profile_enabled) {
-            while ((char*)v <= lim) {
-                int bits = v->bits.gc;
-                if (!gc_marked(bits) || (char*)v >= lim_newpages) {
-                    gc_page_profile_write_garbage(s, page_profile_enabled);
-                }
-                else {
-                    gc_page_profile_write_live_obj(s, v, page_profile_enabled);
-                }
-                v = (jl_taggedvalue_t*)((char*)v + osize);
-            }
-            v = v0;
-        }
-        // sweep the page
-        while ((char*)v <= lim) {
-            int bits = v->bits.gc;
-            // if an object is past `lim_newpages` then we can guarantee it's garbage
-            if (!gc_marked(bits) || (char*)v >= lim_newpages) {
-                // A dead cancellation source that is still linked into its
-                // parents' child lists is kept for this cycle and queued
-                // for the post-sweep unlink pass; the cleared back-pointers
-                // let the next sweep that visits it free it normally. Cells
-                // past `lim_newpages` were never allocated - their headers
-                // are garbage and must not be inspected.
-                if (__unlikely(has_weakproc && (char*)v < lim_newpages &&
-                               gc_is_dead_linked_cancel_source(v))) {
-                    small_arraylist_push(&ptls->gc_tls.weak_processing_objs, jl_valueof(v));
-                    // treat as young so a quick sweep revisits (and frees)
-                    // the corpse promptly
-                    has_young = 1;
-                    freedall = 0;
-                }
-                else {
-                    *pfl = v;
-                    pfl = &v->next;
-                    pfl_begin = (pfl_begin != NULL) ? pfl_begin : pfl;
-                    pg_nfree++;
-                }
-            }
-            else { // marked young or old
-                if (current_sweep_full || bits == GC_MARKED) { // old enough
-                    bits = v->bits.gc = GC_OLD; // promote
-                }
-                prev_nold++;
-                has_marked |= gc_marked(bits);
-                freedall = 0;
-                if (__unlikely(has_weakproc) && !keep_weakproc &&
-                    gc_is_cancel_source(v)) {
-                    jl_cancel_source_t *s = (jl_cancel_source_t*)jl_valueof(v);
-                    if (s->nparents > 0 ||
-                        jl_atomic_load_relaxed(&s->child_head) != (jl_value_t*)jl_nothing)
-                        keep_weakproc = 1;
-                }
-            }
-            v = (jl_taggedvalue_t*)((char*)v + osize);
-        }
-        // gc_scrub_range (active under WITH_GC_DEBUG_ENV) conservatively marks any
-        // pool object found on a task stack, including slots past lim_newpages on the
-        // currently-active bump-pointer page. Those slots are unconditionally treated
-        // as garbage by the sweep (line above: `(char*)v >= lim_newpages`), so
-        // freedall=1 is valid when this is the active newpages page. A page whose
-        // has_weak_processing flag skipped the wholesale-free fast path can also
-        // legitimately turn out fully dead here (it is retained for this cycle -
-        // unlink writes may target it - and freed by the next sweep).
-        assert(!freedall || lim_newpages < data + GC_PAGE_SZ || has_weakproc);
-        pg->has_marked = has_marked;
-        pg->has_young = has_young;
-        pg->has_weak_processing = keep_weakproc;
-        if (pfl_begin) {
-            pg->fl_begin_offset = (char*)pfl_begin - data;
-            pg->fl_end_offset = (char*)pfl - data;
-        }
-        else {
-            pg->fl_begin_offset = UINT16_MAX;
-            pg->fl_end_offset = UINT16_MAX;
-        }
-
-        pg->nfree = pg_nfree;
-        if (current_sweep_full) {
-            pg->nold = 0;
-            pg->prev_nold = prev_nold;
-        }
-    }
+    // unswitched on the page's has_weak_processing flag (constant-folded in
+    // each instantiation of gc_sweep_page_cells): flagged pages are rare,
+    // and the common sweep loop stays free of the weak-processing checks
+    if (__unlikely(pg->has_weak_processing))
+        freedall = gc_sweep_page_cells(s, pg, v0, lim, lim_newpages, osize,
+                                       page_profile_enabled, ptls, 1);
+    else
+        freedall = gc_sweep_page_cells(s, pg, v0, lim, lim_newpages, osize,
+                                       page_profile_enabled, ptls, 0);
     nfree = pg->nfree;
 
 done:
