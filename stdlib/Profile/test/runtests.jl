@@ -458,6 +458,42 @@ end
 
         rm(fname)
     end
+
+    # a readonly current directory should fall back to saving in tempdir
+    # (the readonly bit on a directory doesn't prevent file creation on windows, and root bypasses it)
+    @static if !Sys.iswindows()
+        if ccall(:geteuid, Cuint, ()) != 0
+            @testset "default save when current directory is readonly" begin
+                mktempdir() do tmpdir
+                    fname = cd(tmpdir) do
+                        chmod(tmpdir, 0o555)
+                        try
+                            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+                        finally
+                            chmod(tmpdir, 0o777)
+                        end
+                    end
+                    @test !occursin(tmpdir, fname) # should not be in the readonly dir
+                    @test isfile(fname)
+                    open(fname) do fs
+                        @test readline(fs) != ""
+                    end
+                    rm(fname)
+                end
+            end
+        end
+    end
+
+    @testset "save with custom dir" begin
+        mktempdir() do tmpdir
+            fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot(dir=ARGS[1]))" $tmpdir`, String)
+            @test occursin(tmpdir, fname)
+            @test isfile(fname)
+            open(fname) do fs
+                @test readline(fs) != ""
+            end
+        end
+    end
 end
 
 # the documented streaming workflow: stream the parts, assemble offline, clean up
