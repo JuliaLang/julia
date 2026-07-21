@@ -191,6 +191,8 @@ function assemble_snapshot(in_prefix, io::IO)
         while !eof(strings_io)
             str_size = read(strings_io, UInt)
             str_bytes = read(strings_io, str_size)
+            length(str_bytes) == str_size ||
+                error("truncated strings file: `$(in_prefix).strings` (expected $(str_size) bytes, got $(length(str_bytes)))")
             str = String(str_bytes)
             if first
                 first = false
