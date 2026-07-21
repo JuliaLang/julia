@@ -831,7 +831,7 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         n = n[keep]
         m = m[keep]
     end
-    util_perc = (1 - (nsleeping / totalshots)) * 100
+    util_perc = totalshots == 0 ? 0.0 : (1 - (nsleeping / totalshots)) * 100
     filenamemap = FileNameMap()
     if isempty(lilist)
         if is_subsection
@@ -1292,7 +1292,7 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
     else
         root, nsleeping, is_task_profile = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     end
-    util_perc = (1 - (nsleeping / root.count)) * 100
+    util_perc = root.count == 0 ? 0.0 : (1 - (nsleeping / root.count)) * 100
     is_subsection || print_tree(io, root, cols, fmt, is_subsection)
     if isempty(root.down)
         if is_subsection
