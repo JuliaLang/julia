@@ -116,6 +116,41 @@ end
     end
 end
 
+# regression tests: spurious group warning, discarded filters in flat groupby,
+# `callers` on metadata-bearing data, groupby error type, non-UInt data, and
+# reconfiguring the buffer while profiling is running
+@testset "printing and callers regressions" begin
+    iobuf = IOBuffer()
+    # synthetic single-sample profile on thread 1, so group contents are deterministic
+    fake_data = Profile.add_fake_meta(UInt64[1, 0])
+    fake_lidict = Dict{UInt64,Vector{StackFrame}}(UInt64(1) => [StackFrame(:f1, :file1, 1, nothing, false, false, 0)])
+    if !Sys.iswindows() # avoid the multi-thread-profiling-unsupported warning
+        # no "no samples" warning when every group has samples
+        @test_logs Profile.print(iobuf, fake_data, fake_lidict, groupby = :thread)
+    end
+    # a threads filter that matches no samples must be honored under groupby=:task
+    @test_logs (:warn, r"There were no samples collected in one or more groups") match_mode=:any begin
+        Profile.print(iobuf, fake_data, fake_lidict, groupby = :task, threads = 999:1000)
+    end
+    @test_throws ArgumentError Profile.print(iobuf, groupby = :bogus)
+    # callers must accept default (metadata-bearing) profile data
+    @test Profile.callers("busywait") isa Vector
+    let (data, lidict) = Profile.retrieve()
+        @test Profile.callers("busywait", data, lidict) isa Vector
+    end
+    # data saved as a different unsigned type is accepted by the default lidict path
+    @test Profile.getdict(UInt64.(Profile.fetch(include_meta = false))) isa Profile.LineInfoDict
+end
+
+@testset "init while profiling errors" begin
+    Profile.start_timer()
+    try
+        @test_throws "profiling is running" Profile.init(n = 10^6, delay = 0.01)
+    finally
+        Profile.stop_timer()
+    end
+end
+
 @testset "Profile.fetch() with and without meta" begin
     data_without = Profile.fetch(include_meta = false)
     data_with = Profile.fetch()
@@ -396,34 +431,73 @@ end
 # FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
 @static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
-    tmpdir = mktempdir()
+    mktempdir() do tmpdir
+        # ensure that we can prevent redacting data
+        fname = cd(tmpdir) do
+            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot(; redact_data=false))"`, String)
+        end
 
-    # ensure that we can prevent redacting data
-    fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot(; redact_data=false))"`, String)
+        @test isfile(fname)
+
+        sshot = read(fname, String)
+        @test sshot != ""
+        @test contains(sshot, "redact_this")
+
+        rm(fname)
+
+        # ensure that string data is redacted by default
+        fname = cd(tmpdir) do
+            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
+        end
+
+        @test isfile(fname)
+
+        sshot = read(fname, String)
+        @test sshot != ""
+        @test !contains(sshot, "redact_this")
+
+        rm(fname)
     end
+end
 
-    @test isfile(fname)
+# the documented streaming workflow: stream the parts, assemble offline, clean up
+@testset "HeapSnapshot streaming workflow" begin
+    mktempdir() do tmpdir
+        prefix = joinpath(tmpdir, "streamed")
+        run(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; Profile.take_heap_snapshot(ARGS[1]; streaming=true)" $prefix`)
+        part_files = [string(prefix, ext) for ext in (".metadata.json", ".nodes", ".edges", ".strings")]
+        @test all(isfile, part_files)
 
-    sshot = read(fname, String)
-    @test sshot != ""
-    @test contains(sshot, "redact_this")
+        out_file = string(prefix, ".heapsnapshot")
+        Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)
+        sshot = read(out_file, String)
+        @test sshot != ""
 
-    rm(fname)
+        # structural check: the node/edge arrays must have the expected number of fields
+        node_count = parse(Int, match(r"\"node_count\":(\d+)", sshot).captures[1])
+        edge_count = parse(Int, match(r"\"edge_count\":(\d+)", sshot).captures[1])
+        function array_length(key)
+            start = last(findfirst("\"$key\":[", sshot)) + 1
+            stop = findnext(==(']'), sshot, start) - 1
+            section = strip(sshot[start:stop])
+            return isempty(section) ? 0 : count(==(','), section) + 1
+        end
+        @test node_count > 0
+        @test edge_count > 0
+        @test array_length("nodes") == 7 * node_count
+        @test array_length("edges") == 3 * edge_count
 
-    # ensure that string data is redacted by default
-    fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
+        @test !any(isfile, part_files)
     end
+end
 
-    @test isfile(fname)
-
-    sshot = read(fname, String)
-    @test sshot != ""
-    @test !contains(sshot, "redact_this")
-
-    rm(fname)
-    rm(tmpdir, force = true, recursive = true)
+@testset "take_heap_snapshot to an IO stream" begin
+    mktempdir() do tmpdir
+        out_file = joinpath(tmpdir, "io_method.heapsnapshot")
+        run(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; open(io -> Profile.take_heap_snapshot(io, true), ARGS[1], \"w\")" $out_file`)
+        @test filesize(out_file) > 0
+    end
 end
 end
 
