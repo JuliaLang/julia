@@ -90,7 +90,22 @@ let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no th
             new_env["JULIA_THREADS_EXEC_WATCHDOG"] = "1500"
         end
         println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config starting")
-        run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr))
+        p = run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr), wait = false)
+        if Sys.iswindows() && Sys.WORD_SIZE == 32
+            # backstop above the child's native watchdog (1500s): if even that
+            # thread is dead, report whether the child is spinning or asleep
+            # (cpu-time delta across 15s), then kill it
+            if timedwait(() -> process_exited(p), 1800.0) !== :ok
+                pid = getpid(p)
+                for _ in 1:2
+                    run(ignorestatus(`wmic process where processid=$pid get kernelmodetime,usermodetime`))
+                    sleep(15)
+                end
+                kill(p, Base.SIGKILL)
+            end
+        end
+        wait(p)
+        success(p) || throw(ProcessFailedException(p))
         # threads set via env var
         @test chomp(read(setenv(cmd2, new_env), String)) == threads_config
         # threads set via -t
