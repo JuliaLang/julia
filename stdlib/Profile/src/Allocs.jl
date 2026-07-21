@@ -86,17 +86,17 @@ function _prof_expr(expr, opts)
     end
 end
 
+# The C-side buffers are not safe to mutate/free while another task is reading
+# them (e.g. `clear` frees the backtrace buffers that `fetch` reads), so
+# serialize all API entry points.
+const allocs_lock = Base.ReentrantLock()
+
 """
     Profile.Allocs.start(; sample_rate::Real)
 
 Begin recording allocations with the given sample rate
 A sample rate of 1.0 will record everything; 0.0 will record nothing.
 """
-# The C-side buffers are not safe to mutate/free while another task is reading
-# them (e.g. `clear` frees the backtrace buffers that `fetch` reads), so
-# serialize all API entry points.
-const allocs_lock = Base.ReentrantLock()
-
 function start(; sample_rate::Real)
     @lock allocs_lock begin
         ccall(:jl_start_alloc_profile, Cvoid, (Cdouble,), Float64(sample_rate))
