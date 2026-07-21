@@ -1379,10 +1379,11 @@ end
 
 
 """
-    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false;
+    Profile.take_heap_snapshot(filepath::AbstractString, all_one::Bool=false;
                                redact_data::Bool=true, streaming::Bool=false)
-    Profile.take_heap_snapshot(all_one::Bool=false; redact_data:Bool=true,
-                               dir::String=nothing, streaming::Bool=false)
+    Profile.take_heap_snapshot(io::IO, all_one::Bool=false; redact_data::Bool=true)
+    Profile.take_heap_snapshot(all_one::Bool=false; redact_data::Bool=true,
+                               dir::Union{Nothing,AbstractString}=nothing, streaming::Bool=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
 Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
