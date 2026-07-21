@@ -2,12 +2,6 @@
 
 module HeapSnapshot
 
-"""
-    assemble_snapshot(filepath::AbstractString, out_file::AbstractString)
-
-Assemble a .heapsnapshot file from the .json files produced by `Profile.take_heap_snapshot`.
-"""
-
 # SoA layout to reduce padding
 struct Edges
     type::Vector{UInt32}       # index into `snapshot.meta.edge_types`
@@ -77,6 +71,12 @@ let _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
     end
 end
 
+"""
+    assemble_snapshot(in_prefix::AbstractString, out_file::AbstractString = in_prefix)
+
+Assemble a `.heapsnapshot` file from the four files produced by
+`Profile.take_heap_snapshot(...; streaming=true)` with prefix `in_prefix`.
+"""
 function assemble_snapshot(in_prefix, out_file::AbstractString = in_prefix)
     open(out_file, "w") do io
         assemble_snapshot(in_prefix, io)
