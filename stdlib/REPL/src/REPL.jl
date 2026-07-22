@@ -737,6 +737,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
         while true
             try
                 line *= readline(repl.terminal, keep=true)
+                ast = parse_repl_input_line(line, repl)
             catch e
                 if isa(e,InterruptException)
                     try # raise the debugger if present
@@ -753,7 +754,6 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                     rethrow()
                 end
             end
-            ast = parse_repl_input_line(line, repl)
             (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
