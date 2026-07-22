@@ -2438,7 +2438,7 @@ end
 # desugarable AST to macro AST.  Fortunately there are only two places (meta
 # nkw, and destructuring arg assignments) we do this, so handle them manually.
 function prepend_function_body(ctx, body, ex)
-    @stm body begin
+    out = @stm body begin
         [K"_generated_body" [K"syntaxquote" gen] nongen] -> begin
             ex_est = @stm ex begin
                 [K"meta" [K"Symbol"] n] ->
@@ -2453,6 +2453,21 @@ function prepend_function_body(ctx, body, ex)
         end
         _ -> @ast ctx body [K"block" ex body]
     end
+    # Preserve metadata needed if this body later produces wrappers.
+    mm = getmeta(body, :method_metas, nothing)
+    isnothing(mm) || setmeta!(out, :method_metas, mm)
+    out
+end
+
+# Prepend method metadata and retain it through recursive wrapper generation.
+function prepend_method_metas(ctx, src, body, method_metas)
+    isnothing(method_metas) && return body
+    out = @stm body begin
+        [K"block" stmts...] ->
+            @ast ctx src [K"block" [K"meta" method_metas...] stmts...]
+        _ -> @ast ctx src [K"block" [K"meta" method_metas...] body]
+    end
+    setmeta(out, :method_metas, method_metas)
 end
 
 # Produce all `method` exprs for the given `argl`
@@ -2598,6 +2613,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
     req = pos_req_args(argl)
     passed = copy(req)
+    prop_metas = getmeta(body, :method_metas, nothing)
     methods = SyntaxList()
     for i in eachindex(opt)
         @jl_assert i == length(passed)-length(req)+1 src
@@ -2605,15 +2621,17 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
             # fill-all-defaults case.  note that the final default may be a
             # splat, and doesn't have further args referring to it by name, so
             # we put it directly in the call (see #50563 for some notes)
-            scope_nest(
-                ctx,
-                make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1]),
-                @ast ctx src [K"call" mapindex(passed, 1)...
-                    opt_names[i:end-1]... opt_defaults[end]])
+            @ast ctx src [K"block"
+                scope_nest(
+                    ctx,
+                    make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1]),
+                    @ast ctx src [K"call" mapindex(passed, 1)...
+                        opt_names[i:end-1]... opt_defaults[end]])]
         else
             @ast ctx src [K"block"
                 [K"call" mapindex(passed, 1)... opt_defaults[i]]]
         end
+        wrapper_body = prepend_method_metas(ctx, src, wrapper_body, prop_metas)
         # this function and method_def_expr need sp bounds because of this
         push!(methods, method_def_expr(
             ctx, src, mtable, used_typevars(passed, sparams),
@@ -2694,6 +2712,8 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     (kw_decls, kw_names, kw_syms, kw_defaults, restkw) = expand_kw_args(ctx, kws)
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
     pos_sparams = used_typevars(pargl, sparams)
+    # Sorter bodies may recursively produce optional-argument wrappers.
+    prop_metas = getmeta(body, :method_metas, nothing)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : syntax_name(mtable),
         mangled = reserve_module_binding_i(
@@ -2727,9 +2747,10 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             scope_nest(ctx, make_assigns(ctx, kw_names, kw_defaults),
                 @ast ctx src [K"call" m1_name kw_names... rkw forward_pargl...])
         end
+        nokw_body = prepend_method_metas(
+            ctx, src, @ast(ctx, src, [K"block" [K"return" body2]]), prop_metas)
         method_def_expr(
-            ctx, src, mtable, pos_sparams, pargl,
-            @ast(ctx, src, [K"block" [K"return" body2]]))
+            ctx, src, mtable, pos_sparams, pargl, nokw_body)
     end
     # (3) Core.kwcall(arg2::NamedTuple, pargl...) methods (one per optarg).
     # - for each kwarg:
@@ -2807,6 +2828,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             scope_nest(ctx, kw_assigns,
                        @ast ctx src [K"block" handle_excess final_call])
         end
+        kwcall_body = prepend_method_metas(ctx, src, kwcall_body, prop_metas)
         # Core.kwcall method has its own first argument.  Ensure closure
         # conversion knows not to put the closure there.
         let arg1_name = setmeta!(
