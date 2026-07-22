@@ -2750,8 +2750,9 @@ detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_ar
 
 Return a vector of `Method`s which may have unbound type parameters: some
 call matching the method's signature does not pin every static parameter to
-a definite value, so reading such a parameter in the method body throws an
-`UndefVarError`. Use `recursive=true` to test in all submodules.
+a definite value, so reading such a parameter in the method body may throw an
+`UndefVarError`.
+Use `recursive=true` to test in all submodules.
 
 The check is a conservative static approximation of how subtyping assigns
 static parameters, so a reported method may in practice never see the calls
@@ -2803,15 +2804,15 @@ function detect_unbound_args(mods...;
             nonempty_vararg = false
             if Base.isvatuple(tuple_sig)
                 # a trailing Vararg leaves its element variables unbound only
-                # for zero-length matches
+                # for zero-length matches; remove Vararg and compute dispatch.
+                # compute type-intersect of sig with `NTuple{Any, nparams - 1}`:
                 short_sig = Base.rewrap_unionall(Tuple{params[1:(end - 1)]...}, m.sig)
-                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), short_sig, nothing, world)
-                if mf !== nothing && mf !== m && mf.sig <: short_sig
+                mf = Base._which(short_sig; world, raise=false)
+                if mf !== nothing && mf.method !== m && Base.morespecific(mf.method, m)
                     nonempty_vararg = true
                 end
             end
-            # the where-chain binders, aligned with the `static_parameter`
-            # numbering used in `idxs`
+            # the where-chain binders, aligned with the `static_parameter` numbering used in `idxs`
             sig_vars = TypeVar[]
             let body = m.sig
                 while body isa UnionAll
@@ -2821,37 +2822,27 @@ function detect_unbound_args(mods...;
             end
             shadowed_slots = Int[]
             for i in eachindex(params)
-                # a `Type{S}` argument (with `S` a slot-local range or a
-                # method parameter) binds `S = Union{}` — which constrains
-                # nothing in the bounds of `S` — only when the argument is
-                # `Union{}` itself
+                # a `Type{S}` argument (with type `S`) may bind `S = Union{}` — which does not constrain
+                # TypeVar internal to `S`, unless we later identify a covering method for that dispatch
                 v = type_slot_var(params[i])
                 v === nothing && continue
-                # the re-check consumes a shadowed slot only through
-                # `constrains_type_value` on the slot variable's bound, so a
+                # the re-check consumes a shadowed slot only through a
+                # `MATCH_INHABITED` `constrains_var` on the slot variable's bound, so a
                 # slot that cannot pin any possibly-unbound parameter that
                 # way needs no method-table probe (`idxs` is a superset of
                 # the parameters still unbound under `nonempty_vararg`)
                 any(idx -> (var = sig_vars[idx];
-                            v !== var && Core.Compiler.constrains_type_value(var, v.ub)),
+                            v !== var && Base.Compiler.constrains_var(var, v.ub, Core.Compiler.MATCH_INHABITED)),
                     idxs) || continue
                 bot_params = Any[params...]
                 bot_params[i] = Type{Union{}}
                 bot_sig = Base.rewrap_unionall(Tuple{bot_params...}, m.sig)
-                # the rescue argument requires `m` itself to cover the probe
-                # signature: only then does a different lookup result prove
-                # that every `Union{}` call dispatches away from `m` (rather
-                # than the probe merely escaping to a broad fallback while
-                # `m` still wins the concrete calls)
-                bot_sig <: m.sig || continue
-                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), bot_sig, nothing, world)
-                if mf !== nothing && mf !== m
+                mf = Base._which(bot_sig; world, raise=false)
+                if mf !== nothing && mf.method !== m && Base.morespecific(mf.method, m)
                     push!(shadowed_slots, i)
                 end
             end
-            # re-check unboundness under the verified assumptions, keeping
-            # the parameter indices for the body query below; without any
-            # assumption the first scan already answered
+            # re-check unboundness under the verified assumptions
             if nonempty_vararg || !isempty(shadowed_slots)
                 idxs = unbound_sparams(m.sig, nonempty_vararg, shadowed_slots)
                 isempty(idxs) && continue
@@ -2866,33 +2857,24 @@ function detect_unbound_args(mods...;
     return collect(ambs)
 end
 
-# The static rule for whether every call matching a signature pins a static
-# parameter to a definite value is `Core.Compiler.constrains_var` (see
-# `Compiler/src/inferencestate.jl` for its derivation from subtyping's
-# parameter-assignment semantics); inference uses the same predicate to
-# compute the maybe-undef bit of static parameters.
-
 # The `Type{S}`-valued argument slots recognized by the `Union{}`-shadowing
 # rescue in `detect_unbound_args`: either a slot-local range
 # (`Type{S} where S<:UB`) or a plain method parameter (`Type{S}` with `S`
 # bound in the signature's `where` chain). Returns `S`, or `nothing`.
 function type_slot_var(@nospecialize(p))
-    if p isa UnionAll && Base.isType(p.body) && Base.type_parameter(p.body) === p.var
+    if p isa UnionAll && Base.isTypeEq(p.body) && Base.type_parameter(p.body) === p.var
         return p.var
-    elseif Base.isType(p)
+    elseif Base.isTypeEq(p)
         q = Base.type_parameter(p)
         q isa TypeVar && return q
     end
     return nothing
 end
 
-# The 1-based positions in the signature's `where` chain — which is also the
-# `static_parameter` numbering used by the lowered body — of parameters that
-# some matching call may leave unbound. `nonempty_vararg` assumes the
-# signature's trailing `Vararg` matches at least one argument;
-# `shadowed_slots` lists `Type{S}` argument positions whose `Union{}` member
-# never reaches this method. Both are assumptions the caller must justify
-# (see `detect_unbound_args`).
+# The 1-based positions in the signature's `where` chain of parameters that
+# some matching call may leave unbound.
+# - `nonempty_vararg` assumes the signature's trailing `Vararg` matches at least one argument;
+# - `shadowed_slots` lists `Type{S}` argument positions whose `Union{}` member never reaches this method.
 function unbound_sparams(@nospecialize(sig), nonempty_vararg::Bool=false,
                          shadowed_slots::Vector{Int}=Int[])
     idxs = Int[]
@@ -2904,13 +2886,13 @@ function unbound_sparams(@nospecialize(sig), nonempty_vararg::Bool=false,
         i += 1
         var = body.var
         body = body.body
-        Core.Compiler.constrains_var(var, body, #=covariant=#true, nonempty_vararg) && continue
+        Base.Compiler.constrains_var(var, body, Core.Compiler.MATCH_TYPEOF, nonempty_vararg) && continue
         pinned = false
         for j in shadowed_slots
             # any non-`Union{}` value of this slot's `Type` parameter pins
             # `var` if it occurs invariantly below a constructor of its bound
             v = type_slot_var(params[j])::TypeVar
-            if v !== var && Core.Compiler.constrains_type_value(var, v.ub)
+            if v !== var && Base.Compiler.constrains_var(var, v.ub, Core.Compiler.MATCH_INHABITED)
                 pinned = true
                 break
             end
@@ -2921,30 +2903,20 @@ function unbound_sparams(@nospecialize(sig), nonempty_vararg::Bool=false,
 end
 
 # Whether the lowered body of `m` reads any of the static parameters whose
-# indices are in `idxs`. An `Expr(:isdefined, ...)` query does not count as a
-# read (it cannot throw), but a raw read is counted even when an `@isdefined`
-# guard exists elsewhere in the body: verifying that the guard dominates the
-# read would require dataflow over typed code. Conservatively `true` when no
-# lowered code is available to inspect (e.g. generated functions).
+# indices are in `idxs`.
 function reads_sparams(m::Method, idxs::Vector{Int})
     isdefined(m, :source) || return true
     src = Base.uncompressed_ir(m)
-    read = BitSet()
-    function scan(@nospecialize ex)
-        ex isa Expr || return
-        if ex.head === :static_parameter
-            push!(read, ex.args[1]::Int)
-        elseif ex.head !== :isdefined
-            for a in ex.args
-                scan(a)
+    maybeundef = BitSet(idxs)
+    for stmt in src.code
+        if Meta.isexpr(stmt, :static_parameter)
+            read = stmt.args[1]::Int
+            if read in maybeundef
+                return true
             end
         end
-        return
     end
-    for stmt in src.code
-        scan(stmt)
-    end
-    return any(in(read), idxs)
+    return false
 end
 
 
