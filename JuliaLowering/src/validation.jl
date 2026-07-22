@@ -1148,9 +1148,10 @@ vst1_non_arg_meta(vcx, st) = @stm st begin
 end
 vst1_non_arg_meta_arg(vcx, st) = @stm st begin
     [:purity _...] -> vst1(vcx, st)
-    # [:optlevel [:value]] -> pass()
-    # [:compile [:value]] -> pass()
-    # [:infer [:value]] -> pass()
+    [:optlevel [:value]] -> pass()
+    [:compile [:value]] -> pass()
+    [:infer [:value]] -> pass()
+    [:max_methods [:value]] -> pass()
     [:identifier] -> pass()
     [:value] -> pass()
     _ -> @fail(st, "unsupported `meta` argument")
@@ -1318,6 +1319,10 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
         pass() : @fail(st, "wrong number of args to `purity` expression")
     [:aliasscope] -> pass()
     [:popaliasscope] -> pass()
+    [:optlevel [:value]] -> pass()
+    [:compile [:value]] -> pass()
+    [:infer [:value]] -> pass()
+    [:max_methods [:value]] -> pass()
     [:the_exception] -> pass()
     [:throw_undef_if_not [:symbol] cond] -> vst2(vcx, cond)
 

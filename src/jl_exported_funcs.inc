@@ -211,6 +211,9 @@
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
     XX(jl_get_libjulia_internal_path) \
+    XX(jl_get_method_compile) \
+    XX(jl_get_method_infer) \
+    XX(jl_get_method_optlevel) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_edition) \
     XX(jl_get_module_infer) \

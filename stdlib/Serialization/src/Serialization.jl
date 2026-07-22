@@ -89,7 +89,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 31 # do not make changes without bumping the version #!
+const ser_version = 32 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -540,6 +540,9 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.nospecializeinfer)
     serialize(s, meth.constprop)
     serialize(s, meth.purity)
+    serialize(s, meth.optlevel)
+    serialize(s, meth.compile)
+    serialize(s, meth.infer)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth))
     else
@@ -1234,6 +1237,9 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nospecializeinfer = false
     constprop = 0x00
     purity = 0x0000
+    optlevel = 0xff
+    compile = 0xff
+    infer = 0xff
     template_or_is_opaque = with(current_module => mod) do
         deserialize(s)
     end
@@ -1249,6 +1255,11 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             purity = deserialize(s)::UInt16
         elseif format_version(s) >= 17
             purity = UInt16(deserialize(s)::UInt8)
+        end
+        if format_version(s) >= 32
+            optlevel = deserialize(s)::UInt8
+            compile = deserialize(s)::UInt8
+            infer = deserialize(s)::UInt8
         end
         with(current_module => mod) do
             deserialize(s)
@@ -1274,6 +1285,9 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.nospecializeinfer = nospecializeinfer
         meth.constprop = constprop
         meth.purity = purity
+        meth.optlevel = optlevel
+        meth.compile = compile
+        meth.infer = infer
         if template !== nothing
             # TODO: compress template
             template = template::CodeInfo
@@ -1498,6 +1512,10 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.purity = deserialize(s)::UInt16
     elseif format_version(s) >= 17
         ci.purity = deserialize(s)::UInt8
+    end
+    if format_version(s) >= 32
+        ci.optlevel = deserialize(s)::UInt8
+        ci.infer = deserialize(s)::UInt8
     end
     if format_version(s) >= 22
         ci.inlining_cost = deserialize(s)::UInt16
