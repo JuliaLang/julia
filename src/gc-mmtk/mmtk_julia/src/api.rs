@@ -303,20 +303,13 @@ pub extern "C" fn mmtk_disable_collection() -> i32 {
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_enable_collection() {
-    memory_manager::enable_collection(&SINGLETON);
+pub extern "C" fn mmtk_enable_collection() -> i32 {
+    memory_manager::enable_collection(&SINGLETON) as i32
 }
 
 #[no_mangle]
 pub extern "C" fn mmtk_is_collection_enabled() -> i32 {
     memory_manager::is_collection_enabled(&SINGLETON) as i32
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_collection_in_progress() -> i32 {
-    let concurrent_gc = SINGLETON.get_plan().concurrent().is_some_and(|c| c.concurrent_work_in_progress());
-    let pending_pause = SINGLETON.has_pending_or_active_pause();
-    (concurrent_gc || pending_pause) as i32
 }
 
 #[no_mangle]

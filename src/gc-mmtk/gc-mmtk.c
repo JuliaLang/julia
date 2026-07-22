@@ -238,17 +238,15 @@ JL_DLLEXPORT uint64_t jl_gc_get_hard_heap_limit(void)
     return jl_options.hard_heap_limit;
 }
 
-JL_DLLEXPORT void jl_gc_global_disable_no_check(void)
+JL_DLLEXPORT void jl_gc_globally_enable_no_check(int on)
 {
-    mmtk_disable_collection();
+    if (on)
+        mmtk_enable_collection();
+    else
+        mmtk_disable_collection();
 }
 
-JL_DLLEXPORT void jl_gc_global_enable_no_check(void)
-{
-    mmtk_enable_collection();
-}
-
-JL_DLLEXPORT int jl_gc_is_global_enabled(void)
+JL_DLLEXPORT int jl_gc_is_globally_enabled(void)
 {
     return mmtk_is_collection_enabled();
 }
@@ -262,8 +260,8 @@ JL_DLLEXPORT int jl_gc_enable(int on)
         // disable -> enable
         int was_enabled = mmtk_is_collection_enabled();
         if (!was_enabled) {
-            mmtk_enable_collection();
-            if (mmtk_is_collection_enabled()) {
+            int now_enabled = mmtk_enable_collection();
+            if (now_enabled) {
                 gc_num.allocd += gc_num.deferred_alloc;
                 gc_num.deferred_alloc = 0;
             }
@@ -277,18 +275,9 @@ JL_DLLEXPORT int jl_gc_enable(int on)
                 break;
             } else {
                 jl_gc_safepoint_(ptls);
-                // Maybe do a thread yield here to vavoid busy loop
+                jl_cpu_pause();
             }
         }
-        // Make sure a collection that is already pending or in progress (including the
-        // concurrent marking phase of a concurrent GC) has fully finished before returning,
-        // so the caller can rely on no collection touching memory from this point on.
-        // if (mmtk_collection_in_progress()) {
-        //     jl_safepoint_wait_thread_resume(jl_current_task);
-        // } else {
-        //     jl_gc_safepoint_(ptls);
-        // }
-        // jl_gc_safepoint_(ptls);
     }
     return prev;
 }

@@ -3522,17 +3522,15 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     return prev;
 }
 
-JL_DLLEXPORT void jl_gc_global_disable_no_check(void)
+JL_DLLEXPORT void jl_gc_globally_enable_no_check(int on)
 {
-    jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+    if (on)
+        jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    else
+        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
 }
 
-JL_DLLEXPORT void jl_gc_global_enable_no_check(void)
-{
-    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
-}
-
-JL_DLLEXPORT int jl_gc_is_global_enabled(void)
+JL_DLLEXPORT int jl_gc_is_globally_enabled(void)
 {
     return !jl_atomic_load_acquire(&jl_gc_disable_counter);
 }

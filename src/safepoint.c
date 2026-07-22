@@ -206,7 +206,7 @@ int jl_safepoint_start_gc(jl_task_t *ct)
     // Foreign thread adoption disables the GC and waits for it to finish, however, that may
     // introduce a race between it and this thread checking if the GC is enabled and only
     // then setting jl_gc_running. To avoid that, check again now that we won that race.
-    if (!jl_gc_is_global_enabled()) {
+    if (!jl_gc_is_globally_enabled()) {
         jl_atomic_store_release(&jl_gc_running, 0);
         uv_mutex_unlock(&safepoint_lock);
         return 0;
