@@ -1926,6 +1926,35 @@ end
     """)
     @test Base.Experimental.get_optlevel(only(methods(test_mod._test_opts_mixed))) == 0
 
+    # Per-method options and other method annotations propagate from the body
+    # to positional-default wrappers and the `Core.kwcall` sorter (matching
+    # flisp's `propagate-method-meta`).
+    JuliaLowering.include_string(test_mod, raw"""
+    Base.Experimental.@optlevel 0 @inline function _test_opts_kw(x::Int, y::Int=1; k::Int=2)
+        x + y + k
+    end
+    """)
+    fkw = test_mod._test_opts_kw
+    @test fkw(1) == 4
+    for m in (which(fkw, (Int,)), which(fkw, (Int, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fkw), Int)))
+        @test Base.Experimental.get_optlevel(m) == 0
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
+    # ... including when destructuring-arg assignments are prepended to the body
+    JuliaLowering.include_string(test_mod, raw"""
+    @inline function _test_opts_destr((a, b)::Tuple{Int,Int}, y::Int=1; k::Int=2)
+        a + b + y + k
+    end
+    """)
+    fd = test_mod._test_opts_destr
+    @test fd((1, 2)) == 6
+    for m in (which(fd, (Tuple{Int,Int},)), which(fd, (Tuple{Int,Int}, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fd), Tuple{Int,Int})))
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
     # Module-level options are emitted as statements and applied by the
     # interpreter; one in a non-taken branch is not applied.
     mod_cond = Module()

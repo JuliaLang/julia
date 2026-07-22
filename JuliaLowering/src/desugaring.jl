@@ -2435,7 +2435,7 @@ end
 # desugarable AST to macro AST.  Fortunately there are only two places (meta
 # nkw, and destructuring arg assignments) we do this, so handle them manually.
 function prepend_function_body(ctx, body, ex)
-    @stm body begin
+    out = @stm body begin
         [K"_generated_body" [K"syntaxquote" gen] nongen] -> begin
             ex_est = @stm ex begin
                 [K"meta" [K"Symbol"] n] ->
@@ -2450,6 +2450,9 @@ function prepend_function_body(ctx, body, ex)
         end
         _ -> @ast ctx body [K"block" ex body]
     end
+    # keep :method_metas etc. visible to wrapper method generation
+    hasattr(body, :meta) && setattr!(out, :meta, body.meta)
+    out
 end
 
 # Produce all `method` exprs for the given `argl`
@@ -2594,6 +2597,9 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
     req = pos_req_args(argl)
     passed = copy(req)
+    # collected by `collect_body_meta` in compat.jl, like flisp's
+    # `propagate-method-meta`
+    prop_metas = getmeta(body, :method_metas, nothing)
     methods = SyntaxList(ctx.graph)
     for i in eachindex(opt)
         @jl_assert i == length(passed)-length(req)+1 src
@@ -2602,10 +2608,12 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
             # splat, and doesn't have further args referring to it by name, so
             # we put it directly in the call (see #50563 for some notes)
             @ast ctx src [K"block"
+                isnothing(prop_metas) ? nothing : [K"meta" prop_metas...]
                 make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1])...
                 [K"call" mapindex(passed, 1)... opt_names[i:end-1]... opt_defaults[end]]]
         else
             @ast ctx src [K"block"
+                isnothing(prop_metas) ? nothing : [K"meta" prop_metas...]
                 [K"call" mapindex(passed, 1)... opt_defaults[i]]]
         end
         # this function and method_def_expr need sp bounds because of this
@@ -2688,6 +2696,10 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     (kw_decls, kw_names, kw_syms, kw_defaults, restkw) = expand_kw_args(ctx, kws)
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
     pos_sparams = used_typevars(pargl, sparams)
+    # collected by `collect_body_meta` in compat.jl; also re-attach the
+    # attribute to the sorter bodies below since they go through
+    # `method_def_expr` again when there are optional positional args
+    prop_metas = getmeta(body, :method_metas, nothing)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : mtable.name_val,
         mangled = reserve_module_binding_i(
@@ -2720,9 +2732,13 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             scope_nest(ctx, make_assigns(ctx, kw_names, kw_defaults),
                 @ast ctx src [K"call" m1_name kw_names... rkw forward_pargl...])
         end
+        nokw_body = @ast(ctx, src, [K"block"
+            isnothing(prop_metas) ? nothing : [K"meta" prop_metas...]
+            [K"return" body2]])
+        isnothing(prop_metas) ||
+            (nokw_body = setmeta(nokw_body, :method_metas, prop_metas))
         method_def_expr(
-            ctx, src, mtable, pos_sparams, pargl,
-            @ast(ctx, src, [K"block" [K"return" body2]]))
+            ctx, src, mtable, pos_sparams, pargl, nokw_body)
     end
     # (3) Core.kwcall(arg2::NamedTuple, pargl...) methods (one per optarg).
     # - for each kwarg:
@@ -2799,6 +2815,11 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
         else
             scope_nest(ctx, kw_assigns,
                        @ast ctx src [K"block" handle_excess final_call])
+        end
+        if !isnothing(prop_metas)
+            kwcall_body = setmeta(@ast(ctx, src, [K"block"
+                [K"meta" prop_metas...]
+                kwcall_body]), :method_metas, prop_metas)
         end
         # Core.kwcall method has its own first argument.  Ensure closure
         # conversion knows not to put the closure there.

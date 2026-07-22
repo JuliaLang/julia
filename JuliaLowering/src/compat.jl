@@ -437,27 +437,62 @@ function _mangle_writeonly(st, seen)
     end
 end
 
-# nothing if not found, or symbol if 0-arg [no]specialize, or dict arg->meta
-function collect_body_arg_meta(st)
-    out = nothing
+# Scan leading meta statements of a function body (only those are recognized
+# in lowering; ideally meta after non-meta statements would be an error).
+# Returns:
+# - arg [no]specialize meta: nothing if not found, symbol if 0-arg, or dict
+#   arg->meta, to be absorbed into the arglist by `apply_arglist_meta`
+# - method metas that desugaring must copy onto generated wrapper methods
+#   (like flisp's `propagate-method-meta`): inlining and constprop
+#   annotations, effects overrides, and per-method compiler options
+function collect_body_meta(st)
+    argmeta_all = nothing
+    argmeta = nothing
+    mmetas = nothing
     for c in children(st)
-        k = kind(c)
-        @stm c begin
-            [K"meta" [K"Identifier"] idents...] -> begin
-                meta = Symbol(c[1].name_val::String)
-                meta in (:specialize, :nospecialize) || continue
-                length(idents) == 0 && return meta
-                isnothing(out) && (out = Dict{String, Symbol}())
-                for id in idents
-                    kind(id) === K"Identifier" && (out[id.name_val] = meta)
+        kind(c) === K"meta" || break
+        spec = numchildren(c) >= 1 && kind(c[1]) === K"Identifier" ?
+            c[1].name_val::String : ""
+        if spec in ("specialize", "nospecialize")
+            meta = Symbol(spec)
+            if numchildren(c) == 1
+                isnothing(argmeta_all) && (argmeta_all = meta)
+            else
+                isnothing(argmeta) && (argmeta = Dict{String, Symbol}())
+                for id in c[2:end]
+                    kind(id) === K"Identifier" && (argmeta[id.name_val] = meta)
                 end
             end
-            # Only leading meta statements are recognized in lowering.  Ideally
-            # meta after non-meta statements would be an error.
-            _ -> break
+            continue
+        end
+        for m in children(c)
+            km = kind(m)
+            if km in KSet"purity optlevel compile infer"
+                isnothing(mmetas) && (mmetas = SyntaxList(st._graph))
+                push!(mmetas, m)
+            elseif (km === K"Identifier" || km === K"Symbol") &&
+                    m.name_val::String in ("inline", "noinline",
+                        "propagate_inbounds", "aggressive_constprop",
+                        "no_constprop")
+                isnothing(mmetas) && (mmetas = SyntaxList(st._graph))
+                push!(mmetas, km === K"Symbol" ? m :
+                    setattr(m, :kind, K"Symbol"))
+            end
         end
     end
-    out
+    (isnothing(argmeta_all) ? argmeta : argmeta_all), mmetas
+end
+
+# Convert a function body, handling `if @generated` and attaching collected
+# method metas for desugaring to find.
+function _dst_function_body(g, st, r, method_metas)
+    r2 = if has_if_generated(r)
+        gen, nongen = split_generated(r, true), split_generated(r, false)
+        @ast g st [K"_generated_body" [K"syntaxquote" gen] est_to_dst(nongen)]
+    else
+        est_to_dst(r)
+    end
+    isnothing(method_metas) ? r2 : setmeta(r2, :method_metas, method_metas)
 end
 
 """
@@ -574,41 +609,33 @@ function est_to_dst(st::SyntaxTree)
             @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
         ([K"=" l r], when=(is_eventually_call(l))) -> let
             # no fix_arglist needed, since this func can't be anonymous
-            l = apply_arglist_meta(l, collect_body_arg_meta(r))
-            l = force_readable_sparams(l)
-            if has_if_generated(r)
-                gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
-            else
-                r2 = rec(r)
-            end
-            @ast g st [K"function" rec(l) r2]
+            arg_meta, method_metas = collect_body_meta(r)
+            l = force_readable_sparams(apply_arglist_meta(l, arg_meta))
+            @ast g st [K"function"
+                rec(l)
+                _dst_function_body(g, st, r, method_metas)]
         end
         [K"function" l r] -> let
-            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
-            l = force_readable_sparams(l)
-            if has_if_generated(r)
-                gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
-            else
-                r2 = rec(r)
-            end
-            @ast g st [K"function" rec(l) r2]
+            arg_meta, method_metas = collect_body_meta(r)
+            l = force_readable_sparams(
+                apply_arglist_meta(_dst_fix_arglist(l), arg_meta))
+            @ast g st [K"function"
+                rec(l)
+                _dst_function_body(g, st, r, method_metas)]
         end
         [K"->" l r] -> let
-            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
-            l = force_readable_sparams(l)
-            if has_if_generated(r)
-                gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
-            else
-                r2 = rec(r)
-            end
-            @ast g st [K"->" rec(l) r2]
+            arg_meta, method_metas = collect_body_meta(r)
+            l = force_readable_sparams(
+                apply_arglist_meta(_dst_fix_arglist(l), arg_meta))
+            @ast g st [K"->"
+                rec(l)
+                _dst_function_body(g, st, r, method_metas)]
         end
         [K"macro" l r] -> let
-            l = apply_arglist_meta(l, collect_body_arg_meta(r))
-            @ast g st [K"macro" rec(l) rec(r)]
+            arg_meta, method_metas = collect_body_meta(r)
+            r2 = rec(r)
+            isnothing(method_metas) || (r2 = setmeta(r2, :method_metas, method_metas))
+            @ast g st [K"macro" rec(apply_arglist_meta(l, arg_meta)) r2]
         end
         [K"do" [K"call" f args...] lam] -> let
             @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]
