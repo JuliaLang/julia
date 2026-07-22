@@ -489,7 +489,8 @@ function getdict!(dict::LineInfoDict, data::Vector{<:Unsigned})
 end
 
 function _lookup_corrected(ip::Unsigned)
-    st = lookup(convert(Ptr{Cvoid}, ip))
+    # convert through UInt: only word-size integers convert directly to Ptr
+    st = lookup(convert(Ptr{Cvoid}, UInt(ip)))
     # To correct line numbers for moving code, put it in the form expected by
     # Base.update_stackframes_callback[]
     stn = map(x->(x, 1), st)
