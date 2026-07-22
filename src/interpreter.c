@@ -884,7 +884,9 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES
     if (jl_is_method(mi->def.value)) {
         if (mi->def.method->source) {
             jl_method_t *m = mi->def.method;
-            src = (jl_code_info_t*)m->source;
+            // Acquire pairs with the release publish below: a reader that sees
+            // the uncompressed CodeInfo pointer must also see its contents.
+            src = (jl_code_info_t*)jl_atomic_load_acquire((_Atomic(jl_value_t*)*)&m->source);
             if (!jl_is_code_info(src)) {
                 // Root the compressed blob across the (allocating) decode:
                 // another thread interpreting the same method concurrently can
@@ -900,7 +902,8 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES
                 // access it frequently. TODO: Have some sort of usage-based
                 // cache here. (Concurrent publishes store equivalent copies;
                 // last one wins.)
-                jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)src);
+                jl_gc_write_atomic(m, *(_Atomic(jl_value_t*)*)&m->source, jl_value_t,
+                                   (jl_value_t*)src, release);
             }
             ret = (jl_value_t*)src;
         }
