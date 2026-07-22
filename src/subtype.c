@@ -1420,19 +1420,18 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
 
 // wrap a TypeVar env entry as svec(tvar, constrained): preserves TypeVar
 // identity while carrying the "constrained by any concrete subtype" bit.
-// `tvar` is the uncertain value (typically a TypeVar); `constrained` is 1
-// iff any concrete subtype of the LHS will pin this var to a definite value.
+// `tvar` is the uncertain value (something with has_free_typevars)
+// `constrained` is 1 if all concrete subtypes of the LHS will pin this var to a definite value.
 static jl_value_t *wrap_tvar_env(jl_value_t *tvar, int constrained) JL_CANSAFEPOINT
 {
     return (jl_value_t*)jl_svec2(tvar, constrained ? jl_true : jl_false);
 }
 
-// Allocation-free mirror of the `PIN_TYPEOF` grade of
-// `Core.Compiler.pin_grade`: is `v` pinned to a `typeof`-produced argument
+// See `Core.Compiler.pin_grade`: is `v` pinned to a `typeof`-produced argument
 // type (concrete, in particular not `Union{}`) by every call matching `t`?
 // True for a required covariant argument slot (directly, under nested
 // `Tuple`s, or in all arms of a `Union`), or as the sole upper bound of
-// another variable in such a slot. A false return is always safe.
+// another variable in such a slot. A false return is always conservative.
 static int pins_typeof_static(jl_tvar_t *v, jl_value_t *t) JL_NOTSAFEPOINT
 {
     if (t == (jl_value_t*)v)
@@ -1444,14 +1443,14 @@ static int pins_typeof_static(jl_tvar_t *v, jl_value_t *t) JL_NOTSAFEPOINT
             // the least solution for `v` is the other variable's value
             return 1;
         if (ua->var == v)
-            return 0; // `v` is rebound below
+            return 0; // `v` is rebound
         t = ua->body;
     }
     if (jl_is_uniontype(t)) {
         return pins_typeof_static(v, ((jl_uniontype_t*)t)->a) &&
                pins_typeof_static(v, ((jl_uniontype_t*)t)->b);
     }
-    if (!jl_is_datatype(t))
+    if (!jl_is_datatype(t) || jl_is_abstracttype(t))
         return 0;
     jl_datatype_t *dt = (jl_datatype_t*)t;
     if (dt->name == jl_tuple_typename) {
@@ -1463,17 +1462,17 @@ static int pins_typeof_static(jl_tvar_t *v, jl_value_t *t) JL_NOTSAFEPOINT
                 return 1;
         }
     }
-    // `Type{v}` can be matched by the argument `Union{}`, and invariant
-    // occurrences guarantee at most an inhabited value (the `PIN_INHABITED`
-    // grade, not mirrored here)
     return 0;
 }
 
 // Static check mirroring a conservative subset of
 // Core.Compiler.constrains_var: is `var` guaranteed to be pinned by any
 // concrete leaftype subtype of `typ`? A false return is always safe; a true
-// return must also hold under `constrains_var`. Used only on fast paths
-// where we don't have dynamic varbinding state to draw from.
+// return must also hold under `constrains_var`. Used where a path-independent
+// answer is wanted: the env-copy fast paths in `jl_subtype_env`/`intersect`,
+// which have no dynamic varbinding state to draw from, and
+// `mark_required_tuple_element`, whose answer must not depend on the
+// in-progress dynamic bounds even though `e->vars` is available there.
 static int constrains_param_static(jl_tvar_t *var, jl_value_t *typ, int covariant) JL_NOTSAFEPOINT
 {
     if (typ == (jl_value_t*)var)
@@ -1485,32 +1484,23 @@ static int constrains_param_static(jl_tvar_t *var, jl_value_t *typ, int covarian
         jl_unionall_t *ua = (jl_unionall_t*)typ;
         // occurrences in the inner variable's declared bound pin `var` only
         // when every call pins that variable to a `typeof`-produced argument
-        // type; otherwise it can take the value `Union{}` (e.g. a
-        // `Type{<:...}` range matched by `Union{}`), satisfying its bounds
-        // without constraining them (the `jl_has_typevar` occurs-check gates
-        // the `pins_typeof_static` body traversal)
+        // type, satisfying its bounds without constraining them.
         if (covariant && ua->var->lb == jl_bottom_type &&
             jl_has_typevar(ua->var->ub, var) &&
             pins_typeof_static(ua->var, ua->body) &&
             constrains_param_static(var, ua->var->ub, 1))
             return 1;
-        if (ua->var == var)
-            // `var` is rebound: occurrences below belong to the inner
-            // variable (issue #54893)
+        if (ua->var == var) // `var` is rebound
             return 0;
         typ = ua->body;
     }
     if (jl_is_uniontype(typ)) {
-        // both alternatives must constrain var
+        // conservatively, both alternatives must constrain var
         return constrains_param_static(var, ((jl_uniontype_t*)typ)->a, covariant) &&
                constrains_param_static(var, ((jl_uniontype_t*)typ)->b, covariant);
     }
-    else if (jl_is_some_Type(typ)) {
-        jl_value_t *T = jl_some_Type_T(typ);
-        if (T == (jl_value_t*)var && var->ub == (jl_value_t*)jl_any_type) {
-            return 0;
-        }
-        return constrains_param_static(var, T, 0);
+    else if (jl_is_typeeq(typ)) {
+        return constrains_param_static(var, jl_typeeq_T(typ), 0);
     }
     else if (jl_is_datatype(typ)) {
         jl_datatype_t *dt = (jl_datatype_t*)typ;
@@ -1680,7 +1670,7 @@ static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var, int covarian
 
 // A (closed) type value bound only through equality (`Type{X}`) positions is
 // only known up to `==` (#61323); record it as a pinned (lb == ub) typevar
-// marker. A BOUND_EQ channel still marks it *defined* (constrained) for every
+// marker. A BOUND_EQ channel still marks it defined (constrained) for every
 // `==`-equal call. Returns NULL for other values: free-typevar values keep the
 // legacy plain binding (#61242), egality-certain values stay unwrapped.
 static jl_value_t *eq_pinned_envout_marker(jl_unionall_t *u, jl_varbinding_t *vb, jl_value_t *lb,

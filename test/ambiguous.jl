@@ -330,10 +330,8 @@ _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = E
 end
 @test length(detect_unbound_args(M25341; recursive=true)) == 1
 
-# detect_unbound_args uses a static rule derived from how subtyping assigns
-# static parameters (see `Core.Compiler.constrains_var`)
 module UnboundDetect
-    # some matching call leaves the parameter unbound
+    # some matching calls leave the parameter unbound (with example given)
     unbound1(x::Type{<:T}) where {T} = T                       # f(Union{})
     unbound2(x::Vector{<:T}) where {T} = T                     # f(Vector{Union{}}())
     unbound3(x::T) where {T>:Int} = T                          # f(2.0)
@@ -344,11 +342,7 @@ module UnboundDetect
     unbound8(x::Type{Union{T,Missing}}) where {T} = T          # f(Missing)
     unbound9(x::Ref{Vector{<:T}}) where {T} = T                # f(Ref{Vector}(...))
     unbound10(x::Type{<:T}, y::Type{<:S}) where {T, S} = T     # f(Union{}, Int): S is never read, but T is
-    # a raw read is reported even when an `@isdefined` guard exists elsewhere
-    # in the body: proving the guard dominates the read would need dataflow
     unbound13(x::Type{<:T}) where {T} = @isdefined(T) ? T : 0
-    # a possibly-unbound parameter is only reported when the lowered body
-    # actually reads it; an `@isdefined` query alone cannot throw
     unused1(x::Type{<:T}) where {T} = 0
     unused2(x::Type{<:T}) where {T} = @isdefined(T)
     # every matching call pins the parameter
@@ -362,8 +356,7 @@ module UnboundDetect
     bound8(x::Ref{Vector{T}}) where {T} = T
     bound9(x::Tuple{<:T}) where {T} = T
     # issue #58427: every match pins `T`, but a `Vector{Missing}` argument
-    # does so only by absorbing the `T` arm as `T = Union{}` — deliberately
-    # still reported, since `T == Union{}` is a real problem for the body
+    # does so only by absorbing the `T` arm as `T = Union{}`
     unbound14(x::Vector{Union{Missing, T}}) where {T<:Real} = T
     # issue #59023: the `Vector{T}` arm cannot be absorbed into `Nothing`,
     # so every match genuinely pins `T` — an accepted false positive: the

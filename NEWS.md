@@ -203,16 +203,13 @@ Standard library changes
 * New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that allocate `Core.Box`
   in their lowered code, which can indicate performance issues from captured variables in closures ([#60478]).
 
-* `detect_unbound_args` now uses a static rule derived from how subtyping assigns values
-  to static parameters, instead of a heuristic. It detects previously missed
+* `detect_unbound_args` now uses a conservative rule derived from how subtyping assigns values
+  to static parameters, instead of older heuristics. It detects previously missed
   possibly-unbound parameters (such as `f(::Type{<:T}) where {T}`, which leaves `T`
   unbound when called with `Union{}`, or `f(::Vector{<:T}) where {T}` with a
   `Vector{Union{}}` argument), and no longer reports methods whose problematic calls are
   all shadowed by more specific methods (such as a `f(::Type{Union{}})` fallback), or
-  whose lowered bodies never read the possibly-unbound parameters (other than by
-  querying them with `@isdefined`). A parameter that some calls can pin only as
-  `T == Union{}` by absorbing a `Union` arm (such as `f(::Vector{Union{Nothing, T}})
-  where {T<:Real}` called with a `Vector{Nothing}`) is deliberately still reported.
+  whose lowered bodies never read the possibly-unbound parameters.
 
 #### Dates
 
