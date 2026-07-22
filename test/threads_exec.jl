@@ -4,6 +4,7 @@ using Test
 using Base.Threads
 using Base.Threads: SpinLock, threadpoolsize
 using LinearAlgebra: peakflops
+import Libdl
 
 # for cfunction_closure
 include("testenv.jl")
@@ -21,11 +22,24 @@ const WATCHDOG_DEADLINE_MS =
 function _watchdog_native(::Ptr{Cvoid})
     @ccall gc_safe=true uv_sleep(WATCHDOG_DEADLINE_MS::Cuint)::Cvoid
     ccall(:jl_safe_printf, Cvoid, (Cstring,), "threads_exec native watchdog expired, dumping tasks\n")
-    # scheduler state first: it cannot hang, while the task dump can wedge on
-    # win32 trying to unwind a running task (build 634 stopped after one line)
-    ccall(:jl_dump_scheduler_state, Cvoid, ())
-    ccall(:jl_jit_dump_state_impl, Cvoid, ())
-    ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0)
+    # each dump step guarded: a failure (or a hang already claimed one — the
+    # win32 task dump wedges unwinding a running task) must not cost the rest
+    try
+        # scheduler state first: it cannot hang
+        ccall(:jl_dump_scheduler_state, Cvoid, ())
+    catch
+    end
+    try
+        # bare ccall cannot see libjulia-codegen symbols on Windows (no global
+        # symbol namespace); resolve through an explicit handle
+        h = Libdl.dlopen("libjulia-codegen"; throw_error = false)
+        h === nothing || ccall(Libdl.dlsym(h, :jl_jit_dump_state_impl), Cvoid, ())
+    catch
+    end
+    try
+        ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0)
+    catch
+    end
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), 15) # SIGTERM
     return nothing
 end
