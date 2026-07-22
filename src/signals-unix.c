@@ -532,7 +532,9 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         // thread. That will quickly be rectified when we rerun the faulting
         // instruction and end up right back here, or we start to run the
         // exception handler and immediately hit the safepoint there.
-        if (ct->ptls->defer_signal) {
+        if (ct->ptls->defer_signal || ct->eh == NULL) {
+            // throwing with no handler in the context would be fatal; keep the
+            // sigint pending for a later safepoint
             jl_safepoint_defer_sigint();
         }
         else if (jl_safepoint_consume_sigint()) {
@@ -745,13 +747,15 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
     jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
     if (request == 2) {
         int force = jl_check_force_sigint();
-        if (force || (!ptls->defer_signal && ptls->io_wait)) {
+        jl_jmp_buf *saferestore = jl_get_safe_restore();
+        // throwing with no handler in the context would be fatal
+        int can_throw = saferestore != NULL || ct->eh != NULL;
+        if (can_throw && (force || (!ptls->defer_signal && ptls->io_wait))) {
             jl_safepoint_consume_sigint();
             if (force)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
             // Force a throw
             jl_clear_force_sigint();
-            jl_jmp_buf *saferestore = jl_get_safe_restore();
             if (saferestore) // restarting jl_ or profile
                 jl_longjmp_in_ctx(sig, ctx, *saferestore);
             else
