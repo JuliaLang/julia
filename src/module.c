@@ -81,6 +81,12 @@ struct implicit_search_resolution {
     // If non-null, the unique binding imported. For PARTITION_KIND_IMPLICIT_GLOBAL, always matches binding_or_const.
     // Must have trust_cache = 0.
     jl_binding_t *debug_only_ultimate_binding;
+    // For a deprecated constant, which resolves through PARTITION_KIND_IMPLICIT_GLOBAL to its
+    // defining binding (so the deprecation warning still fires on access), this is the constant
+    // value that binding holds. It lets two deprecated constants that name an `egal` value
+    // unify, so importing the same deprecated constant from two modules is not spuriously
+    // ambiguous. NULL otherwise.
+    jl_value_t *deprecated_const_val;
 };
 
 static size_t WORLDMAX(size_t a, size_t b) { return a > b ? a : b; }
@@ -105,12 +111,23 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     if (to_update->ultimate_kind == PARTITION_KIND_GUARD) {
         to_update->ultimate_kind = resolution.ultimate_kind;
         to_update->binding_or_const = resolution.binding_or_const;
+        to_update->deprecated_const_val = resolution.deprecated_const_val;
         to_update->debug_only_import_from = resolution.debug_only_import_from;
         to_update->debug_only_ultimate_binding = resolution.debug_only_ultimate_binding;
         return;
     }
-    if (resolution.ultimate_kind == to_update->ultimate_kind &&
-        resolution.binding_or_const == to_update->binding_or_const) {
+    int same = resolution.ultimate_kind == to_update->ultimate_kind &&
+               resolution.binding_or_const == to_update->binding_or_const;
+    // Two deprecated constants that name the same value are not ambiguous.
+    if (!same &&
+        resolution.ultimate_kind == PARTITION_KIND_IMPLICIT_GLOBAL &&
+        to_update->ultimate_kind == PARTITION_KIND_IMPLICIT_GLOBAL &&
+        resolution.deprecated_const_val != NULL &&
+        to_update->deprecated_const_val != NULL &&
+        jl_egal(resolution.deprecated_const_val, to_update->deprecated_const_val)) {
+        same = 1;
+    }
+    if (same) {
         if (resolution.debug_only_import_from != to_update->debug_only_import_from) {
             to_update->debug_only_import_from = NULL;
         }
@@ -121,6 +138,7 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     }
     to_update->ultimate_kind = PARTITION_KIND_FAILED;
     to_update->binding_or_const = NULL;
+    to_update->deprecated_const_val = NULL;
     to_update->debug_only_import_from = NULL;
     to_update->debug_only_ultimate_binding = NULL;
 }
@@ -213,7 +231,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
         modstack_t *tmp = st;
         for (; tmp != NULL; tmp = tmp->prev) {
             if (tmp->b == b) {
-                return (struct implicit_search_resolution){ PARTITION_FAKE_KIND_CYCLE, NULL, 0, ~(size_t)0, 1, 0, NULL, NULL };
+                return (struct implicit_search_resolution){ PARTITION_FAKE_KIND_CYCLE, NULL, 0, ~(size_t)0, 1, 0, NULL, NULL, NULL };
             }
         }
     }
@@ -226,7 +244,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
     struct implicit_search_resolution depimpstate;
     size_t min_world = 0;
     size_t max_world = ~(size_t)0;
-    impstate = depimpstate = (struct implicit_search_resolution){ PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL };
+    impstate = depimpstate = (struct implicit_search_resolution){ PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL, NULL };
 
     JL_LOCK(&m->lock);
     int i = (int)module_usings_length(m) - 1;
@@ -302,7 +320,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
             comparison = &depimpstate;
         }
 
-        struct implicit_search_resolution imp_resolution = { PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL };
+        struct implicit_search_resolution imp_resolution = { PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL, NULL };
         if (!tempbpart_valid) {
             imp_resolution = jl_resolve_implicit_import(tempb, &top, world, trust_cache);
             // imp_resolution is the resolution for import into tempb (which may have been cached for tempb
@@ -338,6 +356,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
                     // const-folded as before.
                     imp_resolution.binding_or_const = (jl_value_t *)tempb;
                     imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_GLOBAL;
+                    imp_resolution.deprecated_const_val = tempbpart->restriction;
                 }
                 else {
                     imp_resolution.binding_or_const = tempbpart->restriction;
