@@ -315,3 +315,36 @@ module DeprecatedUsingUnifyTest
     @test (@test_nowarn readmix()) === 0xff
     @test !Base.isdeprecated(@__MODULE__, :MixC)
 end
+
+# The deprecation is carried on the importer's partition for globals as well as constants, and
+# transparently through reexports: a `using` of a module that only reexports a deprecated
+# binding still reports it deprecated (`isdeprecated`) and warns on access, without walking to
+# the defining owner. An explicit `import` still suppresses the use-site warning.
+module DeprecatedReexportTest
+    using Test
+    module Src
+        export DepC, DepG
+        const _c = 0x1234
+        Base.@deprecate_binding DepC _c false
+        newg() = 1
+        Base.@deprecate_binding DepG newg false ", use newg instead." false
+    end
+    module Reexport
+        using ..Src
+        export DepC, DepG                                           # reexport both
+    end
+    using .Reexport
+    readc() = DepC
+    readg() = DepG
+    # Reached through `using .Reexport`; the deprecation is visible on this module's partition.
+    @test Base.isdeprecated(@__MODULE__, :DepC)
+    @test Base.isdeprecated(@__MODULE__, :DepG)
+    @test (@test_warn "DepC is deprecated" readc()) === Src._c
+    @test (@test_warn "DepG is deprecated, use newg instead." readg()) === Src.newg
+
+    # An explicit selective import of the reexported binding suppresses the use-site warning.
+    ex = :(module Consumer; import ..Reexport: DepC; getdep() = DepC; end)
+    @test_warn "importing deprecated binding" eval(ex)
+    @test (@test_nowarn Consumer.getdep()) === Src._c
+    @test !Base.isdeprecated(Consumer, :DepC)
+end

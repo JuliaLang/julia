@@ -342,6 +342,8 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
             imp_resolution.should_be_reexported = 0;
         } else {
             enum jl_partition_kind kind = jl_binding_kind(tempbpart);
+            // Copy the imported binding's deprecation onto the importer's partition.
+            imp_resolution.deprecation_flags = tempbpart_flags & DEPWARN_FLAGS;
             if (kind == PARTITION_KIND_IMPLICIT_GLOBAL) {
                 imp_resolution.binding_or_const = tempbpart->restriction;
                 imp_resolution.debug_only_ultimate_binding = (jl_binding_t*)tempbpart->restriction;
@@ -354,7 +356,6 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
                 assert(tempbpart->restriction);
                 imp_resolution.binding_or_const = tempbpart->restriction;
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
-                imp_resolution.deprecation_flags = tempbpart_flags & DEPWARN_FLAGS;
                 imp_resolution.debug_only_ultimate_binding = tempb;
             } else if (kind == PARTITION_KIND_FAILED) {
                 imp_resolution.binding_or_const = NULL;
@@ -2080,28 +2081,20 @@ JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int st
 
 static int should_depwarn(jl_binding_t *b, uint8_t flag) JL_CANSAFEPOINT
 {
-    // We consider bindings deprecated, if:
+    // We consider a binding deprecated if:
     //
     // 1. The binding itself is deprecated, or
-    // 2. We implicitly import any deprecated binding.
+    // 2. it implicitly imports (through `using`) a deprecated binding.
     //
-    // However, we do not consider the binding deprecated if the import was an explicit
-    // (`using` or `import`). The logic here is that the thing that needs to be adjusted
-    // is not the use itself, but rather the `using` or `import` (which already prints
-    // an appropriate warning).
-    //
-    // Walk imports so this matches the value access warning and codegen's `maybe_depwarn`.
-    // A deprecated global reached through an implicit `using` resolves via `IMPLICIT_GLOBAL`,
-    // so its deprecation lives on the leaf and only shows up once we walk to it; a deprecated
-    // constant instead carries its deprecation on the importer's `IMPLICIT_CONST` partition,
-    // which the walk also inspects. Either way, checking only the top partition without the
-    // walk would miss the global case, so the codegen-emitted `jl_binding_deprecation_check`
-    // would silently skip the warning even though inference kept the effect.
-    size_t world = jl_current_task->world_age;
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
-    int found = 0;
-    jl_walk_binding_inplace_depwarn(&b, &bpart, world, flag, &found);
-    return found != 0;
+    // We do not consider it deprecated when reached through an explicit import (`import`/
+    // `using M: x`): the thing that should be adjusted is the import, not the use, and the
+    // import site already warned. Implicit resolution records both of these on the importer's
+    // own partition -- it stamps the deprecation flag onto the resolved partition for every
+    // implicitly-imported deprecated binding (constant or global, transparently through
+    // reexports), while explicit imports never take that path and so carry no flag. Checking
+    // the top partition therefore suffices, and matches codegen's const-fold `maybe_depwarn`.
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    return (bpart->kind & flag) != 0;
 }
 
 JL_DLLEXPORT void jl_binding_deprecation_check(jl_binding_t *b) JL_CANSAFEPOINT
