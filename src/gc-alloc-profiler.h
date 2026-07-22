@@ -30,7 +30,8 @@ JL_DLLEXPORT void jl_free_alloc_profile(void);
 
 // Report every recorded type pointer to `f`, for GC root marking, so that the
 // types referenced by recorded allocations stay valid until the profile is freed.
-void jl_gc_foreach_alloc_profile_root(void (*f)(jl_value_t*, void*), void *env) JL_NOTSAFEPOINT;
+typedef void (*jl_alloc_profile_root_cb_t)(jl_value_t*, void*) JL_NOTSAFEPOINT;
+void jl_gc_foreach_alloc_profile_root(jl_alloc_profile_root_cb_t f, void *env) JL_NOTSAFEPOINT;
 
 // ---------------------------------------------------------------------
 // Functions to call from GC when alloc profiling is enabled
