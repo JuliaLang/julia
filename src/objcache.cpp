@@ -174,7 +174,7 @@ void ObjCache::initDB()
     checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
     llvm::sys::fs::create_directories(*CachePath);
     if (int Err = mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640)) {
-        if (Err != ENOENT)
+        if (Err != ENOENT && Err != EACCES)
             checkMDB(Err);
         mdb_env_close(Env);
         goto cleanup;
