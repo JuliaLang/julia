@@ -189,7 +189,7 @@ function choosetests(choices = [])
 
     filtertests!(tests, "unicode", ["unicode/utf8"])
     filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
-                   "strings/io", "strings/types", "strings/annotated"])
+                   "strings/io", "strings/types", "strings/annotated", "strings/stringview"])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", ["Compiler"])
