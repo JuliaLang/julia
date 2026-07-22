@@ -258,9 +258,9 @@ module DeprecatedUsingTest
     @test !Base.isdeprecated(Consumer, :DepC)
 end
 
-# Importing the same deprecated constant from two modules must unify by value,
-# not report an ambiguity. Constants with unequal values still are ambiguous,
-# and a non-deprecated peer still wins.
+# Importing the same deprecated constant from two modules must unify by value, not report an
+# ambiguity, and still warn (with each source's deprecation message) on access. Constants with
+# unequal values are still ambiguous, and a non-deprecated peer still wins (no warning).
 module DeprecatedUsingUnifyTest
     using Test
     # Two deprecated constants with equal values.
@@ -277,9 +277,12 @@ module DeprecatedUsingUnifyTest
     using .A, .B
     read2() = DepC
     fold2() = DepC === 0x123456789 ? true : nothing
-    @test (@test_warn "DepC is deprecated" read2()) === 0x123456789
-    @test (@test_warn "DepC is deprecated" getglobal(@__MODULE__, :DepC)) === 0x123456789
+    # The compiled/const-folded read and the dynamic read both warn, and the warning reports
+    # each contributing source module's deprecation message.
+    @test (@test_warn r"DepC is deprecated, use _a instead\., use _b instead\."s read2()) === 0x123456789
+    @test (@test_warn "DepC is deprecated, use _a instead." getglobal(@__MODULE__, :DepC)) === 0x123456789
     @test Base.isdeprecated(@__MODULE__, :DepC)
+    # The value still const-folds through the unified resolution.
     @test Base.infer_return_type(fold2, Tuple{}) === Bool
 
     # Two deprecated constants with unequal values stay ambiguous.

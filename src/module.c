@@ -125,11 +125,7 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
         same = 0;
     }
     else if (resolution.ultimate_kind == PARTITION_KIND_IMPLICIT_CONST) {
-        // Unify constants by value with `jl_egal`, so the same constant defined in two
-        // modules -- including distinct boxes of an equal immutable, such as an integer --
-        // is not spuriously ambiguous. (A deprecated constant is an IMPLICIT_CONST here too,
-        // carrying its deprecation in `deprecation_flags`, so two deprecated constants that
-        // name an egal value unify just like non-deprecated ones.)
+        // Unify constants by `egal`
         same = jl_egal(resolution.binding_or_const, to_update->binding_or_const);
     }
     else {
@@ -449,8 +445,7 @@ static void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t *
 // Walk imports to the leaf while reporting whether any partition along the way carries a
 // deprecation `flag` (`PARTITION_FLAG_DEPWARN` for the access warning, or
 // `PARTITION_FLAG_DEPRECATED` for `isdeprecated`), suppressed once an explicit import is
-// passed (the `import`/`using: x` site is what should be fixed). Keeping the single walk
-// used by both the access-warning and `isdeprecated` paths ensures they agree.
+// passed (the `import`/`using: x` site is what should be fixed).
 static void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world, size_t flag, int *found) JL_CANSAFEPOINT
 {
     int passed_explicit = 0;
@@ -1272,6 +1267,59 @@ extern _Atomic(int) jl_lineno;
 
 static char const dep_message_prefix[] = "_dep_message_";
 
+static void jl_print_dep_message_value(jl_value_t *dep_message) JL_CANSAFEPOINT
+{
+    if (jl_is_string(dep_message))
+        jl_uv_puts(JL_STDERR, jl_string_data(dep_message), jl_string_len(dep_message));
+    else
+        jl_static_show(JL_STDERR, dep_message);
+}
+
+// A binding deprecated only through `using` imports likely has no `_dep_message_<name>` in
+// its own module: the message(s) live on the source module(s) (which do not export them).
+// Walk `m`'s usings to each exported source of `name`, resolve reexports to the defining
+// leaf, and print every deprecated source's message -- so importing the same deprecated
+// constant from several modules reports each one's guidance. Returns 1 if any message was
+// printed. `msgsym` is the `_dep_message_<name>` symbol.
+static int jl_print_using_dep_messages(jl_module_t *m, jl_sym_t *name, jl_sym_t *msgsym) JL_CANSAFEPOINT
+{
+    size_t world = jl_current_task->world_age;
+    int printed = 0;
+    JL_LOCK(&m->lock);
+    size_t usings_len = module_usings_length(m);
+    JL_UNLOCK(&m->lock);
+    for (size_t i = 0; i < usings_len; i++) {
+        JL_LOCK(&m->lock);
+        struct _jl_module_using data = *module_usings_getidx(m, i);
+        JL_UNLOCK(&m->lock);
+        if (data.min_world > world || data.max_world < world)
+            continue;
+        jl_module_t *imp = data.mod;
+        JL_GC_PROMISE_ROOTED(imp); // rooted via `m->usings`
+        jl_binding_t *tempb = jl_get_module_binding(imp, name, 0);
+        if (!tempb)
+            continue;
+        jl_binding_partition_t *tempbpart = jl_get_binding_partition(tempb, world);
+        if (!jl_bpart_is_exported(tempbpart->kind))
+            continue;
+        // Resolve reexports to the module that defines the binding (and holds the message).
+        jl_walk_binding_inplace(&tempb, &tempbpart, world);
+        if (!(tempbpart->kind & PARTITION_FLAG_DEPRECATED))
+            continue;
+        jl_binding_t *msgb = jl_get_module_binding(tempb->globalref->mod, msgsym, 0);
+        if (!msgb)
+            continue;
+        jl_value_t *msg = jl_get_binding_value(msgb);
+        if (!msg)
+            continue;
+        JL_GC_PUSH1(&msg);
+        jl_print_dep_message_value(msg);
+        JL_GC_POP();
+        printed = 1;
+    }
+    return printed;
+}
+
 static void jl_binding_dep_message(jl_binding_t *b)
 {
     jl_module_t *m = b->globalref->mod;
@@ -1282,20 +1330,18 @@ static void jl_binding_dep_message(jl_binding_t *b)
     memcpy(dep_binding_name, dep_message_prefix, prefix_len);
     memcpy(dep_binding_name + prefix_len, jl_symbol_name(name), name_len);
     dep_binding_name[prefix_len+name_len] = '\0';
-    jl_binding_t *dep_message_binding = jl_get_binding(m, jl_symbol(dep_binding_name));
+    jl_sym_t *msgsym = jl_symbol(dep_binding_name);
+    jl_binding_t *dep_message_binding = jl_get_binding(m, msgsym);
     jl_value_t *dep_message = NULL;
     if (dep_message_binding != NULL)
         dep_message = jl_get_binding_value(dep_message_binding);
     JL_GC_PUSH1(&dep_message);
     if (dep_message != NULL) {
-        if (jl_is_string(dep_message)) {
-            jl_uv_puts(JL_STDERR, jl_string_data(dep_message), jl_string_len(dep_message));
-        }
-        else {
-            jl_static_show(JL_STDERR, dep_message);
-        }
+        jl_print_dep_message_value(dep_message);
     }
-    else {
+    // No message on `m` itself: the deprecation may come through `using`, so gather the
+    // source module(s)' messages before falling back to describing the value.
+    else if (!jl_print_using_dep_messages(m, name, msgsym)) {
         jl_value_t *v = jl_get_binding_value(b);
         dep_message = v; // use as gc-root
         if (v) {
