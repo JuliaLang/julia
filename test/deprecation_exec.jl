@@ -278,6 +278,7 @@ module DeprecatedUsingUnifyTest
     read2() = DepC
     fold2() = DepC === 0x123456789 ? true : nothing
     @test (@test_warn "DepC is deprecated" read2()) === 0x123456789
+    @test (@test_warn "DepC is deprecated" getglobal(@__MODULE__, :DepC)) === 0x123456789
     @test Base.isdeprecated(@__MODULE__, :DepC)
     @test Base.infer_return_type(fold2, Tuple{}) === Bool
 

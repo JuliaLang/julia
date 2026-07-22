@@ -81,13 +81,17 @@ struct implicit_search_resolution {
     // If non-null, the unique binding imported. For PARTITION_KIND_IMPLICIT_GLOBAL, always matches binding_or_const.
     // Must have trust_cache = 0.
     jl_binding_t *debug_only_ultimate_binding;
-    // For a deprecated constant, which resolves through PARTITION_KIND_IMPLICIT_GLOBAL to its
-    // defining binding (so the deprecation warning still fires on access), this is the constant
-    // value that binding holds. It lets two deprecated constants that name an `egal` value
-    // unify, so importing the same deprecated constant from two modules is not spuriously
-    // ambiguous. NULL otherwise.
-    jl_value_t *deprecated_const_val;
+    // Deprecation flags (PARTITION_FLAG_DEPRECATED / _DEPWARN) to stamp onto the resolved
+    // partition. A deprecated constant imported through `using` resolves to IMPLICIT_CONST
+    // (its value), so -- unlike a deprecated global, whose flag lives on the leaf the depwarn
+    // walk reaches -- there is no leaf to carry the deprecation. Recording it here and OR-ing
+    // it onto the importer's partition lets the walk (and `should_depwarn`/`isdeprecated`)
+    // find it directly on the resolved partition, so access through `using` warns consistently
+    // for constants and globals. It is OR-ed together when constants unify.
+    size_t deprecation_flags;
 };
+
+static const size_t DEPWARN_FLAGS = PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN;
 
 static size_t WORLDMAX(size_t a, size_t b) { return a > b ? a : b; }
 static size_t WORLDMIN(size_t a, size_t b) { return a > b ? b : a; }
@@ -111,23 +115,31 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     if (to_update->ultimate_kind == PARTITION_KIND_GUARD) {
         to_update->ultimate_kind = resolution.ultimate_kind;
         to_update->binding_or_const = resolution.binding_or_const;
-        to_update->deprecated_const_val = resolution.deprecated_const_val;
+        to_update->deprecation_flags = resolution.deprecation_flags;
         to_update->debug_only_import_from = resolution.debug_only_import_from;
         to_update->debug_only_ultimate_binding = resolution.debug_only_ultimate_binding;
         return;
     }
-    int same = resolution.ultimate_kind == to_update->ultimate_kind &&
-               resolution.binding_or_const == to_update->binding_or_const;
-    // Two deprecated constants that name the same value are not ambiguous.
-    if (!same &&
-        resolution.ultimate_kind == PARTITION_KIND_IMPLICIT_GLOBAL &&
-        to_update->ultimate_kind == PARTITION_KIND_IMPLICIT_GLOBAL &&
-        resolution.deprecated_const_val != NULL &&
-        to_update->deprecated_const_val != NULL &&
-        jl_egal(resolution.deprecated_const_val, to_update->deprecated_const_val)) {
-        same = 1;
+    int same;
+    if (resolution.ultimate_kind != to_update->ultimate_kind) {
+        same = 0;
+    }
+    else if (resolution.ultimate_kind == PARTITION_KIND_IMPLICIT_CONST) {
+        // Unify constants by value with `jl_egal`, so the same constant defined in two
+        // modules -- including distinct boxes of an equal immutable, such as an integer --
+        // is not spuriously ambiguous. (A deprecated constant is an IMPLICIT_CONST here too,
+        // carrying its deprecation in `deprecation_flags`, so two deprecated constants that
+        // name an egal value unify just like non-deprecated ones.)
+        same = jl_egal(resolution.binding_or_const, to_update->binding_or_const);
+    }
+    else {
+        same = resolution.binding_or_const == to_update->binding_or_const;
     }
     if (same) {
+        // Deprecation is weak: unified constants are deprecated only if every contributing
+        // import was (`impstate`/`depimpstate` keep deprecated and non-deprecated resolutions
+        // apart, so this only OR-s together same-strength imports).
+        to_update->deprecation_flags |= resolution.deprecation_flags;
         if (resolution.debug_only_import_from != to_update->debug_only_import_from) {
             to_update->debug_only_import_from = NULL;
         }
@@ -138,14 +150,17 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     }
     to_update->ultimate_kind = PARTITION_KIND_FAILED;
     to_update->binding_or_const = NULL;
-    to_update->deprecated_const_val = NULL;
+    to_update->deprecation_flags = 0;
     to_update->debug_only_import_from = NULL;
     to_update->debug_only_ultimate_binding = NULL;
 }
 
 static jl_binding_partition_t *jl_implicit_import_resolved(jl_binding_t *b, struct implicit_search_gap gap, struct implicit_search_resolution resolution) JL_CANSAFEPOINT
 {
-    size_t new_kind = resolution.ultimate_kind | gap.inherited_flags;
+    // The deprecation flags come from the resolution (the imported binding), not from the
+    // importer's own inherited flags, so a stale deprecation from a prior resolution of this
+    // binding does not persist across a re-resolution (e.g. after the source is un-deprecated).
+    size_t new_kind = resolution.ultimate_kind | (gap.inherited_flags & ~DEPWARN_FLAGS) | resolution.deprecation_flags;
     // If the resolution indicates this should be reexported, add the implicit export flag
     if (resolution.should_be_reexported) {
         new_kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
@@ -231,7 +246,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
         modstack_t *tmp = st;
         for (; tmp != NULL; tmp = tmp->prev) {
             if (tmp->b == b) {
-                return (struct implicit_search_resolution){ PARTITION_FAKE_KIND_CYCLE, NULL, 0, ~(size_t)0, 1, 0, NULL, NULL, NULL };
+                return (struct implicit_search_resolution){ PARTITION_FAKE_KIND_CYCLE, NULL, 0, ~(size_t)0, 1, 0, NULL, NULL, 0 };
             }
         }
     }
@@ -244,7 +259,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
     struct implicit_search_resolution depimpstate;
     size_t min_world = 0;
     size_t max_world = ~(size_t)0;
-    impstate = depimpstate = (struct implicit_search_resolution){ PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL, NULL };
+    impstate = depimpstate = (struct implicit_search_resolution){ PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL, 0 };
 
     JL_LOCK(&m->lock);
     int i = (int)module_usings_length(m) - 1;
@@ -320,7 +335,7 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
             comparison = &depimpstate;
         }
 
-        struct implicit_search_resolution imp_resolution = { PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL, NULL };
+        struct implicit_search_resolution imp_resolution = { PARTITION_KIND_GUARD, NULL, min_world, max_world, 0, 0, NULL, NULL, 0 };
         if (!tempbpart_valid) {
             imp_resolution = jl_resolve_implicit_import(tempb, &top, world, trust_cache);
             // imp_resolution is the resolution for import into tempb (which may have been cached for tempb
@@ -341,27 +356,9 @@ static struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_GLOBAL;
             } else if (jl_bkind_is_defined_constant(kind)) {
                 assert(tempbpart->restriction);
-                if (tempbpart_flags & PARTITION_FLAG_DEPRECATED) {
-                    // A deprecated constant: resolve like a global/backdated
-                    // const (point at the owning binding) instead of absorbing
-                    // the value into an `IMPLICIT_CONST` partition -- which
-                    // would drop the deprecation flag and silently stop the
-                    // depwarn walk here. Deferring to the owner keeps the
-                    // deprecation on the leaf the walk reaches, so access
-                    // through `using` warns like a deprecated global and like
-                    // a direct access (an explicit `using M: x`/`import M: x`
-                    // still suppresses it). Encoding the state in the kind
-                    // also makes (un)deprecation force a fresh resolution. The
-                    // leaf is still a defined const, so the value is
-                    // const-folded as before.
-                    imp_resolution.binding_or_const = (jl_value_t *)tempb;
-                    imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_GLOBAL;
-                    imp_resolution.deprecated_const_val = tempbpart->restriction;
-                }
-                else {
-                    imp_resolution.binding_or_const = tempbpart->restriction;
-                    imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
-                }
+                imp_resolution.binding_or_const = tempbpart->restriction;
+                imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
+                imp_resolution.deprecation_flags = tempbpart_flags & DEPWARN_FLAGS;
                 imp_resolution.debug_only_ultimate_binding = tempb;
             } else if (kind == PARTITION_KIND_FAILED) {
                 imp_resolution.binding_or_const = NULL;
@@ -401,7 +398,8 @@ JL_DLLEXPORT jl_binding_partition_t *jl_maybe_reresolve_implicit(jl_binding_t *b
         assert(bpart == jl_atomic_load_relaxed(&b->partitions));
         assert(bpart);
         struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, new_max_world+1, 0);
-        int resolution_unchanged = bpart->restriction == resolution.binding_or_const && jl_binding_kind(bpart) == resolution.ultimate_kind;
+        int resolution_unchanged = bpart->restriction == resolution.binding_or_const && jl_binding_kind(bpart) == resolution.ultimate_kind &&
+                                   (bpart->kind & DEPWARN_FLAGS) == resolution.deprecation_flags;
         size_t bpart_min_world = jl_atomic_load_relaxed(&bpart->min_world);
         if (resolution.min_world == bpart_min_world) {
             // The resolution has the same world bounds - it must be unchanged
@@ -431,7 +429,7 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     jl_atomic_store_relaxed(&bpart->min_world, resolution.min_world);
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
     jl_gc_write(bpart, bpart->restriction, jl_value_t, resolution.binding_or_const);
-    bpart->kind = resolution.ultimate_kind;
+    bpart->kind = resolution.ultimate_kind | resolution.deprecation_flags;
 }
 
 static void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **pbpart, size_t world) JL_CANSAFEPOINT
@@ -1037,7 +1035,9 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t w
     return jl_atomic_load_relaxed(&b->value);
 }
 
-static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) JL_CANSAFEPOINT
+// Read a binding's value at `world`, warning if it is deprecated (unless reached through an
+// explicit import, which `jl_walk_binding_inplace_depwarn` suppresses).
+static jl_value_t *jl_get_binding_value_depwarn_(jl_binding_t *b, size_t world, int seqcst) JL_CANSAFEPOINT
 {
     assert(b); // alloc=1 parameter ensured that jl_get_module_binding returns a valid binding
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
@@ -1058,23 +1058,17 @@ static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) J
         return bpart->restriction;
     }
     assert(!jl_bkind_is_some_import(kind));
-    return jl_atomic_load_relaxed(&b->value);
+    return seqcst ? jl_atomic_load(&b->value) : jl_atomic_load_relaxed(&b->value);
+}
+
+static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world) JL_CANSAFEPOINT
+{
+    return jl_get_binding_value_depwarn_(b, world, 0);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_seqcst(jl_binding_t *b) JL_CANSAFEPOINT
 {
-    size_t world = jl_current_task->world_age;
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
-    jl_walk_binding_inplace(&b, &bpart, world);
-    enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (jl_bkind_is_some_guard(kind))
-        return NULL;
-    if (jl_bkind_is_some_constant(kind)) {
-        check_backdated_binding(b, kind);
-        return bpart->restriction;
-    }
-    assert(!jl_bkind_is_some_import(kind));
-    return jl_atomic_load(&b->value);
+    return jl_get_binding_value_depwarn_(b, jl_current_task->world_age, 1);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_latest_binding_value_if_const(jl_binding_t *b)
@@ -1887,7 +1881,9 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     if ((kind & PARTITION_MASK_KIND) == PARTITION_FAKE_KIND_IMPLICIT_RECOMPUTE) {
         assert(!restriction_val);
         struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, new_world, 0);
-        new_bpart->kind = resolution.ultimate_kind | (kind & PARTITION_MASK_FLAG);
+        // Deprecation comes fresh from the resolution (see `jl_implicit_import_resolved`), so
+        // mask any prior deprecation out of the carried flags before OR-ing the new one in.
+        new_bpart->kind = resolution.ultimate_kind | ((kind & PARTITION_MASK_FLAG) & ~DEPWARN_FLAGS) | resolution.deprecation_flags;
         // If the resolution indicates this should be reexported, add the implicit export flag
         if (resolution.should_be_reexported) {
             new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
@@ -1987,7 +1983,6 @@ JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 
 // set the deprecated flag for a binding:
 //   0=not deprecated, 1=renamed, 2=moved to another package
-static const size_t DEPWARN_FLAGS = PARTITION_FLAG_DEPRECATED | PARTITION_FLAG_DEPWARN;
 JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag) JL_CANSAFEPOINT
 {
     jl_binding_t *b = jl_get_binding(m, var);
@@ -2049,13 +2044,13 @@ static int should_depwarn(jl_binding_t *b, uint8_t flag) JL_CANSAFEPOINT
     // is not the use itself, but rather the `using` or `import` (which already prints
     // an appropriate warning).
     //
-    // Walk imports so this matches the value access warning and codegen's
-    // `maybe_depwarn`: a deprecated constant reached through an implicit
-    // `using` resolves via `IMPLICIT_GLOBAL`, so the deprecation lives on the
-    // leaf and only shows up if we walk to it (the top partition carries no
-    // flag). Checking only the top partition would miss it here, so the
-    // codegen-emitted `jl_binding_deprecation_check` would silently skip the
-    // warning even though inference kept the effect.
+    // Walk imports so this matches the value access warning and codegen's `maybe_depwarn`.
+    // A deprecated global reached through an implicit `using` resolves via `IMPLICIT_GLOBAL`,
+    // so its deprecation lives on the leaf and only shows up once we walk to it; a deprecated
+    // constant instead carries its deprecation on the importer's `IMPLICIT_CONST` partition,
+    // which the walk also inspects. Either way, checking only the top partition without the
+    // walk would miss the global case, so the codegen-emitted `jl_binding_deprecation_check`
+    // would silently skip the warning even though inference kept the effect.
     size_t world = jl_current_task->world_age;
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     int found = 0;
@@ -2071,9 +2066,7 @@ JL_DLLEXPORT void jl_binding_deprecation_check(jl_binding_t *b) JL_CANSAFEPOINT
 
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var) JL_CANSAFEPOINT
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
-    if (!b)
-        return 0;
+    jl_binding_t *b = jl_get_module_binding(m, var, 1);
     return should_depwarn(b, PARTITION_FLAG_DEPRECATED);
 }
 
