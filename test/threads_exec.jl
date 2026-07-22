@@ -24,6 +24,7 @@ function _watchdog_native(::Ptr{Cvoid})
     # scheduler state first: it cannot hang, while the task dump can wedge on
     # win32 trying to unwind a running task (build 634 stopped after one line)
     ccall(:jl_dump_scheduler_state, Cvoid, ())
+    ccall(:jl_jit_dump_state_impl, Cvoid, ())
     ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0)
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), 15) # SIGTERM
     return nothing

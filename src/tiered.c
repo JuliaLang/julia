@@ -374,6 +374,8 @@ JL_DLLEXPORT void jl_tier_init(void) JL_NOTSAFEPOINT
 static uv_thread_t tier_worker_uvthread;
 static _Atomic(int) tier_worker_running = 0;
 static _Atomic(int) tier_worker_stop = 0;
+// What the worker is promoting right now (relaxed, debugging dumps only).
+static _Atomic(jl_method_instance_t *) tier_worker_current_mi = NULL;
 
 // Quiesce state (documented with the quiesce machinery below). Defined
 // here, not just forward-declared: a second tentative definition is valid
@@ -482,8 +484,11 @@ static void tier_worker_threadfun(void *arg) JL_NO_SAFEPOINT_ANALYSIS
         // world is stale).
         ct->world_age = jl_get_world_counter();
         uint64_t t0 = jl_hrtime();
-        for (size_t i = 0; i < nbatch; i++)
+        for (size_t i = 0; i < nbatch; i++) {
+            jl_atomic_store_relaxed(&tier_worker_current_mi, batch[i]);
             jl_tier_promote(batch[i]);
+        }
+        jl_atomic_store_relaxed(&tier_worker_current_mi, NULL);
         jl_tier_add_promote_ns(jl_hrtime() - t0);
         jl_atomic_fetch_add_relaxed(&tier_busy, -(int)nbatch);
     }
@@ -556,6 +561,11 @@ JL_DLLEXPORT void jl_tier_dump_state(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALY
                    queue_lock_free ? "free" : "HELD");
     if (queue_lock_free)
         jl_safe_printf(" queue_head=%zu queue_len=%zu", qhead, qlen);
+    jl_method_instance_t *cur = jl_atomic_load_relaxed(&tier_worker_current_mi);
+    if (cur != NULL && jl_is_method(cur->def.method))
+        jl_safe_printf(" promoting=%s.%s",
+                       jl_symbol_name(cur->def.method->module->name),
+                       jl_symbol_name(cur->def.method->name));
     jl_safe_printf("\n");
 }
 

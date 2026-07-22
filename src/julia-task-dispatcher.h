@@ -55,6 +55,23 @@ private:
   static inline thread_local bool InCooperativeContext = false;
 
 public:
+  /// Async-safe debugging dump for wedge watchdogs: relaxed reads and a
+  /// trylock probe only, so it cannot itself hang.
+  void dump_wedge_state() JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS {
+    bool LockFree = DispatchMutex.try_lock();
+    size_t NQueued = 0;
+    if (LockFree) {
+      NQueued = TaskQueue.size();
+      DispatchMutex.unlock();
+    }
+    jl_safe_printf("jit dispatcher: active_runs=%d tasks_completed=%llu dispatch_mutex=%s",
+                   ActiveRuns.load(std::memory_order_relaxed),
+                   (unsigned long long)TasksCompleted.load(std::memory_order_relaxed),
+                   LockFree ? "free" : "HELD");
+    if (LockFree)
+      jl_safe_printf(" queued=%zu", NQueued);
+    jl_safe_printf("\n");
+  }
 
 /// @name ORC Promise/Future Classes
 ///

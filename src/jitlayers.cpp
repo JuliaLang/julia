@@ -2137,6 +2137,13 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
             ES.getExecutorProcessControl().getDispatcher()));
 }
 
+extern "C" JL_DLLEXPORT_CODEGEN void jl_jit_dump_state_impl(void) JL_NOTSAFEPOINT
+{
+    if (jl_ExecutionEngine)
+        static_cast<JuliaTaskDispatcher &>(jl_ExecutionEngine->getExecutionSession()
+            .getExecutorProcessControl().getDispatcher()).dump_wedge_state();
+}
+
 void JuliaOJIT::registerCI(jl_code_instance_t *CI)
 {
 #ifndef JL_NDEBUG
