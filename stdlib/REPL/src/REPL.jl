@@ -451,15 +451,28 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        ast_or_func, show_value = try
-            take!(backend.repl_channel)
+        # An asynchronous interrupt may be raised in this task if user code
+        # finished evaluating just as Ctrl-C arrived (issue #58689). Wait without
+        # consuming, so an interrupt raised mid-`take!` cannot drop a request and
+        # leave the frontend blocked on a response that never comes.
+        request = try
+            fetch(backend.repl_channel)
         catch e
-            # An asynchronous interrupt may be forwarded to this task if user code
-            # finished evaluating just as Ctrl-C arrived (issue #58689); ignore it
-            # rather than tearing down the REPL session.
             e isa InterruptException && continue
             rethrow()
         end
+        # consume the request exactly once: retry until the channel no longer
+        # holds it (only this loop removes requests, and no new request can
+        # arrive before we respond to this one), so an interrupt striking the
+        # removal can neither drop the request nor leave it to be evaluated twice
+        while isready(backend.repl_channel)
+            try
+                take!(backend.repl_channel)
+            catch e
+                e isa InterruptException || rethrow()
+            end
+        end
+        ast_or_func, show_value = request
         if show_value == -1
             # exit flag
             break
@@ -729,39 +742,47 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     dopushdisplay && pushdisplay(d)
     hit_eof = false
     while true
-        Base.reseteof(repl.terminal)
-        write(repl.terminal, JULIA_PROMPT)
-        line = ""
-        ast = nothing
-        interrupted = false
-        while true
-            try
-                line *= readline(repl.terminal, keep=true)
-            catch e
-                if isa(e,InterruptException)
-                    try # raise the debugger if present
-                        ccall(:jl_raise_debugger, Int, ())
-                    catch
+        try
+            Base.reseteof(repl.terminal)
+            write(repl.terminal, JULIA_PROMPT)
+            line = ""
+            ast = nothing
+            interrupted = false
+            while true
+                try
+                    line *= readline(repl.terminal, keep=true)
+                catch e
+                    if isa(e,InterruptException)
+                        try # raise the debugger if present
+                            ccall(:jl_raise_debugger, Int, ())
+                        catch
+                        end
+                        line = ""
+                        interrupted = true
+                        break
+                    elseif isa(e,EOFError)
+                        hit_eof = true
+                        break
+                    else
+                        rethrow()
                     end
-                    line = ""
-                    interrupted = true
-                    break
-                elseif isa(e,EOFError)
-                    hit_eof = true
-                    break
-                else
-                    rethrow()
                 end
+                ast = parse_repl_input_line(line, repl)
+                (isa(ast,Expr) && ast.head === :incomplete) || break
             end
-            ast = parse_repl_input_line(line, repl)
-            (isa(ast,Expr) && ast.head === :incomplete) || break
+            if !isempty(line)
+                response = eval_on_backend(ast, backend)
+                print_response(repl, response, !ends_with_semicolon(line), false)
+            end
+            write(repl.terminal, '\n')
+            ((!interrupted && isempty(line)) || hit_eof) && break
+        catch e
+            # An asynchronous interrupt is raised at the next safepoint after
+            # delivery, so it can land outside the guarded `readline` (e.g. while
+            # writing the prompt or printing a response); treat it as an aborted
+            # line rather than exiting the REPL
+            isa(e, InterruptException) || rethrow()
         end
-        if !isempty(line)
-            response = eval_on_backend(ast, backend)
-            print_response(repl, response, !ends_with_semicolon(line), false)
-        end
-        write(repl.terminal, '\n')
-        ((!interrupted && isempty(line)) || hit_eof) && break
     end
     # terminate backend
     put!(backend.repl_channel, (nothing, -1))
@@ -1155,14 +1176,43 @@ find_hist_file() = get(ENV, "JULIA_HISTORY",
 backend(r::AbstractREPL) = hasproperty(r, :backendref) && isdefined(r, :backendref) ? r.backendref : nothing
 
 
-function eval_on_backend(ast, backend::REPLBackendRef)
-    put!(backend.repl_channel, (ast, 1)) # (f, show_value)
-    return take!(backend.response_channel) # (val, iserr)
+# Send a request to the backend and wait for its response, keeping the
+# request/response channels paired in the presence of asynchronous interrupts:
+# once the request is sent, the backend owes a response — abandoning it would
+# leave the channels permanently out of sync, so keep waiting for it.
+# (N.B. sigatomic cannot make the send-and-record step atomic: `defer_signal`
+# is per-thread and the backend task's own sigatomic sections interleave on
+# this thread, so an interrupt landing between the enqueue completing and
+# `sent = true` remains a small unprotected window.)
+function exchange_on_backend(backend::REPLBackendRef, request)
+    # exchanges are serialized on the frontend task, so anything already in the
+    # response channel is a stale response to an abandoned request (see the
+    # note above); discard it rather than pairing it with this request
+    while isready(backend.response_channel)
+        take!(backend.response_channel)
+    end
+    sent = false
+    try
+        put!(backend.repl_channel, request)
+        sent = true
+        return take!(backend.response_channel) # (val, iserr)
+    catch e
+        isa(e, InterruptException) || rethrow()
+        sent || rethrow()
+        while true
+            try
+                return take!(backend.response_channel)
+            catch e2
+                isa(e2, InterruptException) || rethrow()
+            end
+        end
+    end
 end
+eval_on_backend(ast, backend::REPLBackendRef) =
+    exchange_on_backend(backend, (ast, 1)) # (ast, show_value)
 function call_on_backend(f, backend::REPLBackendRef)
     applicable(f) || error("internal error: f is not callable")
-    put!(backend.repl_channel, (f, 2)) # (f, show_value) 2 indicates function (rather than ast)
-    return take!(backend.response_channel) # (val, iserr)
+    return exchange_on_backend(backend, (f, 2)) # (f, show_value) 2 indicates function (rather than ast)
 end
 # if no backend just eval (used by tests)
 eval_on_backend(ast, backend::Nothing) = error("no backend for eval ast")
