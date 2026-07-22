@@ -1895,17 +1895,29 @@ JuliaOJIT::JuliaOJIT()
     if(!ErrorStr.empty())
         report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia-internal\n") + ErrorStr);
 
-    // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
-    // symbols in the program as well. The nullptr argument to the function
-    // tells DynamicLibrary to load the program, not a library.
-    if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
-        report_fatal_error(llvm::Twine("FATAL: unable to dlopen self\n") + ErrorStr);
-
     GlobalJD.addGenerator(
       std::make_unique<orc::DynamicLibrarySearchGenerator>(
         libjulia_internal_dylib,
         DL.getGlobalPrefix(),
         orc::DynamicLibrarySearchGenerator::SymbolPredicate()));
+
+    // For the same reason, place libjulia first in the DynamicLibrary order
+    // since it exports many runtime data symbols (e.g. `jl_emptytuple`)
+    sys::DynamicLibrary libjulia_dylib = sys::DynamicLibrary::addPermanentLibrary(
+      jl_libjulia_handle, &ErrorStr);
+    if(!ErrorStr.empty())
+        report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia\n") + ErrorStr);
+    GlobalJD.addGenerator(
+      std::make_unique<orc::DynamicLibrarySearchGenerator>(
+        libjulia_dylib,
+        DL.getGlobalPrefix(),
+        orc::DynamicLibrarySearchGenerator::SymbolPredicate()));
+
+    // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
+    // symbols in the program as well. The nullptr argument to the function
+    // tells DynamicLibrary to load the program, not a library.
+    if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
+        report_fatal_error(llvm::Twine("FATAL: unable to dlopen self\n") + ErrorStr);
 
     GlobalJD.addGenerator(
       cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
