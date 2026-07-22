@@ -486,6 +486,15 @@ end
     # print float as %d uses round(x)
     @test @sprintf("%d", 25.5) == "26"
 
+    # 61985: negative zero (and values rounding to zero) as %d must not print a sign
+    @test @sprintf("%d", -0.0) == "0"
+    @test @sprintf("%d", -0.3) == "0"
+    @test @sprintf("%d", -0.5) == "0"
+    @test @sprintf("%d", big"-0.0") == "0"
+    @test @sprintf("%05d", -0.0) == "00000"
+    @test @sprintf("%+d", -0.0) == "+0"
+    @test @sprintf("%d", -0.6) == "-1"
+
     # 37539
     @test @sprintf(" %.1e\n", 0.999) == " 1.0e+00\n"
     @test @sprintf("   %.1f", 9.999) == "   10.0"
