@@ -8925,8 +8925,19 @@ static jl_llvm_functions_t
     if (JL_FEAT_TEST(ctx, sanitize_thread))
         FnAttrs.addAttribute(llvm::Attribute::SanitizeThread);
 
-    // add the optimization level specified for this module, if any
-    int optlevel = jl_get_module_optlevel(ctx.module);
+    // add the optimization level: CodeInfo overrides Method overrides Module.
+    // Only methods carry a per-CodeInfo setting; in a top-level thunk the
+    // markers may come from non-executed branches, so the module setting
+    // (applied by the interpreter in control-flow order) governs.
+    int optlevel;
+    if (jl_is_method(lam->def.method)) {
+        optlevel = src->optlevel;
+        if (optlevel == UINT8_MAX)
+            optlevel = jl_get_method_optlevel(lam->def.method);
+    }
+    else {
+        optlevel = jl_get_module_optlevel(ctx.module);
+    }
     if (optlevel >= 0 && optlevel <= 3) {
         static const char* const optLevelStrings[] = { "0", "1", "2", "3" };
         FnAttrs.addAttribute("julia-optimization-level", optLevelStrings[optlevel]);

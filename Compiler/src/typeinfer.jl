@@ -1143,6 +1143,19 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
     return mresult
 end
 
+# Whether inference is enabled for `mi`. For a generated function, a
+# per-expansion `Expr(:meta, Expr(:infer, n))` recorded in the generated
+# CodeInfo overrides the method/module-level setting.
+function infer_enabled(interp::AbstractInterpreter, mi::MethodInstance, method::Method)
+    if hasgenerator(method)
+        src = get_staged(mi, get_inference_world(interp))
+        if src isa CodeInfo && src.infer != 0xff
+            return src.infer != 0x00
+        end
+    end
+    return ccall(:jl_get_method_infer, Cint, (Any,), method) != 0
+end
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
     mi = specialize_method(method, atype, sparams)
@@ -1177,8 +1190,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             end
         end
     end
-    if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
-        add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
+    if !InferenceParams(interp).force_enable_inference && !infer_enabled(interp, mi, method)
+        add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target method")
         return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
     end
     if !is_cached(caller) && frame_parent(caller) === nothing
@@ -1517,7 +1530,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
         end
     end
     if !InferenceParams(interp).force_enable_inference
-        if isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0
+        if isa(def, Method) && !infer_enabled(interp, mi, def)
             src = retrieve_code_info(mi, get_inference_world(interp))
             if src isa CodeInfo
                 finish!(interp, mi, ci, src)

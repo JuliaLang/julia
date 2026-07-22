@@ -502,6 +502,35 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_optlevel_sym) {
+                    if (jl_expr_nargs(ma) == 1 && jl_is_long(jl_exprarg(ma, 0))) {
+                        long n = jl_unbox_long(jl_exprarg(ma, 0));
+                        if (n >= 0 && n <= 3)
+                            li->optlevel = n;
+                    }
+                    // Keep the marker in the body rather than consuming it. For a
+                    // method it is an inert no-op, but for a top-level thunk it
+                    // must remain executable so the interpreter applies the module
+                    // option in its original control-flow position (e.g. so an
+                    // option inside `if false` / `@static` is not applied).
+                    jl_array_ptr_set(meta, ins++, ma);
+                }
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_compile_sym) {
+                    if (jl_expr_nargs(ma) == 1 && jl_is_long(jl_exprarg(ma, 0))) {
+                        long n = jl_unbox_long(jl_exprarg(ma, 0));
+                        if (n >= 0 && n <= 3)
+                            li->compile = n;
+                    }
+                    jl_array_ptr_set(meta, ins++, ma);
+                }
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_infer_sym) {
+                    if (jl_expr_nargs(ma) == 1 && jl_is_long(jl_exprarg(ma, 0))) {
+                        long n = jl_unbox_long(jl_exprarg(ma, 0));
+                        if (n == 0 || n == 1)
+                            li->infer = n;
+                    }
+                    jl_array_ptr_set(meta, ins++, ma);
+                }
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
                     if (jl_expr_nargs(ma) == NUM_EFFECTS_OVERRIDES) {
                         // N.B. this code allows multiple :purity expressions to be present in a single `:meta` node
@@ -707,6 +736,9 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->constprop = 0;
     src->inlining = 0;
     src->purity.bits = 0;
+    src->optlevel = UINT8_MAX;
+    src->compile = UINT8_MAX;
+    src->infer = UINT8_MAX;
     src->nargs = 0;
     src->isva = 0;
     src->inlining_cost = UINT16_MAX;
@@ -952,6 +984,18 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src) JL_C
     m->nospecializeinfer = src->nospecializeinfer;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
+    m->optlevel = src->optlevel;
+    m->compile = src->compile;
+    m->infer = src->infer;
+    // Explicitly disabling inference implies @nospecialize (there is no benefit
+    // to specializing a method that will not be inferred); explicitly enabling
+    // it re-enables specialization. This mirrors jl_set_module_infer for the
+    // module-level setting. Done before the per-argument @nospecialize /
+    // @specialize pass below, so those annotations still take precedence.
+    if (m->infer == 0)
+        m->nospecialize = -1;
+    else if (m->infer == 1)
+        m->nospecialize = 0;
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
@@ -1089,6 +1133,9 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     jl_atomic_store_relaxed(&m->did_scan_source, 0);
     m->constprop = 0;
     m->purity.bits = 0;
+    m->optlevel = UINT8_MAX;
+    m->compile = UINT8_MAX;
+    m->infer = UINT8_MAX;
     m->max_varargs = UINT8_MAX;
     JL_MUTEX_INIT(&m->writelock, "method->writelock");
     return m;

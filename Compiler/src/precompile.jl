@@ -356,10 +356,13 @@ function compile_and_emit_native(worlds::Vector{UInt},
     for mod in module_init_order
         if Core.invoke_in_world(latestworld, isdefined, mod, :__init__)
             f = Core.invoke_in_world(latestworld, getglobal, mod, :__init__)
-            # Get module compile setting
-            setting = ccall(:jl_get_module_compile, Cint, (Any,), mod)
+            tt = Tuple{Core.Typeof(f)}
+            # Get the per-method compile setting (falls back to the module's)
+            match, _ = findsup(tt, InternalMethodTable(latestworld))
+            setting = match === nothing ?
+                ccall(:jl_get_module_compile, Cint, (Any,), mod) :
+                ccall(:jl_get_method_compile, Cint, (Any,), match.method)
             if setting != JL_OPTIONS_COMPILE_OFF && setting != JL_OPTIONS_COMPILE_MIN
-                tt = Tuple{Core.Typeof(f)}
                 compile_hint(tt)
                 trim_mode == 0x00 || add_entrypoint(tt)
             end

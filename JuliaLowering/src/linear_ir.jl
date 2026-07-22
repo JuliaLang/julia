@@ -891,24 +891,38 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"meta"
         if numchildren(ex) >= 1
-            # Certain blessed forms are allowed to share a meta expression;
-            # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
-            if kind(ex[1]) === K"purity" ||
-                kind(ex[1]) === K"Symbol" && ex[1].name_val::String in (
-                    "inline", "noinline", "propagate_inbounds",
-                    "nospecializeinfer", "aggressive_constprop", "no_constprop")
-                for c in children(ex)
-                    if kind(c) === K"purity"
-                        old = get(ctx.meta, :purity, UInt16(0))
-                        ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
-                    elseif kind(c) === K"Symbol"
-                        ctx.meta[Symbol(c.name_val::String)] = true
-                    else
-                        @jl_assert false c
+            # Classify each child independently. A single `(meta ...)` node may
+            # mix kinds because `Base.pushmeta!` appends into one node (e.g.
+            # `@inline` combined with `@optlevel`). Compiler-option markers
+            # (optlevel/compile/infer, see `Base.Experimental.@compiler_options`)
+            # on a method are recorded in the CodeInfo; the blessed inline/purity
+            # markers are likewise consumed. Anything else -- module-level options
+            # in a top-level thunk, `max_methods`, or unrecognized markers -- is
+            # left as a `(meta ...)` statement so the interpreter applies it in
+            # its original control-flow position.
+            leftover = SyntaxList(ctx)
+            for c in children(ex)
+                kc = kind(c)
+                if kc in KSet"optlevel compile infer" && !ctx.is_toplevel_thunk
+                    # Malformed or out-of-range markers are dropped, matching the
+                    # C consumers which silently ignore them.
+                    v = numchildren(c) == 1 ? get(c[1], :value, nothing) : nothing
+                    if v isa Integer && 0 <= v <= (kc == K"infer" ? 1 : 3)
+                        ctx.meta[Symbol(untokenize(kc))] = v
                     end
+                elseif kc === K"purity"
+                    old = get(ctx.meta, :purity, UInt16(0))
+                    ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
+                elseif kc === K"Symbol" && c.name_val::String in (
+                        "inline", "noinline", "propagate_inbounds",
+                        "nospecializeinfer", "aggressive_constprop", "no_constprop")
+                    ctx.meta[Symbol(c.name_val::String)] = true
+                else
+                    push!(leftover, c)
                 end
-            else
-                emit(ctx, ex)
+            end
+            if !isempty(leftover)
+                emit(ctx, @ast ctx ex [K"meta" leftover...])
             end
         end
         if needs_value

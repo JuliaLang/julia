@@ -25,6 +25,11 @@ function _register_kinds()
             "purity"
             "aliasscope"
             "popaliasscope"
+            # Per-method/module compiler options (see `Base.Experimental.@compiler_options`)
+            "optlevel"
+            "compile"
+            "infer"
+            "max_methods"
             # Call into foreign code
             "foreigncall"
             # Look up a symbol in foreign code
