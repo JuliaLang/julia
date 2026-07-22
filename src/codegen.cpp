@@ -10452,6 +10452,11 @@ void emit_always_inline(jl_codegen_output_t &out,
                 if (decls.invoke)
                     decls.invoke->setLinkage(linkage);
                 decls.specptr->setLinkage(linkage);
+                // This body is emitted only to be inlined away, so it must not
+                // influence the module's optimization level: it may come from a
+                // differently annotated module (e.g. `@optlevel 0`) than the
+                // batch that owns this module.
+                decls.specptr->removeFnAttr("julia-optimization-level");
             }
 
             // TODO: jl_promote_method_roots?
