@@ -90,7 +90,8 @@ The following defines the usage of terminal-based `emacs`:
     `define_editor` was introduced in Julia 1.4.
 """
 function define_editor(fn::Function, pattern; wait::Bool=false)
-    callback = function (cmd::Cmd, path::AbstractString, line::Integer, column::Integer)
+    always_wait = wait
+    callback = function (cmd::Cmd, path::AbstractString, line::Integer, column::Integer; wait::Bool=false)
         editor_matches(pattern, cmd) || return false
         editor = if !applicable(fn, cmd, path, line, column)
             # Be backwards compatible with editors that did not define the newly added column argument
@@ -99,7 +100,7 @@ function define_editor(fn::Function, pattern; wait::Bool=false)
             fn(cmd, path, line, column)
         end
         if editor isa Cmd
-            if wait
+            if wait || always_wait
                 run(editor) # blocks while editor runs
             else
                 run(pipeline(editor, stderr=stderr), wait=false)
@@ -217,18 +218,25 @@ function editor()
 end
 
 """
-    edit(path::AbstractString, line::Integer=0, column::Integer=0)
+    edit(path::AbstractString, line::Integer=0, column::Integer=0; wait::Bool=false)
 
 Edit a file or directory optionally providing a line number to edit the file at.
-Return to the `julia` prompt when you quit the editor. The editor can be changed
+The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
+
+If `wait` is set to `true`, then `edit` returns only when the editor is closed.
+The default is `false`. In this case the behavior is governed by the `wait` keyword
+argument provided to `define_editor`.
 
 !!! compat "Julia 1.9"
     The `column` argument requires at least Julia 1.9.
 
+!!! compat "Julia 1.14"
+    The `wait` keyword argument requires at least Julia 1.14.
+
 See also [`InteractiveUtils.define_editor`](@ref).
 """
-function edit(path::AbstractString, line::Integer=0, column::Integer=0)
+function edit(path::AbstractString, line::Integer=0, column::Integer=0; wait::Bool=false)
     path isa String || (path = convert(String, path))
     if endswith(path, ".jl")
         p = find_source_file(path)
@@ -239,7 +247,7 @@ function edit(path::AbstractString, line::Integer=0, column::Integer=0)
         if !applicable(callback, cmd, path, line, column)
             callback(cmd, path, line) && return
         else
-            callback(cmd, path, line, column) && return
+            callback(cmd, path, line, column; wait) && return
         end
     end
     # shouldn't happen unless someone has removed fallback entry
