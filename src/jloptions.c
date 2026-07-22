@@ -561,8 +561,6 @@ restart_switch:
             jl_safe_fprintf(ios_stdout, "julia version %s\n", JULIA_VERSION_STRING);
             exit(0);
         case 'h': // help
-            // not jl_safe_fprintf, which formats through a fixed 1000-byte
-            // buffer and would truncate the help text
             ios_puts(usage, ios_stdout);
             ios_puts(opts, ios_stdout);
             ios_flush(ios_stdout);
