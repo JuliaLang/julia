@@ -50,7 +50,7 @@ impl Collection<JuliaVM> for VMCollection {
         }
 
         assert!(
-            crate::api::mmtk_is_collection_enabled(),
+            crate::api::mmtk_is_collection_enabled() != 0,
             "Collection is disabled when threads are stopped for a GC. This is a concurrency bug, see https://github.com/mmtk/mmtk-julia/issues/278."
         );
 

@@ -137,15 +137,12 @@ typedef enum {
 JL_DLLEXPORT int jl_gc_enable(int on);
 // Returns whether the collector is enabled.
 JL_DLLEXPORT int jl_gc_is_enabled(void);
-// Disable the collector without touching `ptls->disable_gc` or requiring a valid `ptls`/
-// current task, and (for backends that support it) block until any collection that is
-// already in progress has fully finished. Used by contexts where collection must be known
-// to not be running concurrently (e.g. adopting a foreign thread, or recovering from a
-// fatal signal), before a `jl_ptls_t`/current task is necessarily available. Must be paired
-// with a matching call to `jl_gc_enable_no_ptls_no_safepoint`.
-JL_DLLEXPORT void jl_gc_disable_no_ptls_no_safepoint(void);
-// Undoes one `jl_gc_disable_no_ptls_no_safepoint` call.
-JL_DLLEXPORT void jl_gc_enable_no_ptls_no_safepoint(void);
+// Globally disable the collector without checking thread-local disable states, or GC triggering state.
+// No safepoint should be invoked in this call either.
+JL_DLLEXPORT void jl_gc_global_disable_no_check(void) JL_NOTSAFEPOINT;
+// Undoes one `jl_gc_global_disable_no_check` call.
+JL_DLLEXPORT void jl_gc_global_enable_no_check(void);
+JL_DLLEXPORT int jl_gc_is_global_enabled(void);
 // Sets a soft limit to Julia's heap.
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) JL_NOTSAFEPOINT;
 // Runs a GC cycle. This function's parameter determines whether we're running an

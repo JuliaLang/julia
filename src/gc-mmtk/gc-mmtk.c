@@ -238,14 +238,19 @@ JL_DLLEXPORT uint64_t jl_gc_get_hard_heap_limit(void)
     return jl_options.hard_heap_limit;
 }
 
-JL_DLLEXPORT void jl_gc_disable_no_ptls_no_safepoint(void)
+JL_DLLEXPORT void jl_gc_global_disable_no_check(void)
 {
     mmtk_disable_collection();
 }
 
-JL_DLLEXPORT void jl_gc_enable_no_ptls_no_safepoint(void)
+JL_DLLEXPORT void jl_gc_global_enable_no_check(void)
 {
     mmtk_enable_collection();
+}
+
+JL_DLLEXPORT int jl_gc_is_global_enabled(void)
+{
+    return mmtk_is_collection_enabled();
 }
 
 JL_DLLEXPORT int jl_gc_enable(int on)
@@ -256,19 +261,34 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     if (on && !prev) {
         // disable -> enable
         int was_enabled = mmtk_is_collection_enabled();
-        mmtk_enable_collection();
-        if (!was_enabled && mmtk_is_collection_enabled()) {
-            gc_num.allocd += gc_num.deferred_alloc;
-            gc_num.deferred_alloc = 0;
+        if (!was_enabled) {
+            mmtk_enable_collection();
+            if (mmtk_is_collection_enabled()) {
+                gc_num.allocd += gc_num.deferred_alloc;
+                gc_num.deferred_alloc = 0;
+            }
         }
     }
     else if (prev && !on) {
         // enable -> disable
-        mmtk_disable_collection();
+        while (1) {
+            int disabled =  mmtk_disable_collection();
+            if (disabled) {
+                break;
+            } else {
+                jl_gc_safepoint_(ptls);
+                // Maybe do a thread yield here to vavoid busy loop
+            }
+        }
         // Make sure a collection that is already pending or in progress (including the
         // concurrent marking phase of a concurrent GC) has fully finished before returning,
         // so the caller can rely on no collection touching memory from this point on.
-        mmtk_wait_for_no_collection_in_progress();
+        // if (mmtk_collection_in_progress()) {
+        //     jl_safepoint_wait_thread_resume(jl_current_task);
+        // } else {
+        //     jl_gc_safepoint_(ptls);
+        // }
+        // jl_gc_safepoint_(ptls);
     }
     return prev;
 }
