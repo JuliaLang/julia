@@ -141,8 +141,9 @@ JL_DLLEXPORT int jl_gc_is_enabled(void);
 // checking thread-local disable states, or GC triggering state. No safepoint should be invoked
 // in this call either.
 JL_DLLEXPORT void jl_gc_globally_enable_no_check(int on) JL_NOTSAFEPOINT;
-// Returns whether the collector is globally enabled.
-JL_DLLEXPORT int jl_gc_is_globally_enabled(void);
+// Returns whether the collector is globally enabled. No safepoint should be invoked in this
+// call either.
+JL_DLLEXPORT int jl_gc_is_globally_enabled(void) JL_NOTSAFEPOINT;
 // Sets a soft limit to Julia's heap.
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) JL_NOTSAFEPOINT;
 // Runs a GC cycle. This function's parameter determines whether we're running an
