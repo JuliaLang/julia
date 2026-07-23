@@ -13,6 +13,13 @@ OrderStyle(::Type{Symbol}) = Ordered()
 OrderStyle(::Type{<:Any}) = Unordered()
 OrderStyle(::Type{Union{}}, slurp...) = Ordered()
 
+OrderStyle(T::Type{<:Tuple}) = _tuple_ordering(T)
+
+_tuple_ordering(::Type{Tuple{}}) = Ordered()
+function _tuple_ordering(T::Type{<:Tuple})
+    OrderStyle(fieldtype(T,1)) === Ordered() ? _tuple_ordering(Tuple{tail(fieldtypes(T))...}) : Unordered()
+end
+
 # trait for objects that support arithmetic
 abstract type ArithmeticStyle end
 struct ArithmeticRounds <: ArithmeticStyle end     # least significant bits can be lost
