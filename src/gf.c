@@ -354,7 +354,7 @@ jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *sname, jl_fptr_args
     m->isva = 1;
     m->nargs = 2;
     jl_atomic_store_relaxed(&m->primary_world, 1);
-    jl_atomic_store_relaxed(&m->dispatch_status, METHOD_SIG_LATEST_ONLY | METHOD_SIG_LATEST_WHICH);
+    jl_atomic_store_relaxed(&m->dispatch_status, METHOD_SIG_LATEST_WHICH);
     m->sig = (jl_value_t*)tuptyp;
     m->slot_syms = jl_an_empty_string;
     m->nospecialize = 0;
@@ -1888,8 +1888,10 @@ static void cache_insert(
         jl_method_cache_inserted();
         JL_UNLOCK(&mc->writelock); // before acquiring world_counter_lock
 
-        // Only set METHOD_SIG_LATEST_ONLY on method instance if method does NOT have the bit, no guards required, and min_valid == primary_world
-        int should_set_dispatch_status = !(jl_atomic_load_relaxed(&definition->dispatch_status) & METHOD_SIG_LATEST_ONLY) &&
+        // Only set METHOD_SIG_LATEST_ONLY on method instance if the method-level fact
+        // (an empty interference set) does not already cover it, no guards required,
+        // and min_valid == primary_world
+        int should_set_dispatch_status = jl_atomic_load_relaxed(&definition->interferences)->length != 0 &&
             (jl_value_t*)cachett == newmeth->specTypes && jl_svec_len(guardsigs) == 0 &&
             min_valid == jl_atomic_load_relaxed(&definition->primary_world) &&
             !(jl_atomic_load_relaxed(&newmeth->dispatch_status) & METHOD_SIG_LATEST_ONLY);
@@ -2220,9 +2222,10 @@ JL_DLLEXPORT void jl_promote_mi_to_current(jl_method_instance_t *mi, size_t min_
     // No need to acquire the lock if we've been invalidated anyway
     if (current_world > validated_world)
         return;
-    // Only set METHOD_SIG_LATEST_ONLY on method instance if method does NOT have the bit and min_valid == primary_world
+    // Only set METHOD_SIG_LATEST_ONLY on method instance if the method-level fact
+    // (an empty interference set) does not already cover it and min_valid == primary_world
     jl_method_t *definition = mi->def.method;
-    if ((jl_atomic_load_relaxed(&definition->dispatch_status) & METHOD_SIG_LATEST_ONLY) ||
+    if (jl_atomic_load_relaxed(&definition->interferences)->length == 0 ||
         min_world != jl_atomic_load_relaxed(&definition->primary_world) ||
         (jl_atomic_load_relaxed(&mi->dispatch_status) & METHOD_SIG_LATEST_ONLY))
         return;
@@ -2302,7 +2305,7 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
         closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
     // Record every intersecting method so the interference relation is complete.
     // We must NOT early-out when the new method is a strict subtype of an
-    // `oldmethod` that dominates its dispatch (METHOD_SIG_LATEST_ONLY): stopping
+    // `oldmethod` that dominates its dispatch (empty interference set): stopping
     // the scan there would omit the new method's other intersecting pairs, and
     // `morespecific` is not monotone under subtyping (strict-subtype implies
     // morespecific, but the supertype's specificity relations do not transfer to
@@ -3016,7 +3019,6 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     // add our new entry
     assert(jl_atomic_load_relaxed(&method->primary_world) == ~(size_t)0); // min-world
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
-    assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_ONLY) == 0);
     JL_LOCK(&mt->cache->writelock);
     newentry = jl_typemap_alloc((jl_tupletype_t*)method->sig, simpletype, jl_emptysvec, (jl_value_t*)method, ~(size_t)0, 1);
     jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0);
@@ -3256,7 +3258,6 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     size_t world = jl_atomic_load_relaxed(&method->primary_world);
     assert(world == jl_atomic_load_relaxed(&jl_world_counter) + 1); // min-world
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
-    assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_ONLY) == 0);
     assert(jl_atomic_load_relaxed(&newentry->min_world) == ~(size_t)0);
     assert(jl_atomic_load_relaxed(&newentry->max_world) == 1);
     jl_atomic_store_relaxed(&newentry->min_world, world);
@@ -3283,14 +3284,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
         oldmi = jl_alloc_vec_any(0);
     }
 
-    // These get updated from their state stored in the caches files, since content in cache files gets added "all at once".
     int invalidated = 0;
-    int dispatch_bits = METHOD_SIG_LATEST_WHICH; // Always set LATEST_WHICH
-    // Check precompiled dispatch status bits
-    int precompiled_status = jl_atomic_load_relaxed(&method->dispatch_status);
-    if (!(precompiled_status & METHOD_SIG_PRECOMPILE_MANY))
-        // This will store if this method will be currently the only result that would returned from `ml_matches` given `sig`.
-        dispatch_bits |= METHOD_SIG_LATEST_ONLY; // Tentatively set, will be cleared if not applicable
     // Holds the set of all intersecting methods not more specific than this one.
     // The insertion scan below visits every intersecting method (the
     // LATEST_ONLY early-out was removed), so the recorded relation is complete:
@@ -3307,11 +3301,8 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             method_overwrite(newentry, m);
             // This is an optimized version of below, given we know the type-intersection is exact
             jl_method_table_invalidate(m, max_world);
-            int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
-            // Clear METHOD_SIG_LATEST_ONLY and METHOD_SIG_LATEST_WHICH bits
+            // Clear METHOD_SIG_LATEST_WHICH bit
             jl_atomic_store_relaxed(&m->dispatch_status, 0);
-            if (!(m_dispatch & METHOD_SIG_LATEST_ONLY))
-                dispatch_bits &= ~METHOD_SIG_LATEST_ONLY;
             // Take over the interference list from the replaced method
             jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
             if (interferences->length == 0) {
@@ -3370,27 +3361,19 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                 jl_method_t *m = d[j];
                 // Compute ambig state: is there an ambiguity between new method and old m?
                 char ambig = !morespec[j] && !jl_type_morespecific(type, m->sig);
-                // Compute updates to the dispatch state bits
-                int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
                 if (morespec[j] || ambig) {
-                    // !morespecific(new, old)
-                    dispatch_bits &= ~METHOD_SIG_LATEST_ONLY;
-                    // Add the old method to this interference set
+                    // !morespecific(new, old): add the old method to this interference set
                     ssize_t idx;
                     if (!has_key(interferences, (jl_value_t*)m))
                         interferences = jl_idset_put_key(interferences, (jl_value_t*)m, &idx);
                 }
                 if (!morespec[j]) {
-                    // !morespecific(old, new)
-                    m_dispatch &= ~METHOD_SIG_LATEST_ONLY;
-                    // Add the new method to its interference set
+                    // !morespecific(old, new): add the new method to its interference set
                     jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
                     ssize_t idx;
                     m_interferences = jl_idset_put_key(m_interferences, (jl_value_t*)method, &idx);
                     jl_gc_write_atomic(m, m->interferences, jl_genericmemory_t, m_interferences, release);
                 }
-                // Add methods that intersect but are not more specific to interference list
-                jl_atomic_store_relaxed(&m->dispatch_status, m_dispatch);
                 if (morespec[j])
                     continue;
 
@@ -3501,7 +3484,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
     }
     jl_atomic_store_relaxed(&newentry->max_world, ~(size_t)0);
-    jl_atomic_store_relaxed(&method->dispatch_status, dispatch_bits); // TODO: this should be sequenced fully after the world counter store
+    jl_atomic_store_relaxed(&method->dispatch_status, METHOD_SIG_LATEST_WHICH); // TODO: this should be sequenced fully after the world counter store
     jl_gc_write_atomic(method, method->interferences, jl_genericmemory_t, interferences, release);
     JL_GC_POP();
 }
@@ -5122,17 +5105,14 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     if (closure->match.max_valid > max_world)
         closure->match.max_valid = max_world;
     jl_method_t *meth = ml->func.method;
-    // Whether this method dominates (is strictly morespecific than) every
-    // method it intersects, and hence every other candidate for this query:
-    // either its LATEST_ONLY bit is set, or its interference set is empty (the
-    // ground-truth relation, which the bit tracks in lockstep except that the
-    // bit can be suppressed by PRECOMPILE_MANY). Such a method always survives
-    // into the final result (nothing can cover a method that beats every
-    // intersecting method), and when it also fully covers the query it is the
-    // unique result, so the rest of the search can be skipped. Interference
-    // sets only grow, so emptiness now implies emptiness in the query's world.
-    int only = (jl_atomic_load_relaxed(&meth->dispatch_status) & METHOD_SIG_LATEST_ONLY) ||
-               jl_atomic_load_relaxed(&meth->interferences)->length == 0;
+    // An empty interference set means this method is strictly morespecific
+    // than every method it intersects, and hence than every other candidate
+    // for this query. Such a method always survives into the final result
+    // (nothing can cover a method that beats every intersecting method), and
+    // when it also fully covers the query it is the unique result, so the rest
+    // of the search can be skipped. Interference sets only grow, so emptiness
+    // now implies emptiness in the query's world.
+    int only = jl_atomic_load_relaxed(&meth->interferences)->length == 0;
     if (closure->lim >= 0 && only) {
         if (closure->lim == 0) {
             closure->t = jl_an_empty_vec_any;

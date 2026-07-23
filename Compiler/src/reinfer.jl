@@ -471,8 +471,10 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                         return minworld, maxworld
                     end
                 end
-                # Fast path is legal when fully_covers=true
-                if fully_covers && !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                # Fast path is legal when fully_covers=true. An empty interference
+                # set means the method is strictly morespecific than every method
+                # it intersects, so it dominates its sig in every world it exists.
+                if fully_covers && isempty(meth.interferences)
                     minworld = meth.primary_world
                     @assert minworld ≤ world "expected method not present in verification world"
                     maxworld = typemax(UInt)
@@ -600,7 +602,8 @@ end
 # fast-path dispatch_status bit definitions (false indicates unknown)
 # true indicates this method would be returned as the result from `which` when invoking `method.sig` in the current latest world
 const METHOD_SIG_LATEST_WHICH = 0x1
-# true indicates this method would be returned as the only result from `methods` when calling `method.sig` in the current latest world
+# MethodInstance-level: true indicates dispatch of this mi's specTypes yields only this
+# result in the current latest world (the Method-level equivalent is `isempty(method.interferences)`)
 const METHOD_SIG_LATEST_ONLY = 0x2
 
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any})
