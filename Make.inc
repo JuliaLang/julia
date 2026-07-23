@@ -530,6 +530,11 @@ JCPPFLAGS  := $(JCPPFLAGS_GCC)
 JCXXFLAGS  := $(JCXXFLAGS_GCC)
 DEBUGFLAGS := $(DEBUGFLAGS_GCC)
 SHIPFLAGS  := $(SHIPFLAGS_GCC)
+# GCC 15+ requires explicit <cstdint> for bundled LLVM headers (#58478)
+GCC_MAJOR := $(shell $(CXX) -dumpversion 2>/dev/null | cut -d. -f1)
+ifeq ($(shell test $(GCC_MAJOR) -ge 15 2>/dev/null && echo yes),yes)
+JCXXFLAGS  += -include cstdint
+endif
 endif
 
 ifeq ($(USECLANG),1)
