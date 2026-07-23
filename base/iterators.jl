@@ -331,7 +331,7 @@ setindex!(v::Pairs, value, key) = (values(v)[key] = value; v)
 get(v::Pairs, key, default) = get(values(v), key, default)
 get(f::Base.Callable, v::Pairs, key) = get(f, values(v), key)
 
-Base.map(f, v::Pairs) = Base.collect_similar(values(v), Base.generator(f, v))
+Base.map(f, v::Pairs) = Base.collect_similar(values(v), Base.Generator(f, v))
 
 # zip
 
