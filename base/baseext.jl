@@ -39,8 +39,6 @@ Vector() = Vector{Any}(undef, 0)
 
 # Array constructors for nothing and missing
 # type and dimensionality specified
-Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), nothing)
-Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), missing)
+Array{T,N}(x::T, d...) where {T,N} = fill!(Array{T,N}(undef, d...), x)
 # type but not dimensionality specified
-Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(undef, d...), nothing)
-Array{T}(::Missing, d...) where {T} = fill!(Array{T}(undef, d...), missing)
+Array{T}(x::T, d...) where {T} = fill!(Array{T}(undef, d...), x)
