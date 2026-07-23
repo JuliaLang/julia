@@ -135,20 +135,34 @@ typedef struct {
 
 static jl_alloc_profile_t g_alloc_profile;
 _Atomic(int) g_alloc_profile_enabled = 0;
-// number of threads currently inside `_maybe_record_alloc_to_profile`
-static _Atomic(int) g_recording_threads = 0;
+// number of threads currently inside `_maybe_record_alloc_to_profile`, striped
+// over cache-line-padded counters (indexed by tid) to avoid contention on a
+// single cache line while recording
+#define RECORDER_STRIPES 16
+static struct {
+    _Atomic(int) count;
+    char _pad[64 - sizeof(_Atomic(int))];
+} g_recording_threads[RECORDER_STRIPES];
 static alloc_array_t g_combined_allocs; // Will live forever.
 
-// Must only be called while `g_alloc_profile_enabled` is 0, so that once the
-// count reaches zero no new recorder can start touching the profile arrays.
+static _Atomic(int) *recorder_counter(size_t tid) JL_NOTSAFEPOINT
+{
+    return &g_recording_threads[tid % RECORDER_STRIPES].count;
+}
+
+// Must only be called while `g_alloc_profile_enabled` is 0, so that once a
+// stripe reaches zero no new recorder on it can start touching the profile
+// arrays (the same Dekker-style argument as for a single counter, per stripe).
 static void wait_for_recorders(void) JL_NOTSAFEPOINT
 {
     // a recorder can take a while (unwinding takes locks and mallocs), so back off
-    for (int spins = 0; jl_atomic_load(&g_recording_threads) != 0; spins++) {
-        if (spins < 128)
-            jl_cpu_pause();
-        else
-            jl_cpu_suspend();
+    for (int i = 0; i < RECORDER_STRIPES; i++) {
+        for (int spins = 0; jl_atomic_load(&g_recording_threads[i].count) != 0; spins++) {
+            if (spins < 128)
+                jl_cpu_pause();
+            else
+                jl_cpu_suspend();
+        }
     }
 }
 
@@ -312,7 +326,9 @@ void jl_gc_foreach_alloc_profile_root(jl_alloc_profile_root_cb_t f, void *env) J
 
 void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *type) JL_NOTSAFEPOINT
 {
-    jl_atomic_fetch_add(&g_recording_threads, 1);
+    size_t thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
+    _Atomic(int) *recording = recorder_counter(thread_id);
+    jl_atomic_fetch_add(recording, 1);
     // re-check the flag under the recorder count: either we see the stop and
     // leave, or the stopping thread waits for us to finish (Dekker-style
     // synchronization; both sides use sequentially consistent operations)
@@ -320,7 +336,6 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t 
         goto done;
 
     {
-        size_t thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
         if (thread_id >= g_alloc_profile.num_profiles)
             goto done; // ignore allocations on threads started after the alloc-profile started
 
@@ -342,5 +357,5 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t 
     }
 
 done:
-    jl_atomic_fetch_add(&g_recording_threads, -1);
+    jl_atomic_fetch_add(recording, -1);
 }
