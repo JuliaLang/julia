@@ -601,7 +601,7 @@ static int lookup_pointer(
 
 
 
-#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+#if defined(_OS_DARWIN_) && (defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP))
 
 void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry) {
     frame_register_func libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);

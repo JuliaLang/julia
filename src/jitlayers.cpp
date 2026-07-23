@@ -1024,7 +1024,7 @@ private:
     jl_invoke_api_t API;
 };
 
-#if defined(LLVM_SHLIB)
+#if defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP)
 namespace JLEHFrames {
 static Error registerEHFrames(orc::ExecutorAddrRange EHFrameSection) {
     register_eh_frames(EHFrameSection.Start.toPtr<uint8_t *>(), static_cast<size_t>(EHFrameSection.size()));
@@ -1733,9 +1733,9 @@ JuliaOJIT::JuliaOJIT()
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
 #if JL_LLVM_VERSION < 210000
-# if defined(LLVM_SHLIB)
-    // When dynamically linking against LLVM, use our custom EH frame registration code
-    // also used with RTDyld to inform both our and the libc copy of libunwind.
+# if defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP)
+    // When dynamically linking against LLVM or using framehop, use our custom EH frame
+    // registration code to inform the system unwinder and Julia's backtrace unwinder.
     auto ehRegistrar = std::make_unique<JLEHFrameRegistrar>();
 # else
     auto ehRegistrar = std::make_unique<jitlink::InProcessEHFrameRegistrar>();
@@ -1743,9 +1743,9 @@ JuliaOJIT::JuliaOJIT()
     ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
         ES, std::move(ehRegistrar)));
 #else
-    // LLVM 21+ removed EHFrameRegistrar. Use our own plugin for custom registration
-    // when dynamically linking, plus the built-in plugin for standard registration.
-# if defined(LLVM_SHLIB)
+    // LLVM 21+ removed EHFrameRegistrar. Use our own plugin when dynamically linking
+    // against LLVM or using framehop; register_eh_frames preserves system registration.
+# if defined(LLVM_SHLIB) || defined(JL_USE_FRAMEHOP)
     ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
         ExecutorAddr::fromPtr(JLEHFrames::registerEHFrameSectionAllocAction),
         ExecutorAddr::fromPtr(JLEHFrames::deregisterEHFrameSectionAllocAction)));

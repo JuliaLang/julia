@@ -971,9 +971,10 @@ static void do_critical_profile(void)
 
         // do backtrace on thread contexts for critical signals
         // this part must be signal-handler safe
-        signal_bt_size += rec_backtrace_ctx(signal_bt_data + signal_bt_size,
+        signal_bt_size += rec_backtrace_ctx_target(signal_bt_data + signal_bt_size,
                 JL_MAX_BT_SIZE / nthreads - 1,
-                &signal_context, NULL);
+                &signal_context, NULL,
+                jl_atomic_load_relaxed(&jl_all_tls_states)[i], NULL);
         signal_bt_data[signal_bt_size++].uintptr = 0;
         jl_thread_resume(i);
     }

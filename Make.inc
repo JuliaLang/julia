@@ -1325,7 +1325,9 @@ ifneq ($(filter $(OS),Linux FreeBSD Darwin),)
 ifneq ($(filter $(ARCH),x86_64 aarch64),)
 ifeq ($(DISABLE_LIBUNWIND), 0)
 ifeq (,$(findstring musl,$(shell $(CC) -dumpmachine 2>/dev/null)))
+ifneq ($(OS)-$(ARCH),FreeBSD-aarch64)
 USE_FRAMEHOP ?= 1
+endif
 endif
 endif
 endif
@@ -1554,6 +1556,15 @@ endif
 endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
+
+FRAMEHOPUNWIND_BB_TRIPLETS := aarch64-apple-darwin aarch64-linux-gnu \
+	x86_64-apple-darwin x86_64-linux-gnu x86_64-unknown-freebsd
+FRAMEHOPUNWIND_BB_TRIPLET ?= $(BB_TRIPLET)
+ifeq ($(USE_FRAMEHOP)$(USE_BINARYBUILDER_FRAMEHOPUNWIND),11)
+ifeq ($(filter $(FRAMEHOPUNWIND_BB_TRIPLET),$(FRAMEHOPUNWIND_BB_TRIPLETS)),)
+$(error USE_BINARYBUILDER_FRAMEHOPUNWIND=1 is not supported for $(FRAMEHOPUNWIND_BB_TRIPLET); use USE_BINARYBUILDER_FRAMEHOPUNWIND=0 to build framehopunwind from source)
+endif
+endif
 
 # Set the CSL default here too because it affects top-level source flags in
 # addition to dependency installation rules in deps/csl.mk.
