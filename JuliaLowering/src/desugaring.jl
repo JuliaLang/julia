@@ -2564,8 +2564,8 @@ end
 # flisp checks dependencies by searching each additional default for every
 # subexpression of `arg::type` for every non-`passed` `arg` before it.  We only
 # check that static params in `::type` are not referenced in later defaults, and
-# use `(= arg default)` to handle references to `arg`. (possible TODO: it's
-# unclear why flisp doesn't do this; too many slots?)
+# use `(let (= arg default) body)` to handle references to `arg`. (flisp likely
+# does this search to accomplish what we do with scope_nest)
 function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     opt = pos_opt_args(argl)
     opt_decls = mapindex(opt, 1)
@@ -2601,9 +2601,11 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
             # fill-all-defaults case.  note that the final default may be a
             # splat, and doesn't have further args referring to it by name, so
             # we put it directly in the call (see #50563 for some notes)
-            @ast ctx src [K"block"
-                make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1])...
-                [K"call" mapindex(passed, 1)... opt_names[i:end-1]... opt_defaults[end]]]
+            scope_nest(
+                ctx,
+                make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1]),
+                @ast ctx src [K"call" mapindex(passed, 1)...
+                    opt_names[i:end-1]... opt_defaults[end]])
         else
             @ast ctx src [K"block"
                 [K"call" mapindex(passed, 1)... opt_defaults[i]]]
