@@ -2324,6 +2324,23 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             RenameDef(Funcs.specptr, S.specptr);
     }
 
+    // Pre-pass: find CI equivalents, and build EquivMap for use in the main
+    // pass to memoize findCompatibleCI.
+    DenseMap<jl_code_instance_t *, jl_code_instance_t *> EquivMap;
+    for (auto &[Call, T] : Info->call_targets) {
+        auto [CI, API] = Call;
+        JL_GC_PROMISE_ROOTED(CI);
+        if (!Syms.contains(T))
+            continue;
+        if (EquivMap.contains(CI))
+            continue;
+        if (!jl_mi_cache_has_ci(jl_get_ci_mi(CI), CI)) {
+            jl_code_instance_t *Equiv = findCompatibleCI(CI);
+            if (Equiv != CI)
+                EquivMap[CI] = Equiv;
+        }
+    }
+
     // Rename referenced CIs in the workqueue.
     for (auto &[Call, T] : Info->call_targets) {
         auto [CI, API] = Call;
@@ -2339,7 +2356,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             continue;
         }
         JL_GC_PROMISE_ROOTED(CI);
-        auto Dest = linkCallTarget(MR, CI, API);
+        auto Dest = linkCallTarget(MR, CI, API, EquivMap);
         if (!Dest)
             return false;
         if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);
@@ -2398,16 +2415,19 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
 // Must hold LinkerMutex.
 orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibility &MR,
-                                               jl_code_instance_t *CI, jl_invoke_api_t API)
+                                               jl_code_instance_t *CI, jl_invoke_api_t API,
+                                               const DenseMap<jl_code_instance_t *, jl_code_instance_t *> &EquivMap)
 {
-    // This condition should match that in jl_add_codeinst_to_jit!, which will
-    // add a different, compatible CodeInstance to the JIT but not update the
-    // invoke statement.
-    if (!jl_mi_cache_has_ci(jl_get_ci_mi(CI), CI))
-        CI = findCompatibleCI(CI);
-    auto It = CISymbols.find(CI);
-    if (It != CISymbols.end() && It->second.invoke_api == API)
-        return It->second.specptr;
+    {
+        auto It = EquivMap.find(CI);
+        if (It != EquivMap.end())
+            CI = It->second;
+    }
+    {
+        auto It = CISymbols.find(CI);
+        if (It != CISymbols.end() && It->second.invoke_api == API)
+            return It->second.specptr;
+    }
 
     CISymbolPtr *Sym = linkCISymbol(CI);
 
@@ -2438,30 +2458,19 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
     return Sym->specptr;
 }
 
-jl_code_instance_t *JuliaOJIT::findCompatibleCI(jl_code_instance_t *CI)
+jl_code_instance_t *JuliaOJIT::findCompatibleCI(jl_code_instance_t *ci)
 {
-    // add_codeinsts_to_jit! may have added an equivalent CI to the JIT, but
+    // add_codeinsts_to_jit! may have added an equivalent ci to the JIT, but
     // the invoke itself won't be updated.
-    auto MI = jl_get_ci_mi(CI);
-    jl_value_t *Def = CI->def;
-    jl_value_t *Owner = CI->owner;
-    jl_value_t *RetType = CI->rettype;
-    size_t MinWorld = jl_atomic_load_relaxed(&CI->min_world);
-    size_t MaxWorld = jl_atomic_load_relaxed(&CI->max_world);
-    auto IsCompatible = [=](jl_code_instance_t *CI2) JL_NOTSAFEPOINT {
-        return jl_atomic_load_relaxed(&CI2->min_world) <= MinWorld &&
-               jl_atomic_load_relaxed(&CI2->max_world) >= MaxWorld &&
-               jl_egal(CI2->def, Def) && jl_egal(CI2->owner, Owner) &&
-               jl_egal(CI2->rettype, RetType);
-    };
-    for (auto CI2 = jl_atomic_load_relaxed(&MI->cache); CI2;
-         CI2 = jl_atomic_load_relaxed(&CI2->next)) {
-        if (CI2 != CI && IsCompatible(CI2) &&
-            (CISymbols.contains(CI2) || jl_atomic_load_relaxed(&CI2->invoke))) {
-            return CI2;
+    auto mi = jl_get_ci_mi(ci);
+    for (auto ci2 = jl_atomic_load_relaxed(&mi->cache); ci2;
+         ci2 = jl_atomic_load_relaxed(&ci2->next)) {
+        if (ci2 != ci && jl_is_ci_equiv(ci, ci2, 0) &&
+            (CISymbols.contains(ci2) || jl_atomic_load_relaxed(&ci2->invoke))) {
+            return ci2;
         }
     }
-    return CI;
+    return ci;
 }
 
 CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)

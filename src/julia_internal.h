@@ -825,7 +825,8 @@ JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi, jl_code_instance_t
 JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs) JL_CANSAFEPOINT;
 
-JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
+jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
+jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
@@ -836,7 +837,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         uint32_t effects, jl_value_t *analysis_results,
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, size_t target_world) JL_NOTSAFEPOINT;
-
+JL_DLLEXPORT int jl_is_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst, size_t target_world) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     jl_value_t *def = ci->def;
@@ -1870,6 +1871,7 @@ typedef uint_t (*smallintset_hash)(size_t val, jl_value_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uint_t hv);
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
 void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data) JL_CANSAFEPOINT;
+size_t jl_ordereddict_reserve(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, size_t stride) JL_CANSAFEPOINT;
 jl_genericmemory_t* smallintset_rehash(jl_genericmemory_t* a, smallintset_hash hash, jl_value_t *data, size_t newsz, size_t np) JL_CANSAFEPOINT;
 void smallintset_empty(const jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 

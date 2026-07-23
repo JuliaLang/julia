@@ -586,8 +586,8 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
     jl_value_t *owner = jl_nothing; // TODO: owner should be arg
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
-        if (jl_atomic_load_relaxed(&codeinst->min_world) == min_world &&
-            jl_atomic_load_relaxed(&codeinst->max_world) == max_world &&
+        if (jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
+            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
             jl_egal(codeinst->owner, owner) &&
             jl_egal(codeinst->rettype, rettype)) {
             if (di == NULL)
@@ -599,7 +599,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
                     if (!(debuginfo && jl_egal((jl_value_t*)debuginfo, (jl_value_t*)di)))
                         continue;
             }
-            // TODO: this is implied by the matching worlds, since it is intrinsic, so do we really need to verify it?
+            // n.b.: this is implied by the matching worlds for min_world, but not max_world == ~0 (which couldn't compute this)
             jl_svec_t *e = jl_atomic_load_relaxed(&codeinst->edges);
             if (e && jl_egal((jl_value_t*)e, (jl_value_t*)edges))
                 return codeinst;
@@ -624,24 +624,50 @@ JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi,
     return 0;
 }
 
-// look for something with an egal ABI and properties that is already in the JIT for a whole edge (target_world=0) or can be added to the JIT with new source just for target_world.
-JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, size_t target_world) JL_NOTSAFEPOINT
+// return whether the ci has more restrictions than the other arguments (more edges and narrower worlds)
+static int jl_codeinst_edges_sub(jl_code_instance_t *ci, size_t min_world2, size_t max_world2, jl_svec_t *edges2) JL_NOTSAFEPOINT
+{
+    size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
+    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+    jl_svec_t *edges = jl_atomic_load_relaxed(&ci->edges);
+    // n.b.: edges matching is implied sufficiently by the matching worlds for min_world, but not max_world == ~0 (which couldn't compute that)
+    return min_world >= min_world2 && max_world <= max_world2 && edges; // TODO: && jl_egal((jl_value_t*)edges, (jl_value_t*)edges2);
+}
+
+// return whether the codeinst can be substituted in place of ci for an invoke target in target_world
+JL_DLLEXPORT int jl_is_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst, size_t target_world) JL_NOTSAFEPOINT
 {
     jl_value_t *def = ci->def;
-    jl_method_instance_t *mi = jl_get_ci_mi(ci);
     jl_value_t *owner = ci->owner;
     jl_value_t *rettype = ci->rettype;
+    if ((!jl_atomic_load_relaxed(&codeinst->inferred)) == (!jl_atomic_load_relaxed(&ci->inferred)) &&
+        jl_egal(codeinst->def, def) &&
+        jl_egal(codeinst->owner, owner) &&
+        jl_egal(codeinst->rettype, rettype)) {
+        if (!target_world || jl_atomic_load_relaxed(&codeinst->invoke) != NULL) {
+            size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
+            size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+            size_t min_world2 = jl_atomic_load_relaxed(&codeinst->min_world);
+            size_t max_world2 = jl_atomic_load_relaxed(&codeinst->max_world);
+            if (target_world || (min_world2 == min_world && max_world2 == max_world)) {
+                jl_svec_t *edges2 = jl_atomic_load_relaxed(&codeinst->edges);
+                if (jl_codeinst_edges_sub(ci, min_world2, max_world2, edges2)) {
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+// look for something with an egal ABI and properties that is already in the JIT for the target_world, or could be added to the JIT instead of ci to satisfy the same invoke edge with the same src.
+JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, size_t target_world) JL_NOTSAFEPOINT
+{
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
-        if (codeinst != ci &&
-            jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
-            jl_atomic_load_relaxed(&codeinst->min_world) <= target_world &&
-            jl_atomic_load_relaxed(&codeinst->max_world) >= target_world &&
-            jl_egal(codeinst->def, def) &&
-            jl_egal(codeinst->owner, owner) &&
-            jl_egal(codeinst->rettype, rettype)) {
+        if (codeinst != ci && jl_is_ci_equiv(ci, codeinst, target_world))
             return codeinst;
-        }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     return ci;
@@ -1059,7 +1085,7 @@ static void drop_all_methcache(jl_methcache_t *mc) JL_CANSAFEPOINT
     jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_all_entries, NULL);
     jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
     size_t i, l = leafcache->length;
-    for (i = 1; i < l; i += 2) {
+    for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
         jl_typemap_entry_t *oldentry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(leafcache, i);
         if (oldentry) {
             while ((jl_value_t*)oldentry != jl_nothing) {
@@ -1677,10 +1703,55 @@ static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPO
     return 1;
 }
 
+// The leafcache is an insertion-ordered dictionary stored inline in a Memory{Any}:
+// slot [0] holds a `smallintset` mapping each key's hash to its logical entry
+// index, and entry `p` (0-based) is stored densely at slot `1 + p`. The key of
+// each entry is derivable from its value (`entry->sig == tt`), so no separate key
+// column is needed.
+static uint_t leafcache_hash(size_t p, jl_value_t *data) JL_NOTSAFEPOINT
+{
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(data, 1 + p);
+    // entry should not be NULL, unless there was concurrent corruption
+    return entry == NULL ? 0 : (uint_t)jl_object_id((jl_value_t*)entry->sig);
+}
+
+static int leafcache_eq(size_t p, const void *tt, jl_value_t *data, uint_t hv) JL_NOTSAFEPOINT
+{
+    size_t i = 1 + p;
+    if (i >= ((jl_genericmemory_t*)data)->length)
+        return 0; // OOB access, probably due to a data race
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(data, i);
+    return entry != NULL && jl_egal((jl_value_t*)entry->sig, (jl_value_t*)tt);
+}
+
+// find the logical index of the chain whose entries have `entry->sig == tt`, or -1
+static ssize_t leafcache_peek(jl_genericmemory_t *leafcache JL_PROPAGATES_ROOT, jl_value_t *tt) JL_NOTSAFEPOINT
+{
+    if (leafcache == (jl_genericmemory_t*)jl_an_empty_memory_any)
+        return -1;
+    jl_genericmemory_t *idxs = (jl_genericmemory_t*)jl_genericmemory_ptr_ref(leafcache, 0); // acquire
+    JL_GC_PROMISE_ROOTED(idxs);
+    // leafcache_eq does not safepoint, so declare this lookup is safe from JL_NOTSAFEPOINT callers
+    ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq JL_NOTSAFEPOINT, const void *key, jl_value_t *data, uint_t hv, int pop) JL_NOTSAFEPOINT;
+    return jl_smallintset_lookup(idxs, leafcache_eq, tt, (jl_value_t*)leafcache, (uint_t)jl_object_id(tt), 0);
+}
+
+// append `entry` as a new chain and publish it in the index (caller holds the write lock)
+static void leafcache_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, jl_typemap_entry_t *entry) JL_CANSAFEPOINT
+{
+    size_t p = jl_ordereddict_reserve(pcache, parent, 1); // reserve one entry
+    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
+    jl_genericmemory_ptr_set(a, 1 + p, (jl_value_t*)entry); // release
+    // publish the entry last, so a concurrent lookup that observes it in the
+    // index also observes the entry written above
+    jl_smallintset_insert((_Atomic(jl_genericmemory_t*)*)a->ptr, (jl_value_t*)a, leafcache_hash, p, (jl_value_t*)a);
+}
+
 // if available, returns a TypeMapEntry in the "leafcache" that matches `tt` (by type-equality) and is valid during `world`
 static inline jl_typemap_entry_t *lookup_leafcache(jl_genericmemory_t *leafcache JL_PROPAGATES_ROOT, jl_value_t *tt, size_t world) JL_NOTSAFEPOINT
 {
-    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_eqtable_get(leafcache, (jl_value_t*)tt, NULL);
+    ssize_t p = leafcache_peek(leafcache, tt);
+    jl_typemap_entry_t *entry = p == -1 ? NULL : (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(leafcache, 1 + p);
     if (entry) {
         // search tail of the linked-list (including the returned entry) for an entry intersecting world
         //
@@ -1784,11 +1855,17 @@ static void cache_insert(
             JL_UNLOCK(&typecache_lock); // Might GC
         }
         jl_genericmemory_t *oldcache = jl_atomic_load_relaxed(&mc->leafcache);
-        jl_typemap_entry_t *old = (jl_typemap_entry_t*)jl_eqtable_get(oldcache, (jl_value_t*)tt, jl_nothing);
+        ssize_t p = leafcache_peek(oldcache, (jl_value_t*)tt);
+        jl_typemap_entry_t *old = p == -1 ? (jl_typemap_entry_t*)jl_nothing
+                                          : (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(oldcache, 1 + p);
         jl_gc_write_atomic(newentry, newentry->next, jl_typemap_entry_t, old, relaxed);
-        jl_genericmemory_t *newcache = jl_eqtable_put(jl_atomic_load_relaxed(&mc->leafcache), (jl_value_t*)tt, (jl_value_t*)newentry, NULL);
-        if (newcache != oldcache) {
-            jl_gc_write_atomic(mc, mc->leafcache, jl_genericmemory_t, newcache, release);
+        if (p != -1) {
+            // prepend to the existing chain by replacing its head in place (release,
+            // so a concurrent lookup sees a consistent, world-versioned chain)
+            jl_genericmemory_ptr_set(oldcache, 1 + p, (jl_value_t*)newentry);
+        }
+        else {
+            leafcache_insert(&mc->leafcache, (jl_value_t*)mc, newentry);
         }
     }
     else {
@@ -2801,7 +2878,7 @@ static void _method_table_invalidate(jl_methcache_t *mc, void *env0) JL_CANSAFEP
     jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), disable_mt_cache, env0);
     jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
     size_t i, l = leafcache->length;
-    for (i = 1; i < l; i += 2) {
+    for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
         jl_typemap_entry_t *oldentry = (jl_typemap_entry_t*)jl_genericmemory_ptr_ref(leafcache, i);
         if (oldentry) {
             while ((jl_value_t*)oldentry != jl_nothing) {
@@ -3334,7 +3411,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
         jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache, (void*)&mt_cache_env);
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
         size_t i, l = leafcache->length;
-        for (i = 1; i < l; i += 2) {
+        for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
             jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
             if (entry) {
                 while (entry != jl_nothing) {
@@ -3758,7 +3835,7 @@ JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *src
         jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache, (void*)&mt_cache_env);
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
         size_t i, l = leafcache->length;
-        for (i = 1; i < l; i += 2) {
+        for (i = 1; i < l; i++) { // entries are dense from slot 1 (slot 0 is the index)
             jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
             if (entry) {
                 while (entry != jl_nothing) {
@@ -3788,14 +3865,29 @@ static int need_copy_to_mi_cache(jl_method_instance_t *mi, jl_method_instance_t 
 
 static jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst2) JL_CANSAFEPOINT
 {
+    size_t current_world = jl_get_world_counter();
+    size_t max_world2 = jl_atomic_load_relaxed(&codeinst2->max_world);
+    // if codeinst2 is still valid beyond current_world, link codeinst to
+    // it so that invalidation of codeinst2 also invalidates codeinst
+    jl_method_t *m = mi->def.method;
+    jl_svec_t *copy_edge = jl_is_method(m) ? jl_svec2(m->sig, codeinst2) : jl_emptysvec;
+    JL_GC_PUSH1(&copy_edge);
     jl_code_instance_t *codeinst = jl_get_method_uninferred(
             mi, codeinst2->rettype,
             jl_atomic_load_relaxed(&codeinst2->min_world),
-            jl_atomic_load_relaxed(&codeinst2->max_world), // TODO: use min(max_world, current_world) here
+            max_world2 < current_world ? max_world2 : current_world,
             jl_atomic_load_relaxed(&codeinst2->debuginfo),
-            jl_atomic_load_relaxed(&codeinst2->edges));
+            copy_edge);
+    JL_GC_POP();
     if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
-        // TODO: add edges and jl_promote_ci_to_current here
+        if (max_world2 == ~(size_t)0) {
+            JL_LOCK(&world_counter_lock);
+            if (jl_atomic_load_relaxed(&codeinst2->max_world) == ~(size_t)0) {
+                jl_method_instance_add_backedge(mi, NULL, codeinst);
+                jl_atomic_store_relaxed(&codeinst->max_world, ~(size_t)0); // jl_promote_ci_to_current
+            }
+            JL_UNLOCK(&world_counter_lock);
+        }
         jl_gc_write(codeinst, codeinst->rettype_const, jl_value_t, codeinst2->rettype_const);
         uint8_t specsigflags;
         jl_callptr_t invoke;
@@ -4487,10 +4579,16 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t na
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
 }
 
+jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+{
+    size_t world = jl_current_task->world_age;
+    return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+}
+
 // Used by jl_eval_thunk to invoke top-level thunks.  They will be
 // garbage-collectable as soon as they are invoked, so their ORC symbols must be
 // unregistered before we enter invoke, which may never return.
-JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     size_t world = jl_current_task->world_age;
 

@@ -83,6 +83,12 @@ end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
 
+# NOTE: Keep in sync with the JL_OPTIONS_COMPILE_* defines in src/julia.h
+const JL_OPTIONS_COMPILE_OFF = 0
+const JL_OPTIONS_COMPILE_ON  = 1
+const JL_OPTIONS_COMPILE_ALL = 2
+const JL_OPTIONS_COMPILE_MIN = 3
+
 function colored_text(opts::JLOptions)
     return if opts.color != 0
         opts.color == 1
