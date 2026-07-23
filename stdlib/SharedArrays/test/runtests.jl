@@ -522,21 +522,22 @@ end
         S = SharedArray{Int64}(100, 100)
         segname = S.segname
         fill!(S, 3)
-        backing = sdata(S)
 
         @static if Sys.islinux()
             @test first(shmem_mapped(segname))
         end
 
-        # finalize must not unmap while an alias is reachable
-        GC.@preserve backing begin
-            finalize(S)
-            @test all(backing .== 3)
-            @static if Sys.islinux()
-                @test first(shmem_mapped(segname))
+        function finalize_and_check_alias()
+            backing = sdata(S)
+            GC.@preserve backing begin
+                finalize(S)
+                @test all(backing .== 3)
+                @static if Sys.islinux()
+                    @test first(shmem_mapped(segname))
+                end
             end
         end
-        backing = nothing
+        finalize_and_check_alias()
 
         @static if Sys.islinux()
             GC.gc(); GC.gc()
