@@ -15,9 +15,6 @@ end
     bad_st = JuliaSyntax.newleaf(g, st, K"code_info")
     @test_throws "unrecognized leaf kind" JuliaLowering.assert_syntaxtree(bad_st)
 
-    bad_st = JuliaSyntax.newnode(g, st, K"code_info", NodeId[])
-    @test_throws "needs attribute is_toplevel_thunk" JuliaLowering.assert_syntaxtree(bad_st)
-
     JuliaSyntax.setchildren!(g, bad_st._id, NodeId[bad_st._id])
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(bad_st)
 

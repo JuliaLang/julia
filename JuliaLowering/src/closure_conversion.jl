@@ -464,7 +464,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         else
             newleaf(ctx, ex, K"TOMBSTONE")
         end
-    elseif k == K"lambda"
+    elseif k == K"lambda" || k == K"toplevel_lambda" || k == K"generated_lambda"
         @jl_assert false (ex, "lambda should be at top level or in `method`")
     elseif k == K"function_decl"
         func_name = ex[1]
@@ -600,7 +600,8 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
 end
 
 function closure_convert_lambda(ctx, ex, sps)
-    @jl_assert kind(ex) == K"lambda" ex
+    k = kind(ex)
+    @jl_assert k in KSet"lambda toplevel_lambda generated_lambda" ex
     lambda_bindings = ex.lambda_bindings::LambdaBindings
     interpolations = nothing
     if isnothing(ctx.capture_rewriting)
@@ -614,8 +615,8 @@ function closure_convert_lambda(ctx, ex, sps)
         ctx.graph, ctx.bindings, ctx.mod,
         ctx.closure_bindings, cap_rewrite, ctx.top_bindings,
         lambda_bindings, ctx.sp_typevars,
-        ex.is_toplevel_thunk, ex.is_toplevel_thunk,
-        ctx.toplevel_pure && ex.toplevel_pure,
+        k === K"toplevel_lambda", k === K"toplevel_lambda",
+        ctx.toplevel_pure && k == K"generated_lambda",
         ctx.toplevel_stmts, ctx.closure_infos)
     lambda_children = SyntaxList(ctx)
     args = ex[1]

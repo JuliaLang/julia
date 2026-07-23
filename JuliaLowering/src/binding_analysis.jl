@@ -37,12 +37,20 @@ function analyze_def_and_use!(ctx, ex)
             _analyze_nested_lambdas!(ctx, body)
             _analyze_lambda_vars!(ctx, ex)
         end
+        [K"toplevel_lambda" _ _ body _...] -> begin
+            _analyze_nested_lambdas!(ctx, body)
+            _analyze_lambda_vars!(ctx, ex)
+        end
+        [K"generated_lambda" _ _ body _...] -> begin
+            _analyze_nested_lambdas!(ctx, body)
+            _analyze_lambda_vars!(ctx, ex)
+        end
     end
 end
 
 function _analyze_nested_lambdas!(ctx, ex)
     k = kind(ex)
-    if k == K"lambda"
+    if k in KSet"lambda toplevel_lambda generated_lambda"
         analyze_def_and_use!(ctx, ex)
     elseif !is_leaf(ex) && !is_quoted(ex)
         for child in children(ex)
@@ -340,6 +348,8 @@ function _analyze_lambda_vars!(ctx::VariableAnalysisContext, ex)
         [K"lambda" _ _ body] -> du_visit!(ctx, state, body)
         [K"lambda" _ _ body rett] -> (du_visit!(ctx, state, body);
                                       du_visit!(ctx, state, rett))
+        [K"toplevel_lambda" _ _ body] -> du_visit!(ctx, state, body)
+        [K"generated_lambda" _ _ body] -> du_visit!(ctx, state, body)
     end
 
     for id in union(state.live, state.unused)

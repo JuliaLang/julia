@@ -619,7 +619,8 @@ end
 
 @fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
     ensure_attributes!(ex._graph; debuginfo=Any)
-    add_debuginfo!(ex)
+    @jl_assert kind(ex) in KSet"thunk code_info" ex
+    add_debuginfo!(kind(ex) === K"thunk" ? ex[1] : ex)
     _to_lowered_expr(ex)
 end
 
@@ -657,12 +658,7 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"syntaxinert"
         ex[1]
     elseif k == K"code_info"
-        ir = to_code_info(ex, ex.slots, ex.meta)
-        if ex.is_toplevel_thunk
-            Expr(:thunk, ir) # TODO: Maybe nice to just return a CodeInfo here?
-        else
-            ir
-        end
+        to_code_info(ex, ex.slots, ex.meta)
     elseif k == K"Value"
         @jl_assert !isa_lowering_ast_node(ex.value) (
             ex, string("smuggling AST through Value is asking for trouble; ",
@@ -736,6 +732,7 @@ function _to_lowered_expr(ex::SyntaxTree)
                k == K"leave"     ? :leave      :
                k == K"isdefined" ? :isdefined  :
                k == K"loopinfo"  ? :loopinfo   :
+               k == K"thunk"     ? :thunk      :
                k == K"boundscheck"       ? :boundscheck       :
                k == K"latestworld"       ? :latestworld       :
                k == K"pop_exception"     ? :pop_exception     :

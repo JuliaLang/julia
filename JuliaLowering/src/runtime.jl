@@ -330,7 +330,7 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method, graph,
     ctx2, ex2 = expand_forms_2(ex1, world)
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)
+    ex2 = @ast ctx2 ex0 [K"generated_lambda"
         [K"block" _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
         [K"block" _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
         ex2

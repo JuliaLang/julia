@@ -2471,7 +2471,7 @@ function method_def_expr(ctx, src, mtable, sparams, argl, body,
     arg_types = mapsyntax(a->expand_forms_2(ctx, a[2]), argl)
     @ast ctx src [K"method" mtable
         [K"call" "svec"::K"core" arg_types...]
-        [K"lambda"(body, is_toplevel_thunk=false, toplevel_pure=false)
+        [K"lambda"(body)
             [K"block" mapindex(argl, 1)...]
             [K"block" mapindex(sparams, 1)...]
             expand_forms_2(ctx, body)
@@ -2986,7 +2986,7 @@ expand_opaque_closure(ctx, ex) = @stm ex begin
         nargs::K"Integer"
         is_va::K"Bool"
         ::K"SourceLocation"(lam)
-        [K"lambda"(lam, is_toplevel_thunk=false, toplevel_pure=false)
+        [K"lambda"(lam)
             [K"block" arg_names...]
             [K"block"]
             expand_forms_2(ctx, body)]]
@@ -4506,9 +4506,7 @@ function expand_forms_2(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector}
 end
 
 ensure_desugaring_attributes!(graph) = ensure_attributes!(
-    ensure_macro_attributes!(graph),
-    is_toplevel_thunk=Bool,
-    toplevel_pure=Bool)
+    ensure_macro_attributes!(graph))
 
 @fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
     graph = ensure_desugaring_attributes!(copy_attrs(ex._graph))

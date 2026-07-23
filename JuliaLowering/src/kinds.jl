@@ -175,7 +175,11 @@ function _register_kinds()
             # should not be lowered (and should mostly be treated as :inert), but
             # requires scope resolution and special conversion to Expr.
             "foreignsymbol"
+            "thunk"
             # Options specific to K"lambda"
+            "generated_lambda"
+            "toplevel_lambda"
+
             "toplevel_pure"
             "toplevel_thunk"
             # Options specific to K"scope_block"

@@ -43,24 +43,26 @@ end
 
 function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     id = length(ctx.scopes) + 1
+    k = kind(ex)
     if parent_id == 0
-        @jl_assert kind(ex) === K"lambda" ex
+        @jl_assert k in KSet"lambda toplevel_lambda generated_lambda" ex
         lambda_id = id
-        is_permeable = ex.is_toplevel_thunk
+        is_permeable = k == K"toplevel_lambda"
         is_lifted = false
     else
+        @jl_assert k in KSet"lambda method_defs scope_block" ex
         parent = ctx.scopes[parent_id]
-        lambda_id = kind(ex) === K"lambda" ? id : parent.lambda_id
-        is_permeable = (kind(ex) === K"scope_block" &&
+        lambda_id = k === K"lambda" ? id : parent.lambda_id
+        is_permeable = (k === K"scope_block" &&
             kind(ex[1]) === K"neutral_scope" &&
             parent_id !== 0 && parent.is_permeable)
-        is_lifted = kind(ex) === K"method_defs" ||
-            (kind(ex) !== K"lambda" && parent.is_lifted)
+        is_lifted = k === K"method_defs" ||
+            (k !== K"lambda" && parent.is_lifted)
     end
     s = ScopeInfo(
         id, parent_id, lambda_id, ex._id, is_permeable, is_lifted,
         Dict{IdTag, NodeId}(), Dict{NameKey, NodeId}(), Dict{NameKey,IdTag}(),
-        kind(ex) === K"lambda" ? Dict{IdTag,Bool}() : nothing)
+        (parent_id == 0 || k === K"lambda") ? Dict{IdTag,Bool}() : nothing)
     push!(ctx.scopes, s)
     return s
 end
@@ -303,16 +305,16 @@ end
 # means finding all variables declared and used in the scope `ex` and generating
 # the (identifier,layer)=>binding_id mapping `scope.vars`
 function enter_scope!(ctx, ex)
-    @jl_assert kind(ex) in KSet"lambda scope_block method_defs" ex
+    @jl_assert kind(ex) in KSet"lambda scope_block method_defs toplevel_lambda generated_lambda" ex
     # Note that generated functions produce lambdas with this false
-    is_toplevel_thunk = kind(ex) === K"lambda" && ex.is_toplevel_thunk
+    is_toplevel_thunk = kind(ex) === K"toplevel_lambda"
     parent_id = (is_toplevel_thunk || isempty(ctx.scope_stack)) ?
         0 : ctx.scopes[ctx.scope_stack[end]].id
     scope = ScopeInfo(ctx, parent_id, ex)
 
     #---------------------------------------------------------------------------
     # Find explicit decls that may influence assignment assignment resolution
-    if kind(ex) === K"lambda"
+    if kind(ex) in KSet"lambda toplevel_lambda generated_lambda"
         for c in children(ex[1])
             @jl_assert kind(c) in KSet"Identifier BindingId Placeholder" c
             explicit_declare_in_scope!(ctx, scope, c, :argument)
@@ -407,7 +409,8 @@ end
 function _resolve_scopes(ctx, ex::SyntaxTree,
                          @nospecialize(scope::Union{Nothing, ScopeInfo}))
     k = kind(ex)
-    @jl_assert scope isa ScopeInfo || k === K"lambda" ex
+    @jl_assert scope isa ScopeInfo || k === K"lambda" ||
+        k === K"toplevel_lambda" || k === K"generated_lambda" ex
     if k == K"Identifier"
         if (mod = get(ex, :mod, nothing); !isnothing(mod))
             return new_global_binding(ctx, ex, ex.name_val, mod)
@@ -456,7 +459,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
     elseif k == K"always_defined"
         resolve_name(ctx, ex[1]).is_always_defined = true
         newleaf(ctx, ex, K"TOMBSTONE")
-    elseif k == K"lambda"
+    elseif k in KSet"lambda toplevel_lambda generated_lambda"
         # opaque closures are the exception
         # scope isa ScopeInfo && @jl_assert scope.is_lifted ex
         newscope = enter_scope!(ctx, ex)
@@ -486,14 +489,13 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             _resolve_scopes(ctx, ex[4], newscope) : nothing
         pop!(ctx.scope_stack)
 
-        @ast ctx ex [K"lambda"(;lambda_bindings=lambda_bindings,
-                               is_toplevel_thunk=ex.is_toplevel_thunk,
-                               toplevel_pure=ex.toplevel_pure)
+        out = @ast ctx ex [k
             arg_bindings
             [K"block" sparam_bindings...]
             [K"block" body_stmts...]
             ret_var
         ]
+        setattr!(out, :lambda_bindings, lambda_bindings)
     elseif k == K"scope_block"
         newscope = enter_scope!(ctx, ex)
         stmts = SyntaxList(ctx)
@@ -904,9 +906,9 @@ function analyze_variables!(ctx, ex)
         analyze_variables!(ctx, ex[9])
         pop!(ctx.method_def_stack)
         pop!(ctx.closure_key_stack)
-    elseif k == K"lambda"
+    elseif k in KSet"lambda" # generated_lambda?
         lambda_bindings = ex.lambda_bindings::LambdaBindings
-        if !ex.is_toplevel_thunk && !isempty(ctx.closure_key_stack)
+        if !isempty(ctx.closure_key_stack)
             # Record all lambdas for the same closure type in one place
             ck = last(ctx.closure_key_stack)
             if get_binding(ctx, ck.binding).kind === :local
@@ -927,14 +929,10 @@ function analyze_variables!(ctx, ex)
 end
 
 function resolve_scopes(ctx::ScopeResolutionContext, ex)
-    if kind(ex) != K"lambda"
+    if !(kind(ex) in KSet"lambda toplevel_lambda generated_lambda")
         # Wrap in a top level thunk if we're not already expanding a lambda.
         # (Maybe this should be done elsewhere?)
-        ex = @ast ctx ex [K"lambda"(is_toplevel_thunk=true, toplevel_pure=false)
-            [K"block"]
-            [K"block"]
-            ex
-        ]
+        ex = @ast ctx ex [K"toplevel_lambda" [K"block"] [K"block"] ex]
     end
     _resolve_scopes(ctx, ex, nothing)
 end

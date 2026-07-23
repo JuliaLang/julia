@@ -252,7 +252,8 @@ function _deref_ssa(stmts, ex)
     ex
 end
 
-function _find_method_lambda(ex, name)
+function _find_method_lambda(ex0, name)
+    ex = kind(ex0) === K"thunk" ? ex0[1] : ex0
     @jl_assert kind(ex) == K"code_info" ex
     # Heuristic search through outer thunk for the method in question.
     stmts = children(ex[1])
@@ -271,7 +272,7 @@ function _find_method_lambda(ex, name)
 end
 
 function print_ir(io::IO, ex, method_filter=nothing)
-    @jl_assert kind(ex) == K"code_info" ex
+    @jl_assert kind(ex) == K"code_info" || kind(ex) == K"thunk" ex
     if !isnothing(method_filter)
         filtered = _find_method_lambda(ex, method_filter)
         if isnothing(filtered)
@@ -284,11 +285,12 @@ function print_ir(io::IO, ex, method_filter=nothing)
 end
 
 # TODO: JuliaLowering-the-module should always print the same way, ignoring parent modules
-function _print_ir(io::IO, ex, indent)
+function _print_ir(io::IO, ex0, indent)
     added_indent = "    "
+    (ex, is_toplevel_thunk) = kind(ex0) === K"thunk" ? (ex0[1],true) : (ex0,false)
     @jl_assert ((kind(ex) == K"lambda" || kind(ex) == K"code_info")
                 && kind(ex[1]) == K"block") ex
-    if !ex.is_toplevel_thunk && kind(ex) == K"code_info"
+    if !is_toplevel_thunk && kind(ex) == K"code_info"
         slots = ex.slots
         print(io, indent, "slots: [")
         for (i,slot) in enumerate(slots)
@@ -328,7 +330,7 @@ function _print_ir(io::IO, ex, indent)
             println(io)
             _print_ir(io, e[5], indent*added_indent)
         elseif kind(e) == K"code_info"
-            println(io, indent, lno, " --- ", e.is_toplevel_thunk ? "thunk" : "code_info")
+            println(io, indent, lno, " --- ", "code_info")
             _print_ir(io, e, indent*added_indent)
         else
             code = string(e)

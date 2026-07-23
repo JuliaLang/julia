@@ -872,7 +872,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             ex[4]
             compile_lambda(ctx, ex[5])
         ]
-    elseif k == K"lambda"
+    elseif k in KSet"lambda generated_lambda toplevel_lambda"
         lam = compile_lambda(ctx, ex)
         if in_tail_pos
             emit_return(ctx, lam)
@@ -1179,11 +1179,12 @@ struct Slot
 end
 
 function compile_lambda(outer_ctx, ex)
+    k = kind(ex)
     lambda_args = ex[1]
     static_parameters = ex[2]
     lambda_bindings = ex.lambda_bindings
     ctx = LinearIRContext(
-        outer_ctx.graph, outer_ctx, ex.is_toplevel_thunk, lambda_bindings)
+        outer_ctx.graph, outer_ctx, k === K"toplevel_lambda", lambda_bindings)
     if numchildren(ex) == 4
         tmp = ssavar(ctx, ex[4], "rett")
         ctx.rettype_ssa[] = tmp._id
@@ -1263,12 +1264,10 @@ function compile_lambda(outer_ctx, ex)
     for (k, v) in ctx.meta
         meta = CompileHints(meta, k, v)
     end
-    @ast ctx ex [K"code_info"(is_toplevel_thunk=ex.is_toplevel_thunk,
-                              slots=slots, meta=meta)
-        [K"block"(ex[3])
-            code...
-        ]
+    out = @ast ctx ex [K"code_info"(slots=slots, meta=meta)
+        [K"block"(ex[3]) code...]
     ]
+    k === K"toplevel_lambda" ? @ast(ctx, ex, [K"thunk" out]) : out
 end
 
 ensure_linearization_attributes!(graph) = ensure_attributes!(

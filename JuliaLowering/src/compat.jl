@@ -83,8 +83,6 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
         tvars_block = newnode(graph, src, K"block", NodeId[])
         st = newnode(graph, src, K"lambda",
                      NodeId[args_block._id, tvars_block._id, body_id])
-        setattr!(st, :is_toplevel_thunk, false)
-        setattr!(st, :toplevel_pure, false)
     elseif e isa Expr
         head_s = string(e.head)
         st_k = find_kind(head_s)

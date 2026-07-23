@@ -1177,7 +1177,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
         end
     else
         required_attrs = @stm st begin
-            [K"code_info" _...] -> (:slots, :is_toplevel_thunk)
+            [K"code_info" _...] -> (:slots,)
             [K"unknown_head" _...] -> (:name_val,)
             _ -> ()
         end
