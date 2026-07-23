@@ -361,13 +361,14 @@ end
 
     # setproperty form: decl is ignored (this is misleading, syntax TODO)
     @gensym sym
+    @eval test_mod mutable struct with_mutable_a; a; end
     @testset let ex =
         Expr(:let, Expr(:block),
              Expr(:block,
-                  Expr(declkind, Expr(:(=), sym, (;a=1))),
-                  Expr(declkind, Expr(:(=), Expr(:., sym, :a), 2)),
-                  Expr(:tuple, sym)))
-        @test_broken jl_eval(test_mod, ex) == ((;a=2),)
+                  Expr(:(=), sym, :(with_mutable_a(1))),
+                  Expr(declkind, Expr(:(=), Expr(:., sym, QuoteNode(:a)), 2)),
+                  sym))
+        @test jl_eval(test_mod, ex).a == 2
         Core.@latestworld
         @test !isdefined(test_mod, sym)
     end

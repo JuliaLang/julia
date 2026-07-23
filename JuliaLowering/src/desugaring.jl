@@ -2222,6 +2222,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         end
         [K"..." x] -> nothing # from recursion above
         [K"ref" _ _...] -> nothing # decl is ignored; syntax TODO
+        [K"." _ _] -> nothing # decl is ignored; syntax TODO
     end
 
     if !isnothing(declname)
