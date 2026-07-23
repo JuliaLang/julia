@@ -303,57 +303,75 @@ function print(io::IO,
             Base.print(io, "Overhead ╎ [+additional indent] Count File:Line  Function\n")
             Base.print(io, "=========================================================\n")
         end
+        # partition the data per group in one pass, rather than rescanning the
+        # whole buffer for every group
+        blocks = collect_blocks(data)
+        # reverse-appearance order for tasks, matching `get_task_ids`, sorted for threads
+        taskids_of(bs) = unique(b[2] for b in Iterators.reverse(bs))
+        threadids_of(bs) = sort!(unique(b[1] for b in bs))
         if groupby == [:task, :thread]
-            taskids = intersect(get_task_ids(data), tasks)
+            bytask = bucket_blocks(UInt, b -> b[2], blocks)
+            taskids = intersect(taskids_of(blocks), tasks)
             isempty(taskids) && (any_nosamples = true)
             for taskid in taskids
-                threadids = intersect(get_thread_ids(data, taskid), threads)
+                taskblocks = bytask[taskid]
+                threadids = intersect(threadids_of(taskblocks), threads)
                 if length(threadids) == 0
                     any_nosamples = true
                 else
+                    bythread = bucket_blocks(Int, b -> b[1], taskblocks)
                     nl = length(threadids) > 1 ? "\n" : ""
                     printstyled(io, "Task $(Base.repr(taskid))$nl"; bold=true, color=Base.debug_color())
                     for threadid in threadids
                         printstyled(io, " Thread $threadid ($(Threads.threadpooldescription(threadid))) "; bold=true, color=Base.info_color())
-                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
+                        gdata = group_data(data, bythread[threadid], Returns(true))
+                        nosamples = print_group(io, gdata, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
                 end
             end
         elseif groupby == [:thread, :task]
-            threadids = intersect(get_thread_ids(data), threads)
+            bythread = bucket_blocks(Int, b -> b[1], blocks)
+            threadids = intersect(threadids_of(blocks), threads)
             isempty(threadids) && (any_nosamples = true)
             for threadid in threadids
-                taskids = intersect(get_task_ids(data, threadid), tasks)
+                threadblocks = bythread[threadid]
+                taskids = intersect(taskids_of(threadblocks), tasks)
                 if length(taskids) == 0
                     any_nosamples = true
                 else
+                    bytask = bucket_blocks(UInt, b -> b[2], threadblocks)
                     nl = length(taskids) > 1 ? "\n" : ""
                     printstyled(io, "Thread $threadid ($(Threads.threadpooldescription(threadid)))$nl"; bold=true, color=Base.info_color())
                     for taskid in taskids
                         printstyled(io, " Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
+                        gdata = group_data(data, bytask[taskid], Returns(true))
+                        nosamples = print_group(io, gdata, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
                 end
             end
         elseif groupby === :task
-            taskids = intersect(get_task_ids(data), tasks)
+            bytask = bucket_blocks(UInt, b -> b[2], blocks)
+            taskids = intersect(taskids_of(blocks), tasks)
             isempty(taskids) && (any_nosamples = true)
             for taskid in taskids
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                nosamples = print_group(io, data, lidict, pf, format, threads, taskid, true)
+                gdata = group_data(data, bytask[taskid], (t, k) -> t in threads)
+                nosamples = print_group(io, gdata, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
         elseif groupby === :thread
-            threadids = intersect(get_thread_ids(data), threads)
+            bythread = bucket_blocks(Int, b -> b[1], blocks)
+            threadids = intersect(threadids_of(blocks), threads)
             isempty(threadids) && (any_nosamples = true)
             for threadid in threadids
                 printstyled(io, "Thread $threadid ($(Threads.threadpooldescription(threadid))) "; bold=true, color=Base.info_color())
-                nosamples = print_group(io, data, lidict, pf, format, threadid, tasks, true)
+                gdata = group_data(data, bythread[threadid], (t, k) -> k in tasks)
+                nosamples = print_group(io, gdata, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
@@ -398,6 +416,53 @@ function print_group(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDic
     else
         throw(ArgumentError("output format $(repr(format)) not recognized"))
     end
+end
+
+const ProfileBlock = Tuple{Int,UInt,UnitRange{Int}}
+
+# One forward pass over `data`, returning (threadid, taskid, range) per sample
+# block, where `range` spans the block's frames and its trailing metadata.
+function collect_blocks(data::Vector{<:Unsigned})
+    blocks = ProfileBlock[]
+    block_start = 1
+    for i in eachindex(data)
+        if is_block_end(data, i)
+            threadid = Int(data[i - META_OFFSET_THREADID])
+            taskid = UInt(data[i - META_OFFSET_TASKID])
+            push!(blocks, (threadid, taskid, block_start:i))
+            block_start = i + 1
+        end
+    end
+    return blocks
+end
+
+# Partition `blocks` by `key(block)`, preserving block order within each bucket, so
+# that a group can be emitted from its own bucket rather than by rescanning every
+# block. Each block lands in exactly one bucket, so bucketing costs one pass in
+# total rather than one pass per group.
+function bucket_blocks(::Type{K}, key::F, blocks::Vector{ProfileBlock}) where {K, F}
+    buckets = Dict{K,Vector{ProfileBlock}}()
+    for b in blocks
+        push!(get!(Vector{ProfileBlock}, buckets, key(b)::K), b)
+    end
+    return buckets
+end
+
+# Concatenate the blocks selected by `pred(threadid, taskid)` into a standalone
+# profile buffer. Aggregation is insensitive to inter-block order.
+function group_data(data::Vector{T}, blocks::Vector{ProfileBlock}, pred::F) where {T<:Unsigned, F}
+    n = 0
+    for (threadid, taskid, r) in blocks
+        pred(threadid, taskid) && (n += length(r))
+    end
+    out = Vector{T}(undef, n)
+    pos = 1
+    for (threadid, taskid, r) in blocks
+        pred(threadid, taskid) || continue
+        copyto!(out, pos, data, first(r), length(r))
+        pos += length(r)
+    end
+    return out
 end
 
 function get_task_ids(data::Vector{<:Unsigned}, threadid = nothing)
