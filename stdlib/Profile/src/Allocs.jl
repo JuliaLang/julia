@@ -86,9 +86,8 @@ function _prof_expr(expr, opts)
     end
 end
 
-# The C-side buffers are not safe to mutate/free while another task is reading
-# them (e.g. `clear` frees the backtrace buffers that `fetch` reads), so
-# serialize all API entry points.
+# serializes the API entry points: e.g. `clear` frees the C-side buffers that a
+# concurrent `fetch` would be reading
 const allocs_lock = Base.ReentrantLock()
 
 """
@@ -133,8 +132,7 @@ Retrieve the recorded allocations, and decode them into Julia
 objects which can be analyzed.
 """
 function fetch()
-    # hold the lock through `decode`, which reads the C-side buffers that a
-    # concurrent `clear` would free
+    # hold the lock through `decode`, which reads the C-side buffers
     @lock allocs_lock begin
         raw_results = ccall(:jl_fetch_alloc_profile, RawResults, ())
         return decode(raw_results)

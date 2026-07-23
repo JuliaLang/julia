@@ -56,9 +56,8 @@ _Atomic(int) g_alloc_profile_enabled = 0;
 static _Atomic(int) g_recording_threads = 0;
 static alloc_array_t g_combined_allocs; // Will live forever.
 
-// Wait for every in-flight recorder to finish. Must only be called while
-// `g_alloc_profile_enabled` is 0, so that once the count reaches zero no new
-// recorder can start touching the profile arrays.
+// Must only be called while `g_alloc_profile_enabled` is 0, so that once the
+// count reaches zero no new recorder can start touching the profile arrays.
 static void wait_for_recorders(void) JL_NOTSAFEPOINT
 {
     while (jl_atomic_load(&g_recording_threads) != 0)
@@ -97,8 +96,7 @@ static jl_raw_backtrace_t get_raw_backtrace(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate)
 {
-    // stop any already-running profile and wait for in-flight recorders, since
-    // they read the per-thread profile array we may be about to reallocate
+    // in-flight recorders read the per-thread arrays we may be about to reallocate
     jl_stop_alloc_profile();
 
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);

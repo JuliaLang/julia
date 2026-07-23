@@ -116,9 +116,6 @@ end
     end
 end
 
-# regression tests: spurious group warning, discarded filters in flat groupby,
-# `callers` on metadata-bearing data, groupby error type, non-UInt data, and
-# reconfiguring the buffer while profiling is running
 @testset "printing and callers regressions" begin
     iobuf = IOBuffer()
     # synthetic single-sample profile on thread 1, so group contents are deterministic
