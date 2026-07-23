@@ -242,6 +242,15 @@ julia> cld.(-5:5, 3)'
 """
 cld(a, b) = div(a, b, RoundUp)
 
+"""
+    fld1(a, b)
+
+Legacy spelling of `cld(a, b)` for integers.
+
+See also [`cld`](@ref).
+"""
+fld1(a, b) = cld(a, b)
+
 # divrem
 """
     divrem(x, y, r::RoundingMode=RoundToZero)

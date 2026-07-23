@@ -924,6 +924,14 @@ julia> reshape(1:36, 6, 6)
 """
 cldmod1(x, y) = (cld(x, y), mod1(x, y))
 
+"""
+    fldmod1(x, y)
+
+Legacy spelling of `cldmod1(x, y)` for integers.
+
+See also [`cldmod1`](@ref).
+"""
+fldmod1(x, y) = cldmod1(x, y)
 
 """
     widen(x)
