@@ -815,6 +815,10 @@ let NO_LOSERS = Base.ReinferUtils.METHOD_SIG_NO_LOSERS
     for mod in (AmbigCycle3, AmbigCycle3Reorder), m in methods(mod.f)
         @test iszero(m.dispatch_status & NO_LOSERS)
     end
+    # a type-equal replacement records a recency-tiebreak win over the method
+    # it replaces, so it must not inherit the predecessor's bit
+    @eval NoLosersBit f(::Any) = 3
+    @test iszero(which(NoLosersBit.f, Tuple{Any}).dispatch_status & NO_LOSERS)
 end
 
 nothing
