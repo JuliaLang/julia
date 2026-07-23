@@ -119,7 +119,7 @@ _var_str(v) = v === :local ? "local variable" :
 # variable usually can't be two things in one scope, but flisp has quirks.
 function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     if kind(ex) === K"BindingId"
-        bid = ex.var_id
+        bid = get_id(ex)
         b = get_binding(ctx, bid)
         @jl_assert b.kind === new_k ex
         @jl_assert b.lambda_id == 0 (ex, "cannot declare a BindingId in multiple scopes")
@@ -475,9 +475,9 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         self_id = if numchildren(arg_bindings) === 0
             0
         elseif getmeta(ex[1][1], :is_kwcall_self, false)
-            arg_bindings[3].var_id
+            get_id(arg_bindings[3])
         else
-            arg_bindings[1].var_id
+            get_id(arg_bindings[1])
         end
         body_stmts = SyntaxList(ctx)
         add_local_decls!(ctx, body_stmts, ex, newscope)
@@ -635,7 +635,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
         if kind(resolved[1]) !== K"Placeholder"
             @jl_assert kind(resolved[1]) === K"BindingId" resolved
-            if get_binding(ctx, resolved[1].var_id).kind === :local
+            if get_binding(ctx, get_id(resolved[1])).kind === :local
                 throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
             end
         end
@@ -703,7 +703,7 @@ mutable struct VariableAnalysisContext <: AbstractLoweringContext
 end
 
 function init_closure_bindings!(ctx, fname)
-    bid = fname.var_id::IdTag
+    bid = get_id(fname)
     ck = closure_key(ctx, fname)
     @jl_assert get_binding(ctx, bid).kind === :local fname
     get!(ctx.closure_bindings, ck) do
@@ -723,7 +723,7 @@ end
 function static_eval_disallowed_binding(ctx, ex)
     k = kind(ex)
     if k == K"BindingId"
-        b = get_binding(ctx, ex.var_id)
+        b = get_binding(ctx, get_id(ex))
         if b.kind != :global && b.kind != :static_parameter
             lam = ctx.scopes[ctx.lambda_bindings.scope_id]
             if is_top_scope(lam) ||
@@ -783,7 +783,7 @@ end
 
 function closure_key(ctx, ex)
     @jl_assert kind(ex) === K"BindingId" ex
-    ClosureKey(ex.var_id::IdTag, ctx.lambda_bindings.scope_id)
+    ClosureKey(get_id(ex), ctx.lambda_bindings.scope_id)
 end
 function current_closure_bindings(ctx)
     isempty(ctx.closure_key_stack) && return nothing

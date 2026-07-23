@@ -645,11 +645,11 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"Symbol"
         QuoteNode(Symbol(ex.name_val::String))
     elseif k == K"slot"
-        Core.SlotNumber(ex.var_id::IdTag)
+        Core.SlotNumber(get_id(ex))
     elseif k == K"static_parameter"
-        Expr(:static_parameter, ex.var_id::IdTag)
+        Expr(:static_parameter, get_id(ex))
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id::IdTag)
+        Core.SSAValue(get_id(ex))
     elseif k == K"return"
         v = _to_lowered_expr(ex[1])
         @jl_assert Base.Compiler.is_valid_return(v) ex
@@ -666,11 +666,11 @@ function _to_lowered_expr(ex::SyntaxTree)
                        "find a SyntaxTree representation"))
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
-        Core.GotoNode(ex[1].id)
+        Core.GotoNode(get_id(ex[1]))
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(_to_lowered_expr(ex[1]), ex[2].id)
+        Core.GotoIfNot(_to_lowered_expr(ex[1]), get_id(ex[2]))
     elseif k == K"enter"
-        catch_idx = ex[1].id
+        catch_idx = get_id(ex[1])
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2]))

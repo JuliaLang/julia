@@ -648,7 +648,7 @@ function est_to_dst(st::SyntaxTree)
         [K"inbounds" [K"Identifier"]] -> newnode(g, st, K"inbounds_pop", SyntaxList(g))
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
-        [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
+        [K"static_parameter" x] -> newleaf(g, st, K"static_parameter", x.value::IdTag)
         [K"lambda" args sps body] -> mknode(st, [args._id, sps._id, rec(body)._id])
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_expr::K"Value"

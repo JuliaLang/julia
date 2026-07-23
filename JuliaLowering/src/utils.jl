@@ -30,12 +30,8 @@ function _value_string(ex)
               "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
               ex.value isa SyntaxContext ? "SyntaxContext(#=omitted=#)" : repr(ex.value)) :
             hasattr(ex, :value) ? repr(ex.value) : "::K\"$(untokenize(k))\""
-    id = get(ex, :var_id, nothing)
-    if isnothing(id)
-        id = get(ex, :id, nothing)
-    end
-    if !isnothing(id)
-        idstr = subscript_str(id)
+    if kind(ex) in KSet"BindingId slot SSAValue static_parameter label"
+        idstr = subscript_str(get_id(ex))
         str = "$(str)$idstr"
     end
     if k == K"slot" || k == K"BindingId"
@@ -62,7 +58,7 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
         treestr = treestr*" :: "*string(kind(ex))
     end
 
-    std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:var_id,:context])
+    std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:context])
     attrstr = join([attrsummary(n, getproperty(ex, n))
                     for n in JuliaSyntax.attrnames(ex._graph) if n ∉ std_attrs &&
                         hasattr(ex, n)], ",")
@@ -250,7 +246,7 @@ end
 
 function _deref_ssa(stmts, ex)
     while kind(ex) == K"SSAValue"
-        ex = stmts[ex.var_id]
+        ex = stmts[get_id(ex)]
     end
     ex
 end
@@ -400,14 +396,14 @@ function _find_assigned_ssavars!(ctx, ssamap, st)
     if kind(st) == K"=" && kind(st[1]) == K"BindingId"
         b = get_binding(ctx, st[1])
         b.is_ssa || return
-        ssamap[b.id] = _binding_id(ssavar(ctx, st[1], b.name))
+        ssamap[b.id] = get_id(ssavar(ctx, st[1], b.name))
     end
     foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))
 end
 function _replace_binding_ids(ctx, ssamap, st)
     if kind(st) == K"BindingId"
-        id = get(ssamap, _binding_id(st), nothing)
-        isnothing(id) ? st : setattr!(newleaf(ctx, st, K"BindingId"), :var_id, id)
+        id = get(ssamap, get_id(st), nothing)
+        isnothing(id) ? st : newleaf(ctx, st, K"BindingId", id)
     elseif is_leaf(st) || is_quoted(st)
         st
     else

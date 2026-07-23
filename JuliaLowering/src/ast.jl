@@ -65,9 +65,9 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
             k == K"globalref" || k == K"Placeholder"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k == K"BindingId"
-        setattr!(leaf._graph, leaf._id, :var_id, value)
+        setattr!(leaf._graph, leaf._id, :value, value)
     elseif k == K"label"
-        setattr!(leaf._graph, leaf._id, :id, value)
+        setattr!(leaf._graph, leaf._id, :value, value)
     elseif k == K"symboliclabel" || k == K"symbolicgoto"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
@@ -82,6 +82,9 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
               k == K"Bool"    ? value                   :
               k == K"LambdaBindings" ? value :
               k == K"Slots" ? value :
+              k == K"SSAValue" ? value :
+              k == K"slot" ? value :
+              k == K"static_parameter" ? value :
               k == K"VERSION" ? value                   :
               error("Unexpected leaf kind `$k`")
         setattr!(leaf._graph, leaf._id, :value, val)

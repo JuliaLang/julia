@@ -398,7 +398,6 @@ end
 function ensure_macro_attributes!(graph)
     g2 = ensure_attributes!(
         graph;
-        var_id=IdTag,
         meta=CompileHints)
     DEBUG ? ensure_attributes!(g2; jl_source=LineNumberNode) : g2
 end

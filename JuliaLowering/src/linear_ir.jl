@@ -193,7 +193,7 @@ function compile_pop_exception(ctx, srcref, src_tokens, dest_tokens)
     # dest_tokens when src_tokens is the same or nested within dest_tokens.
     # It's enough to check the token on the top of the dest stack.
     n = length(dest_tokens)
-    jump_ok = n == 0 || (n <= length(src_tokens) && _binding_id(dest_tokens[n]) == _binding_id(src_tokens[n]))
+    jump_ok = n == 0 || (n <= length(src_tokens) && get_id(dest_tokens[n]) == get_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into catch block"))
     if n < length(src_tokens)
         @ast ctx srcref [K"pop_exception" src_tokens[n+1]]
@@ -204,7 +204,7 @@ end
 
 function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
     n = length(dest_tokens)
-    jump_ok = n == 0 || (n <= length(src_tokens) && _binding_id(dest_tokens[n]) == _binding_id(src_tokens[n]))
+    jump_ok = n == 0 || (n <= length(src_tokens) && get_id(dest_tokens[n]) == get_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
     if n < length(src_tokens)
         @ast ctx srcref [K"leave" src_tokens[n+1:end]...]
@@ -389,7 +389,7 @@ end
 function make_label(ctx, srcref)
     id = ctx.next_label_id[]
     ctx.next_label_id[] += 1
-    setattr!(newleaf(ctx, srcref, K"label"), :id, id)
+    newleaf(ctx, srcref, K"label", id)
 end
 
 # flisp: make&mark-label
@@ -631,7 +631,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
             if haskey(ctx.argmap, binfo.id)
-                ex1 = setattr!(newleaf(ctx, ex1, K"BindingId"), :var_id, ctx.argmap[binfo.id])
+                ex1 = newleaf(ctx, ex1, K"BindingId", ctx.argmap[binfo.id])
             end
         end
         if in_tail_pos
@@ -684,7 +684,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             if kind(lhs) == K"BindingId"
                 binfo = get_binding(ctx, lhs)
                 if haskey(ctx.argmap, binfo.id)
-                    lhs = setattr!(newleaf(ctx, lhs, K"BindingId"), :var_id, ctx.argmap[binfo.id])
+                    lhs = newleaf(ctx, lhs, K"BindingId", ctx.argmap[binfo.id])
                 end
             end
             if needs_value && !isnothing(rhs)
@@ -961,7 +961,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"newvar"
         @jl_assert !needs_value ex
         is_duplicate = !isempty(ctx.code) &&
-            (e = last(ctx.code); kind(e) == K"newvar" && _binding_id(e[1]) == _binding_id(ex[1]))
+            (e = last(ctx.code); kind(e) == K"newvar" && get_id(e[1]) == get_id(ex[1]))
         if !is_duplicate
             # TODO: also exclude deleted vars
             emit(ctx, ex)
@@ -993,7 +993,7 @@ function _remove_vars_with_isdefined_check!(vars, ex)
     if is_leaf(ex) || is_quoted(ex) || kind(ex) == K"static_eval"
         return
     elseif kind(ex) == K"isdefined"
-        delete!(vars, ex[1].var_id::IdTag)
+        delete!(vars, get_id(ex[1]))
     else
         for e in children(ex)
             _remove_vars_with_isdefined_check!(vars, e)
@@ -1018,14 +1018,14 @@ function unnecessary_newvar_ids(ctx, stmts)
         _remove_vars_with_isdefined_check!(vars, ex)
         k = kind(ex)
         if k == K"newvar"
-            id = _binding_id(ex[1])
+            id = get_id(ex[1])
             if !get_binding(ctx, id).is_captured
                 push!(vars, id)
             end
         elseif k == K"goto" || k == K"gotoifnot" || (k == K"=" && kind(ex[2]) == K"enter")
             empty!(vars)
         elseif k == K"="
-            id = _binding_id(ex[1])
+            id = get_id(ex[1])
             if id in vars
                 delete!(vars, id)
                 push!(ids_assigned_before_branch, id)
@@ -1073,7 +1073,7 @@ function compile_body(ctx::LinearIRContext, ex)
     # Filter out unnecessary newvar nodes
     ids_assigned_before_branch = unnecessary_newvar_ids(ctx, ctx.code)
     filter!(ctx.code) do ex
-        !(kind(ex) == K"newvar" && _binding_id(ex[1]) in ids_assigned_before_branch)
+        !(kind(ex) == K"newvar" && get_id(ex[1]) in ids_assigned_before_branch)
     end
 end
 
@@ -1084,9 +1084,9 @@ end
 function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     k = kind(ex)
     if k == K"BindingId"
-        id = _binding_id(ex)
+        id = get_id(ex)
         if haskey(ssa_rewrites, id)
-            setattr!(newleaf(ctx, ex, K"SSAValue"), :var_id, ssa_rewrites[id])
+            newleaf(ctx, ex, K"SSAValue", ssa_rewrites[id])
         else
             new_id = get(slot_rewrites, id, nothing)
             binfo = get_binding(ctx, id)
@@ -1094,7 +1094,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
                 sk = binfo.kind == :local || binfo.kind == :argument ? K"slot"             :
                      binfo.kind == :static_parameter                 ? K"static_parameter" :
                      throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
-                setattr!(newleaf(ctx, ex, sk), :var_id, new_id)
+                newleaf(ctx, ex, sk, new_id)
             else
                 if binfo.kind !== :global
                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
@@ -1115,7 +1115,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     elseif is_literal(k) || is_quoted(k)
         ex
     elseif k == K"label"
-        @ast ctx ex label_table[ex.id::Int]::K"label"
+        @ast ctx ex label_table[get_id(ex)]::K"label"
     elseif k == K"code_info"
         ex
     else
@@ -1135,20 +1135,20 @@ function renumber_body(ctx, input_code, slot_rewrites)
         k = kind(ex)
         ex_out = nothing
         if k == K"=" && (b = get_binding(ctx, ex[1]); b.is_ssa || b.kind == :typevar)
-            lhs_id = _binding_id(ex[1])
+            lhs_id = get_id(ex[1])
             @jl_assert(!haskey(ssa_rewrites, lhs_id),
                        (ex, "multiple assignments to ssavalue"))
             @jl_assert ctx.is_toplevel_thunk || b.kind !== :typevar binding_ex(ctx, b)
             if is_ssa(ctx, ex[2])
                 # For SSA₁ = SSA₂, record that all uses of SSA₁ should be replaced by SSA₂
-                ssa_rewrites[lhs_id] = ssa_rewrites[_binding_id(ex[2])]
+                ssa_rewrites[lhs_id] = ssa_rewrites[get_id(ex[2])]
             else
                 # Otherwise, record which `code` index this SSA value refers to
                 ssa_rewrites[lhs_id] = length(code) + 1
                 ex_out = ex[2]
             end
         elseif k == K"label"
-            label_table[ex.id::IdTag] = length(code) + 1
+            label_table[get_id(ex)] = length(code) + 1
         elseif k == K"TOMBSTONE"
             # remove statement
         else
@@ -1196,7 +1196,7 @@ function compile_lambda(outer_ctx, ex)
         binfo = get_binding(ctx, arg)
         if binfo.is_assigned
             @jl_assert !haskey(ctx.argmap, binfo.id) ex arg
-            ctx.argmap[binfo.id] = _binding_id(new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name))
+            ctx.argmap[binfo.id] = get_id(new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name))
         end
     end
     compile_body(ctx, ex[4])
@@ -1215,7 +1215,7 @@ function compile_lambda(outer_ctx, ex)
                               false, false, false, false))
         else
             @jl_assert kind(arg) == K"BindingId" ex arg
-            id = arg.var_id::IdTag
+            id = get_id(arg)
             binfo = get_binding(ctx, id)
             @jl_assert binfo.kind == :local || binfo.kind == :argument ex arg
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
@@ -1238,7 +1238,7 @@ function compile_lambda(outer_ctx, ex)
     end
     for (i,arg) in enumerate(children(static_parameters))
         @jl_assert kind(arg) == K"BindingId" arg
-        id = arg.var_id::IdTag
+        id = get_id(arg)
         info = get_binding(ctx.bindings, id)
         @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i
@@ -1248,7 +1248,7 @@ function compile_lambda(outer_ctx, ex)
             if s.is_nospecialize
                 s.kind === :argument || throw(LoweringError(
                     ex, "nospecialize on non-argument"))
-                push!(ns_slots, setattr!(newleaf(ctx, lambda_args[i], K"slot"), :var_id, i))
+                push!(ns_slots, newleaf(ctx, lambda_args[i], K"slot", i))
             end
         end
         if !isempty(ns_slots)
@@ -1272,9 +1272,8 @@ function compile_lambda(outer_ctx, ex)
     k === K"toplevel_lambda" ? @ast(ctx, ex, [K"thunk" out]) : out
 end
 
-ensure_linearization_attributes!(graph) = ensure_attributes!(
-    ensure_scope_attributes!(graph),
-    id=Int)
+ensure_linearization_attributes!(graph) =
+    ensure_scope_attributes!(graph)
 
 """
 This pass converts nested ASTs in the body of a lambda into a list of

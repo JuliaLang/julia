@@ -180,7 +180,7 @@ function du_visit!(ctx, state::DefUseState, e)
     k = kind(e)
 
     if k == K"BindingId"
-        du_mark_used!(state, e.var_id)
+        du_mark_used!(state, get_id(e))
         return false
 
     elseif k == K"symboliclabel"
@@ -203,7 +203,7 @@ function du_visit!(ctx, state::DefUseState, e)
         has_label = du_visit!(ctx, state, e[2])
         lhs = e[1]
         if kind(lhs) == K"BindingId"
-            du_assign!(state, lhs.var_id)
+            du_assign!(state, get_id(lhs))
         end
         return has_label
 
@@ -224,7 +224,7 @@ function du_visit!(ctx, state::DefUseState, e)
         # a separate K"decl" node. So we only need to handle K"BindingId" here.
         for child in children(e)
             if kind(child) == K"BindingId"
-                du_declare!(state, child.var_id)
+                du_declare!(state, get_id(child))
             end
         end
         return false
@@ -241,7 +241,7 @@ function du_visit!(ctx, state::DefUseState, e)
         # [function_decl] defines and instantiates the closure type and assigns
         # it to its first argument (but only once per unique closure key).
         @assert kind(e[1]) == K"BindingId"
-        func_id = e[1].var_id::IdTag
+        func_id = get_id(e[1])
         func_id in state.seen && return false
         ck = ClosureKey(func_id, state.lambda_id)
         if haskey(ctx.closure_bindings, ck)

@@ -12,8 +12,7 @@ end
 # Uses ctx.ssa_mapping to ensure the same external SSA id maps to the same binding.
 function _resolve_ssavalue(ctx::DesugaringContext, ex)
     binding_id = get!(ctx.ssa_mapping, ex[1].value) do
-        s = ssavar(ctx, ex)
-        s.var_id
+        get_id(ssavar(ctx, ex))
     end
     binding_ex(ctx, binding_id)
 end
@@ -22,7 +21,7 @@ end
 # bindings (and hence ssa vars). See also `is_identifier_like()`
 function is_same_identifier_like(ex::SyntaxTree, y::SyntaxTree)
     return (kind(ex) == K"Identifier" && kind(y) == K"Identifier" && NameKey(ex) == NameKey(y)) ||
-           (kind(ex) == K"BindingId"  && kind(y) == K"BindingId"  && ex.var_id   == y.var_id)
+           (kind(ex) == K"BindingId"  && kind(y) == K"BindingId"  && get_id(ex) == get_id(y))
 end
 
 function is_same_identifier_like(ex::SyntaxTree, name::AbstractString)
@@ -4507,8 +4506,7 @@ function expand_forms_2(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector}
     res
 end
 
-ensure_desugaring_attributes!(graph) = ensure_attributes!(
-    ensure_macro_attributes!(graph))
+ensure_desugaring_attributes!(graph) = ensure_macro_attributes!(graph)
 
 @fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
     graph = ensure_desugaring_attributes!(copy_attrs(ex._graph))
