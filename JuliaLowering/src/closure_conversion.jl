@@ -10,28 +10,28 @@ struct ClosureInfo{Attrs}
     capt_sp::SyntaxList{Attrs, Vector{NodeId}}
 end
 
-struct ClosureConversionCtx{Attrs} <: AbstractLoweringContext
-    graph::SyntaxGraph{Attrs}
-    bindings::Bindings
-    mod::Module
-    closure_bindings::Dict{ClosureKey,ClosureBindings}
-    capture_rewriting::Union{Nothing,ClosureInfo{Attrs},
-                             SyntaxList{Attrs, Vector{NodeId}}}
-    top_bindings::LambdaBindings
-    lambda_bindings::LambdaBindings
-    sp_typevars::Dict{IdTag, IdTag}
+mutable struct ClosureConversionCtx{Attrs} <: AbstractLoweringContext
+    const graph::SyntaxGraph{Attrs}
+    const bindings::Bindings
+    const mod::Module
+    const closure_bindings::Dict{ClosureKey,ClosureBindings}
+    const capture_rewriting::Union{Nothing,ClosureInfo{Attrs},
+                                   SyntaxList{Attrs, Vector{NodeId}}}
+    const top_bindings::LambdaBindings
+    const lambda_bindings::LambdaBindings
+    const sp_typevars::Dict{IdTag, IdTag}
     # True if we're in a section of code which preserves top-level sequencing
     # such that closure types can be emitted inline with other code.
-    toplevel::Bool
+    const toplevel::Bool
     # toplevel, or contained by method_defs and no lambda within it
-    lifted::Bool
+    const lifted::Bool
     # True if this expression should not have toplevel effects, namely, it
     # should not declare the globals it references.  This allows generated
     # functions to refer to globals that have already been declared, without
     # triggering the "function body AST not pure" error.
-    toplevel_pure::Bool
-    toplevel_stmts::SyntaxList{Attrs, Vector{NodeId}}
-    closure_infos::Dict{ClosureKey,ClosureInfo{Attrs}}
+    const toplevel_pure::Bool
+    const toplevel_stmts::SyntaxList{Attrs, Vector{NodeId}}
+    const closure_infos::Dict{ClosureKey,ClosureInfo{Attrs}}
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)

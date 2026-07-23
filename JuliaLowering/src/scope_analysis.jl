@@ -67,28 +67,28 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     return s
 end
 
-struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
-    graph::SyntaxGraph{Attrs}
-    layer::ScopeLayer
-    bindings::Bindings
+mutable struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
+    const graph::SyntaxGraph{Attrs}
+    const layer::ScopeLayer
+    const bindings::Bindings
     # Purely for display and deterministic ordering of scope layers
-    layer_ids::Dict{ScopeLayer, Int}
+    const layer_ids::Dict{ScopeLayer, Int}
     # Every lexical scope, indexed by ScopeId
-    scopes::Vector{ScopeInfo}
+    const scopes::Vector{ScopeInfo}
     # Current stack of scopes to look for names in, innermost scope last
-    scope_stack::Vector{ScopeId}
+    const scope_stack::Vector{ScopeId}
     # Usually, globals in the top scope are ignored.  This is a subset that may
     # be assigned to without the `global` keyword in soft scopes due to being
     # assigned to at top level, or passing the defined-and-owned-global check.
-    soft_assignable_globals::Set{NameKey}
+    const soft_assignable_globals::Set{NameKey}
     # Every static parameter corresponds to some typevar (top-level local)
     # required to create this method
-    sp_typevars::Dict{IdTag, IdTag}
+    const sp_typevars::Dict{IdTag, IdTag}
     # Typevars referenced in each typevar's bounds.  Closures capturing a static
     # parameter must also capture the sparams of its typevar's dependencies
-    tv_deps::Dict{IdTag, Vector{IdTag}}
-    enable_soft_scopes::Bool
-    world::UInt
+    const tv_deps::Dict{IdTag, Vector{IdTag}}
+    const enable_soft_scopes::Bool
+    const world::UInt
 end
 
 function contains_softscope_marker(ex)
@@ -153,7 +153,9 @@ end
 
 # globals are added to both `scope` and the top scope (mainly so we can get the
 # same binding for many unrelated global references).
-function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
+function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
+                           is_nospecialize::Bool=false,
+                           is_ambiguous_local::Bool=false)
     nk = NameKey(ex)
     if bk === :global
         mod = syntax_module(ex)
@@ -165,7 +167,8 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
     end
     is_internal = (ex.context::SyntaxContext).internal ||
         getmeta(ex, :is_internal, false)::Bool
-    b = _new_binding(ctx, ex, nk.name, bk; mod, is_internal, kws...)
+    b = _new_binding(ctx.bindings, ex, nk.name, bk;
+                     mod, is_internal, is_nospecialize, is_ambiguous_local)
     declaration_scope.vars[nk] = b.id
     scope.vars[nk] = b.id
     add_lambda_local!(ctx, scope, b)
@@ -406,7 +409,7 @@ function add_local_decls!(ctx, stmts, srcref, scope)
     end
 end
 
-function _resolve_scopes(ctx, ex::SyntaxTree,
+function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
                          @nospecialize(scope::Union{Nothing, ScopeInfo}))
     k = kind(ex)
     @jl_assert scope isa ScopeInfo || k === K"lambda" ||
@@ -655,7 +658,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
     end
 end
 
-function _resolve_scopes(ctx, exs::AbstractVector, scope)
+function _resolve_scopes(ctx::ScopeResolutionContext, exs::AbstractVector, scope)
     out = SyntaxList(ctx)
     for e in exs
         push!(out, _resolve_scopes(ctx, e, scope))
@@ -682,23 +685,23 @@ end
 ClosureBindings(name_stack) =
     ClosureBindings(name_stack, Vector{LambdaBindings}(), Set{IdTag}())
 
-struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
-    graph::SyntaxGraph{Attrs}
-    layer::ScopeLayer
-    bindings::Bindings
-    scopes::Vector{ScopeInfo}
-    lambda_bindings::LambdaBindings
-    lifted::Bool
+mutable struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
+    const graph::SyntaxGraph{Attrs}
+    const layer::ScopeLayer
+    const bindings::Bindings
+    const scopes::Vector{ScopeInfo}
+    const lambda_bindings::LambdaBindings
+    const lifted::Bool
     # Stack of method definitions for closure naming
-    method_def_stack::SyntaxList{Attrs, Vector{NodeId}}
-    closure_key_stack::Vector{ClosureKey}
+    const method_def_stack::SyntaxList{Attrs, Vector{NodeId}}
+    const closure_key_stack::Vector{ClosureKey}
     # Collection of information about each closure, principally which methods
     # are part of the closure (and hence captures).
-    closure_bindings::Dict{ClosureKey,ClosureBindings}
-    sp_typevars::Dict{IdTag, IdTag}
-    tv_deps::Dict{IdTag, Vector{IdTag}}
+    const closure_bindings::Dict{ClosureKey,ClosureBindings}
+    const sp_typevars::Dict{IdTag, IdTag}
+    const tv_deps::Dict{IdTag, Vector{IdTag}}
     # Prevents infinite loops when analyzing a binding's type
-    types_in_analysis::Set{IdTag}
+    const types_in_analysis::Set{IdTag}
 end
 
 function init_closure_bindings!(ctx, fname)
@@ -923,7 +926,9 @@ function analyze_variables!(ctx, ex)
             foreach(e->analyze_variables!(ctx2, e), ex[3:end])
         end
     else
-        foreach(e->analyze_variables!(ctx, e), children(ex))
+        for e in children(ex)
+            analyze_variables!(ctx, e)
+        end
     end
     nothing
 end

@@ -61,25 +61,25 @@ Context for creating linear IR.
 One of these is created per lambda expression to flatten the body down to
 a sequence of statements (linear IR), which eventually becomes one CodeInfo.
 """
-struct LinearIRContext{Attrs} <: AbstractLoweringContext
-    graph::SyntaxGraph{Attrs}
-    code::SyntaxList{Attrs, Vector{NodeId}}
-    bindings::Bindings
-    next_label_id::Ref{Int}
-    is_toplevel_thunk::Bool
-    lambda_bindings::LambdaBindings
-    argmap::Dict{IdTag, IdTag}
-    rettype_ssa::Ref{NodeId}
-    break_targets::Dict{String, JumpTarget{Attrs}}
-    break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
-    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    finally_handlers::Vector{FinallyHandler{Attrs}}
-    symbolic_jump_targets::Dict{String,JumpTarget{Attrs}}
-    symbolic_jump_origins::Vector{JumpOrigin{Attrs}}
-    symbolic_block_labels::Set{String}  # labels that are symbolic blocks (not allowed as @goto targets)
-    meta::Dict{Symbol, Any}
-    mod::Module
+mutable struct LinearIRContext{Attrs} <: AbstractLoweringContext
+    const graph::SyntaxGraph{Attrs}
+    const code::SyntaxList{Attrs, Vector{NodeId}}
+    const bindings::Bindings
+    const next_label_id::Ref{Int}
+    const is_toplevel_thunk::Bool
+    const lambda_bindings::LambdaBindings
+    const argmap::Dict{IdTag, IdTag}
+    const rettype_ssa::Ref{NodeId}
+    const break_targets::Dict{String, JumpTarget{Attrs}}
+    const break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
+    const handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    const catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    const finally_handlers::Vector{FinallyHandler{Attrs}}
+    const symbolic_jump_targets::Dict{String,JumpTarget{Attrs}}
+    const symbolic_jump_origins::Vector{JumpOrigin{Attrs}}
+    const symbolic_block_labels::Set{String}  # labels that are symbolic blocks (not allowed as @goto targets)
+    const meta::Dict{Symbol, Any}
+    const mod::Module
 end
 
 function rettype(ctx::LinearIRContext)
@@ -600,6 +600,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
         end
     else
+        @assert !isnothing(catch_block)
         push!(ctx.catch_token_stack, handler_token)
         catch_val = compile(ctx, catch_block, needs_value, in_tail_pos)
         if !isnothing(try_result) && !isnothing(catch_val)
@@ -768,7 +769,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"symboliclabel"
         label = emit_label(ctx, ex)
-        name = ex.name_val
+        name = ex.name_val::String
         if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
             throw(LoweringError(ex, "Label `$name` defined multiple times"))
         end
@@ -1100,8 +1101,8 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 end
                 out = newleaf(ctx, ex, K"globalref")
+                !isnothing(binfo.mod) && setattr!(out, :mod, binfo.mod)
                 setattr!(out, :name_val, binfo.name)
-                setattr!(out, :mod, binfo.mod)
             end
         end
     elseif k == K"meta" || k == K"static_eval"
@@ -1148,7 +1149,7 @@ function renumber_body(ctx, input_code, slot_rewrites)
                 ex_out = ex[2]
             end
         elseif k == K"label"
-            label_table[ex.id] = length(code) + 1
+            label_table[ex.id::IdTag] = length(code) + 1
         elseif k == K"TOMBSTONE"
             # remove statement
         else
@@ -1182,7 +1183,7 @@ function compile_lambda(outer_ctx, ex)
     k = kind(ex)
     lambda_args = ex[1]
     static_parameters = ex[2]
-    lambda_bindings = ex.lambda_bindings
+    lambda_bindings = ex.lambda_bindings::LambdaBindings
     ctx = LinearIRContext(
         outer_ctx.graph, outer_ctx, k === K"toplevel_lambda", lambda_bindings)
     if numchildren(ex) == 4
@@ -1210,11 +1211,12 @@ function compile_lambda(outer_ctx, ex)
     for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
-            push!(slots, Slot(UNUSED, :argument, getmeta(arg, :nospecialize, false),
+            push!(slots, Slot(UNUSED, :argument,
+                              getmeta(arg, :nospecialize, false)::Bool,
                               false, false, false, false))
         else
             @jl_assert kind(arg) == K"BindingId" ex arg
-            id = arg.var_id
+            id = arg.var_id::IdTag
             binfo = get_binding(ctx, id)
             @jl_assert binfo.kind == :local || binfo.kind == :argument ex arg
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
@@ -1237,7 +1239,7 @@ function compile_lambda(outer_ctx, ex)
     end
     for (i,arg) in enumerate(children(static_parameters))
         @jl_assert kind(arg) == K"BindingId" arg
-        id = arg.var_id
+        id = arg.var_id::IdTag
         info = get_binding(ctx.bindings, id)
         @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i

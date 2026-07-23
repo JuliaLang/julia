@@ -134,9 +134,7 @@ function child(graph::SyntaxGraph, id::NodeId, i::Integer)
     graph.edges[graph.edge_ranges[id][i]]
 end
 
-# XXX: the @noinline (and the one on setattr!) work around an issue where
-# codegen produces a trampoline for `getindex`
-@noinline function getattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
+function getattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
     getfield(graph, :attributes)[name]
 end
 
@@ -153,7 +151,7 @@ function hasattr(graph::SyntaxGraph{<:NamedTuple}, name::Symbol)
 end
 
 # TODO: Probably terribly non-inferable?
-@noinline function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
+function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
     getattr(graph, k)[id] = v
     id
 end
@@ -553,8 +551,8 @@ end
 function macro_prov(st::SyntaxTree)
     sc = get(st, :context, nothing)
     isnothing(sc) && return nothing
-    msrc = sc.unexpanded
-    isnothing(msrc) ? nothing : msrc::SyntaxTree
+    msrc = (sc::SyntaxContext).unexpanded
+    isnothing(msrc) ? nothing : msrc::typeof(st)
 end
 
 "The first macro expansion `st` was involved in (chronologically), or nothing"
@@ -1187,7 +1185,8 @@ function _stm(line::LineNumberNode, st, pats; debug=false)
     end
     push!(case_list_tail,
           :(throw(ErrorException(string(
-              "No match found for `", $st_gs, "` at ", $(string(line)))))))
+              "No match found for `kind=", $k_gs, "numchildren=", $nc_gs,
+              "` at ", $(string(line)))))))
     return esc(out_blk)
 end
 

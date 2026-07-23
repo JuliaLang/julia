@@ -131,7 +131,7 @@ struct LoweringError <: Exception
     internal::Bool
 end
 
-LoweringError(ex::SyntaxTree, msg::String) =
+@noinline LoweringError(ex::SyntaxTree, msg::String) =
     LoweringError(SyntaxList(ex), String[msg], false)
 
 # Returns a set of ancestors within `depth` distance from the nodes in

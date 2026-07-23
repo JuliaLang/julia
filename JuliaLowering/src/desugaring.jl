@@ -1,11 +1,11 @@
 # Lowering Pass 2 - syntax desugaring
 
-struct DesugaringContext{Attrs} <: AbstractLoweringContext
-    graph::SyntaxGraph{Attrs}
-    layer::ScopeLayer
-    bindings::Bindings
-    ssa_mapping::Dict{Int, IdTag}
-    world::UInt
+mutable struct DesugaringContext{Attrs} <: AbstractLoweringContext
+    const graph::SyntaxGraph{Attrs}
+    const layer::ScopeLayer
+    const bindings::Bindings
+    const ssa_mapping::Dict{Int, IdTag}
+    const world::UInt
 end
 
 # Translate a K"ssavalue" node from pre-lowered code into a normal SSA binding.
@@ -2196,6 +2196,7 @@ end
 #   (x::T, (y::U, z))
 #   strip out stmts = (local x) (decl x T) (local x) (decl y U) (local z)
 function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
+    @nospecialize declmeta
     declname = @stm ex begin
         [K"Identifier"] -> ex
         [K"Placeholder"] -> nothing
@@ -4204,6 +4205,7 @@ small set of core syntactic forms. For example, field access syntax `a.b` is
 expanded to a function call `getproperty(a, :b)`.
 """
 function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
+    @nospecialize docs
     k = kind(ex)
     if k == K"atomic"
         throw(LoweringError(ex, "unimplemented or unsupported atomic declaration"))

@@ -26,7 +26,22 @@ mutable struct BindingInfo
     is_used_undef::Bool
 end
 
-function BindingInfo(id::IdTag, name::AbstractString, kind::Symbol, node_id::Integer;
+"""
+Metadata about "entities" (variables, constants, etc) in the program. Each
+entity is associated to a unique integer id, the BindingId. A binding will be
+inferred for each *name* in the user's source program by symbolic analysis of
+the source.
+
+However, bindings can also be introduced programmatically during lowering or
+macro expansion: the primary key for bindings is the `BindingId` integer, not
+a name.
+"""
+struct Bindings
+    info::Vector{BindingInfo}
+end
+
+function BindingInfo(bindings::Bindings,
+                     name::AbstractString, kind::Symbol, node_id::Integer;
                      mod::Union{Nothing,Module} = nothing,
                      type::Union{Nothing,NodeId} = nothing,
                      lambda_id::Int = 0,
@@ -43,10 +58,14 @@ function BindingInfo(id::IdTag, name::AbstractString, kind::Symbol, node_id::Int
                      is_captured::Bool = false,
                      is_always_defined::Bool = is_ssa || kind === :argument,
                      is_used_undef::Bool = false)
-    BindingInfo(id, name, kind, node_id, mod, type, lambda_id, is_const, is_ssa,
-                is_internal, is_ambiguous_local, unboxed, is_nospecialize,
-                is_read, is_called, is_assigned, is_assigned_once, is_captured,
-                is_always_defined, is_used_undef)
+    bid = next_binding_id(bindings)
+    b = BindingInfo(
+        bid, name, kind, node_id, mod, type, lambda_id, is_const, is_ssa,
+        is_internal, is_ambiguous_local, unboxed, is_nospecialize,
+        is_read, is_called, is_assigned, is_assigned_once, is_captured,
+        is_always_defined, is_used_undef)
+    add_binding(bindings, b)
+    b
 end
 
 function Base.show(io::IO, binfo::BindingInfo)
@@ -71,20 +90,6 @@ function Base.show(io::IO, binfo::BindingInfo)
     binfo.is_always_defined  && print(io, ", is_always_defined=true")
     binfo.is_used_undef      && print(io, ", is_used_undef=true")
     print(io, ")")
-end
-
-"""
-Metadata about "entities" (variables, constants, etc) in the program. Each
-entity is associated to a unique integer id, the BindingId. A binding will be
-inferred for each *name* in the user's source program by symbolic analysis of
-the source.
-
-However, bindings can also be introduced programmatically during lowering or
-macro expansion: the primary key for bindings is the `BindingId` integer, not
-a name.
-"""
-struct Bindings
-    info::Vector{BindingInfo}
 end
 
 Bindings() = Bindings(Vector{BindingInfo}())
@@ -115,20 +120,19 @@ function get_binding(ctx::AbstractLoweringContext, x)::BindingInfo
     get_binding(ctx.bindings::Bindings, x)
 end
 
-function _new_binding(ctx::AbstractLoweringContext, srcref::SyntaxTree,
+function _new_binding(bindings::Bindings, srcref::SyntaxTree,
                       name::AbstractString, kind::Symbol; kws...)
-    binding_id = next_binding_id(ctx.bindings)
     # A binding is only useful when it shows up in the tree, so create its tree
     # node eagerly and share it among uses (see `binding_ex`)
-    ex = @ast ctx srcref binding_id::K"BindingId"
-    b = BindingInfo(binding_id, name, kind, ex._id; kws...)
-    add_binding(ctx.bindings, b)
+    bid = next_binding_id(bindings)
+    ex = @ast srcref._graph srcref bid::K"BindingId"
+    b = BindingInfo(bindings, name, kind, ex._id; kws...)
     return b
 end
 
 # Create a new SSA binding
 function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
-    binding_ex(ctx, _new_binding(ctx, srcref, name, :local;
+    binding_ex(ctx, _new_binding(ctx.bindings, srcref, name, :local;
                                  is_ssa=true, is_internal=true))
 end
 
@@ -137,7 +141,7 @@ function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
                            kind=:local, kws...)
     @jl_assert kind === :local || kind === :argument srcref
     nameref = newleaf(ctx, srcref, K"Identifier", name)
-    b = _new_binding(ctx, nameref, name, kind; is_internal=true, kws...)
+    b = _new_binding(ctx.bindings, nameref, name, kind; is_internal=true, kws...)
     lbindings = current_lambda_bindings(ctx)
     if !isnothing(lbindings)
         init_lambda_binding(lbindings, b, false)
@@ -148,7 +152,7 @@ end
 function new_global_binding(ctx::AbstractLoweringContext, srcref, name, mod; kws...)
     nameref = newleaf(ctx, srcref, K"Identifier", name)
     binding_ex(ctx, _new_binding(
-        ctx, nameref, name, :global; is_internal=true, mod=mod, kws...))
+        ctx.bindings, nameref, name, :global; is_internal=true, mod=mod, kws...))
 end
 
 function binding_ex(ctx::AbstractLoweringContext, b::BindingInfo)

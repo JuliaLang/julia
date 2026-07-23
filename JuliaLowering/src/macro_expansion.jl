@@ -239,7 +239,8 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
             rethrow(newexc)
         end
         st_out = if expanded isa SyntaxTree
-            expanded._graph !== ctx.graph ? copy_ast(ctx, expanded) : expanded
+            expanded._graph !== ctx.graph ?
+                copy_ast(ctx, expanded) : expanded::typeof(st)
         else
             expanded isa Expr && throw(LoweringError(
                 st, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
