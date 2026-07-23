@@ -764,7 +764,10 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     n = Int[]
     m = Int[]
     lilist_idx = Dict{T, Int}()
-    recursive = Set{T}()
+    # generation at which each lilist entry was last counted; a per-sample
+    # generation bump replaces an expensive Set of frames for recursion dedup
+    seen_gen = Int[]
+    gen = 1
     leaf = 0
     totalshots = 0
     startframe = length(data)
@@ -792,7 +795,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
             end
             skip = false
             totalshots += 1
-            empty!(recursive)
+            gen += 1
             if leaf != 0
                 m[leaf] += 1
             end
@@ -808,12 +811,12 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
                 key = (T === UInt64 ? ip : frame)
                 idx = get!(lilist_idx, key, length(lilist) + 1)
                 if idx > length(lilist)
-                    push!(recursive, key)
+                    push!(seen_gen, gen)
                     push!(lilist, frame)
                     push!(n, 1)
                     push!(m, 0)
-                elseif !(key in recursive)
-                    push!(recursive, key)
+                elseif seen_gen[idx] != gen
+                    seen_gen[idx] = gen
                     n[idx] += 1
                 end
                 leaf = idx
