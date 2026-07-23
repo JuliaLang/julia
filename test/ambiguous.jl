@@ -638,4 +638,26 @@ let ambig = Ref{Int32}(0)
 end
 @test !isempty(detect_ambiguities(AmbigCycle3Reorder))
 
+# the `METHOD_SIG_NO_LOSERS` dispatch_status bit records that a method is not
+# strictly morespecific than anything it intersects (so removing it from a
+# match list can never free another method from suppression); it is set at
+# insertion and monotone-cleared when a later method is beaten by it
+module NoLosersBit
+f(::Any) = 1
+end
+let NO_LOSERS = Base.ReinferUtils.METHOD_SIG_NO_LOSERS
+    @test !iszero(only(methods(NoLosersBit.f)).dispatch_status & NO_LOSERS)
+    # a specialization beats the fallback: it never gets the bit, while the
+    # fallback (which still beats nothing) keeps it
+    @eval NoLosersBit f(::Int) = 2
+    @test !iszero(which(NoLosersBit.f, Tuple{Any}).dispatch_status & NO_LOSERS)
+    @test iszero(which(NoLosersBit.f, Tuple{Int}).dispatch_status & NO_LOSERS)
+    # every member of a specificity cycle beats another member, so none may
+    # carry the bit (otherwise the check_dominance_transfer fast path would
+    # mask the cycle); this covers both insertion orders used above
+    for mod in (AmbigCycle3, AmbigCycle3Reorder), m in methods(mod.f)
+        @test iszero(m.dispatch_status & NO_LOSERS)
+    end
+end
+
 nothing

@@ -352,7 +352,7 @@ jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *sname, jl_fptr_args
     m->isva = 1;
     m->nargs = 2;
     jl_atomic_store_relaxed(&m->primary_world, 1);
-    jl_atomic_store_relaxed(&m->dispatch_status, METHOD_SIG_LATEST_WHICH);
+    jl_atomic_store_relaxed(&m->dispatch_status, METHOD_SIG_LATEST_WHICH | METHOD_SIG_NO_LOSERS);
     m->sig = (jl_value_t*)tuptyp;
     m->slot_syms = jl_an_empty_string;
     m->nospecialize = 0;
@@ -3082,10 +3082,20 @@ static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t 
 // pass), which the caller must record as an ambiguity.
 static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t ncovers, jl_array_t *t)
 {
+    // If D is not strictly morespecific than anything it intersects
+    // (METHOD_SIG_NO_LOSERS), it was beating nobody and there is nothing to
+    // transfer: the removal is unconditionally silent.
+    if (jl_atomic_load_relaxed(&D->dispatch_status) & METHOD_SIG_NO_LOSERS)
+        return 1;
     size_t len = jl_array_nrows(t);
     for (size_t i = 0; i < len; i++) {
         jl_method_t *S = ((jl_method_match_t*)jl_array_ptr_ref(t, i))->method;
         if (S == D)
+            continue;
+        // An S that beats nothing can never strictly beat a cover, so it can
+        // never close a directed cycle: whether the covers dominate it is then
+        // irrelevant (the unordered case falls through to safety below anyway).
+        if (jl_atomic_load_relaxed(&S->dispatch_status) & METHOD_SIG_NO_LOSERS)
             continue;
         // only consider S that D is strictly morespecific than
         if (!method_morespecific_recorded(D, S))
@@ -3228,6 +3238,8 @@ static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t 
     assert(result == jl_method_morespecific(target_method, start_method) ||
            jl_has_empty_intersection(target_method->sig, start_method->sig) ||
            jl_has_empty_intersection(start_method->sig, target_method->sig));
+    // a method recorded as strictly beating something must not carry NO_LOSERS
+    assert(!result || !(jl_atomic_load_relaxed(&target_method->dispatch_status) & METHOD_SIG_NO_LOSERS));
     return result;
 }
 
@@ -3273,6 +3285,13 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     }
 
     int invalidated = 0;
+    // Tentatively assume the new method is not strictly morespecific than
+    // anything it intersects (METHOD_SIG_NO_LOSERS); the scan below clears it
+    // on the first method this one beats. Conversely, an old method that this
+    // one is beaten by keeps its state, and an old method that is beaten
+    // (morespec[j], conservatively including both-ways-morespecific pairs)
+    // loses its bit.
+    int dispatch_bits = METHOD_SIG_LATEST_WHICH | METHOD_SIG_NO_LOSERS;
     // Holds the set of all intersecting methods not more specific than this one.
     // The insertion scan below visits every intersecting method (the
     // LATEST_ONLY early-out was removed), so the recorded relation is complete:
@@ -3289,6 +3308,10 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             method_overwrite(newentry, m);
             // This is an optimized version of below, given we know the type-intersection is exact
             jl_method_table_invalidate(m, max_world);
+            // The replacement has the same signature, so it inherits the
+            // replaced method's specificity relations, including NO_LOSERS
+            if (!(jl_atomic_load_relaxed(&m->dispatch_status) & METHOD_SIG_NO_LOSERS))
+                dispatch_bits &= ~METHOD_SIG_NO_LOSERS;
             // Clear METHOD_SIG_LATEST_WHICH bit
             jl_atomic_store_relaxed(&m->dispatch_status, 0);
             // Take over the interference list from the replaced method
@@ -3354,6 +3377,16 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     ssize_t idx;
                     if (!has_key(interferences, (jl_value_t*)m))
                         interferences = jl_idset_put_key(interferences, (jl_value_t*)m, &idx);
+                }
+                if (morespec[j]) {
+                    // morespecific(old, new): the old method gained a strict loser
+                    int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
+                    if (m_dispatch & METHOD_SIG_NO_LOSERS)
+                        jl_atomic_store_relaxed(&m->dispatch_status, m_dispatch & ~METHOD_SIG_NO_LOSERS);
+                }
+                else if (!ambig) {
+                    // morespecific(new, old): the new method beats something
+                    dispatch_bits &= ~METHOD_SIG_NO_LOSERS;
                 }
                 if (!morespec[j]) {
                     // !morespecific(old, new): add the new method to its interference set
@@ -3472,7 +3505,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
     }
     jl_atomic_store_relaxed(&newentry->max_world, ~(size_t)0);
-    jl_atomic_store_relaxed(&method->dispatch_status, METHOD_SIG_LATEST_WHICH); // TODO: this should be sequenced fully after the world counter store
+    jl_atomic_store_relaxed(&method->dispatch_status, dispatch_bits); // TODO: this should be sequenced fully after the world counter store
     jl_gc_write_atomic(method, method->interferences, jl_genericmemory_t, interferences, release);
     JL_GC_POP();
 }

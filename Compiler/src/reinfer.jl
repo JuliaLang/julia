@@ -605,6 +605,9 @@ const METHOD_SIG_LATEST_WHICH = 0x1
 # MethodInstance-level: true indicates dispatch of this mi's specTypes yields only this
 # result in the current latest world (the Method-level equivalent is `isempty(method.interferences)`)
 const METHOD_SIG_LATEST_ONLY = 0x2
+# Method-level: true indicates this method is not strictly morespecific than any method it
+# intersects, in any world (monotone-cleared at insertion of a method this one beats)
+const METHOD_SIG_NO_LOSERS = 0x4
 
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any})
     @assert invokesig isa Type "corrupt edges list"
