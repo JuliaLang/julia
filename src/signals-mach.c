@@ -445,7 +445,7 @@ kern_return_t catch_mach_exception_raise(
         jl_mach_gc_wait(ptls2, thread, tid);
         if (ptls2->tid != 0)
             return KERN_SUCCESS;
-        if (ptls2->defer_signal) {
+        if (ptls2->defer_signal || jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL) {
             jl_safepoint_defer_sigint();
         }
         else if (jl_safepoint_consume_sigint()) {
@@ -570,7 +570,9 @@ static void jl_try_deliver_sigint(void)
 
     jl_safepoint_enable_sigint();
     int force = jl_check_force_sigint();
-    if (force || (!ptls2->defer_signal && ptls2->io_wait)) {
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    int can_throw = ct2 != NULL && ct2->eh != NULL;
+    if (can_throw && (force || (!ptls2->defer_signal && ptls2->io_wait))) {
         jl_safepoint_consume_sigint();
         if (force)
             jl_safe_printf("WARNING: Force throwing a SIGINT\n");
