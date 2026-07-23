@@ -7870,7 +7870,10 @@ static Function *gen_cfun_wrapper(
                     inputarg = ghostValue(ctx, jargty);
                 }
                 else {
-                    val = ctx.builder.CreateAlignedLoad(T, val, Align(1)); // make no alignment assumption about pointer from C
+                    Type *loadT = julia_primitive_storage_type(T, jargty);
+                    val = ctx.builder.CreateAlignedLoad(loadT, val, Align(1)); // make no alignment assumption about pointer from C
+                    if (loadT != T)
+                        val = ctx.builder.CreateTrunc(val, T);
                     inputarg = mark_julia_type(ctx, val, false, jargty);
                 }
             }
