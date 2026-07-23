@@ -3257,6 +3257,8 @@ static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t 
            jl_has_empty_intersection(target_method->sig, start_method->sig) ||
            jl_has_empty_intersection(start_method->sig, target_method->sig));
     // a method recorded as strictly beating something must not carry NO_LOSERS
+    // (the replacement path clears the bit for the recency-tiebreak win it
+    // records over the type-equal method it replaces)
     assert(!result || !(jl_atomic_load_relaxed(&target_method->dispatch_status) & METHOD_SIG_NO_LOSERS));
     return result;
 }
@@ -3303,13 +3305,17 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     }
 
     int invalidated = 0;
-    // Tentatively assume the new method is not strictly morespecific than
-    // anything it intersects (METHOD_SIG_NO_LOSERS); the scan below clears it
-    // on the first method this one beats. Conversely, an old method that this
-    // one is beaten by keeps its state, and an old method that is beaten
-    // (morespec[j], conservatively including both-ways-morespecific pairs)
-    // loses its bit.
-    int dispatch_bits = METHOD_SIG_LATEST_WHICH | METHOD_SIG_NO_LOSERS;
+    // METHOD_SIG_NO_LOSERS is carried in from the method's current state, not
+    // re-derived: it is set at method creation and monotone-cleared. The scan
+    // below clears it on the first method this one beats; conversely an old
+    // method that is beaten (morespec[j], conservatively including
+    // both-ways-morespecific pairs) loses its bit. The bit must survive
+    // serialization (like the interference sets, and unlike LATEST_WHICH)
+    // because a cache-image batch shares one world: this scan runs against the
+    // prior world and cannot see same-image methods, so their pairs are never
+    // re-derived at load and only the precompile-time state is correct.
+    int precompiled_status = jl_atomic_load_relaxed(&method->dispatch_status);
+    int dispatch_bits = METHOD_SIG_LATEST_WHICH | (precompiled_status & METHOD_SIG_NO_LOSERS);
     // Holds the set of all intersecting methods not more specific than this one.
     // The insertion scan below visits every intersecting method (the
     // LATEST_ONLY early-out was removed), so the recorded relation is complete:
@@ -3326,10 +3332,13 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             method_overwrite(newentry, m);
             // This is an optimized version of below, given we know the type-intersection is exact
             jl_method_table_invalidate(m, max_world);
-            // The replacement has the same signature, so it inherits the
-            // replaced method's specificity relations, including NO_LOSERS
-            if (!(jl_atomic_load_relaxed(&m->dispatch_status) & METHOD_SIG_NO_LOSERS))
-                dispatch_bits &= ~METHOD_SIG_NO_LOSERS;
+            // The replacement strictly beats the replaced method (the recency
+            // tiebreak in `jl_method_morespecific` for type-equal signatures,
+            // recorded below), so it always has at least that one strict loser.
+            // NO_LOSERS cannot be inherited: type-equal does not imply
+            // morespecific-equal, so the predecessor's relations do not
+            // transfer.
+            dispatch_bits &= ~METHOD_SIG_NO_LOSERS;
             // Clear METHOD_SIG_LATEST_WHICH bit
             jl_atomic_store_relaxed(&m->dispatch_status, 0);
             // Take over the interference list from the replaced method
@@ -3356,6 +3365,15 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     ssize_t idx;
                     m2_interferences = jl_idset_put_key(m2_interferences, (jl_value_t*)method, &idx);
                     jl_gc_write_atomic(m2, m2->interferences, jl_genericmemory_t, m2_interferences, release);
+                }
+                if (m2 && m2 != m) {
+                    // Recompute the partner's NO_LOSERS against the
+                    // replacement's own signature: type-equal does not imply
+                    // morespecific-equal, so `morespecific(m2, method)` may
+                    // hold where `morespecific(m2, m)` did not.
+                    int m2_dispatch = jl_atomic_load_relaxed(&m2->dispatch_status);
+                    if ((m2_dispatch & METHOD_SIG_NO_LOSERS) && jl_type_morespecific(m2->sig, type))
+                        jl_atomic_store_relaxed(&m2->dispatch_status, m2_dispatch & ~METHOD_SIG_NO_LOSERS);
                 }
             }
             loctag = jl_atomic_load_relaxed(&m->specializations); // use loctag for a gcroot
