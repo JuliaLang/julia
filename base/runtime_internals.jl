@@ -538,7 +538,7 @@ function isconst(@nospecialize(t::Type), s::Integer)
 end
 
 """
-    isfieldatomic(t::DataType, s::Union{Int,Symbol})::Bool
+    isfieldatomic(t::DataType, s::Union{Integer,Symbol})::Bool
 
 Determine whether a field `s` is declared `@atomic` in a given type `t`.
 """
@@ -548,8 +548,9 @@ function isfieldatomic(@nospecialize(t::Type), s::Symbol)
     isa(t, DataType) || return false
     return isfieldatomic(t, fieldindex(t, s, false))
 end
-function isfieldatomic(@nospecialize(t::Type), s::Int)
+function isfieldatomic(@nospecialize(t::Type), s::Integer)
     @_foldable_meta
+    s = Int(s)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false # uncertain
