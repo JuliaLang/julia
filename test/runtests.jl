@@ -3,6 +3,7 @@
 using Test
 using Distributed
 using Dates
+using TOML
 using Printf: @sprintf
 using Base: Experimental
 using Base.ScopedValues
@@ -98,6 +99,33 @@ for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
     prepend!(tests, prependme_tests)
+end
+
+# Durations (in seconds) recorded from previous runs, used to start the slowest
+# tests first for better load balancing across workers. The local cache is
+# updated after every run; the committed baseline provides data for tests that
+# have not run locally yet.
+const durations_cache_file = get(ENV, "JULIA_TEST_DURATIONS_FILE",
+                                 joinpath(@__DIR__, "test_durations_local.toml"))
+const durations_baseline_file = joinpath(@__DIR__, "test_durations.toml")
+
+function read_durations_file(file)
+    isfile(file) || return Dict{String, Float64}()
+    parsed = try
+        TOML.parsefile(file)
+    catch e
+        @warn "Failed to read test durations file" file exception=e
+        return Dict{String, Float64}()
+    end
+    return Dict{String, Float64}(k => Float64(v) for (k, v) in parsed if v isa Real)
+end
+
+let durations = merge(read_durations_file(durations_baseline_file),
+                      read_durations_file(durations_cache_file))
+    # stable sort: tests with unknown duration run first, in their existing order.
+    # `ambiguous` stays at the front so it runs on a fresh worker before other
+    # tests can introduce method ambiguities (see choosetests.jl)
+    sort!(tests; by = t -> (t != "ambiguous", -get(durations, t, Inf)))
 end
 
 import LinearAlgebra
@@ -429,6 +457,24 @@ cd(@__DIR__) do
         end
         if @isdefined test_timers
             foreach(close, values(test_timers))
+        end
+    end
+
+    # Update the durations cache used to schedule the slowest tests first
+    let durations = read_durations_file(durations_cache_file)
+        for (test, (resp,), duration) in results
+            # don't record durations of crashed/errored tests
+            isa(resp, Test.DefaultTestSet) || isa(resp, Test.TestSetException) || continue
+            durations[test] = round(duration, digits=1)
+        end
+        if !isempty(durations)
+            try
+                open(durations_cache_file, "w") do io
+                    TOML.print(io, durations; sorted=true)
+                end
+            catch e
+                @warn "Failed to write test durations file" durations_cache_file exception=e
+            end
         end
     end
 
