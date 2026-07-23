@@ -74,7 +74,9 @@ spin at once; a thread denied a spinner slot parks immediately.
 
 `jl_wakeup_threadpool` gates its wake on this count against the pool's
 pending-task count: the queue implementation maintains `n_ready` (insert
-increments, successful dequeue decrements, via `jl_sched_nready_inc/dec`),
+increments, successful dequeue decrements, via `jl_sched_nready_inc/dec`,
+both under the heap lock so a task's decrement cannot precede its
+increment),
 and the wake is skipped while `n_spinning >= n_ready`. A burst of `k`
 enqueues wakes up to `k` workers in parallel; a single enqueue with an
 active searcher wakes nobody.

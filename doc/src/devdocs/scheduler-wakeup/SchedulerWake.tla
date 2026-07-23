@@ -273,6 +273,26 @@ SleepRecheckEmpty ==
         /\ pc' = [pc EXCEPT ![t] = "park"]
         /\ UNCHANGED <<st, spin, nspin, nrun, queue, inject>>
 
+(* A throw during RECHECK (checkempty is a Julia callback). The handler      *)
+(* settles the wake -- a self-flip, or consuming a racing waker's increment   *)
+(* and releasing the slot it pre-accounted -- and then hands off through the  *)
+(* gated wake ("unwindwake"): an enqueue suppressed by the slot released at   *)
+(* RELEASE is observed only by the recheck, which never completed.            *)
+ThrowRecheck ==
+    \E t \in Threads :
+        /\ pc[t] = "recheck"
+        /\ IF st[t] = "sleeping"
+              THEN /\ st' = [st EXCEPT ![t] = "running"]
+                   /\ UNCHANGED <<nrun, spin, nspin>>
+              ELSE /\ nrun' = nrun - 1
+                   /\ IF spin[t]
+                         THEN /\ spin'  = [spin EXCEPT ![t] = FALSE]
+                              /\ nspin' = [nspin EXCEPT ![Pool[t]] = @ - 1]
+                         ELSE UNCHANGED <<spin, nspin>>
+                   /\ UNCHANGED st
+        /\ pc' = [pc EXCEPT ![t] = "unwindwake"]
+        /\ UNCHANGED <<queue, inject>>
+
 (* RETIRE + PARK: leave the running count, then commit unless a waker won    *)
 (* the race (its nrun++ balances our decrement).                              *)
 ParkCommit ==
@@ -304,6 +324,7 @@ Next ==
     \/ SleepRecheckAbortSelf
     \/ SleepRecheckAbortRaced
     \/ SleepRecheckEmpty
+    \/ ThrowRecheck
     \/ ParkCommit
     \/ ParkRaced
     \* Quiescence with empty queues is legitimate (sleeping producers never

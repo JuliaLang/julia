@@ -60,7 +60,9 @@ typedef struct {
     char pad0[64 - sizeof(_Atomic(int32_t))];
     // tasks sitting in the pool's Julia-side shared queues, maintained by
     // the queue implementation (insert increments, successful dequeue
-    // decrements, via jl_sched_nready_inc/dec)
+    // decrements, via jl_sched_nready_inc/dec, both under the heap lock so
+    // a task's decrement cannot precede its increment and undercount the
+    // pending work at the gate)
     _Atomic(int64_t) n_ready;
     char pad1[64 - sizeof(_Atomic(int64_t))];
     // most recently parked thread (tid + 1; 0 = none), woken first: the
@@ -627,16 +629,19 @@ static jl_task_t *sleep_thread(jl_task_t *ct, wake_gate_t **pgate,
     jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
     jl_fence(); // [^store_buffering_1]
     JL_PROBE_RT_SLEEP_CHECK_SLEEP(ptls);
-    if (!force_park && !check_empty(checkempty)) { // uses relaxed loads
-        if (settle_wake(ptls, gate, spinning)) {
-            JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
-        }
-        return NULL;
-    }
     volatile int isrunning = 1;
     JL_TRY {
         // `continue` exits the JL_TRY (popping the handler) and falls
         // through to the return below.
+        // The recheck runs inside the handler: checkempty is a Julia
+        // callback, and a throw here would otherwise unwind with our
+        // sleep state still published.
+        if (!force_park && !check_empty(checkempty)) { // uses relaxed loads
+            if (settle_wake(ptls, gate, spinning)) {
+                JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
+            }
+            continue;
+        }
         task = get_next_task(trypoptask, q); // note: this should not yield
         if (ptls != ct->ptls) {
             // sigh, a yield was detected, so let's go ahead and handle it anyway by starting over
@@ -796,6 +801,11 @@ static jl_task_t *sleep_thread(jl_task_t *ct, wake_gate_t **pgate,
         // jl_task_get_next). With no waker, settle_wake just un-publishes
         // our sleep state.
         settle_wake(ptls, gate, spinning);
+        // An enqueue whose wake was suppressed by the slot we released at
+        // entry is observed only by the recheck; if the unwind cut the
+        // recheck short, hand the wake on.
+        if (gate != NULL)
+            gated_wakeup(gate);
         jl_rethrow();
     }
     return task;

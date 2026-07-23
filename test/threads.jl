@@ -639,3 +639,42 @@ let code = """
     cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no -t2,1 -e $code`
     @test success(cmd)
 end
+
+# A throwing checkempty unwinds from inside the sleep transition, after the
+# thread has published its sleep state: the handler must un-publish it and
+# hand on any wake that was suppressed on this thread's account, or the
+# scheduled task strands with the pool's wakeups gated.
+let code = """
+    using Base.Threads
+    ran = Atomic{Int}(0)
+    victim = Task(() -> (ran[] = 1))
+    victim.sticky = false
+    done = Channel{Bool}(1)
+    calls = Ref(0)
+    trypop = q -> nothing                # never a task: keep polling
+    checkempty = () -> begin
+        calls[] += 1
+        # with JULIA_THREAD_SLEEP_THRESHOLD=1 the third call is the
+        # post-publish recheck (1: quick check, 2: quick check past the
+        # threshold, 3: recheck after sleep_check_state = sleeping)
+        calls[] < 3 && return true
+        schedule(victim)
+        error("boom")
+    end
+    a = Task(() -> begin
+        try
+            ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypop, [], checkempty)
+        catch
+        end
+        Libc.systemsleep(0.5)            # block this thread without yielding
+        put!(done, ran[] == 1)
+    end)
+    a.sticky = true
+    ccall(:jl_set_task_tid, Cint, (Any, Cint), a, 1)  # first default-pool thread
+    schedule(a)
+    exit(take!(done) ? 0 : 1)
+    """
+    cmd = addenv(`$(Base.julia_cmd()) --depwarn=error --startup-file=no -t2,1 -e $code`,
+                 "JULIA_THREAD_SLEEP_THRESHOLD" => "1")
+    @test success(cmd)
+end
