@@ -1717,7 +1717,12 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 if (s->incremental) {
                     if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
                         jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
-                        jl_atomic_store_relaxed(&newm->dispatch_status, 0);
+                        // Keep METHOD_SIG_NO_LOSERS across serialization: the
+                        // activation scan at load runs against the prior world
+                        // and cannot see same-image methods, so this bit (like
+                        // the interference sets) cannot be re-derived there.
+                        int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
+                        jl_atomic_store_relaxed(&newm->dispatch_status, dispatch_status & METHOD_SIG_NO_LOSERS);
                         arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
                 }
