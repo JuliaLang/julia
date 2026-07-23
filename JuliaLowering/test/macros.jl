@@ -1876,3 +1876,93 @@ end
     @test !isdefined(test_mod, :a)
     @test !isdefined(macro_mod, :a)
 end
+
+# Per-method compiler options set via @compiler_options / @optlevel on a function
+# definition are recorded in the lowered CodeInfo and on the resulting Method.
+@testset "compiler options" begin
+    JuliaLowering.include_string(test_mod, raw"""
+    begin
+        Base.Experimental.@compiler_options optimize=0 function _test_opts_fn1(x)
+            x + 1
+        end
+        Base.Experimental.@compiler_options compile=min function _test_opts_fn2(x)
+            x + 1
+        end
+        Base.Experimental.@compiler_options infer=false function _test_opts_fn3(x)
+            x + 1
+        end
+        Base.Experimental.@compiler_options optimize=2 compile=min infer=true function _test_opts_fn5(x)
+            x + 1
+        end
+        Base.Experimental.@optlevel 1 function _test_opts_fn6(x)
+            x + 1
+        end
+        _test_opts_fn7(x) = x + 1
+    end
+    """)
+    @test Base.Experimental.get_optlevel(only(methods(test_mod._test_opts_fn1))) == 0
+    @test Base.Experimental.get_compile(only(methods(test_mod._test_opts_fn2))) == 3
+    @test Base.Experimental.get_infer(only(methods(test_mod._test_opts_fn3))) == 0
+
+    m5 = only(methods(test_mod._test_opts_fn5))
+    @test Base.Experimental.get_optlevel(m5) == 2
+    @test Base.Experimental.get_compile(m5) == 3
+    @test Base.Experimental.get_infer(m5) == 1
+
+    @test Base.Experimental.get_optlevel(only(methods(test_mod._test_opts_fn6))) == 1
+
+    # Unset options inherit from the enclosing module (-1 == module default)
+    m7 = only(methods(test_mod._test_opts_fn7))
+    @test Base.Experimental.get_compile(m7) == -1
+    @test Base.Experimental.get_infer(m7) == -1
+
+    # A compiler option combined with another annotation (`@inline`) shares a
+    # single `(meta ...)` node because `pushmeta!` merges them; each child must
+    # be classified independently.
+    JuliaLowering.include_string(test_mod, raw"""
+    Base.Experimental.@optlevel 0 @inline function _test_opts_mixed(x)
+        x + 1
+    end
+    """)
+    @test Base.Experimental.get_optlevel(only(methods(test_mod._test_opts_mixed))) == 0
+
+    # Per-method options and other method annotations propagate from the body
+    # to positional-default wrappers and the `Core.kwcall` sorter (matching
+    # flisp's `propagate-method-meta`).
+    JuliaLowering.include_string(test_mod, raw"""
+    Base.Experimental.@optlevel 0 @inline function _test_opts_kw(x::Int, y::Int=1; k::Int=2)
+        x + y + k
+    end
+    """)
+    fkw = test_mod._test_opts_kw
+    @test fkw(1) == 4
+    for m in (which(fkw, (Int,)), which(fkw, (Int, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fkw), Int)))
+        @test Base.Experimental.get_optlevel(m) == 0
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
+    # ... including when destructuring-arg assignments are prepended to the body
+    JuliaLowering.include_string(test_mod, raw"""
+    @inline function _test_opts_destr((a, b)::Tuple{Int,Int}, y::Int=1; k::Int=2)
+        a + b + y + k
+    end
+    """)
+    fd = test_mod._test_opts_destr
+    @test fd((1, 2)) == 6
+    for m in (which(fd, (Tuple{Int,Int},)), which(fd, (Tuple{Int,Int}, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(fd), Tuple{Int,Int})))
+        @test Base.uncompressed_ast(m).inlining == 0x01
+    end
+
+    # Module-level options are emitted as statements and applied by the
+    # interpreter; one in a non-taken branch is not applied.
+    mod_cond = Module()
+    JuliaLowering.include_string(mod_cond, raw"""
+    cond = false
+    if cond
+        Base.Experimental.@optlevel 0
+    end
+    """)
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), mod_cond) == -1
+end

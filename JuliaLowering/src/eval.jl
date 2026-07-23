@@ -196,15 +196,18 @@ else
         fts = fieldtypes(Core.CodeInfo)
         conversions = [:(convert($t, $n)) for (t,n) in zip(fts, fns)]
 
-        expected_fns = (:code, :debuginfo, :ssavaluetypes, :ssaflags, :slotnames, :slotflags, :slottypes, :rettype, :parent, :edges, :min_world, :max_world, :method_for_inference_limit_heuristics, :nargs, :propagate_inbounds, :has_fcall, :has_image_globalref, :nospecializeinfer, :isva, :inlining, :constprop, :purity, :inlining_cost)
-        expected_fts = (Vector{Any}, Core.DebugInfo, Any, Vector{UInt32}, Vector{Symbol}, Vector{UInt8}, Any, Any, Any, Any, UInt, UInt, Any, UInt, Bool, Bool, Bool, Bool, Bool, UInt8, UInt8, UInt16, UInt16)
+        expected_fns = (:code, :debuginfo, :ssavaluetypes, :ssaflags, :slotnames, :slotflags, :slottypes, :rettype, :parent, :edges, :min_world, :max_world, :method_for_inference_limit_heuristics, :nargs, :propagate_inbounds, :has_fcall, :has_image_globalref, :nospecializeinfer, :isva, :inlining, :constprop, :purity, :optlevel, :compile, :infer, :inlining_cost)
+        expected_fts = (Vector{Any}, Core.DebugInfo, Any, Vector{UInt32}, Vector{Symbol}, Vector{UInt8}, Any, Any, Any, Any, UInt, UInt, Any, UInt, Bool, Bool, Bool, Bool, Bool, UInt8, UInt8, UInt16, UInt8, UInt8, UInt8, UInt16)
+
         code = if fns != expected_fns || fts != expected_fts
+            unexpected_fns = collect(setdiff(Set(fns), Set(expected_fns)))
+            missing_fns = collect(setdiff(Set(expected_fns), Set(fns)))
             :(function _CodeInfo(args...)
                   error(string(
                       "JuliaLowering didn't recognize Core.CodeInfo's fields; ",
                       "it may need updating to match Core.CodeInfo.\n",
-                      "expected field names: $($expected_fns)\n",
-                      "expected field types: $($expected_fts)\n"))
+                      "unexpected fields: $($unexpected_fns)\n",
+                      "missing fields: $($missing_fns)\n"))
               end)
         else
             :(function _CodeInfo($(fns...))
@@ -585,6 +588,9 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     min_world           = Csize_t(1)
     max_world           = typemax(Csize_t)
     isva                = false
+    optlevel            = get(meta, :optlevel, 0xff)
+    compile             = get(meta, :compile, 0xff)
+    infer               = get(meta, :infer, 0xff)
     inlining_cost       = 0xffff
     rettype             = Any
 
@@ -613,6 +619,9 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
         inlining,
         constprop,
         purity,
+        optlevel,
+        compile,
+        infer,
         inlining_cost
     )
 end
@@ -695,10 +704,12 @@ function _to_lowered_expr(ex::SyntaxTree)
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
         args = Any[_to_lowered_expr(e) for e in children(ex)]
-        # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
-        arg1 = args[1]
-        @jl_assert (arg1 isa QuoteNode) ex
-        args[1] = arg1.value
+        # Flat metas like `(meta :nospecialize ...)` carry an identifier as the
+        # first child, which `Expr(:meta)` wants unquoted; nested metas like
+        # `(meta (max_methods n))` instead carry an `Expr` and are left as-is.
+        if !isempty(args) && args[1] isa QuoteNode
+            args[1] = args[1].value
+        end
         Expr(:meta, args...)
     elseif k == K"foreignsymbol"
         @jl_assert kind(ex[1]) == K"tuple" ex
@@ -748,6 +759,13 @@ function _to_lowered_expr(ex::SyntaxTree)
                k == K"aliasscope"        ? :aliasscope        :
                k == K"popaliasscope"     ? :popaliasscope     :
                k == K"new_opaque_closure" ? :new_opaque_closure :
+               # Module-level compiler options survive lowering as `(meta ...)`
+               # statements for the interpreter to apply (only per-method
+               # optlevel/compile/infer are consumed into the CodeInfo).
+               k == K"max_methods"       ? :max_methods       :
+               k == K"optlevel"          ? :optlevel          :
+               k == K"compile"           ? :compile           :
+               k == K"infer"             ? :infer             :
                nothing
         if isnothing(head)
             throw(LoweringError(ex, "Unhandled form for kind $k"))

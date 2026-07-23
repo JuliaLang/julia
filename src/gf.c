@@ -3981,12 +3981,28 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
 
     jl_method_instance_t *mi2 = mi;
     int compile_option = jl_options.compile_enabled;
-    // disabling compilation per-module can override global setting
+    // disabling compilation per-method/module can override global setting
     if (jl_is_method(def)) {
-        int mod_setting = jl_get_module_compile(((jl_method_t*)def)->module);
-        if (mod_setting == JL_OPTIONS_COMPILE_OFF ||
-            mod_setting == JL_OPTIONS_COMPILE_MIN)
-            compile_option = ((jl_method_t*)def)->module->compile;
+        volatile int method_setting = jl_get_method_compile(def);
+        if (def->generator != NULL) {
+            // a generated function's expansion can override the method/module
+            // setting for this instance (CodeInfo overrides Method overrides Module)
+            JL_TRY {
+                jl_code_instance_t *uninferred = jl_cached_uninferred(
+                        jl_atomic_load_relaxed(&mi->cache), world);
+                jl_code_info_t *src = uninferred
+                    ? (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred)
+                    : jl_code_for_staged(mi, world, &uninferred);
+                if (src != NULL && jl_is_code_info(src) && src->compile != 0xff)
+                    method_setting = src->compile;
+            }
+            JL_CATCH {
+                // generator errors are reported when the code is actually needed
+            }
+        }
+        if (method_setting == JL_OPTIONS_COMPILE_OFF ||
+            method_setting == JL_OPTIONS_COMPILE_MIN)
+            compile_option = method_setting;
     }
 
     // if compilation is disabled or source is unavailable, try calling unspecialized version

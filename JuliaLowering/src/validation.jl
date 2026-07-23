@@ -1296,6 +1296,11 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
         pass() : @fail(st, "wrong number of args to `purity` expression")
     [K"aliasscope"] -> pass()
     [K"popaliasscope"] -> pass()
+    # Per-method/module compiler options (see `Base.Experimental.@compiler_options`)
+    [K"optlevel" x] -> vst2(vcx, x)
+    [K"compile" x] -> vst2(vcx, x)
+    [K"infer" x] -> vst2(vcx, x)
+    [K"max_methods" x] -> vst2(vcx, x)
 
     [K"always_defined" x] -> vst2_ident(vcx, x)
     [K"assert" [K"Symbol"] x] -> vst2(vcx, x)

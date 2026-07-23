@@ -721,6 +721,13 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
     JL_TYPECHK(jl_eval_thunk, code_info, (jl_value_t*)thk);
     JL_TYPECHK(jl_eval_thunk, array_any, (jl_value_t*)thk->code);
 
+    // Module-level `@optlevel` / `@compiler_options` are left as `(meta ...)`
+    // statements in the thunk body and applied by the interpreter (eval_body)
+    // in their original control-flow position, so options guarded by e.g.
+    // `if false` / `@static` only apply when their branch executes. The
+    // thk->optlevel/compile/infer fields are collected without regard for
+    // control flow and are therefore ignored for thunks (here and in codegen).
+
     // Set global jl_lineno/jl_filename to file and line info for the original
     // start of this block.
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);

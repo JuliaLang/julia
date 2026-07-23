@@ -1812,3 +1812,197 @@ if !Sys.iswindows() && !running_under_rr()
         end
     end
 end
+# Per-method compiler options via @compiler_options and programmatic API
+@testset "per-method compiler options" begin
+    # Test @compiler_options applied to function definitions
+    Base.Experimental.@compiler_options optimize=0 function _test_opts_fn1(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn1))
+    @test Base.Experimental.get_optlevel(m) == 0
+
+    Base.Experimental.@compiler_options compile=min function _test_opts_fn2(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn2))
+    @test Base.Experimental.get_compile(m) == 3
+
+    Base.Experimental.@compiler_options infer=false function _test_opts_fn3(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn3))
+    @test Base.Experimental.get_infer(m) == 0
+
+    # Test multiple options at once
+    Base.Experimental.@compiler_options optimize=2 compile=min infer=true function _test_opts_fn5(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn5))
+    @test Base.Experimental.get_optlevel(m) == 2
+    @test Base.Experimental.get_compile(m) == 3
+    @test Base.Experimental.get_infer(m) == 1
+
+    # Test @optlevel on function definition
+    Base.Experimental.@optlevel 1 function _test_opts_fn6(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn6))
+    @test Base.Experimental.get_optlevel(m) == 1
+
+    # max_methods cannot be set per-method
+    @test_throws "max_methods" @macroexpand Base.Experimental.@compiler_options max_methods=1 function _test_opts_fn_mm(x)
+        x + 1
+    end
+
+    # Unset options inherit from the enclosing module (returns -1 for module default)
+    _test_opts_fn7(x) = x + 1
+    m = only(methods(_test_opts_fn7))
+    @test Base.Experimental.get_compile(m) == -1
+    @test Base.Experimental.get_infer(m) == -1
+
+    # Test generated functions can set compiler options via meta expressions
+    struct _TestWrapper{P, F}
+        f::F
+    end
+
+    @generated function _test_call_wrapper(w::_TestWrapper{P}, x) where {P}
+        optlevel = P
+        optlevel_meta = optlevel != 0xFF ? Expr(:meta, Expr(:optlevel, optlevel)) : nothing
+        return quote
+            $optlevel_meta
+            w.f(x)
+        end
+    end
+
+    _test_wrapper_f(x) = x .+ (1.0, 2.0, 3.0, 4.0)
+    w0 = _TestWrapper{0, typeof(_test_wrapper_f)}(_test_wrapper_f)
+    w2 = _TestWrapper{2, typeof(_test_wrapper_f)}(_test_wrapper_f)
+    wdefault = _TestWrapper{0xFF, typeof(_test_wrapper_f)}(_test_wrapper_f)
+
+    ci0 = only(code_lowered(_test_call_wrapper, (typeof(w0), Float64)))
+    ci2 = only(code_lowered(_test_call_wrapper, (typeof(w2), Float64)))
+    cidef = only(code_lowered(_test_call_wrapper, (typeof(wdefault), Float64)))
+
+    @test ci0.optlevel == 0x00
+    @test ci2.optlevel == 0x02
+    @test cidef.optlevel == 0xFF
+
+    # infer=0 in an expansion disables inference for that instance only
+    @generated function _test_staged_infer(w::_TestWrapper{P}, x) where {P}
+        meta = P ? Expr(:meta, Expr(:infer, 0)) : nothing
+        return quote
+            $meta
+            w.f(x)
+        end
+    end
+    wni = _TestWrapper{true, typeof(_test_wrapper_f)}(_test_wrapper_f)
+    wyi = _TestWrapper{false, typeof(_test_wrapper_f)}(_test_wrapper_f)
+    @test _test_staged_infer(wni, 1.0) == (2.0, 3.0, 4.0, 5.0)
+    @test only(Base.return_types(_test_staged_infer, (typeof(wni), Float64))) == Any
+    @test only(Base.return_types(_test_staged_infer, (typeof(wyi), Float64))) == NTuple{4, Float64}
+
+    # compile=min in an expansion makes that instance run in the interpreter
+    @generated function _test_staged_compile(w::_TestWrapper{P}, x) where {P}
+        meta = P ? Expr(:meta, Expr(:compile, 3)) : nothing
+        return quote
+            $meta
+            w.f(x)
+        end
+    end
+    wmin = _TestWrapper{true, typeof(_test_wrapper_f)}(_test_wrapper_f)
+    @test _test_staged_compile(wmin, 1.0) == (2.0, 3.0, 4.0, 5.0)
+    let mi = only(Base.specializations(only(methods(_test_staged_compile))))
+        ci = @atomic :acquire mi.cache
+        # skip the cached uninferred expansion (owner === :uninferred)
+        while ci.owner !== nothing
+            ci = @atomic :acquire ci.next
+        end
+        @test (@atomic :acquire ci.invoke) ==
+            unsafe_load(cglobal(:jl_fptr_interpret_call_addr, Ptr{Cvoid}))
+    end
+
+    # options propagate to positional-default wrappers and the kwcall sorter
+    Base.Experimental.@optlevel 0 function _test_opts_kwf(x::Int, y::Int=1; k::Int=2)
+        x + y + k
+    end
+    @test _test_opts_kwf(1) == 4
+    for m in (which(_test_opts_kwf, (Int,)), which(_test_opts_kwf, (Int, Int)),
+              which(Core.kwcall, (NamedTuple{(:k,), Tuple{Int}}, typeof(_test_opts_kwf), Int)))
+        @test Base.Experimental.get_optlevel(m) == 0
+    end
+
+    # a bodyless declaration cannot carry compiler options
+    @test_throws "function definition with a body" @macroexpand Base.Experimental.@optlevel 1 function _f_no_body end
+end
+
+# Module-level compiler options are applied to the enclosing module (not just methods)
+module _TestModuleOpts
+    Base.Experimental.@optlevel 1
+    Base.Experimental.@compiler_options compile=min max_methods=2
+    fmod(x) = x + 1
+end
+module _TestMethodOnlyOpts
+    Base.Experimental.@compiler_options optimize=0 function fmeth(x)
+        x + 1
+    end
+end
+@testset "module-level compiler options" begin
+    mm = only(methods(_TestModuleOpts.fmod))
+    # `fmod` has no per-method override, so these report the module-level settings
+    @test Base.Experimental.get_optlevel(mm) == 1
+    @test Base.Experimental.get_compile(mm) == 3
+    # `max_methods` is module-level only
+    @test ccall(:jl_get_module_max_methods, Cint, (Any,), _TestModuleOpts) == 2
+
+    # The function-definition form sets only the method, not the enclosing module
+    @test Base.Experimental.get_optlevel(only(methods(_TestMethodOnlyOpts.fmeth))) == 0
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), _TestMethodOnlyOpts) == -1
+end
+
+# Module-level options are applied by the interpreter in their control-flow
+# position, so an option guarded by a branch that is not taken is not applied.
+@testset "module-level compiler options respect control flow" begin
+    m1 = Module()
+    Core.eval(m1, quote
+        cond = false
+        if cond
+            Base.Experimental.@compiler_options infer=false optimize=0
+        end
+        f(x) = x + 1
+    end)
+    @test ccall(:jl_get_module_infer, Cint, (Any,), m1) == -1
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), m1) == -1
+
+    m2 = Module()
+    Core.eval(m2, quote
+        cond = true
+        if cond
+            Base.Experimental.@optlevel 0
+        end
+    end)
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), m2) == 0
+end
+
+# Disabling inference on a method implies @nospecialize (matching the module
+# setting); explicitly enabling it re-enables specialization.
+@testset "per-method infer implies (no)specialization" begin
+    Base.Experimental.@compiler_options infer=false function _test_noinfer(x)
+        x + 1
+    end
+    @test only(methods(_test_noinfer)).nospecialize == -1
+
+    mod = Module()
+    Core.eval(mod, quote
+        Base.Experimental.@compiler_options infer=false
+        Base.Experimental.@compiler_options infer=true function yesinfer(x)
+            x + 1
+        end
+        plain(x) = x + 1
+    end)
+    @test only(methods(mod.yesinfer)).nospecialize == 0
+    @test only(methods(mod.plain)).nospecialize == -1
+
+    # optimization level is validated
+    @test_throws Exception @macroexpand Base.Experimental.@optlevel 5
+    @test_throws Exception @macroexpand Base.Experimental.@compiler_options optimize=7 function _f(x) x end
+end
