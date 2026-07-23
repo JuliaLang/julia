@@ -2139,9 +2139,17 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
 
 extern "C" JL_DLLEXPORT_CODEGEN void jl_jit_dump_state_impl(void) JL_NOTSAFEPOINT
 {
-    if (jl_ExecutionEngine)
-        static_cast<JuliaTaskDispatcher &>(jl_ExecutionEngine->getExecutionSession()
-            .getExecutorProcessControl().getDispatcher()).dump_wedge_state();
+    if (!jl_ExecutionEngine)
+        return;
+    auto &ES = jl_ExecutionEngine->getExecutionSession();
+    static_cast<JuliaTaskDispatcher &>(
+        ES.getExecutorProcessControl().getDispatcher()).dump_wedge_state();
+    // Full session dump (symbol states and pending queries): takes the
+    // session lock, so it can hang if a wedged materializer holds it — keep
+    // it last; the caller is a watchdog on an already-dying process.
+    errs() << "==== ORC session state\n";
+    ES.dump(errs());
+    errs() << "==== end ORC session state\n";
 }
 
 void JuliaOJIT::registerCI(jl_code_instance_t *CI)

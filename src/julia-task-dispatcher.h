@@ -53,6 +53,10 @@ private:
   /// When false, dispatch runs tasks inline to avoid deadlock with callers
   /// that block on std::future (e.g. LocalTrampolinePool::reenter).
   static inline thread_local bool InCooperativeContext = false;
+  /// How many of ActiveRuns belong to the current thread: the stall
+  /// diagnostic must not count the caller's own (ancestor) runs as forward
+  /// progress, or a wait nested inside a running task can never report.
+  static inline thread_local int OwnActiveRuns = 0;
 
 public:
   /// Async-safe debugging dump for wedge watchdogs: relaxed reads and a
@@ -402,7 +406,9 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-fi
     {
       dispatcher_sigdefer_guard defer;
       ActiveRuns.fetch_add(1, std::memory_order_relaxed);
+      OwnActiveRuns++;
       T->run();
+      OwnActiveRuns--;
       ActiveRuns.fetch_sub(1, std::memory_order_relaxed);
       TasksCompleted.fetch_add(1, std::memory_order_relaxed);
       jl_unique_gcsafe_lock Lock{DispatchMutex};
@@ -471,7 +477,7 @@ void JuliaTaskDispatcher::work_until(future_base &F) JL_NO_SAFEPOINT_ANALYSIS {
     if (TimedOut) {
       uint64_t Completed = TasksCompleted.load(std::memory_order_relaxed);
       if (Completed != LastCompleted ||
-          ActiveRuns.load(std::memory_order_relaxed) > 0) {
+          ActiveRuns.load(std::memory_order_relaxed) > OwnActiveRuns) {
         LastCompleted = Completed;
         StalledSeconds = 0;
       }
@@ -508,7 +514,9 @@ void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) JL_NO_SAFEP
         // jl_register_jit_object), so it must run GC_UNSAFE.
         int8_t gc_state = jl_gc_unsafe_enter(jl_current_task->ptls);
         ActiveRuns.fetch_add(1, std::memory_order_relaxed);
+        OwnActiveRuns++;
         T->run(); // n.b. JL_CANCALLBACK
+        OwnActiveRuns--;
         ActiveRuns.fetch_sub(1, std::memory_order_relaxed);
         TasksCompleted.fetch_add(1, std::memory_order_relaxed);
         jl_gc_unsafe_leave(jl_current_task->ptls, gc_state);
