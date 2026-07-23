@@ -84,8 +84,17 @@ mutable struct Parser{Dates}
     filepath::Union{String, Nothing}
 end
 
-function Parser{Dates}(str::String; filepath=nothing) where {Dates}
+# Size the root table from the document size to avoid repeated rehashing
+# while inserting; entries (a `key = value` line or a `[header]`) are rarely
+# shorter than 32 bytes.
+function root_with_sizehint(str::String)
     root = TOMLDict()
+    sizehint!(root, clamp(sizeof(str) >> 5, 8, 2048); shrink=false)
+    return root
+end
+
+function Parser{Dates}(str::String; filepath=nothing) where {Dates}
+    root = root_with_sizehint(str)
     l = Parser{Dates}(
             str,                  # str
             EOF_CHAR,             # current_char
@@ -113,7 +122,6 @@ function startup(l::Parser)
     c = eat_char(l)
     # Skip BOM
     if c === '\ufeff'
-        l.column -= 1
         eat_char(l)
     end
 end
@@ -123,6 +131,10 @@ Parser{Dates}(io::IO) where {Dates} = Parser{Dates}(read(io, String))
 
 # Parser(...) will be defined by TOML stdlib
 
+# empty!(::IdSet) clears the whole backing table, which stays large after
+# parsing a big document; start over from small fresh sets instead
+_fresh_idset!(s::IdSet{T}) where {T} = length(s.idxs) > 64 ? IdSet{T}() : empty!(s)
+
 function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
     p.str = str
     p.current_char = EOF_CHAR
@@ -131,14 +143,14 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     p.column = 0
     p.line = 1
     p.marker = 0
-    p.root = TOMLDict()
+    p.root = root_with_sizehint(str)
     p.active_table = p.root
     empty!(p.dotted_keys)
     empty!(p.chunks)
-    empty!(p.inline_tables)
-    empty!(p.static_arrays)
-    empty!(p.defined_tables)
-    empty!(p.implicit_tables)
+    p.inline_tables = _fresh_idset!(p.inline_tables)
+    p.static_arrays = _fresh_idset!(p.static_arrays)
+    p.defined_tables = _fresh_idset!(p.defined_tables)
+    p.implicit_tables = _fresh_idset!(p.implicit_tables)
     p.filepath = filepath
     startup(p)
     return p
@@ -346,17 +358,14 @@ end
 # Parser utils #
 ################
 
+# Note: `l.line` and `l.column` are not maintained here; they are only needed
+# for error messages and are recomputed from the position when an error occurs.
 @inline function next_char(l::Parser)::Char
     state = iterate(l.str, l.pos)
     l.prevpos = l.pos
-    l.column += 1
     state === nothing && return EOF_CHAR
     c, pos = state
     l.pos = pos
-    if c == '\n'
-        l.line += 1
-        l.column = 0
-    end
     return c
 end
 
@@ -392,6 +401,26 @@ function accept_batch(l::Parser, f::F)::Bool where {F}
     return ok
 end
 
+# Like `accept_batch` but with a predicate over code units, which allows
+# scanning bytes without decoding characters. The predicate must be
+# ASCII-only in the sense that it may not stop between the code units of a
+# multi-byte character (predicates that are false for all non-ASCII bytes,
+# or true for all non-ASCII bytes, are both fine).
+function accept_batch_bytes(l::Parser, f::F)::Bool where {F}
+    s = l.str
+    n = ncodeunits(s)
+    i = l.prevpos # start byte of the look ahead character
+    # multi-byte look ahead is decided by its first byte, see the contract above
+    (i <= n && f(@inbounds codeunit(s, i))) || return false
+    j = l.pos # first byte after the look ahead character
+    @inbounds while j <= n && f(codeunit(s, j))
+        j += 1
+    end
+    l.pos = j
+    l.current_char = next_char(l) # load the character we stopped at
+    return true
+end
+
 # Return true if `f` was accepted `n` times
 @inline function accept_n(l::Parser, n, f::F)::Bool where {F}
     for i in 1:n
@@ -405,14 +434,19 @@ end
 @inline iswhitespace(c::Char) = c == ' ' || c == '\t'
 @inline isnewline(c::Char) = c == '\n' || c == '\r'
 
-skip_ws(l::Parser) = accept_batch(l, iswhitespace)
+@inline iswhitespace_byte(b::UInt8) = b == UInt8(' ') || b == UInt8('\t')
+@inline isnewline_byte(b::UInt8) = b == UInt8('\n') || b == UInt8('\r')
+@inline iswhitespace_nl_byte(b::UInt8) = iswhitespace_byte(b) || isnewline_byte(b)
+@inline isdigit_byte(b::UInt8) = UInt8('0') <= b <= UInt8('9')
 
-skip_ws_nl_no_comment(l::Parser)::Bool = accept_batch(l, x -> iswhitespace(x) || isnewline(x))
+skip_ws(l::Parser) = accept_batch_bytes(l, iswhitespace_byte)
+
+skip_ws_nl_no_comment(l::Parser)::Bool = accept_batch_bytes(l, iswhitespace_nl_byte)
 
 function skip_ws_nl(l::Parser)::Bool
     skipped = false
     while true
-        skipped_ws = accept_batch(l, x -> iswhitespace(x) || isnewline(x))
+        skipped_ws = accept_batch_bytes(l, iswhitespace_nl_byte)
         skipped_comment = skip_comment(l)
         if !skipped_ws && !skipped_comment
             break
@@ -426,7 +460,7 @@ end
 function skip_comment(l::Parser)::Bool
     found_comment = accept(l, '#')
     if found_comment
-        accept_batch(l, !isnewline)
+        accept_batch_bytes(l, !isnewline_byte)
     end
     return found_comment
 end
@@ -435,6 +469,32 @@ skip_ws_comment(l::Parser) = skip_ws(l) && skip_comment(l)
 
 @inline set_marker!(l::Parser) = l.marker = l.prevpos
 take_substring(l::Parser) = SubString(l.str, l.marker:(l.prevpos-1))
+
+# Line and column of the current parser position, for error messages.
+# Counts over all characters loaded so far, i.e. bytes 1:(l.pos-1).
+function compute_line_column(l::Parser)
+    s = l.str
+    line = 1
+    col = 0
+    for k in 1:min(l.pos - 1, ncodeunits(s))
+        b = @inbounds codeunit(s, k)
+        if b == 0x0a
+            line += 1
+            col = 0
+        elseif b & 0xc0 != 0x80 # count characters, not continuation bytes
+            col += 1
+        end
+    end
+    # The BOM is skipped by `startup` and does not count as a column
+    if line == 1 && startswith(s, '﻿')
+        col -= 1
+    end
+    # Loading the EOF look ahead also advances the column by one
+    if l.prevpos > ncodeunits(s)
+        col += 1
+    end
+    return line, col
+end
 
 ############
 # Toplevel #
@@ -454,12 +514,13 @@ function tryparse(l::Parser)::Err{TOMLDict}
         peek(l) == EOF_CHAR && break
         v = parse_toplevel(l)
         if v isa ParserError
+            line, column = compute_line_column(l)
             v.str      = l.str
             v.pos      = l.prevpos-1
             v.table    = l.root
             v.filepath = l.filepath
-            v.line     = l.line
-            v.column   = l.column-1
+            v.line     = line
+            v.column   = column-1
             return v
         end
     end
@@ -577,7 +638,10 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     end
     last_key_part = l.dotted_keys[end]
 
-    v = get(d, last_key_part, nothing)
+    # Find the slot for `last_key_part` once; nothing between here and the
+    # final assignment mutates `d`, so the slot stays valid.
+    idx, sh = Base.ht_keyindex2_shorthash!(d, last_key_part)
+    v = idx > 0 ? @inbounds(d.vals[idx]) : nothing
     if v !== nothing
         @try check_allowed_add_key(l, v)
         if v isa TOMLDict && v in l.implicit_tables
@@ -588,11 +652,15 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     skip_ws(l)
     value = @try parse_value(l)
     # Not allowed to overwrite a value with an inline dict
-    if value isa Dict && haskey(d, last_key_part)
+    if value isa Dict && v !== nothing
         return ParserError(ErrInlineTableRedefine)
     end
-    # TODO: Performance, hashing `last_key_part` again here
-    d[last_key_part] = value
+    if idx > 0
+        d.age += 1
+        @inbounds d.vals[idx] = value
+    else
+        @inbounds Base._setindex!(d, value, last_key_part, -idx, sh)
+    end
     return
 end
 
@@ -610,6 +678,12 @@ end
     'A' <= c <= 'Z' ||
     isdigit(c) ||
     c == '-' || c == '_'
+
+@inline isvalid_barekey_byte(b::UInt8) =
+    UInt8('a') <= b <= UInt8('z') ||
+    UInt8('A') <= b <= UInt8('Z') ||
+    isdigit_byte(b) ||
+    b == UInt8('-') || b == UInt8('_')
 
 # Current key...
 function parse_key(l::Parser)
@@ -630,7 +704,7 @@ function _parse_key(l::Parser)
         @try parse_string_start(l, true; allow_multiline=false)
     else
         set_marker!(l)
-        if accept_batch(l, isvalid_barekey_char)
+        if accept_batch_bytes(l, isvalid_barekey_byte)
             if !(peek(l) == '.' || iswhitespace(peek(l)) || peek(l) == ']' || peek(l) == '=')
                 c = eat_char(l)
                 return ParserError(ErrInvalidBareKeyCharacter, c)
@@ -865,7 +939,7 @@ function parse_number_or_date_start(l::Parser)
         elseif accept(l, isdigit)
             # Could be a local time (00:30) or a zero-padded date (0001-01-01).
             # Consume remaining digits, then check for ':' or '-'.
-            accept_batch(l, isdigit)
+            accept_batch_bytes(l, isdigit_byte)
             if peek(l) == ':'
                 return parse_local_time(l)
             elseif peek(l) == '-'
@@ -912,7 +986,7 @@ function parse_number_or_date_start(l::Parser)
     if accept(l, x -> x == 'e' || x == 'E')
         accept(l, x-> x == '+' || x == '-')
         # SPEC: (which follows the same rules as decimal integer values but may include leading zeros)
-        read_digit = accept_batch(l, isdigit)
+        read_digit = accept_batch_bytes(l, isdigit_byte)
         ate, read_underscore = @try accept_batch_underscore(l, isdigit, !read_digit)
         contains_underscore |= read_underscore
     end
@@ -1158,7 +1232,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
             fractional_second = parse_int(l, false)::Int64
             millisecond = fractional_second * 10^(3 - ndigits)
             # Truncate off the rest eventual digits
-            accept_batch(l, isdigit)
+            accept_batch_bytes(l, isdigit_byte)
         end
     end
     return hour, minute, second, millisecond
@@ -1187,10 +1261,10 @@ function parse_string_start(l::Parser, quoted::Bool; allow_multiline::Bool=true)
     return parse_string_continue(l, multiline, quoted)
 end
 
-@inline stop_candidates_multiline(x)         = x != '"'  &&  x != '\\'
-@inline stop_candidates_singleline(x)        = x != '"'  &&  x != '\\' && x != '\n'
-@inline stop_candidates_multiline_quoted(x)  = x != '\'' &&  x != '\\'
-@inline stop_candidates_singleline_quoted(x) = x != '\'' &&  x != '\\' && x != '\n'
+@inline stop_candidates_multiline(x::UInt8)         = x != UInt8('"')  &&  x != UInt8('\\')
+@inline stop_candidates_singleline(x::UInt8)        = x != UInt8('"')  &&  x != UInt8('\\') && x != UInt8('\n')
+@inline stop_candidates_multiline_quoted(x::UInt8)  = x != UInt8('\'') &&  x != UInt8('\\')
+@inline stop_candidates_singleline_quoted(x::UInt8) = x != UInt8('\'') &&  x != UInt8('\\') && x != UInt8('\n')
 
 function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{String}
     start_chunk = l.prevpos
@@ -1202,9 +1276,9 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
             return ParserError(ErrUnexpectedEndString)
         end
         if quoted
-            accept_batch(l, multiline ? stop_candidates_multiline_quoted : stop_candidates_singleline_quoted)
+            accept_batch_bytes(l, multiline ? stop_candidates_multiline_quoted : stop_candidates_singleline_quoted)
         else
-            accept_batch(l, multiline ? stop_candidates_multiline : stop_candidates_singleline)
+            accept_batch_bytes(l, multiline ? stop_candidates_multiline : stop_candidates_singleline)
         end
         if !multiline && peek(l) == '\n'
             return ParserError(ErrNewLineInString)
