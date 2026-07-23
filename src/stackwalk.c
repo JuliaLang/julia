@@ -235,9 +235,12 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     if (r < 0)
         return 0;
     bt_cursor_t cursor;
-    // Check maxsize first: a successful framehop init claims a pooled slot.
-    if (maxsize == 0 || !jl_unw_init(&cursor, &context, 0))
+    if (!jl_unw_init(&cursor, &context, 0))
         return 0;
+    if (maxsize == 0) {
+        jl_unw_fini(&cursor);
+        return 0;
+    }
     jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0);
