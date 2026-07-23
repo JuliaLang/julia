@@ -44,27 +44,25 @@ mutable struct SyntaxGraph{Attrs}
     const edges::Vector{NodeId}
     const kind::Vector{Kind}
     const source::Vector{SourceAttrType}
-    # const context::Vector{SyntaxContext}
+    const context::Vector{Union{Nothing, SyntaxContext}}
     const attributes::Attrs
 end
 
-SyntaxGraph() = ensure_required_attributes!(
+SyntaxGraph() = ensure_parser_attributes!(
     SyntaxGraph{Dict{Symbol,Dict{NodeId, Any}}}(
         Vector{UnitRange{Int}}(),
         Vector{NodeId}(),
         Vector{Kind}(),
         Vector{SourceAttrType}(),
+        Vector{Union{Nothing,SyntaxContext}}(),
         Dict{Symbol,Dict{NodeId, Any}}()))
 
 function _show_attrs(io, attributes::Dict)
     show(io, MIME("text/plain"), attributes)
 end
-function _show_attrs(io, attributes::NamedTuple)
-    show(io, MIME("text/plain"), Dict(pairs(attributes)...))
-end
 
 function attrnames(graph::SyntaxGraph)
-    Iterators.flatten(((:kind, :source), keys(graph.attributes)))
+    Iterators.flatten(((:kind, :source, :context), keys(graph.attributes)))
 end
 
 function attrdefs(graph::SyntaxGraph)
@@ -72,7 +70,7 @@ function attrdefs(graph::SyntaxGraph)
 end
 
 copy_attrs(g::SyntaxGraph) = SyntaxGraph(
-    g.edge_ranges, g.edges, g.kind, g.source, copy(g.attributes))
+    g.edge_ranges, g.edges, g.kind, g.source, g.context, copy(g.attributes))
 
 function Base.show(io::IO, ::MIME"text/plain", graph::SyntaxGraph)
     print(io, typeof(graph),
@@ -95,27 +93,8 @@ function ensure_attributes(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}; kw
     ensure_attributes!(g; kws...)
 end
 
-function ensure_attributes!(graph::SyntaxGraph{<:NamedTuple}; kws...)
-    throw(ErrorException("""
-        ensure_attributes!: The graph's attributes are frozen. \
-        Consider calling non-mutating `ensure_attributes` instead."""))
-end
-
-function ensure_attributes(graph::SyntaxGraph{<:NamedTuple}; kws...)
-    unfrozen_attrs = Dict{Symbol,Any}(pairs(graph.attributes)...)
-    for (k,v) in pairs(kws)
-        @assert k isa Symbol
-        @assert v isa Type
-        if !haskey(graph.attributes, k)
-            unfrozen_attrs[k] = Dict{NodeId,v}()
-        end
-    end
-    SyntaxGraph(graph.edge_ranges, graph.edges, (; pairs(unfrozen_attrs)...))
-end
-
-ensure_required_attributes!(g::SyntaxGraph) = ensure_attributes!(
+ensure_parser_attributes!(g::SyntaxGraph) = ensure_attributes!(
     g,
-    context=SyntaxContext,
     syntax_flags=UInt16,
     value=Any,
     name_val=String,
@@ -132,18 +111,11 @@ function delete_attributes(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, at
     delete_attributes!(copy_attrs(graph), attr_names...)
 end
 
-function delete_attributes(graph::SyntaxGraph{<:NamedTuple}, attr_names::Symbol...)
-    unfrozen_attrs = Dict{Symbol,Any}(pairs(graph.attributes)...)
-    for name in attr_names
-        delete!(unfrozen_attrs, name)
-    end
-    SyntaxGraph(graph.edge_ranges, graph.edges, (; pairs(unfrozen_attrs)...))
-end
-
 function new_id!(graph::SyntaxGraph)
     push!(graph.edge_ranges, 0:-1) # Invalid range start => leaf node
     push!(graph.kind, K"None")
     push!(graph.source, nothing)
+    push!(graph.context, nothing)
     return length(graph.edge_ranges)
 end
 
@@ -177,14 +149,14 @@ end
 function getattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
     name === :kind && return getfield(graph, :kind)
     name === :source && return getfield(graph, :source)
-    # name === :context && return getfield(graph, :context)
+    name === :context && return getfield(graph, :context)
     getfield(graph, :attributes)[name]
 end
 
 function hasattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
     name === :kind && return true
     name === :source && return true
-    # name === :context && return true
+    name === :context && return true
     haskey(getfield(graph, :attributes), name)
 end
 
@@ -195,7 +167,11 @@ function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
 end
 
 function deleteattr!(graph::SyntaxGraph, id::NodeId, name::Symbol)
-    delete!(getattr(graph, name), id)
+    if name === :context
+        graph.context[id] = nothing
+    else
+        delete!(getattr(graph, name), id)
+    end
 end
 
 function Base.getproperty(graph::SyntaxGraph, name::Symbol)
@@ -205,6 +181,7 @@ function Base.getproperty(graph::SyntaxGraph, name::Symbol)
     name === :attributes  && return getfield(graph, :attributes)
     name === :kind        && return getfield(graph, :kind)
     name === :source      && return getfield(graph, :source)
+    name === :context     && return getfield(graph, :context)
     return getattr(graph, name)
 end
 
@@ -270,6 +247,7 @@ function Base.getproperty(ex::SyntaxTree, name::Symbol)
     name === :_id  && return id
     name === :kind  && return getindex(getfield(graph, :kind), id)
     name === :source  && return getindex(getfield(graph, :source), id)
+    name === :context  && return getindex(getfield(graph, :context), id)
     val = get(getattr(graph, name), id) do
         error("Property `$name` not defined on node: $(node_string(ex))")
     end
@@ -319,9 +297,10 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
 end
 
 function hasattr(ex::SyntaxTree, name::Symbol)
+    graph = ex._graph
     name === :kind && return true
     name === :source && return true
-    graph = ex._graph
+    name === :context && return graph.context[ex._id] !== nothing
     !hasattr(graph, name) && return false
     return haskey(getattr(graph, name), ex._id)
 end
@@ -855,6 +834,7 @@ end
 function copy_attrs!(dest, src)
     # TODO: Make this faster?
     setattr!(dest, :kind, kind(src))
+    setattr!(dest, :context, src.context)
     for (name, attr) in pairs(src._graph.attributes)
         if haskey(attr, src._id)
             setattr!(dest, name, attr[src._id])
