@@ -417,53 +417,17 @@ function method_in_interferences(method2::Method, method1::Method)
     return false
 end
 
-# Check if method1 is more specific than method2 via the interference graph
-function method_morespecific_via_interferences(method1::Method, method2::Method)
-    if method1 === method2
-        return false
-    end
-
-    # Check direct interferences first
-    if method_in_interferences(method2, method1)
-        return false
-    end
-    if method_in_interferences(method1, method2)
-        return true
-    end
-
-    visited = Method[]
-    push!(visited, method2)
-
-    workqueue = Method[method2]
-    while !isempty(workqueue)
-        current = pop!(workqueue)
-        interferences = current.interferences
-        for k = 1:length(interferences)
-            isassigned(interferences, k) || break
-            method3 = interferences[k]::Method
-
-            # Check if we're already visiting this interference method (cycle prevention and memoization)
-            method3 in visited && continue
-            push!(visited, method3)
-
-            if method_in_interferences(current, method3)
-                continue # only follow edges to morespecific methods in search of the morespecific target (skip ambiguities)
-            end
-
-            # Check direct interferences for this interference method
-            if method_in_interferences(method3, method1)
-                continue # return false for this path
-            end
-            if method_in_interferences(method1, method3)
-                return true # found method1 in the interference graph
-            end
-
-            push!(workqueue, method3)
-        end
-    end
-
-    # slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{} || typeintersect(method2.sig, method1.sig) === Union{}
-    return false
+# Whether method1 is strictly more specific than method2, read directly from the
+# recorded interference relation: method1 is in method2's set (so
+# !morespecific(method2, method1)) and method2 is not in method1's set (so
+# morespecific(method1, method2)). Because recording is complete for
+# intersecting pairs this is exact for them; for disjoint pairs neither
+# membership is recorded and it returns false (a disjoint method dominates
+# nothing), which is what the caller wants.
+# slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{} || typeintersect(method2.sig, method1.sig) === Union{}
+function method_morespecific_recorded(method1::Method, method2::Method)
+    method1 === method2 && return false
+    return method_in_interferences(method1, method2) && !method_in_interferences(method2, method1)
 end
 
 # Max interference-set size for which n==1 uses the interference fast path instead of
@@ -560,7 +524,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                             # try looking for a different expected method that fully covers this interference_method anyways over their intersection
                             for j = 1:n
                                 meth2 = get_method_from_edge(expecteds[i+j-1])
-                                if method_morespecific_via_interferences(meth2, interference_method) && ti <: meth2.sig
+                                if method_morespecific_recorded(meth2, interference_method) && ti <: meth2.sig
                                     found_in_expecteds = true
                                     break
                                 end
