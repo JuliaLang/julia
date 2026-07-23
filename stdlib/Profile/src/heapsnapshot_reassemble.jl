@@ -108,8 +108,10 @@ function assemble_snapshot(in_prefix, io::IO)
     nodes = Nodes(node_count, edge_count)
 
     orphans = Set{UInt}() # nodes that have no incoming edges
-    # Parse nodes with empty edge counts that we need to fill later
-    open(string(in_prefix, ".nodes"), "r") do nodes_file
+    # Parse nodes with empty edge counts that we need to fill later.
+    # Read each part file into memory up front: parsing field-at-a-time from an
+    # IOStream is dominated by per-call locking overhead.
+    let nodes_file = IOBuffer(read(string(in_prefix, ".nodes")))
         for i in 1:length(nodes)
             node_type = read(nodes_file, UInt32)
             node_name_idx = read(nodes_file, UInt)
@@ -133,7 +135,7 @@ function assemble_snapshot(in_prefix, io::IO)
     end
 
     # Parse the edges to fill in the edge counts for nodes and correct the to_node offsets
-    open(string(in_prefix, ".edges"), "r") do edges_file
+    let edges_file = IOBuffer(read(string(in_prefix, ".edges")))
         for i in 1:length(nodes.edges)
             edge_type = read(edges_file, UInt32)
             edge_name_or_index = read(edges_file, UInt)
@@ -206,7 +208,7 @@ function assemble_snapshot(in_prefix, io::IO)
     println(io, "\"locations\":[],")
 
     println(io, "\"strings\":[")
-    open(string(in_prefix, ".strings"), "r") do strings_io
+    let strings_io = IOBuffer(read(string(in_prefix, ".strings")))
         first = true
         while !eof(strings_io)
             str_size = read(strings_io, UInt)
