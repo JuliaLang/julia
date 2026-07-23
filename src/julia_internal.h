@@ -818,12 +818,20 @@ typedef union {
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
 
-// dispatch_status bits. LATEST_WHICH is used on Method. LATEST_ONLY is used
-// only on MethodInstance (dispatch of this mi's exact specTypes yields only
-// this result); the corresponding Method-level fact is the method's
-// `interferences` set being empty, which needs no separate bit.
+// dispatch_status bits. LATEST_WHICH and NO_LOSERS are used on Method.
+// LATEST_ONLY is used only on MethodInstance (dispatch of this mi's exact
+// specTypes yields only this result); the corresponding Method-level fact is
+// the method's `interferences` set being empty, which needs no separate bit.
+// NO_LOSERS: this method is not strictly morespecific than any method it
+// intersects (its strict out-neighborhood is empty, the opposite pole from an
+// empty interference set, which means it beats everything it intersects).
+// Set when the method is inserted and cleared - never re-set - when a later
+// insertion finds this method beats it, so a set bit is valid for a query at
+// any world. It cannot be read from the method's own interference set, which
+// records only the methods it does NOT beat.
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
+#define METHOD_SIG_NO_LOSERS                0b0100
 
 void jl_init_engine(void) JL_NOTSAFEPOINT;
 void jl_engine_sweep(jl_ptls_t *gc_all_tls_states) JL_NOTSAFEPOINT;
