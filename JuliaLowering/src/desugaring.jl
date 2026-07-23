@@ -2694,8 +2694,9 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             ctx.layer.mod,
             string(startswith(n, '#') ? "" : "#kw_body#", n, "#"))
         # probably not desirable, but fixes eval-into-closed-module
-        setattr!(newsym(ctx, mtable, mangled),
-                 :context, escape_layer(mtable.context::SyntaxContext, true))
+        m1_sc = escape_layer(mtable.context::SyntaxContext, true)
+        setattr!(newsym(ctx, mtable, mangled), :context,
+                 SyntaxContext(m1_sc.layer, m1_sc.unexpanded, m1_sc.version, true))
     end
     # (1) Body method.  This contains the actual function body, and requires
     # every possible default to be filled.  `rett` is only passed here since it

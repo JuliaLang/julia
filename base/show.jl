@@ -525,10 +525,18 @@ function _show_default(io::IO, @nospecialize(x))
     else
         print(io, "0x")
         r = Ref{Any}(x)
+        nbits = Core.bitsizeof(t)
+        nbytes = cld(nbits, 8)
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
-            for i in (nb - 1):-1:0
-                print(io, string(unsafe_load(convert(Ptr{UInt8}, p + i)), base = 16, pad = 2))
+            for i in (nbytes - 1):-1:0
+                byte = unsafe_load(convert(Ptr{UInt8}, p + i))
+                if i == nbytes - 1 && nbits % 8 != 0
+                    byte &= (UInt8(1) << (nbits % 8)) - UInt8(1)
+                    print(io, string(byte, base = 16, pad = cld(nbits % 8, 4)))
+                else
+                    print(io, string(byte, base = 16, pad = 2))
+                end
             end
         end
     end
@@ -1152,8 +1160,10 @@ function check_world_bounded(tn::Core.TypeName)
                 return Int(partition.min_world):Int(max_world)
             end
         end
-        isdefined(partition, :next) || return nothing
-        partition = @atomic partition.next
+        next = @atomic partition.next
+        # The last partition's `next` is a backreference to the owning Binding.
+        next isa Core.BindingPartition || return nothing
+        partition = next
     end
 end
 
@@ -1374,7 +1384,7 @@ show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 function show(io::IO, n::Unsigned)
     if get(io, :hexunsigned, true)::Bool
-        print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+        print(io, "0x", string(n, pad = cld(Core.bitsizeof(n), 4), base = 16))
     else
         if get(io, :typeinfo, Nothing)::Type == typeof(n)
             print(io, n)
@@ -3457,6 +3467,15 @@ end
 
 function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
     print(io, "BindingPartition ")
+    # The chain terminates in a backreference to the owning binding, so follow
+    # `next` until we reach it to report which binding this partition belongs to.
+    owner = @atomic partition.next
+    while owner isa Core.BindingPartition
+        owner = @atomic owner.next
+    end
+    if owner isa Core.Binding
+        print(io, "for ", owner.globalref, "\n   ")
+    end
     print_partition(io, partition)
 end
 
@@ -3471,8 +3490,10 @@ function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
             println(io)
             print(io, "   ")
             print_partition(io, partition)
-            isdefined(partition, :next) || break
-            partition = @atomic partition.next
+            next = @atomic partition.next
+            # The last partition's `next` is a backreference to the owning Binding.
+            next isa Core.BindingPartition || break
+            partition = next
         end
     end
 end

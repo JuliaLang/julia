@@ -67,6 +67,7 @@ extern "C" {
     XX(setfieldonce,"setfieldonce!") \
     XX(setglobal,"setglobal!") \
     XX(setglobalonce,"setglobalonce!") \
+    XX(bitsizeof,"bitsizeof") \
     XX(sizeof,"sizeof") \
     XX(svec,"svec") \
     XX(swapfield,"swapfield!") \

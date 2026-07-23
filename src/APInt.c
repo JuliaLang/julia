@@ -705,7 +705,7 @@ static int FPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty,
                  "implemented for bit sizes other than 16, 32 and 64");
 
     unsigned onumbytes = jl_datatype_size(oty);
-    unsigned onumbits = onumbytes * 8;
+    unsigned onumbits = jl_datatype_nbits(oty);
     unsigned nw = APINT_NWORDS(onumbits);
     uint64_t *result = (uint64_t *)alloca(nw * sizeof(uint64_t));
     memset(result, 0, nw * sizeof(uint64_t));
@@ -749,8 +749,7 @@ JL_DLLEXPORT int APInt_fptoui_exact(jl_datatype_t *ty, integerPart *pa, jl_datat
 static void APInt_inttofp(jl_datatype_t *ty, integerPart *pa,
                          jl_datatype_t *oty, integerPart *pr, int is_signed) JL_NOTSAFEPOINT
 {
-    unsigned numbytes = jl_datatype_size(ty);
-    unsigned numbits = numbytes * 8;
+    unsigned numbits = jl_datatype_nbits(ty);
     unsigned nw = APINT_NWORDS(numbits);
     uint64_t *a = (uint64_t *)alloca(nw * 8);
     load(a, pa, numbits);
@@ -801,18 +800,21 @@ JL_DLLEXPORT void APInt_uitofp(jl_datatype_t *ty, integerPart *pa, jl_datatype_t
 JL_DLLEXPORT void APInt_sext(jl_datatype_t *ty, integerPart *pa,
                             jl_datatype_t *otys, integerPart *pr)
 {
-    unsigned inumbytes = jl_datatype_size(ty);
+    unsigned inumbits = jl_datatype_nbits(ty);
+    unsigned onumbits = jl_datatype_nbits(otys);
+    unsigned inumbytes = APINT_NBYTES(inumbits);
     unsigned onumbytes = jl_datatype_size(otys);
-    if (!(onumbytes > inumbytes))
+    if (!(onumbits > inumbits))
         jl_error("SExt: output bitsize must be > input bitsize");
-    unsigned inumbits = inumbytes * 8;
-    int bits = (0 - inumbits) % 8;
+    unsigned bits = (8 - (inumbits % 8)) % 8;
     int signbit = (inumbits - 1) % 8;
     int sign = ((unsigned char *)pa)[inumbytes - 1] & (1 << signbit) ? -1 : 0;
     memcpy(pr, pa, inumbytes);
     if (bits) {
-        ((signed char *)pr)[inumbytes - 1] =
-            ((signed char *)pa)[inumbytes - 1] << bits >> bits;
+        unsigned char byte = ((unsigned char *)pa)[inumbytes - 1];
+        ((unsigned char *)pr)[inumbytes - 1] = sign
+            ? (byte | (unsigned char)(0xFF << (8 - bits)))
+            : (byte & (unsigned char)(0xFF >> bits));
     }
     memset((char *)pr + inumbytes, sign, onumbytes - inumbytes);
 }
@@ -820,16 +822,17 @@ JL_DLLEXPORT void APInt_sext(jl_datatype_t *ty, integerPart *pa,
 JL_DLLEXPORT void APInt_zext(jl_datatype_t *ty, integerPart *pa,
                             jl_datatype_t *otys, integerPart *pr)
 {
-    unsigned inumbytes = jl_datatype_size(ty);
+    unsigned inumbits = jl_datatype_nbits(ty);
+    unsigned onumbits = jl_datatype_nbits(otys);
+    unsigned inumbytes = APINT_NBYTES(inumbits);
     unsigned onumbytes = jl_datatype_size(otys);
-    if (!(onumbytes > inumbytes))
+    if (!(onumbits > inumbits))
         jl_error("ZExt: output bitsize must be > input bitsize");
-    unsigned inumbits = inumbytes * 8;
-    int bits = (0 - inumbits) % 8;
+    unsigned bits = (8 - (inumbits % 8)) % 8;
     memcpy(pr, pa, inumbytes);
     if (bits) {
         ((unsigned char *)pr)[inumbytes - 1] =
-            ((unsigned char *)pa)[inumbytes - 1] << bits >> bits;
+            ((unsigned char *)pa)[inumbytes - 1] & (unsigned char)(0xFF >> bits);
     }
     memset((char *)pr + inumbytes, 0, onumbytes - inumbytes);
 }
@@ -837,11 +840,17 @@ JL_DLLEXPORT void APInt_zext(jl_datatype_t *ty, integerPart *pa,
 JL_DLLEXPORT void APInt_trunc(jl_datatype_t *ty, integerPart *pa,
                              jl_datatype_t *otys, integerPart *pr)
 {
-    unsigned inumbytes = jl_datatype_size(ty);
-    unsigned onumbytes = jl_datatype_size(otys);
-    if (!(onumbytes < inumbytes))
+    unsigned inumbits = jl_datatype_nbits(ty);
+    unsigned onumbits = jl_datatype_nbits(otys);
+    unsigned onumbytes_storage = jl_datatype_size(otys);
+    unsigned onumbytes_value = APINT_NBYTES(onumbits);
+    if (!(onumbits < inumbits))
         jl_error("Trunc: output bitsize must be < input bitsize");
-    memcpy(pr, pa, onumbytes);
+    memcpy(pr, pa, onumbytes_value);
+    if (onumbits % 8)
+        ((unsigned char *)pr)[onumbytes_value - 1] &= (1 << (onumbits % 8)) - 1;
+    if (onumbytes_value < onumbytes_storage)
+        memset((char *)pr + onumbytes_value, 0, onumbytes_storage - onumbytes_value);
 }
 
 // ---- Misc ----

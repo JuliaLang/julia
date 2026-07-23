@@ -561,10 +561,14 @@ restart_switch:
             jl_safe_fprintf(ios_stdout, "julia version %s\n", JULIA_VERSION_STRING);
             exit(0);
         case 'h': // help
-            jl_safe_fprintf(ios_stdout, "%s%s", usage, opts);
+            ios_puts(usage, ios_stdout);
+            ios_puts(opts, ios_stdout);
+            ios_flush(ios_stdout);
             exit(0);
         case opt_help_hidden:
-            jl_safe_fprintf(ios_stdout, "%s%s", usage, opts_hidden);
+            ios_puts(usage, ios_stdout);
+            ios_puts(opts_hidden, ios_stdout);
+            ios_flush(ios_stdout);
             exit(0);
         case 'g': // debug info
             if (optarg != NULL) {
