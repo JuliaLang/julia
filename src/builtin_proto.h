@@ -29,7 +29,7 @@ extern "C" {
     XX(compilerbarrier,"compilerbarrier") \
     XX(current_scope,"current_scope") \
     XX(donotdelete,"donotdelete") \
-    XX(fieldtype,"fieldtype") \
+    XX(fieldtype,"_fieldtype") \
     XX(finalizer,"finalizer") \
     XX(get_binding_type,"get_binding_type") \
     XX(getfield,"getfield") \

@@ -106,10 +106,10 @@ let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"
 end
-let li = only(methods(fieldtype)).unspecialized,
+let li = only(methods(nfields)).unspecialized,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == "fieldtype(::Vararg{Any}) at b:3"
+    @test repr == "nfields(::Vararg{Any}) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),

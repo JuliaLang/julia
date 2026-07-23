@@ -7952,7 +7952,7 @@ let code = code_lowered(FieldConvert)[1].code
     @test all(is_globalref.(calls[1][2].args[1:3], (GlobalRef(Core, :apply_type), GlobalRef(@__MODULE__, :FieldConvert), GlobalRef(@__MODULE__, :FieldTypeA))))
 
     # calls[2]
-    @test all(is_globalref.(calls[2][2].args[1:1], (GlobalRef(Core, :fieldtype),)))
+    @test all(is_globalref.(calls[2][2].args[1:1], (GlobalRef(Core, :_fieldtype),)))
     @test all(calls[2][2].args[2:3] .== (calls[1][1], 1))
 
     # calls[3] - isa
@@ -7966,7 +7966,7 @@ let code = code_lowered(FieldConvert)[1].code
     end
 
     # calls[5]
-    @test all(is_globalref.(calls[5][2].args[1:1], (GlobalRef(Core, :fieldtype),)))
+    @test all(is_globalref.(calls[5][2].args[1:1], (GlobalRef(Core, :_fieldtype),)))
     @test all(calls[5][2].args[2:3] .== (calls[1][1], 2))
 end
 

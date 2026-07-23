@@ -1258,7 +1258,7 @@ fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_o
 fieldoffset(x::DataType, name::Symbol) = fieldoffset(x, fieldindex(x, name))
 
 """
-    fieldtype(T, name::Symbol | index::Int)
+    fieldtype(T, name::Symbol | index::Integer)
 
 Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
 

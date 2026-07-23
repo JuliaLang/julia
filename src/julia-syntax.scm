@@ -800,7 +800,7 @@
                                                      (if (and (not selftype?) (equal? type-params params) (memq fty params) (memq fty sparams))
                                                       fty ; the field type is a simple parameter, the usage here is of a
                                                           ; local variable (currently just handles sparam) for the bijection of params to type-params
-                                                      `(call (core fieldtype) ,tn ,(+ fld 1)))
+                                                      `(call (core _fieldtype) ,tn ,(+ fld 1)))
                                                       #f
                                                       #f)))))
     (cond ((> (num-non-varargs args) (length field-names))

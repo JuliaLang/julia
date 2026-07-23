@@ -530,6 +530,25 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(Union{Tuple{Char},Tuple{Char,Char}},2) === Char
 @test_throws BoundsError fieldtype(Union{Tuple{Char},Tuple{Char,Char}},3)
 
+# field-index queries accept any `Integer`, not just `Int`
+mutable struct IntIdxFields
+    @atomic a::Int
+    const b::Float64
+    c::Int
+end
+@test fieldtype(TLayout, 0x2) === Int16
+@test fieldtype(TLayout, Int8(3)) === Int32
+@test fieldtype(TLayout, big(1)) === Int8
+@test fieldtype(TLayout, UInt(2)) === Int16
+@test fieldtype(Tuple{Vararg{Int8}}, 0x1) === Int8
+@test_throws BoundsError fieldtype(TLayout, 0x0)
+@test Base.isfieldatomic(IntIdxFields, 0x1)
+@test !Base.isfieldatomic(IntIdxFields, UInt8(3))
+@test Base.isfieldatomic(IntIdxFields, big(1))
+@test Base.isconst(IntIdxFields, 0x2)
+@test !Base.isconst(IntIdxFields, Int8(1))
+@test Base.isconst(IntIdxFields, UInt(2))
+
 @test [fieldindex(TLayout, i) for i = (:x, :y, :z)] == [1, 2, 3]
 @test fieldname(TLayout, fieldindex(TLayout, :z)) === :z
 @test fieldindex(TLayout, fieldname(TLayout, 3)) === 3
@@ -705,15 +724,15 @@ test_typed_ir_printing(g15714, Tuple{Vector{Float32}},
 #@test used_dup_var_tested15715
 @test used_unique_var_tested15714
 
-let li = only(methods(fieldtype)).unspecialized,
+let li = only(methods(nfields)).unspecialized,
     lrepr = string(li),
     mrepr = string(li.def),
     lmime = repr("text/plain", li),
     mmime = repr("text/plain", li.def)
 
-    @test lrepr == lmime == "MethodInstance for fieldtype(::Vararg{Any})"
-    @test mrepr == "fieldtype(...) @ Core none:0"       # simple print
-    @test mmime == "fieldtype(...)\n     @ Core none:0" # verbose print
+    @test lrepr == lmime == "MethodInstance for nfields(::Vararg{Any})"
+    @test mrepr == "nfields(...) @ Core none:0"       # simple print
+    @test mmime == "nfields(...)\n     @ Core none:0" # verbose print
 end
 
 # Linfo Tracing test

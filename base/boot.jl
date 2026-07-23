@@ -381,6 +381,13 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 # will be inserted by the frontend for closures
 _typeof_captured_variable(@nospecialize t) = (@_total_meta; t isa Type && has_free_typevars(t) ? typeof(t) : Typeof(t))
 
+# `fieldtype` is a wrapper around the `_fieldtype` builtin so that any `Integer`
+# field index is accepted (the builtin only accepts `Int` or `Symbol`).
+fieldtype(@nospecialize(t), name::Symbol) = (@_foldable_meta; _fieldtype(t, name))
+fieldtype(@nospecialize(t), i::Integer) = (@_foldable_meta; _fieldtype(t, Int(i)))
+fieldtype(@nospecialize(t), name::Symbol, boundscheck::Bool) = (@_foldable_meta; _fieldtype(t, name, boundscheck))
+fieldtype(@nospecialize(t), i::Integer, boundscheck::Bool) = (@_foldable_meta; _fieldtype(t, Int(i), boundscheck))
+
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
 # deprecated internal functions:
