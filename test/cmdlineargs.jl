@@ -1104,12 +1104,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomperrors(`$exename --interactive=yes`) ==
         (false, "", "ERROR: option `-i/--interactive` does not accept an argument")
 
-    # --compiled-modules={yes|no}
+    # --compiled-modules={yes|no|existing|strict|background}
     @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
     @test readchomp(`$exename --compiled-modules=yes -E
         "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
     @test readchomp(`$exename --compiled-modules=no -E
         "Bool(Base.JLOptions().use_compiled_modules)"`) == "false"
+    @test readchomp(`$exename --compiled-modules=existing -E
+        "Base.JLOptions().use_compiled_modules"`) == "2"
+    @test readchomp(`$exename --compiled-modules=strict -E
+        "Base.JLOptions().use_compiled_modules"`) == "3"
+    @test readchomp(`$exename --compiled-modules=background -E
+        "Base.JLOptions().use_compiled_modules"`) == "4"
     @test errors_not_signals(`$exename --compiled-modules=foo -e "exit(0)"`)
 
     # issue #12671, starting from a non-directory

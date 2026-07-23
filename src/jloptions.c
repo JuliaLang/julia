@@ -195,12 +195,15 @@ static const char opts[]  =
     "                                               load `~/.julia/config/startup.jl`\n"
     " --handle-signals={yes*|no}                    Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes*|no}              Use native code from system image if available\n"
-    " --compiled-modules={yes*|no|existing|strict}  Enable or disable incremental precompilation of\n"
-    "                                               modules. The `existing` option allows use of existing\n"
-    "                                               compiled modules that were previously precompiled,\n"
-    "                                               but disallows creation of new precompile files.\n"
+    " --compiled-modules={yes*|no|existing|strict|background}  Enable or disable incremental\n"
+    "                                               precompilation of modules. The `existing` option allows\n"
+    "                                               use of existing compiled modules that were previously\n"
+    "                                               precompiled, but disallows creation of new precompile files.\n"
     "                                               The `strict` option is similar, but will error if no\n"
     "                                               precompile file is found.\n"
+    "                                               The `background` option creates missing or stale\n"
+    "                                               precompile files in the background while loading\n"
+    "                                               source in the current process.\n"
     " --pkgimages={yes*|no|existing}                Enable or disable usage of native code caching in the\n"
     "                                               form of pkgimages. The `existing` option allows use\n"
     "                                               of existing pkgimages but disallows creation of new\n"
@@ -664,8 +667,10 @@ restart_switch:
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_EXISTING;
             else if (!strcmp(optarg,"strict"))
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_STRICT;
+            else if (!strcmp(optarg,"background"))
+                jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_BACKGROUND;
             else
-                jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing|strict} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing|strict|background} (%s)", optarg);
             break;
         case opt_pkgimages:
             if (!strcmp(optarg,"yes"))

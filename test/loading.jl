@@ -1871,6 +1871,156 @@ end
         @test occursin(r"Generating cache file for Parent", log)
         @test occursin(r"Loading cache file .+ for Parent", log)
 
+        # --compiled-modules=background loads source without waiting for the
+        # cache being generated, then uses that cache in the next process.
+        source_marker = joinpath(dir, "background-source-loaded")
+        precompile_marker = joinpath(dir, "background-precompile-started")
+        open(joinpath(dir, "Background.jl"), "w") do io
+            println(io, """
+                module Background
+                if Base.generating_output()
+                    deadline = time() + 30
+                    while !isfile($(repr(source_marker))) && time() < deadline
+                        sleep(0.01)
+                    end
+                    isfile($(repr(source_marker))) || error("source loading remained blocked")
+                    write($(repr(precompile_marker)), "started")
+                else
+                    write($(repr(source_marker)), "loaded")
+                end
+                end""")
+        end
+        code = """
+            using Background
+            @assert isfile($(repr(source_marker)))
+            Base.Precompilation.monitor_background_precompile(devnull, false; key_controls=false)
+            @assert isfile($(repr(precompile_marker)))
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --compiled-modules=background --pkgimages=no -e $code`,
+                     "JULIA_LOAD_PATH" => dir,
+                     "JULIA_DEPOT_PATH" => depot_path)
+        @test success(run(ignorestatus(cmd)))
+
+        rm(source_marker)
+        rm(precompile_marker)
+        log = load_package("Background", `--compiled-modules=background --pkgimages=no`)
+        @test !isfile(source_marker)
+        @test !isfile(precompile_marker)
+        @test occursin(r"Loading cache file .+ for Background", log)
+
+        # A background cache must record the build ID of the dependency cache,
+        # not the source-loaded dependency in the requesting process.
+        parent_source_marker = joinpath(dir, "background-parent-source-loaded")
+        open(joinpath(dir, "BackgroundDependency.jl"), "w") do io
+            println(io, "module BackgroundDependency end")
+        end
+        open(joinpath(dir, "BackgroundParent.jl"), "w") do io
+            println(io, """
+                module BackgroundParent
+                using BackgroundDependency
+                Base.generating_output() || write($(repr(parent_source_marker)), "loaded")
+                end""")
+        end
+        code = """
+            using BackgroundParent
+            Base.Precompilation.monitor_background_precompile(devnull, false; key_controls=false)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --compiled-modules=background --pkgimages=no -e $code`,
+                     "JULIA_LOAD_PATH" => dir,
+                     "JULIA_DEPOT_PATH" => depot_path)
+        @test success(run(pipeline(ignorestatus(cmd), stdout=devnull, stderr=devnull)))
+        rm(parent_source_marker; force=true)
+        log = load_package("BackgroundParent", `--compiled-modules=background --pkgimages=no`)
+        @test !isfile(parent_source_marker)
+        @test occursin(r"Loading cache file .+ for BackgroundParent", log)
+
+        # Concurrent loads join the same background session without canceling
+        # either cache request or making either `using` wait for compilation.
+        concurrent_markers = [joinpath(dir, "concurrent-source-$i") for i in 1:2]
+        for (i, marker) in enumerate(concurrent_markers)
+            open(joinpath(dir, "ConcurrentBackground$i.jl"), "w") do io
+                println(io, """
+                    module ConcurrentBackground$i
+                    if Base.generating_output()
+                        deadline = time() + 30
+                        while !all(isfile, $(repr(concurrent_markers))) && time() < deadline
+                            sleep(0.01)
+                        end
+                        all(isfile, $(repr(concurrent_markers))) || error("concurrent source loads did not finish")
+                    else
+                        write($(repr(marker)), "loaded")
+                    end
+                    end""")
+            end
+        end
+        code = """
+            tasks = [Threads.@spawn Base.require(Main, Symbol("ConcurrentBackground", string(i))) for i in 1:2]
+            foreach(fetch, tasks)
+            @assert all(isfile, $(repr(concurrent_markers)))
+            Base.Precompilation.monitor_background_precompile(devnull, false; key_controls=false)
+            @assert all(i -> Base.isprecompiled(Base.identify_package("ConcurrentBackground\$i"); ignore_loaded=true), 1:2)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --threads=2 --compiled-modules=background --pkgimages=no -e $code`,
+                     "JULIA_LOAD_PATH" => dir,
+                     "JULIA_DEPOT_PATH" => depot_path)
+        @test success(run(pipeline(ignorestatus(cmd), stdout=devnull, stderr=devnull)))
+
+        # Background top-level requests must use the compile-cache pidfile. Two
+        # Julia processes sharing a depot should run only one compile worker.
+        pidfile_attempts = joinpath(dir, "pidfile-precompile-attempts")
+        pidfile_sources = joinpath(dir, "pidfile-source-loads")
+        pidfile_release = joinpath(dir, "pidfile-release")
+        open(joinpath(dir, "BackgroundPidfile.jl"), "w") do io
+            println(io, """
+                module BackgroundPidfile
+                if Base.generating_output()
+                    open($(repr(pidfile_attempts)), "a") do marker
+                        println(marker, getpid())
+                    end
+                    deadline = time() + 30
+                    while !isfile($(repr(pidfile_release))) && time() < deadline
+                        sleep(0.01)
+                    end
+                    isfile($(repr(pidfile_release))) || error("pidfile test release timed out")
+                else
+                    open($(repr(pidfile_sources)), "a") do marker
+                        println(marker, getpid())
+                    end
+                end
+                end""")
+        end
+        code = """
+            using BackgroundPidfile
+            Base.Precompilation.monitor_background_precompile(devnull, false; key_controls=false)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --compiled-modules=background --pkgimages=no -e $code`,
+                     "JULIA_LOAD_PATH" => dir,
+                     "JULIA_DEPOT_PATH" => depot_path)
+        linecount(path) = isfile(path) ? length(readlines(path)) : 0
+        proc1 = run(pipeline(ignorestatus(cmd), stdout=devnull, stderr=devnull); wait=false)
+        proc2 = nothing
+        try
+            deadline = time() + 30
+            while linecount(pidfile_attempts) < 1 && time() < deadline
+                sleep(0.01)
+            end
+            @test linecount(pidfile_attempts) == 1
+            proc2 = run(pipeline(ignorestatus(cmd), stdout=devnull, stderr=devnull); wait=false)
+            deadline = time() + 30
+            while linecount(pidfile_sources) < 2 && time() < deadline
+                sleep(0.01)
+            end
+            @test linecount(pidfile_sources) == 2
+            sleep(1)
+            @test linecount(pidfile_attempts) == 1
+        finally
+            write(pidfile_release, "release")
+            wait(proc1)
+            proc2 === nothing || wait(proc2)
+        end
+        @test success(proc1)
+        @test proc2 !== nothing && success(proc2)
+        @test linecount(pidfile_attempts) == 1
 
         ## tests for `--pkgimages`, which generates object cache files
 

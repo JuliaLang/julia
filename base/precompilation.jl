@@ -271,6 +271,7 @@ mutable struct BackgroundPrecompileState
     completed_pkgids::Set{PkgId}  # packages that have finished precompiling (for fast-finish detection)
     pkg_done::Threads.Condition  # notified when a package finishes precompiling
     work_channel::Channel{PrecompileRequest}  # channel for injecting requests into running task
+    ignore_loaded::Bool  # freshness policy of the current session
     verbose::Bool  # show PIDs and CPU% for each worker
     detachable::Bool  # whether the monitor can be detached
     confirming::Symbol  # :none, :cancel, or :info — action awaiting Enter to confirm
@@ -282,7 +283,7 @@ Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
 Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
 Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false, false)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), true, false, false, :none, 0.0, false, false)
 
 ## Constants and formatting utilities
 
@@ -1124,6 +1125,10 @@ precompiles only the given packages and their dependencies (unless
   [`Base.Precompilation.monitor_background_precompile`](@ref). Pkg.jl passes
   `detachable=true` in interactive sessions.
 
+- `background::Bool`: When `true` (not default), enqueue precompilation and
+  return immediately without attaching a monitor. This is used by the package
+  loader for `--compiled-modules=background`.
+
 # Keyboard Controls
 
 When running interactively in a TTY, the following keys are available during
@@ -1170,16 +1175,17 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         fancyprint::Bool = can_fancyprint(io) && !timing && !verbose,
                         manifest::Bool=false,
                         ignore_loaded::Bool=true,
-                        detachable::Bool=false)
+                        detachable::Bool=false,
+                        background::Bool=false)
     # verbose timing mode requires timing to be enabled (per-package breakdown
     # is only shown alongside timing lines in non-fancy mode)
     verbose && (timing = true)
-    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable
+    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable background
     verbose && (@lock BG BG.verbose = true)
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                    configs isa Vector{Config} ? configs : [configs],
-                   io isa IOContext ? io : IOContext(io), fancyprint, manifest, ignore_loaded, detachable)
+                   io isa IOContext ? io : IOContext(io), fancyprint, manifest, ignore_loaded, detachable, background)
 end
 
 ## Background lifecycle
@@ -1583,6 +1589,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
         empty!(BG.pending_pkgids)
         empty!(BG.completed_pkgids)
         BG.work_channel = Channel{PrecompileRequest}(Inf)
+        BG.ignore_loaded = ignore_loaded
     end
 
     # Capture necessary context for background task
@@ -1660,12 +1667,14 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          fancyprint′::Bool,
                          manifest::Bool,
                          ignore_loaded::Bool,
-                         detachable::Bool)
-    # Try to inject into a running background task
+                         detachable::Bool,
+                         background::Bool)
+    # Try to inject into a running background task. Keep background join/start
+    # atomic so concurrent package loads never replace and wait for each other.
     local req = nothing
     injected = @lock BG begin
         if BG.task !== nothing && !istaskdone(BG.task) &&
-                isopen(BG.work_channel)
+                isopen(BG.work_channel) && BG.ignore_loaded == ignore_loaded
             pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
             req = PrecompileRequest(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
                                     configs, io, fancyprint′, manifest, ignore_loaded, detachable,
@@ -1677,16 +1686,24 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 req = nothing
                 false
             end
+        elseif background && (BG.task === nothing || istaskdone(BG.task))
+            launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing,
+                _from_loading, configs, io, fancyprint′, manifest, ignore_loaded,
+                detachable)
+            BG.monitoring = false
+            false
         else
             false
         end
     end
     if injected
-        printpkgstyle(io, :Precompiling, "Merging precompilation request into existing run...", color = Base.info_color())
-    else
+        background || printpkgstyle(io, :Precompiling, "Merging precompilation request into existing run...", color = Base.info_color())
+    elseif !background
         launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                                      configs, io, fancyprint′, manifest, ignore_loaded, detachable)
     end
+
+    background && return nothing
 
     if req !== nothing
         # Injected into existing task — monitor until our package finishes, then read result
@@ -2178,14 +2195,18 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         end
                         loadable_exts = haskey(s.ext_to_parent, pkg) ? filter((dep)->haskey(s.ext_to_parent, dep), s.triggers[pkg]) : nothing
 
-                        flags_ = if !isempty(deps)
+                        flags_ = if from_loading && s.ignore_loaded
+                            `$flags --compiled-modules=yes`
+                        elseif !isempty(deps)
                             `$flags --compiled-modules=strict`
                         else
                             flags
                         end
 
                         pid_ch = Channel{Int32}(1)
-                        if from_loading && pkg in requested_pkgids
+                        # The foreground loader holds this lock and uses
+                        # ignore_loaded=false; background loading must acquire it.
+                        if from_loading && !s.ignore_loaded && pkg in requested_pkgids
                             Base.errormonitor(Threads.@spawn :samepool begin
                                 pid = try; take!(pid_ch); catch; Int32(0); end
                                 pid > 0 && @lock s.print_lock set_pid!(s.jobs[pkg_config], pid)
@@ -2664,7 +2685,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     logio = io
     logcalls = nothing
     if _from_loading
-        if isinteractive()
+        if isinteractive() && io.io !== devnull
             logcalls = CoreLogging.Info
         else
             logio = IOContext{IO}(devnull)
@@ -2730,7 +2751,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         warn_loaded, ignore_loaded, internal_call, strict, _from_loading,
         time_start, print_lock,
         parallel_limiter=WorkerLimiter(Base.Semaphore(num_tasks), precompile_jobserver !== :none), num_tasks,
-        start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids,
+        start_loaded_modules=warn_loaded ? Set{PkgId}(keys(Base.loaded_modules)) : Set{PkgId}(), requested_pkgids,
         direct_deps=graph.direct_deps,
         ext_to_parent=graph.ext_to_parent, parent_to_exts=graph.parent_to_exts,
         triggers=graph.triggers, project_deps=graph.project_deps,

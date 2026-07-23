@@ -2904,6 +2904,23 @@ function __require_prelocked(pkg::PkgId, env)
         end
     end
 
+    if JLOptions().use_compiled_modules == 4 && !generating_output(#=incremental=#false) &&
+            !disable_parallel_precompile && @isdefined(Precompilation)
+        # Generate a cache for the next session, but load source now so this
+        # session does not wait for precompilation.
+        unlock(require_lock)
+        try
+            @invokelatest Precompilation.precompilepkgs([pkg]; _from_loading=true,
+                ignore_loaded=true, warn_loaded=false, io=devnull, fancyprint=false,
+                background=true)
+        catch err
+            err isa InterruptException && rethrow()
+            @debug "Failed to enqueue background precompilation for $(repr("text/plain", pkg))" exception=err
+        finally
+            lock(require_lock)
+        end
+    end
+
     if JLOptions().use_compiled_modules == 1
         if !generating_output(#=incremental=#false)
             # If a background precompile task is working on this package,

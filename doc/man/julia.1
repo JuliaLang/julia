@@ -93,11 +93,13 @@ Enable or disable Julia's default signal handlers
 Use native code from system image if available
 
 .TP
---compiled-modules={yes*|no|existing|strict}
+--compiled-modules={yes*|no|existing|strict|background}
 Enable or disable incremental precompilation of modules.
 The `existing` option allows use of existing compiled modules that were
 previously precompiled, but disallows creation of new precompile files.
 The `strict` option is similar, but will error if no precompile file is found.
+The `background` option loads source immediately while creating missing or stale
+precompile files in the background for future sessions.
 
 .TP
 --pkgimages={yes*|no|existing}
