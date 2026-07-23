@@ -485,7 +485,7 @@ end
 # times.
 struct StatementListCtx{Ctx} <: AbstractLoweringContext
     ctx::Ctx
-    stmts::SyntaxList{Vector{NodeId}}
+    stmts::Vector{SyntaxTree}
 end
 
 function Base.getproperty(ctx::StatementListCtx, field::Symbol)

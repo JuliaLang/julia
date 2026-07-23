@@ -343,7 +343,7 @@ function enter_scope!(ctx, ex)
 
     #---------------------------------------------------------------------------
     # Find assignment targets, possibly introducing implicit locals and globals
-    for (bid, _node_id) in sort!(collect(scope.binding_assignments))
+    for (bid, _node_id) in sort!(collect(scope.binding_assignments); by=first)
         # Mutable nameless bindings may be introduced in desugaring.  These
         # should be capturable, and may be local to the nearest lambda or
         # global.  Desugaring should ensure these are never used undef.
@@ -691,7 +691,7 @@ mutable struct VariableAnalysisContext <: AbstractLoweringContext
     const lambda_bindings::LambdaBindings
     const lifted::Bool
     # Stack of method definitions for closure naming
-    const method_def_stack::SyntaxList{Vector{NodeId}}
+    const method_def_stack::Vector{SyntaxTree}
     const closure_key_stack::Vector{ClosureKey}
     # Collection of information about each closure, principally which methods
     # are part of the closure (and hence captures).
@@ -955,7 +955,7 @@ enclosing lambda form and information about variables captured by closures.
 @fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex;
                                                     soft_scope::Union{Nothing,Bool}=nothing,
                                                     world::UInt=ctx.world)
-    graph = ensure_scope_attributes!(copy_attrs(ctx.graph))
+    graph = ensure_scope_attributes!(ctx.graph)
     ex = reparent(graph, ex)
     enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
     ctx2 = ScopeResolutionContext(graph, ctx.layer, ctx.bindings,

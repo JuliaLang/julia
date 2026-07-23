@@ -219,20 +219,20 @@ function _dst_eq_to_in(st::SyntaxTree)
     end
 end
 
-function _dst_iterspec(src::SyntaxTree, sl::SyntaxList)
+function _dst_iterspec(src::SyntaxTree, sl::AbstractVector{SyntaxTree})
     return if length(sl) === 1 && kind(sl[1]) === K"filter"
         cond = sl[1][1]
         iters = sl[1][2:end]
-        @ast sl.graph sl[1] [K"filter"
+        @ast src._graph sl[1] [K"filter"
             [K"iteration" mapsyntax(_dst_eq_to_in, iters)...]
             est_to_dst(cond)
         ]
     else
-        @ast sl.graph src [K"iteration" map(_dst_eq_to_in, sl)...]
+        @ast src._graph src [K"iteration" map(_dst_eq_to_in, sl)...]
     end
 end
 
-function _dst_sink_parameters(sl::SyntaxList)
+function _dst_sink_parameters(sl::AbstractVector{SyntaxTree})
     out = mapsyntax(est_to_dst, sl)
     if !isempty(out) && kind(out[1]) === K"parameters"
         push!(out, popfirst!(out))

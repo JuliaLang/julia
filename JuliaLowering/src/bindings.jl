@@ -5,7 +5,7 @@ mutable struct BindingInfo
     const id::IdTag                 # Unique integer identifying this binding
     const name::String
     const kind::Symbol              # :local :global :argument :static_parameter
-    const node_id::Int              # ID of some K"BindingId" node in the syntax graph
+    const node_id::SyntaxTree
     const mod::Union{Nothing,Module} # Set when `kind === :global`
     type::Union{Nothing,NodeId}      # Type, for bindings declared like x::T = 10
     lambda_id::Int            # from scope resolution; 0 if unresolved
@@ -41,7 +41,7 @@ struct Bindings
 end
 
 function BindingInfo(bindings::Bindings,
-                     name::AbstractString, kind::Symbol, node_id::Integer;
+                     name::AbstractString, kind::Symbol, node_id::SyntaxTree;
                      mod::Union{Nothing,Module} = nothing,
                      type::Union{Nothing,NodeId} = nothing,
                      lambda_id::Int = 0,

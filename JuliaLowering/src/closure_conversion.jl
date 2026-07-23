@@ -3,11 +3,11 @@ struct ClosureInfo
     # Global name of the type of the closure
     type_name::SyntaxTree
     # Names of fields for use with getfield, in order
-    field_names::SyntaxList{Vector{NodeId}}
+    field_names::Vector{SyntaxTree}
     # Map from the original BindingId of closed-over vars to the index of the
     # associated field in the closure type.
     field_inds::Dict{IdTag,Int}
-    capt_sp::SyntaxList{Vector{NodeId}}
+    capt_sp::Vector{SyntaxTree}
 end
 
 mutable struct ClosureConversionCtx <: AbstractLoweringContext
@@ -16,7 +16,7 @@ mutable struct ClosureConversionCtx <: AbstractLoweringContext
     const mod::Module
     const closure_bindings::Dict{ClosureKey,ClosureBindings}
     const capture_rewriting::Union{Nothing,ClosureInfo,
-                                   SyntaxList{Vector{NodeId}}}
+                                   Vector{SyntaxTree}}
     const top_bindings::LambdaBindings
     const lambda_bindings::LambdaBindings
     const sp_typevars::Dict{IdTag, IdTag}
@@ -30,7 +30,7 @@ mutable struct ClosureConversionCtx <: AbstractLoweringContext
     # functions to refer to globals that have already been declared, without
     # triggering the "function body AST not pure" error.
     const toplevel_pure::Bool
-    const toplevel_stmts::SyntaxList{Vector{NodeId}}
+    const toplevel_stmts::Vector{SyntaxTree}
     const closure_infos::Dict{ClosureKey,ClosureInfo}
 end
 

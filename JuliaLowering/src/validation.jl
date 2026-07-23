@@ -888,7 +888,7 @@ end
 
 # assignment should never be allowed, but flisp fails to check inside blocks or
 # after anything that isn't a field.  See #62075.
-function _struct_noassign(vcx, body::SyntaxList)
+function _struct_noassign(vcx, body)
     for st in body
         if kind(st) === K"=" && vst1_struct_field(vcx, st[1]).ok
             return @fail(st, "assignment syntax in structure fields is reserved")
@@ -1031,12 +1031,12 @@ function no_assignment(sl, hint="this expression")
 end
 
 # If there is both a min and a max, prefer a finite number of match cases
-function minlen(err_st::SyntaxTree, sl::SyntaxList, n::Int)
+function minlen(err_st::SyntaxTree, sl, n::Int)
     length(sl) >= n ? pass() :
         @fail(err_st, string(
             "expected at least ", n, " argument", (n === 1 ? "" : "s")))
 end
-function maxlen(err_st::SyntaxTree, sl::SyntaxList, n::Int)
+function maxlen(err_st::SyntaxTree, sl, n::Int)
     length(sl) <= n ? pass() :
         @fail(err_st, string(
             "expected at most ", n, " argument", (n === 1 ? "" : "s")))
@@ -1196,7 +1196,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
         sc.unexpanded === st && (vr &= @fail(st, "unexpanded equal to self"))
 
     push!(parents, st._id)
-    for c in children(st)
+    is_leaf(st) || for c in children(st)
         vr &= _assert_syntaxtree(c, parents, vr)
     end
     pop!(parents)

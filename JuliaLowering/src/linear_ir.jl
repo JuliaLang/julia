@@ -23,8 +23,8 @@ end
 # nesting
 struct JumpTarget
     label::SyntaxTree
-    handler_token_stack::SyntaxList{Vector{NodeId}}
-    catch_token_stack::SyntaxList{Vector{NodeId}}
+    handler_token_stack::Vector{SyntaxTree}
+    catch_token_stack::Vector{SyntaxTree}
     result_var::Union{SyntaxTree, Nothing}  # for symbolicblock valued breaks
 end
 
@@ -35,8 +35,8 @@ end
 struct JumpOrigin
     goto::SyntaxTree
     index::Int
-    handler_token_stack::SyntaxList{Vector{NodeId}}
-    catch_token_stack::SyntaxList{Vector{NodeId}}
+    handler_token_stack::Vector{SyntaxTree}
+    catch_token_stack::Vector{SyntaxTree}
 end
 
 function JumpOrigin(goto::SyntaxTree, index, ctx)
@@ -63,17 +63,17 @@ a sequence of statements (linear IR), which eventually becomes one CodeInfo.
 """
 mutable struct LinearIRContext <: AbstractLoweringContext
     const graph::SyntaxGraph
-    const code::SyntaxList{Vector{NodeId}}
+    const code::Vector{SyntaxTree}
     const bindings::Bindings
     const next_label_id::Ref{Int}
     const is_toplevel_thunk::Bool
     const lambda_bindings::LambdaBindings
     const argmap::Dict{IdTag, IdTag}
-    const rettype_ssa::Ref{NodeId}
+    const rettype_ssa::Ref{Union{Nothing,NodeId}}
     const break_targets::Dict{String, JumpTarget}
     const break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
-    const handler_token_stack::SyntaxList{Vector{NodeId}}
-    const catch_token_stack::SyntaxList{Vector{NodeId}}
+    const handler_token_stack::Vector{SyntaxTree}
+    const catch_token_stack::Vector{SyntaxTree}
     const finally_handlers::Vector{FinallyHandler}
     const symbolic_jump_targets::Dict{String,JumpTarget}
     const symbolic_jump_origins::Vector{JumpOrigin}
@@ -84,14 +84,15 @@ end
 
 function rettype(ctx::LinearIRContext)
     let r = ctx.rettype_ssa[]
-        r == 0 ? nothing : SyntaxTree(ctx.graph, r)
+        isnothing(r) ? nothing : SyntaxTree(ctx.graph, r)
     end
 end
 
 function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(),
-                    Ref(0), Dict{String,JumpTarget}(), String[],
+                    Ref{Union{Nothing,NodeId}}(nothing),
+                    Dict{String,JumpTarget}(), String[],
                     SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler}(), Dict{String,JumpTarget}(),
                     Vector{JumpOrigin}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
@@ -1284,7 +1285,7 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
 `K"BindingId"` into `K"slot"`, `K"globalref"` or `K"SSAValue"` as appropriate.
 """
 @fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
-    graph = ensure_linearization_attributes!(copy_attrs(ctx.graph))
+    graph = ensure_linearization_attributes!(ctx.graph)
     ex = reparent(graph, ex)
     ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings())
     ex_out = compile_lambda(ctx_out, ex)

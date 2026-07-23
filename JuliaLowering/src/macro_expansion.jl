@@ -239,8 +239,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
             rethrow(newexc)
         end
         st_out = if expanded isa SyntaxTree
-            expanded._graph !== ctx.graph ?
-                copy_ast(ctx, expanded) : expanded::typeof(st)
+            expanded
         else
             expanded isa Expr && throw(LoweringError(
                 st, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
@@ -396,16 +395,13 @@ function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
 end
 
 function ensure_macro_attributes!(graph)
-    g2 = ensure_attributes!(
-        graph;
-        meta=CompileHints)
-    DEBUG ? ensure_attributes!(g2; jl_source=LineNumberNode) : g2
+    graph
 end
 
 function assert_expandable(st, l=base_layer(st.context::SyntaxContext))
     @jl_assert hasattr(st, :context) (st, "expected syntax context")
     @jl_assert base_layer(st.context::SyntaxContext) == l (st, "expected consistent layer")
-    for c in children(st)
+    !is_leaf(st) && for c in children(st)
         assert_expandable(c, l)
     end
 end
@@ -413,7 +409,7 @@ end
 @fzone "JL: macroexpand" function expand_forms_1(
     st::SyntaxTree, world::UInt, recursive::Bool)
 
-    graph = ensure_macro_attributes!(copy_attrs(st._graph))
+    graph = ensure_macro_attributes!(st._graph)
     st = reparent(graph, st)
     DEBUG && assert_expandable(st)
     ctx = MacroExpansionContext(st, world, recursive)

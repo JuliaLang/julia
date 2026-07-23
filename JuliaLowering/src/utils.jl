@@ -58,12 +58,12 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
         treestr = treestr*" :: "*string(kind(ex))
     end
 
-    std_attrs = Set([:value,:kind,:syntax_flags,:context])
+    std_attrs = Set([:value,:kind,:syntax_flags,:source,:context])
     attrstr = join([attrsummary(n, getproperty(ex, n))
-                    for n in JuliaSyntax.attrnames(ex._graph) if n ∉ std_attrs &&
+                    for n in fieldnames(typeof(ex)) if n ∉ std_attrs &&
                         hasattr(ex, n)], ",")
     print(io, rpad(treestr, 60))
-    print(io, " | ($(ex._id)) ")
+    print(io, " | ")
     sc = get(ex, :context, nothing)
     if hasattr(ex, :context) && sc !== parent_sc
         print(io, sc)
@@ -81,8 +81,6 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
-    anames = join(string.(JuliaSyntax.attrnames(ex._graph)), ",")
-    println(io, "SyntaxTree with attributes $anames")
     assert_syntaxtree(ex)
     _show_syntax_tree(io, ex, "", show_kinds, nothing)
 end
@@ -133,30 +131,6 @@ end
 @noinline LoweringError(ex::SyntaxTree, msg::String) =
     LoweringError(SyntaxList(ex), String[msg], false)
 
-# Returns a set of ancestors within `depth` distance from the nodes in
-# `sts`. Slow, intended for error printing only.  >1 answer will only be
-# produced with a non-tree DAG.
-function _scan_parents(sts::SyntaxList; depth::Int=3)
-    depth <= 0 && return sts
-    g = sts.graph
-    out = SyntaxList(sts.graph)
-    for st in sts
-        n_parents = 0
-        for candidate_id in lastindex(g.edge_ranges):-1:firstindex(g.edge_ranges)
-            candidate = SyntaxTree(g, candidate_id)
-            if st in children(candidate)
-                push!(out, SyntaxTree(g, candidate_id))
-                n_parents += 1
-                # ideally we just want one; don't be spammy if we find many.
-                # iterating in reverse means get chronologically latest results.
-                n_parents >= 3 && break
-            end
-        end
-        n_parents === 0 && push!(out, st)
-    end
-    return _scan_parents(out; depth=depth-1)
-end
-
 function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
     println(io, exc.internal ? "internal lowering bug:" : "LoweringError:")
     for i in eachindex(exc.sts)
@@ -167,8 +141,9 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
         if exc.internal || src isa LineNumberNode
             print(io, "\nExpression:\n  ")
             show(io, MIME"text/x.sexpression"(), st)
-            parents = _scan_parents(SyntaxList(st))
-            print(io, "\nContaining expressions:")
+            # TODO: no parents available here; need to place them in LoweringError
+            parents = SyntaxList()
+            isempty(parents) || print(io, "\nContaining expressions:")
             for p in parents
                 print(io, "\n  ")
                 show(io, MIME"text/x.sexpression"(), p)
@@ -177,7 +152,7 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
         i !== lastindex(exc.sts) && print(io, "\n\n")
     end
 
-    if show_detail || exc.internal
+    if show_detail || exc.internal && !isempty(exc.sts)
         print(io, "\n\nDetailed provenance:\n  ")
         _show_provtree(io, exc.sts[1], "  ")
     end

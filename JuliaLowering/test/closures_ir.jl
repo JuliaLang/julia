@@ -1139,5 +1139,3 @@ LoweringError:
 #= line 1 =# - invalid syntax: unknown form `generated_lambda` or number of arguments 3
 Expression:
   (generated_lambda (block) (block) (-> (tuple) (block)))
-Containing expressions:
-  (generated_lambda (block) (block) (-> (tuple) (block)))

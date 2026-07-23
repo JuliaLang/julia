@@ -81,8 +81,7 @@ function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
             @jl_assert numchildren(c) == 1 st
             @jl_assert kind(c[1]) === K"..." || length(tup) == 1 st
             for v in tup
-                v2 = !(v isa SyntaxTree) ? expr_to_est(st._graph, v, c._id) :
-                   copy_ast(st._graph, v)
+                v2 = !(v isa SyntaxTree) ? expr_to_est(st._graph, v, c._id) : v
                 push!(cs_out, v2)
             end
         else
@@ -92,7 +91,8 @@ function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
     mknode(st, cs_out)
 end
 function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
-    st = copy_ast(ensure_macro_attributes!(SyntaxGraph()), st)
+    # TODO: copy probably not required if immutable
+    st = mktree(st)
     val_i = Ref(0)
     out = __interpolate_syntax((@ast st._graph st [K"None" st]), 0, vals, val_i)
     @jl_assert val_i[] == length(vals) st
@@ -312,11 +312,8 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method, graph,
         ex0 = expr_to_est(
             graph, ex0, source_location(LineNumberNode, g.srcref))
     end
-    if ex0 isa SyntaxTree
-        if !is_compatible_graph(graph, ex0)
-            ex0 = copy_ast(graph, ex0)
-        end
-    else
+    # TODO: rebase mistake above?
+    if !(ex0 isa SyntaxTree)
         ex0 isa Expr && throw(LoweringError(
             ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
         ex0 = expr_to_est(graph, ex0, g.srcref)

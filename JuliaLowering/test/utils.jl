@@ -27,10 +27,7 @@ function _ast_test_graph()
 end
 
 function _source_node(graph, src)
-    id = new_id!(graph)
-    setattr!(graph, id, :kind, K"TOMBSTONE")
-    setattr!(graph, id, :source, src)
-    SyntaxTree(graph, id)
+    SyntaxTree(K"TOMBSTONE", nothing, nothing, src, nothing)
 end
 
 macro ast_(tree)
