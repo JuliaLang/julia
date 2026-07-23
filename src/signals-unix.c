@@ -920,6 +920,7 @@ static void jl_sigsetset(sigset_t *sset)
 }
 
 #ifdef HAVE_KEVENT
+static void sigint_handler(int sig);
 static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 {
     if (*sigqueue == -1)
@@ -931,8 +932,14 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
         *sigqueue = -1;
     }
     else {
-        // kqueue gets signals before SIG_IGN, but does not remove them from pending (unlike sigwait)
-        signal(sig, SIG_IGN);
+        // kqueue gets signals before the disposition applies, but does not remove
+        // them from pending (unlike sigwait), so the default disposition must be
+        // replaced. SIGINT must get `sigint_handler` rather than SIG_IGN: this
+        // (running on the listener thread) races with the main thread's
+        // `jl_install_default_signal_handlers` and the last writer wins, and if
+        // SIG_IGN wins, the `jl_ignore_sigint` debugger probe never observes its
+        // self-raised signal and every SIGINT is silently ignored.
+        signal(sig, sig == SIGINT ? sigint_handler : SIG_IGN);
     }
 }
 #endif
