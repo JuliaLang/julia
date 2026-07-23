@@ -1518,7 +1518,7 @@ function expand_condition(ctx, ex)
     if isblock
         # Special handling so that the rules for `&&` and `||` can be applied
         # to the last statement of a block
-        @ast ctx ex [K"block" map(e->expand_forms_2(ctx,e), ex[1:end-1])... test]
+        @ast ctx ex [K"block" mapsyntax(e->expand_forms_2(ctx,e), ex[1:end-1])... test]
     else
         test
     end

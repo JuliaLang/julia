@@ -692,8 +692,8 @@ function est_to_dst(st::SyntaxTree)
         end
 
         # avoid creating excess nodes
-        _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))
-            out_cs == children(st).ids ? st : mknode(st, out_cs)
+        _ -> let out_cs = mapsyntax(rec, children(st))
+            out_cs.ids == children(st).ids ? st : mknode(st, out_cs)
         end
     end
 end

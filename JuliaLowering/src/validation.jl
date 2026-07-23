@@ -50,7 +50,7 @@ end
 
 abstract type ValidationContext end
 
-function Base.all(f::Function, vcx::ValidationContext, itr; kws...)
+function Base.all(f::T, vcx::ValidationContext, itr; kws...) where {T<:Function}
     ok = pass()
     for i in itr
         ok &= f(vcx, i; kws...)

@@ -165,7 +165,17 @@ end
 
 # TODO: Probably terribly non-inferable?
 function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
-    getattr(graph, k)[id] = v
+    if k === :kind
+        graph.kind[id] = v
+    elseif k === :source
+        graph.source[id] = v
+    elseif k === :context
+        graph.context[id] = v
+    elseif k === :value
+        graph.value[id] = v
+    else
+        (getattr(graph, k)::Dict{NodeId, Any})[id] = v
+    end
     id
 end
 
@@ -241,20 +251,16 @@ function node_string(ex::SyntaxTree, depth=2)
 end
 
 function Base.getproperty(ex::SyntaxTree, name::Symbol)
-    graph = getfield(ex, :_graph)
+    g = getfield(ex, :_graph)
     id = getfield(ex, :_id)
-    name === :_graph && return graph
+    name === :_graph && return g
     name === :_id  && return id
-    name === :kind  && return getindex(getfield(graph, :kind), id)
-    name === :source  && return getindex(getfield(graph, :source), id)
-    name === :context  && return getindex(getfield(graph, :context), id)
-    name === :value && let out = getindex(getfield(graph, :value), id)
-        (kind(ex) === K"Value" || !isnothing(out)) && return out
-    end
-    val = get(getattr(graph, name), id) do
+    val = get(ex, name, nothing)
+    if !isnothing(val) || getfield(g, :kind)[id] === K"Value"
+        return val
+    else
         error("Property `$name` not defined on node: $(node_string(ex))")
     end
-    return val
 end
 
 function Base.setproperty!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
@@ -267,9 +273,18 @@ function Base.propertynames(ex::SyntaxTree)
 end
 
 function Base.get(ex::SyntaxTree, name::Symbol, default)
-    graph = getfield(ex, :_graph)
-    !hasattr(graph, name) && return default
-    get(getattr(graph, name), getfield(ex, :_id), default)
+    g = getfield(ex, :_graph)
+    id = getfield(ex, :_id)
+    !hasattr(g, name) && return default
+    !hasattr(ex, name) && return default
+    name === :kind  && return getindex(getfield(g, :kind), id)
+    name === :source  && return getindex(getfield(g, :source), id)
+    name === :context  && return getindex(getfield(g, :context), id)
+    name === :value && let val = getindex(getfield(g, :value), id)
+        k = getfield(g, :kind)[id]
+        (!isnothing(val) || k === K"Value") && return val
+    end
+    get(getattr(g, name)::Dict{NodeId, Any}, id, default)
 end
 
 function Base.getindex(ex::SyntaxTree, i::Integer)
@@ -299,13 +314,15 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
 end
 
 function hasattr(ex::SyntaxTree, name::Symbol)
-    graph = ex._graph
+    g = getfield(ex, :_graph)
+    id = getfield(ex, :_id)
+    !hasattr(g, name) && return false
     name === :kind && return true
     name === :source && return true
-    name === :context && return graph.context[ex._id] !== nothing
-    name === :value && return graph.value[ex._id] !== nothing || kind(ex) === K"Value"
-    !hasattr(graph, name) && return false
-    return haskey(getattr(graph, name), ex._id)
+    name === :context && return getfield(g, :context)[id] !== nothing
+    name === :value && return getfield(g, :value)[id] !== nothing ||
+        (getfield(g, :kind)[id] === K"Value")
+    return haskey(getattr(g, name), id)
 end
 
 function setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
@@ -339,7 +356,8 @@ function head(ex::SyntaxTree)
 end
 
 function kind(ex::SyntaxTree)
-    ex._graph.kind[ex._id]::Kind
+    kinds = getfield(getfield(ex, :_graph), :kind)
+    kinds[ex._id]::Kind
 end
 
 function flags(ex::SyntaxTree)
@@ -835,8 +853,8 @@ end
 function copy_attrs!(dest, src)
     # TODO: Make this faster?
     setattr!(dest, :kind, kind(src))
-    setattr!(dest, :context, src.context)
-    setattr!(dest, :value, src.value)
+    hasattr(src, :context) && setattr!(dest, :context, src.context)
+    hasattr(src, :value) && setattr!(dest, :value, src.value)
     for (name, attr) in pairs(src._graph.attributes)
         if haskey(attr, src._id)
             setattr!(dest, name, attr[src._id])
