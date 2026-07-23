@@ -73,13 +73,13 @@ typedef intptr_t ssize_t;
 #ifdef _OS_WINDOWS_
 #define STDCALL  __stdcall
 # ifdef JL_LIBRARY_EXPORTS_INTERNAL
-#  define JL_DLLEXPORT __declspec(dllexport)
+#  define JL_DLLEXPORT __declspec(dllexport) __attribute__ ((visibility("default")))
 # endif
 # ifdef JL_LIBRARY_EXPORTS_CODEGEN
-#  define JL_DLLEXPORT_CODEGEN __declspec(dllexport)
+#  define JL_DLLEXPORT_CODEGEN __declspec(dllexport) __attribute__ ((visibility("default")))
 # endif
 #define JL_HIDDEN
-#define JL_DLLIMPORT   __declspec(dllimport)
+#define JL_DLLIMPORT   __declspec(dllimport) __attribute__ ((visibility("default")))
 #else
 #define STDCALL
 #define JL_DLLIMPORT __attribute__ ((visibility("default")))
@@ -123,11 +123,7 @@ typedef intptr_t ssize_t;
 #define STATIC_INLINE static inline
 #define FORCE_INLINE static inline __attribute__((always_inline))
 
-#ifdef _OS_WINDOWS_
-#define EXTERN_INLINE_DECLARE inline
-#else
 #define EXTERN_INLINE_DECLARE inline __attribute__ ((visibility("default")))
-#endif
 #define EXTERN_INLINE_DEFINE extern inline JL_DLLEXPORT
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
