@@ -509,7 +509,7 @@ function isconst(g::GlobalRef)
 end
 
 """
-    isconst(t::DataType, s::Union{Int,Symbol})::Bool
+    isconst(t::DataType, s::Union{Integer,Symbol})::Bool
 
 Determine whether a field `s` is const in a given type `t`
 in the sense that a read from said field is consistent
@@ -523,8 +523,9 @@ function isconst(@nospecialize(t::Type), s::Symbol)
     isa(t, DataType) || return false
     return isconst(t, fieldindex(t, s, false))
 end
-function isconst(@nospecialize(t::Type), s::Int)
+function isconst(@nospecialize(t::Type), s::Integer)
     @_foldable_meta
+    s = Int(s)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false # uncertain
