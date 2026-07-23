@@ -80,7 +80,18 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    @test all(==(Bool), Base.return_types(isequal, Tuple{Any,Any}))
+    @testset "isequal always infers as Bool" begin
+        good = all(==(Bool), Base.return_types(isequal, Tuple{Any, Any}))
+        if !good
+            # Print some info to make the test failure easier to debug
+            for m in methods(isequal, Tuple{Any, Any})
+                sig = Base.unwrap_unionall(m.sig).parameters[2:end]
+                t = Core.Compiler.return_type(isequal, Tuple{sig...})
+                t != Bool && @info "" m t
+            end
+        end
+        @test good
+    end
 end
 
 @testset "arithmetic operators" begin
