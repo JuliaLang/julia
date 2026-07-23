@@ -1,21 +1,60 @@
+mutable struct ScopeLayer
+    const mod::Module
+    const escaped::Union{Nothing, ScopeLayer}
+end
+Base.var"=="(si1::ScopeLayer, si2::ScopeLayer) = si1 === si2
+
+"""
+Each node has a SyntaxContext describing its macro expansion and syntax version.
+`SyntaxContext` is shared between all nodes of a single macro expansion, and is
+one-to-one with ScopeLayer, with a few exceptions (contexts sharing same layer):
+- `escape` and adopt_scope
+- Desugaring creates internal contexts in its better version of `gensym`
+
+We may want to move layer out of this struct for easier adopt_scope and
+rebase_layer operations, but assuming mostly hygienic macros and few
+scope-changing functions, this is most compact.
+
+(TODO) GlobalRef (attr :mod) could probably also go through this system
+"""
+mutable struct SyntaxContext
+    const layer::ScopeLayer
+    # For provenance; is not affected by escaping
+    const unexpanded::Any # Union{SyntaxTree, Nothing}
+    const version::VersionNumber
+    const internal::Bool
+end
+
+# Reference to bytes within a source file
+struct SourceRef
+    file::Base.RefValue{SourceFile}
+    first_byte::UInt32
+    last_byte::UInt32
+end
+
 const NodeId = Int
+const SourceAttrType = Union{Nothing, SourceRef,LineNumberNode,NodeId}
 
 """
 Directed graph with arbitrary attributes on nodes. Used here for representing
 one or several syntax trees.
-
-TODO: Global attributes!
 """
 mutable struct SyntaxGraph{Attrs}
     const edge_ranges::Vector{UnitRange{Int}}
     const edges::Vector{NodeId}
+    const kind::Vector{Kind}
+    const source::Vector{SourceAttrType}
+    # const context::Vector{SyntaxContext}
     const attributes::Attrs
 end
 
 SyntaxGraph() = ensure_required_attributes!(
     SyntaxGraph{Dict{Symbol,Dict{NodeId, Any}}}(
         Vector{UnitRange{Int}}(),
-        Vector{NodeId}(), Dict{Symbol,Dict{NodeId, Any}}()))
+        Vector{NodeId}(),
+        Vector{Kind}(),
+        Vector{SourceAttrType}(),
+        Dict{Symbol,Dict{NodeId, Any}}()))
 
 function _show_attrs(io, attributes::Dict)
     show(io, MIME("text/plain"), attributes)
@@ -25,14 +64,15 @@ function _show_attrs(io, attributes::NamedTuple)
 end
 
 function attrnames(graph::SyntaxGraph)
-    keys(graph.attributes)
+    Iterators.flatten(((:kind, :source), keys(graph.attributes)))
 end
 
 function attrdefs(graph::SyntaxGraph)
     [(k=>typeof(v).parameters[2]) for (k, v) in pairs(graph.attributes)]
 end
 
-copy_attrs(g::SyntaxGraph) = SyntaxGraph(g.edge_ranges, g.edges, copy(g.attributes))
+copy_attrs(g::SyntaxGraph) = SyntaxGraph(
+    g.edge_ranges, g.edges, g.kind, g.source, copy(g.attributes))
 
 function Base.show(io::IO, ::MIME"text/plain", graph::SyntaxGraph)
     print(io, typeof(graph),
@@ -75,8 +115,6 @@ end
 
 ensure_required_attributes!(g::SyntaxGraph) = ensure_attributes!(
     g,
-    kind=Kind,
-    source=SourceAttrType,
     context=SyntaxContext,
     syntax_flags=UInt16,
     value=Any,
@@ -104,6 +142,8 @@ end
 
 function new_id!(graph::SyntaxGraph)
     push!(graph.edge_ranges, 0:-1) # Invalid range start => leaf node
+    push!(graph.kind, K"None")
+    push!(graph.source, nothing)
     return length(graph.edge_ranges)
 end
 
@@ -135,18 +175,16 @@ function child(graph::SyntaxGraph, id::NodeId, i::Integer)
 end
 
 function getattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
+    name === :kind && return getfield(graph, :kind)
+    name === :source && return getfield(graph, :source)
+    # name === :context && return getfield(graph, :context)
     getfield(graph, :attributes)[name]
 end
 
-function getattr(graph::SyntaxGraph{<:NamedTuple}, name::Symbol)
-    getfield(getfield(graph, :attributes), name)
-end
-
 function hasattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
-    haskey(getfield(graph, :attributes), name)
-end
-
-function hasattr(graph::SyntaxGraph{<:NamedTuple}, name::Symbol)
+    name === :kind && return true
+    name === :source && return true
+    # name === :context && return true
     haskey(getfield(graph, :attributes), name)
 end
 
@@ -165,6 +203,8 @@ function Base.getproperty(graph::SyntaxGraph, name::Symbol)
     name === :edge_ranges && return getfield(graph, :edge_ranges)
     name === :edges       && return getfield(graph, :edges)
     name === :attributes  && return getfield(graph, :attributes)
+    name === :kind        && return getfield(graph, :kind)
+    name === :source      && return getfield(graph, :source)
     return getattr(graph, name)
 end
 
@@ -205,8 +245,10 @@ end
 # fallback printing
 function node_string(ex::SyntaxTree, depth=2)
     out = "(_id="*string(ex._id)
-    for n in sort!(collect(attrnames(ex)))
-        out *= ", "*string(n)*"="*repr(getproperty(ex, n))
+    for n in sort!(collect(attrnames(ex._graph)))
+        if hasattr(ex, n)
+            out *= ", "*string(n)*"="*repr(getproperty(ex, n))
+        end
     end
     if is_leaf(ex)
         out *= ", leaf"
@@ -222,10 +264,13 @@ function node_string(ex::SyntaxTree, depth=2)
 end
 
 function Base.getproperty(ex::SyntaxTree, name::Symbol)
-    name === :_graph && return getfield(ex, :_graph)
-    name === :_id  && return getfield(ex, :_id)
     graph = getfield(ex, :_graph)
-    val = get(getattr(graph, name), getfield(ex, :_id)) do
+    id = getfield(ex, :_id)
+    name === :_graph && return graph
+    name === :_id  && return id
+    name === :kind  && return getindex(getfield(graph, :kind), id)
+    name === :source  && return getindex(getfield(graph, :source), id)
+    val = get(getattr(graph, name), id) do
         error("Property `$name` not defined on node: $(node_string(ex))")
     end
     return val
@@ -274,14 +319,11 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
 end
 
 function hasattr(ex::SyntaxTree, name::Symbol)
+    name === :kind && return true
+    name === :source && return true
     graph = ex._graph
     !hasattr(graph, name) && return false
     return haskey(getattr(graph, name), ex._id)
-end
-
-function attrnames(ex::SyntaxTree)
-    attrs = ex._graph.attributes
-    (name::Symbol for (name, value) in pairs(attrs) if haskey(value, ex._id))
 end
 
 function setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
@@ -315,38 +357,11 @@ function head(ex::SyntaxTree)
 end
 
 function kind(ex::SyntaxTree)
-    ex.kind::Kind
+    ex._graph.kind[ex._id]::Kind
 end
 
 function flags(ex::SyntaxTree)
     get(ex, :syntax_flags, 0x0000)::UInt16
-end
-
-mutable struct ScopeLayer
-    const mod::Module
-    const escaped::Union{Nothing, ScopeLayer}
-end
-Base.var"=="(si1::ScopeLayer, si2::ScopeLayer) = si1 === si2
-
-"""
-Each node has a SyntaxContext describing its macro expansion and syntax version.
-`SyntaxContext` is shared between all nodes of a single macro expansion, and is
-one-to-one with ScopeLayer, with a few exceptions (contexts sharing same layer):
-- `escape` and adopt_scope
-- Desugaring creates internal contexts in its better version of `gensym`
-
-We may want to move layer out of this struct for easier adopt_scope and
-rebase_layer operations, but assuming mostly hygienic macros and few
-scope-changing functions, this is most compact.
-
-(TODO) GlobalRef (attr :mod) could probably also go through this system
-"""
-mutable struct SyntaxContext
-    const layer::ScopeLayer
-    # For provenance; is not affected by escaping
-    const unexpanded::Union{SyntaxTree, Nothing}
-    const version::VersionNumber
-    const internal::Bool
 end
 
 # A default context corresponding to no expansion
@@ -430,13 +445,6 @@ function remove_context!(st::SyntaxTree)
     st
 end
 remove_context(st) = remove_context!(mktree(st))
-
-# Reference to bytes within a source file
-struct SourceRef
-    file::Base.RefValue{SourceFile}
-    first_byte::UInt32
-    last_byte::UInt32
-end
 
 function Base.show(io::IO, ::MIME"text/plain", sl::ScopeLayer)
     color = isnothing(sl.escaped) ? :normal : :cyan
@@ -544,7 +552,8 @@ end
 
 "`st`'s textref's `.source`, ignoring all expansions"
 function sourceref(st::SyntaxTree)
-    prov_end(st).source::Union{LineNumberNode, SourceRef}
+    src = prov_end(st)
+    src.source::Union{LineNumberNode, SourceRef}
 end
 
 "The last macro expansion `st` was involved in, or nothing"
@@ -617,8 +626,6 @@ function is_ancestor(ex, ancestor)
         end
     end
 end
-
-const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId}
 
 function reparent(ctx, ex::SyntaxTree)
     # Ensure `ex` has the same parent graph, in a somewhat loose sense.
@@ -799,6 +806,7 @@ function newnode(graph::SyntaxGraph, prov::SourceAttrType, k::Kind, children)
     return st
 end
 function newleaf(graph::SyntaxGraph, prov::SourceAttrType, k::Kind)
+    isnothing(prov) && throw(k)
     st = SyntaxTree(graph, new_id!(graph))
     setattr!(st, :kind, k)
     let prov_st = prov isa NodeId ? SyntaxTree(graph, prov) : nothing
@@ -846,8 +854,9 @@ end
 # Mapping and copying of AST nodes
 function copy_attrs!(dest, src)
     # TODO: Make this faster?
+    setattr!(dest, :kind, kind(src))
     for (name, attr) in pairs(src._graph.attributes)
-        if (name !== :source) && haskey(attr, src._id)
+        if haskey(attr, src._id)
             setattr!(dest, name, attr[src._id])
         end
     end
@@ -910,8 +919,10 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph, id1::NodeId, seen)
     if src1 isa NodeId
         src2 =  _copy_ast(graph2, graph1, src1, seen)
         setattr!(graph2, id2, :source, src2)
-    else
+    elseif !isnothing(src1)
         setattr!(graph2, id2, :source, src1)
+    else
+        throw(node_string(SyntaxTree(graph1, id1))*node_string(SyntaxTree(graph2, id2)))
     end
     copy_attrs!(SyntaxTree(graph2, id2), SyntaxTree(graph1, id1))
     return id2

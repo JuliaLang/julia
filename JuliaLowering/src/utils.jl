@@ -60,9 +60,10 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
         treestr = treestr*" :: "*string(kind(ex))
     end
 
-    std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:source,:var_id,:context])
+    std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:var_id,:context])
     attrstr = join([attrsummary(n, getproperty(ex, n))
-                    for n in JuliaSyntax.attrnames(ex) if n ∉ std_attrs], ",")
+                    for n in JuliaSyntax.attrnames(ex._graph) if n ∉ std_attrs &&
+                        hasattr(ex, n)], ",")
     print(io, rpad(treestr, 60))
     print(io, " | ($(ex._id)) ")
     sc = get(ex, :context, nothing)
