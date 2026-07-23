@@ -186,21 +186,34 @@ function load_type(ptr::Ptr{Type})
     return unsafe_pointer_to_objref(ptr)
 end
 
-function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
-    Alloc(
-        load_type(raw_alloc.type),
-        stacktrace_memoized(cache, load_backtrace(raw_alloc.backtrace)),
-        UInt(raw_alloc.size),
-        raw_alloc.task,
-        raw_alloc.timestamp
-    )
-end
-
 function decode(raw_results::RawResults)::AllocResults
+    raw_allocs = [unsafe_load(raw_results.allocs, i) for i in 1:raw_results.num_allocs]
+    backtraces = [load_backtrace(a.backtrace) for a in raw_allocs]
+    # symbol lookup dominates decoding, so do it once per unique ip, in parallel
+    # (the same approach as `Profile.getdict!`)
     cache = BacktraceCache()
+    unique_ips = unique(Iterators.flatten(backtraces))
+    if !isempty(unique_ips)
+        sort!(unique_ips) # help each thread to get a disjoint set of libraries, as much as possible
+        lookups = Vector{Vector{StackFrame}}(undef, length(unique_ips))
+        @sync for part in Iterators.partition(eachindex(unique_ips), div(length(unique_ips), Threads.threadpoolsize(), RoundUp))
+            Threads.@spawn for i in part
+                lookups[i] = lookup(unique_ips[i])
+            end
+        end
+        for i in eachindex(unique_ips)
+            cache[unique_ips[i]] = lookups[i]
+        end
+    end
     allocs = [
-        decode_alloc(cache, unsafe_load(raw_results.allocs, i))
-        for i in 1:raw_results.num_allocs
+        Alloc(
+            load_type(raw_allocs[i].type),
+            stacktrace_memoized(cache, backtraces[i]),
+            UInt(raw_allocs[i].size),
+            raw_allocs[i].task,
+            raw_allocs[i].timestamp
+        )
+        for i in eachindex(raw_allocs)
     ]
     return AllocResults(allocs)
 end
