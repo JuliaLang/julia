@@ -126,7 +126,7 @@ div(::Missing, ::Missing, r::RoundingMode) = missing
 div(::Missing, ::Number, r::RoundingMode) = missing
 div(::Number, ::Missing, r::RoundingMode) = missing
 
-for (f, result) in ((min, missing), (max, missing), (minmax, (missing, missing)))
+for (f, result) in ((:min, missing), (:max, missing), (:minmax, (missing, missing)))
     @eval begin
         $f(::Missing, ::Missing) = $result
         $f(::Missing, ::Any)     = $result
