@@ -628,16 +628,13 @@ from achieving this, `unalias_nodes` should not allocate new nodes.
 If a `SyntaxList` is given, every resulting tree will be unique with respect to
 each other as well as internally.  A duplicate entry will produce a copied tree.
 """
-unalias_nodes(st::SyntaxTree) = SyntaxTree(
-    syntax_graph_js(st),
-    _unalias_nodes(syntax_graph_js(st), st._id, Set{NodeId}(), Set{Int}()))
+unalias_nodes(st::SyntaxTree) =
+    _unalias_nodes(st, Set{SyntaxTree}(), Base.IdSet{Vector{SyntaxTree}}())
 
 function unalias_nodes(sl::SyntaxList)
-    seen = Set{NodeId}()
-    seen_edges = Set{Int}()
-    SyntaxList(syntax_graph_js(sl),
-               map(id->_unalias_nodes(syntax_graph_js(sl), id, seen, seen_edges),
-                   sl.ids))
+    seen = Set{SyntaxTree}()
+    seen_children = Base.IdSet{Vector{SyntaxTree}}()
+    mapsyntax(st->_unalias_nodes(st, seen, seen_children), sl)
 end
 
 function _unalias_copy_tree(old::SyntaxTree)
@@ -651,25 +648,25 @@ function _unalias_copy_tree(old::SyntaxTree)
     setattr!(out, :source, old.source)
 end
 
-# Note that `seen_edges` is only needed for when edge ranges overlap, which is a
-# situation we don't produce yet.
-function _unalias_nodes(graph::SyntaxGraph, id::NodeId,
-                        seen::Set{NodeId}, seen_edges::Set{Int})
-    if id in seen
-        id = _unalias_copy_tree(SyntaxTree(graph, id))._id
+function _unalias_nodes(st::SyntaxTree, seen::Set{SyntaxTree},
+                        seen_children::Base.IdSet{Vector{SyntaxTree}})
+    if st in seen
+        return _unalias_copy_tree(st)
     end
-    # nodes may not share edges (SyntaxGraph invariant)
-    # @assert isempty(intersect(seen_edges, graph.edge_ranges[id]))
-    # union!(seen_edges, graph.edge_ranges[id])
-    push!(seen, id)
-
-    # for (c, i) in zip(children(graph, id), graph.edge_ranges[id])
-    #     c2 = _unalias_nodes(graph, c, seen, seen_edges)
-    #     # the new child should be the same in every way to the old one, so
-    #     # modify the edge instead of triggering copies with `mapchildren`
-    #     c !== c2 && (graph.edges[i] = c2)
-    # end
-    return id
+    push!(seen, st)
+    if !is_leaf(st)
+        cs = children(st)
+        if cs in seen_children
+            cs = copy(cs)
+            setchildren!(st, cs)
+        end
+        push!(seen_children, cs)
+        for (i, c) in enumerate(cs)
+            c2 = _unalias_nodes(c, seen, seen_children)
+            c !== c2 && (cs[i] = c2)
+        end
+    end
+    return st
 end
 
 """
