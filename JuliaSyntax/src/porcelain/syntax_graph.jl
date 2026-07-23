@@ -45,6 +45,7 @@ mutable struct SyntaxGraph
     const kind::Vector{Kind}
     const source::Vector{SourceAttrType}
     const context::Vector{Union{Nothing, SyntaxContext}}
+    const value::Vector{Any}
     const attributes::Dict{Symbol,Dict{NodeId, Any}}
 end
 
@@ -55,6 +56,7 @@ SyntaxGraph() = ensure_parser_attributes!(
         Vector{Kind}(),
         Vector{SourceAttrType}(),
         Vector{Union{Nothing,SyntaxContext}}(),
+        Vector{Any}(),
         Dict{Symbol,Dict{NodeId, Any}}()))
 
 function _show_attrs(io, attributes::Dict)
@@ -62,7 +64,7 @@ function _show_attrs(io, attributes::Dict)
 end
 
 function attrnames(graph::SyntaxGraph)
-    Iterators.flatten(((:kind, :source, :context), keys(graph.attributes)))
+    Iterators.flatten(((:kind, :source, :context, :value), keys(graph.attributes)))
 end
 
 function attrdefs(graph::SyntaxGraph)
@@ -70,7 +72,7 @@ function attrdefs(graph::SyntaxGraph)
 end
 
 copy_attrs(g::SyntaxGraph) = SyntaxGraph(
-    g.edge_ranges, g.edges, g.kind, g.source, g.context, copy(g.attributes))
+    g.edge_ranges, g.edges, g.kind, g.source, g.context, g.value, copy(g.attributes))
 
 function Base.show(io::IO, ::MIME"text/plain", graph::SyntaxGraph)
     print(io, typeof(graph),
@@ -96,7 +98,6 @@ end
 ensure_parser_attributes!(g::SyntaxGraph) = ensure_attributes!(
     g,
     syntax_flags=UInt16,
-    value=Any,
     mod=Module)
 
 function delete_attributes!(graph::SyntaxGraph, attr_names::Symbol...)
@@ -115,6 +116,7 @@ function new_id!(graph::SyntaxGraph)
     push!(graph.kind, K"None")
     push!(graph.source, nothing)
     push!(graph.context, nothing)
+    push!(graph.value, nothing)
     return length(graph.edge_ranges)
 end
 
@@ -149,6 +151,7 @@ function getattr(graph::SyntaxGraph, name::Symbol)
     name === :kind && return getfield(graph, :kind)
     name === :source && return getfield(graph, :source)
     name === :context && return getfield(graph, :context)
+    name === :value && return getfield(graph, :value)
     getfield(graph, :attributes)[name]
 end
 
@@ -156,6 +159,7 @@ function hasattr(graph::SyntaxGraph, name::Symbol)
     name === :kind && return true
     name === :source && return true
     name === :context && return true
+    name === :value && return true
     haskey(getfield(graph, :attributes), name)
 end
 
@@ -181,6 +185,7 @@ function Base.getproperty(graph::SyntaxGraph, name::Symbol)
     name === :kind        && return getfield(graph, :kind)
     name === :source      && return getfield(graph, :source)
     name === :context     && return getfield(graph, :context)
+    name === :value       && return getfield(graph, :value)
     return getattr(graph, name)
 end
 
@@ -243,6 +248,9 @@ function Base.getproperty(ex::SyntaxTree, name::Symbol)
     name === :kind  && return getindex(getfield(graph, :kind), id)
     name === :source  && return getindex(getfield(graph, :source), id)
     name === :context  && return getindex(getfield(graph, :context), id)
+    name === :value && let out = getindex(getfield(graph, :value), id)
+        (kind(ex) === K"Value" || !isnothing(out)) && return out
+    end
     val = get(getattr(graph, name), id) do
         error("Property `$name` not defined on node: $(node_string(ex))")
     end
@@ -295,6 +303,7 @@ function hasattr(ex::SyntaxTree, name::Symbol)
     name === :kind && return true
     name === :source && return true
     name === :context && return graph.context[ex._id] !== nothing
+    name === :value && return graph.value[ex._id] !== nothing || kind(ex) === K"Value"
     !hasattr(graph, name) && return false
     return haskey(getattr(graph, name), ex._id)
 end
@@ -827,6 +836,7 @@ function copy_attrs!(dest, src)
     # TODO: Make this faster?
     setattr!(dest, :kind, kind(src))
     setattr!(dest, :context, src.context)
+    setattr!(dest, :value, src.value)
     for (name, attr) in pairs(src._graph.attributes)
         if haskey(attr, src._id)
             setattr!(dest, name, attr[src._id])
