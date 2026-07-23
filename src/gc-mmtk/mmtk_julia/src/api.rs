@@ -299,7 +299,7 @@ pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, coll
 
 #[no_mangle]
 pub extern "C" fn mmtk_disable_collection() -> i32 {
-    memory_manager::disable_collection(&SINGLETON) as i32
+    memory_manager::disable_collection(&SINGLETON).is_ok() as i32
 }
 
 #[no_mangle]
