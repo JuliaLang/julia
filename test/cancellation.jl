@@ -226,6 +226,10 @@ end
 @testset "cancellation source memory accounting" begin
     a = CancellationTokenSource()
     b = CancellationTokenSource()
+    # instances are variable-sized, so (like String or Memory) the type has
+    # no definite size and inference must not fold an instance's sizeof
+    @test_throws ErrorException Core.sizeof(CancellationTokenSource)
+    @test Base.infer_return_type(Core.sizeof, Tuple{CancellationTokenSource}) == Int
     base = Core.sizeof(a)
     linksz = 3 * sizeof(Ptr{Cvoid})
     c2 = CancellationTokenSource(CancellationToken(a), CancellationToken(b))
