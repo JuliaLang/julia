@@ -1529,18 +1529,19 @@ end
 # Expand let blocks
 
 function expand_let(ctx, ex)
-    @jl_assert numchildren(ex) == 2 ex
+    scope_type = numchildren(ex) == 3 && kind(ex[3]) === K"neutral_scope" ?
+        ex[3] : @ast ctx ex [K"hard_scope"]
+    @jl_assert numchildren(ex) == 2 || kind(scope_type) === K"neutral_scope" ex
     bindings = ex[1]
     @jl_assert kind(bindings) == K"block" bindings
     blk = ex[2]
-    scope_type = get(ex, :scope_type, :hard)
     if numchildren(bindings) == 0
-        return @ast ctx ex [K"scope_block"(scope_type=scope_type) blk]
+        return @ast ctx ex [K"scope_block" scope_type blk]
     end
     for binding in Iterators.reverse(children(bindings))
         kb = kind(binding)
         if kb == K"::" || is_identifier_like(binding)
-            blk = @ast ctx ex [K"scope_block"(scope_type=scope_type)
+            blk = @ast ctx ex [K"scope_block" scope_type
                 [K"local" binding]
                 blk
             ]
@@ -1551,7 +1552,7 @@ function expand_let(ctx, ex)
                 kind(lhs) === K"Placeholder" && continue
                 blk = @ast ctx binding [K"block"
                     tmp := rhs
-                    [K"scope_block"(ex, scope_type=scope_type)
+                    [K"scope_block"(ex) scope_type
                         [K"local"(lhs) lhs]
                         [K"always_defined" lhs]
                         [K"="(binding) lhs tmp]
@@ -1567,7 +1568,7 @@ function expand_let(ctx, ex)
                 blk = @ast ctx binding [K"block"
                     tmp := rhs
                     # type := lhs[2]
-                    [K"scope_block"(ex, scope_type=scope_type)
+                    [K"scope_block"(ex) scope_type
                         # n.b. the declared type is referenced directly (not
                         # hoisted into a temporary) so that the declaration
                         # works for variables captured into other lambdas, where
@@ -1586,7 +1587,7 @@ function expand_let(ctx, ex)
                 end
                 blk = @ast ctx binding [K"block"
                     tmp := rhs
-                    [K"scope_block"(ex, scope_type=scope_type)
+                    [K"scope_block"(ex) scope_type
                         lhs_locals...
                         [K"="(binding) lhs tmp]
                         blk
@@ -1606,7 +1607,7 @@ function expand_let(ctx, ex)
                 throw(LoweringError(sig, "Function signature does not define a local function name"))
             end
             blk = @ast ctx binding [K"block"
-                [K"scope_block"(ex, scope_type=scope_type)
+                [K"scope_block"(ex) scope_type
                     [K"local"(func_name) func_name]
                     # note no always_defined, as it's stronger than flisp's local-def
                     binding
@@ -2064,18 +2065,17 @@ function expand_for(ctx, ex)
             # Innermost loop gets the continue label and copied vars
             @ast ctx ex [K"symbolicblock"
                 "loop-cont"::K"symboliclabel"
-                [K"let"(scope_type=:neutral)
+                [K"let"
                      [K"block"
                          copied_vars...
                      ]
                      body
+                    [K"neutral_scope"]
                 ]
             ]
         else
             # Outer loops get a scope block to contain the iteration vars
-            @ast ctx ex [K"scope_block"(scope_type=:neutral)
-                body
-            ]
+            @ast ctx ex [K"scope_block" [K"neutral_scope"] body]
         end
 
         loop = @ast ctx ex [K"block"
@@ -2149,7 +2149,7 @@ function expand_try(ctx, ex)
         # TODO: Disallow @goto from try/catch/else blocks when there's a finally clause
     end
 
-    try_body = @ast ctx try_ [K"scope_block"(scope_type=:neutral) try_]
+    try_body = @ast ctx try_ [K"scope_block" [K"neutral_scope"] try_]
 
     if isnothing(catch_)
         try_block = try_body
@@ -2161,7 +2161,7 @@ function expand_try(ctx, ex)
         end
         try_block = @ast ctx ex [K"trycatchelse"
             try_body
-            [K"scope_block"(catch_, scope_type=:neutral)
+            [K"scope_block"(catch_) [K"neutral_scope"]
                 if kind(exc_var) != K"Placeholder"
                     [K"block"
                         [K"="(exc_var) exc_var [K"call" current_exception::K"Value"]]
@@ -2172,7 +2172,7 @@ function expand_try(ctx, ex)
                 end
             ]
             if !isnothing(else_)
-                [K"scope_block"(else_, scope_type=:neutral) else_]
+                [K"scope_block"(else_) [K"neutral_scope"] else_]
             end
         ]
     end
@@ -2182,7 +2182,7 @@ function expand_try(ctx, ex)
     else
         @ast ctx ex [K"tryfinally"
             try_block
-            [K"scope_block"(finally_, scope_type=:neutral) finally_]
+            [K"scope_block"(finally_) [K"neutral_scope"] finally_]
         ]
     end
 end
@@ -3163,7 +3163,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     newtype_var = ssavar(ctx, ex, "new_type")
     @ast ctx ex [K"block"
-        [K"scope_block"(scope_type=:hard)
+        [K"scope_block" [K"hard_scope"]
             [K"block"
                 [K"local" name]
                 [K"always_defined" name]
@@ -3712,7 +3712,7 @@ function expand_typegroup_def(ctx, ex)
             ]
         ])
 
-        push!(stmts, @ast ctx e.sdef [K"scope_block"(scope_type=:hard)
+        push!(stmts, @ast ctx e.sdef [K"scope_block" [K"hard_scope"]
             [K"block" inner_stmts...]
         ])
     end
@@ -3754,7 +3754,7 @@ function expand_typegroup_def(ctx, ex)
                     rewrite_ctor(ctx, def, struct_names[i], global_names[i],
                              e.typevar_names, e.field_types)
             end
-            push!(fdef_stmts, @ast ctx e.sdef [K"scope_block"(scope_type=:hard)
+            push!(fdef_stmts, @ast ctx e.sdef [K"scope_block" [K"hard_scope"]
                 [K"block" inner_defs...]
             ])
         end
@@ -3787,7 +3787,7 @@ function expand_typegroup_def(ctx, ex)
 
     result = @ast ctx ex [K"block"
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block"(scope_type=:hard)
+        [K"scope_block" [K"hard_scope"]
             scope_block_stmts...
         ]
         fdef_stmts...
@@ -3887,7 +3887,7 @@ function expand_struct_def(ctx, ex, docs)
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex] ]
         [K"block"
             [K"global" struct_globalref]
-            [K"scope_block"(scope_type=:hard)
+            [K"scope_block" [K"hard_scope"]
                 [K"local" struct_name]
                 [K"always_defined" struct_name]
                 typevar_stmts...
@@ -3954,7 +3954,7 @@ function expand_struct_def(ctx, ex, docs)
             # User-defined inner constructors are placed in a separate scope_block
             # so that helper functions defined in the struct body don't leak to
             # the module's global scope.
-            [K"scope_block"(scope_type=:hard)
+            [K"scope_block" [K"hard_scope"]
                 [K"block" inner_defs...]
             ]
         end
@@ -4442,7 +4442,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [K"_while"
                 expand_condition(ctx, ex[1])
                 [K"symbolicblock" "loop-cont"::K"symboliclabel"
-                    [K"scope_block"(scope_type=:neutral)
+                    [K"scope_block" [K"neutral_scope"]
                          expand_forms_2(ctx, ex[2])
                     ]
                 ]
@@ -4508,8 +4508,7 @@ end
 ensure_desugaring_attributes!(graph) = ensure_attributes!(
     ensure_macro_attributes!(graph),
     is_toplevel_thunk=Bool,
-    toplevel_pure=Bool,
-    scope_type=Symbol)
+    toplevel_pure=Bool)
 
 @fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
     graph = ensure_desugaring_attributes!(copy_attrs(ex._graph))

@@ -1178,7 +1178,6 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     else
         required_attrs = @stm st begin
             [K"code_info" _...] -> (:slots, :is_toplevel_thunk)
-            [K"scope_block" _...] -> (:scope_type,)
             [K"unknown_head" _...] -> (:name_val,)
             _ -> ()
         end
@@ -1234,7 +1233,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
         all(vst2, vcx, xs) : @fail(st, "expected (call (static_eval cglobal) _...)")
     [K"call" xs...] -> all(vst2, vcx, xs)
     [K"block" xs...] -> all(vst2, vcx, xs)
-    [K"scope_block" xs...] -> all(vst2, vcx, xs)
+    [K"scope_block" [K"neutral_scope"] xs...] -> all(vst2, vcx, xs)
+    [K"scope_block" [K"hard_scope"] xs...] -> all(vst2, vcx, xs)
     [K"=" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
     [K"assign_or_constdecl_if_global" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
     [K"global_if_global" x] -> vst2_ident_lhs(vcx, x)

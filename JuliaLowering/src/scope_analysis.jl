@@ -52,7 +52,8 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
         parent = ctx.scopes[parent_id]
         lambda_id = kind(ex) === K"lambda" ? id : parent.lambda_id
         is_permeable = (kind(ex) === K"scope_block" &&
-            ex.scope_type === :neutral && parent_id !== 0 && parent.is_permeable)
+            kind(ex[1]) === K"neutral_scope" &&
+            parent_id !== 0 && parent.is_permeable)
         is_lifted = kind(ex) === K"method_defs" ||
             (kind(ex) !== K"lambda" && parent.is_lifted)
     end
@@ -497,7 +498,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         newscope = enter_scope!(ctx, ex)
         stmts = SyntaxList(ctx)
         add_local_decls!(ctx, stmts, ex, newscope)
-        for e in children(ex)
+        for e in children(ex)[2:end]
             push!(stmts, _resolve_scopes(ctx, e, newscope))
         end
         pop!(ctx.scope_stack)
