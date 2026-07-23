@@ -349,11 +349,8 @@ private:
 
 }; // class JuliaTaskDispatcher
 
-// An InterruptException raised at a safepoint inside dispatcher work would
-// longjmp past the dispatcher's C++ state, deadlocking other waiters on a
-// future that never completes, so defer signal delivery. Unlike
-// JL_SIGATOMIC_END, the destructor does not raise a pending sigint — these
-// frames are not unwind-safe; it is raised at a later sigint safepoint.
+// Dispatcher work is not unwind-safe, so deliver pending SIGINTs at a later
+// safepoint instead of raising an InterruptException inside it.
 struct dispatcher_sigdefer_guard {
   jl_ptls_t ptls;
   dispatcher_sigdefer_guard() JL_NOTSAFEPOINT : ptls(jl_current_task->ptls) {

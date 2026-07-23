@@ -533,8 +533,6 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         // instruction and end up right back here, or we start to run the
         // exception handler and immediately hit the safepoint there.
         if (ct->ptls->defer_signal || ct->eh == NULL) {
-            // throwing with no handler in the context would be fatal; keep the
-            // sigint pending for a later safepoint
             jl_safepoint_defer_sigint();
         }
         else if (jl_safepoint_consume_sigint()) {
@@ -748,7 +746,6 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
     if (request == 2) {
         int force = jl_check_force_sigint();
         jl_jmp_buf *saferestore = jl_get_safe_restore();
-        // throwing with no handler in the context would be fatal
         int can_throw = saferestore != NULL || ct->eh != NULL;
         if (can_throw && (force || (!ptls->defer_signal && ptls->io_wait))) {
             jl_safepoint_consume_sigint();
@@ -932,13 +929,8 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
         *sigqueue = -1;
     }
     else {
-        // kqueue gets signals before the disposition applies, but does not remove
-        // them from pending (unlike sigwait), so the default disposition must be
-        // replaced. SIGINT must get `sigint_handler` rather than SIG_IGN: this
-        // (running on the listener thread) races with the main thread's
-        // `jl_install_default_signal_handlers` and the last writer wins, and if
-        // SIG_IGN wins, the `jl_ignore_sigint` debugger probe never observes its
-        // self-raised signal and every SIGINT is silently ignored.
+        // kqueue gets signals before SIG_IGN, but does not remove them from pending (unlike sigwait)
+        // Installing SIG_IGN for SIGINT can race with its handler installation.
         signal(sig, sig == SIGINT ? sigint_handler : SIG_IGN);
     }
 }

@@ -327,8 +327,6 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls)
     if (jl_atomic_load_relaxed(&ct->tid) != 0)
         return;
     if (ptls->defer_signal || ct->eh == NULL) {
-        // throwing with no handler in the context would be fatal; keep the
-        // sigint pending for a later safepoint
         jl_safepoint_defer_sigint();
     }
     else if (jl_safepoint_consume_sigint()) {
@@ -629,7 +627,7 @@ static void jl_try_deliver_sigint(void)
     jl_safepoint_enable_sigint();
     int force = jl_check_force_sigint();
     jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    int can_throw = ct2 != NULL && ct2->eh != NULL; // throwing with no handler in the context would be fatal
+    int can_throw = ct2 != NULL && ct2->eh != NULL;
     if (can_throw && (force || (!ptls2->defer_signal && ptls2->io_wait))) {
         jl_safepoint_consume_sigint();
         if (force)

@@ -451,20 +451,14 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        # An asynchronous interrupt may be raised in this task if user code
-        # finished evaluating just as Ctrl-C arrived (issue #58689). Wait without
-        # consuming, so an interrupt raised mid-`take!` cannot drop a request and
-        # leave the frontend blocked on a response that never comes.
+        # Fetch without consuming, then retry removal so an interrupt cannot lose
+        # or duplicate a request.
         request = try
             fetch(backend.repl_channel)
         catch e
             e isa InterruptException && continue
             rethrow()
         end
-        # consume the request exactly once: retry until the channel no longer
-        # holds it (only this loop removes requests, and no new request can
-        # arrive before we respond to this one), so an interrupt striking the
-        # removal can neither drop the request nor leave it to be evaluated twice
         while isready(backend.repl_channel)
             try
                 take!(backend.repl_channel)
@@ -777,10 +771,6 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             write(repl.terminal, '\n')
             ((!interrupted && isempty(line)) || hit_eof) && break
         catch e
-            # An asynchronous interrupt is raised at the next safepoint after
-            # delivery, so it can land outside the guarded `readline` (e.g. while
-            # writing the prompt or printing a response); treat it as an aborted
-            # line rather than exiting the REPL
             isa(e, InterruptException) || rethrow()
         end
     end
@@ -1176,18 +1166,10 @@ find_hist_file() = get(ENV, "JULIA_HISTORY",
 backend(r::AbstractREPL) = hasproperty(r, :backendref) && isdefined(r, :backendref) ? r.backendref : nothing
 
 
-# Send a request to the backend and wait for its response, keeping the
-# request/response channels paired in the presence of asynchronous interrupts:
-# once the request is sent, the backend owes a response — abandoning it would
-# leave the channels permanently out of sync, so keep waiting for it.
-# (N.B. sigatomic cannot make the send-and-record step atomic: `defer_signal`
-# is per-thread and the backend task's own sigatomic sections interleave on
-# this thread, so an interrupt landing between the enqueue completing and
-# `sent = true` remains a small unprotected window.)
+# Keep request and response channels paired across asynchronous interrupts.
 function exchange_on_backend(backend::REPLBackendRef, request)
-    # exchanges are serialized on the frontend task, so anything already in the
-    # response channel is a stale response to an abandoned request (see the
-    # note above); discard it rather than pairing it with this request
+    # A response can be stale if an interrupt lands after enqueueing but before
+    # `sent` is recorded.
     while isready(backend.response_channel)
         take!(backend.response_channel)
     end
@@ -1209,7 +1191,7 @@ function exchange_on_backend(backend::REPLBackendRef, request)
     end
 end
 eval_on_backend(ast, backend::REPLBackendRef) =
-    exchange_on_backend(backend, (ast, 1)) # (ast, show_value)
+    exchange_on_backend(backend, (ast, 1))
 function call_on_backend(f, backend::REPLBackendRef)
     applicable(f) || error("internal error: f is not callable")
     return exchange_on_backend(backend, (f, 2)) # (f, show_value) 2 indicates function (rather than ast)

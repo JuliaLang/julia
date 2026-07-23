@@ -2948,11 +2948,6 @@ function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=ini
             end
             Base.invokelatest(mode(state(s)).on_done, s, buf, ok)
         catch e
-            # An asynchronous interrupt is raised at the next safepoint after
-            # delivery, so it can land outside the guarded read loop (e.g. while
-            # refreshing the prompt); abort the current line rather than tearing
-            # down the session, clearing partial input and transient mode state
-            # like the ^C keymap handler does
             isa(e, InterruptException) || rethrow()
             try
                 cancel_beep(s)
