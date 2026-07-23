@@ -4510,7 +4510,6 @@ ensure_desugaring_attributes!(graph) = ensure_macro_attributes!(graph)
 
 @fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
     graph = ensure_desugaring_attributes!(ex._graph)
-    ex = reparent(graph, ex)
     sl = base_layer(ex.context::SyntaxContext)
     ctx_out = DesugaringContext(graph, sl, Bindings(), Dict{Int, IdTag}(), world)
     vr = valid_st1(ex)

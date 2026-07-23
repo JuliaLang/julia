@@ -410,7 +410,6 @@ end
     st::SyntaxTree, world::UInt, recursive::Bool)
 
     graph = ensure_macro_attributes!(st._graph)
-    st = reparent(graph, st)
     DEBUG && assert_expandable(st)
     ctx = MacroExpansionContext(st, world, recursive)
     st_out = expand_forms_1(ctx, st)

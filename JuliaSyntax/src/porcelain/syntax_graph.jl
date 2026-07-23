@@ -1,3 +1,10 @@
+"""
+Deprecated.  JuliaLowering used to store trees and their fields here, handling
+trees as an index into a larger SyntaxGraph.
+"""
+mutable struct SyntaxGraph
+end
+
 mutable struct ScopeLayer
     const mod::Module
     const escaped::Union{Nothing, ScopeLayer}
@@ -58,13 +65,6 @@ Base.var"=="(st1::SyntaxTree, st2::SyntaxTree) = st1 === st2
 const NodeId = SyntaxTree
 const SourceAttrType = Union{SyntaxTree,SourceRef,LineNumberNode}
 
-"""
-Directed graph with arbitrary attributes on nodes. Used here for representing
-one or several syntax trees.
-"""
-mutable struct SyntaxGraph
-end
-
 # shim for refactoring
 SyntaxTree(g::SyntaxGraph, id::SyntaxTree) = id
 
@@ -72,7 +72,7 @@ function setchildren!(id::NodeId, children::AbstractVector{NodeId})
     id.children = children
 end
 
-# fallback printing
+# fallback printing.  TODO: vulnerable to invalidations
 function node_string(ex::SyntaxTree, depth=2)
     out = ""
     for n in sort!(collect(fieldnames(typeof(ex))))
@@ -174,7 +174,10 @@ function numchildren(ex::SyntaxTree)
     isnothing(cs) ? 0 : length(ex.children)
 end
 
+# TODO: Better to make this an error, since it can cause nodes that were
+# intended to be leaves `SyntaxTree(kind, children(old), ...)` to be non-leaves
 const NO_CHILDREN = SyntaxTree[]
+
 function children(ex::SyntaxTree)
     is_leaf(ex) ? NO_CHILDREN : ex.children
 end
@@ -356,16 +359,15 @@ function provenance(st::SyntaxTree)
     prov = SyntaxList(st._graph)
     s = st.source
     while s isa NodeId
-        s_tree = SyntaxTree(st._graph, s)
-        push!(prov, s_tree)
-        s = s_tree.source
+        push!(prov, s)
+        s = s.source
     end
     return prov
 end
 
 "`provenance(st)[1]`, or `st` if that's empty"
 function prov(st::SyntaxTree)
-    st.source isa NodeId ? SyntaxTree(st._graph, st.source) : st
+    st.source isa NodeId ? st.source : st
 end
 
 "textref of st (possibly == st)"
@@ -435,26 +437,6 @@ function _flattened_provenance(st::SyntaxTree, out)
     out
 end
 
-function is_ancestor(ex, ancestor)
-    sources = ex._graph.source
-    id::NodeId = ex._id
-    while true
-        s = get(sources, id, nothing)
-        if s isa NodeId
-            id = s
-            if id == ancestor._id
-                return true
-            end
-        else
-            return false
-        end
-    end
-end
-
-function reparent(ctx, ex::SyntaxTree)
-    ex
-end
-
 sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
 byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
@@ -463,9 +445,6 @@ function sourcetext(ex::SyntaxTree)
     sf isa LineNumberNode && return SubString("")
     view(sf, byte_range(ex))
 end
-
-#-------------------------------------------------------------------------------
-# Lightweight vector of nodes ids with associated pointer to graph stored separately.
 
 const SyntaxList = Vector{SyntaxTree}
 
@@ -587,7 +566,7 @@ function copy_ast(ctx, ex::SyntaxTree)
     graph2 = syntax_graph_js(ctx)
     # @assert graph1 !== graph2 "use mktree(ex) for this"
     id2 = _copy_ast(graph2, graph1, ex._id, Dict{NodeId, NodeId}())
-    return SyntaxTree(graph2, id2)
+    return id2
 end
 
 function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph, id1::NodeId, seen)
@@ -603,14 +582,14 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph, id1::NodeId, seen)
         end
         setchildren!(id2, cs)
     end
-    src1 = get(SyntaxTree(graph1, id1), :source, nothing)
+    src1 = get(id1, :source, nothing)
     if src1 isa NodeId
         src2 =  _copy_ast(graph2, graph1, src1, seen)
         setattr!(id2, :source, src2)
     elseif !isnothing(src1)
         setattr!(id2, :source, src1)
     else
-        throw(node_string(SyntaxTree(graph1, id1))*node_string(SyntaxTree(graph2, id2)))
+        throw("bad source?")
     end
     return id2
 end
@@ -674,7 +653,7 @@ Give each descendent of `st` a `parent::NodeId` attribute.
 """
 function annotate_parent!(st::SyntaxTree)
     g = syntax_graph_js(st)
-    st = unalias_nodes(SyntaxTree(g, st._id))
+    st = unalias_nodes(st)
     mapchildren(t->_annotate_parent!(t, st._id), syntax_graph_js(st), st)
 end
 
@@ -965,7 +944,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     # There may be multiple non-trivia toplevel nodes (e.g. parse error)
     length(cs) === 1 && return only(cs)
     id = SyntaxTree(K"wrapper", reverse(cs), source, nothing)
-    return SyntaxTree(graph, id)
+    return id
 end
 
 function SyntaxTree(graph::SyntaxGraph, sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor)
@@ -974,7 +953,7 @@ function SyntaxTree(graph::SyntaxGraph, sf::Base.RefValue{SourceFile}, cursor::R
         offset = raw_offset - sf[].byte_offset
         _insert_green(graph, sf, txtbuf, offset, cursor)
     end
-    gst = SyntaxTree(graph, green_id)
+    gst = green_id
     out = _green_to_est(gst, 0, gst)
     @assert !isnothing(out) "SyntaxTree requires >0 nontrivia nodes"
     return out

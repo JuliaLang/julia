@@ -153,15 +153,11 @@ function new_global_binding(ctx::AbstractLoweringContext, srcref, name, mod; kws
 end
 
 function binding_ex(ctx::AbstractLoweringContext, b::BindingInfo)
-    # Reconstruct the SyntaxTree for this binding. We keep only the node_id
-    # here, because that's got a concrete type. Whereas if we stored SyntaxTree
-    # that would contain the type of the graph used in the pass where the
-    # bindings were created and we'd need to call reparent(), etc.
-    SyntaxTree(ctx.graph, b.node_id)
+    b.node_id
 end
 binding_ex(ctx, id::IdTag) = binding_ex(ctx, get_binding(ctx, id))
 binding_type_ex(ctx::AbstractLoweringContext, b::BindingInfo) =
-    SyntaxTree(ctx.graph, b.type)
+    b.type
 
 # One lambda's variables
 struct LambdaBindings

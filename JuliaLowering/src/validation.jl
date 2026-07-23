@@ -1141,7 +1141,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     if st._id in parents
         err = "cycle detected: ["
         for p in parents
-            err *= "\n" * node_string(SyntaxTree(st._graph, p))
+            err *= "\n" * node_string(p)
         end
         return vr & @fail(st, err*"]")
     end

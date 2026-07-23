@@ -84,7 +84,7 @@ end
 
 function rettype(ctx::LinearIRContext)
     let r = ctx.rettype_ssa[]
-        isnothing(r) ? nothing : SyntaxTree(ctx.graph, r)
+        isnothing(r) ? nothing : r
     end
 end
 
@@ -1286,7 +1286,6 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
 """
 @fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
     graph = ensure_linearization_attributes!(ctx.graph)
-    ex = reparent(graph, ex)
     ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings())
     ex_out = compile_lambda(ctx_out, ex)
     ctx_out, ex_out

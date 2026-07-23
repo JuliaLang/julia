@@ -172,8 +172,7 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
     printstyled(io, string(
         indent, msrc === nothing ? "└─ " : "├─ "); color=:light_black)
     if src isa NodeId
-        _show_provtree(io, SyntaxTree(ex._graph, src),
-                       string(indent, msrc === nothing ? "   " : "│  "))
+        _show_provtree(io, src, string(indent, msrc === nothing ? "   " : "│  "))
     else
         @jl_assert ex.source isa Union{LineNumberNode, SourceRef} ex
         src = sourceref(ex)

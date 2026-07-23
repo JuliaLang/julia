@@ -352,7 +352,7 @@ function enter_scope!(ctx, ex)
     end
     for (vk, node_id) in sort!(collect(scope.assignments);
                                by=x->let nk=x[1]; (nk.name, ctx.layer_ids[nk.layer]); end)
-        local ex = SyntaxTree(ctx.graph, node_id)
+        local ex = node_id
         b = resolve_name(ctx, ex)
         if b === nothing
             sc = ex.context::SyntaxContext
@@ -577,7 +577,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         push!(stmts, locals_dict)
         newnode(ctx, ex, K"block", stmts)
     elseif k == K"thisfunction"
-        lam = SyntaxTree(ex._graph, enclosing_lambda(ctx, scope::ScopeInfo).node_id)
+        lam = enclosing_lambda(ctx, scope::ScopeInfo).node_id
         self_arg = lam[1][1]
         for a in children(lam[1])
             getmeta(a, :thisfunction_original, false) && (self_arg = a)
@@ -956,7 +956,6 @@ enclosing lambda form and information about variables captured by closures.
                                                     soft_scope::Union{Nothing,Bool}=nothing,
                                                     world::UInt=ctx.world)
     graph = ensure_scope_attributes!(ctx.graph)
-    ex = reparent(graph, ex)
     enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
     ctx2 = ScopeResolutionContext(graph, ctx.layer, ctx.bindings,
                                   Dict{ScopeLayer, Int}(),

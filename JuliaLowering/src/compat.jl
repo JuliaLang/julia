@@ -32,7 +32,7 @@ function expr_to_est(@nospecialize(e),
 end
 
 function expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
-    SyntaxTree(graph, _expr_to_est(graph, e, src)[1])
+    _expr_to_est(graph, e, src)[1]
 end
 
 function _get_inner_lnn(e::Expr, default::LineNumberNode)

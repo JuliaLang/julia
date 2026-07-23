@@ -16,7 +16,7 @@ using .JuliaSyntax: @KSet_str, @stm, Kind, NodeId, SourceAttrType, SourceRef, Sy
     SyntaxList, SyntaxTree, byte_range, children, copy_ast, filename, first_byte,
     flattened_provenance, hasattr, head, highlight,
     is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, mkleaf, mknode, newleaf,
-    newnode, node_string, numchildren, provenance, reparent, setattr, setattr!,
+    newnode, node_string, numchildren, provenance, setattr, setattr!,
     source_location, sourcefile, sourceref, tree_ids, mapindex, mktree,
     ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
     syntax_module, is_flisp_compat, adopt_scope, remove_context, fill_context!,
