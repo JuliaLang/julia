@@ -53,10 +53,71 @@ static void type_array_push(type_array_t *a, jl_datatype_t *val) JL_NOTSAFEPOINT
 
 #define TYPE_FILTER_SIZE 256 // must be a power of two
 
-// Per-thread profile: a growable array of alloc records, plus the types they
-// refer to, which have to be reported to the GC as roots.
+// Bump arena for the recorded backtraces, to avoid a malloc per sample.
+// Blocks are only freed all at once in `jl_free_alloc_profile`, since records
+// combined into `g_combined_allocs` keep pointing into them.
+typedef struct jl_bt_arena_block_t {
+    struct jl_bt_arena_block_t *next;
+    size_t used; // in elements
+    size_t cap;  // in elements
+    jl_bt_element_t data[];
+} jl_bt_arena_block_t;
+
+typedef struct {
+    jl_bt_arena_block_t *head;
+} jl_bt_arena_t;
+
+#define BT_ARENA_BLOCK_ELEMENTS (size_t)(64 * 1024 / sizeof(jl_bt_element_t))
+
+static jl_bt_element_t *bt_arena_alloc(jl_bt_arena_t *arena, size_t n) JL_NOTSAFEPOINT
+{
+    jl_bt_arena_block_t *block = arena->head;
+    if (n >= BT_ARENA_BLOCK_ELEMENTS) {
+        // oversized: give it a dedicated block, keeping the current block (and
+        // its remaining space) as the head
+        jl_bt_arena_block_t *big = (jl_bt_arena_block_t*)malloc_s(
+            sizeof(jl_bt_arena_block_t) + n * sizeof(jl_bt_element_t));
+        big->used = big->cap = n;
+        if (block == NULL) {
+            big->next = NULL;
+            arena->head = big;
+        }
+        else {
+            big->next = block->next;
+            block->next = big;
+        }
+        return big->data;
+    }
+    if (block == NULL || block->cap - block->used < n) {
+        block = (jl_bt_arena_block_t*)malloc_s(
+            sizeof(jl_bt_arena_block_t) + BT_ARENA_BLOCK_ELEMENTS * sizeof(jl_bt_element_t));
+        block->next = arena->head;
+        block->used = 0;
+        block->cap = BT_ARENA_BLOCK_ELEMENTS;
+        arena->head = block;
+    }
+    jl_bt_element_t *p = &block->data[block->used];
+    block->used += n;
+    return p;
+}
+
+static void bt_arena_free(jl_bt_arena_t *arena) JL_NOTSAFEPOINT
+{
+    jl_bt_arena_block_t *block = arena->head;
+    while (block != NULL) {
+        jl_bt_arena_block_t *next = block->next;
+        free(block);
+        block = next;
+    }
+    arena->head = NULL;
+}
+
+// Per-thread profile: a growable array of alloc records, the arena that owns
+// their backtrace memory, and the types they refer to, which have to be
+// reported to the GC as roots.
 typedef struct {
     alloc_array_t allocs;
+    jl_bt_arena_t bt_arena;
     type_array_t type_roots;
     // direct-mapped filter over `type_roots`, so that it doesn't grow with every
     // sample. Owning thread only; a collision just lets a duplicate through.
@@ -128,7 +189,7 @@ static void record_type_root(jl_per_thread_alloc_profile_t *p, jl_datatype_t *ty
 
 // === stack stuff ===
 
-static jl_raw_backtrace_t get_raw_backtrace(void) JL_NOTSAFEPOINT
+static jl_raw_backtrace_t get_raw_backtrace(jl_bt_arena_t *arena) JL_NOTSAFEPOINT
 {
     // We first record the backtrace onto a MAX-sized buffer, so that we don't have to
     // allocate the buffer until we know the size. To ensure thread-safety, we use a
@@ -144,9 +205,8 @@ static jl_raw_backtrace_t get_raw_backtrace(void) JL_NOTSAFEPOINT
     size_t bt_size = rec_backtrace(shared_bt_data_buffer, JL_MAX_BT_SIZE, 2);
 
     // Then we copy only the needed bytes out of the buffer into our profile.
-    size_t bt_bytes = bt_size * sizeof(jl_bt_element_t);
-    jl_bt_element_t *bt_data = (jl_bt_element_t *)malloc_s(bt_bytes);
-    memcpy(bt_data, shared_bt_data_buffer, bt_bytes);
+    jl_bt_element_t *bt_data = bt_arena_alloc(arena, bt_size);
+    memcpy(bt_data, shared_bt_data_buffer, bt_size * sizeof(jl_bt_element_t));
 
     jl_raw_backtrace_t result;
     result.data = bt_data;
@@ -220,24 +280,16 @@ JL_DLLEXPORT void jl_free_alloc_profile(void)
     // in-flight recorders may be pushing onto the arrays we are about to free
     int was_enabled = suspend_recording();
 
-    // Free any allocs that remain in the per-thread profiles, that haven't
-    // been combined yet (which happens in jl_fetch_alloc_profile()).
+    // The per-thread arenas own all backtrace memory, including that of allocs
+    // already combined into `g_combined_allocs` by jl_fetch_alloc_profile().
     for (size_t i = 0; i < g_alloc_profile.num_profiles; i++) {
         jl_per_thread_alloc_profile_t *p = &g_alloc_profile.per_thread_profiles[i];
-        for (size_t j = 0; j < p->allocs.len; j++) {
-            free(p->allocs.data[j].backtrace.data);
-        }
         alloc_array_clear(&p->allocs);
+        bt_arena_free(&p->bt_arena);
         // no alloc record refers to these types any more
         p->type_roots.len = 0;
         memset(p->type_filter, 0, sizeof(p->type_filter));
     }
-
-    // Free the allocs that have been already combined into the combined results object.
-    for (size_t i = 0; i < g_combined_allocs.len; i++) {
-        free(g_combined_allocs.data[i].backtrace.data);
-    }
-
     alloc_array_clear(&g_combined_allocs);
     resume_recording(was_enabled);
 }
@@ -281,7 +333,7 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t 
 
         jl_raw_alloc_t alloc;
         alloc.type_address = type;
-        alloc.backtrace = get_raw_backtrace();
+        alloc.backtrace = get_raw_backtrace(&p->bt_arena);
         alloc.size = size;
         alloc.task = (void *)jl_current_task;
         alloc.timestamp = cycleclock();
