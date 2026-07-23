@@ -1,7 +1,7 @@
 ------------------------------- MODULE MCFixed -------------------------------
-(* Concrete instance for TLC: the shipped wake-one algorithm that always scans  *)
-(* each worker's sleep_check_state. TLC reports no deadlock and NoLostWakeup     *)
-(* holds across the full state space.                                           *)
+(* Concrete instance for TLC: the shipped wake-one algorithm with searcher      *)
+(* accounting and the count gate. TLC reports no deadlock and NoLostWakeup       *)
+(* holds across the full state space.                                            *)
 (*                                                                             *)
 (* Two workers share pool B (plus a producer in A) so the model checker can     *)
 (* exercise wake-one against multiple sleepers, including cross-pool inserts.    *)

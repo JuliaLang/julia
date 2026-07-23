@@ -1,17 +1,22 @@
 -------------------------- MODULE SchedulerWake --------------------------
 (***************************************************************************)
 (* Julia's task scheduler sleep/wake handshake: the wake-one strategy of     *)
-(* `jl_wakeup_threadpool` (JuliaLang/julia#61826) plus the searcher          *)
-(* accounting and count-gated wakeups of JuliaLang/julia#62284.              *)
+(* `jl_wakeup_threadpool` (JuliaLang/julia#61826, for issues #61820 and     *)
+(* #50425) plus the searcher accounting and count-gated wakeups of           *)
+(* JuliaLang/julia#62284.                                                    *)
 (*                                                                           *)
 (* Every action is atomic; TLC explores all sequentially-consistent          *)
 (* interleavings. The C code realizes this ordering with the store-buffering *)
 (* fences documented in src/scheduler.c ([^store_buffering_1]).              *)
 (*                                                                           *)
 (* Workers consume tasks only from their own pool's queue. A worker that     *)
-(* finds no work may become a *searcher* (polling the queues) while fewer    *)
-(* than half of its pool holds a searcher slot; otherwise it parks without   *)
-(* polling. The sleep transition follows `jl_task_get_next`:                 *)
+(* finds no work may become a *searcher* (polling the queues) while          *)
+(* 2*n_spinning < pool size, bounding the searchers at ceil(size/2);         *)
+(* otherwise it parks without polling. Admission is one atomic action here,  *)
+(* abstracting the C's load-then-add, which can briefly overshoot the cap:   *)
+(* overshoot only admits extra real searchers, so it affects the polling     *)
+(* bound, not the wake protocol, and is not modeled. The sleep transition    *)
+(* follows `jl_task_get_next`:                                               *)
 (*                                                                           *)
 (*   RELEASE  searchers: drop the slot          ("run" -> "exitspin")        *)
 (*   PUBLISH  sleep_check_state := "sleeping"   (pc -> "recheck")            *)
@@ -64,9 +69,11 @@ Blocked(t)   == pc[t] \in {"parked", "outside"}
 
 QueueEmpty   == \A p \in Pools : queue[p] = 0
 
-(* Every worker of a pool unwound. "outside" is permanent in the model, but   *)
-(* an unwinding worker always re-enters jl_task_get_next through its task's   *)
-(* teardown, so this state heals by re-entry; NoLostWakeup excuses it.        *)
+(* Every worker of a pool unwound. An outside worker is running user code,    *)
+(* not parked, so no wakeup can be lost on it; work queued while every        *)
+(* worker is outside waits until one blocks, which re-enters the scheduler.   *)
+(* The wake protocol's obligation covers only wakeable (parked) workers,      *)
+(* which is NoLostWakeup's other disjunct; this case is excused.              *)
 AllOutside(p) == \A t \in ThreadsOf(p) : pc[t] = "outside"
 
 TypeOK ==
@@ -142,8 +149,8 @@ Consume ==
         /\ queue' = [queue EXCEPT ![Pool[t]] = @ - 1]
         /\ UNCHANGED <<st, pc, spin, nspin, nrun, inject>>
 
-(* A worker that found no work takes a spinner slot, if under the pool's cap  *)
-(* (at most half the pool, and at least one).                                 *)
+(* A worker that found no work takes a searcher slot, if admission is open    *)
+(* (2*nspin < pool size, i.e. at most ceil(size/2) slots, and at least one).  *)
 SpinEnter ==
     \E t \in Threads :
         /\ pc[t] = "run"

@@ -35,8 +35,9 @@ _Atomic(int) n_threads_running = 0;
 
 // Searcher accounting (cf. Go's nmspinning; see devdocs/scheduler-wakeup).
 // A thread that fails to pop work may become a "searcher", polling the
-// queues for up to sleep_threshold ns before parking. At most half of a
-// pool may search at once; above that they are parked.
+// queues for up to sleep_threshold ns before parking. A slot is granted
+// while 2*n_spinning < pool size (at most ceil(size/2) searchers, briefly
+// more from the load-then-add); above that they are parked.
 // jl_wakeup_threadpool compares the number of pending tasks (n_ready)
 // against the number of spinners, so we also don't have more spinners than
 // work. This avoids unneeded contention on the queues.

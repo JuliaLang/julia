@@ -69,8 +69,9 @@ window, and it is inspected per-pool.
 ## Spinner accounting
 
 `jl_task_get_next` maintains a per-pool count of *spinners* — threads
-busy-polling the queues after failing to pop work. At most half of a pool may
-spin at once; a thread denied a spinner slot parks immediately.
+busy-polling the queues after failing to pop work. A slot is granted while
+`2 * n_spinning < pool size`, bounding the searchers at half the pool
+(rounded up); a thread denied a slot parks immediately.
 
 `jl_wakeup_threadpool` gates its wake on this count against the pool's
 pending-task count: the queue implementation maintains `n_ready` (insert
@@ -128,8 +129,9 @@ wake was gated on the slot would strand.
 The model covers this exit with `ThrowSpinner`, `UnwindHandoff`, and a
 distinct `"outside"` state that `NoLostWakeup` counts as unable to service
 work. A pool whose workers *all* unwound is excused (`AllOutside`): an
-unwinding worker always re-enters `jl_task_get_next` through its task's
-teardown, so that state heals by re-entry.
+unwound worker is running user code, not parked, so no wakeup can be lost
+on it; queued work then waits until a worker blocks, which re-enters the
+scheduler.
 
 The model checks the protocol, not the C code: every scheduler exit path in
 C (found work, park, unwind) maps to a model action, and the model assumes
