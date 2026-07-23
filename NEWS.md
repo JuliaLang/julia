@@ -95,6 +95,8 @@ New library functions
   in a module, allowing an `export` or `public` declaration to be retracted programmatically ([#62131]).
 * `Base.generating_output()` has been made `public` (but not exported) to allow checking whether the current
   process is performing compilation for a pkgimage/sysimage ([#61224]).
+* `Base.isfieldatomic(t, s)` has been made `public` (but not exported); it reports whether a field `s` of a
+  type `t` is declared `@atomic`.
 * `Base.raw_substring` is an unexported, public constructor to build a `SubString` without checking for
   valid string indices.
 * `Base.unannotate(::AnnotatedString)` returns the underlying un-annotated string of the input string.
