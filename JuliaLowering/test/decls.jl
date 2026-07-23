@@ -36,6 +36,13 @@ end
     """) === (nothing, nothing)
     @test JuliaLowering.include_string(test_mod, "(() -> (global x_tail_decl4))()") === nothing
 
+    # non-simple is fine to read from for some reason
+    @test JuliaLowering.include_string(
+        test_mod, "_ = global tail_decl_typed::Int") === nothing
+    @test Base.binding_kind(test_mod, :tail_decl_typed) == Base.PARTITION_KIND_GLOBAL
+    @test JuliaLowering.include_string(
+        test_mod, "_ = global _______________::Int") === nothing
+
     # disallowed in value position otherwise
     @test_throws LoweringError JuliaLowering.include_string(test_mod, """
     function f_value_global_decl()

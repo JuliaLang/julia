@@ -2237,8 +2237,10 @@ function expand_decls(ctx, ex)
     declkind = kind(ex)
     @jl_assert declkind in KSet"local global" ex
     stmts = SyntaxList()
+    val_nothing = !(numchildren(ex) == 1 && is_leaf(children(ex)[1]))
     for c in children(ex)
         simple = kind(c) in KSet"Identifier :: Placeholder"
+        val_nothing &= simple
         if declkind === K"global"
             if kind(c) === K"="
                 (lhs, relayered) = relayer_global_if_unhygienic(ctx, c[1]);
@@ -2262,6 +2264,8 @@ function expand_decls(ctx, ex)
         make_lhs_decls(ctx, stmts, declkind, ex.meta, lhs, simple)
         simple || push!(stmts, expand_forms_2(ctx, c))
     end
+    # flisp quirk: if not a plain `global x` or `local x`, value is readable
+    val_nothing && push!(stmts, @ast ctx ex (::K"nothing"))
     newnode(ex, K"block", stmts)
 end
 
