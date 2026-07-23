@@ -5128,7 +5128,17 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     if (closure->match.max_valid > max_world)
         closure->match.max_valid = max_world;
     jl_method_t *meth = ml->func.method;
-    int only = jl_atomic_load_relaxed(&meth->dispatch_status) & METHOD_SIG_LATEST_ONLY;
+    // Whether this method dominates (is strictly morespecific than) every
+    // method it intersects, and hence every other candidate for this query:
+    // either its LATEST_ONLY bit is set, or its interference set is empty (the
+    // ground-truth relation, which the bit tracks in lockstep except that the
+    // bit can be suppressed by PRECOMPILE_MANY). Such a method always survives
+    // into the final result (nothing can cover a method that beats every
+    // intersecting method), and when it also fully covers the query it is the
+    // unique result, so the rest of the search can be skipped. Interference
+    // sets only grow, so emptiness now implies emptiness in the query's world.
+    int only = (jl_atomic_load_relaxed(&meth->dispatch_status) & METHOD_SIG_LATEST_ONLY) ||
+               jl_atomic_load_relaxed(&meth->interferences)->length == 0;
     if (closure->lim >= 0 && only) {
         if (closure->lim == 0) {
             closure->t = jl_an_empty_vec_any;
@@ -5475,6 +5485,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
     // more-specific than any other fully-covering method (but if !all_subtypes, there are
     // non-fully-covering methods to which it is _likely_ not more specific)
     jl_method_match_t *minmax = NULL;
+    int minmax_dominates = 0;
     int any_subtypes = 0;
     if (len > 1) {
         // first try to pre-process the results to find the most specific option
@@ -5486,6 +5497,21 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
             if (matc->fully_covers == FULLY_COVERS) {
                 any_subtypes = 1;
                 jl_method_t *m = matc->method;
+                // A fully-covering match with an empty interference set is
+                // strictly morespecific than every method it intersects
+                // (recording is complete), and every other match intersects it
+                // (through the query type it covers): it is the unique
+                // dispatch winner over the whole query, every other match can
+                // be dropped with `m` itself as the dominating cover, and no
+                // ambiguity can involve it. Since interference sets only ever
+                // grow, emptiness now implies emptiness in the query's world.
+                // (Two such matches cannot coexist: they would intersect, so
+                // one of the two memberships would be recorded.)
+                if (jl_atomic_load_relaxed(&m->interferences)->length == 0) {
+                    minmax = matc;
+                    minmax_dominates = 1;
+                    break;
+                }
                 for (j = 0; j < len; j++) {
                     if (i == j)
                         continue;
@@ -5513,7 +5539,7 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
         //     (we will look for this later, when we compute ambig_groupid, for
         //     correctness)
         int all_subtypes = any_subtypes;
-        if (any_subtypes) {
+        if (any_subtypes && !minmax_dominates) {
             jl_method_t *minmaxm = NULL;
             if (minmax != NULL)
                 minmaxm = minmax->method;
