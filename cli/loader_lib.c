@@ -43,22 +43,27 @@ void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * 
  * which the user can delete to save space if generating new code is not necessary.
  * However, if it exists and cannot be loaded, that's a problem. So, we alert the user
  * and abort the process. */
-static void * load_library(const char * rel_path, const char * src_dir, int err) {
+/* If allow_basename, then any library already loaded with the same basename is treated
+ * as a duplicate and a handle to the loaded library is returned. Otherwise already-loaded
+ * libraries are detected by full filepath / inode. */
+static void *load_library(const char * rel_path, const char * src_dir, int allow_basename, int err) {
     void * handle = NULL;
-    // See if a handle is already open to the basename
-    const char *basename = rel_path + strlen(rel_path);
-    while (basename-- > rel_path)
-        if (*basename == PATHSEPSTRING[0] || *basename == '/')
-            break;
-    basename++;
+    if (allow_basename) {
+        // See if a handle is already open to the basename
+        const char *basename = rel_path + strlen(rel_path);
+        while (basename-- > rel_path)
+            if (*basename == PATHSEPSTRING[0] || *basename == '/')
+                break;
+        basename++;
 #if defined(_OS_WINDOWS_)
-    if ((handle = GetModuleHandleA(basename)))
-        return handle;
+        if ((handle = GetModuleHandleA(basename)))
+            return handle;
 #else
-    // if err == 0 the library is optional, so don't allow global lookups to see it
-    if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL))))
-        return handle;
+        // if err == 0 the library is optional, so don't allow global lookups to see it
+        if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL))))
+            return handle;
 #endif
+    }
 
     char path[2*JL_PATH_MAX + 1] = {0};
     strncat(path, src_dir, sizeof(path) - 1);
@@ -351,23 +356,23 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 # ifdef RT_STATIC_LIBSTDCXX
                     // If we have a statically-linked libstdc++, it is ok for
                     // this to fail.
-                    load_library(curr_dep, lib_dir, 0);
+                    load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 0);
 # else
-                    load_library(curr_dep, lib_dir, 1);
+                    load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 1);
 # endif
                 }
 #endif
             } else if (special_idx == 1) {
                 // This special library is `libjulia-internal`
-                libjulia_internal = load_library(curr_dep, lib_dir, 1);
+                libjulia_internal = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 1);
             } else if (special_idx == 2) {
                 // This special library is `libjulia-codegen`
-                libjulia_codegen = load_library(curr_dep, lib_dir, 0);
+                libjulia_codegen = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 0);
             }
             special_idx++;
         } else {
             // Otherwise, just load it as "normal"
-            load_library(curr_dep, lib_dir, 1);
+            load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 1);
         }
 
         // Skip ahead to next dependency
