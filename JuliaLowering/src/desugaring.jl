@@ -3412,21 +3412,30 @@ end
 #
 # This function should do as much as `new-call`, but does not use curlyargs
 # or ctor_sparams, so may be missing something.
-function _rewrite_ctor_new_calls(ctx, ex, global_struct_name, ctor_sparams,
+function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams,
                                        struct_typevars, ctor_self, field_types)
-    if is_leaf(ex)
-        return ex
-    elseif !_is_new_call(ex)
+    if is_leaf(ex0)
+        return ex0
+    elseif !_is_new_call(ex0)
         return mapchildren(
             e->_rewrite_ctor_new_calls(ctx, e, global_struct_name, ctor_sparams,
                                        struct_typevars, ctor_self, field_types),
-            ex
+            ex0
         )
     end
     # Rewrite a call to new()
-    kw_arg_i = findfirst(e->(k = kind(e); k == K"kw" || k == K"parameters"), children(ex))
-    if !isnothing(kw_arg_i)
-        throw(LoweringError(ex[kw_arg_i], "`new` does not accept keyword arguments"))
+    e0args = children(ex0)
+    kw_arg_i = findfirst(e->(k = kind(e); k == K"kw"), e0args)
+    ex = if !isnothing(kw_arg_i)
+        throw(LoweringError(e0args[kw_arg_i], "`new` does not accept keyword arguments"))
+    elseif kind(e0args[end]) === K"parameters" # flisp oversight
+        if is_flisp_compat(ex0)
+            @mknode(ex0; children=e0args[1:end-1])
+        else
+            throw(LoweringError(e0args[end], "`new` does not accept keyword arguments"))
+        end
+    else
+        ex0
     end
     full_struct_type = if kind(ex[1]) == K"curly"
         # new{A,B}(...)
