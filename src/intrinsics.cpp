@@ -334,31 +334,31 @@ static Constant *undef_value_for_type(Type *T) {
     return undef;
 }
 
-// rebuild a struct type with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
+// The type an aggregate occupies in memory: every integer element byte-rounded
+// (e.g. i1 Bool in llvmcall types). Returns T itself when nothing widens, so
+// identified struct types survive the round trip.
 static Type *zext_struct_type(Type *T)
 {
     if (auto *AT = dyn_cast<ArrayType>(T)) {
-        return ArrayType::get(AT->getElementType(), AT->getNumElements());
+        return ArrayType::get(zext_struct_type(AT->getElementType()), AT->getNumElements());
     }
     else if (auto *ST = dyn_cast<StructType>(T)) {
         SmallVector<Type*> Elements(ST->element_begin(), ST->element_end());
+        bool widened = false;
         for (size_t i = 0; i < Elements.size(); i++) {
-            Elements[i] = zext_struct_type(Elements[i]);
+            Type *E = zext_struct_type(Elements[i]);
+            widened |= E != Elements[i];
+            Elements[i] = E;
         }
-        return StructType::get(ST->getContext(), Elements, ST->isPacked());
+        return widened ? StructType::get(ST->getContext(), Elements, ST->isPacked()) : T;
     }
     else if (auto *VT = dyn_cast<VectorType>(T)) {
         return VectorType::get(zext_struct_type(VT->getElementType()), VT);
     }
-    else if (auto *IT = dyn_cast<IntegerType>(T)) {
-        unsigned BitWidth = IT->getBitWidth();
-        if (alignTo(BitWidth, 8) != BitWidth)
-            return IntegerType::get(IT->getContext(), alignTo(BitWidth, 8));
-    }
-    return T;
+    return julia_primitive_storage_type(T);
 }
 
-// rebuild a struct with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
+// Rebuild a value to match zext_struct_type.
 static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2)
 {
     Type *T = V->getType();
@@ -389,6 +389,35 @@ static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2)
 static Value *zext_struct(jl_codectx_t &ctx, Value *V)
 {
     return zext_struct_helper(ctx, V, zext_struct_type(V->getType()));
+}
+
+// Inverse of zext_struct_helper: narrow a value loaded at its storage width
+// back to the register type T2.
+static Value *trunc_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2)
+{
+    Type *T = V->getType();
+    if (T == T2)
+        return V;
+    if (auto *AT = dyn_cast<ArrayType>(T2)) {
+        Value *V2 = undef_value_for_type(AT);
+        for (size_t i = 0; i < AT->getNumElements(); i++) {
+            Value *E = trunc_struct_helper(ctx, ctx.builder.CreateExtractValue(V, i), AT->getElementType());
+            V2 = ctx.builder.CreateInsertValue(V2, E, i);
+        }
+        return V2;
+    }
+    else if (auto *ST = dyn_cast<StructType>(T2)) {
+        Value *V2 = undef_value_for_type(ST);
+        for (size_t i = 0; i < ST->getNumElements(); i++) {
+            Value *E = trunc_struct_helper(ctx, ctx.builder.CreateExtractValue(V, i), ST->getElementType(i));
+            V2 = ctx.builder.CreateInsertValue(V2, E, i);
+        }
+        return V2;
+    }
+    else if (T2->isIntegerTy() || T2->isVectorTy()) {
+        return ctx.builder.CreateTrunc(V, T2);
+    }
+    return V;
 }
 
 static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
@@ -495,9 +524,10 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
         ai = combined_ai;
     }
     assert(p); // clang-sa doesn't know that x.ispointer() implied this is true
-    Instruction *load = ctx.builder.CreateAlignedLoad(to, p, alignment);
+    Instruction *load = ctx.builder.CreateAlignedLoad(zext_struct_type(to), p, alignment);
     setName(ctx.emission_context, load, p->getName() + ".unbox");
-    return ai.decorateInst(load);
+    ai.decorateInst(load);
+    return trunc_struct_helper(ctx, load, to);
 }
 
 // emit code to store a raw value into a destination
@@ -610,12 +640,13 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
         // the dynamic checks above ensure only primitive types reach here
         if (isboxed)
             vxt = llvmt;
-        auto storage_type = vxt->isIntegerTy(1) ? getInt8Ty(ctx.builder.getContext()) : vxt;
+        auto register_type = vxt->isIntegerTy(1) ? getInt8Ty(ctx.builder.getContext()) : vxt;
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, v.tbaa);
         vx = ai.decorateInst(ctx.builder.CreateLoad(
-            storage_type,
+            zext_struct_type(register_type),
             maybe_decay_tracked(ctx, v.V)));
         setName(ctx.emission_context, vx, "bitcast");
+        vx = trunc_struct_helper(ctx, vx, register_type);
     }
 
     vxt = vx->getType();

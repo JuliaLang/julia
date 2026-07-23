@@ -2325,8 +2325,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             if (static_rt)
                 return mark_julia_slot(result, rt, NULL, ctx.tbaa().tbaa_stack);
             ++SRetCCalls;
-            result = ctx.builder.CreateLoad(sretty, result);
+            result = ctx.builder.CreateLoad(zext_struct_type(sretty), result);
             setName(ctx.emission_context, result, "returned");
+            result = trunc_struct_helper(ctx, result, sretty);
         }
     }
     else {
