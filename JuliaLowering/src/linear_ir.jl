@@ -21,37 +21,37 @@ end
 
 # Target to jump to, including info on try handler nesting and catch block
 # nesting
-struct JumpTarget{Attrs}
-    label::SyntaxTree{Attrs}
-    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    result_var::Union{SyntaxTree{Attrs}, Nothing}  # for symbolicblock valued breaks
+struct JumpTarget
+    label::SyntaxTree
+    handler_token_stack::SyntaxList{Vector{NodeId}}
+    catch_token_stack::SyntaxList{Vector{NodeId}}
+    result_var::Union{SyntaxTree, Nothing}  # for symbolicblock valued breaks
 end
 
-function JumpTarget(label::SyntaxTree{Attrs}, ctx, result_var=nothing) where {Attrs}
-    JumpTarget{Attrs}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack), result_var)
+function JumpTarget(label::SyntaxTree, ctx, result_var=nothing)
+    JumpTarget(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack), result_var)
 end
 
-struct JumpOrigin{Attrs}
-    goto::SyntaxTree{Attrs}
+struct JumpOrigin
+    goto::SyntaxTree
     index::Int
-    handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    handler_token_stack::SyntaxList{Vector{NodeId}}
+    catch_token_stack::SyntaxList{Vector{NodeId}}
 end
 
-function JumpOrigin(goto::SyntaxTree{Attrs}, index, ctx) where {Attrs}
-    JumpOrigin{Attrs}(goto, index, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+function JumpOrigin(goto::SyntaxTree, index, ctx)
+    JumpOrigin(goto, index, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
 end
 
-struct FinallyHandler{Attrs}
-    tagvar::SyntaxTree{Attrs}
-    target::JumpTarget{Attrs}
-    exit_actions::Vector{Tuple{Symbol,Union{Nothing,SyntaxTree{Attrs}}}}
+struct FinallyHandler
+    tagvar::SyntaxTree
+    target::JumpTarget
+    exit_actions::Vector{Tuple{Symbol,Union{Nothing,SyntaxTree}}}
 end
 
-function FinallyHandler(tagvar::SyntaxTree{Attrs}, target::JumpTarget) where {Attrs}
-    FinallyHandler{Attrs}(tagvar, target,
-        Vector{Tuple{Symbol, Union{Nothing,SyntaxTree{Attrs}}}}())
+function FinallyHandler(tagvar::SyntaxTree, target::JumpTarget)
+    FinallyHandler(tagvar, target,
+        Vector{Tuple{Symbol, Union{Nothing,SyntaxTree}}}())
 end
 
 
@@ -61,22 +61,22 @@ Context for creating linear IR.
 One of these is created per lambda expression to flatten the body down to
 a sequence of statements (linear IR), which eventually becomes one CodeInfo.
 """
-mutable struct LinearIRContext{Attrs} <: AbstractLoweringContext
-    const graph::SyntaxGraph{Attrs}
-    const code::SyntaxList{Attrs, Vector{NodeId}}
+mutable struct LinearIRContext <: AbstractLoweringContext
+    const graph::SyntaxGraph
+    const code::SyntaxList{Vector{NodeId}}
     const bindings::Bindings
     const next_label_id::Ref{Int}
     const is_toplevel_thunk::Bool
     const lambda_bindings::LambdaBindings
     const argmap::Dict{IdTag, IdTag}
     const rettype_ssa::Ref{NodeId}
-    const break_targets::Dict{String, JumpTarget{Attrs}}
+    const break_targets::Dict{String, JumpTarget}
     const break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
-    const handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    const catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    const finally_handlers::Vector{FinallyHandler{Attrs}}
-    const symbolic_jump_targets::Dict{String,JumpTarget{Attrs}}
-    const symbolic_jump_origins::Vector{JumpOrigin{Attrs}}
+    const handler_token_stack::SyntaxList{Vector{NodeId}}
+    const catch_token_stack::SyntaxList{Vector{NodeId}}
+    const finally_handlers::Vector{FinallyHandler}
+    const symbolic_jump_targets::Dict{String,JumpTarget}
+    const symbolic_jump_origins::Vector{JumpOrigin}
     const symbolic_block_labels::Set{String}  # labels that are symbolic blocks (not allowed as @goto targets)
     const meta::Dict{Symbol, Any}
     const mod::Module
@@ -89,13 +89,12 @@ function rettype(ctx::LinearIRContext)
 end
 
 function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings)
-    Attrs = typeof(graph.attributes)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(),
-                    Ref(0), Dict{String,JumpTarget{Attrs}}(), String[],
+                    Ref(0), Dict{String,JumpTarget}(), String[],
                     SyntaxList(ctx), SyntaxList(ctx),
-                    Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
-                    Vector{JumpOrigin{Attrs}}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
+                    Vector{FinallyHandler}(), Dict{String,JumpTarget}(),
+                    Vector{JumpOrigin}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
 end
 
 function current_lambda_bindings(ctx::LinearIRContext)

@@ -39,17 +39,17 @@ const SourceAttrType = Union{Nothing, SourceRef,LineNumberNode,NodeId}
 Directed graph with arbitrary attributes on nodes. Used here for representing
 one or several syntax trees.
 """
-mutable struct SyntaxGraph{Attrs}
+mutable struct SyntaxGraph
     const edge_ranges::Vector{UnitRange{Int}}
     const edges::Vector{NodeId}
     const kind::Vector{Kind}
     const source::Vector{SourceAttrType}
     const context::Vector{Union{Nothing, SyntaxContext}}
-    const attributes::Attrs
+    const attributes::Dict{Symbol,Dict{NodeId, Any}}
 end
 
 SyntaxGraph() = ensure_parser_attributes!(
-    SyntaxGraph{Dict{Symbol,Dict{NodeId, Any}}}(
+    SyntaxGraph(
         Vector{UnitRange{Int}}(),
         Vector{NodeId}(),
         Vector{Kind}(),
@@ -78,7 +78,7 @@ function Base.show(io::IO, ::MIME"text/plain", graph::SyntaxGraph)
     _show_attrs(io, graph.attributes)
 end
 
-function ensure_attributes!(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}; kws...)
+function ensure_attributes!(graph::SyntaxGraph; kws...)
     for (k,_) in pairs(kws)
         @assert k isa Symbol
         if !haskey(graph.attributes, k)
@@ -88,7 +88,7 @@ function ensure_attributes!(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}; k
     graph
 end
 
-function ensure_attributes(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}; kws...)
+function ensure_attributes(graph::SyntaxGraph; kws...)
     g = copy_attrs(graph)
     ensure_attributes!(g; kws...)
 end
@@ -100,14 +100,14 @@ ensure_parser_attributes!(g::SyntaxGraph) = ensure_attributes!(
     name_val=String,
     mod=Module)
 
-function delete_attributes!(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, attr_names::Symbol...)
+function delete_attributes!(graph::SyntaxGraph, attr_names::Symbol...)
     for name in attr_names
         delete!(graph.attributes, name)
     end
     graph
 end
 
-function delete_attributes(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, attr_names::Symbol...)
+function delete_attributes(graph::SyntaxGraph, attr_names::Symbol...)
     delete_attributes!(copy_attrs(graph), attr_names...)
 end
 
@@ -146,14 +146,14 @@ function child(graph::SyntaxGraph, id::NodeId, i::Integer)
     graph.edges[graph.edge_ranges[id][i]]
 end
 
-function getattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
+function getattr(graph::SyntaxGraph, name::Symbol)
     name === :kind && return getfield(graph, :kind)
     name === :source && return getfield(graph, :source)
     name === :context && return getfield(graph, :context)
     getfield(graph, :attributes)[name]
 end
 
-function hasattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
+function hasattr(graph::SyntaxGraph, name::Symbol)
     name === :kind && return true
     name === :source && return true
     name === :context && return true
@@ -207,8 +207,8 @@ end
 An ECS-style AST used in JuliaLowering.  Unstable, but may eventually replace
 SyntaxNode.
 """
-struct SyntaxTree{Attrs}
-    _graph::SyntaxGraph{Attrs}
+struct SyntaxTree
+    _graph::SyntaxGraph
     _id::NodeId
 end
 
@@ -627,13 +627,13 @@ end
 
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
-struct SyntaxList{Attrs, NodeIdVecType} <: AbstractVector{SyntaxTree}
-    graph::SyntaxGraph{Attrs}
+struct SyntaxList{NodeIdVecType} <: AbstractVector{SyntaxTree}
+    graph::SyntaxGraph
     ids::NodeIdVecType
 end
 
-function SyntaxList(graph::SyntaxGraph{T}, ids::AbstractVector{NodeId}) where {T}
-    SyntaxList{T, typeof(ids)}(graph, ids)
+function SyntaxList(graph::SyntaxGraph, ids::AbstractVector{NodeId})
+    SyntaxList{typeof(ids)}(graph, ids)
 end
 
 SyntaxList(graph::SyntaxGraph) = SyntaxList(graph, Vector{NodeId}())

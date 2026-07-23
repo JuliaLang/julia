@@ -471,9 +471,9 @@ end
 # Context wrapper which helps to construct a list of statements to be executed
 # prior to some expression. Useful when we need to use subexpressions multiple
 # times.
-struct StatementListCtx{Ctx, Attrs} <: AbstractLoweringContext
+struct StatementListCtx{Ctx} <: AbstractLoweringContext
     ctx::Ctx
-    stmts::SyntaxList{Attrs, Vector{NodeId}}
+    stmts::SyntaxList{Vector{NodeId}}
 end
 
 function Base.getproperty(ctx::StatementListCtx, field::Symbol)

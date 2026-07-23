@@ -1,7 +1,7 @@
 # Lowering Pass 2 - syntax desugaring
 
-mutable struct DesugaringContext{Attrs} <: AbstractLoweringContext
-    const graph::SyntaxGraph{Attrs}
+mutable struct DesugaringContext <: AbstractLoweringContext
+    const graph::SyntaxGraph
     const layer::ScopeLayer
     const bindings::Bindings
     const ssa_mapping::Dict{Int, IdTag}

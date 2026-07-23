@@ -1,6 +1,6 @@
 # One per pass
-struct MacroExpansionContext{Attrs} <: AbstractLoweringContext
-    graph::SyntaxGraph{Attrs}
+struct MacroExpansionContext <: AbstractLoweringContext
+    graph::SyntaxGraph
     syntax_context::SyntaxContext
     known_layers::Dict{ScopeLayer, Bool}
     world::UInt
@@ -84,9 +84,9 @@ function expand_syntaxquote(ctx, st)
 end
 
 # Passed to the user as an implicit macro argument
-struct MacroContext{Attrs} <: AbstractLoweringContext
+struct MacroContext <: AbstractLoweringContext
     graph::SyntaxGraph
-    macrocall::SyntaxTree{Attrs}
+    macrocall::SyntaxTree
 end
 
 struct MacroExpansionError <: Exception

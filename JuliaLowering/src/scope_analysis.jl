@@ -67,8 +67,8 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     return s
 end
 
-mutable struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
-    const graph::SyntaxGraph{Attrs}
+mutable struct ScopeResolutionContext <: AbstractLoweringContext
+    const graph::SyntaxGraph
     const layer::ScopeLayer
     const bindings::Bindings
     # Purely for display and deterministic ordering of scope layers
@@ -685,15 +685,15 @@ end
 ClosureBindings(name_stack) =
     ClosureBindings(name_stack, Vector{LambdaBindings}(), Set{IdTag}())
 
-mutable struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
-    const graph::SyntaxGraph{Attrs}
+mutable struct VariableAnalysisContext <: AbstractLoweringContext
+    const graph::SyntaxGraph
     const layer::ScopeLayer
     const bindings::Bindings
     const scopes::Vector{ScopeInfo}
     const lambda_bindings::LambdaBindings
     const lifted::Bool
     # Stack of method definitions for closure naming
-    const method_def_stack::SyntaxList{Attrs, Vector{NodeId}}
+    const method_def_stack::SyntaxList{Vector{NodeId}}
     const closure_key_stack::Vector{ClosureKey}
     # Collection of information about each closure, principally which methods
     # are part of the closure (and hence captures).

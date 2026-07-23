@@ -1,22 +1,22 @@
-struct ClosureInfo{Attrs}
+struct ClosureInfo
     closure_key::ClosureKey
     # Global name of the type of the closure
-    type_name::SyntaxTree{Attrs}
+    type_name::SyntaxTree
     # Names of fields for use with getfield, in order
-    field_names::SyntaxList{Attrs, Vector{NodeId}}
+    field_names::SyntaxList{Vector{NodeId}}
     # Map from the original BindingId of closed-over vars to the index of the
     # associated field in the closure type.
     field_inds::Dict{IdTag,Int}
-    capt_sp::SyntaxList{Attrs, Vector{NodeId}}
+    capt_sp::SyntaxList{Vector{NodeId}}
 end
 
-mutable struct ClosureConversionCtx{Attrs} <: AbstractLoweringContext
-    const graph::SyntaxGraph{Attrs}
+mutable struct ClosureConversionCtx <: AbstractLoweringContext
+    const graph::SyntaxGraph
     const bindings::Bindings
     const mod::Module
     const closure_bindings::Dict{ClosureKey,ClosureBindings}
-    const capture_rewriting::Union{Nothing,ClosureInfo{Attrs},
-                                   SyntaxList{Attrs, Vector{NodeId}}}
+    const capture_rewriting::Union{Nothing,ClosureInfo,
+                                   SyntaxList{Vector{NodeId}}}
     const top_bindings::LambdaBindings
     const lambda_bindings::LambdaBindings
     const sp_typevars::Dict{IdTag, IdTag}
@@ -30,8 +30,8 @@ mutable struct ClosureConversionCtx{Attrs} <: AbstractLoweringContext
     # functions to refer to globals that have already been declared, without
     # triggering the "function body AST not pure" error.
     const toplevel_pure::Bool
-    const toplevel_stmts::SyntaxList{Attrs, Vector{NodeId}}
-    const closure_infos::Dict{ClosureKey,ClosureInfo{Attrs}}
+    const toplevel_stmts::SyntaxList{Vector{NodeId}}
+    const closure_infos::Dict{ClosureKey,ClosureInfo}
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)
@@ -677,8 +677,8 @@ Invariants:
 * Any new binding IDs must be added to the enclosing lambda locals
 """
 @fzone "JL: closures" function convert_closures(
-    ctx::VariableAnalysisContext, ex::SyntaxTree{Attrs}
-) where Attrs
+    ctx::VariableAnalysisContext, ex::SyntaxTree
+)
     # TODO: ctx.mod is used instead of syntax_module(ex) beyond this point,
     # which is dubious
     ctx_out = ClosureConversionCtx(ctx.graph, ctx.bindings,
@@ -687,7 +687,7 @@ Invariants:
                                    ex.lambda_bindings, ex.lambda_bindings,
                                    ctx.sp_typevars,
                                    false, true, true, SyntaxList(ctx.graph),
-                                   Dict{ClosureKey,ClosureInfo{Attrs}}())
+                                   Dict{ClosureKey,ClosureInfo}())
     ex_out = closure_convert_lambda(ctx_out, ex, children(ex[2]))
     if !isempty(ctx_out.toplevel_stmts)
         throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))

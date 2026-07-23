@@ -94,13 +94,13 @@ end
 # We might consider changing at least the second of these choices, depending on
 # how we end up putting this into Base.
 
-struct LoweringIterator{Attrs}
+struct LoweringIterator
     ver::VersionNumber # later stored in module?
-    todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
+    todo::Vector{Tuple{SyntaxTree, Bool, Int}}
 end
 
-function lower_init(ex::SyntaxTree{T}, ver) where {T}
-    LoweringIterator{T}(ver, [(ex, false, 0)])
+function lower_init(ex::SyntaxTree, ver)
+    LoweringIterator(ver, [(ex, false, 0)])
 end
 
 function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
