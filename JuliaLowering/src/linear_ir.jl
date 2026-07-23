@@ -1180,15 +1180,15 @@ end
 
 function compile_lambda(outer_ctx, ex)
     k = kind(ex)
-    lambda_args = ex[1]
-    static_parameters = ex[2]
-    lambda_bindings = ex.lambda_bindings::LambdaBindings
+    lbs = lambda_bindings(ex[1])
+    lambda_args = ex[2]
+    static_parameters = ex[3]
     ctx = LinearIRContext(
-        outer_ctx.graph, outer_ctx, k === K"toplevel_lambda", lambda_bindings)
-    if numchildren(ex) == 4
-        tmp = ssavar(ctx, ex[4], "rett")
+        outer_ctx.graph, outer_ctx, k === K"toplevel_lambda", lbs)
+    if numchildren(ex) == 5
+        tmp = ssavar(ctx, ex[5], "rett")
         ctx.rettype_ssa[] = tmp._id
-        compile(ctx, @ast(ctx, ex[4], [K"=" tmp ex[4]]), false, false)
+        compile(ctx, @ast(ctx, ex[5], [K"=" tmp ex[5]]), false, false)
     end
     for arg in children(lambda_args)
         kind(arg) == K"Placeholder" && continue
@@ -1199,7 +1199,7 @@ function compile_lambda(outer_ctx, ex)
             ctx.argmap[binfo.id] = _binding_id(new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name))
         end
     end
-    compile_body(ctx, ex[3])
+    compile_body(ctx, ex[4])
     for (id, remapped) in pairs(ctx.argmap)
         binding = binding_ex(ctx, id)
         local_slot = binding_ex(ctx, remapped)
@@ -1225,7 +1225,7 @@ function compile_lambda(outer_ctx, ex)
         end
     end
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
-    for (id, is_capt) in sort(collect(pairs(lambda_bindings.locals_capt)), by=first)
+    for (id, is_capt) in sort(collect(pairs(lbs.locals_capt)), by=first)
         if !is_capt
             binfo = get_binding(ctx.bindings, id)
             if binfo.kind == :local
@@ -1265,15 +1265,15 @@ function compile_lambda(outer_ctx, ex)
     for (k, v) in ctx.meta
         meta = CompileHints(meta, k, v)
     end
-    out = @ast ctx ex [K"code_info"(slots=slots, meta=meta)
-        [K"block"(ex[3]) code...]
+    out = @ast ctx ex [K"code_info"(meta=meta)
+        slots::K"Slots"
+        [K"block"(ex[4]) code...]
     ]
     k === K"toplevel_lambda" ? @ast(ctx, ex, [K"thunk" out]) : out
 end
 
 ensure_linearization_attributes!(graph) = ensure_attributes!(
     ensure_scope_attributes!(graph),
-    slots=Vector{Slot},
     id=Int)
 
 """

@@ -189,3 +189,8 @@ function init_lambda_binding(bindings::LambdaBindings, b::BindingInfo, capt::Boo
     bindings.locals_capt[b.id] = capt
     b.lambda_id = bindings.scope_id
 end
+
+function lambda_bindings(st::SyntaxTree)
+    @jl_assert kind(st) === K"LambdaBindings" st
+    st.value::LambdaBindings
+end

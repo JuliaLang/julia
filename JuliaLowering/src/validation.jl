@@ -1173,11 +1173,12 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
             (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
             (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
             (_, when=JuliaSyntax.is_operator(st)) -> (:name_val,) # TODO: remove
+            [K"LambdaBindings"] -> (:value,)
+            [K"Slots"] -> (:value,)
             _ -> return vr & @fail(st, "unrecognized leaf kind $(kind(st))")
         end
     else
         required_attrs = @stm st begin
-            [K"code_info" _...] -> (:slots,)
             [K"unknown_head" _...] -> (:name_val,)
             _ -> ()
         end

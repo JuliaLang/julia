@@ -33,15 +33,15 @@ This is called on the outermost lambda, and recursively processes nested lambdas
 """
 function analyze_def_and_use!(ctx, ex)
     @stm ex begin
-        [K"lambda" _ _ body _...] -> begin
+        [K"lambda" _ _ _ body _...] -> begin
             _analyze_nested_lambdas!(ctx, body)
             _analyze_lambda_vars!(ctx, ex)
         end
-        [K"toplevel_lambda" _ _ body _...] -> begin
+        [K"toplevel_lambda" _ _ _ body _...] -> begin
             _analyze_nested_lambdas!(ctx, body)
             _analyze_lambda_vars!(ctx, ex)
         end
-        [K"generated_lambda" _ _ body _...] -> begin
+        [K"generated_lambda" _ _ _ body _...] -> begin
             _analyze_nested_lambdas!(ctx, body)
             _analyze_lambda_vars!(ctx, ex)
         end
@@ -209,8 +209,7 @@ function du_visit!(ctx, state::DefUseState, e)
 
     elseif k == K"lambda"
         # Check captures from nested lambda
-        nested_lb = e.lambda_bindings
-        for (id, is_capt) in nested_lb.locals_capt
+        for (id, is_capt) in lambda_bindings(e[1]).locals_capt
             if is_capt
                 du_mark_captured!(state, id)
             end
@@ -329,11 +328,9 @@ function du_visit!(ctx, state::DefUseState, e)
 end
 
 function _analyze_lambda_vars!(ctx::VariableAnalysisContext, ex)
-    lambda_bindings = ex.lambda_bindings::LambdaBindings
-
     # Collect candidate variables: captured and single-assigned
     candidates = Set{IdTag}()
-    for (id, from_outer_lambda) in lambda_bindings.locals_capt
+    for (id, from_outer_lambda) in lambda_bindings(ex[1]).locals_capt
         b = get_binding(ctx, id)
         !b.is_captured && continue
         from_outer_lambda && continue
@@ -343,13 +340,13 @@ function _analyze_lambda_vars!(ctx::VariableAnalysisContext, ex)
     end
     isempty(candidates) && return
 
-    state = DefUseState(lambda_bindings.scope_id, ctx, candidates)
+    state = DefUseState(lambda_bindings(ex[1]).scope_id, ctx, candidates)
     @stm ex begin
-        [K"lambda" _ _ body] -> du_visit!(ctx, state, body)
-        [K"lambda" _ _ body rett] -> (du_visit!(ctx, state, body);
+        [K"lambda" _ _ _ body] -> du_visit!(ctx, state, body)
+        [K"lambda" _ _ _ body rett] -> (du_visit!(ctx, state, body);
                                       du_visit!(ctx, state, rett))
-        [K"toplevel_lambda" _ _ body] -> du_visit!(ctx, state, body)
-        [K"generated_lambda" _ _ body] -> du_visit!(ctx, state, body)
+        [K"toplevel_lambda" _ _ _ body] -> du_visit!(ctx, state, body)
+        [K"generated_lambda" _ _ _ body] -> du_visit!(ctx, state, body)
     end
 
     for id in union(state.live, state.unused)

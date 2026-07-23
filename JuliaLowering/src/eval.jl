@@ -397,7 +397,7 @@ function collect_locs!(node_sources, codeinfos, top_sf, st)
         push!(codeinfos, st)
         # TODO: macro_source is ignored for now
         get!(node_sources, st._id, _di_pos(st))
-        for c in children(st[1])
+        for c in children(st[2])
             node_sources[c._id] =
                 if _di_sourcefile(c) !== top_sf
                     top_sf isa SourceFile &&
@@ -422,8 +422,8 @@ function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
                            node_sources::Dict{NodeId, Tuple{Int32, Int32}},
                            spans::Vector{Tuple{Int32, Int32}})
     @jl_assert kind(st) === K"code_info" st
-    locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[1]))
-        for c in children(st[1])
+    locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[2]))
+        for c in children(st[2])
             if top_sbt isa String # precise provenance
                 push!(a, Int32(searchsortedfirst(spans, node_sources[c._id])))
             else
@@ -437,10 +437,10 @@ function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
         a
     end
 
-    setattr!(st, :debuginfo, Core.DebugInfo(
+    setmeta!(st, :debuginfo, Core.DebugInfo(
         file, top_sbt, Core.svec(),
         @ccall(jl_compress_codelocs((-1)::Int32, locs::Any,
-                                    numchildren(st[1])::Csize_t)::String)))
+                                    numchildren(st[2])::Csize_t)::String)))
 end
 
 # Populate `.debuginfo` on all K"code_info" in `st`
@@ -530,7 +530,9 @@ end
 
 # Convert SyntaxTree to the CodeInfo+Expr data structures understood by the
 # Julia runtime
-function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
+function to_code_info(ex::SyntaxTree)
+    slots = ex[1].value::Vector{Slot}
+    meta = ex.meta
     nargs = sum((s.kind==:argument for s in slots), init=0)
     slotnames = Vector{Symbol}(undef, length(slots))
     slot_rename_inds = Dict{String,Int}()
@@ -556,9 +558,9 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
             slot.is_called        << 6   # SLOT_CALLED        | -
     end
 
-    stmts = map(_to_lowered_expr, children(ex[1]))
+    stmts = map(_to_lowered_expr, children(ex[2]))
     has_image_globalref = any(codeinfo_has_image_globalref, stmts)
-    ssaflags = compute_ssaflags(ex[1])
+    ssaflags = compute_ssaflags(ex[2])
     propagate_inbounds =
         get(meta, :propagate_inbounds, false)
     has_fcall = any(codeinfo_has_fcall, stmts)
@@ -588,11 +590,11 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     inlining_cost       = 0xffff
     rettype             = Any
 
-    @jl_assert(length(stmts) == numchildren(ex[1]), ex)
+    @jl_assert(length(stmts) == numchildren(ex[2]), ex)
 
     _CodeInfo(
         stmts,
-        ex.debuginfo,
+        getmeta(ex, :debuginfo, nothing),
         ssavaluetypes,
         ssaflags,
         slotnames,
@@ -618,7 +620,6 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
 end
 
 @fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
-    ensure_attributes!(ex._graph; debuginfo=Any)
     @jl_assert kind(ex) in KSet"thunk code_info" ex
     add_debuginfo!(kind(ex) === K"thunk" ? ex[1] : ex)
     _to_lowered_expr(ex)
@@ -658,7 +659,7 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"syntaxinert"
         ex[1]
     elseif k == K"code_info"
-        to_code_info(ex, ex.slots, ex.meta)
+        to_code_info(ex)
     elseif k == K"Value"
         @jl_assert !isa_lowering_ast_node(ex.value) (
             ex, string("smuggling AST through Value is asking for trouble; ",

@@ -180,11 +180,10 @@ function _register_kinds()
             "generated_lambda"
             "toplevel_lambda"
 
-            "toplevel_pure"
-            "toplevel_thunk"
             # Options specific to K"scope_block"
             "hard_scope"
             "neutral_scope"
+
             "LambdaBindings"
             "Slots"
         "END_LOWERING_KINDS"

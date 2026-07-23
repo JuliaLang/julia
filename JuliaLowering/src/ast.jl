@@ -30,7 +30,6 @@ else
     end
 end
 
-#-------------------------------------------------------------------------------
 abstract type AbstractLoweringContext end
 
 """
@@ -81,6 +80,8 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
               k == K"Char"    ? convert(Char,    value) :
               k == K"Value"   ? value                   :
               k == K"Bool"    ? value                   :
+              k == K"LambdaBindings" ? value :
+              k == K"Slots" ? value :
               k == K"VERSION" ? value                   :
               error("Unexpected leaf kind `$k`")
         setattr!(leaf._graph, leaf._id, :value, val)

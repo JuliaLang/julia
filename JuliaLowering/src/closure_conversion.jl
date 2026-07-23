@@ -483,7 +483,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         @jl_assert ctx.lifted ex
         # The method sp svec needs every sp the body and sig capture
         cr = ctx.capture_rewriting
-        sp_ids = IdTag[c.var_id::IdTag for c in children(ex[3][2])]
+        sp_ids = IdTag[c.var_id::IdTag for c in children(ex[3][3])]
         if cr isa ClosureInfo
             append!(sp_ids, sp.var_id::IdTag for sp in cr.capt_sp)
         end
@@ -602,7 +602,7 @@ end
 function closure_convert_lambda(ctx, ex, sps)
     k = kind(ex)
     @jl_assert k in KSet"lambda toplevel_lambda generated_lambda" ex
-    lambda_bindings = ex.lambda_bindings::LambdaBindings
+    lbs = lambda_bindings(ex[1])
     interpolations = nothing
     if isnothing(ctx.capture_rewriting)
         # Global method which may capture locals
@@ -614,18 +614,18 @@ function closure_convert_lambda(ctx, ex, sps)
     ctx2 = ClosureConversionCtx(
         ctx.graph, ctx.bindings, ctx.mod,
         ctx.closure_bindings, cap_rewrite, ctx.top_bindings,
-        lambda_bindings, ctx.sp_typevars,
+        lbs, ctx.sp_typevars,
         k === K"toplevel_lambda", k === K"toplevel_lambda",
         ctx.toplevel_pure && k == K"generated_lambda",
         ctx.toplevel_stmts, ctx.closure_infos)
     lambda_children = SyntaxList(ctx)
-    args = ex[1]
-    push!(lambda_children, args)
-    push!(lambda_children, @ast ctx ex[2] [K"block" sps...])
+    push!(lambda_children, ex[1])
+    push!(lambda_children, ex[2])
+    push!(lambda_children, @ast ctx ex[3] [K"block" sps...])
 
     # Add box initializations for arguments which are captured by an inner lambda
     body_stmts = SyntaxList(ctx)
-    for arg in children(args)
+    for arg in children(ex[2])
         kind(arg) != K"Placeholder" || continue
         if is_boxed(ctx, arg)
             push!(body_stmts, @ast ctx arg [K"="
@@ -635,19 +635,19 @@ function closure_convert_lambda(ctx, ex, sps)
         end
     end
     # Convert body.
-    input_body_stmts = kind(ex[3]) != K"block" ? ex[3:3] : ex[3][1:end]
+    input_body_stmts = kind(ex[4]) != K"block" ? ex[4:4] : ex[4][1:end]
     for e in input_body_stmts
         push!(body_stmts, _convert_closures(ctx2, e))
     end
-    push!(lambda_children, @ast ctx2 ex[3] [K"block" body_stmts...])
+    push!(lambda_children, @ast ctx2 ex[4] [K"block" body_stmts...])
 
-    if numchildren(ex) > 3
+    if numchildren(ex) > 4
         # Convert return type
-        @jl_assert numchildren(ex) == 4 ex
-        push!(lambda_children, _convert_closures(ctx2, ex[4]))
+        @jl_assert numchildren(ex) == 5 ex
+        push!(lambda_children, _convert_closures(ctx2, ex[5]))
     end
 
-    lam = setattr!(mknode(ex, lambda_children), :lambda_bindings, lambda_bindings)
+    lam = mknode(ex, lambda_children)
     if !isnothing(interpolations) && !isempty(interpolations)
         @ast ctx ex [K"call"
             replace_captured_locals::K"Value"
@@ -681,14 +681,14 @@ Invariants:
 )
     # TODO: ctx.mod is used instead of syntax_module(ex) beyond this point,
     # which is dubious
+    lbs = lambda_bindings(ex[1])
     ctx_out = ClosureConversionCtx(ctx.graph, ctx.bindings,
                                    ctx.layer.mod,
                                    ctx.closure_bindings, nothing,
-                                   ex.lambda_bindings, ex.lambda_bindings,
-                                   ctx.sp_typevars,
+                                   lbs, lbs, ctx.sp_typevars,
                                    false, true, true, SyntaxList(ctx.graph),
                                    Dict{ClosureKey,ClosureInfo}())
-    ex_out = closure_convert_lambda(ctx_out, ex, children(ex[2]))
+    ex_out = closure_convert_lambda(ctx_out, ex, children(ex[3]))
     if !isempty(ctx_out.toplevel_stmts)
         throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
     end

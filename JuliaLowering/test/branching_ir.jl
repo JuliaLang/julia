@@ -228,9 +228,9 @@ LoweringError:
 Expression:
   label:foo
 Containing expressions:
-  (toplevel_lambda (block) (block) (block label:foo label:foo))
-  (toplevel_lambda (block) (block) (block label:foo label:foo))
-  (toplevel_lambda (block) (block) (block label:foo label:foo))
+  (toplevel_lambda LambdaBindings (block) (block) (block label:foo label:foo))
+  (toplevel_lambda LambdaBindings (block) (block) (block label:foo label:foo))
+  (toplevel_lambda LambdaBindings (block) (block) (block label:foo label:foo))
 
 ########################################
 # Error: using value of symbolic label
@@ -241,9 +241,9 @@ LoweringError:
 Expression:
   label:foo
 Containing expressions:
-  (toplevel_lambda (block) (block) (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing (= #₂ label:foo) (= #₃ (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅ #₃) (= #₄/tmp #₂) (if (call core.isa #₄/tmp #₅) core.nothing (= #₄/tmp (call top.convert #₅ #₄/tmp))) #₄/tmp)) #₂))
+  (toplevel_lambda LambdaBindings (block) (block) (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing (= #₂ label:foo) (= #₃ (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅ #₃) (= #₄/tmp #₂) (if (call core.isa #₄/tmp #₅) core.nothing (= #₄/tmp (call top.convert #₅ #₄/tmp))) #₄/tmp)) #₂))
   (block (block (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing) (= #₂ label:foo) (= #₃ (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅ #₃) (= #₄/tmp #₂) (if (call core.isa #₄/tmp #₅) core.nothing (= #₄/tmp (call top.convert #₅ #₄/tmp))) #₄/tmp)) #₂))
-  (toplevel_lambda (block) (block) (block (= #₁/x label:foo)))
+  (toplevel_lambda LambdaBindings (block) (block) (block (= #₁/x label:foo)))
   (toplevel_lambda (block) (block) (= x label:foo))
 
 ########################################

@@ -16,6 +16,8 @@ function _value_string(ex)
           k == K"Symbol"      ? ":$(ex.name_val)" :
           k == K"globalref"   ? "$(ex.mod).$(ex.name_val)" :
           k == K"slot"        ? "slot" :
+          k == K"Slots"       ? "Slots" :
+          k == K"LambdaBindings" ? "LambdaBindings" :
           k == K"latestworld" ? "latestworld" :
           k == K"static_parameter" ? "static_parameter" :
           k == K"symboliclabel" ? "label:$(ex.name_val)" :
@@ -257,7 +259,7 @@ function _find_method_lambda(ex0, name)
     ex = kind(ex0) === K"thunk" ? ex0[1] : ex0
     @jl_assert kind(ex) == K"code_info" ex
     # Heuristic search through outer thunk for the method in question.
-    stmts = children(ex[1])
+    stmts = children(ex[2])
     for e in stmts
         if kind(e) == K"method" && numchildren(e) >= 3
             sig = _deref_ssa(stmts, e[2])
@@ -290,9 +292,9 @@ function _print_ir(io::IO, ex0, indent)
     added_indent = "    "
     (ex, is_toplevel_thunk) = kind(ex0) === K"thunk" ? (ex0[1],true) : (ex0,false)
     @jl_assert ((kind(ex) == K"lambda" || kind(ex) == K"code_info")
-                && kind(ex[1]) == K"block") ex
+                && kind(ex[2]) == K"block") ex
     if !is_toplevel_thunk && kind(ex) == K"code_info"
-        slots = ex.slots
+        slots = ex[1].value
         print(io, indent, "slots: [")
         for (i,slot) in enumerate(slots)
             print(io, "slot$(subscript_str(i))/$(slot.name)")
@@ -311,7 +313,7 @@ function _print_ir(io::IO, ex0, indent)
         end
         println(io, "]")
     end
-    stmts = children(ex[1])
+    stmts = children(ex[2])
     for (i, e) in enumerate(stmts)
         lno = rpad(i, 3)
         if kind(e) == K"method" && numchildren(e) == 3

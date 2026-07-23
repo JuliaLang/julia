@@ -479,7 +479,6 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         else
             arg_bindings[1].var_id
         end
-        lambda_bindings = LambdaBindings(self_id, newscope.id, newscope.locals_capt)
         body_stmts = SyntaxList(ctx)
         add_local_decls!(ctx, body_stmts, ex, newscope)
         body = _resolve_scopes(ctx, ex[3], newscope)
@@ -491,14 +490,13 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         ret_var = numchildren(ex) == 4 ?
             _resolve_scopes(ctx, ex[4], newscope) : nothing
         pop!(ctx.scope_stack)
-
-        out = @ast ctx ex [k
+        @ast ctx ex [k
+            LambdaBindings(self_id, newscope.id, newscope.locals_capt)::K"LambdaBindings"
             arg_bindings
             [K"block" sparam_bindings...]
             [K"block" body_stmts...]
             ret_var
         ]
-        setattr!(out, :lambda_bindings, lambda_bindings)
     elseif k == K"scope_block"
         newscope = enter_scope!(ctx, ex)
         stmts = SyntaxList(ctx)
@@ -909,21 +907,21 @@ function analyze_variables!(ctx, ex)
         analyze_variables!(ctx, ex[9])
         pop!(ctx.method_def_stack)
         pop!(ctx.closure_key_stack)
-    elseif k in KSet"lambda" # generated_lambda?
-        lambda_bindings = ex.lambda_bindings::LambdaBindings
+    elseif k in KSet"lambda toplevel_lambda generated_lambda"
+        lbs = lambda_bindings(ex[1])
         if !isempty(ctx.closure_key_stack)
             # Record all lambdas for the same closure type in one place
             ck = last(ctx.closure_key_stack)
             if get_binding(ctx, ck.binding).kind === :local
-                push!(ctx.closure_bindings[ck].lambdas, lambda_bindings)
+                push!(ctx.closure_bindings[ck].lambdas, lbs)
             end
         end
         let ctx2 = VariableAnalysisContext(
             ctx.graph, ctx.layer, ctx.bindings, ctx.scopes,
-            lambda_bindings, false, ctx.method_def_stack,
+            lbs, false, ctx.method_def_stack,
             ctx.closure_key_stack, ctx.closure_bindings,
             ctx.sp_typevars, ctx.tv_deps, ctx.types_in_analysis)
-            foreach(e->analyze_variables!(ctx2, e), ex[3:end])
+            foreach(e->analyze_variables!(ctx2, e), ex[4:end])
         end
     else
         for e in children(ex)
@@ -942,9 +940,7 @@ function resolve_scopes(ctx::ScopeResolutionContext, ex)
     _resolve_scopes(ctx, ex, nothing)
 end
 
-ensure_scope_attributes!(graph) = ensure_attributes!(
-    ensure_desugaring_attributes!(graph),
-    lambda_bindings=LambdaBindings)
+ensure_scope_attributes!(graph) = ensure_desugaring_attributes!(graph)
 
 """
 This pass analyzes scopes and the names (locals/globals etc) used within them.
@@ -971,7 +967,7 @@ enclosing lambda form and information about variables captured by closures.
                                   world)
     ex2 = resolve_scopes(ctx2, ex)
     ctx3 = VariableAnalysisContext(graph, ctx2.layer, ctx2.bindings,
-                                   ctx2.scopes, ex2.lambda_bindings, true,
+                                   ctx2.scopes, lambda_bindings(ex2[1]), true,
                                    SyntaxList(graph), Vector{ClosureKey}(),
                                    Dict{ClosureKey,ClosureBindings}(),
                                    ctx2.sp_typevars, ctx2.tv_deps, Set{IdTag}())

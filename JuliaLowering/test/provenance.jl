@@ -22,7 +22,7 @@ end
     JuliaLowering.@jl_assert kind(st_thunk) === K"thunk" &&
         kind(st) === K"code_info" (st_thunk, "fix this brittle test")
     add_debuginfo!(st)
-    csbt = st.debuginfo
+    csbt = st.meta[:debuginfo]
     usbt = uncompress_sbt(csbt)
     cusbt = compress_sbt(usbt)
     @test csbt isa Core.DebugInfo
@@ -30,8 +30,8 @@ end
     @test cusbt isa String
     @test cusbt === csbt.linetable
 
-    @test length(usbt.spans) <= numchildren(st[1]) # lhs is unique locs
-    test_byte_precise(csbt, numchildren(st[1]))
+    @test length(usbt.spans) <= numchildren(st[2]) # lhs is unique locs
+    test_byte_precise(csbt, numchildren(st[2]))
 end
 
 @testset "Attaching DebugInfo to methods" begin
