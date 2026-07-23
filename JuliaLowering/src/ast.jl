@@ -50,7 +50,7 @@ Lexical scope ID
 """
 const ScopeId = Int
 
-JuliaSyntax.SyntaxList(ctx::AbstractLoweringContext) = SyntaxList(ctx.graph)
+JuliaSyntax.SyntaxList(ctx::AbstractLoweringContext) = SyntaxList()
 
 function JuliaSyntax.newleaf(ctx::AbstractLoweringContext,
                     prov::Union{SyntaxTree, SourceAttrType},
@@ -63,13 +63,13 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
     leaf = newleaf(ctx, prov, k)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
             k == K"globalref" || k == K"Placeholder"
-        setattr!(leaf._graph, leaf._id, :value, value)
+        setattr!(leaf, :value, value)
     elseif k == K"BindingId"
-        setattr!(leaf._graph, leaf._id, :value, value)
+        setattr!(leaf, :value, value)
     elseif k == K"label"
-        setattr!(leaf._graph, leaf._id, :value, value)
+        setattr!(leaf, :value, value)
     elseif k == K"symboliclabel" || k == K"symbolicgoto"
-        setattr!(leaf._graph, leaf._id, :value, value)
+        setattr!(leaf, :value, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
                      softscope nothing"
         # no attributes
@@ -87,7 +87,7 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
               k == K"static_parameter" ? value :
               k == K"VERSION" ? value                   :
               error("Unexpected leaf kind `$k`")
-        setattr!(leaf._graph, leaf._id, :value, val)
+        setattr!(leaf, :value, val)
     end
     leaf
 end
@@ -129,14 +129,13 @@ end
 #-------------------------------------------------------------------------------
 # @ast macro
 
-_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_compatible_graph(graph, ex); ex._id)
+_node_id(graph::SyntaxGraph, ex::SyntaxTree) = ex._id
 
 _node_ids(::SyntaxGraph) = ()
 _node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)
 _node_ids(graph::SyntaxGraph, c, cs...) = (_node_id(graph, c), _node_ids(graph, cs...)...)
 _node_ids(graph::SyntaxGraph, cs::SyntaxList, cs1...) = (_node_ids(graph, cs...)..., _node_ids(graph, cs1...)...)
 function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
-    check_compatible_graph(graph, cs)
     cs.ids
 end
 
@@ -161,7 +160,6 @@ function _append_nodeids!(graph::SyntaxGraph, ids::Vector{NodeId}, vals)
     end
 end
 function _append_nodeids!(graph::SyntaxGraph, ids::Vector{NodeId}, vals::SyntaxList)
-    check_compatible_graph(graph, vals)
     append!(ids, vals.ids)
 end
 

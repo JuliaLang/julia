@@ -68,104 +68,8 @@ end
 # shim for refactoring
 SyntaxTree(g::SyntaxGraph, id::SyntaxTree) = id
 
-function ensure_attributes!(graph::SyntaxGraph; kws...)
-    # for (k,_) in pairs(kws)
-    #     @assert k isa Symbol
-    #     if !haskey(graph.attributes, k)
-    #         graph.attributes[k] = Dict{NodeId,Any}()
-    #     end
-    # end
-    graph
-end
-
-function ensure_attributes(graph::SyntaxGraph; kws...)
-    # g = copy_attrs(graph)
-    # ensure_attributes!(g; kws...)
-    graph
-end
-
-ensure_parser_attributes!(g::SyntaxGraph) = g
-
-function delete_attributes!(graph::SyntaxGraph, attr_names::Symbol...)
-    # for name in attr_names
-    #     delete!(graph.attributes, name)
-    # end
-    graph
-end
-
-function delete_attributes(graph::SyntaxGraph, attr_names::Symbol...)
-    # delete_attributes!(copy_attrs(graph), attr_names...)
-    graph
-end
-
 function setchildren!(id::NodeId, children::AbstractVector{NodeId})
     id.children = children
-end
-
-function is_leaf(graph::SyntaxGraph, id)
-    is_leaf(id)
-end
-
-function numchildren(graph::SyntaxGraph, id)
-    numchildren(id)
-end
-
-function children(graph::SyntaxGraph, id)
-    children(id)
-end
-
-function children(graph::SyntaxGraph, id, r::UnitRange)
-    children(id, r)
-end
-
-function child(graph::SyntaxGraph, id::NodeId, i::Integer)
-    children(id)[i]
-end
-
-function getattr(graph::SyntaxGraph, name::Symbol)
-    error(name)
-end
-
-function hasattr(graph::SyntaxGraph, name::Symbol)
-    error(name)
-end
-
-# TODO: Probably terribly non-inferable?
-function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
-    setattr!(id, k, v)
-    id
-end
-
-function deleteattr!(graph::SyntaxGraph, id::NodeId, name::Symbol)
-    setproperty!(id, name, nothing)
-    # if name === :context
-    #     graph.context[id] = nothing
-    # else
-    #     delete!(getattr(graph, name), id)
-    # end
-end
-
-function Base.getproperty(graph::SyntaxGraph, name::Symbol)
-    error(name)
-end
-
-function check_same_graph(x, y)
-    true
-    # if syntax_graph_js(x) !== syntax_graph_js(y)
-    #     error("Mismatching syntax graphs")
-    # end
-end
-
-function check_compatible_graph(x, y)
-    true
-    # if !is_compatible_graph(x, y)
-    #     error("Incompatible syntax graphs")
-    # end
-end
-
-function is_compatible_graph(x, y)
-    # syntax_graph_js(x).edges === syntax_graph_js(y).edges
-    true
 end
 
 # fallback printing
@@ -193,13 +97,6 @@ function Base.getproperty(ex::SyntaxTree, name::Symbol)
     name === :_graph && return SyntaxGraph()
     name === :_id  && return ex
     return getfield(ex, name)
-    # name === :children  && return getfield(ex, :children)
-    # val = get(ex, name, nothing)
-    # if !isnothing(val) || getfield(ex, :kind) === K"Value"
-    #     return val
-    # else
-    #     error("Property `$name` not defined on node: $(kind(ex))")
-    # end
 end
 
 function Base.get(ex::SyntaxTree, name::Symbol, default)
@@ -539,9 +436,6 @@ function _flattened_provenance(st::SyntaxTree, out)
 end
 
 function is_ancestor(ex, ancestor)
-    if !is_compatible_graph(ex, ancestor)
-        return false
-    end
     sources = ex._graph.source
     id::NodeId = ex._id
     while true
@@ -559,10 +453,6 @@ end
 
 function reparent(ctx, ex::SyntaxTree)
     ex
-end
-
-function ensure_attributes(ex::SyntaxTree; kws...)
-    reparent(ensure_attributes(syntax_graph_js(ex); kws...), ex)
 end
 
 sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
@@ -595,9 +485,6 @@ tree_ids(sts::SyntaxTree...) = NodeId[st._id for st in sts]
 
 syntax_graph_js(s::SyntaxGraph) = s
 syntax_graph_js(any) = SyntaxGraph()
-
-setchildren!(graph::SyntaxGraph, id::NodeId, children::SyntaxList) =
-    setchildren!(id, children.ids)
 
 function mapsyntax(f, exs::AbstractVector{SyntaxTree})
     out = SyntaxList(syntax_graph_js(exs))
@@ -707,11 +594,11 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph, id1::NodeId, seen)
     let copied = get(seen, id1, nothing)
         isnothing(copied) || return copied
     end
-    id2 = copy(id1)
+    id2 = is_leaf(id1) ? mkleaf(id1) : mknode(id1, children(id1))
     seen[id1] = id2
-    if !is_leaf(graph1, id1)
+    if !is_leaf(id1)
         cs = NodeId[]
-        for cid in children(graph1, id1)
+        for cid in children(id1)
             push!(cs, _copy_ast(graph2, graph1, cid, seen))
         end
         setchildren!(id2, cs)
@@ -719,9 +606,9 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph, id1::NodeId, seen)
     src1 = get(SyntaxTree(graph1, id1), :source, nothing)
     if src1 isa NodeId
         src2 =  _copy_ast(graph2, graph1, src1, seen)
-        setattr!(graph2, id2, :source, src2)
+        setattr!(id2, :source, src2)
     elseif !isnothing(src1)
-        setattr!(graph2, id2, :source, src1)
+        setattr!(id2, :source, src1)
     else
         throw(node_string(SyntaxTree(graph1, id1))*node_string(SyntaxTree(graph2, id2)))
     end
@@ -791,12 +678,11 @@ Give each descendent of `st` a `parent::NodeId` attribute.
 function annotate_parent!(st::SyntaxTree)
     g = syntax_graph_js(st)
     st = unalias_nodes(SyntaxTree(g, st._id))
-    ensure_attributes!(g; parent=NodeId)
     mapchildren(t->_annotate_parent!(t, st._id), syntax_graph_js(st), st)
 end
 
 function _annotate_parent!(st::SyntaxTree, pid::NodeId)
-    setattr!(st, :parent, pid)
+    setmeta!(st, :parent, pid)
     mapchildren(t->_annotate_parent!(t, st._id), syntax_graph_js(st), st)
 end
 
@@ -1086,8 +972,6 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
 end
 
 function SyntaxTree(graph::SyntaxGraph, sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor)
-    ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16,
-                       source=SourceAttrType, value=Any)
     green_id = GC.@preserve sf begin
         raw_offset, txtbuf = _unsafe_wrap_substring(sf[].code)
         offset = raw_offset - sf[].byte_offset
@@ -1105,7 +989,7 @@ function _insert_green(graph::SyntaxGraph, sf::Base.RefValue{SourceFile},
     source = SourceRef(sf, first_byte(cursor), last_byte(cursor))
     id = SyntaxTree(kind(cursor), nothing, nothing, source, nothing)
     let f = remove_flags(flags(cursor), NON_TERMINAL_FLAG)
-        f != 0 && setattr!(graph, id, :syntax_flags, f)
+        f != 0 && setattr!(id, :syntax_flags, f)
     end
     if !is_leaf(cursor)
         cs = SyntaxList(graph)
@@ -1117,9 +1001,9 @@ function _insert_green(graph::SyntaxGraph, sf::Base.RefValue{SourceFile},
         v = parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ offset)
         if v isa Symbol
             # TODO: Fixes in JuliaSyntax to avoid ever converting to Symbol
-            setattr!(graph, id, :value, string(v))
+            setattr!(id, :value, string(v))
         elseif !isnothing(v)
-            setattr!(graph, id, :value, v)
+            setattr!(id, :value, v)
         end
     end
     return id

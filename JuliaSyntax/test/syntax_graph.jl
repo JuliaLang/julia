@@ -1,4 +1,4 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, prov_end, provenance, macro_prov, macro_prov_end, flattened_provenance, sourceref, unexpanded_sourceref, newleaf, mkleaf, mknode, mktree, setattr!, hasattr, SyntaxContext, ScopeLayer
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, prov_end, provenance, macro_prov, macro_prov_end, flattened_provenance, sourceref, unexpanded_sourceref, newleaf, mkleaf, mknode, mktree, setattr!, hasattr, SyntaxContext, ScopeLayer
 
 "For filling required attrs in graphs created by hand"
 function testgraph(edge_ranges, edges, more_attrs...)
@@ -12,59 +12,6 @@ function testgraph(edge_ranges, edges, more_attrs...)
         Dict{Symbol, Dict{NodeId, Any}}(
             :kind => kinds, :source => sources,
             :orig => orig, more_attrs...))
-end
-
-@testset "SyntaxGraph attrs" begin
-    g_dict = SyntaxGraph()
-    g_nt = ensure_attributes(
-        SyntaxGraph(Vector{UnitRange{Int}}(), Vector{NodeId}(), (;)),
-        kind=Kind,
-        source=SourceAttrType,
-        context=SyntaxContext,
-        syntax_flags=UInt16,
-        value=Any,
-        name_val=String,
-        mod=Module)
-
-    # Check that a default graph has required attrs
-    @test (:kind=>Any) in attrdefs(g_dict)
-    @test (:source=>Any) in attrdefs(g_dict)
-    @test (:value=>Any) in attrdefs(g_dict)
-    @test (:name_val=>Any) in attrdefs(g_dict)
-    @test (:kind=>Kind) in attrdefs(g_nt)
-    @test (:source=>SourceAttrType) in attrdefs(g_nt)
-    @test (:value=>Any) in attrdefs(g_nt)
-    @test (:name_val=>String) in attrdefs(g_nt)
-
-    # ensure_attributes
-    g_nt2 = ensure_attributes(g_nt, test_attr=Symbol, foo=Type)
-    g_dict2 = ensure_attributes(g_dict, test_attr=Symbol, foo=Type)
-    # returns a graph with the same attribute storage
-    @test g_nt2.attributes isa NamedTuple
-    @test g_dict2.attributes isa Dict
-    # does its job
-    @test (:test_attr=>Symbol) in attrdefs(g_nt2)
-    @test (:foo=>Type) in attrdefs(g_nt2)
-    @test Set(keys(g_nt2.attributes)) == Set(keys(g_dict2.attributes))
-    # no mutation
-    @test !((:test_attr=>Symbol) in attrdefs(g_nt))
-    @test !((:foo=>Type) in attrdefs(g_nt))
-    @test Set(keys(g_nt.attributes)) == Set(keys(g_dict.attributes))
-
-    # delete_attributes
-    g_nt3 = delete_attributes(g_nt2, :test_attr, :foo)
-    g_dict3 = delete_attributes(g_dict2, :test_attr, :foo)
-    # returns a graph with the same attribute storage
-    @test g_nt3.attributes isa NamedTuple
-    @test g_dict3.attributes isa Dict
-    # does its job
-    @test !((:test_attr=>Symbol) in attrdefs(g_nt3))
-    @test !((:foo=>Type) in attrdefs(g_nt3))
-    @test Set(keys(g_nt3.attributes)) == Set(keys(g_dict3.attributes))
-    # no mutation
-    @test (:test_attr=>Symbol) in attrdefs(g_nt2)
-    @test (:foo=>Type) in attrdefs(g_nt2)
-    @test Set(keys(g_nt2.attributes)) == Set(keys(g_dict2.attributes))
 end
 
 @testset "SyntaxTree parsing" begin
@@ -196,7 +143,6 @@ end
                           map(i->i+3, 1:6)...
                           map(LineNumberNode, 7:9)...])))
         st = SyntaxTree(g, 1)
-        new_g = ensure_attributes!(SyntaxGraph(); attrdefs(g)...)
 
         stcopy = copy_ast(new_g, st)
         # Each node should be copied once

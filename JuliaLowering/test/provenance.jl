@@ -17,7 +17,6 @@ end
 
 @testset "SourceByteTable roundtrip" begin
     st_thunk = jl_lower(test_mod, JuliaSyntax.parsestmt(SyntaxTree, "1 + 2 - \n 3"))
-    JuliaSyntax.ensure_attributes!(st_thunk._graph; debuginfo=Any)
     st = st_thunk[1]
     JuliaLowering.@jl_assert kind(st_thunk) === K"thunk" &&
         kind(st) === K"code_info" (st_thunk, "fix this brittle test")

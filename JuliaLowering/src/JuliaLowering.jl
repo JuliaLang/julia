@@ -13,9 +13,8 @@ else
 end
 
 using .JuliaSyntax: @KSet_str, @stm, Kind, NodeId, SourceAttrType, SourceRef, SyntaxGraph,
-    SyntaxList, SyntaxTree, byte_range, check_compatible_graph, children, copy_ast,
-    delete_attributes, ensure_attributes!, filename, first_byte,
-    flattened_provenance, hasattr, head, highlight, is_compatible_graph,
+    SyntaxList, SyntaxTree, byte_range, children, copy_ast, filename, first_byte,
+    flattened_provenance, hasattr, head, highlight,
     is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, mkleaf, mknode, newleaf,
     newnode, node_string, numchildren, provenance, reparent, setattr, setattr!,
     source_location, sourcefile, sourceref, tree_ids, mapindex, mktree,
