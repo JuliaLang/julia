@@ -188,30 +188,35 @@ end
 10  (return %₅)
 
 ########################################
-# @locals with function args (TODO: static parameters)
-function f(z)
+# @locals with function args, sparams
+function f(z::T) where T
     @locals
 end
 #---------------------
 1   (call core.define_method TestMod :f)
 2   latestworld
-3   TestMod.f
-4   (call core.TypeEqOf %₃)
-5   (call core.svec %₄ core.Any)
-6   (call core.svec)
-7   SourceLocation::1:1
-8   (call core.svec %₅ %₆ %₇)
-9   (call core.define_method TestMod TestMod.f %₈
+3   (call core.TypeVar :T)
+4   TestMod.f
+5   (call core.TypeEqOf %₄)
+6   (call core.svec %₅ %₃)
+7   (call core.svec %₃)
+8   SourceLocation::1:1
+9   (call core.svec %₆ %₇ %₈)
+10  (call core.define_method TestMod TestMod.f %₉
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (gotoifnot true label₅)
     4   (call top.setindex! %₂ slot₂/z :z)
-    5   (return %₂)
-10  latestworld
-11  TestMod.f
-12  (return %₁₁)
+    5   (isdefined static_parameter₁)
+    6   (gotoifnot %₅ label₉)
+    7   static_parameter₁
+    8   (call top.setindex! %₂ %₇ :T)
+    9   (return %₂)
+11  latestworld
+12  TestMod.f
+13  (return %₁₂)
 
 ########################################
 # Error: Duplicate function argument names
