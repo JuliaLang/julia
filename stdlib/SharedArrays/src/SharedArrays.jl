@@ -274,16 +274,15 @@ function initialize_shared_array(S, onlocalhost, init, pids)
 end
 
 function finalize_refs(S::SharedArray{T,N}) where T where N
-    if length(S.pids) > 0
-        for r in S.refs
-            finalize(r)
-        end
-        empty!(S.pids)
-        empty!(S.refs)
-        init_loc_flds(S)
-        S.s = Array{T}(undef, ntuple(d->0,N))
-        delete!(sa_refs, S.id)
+    for r in S.refs
+        finalize(r)
     end
+    empty!(S.pids)
+    empty!(S.refs)
+    init_loc_flds(S)
+    S.s = Array{T}(undef, ntuple(d->0,N))
+    S.dims = ntuple(d->0,N)
+    delete!(sa_refs, S.id)
     S
 end
 
@@ -628,9 +627,15 @@ on the host process.
 
 Must be called from the process that created `S`; calling it from any other process throws an `ArgumentError`.
 
+!!! warning
+     The workers' mappings are revoked eagerly. Accessing the array's data on a worker
+     afterwards is undefined behavior.
+
 !!! note
      Relying on the finalizers to perform cleanup requires multiple GC rounds to release the underlying
      mmap. Call this function proactively to ensure a single GC round is sufficient.
+
+To also release the current process's own mapping, use `close(S)`.
 """
 function unshare!(S::SharedArray)
     if !isempty(S.pids)
@@ -648,6 +653,26 @@ function unshare!(S::SharedArray)
         init_loc_flds(S)
         return nothing
     end
+end
+
+"""
+    close(S::SharedArray)
+
+Eagerly release the resources referenced through `S`, unmapping its shared memory on every
+mapped process, including the current one. Afterwards `S` no longer refers to that data and
+neither it nor any alias (e.g. from [`sdata`](@ref)) may be used on any process. Garbage
+collection performs the same cleanup once the array and all aliases are unreachable; use
+`close` when the release must be deterministic, e.g. before deleting the file backing a
+file-backed `SharedArray`.
+
+Like [`unshare!`](@ref), must be called from the process that created `S`. To revoke only
+the workers' access, keeping the array usable on the current process, use `unshare!` instead.
+"""
+function Base.close(S::SharedArray)
+    unshare!(S)
+    isempty(S.s) || Mmap.munmap!(S.s)
+    finalize_refs(S)
+    return nothing
 end
 
 function print_shmem_limits(slen)

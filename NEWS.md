@@ -147,6 +147,12 @@ Standard library changes
 
 #### REPL
 
+#### SharedArrays
+
+* `close(::SharedArray)` eagerly releases the shared-memory mappings referenced through the
+  array on all processes, e.g. so the file backing a file-backed `SharedArray` can be deleted
+  immediately ([#62488]).
+
 #### Test
 
 * `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument
