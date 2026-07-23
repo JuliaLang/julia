@@ -2582,7 +2582,10 @@ static bool valid_as_globalinit(const Value *v) {
     return isa<Constant>(v);
 }
 
+static Type *zext_struct_type(Type *T);
 static Value *zext_struct(jl_codectx_t &ctx, Value *V);
+static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
+static Value *trunc_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2);
 
 // TODO: in the future, assume all callers will handle the interior pointers separately, and have
 // have zext_struct strip them out, so we aren't saving those to the stack here causing shadow stores
@@ -6332,7 +6335,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 setName(ctx.emission_context, ssaslot, varslot->getName() + StringRef(".ssa"));
                 ssaslot->insertAfter(varslot);
                 if (vi.isVolatile) {
-                    Value *unbox = ctx.builder.CreateAlignedLoad(ssaslot->getAllocatedType(), varslot, varslot->getAlign(), true);
+                    Value *unbox = ctx.builder.CreateAlignedLoad(zext_struct_type(ssaslot->getAllocatedType()), varslot, varslot->getAlign(), true);
                     stack_ai.decorateInst(ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign()));
                 }
                 else {
@@ -8199,8 +8202,9 @@ static Function *gen_cfun_wrapper(
                     inputarg = ghostValue(ctx, jargty);
                 }
                 else {
-                    val = ctx.builder.CreateAlignedLoad(T, val, Align(1)); // make no alignment assumption about pointer from C
-                    inputarg = mark_julia_type(ctx, val, false, jargty);
+                    // make no alignment assumption about pointer from C
+                    val = ctx.builder.CreateAlignedLoad(zext_struct_type(T), val, Align(1));
+                    inputarg = mark_julia_type(ctx, trunc_struct_helper(ctx, val, T), false, jargty);
                 }
             }
             else if (static_at || (!jl_is_typevar(jargty) && (!jl_is_datatype(jargty) || jl_is_abstracttype(jargty) || jl_is_mutable_datatype(jargty)))) {
@@ -8263,7 +8267,9 @@ static Function *gen_cfun_wrapper(
                 // undo whatever we might have done to this poor argument
                 assert(jl_is_datatype(jargty));
                 if (sig.byRefList[i]) {
-                    val = ctx.builder.CreateAlignedLoad(sig.fargt[i], val, Align(1)); // unknown alignment from C
+                    // unknown alignment from C
+                    val = ctx.builder.CreateAlignedLoad(zext_struct_type(sig.fargt[i]), val, Align(1));
+                    val = trunc_struct_helper(ctx, val, sig.fargt[i]);
                 }
                 else {
                     bool issigned = jl_signed_type && jl_subtype(jargty_proper, (jl_value_t*)jl_signed_type);
@@ -8323,7 +8329,7 @@ static Function *gen_cfun_wrapper(
         Value *v = emit_unbox(ctx, sig.lrt, retval);
         r = llvm_type_rewrite(ctx, v, prt, issigned);
         if (sig.sret) {
-            ctx.builder.CreateStore(r, sretPtr);
+            ctx.builder.CreateStore(zext_struct(ctx, r), sretPtr);
             r = NULL;
         }
     }
@@ -10186,7 +10192,7 @@ static jl_llvm_functions_t
                 }
                 else if (retvalinfo.V) {
                     Align align(returninfo.union_align);
-                    sret_ai.decorateInst(ctx.builder.CreateAlignedStore(retvalinfo.V, sret, align));
+                    sret_ai.decorateInst(ctx.builder.CreateAlignedStore(zext_struct(ctx, retvalinfo.V), sret, align));
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
             }
