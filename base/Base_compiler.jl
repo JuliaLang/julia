@@ -55,6 +55,9 @@ setproperty!(x::Array, f::Symbol, v) = error("setfield! fields of Array should n
 getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
+getproperty(x::Tuple, f::Integer) = (@inline; getfield(x, Int(f)))
+setproperty!(x::Tuple, f::Integer, v) = setfield!(x, Int(f), v) # to get a decent error
+
 getproperty(x, f::Symbol) = (@inline; getfield(x, f))
 function setproperty!(x, f::Symbol, v)
     ty = fieldtype(typeof(x), f)
@@ -78,6 +81,9 @@ getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order)
 setproperty!(x::Type, f::Symbol, v, order::Symbol) = error("setfield! fields of Types should not be changed")
 getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
+
+getproperty(x::Tuple, f::Integer, order::Symbol) = (@inline; getfield(x, Int(f), order))
+setproperty!(x::Tuple, f::Integer, v, order::Symbol) = setfield!(x, Int(f), v, order) # to get a decent error
 
 getproperty(x, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 function setproperty!(x, f::Symbol, v, order::Symbol)

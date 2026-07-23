@@ -548,6 +548,9 @@ end
 @test Base.isconst(IntIdxFields, 0x2)
 @test !Base.isconst(IntIdxFields, Int8(1))
 @test Base.isconst(IntIdxFields, UInt(2))
+@test getproperty((10, 20, 30), 0x2) === 20
+@test getproperty((10, 20, 30), big(3)) === 30
+@test getproperty((10, 20, 30), Int8(1)) === 10
 
 @test [fieldindex(TLayout, i) for i = (:x, :y, :z)] == [1, 2, 3]
 @test fieldname(TLayout, fieldindex(TLayout, :z)) === :z

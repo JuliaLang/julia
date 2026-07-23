@@ -122,6 +122,9 @@ New library features
   along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
   etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
   returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
+* Field-reflection functions now accept any `Integer` field index in addition to an `Int` or `Symbol`,
+  so a field can be selected by a non-`Int` index such as a `UInt8`. This applies to `fieldtype`,
+  `isconst`, `isfieldatomic`, and to `getproperty`/`setproperty!` on tuples.
 
 Standard library changes
 ------------------------
