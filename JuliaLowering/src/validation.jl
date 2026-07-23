@@ -5,7 +5,7 @@ struct ValidationDiagnostic
 end
 ValidationDiagnostic(st::SyntaxTree, msg, loc) =
     ValidationDiagnostic(
-        SyntaxList(syntax_graph(st), NodeId[st._id]), String[msg], loc)
+        SyntaxList(st._graph, NodeId[st._id]), String[msg], loc)
 
 """
 The type returned by all `vst` functions.  There are three answers this can

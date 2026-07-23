@@ -414,7 +414,7 @@ end
 @fzone "JL: macroexpand" function expand_forms_1(
     st::SyntaxTree, world::UInt, recursive::Bool)
 
-    graph = ensure_macro_attributes!(copy_attrs(syntax_graph(st)))
+    graph = ensure_macro_attributes!(copy_attrs(st._graph))
     st = reparent(graph, st)
     DEBUG && assert_expandable(st)
     ctx = MacroExpansionContext(st, world, recursive)

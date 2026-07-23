@@ -185,15 +185,8 @@ function Base.getproperty(graph::SyntaxGraph, name::Symbol)
     return getattr(graph, name)
 end
 
-"""
-    syntax_graph(ctx)
-
-Return `SyntaxGraph` associated with `ctx`
-"""
-syntax_graph(graph::SyntaxGraph) = graph
-
 function check_same_graph(x, y)
-    if syntax_graph(x) !== syntax_graph(y)
+    if syntax_graph_js(x) !== syntax_graph_js(y)
         error("Mismatching syntax graphs")
     end
 end
@@ -205,7 +198,7 @@ function check_compatible_graph(x, y)
 end
 
 function is_compatible_graph(x, y)
-    syntax_graph(x).edges === syntax_graph(y).edges
+    syntax_graph_js(x).edges === syntax_graph_js(y).edges
 end
 
 """
@@ -218,6 +211,9 @@ struct SyntaxTree{Attrs}
     _graph::SyntaxGraph{Attrs}
     _id::NodeId
 end
+
+syntax_graph_js(s::SyntaxTree) = s._graph
+syntax_graph_js(s::SyntaxGraph) = s
 
 # fallback printing
 function node_string(ex::SyntaxTree, depth=2)
@@ -611,16 +607,14 @@ function reparent(ctx, ex::SyntaxTree)
     # Could relax by copying if necessary?
     # In that case, would we copy all the attributes? That would have slightly
     # different semantics.
-    graph = syntax_graph(ctx)
+    graph = syntax_graph_js(ctx)
     @assert graph.edge_ranges === ex._graph.edge_ranges
     SyntaxTree(graph, ex._id)
 end
 
 function ensure_attributes(ex::SyntaxTree; kws...)
-    reparent(ensure_attributes(syntax_graph(ex); kws...), ex)
+    reparent(ensure_attributes(syntax_graph_js(ex); kws...), ex)
 end
-
-syntax_graph(ex::SyntaxTree) = ex._graph
 
 sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
 byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
@@ -648,7 +642,7 @@ SyntaxList(st::SyntaxTree, rest::SyntaxTree...) =
 
 tree_ids(sts::SyntaxTree...) = NodeId[st._id for st in sts]
 
-syntax_graph(lst::SyntaxList) = lst.graph
+syntax_graph_js(lst::SyntaxList) = lst.graph
 
 setchildren!(graph::SyntaxGraph, id::NodeId, children::SyntaxList) =
     setchildren!(graph, id, children.ids)
@@ -746,7 +740,7 @@ function Base.copy(v::SyntaxList)
 end
 
 function Base.filter(f, exs::SyntaxList)
-    out = SyntaxList(syntax_graph(exs))
+    out = SyntaxList(syntax_graph_js(exs))
     for ex in exs
         if f(ex)
             push!(out, ex)
@@ -756,7 +750,7 @@ function Base.filter(f, exs::SyntaxList)
 end
 
 function mapsyntax(f, exs::SyntaxList)
-    out = SyntaxList(syntax_graph(exs))
+    out = SyntaxList(syntax_graph_js(exs))
     for ex in exs
         push!(out, f(ex))
     end
@@ -764,7 +758,7 @@ function mapsyntax(f, exs::SyntaxList)
 end
 
 function mapindex(sl::SyntaxList, i::Int)
-    out = SyntaxList(syntax_graph(sl))
+    out = SyntaxList(syntax_graph_js(sl))
     for st in sl
         push!(out, getindex(st, i))
     end
@@ -814,7 +808,7 @@ function mknode(old::SyntaxTree, children)
     return st
 end
 function mkleaf(old::SyntaxTree)
-    graph = syntax_graph(old)
+    graph = syntax_graph_js(old)
     st = SyntaxTree(graph, new_id!(graph))
     copy_attrs!(st, old)
     hasattr(old, :context) && setattr!(st, :context, old.context)
@@ -854,7 +848,7 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree)
             if newchild == e
                 continue
             else
-                cs = SyntaxList(syntax_graph(ctx))
+                cs = SyntaxList(syntax_graph_js(ctx))
                 append!(cs, orig_children[1:i-1])
             end
         end
@@ -875,8 +869,8 @@ Recursively copy AST `ex` into `ctx`.  Every node in `ex` should be copied at
 most once.
 """
 function copy_ast(ctx, ex::SyntaxTree)
-    graph1 = syntax_graph(ex)
-    graph2 = syntax_graph(ctx)
+    graph1 = syntax_graph_js(ex)
+    graph2 = syntax_graph_js(ctx)
     @assert graph1 !== graph2 "use mktree(ex) for this"
     id2 = _copy_ast(graph2, graph1, ex._id, Dict{NodeId, NodeId}())
     return SyntaxTree(graph2, id2)
@@ -922,14 +916,14 @@ If a `SyntaxList` is given, every resulting tree will be unique with respect to
 each other as well as internally.  A duplicate entry will produce a copied tree.
 """
 unalias_nodes(st::SyntaxTree) = SyntaxTree(
-    syntax_graph(st),
-    _unalias_nodes(syntax_graph(st), st._id, Set{NodeId}(), Set{Int}()))
+    syntax_graph_js(st),
+    _unalias_nodes(syntax_graph_js(st), st._id, Set{NodeId}(), Set{Int}()))
 
 function unalias_nodes(sl::SyntaxList)
     seen = Set{NodeId}()
     seen_edges = Set{Int}()
-    SyntaxList(syntax_graph(sl),
-               map(id->_unalias_nodes(syntax_graph(sl), id, seen, seen_edges),
+    SyntaxList(syntax_graph_js(sl),
+               map(id->_unalias_nodes(syntax_graph_js(sl), id, seen, seen_edges),
                    sl.ids))
 end
 
@@ -984,7 +978,7 @@ function prune(st::SyntaxTree;
     entrypoints = NodeId[st._id]
     keep isa SyntaxList && append!(entrypoints, keep.ids)
     keep isa SyntaxTree && push!(entrypoints, keep._id)
-    prune(syntax_graph(st), unique(entrypoints))[1]
+    prune(syntax_graph_js(st), unique(entrypoints))[1]
 end
 
 # This implementation unaliases nodes, which undoes a small amount of space
@@ -1057,15 +1051,15 @@ end
 Give each descendent of `st` a `parent::NodeId` attribute.
 """
 function annotate_parent!(st::SyntaxTree)
-    g = syntax_graph(st)
+    g = syntax_graph_js(st)
     st = unalias_nodes(SyntaxTree(g, st._id))
     ensure_attributes!(g; parent=NodeId)
-    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph(st), st)
+    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph_js(st), st)
 end
 
 function _annotate_parent!(st::SyntaxTree, pid::NodeId)
     setattr!(st, :parent, pid)
-    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph(st), st)
+    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph_js(st), st)
 end
 
 #-------------------------------------------------------------------------------
@@ -1427,7 +1421,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         return nothing
     end
 
-    graph = syntax_graph(st)
+    graph = syntax_graph_js(st)
     k = kind(st)
     symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :name_val, s)
     core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)

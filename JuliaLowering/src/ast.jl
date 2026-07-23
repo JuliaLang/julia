@@ -41,10 +41,6 @@ collected later.
 """
 current_lambda_bindings(::AbstractLoweringContext) = nothing
 
-function JuliaSyntax.syntax_graph(ctx::AbstractLoweringContext)
-    ctx.graph
-end
-
 """
 Unique symbolic identity for a variable, constant, label, or other entity
 """
@@ -55,12 +51,12 @@ Lexical scope ID
 """
 const ScopeId = Int
 
-JuliaSyntax.SyntaxList(ctx::AbstractLoweringContext) = SyntaxList(syntax_graph(ctx))
+JuliaSyntax.SyntaxList(ctx::AbstractLoweringContext) = SyntaxList(ctx.graph)
 
 function JuliaSyntax.newleaf(ctx::AbstractLoweringContext,
                     prov::Union{SyntaxTree, SourceAttrType},
                     k::Kind)
-    newleaf(syntax_graph(ctx), prov, k)
+    newleaf(ctx.graph, prov, k)
 end
 
 function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
@@ -95,7 +91,7 @@ end
 JuliaSyntax.newnode(ctx::AbstractLoweringContext,
                     prov::Union{SyntaxTree, SourceAttrType},
                     k::Kind, cs) =
-    newnode(syntax_graph(ctx), prov, k, cs)
+    newnode(ctx.graph, prov, k, cs)
 
 # Convenience functions to create leaf nodes referring to identifiers within
 # the Core and Top modules.
@@ -175,6 +171,8 @@ function _kw_to_pair(ex)
     end
 end
 
+JuliaSyntax.syntax_graph_js(ctx::AbstractLoweringContext) = ctx.graph
+
 function _match_kind(srcref, ex)
     kws = []
     if Meta.isexpr(ex, :call)
@@ -232,7 +230,7 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
                 push!(flatargs, a)
             end
         end
-        children_ex = :(let child_ids = Vector{NodeId}(), graph = syntax_graph($ctx)
+        children_ex = :(let child_ids = Vector{NodeId}(), graph = JuliaSyntax.syntax_graph_js($ctx)
         end)
         child_stmts = children_ex.args[2].args
         for a in flatargs[2:end]

@@ -83,7 +83,7 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
-    anames = join(string.(JuliaSyntax.attrnames(syntax_graph(ex))), ",")
+    anames = join(string.(JuliaSyntax.attrnames(ex._graph)), ",")
     println(io, "SyntaxTree with attributes $anames")
     assert_syntaxtree(ex)
     _show_syntax_tree(io, ex, "", show_kinds, nothing)

@@ -160,11 +160,11 @@ function binding_ex(ctx::AbstractLoweringContext, b::BindingInfo)
     # here, because that's got a concrete type. Whereas if we stored SyntaxTree
     # that would contain the type of the graph used in the pass where the
     # bindings were created and we'd need to call reparent(), etc.
-    SyntaxTree(syntax_graph(ctx), b.node_id)
+    SyntaxTree(ctx.graph, b.node_id)
 end
 binding_ex(ctx, id::IdTag) = binding_ex(ctx, get_binding(ctx, id))
 binding_type_ex(ctx::AbstractLoweringContext, b::BindingInfo) =
-    SyntaxTree(syntax_graph(ctx), b.type)
+    SyntaxTree(ctx.graph, b.type)
 
 # One lambda's variables
 struct LambdaBindings
