@@ -19,7 +19,7 @@ using .JuliaSyntax: SourceAttrType, new_id!, sourcetext
 
 using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
     ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,
-    is_leaf, mapchildren, numchildren, setattr!, showprov, get_name, get_id
+    is_leaf, mapchildren, numchildren, setattr!, showprov, syntax_name, syntax_id
 
 function _ast_test_graph()
     JuliaLowering.ensure_desugaring_attributes!(
@@ -55,9 +55,9 @@ function _format_as_ast_macro(io, ex, indent)
         println(io, indent, "]")
     else
         val_str = if k == K"Identifier" || k == K"core" || k == K"top"
-            repr(get_name(ex))
+            repr(syntax_name(ex))
         elseif k == K"BindingId"
-            repr(get_id(ex))
+            repr(syntax_id(ex))
         else
             repr(get(ex, :value, nothing))
         end
@@ -142,7 +142,7 @@ function format_ir_for_test(mod, case)
     ex = parsestmt(SyntaxTree, case.input)
     try
         if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
-            get_name(ex[1]) == "@ast_")
+            syntax_name(ex[1]) == "@ast_")
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
             ex = Base.eval(mod, JuliaLowering.est_to_expr(ex))

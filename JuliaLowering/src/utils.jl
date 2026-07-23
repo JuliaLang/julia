@@ -5,24 +5,24 @@ attrsummary(name, value::Module) = "$name=$value"
 
 function _value_string(ex)
     k = kind(ex)
-    str = k == K"Identifier"  ? get_name(ex)           :
-          k == K"Placeholder" ? get_name(ex)           :
+    str = k == K"Identifier"  ? syntax_name(ex)           :
+          k == K"Placeholder" ? syntax_name(ex)           :
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
           k == K"label"       ? "label"               :
           k == K"nothing"     ? "core.nothing"        :
-          k == K"core"        ? "core.$(get_name(ex))" :
-          k == K"top"         ? "top.$(get_name(ex))"  :
-          k == K"Symbol"      ? ":$(get_name(ex))" :
-          k == K"globalref"   ? "$(ex.mod).$(get_name(ex))" :
+          k == K"core"        ? "core.$(syntax_name(ex))" :
+          k == K"top"         ? "top.$(syntax_name(ex))"  :
+          k == K"Symbol"      ? ":$(syntax_name(ex))" :
+          k == K"globalref"   ? "$(ex.mod).$(syntax_name(ex))" :
           k == K"slot"        ? "slot" :
           k == K"Slots"       ? "Slots" :
           k == K"LambdaBindings" ? "LambdaBindings" :
           k == K"latestworld" ? "latestworld" :
           k == K"static_parameter" ? "static_parameter" :
-          k == K"symboliclabel" ? "label:$(get_name(ex))" :
-          k == K"symbolicgoto" ? "goto:$(get_name(ex))" :
-          k == K"oldsymbolicgoto" ? "goto:$(get_name(ex))" :
+          k == K"symboliclabel" ? "label:$(syntax_name(ex))" :
+          k == K"symbolicgoto" ? "goto:$(syntax_name(ex))" :
+          k == K"oldsymbolicgoto" ? "goto:$(syntax_name(ex))" :
           k == K"SourceLocation" ?
               "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
               k == K"Value" ?
@@ -31,13 +31,13 @@ function _value_string(ex)
               ex.value isa SyntaxContext ? "SyntaxContext(#=omitted=#)" : repr(ex.value)) :
             hasattr(ex, :value) ? repr(ex.value) : "::K\"$(untokenize(k))\""
     if kind(ex) in KSet"BindingId slot SSAValue static_parameter label"
-        idstr = subscript_str(get_id(ex))
+        idstr = subscript_str(syntax_id(ex))
         str = "$(str)$idstr"
     end
     if k == K"slot" || k == K"BindingId"
         for p in provenance(ex)
             if kind(p) == K"Identifier"
-                str = "$(str)/$(get_name(p))"
+                str = "$(str)/$(syntax_name(p))"
                 break
             end
         end
@@ -50,7 +50,7 @@ end
 const UNUSED = "#unused#"
 
 function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
-    nodestr = kind(ex) === K"unknown_head" ? ("unknown_head:"*get_name(ex)) :
+    nodestr = kind(ex) === K"unknown_head" ? ("unknown_head:"*syntax_name(ex)) :
         !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
 
     treestr = rpad(string(indent, nodestr), 40)
@@ -246,7 +246,7 @@ end
 
 function _deref_ssa(stmts, ex)
     while kind(ex) == K"SSAValue"
-        ex = stmts[get_id(ex)]
+        ex = stmts[syntax_id(ex)]
     end
     ex
 end
@@ -263,7 +263,7 @@ function _find_method_lambda(ex0, name)
             arg_types = _deref_ssa(stmts, sig[2])
             @jl_assert kind(arg_types) == K"call" ex
             self_type = _deref_ssa(stmts, arg_types[2])
-            if kind(self_type) == K"globalref" && occursin(name, get_name(self_type))
+            if kind(self_type) == K"globalref" && occursin(name, syntax_name(self_type))
                 return e[3]
             end
         end
@@ -396,13 +396,13 @@ function _find_assigned_ssavars!(ctx, ssamap, st)
     if kind(st) == K"=" && kind(st[1]) == K"BindingId"
         b = get_binding(ctx, st[1])
         b.is_ssa || return
-        ssamap[b.id] = get_id(ssavar(ctx, st[1], b.name))
+        ssamap[b.id] = syntax_id(ssavar(ctx, st[1], b.name))
     end
     foreach(e->_find_assigned_ssavars!(ctx, ssamap, e), children(st))
 end
 function _replace_binding_ids(ctx, ssamap, st)
     if kind(st) == K"BindingId"
-        id = get(ssamap, get_id(st), nothing)
+        id = get(ssamap, syntax_id(st), nothing)
         isnothing(id) ? st : newleaf(ctx, st, K"BindingId", id)
     elseif is_leaf(st) || is_quoted(st)
         st

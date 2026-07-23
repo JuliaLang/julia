@@ -142,7 +142,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         if kind(mname) != K"Identifier"
             throw(LoweringError(mname, "Expected module name"))
         end
-        newmod_name = Symbol(get_name(mname))
+        newmod_name = Symbol(syntax_name(mname))
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
@@ -632,24 +632,24 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"nothing"
         nothing
     elseif k == K"core"
-        GlobalRef(Core, Symbol(get_name(ex)))
+        GlobalRef(Core, Symbol(syntax_name(ex)))
     elseif k == K"top"
-        GlobalRef(Base, Symbol(get_name(ex)))
+        GlobalRef(Base, Symbol(syntax_name(ex)))
     elseif k == K"globalref"
-        GlobalRef(ex.mod::Module, Symbol(get_name(ex)))
+        GlobalRef(ex.mod::Module, Symbol(syntax_name(ex)))
     elseif k == K"Identifier"
         # TODO: assert false (only reachable from simdloop?)
-        Symbol(get_name(ex))
+        Symbol(syntax_name(ex))
     elseif k == K"SourceLocation"
         QuoteNode(source_location(LineNumberNode, ex))
     elseif k == K"Symbol"
-        QuoteNode(Symbol(get_name(ex)))
+        QuoteNode(Symbol(syntax_name(ex)))
     elseif k == K"slot"
-        Core.SlotNumber(get_id(ex))
+        Core.SlotNumber(syntax_id(ex))
     elseif k == K"static_parameter"
-        Expr(:static_parameter, get_id(ex))
+        Expr(:static_parameter, syntax_id(ex))
     elseif k == K"SSAValue"
-        Core.SSAValue(get_id(ex))
+        Core.SSAValue(syntax_id(ex))
     elseif k == K"return"
         v = _to_lowered_expr(ex[1])
         @jl_assert Base.Compiler.is_valid_return(v) ex
@@ -666,11 +666,11 @@ function _to_lowered_expr(ex::SyntaxTree)
                        "find a SyntaxTree representation"))
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
-        Core.GotoNode(get_id(ex[1]))
+        Core.GotoNode(syntax_id(ex[1]))
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(_to_lowered_expr(ex[1]), get_id(ex[2]))
+        Core.GotoIfNot(_to_lowered_expr(ex[1]), syntax_id(ex[2]))
     elseif k == K"enter"
-        catch_idx = get_id(ex[1])
+        catch_idx = syntax_id(ex[1])
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2]))
@@ -710,7 +710,7 @@ function _to_lowered_expr(ex::SyntaxTree)
         ret = Expr(:cfunction)
         for (i, e) in enumerate(children(ex))
             if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
-                push!(ret.args, QuoteNode(Symbol(get_name(e[1]))))
+                push!(ret.args, QuoteNode(Symbol(syntax_name(e[1]))))
             else
                 push!(ret.args, _to_lowered_expr(e))
             end
@@ -764,7 +764,7 @@ function _foreignsymbol_expr(ex)
         _to_lowered_expr(ex)
     else
         k = kind(ex)
-        Expr(Symbol((k === K"unknown_head" ? get_name(ex) : untokenize(k))::String),
+        Expr(Symbol((k === K"unknown_head" ? syntax_name(ex) : untokenize(k))::String),
              map(_foreignsymbol_expr, children(ex))...)
     end
 end

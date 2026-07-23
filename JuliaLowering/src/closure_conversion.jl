@@ -42,7 +42,7 @@ end
 function captured_var_access(ctx, ex)
     cap_rewrite = ctx.capture_rewriting
     if cap_rewrite isa ClosureInfo
-        field_sym = cap_rewrite.field_names[cap_rewrite.field_inds[get_id(ex)]]
+        field_sym = cap_rewrite.field_names[cap_rewrite.field_inds[syntax_id(ex)]]
         @ast ctx ex [K"call"
             "getfield"::K"core"
             binding_ex(ctx, current_lambda_bindings(ctx).self)
@@ -325,7 +325,7 @@ function convert_local_function_decl(ctx, ex)
         string("#", join(closure_binds.name_stack, "#"), "##"))
     global_clstruct = new_global_binding(ctx, ex, name_str, ctx.mod)
     sp_syms = mapsyntax(sp->newleaf(ctx, sp, K"Symbol",
-                                    get_binding(ctx, get_id(sp)).name),
+                                    get_binding(ctx, syntax_id(sp)).name),
                         capt_sp)
     define_clstruct = type_ex = @ast ctx ex [K"call"
         eval_closure_type::K"Value"
@@ -483,16 +483,16 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         @jl_assert ctx.lifted ex
         # The method sp svec needs every sp the body and sig capture
         cr = ctx.capture_rewriting
-        sp_ids = IdTag[get_id(c) for c in children(ex[3][3])]
+        sp_ids = IdTag[syntax_id(c) for c in children(ex[3][3])]
         if cr isa ClosureInfo
-            append!(sp_ids, get_id(sp) for sp in cr.capt_sp)
+            append!(sp_ids, syntax_id(sp) for sp in cr.capt_sp)
         end
         sort!(sp_ids)
         sps = SyntaxList(ctx)
         for id in sp_ids
             push!(sps, binding_ex(ctx, id))
         end
-        tvs = mapsyntax(c->binding_ex(ctx, ctx.sp_typevars[get_id(c)]), sps)
+        tvs = mapsyntax(c->binding_ex(ctx, ctx.sp_typevars[syntax_id(c)]), sps)
 
         # rm method table argument if it's a closure id, since it's unnecessary
         # and requires the `(= id (new ...))` call to be lifted above the
@@ -521,7 +521,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             else
                 # flisp: fix-function-arg-type
                 tvs = mapsyntax(
-                    sp->binding_ex(ctx, ctx.sp_typevars[get_id(sp)]),
+                    sp->binding_ex(ctx, ctx.sp_typevars[syntax_id(sp)]),
                     ci.capt_sp)
                 @ast ctx ex [K"call" "apply_type"::K"core" ci.type_name tvs...]
             end

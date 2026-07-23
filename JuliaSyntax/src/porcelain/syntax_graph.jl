@@ -1431,7 +1431,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
     graph = syntax_graph_js(st)
     k = kind(st)
-    name_val(x) = x.value::String
+    syntax_name(x) = x.value::String
     symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :value, s)
     core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
     valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
@@ -1446,7 +1446,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
     if is_leaf(st)
         return if k === K"CmdMacroName" || k === K"StrMacroName"
-            name = lower_identifier_name(name_val(st), k)
+            name = lower_identifier_name(syntax_name(st), k)
             symleaf(name)
         elseif k === K"VERSION"
             valleaf(version_to_expr(st))
@@ -1461,7 +1461,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             newnode(graph, st, K"macrocall", ret_cids)
         elseif hasattr(st, :value) && !(k in KSet"Identifier Value" || is_literal(k))
             # certain kinds should really be identifiers.  known: &, |, :
-            symleaf(name_val(st))
+            symleaf(syntax_name(st))
         else
             st
         end
@@ -1486,14 +1486,14 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # "@M.x" => (macro_name (. M x)) => (. M @x)
         #           (macro_name else) => else
         if kind(cs[1]) === K"Identifier"
-            return symleaf(lower_identifier_name(name_val(cs[1]), K"macro_name"))
+            return symleaf(lower_identifier_name(syntax_name(cs[1]), K"macro_name"))
         else
             inner_st = cs[1]
             inner_cs = preprocessed_green_children(inner_st)
             if (length(inner_cs) === 2 && kind(inner_st) === K"." &&
                 kind(inner_cs[2]) === K"Identifier")
                 (lhs, raw_m) = _green_to_est(cs[1], 1, inner_cs[1]), inner_cs[2]
-                mname_s = lower_identifier_name(name_val(raw_m), K"macro_name")
+                mname_s = lower_identifier_name(syntax_name(raw_m), K"macro_name")
                 mname = setattr!(mkleaf(raw_m), :value, mname_s)
                 mname_inert = newnode(graph, raw_m, K"inert", tree_ids(mname))
                 return mknode(inner_st, tree_ids(lhs, mname_inert))
@@ -1556,7 +1556,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             cs[2], cs[1] = cs[1], cs[2]
         end
         if is_postfix_op_call(st) && kind(cs[1]) == K"Identifier" &&
-            name_val(cs[1]) === "'"
+            syntax_name(cs[1]) === "'"
             popfirst!(cs)
             ret_k = K"'"
         end
@@ -1572,7 +1572,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 # (dotcall + args...) => (call .+ args...)
                 ret_k = K"call"
                 if kind(cs[1]) === K"Identifier"
-                    cs[1] = symleaf('.' * name_val(cs[1]))
+                    cs[1] = symleaf('.' * syntax_name(cs[1]))
                 end
             end
         end
@@ -1596,7 +1596,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
             if (coalesce_dot || is_syntactic_operator(kind(cs[1])) ||
                 kind(parent) === K"comparison" && iseven(parent_i))
-                return symleaf('.' * name_val(cs[1]))
+                return symleaf('.' * syntax_name(cs[1]))
             end
         end
     elseif k === K"ref" || k === K"curly"

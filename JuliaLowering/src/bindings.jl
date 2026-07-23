@@ -103,13 +103,13 @@ function add_binding(bindings::Bindings, binding)
     push!(bindings.info, binding)
 end
 
-function get_id(ex::SyntaxTree)
+function syntax_id(ex::SyntaxTree)
     @jl_assert kind(ex) in KSet"BindingId SSAValue slot static_parameter label" ex
     ex.value::IdTag
 end
 
 function get_binding(bindings::Bindings, x)::BindingInfo
-    id = x isa SyntaxTree ? get_id(x) : x
+    id = x isa SyntaxTree ? syntax_id(x) : x
     bindings.info[id]
 end
 

@@ -193,7 +193,7 @@ function compile_pop_exception(ctx, srcref, src_tokens, dest_tokens)
     # dest_tokens when src_tokens is the same or nested within dest_tokens.
     # It's enough to check the token on the top of the dest stack.
     n = length(dest_tokens)
-    jump_ok = n == 0 || (n <= length(src_tokens) && get_id(dest_tokens[n]) == get_id(src_tokens[n]))
+    jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into catch block"))
     if n < length(src_tokens)
         @ast ctx srcref [K"pop_exception" src_tokens[n+1]]
@@ -204,7 +204,7 @@ end
 
 function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
     n = length(dest_tokens)
-    jump_ok = n == 0 || (n <= length(src_tokens) && get_id(dest_tokens[n]) == get_id(src_tokens[n]))
+    jump_ok = n == 0 || (n <= length(src_tokens) && syntax_id(dest_tokens[n]) == syntax_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
     if n < length(src_tokens)
         @ast ctx srcref [K"leave" src_tokens[n+1:end]...]
@@ -299,7 +299,7 @@ function emit_return(ctx, ex)
 end
 
 function emit_break(ctx, ex)
-    name = get_name(ex[1])
+    name = syntax_name(ex[1])
     target = get(ctx.break_targets, name, nothing)
     if isnothing(target)
         if name == "loop-exit"
@@ -720,7 +720,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             res
         end
     elseif k == K"symbolicblock"
-        name = get_name(ex[1])
+        name = syntax_name(ex[1])
         # Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
         if name != "loop-exit" && name != "loop-cont"
             if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
@@ -768,7 +768,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"symboliclabel"
         label = emit_label(ctx, ex)
-        name = get_name(ex)
+        name = syntax_name(ex)
         if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
             throw(LoweringError(ex, "Label `$name` defined multiple times"))
         end
@@ -894,7 +894,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             # Certain blessed forms are allowed to share a meta expression;
             # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
             if kind(ex[1]) === K"purity" ||
-                kind(ex[1]) === K"Symbol" && get_name(ex[1]) in (
+                kind(ex[1]) === K"Symbol" && syntax_name(ex[1]) in (
                     "inline", "noinline", "propagate_inbounds",
                     "nospecializeinfer", "aggressive_constprop", "no_constprop")
                 for c in children(ex)
@@ -902,7 +902,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                         old = get(ctx.meta, :purity, UInt16(0))
                         ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
                     elseif kind(c) === K"Symbol"
-                        ctx.meta[Symbol(get_name(c))] = true
+                        ctx.meta[Symbol(syntax_name(c))] = true
                     else
                         @jl_assert false c
                     end
@@ -961,7 +961,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"newvar"
         @jl_assert !needs_value ex
         is_duplicate = !isempty(ctx.code) &&
-            (e = last(ctx.code); kind(e) == K"newvar" && get_id(e[1]) == get_id(ex[1]))
+            (e = last(ctx.code); kind(e) == K"newvar" && syntax_id(e[1]) == syntax_id(ex[1]))
         if !is_duplicate
             # TODO: also exclude deleted vars
             emit(ctx, ex)
@@ -993,7 +993,7 @@ function _remove_vars_with_isdefined_check!(vars, ex)
     if is_leaf(ex) || is_quoted(ex) || kind(ex) == K"static_eval"
         return
     elseif kind(ex) == K"isdefined"
-        delete!(vars, get_id(ex[1]))
+        delete!(vars, syntax_id(ex[1]))
     else
         for e in children(ex)
             _remove_vars_with_isdefined_check!(vars, e)
@@ -1018,14 +1018,14 @@ function unnecessary_newvar_ids(ctx, stmts)
         _remove_vars_with_isdefined_check!(vars, ex)
         k = kind(ex)
         if k == K"newvar"
-            id = get_id(ex[1])
+            id = syntax_id(ex[1])
             if !get_binding(ctx, id).is_captured
                 push!(vars, id)
             end
         elseif k == K"goto" || k == K"gotoifnot" || (k == K"=" && kind(ex[2]) == K"enter")
             empty!(vars)
         elseif k == K"="
-            id = get_id(ex[1])
+            id = syntax_id(ex[1])
             if id in vars
                 delete!(vars, id)
                 push!(ids_assigned_before_branch, id)
@@ -1042,7 +1042,7 @@ function compile_body(ctx::LinearIRContext, ex)
     # Fix up any symbolic gotos. (We can't do this earlier because the goto
     # might precede the label definition in unstructured control flow.)
     for origin in ctx.symbolic_jump_origins
-        name = get_name(origin.goto)
+        name = syntax_name(origin.goto)
         target = get(ctx.symbolic_jump_targets, name, nothing)
         if isnothing(target)
             # Check if it's a symbolic block label
@@ -1073,7 +1073,7 @@ function compile_body(ctx::LinearIRContext, ex)
     # Filter out unnecessary newvar nodes
     ids_assigned_before_branch = unnecessary_newvar_ids(ctx, ctx.code)
     filter!(ctx.code) do ex
-        !(kind(ex) == K"newvar" && get_id(ex[1]) in ids_assigned_before_branch)
+        !(kind(ex) == K"newvar" && syntax_id(ex[1]) in ids_assigned_before_branch)
     end
 end
 
@@ -1084,7 +1084,7 @@ end
 function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     k = kind(ex)
     if k == K"BindingId"
-        id = get_id(ex)
+        id = syntax_id(ex)
         if haskey(ssa_rewrites, id)
             newleaf(ctx, ex, K"SSAValue", ssa_rewrites[id])
         else
@@ -1115,7 +1115,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     elseif is_literal(k) || is_quoted(k)
         ex
     elseif k == K"label"
-        @ast ctx ex label_table[get_id(ex)]::K"label"
+        @ast ctx ex label_table[syntax_id(ex)]::K"label"
     elseif k == K"code_info"
         ex
     else
@@ -1135,20 +1135,20 @@ function renumber_body(ctx, input_code, slot_rewrites)
         k = kind(ex)
         ex_out = nothing
         if k == K"=" && (b = get_binding(ctx, ex[1]); b.is_ssa || b.kind == :typevar)
-            lhs_id = get_id(ex[1])
+            lhs_id = syntax_id(ex[1])
             @jl_assert(!haskey(ssa_rewrites, lhs_id),
                        (ex, "multiple assignments to ssavalue"))
             @jl_assert ctx.is_toplevel_thunk || b.kind !== :typevar binding_ex(ctx, b)
             if is_ssa(ctx, ex[2])
                 # For SSA₁ = SSA₂, record that all uses of SSA₁ should be replaced by SSA₂
-                ssa_rewrites[lhs_id] = ssa_rewrites[get_id(ex[2])]
+                ssa_rewrites[lhs_id] = ssa_rewrites[syntax_id(ex[2])]
             else
                 # Otherwise, record which `code` index this SSA value refers to
                 ssa_rewrites[lhs_id] = length(code) + 1
                 ex_out = ex[2]
             end
         elseif k == K"label"
-            label_table[get_id(ex)] = length(code) + 1
+            label_table[syntax_id(ex)] = length(code) + 1
         elseif k == K"TOMBSTONE"
             # remove statement
         else
@@ -1196,7 +1196,7 @@ function compile_lambda(outer_ctx, ex)
         binfo = get_binding(ctx, arg)
         if binfo.is_assigned
             @jl_assert !haskey(ctx.argmap, binfo.id) ex arg
-            ctx.argmap[binfo.id] = get_id(new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name))
+            ctx.argmap[binfo.id] = syntax_id(new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name))
         end
     end
     compile_body(ctx, ex[4])
@@ -1215,7 +1215,7 @@ function compile_lambda(outer_ctx, ex)
                               false, false, false, false))
         else
             @jl_assert kind(arg) == K"BindingId" ex arg
-            id = get_id(arg)
+            id = syntax_id(arg)
             binfo = get_binding(ctx, id)
             @jl_assert binfo.kind == :local || binfo.kind == :argument ex arg
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
@@ -1238,7 +1238,7 @@ function compile_lambda(outer_ctx, ex)
     end
     for (i,arg) in enumerate(children(static_parameters))
         @jl_assert kind(arg) == K"BindingId" arg
-        id = get_id(arg)
+        id = syntax_id(arg)
         info = get_binding(ctx.bindings, id)
         @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i

@@ -12,7 +12,7 @@ end
 # Uses ctx.ssa_mapping to ensure the same external SSA id maps to the same binding.
 function _resolve_ssavalue(ctx::DesugaringContext, ex)
     binding_id = get!(ctx.ssa_mapping, ex[1].value) do
-        get_id(ssavar(ctx, ex))
+        syntax_id(ssavar(ctx, ex))
     end
     binding_ex(ctx, binding_id)
 end
@@ -21,11 +21,11 @@ end
 # bindings (and hence ssa vars). See also `is_identifier_like()`
 function is_same_identifier_like(ex::SyntaxTree, y::SyntaxTree)
     return (kind(ex) == K"Identifier" && kind(y) == K"Identifier" && NameKey(ex) == NameKey(y)) ||
-           (kind(ex) == K"BindingId"  && kind(y) == K"BindingId"  && get_id(ex) == get_id(y))
+           (kind(ex) == K"BindingId"  && kind(y) == K"BindingId"  && syntax_id(ex) == syntax_id(y))
 end
 
 function is_same_identifier_like(ex::SyntaxTree, name::AbstractString)
-    return kind(ex) == K"Identifier" && get_name(ex) == name
+    return kind(ex) == K"Identifier" && syntax_name(ex) == name
 end
 
 # Hack.  Scopes aren't resolved, so only use this where a false positive is
@@ -618,8 +618,8 @@ end
 # last index
 function replace_beginend(ctx, ex, arr, n, splats, is_last)
     k = kind(ex)
-    if k == K"Identifier" && get_name(ex) in ("begin", "end")
-        indexfunc = @ast ctx ex (get_name(ex) == "begin" ? "firstindex" : "lastindex")::K"top"
+    if k == K"Identifier" && syntax_name(ex) in ("begin", "end")
+        indexfunc = @ast ctx ex (syntax_name(ex) == "begin" ? "firstindex" : "lastindex")::K"top"
         if length(splats) == 0
             if is_last && n == 1
                 @ast ctx ex [K"call" indexfunc arr]
@@ -778,7 +778,7 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 lhs
             end
-            if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && get_name(rhs[1]) == "broadcasted")
+            if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && syntax_name(rhs[1]) == "broadcasted")
                 # Ensure the rhs of .= is always wrapped in a call to `broadcasted()`
                 [K"call"(rhs)
                     "broadcasted"::K"top"
@@ -1694,7 +1694,7 @@ function expand_named_tuple(ctx, ex, kws; field_name="named tuple field",
         end
         if !isnothing(name) && !isnothing(value)
             if kind(name) == K"Symbol"
-                name_str = get_name(name)
+                name_str = syntax_name(name)
                 if name_str in name_strs
                     throw(LoweringError(name, "Repeated $field_name name"))
                 end
@@ -1955,9 +1955,9 @@ end
 
 function expand_call(ctx, ex)
     farg = ex[1]
-    if kind(farg) === K"Identifier" && get_name(farg) === "ccall"
+    if kind(farg) === K"Identifier" && syntax_name(farg) === "ccall"
         return expand_ccall(ctx, ex)
-    elseif kind(farg) === K"Identifier" && get_name(farg) === "cglobal"
+    elseif kind(farg) === K"Identifier" && syntax_name(farg) === "cglobal"
         return expand_cglobal(ctx, ex)
     end
     args = copy(ex[2:end])
@@ -1968,7 +1968,7 @@ function expand_call(ctx, ex)
     if any(kind(arg) == K"..." for arg in args)
         # Splatting, eg, `f(a, xs..., b)`
         expand_splat(ctx, ex, expand_forms_2(ctx, farg), args)
-    elseif kind(farg) == K"Identifier" && get_name(farg) === "include"
+    elseif kind(farg) == K"Identifier" && syntax_name(farg) === "include"
         # world age special case
         r = ssavar(ctx, ex)
         @ast ctx ex [K"block"
@@ -2494,7 +2494,7 @@ function _expr_arg_syms(args)
         elseif (a[1].context::SyntaxContext).internal && i > 1
             # we lose context, so deduplicate names (ignoring #self# to be
             # safe).  HACK: destructured args must match the desugared rhs
-            n = get_name(sym)
+            n = syntax_name(sym)
             contains(n, "destructured") || setattr!(sym, :value, n*"#"*string(i))
         end
         push!(out, sym)
@@ -2661,7 +2661,7 @@ end
 is_vararg_type_expr(st) = @stm st begin
     [K"curly" x _...] -> is_vararg_type_expr(x)
     [K"where" x _...] -> is_vararg_type_expr(x)
-    _ -> kind(st) in KSet"core Identifier" && get_name(st) == "Vararg"
+    _ -> kind(st) in KSet"core Identifier" && syntax_name(st) == "Vararg"
 end
 
 function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
@@ -2691,7 +2691,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
     pos_sparams = used_typevars(pargl, sparams)
 
-    m1_name = let n = kind(mtable) === K"nothing" ? "_" : get_name(mtable),
+    m1_name = let n = kind(mtable) === K"nothing" ? "_" : syntax_name(mtable),
         mangled = reserve_module_binding_i(
             ctx.layer.mod,
             string(startswith(n, '#') ? "" : "#kw_body#", n, "#"))
@@ -2739,7 +2739,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             use_ssa_kw_temps = !ordered_defaults &&
                 !any(val->contains_unquoted(e->kind(e) == K"=", val), kw_defaults)
         kw_temps = use_ssa_kw_temps ?
-            mapsyntax(x->ssavar(ctx, x, get_name(x)), kw_names) : kw_names
+            mapsyntax(x->ssavar(ctx, x, syntax_name(x)), kw_names) : kw_names
         tempslot = newsym(ctx, kws, "#kwtmp#")
         keyword_only_spnames = mapindex(unused_typevars(pargl, sparams), 1)
 
@@ -3000,10 +3000,10 @@ function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
         name = setattr!(mkleaf(ex), :kind, k)
-        setattr!(name, :value, "@$(get_name(ex))")
+        setattr!(name, :value, "@$(syntax_name(ex))")
     elseif k == K"Placeholder"
         name = setattr!(mkleaf(ex), :kind, K"Identifier")
-        setattr!(name, :value, "@$(get_name(ex))")
+        setattr!(name, :value, "@$(syntax_name(ex))")
     elseif is_valid_modref(ex)
         @jl_assert numchildren(ex) == 2 ex
         @ast ctx ex [K"." ex[1] _make_macro_name(ctx, ex[2])]
@@ -3068,8 +3068,8 @@ function typevar_bounds(ex)
     (name, lb, ub) = bounds = @stm ex begin
         [K"Identifier"] -> (ex, any, any)
         [K"Placeholder"] -> (ex, any, any)
-        ([K"comparison" lb op x _ ub], when=get_name(op)==="<:") -> (x, lb, ub)
-        ([K"comparison" ub op x _ lb], when=get_name(op)===">:") -> (x, lb, ub)
+        ([K"comparison" lb op x _ ub], when=syntax_name(op)==="<:") -> (x, lb, ub)
+        ([K"comparison" ub op x _ lb], when=syntax_name(op)===">:") -> (x, lb, ub)
         [K"<:" x ub] -> (x, any, ub)
         [K">:" x lb] -> (x, lb, any)
     end
@@ -3242,7 +3242,7 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
             if !isnothing(m)
                 # Struct field
                 for prev in field_names
-                    if get_name(prev) == get_name(m.name)
+                    if syntax_name(prev) == syntax_name(m.name)
                         throw(LoweringError(m.name, "duplicate field name"))
                     end
                 end
@@ -3292,8 +3292,8 @@ end
 
 function _is_new_call(ex)
     kind(ex) == K"call" &&
-        ((kind(ex[1]) == K"Identifier" && get_name(ex[1]) == "new") ||
-         (kind(ex[1]) == K"curly" && kind(ex[1][1]) == K"Identifier" && get_name(ex[1][1]) == "new"))
+        ((kind(ex[1]) == K"Identifier" && syntax_name(ex[1]) == "new") ||
+         (kind(ex[1]) == K"curly" && kind(ex[1][1]) == K"Identifier" && syntax_name(ex[1][1]) == "new"))
 end
 
 # Rewrite constructor signature, returning extra information needed for
@@ -3541,7 +3541,7 @@ function _insert_fieldtype_struct_shim(ctx, sname, ex)
     if kind(ex) == K"." &&
         numchildren(ex) == 2 &&
         kind(ex[2]) == K"Symbol" &&
-        get_name(ex[2]) == get_name(sname)
+        syntax_name(ex[2]) == syntax_name(sname)
         @ast ctx ex [K"call" "struct_name_shim"::K"core" ex[1] ex[2] syntax_module(ex)::K"Value" sname]
     elseif numchildren(ex) > 0
         mapchildren(e->_insert_fieldtype_struct_shim(ctx, sname, e), ctx, ex)
@@ -3562,7 +3562,7 @@ function _replace_type_constructors(ctx, ex)
         return ex
     end
     k = kind(ex)
-    if k == K"call" && numchildren(ex) >= 1 && kind(ex[1]) == K"core" && get_name(ex[1]) == "apply_type"
+    if k == K"call" && numchildren(ex) >= 1 && kind(ex[1]) == K"core" && syntax_name(ex[1]) == "apply_type"
         new_head = @ast ctx ex[1] "apply_type_or_typeapp"::K"core"
         new_children = SyntaxList(ctx)
         push!(new_children, new_head)
@@ -4147,7 +4147,7 @@ function expand_public(ctx, ex)
         syntax_module(relayer_global_if_unhygienic(ctx, e)[1]) !== mod &&
             throw(LoweringError(
                 ex, "unexpected public/export with names from multiple modules"))
-        push!(identifiers, get_name(e))
+        push!(identifiers, syntax_name(e))
     end
     @ast ctx ex [K"call"
         eval_public::K"Value"
@@ -4177,7 +4177,7 @@ function expand_doc(ctx, ex, docex)
         expand_forms_2(ctx, @ast ctx docex [K"call"
             bind_static_docs!::K"Value"
             (kind(ex) === K"." ? ex[1] : syntax_module(ex)::K"Value")
-            get_name((kind(ex) === K"." ? ex[2] : ex))::K"Symbol"
+            syntax_name((kind(ex) === K"." ? ex[2] : ex))::K"Symbol"
             docex[1]
             ::K"SourceLocation"(ex)
             Union{}::K"Value"
@@ -4275,7 +4275,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [K"continue" [K"Placeholder"]] ->
                 @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
             [K"continue" [K"Identifier"]] ->
-                @ast ctx ex [K"break" string(get_name(ex[1]), "#cont")::K"symboliclabel"]
+                @ast ctx ex [K"break" string(syntax_name(ex[1]), "#cont")::K"symboliclabel"]
         end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))

@@ -92,10 +92,10 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
     leaf
 end
 
-function get_name(st)
+function syntax_name(st)
     @jl_assert kind(st) in KSet"""
     Identifier Placeholder Symbol core top globalref symboliclabel symbolicgoto
-    unknown_head
+    unknown_head oldsymbolicgoto
     """ st
     st.value::String
 end
@@ -377,7 +377,7 @@ function extension_type(ex)
     @jl_assert kind(ex) == K"assert" ex
     @jl_assert numchildren(ex) >= 1 ex
     @jl_assert kind(ex[1]) == K"Symbol" ex
-    get_name(ex[1])
+    syntax_name(ex[1])
 end
 
 function is_eventually_call(ex::SyntaxTree)
@@ -417,7 +417,7 @@ function is_valid_modref(ex)
 end
 
 function is_core_Any(ex)
-    kind(ex) === K"core" && get_name(ex) === "Any"
+    kind(ex) === K"core" && syntax_name(ex) === "Any"
 end
 
 function is_simple_atom(ctx, ex)
