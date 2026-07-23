@@ -88,6 +88,12 @@ let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no th
         if Sys.iswindows() && Sys.WORD_SIZE == 32
             # win32 CI has hung silently in this child; let it dump itself
             new_env["JULIA_THREADS_EXEC_WATCHDOG"] = "1500"
+            # wedge experiment: the build-742 session dump shows the blocked
+            # materializer stuck with its definition unemitted, and the first
+            # captured stack (build 634) was inside objcache::get — LMDB's
+            # cross-process writer lock is not robust to SIGKILLed owners on
+            # Windows; if disabling the cache stops the hang, that's the cause
+            new_env["JULIA_OBJCACHE"] = "0"
         end
         println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config starting")
         p = run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr), wait = false)
