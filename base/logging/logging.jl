@@ -709,15 +709,15 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     levelstr = level == Warn ? "Warning" : string(level)
     msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
     msg1, rest = Iterators.peel(msglines)
-    println(iob, "┌ ", levelstr, ": ", msg1)
+    println(iob, "⎡ ", levelstr, ": ", msg1)
     for msg in rest
-        println(iob, "│ ", msg)
+        println(iob, "⎜ ", msg)
     end
     for (key, val) in kwargs
         key === :maxlog && continue
-        println(iob, "│   ", key, " = ", val)
+        println(iob, "⎜   ", key, " = ", val)
     end
-    println(iob, "└ @ ", _module, " ", filepath, ":", line)
+    println(iob, "⎣ @ ", _module, " ", filepath, ":", line)
     b = take!(buf)
     @lock logger.lock begin
         if !(isopen(stream)::Bool)

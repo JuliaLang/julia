@@ -425,8 +425,8 @@ julia> code = """
        """;
 
 julia> include_string(Main, code)
-┌ Warning: Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists: `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or `global s` to assign to the existing global variable.
-└ @ string:4
+⎡ Warning: Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists: `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or `global s` to assign to the existing global variable.
+⎣ @ string:4
 ERROR: LoadError: UndefVarError: `s` not defined in local scope
 ```
 
