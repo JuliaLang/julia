@@ -766,4 +766,33 @@ end
 # ambiguity
 @test !isempty(detect_ambiguities(AmbigCycle3))
 
+# same 3-way cycle, but defined in the order that used to trigger the
+# `LATEST_ONLY` slurp early-out in `get_intersect_visitor`: `mU` is inserted
+# before `mStr`, so when `mStr` (a strict subtype of `mU`, which dominates `mT`
+# and is thus `METHOD_SIG_LATEST_ONLY`) is added, the scan used to stop after
+# recording only the `(mStr, mU)` pair and never record that `mT` is
+# morespecific than `mStr`. That omission left `mStr`'s interference set empty,
+# so the cycle was invisible and `f(1)` silently dispatched to `mStr` instead of
+# raising an ambiguity. Insertion order must not change the observed relation.
+module AmbigCycle3Reorder
+f(::T, ::Vararg{T}) where {T<:Integer} = 1    # mT
+f(::Integer, ::Vararg{Union{Int,String}}) = 3 # mU  (inserted before mStr; dominates mT)
+f(::Integer, ::Vararg{String}) = 2            # mStr (⊊ mU)
+end
+let mT   = which(AmbigCycle3Reorder.f, Tuple{T, Vararg{T}} where T<:Integer),
+    mStr = which(AmbigCycle3Reorder.f, Tuple{Integer, Vararg{String}}),
+    mU   = which(AmbigCycle3Reorder.f, Tuple{Integer, Vararg{Union{Int,String}}})
+    @test Base.morespecific(mT, mStr) && Base.morespecific(mStr, mU) && Base.morespecific(mU, mT)
+    @test !(Base.morespecific(mStr, mT) || Base.morespecific(mU, mStr) || Base.morespecific(mT, mU))
+    @test Base.isambiguous(mT, mStr)
+    @test Base.isambiguous(mStr, mU)
+    @test Base.isambiguous(mU, mT)
+end
+@test_throws MethodError AmbigCycle3Reorder.f(1) # genuinely ambiguous in dispatch
+let ambig = Ref{Int32}(0)
+    Base._methods_by_ftype(Tuple{typeof(AmbigCycle3Reorder.f), Int}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ambig[] == 1
+end
+@test !isempty(detect_ambiguities(AmbigCycle3Reorder))
+
 nothing
