@@ -33,6 +33,107 @@ static const int16_t sleeping_like_the_dead JL_UNUSED = 2;
 // n.b. this may temporarily exceed jl_n_threads
 _Atomic(int) n_threads_running = 0;
 
+// Searcher accounting (cf. Go's nmspinning; see devdocs/scheduler-wakeup).
+// A thread that fails to pop work may become a "searcher", polling the
+// queues for up to sleep_threshold ns before parking. At most half of a
+// pool may search at once; above that they are parked.
+// jl_wakeup_threadpool compares the number of pending tasks (n_ready)
+// against the number of spinners, so we also don't have more spinners than
+// work. This avoids unneeded contention on the queues.
+// n_spinning is incremented by the waker but decremented by the thread that
+// got woken; a waker that loses the wakeup CAS decrements the count itself.
+// Lost-wakeup safety:
+//  - a searcher leaving to park decrements n_spinning *before* its
+//    sleeping-store + fence + queue recheck, pairing with the enqueuer's
+//    store + fence + load ([^store_buffering_1]);
+//  - the last searcher to exit any other way (with work, or unwinding)
+//    is responsible for waking another thread if work remains (the exit
+//    handoff).
+// Like Go, the count may briefly overshoot the cap (load-then-add).
+// One wake gate per thread pool. Threads outside both pools
+// (foreign/adopted) have no gate: they cannot pop the pool queues, so they
+// are not search supply and their wakes pre-account nothing.
+typedef struct {
+    // searchers committed to this pool: threads polling its queues plus
+    // wakes in flight (wake_thread pre-accounts its target)
+    _Atomic(int32_t) n_spinning;
+    char pad0[64 - sizeof(_Atomic(int32_t))];
+    // tasks sitting in the pool's Julia-side shared queues, maintained by
+    // the queue implementation (insert increments, successful dequeue
+    // decrements, via jl_sched_nready_inc/dec)
+    _Atomic(int64_t) n_ready;
+    char pad1[64 - sizeof(_Atomic(int64_t))];
+    // most recently parked thread (tid + 1; 0 = none), woken first: the
+    // last sleeper has the warmest core (cf. Go's LIFO idle-M stack).
+    // Advisory; races are benign.
+    _Atomic(int16_t) last_parked;
+    char pad2[64 - sizeof(_Atomic(int16_t))];
+    // the pool's tid range [lo, lo + n), filled in at init
+    int16_t lo;
+    int16_t n;
+} wake_gate_t;
+#define JL_N_WAKE_GATES 2
+static wake_gate_t wake_gates[JL_N_WAKE_GATES];
+
+static wake_gate_t *gate_of_pool(int8_t tpid) JL_NOTSAFEPOINT
+{
+    if (tpid < 0 || tpid >= JL_N_WAKE_GATES)
+        return NULL;
+    return &wake_gates[tpid];
+}
+
+// The wake gate of the pool that owns `tid`. A NULL result means "not a
+// pool worker" (foreign/adopted threads, GC threads), and every
+// `gate != NULL` check below is that membership test: only pool workers
+// can pop the pool queues, so only they count in the searcher accounting.
+static wake_gate_t *gate_of_tid(int16_t tid) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < JL_N_WAKE_GATES; i++) {
+        if (tid >= wake_gates[i].lo && tid < wake_gates[i].lo + wake_gates[i].n)
+            return &wake_gates[i];
+    }
+    return NULL;
+}
+
+JL_DLLEXPORT void jl_sched_nready_inc(int8_t tpid) JL_NOTSAFEPOINT
+{
+    wake_gate_t *gate = gate_of_pool(tpid);
+    if (gate != NULL)
+        jl_atomic_fetch_add_relaxed(&gate->n_ready, 1);
+}
+
+JL_DLLEXPORT void jl_sched_nready_dec(int8_t tpid) JL_NOTSAFEPOINT
+{
+    wake_gate_t *gate = gate_of_pool(tpid);
+    if (gate != NULL)
+        jl_atomic_fetch_add_relaxed(&gate->n_ready, -1);
+}
+
+// Release this thread's searcher slot; returns 1 if it was the last one.
+static int spin_exit(wake_gate_t *gate) JL_NOTSAFEPOINT
+{
+    int32_t prev = jl_atomic_fetch_add_relaxed(&gate->n_spinning, -1);
+    assert(prev > 0);
+    return prev == 1;
+}
+
+// Pre-account tid as a searcher for a wake in flight (NULL for threads
+// outside every pool). Undone by unaccount_searcher when the wake CAS is
+// lost; taken over by the woken thread (settle_wake) when it is won.
+static wake_gate_t *preaccount_searcher(int16_t tid) JL_NOTSAFEPOINT
+{
+    wake_gate_t *gate = gate_of_tid(tid);
+    if (gate != NULL)
+        jl_atomic_fetch_add_relaxed(&gate->n_spinning, 1);
+    return gate;
+}
+
+static void unaccount_searcher(wake_gate_t *gate) JL_NOTSAFEPOINT
+{
+    if (gate != NULL)
+        jl_atomic_fetch_add_relaxed(&gate->n_spinning, -1);
+}
+
 // invariant: No thread is ever asleep unless sleep_check_state is sleeping (or we have a wakeup signal pending).
 // invariant: Any particular thread is not asleep unless that thread's sleep_check_state is sleeping.
 // invariant: The transition of a thread state to sleeping must be followed by a check that there wasn't work pending for it.
@@ -84,6 +185,12 @@ JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSA
 // (called only by the main thread)
 void jl_init_threadinginfra(void)
 {
+    int16_t lo = 0;
+    for (int i = 0; i < JL_N_WAKE_GATES && i < jl_n_threadpools; i++) {
+        wake_gates[i].lo = lo;
+        wake_gates[i].n = (int16_t)jl_n_threads_per_pool[i];
+        lo += wake_gates[i].n;
+    }
     /* initialize the synchronization trees pool */
     sleep_threshold = DEFAULT_THREAD_SLEEP_THRESHOLD;
     char *cp = getenv(THREAD_SLEEP_THRESHOLD_NAME);
@@ -192,11 +299,15 @@ void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT
     // equivalent to wake_thread, without the assert on wasrunning
     int8_t state = jl_atomic_load_relaxed(&ptls->sleep_check_state);
     if (state == sleeping) {
+        wake_gate_t *gate = preaccount_searcher(ptls->tid);
         if (jl_atomic_cmpswap_relaxed(&ptls->sleep_check_state, &state, not_sleeping)) {
             // this notification will never be consumed, so we may have now
             // introduced some inaccuracy into the count, but that is
             // unavoidable with any asynchronous interruption
             jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+        }
+        else {
+            unaccount_searcher(gate);
         }
     }
 }
@@ -214,21 +325,44 @@ static int set_not_sleeping(jl_ptls_t ptls) JL_NOTSAFEPOINT
     return 0;
 }
 
+// Leave the sleep transition, consuming a waker's flip: take the
+// pre-accounted searcher slot. Returns 1 if we flipped ourselves (no waker
+// was involved, so there is nothing to take).
+static int settle_wake(jl_ptls_t ptls, wake_gate_t *gate, volatile int *spinning) JL_NOTSAFEPOINT
+{
+    if (set_not_sleeping(ptls))
+        return 1;
+    if (gate != NULL)
+        *spinning = 1;
+    return 0;
+}
+
+// Signal a (possibly) parked thread's wake condition.
+static void signal_thread_wake(jl_ptls_t ptls2) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&ptls2->sleep_lock);
+    uv_cond_signal(&ptls2->wake_signal);
+    uv_mutex_unlock(&ptls2->sleep_lock);
+}
+
 static int wake_thread(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
 
     if (jl_atomic_load_relaxed(&ptls2->sleep_check_state) != not_sleeping) {
+        // The increment comes before the CAS so the target's release cannot
+        // underflow; only one waker can win the CAS, so concurrent wakers
+        // cannot double-count.
+        wake_gate_t *gate = preaccount_searcher(tid);
         int8_t state = sleeping;
         if (jl_atomic_cmpswap_relaxed(&ptls2->sleep_check_state, &state, not_sleeping)) {
             int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1); // increment in-flight wakeup count
             assert(wasrunning); (void)wasrunning;
             JL_PROBE_RT_SLEEP_CHECK_WAKE(ptls2, state);
-            uv_mutex_lock(&ptls2->sleep_lock);
-            uv_cond_signal(&ptls2->wake_signal);
-            uv_mutex_unlock(&ptls2->sleep_lock);
+            signal_thread_wake(ptls2);
             return 1;
         }
+        unaccount_searcher(gate);
     }
     return 0;
 }
@@ -241,6 +375,47 @@ static void wake_libuv(void) JL_NOTSAFEPOINT
     JULIA_DEBUG_SLEEPWAKE( io_wakeup_leave = cycleclock() );
 }
 
+// The current thread is awake by definition, but make sure it exits any
+// partial sleep transition (accounting for the in-flight wakeup), and make
+// sure it exits uv_run if it is the thread running the event loop.
+static void wake_self(jl_task_t *ct, jl_task_t *uvlock) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = ct->ptls;
+    if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
+        // Flipping our own mid-transition sleep state pre-accounts like
+        // any other wake; our raced-detection downstream takes the slot
+        // (settle_wake at one of sleep_thread's exits).
+        wake_gate_t *gate = preaccount_searcher(jl_atomic_load_relaxed(&ct->tid));
+        if (jl_atomic_exchange_relaxed(&ptls->sleep_check_state, not_sleeping) != not_sleeping) {
+            int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+            assert(wasrunning); (void)wasrunning;
+            JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls);
+        }
+        else {
+            unaccount_searcher(gate);
+        }
+    }
+    if (uvlock == ct)
+        uv_stop(jl_global_event_loop());
+}
+
+// Wake `tid` if it is sleeping. On success, if the woken thread is the one
+// blocked in uv_run, kick libuv too: now that it is not-sleeping, ensure it
+// either has not yet acquired the libuv lock or will observe the state change.
+static int wake_thread_and_uv(jl_task_t *ct, jl_task_t *uvlock, int16_t tid) JL_NOTSAFEPOINT
+{
+    if (!wake_thread(tid))
+        return 0;
+    if (uvlock != ct) {
+        jl_fence();
+        jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
+        if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+            wake_libuv();
+    }
+    return 1;
+}
+
 // Returns 1 if a sleeping thread was transitioned to running (i.e. the wake
 // added a running thread), 0 if the target was already awake or is the caller.
 static int wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
@@ -251,35 +426,11 @@ static int wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass i
     jl_task_t *uvlock = jl_atomic_load_relaxed(&jl_uv_mutex.owner);
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
     if (tid == self || tid == -1) {
-        // we're already awake, but make sure we'll exit uv_run
-        // and that n_threads_running is updated if this is now considered in-flight
-        jl_ptls_t ptls = ct->ptls;
-        if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
-            if (jl_atomic_exchange_relaxed(&ptls->sleep_check_state, not_sleeping) != not_sleeping) {
-                int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
-                assert(wasrunning); (void)wasrunning;
-                JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls);
-            }
-        }
-        if (uvlock == ct)
-            uv_stop(jl_global_event_loop());
+        wake_self(ct, uvlock);
     }
     else {
         // something added to the sticky-queue: notify that thread
-        if (wake_thread(tid)) {
-            woke = 1;
-            if (uvlock != ct) {
-                // check if we need to notify uv_run too
-                jl_fence();
-                jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-                jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
-                // now that we have changed the thread to not-sleeping, ensure that
-                // either it has not yet acquired the libuv lock, or that it will
-                // observe the change of state to not_sleeping
-                if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
-                    wake_libuv();
-            }
-        }
+        woke = wake_thread_and_uv(ct, uvlock, tid);
     }
     if (tid == -1) {
         // Legacy broadcast wake; prefer jl_wakeup_threadpool.
@@ -318,65 +469,77 @@ typedef struct {
 } pool_wake_hint_t;
 static pool_wake_hint_t pool_wake_hints[POOL_WAKE_HINT_STRIPES];
 
+// Wake one sleeping thread in the gate's pool, preferring the most
+// recently parked one (its core is the warmest), falling back to a striped
+// round-robin scan. Not gated on the searcher count.
+static void wake_one_in_pool(jl_task_t *ct, jl_task_t *uvlock, wake_gate_t *gate, int16_t self) JL_NOTSAFEPOINT
+{
+    int16_t lo = gate->lo;
+    int16_t n = gate->n;
+
+    int16_t hinted = (int16_t)(jl_atomic_load_relaxed(&gate->last_parked) - 1);
+    if (hinted >= lo && hinted < lo + n && hinted != self &&
+        wake_thread_and_uv(ct, uvlock, hinted))
+        return;
+    if (n > 0) {
+        uint32_t stripe = ((uint32_t)self) & (POOL_WAKE_HINT_STRIPES - 1);
+        uint32_t start = jl_atomic_fetch_add_relaxed(&pool_wake_hints[stripe].v, 1);
+        for (int16_t k = 0; k < n; k++) {
+            int16_t tid = lo + (int16_t)((start + (uint32_t)k) % (uint32_t)n);
+            if (tid != self && wake_thread_and_uv(ct, uvlock, tid))
+                return;
+        }
+    }
+}
+
 // Wake at most one sleeping thread in threadpool `tpid`, replacing the
 // O(jl_n_threads) broadcast of jl_wakeup_thread(-1) (#61820, #50425). Scan each
 // candidate's sleep_check_state under a fence ([^store_buffering_1]); do not
 // short-circuit on n_threads_running, which can be stale and is not pool-local.
 // See devdocs/scheduler-wakeup.
-JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid)
+static void gated_wakeup(wake_gate_t *gate) JL_NOTSAFEPOINT
 {
-    if (tpid < 0 || tpid >= jl_n_threadpools) {
-        wakeup_thread(jl_current_task, -1);
-        return;
-    }
     jl_task_t *ct = jl_current_task;
     int16_t self = jl_atomic_load_relaxed(&ct->tid);
     jl_fence(); // [^store_buffering_1]
     jl_task_t *uvlock = jl_atomic_load_relaxed(&jl_uv_mutex.owner);
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
 
-    // ensure self exits any partial sleep transition
-    jl_ptls_t ptls = ct->ptls;
-    if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
-        if (jl_atomic_exchange_relaxed(&ptls->sleep_check_state, not_sleeping) != not_sleeping) {
-            int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
-            assert(wasrunning); (void)wasrunning;
-            JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls);
-        }
-    }
-    if (uvlock == ct)
-        uv_stop(jl_global_event_loop());
+    wake_self(ct, uvlock);
 
-    // [lo, lo+n) tid range of the target pool
-    int16_t lo = 0;
-    for (int8_t i = 0; i < tpid; i++)
-        lo += (int16_t)jl_n_threads_per_pool[i];
-    int16_t n = (int16_t)jl_n_threads_per_pool[tpid];
-
-    int woke = 0;
-    if (n > 0) {
-        uint32_t stripe = ((uint32_t)self) & (POOL_WAKE_HINT_STRIPES - 1);
-        uint32_t start = jl_atomic_fetch_add_relaxed(&pool_wake_hints[stripe].v, 1);
-        for (int16_t k = 0; k < n; k++) {
-            int16_t tid = lo + (int16_t)((start + (uint32_t)k) % (uint32_t)n);
-            if (tid == self)
-                continue;
-            if (wake_thread(tid)) {
-                woke = 1;
-                if (uvlock != ct) {
-                    jl_fence();
-                    jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-                    jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
-                    // if the woken thread is the one blocked in uv_run, kick uv too
-                    if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
-                        wake_libuv();
-                }
-                break;
-            }
-        }
+    // Count gate: skip the wake while committed searchers (including wakes
+    // in flight) cover the pending work. The skip cannot strand work: an
+    // exiting searcher re-runs this gate, and a parking one re-checks the
+    // queues after publishing its sleep state.
+    if ((int64_t)jl_atomic_load_relaxed(&gate->n_spinning) >=
+            jl_atomic_load_relaxed(&gate->n_ready)) {
+        JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
+        return;
     }
-    (void)woke;
+    wake_one_in_pool(ct, uvlock, gate, self);
     JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
+}
+
+JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid)
+{
+    wake_gate_t *gate = gate_of_pool(tpid);
+    if (gate == NULL) {
+        wakeup_thread(jl_current_task, -1);
+        return;
+    }
+    gated_wakeup(gate);
+}
+
+// Stop being a searcher: release the slot (if held) and run the exit
+// handoff -- the last searcher out is responsible for waking another
+// thread if work remains.
+static void searcher_exit(wake_gate_t *gate, volatile int *spinning) JL_NOTSAFEPOINT
+{
+    if (*spinning) {
+        *spinning = 0;
+        if (spin_exit(gate))
+            gated_wakeup(gate);
+    }
 }
 
 // get the next runnable task
@@ -437,194 +600,283 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
 }
 
 
+// The sleep transition: publish, recheck, retire, park (searchers release
+// their slot first). Returns a task obtained on the way -- the post-publish
+// poll, or wait_empty on thread 0 -- or NULL after waking. The handler
+// restores what this scope perturbed (the running count, the published
+// sleep state, a raced waker's pre-accounted slot) and rethrows; the
+// usual thrower is a Ctrl-C InterruptException materializing at one of the
+// safepoints
+// here, on its way up to the task that called wait.
+static jl_task_t *sleep_thread(jl_task_t *ct, wake_gate_t **pgate,
+                               volatile int *spinning, uint64_t *start_cycles,
+                               jl_value_t *trypoptask, jl_value_t *q,
+                               jl_value_t *checkempty, int force_park) JL_CANSAFEPOINT
+{
+    jl_ptls_t ptls = ct->ptls;
+    wake_gate_t *gate = *pgate;
+    jl_task_t *task = NULL;
+    if (*spinning) {
+        // release the slot before the sleeping-store + fence: pairs with
+        // the wakeup gate's n_spinning load
+        *spinning = 0;
+        spin_exit(gate);
+    }
+    // acquire sleep-check lock
+    assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
+    jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
+    jl_fence(); // [^store_buffering_1]
+    JL_PROBE_RT_SLEEP_CHECK_SLEEP(ptls);
+    if (!force_park && !check_empty(checkempty)) { // uses relaxed loads
+        if (settle_wake(ptls, gate, spinning)) {
+            JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
+        }
+        return NULL;
+    }
+    volatile int isrunning = 1;
+    JL_TRY {
+        // `continue` exits the JL_TRY (popping the handler) and falls
+        // through to the return below.
+        task = get_next_task(trypoptask, q); // note: this should not yield
+        if (ptls != ct->ptls) {
+            // sigh, a yield was detected, so let's go ahead and handle it anyway by starting over
+            ptls = ct->ptls;
+            gate = gate_of_tid(jl_atomic_load_relaxed(&ct->tid));
+            *pgate = gate;
+            if (settle_wake(ptls, gate, spinning)) {
+                JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
+            }
+            continue;
+        }
+        if (task) {
+            if (settle_wake(ptls, gate, spinning)) {
+                JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
+            }
+            continue;
+        }
+
+        // IO is always permitted, but outside a threaded region, only
+        // thread 0 will process messages.
+        // Inside a threaded region, any thread can listen for IO messages,
+        // and one thread should win this race and watch the event loop,
+        // but we bias away from idle threads getting parked here.
+        //
+        // The reason this works is somewhat convoluted, and closely tied to [^store_buffering_1]:
+        //  - After decrementing _threadedregion, the thread is required to
+        //    call jl_wakeup_thread(0), that will kick out any thread who is
+        //    already there, and then eventually thread 0 will get here.
+        //  - Inside a _threadedregion, there must exist at least one
+        //    thread that has a happens-before relationship on the libuv lock
+        //    before reaching this decision point in the code who will see
+        //    the lock as unlocked and thus must win this race here.
+        int uvlock = 0;
+        if (jl_atomic_load_relaxed(&_threadedregion)) {
+            uvlock = jl_mutex_trylock(&jl_uv_mutex);
+        }
+        else if (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid)) {
+            uvlock = 1;
+            JL_UV_LOCK();
+        }
+        else {
+            // Since we might have started some IO work, we might need
+            // to ensure tid = 0 will go watch that new event source.
+            // If trylock would have succeeded, that may have been our
+            // responsibility, so need to make sure thread 0 will take care
+            // of us.
+            if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
+                jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
+
+        }
+        if (uvlock) {
+            int enter_eventloop = may_sleep(ptls);
+            int active = 0;
+            if (jl_atomic_load_relaxed(&jl_uv_n_waiters) != 0)
+                // if we won the race against someone who actually needs
+                // the lock to do real work, we need to let them have it instead
+                enter_eventloop = 0;
+            if (enter_eventloop) {
+                uv_loop_t *loop = jl_global_event_loop();
+                loop->stop_flag = 0;
+                JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_enter = cycleclock() );
+                active = uv_run(loop, UV_RUN_ONCE);
+                JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_leave = cycleclock() );
+                jl_gc_safepoint();
+            }
+            JL_UV_UNLOCK();
+            // optimization: check again first if we may have work to do.
+            // Otherwise we got a spurious wakeup since some other thread
+            // that just wanted to steal libuv from us. We will just go
+            // right back to sleep on the individual wake signal to let
+            // them take it from us without conflict.
+            if (active || !may_sleep(ptls)) {
+                if (settle_wake(ptls, gate, spinning)) {
+                    JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls);
+                }
+                *start_cycles = 0;
+                continue;
+            }
+            if (!enter_eventloop && !jl_atomic_load_relaxed(&_threadedregion) && ptls->tid == jl_atomic_load_relaxed(&io_loop_tid)) {
+                // thread 0 is the only thread permitted to run the event loop
+                // so it needs to stay alive, just spin-looping if necessary
+                if (settle_wake(ptls, gate, spinning)) {
+                    JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls);
+                }
+                *start_cycles = 0;
+                continue;
+            }
+        }
+
+        // any thread which wants us running again will have to observe
+        // sleep_check_state==sleeping and increment n_threads_running for us
+        int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
+        assert(wasrunning);
+        isrunning = 0;
+        if (wasrunning == 1) {
+            // This was the last running thread, and there is no thread with !may_sleep
+            // so make sure io_loop_tid is notified to check wait_empty
+            // TODO: this also might be a good time to check again that
+            // libuv's queue is truly empty, instead of during delete_thread
+            int16_t tid2 = 0;
+            if (ptls->tid != tid2)
+                signal_thread_wake(jl_atomic_load_relaxed(&jl_all_tls_states)[tid2]);
+        }
+
+        // the other threads will just wait for an individual wake signal to resume
+        if (gate != NULL)
+            jl_atomic_store_relaxed(&gate->last_parked, (int16_t)(ptls->tid + 1));
+        JULIA_DEBUG_SLEEPWAKE( ptls->sleep_enter = cycleclock() );
+        int8_t gc_state = jl_gc_safe_enter(ptls);
+        jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
+        while (may_sleep(ptls)) {
+            if (ptls->tid == 0) {
+                task = wait_empty;
+                if (task && jl_atomic_load_relaxed(&n_threads_running) == 0) {
+                    wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+                    assert(!wasrunning);
+                    wasrunning = !set_not_sleeping(ptls);
+                    assert(!wasrunning);
+                    JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
+                    if (!ptls->finalizers_inhibited)
+                        ptls->finalizers_inhibited++; // this annoyingly is rather sticky (we should like to reset it at the end of jl_task_wait_empty)
+                    break;
+                }
+                task = NULL;
+            }
+            // else should we warn the user of certain deadlock here if tid == 0 && n_threads_running == 0?
+            uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
+        }
+        assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
+        assert(jl_atomic_load_relaxed(&n_threads_running));
+        *start_cycles = 0;
+        uv_mutex_unlock(&ptls->sleep_lock);
+        JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
+        jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
+        if (task) {
+            assert(task == wait_empty);
+            wait_empty = NULL;
+            continue;
+        }
+        // We were parked and a waker flipped our state (the only self-flip
+        // out of the wait loop is the wait_empty path above): the waker
+        // pre-accounted us as a searcher.
+        if (gate != NULL)
+            *spinning = 1;
+    }
+    JL_CATCH {
+        // Routine, not fatal: usually a Ctrl-C InterruptException from a
+        // safepoint above, possibly a user mistake in trypoptask or a
+        // throwing libuv callback under uv_run.
+        if (!isrunning)
+            jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+        // A wake can accompany the exception: an ordinary wake may race it,
+        // and SIGINT delivery itself flips a parked thread (surprise_wakeup)
+        // so it reaches the safepoint that throws. Either way the waker
+        // pre-accounted a searcher slot we will never use: record it in
+        // *spinning so the caller's handler releases it (searcher_exit in
+        // jl_task_get_next). With no waker, settle_wake just un-publishes
+        // our sleep state.
+        settle_wake(ptls, gate, spinning);
+        jl_rethrow();
+    }
+    return task;
+}
+
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     uint64_t start_cycles = 0;
+    // NULL for threads outside every pool (foreign/adopted): legacy
+    // poll/park behavior, no accounting.
+    wake_gate_t *gate = gate_of_tid(jl_atomic_load_relaxed(&ct->tid));
+    // Whether this search loop holds a searcher slot. Frame-local rather
+    // than a ptls field (cf. Go's m.spinning) because this loop runs on the
+    // waiting task's stack, which can migrate threads if a scheduler
+    // callback yields; the slot is counted on the pool's gate and tasks are
+    // pool-bound, so the frame's claim stays valid across a migration.
+    // volatile: read in the outer JL_CATCH after a longjmp.
+    volatile int spinning = 0;
+    jl_task_t *task = NULL;
 
+    // The loop also unwinds in normal operation: a Ctrl-C surfaces as an
+    // InterruptException thrown from a safepoint inside sleep_thread, and
+    // trypoptask/checkempty can throw. This handler releases the searcher
+    // slot and runs the exit handoff; a leaked slot would gate the pool's
+    // wakeups forever. sleep_thread's own handler restores the sleep
+    // transition before the exception gets here.
+    JL_TRY {
     while (1) {
-        jl_task_t *task = get_next_task(trypoptask, q);
-        if (task)
-            return task;
-
-        // quick, race-y check to see if there seems to be any stuff in there
-        jl_cpu_pause();
-        if (!check_empty(checkempty)) {
-            start_cycles = 0;
-            continue;
-        }
-
-        jl_cpu_pause();
-        jl_ptls_t ptls = ct->ptls;
-        if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid) && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
-            // acquire sleep-check lock
-            assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
-            jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
-            jl_fence(); // [^store_buffering_1]
-            JL_PROBE_RT_SLEEP_CHECK_SLEEP(ptls);
-            if (!check_empty(checkempty)) { // uses relaxed loads
-                if (set_not_sleeping(ptls)) {
-                    JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
+        task = get_next_task(trypoptask, q);
+        if (task == NULL) {
+            jl_ptls_t ptls = ct->ptls;
+            int is_io_thread = ptls->tid == jl_atomic_load_relaxed(&io_loop_tid);
+            if (!spinning && gate != NULL && !is_io_thread) {
+                int32_t ns = jl_atomic_load_relaxed(&gate->n_spinning);
+                if (2 * ns < gate->n) {
+                    jl_atomic_fetch_add_relaxed(&gate->n_spinning, 1);
+                    spinning = 1;
                 }
+            }
+            // Denied a spinner slot: park without polling. The post-fence
+            // get_next_task retry in sleep_thread keeps this race-free.
+            int force_park = gate != NULL && !spinning && !is_io_thread;
+
+            // quick, race-y check to see if there seems to be any stuff in there
+            jl_cpu_pause();
+            if (!force_park && !check_empty(checkempty)) {
+                start_cycles = 0;
                 continue;
             }
-            volatile int isrunning = 1;
-            JL_TRY {
-                task = get_next_task(trypoptask, q); // note: this should not yield
-                if (ptls != ct->ptls) {
-                    // sigh, a yield was detected, so let's go ahead and handle it anyway by starting over
-                    ptls = ct->ptls;
-                    if (set_not_sleeping(ptls)) {
-                        JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
-                    }
-                    continue; // jump to JL_CATCH
-                }
-                if (task) {
-                    if (set_not_sleeping(ptls)) {
-                        JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
-                    }
-                    continue; // jump to JL_CATCH
-                }
 
-                // IO is always permitted, but outside a threaded region, only
-                // thread 0 will process messages.
-                // Inside a threaded region, any thread can listen for IO messages,
-                // and one thread should win this race and watch the event loop,
-                // but we bias away from idle threads getting parked here.
-                //
-                // The reason this works is somewhat convoluted, and closely tied to [^store_buffering_1]:
-                //  - After decrementing _threadedregion, the thread is required to
-                //    call jl_wakeup_thread(0), that will kick out any thread who is
-                //    already there, and then eventually thread 0 will get here.
-                //  - Inside a _threadedregion, there must exist at least one
-                //    thread that has a happens-before relationship on the libuv lock
-                //    before reaching this decision point in the code who will see
-                //    the lock as unlocked and thus must win this race here.
-                int uvlock = 0;
-                if (jl_atomic_load_relaxed(&_threadedregion)) {
-                    uvlock = jl_mutex_trylock(&jl_uv_mutex);
-                }
-                else if (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid)) {
-                    uvlock = 1;
-                    JL_UV_LOCK();
-                }
-                else {
-                    // Since we might have started some IO work, we might need
-                    // to ensure tid = 0 will go watch that new event source.
-                    // If trylock would have succeeded, that may have been our
-                    // responsibility, so need to make sure thread 0 will take care
-                    // of us.
-                    if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
-                        jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
-
-                }
-                if (uvlock) {
-                    int enter_eventloop = may_sleep(ptls);
-                    int active = 0;
-                    if (jl_atomic_load_relaxed(&jl_uv_n_waiters) != 0)
-                        // if we won the race against someone who actually needs
-                        // the lock to do real work, we need to let them have it instead
-                        enter_eventloop = 0;
-                    if (enter_eventloop) {
-                        uv_loop_t *loop = jl_global_event_loop();
-                        loop->stop_flag = 0;
-                        JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_enter = cycleclock() );
-                        active = uv_run(loop, UV_RUN_ONCE);
-                        JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_leave = cycleclock() );
-                        jl_gc_safepoint();
-                    }
-                    JL_UV_UNLOCK();
-                    // optimization: check again first if we may have work to do.
-                    // Otherwise we got a spurious wakeup since some other thread
-                    // that just wanted to steal libuv from us. We will just go
-                    // right back to sleep on the individual wake signal to let
-                    // them take it from us without conflict.
-                    if (active || !may_sleep(ptls)) {
-                        if (set_not_sleeping(ptls)) {
-                            JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls);
-                        }
-                        start_cycles = 0;
-                        continue; // jump to JL_CATCH
-                    }
-                    if (!enter_eventloop && !jl_atomic_load_relaxed(&_threadedregion) && ptls->tid == jl_atomic_load_relaxed(&io_loop_tid)) {
-                        // thread 0 is the only thread permitted to run the event loop
-                        // so it needs to stay alive, just spin-looping if necessary
-                        if (set_not_sleeping(ptls)) {
-                            JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls);
-                        }
-                        start_cycles = 0;
-                        continue; // jump to JL_CATCH
-                    }
-                }
-
-                // any thread which wants us running again will have to observe
-                // sleep_check_state==sleeping and increment n_threads_running for us
-                int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
-                assert(wasrunning);
-                isrunning = 0;
-                if (wasrunning == 1) {
-                    // This was the last running thread, and there is no thread with !may_sleep
-                    // so make sure io_loop_tid is notified to check wait_empty
-                    // TODO: this also might be a good time to check again that
-                    // libuv's queue is truly empty, instead of during delete_thread
-                    int16_t tid2 = 0;
-                    if (ptls->tid != tid2) {
-                        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid2];
-                        uv_mutex_lock(&ptls2->sleep_lock);
-                        uv_cond_signal(&ptls2->wake_signal);
-                        uv_mutex_unlock(&ptls2->sleep_lock);
-                    }
-                }
-
-                // the other threads will just wait for an individual wake signal to resume
-                JULIA_DEBUG_SLEEPWAKE( ptls->sleep_enter = cycleclock() );
-                int8_t gc_state = jl_gc_safe_enter(ptls);
-                jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
-                while (may_sleep(ptls)) {
-                    if (ptls->tid == 0) {
-                        task = wait_empty;
-                        if (task && jl_atomic_load_relaxed(&n_threads_running) == 0) {
-                            wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
-                            assert(!wasrunning);
-                            wasrunning = !set_not_sleeping(ptls);
-                            assert(!wasrunning);
-                            JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
-                            if (!ptls->finalizers_inhibited)
-                                ptls->finalizers_inhibited++; // this annoyingly is rather sticky (we should like to reset it at the end of jl_task_wait_empty)
-                            break;
-                        }
-                        task = NULL;
-                    }
-                    // else should we warn the user of certain deadlock here if tid == 0 && n_threads_running == 0?
-                    uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
-                }
-                assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
-                assert(jl_atomic_load_relaxed(&n_threads_running));
-                start_cycles = 0;
-                uv_mutex_unlock(&ptls->sleep_lock);
-                JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
-                jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
-                if (task) {
-                    assert(task == wait_empty);
-                    wait_empty = NULL;
-                    continue;
-                }
+            jl_cpu_pause();
+            if (force_park || sleep_check_after_threshold(&start_cycles) || (is_io_thread && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
+                task = sleep_thread(ct, &gate, &spinning, &start_cycles,
+                                    trypoptask, q, checkempty, force_park);
+                // sleep_thread sets `spinning` for a pre-accounted slot only
+                // with a non-NULL (possibly yield-updated) gate
+                assert(!spinning || gate != NULL);
             }
-            JL_CATCH {
-                // probably SIGINT, but possibly a user mistake in trypoptask
-                if (!isrunning)
-                    jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
-                set_not_sleeping(ptls);
-                jl_rethrow();
+            else {
+                // maybe check the kernel for new messages too
+                jl_process_events();
             }
-            if (task)
-                return task;
         }
-        else {
-            // maybe check the kernel for new messages too
-            jl_process_events();
+        if (task) {
+            // the single found-task exit, for both the poll above and
+            // sleep_thread's task-carrying returns
+            searcher_exit(gate, &spinning);
+            break;
         }
     }
+    }
+    JL_CATCH {
+        // An unwinding searcher performs no post-fence queue recheck, so it
+        // owes the same exit handoff as one that found work: a wakeup gated
+        // on our slot must be handed on. `spinning` includes slots that
+        // wakers pre-accounted, taken at the raced-detection sites above.
+        searcher_exit(gate, &spinning);
+        jl_rethrow();
+    }
+    return task;
 }
 
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
@@ -633,12 +885,9 @@ void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
     jl_fence();
     if (notsleeping) {
         if (jl_atomic_load_relaxed(&n_threads_running) == 1) {
-            jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[jl_atomic_load_relaxed(&io_loop_tid)];
             // This was the last running thread, and there is no thread with !may_sleep
             // so make sure tid 0 is notified to check wait_empty
-            uv_mutex_lock(&ptls2->sleep_lock);
-            uv_cond_signal(&ptls2->wake_signal);
-            uv_mutex_unlock(&ptls2->sleep_lock);
+            signal_thread_wake(jl_atomic_load_relaxed(&jl_all_tls_states)[jl_atomic_load_relaxed(&io_loop_tid)]);
         }
     }
     else {

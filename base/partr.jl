@@ -168,6 +168,7 @@ function multiq_insert(task::Task, priority::UInt16)
         @atomic :monotonic heap.priority = task.priority
     end
     unlock(heap.lock)
+    ccall(:jl_sched_nready_inc, Cvoid, (Int8,), tpid)
 
     return true
 end
@@ -236,6 +237,7 @@ function multiq_deletemin()
     end
     @atomic :monotonic heap.priority = prio1
     unlock(heap.lock)
+    ccall(:jl_sched_nready_dec, Cvoid, (Int8,), tp - 1)
 
     return task
 end

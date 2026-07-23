@@ -10,8 +10,10 @@ EXTENDS Naturals, FiniteSets, TLC
 Threads  == {1, 2, 3}
 Pool     == (1 :> "A") @@ (2 :> "B") @@ (3 :> "B")
 Inject0  == ("A" :> 0) @@ ("B" :> 2)
+UnwindHandsOff == TRUE
 
-VARIABLES st, pc, nrun, queue, inject
+
+VARIABLES st, pc, spin, nspin, nrun, queue, inject
 
 INSTANCE SchedulerWake
 =============================================================================
