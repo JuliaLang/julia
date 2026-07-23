@@ -593,6 +593,21 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
     return PkgId(uuid, name)
 end
 
+# CondaPkg calls this
+function manifest_uuid_load_spec(env::String, pkg::PkgId)::Union{Nothing,PkgLoadSpec,Missing}
+    @lock require_lock begin
+        project_file = env_project_file(env)
+        if project_file isa String
+            envobj = cached_explicit_env(project_file)
+        elseif project_file
+            envobj = abspath(env) == abspath(Sys.STDLIB) ? stdlib_env() : ImplicitEnv(env)
+        else
+            return nothing
+        end
+        return _locate_package(envobj, pkg)
+    end
+end
+
 # Revise calls this
 function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, entry::Dict{String,Any})::Union{Nothing, Missing, PkgLoadSpec}
     syntax_version = syntax_table_version(get(entry, "syntax", nothing))
