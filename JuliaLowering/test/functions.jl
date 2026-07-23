@@ -311,6 +311,9 @@ end
     @test JL.include_string(test_mod, "let y = 2; ((x=y,y...=y)->(x,y))(); end") == (2,(2,),)
     @test JL.include_string(test_mod, "let y = 2; ((x=y,y...=y)->(x,y))(0); end") == (0,(2,),)
     @test JL.include_string(test_mod, "let y = 2; ((x=y,y...=y)->(x,y))(0,0); end") == (0,(0,),)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y,z=y)->(x,y,z))(); end") == (2,2,2)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y,z=y)->(x,y,z))(0); end") == (0,2,2)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y,z=y)->(x,y,z))(0,0); end") == (0,0,0)
     # defaults containing previous sparams
     @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))()") == (1, Int, Int)
     @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))(true)") == (true, Bool, Bool)
