@@ -384,51 +384,20 @@ static void clear_weak_refs(void) JL_NOTSAFEPOINT
     }
 }
 
-// weak processing (currently: cancellation token source child lists)
+// Accelerated weak processing
 //
-// A collected cancellation source must leave its parents' (weak,
-// intrusive, doubly-linked) child lists. There is no registry to scan:
-// the sweep - which visits every dead cell's header anyway - detects dead
-// sources that are still linked (`gc_is_dead_linked_cancel_source`, gated
-// by the page's has_weak_processing flag), *keeps* their cells for this
-// cycle instead of freeing them, and queues them on the sweeping thread's
-// `weak_processing_objs` list. After all sweeping, still inside the
-// stop-the-world window,
-// sweep_weak_processing() performs the O(1) hlist unlinks: every slot
-// it writes lives either in an object that survived this cycle (a correct
-// fix-up) or in an object that died *this* cycle whose memory the sweep
-// kept around (see below) - sibling lists only ever contain cancellation
-// sources, and a parent strongly referenced by its children can never die
-// before them - so unlinks of adjacent dead nodes compose in any order.
-// The cleared back-pointers (`pprev == NULL`) make the next sweep that
-// visits a kept corpse free it normally. Total cost is strictly
-// proportional to the number of sources that died.
-//
-// Memory validity of the unlink writes:
-//  - pool pages holding any cancellation source that unlink writes may
-//    target carry the has_weak_processing flag (set when a source with
-//    parents is allocated on the page, and on every parent's page - see
-//    jl_gc_set_weak_processing_target). A flagged page is never freed
-//    wholesale by the `!has_marked` fast path; the cell-by-cell scan it
-//    takes instead always retains the page for the cycle, so writes into
-//    cells that died this cycle land in mapped, still-owned memory. The
-//    scan recomputes the flag from the page's *live* contents, so a page
-//    whose sources are gone stops being scanned - and gets reclaimed -
-//    by the following sweep.
-//  - big-object cancellation sources are not freed by sweep_big when they
-//    die; they are pushed onto `big_weak_corpses` (still linked into the
-//    bigval list) and freed at the end of sweep_weak_processing, after
-//    every unlink has been performed.
+// This code supports O(dead object) processing of weak object links.
+// Currently this is only used for cancellation sources. Pages
+// containing objects that need weak processing are flagged during allocation.
+// The sweep phase of the GC then collects all such objects into a per-thread
+// list. After the sweep phase, the GC calls `sweep_weak_processing` to
+// perform the necessary processing.
 
 // Dead big-object cancellation sources whose free is deferred until after
 // the unlink pass. Only touched by the serial parts of the sweep.
 static arraylist_t big_weak_corpses;
 
 // Does this (live or dead-this-cycle) cell hold a cancellation source?
-// Constant compare: cancellation sources carry a small type tag. Cells
-// freed by a previous sweep cannot false-positive: their header holds
-// either a freelist pointer (a valid heap address) or a newly allocated
-// object's type tag.
 STATIC_INLINE int gc_is_cancel_source(jl_taggedvalue_t *v) JL_NOTSAFEPOINT
 {
     return (v->header & ~(uintptr_t)0xf) == (jl_cancel_source_tag << 4);
@@ -3465,11 +3434,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_scrub();
         gc_verify_tags();
         gc_sweep_pool();
-        // Process the dead weakly-processed objects found (and kept) by the
-        // big-object and pool sweeps above - i.e. unlink dead cancellation
-        // sources from their parents' child lists. Must run before the
-        // world restarts, while the memory of every dead list neighbor is
-        // still intact.
         sweep_weak_processing();
     }
 

@@ -11,18 +11,8 @@
 # may only *react* to cancellation; the source is the capability to *request*
 # it.
 #
-# The token governing a piece of code is carried dynamically as a scoped
-# value (see `CANCEL_TOKEN`), which `@cancel_check` resolves at every check.
-# Tasks inherit their creating task's scope, so cancellation scopes propagate
-# to child tasks without explicit plumbing.
-#
-# This file provides the data model and the cooperative (polling) checks.
-#
-# A scoped-value lookup is a `Core.current_scope()` read plus a
-# persistent-dict (HAMT) lookup, and the optimizer only folds
-# `current_scope()` when the enclosing `@with` is visible in the same
-# (post-inlining) frame - for inherited scopes the lookup stays in hot
-# loops. Hot loops can hoist it manually via the `@cancel_check tok` form.
+# For convenience, the scoped value `CANCEL_TOKEN` carries the governing token
+# carries the default cancellation token.
 
 const CancellationTokenSource = Core.CancellationTokenSource
 
@@ -35,8 +25,8 @@ cancellation of the associated source, but cannot request cancellation
 itself. Only the holder of the *source* can call [`cancel!`](@ref).
 
 A token takes effect by scoping it over a computation via the
-[`CANCEL_TOKEN`](@ref) scoped value (spawned tasks inherit it): once the
-source is cancelled, the computation's cancellation points (see
+[`CANCEL_TOKEN`](@ref) scoped value or by explicit token passing.
+Once the associated source is cancelled, the computation's cancellation points (see
 [`@cancel_check`](@ref)) throw a [`CancellationRequest`](@ref).
 """
 struct CancellationToken
@@ -100,10 +90,6 @@ frozen in place and never scheduled again.
 """
 const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
 
-# The state byte of a source is 0x00 while uncancelled, and the (nonzero)
-# severity once cancelled - severities start at 0x1 precisely so that the
-# two cases cannot collide.
-
 """
     cancel_severity(src::CancellationTokenSource) -> Union{Nothing, CancellationRequest}
     cancel_severity(tok::CancellationToken)
@@ -130,31 +116,6 @@ iscancelled(src::CancellationTokenSource) = (@atomic :monotonic src.state) != 0x
 iscancelled(tok::CancellationToken) = iscancelled(tok.source)
 
 ## Source construction and graph linkage
-#
-# A source is a variable-sized object: its fixed fields (`child_head`,
-# `state`, `nparents`) are followed by `nparents` {parent,
-# next, pprev} link entries (see `jl_cancel_source_t` in julia_threads.h).
-# The `parent` slots are strong, const references - a child keeps its
-# parents alive - while `child_head` and the `next`/`pprev` slots form
-# intrusive per-parent sibling lists of *weak* references: when a source is
-# collected, the sweep - which visits every dead object anyway - detects it
-# and unlinks it from its parents' lists in O(1) via the `pprev`
-# back-pointer, so there is no explicit detach operation, the collector's
-# work is proportional to the number of sources that actually died, and, at
-# any point the mutator can observe, the lists contain only live sources.
-#
-# The lists are lock-free: mutators only ever prepend (in the C constructor
-# `jl_new_cancel_source`, via CAS on `child_head`); removal happens only
-# inside the collector with the world stopped. Construction and cancellation
-# synchronize with seq_cst operations so that attachment is level-triggered:
-# either the canceller's walk observes the new child, or the constructor
-# observes the cancelled state (and the child is born cancelled).
-
-# Construction is the builtin `Core._new_cancel_source(parents...)`
-# (jl_new_cancel_source): it allocates the object with one link entry per
-# argument and performs the linking and state inheritance in C, where the
-# absence of safepoints between publishing a link and reading the parent's
-# state can be guaranteed.
 
 """
     CancellationTokenSource() -> CancellationTokenSource
@@ -222,9 +183,6 @@ end
 #
 # Cancellation is uniformly level-triggered: while the governing token is
 # cancelled, every cancellation point throws the `CancellationRequest`.
-# There is no per-task acknowledgement state; code that must keep running
-# under a cancelled scope shields itself by scoping `CANCEL_TOKEN => nothing`
-# over the block.
 
 """
     cancel!(src::CancellationTokenSource,
@@ -243,10 +201,7 @@ their cancellation points (see [`@cancel_check`](@ref)), which throw a
 [`CancellationRequest`](@ref).
 
 When `cancel!` returns, every source currently reachable from `src` has
-been advanced to (at least) the requested severity by this very call - even
-a call that returns `false` performs the full walk, so that a repeated
-`cancel!` also repairs a subgraph whose earlier cancellation was cut short
-(say, by the cancelling task itself being torn down mid-walk).
+been advanced to (at least) the requested severity by this very call.
 """
 function cancel!(src::CancellationTokenSource,
                  request::CancellationRequest=CANCEL_REQUEST_SAFE)
@@ -255,28 +210,12 @@ function cancel!(src::CancellationTokenSource,
         throw(ArgumentError("invalid cancellation severity $(repr(request.request))"))
     end
     raised = _raise_state!(src, sev)
-    # Mark the descendants: each node is marked before its children so a
-    # concurrent construction of a child source is level-triggered. The walk
-    # does not depend on `raised`: when a concurrent equal-severity cancel!
-    # wins the state transition, its walk may still be in flight (or may
-    # never finish), so the loser must provide the on-return guarantee with
-    # its own traversal.
     _cancel_walk!(src, sev)
-    # Heavy fence, after every state write of the walk: lets a delivery
-    # mechanism publish per-task token bindings with compiler ordering only
-    # - either the canceller observes the binding of a running task, or the
-    # task's next cancellation point observes the walk's state writes.
     Threads.atomic_fence_heavy()
     return raised
 end
 
 function _cancel_walk!(src::CancellationTokenSource, sev::UInt8)
-    # Iterative worklist (no recursion): a deep source chain must not
-    # overflow the canceller's stack. The visited set - rather than pruning
-    # on nodes whose state some walk already advanced - makes a reconverging
-    # ("linked") graph linear in edges while keeping the walk self-contained:
-    # this call visits every reachable node itself instead of trusting
-    # another (possibly interrupted) walk to have done so.
     visited = IdSet{CancellationTokenSource}()
     push!(visited, src)
     pending = CancellationTokenSource[src]
@@ -289,29 +228,8 @@ end
 function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
                             pending::Vector{CancellationTokenSource},
                             visited::IdSet{CancellationTokenSource})
-    # Advance at least to the node's current severity: a concurrent higher-
-    # severity cancel! may have raised the state after this walk's own
-    # transition, and this walk may reach parts of the graph before that
-    # one does, so it carries the escalated severity onward (best effort;
-    # the escalator's own walk is what guarantees its severity).
-    # seq_cst, not acquire: when this walk's `_raise_state!` on `node` was
-    # lost, that call performed only monotonic reads, so this load is the
-    # walk's one seq_cst operation on `node.state` before the `child_head`
-    # read below - the pairing depends on it.
     st = @atomic :sequentially_consistent node.state
     sev < st && (sev = st)
-    # Walk the node's (weak, intrusive) child list. The level-trigger
-    # guarantee is a store-buffering pairing: the constructor publishes the
-    # child (seq_cst CAS on `child_head`), then reads the parent's state
-    # (seq_cst); the walk performs a seq_cst access of `node.state` - the
-    # winning CAS in `_raise_state!`, or the load above when the raise was
-    # lost (it re-reads the cancelled state, pinning the winner's write into
-    # the seq_cst order) - before the seq_cst `child_head` read below. Thus
-    # a child this read misses was published after the cancelled state
-    # became seq_cst-visible, so its constructor observes a cancelled parent
-    # and the child is born at (at least) this severity. Children attached
-    # concurrently *during* the walk are prepended before the list positions
-    # already traversed and are likewise born cancelled.
     c = @atomic node.child_head
     while c !== nothing
         c = c::CancellationTokenSource
@@ -379,12 +297,7 @@ end
 checkcancel(::Nothing) = nothing
 checkcancel(tok::CancellationToken) = checkcancel(tok.source)
 
-## The scoped default token
-
-# The scoped-value key under which the governing cancellation token is
-# carried. `AbstractScopedValue` so the ScopedValues API (`@with
-# Base.CANCEL_TOKEN => tok ...`) works on it; the accessors below avoid the
-# ScopedValues module so they are usable during early bootstrap.
+## CANCEL_TOKEN
 struct CancelTokenKey <: AbstractScopedValue{Union{Nothing, CancellationToken}} end
 
 """
@@ -410,13 +323,7 @@ Scoping `Base.CANCEL_TOKEN => nothing` instead *shields* the enclosed code
 from an outer (possibly cancelled) token; use this for cleanup that must
 complete while the surrounding computation is being cancelled.
 
-The current value can be read with `Base.CANCEL_TOKEN[]`, for example to
-hand the governing token across a boundary that does not preserve dynamic
-scope (a `ccall` callback, a queue consumed by unrelated tasks). Note that
-this only connects code within the same process: *serializing* a token
-(e.g. shipping it to a worker process) copies its source graph - the copy
-reflects the cancellation state as of serialization, and is independent
-thereafter, so cancelling the original does not cancel the copy.
+The current value can be read with `Base.CANCEL_TOKEN[]`.
 """
 const CANCEL_TOKEN = CancelTokenKey()
 

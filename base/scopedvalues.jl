@@ -4,10 +4,6 @@ module ScopedValues
 
 export ScopedValue, LazyScopedValue, with, @with, ScopedThunk
 public get
-
-# The `Scope`/`AbstractScopedValue` types are defined early in bootstrap
-# (base/scope.jl) so that early Base code can resolve scoped state; this
-# module provides the user-facing API on top of them.
 using Base: AbstractScopedValue, Scope, ScopeStorage
 
 

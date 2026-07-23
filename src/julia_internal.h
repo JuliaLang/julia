@@ -688,10 +688,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty) JL_CAN
 // Informs the collector that `v` (freshly allocated) requires weak
 // processing when it dies - collector-side bookkeeping beyond freeing the
 // memory, dispatched on the object's type (currently: unlinking a
-// cancellation token source from its parents' child lists). How the
-// collector finds such dead objects is implementation-defined: the stock GC
-// flags the page so its sweep inspects dead cells there; MMTk registers the
-// object for a post-mark registry scan.
+// cancellation token source from its parents' child lists).
 void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT;
 // Declare that `v` may be *written* by the GC's weak-processing pass in the
 // cycle in which it dies (e.g. a parent whose intrusive child list dead

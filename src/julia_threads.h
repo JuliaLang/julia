@@ -253,16 +253,7 @@ typedef struct _jl_handler_t jl_handler_t;
 // `next`/`pprev` fields of each link) are *weak*, with unlink-on-death
 // semantics rather than WeakRef's clear-on-death: a child stays linked for
 // exactly as long as it is reachable, and when it is collected the GC
-// unlinks it from each parent's sibling list before the world restarts
-// (stock GC: detected per-dead-object by the sweep, which reads every dead
-// cell's header anyway, and unlinked by sweep_weak_processing; MMTk:
-// detected by scanning a registry, see jl_gc_sweep_weak_processing). At any
-// mutator-observable point the lists therefore contain only live objects.
-// The lists are doubly linked in the hlist style - `pprev` points at
-// whichever slot currently points at this node (the parent's `child_head`
-// or the previous sibling's `next`) - so unlinking a dead source is O(1)
-// and the stock collector's total work is proportional to the number of
-// sources that actually died.
+// unlinks it from each parent's sibling list before the world restarts.
 //
 // Concurrency: the lists are lock-free. Mutators only ever *prepend* (at
 // construction, via CAS on `child_head`); removal happens only inside the

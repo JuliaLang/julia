@@ -885,10 +885,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
     }
     else if (jl_is_cancel_source(v)) {
-        // Only the (strong) parent links are serialized; the weak child
-        // lists (`child_head` and the link entries' `next`/`pprev`) are
-        // dropped and rebuilt on load by relinking each source under its
-        // parents as if newly allocated (see jl_cancel_source_relink).
+        // Write parents - child lists are reconstruct at load time.
         jl_cancel_source_t *cs = (jl_cancel_source_t*)v;
         jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
         for (size_t i = 0; i < cs->nparents; i++)
@@ -1600,12 +1597,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             write_uint8(f, '\0'); // null-terminated strings for easier C-compatibility
         }
         else if (jl_is_cancel_source(v)) {
-            // Variable-sized: the fixed fields are followed by `nparents`
-            // {parent, next, pprev} link entries. The weak child links
-            // (`child_head` and the `next`/`pprev` slots) are reset rather
-            // than serialized: on load the source is relinked under its
-            // parents as if newly allocated (see the fixup below), which
-            // also re-inherits their current cancellation state.
+            // Variable-sized. Store parents, reset children (reconstructed on load).
             assert(f == s->s);
             jl_cancel_source_t *cs = (jl_cancel_source_t*)v;
             write_pointerfield(s, jl_nothing); // child_head (weak; reset)

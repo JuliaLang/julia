@@ -4161,12 +4161,8 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_namedtuple_type))->layout = NULL;
     jl_namedtuple_typename = ntt->name;
 
-    // Variable-sized (see jl_cancel_source_t): the declared fields cover only
-    // the fixed part; `nparents` parent links follow them. The GCs
-    // special-case both the size and the scanning of this layout (the
-    // declared fields contain no boxed values as far as the field system is
-    // concerned - `child_head` is a weak reference the marker must not
-    // trace).
+    // Variable-sized (see jl_cancel_source_t) - only the fixed fields are exposed to
+    // julia.
     jl_cancel_source_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
                         jl_emptysvec,
