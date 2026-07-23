@@ -133,16 +133,16 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         push!(iter.todo, (ex, false, 1))
         return lower_step(iter, mod, world; soft_scope)
     elseif k == K"module"
-        (version, notbare, name, body) = @stm ex begin
-            [K"module" version nb_st name body] ->
-                (version.value, nb_st.value, name, body)
-            [K"module" nb_st name body] ->
-                (nothing, nb_st.value, name, body)
+        (version, notbare, mname, body) = @stm ex begin
+            [K"module" version nb_st mname body] ->
+                (version.value, nb_st.value, mname, body)
+            [K"module" nb_st mname body] ->
+                (nothing, nb_st.value, mname, body)
         end
-        if kind(name) != K"Identifier"
-            throw(LoweringError(name, "Expected module name"))
+        if kind(mname) != K"Identifier"
+            throw(LoweringError(mname, "Expected module name"))
         end
-        newmod_name = Symbol(name.name_val)
+        newmod_name = Symbol(get_name(mname))
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
@@ -632,18 +632,18 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"nothing"
         nothing
     elseif k == K"core"
-        GlobalRef(Core, Symbol(ex.name_val::String))
+        GlobalRef(Core, Symbol(get_name(ex)))
     elseif k == K"top"
-        GlobalRef(Base, Symbol(ex.name_val::String))
+        GlobalRef(Base, Symbol(get_name(ex)))
     elseif k == K"globalref"
-        GlobalRef(ex.mod::Module, Symbol(ex.name_val::String))
+        GlobalRef(ex.mod::Module, Symbol(get_name(ex)))
     elseif k == K"Identifier"
         # TODO: assert false (only reachable from simdloop?)
-        Symbol(ex.name_val::String)
+        Symbol(get_name(ex))
     elseif k == K"SourceLocation"
         QuoteNode(source_location(LineNumberNode, ex))
     elseif k == K"Symbol"
-        QuoteNode(Symbol(ex.name_val::String))
+        QuoteNode(Symbol(get_name(ex)))
     elseif k == K"slot"
         Core.SlotNumber(get_id(ex))
     elseif k == K"static_parameter"
@@ -710,7 +710,7 @@ function _to_lowered_expr(ex::SyntaxTree)
         ret = Expr(:cfunction)
         for (i, e) in enumerate(children(ex))
             if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
-                push!(ret.args, QuoteNode(Symbol(e[1].name_val::String)))
+                push!(ret.args, QuoteNode(Symbol(get_name(e[1]))))
             else
                 push!(ret.args, _to_lowered_expr(e))
             end
@@ -764,7 +764,7 @@ function _foreignsymbol_expr(ex)
         _to_lowered_expr(ex)
     else
         k = kind(ex)
-        Expr(Symbol((k === K"unknown_head" ? ex.name_val : untokenize(k))::String),
+        Expr(Symbol((k === K"unknown_head" ? get_name(ex) : untokenize(k))::String),
              map(_foreignsymbol_expr, children(ex))...)
     end
 end

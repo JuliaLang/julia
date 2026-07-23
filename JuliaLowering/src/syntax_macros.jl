@@ -121,7 +121,7 @@ function ccall_macro_parse(ctx, exs)
     ex = exs[end]
     for opt in opts
         @stm opt begin
-            [K"=" [K"Identifier"] val] -> if opt[1].name_val != "gc_safe"
+            [K"=" [K"Identifier"] val] -> if get_name(opt[1]) != "gc_safe"
                 throw(MacroExpansionError(opt[1], "unknown option name for ccall"))
             elseif !(kind(val) in KSet"Bool Value")
                 throw(MacroExpansionError(val, "gc_safe must be true or false"))
@@ -262,7 +262,7 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
                 ]
             ]
         ]
-        [K"unknown_head"(name_val="latestworld-if-toplevel")]
+        [K"unknown_head"(value="latestworld-if-toplevel")]
         val
     ]
 end

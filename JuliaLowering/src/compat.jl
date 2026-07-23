@@ -66,7 +66,7 @@ end
 # provenance (but still removed).
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
     st = if e isa Symbol
-        setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
+        newleaf(graph, src, K"Identifier", String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(graph, e.value, src)
         newnode(graph, src, K"inert", NodeId[cid])
@@ -74,8 +74,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
         for name in argnames
-            id = newleaf(graph, src, K"Identifier")
-            setattr!(id, :name_val, String(name::Symbol))
+            id = newleaf(graph, src, K"Identifier", String(name::Symbol))
             push!(arg_cs, id._id)
         end
         body_id, src = _expr_to_est(graph, e.args[2], src)
@@ -98,7 +97,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
             end
         end
         if isnothing(st_k)
-            setattr!(newnode(graph, old_src, K"unknown_head", cs), :name_val, head_s)
+            setattr!(newnode(graph, old_src, K"unknown_head", cs), :value, head_s)
         else
             newnode(graph, old_src, st_k, cs)
         end
@@ -122,7 +121,7 @@ end
 
 # @__doc__ is brittle
 _is_meta_doc_block(st) = @stm st begin
-    [K"block" [K"meta" [K"Identifier"]] _] -> st[1][1].name_val::String == "doc"
+    [K"block" [K"meta" [K"Identifier"]] _] -> get_name(st[1][1]) == "doc"
     _ -> false
 end
 
@@ -133,7 +132,7 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
     k = kind(st)
     if kind(st) === K"Identifier"
         # @jl_assert scope layer is base
-        n = Symbol(st.name_val::String)
+        n = Symbol(get_name(st))
         mod = get(st, :mod, nothing)
         !isnothing(mod) ? GlobalRef(mod, n) : n
     elseif is_leaf(st) && is_expr_value(st)
@@ -152,7 +151,7 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
         @jl_assert !is_leaf(st) (st, "est_to_expr should only be used pre-desugaring")
         # In a partially-expanded or quoted AST, there may be heads with no
         # corresponding kind
-        head = Symbol((k === K"unknown_head" ? st.name_val : untokenize(k))::String)
+        head = Symbol((k === K"unknown_head" ? get_name(st) : untokenize(k))::String)
         out = Expr(head)
 
         # (Move the following assumptions to the docs if they turn out accurate)
@@ -197,10 +196,10 @@ end
 function _dst_separate_dotop(st::SyntaxTree)
     k = kind(st)
     if k === K"Identifier"
-        dotop_s = st.name_val::String
+        dotop_s = get_name(st)
         !is_dotted_operator(dotop_s) && return est_to_dst(st)
         op_s = dotop_s[nextind(dotop_s,1):end]
-        op_leaf = setattr(mkleaf(st), :name_val, op_s)
+        op_leaf = newleaf(st._graph, st, K"Identifier", op_s)
         return @ast st._graph st [K"." op_leaf]
     elseif k === K"Value" && st.value isa GlobalRef &&
         is_dotted_operator(string(st.value.name))
@@ -291,7 +290,7 @@ function _expand_literal_pow(st::SyntaxTree)
     k = kind(st)
     (k in KSet"call dotcall" &&
         numchildren(st) === 3 &&
-        get(st[1], :name_val, "") === "^" &&
+        get(st[1], :value, "") === "^" &&
         get(st[3], :value, nothing) isa Integer) || return st
     @ast st._graph st [k
         "literal_pow"::K"top"
@@ -301,7 +300,7 @@ function _expand_literal_pow(st::SyntaxTree)
 end
 
 function _est_to_dst_ident(st::SyntaxTree)
-    s = st.name_val::String
+    s = get_name(st)
     if is_writeonly_est_name(s)
         setattr!(mkleaf(st), :kind, K"Placeholder")
     else
@@ -346,7 +345,7 @@ function apply_arg_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
         elseif isnothing(meta)
             st
         else
-            sym = get(meta, st.name_val::String, nothing)
+            sym = get(meta, get_name(st), nothing)
             !isnothing(sym) ? setmeta(st, sym, true) : st
         end
     elseif k == K"Placeholder" || k == K"tuple" || k == K"::" && numchildren(st) == 1
@@ -358,7 +357,7 @@ function apply_arg_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
     elseif k == K"meta"
         # not specified what to do here if we get conflicting
         # specialize/nospecialize
-        meta2 = Symbol(st[1].name_val::String)
+        meta2 = Symbol(get_name(st[1]))
         @jl_assert meta2 in (:specialize, :nospecialize) st
         apply_arg_meta(st[2], meta2)
     elseif k == K"parameters"
@@ -390,7 +389,7 @@ function force_readable_sparams(st)
     sig, wheres = let (sig0, wheres0) = flatten_wheres(st)
         sig0, mapsyntax(typevar_bounds, wheres0)
     end
-    any(w->is_flisp_compat(w) && is_writeonly_est_name(w[1].name_val::String),
+    any(w->is_flisp_compat(w) && is_writeonly_est_name(get_name(w[1])),
         wheres) || return st
 
     g = st._graph
@@ -398,7 +397,7 @@ function force_readable_sparams(st)
     lt = @ast g st "<:"::K"Identifier"
     for i in eachindex(wheres)
         n = wheres[i][1]
-        n_str = n.name_val::String
+        n_str = get_name(n)
         lb = _mangle_writeonly(wheres[i][2], seen)
         ub = _mangle_writeonly(wheres[i][3], seen)
         is_flisp_compat(n) && is_writeonly_est_name(n_str) && push!(seen, n_str)
@@ -426,7 +425,7 @@ function _mangle_writeonly(st, seen)
     g = st._graph
     k = kind(st)
     if k === K"Identifier" && !hasattr(st, :mod) && is_flisp_compat(st)
-        n = st.name_val::String
+        n = get_name(st)
         !(n in seen) ? st : @ast g st (string(n, "FIXME#60626")::K"Identifier")
     elseif is_leaf(st) || is_quoted(st) || k === K"->" || k === K"function"
         st
@@ -442,12 +441,12 @@ function collect_body_arg_meta(st)
         k = kind(c)
         @stm c begin
             [K"meta" [K"Identifier"] idents...] -> begin
-                meta = Symbol(c[1].name_val::String)
+                meta = Symbol(get_name(c[1]))
                 meta in (:specialize, :nospecialize) || continue
                 length(idents) == 0 && return meta
                 isnothing(out) && (out = Dict{String, Symbol}())
                 for id in idents
-                    kind(id) === K"Identifier" && (out[id.name_val] = meta)
+                    kind(id) === K"Identifier" && (out[get_name(id)] = meta)
                 end
             end
             # Only leading meta statements are recognized in lowering.  Ideally
@@ -482,13 +481,12 @@ function est_to_dst(st::SyntaxTree)
         [K"Value"] -> st.value === nothing ? newleaf(g, st, K"nothing") : st
         (_, when=is_leaf(st)) -> st
         ([K"unknown_head" l r],
-         when=(s=st.name_val; Base.isoperator(s))) -> let
+         when=(s=get_name(st); Base.isoperator(s))) -> let
              (op_s, out_k) = s[1] === '.' ?
                  (s[nextind(s,1):prevind(s,end)], K".op=") :
                  (s[1:prevind(s,end)], K"op=")
 
-             op_leaf = newleaf(g, st, K"Identifier")
-             setattr!(op_leaf, :name_val, op_s)
+             op_leaf = newleaf(g, st, K"Identifier", op_s)
              @ast g st [out_k rec(l) op_leaf rec(r)]
          end
         [K"comparison" cs0...] -> let cs = copy(cs0)
@@ -525,8 +523,8 @@ function est_to_dst(st::SyntaxTree)
         [K"foreignglobal" [K"tuple" _...]] ->
             @ast g st [K"foreignglobal" [K"foreignsymbol" st[1]]]
         ([K"call" [K"Identifier"] sym args...],
-         when=(st[1].name_val::String === "ccall" ||
-               st[1].name_val::String === "cglobal")) -> if kind(sym) === K"tuple"
+         when=(get_name(st[1]) === "ccall" ||
+               get_name(st[1]) === "cglobal")) -> if kind(sym) === K"tuple"
              @ast g st [K"call" st[1] [K"foreignsymbol" st[2]] mapsyntax(rec, args)...]
          else
              @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
@@ -634,10 +632,10 @@ function est_to_dst(st::SyntaxTree)
         #-----------------------------------------------------------------------
         # Heads not emitted from parsing
         ([K"meta" s vs...],
-         when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
+         when=(meta=get(s, :value, ""); meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
              newleaf(g, st, K"nothing")
-        ([K"meta" s gen], when=get(s, :name_val, "")::String == "generated") ->
+        ([K"meta" s gen], when=get(s, :value, "") === "generated") ->
             @ast g st [K"meta" setattr(s, :kind, K"Symbol") rec(gen)]
         [K"meta" syms...] ->
             @ast g st [K"meta" mapsyntax(
@@ -646,25 +644,25 @@ function est_to_dst(st::SyntaxTree)
            ]
         [K"boundscheck" x] -> mknode(st, SyntaxList(g))
         [K"inbounds" [K"Identifier"]] -> newnode(g, st, K"inbounds_pop", SyntaxList(g))
-        [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
-        [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
+        [K"core" x] -> newleaf(g, st, K"core", get_name(x))
+        [K"top" x] -> newleaf(g, st, K"top", get_name(x))
         [K"static_parameter" x] -> newleaf(g, st, K"static_parameter", x.value::IdTag)
         [K"lambda" args sps body] -> mknode(st, [args._id, sps._id, rec(body)._id])
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_expr::K"Value"
             [K"inert"(st[1]) ex]
         ]
-        [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
-        [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
-        [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
-        [K"symbolicblock" id body] -> let s = id.name_val::String
+        [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :value, get_name(lab))
+        [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :value, get_name(lab))
+        [K"symboliclabel" lab] -> setattr!(mkleaf(st), :value, get_name(lab))
+        [K"symbolicblock" id body] -> let s = get_name(id)
             if is_writeonly_est_name(s)
                 @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
             else
                 @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
             end
         end
-        [K"unknown_head" cs...] -> let head = st.name_val
+        [K"unknown_head" cs...] -> let head = get_name(st)
             if head === "latestworld-if-toplevel"
                 newleaf(g, st, K"latestworld_if_toplevel")
             else

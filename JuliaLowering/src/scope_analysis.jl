@@ -10,7 +10,7 @@ end
 
 function NameKey(ex::SyntaxTree)
     @jl_assert kind(ex) === K"Identifier" ex
-    NameKey(ex.name_val, (ex.context::SyntaxContext).layer)
+    NameKey(get_name(ex), (ex.context::SyntaxContext).layer)
 end
 
 struct ScopeInfo
@@ -416,7 +416,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         k === K"toplevel_lambda" || k === K"generated_lambda" ex
     if k == K"Identifier"
         if (mod = get(ex, :mod, nothing); !isnothing(mod))
-            return new_global_binding(ctx, ex, ex.name_val, mod)
+            return new_global_binding(ctx, ex, get_name(ex), mod)
         end
         b = resolve_name(ctx, ex)
         # Unresolved names are assumed global

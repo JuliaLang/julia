@@ -299,7 +299,7 @@ function emit_return(ctx, ex)
 end
 
 function emit_break(ctx, ex)
-    name = ex[1].name_val
+    name = get_name(ex[1])
     target = get(ctx.break_targets, name, nothing)
     if isnothing(target)
         if name == "loop-exit"
@@ -720,7 +720,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             res
         end
     elseif k == K"symbolicblock"
-        name = ex[1].name_val
+        name = get_name(ex[1])
         # Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
         if name != "loop-exit" && name != "loop-cont"
             if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
@@ -768,7 +768,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"symboliclabel"
         label = emit_label(ctx, ex)
-        name = ex.name_val::String
+        name = get_name(ex)
         if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
             throw(LoweringError(ex, "Label `$name` defined multiple times"))
         end
@@ -894,7 +894,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             # Certain blessed forms are allowed to share a meta expression;
             # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
             if kind(ex[1]) === K"purity" ||
-                kind(ex[1]) === K"Symbol" && ex[1].name_val::String in (
+                kind(ex[1]) === K"Symbol" && get_name(ex[1]) in (
                     "inline", "noinline", "propagate_inbounds",
                     "nospecializeinfer", "aggressive_constprop", "no_constprop")
                 for c in children(ex)
@@ -902,7 +902,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                         old = get(ctx.meta, :purity, UInt16(0))
                         ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
                     elseif kind(c) === K"Symbol"
-                        ctx.meta[Symbol(c.name_val::String)] = true
+                        ctx.meta[Symbol(get_name(c))] = true
                     else
                         @jl_assert false c
                     end
@@ -1042,7 +1042,7 @@ function compile_body(ctx::LinearIRContext, ex)
     # Fix up any symbolic gotos. (We can't do this earlier because the goto
     # might precede the label definition in unstructured control flow.)
     for origin in ctx.symbolic_jump_origins
-        name = origin.goto.name_val
+        name = get_name(origin.goto)
         target = get(ctx.symbolic_jump_targets, name, nothing)
         if isnothing(target)
             # Check if it's a symbolic block label
@@ -1099,9 +1099,9 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
                 if binfo.kind !== :global
                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 end
-                out = newleaf(ctx, ex, K"globalref")
+                out = newleaf(ctx, ex, K"globalref", binfo.name)
                 !isnothing(binfo.mod) && setattr!(out, :mod, binfo.mod)
-                setattr!(out, :name_val, binfo.name)
+                out
             end
         end
     elseif k == K"meta" || k == K"static_eval"

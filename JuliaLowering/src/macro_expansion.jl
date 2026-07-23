@@ -155,7 +155,7 @@ function _eval_dot(world::UInt, mod, ex::SyntaxTree)
         ex = ex[1]
     end
     kind(ex) in KSet"Identifier Symbol" && mod isa Module ?
-        _invoke_in_world(world, getproperty, mod, Symbol(ex.name_val)) :
+        _invoke_in_world(world, getproperty, mod, Symbol(get_name(ex))) :
         nothing
 end
 
@@ -172,7 +172,7 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
             st.value
         elseif kind(st) === K"Identifier"
             _invoke_in_world(ctx.world, getproperty,
-                             syntax_module(st), Symbol(st.name_val))
+                             syntax_module(st), Symbol(get_name(st)))
         elseif kind(st) === K"." &&
                 # TODO: correct mod?
                 (ed = _eval_dot(ctx.world, mod, st); !isnothing(ed))

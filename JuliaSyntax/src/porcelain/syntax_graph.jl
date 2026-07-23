@@ -97,7 +97,6 @@ ensure_parser_attributes!(g::SyntaxGraph) = ensure_attributes!(
     g,
     syntax_flags=UInt16,
     value=Any,
-    name_val=String,
     mod=Module)
 
 function delete_attributes!(graph::SyntaxGraph, attr_names::Symbol...)
@@ -282,8 +281,7 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
     end
     if is_leaf(ex1)
         return hasattr(ex1, :value) == hasattr(ex2, :value) &&
-               get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
-               get(ex1, :name_val, nothing) == get(ex2, :name_val, nothing)
+               get(ex1, :value,    nothing) == get(ex2, :value,    nothing)
     else
         if numchildren(ex1) != numchildren(ex2)
             return false
@@ -1352,7 +1350,7 @@ end
 
 function SyntaxTree(graph::SyntaxGraph, sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor)
     ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16,
-                       source=SourceAttrType, value=Any, name_val=String)
+                       source=SourceAttrType, value=Any)
     green_id = GC.@preserve sf begin
         raw_offset, txtbuf = _unsafe_wrap_substring(sf[].code)
         offset = raw_offset - sf[].byte_offset
@@ -1383,7 +1381,7 @@ function _insert_green(graph::SyntaxGraph, sf::Base.RefValue{SourceFile},
         v = parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ offset)
         if v isa Symbol
             # TODO: Fixes in JuliaSyntax to avoid ever converting to Symbol
-            setattr!(graph, id, :name_val, string(v))
+            setattr!(graph, id, :value, string(v))
         elseif !isnothing(v)
             setattr!(graph, id, :value, v)
         end
@@ -1423,7 +1421,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
     graph = syntax_graph_js(st)
     k = kind(st)
-    symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :name_val, s)
+    name_val(x) = x.value::String
+    symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :value, s)
     core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
     valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
 
@@ -1437,7 +1436,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
     if is_leaf(st)
         return if k === K"CmdMacroName" || k === K"StrMacroName"
-            name = lower_identifier_name(st.name_val, k)
+            name = lower_identifier_name(name_val(st), k)
             symleaf(name)
         elseif k === K"VERSION"
             valleaf(version_to_expr(st))
@@ -1450,9 +1449,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             arg = valleaf(replace(sourcetext(st), '_'=>""))
             ret_cids = tree_ids(mac, valleaf(nothing), arg)
             newnode(graph, st, K"macrocall", ret_cids)
-        elseif hasattr(st, :name_val) && !(kind(st) in KSet"Identifier")
+        elseif hasattr(st, :value) && !(k in KSet"Identifier Value" || is_literal(k))
             # certain kinds should really be identifiers.  known: &, |, :
-            symleaf(st.name_val)
+            symleaf(name_val(st))
         else
             st
         end
@@ -1477,15 +1476,15 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # "@M.x" => (macro_name (. M x)) => (. M @x)
         #           (macro_name else) => else
         if kind(cs[1]) === K"Identifier"
-            return symleaf(lower_identifier_name(cs[1].name_val, K"macro_name"))
+            return symleaf(lower_identifier_name(name_val(cs[1]), K"macro_name"))
         else
             inner_st = cs[1]
             inner_cs = preprocessed_green_children(inner_st)
             if (length(inner_cs) === 2 && kind(inner_st) === K"." &&
                 kind(inner_cs[2]) === K"Identifier")
                 (lhs, raw_m) = _green_to_est(cs[1], 1, inner_cs[1]), inner_cs[2]
-                mname_s = lower_identifier_name(raw_m.name_val, K"macro_name")
-                mname = setattr!(mkleaf(raw_m), :name_val, mname_s)
+                mname_s = lower_identifier_name(name_val(raw_m), K"macro_name")
+                mname = setattr!(mkleaf(raw_m), :value, mname_s)
                 mname_inert = newnode(graph, raw_m, K"inert", tree_ids(mname))
                 return mknode(inner_st, tree_ids(lhs, mname_inert))
             else
@@ -1501,13 +1500,13 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
         out = newnode(graph, st, K"unknown_head", tree_ids(lhs, rhs))
-        return setattr!(out, :name_val, op_s)
+        return setattr!(out, :value, op_s)
     elseif k === K".op=" && n_cs === 3
         op_s = '.' * string(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
         out = newnode(graph, st, K"unknown_head", tree_ids(lhs, rhs))
-        return setattr!(out, :name_val, op_s)
+        return setattr!(out, :value, op_s)
     elseif k === K"op=" && n_cs === 1
         # (op= +) => +=   (the operator name itself, eg when quoted as `:(+=)`)
         return symleaf(string(cs[1]) * '=')
@@ -1547,7 +1546,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             cs[2], cs[1] = cs[1], cs[2]
         end
         if is_postfix_op_call(st) && kind(cs[1]) == K"Identifier" &&
-            cs[1].name_val === "'"
+            name_val(cs[1]) === "'"
             popfirst!(cs)
             ret_k = K"'"
         end
@@ -1563,7 +1562,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 # (dotcall + args...) => (call .+ args...)
                 ret_k = K"call"
                 if kind(cs[1]) === K"Identifier"
-                    cs[1] = symleaf('.' * cs[1].name_val)
+                    cs[1] = symleaf('.' * name_val(cs[1]))
                 end
             end
         end
@@ -1587,7 +1586,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
             if (coalesce_dot || is_syntactic_operator(kind(cs[1])) ||
                 kind(parent) === K"comparison" && iseven(parent_i))
-                return symleaf('.' * cs[1].name_val)
+                return symleaf('.' * name_val(cs[1]))
             end
         end
     elseif k === K"ref" || k === K"curly"

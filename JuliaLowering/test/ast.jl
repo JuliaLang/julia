@@ -9,8 +9,8 @@ end
     @test JuliaLowering.assert_syntaxtree(st) === nothing
 
     bad_st = JuliaSyntax.newleaf(g, st, K"Identifier")
-    @test_throws "needs attribute name_val" JuliaLowering.assert_syntaxtree(bad_st)
-    @test_throws "needs attribute name_val" show(bad_st)
+    @test_throws "needs attribute value" JuliaLowering.assert_syntaxtree(bad_st)
+    @test_throws "needs attribute value" show(bad_st)
 
     bad_st = JuliaSyntax.newleaf(g, st, K"code_info")
     @test_throws "unrecognized leaf kind" JuliaLowering.assert_syntaxtree(bad_st)

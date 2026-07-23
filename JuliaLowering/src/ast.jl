@@ -63,13 +63,13 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
     leaf = newleaf(ctx, prov, k)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
             k == K"globalref" || k == K"Placeholder"
-        setattr!(leaf._graph, leaf._id, :name_val, value)
+        setattr!(leaf._graph, leaf._id, :value, value)
     elseif k == K"BindingId"
         setattr!(leaf._graph, leaf._id, :value, value)
     elseif k == K"label"
         setattr!(leaf._graph, leaf._id, :value, value)
     elseif k == K"symboliclabel" || k == K"symbolicgoto"
-        setattr!(leaf._graph, leaf._id, :name_val, value)
+        setattr!(leaf._graph, leaf._id, :value, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
                      softscope nothing"
         # no attributes
@@ -90,6 +90,14 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
         setattr!(leaf._graph, leaf._id, :value, val)
     end
     leaf
+end
+
+function get_name(st)
+    @jl_assert kind(st) in KSet"""
+    Identifier Placeholder Symbol core top globalref symboliclabel symbolicgoto
+    unknown_head
+    """ st
+    st.value::String
 end
 
 JuliaSyntax.newnode(ctx::AbstractLoweringContext,
@@ -369,7 +377,7 @@ function extension_type(ex)
     @jl_assert kind(ex) == K"assert" ex
     @jl_assert numchildren(ex) >= 1 ex
     @jl_assert kind(ex[1]) == K"Symbol" ex
-    ex[1].name_val
+    get_name(ex[1])
 end
 
 function is_eventually_call(ex::SyntaxTree)
@@ -409,7 +417,7 @@ function is_valid_modref(ex)
 end
 
 function is_core_Any(ex)
-    kind(ex) === K"core" && ex.name_val::String === "Any"
+    kind(ex) === K"core" && get_name(ex) === "Any"
 end
 
 function is_simple_atom(ctx, ex)

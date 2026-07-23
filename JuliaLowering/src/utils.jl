@@ -5,24 +5,24 @@ attrsummary(name, value::Module) = "$name=$value"
 
 function _value_string(ex)
     k = kind(ex)
-    str = k == K"Identifier"  ? ex.name_val           :
-          k == K"Placeholder" ? ex.name_val           :
+    str = k == K"Identifier"  ? get_name(ex)           :
+          k == K"Placeholder" ? get_name(ex)           :
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
           k == K"label"       ? "label"               :
           k == K"nothing"     ? "core.nothing"        :
-          k == K"core"        ? "core.$(ex.name_val)" :
-          k == K"top"         ? "top.$(ex.name_val)"  :
-          k == K"Symbol"      ? ":$(ex.name_val)" :
-          k == K"globalref"   ? "$(ex.mod).$(ex.name_val)" :
+          k == K"core"        ? "core.$(get_name(ex))" :
+          k == K"top"         ? "top.$(get_name(ex))"  :
+          k == K"Symbol"      ? ":$(get_name(ex))" :
+          k == K"globalref"   ? "$(ex.mod).$(get_name(ex))" :
           k == K"slot"        ? "slot" :
           k == K"Slots"       ? "Slots" :
           k == K"LambdaBindings" ? "LambdaBindings" :
           k == K"latestworld" ? "latestworld" :
           k == K"static_parameter" ? "static_parameter" :
-          k == K"symboliclabel" ? "label:$(ex.name_val)" :
-          k == K"symbolicgoto" ? "goto:$(ex.name_val)" :
-          k == K"oldsymbolicgoto" ? "goto:$(ex.name_val)" :
+          k == K"symboliclabel" ? "label:$(get_name(ex))" :
+          k == K"symbolicgoto" ? "goto:$(get_name(ex))" :
+          k == K"oldsymbolicgoto" ? "goto:$(get_name(ex))" :
           k == K"SourceLocation" ?
               "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
               k == K"Value" ?
@@ -37,7 +37,7 @@ function _value_string(ex)
     if k == K"slot" || k == K"BindingId"
         for p in provenance(ex)
             if kind(p) == K"Identifier"
-                str = "$(str)/$(p.name_val)"
+                str = "$(str)/$(get_name(p))"
                 break
             end
         end
@@ -50,7 +50,7 @@ end
 const UNUSED = "#unused#"
 
 function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
-    nodestr = kind(ex) === K"unknown_head" ? ("unknown_head:"*ex.name_val::String) :
+    nodestr = kind(ex) === K"unknown_head" ? ("unknown_head:"*get_name(ex)) :
         !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
 
     treestr = rpad(string(indent, nodestr), 40)
@@ -58,7 +58,7 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
         treestr = treestr*" :: "*string(kind(ex))
     end
 
-    std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:context])
+    std_attrs = Set([:value,:kind,:syntax_flags,:context])
     attrstr = join([attrsummary(n, getproperty(ex, n))
                     for n in JuliaSyntax.attrnames(ex._graph) if n ∉ std_attrs &&
                         hasattr(ex, n)], ",")
@@ -263,7 +263,7 @@ function _find_method_lambda(ex0, name)
             arg_types = _deref_ssa(stmts, sig[2])
             @jl_assert kind(arg_types) == K"call" ex
             self_type = _deref_ssa(stmts, arg_types[2])
-            if kind(self_type) == K"globalref" && occursin(name, self_type.name_val)
+            if kind(self_type) == K"globalref" && occursin(name, get_name(self_type))
                 return e[3]
             end
         end

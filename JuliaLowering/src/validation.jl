@@ -294,7 +294,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"boundscheck"] -> pass() # optional bool arg does nothing
     ([K"boundscheck" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
     ([K"inbounds" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
-    ([K"inbounds" [K"Identifier"]], when=(st[1].name_val == "pop")) -> pass()
+    ([K"inbounds" [K"Identifier"]], when=(get_name(st[1]) == "pop")) -> pass()
     ([K"inline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
     ([K"noinline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
     [K"purity"] -> pass()
@@ -310,7 +310,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "can only be used inside a function") :
         !vcx.return_ok ?
         @fail(st, "current function not defined in comprehension or generator") : pass()
-    [K"unknown_head"] -> let head = st.name_val
+    [K"unknown_head"] -> let head = get_name(st)
         head === "latestworld-if-toplevel" ? pass() :
             @fail(st, string("unknown expr head: ", head))
     end
@@ -337,7 +337,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"Placeholder"] ->
         @fail(st, "`Placeholder` kind not valid until desugaring")
     [K"unknown_head" _...] ->
-        @fail(st, string("unknown expr head: ", st.name_val))
+        @fail(st, string("unknown expr head: ", get_name(st)))
     [K"$" x] -> @fail(st, raw"`$` expression outside string or quote")
     [K"continue" _...] ->
         @fail(st, "`continue` outside of a `while` or `for` loop")
@@ -425,7 +425,7 @@ function vst1_importpath(vcx, st; dots_ok)
     end
     seen_first = false
     for c in path_components
-        if kind(c) === K"Identifier" && c.name_val::String === "."
+        if kind(c) === K"Identifier" && get_name(c) === "."
             if !dots_ok || seen_first
                 ok &= @fail(c, "unexpected `.` in import path")
             end
@@ -528,7 +528,7 @@ end
 # TODO: globalref (identifier with .mod) might not be valid everywhere; check
 # usage of this function
 vst1_ident(vcx, st; lhs=false) = @stm st begin
-    [K"Identifier"] -> _ident_str(vcx, st, st.name_val; lhs)
+    [K"Identifier"] -> _ident_str(vcx, st, get_name(st); lhs)
     _ -> @fail(st, "expected identifier")
 end
 function _ident_str(vcx, st, s::String; lhs=false)
@@ -549,7 +549,7 @@ function is_writeonly_est_name(s::String)
 end
 
 vst1_call(vcx, st) = @stm st begin
-    ([K"call" [K"Identifier"] args...], when=st[1].name_val==="cglobal") ->
+    ([K"call" [K"Identifier"] args...], when=get_name(st[1])==="cglobal") ->
         (1 <= length(args) <= 2 ? pass() :
             @fail(st, "cglobal must have one or two arguments")) &
         all(vst1_call_arg, vcx, args)
@@ -589,7 +589,7 @@ vst1_call_kwarg(vcx, st) = @stm st begin
     [K"..." x] -> vst1(vcx, x)
     [K"." x [K"inert" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
     [K"." x [K"syntaxinert" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
-    ([K"call" [K"Identifier"] symval v], when=(st[1].name_val==="=>")) ->
+    ([K"call" [K"Identifier"] symval v], when=(get_name(st[1])==="=>")) ->
         vst1(vcx, symval) & vst1(vcx, v)
     _ -> @fail(st, "expected identifier, `=`, or `...` after semicolon")
 end
@@ -697,7 +697,7 @@ end
 
 vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"Identifier"] -> vst1_ident(vcx, st; lhs=true) &
-        (!is_dotted_operator(st.name_val::String) ? pass() :
+        (!is_dotted_operator(get_name(st)) ? pass() :
         @fail(st, "dotted operator is not a valid function name"))
     [K"." _ _] ->
         vst1_calldecl_dot_name(vcx, st)
@@ -719,7 +719,7 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
 end
 
 strip_arg_meta(st) = @stm st begin
-    [K"meta" s arg] -> let meta_s = get(s, :name_val, "")::String
+    [K"meta" s arg] -> let meta_s = get(s, :value, "")::String
         kind(arg) === K"meta" ? st :
             !(meta_s in ("specialize", "nospecialize")) ? st : arg
     end
@@ -853,7 +853,7 @@ vst1_typevar_decl(vcx, st) = @stm st begin
     [K">:" t old] ->
         vst1_ident(vcx, t; lhs=true) & vst1(vcx, old)
     ([K"comparison" val_l [K"Identifier"] t [K"Identifier"] val_r],
-     when=(st[2].name_val===st[4].name_val && st[2].name_val in ("<:", ">:"))) ->
+     when=(get_name(st[2])===get_name(st[4]) && get_name(st[2]) in ("<:", ">:"))) ->
          vst1(vcx, val_l) &
          vst1_ident(vcx, t; lhs=true) &
          vst1(vcx, val_r)
@@ -918,7 +918,7 @@ end
 #
 # Note simple `op` and `.op` are calls to (dotted) identifiers, so this special
 # handling isn't necessary.
-vst1_dotted_or_op_assign(vcx, st) = let op_s = get(st, :name_val, "")::String
+vst1_dotted_or_op_assign(vcx, st) = let op_s = get(st, :value, "")::String
     @stm st begin
         [K".=" l r] -> vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
         (_, when=(!Base.isoperator(op_s))) -> unknown()
@@ -1150,17 +1150,17 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     if is_leaf(st)
         # Note some kinds can show up in non-leaves too
         required_attrs = @stm st begin
-            [K"Identifier"] -> (:name_val,)
-            [K"core"] -> (:name_val,)
-            [K"top"] -> (:name_val,)
-            [K"Symbol"] -> (:name_val,)
-            [K"globalref"] -> (:name_val,:mod)
+            [K"Identifier"] -> (:value,)
+            [K"core"] -> (:value,)
+            [K"top"] -> (:value,)
+            [K"Symbol"] -> (:value,)
+            [K"globalref"] -> (:value,:mod)
             [K"Placeholder"] -> ()
             [K"BindingId"] -> (:value,)
             [K"label"] -> (:value,)
-            [K"symboliclabel"] -> (:name_val,)
-            [K"symbolicgoto"] -> (:name_val,)
-            [K"oldsymbolicgoto"] -> (:name_val,)
+            [K"symboliclabel"] -> (:value,)
+            [K"symbolicgoto"] -> (:value,)
+            [K"oldsymbolicgoto"] -> (:value,)
             [K"Value"] -> (:value,)
             [K"slot"] -> (:value,)
             [K"static_parameter"] -> (:value,)
@@ -1172,14 +1172,14 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
             [K"latestworld_if_toplevel"] -> ()
             (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
             (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
-            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val,) # TODO: remove
+            (_, when=JuliaSyntax.is_operator(st)) -> (:value,) # TODO: remove
             [K"LambdaBindings"] -> (:value,)
             [K"Slots"] -> (:value,)
             _ -> return vr & @fail(st, "unrecognized leaf kind $(kind(st))")
         end
     else
         required_attrs = @stm st begin
-            [K"unknown_head" _...] -> (:name_val,)
+            [K"unknown_head" _...] -> (:value,)
             _ -> ()
         end
     end
@@ -1230,7 +1230,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     latestworld latestworld_if_toplevel symbolicgoto oldsymbolicgoto symboliclabel TOMBSTONE
     """ ? pass() : @fail(st, "unrecognized leaf kind $(kind(st))")
 
-    [K"call" [K"static_eval" cg] xs...] -> get(cg, :name_val, nothing) == "cglobal" ?
+    [K"call" [K"static_eval" cg] xs...] -> get(cg, :value, nothing) === "cglobal" ?
         all(vst2, vcx, xs) : @fail(st, "expected (call (static_eval cglobal) _...)")
     [K"call" xs...] -> all(vst2, vcx, xs)
     [K"block" xs...] -> all(vst2, vcx, xs)
