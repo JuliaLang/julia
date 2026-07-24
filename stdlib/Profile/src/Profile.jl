@@ -675,7 +675,7 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
 const error_codes = Dict(
-    -1=> Sys.iswindows() ? "cannot create the profiling thread" : "profiling is not supported on this platform",
+    -1=>Sys.iswindows() ? "cannot create the profiling thread" : "profiling is not supported on this platform",
     -2=>"cannot create the timer for profiling",
     -3=>"cannot start the timer for profiling")
 
@@ -688,13 +688,14 @@ values in `data` have meaning only on this machine in the current session, becau
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
 By default metadata such as threadid and taskid is included. Set `include_meta` to `false` to strip metadata.
+Set `limitwarn` to `false` to suppress the warnings about a full buffer or a still-running profiler.
 """
 function fetch(;include_meta = true, limitwarn = true)
     maxlen = maxlen_data()
     if maxlen == 0
         error("The profiling data buffer is not initialized. A profile has not been requested this session.")
     end
-    if is_running()
+    if limitwarn && is_running()
         @warn "Profiling is still running; the resulting data may be incomplete. Call `Profile.stop_timer()` before fetching."
     end
     len = len_data()
