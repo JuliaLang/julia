@@ -329,6 +329,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_module_tag:
         case jl_bool_tag:
         case jl_nothing_tag:
+        case jl_cancel_source_tag: // mutable: identity (a == b checked above)
             return 0;
         case jl_simplevector_tag:
             return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
@@ -629,7 +630,8 @@ JL_CALLABLE(jl_f_sizeof)
             else
                 jl_errorf("Argument is an incomplete %s type and does not have a definite size.", jl_symbol_name(dx->name->name));
         }
-        if (jl_is_layout_opaque(dx->layout)) // includes all GenericMemory{kind,T}
+        if (jl_is_layout_opaque(dx->layout) || // includes all GenericMemory{kind,T}
+            dx == jl_cancel_source_type)       // variable-sized (layout covers only the fixed fields)
             jl_errorf("Type %s does not have a definite size.", jl_symbol_name(dx->name->name));
         return jl_box_long(jl_datatype_size(x));
     }
@@ -641,6 +643,12 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
+    if (jl_is_cancel_source(x)) {
+        // variable-sized: one link entry per parent follows the fixed fields
+        jl_cancel_source_t *cs = (jl_cancel_source_t*)x;
+        return jl_box_long(sizeof(jl_cancel_source_t) +
+                           cs->nparents * sizeof(jl_cancel_parent_link_t));
+    }
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);
@@ -721,6 +729,14 @@ JL_CALLABLE(jl_f_current_scope)
 {
     JL_NARGS(current_scope, 0, 0);
     return jl_current_task->scope;
+}
+
+JL_CALLABLE(jl_f__new_cancel_source)
+{
+    // each argument is a parent CancellationTokenSource (checked, along
+    // with distinctness, by jl_new_cancel_source); no arguments makes a
+    // root source
+    return jl_new_cancel_source(args, nargs);
 }
 
 // apply ----------------------------------------------------------------------
@@ -2777,6 +2793,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
+    add_builtin("CancellationTokenSource", (jl_value_t*)jl_cancel_source_type);
 
     add_builtin("AddrSpace", (jl_value_t*)jl_addrspace_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
