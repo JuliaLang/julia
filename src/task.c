@@ -677,11 +677,11 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
         // Adopted (foreign) threads run Julia only for the duration of an
         // entered cfunction: the caller expects that call to return, so this
         // thread may block in place but must not be parked on other tasks'
-        // work. Opt in with `jl_allow_adopted_task_switching(1)`. Note that a
+        // work. Opt in with `jl_thread_allow_task_switching(1)`. Note that a
         // task that blocks with nothing else to run never reaches here - its
         // resumption is the `t == ct` no-op switch above.
         jl_error("task switch not allowed on an adopted foreign thread "
-                 "(call jl_allow_adopted_task_switching(1) to opt in)");
+                 "(call jl_thread_allow_task_switching(1) to opt in)");
     if (!jl_set_task_tid(t, jl_atomic_load_relaxed(&ct->tid))) // manually yielding to a task
         jl_error("cannot switch to task running on another thread");
 

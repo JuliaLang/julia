@@ -4,7 +4,6 @@
     XX(jl_active_task_stack) \
     XX(jl_adopt_thread) \
     XX(jl_alignment) \
-    XX(jl_allow_adopted_task_switching) \
     XX(jl_alloc_array_1d) \
     XX(jl_alloc_array_2d) \
     XX(jl_alloc_array_3d) \
@@ -457,6 +456,7 @@
     XX(jl_task_get_next) \
     XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
+    XX(jl_thread_allow_task_switching) \
     XX(jl_threadid) \
     XX(jl_threadpoolid) \
     XX(jl_get_ptls_rng) \

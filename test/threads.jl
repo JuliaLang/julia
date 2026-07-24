@@ -429,7 +429,7 @@ end
     # return, so Julia code on it may block in place (host `wait()` and be
     # resumed by a notify), but may not be parked on other tasks' work: a
     # switch to a *different* task errors unless the thread opts in with
-    # `jl_allow_adopted_task_switching`.
+    # `jl_thread_allow_task_switching`.
     blocked_ok = Ref{Any}(nothing)
     denied = Ref{Any}(nothing)
     optin = Ref{Any}(nothing)
@@ -447,7 +447,7 @@ end
         catch e
             denied[] = e
         end
-        prev = @ccall jl_allow_adopted_task_switching(1::Cint)::Cint
+        prev = @ccall jl_thread_allow_task_switching(1::Cint)::Cint
         try
             t = @async :ran
             yield()

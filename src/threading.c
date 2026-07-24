@@ -909,7 +909,7 @@ void jl_start_threads(void)
 _Atomic(unsigned) _threadedregion; // keep track of whether to prioritize IO or threading
 _Atomic(uint16_t) io_loop_tid; // mark which thread is assigned to run the uv_loop
 
-JL_DLLEXPORT int jl_allow_adopted_task_switching(int allow) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_thread_allow_task_switching(int allow) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     int prev = ptls->allow_task_switching;

@@ -157,7 +157,7 @@ typedef struct _jl_tls_states_t {
     // this thread only for the duration of a cfunction call, and parking it
     // on another task's work would prevent that call from returning (and pin
     // tasks to a thread that may never re-enter the scheduler). 0 on adopted
-    // threads unless explicitly opted in via `jl_allow_adopted_task_switching`;
+    // threads unless explicitly opted in via `jl_thread_allow_task_switching`;
     // always 1 on threads the runtime owns.
     int16_t allow_task_switching;
     int16_t disable_gc;

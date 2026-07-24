@@ -499,7 +499,7 @@ function make_io_thread()
     threadwork = @cfunction function(arg::Ptr{Cvoid})
             # this thread is donated to the runtime for good: opt in to task
             # switching, which adopted threads are otherwise denied
-            @ccall jl_allow_adopted_task_switching(1::Cint)::Cint
+            @ccall jl_thread_allow_task_switching(1::Cint)::Cint
             current_task().donenotify = Base.ThreadSynchronizer() #TODO: Should this happen by default in adopt thread?
             Base.errormonitor(current_task()) # this may not go particularly well if the IO loop is dead, but try anyways
             @ccall jl_set_io_loop_tid((Threads.threadid() - 1)::Int16)::Cvoid
