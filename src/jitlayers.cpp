@@ -2150,6 +2150,18 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
 // waiter then queues behind Float16/BFloat16 conversions forever; see the
 // "why does Windows CI hang" TODO at the alias definitions for an earlier
 // encounter with this area). Too early to run from the JuliaOJIT constructor.
+// Async-safe wedge probe: LinkerMutex is a non-recursive std::mutex taken by
+// both JLMaterializationUnit's linkOutput and the tojlinvoke trampoline unit's
+// materialize, so a wedge holding it explains a queued trampoline task that
+// never runs.
+void JuliaOJIT::dumpLinkerMutexState() JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
+{
+    bool Free = LinkerMutex.try_lock();
+    if (Free)
+        LinkerMutex.unlock();
+    jl_safe_printf("jit linker: linker_mutex=%s\n", Free ? "free" : "HELD");
+}
+
 void JuliaOJIT::primeCRTAliases() JL_CANSAFEPOINT
 {
     auto Result = ES.lookup({{&GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}},
@@ -2172,6 +2184,7 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_jit_dump_state_impl(void) JL_NOTSAFEPOIN
     auto &ES = jl_ExecutionEngine->getExecutionSession();
     static_cast<JuliaTaskDispatcher &>(
         ES.getExecutorProcessControl().getDispatcher()).dump_wedge_state();
+    jl_ExecutionEngine->dumpLinkerMutexState();
     // Full session dump (symbol states and pending queries): takes the
     // session lock, so it can hang if a wedged materializer holds it — keep
     // it last; the caller is a watchdog on an already-dying process.
@@ -2384,6 +2397,7 @@ renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
 
 bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
+    JL_NO_SAFEPOINT_ANALYSIS
 {
     std::unique_lock Lock{LinkerMutex};
 
@@ -2457,8 +2471,11 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         }
         JL_GC_PROMISE_ROOTED(CI);
         auto Dest = linkCallTarget(MR, CI, API, EquivMap);
-        if (!Dest)
+        if (!Dest) {
+            Lock.unlock();
+            PendingTrampolines.clear();
             return false;
+        }
         if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);
             DestSym && !DestSym->isExternal() && !OwnedSyms.contains(Dest))
             makeAnonymousLinkGraphSymbol(G, *DestSym);
@@ -2510,6 +2527,23 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     cantFail(JD.define(orc::absoluteSymbols(std::move(GlobalSyms))));
 
     DebuginfoPlugin->notifyMaterializingWithInfo(MR, G, ObjBuf, std::move(Info));
+
+    // Define the tojlinvoke trampolines collected by linkCallTarget only after
+    // dropping LinkerMutex: defining a unit whose symbols a query already
+    // awaits can dispatch its materialization, which needs this same
+    // non-recursive mutex.
+    auto Trampolines = std::move(PendingTrampolines);
+    PendingTrampolines.clear();
+    Lock.unlock();
+    for (auto &MU : Trampolines) {
+        if (auto Err = JD.define(MU)) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
+            MR.getExecutionSession().reportError(std::move(Err));
+#endif
+            MR.failMaterialization();
+            return false;
+        }
+    }
     return true;
 }
 
@@ -2543,15 +2577,12 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
         Trampoline.specptr = mangle(*TSym);
         Trampoline.invoke_api = API;
         Sym = &Trampoline;
-        auto Err = JD.define(std::make_unique<JLTrampolineMaterializationUnit>(
-            *this, ObjectLayer, TSym, CI, API));
-        if (Err) {
-#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
-            MR.getExecutionSession().reportError(std::move(Err));
-#endif
-            MR.failMaterialization();
-            return {};
-        }
+        // Defer the define: we hold LinkerMutex here, and defining a unit
+        // whose symbols another query already awaits can dispatch that unit's
+        // materialization — which takes LinkerMutex itself. The caller defines
+        // the collected units after releasing the lock.
+        PendingTrampolines.push_back(
+            std::make_unique<JLTrampolineMaterializationUnit>(*this, ObjectLayer, TSym, CI, API));
     }
 
     assert(Sym->invoke_api == API);
