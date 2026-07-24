@@ -258,24 +258,41 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     ptls->disable_gc = (on == 0);
     if (on && !prev) {
         // disable -> enable
-        int was_enabled = mmtk_is_collection_enabled();
-        if (!was_enabled) {
-            int now_enabled = mmtk_enable_collection();
-            if (now_enabled) {
-                gc_num.allocd += gc_num.deferred_alloc;
-                gc_num.deferred_alloc = 0;
-            }
+        int now_enabled = mmtk_enable_collection();
+        if (now_enabled) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
         }
     }
     else if (prev && !on) {
         // enable -> disable
         while (1) {
-            int disabled =  mmtk_disable_collection();
-            if (disabled) {
+            // Capture the GC epoch *before* attempting to disable, so that if the epoch advances
+            // between this call and mmtk_wait_for_new_gc_epoch() below, we don't miss the
+            // notification and wait forever.
+            uint64_t gc_epoch = mmtk_gc_epoch();
+            int result = mmtk_disable_collection();
+            if (result == MMTK_DISABLE_COLLECTION_OK) {
                 break;
-            } else {
+            } else if (result == MMTK_DISABLE_COLLECTION_RETRY) {
+                // A GC pause has been requested in MMTk but mutators have not all stopped yet. This
+                // thread may itself be one of the ones the pause is waiting to stop, so do a
+                // safepoint check (which is exactly how a mutator cooperates with letting the
+                // pause start) and retry.
+                // It is also possible that safepoints are not yet enabled. We will retry as well.
                 jl_gc_safepoint_(ptls);
-                jl_cpu_pause();
+            } else {
+                assert(result == MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH);
+                // A stop-the-world pause is active, or a concurrent GC's background work is
+                // running. Block until the next GC epoch instead.
+                //
+                // This thread must enter a GC-safe state before blocking here: the wait can only
+                // be woken by a future stop-the-world pause completing (see resume_mutators() in
+                // the mmtk_julia binding). This mirrors the same jl_gc_safe_enter/leave pattern used around other
+                // blocking waits elsewhere in the runtime (e.g. _jl_mutex_wait in threading.c).
+                int8_t gc_state = jl_gc_safe_enter(ptls);
+                mmtk_wait_for_new_gc_epoch(gc_epoch);
+                jl_gc_safe_leave(ptls, gc_state);
             }
         }
     }

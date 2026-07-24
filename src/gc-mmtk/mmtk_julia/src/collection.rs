@@ -94,6 +94,18 @@ impl Collection<JuliaVM> for VMCollection {
         cvar.notify_all();
         drop(count);
 
+        // `resume_mutators()` is called after every stop-the-world pause, including the pause
+        // that ends a concurrent GC's background-work phase (there's no more targeted mmtk-core
+        // hook for that specifically). Advance the GC epoch to wake any mutator retrying
+        // `mmtk_disable_collection()` after it failed with
+        // `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH`: since a pause just completed, it's
+        // worth retrying (the retry is cheap; if it still fails, the mutator just waits again).
+        let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
+        let mut epoch = lock.lock().unwrap();
+        *epoch = epoch.wrapping_add(1);
+        cvar.notify_all();
+        drop(epoch);
+
         info!(
             "Live bytes = {}, total bytes = {}",
             crate::api::mmtk_used_bytes(),

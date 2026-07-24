@@ -71,9 +71,26 @@ extern const char* mmtk_get_plan_name(void);
 extern bool mmtk_process(char* name, char* value);
 extern void mmtk_scan_region(void);
 extern void mmtk_handle_user_collection_request(void *tls, uint8_t collection);
+// mmtk_disable_collection() return values:
+//   0 (MMTK_DISABLE_COLLECTION_OK): succeeded, collection is now disabled.
+//   1 (MMTK_DISABLE_COLLECTION_RETRY): failed; a GC pause has been requested but mutators have
+//     not all stopped yet. This thread may itself be one of the ones the pause is waiting to
+//     stop, so do a safepoint check (which is exactly how a mutator cooperates with letting the
+//     pause start) and retry.
+//   2 (MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH): failed; a stop-the-world pause is active,
+//     or a concurrent GC's background work is currently running. Either way there is no useful
+//     safepoint action to take. Instead, call mmtk_gc_epoch() *before* retrying disable, and if
+//     it fails again with this value, call mmtk_wait_for_new_gc_epoch() with that epoch value
+//     before retrying again.
+// Any other failure (there should not be any) is a hard bug and mmtk_disable_collection() panics.
+#define MMTK_DISABLE_COLLECTION_OK 0
+#define MMTK_DISABLE_COLLECTION_RETRY 1
+#define MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH 2
 extern int mmtk_disable_collection(void);
 extern int mmtk_enable_collection(void);
 extern int mmtk_is_collection_enabled(void);
+extern uint64_t mmtk_gc_epoch(void);
+extern void mmtk_wait_for_new_gc_epoch(uint64_t last_seen_epoch);
 extern void mmtk_initialize_collection(void* tls);
 extern void mmtk_start_control_collector(void *tls);
 extern void mmtk_start_worker(void *tls, void* worker, void* mmtk);

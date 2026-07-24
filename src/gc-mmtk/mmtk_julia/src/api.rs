@@ -297,9 +297,40 @@ pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, coll
     };
 }
 
+/// `mmtk_disable_collection()` succeeded: collection is now disabled.
+pub const MMTK_DISABLE_COLLECTION_OK: i32 = 0;
+/// `mmtk_disable_collection()` failed because a GC pause has been requested but mutators have
+/// not all stopped yet (status `PauseRequested`). This mutator may itself be one of the ones the
+/// pause is waiting to stop, so the caller should do a safepoint check (which is exactly how a
+/// mutator cooperates with letting the pause start) and then retry.
+pub const MMTK_DISABLE_COLLECTION_RETRY: i32 = 1;
+/// `mmtk_disable_collection()` failed because a stop-the-world pause is currently active, or a
+/// concurrent GC's background work is currently running (statuses `InPause`/`InConcurrentGC`).
+/// Either way there's no useful safepoint action to take right now: in the `InPause` case, this
+/// mutator isn't one of the ones the active pause is waiting on (otherwise it wouldn't be running
+/// this code at all), and in the `InConcurrentGC` case there's no pause happening yet to
+/// safepoint into. The caller should instead wait on `mmtk_wait_for_new_gc_epoch()` and then
+/// retry.
+pub const MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH: i32 = 2;
+
 #[no_mangle]
 pub extern "C" fn mmtk_disable_collection() -> i32 {
-    memory_manager::disable_collection(&SINGLETON).is_ok() as i32
+    use mmtk::GcStatus;
+    match memory_manager::disable_collection(&SINGLETON) {
+        Ok(_) => MMTK_DISABLE_COLLECTION_OK,
+        Err(GcStatus::PauseRequested) => MMTK_DISABLE_COLLECTION_RETRY,
+        Err(GcStatus::InPause | GcStatus::InConcurrentGC) => {
+            MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH
+        }
+        // `Uninitialized` should never happen this late (MMTk must already be initialized for a
+        // mutator to be calling this at all), and `NotInGC`/`Disabled(_)` are the success cases,
+        // so they can never appear here either. Treat any of these as a hard bug rather than
+        // silently falling back to some retry strategy.
+        Err(status) => panic!(
+            "disable_collection() failed with unexpected status: {:?}",
+            status
+        ),
+    }
 }
 
 #[no_mangle]
@@ -310,6 +341,31 @@ pub extern "C" fn mmtk_enable_collection() -> i32 {
 #[no_mangle]
 pub extern "C" fn mmtk_is_collection_enabled() -> i32 {
     memory_manager::is_collection_enabled(&SINGLETON) as i32
+}
+
+/// Return the current GC epoch. Call this *before* attempting `mmtk_disable_collection()`, and
+/// pass the returned value to `mmtk_wait_for_new_gc_epoch()` if that attempt fails with
+/// `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH`, so a notification that arrives in between is
+/// not missed.
+#[no_mangle]
+pub extern "C" fn mmtk_gc_epoch() -> u64 {
+    let arc = crate::GC_EPOCH_COND.clone();
+    let (lock, _cvar) = &*arc;
+    let epoch = *lock.lock().unwrap();
+    epoch
+}
+
+/// Block until the GC epoch has advanced at least once since `last_seen_epoch` (as previously
+/// obtained from `mmtk_gc_epoch()`). The epoch advances once per completed stop-the-world pause,
+/// which covers both the case of waiting for an active pause to finish, and the pause that ends a
+/// concurrent GC's background-work phase. Returns immediately if the epoch has already moved on.
+#[no_mangle]
+pub extern "C" fn mmtk_wait_for_new_gc_epoch(last_seen_epoch: u64) {
+    let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
+    let guard = lock.lock().unwrap();
+    let _guard = cvar
+        .wait_while(guard, |epoch| *epoch == last_seen_epoch)
+        .unwrap();
 }
 
 #[no_mangle]

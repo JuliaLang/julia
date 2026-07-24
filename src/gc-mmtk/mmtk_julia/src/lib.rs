@@ -87,6 +87,21 @@ lazy_static! {
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
 
+    // The GC epoch: notified by `VMCollection::resume_mutators()` every time a stop-the-world
+    // pause ends (including the pause that ends a concurrent GC's background-work phase). Used
+    // to wake a mutator that's retrying `mmtk_disable_collection()` after it failed with
+    // `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH` (status `InPause`/`InConcurrentGC`; see
+    // `mmtk_wait_for_new_gc_epoch()`), since mmtk-core has no more targeted hook for "a pause or
+    // concurrent GC just ended" specifically.
+    //
+    // The guarded `u64` is the epoch counter, incremented on every notification: a waiter should
+    // capture its current value (`mmtk_gc_epoch()`) before giving up on
+    // `mmtk_disable_collection()`, then wait until the epoch differs from that captured value,
+    // rather than waiting unconditionally -- this avoids missing a notification that arrives
+    // between the failed disable attempt and the start of the wait.
+    pub static ref GC_EPOCH_COND: Arc<(Mutex<u64>, Condvar)> =
+        Arc::new((Mutex::new(0), Condvar::new()));
+
     // We create a boxed mutator with MMTk core, and we mem copy its content to jl_tls_state_t (shallow copy).
     // This map stores the pair of the mutator address in jl_tls_state_t and the original boxed mutator.
     // As we only do a shallow copy, we should not free the original boxed mutator, until the thread is getting destroyed.
