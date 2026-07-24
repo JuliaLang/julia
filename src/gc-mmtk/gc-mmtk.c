@@ -545,6 +545,20 @@ static void add_node_to_tpinned_roots_buffer(RootsWorkClosure* closure, RootsWor
     }
 }
 
+// tpinned: the alloc profile holds raw pointers that `Profile.Allocs.load_type`
+// dereferences later, so the recorded types must not move
+typedef struct {
+    RootsWorkClosure *closure;
+    RootsWorkBuffer *buf;
+    size_t *len;
+} alloc_profile_root_env_t;
+
+static void add_alloc_profile_root(jl_value_t *v, void *env) JL_NOTSAFEPOINT
+{
+    alloc_profile_root_env_t *e = (alloc_profile_root_env_t*)env;
+    add_node_to_tpinned_roots_buffer(e->closure, e->buf, e->len, v);
+}
+
 JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
 {
     // Create a new buf
@@ -584,6 +598,10 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
 
     // FIXME: transitively pinning for now, should be removed after we add moving Immix
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, precompile_field_replace);
+
+    // types recorded by the allocation profiler
+    alloc_profile_root_env_t alloc_profile_env = {closure, &tpinned_buf, &tpinned_len};
+    jl_gc_foreach_alloc_profile_root(add_alloc_profile_root, &alloc_profile_env);
 
     // Push the result of the work.
     (closure->report_nodes_func)(buf.ptr, len, buf.cap, closure->data, false);
