@@ -1116,10 +1116,12 @@ end
 
 function mapreduce_kernel_commutative(f, op, A, init, inds::AbstractArray)
     if length(inds) < 16
-        i1, iN = firstindex(inds), lastindex(inds)
-        v_1 = _mapreduce_start(f, op, A, init, @inbounds A[inds[i1]])
-        for i in i1+1:iN
-            a = @inbounds A[inds[i]]
+        # Iterate by value; position arithmetic like `firstindex(inds)+1` can
+        # overflow for indices that abut typemax (issue #38627)
+        (j, s) = iterate(inds)::Tuple
+        v_1 = _mapreduce_start(f, op, A, init, @inbounds A[j])
+        for j in Iterators.rest(inds, s)
+            a = @inbounds A[j]
             v_1 = op(v_1, f(a))
         end
         return v_1
