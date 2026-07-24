@@ -208,10 +208,7 @@ let A = Tuple{Vector, AbstractVector},
     @test args_morespecific(A, C)
 end
 
-# `morespecific` is a partial order but is deliberately NOT transitive: genuine
-# specificity cycles exist. This is a rock-paper-scissors cycle A ≻ B ≻ C ≻ A
-# (which is what allows a 3-way method ambiguity even when every pair of the
-# three methods has a clear winner).
+# exemplify that `morespecific` is a non-transitive relation
 let A = Tuple{T, Vararg{T}} where T<:Integer,
     B = Tuple{Integer, Vararg{String}},
     C = Tuple{Integer, Vararg{Union{Int,String}}}

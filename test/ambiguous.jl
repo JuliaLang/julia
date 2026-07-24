@@ -637,7 +637,7 @@ let ambig = Ref{Int32}(0)
     @test ms[4].method === which(ambig10, (Vararg{Number},))
 end
 
-# issue #62262: an ambiguity can be resolved by the *union* of several more
+# issue #62262: an ambiguity can be resolved by the union of several more
 # specific methods, without any single method covering the intersection
 module Ambig62262
 abstract type MyAbstractMat end
@@ -664,17 +664,17 @@ struct LikeStr <: LikeString end
 struct LikeMissing end
 s(x::Union{LikeSigned,LikeMissing}, y::LikeInt...) = 1            # m1
 s(x::Union{LikeInt,LikeString,LikeMissing}, y::LikeSigned...) = 2 # m2
-s(x::T, y::T...) where {T<:Union{LikeInt,LikeString}} = 3         # covers the LikeInt part, but loses to method 5 (below)
-s(x::LikeMissing, y::LikeInt...) = 4                              # genuinely covers the LikeMissing part
-s(x::Union{LikeSigned,LikeStr}, y::LikeStr...) = 5               # more specific than method 3
-s(x::LikeSigned, y::LikeStr...) = 6                              # more specific than 5; method 2 is more specific than this
+s(x::T, y::T...) where {T<:Union{LikeInt,LikeString}} = 3         # m3 covers the LikeInt part, but loses to method 5 (below)
+s(x::LikeMissing, y::LikeInt...) = 4                              # m4 covers the LikeMissing part
+s(x::Union{LikeSigned,LikeStr}, y::LikeStr...) = 5                # m5 more specific than method 3
+s(x::LikeSigned, y::LikeStr...) = 6                               # m6 more specific than 5; method 2 is more specific than this
 end
 let m1 = which(AmbigUnionCycle.s, Tuple{Union{AmbigUnionCycle.LikeSigned,AmbigUnionCycle.LikeMissing}, Vararg{AmbigUnionCycle.LikeInt}}),
     m2 = which(AmbigUnionCycle.s, Tuple{Union{AmbigUnionCycle.LikeInt,AmbigUnionCycle.LikeString,AmbigUnionCycle.LikeMissing}, Vararg{AmbigUnionCycle.LikeSigned}})
     # method 3 "covers" the LikeInt part but is in a specificity cycle (2 ≻ 6 ≻ 5 ≻ 3 ≻ 2)
     @test Base.isambiguous(m1, m2)
 end
-@test_throws MethodError AmbigUnionCycle.s(AmbigUnionCycle.LikeInt()) # genuinely ambiguous
+@test_throws MethodError AmbigUnionCycle.s(AmbigUnionCycle.LikeInt())
 @test AmbigUnionCycle.s(AmbigUnionCycle.LikeMissing()) == 4
 @test AmbigUnionCycle.s(AmbigUnionCycle.LikeInt(), AmbigUnionCycle.LikeInt()) == 3
 
@@ -684,9 +684,9 @@ end
 # resolved by other methods. Here dispatch resolves every point of the
 # intersection of methods 1 and 2 (methods 7 and 8 rescue the only points where
 # the loser chain 2 ≻ 6 ≻ 5 ≻ 3 overlaps method 3). The region-aware
-# union-coverage resolution in `ml_matches` (gf.c) sees that the cycle members
-# are fully covered over this query before they can disqualify method 3, so the
-# pair is correctly reported as resolved.
+# union-coverage resolution computes that the cycle members are fully covered
+# over this query before they can disqualify method 3, so the pair is correctly
+# reported as resolved.
 module AmbigLoserRegion
 abstract type LikeSigned end
 struct LikeInt <: LikeSigned end
@@ -695,14 +695,14 @@ struct LikeStr <: LikeString end
 struct LikeMissing end
 s(x::Union{LikeSigned,LikeMissing}, y::LikeInt...) = 1             # m1
 s(x::Union{LikeInt,LikeString,LikeMissing}, y::LikeSigned...) = 2  # m2
-s(x::T, y::T...) where {T<:Union{LikeInt,LikeString}} = 3          # resolves the (LikeInt, LikeInt...) region
-s(x::LikeMissing, y::LikeInt...) = 4                               # resolves the LikeMissing region
-s(x::Union{LikeSigned,LikeStr,LikeMissing}, y::LikeStr...) = 5     # more specific than method 3
-s(x::Union{LikeSigned,LikeMissing}, y::LikeStr...) = 6             # more specific than 5; method 2 is more specific than this
-s(x::LikeInt) = 7                                                  # resolves the arity-1 LikeInt point
-s(x::LikeMissing) = 8                                              # resolves the arity-1 LikeMissing point
+s(x::T, y::T...) where {T<:Union{LikeInt,LikeString}} = 3          # m3 resolves the (LikeInt, LikeInt...) region
+s(x::LikeMissing, y::LikeInt...) = 4                               # m4 resolves the LikeMissing region
+s(x::Union{LikeSigned,LikeStr,LikeMissing}, y::LikeStr...) = 5     # m5 more specific than method 3
+s(x::Union{LikeSigned,LikeMissing}, y::LikeStr...) = 6             # m6 more specific than 5; method 2 is more specific than this
+s(x::LikeInt) = 7                                                  # m7 resolves the arity-1 LikeInt point
+s(x::LikeMissing) = 8                                              # m8 resolves the arity-1 LikeMissing point
 end
-# dispatch is fully resolved over the intersection of methods 1 and 2 ...
+# dispatch is fully resolved over the intersection of methods 1 and 2
 @test AmbigLoserRegion.s(AmbigLoserRegion.LikeInt()) == 7
 @test AmbigLoserRegion.s(AmbigLoserRegion.LikeMissing()) == 8
 @test AmbigLoserRegion.s(AmbigLoserRegion.LikeInt(), AmbigLoserRegion.LikeInt()) == 3
@@ -712,7 +712,7 @@ let m1 = which(AmbigLoserRegion.s, Tuple{Union{AmbigLoserRegion.LikeSigned,Ambig
     @test !Base.isambiguous(m1, m2)
 end
 
-# complement of #62262: if the more specific methods only cover *part* of the
+# complement of #62262: if the more specific methods only cover part of the
 # intersection, the uncovered part is still a genuine ambiguity (so the union
 # check must not over-resolve)
 module Ambig62262Partial
@@ -725,11 +725,11 @@ h(::Union{MatA,MatB}, ::MyAbstractMat) = 2
 h(::MatA, ::SpecialMat) = 3  # covers only the MatA part of the intersection
 end
 @test length(detect_ambiguities(Ambig62262Partial)) == 1
-@test Ambig62262Partial.h(Ambig62262Partial.MatA(), Ambig62262Partial.SpecialMat()) == 3          # covered -> resolved
-@test_throws MethodError Ambig62262Partial.h(Ambig62262Partial.MatB(), Ambig62262Partial.SpecialMat()) # uncovered -> ambiguous
+@test Ambig62262Partial.h(Ambig62262Partial.MatA(), Ambig62262Partial.SpecialMat()) == 3
+@test_throws MethodError Ambig62262Partial.h(Ambig62262Partial.MatB(), Ambig62262Partial.SpecialMat())
 
 # a 3-way (non-transitive) specificity cycle is a real dispatch ambiguity that
-# `_methods_by_ftype` reports via `has_ambig`, even though every *pair* of the
+# `_methods_by_ftype` reports via `has_ambig`, even though every pair of the
 # three methods has a clear winner
 module AmbigCycle3
 f(::T, ::Vararg{T}) where {T<:Integer} = 1    # mT
@@ -739,7 +739,7 @@ end
 let mT   = which(AmbigCycle3.f, Tuple{T, Vararg{T}} where T<:Integer),
     mStr = which(AmbigCycle3.f, Tuple{Integer, Vararg{String}}),
     mU   = which(AmbigCycle3.f, Tuple{Integer, Vararg{Union{Int,String}}})
-    # specificity cycle mT ≻ mStr ≻ mU ≻ mT: no unique most specific method
+    # specificity cycle mT ≻ mStr ≻ mU ≻ mT
     @test Base.morespecific(mT, mStr) && Base.morespecific(mStr, mU) && Base.morespecific(mU, mT)
     @test !(Base.morespecific(mStr, mT) || Base.morespecific(mU, mStr) || Base.morespecific(mT, mU))
     # every pair is pairwise ordered, but each pair still participates in the
@@ -748,32 +748,19 @@ let mT   = which(AmbigCycle3.f, Tuple{T, Vararg{T}} where T<:Integer),
     @test Base.isambiguous(mStr, mU)
     @test Base.isambiguous(mU, mT)
 end
-@test_throws MethodError AmbigCycle3.f(3) # genuinely ambiguous in dispatch
+@test_throws MethodError AmbigCycle3.f(3)
 let ambig = Ref{Int32}(0)
     Base._methods_by_ftype(Tuple{typeof(AmbigCycle3.f), Int}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ambig[] == 1
 end
-# querying a single method signature must also report the cycle (`has_ambig`):
-# inference consumes that result, and effects for a signature covering the
-# throwing call `f(3)` above must not be inferred `:nothrow`
 @test !Base.infer_effects(AmbigCycle3.f, Tuple{Integer, Vararg{Union{Int,String}}}).nothrow
 let ambig = Ref{Int32}(0)
     Base._methods_by_ftype(Tuple{typeof(AmbigCycle3.f), Integer, Vararg{Union{Int,String}}}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ambig[] == 1
 end
-# `detect_ambiguities` queries each method signature on its own, where the
-# cycle now surfaces via `has_ambig`, so pairwise detection reports the 3-way
-# ambiguity
 @test !isempty(detect_ambiguities(AmbigCycle3))
 
-# same 3-way cycle, but defined in the order that used to trigger the
-# `LATEST_ONLY` slurp early-out in `get_intersect_visitor`: `mU` is inserted
-# before `mStr`, so when `mStr` (a strict subtype of `mU`, which dominates `mT`
-# and is thus `METHOD_SIG_LATEST_ONLY`) is added, the scan used to stop after
-# recording only the `(mStr, mU)` pair and never record that `mT` is
-# morespecific than `mStr`. That omission left `mStr`'s interference set empty,
-# so the cycle was invisible and `f(1)` silently dispatched to `mStr` instead of
-# raising an ambiguity. Insertion order must not change the observed relation.
+# same 3-way cycle, but defined in reverse order
 module AmbigCycle3Reorder
 f(::T, ::Vararg{T}) where {T<:Integer} = 1    # mT
 f(::Integer, ::Vararg{Union{Int,String}}) = 3 # mU  (inserted before mStr; dominates mT)
@@ -795,10 +782,6 @@ let ambig = Ref{Int32}(0)
 end
 @test !isempty(detect_ambiguities(AmbigCycle3Reorder))
 
-# the `METHOD_SIG_NO_LOSERS` dispatch_status bit records that a method is not
-# strictly morespecific than anything it intersects (so removing it from a
-# match list can never free another method from suppression); it is set at
-# insertion and monotone-cleared when a later method is beaten by it
 module NoLosersBit
 f(::Any) = 1
 end
@@ -809,11 +792,13 @@ let NO_LOSERS = Base.ReinferUtils.METHOD_SIG_NO_LOSERS
     @eval NoLosersBit f(::Int) = 2
     @test !iszero(which(NoLosersBit.f, Tuple{Any}).dispatch_status & NO_LOSERS)
     @test iszero(which(NoLosersBit.f, Tuple{Int}).dispatch_status & NO_LOSERS)
-    # every member of a specificity cycle beats another member, so none may
-    # carry the bit (otherwise the check_dominance_transfer fast path would
-    # mask the cycle); this covers both insertion orders used above
+    # every member of a specificity cycle beats another member (which loses to it)
     for mod in (AmbigCycle3, AmbigCycle3Reorder), m in methods(mod.f)
         @test iszero(m.dispatch_status & NO_LOSERS)
+    end
+    # every member of a ambiguity still sets the bit
+    for m in methods(amb_2)
+        @test !iszero(m.dispatch_status & NO_LOSERS)
     end
     # a type-equal replacement records a recency-tiebreak win over the method
     # it replaces, so it must not inherit the predecessor's bit
