@@ -85,7 +85,8 @@ function assemble_snapshot(in_prefix, out_file::AbstractString = in_prefix)
         open(tmp_file, "w") do io
             assemble_snapshot(in_prefix, io)
         end
-        mv(tmp_file, out_file; force=true)
+        # `rename` replaces atomically, unlike `mv(...; force=true)` which unlinks first
+        Base.Filesystem.rename(tmp_file, out_file)
     finally
         rm(tmp_file; force=true)
     end
@@ -151,13 +152,11 @@ function assemble_snapshot(in_prefix, io::IO)
         end
     end
 
-    # remove the uber node from the orphans
-    if 0 in orphans
-        delete!(orphans, 0)
-    end
+    delete!(orphans, 0) # the uber node has no incoming edges by construction
 
     isempty(orphans) ||
-        error("malformed snapshot `$(in_prefix)`: $(length(orphans)) of $(length(nodes)) nodes have no incoming edges: $(orphans)")
+        error("malformed snapshot `$(in_prefix)`: $(length(orphans)) of $(length(nodes)) nodes have no incoming edges: ",
+              join(Iterators.take(orphans, 10), ", "), length(orphans) > 10 ? ", ..." : "")
 
     _digits_buf = zeros(UInt8, ndigits(typemax(UInt)))
     println(io, @view(preamble[1:end-1]), ",") # remove trailing "}" to reopen the object
