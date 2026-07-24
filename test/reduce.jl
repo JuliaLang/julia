@@ -45,7 +45,11 @@ let x = rand(10)
     @test 0 == @allocated(sum(Iterators.reverse(x)))
     @test 0 == @allocated(foldr(-, x))
     @test 0 == @allocated(sum(x))
-    @test 0 == @allocated(sum(log, x))
+    # A higher-order call written directly inside `@allocated`'s thunk is not
+    # specialized on the function argument, so measure it behind a wrapper
+    sumlog(x) = sum(log, x)
+    sumlog(x)
+    @test 0 == @allocated(sumlog(x))
 end
 
 # reduce
