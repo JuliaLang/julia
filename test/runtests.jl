@@ -86,7 +86,13 @@ limited_worker_rss && move_to_node1("Distributed")
 # while, so we might as well get them all started early. SparseArrays in particular
 # runs as a single test set for close to an hour on slow platforms (e.g. i686) and
 # dominates the critical path if started late.
-for prependme in ["LinearAlgebra", "Pkg", "SparseArrays"]
+# The ambiguity test must run before any worker has finished the SparseArrays tests:
+# SparseArrays' test module defines constructors (e.g. `Counting`) that are ambiguous
+# with Base's `Type` constructors, and once loaded on a worker they are picked up by
+# `detect_ambiguities(Core, Base)` in any test that later runs on the same worker.
+# Placing "ambiguous" last here schedules it first, so it completes while every
+# other worker is still busy with the long front-loaded test sets.
+for prependme in ["LinearAlgebra", "Pkg", "SparseArrays", "ambiguous"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
