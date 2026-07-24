@@ -387,10 +387,15 @@ end
 
 convert(T::Type{<:SharedArray}, a::Array) = T(a)::T
 
-function deepcopy_internal(S::SharedArray, stackdict::IdDict)
+function deepcopy_internal(S::SharedArray{T,N}, stackdict::IdDict) where {T,N}
     haskey(stackdict, S) && return stackdict[S]
-    R = SharedArray{eltype(S),ndims(S)}(size(S); pids = S.pids)
-    copyto!(sdata(R), sdata(S))
+    if isempty(procs(S))
+        R = SharedArray{T,N}(size(S), Int[], Future[], S.segname, copy(S.s))
+        finalizer(finalize_refs, R)
+    else
+        R = SharedArray{T,N}(size(S); pids = procs(S))
+        copyto!(sdata(R), sdata(S))
+    end
     stackdict[S] = R
     return R
 end
@@ -455,7 +460,7 @@ function serialize(s::AbstractSerializer, S::SharedArray)
     serialize_cycle_header(s, S) && return
 
     destpid = worker_id_from_socket(s.io)
-    if S.id.whence == destpid
+    if S.id.whence == destpid && !isempty(S.pids)
         # The shared array was created from destpid, hence a reference to it
         # must be available at destpid.
         serialize(s, true)
@@ -469,7 +474,7 @@ function serialize(s::AbstractSerializer, S::SharedArray)
             writetag(s.io, UNDEFREF_TAG)
         elseif n === :refs
             v = getfield(S, n)
-            if isa(v[1], Future)
+            if !isempty(v) && isa(v[1], Future)
                 # convert to ids to avoid distributed GC overhead
                 ids = [remoteref_id(x) for x in v]
                 serialize(s, ids)
@@ -498,7 +503,7 @@ function deserialize(s::AbstractSerializer, t::Type{<:SharedArray})
 end
 
 function show(io::IO, S::SharedArray)
-    if length(S.s) > 0
+    if length(S.s) > 0 || isempty(S.pids)
         invoke(show, Tuple{IO,DenseArray}, io, S)
     else
         show(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S))
@@ -506,7 +511,7 @@ function show(io::IO, S::SharedArray)
 end
 
 function show(io::IO, mime::MIME"text/plain", S::SharedArray)
-    if length(S.s) > 0
+    if length(S.s) > 0 || isempty(S.pids)
         invoke(show, Tuple{IO,MIME"text/plain",DenseArray}, io, MIME"text/plain"(), S)
     else
         # retrieve from the first worker mapping the array.
@@ -601,6 +606,7 @@ copyto!(S::SharedArray, A::Array) = (copyto!(S.s, A); S)
 
 function copyto!(S::SharedArray, R::SharedArray)
     length(S) == length(R) || throw(BoundsError())
+    isempty(S) && return S
     ps = intersect(procs(S), procs(R))
     isempty(ps) && throw(ArgumentError("source and destination arrays don't share any process"))
     l = length(S)

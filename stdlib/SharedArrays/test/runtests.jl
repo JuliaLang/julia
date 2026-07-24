@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Mmap, SharedArrays, Random
+using Test, Distributed, Mmap, SharedArrays, Random, Serialization
 include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testenv.jl"))
 
 @test isempty(Test.detect_closure_boxes(SharedArrays))
@@ -556,6 +556,8 @@ end
         @test isempty(procs(S))
         @test isempty(sdata(S))
         @test size(S) == (0, 0)
+        @test repr(S) == "0×0 SharedMatrix{Int64}"
+        @test repr("text/plain", S) == "0×0 SharedMatrix{Int64}"
         @static if Sys.islinux()
             for p in mapped_pids
                 @test !remotecall_fetch(s -> first(shmem_mapped(s)), p, segname)
@@ -563,6 +565,46 @@ end
         end
 
         close(S)
+    end
+
+    @testset "closed SharedArrays travel and copy as empty arrays" begin
+        S = SharedArray{Int64}(4)
+        fill!(S, 2)
+        close(S)
+
+        io = IOBuffer()
+        serialize(io, S)
+        seekstart(io)
+        D = deserialize(io)
+        @test D isa SharedVector{Int64}
+        @test size(D) == (0,)
+        @test isempty(procs(D))
+
+        W = remotecall_fetch(identity, id_other, S)
+        @test W isa SharedVector{Int64}
+        @test size(W) == (0,)
+        @test isempty(procs(W))
+
+        C = deepcopy(S)
+        @test size(C) == (0,)
+        @test isempty(procs(C))
+        @test isempty(sdata(C))
+
+        S2 = SharedArray{Int64}(4)
+        close(S2)
+        @test copyto!(S, S2) === S
+
+        E1 = SharedArray{Int64}(0)
+        E2 = SharedArray{Int64}(0)
+        @test copyto!(E1, E2) === E1
+
+        A = SharedArray{Int64}(3)
+        fill!(A, 7)
+        unshare!(A)
+        B = deepcopy(A)
+        @test isempty(procs(B))
+        @test sdata(B) !== sdata(A)
+        @test B == A
     end
 
     @testset "backing array remains valid after the SharedArray wrapper is GC'd" begin
