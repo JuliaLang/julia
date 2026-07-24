@@ -96,7 +96,7 @@ end
 # guarantee there's some scope it's declared in, and that it's not declared or
 # used outside of that scope (binding capture is OK).  This is the alternative.
 function newsym(ctx, src::SyntaxTree, name::String; unused=false)
-    out = newleaf(ctx, src, unused ? K"Placeholder" : K"Identifier", name)
+    out = newleaf(src, unused ? K"Placeholder" : K"Identifier", name)
     hasattr(src, :meta) && setattr!(out, :meta, src.meta)
     setattr!(out, :context, new_internal_context(src))
 end
@@ -308,7 +308,7 @@ function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
             [K"call" "getfield"::K"core" tmp i::K"Integer"]
         ])
     end
-    newnode(ctx, assignment_srcref, K"block", stmts)
+    newnode(assignment_srcref, K"block", stmts)
 end
 
 # Implement destructuring with `lhs` a tuple expression (possibly with
@@ -441,7 +441,7 @@ function expand_property_destruct(ctx, ex)
         ]))
     end
     push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
-    newnode(ctx, ex, K"block", stmts)
+    newnode(ex, K"block", stmts)
 end
 
 # Expands all cases of general tuple destructuring, eg
@@ -482,7 +482,7 @@ function expand_tuple_destruct(ctx, ex, is_const)
     end
     _destructure(ctx, ex, stmts, lhs, rhs1, is_const)
     push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
-    newnode(ctx, ex, K"block", stmts)
+    newnode(ex, K"block", stmts)
 end
 
 #-------------------------------------------------------------------------------
@@ -1219,7 +1219,7 @@ function expand_ncat(ctx, ex)
     sort!(nrow_spans, by=first) # depends on a stable sort
     is_balanced = true
     i = 1
-    dim_lengths = zeros(outer_dim)
+    dim_lengths = zeros(Int, outer_dim)
     prev_dimspan = 1
     while i <= length(nrow_spans)
         layout_dim, dimspan = nrow_spans[i]
@@ -1232,7 +1232,7 @@ function expand_ncat(ctx, ex)
         end
         is_balanced || break
         @jl_assert dimspan % prev_dimspan == 0 ex
-        dim_lengths[layout_dim] = dimspan ÷ prev_dimspan
+        dim_lengths[layout_dim] = Int(dimspan ÷ prev_dimspan)
         prev_dimspan = dimspan
     end
     shape_spec = SyntaxList(ctx)
@@ -1511,7 +1511,7 @@ function expand_condition(ctx, ex)
         cs = expand_cond_children(ctx, test)
         test = isempty(cs) ? (@ast ctx ex (k === K"&&")::K"Bool") :
             length(cs) == 1 ? (@ast ctx ex cs[1]) :
-            newnode(ctx, test, k, cs)
+            newnode(test, k, cs)
     else
         test = expand_forms_2(ctx, test)
     end
@@ -1875,10 +1875,10 @@ function expand_ccall(ctx, ex)
         sctx.stmts...
         [K"foreigncall"
             expand_csymbol(ctx, cfunc_name)
-            [K"static_eval"(meta=name_hint("ccall return type"))
+            [K"static_eval"(;meta=name_hint("ccall return type"))
                 expand_forms_2(ctx, return_type)
             ]
-            [K"static_eval"(meta=name_hint("ccall argument type"))
+            [K"static_eval"(;meta=name_hint("ccall argument type"))
                 [K"call"
                     "svec"::K"core"
                     expanded_types...
@@ -2201,7 +2201,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         [K"Placeholder"] -> nothing
         ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
             t2 = expand_forms_2(ctx, t)
-            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t2)))
+            push!(stmts, newnode(ex, K"decl", tree_ids(x, t2)))
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
         ([K"::" [K"Placeholder"] t], when=type_decls) -> let
@@ -2264,7 +2264,7 @@ function expand_decls(ctx, ex)
         make_lhs_decls(ctx, stmts, declkind, get(ex, :meta, nothing), lhs, simple)
         simple || push!(stmts, expand_forms_2(ctx, c))
     end
-    newnode(ctx, ex, K"block", stmts)
+    newnode(ex, K"block", stmts)
 end
 
 # Iterate over the variable names assigned to from a "fancy assignment left hand
@@ -2518,7 +2518,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
          gen_argl = SyntaxList(
              @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
              @ast(ctx, src, [K"::"
-                 "__context__"::K"Identifier"(context=sc)
+                 "__context__"::K"Identifier"(;context=sc)
                  SyntaxContext::K"Value"
              ]),
              mapsyntax(_untyped_arg, sparams)...,
@@ -2830,7 +2830,7 @@ end
 # (hack, see _expr_arg_syms).
 _lower_destructuring_arg(stmts, ctx, i, ex) = @stm ex begin
     [K"tuple" _...] -> let arg2 = newsym(ctx, ex, "destructured#" * string(i))
-        push!(stmts, @ast(ctx, ex, [K"local"(meta=CompileHints(:is_destructured_arg, true))
+        push!(stmts, @ast(ctx, ex, [K"local"(;meta=CompileHints(:is_destructured_arg, true))
             [K"=" ex arg2]]))
         arg2
     end
@@ -4227,7 +4227,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # structure. For now we attribute to the parent node.
         cond = length(cs) == 2 ?
             cs[1] :
-            newnode(ctx, ex, k, cs[1:end-1])
+            newnode(ex, k, cs[1:end-1])
         # This transformation assumes the type assertion `cond::Bool` will be
         # added by a later compiler pass (currently done in codegen)
         if k == K"&&"

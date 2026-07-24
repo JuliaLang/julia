@@ -131,10 +131,10 @@ function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing)
         (::K"latestworld")
         (::K"nothing")
     ]
-    ctx.toplevel_pure && return newleaf(ctx, decl, K"TOMBSTONE")
+    ctx.toplevel_pure && return newleaf(decl, K"TOMBSTONE")
     if !ctx.toplevel
         push!(ctx.toplevel_stmts, decl)
-        newleaf(ctx, decl, K"TOMBSTONE")
+        newleaf(decl, K"TOMBSTONE")
     else
         return decl
     end
@@ -324,7 +324,7 @@ function convert_local_function_decl(ctx, ex)
         ctx.mod,
         string("#", join(closure_binds.name_stack, "#"), "##"))
     global_clstruct = new_global_binding(ctx, ex, name_str, ctx.mod)
-    sp_syms = mapsyntax(sp->newleaf(ctx, sp, K"Symbol",
+    sp_syms = mapsyntax(sp->newleaf(sp, K"Symbol",
                                     get_binding(ctx, syntax_id(sp)).name),
                         capt_sp)
     define_clstruct = type_ex = @ast ctx ex [K"call"
@@ -440,7 +440,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             # [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
             make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, _convert_closures(ctx, ex[2]))
         else
-            newleaf(ctx, ex, K"TOMBSTONE")
+            newleaf(ex, K"TOMBSTONE")
         end
     elseif k == K"global"
         # Leftover `global` forms become weak globals.
@@ -462,7 +462,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         elseif !binfo.is_always_defined
             @ast ctx ex [K"newvar" var]
         else
-            newleaf(ctx, ex, K"TOMBSTONE")
+            newleaf(ex, K"TOMBSTONE")
         end
     elseif k == K"lambda" || k == K"toplevel_lambda" || k == K"generated_lambda"
         @jl_assert false (ex, "lambda should be at top level or in `method`")

@@ -66,21 +66,21 @@ end
 # provenance (but still removed).
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
     st = if e isa Symbol
-        newleaf(graph, src, K"Identifier", String(e))
+        newleaf(src, K"Identifier", String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(graph, e.value, src)
-        newnode(graph, src, K"inert", NodeId[cid])
+        newnode(src, K"inert", NodeId[cid])
     elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
         for name in argnames
-            id = newleaf(graph, src, K"Identifier", String(name::Symbol))
+            id = newleaf(src, K"Identifier", String(name::Symbol))
             push!(arg_cs, id._id)
         end
         body_id, src = _expr_to_est(graph, e.args[2], src)
-        args_block = newnode(graph, src, K"block", arg_cs)
-        tvars_block = newnode(graph, src, K"block", NodeId[])
-        st = newnode(graph, src, K"lambda",
+        args_block = newnode(src, K"block", arg_cs)
+        tvars_block = newnode(src, K"block", NodeId[])
+        st = newnode(src, K"lambda",
                      NodeId[args_block._id, tvars_block._id, body_id])
     elseif e isa Expr
         head_s = string(e.head)
@@ -97,13 +97,13 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
             end
         end
         if isnothing(st_k)
-            setattr!(newnode(graph, old_src, K"unknown_head", cs), :value, head_s)
+            setattr!(newnode(old_src, K"unknown_head", cs), :value, head_s)
         else
-            newnode(graph, old_src, st_k, cs)
+            newnode(old_src, st_k, cs)
         end
     elseif e isa GlobalRef
         # Represent globalref as K"Identifier" with :mod attribute
-        setattr!(newleaf(graph, src, K"Identifier", string(e.name)), :mod, e.mod)
+        setattr!(newleaf(src, K"Identifier", string(e.name)), :mod, e.mod)
     else
         # We may want additional special cases for other types where
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
@@ -112,7 +112,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
             # linenode outside of block or toplevel
             src = e
         end
-        setattr!(newleaf(graph, src, K"Value"), :value, e)
+        setattr!(newleaf(src, K"Value"), :value, e)
     end
     @jl_assert isa_lowering_ast_node(e) || is_expr_value(st) st
 
@@ -199,7 +199,7 @@ function _dst_separate_dotop(st::SyntaxTree)
         dotop_s = syntax_name(st)
         !is_dotted_operator(dotop_s) && return est_to_dst(st)
         op_s = dotop_s[nextind(dotop_s,1):end]
-        op_leaf = newleaf(st._graph, st, K"Identifier", op_s)
+        op_leaf = newleaf(st, K"Identifier", op_s)
         return @ast st._graph st [K"." op_leaf]
     elseif k === K"Value" && st.value isa GlobalRef &&
         is_dotted_operator(string(st.value.name))
@@ -478,7 +478,7 @@ function est_to_dst(st::SyntaxTree)
     rec = var"#self#"
     return @stm st begin
         [K"Identifier"] -> _est_to_dst_ident(st)
-        [K"Value"] -> st.value === nothing ? newleaf(g, st, K"nothing") : st
+        [K"Value"] -> st.value === nothing ? newleaf(st, K"nothing") : st
         (_, when=is_leaf(st)) -> st
         ([K"unknown_head" l r],
          when=(s=syntax_name(st); Base.isoperator(s))) -> let
@@ -486,7 +486,7 @@ function est_to_dst(st::SyntaxTree)
                  (s[nextind(s,1):prevind(s,end)], K".op=") :
                  (s[1:prevind(s,end)], K"op=")
 
-             op_leaf = newleaf(g, st, K"Identifier", op_s)
+             op_leaf = newleaf(st, K"Identifier", op_s)
              @ast g st [out_k rec(l) op_leaf rec(r)]
          end
         [K"comparison" cs0...] -> let cs = copy(cs0)
@@ -542,7 +542,7 @@ function est_to_dst(st::SyntaxTree)
         [K"try" tryb cvar catchb rest...] -> let
             has_catch = !(_is_false(cvar) && _is_false(catchb))
             cvar_out = _is_false(cvar) ?
-                newleaf(g, cvar, K"Placeholder") : rec(cvar)
+                newleaf(cvar, K"Placeholder") : rec(cvar)
             has_finally = length(rest) >= 1 && !_is_false(rest[1])
             has_else = length(rest) === 2
             @ast g st [K"try" rec(tryb)
@@ -634,7 +634,7 @@ function est_to_dst(st::SyntaxTree)
         ([K"meta" s vs...],
          when=(meta=get(s, :value, ""); meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
-             newleaf(g, st, K"nothing")
+             newleaf(st, K"nothing")
         ([K"meta" s gen], when=get(s, :value, "") === "generated") ->
             @ast g st [K"meta" setattr(s, :kind, K"Symbol") rec(gen)]
         [K"meta" syms...] ->
@@ -643,10 +643,10 @@ function est_to_dst(st::SyntaxTree)
                 syms)...
            ]
         [K"boundscheck" x] -> mknode(st, SyntaxList(g))
-        [K"inbounds" [K"Identifier"]] -> newnode(g, st, K"inbounds_pop", SyntaxList(g))
-        [K"core" x] -> newleaf(g, st, K"core", syntax_name(x))
-        [K"top" x] -> newleaf(g, st, K"top", syntax_name(x))
-        [K"static_parameter" x] -> newleaf(g, st, K"static_parameter", x.value::IdTag)
+        [K"inbounds" [K"Identifier"]] -> newnode(st, K"inbounds_pop", SyntaxList(g))
+        [K"core" x] -> newleaf(st, K"core", syntax_name(x))
+        [K"top" x] -> newleaf(st, K"top", syntax_name(x))
+        [K"static_parameter" x] -> newleaf(st, K"static_parameter", x.value::IdTag)
         [K"lambda" args sps body] -> mknode(st, [args._id, sps._id, rec(body)._id])
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_expr::K"Value"
@@ -664,14 +664,14 @@ function est_to_dst(st::SyntaxTree)
         end
         [K"unknown_head" cs...] -> let head = syntax_name(st)
             if head === "latestworld-if-toplevel"
-                newleaf(g, st, K"latestworld_if_toplevel")
+                newleaf(st, K"latestworld_if_toplevel")
             else
                 @jl_assert(false, (st, string(
                     "unknown expr head (corresponding to no kind) between",
                     " macro-expansion and desugaring: ")))
             end
         end
-        ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
+        ([K"latestworld"], when=!is_leaf(st)) -> newleaf(st, K"latestworld")
         [K"cfunction" typ fptr rt at sym] -> let
             # A symbol in fptr[1] does not observe hygiene or local scopes, but
             # treating this as a binding is better for e.g. JETLS.
@@ -685,8 +685,8 @@ function est_to_dst(st::SyntaxTree)
             end
             @ast g st [K"cfunction"
                 rec(typ) out_fptr
-                [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
-                [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
+                [K"static_eval"(rt; meta=name_hint("cfunction return type")) rec(rt)]
+                [K"static_eval"(at; meta=name_hint("cfunction argument type")) rec(at)]
                 rec(sym)
             ]
         end

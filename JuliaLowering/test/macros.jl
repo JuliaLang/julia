@@ -510,7 +510,7 @@ end
     JuliaLowering.include_string(test_mod, raw"""
     macro mk_toplevel(x, y, z)
         JuliaSyntax.newnode(
-            x._graph, __context__.macrocall, K"toplevel",
+            __context__.macrocall, K"toplevel",
             JuliaSyntax.SyntaxList(x, y, z))
     end
     macro toplevel_first_child(x)

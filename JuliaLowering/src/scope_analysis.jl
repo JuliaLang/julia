@@ -429,11 +429,11 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         if getmeta(ex, :nospecialize, false) && b.kind === :argument
             b.is_nospecialize = true
         end
-        newleaf(ctx, ex, K"BindingId", b.id)
+        newleaf(ex, K"BindingId", b.id)
     elseif k === K"BindingId"
         ex
     elseif k == K"softscope"
-        newleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ex, K"TOMBSTONE")
     elseif !needs_resolution(ex)
         ex
     elseif k == K"local"
@@ -461,7 +461,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         ex_out
     elseif k == K"always_defined"
         resolve_name(ctx, ex[1]).is_always_defined = true
-        newleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ex, K"TOMBSTONE")
     elseif k in KSet"lambda toplevel_lambda generated_lambda"
         # opaque closures are the exception
         # scope isa ScopeInfo && @jl_assert scope.is_lifted ex
@@ -575,7 +575,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
             end
         end
         push!(stmts, locals_dict)
-        newnode(ctx, ex, K"block", stmts)
+        newnode(ex, K"block", stmts)
     elseif k == K"thisfunction"
         lam = enclosing_lambda(ctx, scope::ScopeInfo).node_id
         self_arg = lam[1][1]
@@ -605,7 +605,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         else
             @jl_assert false (ex, "unknown syntax assertion")
         end
-        newleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ex, K"TOMBSTONE")
     elseif k === K"relayered_global"
         bid = get(scope.vars, NameKey(ex[1]), nothing)
         !isnothing(bid) && let b = get_binding(ctx, bid)
@@ -613,7 +613,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
                 "unhygienic global name `$(NameKey(ex[1]).name)` conflicts ",
                 "with an existing $(_var_str(b.kind))")))
         end
-        newleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ex, K"TOMBSTONE")
     elseif k == K"function_decl"
         resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
         name = resolved[1]

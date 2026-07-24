@@ -1,4 +1,4 @@
-let node = JS.newleaf(SyntaxGraph(), LineNumberNode(1), K"Value", nothing)
+let node = JS.newleaf(LineNumberNode(1), K"Value", nothing)
     @test JS.hasattr(node, :value)
     @test node.value === nothing
 end
@@ -8,19 +8,19 @@ end
     g = st._graph
     @test JuliaLowering.assert_syntaxtree(st) === nothing
 
-    bad_st = JuliaSyntax.newleaf(g, st, K"Identifier")
+    bad_st = JuliaSyntax.newleaf(st, K"Identifier")
     @test_throws "needs attribute value" JuliaLowering.assert_syntaxtree(bad_st)
     @test_throws "needs attribute value" show(bad_st)
 
-    bad_st = JuliaSyntax.newleaf(g, st, K"code_info")
+    bad_st = JuliaSyntax.newleaf(st, K"code_info")
     @test_throws "unrecognized leaf kind" JuliaLowering.assert_syntaxtree(bad_st)
 
-    JuliaSyntax.setchildren!(bad_st, NodeId[bad_st._id])
+    setfield!(bad_st, :children, NodeId[bad_st._id])
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(bad_st)
 
-    cyc_1 = JuliaSyntax.newnode(g, st, K"block", NodeId[])
-    cyc_2 = JuliaSyntax.newnode(g, st, K"block", NodeId[cyc_1._id])
-    JuliaSyntax.setchildren!(cyc_1, NodeId[cyc_2._id])
+    cyc_1 = JuliaSyntax.newnode(st, K"block", NodeId[])
+    cyc_2 = JuliaSyntax.newnode(st, K"block", NodeId[cyc_1._id])
+    setfield!(cyc_1, :children, NodeId[cyc_2._id])
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_1)
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_2)
 end

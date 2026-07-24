@@ -64,7 +64,7 @@ const NodeId = SyntaxTree
 const SourceAttrType = Union{SyntaxTree,SourceRef,LineNumberNode}
 
 function setchildren!(id::NodeId, children::AbstractVector{NodeId})
-    id.children = children
+    setfield!(id, :children, children)
 end
 
 # fallback printing.  TODO: vulnerable to invalidations
@@ -158,9 +158,8 @@ function deleteattr!(ex::SyntaxTree, name::Symbol)
     ex
 end
 
-function setproperty!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
+Base.setproperty!(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
     error("SyntaxTree: this can't be mutated")
-end
 
 # JuliaSyntax tree API
 
@@ -488,11 +487,11 @@ end
 
 Add a new node to `graph` with reference to parsed source text `prov`.
 """
-function newnode(graph::SyntaxGraph, prov::SourceAttrType, k::Kind, children)
+function newnode(prov::SourceAttrType, k::Kind, children)
     context = prov isa SyntaxTree ? prov.context : nothing
     SyntaxTree(k, children, nothing, prov, context)
 end
-function newleaf(graph::SyntaxGraph, prov::SourceAttrType, k::Kind)
+function newleaf(prov::SourceAttrType, k::Kind)
     context = prov isa SyntaxTree ? prov.context : nothing
     SyntaxTree(k, nothing, nothing, prov, context)
 end
@@ -500,9 +499,6 @@ end
 """
     mknode(old::SyntaxTree, children)
 
-Create a node in `old`'s graph that is an immutable update of `old`, but setting
-`old` as its provenance.  This is the main operation used by syntax
-transformations such as lowering.
 """
 function mknode(old::SyntaxTree, children)
     st = mkleaf(old)
@@ -993,10 +989,9 @@ We can't assume much about `st` since it's anything the parser produces.  Our
 correctness is defined against existing text->Expr transformations.
 
 All node rearrangements and head changes are determined before recursing on
-children, unlike in `node_to_expr`.  This is because these nodes are not mutable
-and filling the graph with temporary nodes to fix up later is less desirable,
-and also because knowing our parent's kind and our position within it
-ahead-of-time makes conversion simpler.  By default, for each node `st`, we
+children, unlike in `node_to_expr`.  This is because knowing our parent's kind
+and our position within it ahead-of-time makes conversion simpler.  By default,
+for each node `st`, we
   1. let `cs` be `children(st)` minus (non-recursively) all trivia and parens
   2. rearrange `cs` based on length(cs), their/our/parent's kind/flags, etc.
   3. let `ret_cs` be `map(convert, cs)`
@@ -1016,9 +1011,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     graph = syntax_graph_js(st)
     k = kind(st)
     syntax_name(x) = x.value::String
-    symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :value, s)
+    symleaf(s::String) = setattr!(newleaf(st, K"Identifier"), :value, s)
     core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
-    valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
+    valleaf(@nospecialize(v)) = setattr!(newleaf(st, K"Value"), :value, v)
 
     if k === K"DotsIdentifier"
         # `..`/`...` used as an ordinary identifier (eg the `..` operator, or
@@ -1042,7 +1037,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             mac = core_globalref(macname)
             arg = valleaf(replace(sourcetext(st), '_'=>""))
             ret_cids = tree_ids(mac, valleaf(nothing), arg)
-            newnode(graph, st, K"macrocall", ret_cids)
+            newnode(st, K"macrocall", ret_cids)
         elseif hasattr(st, :value) && !(k in KSet"Identifier Value" || is_literal(k))
             # certain kinds should really be identifiers.  known: &, |, :
             symleaf(syntax_name(st))
@@ -1063,7 +1058,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (cmdstring _...) => (macrocall Core.@cmd lno joined_str)
         cmd_arg = _string_to_est(st, cs; unwrap_literal=true)
         loc_st = valleaf(source_location(LineNumberNode, st))
-        return newnode(graph, st, K"macrocall", tree_ids(
+        return newnode(st, K"macrocall", tree_ids(
             core_globalref("@cmd"), loc_st, cmd_arg))
     elseif k === K"macro_name" && n_cs === 1
         # "M.@x" => (. M (macro_name x)) => (. M @x)
@@ -1079,7 +1074,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 (lhs, raw_m) = _green_to_est(cs[1], 1, inner_cs[1]), inner_cs[2]
                 mname_s = lower_identifier_name(syntax_name(raw_m), K"macro_name")
                 mname = setattr!(mkleaf(raw_m), :value, mname_s)
-                mname_inert = newnode(graph, raw_m, K"inert", tree_ids(mname))
+                mname_inert = newnode(raw_m, K"inert", tree_ids(mname))
                 return mknode(inner_st, tree_ids(lhs, mname_inert))
             else
                 return _green_to_est(parent, 1, inner_st)
@@ -1093,13 +1088,13 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         op_s = string(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
-        out = newnode(graph, st, K"unknown_head", tree_ids(lhs, rhs))
+        out = newnode(st, K"unknown_head", tree_ids(lhs, rhs))
         return setattr!(out, :value, op_s)
     elseif k === K".op=" && n_cs === 3
         op_s = '.' * string(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
-        out = newnode(graph, st, K"unknown_head", tree_ids(lhs, rhs))
+        out = newnode(st, K"unknown_head", tree_ids(lhs, rhs))
         return setattr!(out, :value, op_s)
     elseif k === K"op=" && n_cs === 1
         # (op= +) => +=   (the operator name itself, eg when quoted as `:(+=)`)
@@ -1150,8 +1145,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             if is_prefix_call(st)
                 # (dotcall f args...) => (. f (tuple args...))
                 ret_cs = _map_green_to_est(st, cs)
-                tuple = newnode(graph, st, K"tuple", ret_cs[2:end])
-                return newnode(graph, st, K".", tree_ids(ret_cs[1], tuple))
+                tuple = newnode(st, K"tuple", ret_cs[2:end])
+                return newnode(st, K".", tree_ids(ret_cs[1], tuple))
             else
                 # (dotcall + args...) => (call .+ args...)
                 ret_k = K"call"
@@ -1167,7 +1162,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             lhs = _green_to_est(st, 1, cs[1])
             rhs = _green_to_est(st, 2, cs[2])
             inert_rhs = kind(rhs) in KSet"quote inert" ? rhs :
-                newnode(graph, cs[2], K"inert", tree_ids(rhs))
+                newnode(cs[2], K"inert", tree_ids(rhs))
             return mknode(st, tree_ids(lhs, inert_rhs))
         elseif n_cs === 1
             # (. x) => (. x) or .x
@@ -1273,7 +1268,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             end
             g_out = mknode(st, gen_cs)
             if c !== cs[end]
-                g_out = newnode(graph, c, K"flatten", tree_ids(g_out))
+                g_out = newnode(c, K"flatten", tree_ids(g_out))
             end
         end
         return setattr!(g_out, :source, st._id) # outermost provenance
@@ -1293,11 +1288,11 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (elseif cond body) => (elseif (block cond) body)
         # RGN->Expr block-wraps for linenodes; we do it for parity
         ret_cs = _map_green_to_est(st, cs)
-        ret_cs[1] = newnode(graph, cs[1], K"block", tree_ids(ret_cs[1]))
+        ret_cs[1] = newnode(cs[1], K"block", tree_ids(ret_cs[1]))
         return mknode(st, ret_cs)
     elseif k === K"->" && kind(cs[2]) !== K"block"
         ret_cs = _map_green_to_est(st, cs)
-        ret_cs[2] = newnode(graph, cs[2], K"block", tree_ids(ret_cs[2]))
+        ret_cs[2] = newnode(cs[2], K"block", tree_ids(ret_cs[2]))
         return mknode(st, ret_cs)
     elseif k === K"function" && n_cs >= 2 &&
         has_flags(st, SHORT_FORM_FUNCTION_FLAG)
@@ -1305,8 +1300,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # exception: no block on "x' = y", or if body is already a block
         if kind(cs[2]) !== K"block" && !is_postfix_op_call(cs[1])
             ret_cs = _map_green_to_est(st, cs)
-            ret_cs[2] = newnode(graph, cs[2], K"block", tree_ids(ret_cs[2]))
-            return newnode(graph, st, K"=", ret_cs)
+            ret_cs[2] = newnode(cs[2], K"block", tree_ids(ret_cs[2]))
+            return newnode(st, K"=", ret_cs)
         end
         ret_k = K"="
     elseif k === K"module"
@@ -1316,7 +1311,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (quote something_simple) => (inert something_simple)
         ret_c = _green_to_est(st, 1, cs[1])
         return is_leaf(ret_c) && kind(ret_c) !== K"Bool" ?
-            newnode(graph, st, K"inert", tree_ids(ret_c)) :
+            newnode(st, K"inert", tree_ids(ret_c)) :
             mknode(st, tree_ids(ret_c))
     elseif k === K"do"
         ret_k = K"->"
@@ -1437,7 +1432,7 @@ end
 function _make_do_expression(st::SyntaxTree, args::SyntaxList, doex::SyntaxTree)
     ret_doex = _green_to_est(st, 0, doex)
     ret_callex = mknode(st, _map_green_to_est(st, args))
-    return newnode(st._graph, st, K"do", tree_ids(ret_callex, ret_doex))
+    return newnode(st, K"do", tree_ids(ret_callex, ret_doex))
 end
 
 # A `string` or `cmdstring` may have multiple literal strings within (from
@@ -1468,7 +1463,7 @@ function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
         elseif cur_str
             write(buf, c.value)
             if !next_str
-                ret_c = newleaf(st._graph, st, literal_k)
+                ret_c = newleaf(st, literal_k)
                 setattr!(ret_c, :value, String(take!(buf)))
                 push!(ret_cs, ret_c)
             end

@@ -262,7 +262,7 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
                 ]
             ]
         ]
-        [K"unknown_head"(value="latestworld-if-toplevel")]
+        [K"unknown_head"(;value="latestworld-if-toplevel")]
         val
     ]
 end

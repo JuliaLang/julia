@@ -58,16 +58,16 @@ end
             false)
 
         g = SyntaxGraph()
-        st1 = setattr!(newleaf(g, LineNumberNode(1), K"Identifier"), :name_val, "st1")
+        st1 = setattr!(newleaf(LineNumberNode(1), K"Identifier"), :name_val, "st1")
         st2 = setattr!(mkleaf(st1), :name_val, "st2")
         st3 = setattr!(mkleaf(st2), :name_val, "st3")
 
-        stm1 = setattr!(newleaf(g, LineNumberNode(1, :m), K"Identifier"), :name_val, "stm1")
+        stm1 = setattr!(newleaf(LineNumberNode(1, :m), K"Identifier"), :name_val, "stm1")
         stm2 = setattr!(mkleaf(stm1), :name_val, "stm2")
         stm3 = setattr!(mkleaf(stm1), :name_val, "stm3")
-        stm_unused = setattr!(newleaf(g, LineNumberNode(0), K"Identifier"), :name_val, "stm_unused")
+        stm_unused = setattr!(newleaf(LineNumberNode(0), K"Identifier"), :name_val, "stm_unused")
 
-        stmm1 = setattr!(newleaf(g, LineNumberNode(1, :mm), K"Identifier"), :name_val, "stmm1")
+        stmm1 = setattr!(newleaf(LineNumberNode(1, :mm), K"Identifier"), :name_val, "stmm1")
         stmm2 = setattr!(mkleaf(stmm1), :name_val, "stmm2")
         stmm3 = setattr!(mkleaf(stmm2), :name_val, "stmm3")
 

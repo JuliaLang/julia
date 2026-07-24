@@ -377,7 +377,7 @@ end
 function _replace_binding_ids(ctx, ssamap, st)
     if kind(st) == K"BindingId"
         id = get(ssamap, syntax_id(st), nothing)
-        isnothing(id) ? st : newleaf(ctx, st, K"BindingId", id)
+        isnothing(id) ? st : newleaf(st, K"BindingId", id)
     elseif is_leaf(st) || is_quoted(st)
         st
     else

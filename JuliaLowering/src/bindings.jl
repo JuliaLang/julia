@@ -137,7 +137,7 @@ end
 function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
                            kind=:local, kws...)
     @jl_assert kind === :local || kind === :argument srcref
-    nameref = newleaf(ctx, srcref, K"Identifier", name)
+    nameref = newleaf(srcref, K"Identifier", name)
     b = _new_binding(ctx.bindings, nameref, name, kind; is_internal=true, kws...)
     lbindings = current_lambda_bindings(ctx)
     if !isnothing(lbindings)
@@ -147,7 +147,7 @@ function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
 end
 
 function new_global_binding(ctx::AbstractLoweringContext, srcref, name, mod; kws...)
-    nameref = newleaf(ctx, srcref, K"Identifier", name)
+    nameref = newleaf(srcref, K"Identifier", name)
     binding_ex(ctx, _new_binding(
         ctx.bindings, nameref, name, :global; is_internal=true, mod=mod, kws...))
 end
