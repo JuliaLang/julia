@@ -114,6 +114,7 @@ Glossary
 
 #ifdef _OS_WINDOWS_
 #include <memoryapi.h>
+#include <io.h>
 #else
 #include <dlfcn.h>
 #include <sys/mman.h>
@@ -3662,7 +3663,7 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 #endif
 }
 
-static size_t jl_image_get_split_ji(void *handle, char **dest, int use_pages)
+static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap)
 {
     const char *lib_path = jl_pathname_for_handle(handle);
     if (!lib_path) {
@@ -3691,18 +3692,39 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_pages)
     snprintf(ji_path + ji_path_len, sizeof ji_path - ji_path_len, ".ji");
 
     ios_t s;
-    if (!ios_file(&s, ji_path, 1, 0, 0, 0)) {
-        jl_printf(JL_STDERR, "unable to open .ji associated with native image: %s\n",
-                  ji_path);
-        abort();
+    size_t size;
+    if (!ios_file(&s, ji_path, 1, 0, 0, 0))
+        goto error;
+    size = ios_filesize(&s);
+
+    if (use_mmap) {
+#ifdef _OS_WINDOWS_
+        HANDLE hdl = (HANDLE)_get_osfhandle(s.fd);
+        HANDLE map = CreateFileMapping(hdl, NULL, PAGE_WRITECOPY, 0, 0, NULL);
+        if (!map)
+            goto error;
+        *dest = (char *)MapViewOfFile(map, FILE_MAP_COPY, 0, 0, size);
+        CloseHandle(map);
+        if (!*dest)
+            goto error;
+#else
+        *dest = (char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, s.fd, 0);
+        if (*dest == MAP_FAILED)
+            goto error;
+#endif
+    }
+    else {
+        *dest = (char *)malloc(size);
+        ios_bufmode(&s, bm_none);
+        ios_readall(&s, *dest, size);
     }
 
-    size_t size = ios_filesize(&s);
-    *dest = use_pages ? jl_image_alloc_pages(size) : (char *)malloc(size);
-    ios_bufmode(&s, bm_none);
-    ios_readall(&s, *dest, size);
     ios_close(&s);
     return size;
+
+error:
+    jl_printf(JL_STDERR, "unable to load .ji associated with native image: %s\n", ji_path);
+    abort();
 }
 
 JL_DLLEXPORT void jl_image_unpack_split(void *handle, jl_image_buf_t *image)
