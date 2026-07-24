@@ -299,18 +299,16 @@ static int sleep_check_after_threshold(uint64_t *start_cycles) JL_NOTSAFEPOINT
 
 void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    // equivalent to wake_thread, without the assert on wasrunning
+    // Unlike wake_thread, this is called only when the current task frame
+    // will not return to the scheduler. Do not pre-account a searcher: no
+    // jl_task_get_next frame remains to take and release that slot.
     int8_t state = jl_atomic_load_relaxed(&ptls->sleep_check_state);
     if (state == sleeping) {
-        wake_gate_t *gate = preaccount_searcher(ptls->tid);
         if (jl_atomic_cmpswap_relaxed(&ptls->sleep_check_state, &state, not_sleeping)) {
             // this notification will never be consumed, so we may have now
             // introduced some inaccuracy into the count, but that is
             // unavoidable with any asynchronous interruption
             jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
-        }
-        else {
-            unaccount_searcher(gate);
         }
     }
 }
@@ -385,11 +383,13 @@ static void wake_self(jl_task_t *ct, jl_task_t *uvlock) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = ct->ptls;
     if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
-        // Flipping our own mid-transition sleep state pre-accounts like
+        // Flipping our own mid-transition sleeping state pre-accounts like
         // any other wake; our raced-detection downstream takes the slot
-        // (settle_wake at one of sleep_thread's exits).
+        // (settle_wake at one of sleep_thread's exits). Do not revive
+        // sleeping_like_the_dead: it has no scheduler frame to take the slot.
         wake_gate_t *gate = preaccount_searcher(jl_atomic_load_relaxed(&ct->tid));
-        if (jl_atomic_exchange_relaxed(&ptls->sleep_check_state, not_sleeping) != not_sleeping) {
+        int8_t state = sleeping;
+        if (jl_atomic_cmpswap_relaxed(&ptls->sleep_check_state, &state, not_sleeping)) {
             int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
             assert(wasrunning); (void)wasrunning;
             JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls);
@@ -792,13 +792,10 @@ static jl_task_t *sleep_thread(jl_task_t *ct, wake_gate_t **pgate,
         // InterruptException or error in scheduler/libuv
         if (!isrunning)
             jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
-        // A wake can accompany the exception: an ordinary wake may race it,
-        // and SIGINT delivery itself flips a parked thread (surprise_wakeup)
-        // so it reaches the safepoint that throws. Either way the waker
-        // pre-accounted a searcher slot we will never use: record it in
-        // *spinning so the caller's handler releases it (searcher_exit in
-        // jl_task_get_next). With no waker, settle_wake just un-publishes
-        // our sleep state.
+        // An ordinary wake may race the exception. Its waker pre-accounted
+        // a searcher slot we will never use: record it in *spinning so the
+        // caller's handler releases it (searcher_exit in jl_task_get_next).
+        // With no waker, settle_wake just un-publishes our sleep state.
         settle_wake(ptls, gate, spinning);
         // An enqueue whose wake was suppressed by the slot we released at
         // entry is observed only by the recheck; if the unwind cut the
