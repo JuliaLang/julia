@@ -207,16 +207,19 @@ end
 
 function load_backtrace(trace::RawBacktrace)::Vector{BTElement}
     out = Vector{BTElement}()
+    n = Int(trace.size)
     i = 1
-    while i <= trace.size
+    while i <= n
         e = unsafe_load(trace.data, i)
         if e == typemax(BTElement) # JL_BT_NON_PTR_ENTRY: start of an extended entry
             # Extended entries (e.g. interpreter frames) hold unrooted object
             # pointers, not native instruction pointers, so they cannot be
             # decoded here; skip over them (size is encoded in the descriptor).
+            # Those frames are therefore missing from the reported stack.
+            i + 1 <= n || break # truncated entry; nothing more to decode
             descriptor = unsafe_load(trace.data, i + 1)
-            ngc = descriptor & 0x7
-            nptr = (descriptor >> 3) & 0x7
+            ngc = Int(descriptor & 0x7)
+            nptr = Int((descriptor >> 3) & 0x7)
             i += 2 + ngc + nptr
             continue
         end
