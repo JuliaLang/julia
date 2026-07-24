@@ -970,6 +970,13 @@ workqueue_for(tid::Int) = Workqueues[tid]
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    # A task with an armed wait registration is parked, not runnable: whoever
+    # wants to wake it must claim the registration first (see the wake-claim
+    # protocol in condition.jl). Every internal wake path does; catching the
+    # misuse here keeps a stray `schedule(t)` from racing the queue's `notify`
+    # into waking `t` twice.
+    (@atomic :monotonic t.waiting_on) === nothing ||
+        throw(ConcurrencyViolationError("schedule: Task is registered on a wait queue"))
 
     # Sticky tasks go into their thread's work queue.
     if t.sticky
@@ -1144,7 +1151,8 @@ Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 function yield(t::Task, @nospecialize(x=nothing))
     ct = current_task()
     t === ct && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
-    (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
+    (t._state === task_state_runnable && t.queue === nothing &&
+     (@atomic :monotonic t.waiting_on) === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
     # [task] user_time -yield-> wait_time
     record_running_time!(ct)
     # [task] created -scheduled-> wait_time

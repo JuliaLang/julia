@@ -247,6 +247,18 @@ end
         notify(e)
         @test timedwait(() -> istaskdone(target), 10.0) == :ok
     end
+    # scheduling (or yielding to) a task with an armed wait registration is a
+    # concurrency violation: it must be woken through its registration's queue
+    # (or by claiming, as `schedule(t, exc, error=true)` does)
+    let cond = Threads.Condition()
+        t = @async @lock cond wait(cond)
+        @test timedwait(() -> parked_on(t, cond), 10.0) == :ok
+        @test_throws ConcurrencyViolationError schedule(t)
+        @test_throws ConcurrencyViolationError schedule(t, :wrong)
+        @test_throws ConcurrencyViolationError yield(t)
+        @lock cond notify(cond, :legit)
+        @test fetch(t) === :legit
+    end
 end
 
 # the cached WaitEntry makes the steady-state park/wake cycle allocation-free:
