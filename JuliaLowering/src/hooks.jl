@@ -41,8 +41,14 @@ function core_lowering_hook(@nospecialize(code), mod::Module, file::Union{String
         ex = to_lowered_expr(st5)
         return Core.svec(ex, st5, ctx5)
     catch exc
-        @info("JuliaLowering threw given input:", code=code, st0=st0, st1=st1, file=file, line=line, mod=mod)
-        rethrow(exc)
+        @info("JuliaLowering threw given input:", code=code, file=file,
+              line=line, mod=mod, st0=st0, st1=st1)
+        if exc isa LoweringError && !exc.internal
+            return Core.svec(Expr(:error, sprint(
+                (io,err)->showerror(io,err; show_detail=false), exc)))
+        else
+            rethrow(exc)
+        end
 
         # TODO: Re-enable flisp fallback once we're done collecting errors
         # @error("JuliaLowering failed — falling back to flisp!",

@@ -100,12 +100,12 @@ end
         @test ismissing(f(missing, 1))
     end
 
-    @test ismissing(min(missing, missing))
-    @test ismissing(max(missing, missing))
-    for f in [min, max]
+    for (f, result) in ((min, missing), (max, missing), (minmax, (missing, missing)))
+        @test f(missing, missing) === result
+        @test f(missing) === result
         for arg in ["", "a", 1, -1.0, [2]]
-            @test ismissing(f(missing, arg))
-            @test ismissing(f(arg, missing))
+            @test f(missing, arg) === result
+            @test f(arg, missing) === result
         end
     end
 end

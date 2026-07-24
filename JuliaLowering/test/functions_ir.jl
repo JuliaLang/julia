@@ -414,6 +414,18 @@ end
 8   (return core.nothing)
 
 ########################################
+# Error: Callable type not at top level
+function f(x)
+    (::T)(y) = x + y
+end
+#---------------------
+LoweringError:
+function f(x)
+    (::T)(y) = x + y
+#    └─┘ ── adding methods to callable type only allowed at top level
+end
+
+########################################
 # `where` params used in callable object type
 function (x::X1{T})() where T
     T
