@@ -79,12 +79,6 @@ end
         end
     end
 
-    array_section(s, key) = begin
-        start = last(findfirst("\"$key\":[", s)) + 1
-        s[start:findnext(==(']'), s, start)-1]
-    end
-    n_elems(section) = isempty(strip(section)) ? 0 : count(==(','), section) + 1
-
     mktempdir() do tmpdir
         prefix = joinpath(tmpdir, "syn")
         out_file = joinpath(tmpdir, "syn.heapsnapshot")
@@ -92,12 +86,11 @@ end
         write_parts(prefix)
         Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)
         sshot = read(out_file, String)
-        @test n_elems(array_section(sshot, "nodes")) == 7 * 2
-        @test n_elems(array_section(sshot, "edges")) == 3 * 1
+        @test length(snapshot_array(sshot, "nodes")) == 7 * 2
         @test contains(sshot, "\"node_a\"")
         @test contains(sshot, "\"node_b\"")
-        # to_node is emitted as an offset into the flat nodes array
-        @test contains(array_section(sshot, "edges"), "7")
+        # type, name_or_index, and to_node as an offset into the flat nodes array
+        @test snapshot_array(sshot, "edges") == [0, 0, 7]
         rm(out_file)
 
         # a node with no incoming edges is an error, and must not leave output behind

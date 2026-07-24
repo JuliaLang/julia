@@ -123,7 +123,7 @@ end
     fake_lidict = Dict{UInt64,Vector{StackFrame}}(UInt64(1) => [StackFrame(:f1, :file1, 1, nothing, false, false, 0)])
     if !Sys.iswindows() # avoid the multi-thread-profiling-unsupported warning
         # no "no samples" warning when every group has samples
-        @test_logs Profile.print(iobuf, fake_data, fake_lidict, groupby = :thread)
+        @test_logs min_level=Logging.Warn Profile.print(iobuf, fake_data, fake_lidict, groupby = :thread)
     end
     # a threads filter that matches no samples must be honored under groupby=:task
     @test_logs (:warn, r"There were no samples collected in one or more groups") match_mode=:any begin
@@ -135,8 +135,10 @@ end
     let (data, lidict) = Profile.retrieve()
         @test Profile.callers("busywait", data, lidict) isa Vector
     end
-    # data saved as a different unsigned type is accepted by the default lidict path
-    @test Profile.getdict(UInt64.(Profile.fetch(include_meta = false))) isa Profile.LineInfoDict
+    # data saved on a host with a different word size is accepted (`UInt` there may
+    # not be `UInt` here), rather than hitting a MethodError
+    @test Profile.getdict(UInt32[1, 0]) isa Profile.LineInfoDict
+    @test Profile.getdict(UInt64[1, 0]) isa Profile.LineInfoDict
 end
 
 @testset "init while profiling errors" begin
@@ -493,6 +495,13 @@ end
     end
 end
 
+# the elements of the flat `"<key>":[...]` array of a .heapsnapshot, as integers
+function snapshot_array(sshot::AbstractString, key::AbstractString)
+    start = last(findfirst("\"$key\":[", sshot)) + 1
+    section = strip(sshot[start:findnext(==(']'), sshot, start)-1])
+    return isempty(section) ? Int[] : parse.(Int, split(section, ','))
+end
+
 # the documented streaming workflow: stream the parts, assemble offline, clean up
 @testset "HeapSnapshot streaming workflow" begin
     mktempdir() do tmpdir
@@ -509,16 +518,10 @@ end
         # structural check: the node/edge arrays must have the expected number of fields
         node_count = parse(Int, match(r"\"node_count\":(\d+)", sshot).captures[1])
         edge_count = parse(Int, match(r"\"edge_count\":(\d+)", sshot).captures[1])
-        function array_length(key)
-            start = last(findfirst("\"$key\":[", sshot)) + 1
-            stop = findnext(==(']'), sshot, start) - 1
-            section = strip(sshot[start:stop])
-            return isempty(section) ? 0 : count(==(','), section) + 1
-        end
         @test node_count > 0
         @test edge_count > 0
-        @test array_length("nodes") == 7 * node_count
-        @test array_length("edges") == 3 * edge_count
+        @test length(snapshot_array(sshot, "nodes")) == 7 * node_count
+        @test length(snapshot_array(sshot, "edges")) == 3 * edge_count
 
         Profile.HeapSnapshot.cleanup_streamed_files(prefix)
         @test !any(isfile, part_files)
