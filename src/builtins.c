@@ -2229,11 +2229,13 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
     if (!jl_types_equal(a, b))
         goto no;
-    JL_TRY {
-        a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
-    }
-    JL_CATCH {
-        ok = 0;
+    {
+        JL_TRY {
+            a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
+        }
+        JL_CATCH {
+            ok = 0;
+        }
     }
     if (!ok)
         goto no;
