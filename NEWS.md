@@ -107,6 +107,9 @@ New library functions
 New library features
 --------------------
 
+* `normpath` and `abspath` now accept a `safe=true` keyword argument that preserves
+  `..` components so normalization does not change paths containing symbolic links
+  ([#60251]).
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 * `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags
