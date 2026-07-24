@@ -2304,15 +2304,6 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
     if (closure->shadowed == NULL)
         closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
     // Record every intersecting method so the interference relation is complete.
-    // We must NOT early-out when the new method is a strict subtype of an
-    // `oldmethod` that dominates its dispatch (empty interference set): stopping
-    // the scan there would omit the new method's other intersecting pairs, and
-    // `morespecific` is not monotone under subtyping (strict-subtype implies
-    // morespecific, but the supertype's specificity relations do not transfer to
-    // the subtype and can even reverse), so a dominated-looking supertype can
-    // still hide intersections that must be recorded. `typemap_slurp_search`
-    // below is only the shared `Type{Union{}}` (exclude_typeofbottom) traversal
-    // hint used on the query path too; it does not drop intersecting entries.
     jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldmethod);
     typemap_slurp_search(oldentry, &closure->match);
     return 1;
@@ -3049,21 +3040,8 @@ static int has_key(jl_genericmemory_t *keys, jl_value_t *key)
 }
 
 // Check if m2 is in m1's interferences set, which means !morespecific(m1, m2)
-//
-// Completeness contract: for any two currently-live methods with intersecting
-// signatures, at least one of `method_in_interferences(a, b)` /
-// `method_in_interferences(b, a)` is recorded (both, when they are mutually
-// non-morespecific, i.e. ambiguous), and each present membership implies its
-// `!morespecific` fact. This holds because `jl_method_table_activate` visits
-// every intersecting method when recording (no LATEST_ONLY / dominance
-// early-out). For disjoint pairs neither membership is present.
-//
-// Tolerated staleness: a set may still name methods that have since been
-// deleted, or methods not yet visible in the querying world (a set is populated
-// at insertion and not pruned on deletion). Consumers must filter by world
-// (reinfer.jl checks METHOD_SIG_LATEST_WHICH / primary_world; gf.c filters
-// through find_method_in_matches, which only keeps methods present in the
-// current query's match array).
+// for two methods that were at any point live in the same table at the same time
+// over some type-intersection
 static int method_in_interferences(jl_method_t *m2, jl_method_t *m1)
 {
     return has_key(jl_atomic_load_relaxed(&m1->interferences), (jl_value_t*)m2);
@@ -3081,13 +3059,7 @@ static int find_method_in_matches(jl_array_t *t, jl_method_t *method)
     return -1;
 }
 
-// Whether `target_method` is strictly morespecific than `start_method`, read
-// directly from the recorded interference relation (which is complete for
-// intersecting pairs, see `method_in_interferences`). Exact for intersecting
-// pairs; returns 0 for disjoint pairs (neither membership is recorded), which
-// is the answer the covering/dominance callers want (a disjoint method cannot
-// dominate another).
-static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t *start_method);
+static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t *start_method) JL_CANSAFEPOINT;
 
 // About to remove match `D` from the possible dispatch targets, since it is
 // fully covered by the strictly-morespecific cover(s) `covers` and thus can
@@ -3098,7 +3070,7 @@ static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t 
 // removal is safe, or 0 when such a method exists, meaning the sorted order is
 // not exact over this query (removing `D` would hide the cycle from the SCC
 // pass), which the caller must record as an ambiguity.
-static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t ncovers, jl_array_t *t)
+static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t ncovers, jl_array_t *t) JL_CANSAFEPOINT
 {
     // If D is not strictly morespecific than anything it intersects
     // (METHOD_SIG_NO_LOSERS), it was beating nobody and there is nothing to
@@ -3112,10 +3084,9 @@ static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t
             continue;
         // An S that beats nothing can never strictly beat a cover, so it can
         // never close a directed cycle: whether the covers dominate it is then
-        // irrelevant (the unordered case falls through to safety below anyway).
+        // irrelevant (as a fast-path)
         if (jl_atomic_load_relaxed(&S->dispatch_status) & METHOD_SIG_NO_LOSERS)
             continue;
-        // only consider S that D is strictly morespecific than
         if (!method_morespecific_recorded(D, S))
             continue;
         size_t j;
@@ -3124,12 +3095,12 @@ static int check_dominance_transfer(jl_method_t *D, jl_method_t **covers, size_t
                 break;
         }
         if (j == ncovers) {
-            // No cover dominates S. That is only dangerous when S strictly
-            // beats one of the covers (a directed specificity cycle through
-            // D); if S is merely mutually ambiguous with (or unordered
-            // against) the covers, that ambiguity is recorded on their own
-            // interference edges and remains visible to check_fully_ambiguous
-            // independent of D's removal.
+            // No cover dominates S. Now check if S strictly beats one of the
+            // covers (detecting a directed specificity cycle through D); if
+            // S is merely mutually ambiguous with (or unordered against) the
+            // covers, that ambiguity is recorded on their own interference
+            // edges and remains visible to check_fully_ambiguous independent
+            // of D's removal.
             for (j = 0; j < ncovers; j++) {
                 if (method_morespecific_recorded(S, covers[j]))
                     return 0;
@@ -3149,10 +3120,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
 {
     jl_genericmemory_t *interferences = jl_atomic_load_relaxed(&m->interferences);
     // First: is `m` fully covered (dominated over the whole query region `ti`)
-    // by a single recorded strictly-morespecific method? Because recording is
-    // complete, any such method intersects `m` and is morespecific than it, so
-    // `!morespecific(m, it)` was recorded and it is a *direct* member of `m`'s
-    // interference set: a single pass suffices, with no transitive chase.
+    // by a single recorded strictly-morespecific method?
     for (size_t i = 0; i < interferences->length; i++) {
         jl_method_t *m2 = (jl_method_t*)jl_genericmemory_ptr_ref(interferences, i);
         if (m2 == NULL)
@@ -3161,7 +3129,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
         if (idx < 0)
             continue;
         if (method_in_interferences(m, m2))
-            continue; // mutual interference (ambiguous), not a strict cover
+            continue; // ambiguous
         if (visited->items[idx] != (void*)1)
             continue; // not finalized yet (part of the same SCC cycle, handled by ambiguity later, or skipped as part of the minmax group)
         if (jl_subtype(ti, m2->sig)) {
@@ -3196,7 +3164,7 @@ static int check_interferences_covers(jl_method_t *m, jl_value_t *ti, jl_array_t
             continue;
         if (visited->items[idx] != (void*)1 || tainted[idx])
             continue;
-        if (method_in_interferences(m, m2)) // mutual interference (ambiguous)
+        if (method_in_interferences(m, m2)) // ambiguous
             continue;
         covers[ncovers++] = m2;
     }
@@ -3240,25 +3208,17 @@ static int check_fully_ambiguous(jl_method_t *m, jl_value_t *ti, jl_array_t *t, 
     return 0;
 }
 
-// Whether target_method is strictly morespecific than start_method, read
-// directly from the recorded interference relation: target is in start's set
-// (so !morespecific(start, target)) but start is not in target's set (so
-// morespecific(target, start)). Because recording is complete for intersecting
-// pairs, this is exact for them; for disjoint pairs neither membership is
-// present and the result is 0 (a disjoint method dominates nothing), which is
-// what the covering/dominance callers want. The assert documents that contract.
-static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t *start_method)
+// Whether `target_method` is morespecific than `start_method`, and has an type-intersection
+static int method_morespecific_recorded(jl_method_t *target_method, jl_method_t *start_method) JL_CANSAFEPOINT
 {
     if (target_method == start_method)
         return 0;
     int result = method_in_interferences(target_method, start_method) &&
                  !method_in_interferences(start_method, target_method);
-    assert(result == jl_method_morespecific(target_method, start_method) ||
-           jl_has_empty_intersection(target_method->sig, start_method->sig) ||
-           jl_has_empty_intersection(start_method->sig, target_method->sig));
-    // a method recorded as strictly beating something must not carry NO_LOSERS
-    // (the replacement path clears the bit for the recency-tiebreak win it
-    // records over the type-equal method it replaces)
+    //// Expensive cross-check:
+    //assert(result == jl_method_morespecific(target_method, start_method) ||
+    //       jl_has_empty_intersection(target_method->sig, start_method->sig) ||
+    //       jl_has_empty_intersection(start_method->sig, target_method->sig));
     assert(!result || !(jl_atomic_load_relaxed(&target_method->dispatch_status) & METHOD_SIG_NO_LOSERS));
     return result;
 }
@@ -3305,23 +3265,10 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     }
 
     int invalidated = 0;
-    // METHOD_SIG_NO_LOSERS is carried in from the method's current state, not
-    // re-derived: it is set at method creation and monotone-cleared. The scan
-    // below clears it on the first method this one beats; conversely an old
-    // method that is beaten (morespec[j], conservatively including
-    // both-ways-morespecific pairs) loses its bit. The bit must survive
-    // serialization (like the interference sets, and unlike LATEST_WHICH)
-    // because a cache-image batch shares one world: this scan runs against the
-    // prior world and cannot see same-image methods, so their pairs are never
-    // re-derived at load and only the precompile-time state is correct.
     int precompiled_status = jl_atomic_load_relaxed(&method->dispatch_status);
+    // Always set LATEST_WHICH and carry over NO_LOSERS from initialization and accross precompilation
     int dispatch_bits = METHOD_SIG_LATEST_WHICH | (precompiled_status & METHOD_SIG_NO_LOSERS);
     // Holds the set of all intersecting methods not more specific than this one.
-    // The insertion scan below visits every intersecting method (the
-    // LATEST_ONLY early-out was removed), so the recorded relation is complete:
-    // for any two currently-live methods with intersecting signatures, at least
-    // one of the two memberships is present (see the contract on
-    // `method_in_interferences`).
     interferences = (jl_genericmemory_t*)jl_atomic_load_relaxed(&method->interferences);
     if (oldvalue) {
         assert(n > 0);
@@ -3333,15 +3280,12 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             // This is an optimized version of below, given we know the type-intersection is exact
             jl_method_table_invalidate(m, max_world);
             // The replacement strictly beats the replaced method (the recency
-            // tiebreak in `jl_method_morespecific` for type-equal signatures,
-            // recorded below), so it always has at least that one strict loser.
-            // NO_LOSERS cannot be inherited: type-equal does not imply
-            // morespecific-equal, so the predecessor's relations do not
-            // transfer.
+            // tiebreak in `jl_method_morespecific` for type-equal signatures).
             dispatch_bits &= ~METHOD_SIG_NO_LOSERS;
             // Clear METHOD_SIG_LATEST_WHICH bit
             jl_atomic_store_relaxed(&m->dispatch_status, 0);
             // Take over the interference list from the replaced method
+            // (TODO: we should consider recomputing it instead, since type-equal doesn't imply more-specific-equal)
             jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
             if (interferences->length == 0) {
                 interferences = jl_genericmemory_copy(m_interferences);
@@ -3360,20 +3304,13 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             jl_gc_write_atomic(m, m->interferences, jl_genericmemory_t, m_interferences, release);
             for (j = 0; j < n; j++) {
                 jl_method_t *m2 = d[j];
-                if (m2 && method_in_interferences(m, m2)) {
+                if (!m2 || m == m2)
+                    continue;
+                if (method_in_interferences(m, m2)) {
                     jl_genericmemory_t *m2_interferences = jl_atomic_load_relaxed(&m2->interferences);
                     ssize_t idx;
                     m2_interferences = jl_idset_put_key(m2_interferences, (jl_value_t*)method, &idx);
                     jl_gc_write_atomic(m2, m2->interferences, jl_genericmemory_t, m2_interferences, release);
-                }
-                if (m2 && m2 != m) {
-                    // Recompute the partner's NO_LOSERS against the
-                    // replacement's own signature: type-equal does not imply
-                    // morespecific-equal, so `morespecific(m2, method)` may
-                    // hold where `morespecific(m2, m)` did not.
-                    int m2_dispatch = jl_atomic_load_relaxed(&m2->dispatch_status);
-                    if ((m2_dispatch & METHOD_SIG_NO_LOSERS) && jl_type_morespecific(m2->sig, type))
-                        jl_atomic_store_relaxed(&m2->dispatch_status, m2_dispatch & ~METHOD_SIG_NO_LOSERS);
                 }
             }
             loctag = jl_atomic_load_relaxed(&m->specializations); // use loctag for a gcroot
@@ -5162,13 +5099,6 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     if (closure->match.max_valid > max_world)
         closure->match.max_valid = max_world;
     jl_method_t *meth = ml->func.method;
-    // An empty interference set means this method is strictly morespecific
-    // than every method it intersects, and hence than every other candidate
-    // for this query. Such a method always survives into the final result
-    // (nothing can cover a method that beats every intersecting method), and
-    // when it also fully covers the query it is the unique result, so the rest
-    // of the search can be skipped. Interference sets only grow, so emptiness
-    // now implies emptiness in the query's world.
     int only = jl_atomic_load_relaxed(&meth->interferences)->length == 0;
     if (closure->lim >= 0 && only) {
         if (closure->lim == 0) {
@@ -5210,6 +5140,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 //  * `t`: the array of vertexes (method matches)
 //  * `idx`: the next vertex to add to the output
 //  * `visited`: the state of the algorithm for each vertex in `t`: either 1 if we visited it already or 1+depth if we are visiting it now
+//  * `tainted`: TBD
 //  * `stack`: the state of the algorithm for the current vertex (up to length equal to `t`): the list of all vertexes currently in the depth-first path or in the current SCC
 //  * `result`: the output of the algorithm, a sorted list of vertexes (up to length `lim`)
 //  * `lim`: either -1 for unlimited matches, or the maximum length for `result` before returning failure (return -1).
@@ -5500,9 +5431,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, char 
 // Sort the intersecting matches in `t` (a Vector{Any} of MethodMatch, as
 // collected for a single query type) into dispatch order, removing every match
 // that can never be the dispatch target over its intersection with the query
-// (being fully covered by more specific methods), and setting *has_ambiguity
-// if the sorted order of the remaining matches is not exact (some of them are
-// ambiguous with each other over part of the query). When `approximate_ambig`
+// (being fully covered by more specific methods). When `approximate_ambig`
 // is set, the caller does not need *has_ambiguity computed accurately and it
 // is pessimistically set to 1 without attempting to prove otherwise.
 // Returns the new length of `t`, or -1 if `lim` was exceeded (in which case
@@ -5530,14 +5459,8 @@ static ssize_t sort_method_matches(jl_array_t *t, int lim, int include_ambiguous
                 jl_method_t *m = matc->method;
                 // A fully-covering match with an empty interference set is
                 // strictly morespecific than every method it intersects
-                // (recording is complete), and every other match intersects it
-                // (through the query type it covers): it is the unique
-                // dispatch winner over the whole query, every other match can
-                // be dropped with `m` itself as the dominating cover, and no
-                // ambiguity can involve it. Since interference sets only ever
-                // grow, emptiness now implies emptiness in the query's world.
-                // (Two such matches cannot coexist: they would intersect, so
-                // one of the two memberships would be recorded.)
+                // meaning it is already proven to be the `minmax` choice
+                // without exploring the list any further
                 if (jl_atomic_load_relaxed(&m->interferences)->length == 0) {
                     minmax = matc;
                     minmax_dominates = 1;

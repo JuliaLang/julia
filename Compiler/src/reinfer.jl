@@ -417,14 +417,8 @@ function method_in_interferences(method2::Method, method1::Method)
     return false
 end
 
-# Whether method1 is strictly more specific than method2, read directly from the
-# recorded interference relation: method1 is in method2's set (so
-# !morespecific(method2, method1)) and method2 is not in method1's set (so
-# morespecific(method1, method2)). Because recording is complete for
-# intersecting pairs this is exact for them; for disjoint pairs neither
-# membership is recorded and it returns false (a disjoint method dominates
-# nothing), which is what the caller wants.
-# slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{} || typeintersect(method2.sig, method1.sig) === Union{}
+# Check if method1 is more specific than method2 via the interference graph
+# equivalent to: ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{}
 function method_morespecific_recorded(method1::Method, method2::Method)
     method1 === method2 && return false
     return method_in_interferences(method1, method2) && !method_in_interferences(method2, method1)
@@ -471,10 +465,8 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                         return minworld, maxworld
                     end
                 end
-                # Fast path is legal when fully_covers=true. An empty interference
-                # set means the method is strictly morespecific than every method
-                # it intersects, so it dominates its sig in every world it exists.
-                if fully_covers && isempty(meth.interferences)
+                # Fast path is legal when fully_covers=true
+                if fully_covers && !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
                     minworld = meth.primary_world
                     @assert minworld ≤ world "expected method not present in verification world"
                     maxworld = typemax(UInt)
@@ -602,11 +594,11 @@ end
 # fast-path dispatch_status bit definitions (false indicates unknown)
 # true indicates this method would be returned as the result from `which` when invoking `method.sig` in the current latest world
 const METHOD_SIG_LATEST_WHICH = 0x1
-# MethodInstance-level: true indicates dispatch of this mi's specTypes yields only this
-# result in the current latest world (the Method-level equivalent is `isempty(method.interferences)`)
+# true indicates this method would be returned as the only result from `methods` when calling `method_instance.specTypes` in the current latest world
+# it is equivalently tracked as `isempty(interferences)` on a `method`
 const METHOD_SIG_LATEST_ONLY = 0x2
-# Method-level: true indicates this method is not strictly morespecific than any method it
-# intersects, in any world (monotone-cleared at insertion of a method this one beats)
+# true indicates this method is not strictly morespecific than any method it intersects
+# (equivalently, that this method is not in the interference set of any other method without also being in this methods interference set too).
 const METHOD_SIG_NO_LOSERS = 0x4
 
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any})

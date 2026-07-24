@@ -818,23 +818,13 @@ typedef union {
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
 
-// dispatch_status bits. LATEST_WHICH and NO_LOSERS are used on Method.
-// LATEST_ONLY is used only on MethodInstance (dispatch of this mi's exact
-// specTypes yields only this result); the corresponding Method-level fact is
-// the method's `interferences` set being empty, which needs no separate bit.
-// NO_LOSERS: this method is not strictly morespecific than any method it
-// intersects (its strict out-neighborhood is empty, the opposite pole from an
-// empty interference set, which means it beats everything it intersects).
-// Set when the method is created and cleared - never re-set - when an
-// insertion scan finds a method it beats, so a set bit is valid for a query
-// at any world. It cannot be read from the method's own interference set,
-// which records only the methods it does NOT beat, and (like that set, but
-// unlike LATEST_WHICH) it survives incremental serialization, because the
-// activation scan at load cannot see same-image methods and so cannot
-// re-derive it. A type-equal replacement does not inherit the bit: it records
-// a recency-tiebreak win over the method it replaces (so it always has that
-// strict loser), and type-equal does not imply morespecific-equal, so the
-// predecessor's relations do not transfer.
+// dispatch_status bits.
+// - LATEST_WHICH: invoke of this mi's exact specTypes yields exactly this result.
+// - LATEST_ONLY: dispatch of this mi's exact specTypes yields only this result);
+//   the corresponding Method-level fact is the method's `interferences` set being empty.
+// - NO_LOSERS: this method is not strictly morespecific than any method it
+//   intersects (its strict out-neighborhood is empty, the opposite pole from an
+//   empty interference set, which means it beats everything it intersects).
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
 #define METHOD_SIG_NO_LOSERS                0b0100
