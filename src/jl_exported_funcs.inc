@@ -378,6 +378,7 @@
     XX(jl_profile_init) \
     XX(jl_profile_is_running) \
     XX(jl_profile_len_data) \
+    XX(jl_profile_suspend_failures) \
     XX(jl_profile_maxlen_data) \
     XX(jl_profile_start_timer) \
     XX(jl_profile_stop_timer) \

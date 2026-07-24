@@ -990,6 +990,15 @@ static void do_critical_profile(void)
     }
 }
 
+// Count of sampling rounds abandoned because a thread could not be suspended
+// (see do_profile); read from Julia with jl_profile_suspend_failures.
+static _Atomic(uint64_t) profile_suspend_failures = 0;
+
+JL_DLLEXPORT uint64_t jl_profile_suspend_failures(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&profile_suspend_failures);
+}
+
 static void do_profile(void) JL_NOTSAFEPOINT
 {
     bt_context_t signal_context;
@@ -1007,8 +1016,13 @@ static void do_profile(void) JL_NOTSAFEPOINT
             return;
         }
         // notify thread to stop
-        if (!jl_thread_suspend(tid, &signal_context))
+        if (!jl_thread_suspend(tid, &signal_context)) {
+            // A thread that cannot be suspended costs the whole round, so
+            // count it: an empty profile buffer is otherwise indistinguishable
+            // from a workload that never ran.
+            jl_atomic_fetch_add_relaxed(&profile_suspend_failures, 1);
             return;
+        }
         // unwinding can fail, so keep track of the current state
         // and restore from the SEGV handler if anything happens.
         jl_jmp_buf *old_buf = jl_get_safe_restore();

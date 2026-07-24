@@ -105,6 +105,12 @@ for options in ((format=:tree, C=true),
     iobuf = IOBuffer()
     Profile.print(iobuf; options...)
     str = String(take!(iobuf))
+    if isempty(str)
+        # an empty buffer means no sample was ever collected; report whether
+        # sampling rounds were being abandoned because a thread (e.g. an
+        # adopted one) could not be suspended
+        @error "empty profile" options len_data=Profile.len_data() nthreads=Threads.maxthreadid() suspend_failures=ccall(:jl_profile_suspend_failures, UInt64, ())
+    end
     @test !isempty(str)
     file, _ = mktemp()
     Profile.print(file; options...)
