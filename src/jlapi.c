@@ -40,16 +40,6 @@ extern "C" {
 #define FE_TOWARDZERO 0xc00
 #endif
 
-static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir);
-
-/**
- * @brief Check if Julia is already initialized.
- *
- * Determine if Julia has been previously initialized via `jl_init` or
- * `jl_init_with_image_file` or `jl_init_with_image_handle`.
- *
- * @return Returns 1 if Julia is initialized, 0 otherwise.
- */
 JL_DLLEXPORT int jl_is_initialized(void)
 {
     return jl_main_module != NULL;
