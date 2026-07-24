@@ -152,6 +152,7 @@ function _eval_dot(world::UInt, mod, ex::SyntaxTree)
     if kind(ex) === K"inert"
         ex = ex[1]
     end
+    kind(ex) === K"Value" && return ex.value
     kind(ex) in KSet"Identifier Symbol" && mod isa Module ?
         _invoke_in_world(world, getproperty, mod, Symbol(syntax_name(ex))) :
         nothing
