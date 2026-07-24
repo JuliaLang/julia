@@ -127,21 +127,23 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
         gc_alloc_map_set(meta->data, 1);
         goto exit;
     }
-    // must map a new set of pages
-    char *data = jl_gc_try_alloc_pages();
-    meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
-    for (int i = 0; i < block_pg_cnt; i++) {
-        jl_gc_pagemeta_t *pg = &meta[i];
-        pg->data = data + GC_PAGE_SZ * i;
-        gc_alloc_map_maybe_create(pg->data);
-        if (i == 0) {
-            gc_alloc_map_set(pg->data, 1);
+    {
+        // must map a new set of pages
+        char *data = jl_gc_try_alloc_pages();
+        meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
+        for (int i = 0; i < block_pg_cnt; i++) {
+            jl_gc_pagemeta_t *pg = &meta[i];
+            pg->data = data + GC_PAGE_SZ * i;
+            gc_alloc_map_maybe_create(pg->data);
+            if (i == 0) {
+                gc_alloc_map_set(pg->data, 1);
+            }
+            else {
+                push_lf_page_metadata_back(&global_page_pool_clean, pg);
+            }
         }
-        else {
-            push_lf_page_metadata_back(&global_page_pool_clean, pg);
-        }
+        uv_mutex_unlock(&gc_perm_lock);
     }
-    uv_mutex_unlock(&gc_perm_lock);
 exit:
 #ifdef _OS_WINDOWS_
     VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
