@@ -218,8 +218,14 @@ number of effective CPU threads.
 Unlike [`JULIA_NUM_PRECOMPILE_TASKS`](@ref JULIA_NUM_PRECOMPILE_TASKS) (which caps
 worker *processes*) and [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) (which
 pins a *per-worker* thread count), this is the shared total. Setting
-`JULIA_IMAGE_THREADS` bypasses the budget, so `JULIA_PRECOMPILE_THREADS` then has
-no effect.
+`JULIA_IMAGE_THREADS` alone bypasses the budget, but if `JULIA_PRECOMPILE_THREADS`
+is also set, it takes precedence and the shared budget is used instead. For example:
+
+  * neither set: budget = `EFFECTIVE_CPU_THREADS + 1`
+  * `JULIA_PRECOMPILE_THREADS=8`: budget = 8
+  * `JULIA_IMAGE_THREADS=4`: no shared budget; every worker is pinned to 4 threads
+  * `JULIA_IMAGE_THREADS=4` and `JULIA_PRECOMPILE_THREADS=8`: budget = 8
+    (`JULIA_IMAGE_THREADS` is ignored)
 
 ### [`JULIA_PKG_DEVDIR`](@id JULIA_PKG_DEVDIR)
 
@@ -407,7 +413,9 @@ During parallel package precompilation, workers instead coordinate their CPU
 usage through a shared token pool sized by
 [`JULIA_PRECOMPILE_THREADS`](@ref JULIA_PRECOMPILE_THREADS), so their combined
 thread count stays bounded. Setting `JULIA_IMAGE_THREADS` overrides that
-coordination and pins the given codegen-thread count for every worker.
+coordination and pins the given codegen-thread count for every worker, unless
+`JULIA_PRECOMPILE_THREADS` is also set, in which case the shared budget takes
+precedence and `JULIA_IMAGE_THREADS` is ignored.
 
 ### [`JULIA_IMAGE_TIMINGS`](@id JULIA_IMAGE_TIMINGS)
 
