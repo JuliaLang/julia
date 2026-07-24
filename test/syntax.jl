@@ -117,6 +117,10 @@ macro test999_str(args...); args; end
 @test_parseerror "."
 @test_parseerror "..."
 
+# Wrapping compound assignments parse as distinct assignment heads.
+@test Meta.parse("x -%= y"; mod=@__MODULE__) == Expr(Symbol("-%="), :x, :y)
+@test Meta.parse("x .-%= y"; mod=@__MODULE__) == Expr(Symbol(".-%="), :x, :y)
+
 # issue #10901
 @test Meta.parse("/([1], 1)[1]") == :(([1] / 1)[1])
 
@@ -979,7 +983,7 @@ end
              Meta.parse("module B
                         using ..x,
                               ..y
-                    end").args[3].args)[1] ==
+                    end").args[end].args)[1] ==
       Expr(:using,
            Expr(:., :., :., :x),
            Expr(:., :., :., :y))
@@ -988,7 +992,7 @@ end
              Meta.parse("module A
                         using .B,
                               .C
-                    end").args[3].args)[1] ==
+                    end").args[end].args)[1] ==
       Expr(:using,
            Expr(:., :., :B),
            Expr(:., :., :C))
@@ -4125,6 +4129,11 @@ module ExtendedIsDefined
         @test !Core.isdefinedglobal(@__MODULE__, :x2, false)
         @test !Core.isdefinedglobal(@__MODULE__, :x3, false)
         @test !Core.isdefinedglobal(@__MODULE__, :x4, false)
+
+        @test Core.isdefinedglobal(@__MODULE__, :x1, true, :monotonic)
+        @test Core.isdefinedglobal(@__MODULE__, :x1, false, :acquire)
+        @test !Core.isdefinedglobal(@__MODULE__, :x2, false, :sequentially_consistent)
+        @test_throws ConcurrencyViolationError Core.isdefinedglobal(@__MODULE__, :x1, true, :not_atomic)
     end
 end
 

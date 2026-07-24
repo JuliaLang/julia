@@ -1630,15 +1630,33 @@ end
 
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
-                         invokelatest_queue::Union{CompilationQueue,Nothing} = nothing)
+                         invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
+                         enqueue_unprepared_invokes::Bool = false)
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
-            edge isa CodeInstance && isdefined(edge, :inferred) &&
-                has_valid_abi_sparams(get_ci_mi(edge)) && push!(workqueue, edge)
+            if edge isa CodeInstance && has_valid_abi_sparams(get_ci_mi(edge)) &&
+                    (enqueue_unprepared_invokes ||
+                     ci_has_invoke(edge) || ci_has_source(workqueue.interp, edge) ||
+                     !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), get_ci_mi(edge), edge)))
+                # The globally-cached check keeps batches closed under invoke
+                # edges even when the edge's source lives only in another
+                # interpreter's codegen cache (activation clears `inferred`,
+                # so `ci_has_source` cannot see it): the drain loops re-infer
+                # such edges, preventing them from silently leaking to
+                # permanent `tojlinvoke` fallbacks at link time. Uncached
+                # speculative edges must NOT be enqueued unconditionally:
+                # resolved invoke edges of recursion that inference widened
+                # (e.g. self-recursion with a growing tuple argument) form an
+                # unbounded chain of fresh signatures, and re-inferring each
+                # one would enqueue the next forever.
+                push!(workqueue, edge)
+            elseif enqueue_unprepared_invokes && edge isa MethodInstance && has_valid_abi_sparams(edge)
+                push!(workqueue, edge)
+            end
         end
 
         invokelatest_queue === nothing && continue
@@ -1705,6 +1723,12 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
             markinspected!(workqueue, callee)
             continue
         end
+        let cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
+            if cached !== callee
+                markinspected!(workqueue, callee)
+                continue
+            end
+        end
         src = ci_get_source(interp, callee)
         if !isa(src, CodeInfo)
             newcallee = typeinf_ext(workqueue.interp, callee.def, source_mode) # always SOURCE_MODE_ABI
@@ -1722,14 +1746,15 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         sptypes = sptypes_from_meth_instance(mi)
         collectinvokes!(workqueue, src, sptypes)
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-            cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
-            if cached === callee
-                # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
-                code_cache(workqueue.interp)[mi] = callee
-            else
-                # use an existing CI from the cache, if there is available one that is compatible
-                callee === ci && (ci = cached)
-                callee = cached
+            let cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, 0x0)::CodeInstance
+                if cached === callee
+                    # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
+                    code_cache(workqueue.interp)[mi] = callee
+                else
+                    # use an existing CI from the cache, if there is available one that is compatible
+                    callee === ci && (ci = cached)
+                    callee = cached
+                end
             end
         end
         push!(codeinsts, callee)
@@ -1755,6 +1780,7 @@ end
 
 function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
     invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
+    enqueue_unprepared_invokes::Bool = false,
 )
     interp = workqueue.interp
     world = get_inference_world(interp)
@@ -1813,15 +1839,17 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             markinspected!(workqueue, callee)
             if src isa CodeInfo
                 sptypes = sptypes_from_meth_instance(mi)
-                collectinvokes!(workqueue, src, sptypes; invokelatest_queue)
+                collectinvokes!(workqueue, src, sptypes; invokelatest_queue,
+                                enqueue_unprepared_invokes)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-                    cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, world)::CodeInstance
-                    if cached === callee
-                        code_cache(interp)[mi] = callee
-                    else
-                        # Use an existing CI from the cache, if there is available one that is compatible
-                        callee = cached
+                    let cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, 0x0)::CodeInstance
+                        if cached === callee
+                            code_cache(interp)[mi] = callee
+                        else
+                            # Use an existing CI from the cache, if there is available one that is compatible
+                            callee = cached
+                        end
                     end
                 end
                 push!(codeinfos, callee)
@@ -1839,7 +1867,10 @@ const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
 function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
-    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
+    # back to `nothing` at serialization time (see `src/staticdata.c`).
+    cache_owner = trim_mode == TRIM_NO ? nothing : :trim
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO, cache_owner)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative
     # invokelatest calls such as from `Core.finalizer` and `ccallable`
@@ -1855,19 +1886,84 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         )
 
         append!(workqueue, methods)
-        compile!(codeinfos, workqueue; invokelatest_queue)
+        compile!(codeinfos, workqueue; invokelatest_queue,
+                 enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 
     if invokelatest_queue !== nothing
         # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
         # (it will enqueue into itself and immediately drain)
-        compile!(codeinfos, invokelatest_queue; invokelatest_queue)
+        compile!(codeinfos, invokelatest_queue; invokelatest_queue,
+                 enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
         verify_typeinf_trim(codeinfos, trim_mode == TRIM_UNSAFE_WARN)
     end
-    return codeinfos
+
+    # Build the ordered list of CodeInstances to store in the image's method
+    # caches. This is kept as its own array (rather than being recovered from
+    # `codeinfos` by the caller) so the set and ordering of cached entries can be
+    # chosen independently of what native code gets emitted. The linked list of
+    # each MethodInstance's cache is rebuilt from this order during serialization
+    # (see jl_rewrite_mi_caches in staticdata.c).
+    #
+    # First the compiled entries, in compilation order: every entry paired with a
+    # CodeInfo in `codeinfos` is inferred and about to be compiled, so it lands in
+    # the single invoke+inferred group that jl_mi_cache_insert (gf.c) keeps at the
+    # front, and the compilation order already lists higher-`max_world` entries
+    # first (worlds are processed newest-first).
+    cis = Any[]
+    seen = IdSet{CodeInstance}()
+    for i = 1:length(codeinfos)
+        item = codeinfos[i]
+        if item isa CodeInstance && !(item in seen)
+            push!(seen, item)
+            push!(cis, item)
+        end
+    end
+
+    # Then walk each CodeInstance's forward `edges` recursively and append every
+    # reachable CodeInstance. These callees are inferred but were not compiled
+    # (no `invoke` assigned), so appending them after the compiled entries places
+    # them in gf.c's inferred (post-invoke) group within each MethodInstance's
+    # cache. Preserving them keeps the inference results callers depend on from
+    # being dropped by the cache-clearing pass in staticdata.c. `cis` doubles as
+    # the worklist, so edges discovered from appended entries are visited too.
+    #
+    # Skip under `--trim` where inferred-but-not-compiled entries are not useful
+    # at runtime without a Compiler / JIT.
+    if trim_mode == TRIM_NO
+        i = 1
+        while i <= length(cis)
+            ci = cis[i]::CodeInstance
+            if isdefined(ci, :edges)
+                edges = ci.edges
+                for j = 1:length(edges)
+                    isassigned(edges, j) || continue
+                    edge = edges[j]
+                    if edge isa CodeInstance && !(edge in seen)
+                        push!(seen, edge)
+                        push!(cis, edge)
+                    end
+                end
+            end
+            i += 1
+        end
+    end
+
+    # Keep cache CodeInstances that represent an existing cache entry: either they are
+    # already linked into their MethodInstance's cache, or jl_get_ci_equiv finds
+    # another equivalent already cached for them.
+    # This hack avoids putting badly inferred edges in the cache, while still trying to populate the cache sufficiently.
+    filter!(cis) do ci
+        ci = ci::CodeInstance
+        mi = get_ci_mi(ci)
+        return !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, ci)) ||
+            ccall(:jl_get_ci_equiv, Any, (Any, UInt), ci, 0x0)::CodeInstance !== ci
+    end
+
+    return Core.svec(codeinfos, cis)
 end
 
 const _verify_trim_world_age = RefValue{UInt}(typemax(UInt))

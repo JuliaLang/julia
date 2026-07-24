@@ -100,6 +100,16 @@ let x = [1 2; 3 4]
 end
 """) == [0 1 ; 3 4]
 
+# Tuple-destructuring updating assignment `x, y += a, b`
+@test JuliaLowering.include_string(@newmod(), """
+struct Vec1; v::Int; end
+Base.:+(a::Tuple{Vec1,Vec1}, b::Tuple{Vec1,Vec1}) = (Vec1(a[1].v+b[1].v), Vec1(a[2].v+b[2].v))
+let x = Vec1(1), y = Vec1(2)
+    x, y += Vec1(3), Vec1(4)
+    (x.v, y.v)
+end
+""") == (4, 6)
+
 @testset "lhs forms" begin
     @test JuliaLowering.include_string(test_mod, """
     mutable struct with_mutable_x; x; end
@@ -453,9 +463,9 @@ end
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), eq)
             @test fl_eval(test_mod, ex) == (1, :semicolon)
-            @test_broken jl_eval(test_mod, ex) == (1, :semicolon)
+            @test jl_eval(test_mod, ex) == (1, :semicolon)
             @test fl_eval(test_mod, outer_ab(ex)) == (1, 0)
-            @test_broken jl_eval(test_mod, outer_ab(ex)) == (1, 0)
+            @test jl_eval(test_mod, outer_ab(ex)) == (1, 0)
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), peq)
             @test_throws "unexpected semicolon" fl_eval(test_mod, ex)
@@ -463,9 +473,9 @@ end
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), kw)
             @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
-            @test_broken jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
             @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-            @test_broken jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
         end
         @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), pkw)
             @test_throws "unexpected semicolon" fl_eval(test_mod, ex)

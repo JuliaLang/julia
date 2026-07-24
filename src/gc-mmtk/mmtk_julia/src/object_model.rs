@@ -327,6 +327,7 @@ pub fn is_small_typeof_tag_with_no_pointer(vtag: usize) -> bool {
         || vtag == ((jl_small_typeof_tags_jl_unionall_tag as usize) << 4)
         || vtag == ((jl_small_typeof_tags_jl_uniontype_tag as usize) << 4)
         || vtag == ((jl_small_typeof_tags_jl_typeeq_tag as usize) << 4)
+        || vtag == ((jl_small_typeof_tags_jl_typeegal_tag as usize) << 4)
         || vtag == ((jl_small_typeof_tags_jl_tvar_tag as usize) << 4)
         || vtag == ((jl_small_typeof_tags_jl_vararg_tag as usize) << 4)
         || vtag == ((jl_small_typeof_tags_jl_globalref_tag as usize) << 4)

@@ -55,7 +55,7 @@ function Threads.foreach(f, channel::Channel;
                 stop[] && break
             end
         catch
-            stop[] = true
+            @atomic stop[] = true
             rethrow()
         end
     end

@@ -767,6 +767,13 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
     return new_argtypes
 end
 
+function has_typeegal_slot(@nospecialize(atype))
+    for p in (atype::DataType).parameters
+        p isa Core.TypeEgal && return true
+    end
+    return false
+end
+
 function compileable_specialization(code::Union{MethodInstance,CodeInstance}, effects::Effects,
     et::InliningEdgeTracker, @nospecialize(info::CallInfo), state::InliningState)
     mi = code isa CodeInstance ? code.def : code
@@ -779,7 +786,6 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
             (_, sparams) = typeintersect_env(new_atype, method.sig)
             mi_invoke = specialize_method(method, new_atype, sparams)
             mi_invoke === nothing && return nothing
-            code = mi_invoke
         end
     else
         # If this caller does not want us to optimize calls to use their
@@ -794,11 +800,19 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     end
     # prefer using a CodeInstance gotten from the cache, since that is where the invoke target should get compiled to normally
     # TODO: can this code be gotten directly from inference sometimes?
-    code = get(code_cache(state), mi_invoke, nothing)
-    code isa InferenceResult && (code = code.ci)
-    if !isa(code, CodeInstance)
-        #println("missing code for ", mi_invoke, " for ", mi)
-        code = mi_invoke
+    # A normalized compileable signature can have a less precise ABI for TypeEgal
+    # arguments, forcing boxed argument passing for non-recursive invokes, so a
+    # directly supplied inferred edge for the actual call signature wins there.
+    keep_direct_edge = code isa CodeInstance && mi !== mi_invoke && has_typeegal_slot(atype)
+    if !keep_direct_edge
+        cached = get(code_cache(state), mi_invoke, nothing)
+        cached isa InferenceResult && (cached = cached.ci)
+        if cached isa CodeInstance
+            code = cached
+        elseif !(code isa CodeInstance && code.def === mi_invoke)
+            #println("missing code for ", mi_invoke, " for ", mi)
+            code = mi_invoke
+        end
     end
     add_inlining_edge!(et, code) # to the code and edges
     return InvokeCase(code, effects, info)
@@ -1723,16 +1737,30 @@ struct SSASubstitute
     arg_replacements::Vector{Any}
     spvals_ssa::Union{Nothing,SSAValue}
     inlined_at::NTuple{3,Int32} # TODO: add a map also, so that ssaidx doesn't need to equal inlined_idx?
+    # lazily-computed `sptypes_from_meth_instance(mi)`, shared across all
+    # marker-sparam substitutions of this inlined item
+    sptypes_cache::RefValue{Union{Nothing,Vector{VarState}}}
+end
+SSASubstitute(mi::MethodInstance, arg_replacements::Vector{Any},
+              spvals_ssa::Union{Nothing,SSAValue}, inlined_at::NTuple{3,Int32}) =
+    SSASubstitute(mi, arg_replacements, spvals_ssa, inlined_at,
+                  RefValue{Union{Nothing,Vector{VarState}}}(nothing))
+
+function cached_sptypes(ssa_substitute::SSASubstitute)
+    sptypes = ssa_substitute.sptypes_cache[]
+    sptypes === nothing || return sptypes
+    return ssa_substitute.sptypes_cache[] = sptypes_from_meth_instance(ssa_substitute.mi)
 end
 
-function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
+function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int,
+                       do_isdefined::Bool, @nospecialize(typ = Any))
     ret = insert_node!(
-        removable_if_unused(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), Any)))
+        removable_if_unused(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), typ)))
     tcheck_not = nothing
     if do_isdefined
-        # The caller handles guaranteed-defined `svec(value, constrained)`
-        # markers before this fallback. At runtime, SimpleVector is the
-        # undefined sentinel for sparams.
+        # The caller handles guaranteed-defined static parameters before this
+        # fallback. At runtime, SimpleVector is the undefined sentinel for
+        # sparams.
         tcheck = insert_node!(
             removable_if_unused(NewInstruction(Expr(:call, Core.isa, ret, Core.SimpleVector), Bool)))
         tcheck_not = insert_node!(
@@ -1758,8 +1786,15 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
                 return quoted(val)
             else
                 flag = subst_inst[:flag]
-                maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && val_uncertain
-                (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef)
+                if isa(val, SimpleVector)
+                    spstate = cached_sptypes(ssa_substitute)[spidx]
+                    maybe_undef = spstate.undef && !has_flag(flag, IR_FLAG_NOTHROW)
+                    typ = spstate.undef ? Any : spstate.typ
+                else
+                    maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && val_uncertain
+                    typ = Any
+                end
+                (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef, typ)
                 if maybe_undef
                     insert_node!(
                         NewInstruction(Expr(:throw_undef_if_not, sp_at_idx(ssa_substitute.mi.def.sig, spidx).name, tcheck_not), Nothing))

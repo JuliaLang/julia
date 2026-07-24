@@ -300,6 +300,20 @@ end
     @test JL.include_string(test_mod, "((x=1,y=x,z=x,va...=x)->(x,y,z,va))(2)") == (2,2,2,(2,))
     @test JL.include_string(test_mod, "((x=1,y=x,z=y+x,va...=z+y+x)->(x,y,z,va))()") == (1,1,2,(4,))
     @test JL.include_string(test_mod, "((x=1,y=x,z=y+x,va...=z+y+x)->(x,y,z,va))(2)") == (2,2,4,(8,))
+    # defaults shadowed by later args (resolution should not pick the arg)
+    @test JL.include_string(test_mod, "let x = 1; ((x=x)->(x,))(); end") == (1,)
+    @test JL.include_string(test_mod, "let x = 1; ((x=x)->(x,))(0); end") == (0,)
+    @test JL.include_string(test_mod, "let x = 1; ((x...=x)->(x,))(); end") == ((1,),)
+    @test JL.include_string(test_mod, "let x = 1; ((x...=x)->(x,))(0); end") == ((0,),)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y)->(x,y))(); end") == (2,2,)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y)->(x,y))(0); end") == (0,2,)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y)->(x,y))(0,0); end") == (0,0,)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y...=y)->(x,y))(); end") == (2,(2,),)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y...=y)->(x,y))(0); end") == (0,(2,),)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y...=y)->(x,y))(0,0); end") == (0,(0,),)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y,z=y)->(x,y,z))(); end") == (2,2,2)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y,z=y)->(x,y,z))(0); end") == (0,2,2)
+    @test JL.include_string(test_mod, "let y = 2; ((x=y,y=y,z=y)->(x,y,z))(0,0); end") == (0,0,0)
     # defaults containing previous sparams
     @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))()") == (1, Int, Int)
     @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))(true)") == (true, Bool, Bool)
@@ -425,7 +439,7 @@ end
     end
     """) == (Complex(1), Complex(2))
 
-    # Both JL and flisp will evaluate the sparam bound multiple times
+    # flisp will evaluate the sparam bound multiple times
     let res = JuliaLowering.include_string(test_mod, """
         let eval_spbounds_counter = 0
             global function f_optarg_eval_spbounds_counter(
@@ -436,8 +450,7 @@ end
             f_optarg_eval_spbounds_counter(Complex(1))
         end
         """)
-        @test res == (Complex(1), 4)
-        @test_broken res == (Complex(1), 1)
+        @test res == (Complex(1), 1)
     end
 end
 
@@ -636,10 +649,7 @@ end
     @testset for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
         arg1 in [arg0, Expr(:..., arg0)],
         arg2 in [arg1, Expr(:kw, arg1, :Int)],
-        expander in [fl_macroexpand, (_,x)->x]
-        # TODO: would use jl_macroexpand, but that cannot be done as a separate
-        # step due to MacroExpansionContext, and we must use jl_eval.
-        @test_broken false
+        expander in [fl_macroexpand, jl_macroexpand]
 
         @testset let expanded = expander(
             test_mod, :(function (specialized, @nospecialize($arg2))
@@ -1118,7 +1128,6 @@ end
                  (Vector{Int}, 2, [10]), (Vector{Int}, 2, [1]))
     end
 
-
     @testset "destructured args" begin
         @test JL.include_string(
             test_mod, "(function ((d1,d2);kw); [d1,d2,kw]; end)((1,2);kw=3)") == [1,2,3]
@@ -1136,6 +1145,46 @@ end
         @test JL.include_string(
             test_mod, "(function ((d1,d2);kw1=1,kw2=kw1); [d1,d2,kw1,kw2]; end)((1,2);kw1=9,kw2=10)") == [1,2,9,10]
     end
+end
+
+# Brittle test, needs fixing if kw_body naming or kwarg implementation changes
+@testset "(AI) kw function helper is declared in the correct module" begin
+    # Extending another module's keyword function with a new keyword method must
+    # reserve the hidden `#kw_body#...` global in the *extending* module (the
+    # call/eval site), never in the extended function's home module -- reserving
+    # it in a foreign (possibly precompiled/closed) module breaks incremental
+    # compilation.  This is most easily broken when the method name arrives as an
+    # interpolated `GlobalRef` *value* (the StatsBase/TracedSample shape), whose
+    # `:mod` attribute would otherwise steer the reservation to the owner module.
+    kwbodies(m) = filter(s -> occursin("kw_body", String(s)), names(m; all=true))
+
+    # (a) interpolated `GlobalRef` value as the method name (the regressing case)
+    OwnerA = Module()
+    JL.include_string(OwnerA, "sample(x; y=1) = x + y")
+    a_before = Set(kwbodies(OwnerA))
+    ExtA = Module()
+    @eval ExtA const OwnerA = $OwnerA
+    JL.include_string(ExtA, """
+        let fn = GlobalRef(OwnerA, :sample)
+            @eval \$fn(x::Symbol; y=1) = y
+        end
+    """)
+    @test isempty(setdiff(Set(kwbodies(OwnerA)), a_before))  # no new global in owner
+    @test !isempty(kwbodies(ExtA))                           # reserved in extender
+    @test OwnerA.sample(3; y=10) == 13                       # original method intact
+    @test OwnerA.sample(:s; y=7) == 7                        # new method dispatches
+    @test OwnerA.sample(:s) == 1                             # ...with its own default
+
+    # (b) syntactic dotted name reaches the same conclusion (guards the common path)
+    OwnerB = Module()
+    JL.include_string(OwnerB, "sample(x; y=1) = x + y")
+    b_before = Set(kwbodies(OwnerB))
+    ExtB = Module()
+    @eval ExtB const OwnerB = $OwnerB
+    JL.include_string(ExtB, "function OwnerB.sample(x::Symbol; y=1); y; end")
+    @test isempty(setdiff(Set(kwbodies(OwnerB)), b_before))
+    @test !isempty(kwbodies(ExtB))
+    @test OwnerB.sample(:s; y=7) == 7
 end
 
 @testset "pre-desugared arg::Vararg" begin
@@ -1174,6 +1223,112 @@ end
         f_vararg_nosplat((1,2),(3,),(4,))
     end
     """) == ((1, 2), (3,), (4,))
+
+    @testset "(AI) in keyword functions" begin
+        # A trailing positional `Vararg{T,N}` written with an explicit `::Vararg`
+        # annotation (rather than `...`) must still be splatted when the keyword
+        # wrappers forward it to the body method.  The zero-keyword path (defaulting
+        # sorter), the explicit-keyword path, and splatted keywords must all work,
+        # and `N` may be referenced in the signature and body.
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_N_kws(y::Integer, args::Vararg{Integer,N}; kwargs...) where {N}
+            (y, args, N, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_N_kws(1, 2, 3) === (1, (2, 3), 2, Base.pairs(NamedTuple()))
+        let r = test_mod.f_vararg_N_kws(1, 2, 3; foo=1)
+            @test (r[1], r[2], r[3]) === (1, (2, 3), 2)
+            @test r[4][:foo] == 1
+        end
+        let ekw = (a=1, b=2), r = test_mod.f_vararg_N_kws(1, 2; ekw...)
+            @test (r[1], r[2], r[3]) === (1, (2,), 1)
+            @test (r[4][:a], r[4][:b]) == (1, 2)
+        end
+
+        # `N` used as a keyword default (exercises the sorter/body kw forwarding too).
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_N_kwdefault(y::Integer, args::Vararg{Integer,N}; scale::Int=N) where {N}
+            (y, args, scale)
+        end
+        """)
+        @test test_mod.f_vararg_N_kwdefault(1, 2, 3) === (1, (2, 3), 2)
+        @test test_mod.f_vararg_N_kwdefault(1, 2, 3; scale=10) === (1, (2, 3), 10)
+
+        # `Vararg{T}` with no count, and a bare `Vararg`, plus `Vararg` on an
+        # anonymous (unnamed) positional argument.
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_T_kws(y, args::Vararg{Integer}; kwargs...)
+            (y, args, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_T_kws(1, 2, 3) === (1, (2, 3), Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_T_kws(1, 2, 3; foo=1)[3][:foo] == 1
+
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_bare_kws(y, args::Vararg; kwargs...)
+            (y, args, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_bare_kws(1, 2, 3) === (1, (2, 3), Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_bare_kws(1; z=9)[3][:z] == 9
+
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_anon_kws(y, ::Vararg{Integer,N}; kwargs...) where {N}
+            (y, N, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_anon_kws(1, 2, 3) === (1, 2, Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_anon_kws(1, 2, 3; k=1)[3][:k] == 1
+
+        # Equivalent `args::T...` and plain `args...` forms with kwargs (already
+        # handled, covered here for parity).
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_dots_typed_kws(y, args::Integer...; kwargs...)
+            (y, args, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_dots_typed_kws(1, 2, 3) === (1, (2, 3), Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_dots_typed_kws(1, 2, 3; foo=1)[3][:foo] == 1
+
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_dots_kws(y, args...; kwargs...)
+            (y, args, kwargs)
+        end
+        """)
+        @test test_mod.f_vararg_dots_kws(1, 2, 3) === (1, (2, 3), Base.pairs(NamedTuple()))
+        @test test_mod.f_vararg_dots_kws(1, 2, 3; foo=1)[3][:foo] == 1
+
+        # Vararg-annotated positional args carrying a default value (`K"kw"`-wrapped
+        # in the AST), both named and anonymous.
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_default_kws(y, args::Vararg{Int,N}=1; k=1) where {N}
+            (y, args, N, k)
+        end
+        """)
+        @test test_mod.f_vararg_default_kws(1, 2, 3) === (1, (2, 3), 2, 1)
+        @test test_mod.f_vararg_default_kws(1, 2, 3; k=9) === (1, (2, 3), 2, 9)
+
+        JuliaLowering.include_string(test_mod, """
+        function f_vararg_anon_default_kws(y, ::Vararg{Int,N}=1; k=1) where {N}
+            (y, N, k)
+        end
+        """)
+        @test test_mod.f_vararg_anon_default_kws(1, 2, 3) === (1, 2, 1)
+        @test test_mod.f_vararg_anon_default_kws(1, 2, 3; k=9) === (1, 2, 9)
+
+        # Callable-type method with a trailing Vararg and keywords (shape from
+        # SerializedElementArrays.jl).
+        JuliaLowering.include_string(test_mod, """
+        struct VKS{T,N}
+            dims::NTuple{N,Int}
+        end
+        function (A::Type{VKS{<:Any,N}})(::UndefInitializer, dims::Vararg{Integer,N}; kw=1) where {N}
+            (N, dims, kw)
+        end
+        """)
+        @test test_mod.VKS{<:Any,2}(undef, 3, 4) === (2, (3, 4), 1)
+        @test test_mod.VKS{<:Any,1}(undef, 7; kw=9) === (1, (7,), 9)
+    end
 end
 
 @testset "all known valid positional argument forms" begin
@@ -1369,6 +1524,28 @@ end
     @test xy(0,0) == (1,9,9,9,2,0,0)
 end
 
+@testset "sparam in keyword default" begin
+    # The keyword default is evaluated in the body method, which carries all
+    # of the function's static parameters
+    @test JL.include_string(test_mod,
+        "f_kwdef_sp(y::T; k=T) where T = (y, k); f_kwdef_sp(1)") == (1, Int)
+    # ... but an sparam unused in the signature is undetermined at dispatch
+    JL.include_string(test_mod, "f_kwdef_sp_undet(y; k=T) where T = (y, k)")
+    @test_throws UndefVarError test_mod.f_kwdef_sp_undet(1)
+end
+
+@testset "anonymous static parameters" begin
+    # `where _` declares a static parameter which can never be referenced
+    @test JL.include_string(test_mod, "f_anon_sp(x) where _ = x; f_anon_sp(42)") == 42
+    @test JL.include_string(
+        test_mod, "f_anon_sp2(x::T) where {T, _} = (x, T); f_anon_sp2(1.5)") == (1.5, Float64)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "f_anon_sp3(x) where {_, _} = x"; expr_compat_mode=true)
+    # Currently allowed (like arguments).  Could error like flisp.
+    @test_throws LoweringError JL.include_string(
+        test_mod, "f_anon_sp3(x) where {_, _} = x") broken=true
+end
+
 @testset "first arg `where`" begin
     @eval test_mod struct A12238{T} end
     Core.@latestworld
@@ -1478,6 +1655,13 @@ end
 end
 
 @testset "Consequences of accepting badly-parsed anonymous forms" begin
+    # kw
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:kw, :a, 1),
+                            Expr(:block, Expr(:tuple, :a))),
+                       )) == (1,)
+
     # empty block
     @test jl_eval(test_mod,
                   Expr(:call,
@@ -1487,7 +1671,7 @@ end
 
     # unwrapped or block-wrapped arg
     @testset for a1 in [:a, Expr(:(::), :a, :Int)],
-        a2 in [a1, Expr(:(=), :a, 0)],
+        a2 in [a1, Expr(:(=), :a, 0), Expr(:kw, :a, 0)],
         wrap_where in [identity, x->Expr(:where, x), x->Expr(:where, Expr(:where, x))]
 
         @test jl_eval(test_mod,
@@ -1583,6 +1767,7 @@ end
 
 @testset "Generated functions" begin; for expr_compat_mode in (false, true)
     local genfunc_s, genfunc_f
+    @eval test_mod import JuliaLowering.@legacy_quote_to_syntax
 
     @testset "returning special syntax forms" begin
         @test JuliaLowering.include_string(test_mod, raw"""
@@ -1699,7 +1884,47 @@ end
         end
         """
         @test (genfunc_f = JL.include_string(test_mod, genfunc_s; expr_compat_mode)) isa Function
-        @test_broken genfunc_f((1,2)) == (1, 2, Tuple{Int, Int}, "gen")
+        @test genfunc_f((1,2)) == (1, 2, Tuple{Int, Int}, "gen")
+    end
+
+    @testset "(AI) destructured args: shapes" begin
+        # A destructured-tuple argument in a fully-`@generated` function whose
+        # body is a `quote`/`Expr(:block)` (not a bare single expression): the
+        # implicit `(names...) = <arg>` prologue must reach the generated code.
+        @test JL.include_string(test_mod, raw"""
+            @generated function fds_named(x, (a, b)); quote a + b end; end
+            fds_named(1, (2, 3))
+        """; expr_compat_mode) == 5
+        # Same, with the generated body built as an explicit `Expr(:block, ...)`.
+        @test JL.include_string(test_mod, raw"""
+            @generated function fds_exprblock(x, (a, b)); Expr(:block, :(a + b)); end
+            fds_exprblock(1, (2, 3))
+        """; expr_compat_mode) == 5
+        # Nested destructuring.
+        @test JL.include_string(test_mod, raw"""
+            @generated function fds_nested(x, (a, (b, c))); quote a + b + c end; end
+            fds_nested(1, (2, (3, 4)))
+        """; expr_compat_mode) == 9
+        # Destructured first argument.
+        @test JL.include_string(test_mod, raw"""
+            @generated function fds_first((a, b)); quote a + b end; end
+            fds_first((2, 3))
+        """; expr_compat_mode) == 5
+        # Positional vararg after a destructured argument.
+        @test JL.include_string(test_mod, raw"""
+            @generated function fds_va((a, b), xs...); quote a + b + length(xs) end; end
+            fds_va((2, 3), 10, 20)
+        """; expr_compat_mode) == 7
+        # Destructured argument alongside keyword arguments.
+        @test JL.include_string(test_mod, raw"""
+            @generated function fds_kw((a, b); k=0); quote a + b + k end; end
+            fds_kw((2, 3); k=10)
+        """; expr_compat_mode) == 15
+        # Multiple destructured args
+        @test JL.include_string(test_mod, raw"""
+            @generated function fds_multi((a, b), (c, d)); quote a + b + c + d end; end
+            fds_multi((1, 2), (3, 4))
+        """; expr_compat_mode) == 10
     end
 
     @testset "keyword args" begin
@@ -1802,12 +2027,126 @@ end
         f_gen_calls_macros(1)
     end
     """; expr_compat_mode) === "foo"
+    @test JuliaLowering.include_string(test_mod, raw"""begin
+        @generated function calls_versioned_macro(::Type{T}, ::Val{i}) where {T, i}
+            i isa Integer || @goto err
+            return i
+            @label err
+            return 0
+        end
+
+        calls_versioned_macro(Tuple{Int}, Val(1))
+    end """; expr_compat_mode) == 1
+
+    @testset "(AI) anonymous args promoted by optional/keyword args" begin
+        # A `@generated` method with >=2 anonymous args (`::T` or `_`) whose
+        # placeholder slots get promoted to `#arg#` identifiers because the
+        # method also has an optional positional or keyword arg used to fail at
+        # first call with "function argument name not unique".
+
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated function g_anon_opt(x,
+                                           ::Val{A}=Val(false),
+                                           ::Val{B}=Val(false)) where {A,B}
+                :( (x, A, B) )
+            end
+            g_anon_opt(1)
+        end
+        """; expr_compat_mode) === (1, false, false)
+
+        # calling the same function at two different type instantiations
+        @test JuliaLowering.include_string(test_mod, raw"""
+            (g_anon_opt(1, Val(:a), Val(:b)), g_anon_opt(2.0, Val(3)))
+        """; expr_compat_mode) === ((1, :a, :b), (2.0, 3, false))
+
+        # 2 anonymous required args forced by an unrelated keyword arg
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated function g_anon_kw(::Val{A}, ::Val{B}; kw=1) where {A,B}
+                :( (A, B, kw) )
+            end
+            g_anon_kw(Val(1), Val(2))
+        end
+        """; expr_compat_mode) === (1, 2, 1)
+        @test JuliaLowering.include_string(test_mod,
+            "g_anon_kw(Val(1), Val(2); kw=5)"; expr_compat_mode) === (1, 2, 5)
+
+        # underscore args (also anonymous), forced by a default
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated function g_anon_underscore(_, _, z=10)
+                :( z )
+            end
+            g_anon_underscore(:a, :b)
+        end
+        """; expr_compat_mode) === 10
+
+        # named + anonymous mix, with the body reading the named arg while the
+        # generator also uses the where-params
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated function g_named_anon(a, ::Val{A}, ::Val{B}=Val(0); k=7) where {A,B}
+                :( (a, A, B, k) )
+            end
+            g_named_anon("hi", Val(1))
+        end
+        """; expr_compat_mode) === ("hi", 1, 0, 7)
+
+        # single anonymous arg (no collision possible) still works with a kwarg
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated function g_one_anon(x, ::Val{A}; k=3) where {A}
+                :( (x, A, k) )
+            end
+            g_one_anon(1, Val(2))
+        end
+        """; expr_compat_mode) === (1, 2, 3)
+
+        # Pathological: a user arg literally named `#arg#` (the promotion name)
+        # must remain a real, body-referenceable slot -- the discriminator is a
+        # metadata tag on promoted anonymous args, not a name match.
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated function g_user_hasharg(var"#arg#", ::Val{A}=Val(0)) where {A}
+                :( (var"#arg#", A) )
+            end
+            g_user_hasharg(5)
+        end
+        """; expr_compat_mode) === (5, 0)
+    end
+
+    @testset "hygiene in generated functions" begin
+        # (AI) A generator whose returned body is a bare macrocall to an
+        # old-style macro that re-wraps `esc`'d fragments in a freshly-built,
+        # unescaped `Expr` (e.g.  `Base.Cartesian.@nif`), referencing the
+        # generated function's own arguments and static parameters. Those
+        # escaped references unwind to the generator's base layer, so the
+        # synthesized argument/sparam names of the staged method must live in
+        # that same layer -- otherwise they resolve as bogus module globals
+        # (`UndefVarError`).
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated function find_first_eq(x, itr::I) where {
+                    N, I <: Tuple{Vararg{Any, N}}
+                }
+                return :(Base.Cartesian.@nif $(N + 1) d -> (x == getfield(itr, d)) d -> (d) d -> (nothing))
+            end
+            (find_first_eq(20, (10, 20, 30)), find_first_eq(99, (10, 20, 30)))
+        end"""; expr_compat_mode) === (2, nothing)
+        @test JuliaLowering.include_string(test_mod, raw"""begin
+            @generated function nif_uses_sparam(x, ::Type{T}) where {T}
+                return :(Base.Cartesian.@nif 2 d -> (x isa T) d -> (T) d -> (nothing))
+            end
+            nif_uses_sparam(1, Int)
+        end"""; expr_compat_mode) === Int
+    end
 end
 
     genfunc_quote_s = """
     begin
         function f_gen_quote_1(::Tuple{T}) where {T}
-            out = :(:x1,first)
+            out = @legacy_quote_to_syntax :(:x1,first)
             if @generated
             else
             end
@@ -1828,7 +2167,7 @@ end
         function f_gen_quote_2(::Tuple{T}) where {T}
             out = nothing
             if @generated
-                :(out = :(:x2,generated))
+                @legacy_quote_to_syntax :(out = @legacy_quote_to_syntax :(:x2,generated))
             else
                 out = (:x2,nongen)
             end
@@ -1850,7 +2189,7 @@ end
             if @generated
             else
             end
-            return :(:x4,after)
+            return @legacy_quote_to_syntax :(:x4,after)
         end
 
         f_gen_quote_3((1,))
@@ -1867,9 +2206,9 @@ end
         function f_gen_interpolate(::Tuple{T}) where {T}
             out = :(:x1,first)
             if @generated
-                out = :($out, generated)
+                out = @legacy_quote_to_syntax :($out, generated)
             else
-                out = :($out, nongen)
+                out = @legacy_quote_to_syntax :($out, nongen)
             end
             return out
         end
@@ -1888,18 +2227,21 @@ end
 
     genfunc_quote_s = raw"""
     begin
-        @eval function f_gen_quote_1(::Tuple{T}) where {T}
+        @eval function f_gen_eval_quote_1(::Tuple{T}) where {T}
             out = $(Expr(:quote, Expr(:call, :+, 1, Expr(:if, Expr(:generated), 1, 2))))
             if @generated
             else
             end
             return out
         end
-        f_gen_quote_1((1,))
+        f_gen_eval_quote_1((1,))
     end
     """
     @test JuliaLowering.include_string(
         test_mod, genfunc_quote_s; expr_compat_mode=true) ==
+            :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=false) ==
             :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
 
     # Test generated function edges to bindings

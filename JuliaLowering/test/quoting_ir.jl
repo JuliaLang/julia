@@ -6,7 +6,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i + ($ x) 1))) %₂)
+3   (call JuliaLowering.interpolate_expr (inert (block (call-i + ($ x) 1))) %₂)
 4   (return %₃)
 
 ########################################
@@ -14,9 +14,7 @@ end
 :($x)
 #---------------------
 1   TestMod.x
-2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree ($ x)) %₂)
-4   (return %₃)
+2   (return %₁)
 
 ########################################
 # Double escape
@@ -28,7 +26,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (quote (block (call-i + ($ ($ x)) 1))))) %₂)
+3   (call JuliaLowering.interpolate_expr (inert (block (quote (block (call-i + ($ ($ x)) 1))))) %₂)
 4   (return %₃)
 
 ########################################
@@ -40,7 +38,7 @@ end
 1   1
 2   (= slot₁/x %₁)
 3   (call core.tuple slot₁/x)
-4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (. A (inert ($ x)))) %₃)
+4   (call JuliaLowering.interpolate_expr (inert (. A (inert ($ x)))) %₃)
 5   (return %₄)
 
 ########################################
@@ -77,10 +75,10 @@ function Base.:(==)() end
 #---------------------
 1   TestMod.Base
 2   (call top.getproperty %₁ :==)
-3   (call core.Typeof %₂)
+3   (call core.TypeEqOf %₂)
 4   (call core.svec %₃)
 5   (call core.svec)
-6   SourceLocation::1:10
+6   SourceLocation::1:1
 7   (call core.svec %₄ %₅ %₆)
 8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read)]

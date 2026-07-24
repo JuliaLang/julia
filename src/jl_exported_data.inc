@@ -129,6 +129,7 @@
     XX(tvar_type, jl_datatype_t*) \
     XX(typeerror_type, jl_datatype_t*) \
     XX(typeeq_type, jl_datatype_t*) \
+    XX(typeegal_type, jl_datatype_t*) \
     XX(typemap_entry_type, jl_datatype_t*) \
     XX(typemap_level_type, jl_datatype_t*) \
     XX(typename_type, jl_datatype_t*) \

@@ -72,6 +72,8 @@ function _register_kinds()
             "locals"
             "thisfunction"
             "overlay"
+            "syntaxquote"
+            "syntaxunquote"
         "END_EXTENSION_KINDS"
 
         # The following kinds are internal to lowering
@@ -93,6 +95,10 @@ function _register_kinds()
             # [K"always_defined" x] is an assertion that variable `x` is assigned before use
             # ('local-def in flisp implementation is K"local" plus K"always_defined"
             "always_defined"
+            # `(relayered_global old::Identifier)` is used to tell scope
+            # resolution that any declaration conflicting with `(global old)`
+            # should fail, even though `old` was never actually declared
+            "relayered_global"
             "_while"
             "_do_while"
             # (_typevar name lb ub).  flisp usually uses 3-long lists for these,
@@ -118,15 +124,25 @@ function _register_kinds()
             # [K"function_type" name]
             # Evaluates to the type of the function or closure with given `name`
             "function_type"
-            # [K"method_defs" name block]
-            # The code in `block` defines methods for generic function `name`
+            # [K"method_defs" name [K"block" typevars...] [K"block" body...]]
+            # The code in `body` defines methods for generic function `name`.
+            # If non-toplevel, all contained methods share a closure type.
+            # `typevars` are assigned-once top-level locals only referenced
+            # inside `K"method"`, but outside of `K"lambda"`, since any
+            # reference inside a lambda should resolve to the lambda's sparam
+            # shadowing it.
             "method_defs"
+            # [K"typevar" name rhs] appears only in method_defs and gets special
+            # scope resolution: a sequence of K"sparam"s are similar to nested
+            # let-blocks, but without introducing a local scope.
+            "typevar"
             "_opaque_closure"
             # The enclosed statements must be executed at top level
             "toplevel_butfirst"
             # like v = val, except that if `v` turns out global (either
             # implicitly or by explicit `global`), it gains an implicit `const`
             "assign_or_constdecl_if_global"
+            "global_if_global"
             "moved_local"
             "label"
             "trycatchelse"

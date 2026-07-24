@@ -575,7 +575,7 @@ function Base.union(A::VersionSpec, B::VersionSpec)
 end
 
 Base.:(==)(A::VersionSpec, B::VersionSpec) = A.ranges == B.ranges
-Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h + (0x2fd2ca6efa023f44 % UInt))
+Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h +% (0x2fd2ca6efa023f44 % UInt))
 
 function Base.print(io::IO, s::VersionSpec)
     isempty(s) && return print(io, _empty_symbol)

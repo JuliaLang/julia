@@ -80,8 +80,30 @@ end
 function kwarg_decl(m::Method, kwtype = nothing)
     if !(m.sig === Tuple || m.sig <: Tuple{Core.Builtin, Vararg}) # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
-        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
+        sig_params = (unwrap_unionall(m.sig)::DataType).parameters
+        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, sig_params...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
+        if kwli === nothing
+            # a compiled keyword sorter is specialized on the dispatch (egality)
+            # spelling of closed type-valued slots, so retry the lookup with
+            # `Type{X}` slots as `Core.TypeEgal{X}`
+            new_params = Any[kwtype, NamedTuple]
+            changed = false
+            for p in sig_params
+                if p isa TypeEq
+                    tp = type_parameter(p)
+                    if tp isa Type && !has_free_typevars(tp)
+                        p = Core.TypeEgal{tp}
+                        changed = true
+                    end
+                end
+                push!(new_params, p)
+            end
+            if changed
+                sig = rewrap_unionall(Tuple{new_params...}, m.sig)
+                kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
+            end
+        end
         if kwli !== nothing
             kwli = kwli::Method
             slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)

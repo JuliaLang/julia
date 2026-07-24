@@ -2,10 +2,8 @@
 
 struct DesugaringContext{Attrs} <: AbstractLoweringContext
     graph::SyntaxGraph{Attrs}
+    layer::ScopeLayer
     bindings::Bindings
-    scope_layers::Vector{ScopeLayer}
-    mod::Module
-    expr_compat_mode::Bool
     ssa_mapping::Dict{Int, IdTag}
     world::UInt
 end
@@ -49,7 +47,7 @@ end
 function contains_unquoted(f::Function, ex::SyntaxTree)
     if f(ex)
         return true
-    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert inert_syntaxtree meta")
+    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert syntaxinert meta")
         return any(contains_unquoted(f, e) for e in children(ex))
     else
         return false
@@ -63,8 +61,8 @@ function is_effect_free(ex)
     k = kind(ex)
     # TODO: metas
     is_literal(k) || is_identifier_like(ex) || k == K"Symbol" ||
-        k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
-        k == K"core" || k == K"Value"
+        k == K"inert" || k == K"syntaxinert" || k == K"top" ||
+        k == K"core" || k == K"Value" || k == K"nothing"
     # flisp also includes `a.b` with simple `a`, but this seems like a bug
     # because this calls the user-defined getproperty?
 end
@@ -83,13 +81,55 @@ function check_no_assignment(exs, msg="misplaced assignment statement in `[ ... 
     end
 end
 
+function new_internal_context(st::SyntaxTree)
+    sc_orig = st.context::SyntaxContext
+    SyntaxContext(
+        ScopeLayer(syntax_module(st), nothing),
+        # macro provenance: could use nothing, but this is easier for consumers
+        sc_orig.unexpanded,
+        # version: internal bindings are only used in syntax we create, so the
+        # version should be the latest one
+        JL_NEW_SYNTAX_VERSION,
+        true)
+end
+
 # Generating a new_local_binding or ssaval should only be done if we can
 # guarantee there's some scope it's declared in, and that it's not declared or
 # used outside of that scope (binding capture is OK).  This is the alternative.
 function newsym(ctx, src::SyntaxTree, name::String; unused=false)
     out = newleaf(ctx, src, unused ? K"Placeholder" : K"Identifier", name)
     hasattr(src, :meta) && setattr!(out, :meta, src.meta)
-    setattr!(out, :scope_layer, new_internal_scope_layer(ctx, ctx.mod).id)
+    setattr!(out, :context, new_internal_context(src))
+end
+
+# In an flisp-compatible expansion, some explicit global declarations (and any
+# initialization in the same expression) are unhygienic; they are declared in
+# the macrocall module (unless wrapped in a top-level form).  This is buggy
+# (references in the same scope don't resolve to it, op-equal assignments don't
+# work, etc.), but compatible.  flisp: `unescape`, `unescape-global-lhs`.  TODO:
+# It would be cleaner to do this in compat.jl.
+function relayer_global_if_unhygienic(ctx, st::SyntaxTree)
+    sc = st.context::SyntaxContext
+    relayered = SyntaxList(st._graph)
+    # TODO: is_base_layer(sc) or sc.layer == ctx.layer?
+    (!is_flisp_compat(sc) || is_base_layer(sc)) && return st, relayered
+    sc2 = escape_layer(sc, true)
+    return _relayer_global_if_unhygienic(relayered, st, sc2), relayered
+end
+function _relayer_global_if_unhygienic(done::SyntaxList, st::SyntaxTree, sc::SyntaxContext)
+    k = kind(st)
+    if k === K"Identifier" && is_flisp_compat(st) && st.context::SyntaxContext !== sc
+        push!(done, st)
+        setattr(st, :context, sc)
+    elseif k === K"::" || k === K"kw"
+        n_done = length(done)
+        lhs = _relayer_global_if_unhygienic(done, st[1], sc)
+        n_done == length(done) ? st : (@ast st._graph st [k lhs st[2]])
+    elseif k === K"tuple" || k === K"parameters"
+        mapchildren(e->_relayer_global_if_unhygienic(done, e, sc), st._graph, st)
+    else
+        st
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -141,7 +181,7 @@ function tuple_to_assignments(ctx, ex, is_const)
         end
         k = kind(r)
         if is_literal(k) || k == K"Symbol" || k == K"inert" ||
-            k == K"inert_syntaxtree" || k == K"top" || k == K"core" ||
+            k == K"syntaxinert" || k == K"top" || k == K"core" ||
             k == K"Value"
             # Effect-free and nothrow right hand sides do not need a temporary
             # (we require nothrow because the order of rhs terms is observable
@@ -633,8 +673,8 @@ function process_indices(sctx::StatementListCtx, arr, idxs)
         is_splat = kind(idx0) == K"..."
         val = replace_beginend(sctx, is_splat ? idx0[1] : idx0,
                                arr, n, splats, n == length(idxs))
-        # TODO: kwarg?
-        idx = !has_splats || is_simple_atom(sctx, val) ? val : emit_assign_tmp(sctx, val)
+        idx = kind(val) === K"kw" || !has_splats || is_simple_atom(sctx, val) ?
+            val : emit_assign_tmp(sctx, val)
         if is_splat
             push!(splats, idx)
         end
@@ -766,7 +806,7 @@ end
 function find_return(ex::SyntaxTree)
     if kind(ex) == K"return"
         return ex
-    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert inert_syntaxtree meta function ->")
+    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert syntaxinert meta function ->")
         for e in children(ex)
             r = find_return(e)
             if !isnothing(r)
@@ -1419,7 +1459,9 @@ function expand_update_operator(ctx, ex)
             lhs = emit_assign_tmp(stmts, ctx, lhs)
         end
     else
-        if kind(lhs) == K"tuple" && contains_ssa_binding(ctx, lhs)
+        if kind(lhs) == K"tuple" && contains_unquoted(
+                e->kind(e) == K"BindingId" && get_binding(ctx, e).is_ssa,
+                lhs)
             # If remove_argument_side_effects needed to replace an expression
             # with an ssavalue, then it can't be updated by assignment
             # (JuliaLang/julia#30062)
@@ -1461,15 +1503,16 @@ end
 
 # Expand condition in, eg, `if` or `while`
 function expand_condition(ctx, ex)
-    isblock = kind(ex) == K"block"
+    isblock = kind(ex) == K"block" && numchildren(ex) >= 1
     test = isblock ? ex[end] : ex
     k = kind(test)
     if k == K"&&" || k == K"||"
         # `||` and `&&` get special lowering so that they compile directly to
         # jumps rather than first computing a bool and then jumping.
         cs = expand_cond_children(ctx, test)
-        @jl_assert length(cs) > 1 ex
-        test = newnode(ctx, test, k, cs)
+        test = isempty(cs) ? (@ast ctx ex (k === K"&&")::K"Bool") :
+            length(cs) == 1 ? (@ast ctx ex cs[1]) :
+            newnode(ctx, test, k, cs)
     else
         test = expand_forms_2(ctx, test)
     end
@@ -1953,8 +1996,10 @@ function expand_dot(ctx, ex)
         # of DOTOP_FLAG? This way, `K"."` will be exclusively used for
         # getproperty.
         [K"." op] -> @ast ctx ex [K"call" "BroadcastFunction"::K"top" op]
+        [K"." l [K"syntaxinert" r]] ->
+            @ast ctx ex [K"call" "getproperty"::K"top" l [K"inert" r]]
         [K"." l r] -> begin
-            @jl_assert is_leaf(r) || kind(r) in KSet"inert inert_syntaxtree" ex
+            @jl_assert is_leaf(r) || kind(r) in KSet"inert syntaxinert" ex
             @ast ctx ex [K"call" "getproperty"::K"top" l r]
         end
     end
@@ -2153,10 +2198,6 @@ end
 function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
     declname = @stm ex begin
         [K"Identifier"] -> ex
-        # TODO: consider removing support for Expr(:global, GlobalRef(...)) and
-        # other Exprs that cannot be produced by the parser (tested by
-        # test/precompile.jl #50538).
-        ([K"Value"], when=ex.value isa GlobalRef) -> ex
         [K"Placeholder"] -> nothing
         ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
             t2 = expand_forms_2(ctx, t)
@@ -2199,7 +2240,18 @@ function expand_decls(ctx, ex)
     @jl_assert declkind in KSet"local global" ex
     stmts = SyntaxList(ctx)
     for c in children(ex)
-        simple = kind(c) in KSet"Identifier :: Value Placeholder"
+        simple = kind(c) in KSet"Identifier :: Placeholder"
+        if declkind === K"global"
+            if kind(c) === K"="
+                (lhs, relayered) = relayer_global_if_unhygienic(ctx, c[1]);
+                !isempty(relayered) && (c = @ast ctx c [K"=" lhs c[2]])
+            elseif simple
+                (c, relayered) = relayer_global_if_unhygienic(ctx, c);
+            end
+            @isdefined(relayered) && for x in relayered
+                push!(stmts, @ast ctx x [K"relayered_global" x])
+            end
+        end
         lhs = @stm c begin
             (_, when=simple) -> c
             [K"=" x _] -> x
@@ -2245,10 +2297,14 @@ function expand_const_decl(ctx, ex)
 
         [K"global" x] -> let decls = SyntaxList(ctx)
             @jl_assert kind(x) === K"=" ex
+            (lhs, relayered) = relayer_global_if_unhygienic(ctx, x[1])
             make_lhs_decls(
-                ctx, decls, K"global", get(ex[1], :meta, nothing), x[1], false)
-            ex2 = @ast ctx ex [K"const" x]
-            @ast ctx ex [K"block" decls... expand_const_decl(ctx, ex2)]
+                ctx, decls, K"global", get(ex[1], :meta, nothing), lhs, false)
+            for x in relayered
+                push!(decls, @ast ctx x [K"relayered_global" x])
+            end
+            x2 = @ast ctx x [K"=" lhs x[2]]
+            @ast ctx ex [K"block" decls... expand_assignment(ctx, x2, true)]
         end
         [K"=" _ _] -> expand_assignment(ctx, ex[1], true)
         # Expr(:const, v) where v is a Symbol or a GlobalRef is an unfortunate
@@ -2261,14 +2317,6 @@ end
 
 #-------------------------------------------------------------------------------
 # Expansion of function definitions
-
-# Expand `where` clause(s) of a function into (typevar_names, typevar_stmts) where
-# - `typevar_names` are the names of the type's type parameters
-# - `typevar_stmts` are a list of statements to define a `TypeVar` for each parameter
-#   name in `typevar_names`, with exactly one per `typevar_name`. Some of these
-#   may already have been emitted.
-# - `new_typevar_stmts` is the list of statements which needs to be emitted
-#   prior to uses of `typevar_names`.
 
 # (where (where x a b) c d) -> (x, [c d a b])
 function flatten_wheres(ex)
@@ -2373,23 +2421,32 @@ function assign_sparams(ctx, tvs)
     out
 end
 
+function method_def_sparams(ctx, src, tvs)
+    out = SyntaxList(ctx)
+    for tv in tvs
+        @jl_assert kind(tv) === K"_typevar" tv
+        push!(out, @ast ctx tv [K"typevar" tv[1] bounds_to_typevar(ctx, tv)])
+    end
+    @ast ctx src [K"block" out...]
+end
+
 # Hack: Normally just (block ex body), but needs special handling due to
 # pre-quoted parts of generated function body, where we need to prepend
 # desugarable AST to macro AST.  Fortunately there are only two places (meta
 # nkw, and destructuring arg assignments) we do this, so handle them manually.
 function prepend_function_body(ctx, body, ex)
     @stm body begin
-        [K"_generated_body" [K"quote" gen] nongen] -> begin
+        [K"_generated_body" [K"syntaxquote" gen] nongen] -> begin
             ex_est = @stm ex begin
                 [K"meta" [K"Symbol"] n] ->
                     @ast ctx ex [K"meta" "nkw"::K"Identifier" n]
-                # TODO: need to handle destructuring arg assignments
-                [K"block" _... [K"nothing"]] ->
-                    newleaf(ctx, ex, K"Value", nothing)
+                # destructured arg assignments
+                [K"block" stmts... [K"nothing"]] ->
+                    @ast ctx ex [K"block" stmts...]
                 _ -> @jl_assert false (ex, "unexpected prepend_function_body")
             end
             @ast ctx body [K"_generated_body"
-                [K"quote" [K"block" ex_est gen]] [K"block" ex nongen]]
+                [K"syntaxquote" [K"block" ex_est gen]] [K"block" ex nongen]]
         end
         _ -> @ast ctx body [K"block" ex body]
     end
@@ -2412,23 +2469,13 @@ function method_def_expr(ctx, src, mtable, sparams, argl, body,
     end
     # Needs to be done per method, not per function (may create ssavalues)
     arg_types = mapsyntax(a->expand_forms_2(ctx, a[2]), argl)
-    @ast ctx src [K"block"
-        # possible TODO: flisp assigns typevars to ssavalues and manually
-        # resolves them here instead of assigning to locals
-        assign_sparams(ctx, sparams)...
-        method_metadata := [K"call"(src) "svec"::K"core"
-            [K"call" "svec"::K"core" arg_types...]
-            [K"call" "svec"::K"core" mapindex(sparams, 1)...]
-            ::K"SourceLocation"(src[1])]
-        [K"method"
-            mtable
-            method_metadata
-            [K"lambda"(body, is_toplevel_thunk=false, toplevel_pure=false)
-                [K"block" mapindex(argl, 1)...]
-                [K"block" mapindex(sparams, 1)...]
-                expand_forms_2(ctx, body)
-                is_core_Any(rett) ? nothing : expand_forms_2(ctx, rett)]]
-        [K"removable" method_metadata]]
+    @ast ctx src [K"method" mtable
+        [K"call" "svec"::K"core" arg_types...]
+        [K"lambda"(body, is_toplevel_thunk=false, toplevel_pure=false)
+            [K"block" mapindex(argl, 1)...]
+            [K"block" mapindex(sparams, 1)...]
+            expand_forms_2(ctx, body)
+            is_core_Any(rett) ? nothing : expand_forms_2(ctx, rett)]]
 end
 
 function _untyped_arg(a)
@@ -2437,36 +2484,47 @@ function _untyped_arg(a)
     @ast a._graph a [K"::" aname "Any"::K"core"]
 end
 
-function _expr_arg_sym(a)
-    @jl_assert kind(a) === K"::" || kind(a) === K"_typevar" a
-    sym = setattr(a[1], :kind, K"Symbol")
-    if kind(a[1]) === K"Placeholder"
-        setattr!(sym, :name_val, UNUSED)
+function _expr_arg_syms(args)
+    out = SyntaxList(args.graph)
+    for (i, a) in enumerate(args)
+        @jl_assert kind(a) === K"::" || kind(a) === K"_typevar" a
+        sym = setattr(a[1], :kind, K"Symbol")
+        if kind(a[1]) === K"Placeholder"
+            setattr!(sym, :name_val, UNUSED)
+        elseif (a[1].context::SyntaxContext).internal && i > 1
+            # we lose context, so deduplicate names (ignoring #self# to be
+            # safe).  HACK: destructured args must match the desugared rhs
+            n = sym.name_val::String
+            contains(n, "destructured") || setattr!(sym, :name_val, n*"#"*string(i))
+        end
+        push!(out, sym)
     end
-    sym
+    out
 end
 
 # The Julia runtime associates the code generator with the non-generated method
 # by adding (meta generated ...) to the non-generated body
+# May need hygiene/provenance adjustments
 function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @jl_assert kind(body) === K"_generated_body" && numchildren(body) == 2 body
     gen_name = let mangled = reserve_module_binding_i(
-        ctx.mod, string("#", kind(mtable) === K"nothing" ? "_" : mtable, "@generator#"))
-        new_global_binding(ctx, src, mangled, ctx.mod)
+        ctx.layer.mod,
+        string("#", kind(mtable) === K"nothing" ? "_" : mtable, "@generator#"))
+        new_global_binding(ctx, src, mangled, ctx.layer.mod)
     end
 
+    sc = src.context::SyntaxContext
     gen_mdef = let arg1_name = newsym(ctx, argl[1], "#self#"),
          gen_argl = SyntaxList(
-            @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
-            @ast(ctx, src, [K"::"
-                # TODO: correct scope layer?
-                "__context__"::K"Identifier"(scope_layer=get(mtable, :scope_layer, 1))
-                MacroContext::K"Value"
-            ]),
-            mapsyntax(_untyped_arg, sparams)...,
+             @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
+             @ast(ctx, src, [K"::"
+                 "__context__"::K"Identifier"(context=sc)
+                 SyntaxContext::K"Value"
+             ]),
+             mapsyntax(_untyped_arg, sparams)...,
              mapsyntax(_untyped_arg, argl)...)
-        @jl_assert kind(body[1]) === K"quote" body
-        gen_body = est_to_dst(expand_quote(ctx, body[1][1]))
+        @jl_assert kind(body[1]) === K"syntaxquote" body
+        gen_body = est_to_dst(expand_syntaxquote(ctx, body[1][1]))
 
         method_def_expr(ctx, src, gen_name, SyntaxList(ctx), gen_argl, gen_body,
                         @ast(ctx, src, "Any"::K"core"))
@@ -2476,7 +2534,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
         nongen_body = @ast ctx body[2] [K"block" [K"meta" "generated"::K"Symbol"
             [K"new"
                 GeneratedFunctionStub::K"Value" # Use stub type from JuliaLowering
-                ctx.expr_compat_mode::K"Value"
+                SyntaxContext(ctx.layer.mod, sc.version)::K"Value"
                 gen_name
                 # Truncate provenance to just the source file range, as this
                 # will live permanently in the IR and we probably don't want
@@ -2484,8 +2542,8 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
                 # (TODO: More truncation. We certainly don't want to store the
                 #  source file either.)
                 sourceref(src)::K"Value"
-                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, argl)...]
-                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, sparams)...]]]
+                [K"call" "svec"::K"core" _expr_arg_syms(argl)...]
+                [K"call" "svec"::K"core" _expr_arg_syms(sparams)...]]]
             body[2]]
         method_def_expr(ctx, src, mtable, sparams, argl, nongen_body, rett)
     end
@@ -2493,7 +2551,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @ast ctx src [K"block"
         [K"global" gen_name]
         [K"function_decl" gen_name]
-        [K"method_defs" gen_name gen_mdef]
+        [K"method_defs" gen_name [K"block"] gen_mdef]
         nongen_mdef]
 end
 
@@ -2506,8 +2564,8 @@ end
 # flisp checks dependencies by searching each additional default for every
 # subexpression of `arg::type` for every non-`passed` `arg` before it.  We only
 # check that static params in `::type` are not referenced in later defaults, and
-# use `(= arg default)` to handle references to `arg`. (possible TODO: it's
-# unclear why flisp doesn't do this; too many slots?)
+# use `(let (= arg default) body)` to handle references to `arg`. (flisp likely
+# does this search to accomplish what we do with scope_nest)
 function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     opt = pos_opt_args(argl)
     opt_decls = mapindex(opt, 1)
@@ -2543,13 +2601,16 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
             # fill-all-defaults case.  note that the final default may be a
             # splat, and doesn't have further args referring to it by name, so
             # we put it directly in the call (see #50563 for some notes)
-            @ast ctx src [K"block"
-                make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1])...
-                [K"call" mapindex(passed, 1)... opt_names[i:end-1]... opt_defaults[end]]]
+            scope_nest(
+                ctx,
+                make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1]),
+                @ast ctx src [K"call" mapindex(passed, 1)...
+                    opt_names[i:end-1]... opt_defaults[end]])
         else
             @ast ctx src [K"block"
                 [K"call" mapindex(passed, 1)... opt_defaults[i]]]
         end
+        # this function and method_def_expr need sp bounds because of this
         push!(methods, method_def_expr(
             ctx, src, mtable, used_typevars(passed, sparams),
             passed, wrapper_body))
@@ -2595,7 +2656,15 @@ function expand_kw_args(ctx, kws)
     return (kw_decls, kw_names, kw_syms, kw_defaults, restkw_list)
 end
 
-function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, pos_va)
+# Assumes `expand_function_arg` has run.  Note that user-supplied
+# "Vararg"::K"Identifier" is assumed to resolve to Core.Vararg
+is_vararg_type_expr(st) = @stm st begin
+    [K"curly" x _...] -> is_vararg_type_expr(x)
+    [K"where" x _...] -> is_vararg_type_expr(x)
+    _ -> kind(st) in KSet"core Identifier" && st.name_val::String == "Vararg"
+end
+
+function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     kws = argl[end]
     pargl = argl[1:end-1]
     @jl_assert kind(kws) === K"parameters" src
@@ -2610,16 +2679,26 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
 
     # Positional names and splatted vararg so we can `(call f forward_pargl...)`
     forward_pargl = let l = mapindex(pos_decls, 1)
+        pos_va = @stm argl[end-1] begin
+            [K"kw" [K"::" _... t] _...] -> is_vararg_type_expr(t)
+            [K"::" _... t] -> is_vararg_type_expr(t)
+            _ -> false
+        end
         pos_va && (l[end] = @ast ctx l[end] [K"..." l[end]])
         l
     end
     (kw_decls, kw_names, kw_syms, kw_defaults, restkw) = expand_kw_args(ctx, kws)
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
-    positional_sparams = used_typevars(pargl, sparams)
+    pos_sparams = used_typevars(pargl, sparams)
 
     m1_name = let n = kind(mtable) === K"nothing" ? "_" : mtable.name_val,
-        mangled = string(startswith(n, '#') ? "" : "#kw_body#", n, "#")
-        newsym(ctx, argl[1], reserve_module_binding_i(ctx.mod, mangled))
+        mangled = reserve_module_binding_i(
+            ctx.layer.mod,
+            string(startswith(n, '#') ? "" : "#kw_body#", n, "#"))
+        # probably not desirable, but fixes eval-into-closed-module
+        m1_sc = escape_layer(mtable.context::SyntaxContext, true)
+        setattr!(newsym(ctx, mtable, mangled), :context,
+                 SyntaxContext(m1_sc.layer, m1_sc.unexpanded, m1_sc.version, true))
     end
     # (1) Body method.  This contains the actual function body, and requires
     # every possible default to be filled.  `rett` is only passed here since it
@@ -2644,7 +2723,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
                 @ast ctx src [K"call" m1_name kw_names... rkw forward_pargl...])
         end
         method_def_expr(
-            ctx, src, mtable, positional_sparams, pargl,
+            ctx, src, mtable, pos_sparams, pargl,
             @ast(ctx, src, [K"block" [K"return" body2]]))
     end
     # (3) Core.kwcall(arg2::NamedTuple, pargl...) methods (one per optarg).
@@ -2661,7 +2740,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
                 !any(val->contains_unquoted(e->kind(e) == K"=", val), kw_defaults)
         kw_temps = use_ssa_kw_temps ?
             mapsyntax(x->ssavar(ctx, x, x.name_val), kw_names) : kw_names
-        tempslot = newsym(ctx, kws, "kwtmp")
+        tempslot = newsym(ctx, kws, "#kwtmp#")
         keyword_only_spnames = mapindex(unused_typevars(pargl, sparams), 1)
 
         kw_assigns = SyntaxList(ctx.graph)
@@ -2733,36 +2812,38 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
             ]
             arg2 = @ast ctx arg2_name [K"::" arg2_name "NamedTuple"::K"core"]
             method_def_expr(
-                ctx, src, mtable, positional_sparams,
+                ctx, src, mtable, pos_sparams,
                 SyntaxList(arg1, arg2, pargl...), kwcall_body)
         end
     end
     @ast ctx src [K"block"
         [K"function_decl" m1_name]
         kind(mtable) === K"nothing" ? nothing : [K"function_decl" mtable]
-        [K"method_defs" m1_name mdefs1]
-        [K"method_defs" mtable mdefs2]
-        [K"method_defs" mtable mdefs3]
+        [K"method_defs" m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+        [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
+        [K"method_defs" mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
         mtable
     ]
 end
 
-_lower_destructuring_arg(stmts, ctx, ex) = @stm ex begin
-    [K"tuple" _...] -> let arg2 = newsym(ctx, ex, "destructured")
+# string mangling is necessary until generated functions know about scope layers
+# (hack, see _expr_arg_syms).
+_lower_destructuring_arg(stmts, ctx, i, ex) = @stm ex begin
+    [K"tuple" _...] -> let arg2 = newsym(ctx, ex, "destructured#" * string(i))
         push!(stmts, @ast(ctx, ex, [K"local"(meta=CompileHints(:is_destructured_arg, true))
             [K"=" ex arg2]]))
         arg2
     end
-    [K"::" x t] -> @ast ctx ex [K"::" _lower_destructuring_arg(stmts, ctx, x) t]
-    [K"kw" x t] -> @ast ctx ex [K"kw" _lower_destructuring_arg(stmts, ctx, x) t]
-    [K"..." x]  -> @ast ctx ex [K"..." _lower_destructuring_arg(stmts, ctx, x)]
+    [K"::" x t] -> @ast ctx ex [K"::" _lower_destructuring_arg(stmts, ctx, i, x) t]
+    [K"kw" x t] -> @ast ctx ex [K"kw" _lower_destructuring_arg(stmts, ctx, i, x) t]
+    [K"..." x]  -> @ast ctx ex [K"..." _lower_destructuring_arg(stmts, ctx, i, x)]
     _ -> ex
 end
 
 function lower_destructuring_args!(ctx, args)
     stmts = SyntaxList(ctx.graph)
     for (i, a) in enumerate(args)
-        args[i] = _lower_destructuring_arg(stmts, ctx, a)
+        args[i] = _lower_destructuring_arg(stmts, ctx, i, a)
     end
     # return `nothing` from the assignments (issue #26518)
     !isempty(stmts) && push!(stmts, @ast ctx stmts[1] (::K"nothing"))
@@ -2849,19 +2930,15 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
             end
         end
     end
-    sparams = mapsyntax(x->typevar_bounds(ctx, x), wheres)
+    sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
-        pos_va = @stm raw_args[end-1] begin
-            [K"kw" [K"..." _] _...] -> true
-            [K"..." _] -> true
-            _ -> false
-        end
-        keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, pos_va)
+        keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
     else
         @ast ctx src [K"block"
             (overlay || kind(mtable) === K"nothing") ? nothing : [K"function_decl" mtable]
-            [K"method_defs" mtable [K"block"
-                method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
+            [K"method_defs" mtable
+                method_def_sparams(ctx, src, sparams)
+                [K"block" method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
                 # TODO: overlay should return the method
                 [K"removable" mtable]]
     end
@@ -2947,18 +3024,17 @@ function expand_macro_def(ctx, ex)
         _ -> @jl_assert false ex
     end
 
-    scope_ref = kind(name) == K"." ? name[1] : name
-    if ctx.expr_compat_mode
+    sc_ref = (kind(name) == K"." ? name[1] : name)
+    if is_flisp_compat(ex)
         @ast ctx ex [K"function"
             [K"call"(sig)
                 _make_macro_name(ctx, name)
                 [K"::"
-                    # TODO: should we be adopting the scope of the K"macro" expression itself?
-                    adopt_scope(@ast(ctx, sig, "__source__"::K"Identifier"), scope_ref)
+                    adopt_scope(sc_ref, @ast(ctx, sig, "__source__"::K"Identifier"))
                     "LineNumberNode"::K"core"
                 ]
                 [K"::"
-                    adopt_scope(@ast(ctx, sig, "__module__"::K"Identifier"), scope_ref)
+                    adopt_scope(sc_ref, @ast(ctx, sig, "__module__"::K"Identifier"))
                     "Module"::K"core"
                 ]
                 mapsyntax(e->apply_arg_meta(e, :nospecialize), args)...
@@ -2970,10 +3046,10 @@ function expand_macro_def(ctx, ex)
             [K"call"(sig)
                 _make_macro_name(ctx, name)
                 [K"::"
-                    adopt_scope(@ast(ctx, sig, "__context__"::K"Identifier"), scope_ref)
+                    adopt_scope(sc_ref, @ast(ctx, sig, "__context__"::K"Identifier"))
                     MacroContext::K"Value"
                 ]
-                # flisp: We don't mark these @nospecialize because all arguments to
+                # We don't mark these @nospecialize because all arguments to
                 # new macros will be of type SyntaxTree
                 args...
             ]
@@ -2987,8 +3063,8 @@ end
 
 # argument to where expression -> (_typevar name expanded_lb expanded_ub)
 # used, e.g. in all `sparams`, where flisp generally uses a list (name, lb, ub)
-function typevar_bounds(ctx, ex)
-    any = @ast ctx ex "Any"::K"core"
+function typevar_bounds(ex)
+    any = @ast ex._graph ex "Any"::K"core"
     (name, lb, ub) = bounds = @stm ex begin
         [K"Identifier"] -> (ex, any, any)
         [K"Placeholder"] -> (ex, any, any)
@@ -2997,7 +3073,7 @@ function typevar_bounds(ctx, ex)
         [K"<:" x ub] -> (x, any, ub)
         [K">:" x lb] -> (x, lb, any)
     end
-    @ast ctx ex [K"_typevar" name lb ub]
+    @ast ex._graph ex [K"_typevar" name lb ub]
 end
 
 function bounds_to_typevar(ctx, ex)
@@ -3062,7 +3138,7 @@ function expand_typevars(ctx, type_params)
     typevar_names = SyntaxList(ctx)
     typevar_stmts = SyntaxList(ctx)
     for param in type_params
-        bounds = typevar_bounds(ctx, param)
+        bounds = typevar_bounds(param)
         n = bounds[1]
         push!(typevar_names, n)
         push!(typevar_stmts, @ast ctx param [K"block"
@@ -3083,6 +3159,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
     end
     nbits = is_abstract ? nothing : ex[2]
     name, type_params, supertype = analyze_type_sig(ctx, ex[1])
+    name, _ = relayer_global_if_unhygienic(ctx, name)
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     newtype_var = ssavar(ctx, ex, "new_type")
     @ast ctx ex [K"block"
@@ -3095,7 +3172,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
                     newtype_var
                     [K"call"
                         (is_abstract ? "_abstracttype" : "_primitivetype")::K"core"
-                        ctx.mod::K"Value"
+                        syntax_module(name)::K"Value"
                         name=>K"Symbol"
                         [K"call" "svec"::K"core" typevar_names...]
                         if !is_abstract
@@ -3108,13 +3185,13 @@ function expand_abstract_or_primitive_type(ctx, ex)
                 [K"call" "_typebody!"::K"core" false::K"Bool" name]
             ]
         ]
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
+        [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex] ]
         [K"global" name]
         [K"if"
             [K"&&"
                 [K"call"
                    "isdefinedglobal"::K"core"
-                   ctx.mod::K"Value"
+                   syntax_module(name)::K"Value"
                    name=>K"Symbol"
                    false::K"Bool"]
                 [K"call" "_equiv_typedef"::K"core" name newtype_var]
@@ -3233,7 +3310,7 @@ function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres
     @stm sig begin
         [K"::" x rett] -> let
             call2, ctor_self = rewrite_ctor_sig(
-                ctx, x, tname, global_tname, struct_typevars, wheres)
+                ctx, x, tname, global_tname, struct_typevars, SyntaxList(ctx))
             sig2 = @ast(ctx, sig, [K"::" call2 rett])
         end
         # recognize `(_::(Type{X{T}} where T))(...)` as an inner-style
@@ -3321,7 +3398,7 @@ function rewrite_ctor(ctx, ex, tname, global_tname, struct_typevars, field_types
                 rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres)
             body2 = _rewrite_ctor_new_calls(
                 ctx, body, global_tname,
-                mapsyntax(x->typevar_bounds(ctx, x), wheres),
+                mapsyntax(typevar_bounds, wheres),
                 struct_typevars, ctor_self, field_types)
             @ast ctx ex [K"function" call2 body2]
         end
@@ -3364,7 +3441,8 @@ function _rewrite_ctor_new_calls(ctx, ex, global_struct_name, ctor_sparams,
         elseif n_type_nonsplat > length(struct_typevars)
             throw(LoweringError(ex[1], "too many type parameters specified in `new{...}`"))
         end
-        @ast ctx ex[1] [K"curly" global_struct_name new_type_params...]
+        isempty(new_type_params) ? global_struct_name :
+            @ast ctx ex[1] [K"curly" global_struct_name new_type_params...]
     elseif !isnothing(ctor_self)
         # new(...) in constructors
         ctor_self
@@ -3464,7 +3542,7 @@ function _insert_fieldtype_struct_shim(ctx, name, ex)
         numchildren(ex) == 2 &&
         kind(ex[2]) == K"Symbol" &&
         ex[2].name_val == name.name_val
-        @ast ctx ex [K"call" "struct_name_shim"::K"core" ex[1] ex[2] ctx.mod::K"Value" name]
+        @ast ctx ex [K"call" "struct_name_shim"::K"core" ex[1] ex[2] syntax_module(ex)::K"Value" name]
     elseif numchildren(ex) > 0
         mapchildren(e->_insert_fieldtype_struct_shim(ctx, name, e), ctx, ex)
     else
@@ -3525,6 +3603,7 @@ function expand_typegroup_def(ctx, ex)
     struct_names = SyntaxList(ctx)   # local name bindings (splatted into AST)
     global_names = SyntaxList(ctx)   # global name bindings (splatted into AST)
     info_vars = SyntaxList(ctx)      # SSA vars for struct info svecs (splatted into AST)
+    struct_mod_prev = nothing
 
     for child in children(body)
         if kind(child) == K"struct"
@@ -3566,14 +3645,20 @@ function expand_typegroup_def(ctx, ex)
                                       supertype, is_mutable, min_initialized,
                                       inner_defs, field_docs))
         push!(struct_names, struct_name)
-        layer = new_internal_escapable_scope_layer(ctx, struct_name).id
-        push!(global_names, adopt_scope(struct_name, layer))
+        global_struct_name, _ = relayer_global_if_unhygienic(ctx, struct_name)
+        struct_mod = syntax_module(global_struct_name)
+        isnothing(struct_mod_prev) || struct_mod == struct_mod_prev || throw(
+            LoweringError(ex, "typegroup of types from multiple modules"))
+        struct_mod_prev = struct_mod
+        struct_globalref = setattr!(mkleaf(global_struct_name), :mod, struct_mod)
+        push!(global_names, struct_globalref)
         push!(info_vars, ssavar(ctx, sdef, "struct_info"))
     end
     n = length(entries)
     if n == 0
         return nothing_(ctx, ex)
     end
+    typegroup_mod = syntax_module(global_names[1])
 
     # Build the lowered code
     #
@@ -3613,7 +3698,7 @@ function expand_typegroup_def(ctx, ex)
             push!(inner_stmts, @ast ctx e.sdef [K"local" tv_name])
         end
         append!(inner_stmts, typevar_stmts)
-        push!(inner_stmts, @ast ctx e.sdef [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" e.sdef]])
+        push!(inner_stmts, @ast ctx e.sdef [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" e.sdef]])
         push!(inner_stmts, @ast ctx e.sdef [K"="
             info_var
             [K"call" "svec"::K"core"
@@ -3636,7 +3721,7 @@ function expand_typegroup_def(ctx, ex)
     push!(stmts, @ast ctx ex [K"="
         [K"tuple" struct_names...]
         [K"call" "resolve_typegroup"::K"core"
-            ctx.mod::K"Value"
+            typegroup_mod::K"Value"
             [K"call" "svec"::K"core" struct_names...]
             [K"call" "svec"::K"core" info_vars...]
         ]
@@ -3698,13 +3783,10 @@ function expand_typegroup_def(ctx, ex)
 
     # Build the toplevel assertion + scope block, then do the expand and replace
     scope_block_stmts = SyntaxList(ctx)
-    for name in global_names
-        push!(scope_block_stmts, @ast ctx ex [K"global" name])
-    end
     push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
 
     result = @ast ctx ex [K"block"
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
+        [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
         [K"scope_block"(scope_type=:hard)
             scope_block_stmts...
         ]
@@ -3739,11 +3821,12 @@ function expand_struct_def(ctx, ex, docs)
     hasprev = ssavar(ctx, ex, "hasprev")
     prev = ssavar(ctx, ex, "prev")
     newdef = ssavar(ctx, ex, "newdef")
-    layer = new_internal_escapable_scope_layer(ctx, struct_name).id
-    global_struct_name = adopt_scope(struct_name, layer)
+    global_struct_name, _ = relayer_global_if_unhygienic(ctx, struct_name)
+    struct_mod = syntax_module(global_struct_name)
+    struct_globalref = setattr!(mkleaf(global_struct_name), :mod, struct_mod)
     if !isempty(typevar_names)
         # Generate expression like `prev_struct.body.body.parameters`
-        prev_typevars = global_struct_name
+        prev_typevars = struct_globalref
         for _ in 1:length(typevar_names)
             prev_typevars = @ast ctx type_sig [K"." prev_typevars "body"::K"Symbol"]
         end
@@ -3773,7 +3856,7 @@ function expand_struct_def(ctx, ex, docs)
             if !typevar_in_fields
                 typevar_in_bounds = any(type_params[i+1:end]) do param
                     # Check the bounds of subsequent type params
-                    (lb,ub) = let bounds = typevar_bounds(ctx, param)
+                    (lb,ub) = let bounds = typevar_bounds(param)
                         bounds[2], bounds[3]
                     end
                     # todo: flisp lowering tests `lb` here so we also do. But
@@ -3793,7 +3876,7 @@ function expand_struct_def(ctx, ex, docs)
     # constructor-like signatures
     for (def_i, def) in enumerate(inner_defs)
         inner_defs[def_i] =
-            rewrite_ctor(ctx, def, struct_name, global_struct_name,
+            rewrite_ctor(ctx, def, struct_name, struct_globalref,
                          typevar_names, field_types)
     end
 
@@ -3801,9 +3884,9 @@ function expand_struct_def(ctx, ex, docs)
     # typevars when "redefining" structs.
     # See https://github.com/JuliaLang/julia/pull/36121
     @ast ctx ex [K"block"
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
-        [K"scope_block"(scope_type=:hard)
-            [K"global" global_struct_name]
+        [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex] ]
+        [K"block"
+            [K"global" struct_globalref]
             [K"scope_block"(scope_type=:hard)
                 [K"local" struct_name]
                 [K"always_defined" struct_name]
@@ -3812,7 +3895,7 @@ function expand_struct_def(ctx, ex, docs)
                     newtype_var
                     [K"call"
                         "_structtype"::K"core"
-                        ctx.mod::K"Value"
+                        struct_mod::K"Value"
                         struct_name=>K"Symbol"
                         [K"call"(type_sig) "svec"::K"core" typevar_names...]
                         [K"call"(type_body) "svec"::K"core" [n=>K"Symbol" for n in field_names]...]
@@ -3825,12 +3908,12 @@ function expand_struct_def(ctx, ex, docs)
                 [K"call"(supertype) "_setsuper!"::K"core" newtype_var supertype]
                 [K"=" hasprev
                       [K"&&" [K"call" "isdefinedglobal"::K"core"
-                              ctx.mod::K"Value"
+                              struct_mod::K"Value"
                               struct_name=>K"Symbol"
                               false::K"Bool"]
-                             [K"call" "_equiv_typedef"::K"core" global_struct_name newtype_var]
+                             [K"call" "_equiv_typedef"::K"core" struct_globalref newtype_var]
                        ]]
-                [K"=" prev [K"if" hasprev global_struct_name false::K"Bool"]]
+                [K"=" prev [K"if" hasprev struct_globalref false::K"Bool"]]
                 [K"if" hasprev
                    [K"block"
                     # if this is compatible with an old definition, use the old parameters, but the
@@ -3852,7 +3935,7 @@ function expand_struct_def(ctx, ex, docs)
                       [K"call" "svec"::K"core" insert_struct_shim(ctx, field_types, struct_name)...]
                    ]]
                 [K"constdecl"
-                    global_struct_name
+                    struct_globalref
                     newdef
                  ]
         ]
@@ -3862,7 +3945,7 @@ function expand_struct_def(ctx, ex, docs)
             [K"block"
                 [K"call"
                     "_defaultctors"::K"top"
-                    global_struct_name
+                    struct_globalref
                     ::K"SourceLocation"(ex)
                 ]
                 (::K"latestworld")
@@ -3898,7 +3981,7 @@ end
 # Expand `where` syntax
 
 function expand_where(ctx, srcref, lhs, rhs)
-    bounds = typevar_bounds(ctx, rhs)
+    bounds = typevar_bounds(rhs)
     v = bounds[1]
     @ast ctx srcref [K"let"
         [K"block" [K"=" v bounds_to_typevar(ctx, bounds)]]
@@ -3966,9 +4049,17 @@ end
 
 function expand_importpath(ctx, path)
     @jl_assert kind(path) == K"importpath" path
-    setattr(path, :kind, K".")
+    @ast ctx path [K"." mapsyntax(_unplaceholder, children(path))...]
 end
 
+function _unplaceholder(st)
+    k = kind(st)
+    k === K"Placeholder" ? setattr(st, :kind, K"Identifier") :
+        k === K"Identifier" ? st : @jl_assert false st
+end
+
+# importer does not obey hygiene.  Doesn't bother with relayering any imported
+# items, as the runtime functions don't see hygiene anyway
 function expand_import_or_using(ctx, ex)
     if kind(ex[1]) == K":"
         # import M: x.y as z, w
@@ -3995,8 +4086,8 @@ function expand_import_or_using(ctx, ex)
     for spec in paths
         if kind(spec) == K"as"
             @jl_assert numchildren(spec) == 2 spec
-            @jl_assert kind(spec[2]) == K"Identifier" spec
-            path = @ast ctx spec [K"as" expand_importpath(ctx, spec[1]) spec[2]]
+            s2 = _unplaceholder(spec[2])
+            path = @ast ctx spec [K"as" expand_importpath(ctx, spec[1]) s2]
         else
             path = expand_importpath(ctx, spec)
         end
@@ -4010,7 +4101,7 @@ function expand_import_or_using(ctx, ex)
                 push!(stmts,
                     @ast ctx spec [K"call"
                         eval_using   ::K"Value"
-                        ctx.mod      ::K"Value"
+                        ctx.layer.mod::K"Value"
                         spec
                     ]
                 )
@@ -4019,7 +4110,7 @@ function expand_import_or_using(ctx, ex)
                     @ast ctx spec [K"call"
                         eval_import   ::K"Value"
                         (!is_using)   ::K"Bool"
-                        ctx.mod       ::K"Value"
+                        ctx.layer.mod::K"Value"
                         (::K"nothing")
                         spec
                     ]
@@ -4033,29 +4124,34 @@ function expand_import_or_using(ctx, ex)
         push!(stmts, @ast ctx ex [K"call"
             eval_import   ::K"Value"
             (!is_using)   ::K"Bool"
-            ctx.mod       ::K"Value"
+            ctx.layer.mod::K"Value"
             from_path
             path_specs...
         ])
         push!(stmts, @ast ctx ex (::K"latestworld"))
     end
     @ast ctx ex [K"block"
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
+        [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
         stmts...
         [K"removable" (::K"nothing")]
     ]
 end
 
-# Expand `public` or `export`
+# flisp: export is relayered, and no-esc public is a syntax error (we relayer)
 function expand_public(ctx, ex)
     identifiers = String[]
+    numchildren(ex) == 0 && return @ast ctx ex (::K"nothing")
+    mod = syntax_module(relayer_global_if_unhygienic(ctx, ex[1])[1])
     for e in children(ex)
         @jl_assert kind(e) == K"Identifier" (ex, "Expected identifier")
+        syntax_module(relayer_global_if_unhygienic(ctx, e)[1]) !== mod &&
+            throw(LoweringError(
+                ex, "unexpected public/export with names from multiple modules"))
         push!(identifiers, e.name_val)
     end
     @ast ctx ex [K"call"
         eval_public::K"Value"
-        ctx.mod::K"Value"
+        mod::K"Value"
         (kind(ex) == K"export")::K"Bool"
         identifiers::K"Value"
     ]
@@ -4070,7 +4166,7 @@ function isquotedmacrocall(ex)
     let (f, ex) = (ex[1], ex[3])
         kind(f) == K"Value" || return false
         kind(ex) == K"inert" || return false
-        f.value === interpolate_ast || return false
+        f.value === interpolate_expr || return false
         kind(ex[1]) == K"macrocall" || return false
         return true
     end
@@ -4080,7 +4176,7 @@ function expand_doc(ctx, ex, docex)
     if kind(ex) in (K"Identifier", K".")
         expand_forms_2(ctx, @ast ctx docex [K"call"
             bind_static_docs!::K"Value"
-            (kind(ex) === K"." ? ex[1] : ctx.mod::K"Value")
+            (kind(ex) === K"." ? ex[1] : syntax_module(ex)::K"Value")
             (kind(ex) === K"." ? ex[2] : ex).name_val::K"Symbol"
             docex[1]
             ::K"SourceLocation"(ex)
@@ -4147,7 +4243,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"<:" || k == K">:" || k == K"-->"
         expand_forms_2(ctx, @ast ctx ex [K"call"
-            adopt_scope(string(k)::K"Identifier", ex)
+            adopt_scope(ex, string(k)::K"Identifier")
             children(ex)...
         ])
     elseif k == K"op=" || k == K".op="
@@ -4212,7 +4308,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"function"
         if numchildren(ex) == 1
-            return @ast ctx ex [K"block" [K"function_decl" ex[1]] ex[1]]
+            return @ast ctx ex [K"block"
+                [K"global_if_global" ex[1]] [K"function_decl" ex[1]] ex[1]]
         end
         sig, wheres = flatten_wheres(ex[1])
         name, args, rett = @stm sig begin
@@ -4239,7 +4336,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         @ast ctx ex [K"block"
             [K"assert"
                 "global_toplevel_only"::K"Symbol"
-                [K"inert_syntaxtree" ex]
+                [K"syntaxinert" ex]
             ]
             expand_forms_2(ctx, expand_macro_def(ctx, ex))
         ]
@@ -4312,20 +4409,17 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"curly"
         expand_forms_2(ctx, expand_curly(ctx, ex))
     elseif k == K"toplevel"
-        # The toplevel form can't be lowered here - it needs to just be quoted
-        # and passed through to a call to eval.
+        # Temporary: It would make more sense to return this unchanged once
+        # toplevel iteration over SyntaxTree exists, but for now, a call to
+        # `eval` lets JuliaLowering retain provenance and hygiene here.
         ex2 = @ast ctx ex [K"block"
-            [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
+            [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
             [K"call"
-                eval                  ::K"Value"
-                ctx.mod               ::K"Value"
-                [K"inert_syntaxtree" ex]
-                [K"parameters"
-                    [K"kw"
-                        "expr_compat_mode"::K"Identifier"
-                        ctx.expr_compat_mode::K"Bool"
-                    ]
-                ]
+             eval::K"Value"
+                # a macro expanding to toplevel does not change the eval module,
+                # but does change the name resolution module
+                ctx.layer.mod::K"Value"
+                [K"syntaxinert" ex]
             ]
         ]
         expand_forms_2(ctx, ex2)
@@ -4354,7 +4448,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 ]
             ]
         ]
-    elseif k == K"inert" || k == K"inert_syntaxtree" || k == K"foreignsymbol"
+    elseif k == K"inert" || k == K"syntaxinert" || k == K"foreignsymbol"
         ex
     elseif k == K"foreignglobal"
         @ast ctx ex [K"foreignglobal" expand_csymbol(ctx, ex[1])]
@@ -4417,12 +4511,11 @@ ensure_desugaring_attributes!(graph) = ensure_attributes!(
     toplevel_pure=Bool,
     scope_type=Symbol)
 
-@fzone "JL: desugar" function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
-    graph = ensure_desugaring_attributes!(copy_attrs(ctx.graph))
+@fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
+    graph = ensure_desugaring_attributes!(copy_attrs(ex._graph))
     ex = reparent(graph, ex)
-    ctx_out = DesugaringContext(graph, ctx.bindings, ctx.scope_layers,
-                                ctx.scope_layers[1].mod, ctx.expr_compat_mode,
-                                Dict{Int, IdTag}(), ctx.macro_world)
+    sl = base_layer(ex.context::SyntaxContext)
+    ctx_out = DesugaringContext(graph, sl, Bindings(), Dict{Int, IdTag}(), world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !vr.ok

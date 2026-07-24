@@ -263,6 +263,7 @@ struct InferenceParams
     assume_bindings_static::Bool
     ignore_recursion_hardlimit::Bool
     force_enable_inference::Bool
+    cache_owner::Any
 
     function InferenceParams(
         max_methods::Int,
@@ -275,6 +276,7 @@ struct InferenceParams
         assume_bindings_static::Bool,
         ignore_recursion_hardlimit::Bool,
         force_enable_inference::Bool,
+        @nospecialize(cache_owner),
     )
         return new(
             max_methods,
@@ -287,6 +289,7 @@ struct InferenceParams
             assume_bindings_static,
             ignore_recursion_hardlimit,
             force_enable_inference,
+            cache_owner,
         )
     end
 end
@@ -301,7 +304,8 @@ function InferenceParams(
         #=aggressive_constant_propagation::Bool=# false,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false,
-        #=force_enable_inference::Bool=# false
+        #=force_enable_inference::Bool=# false,
+        #=cache_owner=# nothing
     );
     max_methods::Int = params.max_methods,
     max_union_splitting::Int = params.max_union_splitting,
@@ -313,6 +317,7 @@ function InferenceParams(
     assume_bindings_static::Bool = params.assume_bindings_static,
     ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit,
     force_enable_inference::Bool = params.force_enable_inference,
+    cache_owner = params.cache_owner,
 )
     return InferenceParams(
         max_methods,
@@ -325,6 +330,7 @@ function InferenceParams(
         assume_bindings_static,
         ignore_recursion_hardlimit,
         force_enable_inference,
+        cache_owner,
     )
 end
 
@@ -472,7 +478,7 @@ InferenceParams(interp::NativeInterpreter) = interp.inf_params
 OptimizationParams(interp::NativeInterpreter) = interp.opt_params
 get_inference_world(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
-cache_owner(::NativeInterpreter) = nothing
+cache_owner(interp::NativeInterpreter) = interp.inf_params.cache_owner
 
 engine_reserve(interp::AbstractInterpreter, mi::MethodInstance) = engine_reserve(mi, cache_owner(interp))
 engine_reserve(mi::MethodInstance, @nospecialize owner) = ccall(:jl_engine_reserve, Any, (Any, Any), mi, owner)::CodeInstance

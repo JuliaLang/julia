@@ -326,7 +326,7 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls)
     jl_set_gc_and_wait(ct);
     if (jl_atomic_load_relaxed(&ct->tid) != 0)
         return;
-    if (ptls->defer_signal) {
+    if (ptls->defer_signal || ct->eh == NULL) {
         jl_safepoint_defer_sigint();
     }
     else if (jl_safepoint_consume_sigint()) {
@@ -568,6 +568,8 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
 
 static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT
 {
+    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return 0;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL) // this thread is not alive
         return 0;
@@ -624,7 +626,9 @@ static void jl_try_deliver_sigint(void)
 
     jl_safepoint_enable_sigint();
     int force = jl_check_force_sigint();
-    if (force || (!ptls2->defer_signal && ptls2->io_wait)) {
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    int can_throw = ct2 != NULL && ct2->eh != NULL;
+    if (can_throw && (force || (!ptls2->defer_signal && ptls2->io_wait))) {
         jl_safepoint_consume_sigint();
         if (force)
             jl_safe_printf("WARNING: Force throwing a SIGINT\n");

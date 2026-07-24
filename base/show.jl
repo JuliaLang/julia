@@ -525,10 +525,18 @@ function _show_default(io::IO, @nospecialize(x))
     else
         print(io, "0x")
         r = Ref{Any}(x)
+        nbits = Core.bitsizeof(t)
+        nbytes = cld(nbits, 8)
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
-            for i in (nb - 1):-1:0
-                print(io, string(unsafe_load(convert(Ptr{UInt8}, p + i)), base = 16, pad = 2))
+            for i in (nbytes - 1):-1:0
+                byte = unsafe_load(convert(Ptr{UInt8}, p + i))
+                if i == nbytes - 1 && nbits % 8 != 0
+                    byte &= (UInt8(1) << (nbits % 8)) - UInt8(1)
+                    print(io, string(byte, base = 16, pad = cld(nbits % 8, 4)))
+                else
+                    print(io, string(byte, base = 16, pad = 2))
+                end
             end
         end
     end
@@ -580,7 +588,6 @@ end
 
 print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 
-show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
@@ -600,11 +607,14 @@ io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
 modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
+modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, parentmodule(x))
     elseif x isa TypeEq
+        modulesof!(s, x)
+    elseif x isa Core.TypeEgal
         modulesof!(s, x)
     elseif x isa Union
         modulesof!(s, x.a)
@@ -738,8 +748,8 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
         return o isa TypeVar &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o.ub) != 0 &&
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o.lb) != 0
     end
     for i = n:-1:1
         p = env[i]
@@ -1019,8 +1029,22 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-show(io::IO, @nospecialize(x::TypeEq)) = show_typeeq(io, x)
-show(io::IO, @nospecialize(x::Core.AnyType)) = _show_type(io, inferencebarrier(x))
+function show_typeegal(io::IO, @nospecialize(x::Core.TypeEgal))
+    print(io, "Core.TypeEgal{")
+    show(io, type_parameter(x))
+    print(io, "}")
+end
+function show(io::IO, @nospecialize(x::Core.AnyType))
+    if x isa Core.TypeofBottom
+        print(io, "Union{}")
+    elseif x isa Core.TypeEgal
+        show_typeegal(io, x)
+    elseif x isa TypeEq
+        show_typeeq(io, x)
+    else
+        _show_type(io, inferencebarrier(x))
+    end
+end
 # `Type{T}` is the familiar user-facing spelling and is used for all normal
 # (compact) printing. In non-compact contexts (e.g. the REPL's `text/plain`
 # display) the canonical kind name `TypeEq{T}` is shown instead, so that a
@@ -1031,7 +1055,10 @@ function show_typeeq(io::IO, @nospecialize(x::TypeEq))
     print(io, "}")
 end
 function _show_type(io::IO, @nospecialize(x::Type))
-    if print_without_params(x)
+    if x isa Core.TypeEgal
+        show_typeegal(io, x)
+        return
+    elseif print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
@@ -1133,8 +1160,10 @@ function check_world_bounded(tn::Core.TypeName)
                 return Int(partition.min_world):Int(max_world)
             end
         end
-        isdefined(partition, :next) || return nothing
-        partition = @atomic partition.next
+        next = @atomic partition.next
+        # The last partition's `next` is a backreference to the owning Binding.
+        next isa Core.BindingPartition || return nothing
+        partition = next
     end
 end
 
@@ -1355,7 +1384,7 @@ show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 function show(io::IO, n::Unsigned)
     if get(io, :hexunsigned, true)::Bool
-        print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+        print(io, "0x", string(n, pad = cld(Core.bitsizeof(n), 4), base = 16))
     else
         if get(io, :typeinfo, Nothing)::Type == typeof(n)
             print(io, n)
@@ -3391,24 +3420,12 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, max_world)
     end
     if (partition.kind & PARTITION_MASK_FLAG) != 0
-        first = false
-        print(io, " [")
-        if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
-            print(io, "exported")
-        end
-        if (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0
-            first ? (first = false) : print(io, ",")
-            print(io, "re-exported")
-        end
-        if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
-            first ? (first = false) : print(io, ",")
-            print(io, "deprecated")
-        end
-        if (partition.kind & PARTITION_FLAG_DEPWARN) != 0
-            first ? (first = false) : print(io, ",")
-            print(io, "depwarn")
-        end
-        print(io, "]")
+        flags = String[]
+        (partition.kind & PARTITION_FLAG_EXPORTED)            != 0 && push!(flags, "exported")
+        (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0 && push!(flags, "re-exported")
+        (partition.kind & PARTITION_FLAG_DEPRECATED)          != 0 && push!(flags, "deprecated")
+        (partition.kind & PARTITION_FLAG_DEPWARN)             != 0 && push!(flags, "depwarn")
+        print(io, " [", join(flags, ","), "]")
     end
     print(io, " - ")
     kind = binding_kind(partition)
@@ -3450,6 +3467,15 @@ end
 
 function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
     print(io, "BindingPartition ")
+    # The chain terminates in a backreference to the owning binding, so follow
+    # `next` until we reach it to report which binding this partition belongs to.
+    owner = @atomic partition.next
+    while owner isa Core.BindingPartition
+        owner = @atomic owner.next
+    end
+    if owner isa Core.Binding
+        print(io, "for ", owner.globalref, "\n   ")
+    end
     print_partition(io, partition)
 end
 
@@ -3464,8 +3490,10 @@ function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
             println(io)
             print(io, "   ")
             print_partition(io, partition)
-            isdefined(partition, :next) || break
-            partition = @atomic partition.next
+            next = @atomic partition.next
+            # The last partition's `next` is a backreference to the owning Binding.
+            next isa Core.BindingPartition || break
+            partition = next
         end
     end
 end

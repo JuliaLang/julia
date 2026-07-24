@@ -106,7 +106,7 @@ typedef struct {
 
 // System-wide initialization function. Responsible for initializing global locks as well as
 // global memory parameters (e.g. target heap size) used by the collector.
-void jl_gc_init(void);
+void jl_gc_init(void) JL_NOTSAFEPOINT;
 // Spawns GC threads.
 void jl_start_gc_threads(void);
 
@@ -138,10 +138,10 @@ JL_DLLEXPORT int jl_gc_enable(int on);
 // Returns whether the collector is enabled.
 JL_DLLEXPORT int jl_gc_is_enabled(void);
 // Sets a soft limit to Julia's heap.
-JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
+JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) JL_NOTSAFEPOINT;
 // Runs a GC cycle. This function's parameter determines whether we're running an
 // incremental, full, or automatic (i.e. heuristic driven) collection.
-JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
+JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) JL_CANSAFEPOINT;
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
 // Enables or disables automatic full (non-generational) collections.
@@ -153,7 +153,7 @@ JL_DLLEXPORT int jl_gc_enable_auto_full_collection(int on);
 JL_DLLEXPORT int jl_gc_auto_full_collection_is_enabled(void);
 // Returns which GC implementation is being used and possibly its version according to the list of supported GCs
 // NB: it should clearly identify the GC by including e.g. 'stock' or 'mmtk' as a substring.
-JL_DLLEXPORT const char* jl_gc_active_impl(void);
+JL_DLLEXPORT const char* jl_gc_active_impl(void) JL_NOTSAFEPOINT;
 // Sweep Julia's stack pools and mtarray buffers. Note that this function has been added to the interface as
 // each GC should implement it but it will most likely not be used by other code in the runtime.
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
@@ -197,7 +197,7 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 // to decide whether to allocate a small or a large object. Finally, note that this function
 // **must** also set the type of the returning object to be `ty`. The type `ty` may also be used to record
 // an allocation of that type in the allocation profiler.
-struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
+struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty) JL_CANSAFEPOINT;
 // Allocates small objects and increments Julia allocation counters. Size of the object
 // header must be included in the object size. The (possibly unused in some implementations)
 // offset to the arena in which we're allocating is passed in the second parameter, and the
@@ -208,7 +208,7 @@ struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void
 // allocation profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc(struct _jl_tls_states_t *ptls,
                                                    int offset, int osize,
-                                                   struct _jl_value_t *type);
+                                                   struct _jl_value_t *type) JL_CANSAFEPOINT;
 // Description: Allocates large objects and increments Julia allocation counters. Size of
 // the object header must be included in the object size. If thread-local allocators are
 // used, then this function should allocate in the thread-local allocator of the thread
@@ -216,15 +216,15 @@ JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc(struct _jl_tls_states_t *ptls
 // information about the type of the object being allocated may be used to record an
 // allocation of that type in the allocation profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc(struct _jl_tls_states_t *ptls, size_t sz,
-                                                 struct _jl_value_t *type);
+                                                 struct _jl_value_t *type) JL_CANSAFEPOINT;
 // Wrapper around Libc malloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz) JL_CANSAFEPOINT;
 // Wrapper around Libc calloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz);
+JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT;
 // Wrapper around Libc free that updates Julia allocation counters.
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz);
 // Wrapper around Libc realloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz);
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
 // Wrapper around Libc malloc that's used to dynamically allocate memory for Arrays and
 // Strings. It increments Julia allocation counters and should check whether we're close to
 // the Julia heap target, and therefore, whether we should run a collection. Note that this
@@ -232,12 +232,12 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
 // front of the memory payload): this function is used for Julia object allocations, and we
 // assume that there is already a field in the Julia object being allocated that we may use
 // to store the size of the memory buffer.
-JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
+JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz) JL_CANSAFEPOINT;
 // Allocates a new weak-reference, assigns its value and increments Julia allocation
 // counters. If thread-local allocators are used, then this function should allocate in the
 // thread-local allocator of the thread referenced by the first jl_ptls_t argument.
 JL_DLLEXPORT struct _jl_weakref_t *jl_gc_new_weakref_th(struct _jl_tls_states_t *ptls,
-                                                        struct _jl_value_t *value);
+                                                        struct _jl_value_t *value) JL_CANSAFEPOINT;
 // Permanently allocates a memory slot of the size specified by the first parameter. This
 // block of memory is allocated in an immortal region that is never swept. The second
 // parameter specifies whether the memory should be filled with zeros. The third and fourth

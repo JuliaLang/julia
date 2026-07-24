@@ -67,6 +67,7 @@ extern "C" {
     XX(setfieldonce,"setfieldonce!") \
     XX(setglobal,"setglobal!") \
     XX(setglobalonce,"setglobalonce!") \
+    XX(bitsizeof,"bitsizeof") \
     XX(sizeof,"sizeof") \
     XX(svec,"svec") \
     XX(swapfield,"swapfield!") \
@@ -76,9 +77,10 @@ extern "C" {
     XX(tuple,"tuple") \
     XX(typeassert,"typeassert") \
     XX(typeof,"typeof") \
+    XX(has_free_typevars,"has_free_typevars")
 
 #define DECLARE_BUILTIN(cname,jlname) \
-    JL_CALLABLE(jl_f_##cname);
+    JL_CALLABLE(jl_f_##cname) JL_CANSAFEPOINT;
 JL_BUILTIN_FUNCTIONS(DECLARE_BUILTIN)
 #undef DECLARE_BUILTIN
 

@@ -468,7 +468,7 @@ module IteratorsMD
     __inc(::Tuple{}, ::Tuple{}) = false, ()
     @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
-        I = state[1] + step(rng)
+        I = state[1] +% step(rng)
         valid = state[1] != last(rng)
         return valid, (I,)
     end
@@ -592,13 +592,13 @@ module IteratorsMD
     @inline __dec(::Tuple{}, ::Tuple{}) = false, ()
     @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
-        I = state[1] - step(rng)
+        I = state[1] -% step(rng)
         valid = state[1] != first(rng)
         return valid, (I,)
     end
     @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
-        I = state[1] - step(rng)
+        I = state[1] -% step(rng)
         if state[1] != first(rng)
             return true, (I, tail(state)...)
         end

@@ -766,7 +766,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
     # --print-before/--print-after with pass names is broken on Windows due to no-gnu-unique issues
     if !Sys.iswindows()
-        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization") do
+        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization", "JULIA_OBJCACHE" => "0") do
             let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
                 code = code[3]
@@ -1305,6 +1305,23 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     close(err.in)
     txt = readline(err)
     @test startswith(txt, r"ERROR: (syntax: incomplete|ParseError:)")
+end
+
+# uncaught errors in `-e` and script files must not leak driver frames
+# (exec_options, _start, eval/include machinery) into the printed backtrace
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+    script = tempname() * ".jl"
+    write(script, "f() = error(\"boom\")\nf()\n")
+    for cmd in (`$exename -e 'f() = error("boom"); f()'`, `$exename $script`)
+        (success, out, err) = readchomperrors(cmd)
+        @test !success
+        @test occursin("boom", err)
+        @test occursin("top-level scope", err)
+        @test !occursin("exec_options", err)
+        @test !occursin("_start", err)
+        @test !occursin("__script_entry", err)
+    end
+    rm(script; force=true)
 end
 
 # Issue #29855

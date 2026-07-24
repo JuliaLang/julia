@@ -8,6 +8,12 @@
 #    T
 #end
 #const Type = TypeEq(T) where T
+# TypeEgal{T} is the egality-based dual of TypeEq{T}: its only instance is `T`
+# itself (matched by `===`), used internally for dispatch-cache specialization.
+# Free typevars are disallowed inside TypeEgal.
+#struct TypeEgal <: AnyType
+#    T
+#end
 
 #abstract type Vararg{T} end
 
@@ -286,7 +292,26 @@ end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
-      (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
+      (f::typeof(Typeof))(x) = begin
+          $(_expr(:meta,:nospecialize,:x))
+          if isa(x,Type)
+              has_free_typevars(x) ? Type{x} : TypeEgal{x}
+          else
+              typeof(x)
+          end
+      end
+      end)
+
+# like `Typeof`, but yields the equality kind `Type{x}` for type values; used
+# by lowering to spell the callee self-type of method definitions, so equal
+# UnionAll spellings share the constructor method they define
+function TypeEqOf end
+ccall(:jl_toplevel_eval_in, Any, (Any, Any),
+      Core, quote
+      (f::typeof(TypeEqOf))(x) = begin
+          $(_expr(:meta,:nospecialize,:x))
+          isa(x,Type) ? Type{x} : typeof(x)
+      end
       end)
 
 function iterate end
@@ -355,8 +380,6 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 
 # will be inserted by the frontend for closures
 _typeof_captured_variable(@nospecialize t) = (@_total_meta; t isa Type && has_free_typevars(t) ? typeof(t) : Typeof(t))
-
-has_free_typevars(@nospecialize t) = (@_total_meta; ccall(:jl_has_free_typevars, Int32, (Any,), t) === Int32(1))
 
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
@@ -472,9 +495,9 @@ MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typema
 
 struct AssertionError <: Exception
     msg::AbstractString
-    AssertionError(msg::AbstractString) = new(msg)
+    AssertionError(msg::AbstractString) = (@noinline; new(msg))
 end
-AssertionError() = AssertionError("")
+AssertionError() = (@noinline; AssertionError(""))
 
 struct FieldError <: Exception
     type::DataType

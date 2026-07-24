@@ -1507,6 +1507,12 @@ end
 @test Base.infer_effects(invokelatest, Tuple{Vararg{Any}}) == Compiler.Effects()
 @test Base.infer_effects(invoke, Tuple{Vararg{Any}}) == Compiler.Effects()
 
+bitsizeof_int() = Core.bitsizeof(Int)
+let effects = Base.infer_effects(bitsizeof_int)
+    @test Compiler.is_foldable_nothrow(effects)
+    @test Compiler.is_inaccessiblememonly(effects)
+end
+
 # Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)
 let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
         Core._svec_ref(svec, i)
@@ -1551,6 +1557,27 @@ let f = (x) -> Core.Intrinsics.trunc_int(Int16, x)
     @test !Compiler.is_nothrow(Base.infer_effects(f, (Int16,)))
     @test Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
     @test catch_error_61435(f, Int16(0)) === :caught
+end
+
+# Intrinsic width checks use logical primitive widths rather than storage sizes.
+primitive type EffectsUInt17 17 end
+primitive type EffectsUInt23 23 end
+let f = (x) -> Core.Intrinsics.bitcast(EffectsUInt17, x)
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt23,)))
+    @test Base.infer_exception_type(f, (EffectsUInt23,)) === ErrorException
+    @test !fully_eliminated((EffectsUInt23,)) do x
+        f(x)
+        return nothing
+    end
+end
+let f = (x) -> Core.Intrinsics.zext_int(EffectsUInt23, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt17,)))
+end
+let f = (x) -> Core.Intrinsics.sext_int(EffectsUInt23, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt17,)))
+end
+let f = (x) -> Core.Intrinsics.trunc_int(EffectsUInt17, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (EffectsUInt23,)))
 end
 
 # issue #57324

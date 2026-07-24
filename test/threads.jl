@@ -320,7 +320,7 @@ close(proc.in)
         try
             wait(proc)
         finally
-            done[] = true
+            @atomic done[] = true
             close(timer)
         end
         if !success(proc) || timeout
@@ -586,4 +586,22 @@ end
 let once = OncePerTask{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("expected") once()
+end
+
+# Exercise `save_stack`/`restore_stack` under GC pressure: a missing write-barrier
+# when storing the freshly-allocated copy-stack buffer into `lastt->ctx.stkbuf`
+# let the GC collect the buffer while the (old) task still referenced it.
+let code = """
+    function f(x)
+        x in (0, 1) && return x
+        a = Threads.@spawn f(x - 2)
+        b = Threads.@spawn f(x - 1)
+        return fetch(a) + fetch(b)
+    end
+    print(@sync f(25))
+    """
+    cmd = addenv(`$(Base.julia_cmd()) --depwarn=error --startup-file=no -t4 -e $code`,
+                 "JULIA_COPY_STACKS" => "1")
+    # JULIA_COPY_STACKS is broken on Windows (#35147)
+    @test read(cmd, String) == "75025" skip=Sys.iswindows()
 end
