@@ -38,7 +38,10 @@ JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
     uv_mutex_lock(&bt_data_prof_lock);
     if (profile_running) {
-        // the sampler may be writing into the buffer we are about to free
+        // the sampler may be writing into the buffer we are about to free. Note this
+        // only rules out re-initializing while running: `jl_profile_stop_timer` doesn't
+        // wait for a sampler iteration already under way, and the thread samplers write
+        // without taking this lock.
         uv_mutex_unlock(&bt_data_prof_lock);
         return -2;
     }
