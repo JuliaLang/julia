@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# clear any hooks that the compiler image saved for its own output: this build
+# stage has no `Base._start` to do it (see the definition in client.jl)
+empty!(Base.postoutput_hooks)
+
 Base.include("Base.jl") # finish populating Base (currently just has the Compiler)
 
 # Set up Main module by importing from Base
@@ -157,5 +161,13 @@ Base.TOML.reinit!(Base.TOML_CACHE.p, "")
 @eval Sys begin
     BINDIR = ""
     STDLIB = ""
+end
+
+println(stdout, "Outputting sysimage file...")
+let pre_output_time = time_ns(), stdout = stdout
+    Base.postoutput() do
+        output_time = time_ns() - pre_output_time
+        print(stdout, "Output ────── "); Base.time_print(stdout, output_time); println(stdout)
+    end
 end
 end
