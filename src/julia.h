@@ -416,7 +416,7 @@ typedef struct _jl_method_t {
     struct _jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
-    _Atomic(uint8_t) dispatch_status; // METHOD_SIG_LATEST_WHICH bit, see julia_internal.h
+    _Atomic(uint8_t) dispatch_status; // bits defined in julia_internal.h or staticdata.jl
     _Atomic(jl_genericmemory_t*) interferences; // set of intersecting methods not more specific
     _Atomic(size_t) primary_world;
 
@@ -508,7 +508,7 @@ struct _jl_method_instance_t {
     //   bit 2: The ->backedges field is currently being walked higher up the stack - entries may be deleted, but not moved
     //   bit 3: The ->backedges field was modified and should be compacted when clearing bit 2
     _Atomic(uint8_t) flags;
-    _Atomic(uint8_t) dispatch_status; // METHOD_SIG_LATEST_ONLY bit, see julia_internal.h
+    _Atomic(uint8_t) dispatch_status; // bits defined in julia_internal.h or staticdata.jl
     _Atomic(uint8_t) precompile; // if set, this will be added to the output system image
 };
 #define JL_MI_FLAGS_MASK_PRECOMPILED    0x01

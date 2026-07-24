@@ -1082,8 +1082,6 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->isva = 0;
     m->nargs = 0;
     jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
-    // a method is born beating nothing; METHOD_SIG_NO_LOSERS is monotone-cleared
-    // from here (by activation scans and later insertions), never re-derived
     jl_atomic_store_relaxed(&m->dispatch_status, METHOD_SIG_NO_LOSERS);
     jl_atomic_store_relaxed(&m->interferences, (jl_genericmemory_t*)jl_an_empty_memory_any);
     m->is_for_opaque_closure = 0;

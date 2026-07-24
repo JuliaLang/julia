@@ -941,11 +941,6 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         for (i = 0; i < l; i++) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
             //uint64_t t0 = uv_hrtime();
-            // Re-runs the full intersection scan against the live table, so the
-            // interference relation stays complete across package boundaries:
-            // this method's set and every intersecting partner's set are updated
-            // here. (Internal methods keep the complete sets serialized at
-            // precompile time.)
             jl_method_table_activate(entry);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);

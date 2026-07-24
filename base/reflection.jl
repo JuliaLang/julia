@@ -1233,7 +1233,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         end
         # if ml-matches reported the existence of an ambiguity over their
         # intersection, see if both m1 and m2 seem to be involved in it
-        # (if one was fully dominated by a different method, we want to will
+        # (if one was fully dominated by a different method, we want to
         # report the other ambiguous pair)
         have_m1 = have_m2 = false
         for match in ms
@@ -1248,12 +1248,11 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         if !ambiguous_bottom
             # Since we're intentionally ignoring certain ambiguities (via the
             # filter call above), re-run the runtime's match sort on the
-            # remaining matches: without the Union{}-parameter matches, the
-            # apparent ambiguity may now be resolved by the other more specific
-            # methods (possibly only by a union of several of them together).
-            # This prunes every match that can no longer be a dispatch target
-            # from `ms` and recomputes whether any ambiguity remains.
-            ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0 && return false
+            # remaining matches and see if the solution is still holding an ambiguity
+            # and m1 and m2 are both still reported in the solution
+            if ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0
+                return false
+            end
             have_m1 = have_m2 = false
             for match in ms
                 m = (match::Core.MethodMatch).method
@@ -1261,8 +1260,6 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
                 m === m2 && (have_m2 = true)
             end
             if !have_m1 || !have_m2
-                # the remaining ambiguity is not between m1 and m2 (at least one
-                # of them can never be the dispatch target over `ti`)
                 return false
             end
         end
