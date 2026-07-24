@@ -327,7 +327,7 @@ split_generated(st::SyntaxTree, gen_part) = @stm st begin
     else
         nongen
     end
-    _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
+    _ -> mapchildren(x->split_generated(x, gen_part), st)
 end
 
 # Set [no]specialize on a function parameter's identifier.  `meta` is a symbol
@@ -361,7 +361,7 @@ function apply_arg_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
         @jl_assert meta2 in (:specialize, :nospecialize) st
         apply_arg_meta(st[2], meta2)
     elseif k == K"parameters"
-        mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
+        mapchildren(x->apply_arg_meta(x, meta), st)
     else
         @jl_assert false st
     end
@@ -377,8 +377,8 @@ function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol
             fixed == x ? st : @ast g st [K"::" fixed t]
         end
         [K"call" f args...] -> mapchildren(x->
-            x == f ? strip_arg_meta(f) : apply_arg_meta(x, meta), st._graph, st)
-        [K"tuple" _...] -> mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
+            x == f ? strip_arg_meta(f) : apply_arg_meta(x, meta), st)
+        [K"tuple" _...] -> mapchildren(x->apply_arg_meta(x, meta), st)
     end
 end
 
@@ -412,7 +412,7 @@ function force_readable_sparams(st)
     @ast g st [K"where" sig2 wheres...]
 end
 _mangle_writeonly_argt(st, seen) = let g = st._graph; @stm st begin
-    [K"parameters" _...] -> mapchildren(c->_mangle_writeonly_argt(c, seen), g, st)
+    [K"parameters" _...] -> mapchildren(c->_mangle_writeonly_argt(c, seen), st)
     [K"kw" x v] -> @ast g st [K"kw" _mangle_writeonly_argt(x, seen) v]
     [K"=" x v] -> @ast g st [K"=" _mangle_writeonly_argt(x, seen) v]
     [K"..." x] -> @ast g st [K"..." _mangle_writeonly_argt(x, seen)]
@@ -430,7 +430,7 @@ function _mangle_writeonly(st, seen)
     elseif is_leaf(st) || is_quoted(st) || k === K"->" || k === K"function"
         st
     else
-        mapchildren(c->_mangle_writeonly(c, seen), g, st)
+        mapchildren(c->_mangle_writeonly(c, seen), st)
     end
 end
 
@@ -693,7 +693,7 @@ function est_to_dst(st::SyntaxTree)
 
         # avoid creating excess nodes
         _ -> let out_cs = mapsyntax(rec, children(st))
-            out_cs.ids == children(st).ids ? st : mknode(st, out_cs)
+            out_cs == children(st) ? st : mknode(st, out_cs)
         end
     end
 end

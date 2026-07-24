@@ -1110,7 +1110,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         # weird top-level semantics for `gen`, but we still need to translate
         # the binding it contains to a globalref. (TODO: use
         # static_eval for this meta, somehow)
-        mapchildren(ctx, ex) do e
+        mapchildren(ex) do e
             _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, e)
         end
     elseif is_literal(k) || is_quoted(k)
@@ -1120,7 +1120,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     elseif k == K"code_info"
         ex
     else
-        mapchildren(ctx, ex) do e
+        mapchildren(ex) do e
             _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, e)
         end
     end

@@ -125,7 +125,7 @@ function _relayer_global_if_unhygienic(done::SyntaxList, st::SyntaxTree, sc::Syn
         lhs = _relayer_global_if_unhygienic(done, st[1], sc)
         n_done == length(done) ? st : (@ast st._graph st [k lhs st[2]])
     elseif k === K"tuple" || k === K"parameters"
-        mapchildren(e->_relayer_global_if_unhygienic(done, e, sc), st._graph, st)
+        mapchildren(e->_relayer_global_if_unhygienic(done, e, sc), st)
     else
         st
     end
@@ -579,7 +579,7 @@ function _arg_to_temp(ctx, stmts, ex)
     elseif k == K"kw"
         @ast ctx ex [K"kw" ex[1] _arg_to_temp(ctx, stmts, ex[2])]
     elseif k == K"parameters"
-        mapchildren(ctx, ex) do e
+        mapchildren(ex) do e
             _arg_to_temp(ctx, stmts, e)
         end
     else
@@ -655,7 +655,7 @@ function replace_beginend(ctx, ex, arr, n, splats, is_last)
         # positional, but in this context we have just used their positions anyway
         @ast ctx ex [K"kw" ex[1] replace_beginend(ctx, ex[2], arr, n, splats, is_last)]
     else
-        mapchildren(e->replace_beginend(ctx, e, arr, n, splats, is_last), ctx, ex)
+        mapchildren(e->replace_beginend(ctx, e, arr, n, splats, is_last), ex)
     end
 end
 
@@ -3403,7 +3403,7 @@ function rewrite_ctor(ctx, ex, tname, global_tname, struct_typevars, field_types
             @ast ctx ex [K"function" call2 body2]
         end
         x -> mapchildren(e->rewrite_ctor(
-            ctx, e, tname, global_tname, struct_typevars, field_types), ctx, ex)
+            ctx, e, tname, global_tname, struct_typevars, field_types), ex)
     end
 end
 
@@ -3423,7 +3423,7 @@ function _rewrite_ctor_new_calls(ctx, ex, global_struct_name, ctor_sparams,
         return mapchildren(
             e->_rewrite_ctor_new_calls(ctx, e, global_struct_name, ctor_sparams,
                                        struct_typevars, ctor_self, field_types),
-            ctx, ex
+            ex
         )
     end
     # Rewrite a call to new()
@@ -3544,7 +3544,7 @@ function _insert_fieldtype_struct_shim(ctx, sname, ex)
         syntax_name(ex[2]) == syntax_name(sname)
         @ast ctx ex [K"call" "struct_name_shim"::K"core" ex[1] ex[2] syntax_module(ex)::K"Value" sname]
     elseif numchildren(ex) > 0
-        mapchildren(e->_insert_fieldtype_struct_shim(ctx, sname, e), ctx, ex)
+        mapchildren(e->_insert_fieldtype_struct_shim(ctx, sname, e), ex)
     else
         ex
     end
@@ -3571,7 +3571,7 @@ function _replace_type_constructors(ctx, ex)
         end
         return @ast ctx ex [K"call" new_children...]
     else
-        return mapchildren(e->_replace_type_constructors(ctx, e), ctx, ex)
+        return mapchildren(e->_replace_type_constructors(ctx, e), ex)
     end
 end
 
@@ -4489,12 +4489,12 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         if numchildren(ex) == 0
             @ast ctx ex [K"return" (::K"nothing")]
         elseif numchildren(ex) == 1
-            mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
+            mapchildren(e->expand_forms_2(ctx,e), ex)
         else
             throw(LoweringError(ex, "More than one argument to return"))
         end
     else
-        mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
+        mapchildren(e->expand_forms_2(ctx,e), ex)
     end
 end
 

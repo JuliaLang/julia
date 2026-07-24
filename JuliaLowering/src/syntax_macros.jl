@@ -435,7 +435,7 @@ function _ensure_syntax_version(st, ver::VersionNumber)
     if is_leaf(st) || numchildren(st) == 0
         st_sc == sc ? st : setattr(st, :context, sc)
     else
-        out = mapchildren(c->_ensure_syntax_version(c, ver), st._graph, st)
+        out = mapchildren(c->_ensure_syntax_version(c, ver), st)
         st_sc == sc ? out :
             out !== st ? setattr!(out, :context, sc) : setattr(out, :context, sc)
     end

@@ -65,8 +65,7 @@ function _rebase_layers(st, slmap, scmap)
     if is_leaf(st) || numchildren(st) == 0
         setattr(st, :context, sc2)
     else
-        setattr!(mapchildren(c->_rebase_layers(c, slmap, scmap), st._graph, st),
-                 :context, sc2)
+        setattr!(mapchildren(c->_rebase_layers(c, slmap, scmap), st), :context, sc2)
     end
 end
 

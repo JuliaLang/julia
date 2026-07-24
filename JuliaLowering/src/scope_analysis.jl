@@ -442,7 +442,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         # TODO: Should local decls be disallowed in value position?
         @ast ctx ex (::K"nothing")
     elseif k == K"decl"
-        ex_out = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
+        ex_out = mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
         name = ex_out[1]
         if kind(name) != K"Placeholder"
             binfo = get_binding(ctx, name)
@@ -615,7 +615,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         end
         newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"function_decl"
-        resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
+        resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
         name = resolved[1]
         if kind(name) == K"BindingId"
             bk = get_binding(ctx, name).kind
@@ -632,7 +632,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         if !is_top_scope(enclosing_lambda(ctx, scope))
             throw(LoweringError(ex, "unsupported `const` inside function"))
         end
-        resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
+        resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
         if kind(resolved[1]) !== K"Placeholder"
             @jl_assert kind(resolved[1]) === K"BindingId" resolved
             if get_binding(ctx, syntax_id(resolved[1])).kind === :local
@@ -652,7 +652,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         get_binding(ctx, out).kind !== :global ? (@ast ctx ex (::K"TOMBSTONE")) :
             @ast ctx ex [K"global" out]
     else
-        mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
+        mapchildren(e->_resolve_scopes(ctx, e, scope), ex)
     end
 end
 

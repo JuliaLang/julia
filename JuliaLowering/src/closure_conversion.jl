@@ -384,14 +384,14 @@ function map_cl_convert(ctx::ClosureConversionCtx, ex)
             ctx.closure_bindings, ctx.capture_rewriting, ctx.top_bindings,
             ctx.lambda_bindings, ctx.sp_typevars, true, ctx.lifted,
             ctx.toplevel_pure, toplevel_stmts, ctx.closure_infos)
-        res = mapchildren(e->_convert_closures(ctx2, e), ctx2, ex)
+        res = mapchildren(e->_convert_closures(ctx2, e), ex)
         if isempty(toplevel_stmts)
             res
         else
             @ast ctx ex [K"block" toplevel_stmts... res]
         end
     else
-        mapchildren(e->_convert_closures(ctx, e), ctx, ex)
+        mapchildren(e->_convert_closures(ctx, e), ex)
     end
 end
 

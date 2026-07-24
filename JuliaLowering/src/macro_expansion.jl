@@ -348,7 +348,7 @@ function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
         qdepth2 = qdepth + (k === K"quote" ? 1 : k === K"$" ? -1 : 0)
         sqdepth2 = sqdepth + (k === K"syntaxquote" ? 1 : k === K"syntaxunquote" ? -1 : 0)
         out = mapchildren(c->apply_expansion_layer(
-            ctx, c, sc_in, done2, qdepth2, sqdepth2), ctx, st)
+            ctx, c, sc_in, done2, qdepth2, sqdepth2), st)
         setattr!(out, :context, sc)
     end
     out
@@ -390,7 +390,7 @@ function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
             ctx, apply_expansion_layer(
                 ctx, st, st.context::SyntaxContext, true, 0, 0))
     else
-        mapchildren(c->expand_forms_1(ctx, c), ctx, st)
+        mapchildren(c->expand_forms_1(ctx, c), st)
     end
 end
 

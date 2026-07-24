@@ -342,7 +342,7 @@ function _flatten_blocks(st::SyntaxTree)
     elseif is_quoted(st)
         SyntaxList(st)
     else
-        SyntaxList(mapchildren(flatten_blocks, st._graph, st))
+        SyntaxList(mapchildren(flatten_blocks, st))
     end
 end
 
@@ -353,7 +353,7 @@ function flatten_blocks(st::SyntaxTree)
     elseif is_quoted(st)
         st
     else
-        mapchildren(flatten_blocks, st._graph, st)
+        mapchildren(flatten_blocks, st)
     end
 end
 
@@ -381,6 +381,6 @@ function _replace_binding_ids(ctx, ssamap, st)
     elseif is_leaf(st) || is_quoted(st)
         st
     else
-        mapchildren(e->_replace_binding_ids(ctx, ssamap, e), ctx, st)
+        mapchildren(e->_replace_binding_ids(ctx, ssamap, e), st)
     end
 end

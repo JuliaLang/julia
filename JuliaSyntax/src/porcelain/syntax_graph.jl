@@ -21,8 +21,6 @@ one-to-one with ScopeLayer, with a few exceptions (contexts sharing same layer):
 We may want to move layer out of this struct for easier adopt_scope and
 rebase_layer operations, but assuming mostly hygienic macros and few
 scope-changing functions, this is most compact.
-
-(TODO) GlobalRef (attr :mod) could probably also go through this system
 """
 mutable struct SyntaxContext
     const layer::ScopeLayer
@@ -65,19 +63,16 @@ Base.var"=="(st1::SyntaxTree, st2::SyntaxTree) = st1 === st2
 const NodeId = SyntaxTree
 const SourceAttrType = Union{SyntaxTree,SourceRef,LineNumberNode}
 
-# shim for refactoring
-SyntaxTree(g::SyntaxGraph, id::SyntaxTree) = id
-
 function setchildren!(id::NodeId, children::AbstractVector{NodeId})
     id.children = children
 end
 
 # fallback printing.  TODO: vulnerable to invalidations
-function node_string(ex::SyntaxTree, depth=2)
+function node_string(ex::SyntaxTree, depth=0)
     out = ""
     for n in sort!(collect(fieldnames(typeof(ex))))
         if hasattr(ex, n)
-            out *= ", "*string(n)*"="*repr(getproperty(ex, n))
+            out *= ", "*string(n)*"="*string(getproperty(ex, n))
         end
     end
     if is_leaf(ex)
@@ -152,15 +147,19 @@ function hasattr(ex::SyntaxTree, name::Symbol)
 end
 
 function setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
-    setproperty!(ex, name, val)
+    setfield!(ex, name, val)
     ex
 end
 setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
     setattr!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), name, val)
 
 function deleteattr!(ex::SyntaxTree, name::Symbol)
-    setproperty!(ex, name, nothing)
+    setfield!(ex, name, nothing)
     ex
+end
+
+function setproperty!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
+    error("SyntaxTree: this can't be mutated")
 end
 
 # JuliaSyntax tree API
@@ -246,7 +245,7 @@ function adopt_scope(sc_in::SyntaxContext, st::SyntaxTree, scmap)
     if is_leaf(st) || numchildren(st) == 0
         sc2 === st_sc ? st : setattr(st, :context, sc2)
     else
-        out = mapchildren(c->adopt_scope(sc_in, c, scmap), st._graph, st)
+        out = mapchildren(c->adopt_scope(sc_in, c, scmap), st)
         sc2 === st_sc ? out :
             out !== st ? setattr!(out, :context, sc2) :
             setattr(out, :context, sc2)
@@ -526,27 +525,26 @@ end
 #-------------------------------------------------------------------------------
 # Mapping and copying of AST nodes
 
-function mapchildren(f::Function, ctx, ex::SyntaxTree)
+# This function should be allocation-free if no children were changed
+function mapchildren(f::Function, ex::SyntaxTree)
     if is_leaf(ex)
         return ex
     end
     orig_children = children(ex)
     cs = nothing
     for (i,e) in enumerate(orig_children)
-        newchild = f(e)
+        newchild = f(e)::SyntaxTree
         if isnothing(cs)
             if newchild == e
                 continue
             else
-                cs = SyntaxList(syntax_graph_js(ctx))
-                append!(cs, orig_children[1:i-1])
+                cs = SyntaxList(undef, length(orig_children))
+                copyto!(cs, orig_children[1:i-1])
             end
         end
-        push!(cs::SyntaxList, newchild)
+        cs[i] = newchild
     end
     if isnothing(cs)
-        # This function should be allocation-free if no children were changed
-        # by the mapping and there's no extra_attrs
         return ex
     end
     cs::SyntaxList
@@ -654,12 +652,12 @@ Give each descendent of `st` a `parent::NodeId` attribute.
 function annotate_parent!(st::SyntaxTree)
     g = syntax_graph_js(st)
     st = unalias_nodes(st)
-    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph_js(st), st)
+    mapchildren(t->_annotate_parent!(t, st._id), st)
 end
 
 function _annotate_parent!(st::SyntaxTree, pid::NodeId)
     setmeta!(st, :parent, pid)
-    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph_js(st), st)
+    mapchildren(t->_annotate_parent!(t, st._id), st)
 end
 
 #-------------------------------------------------------------------------------
@@ -1385,7 +1383,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
     # Recurse on `cs`.  If no children change, just return `st`.
     ret_cs = _map_green_to_est(st, cs; kw_in_params)
-    return ret_cs.ids == children(st).ids && ret_k == kind(st) ?
+    return ret_cs == children(st) && ret_k == kind(st) ?
         st : setattr!(mknode(st, ret_cs), :kind, ret_k)
 end
 
