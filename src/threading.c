@@ -369,6 +369,9 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #endif
     ptls->system_id = uv_thread_self();
     ptls->rngseed = jl_rand();
+    // adopted threads (tid == -1 here) may not switch tasks unless they
+    // explicitly opt in: their owner expects the entered cfunction to return
+    ptls->allow_task_switching = (tid != -1);
     if (tid == 0) {
         ptls->disable_gc = 1;
 #ifdef _OS_WINDOWS_
@@ -905,6 +908,14 @@ void jl_start_threads(void)
 
 _Atomic(unsigned) _threadedregion; // keep track of whether to prioritize IO or threading
 _Atomic(uint16_t) io_loop_tid; // mark which thread is assigned to run the uv_loop
+
+JL_DLLEXPORT int jl_allow_adopted_task_switching(int allow) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int prev = ptls->allow_task_switching;
+    ptls->allow_task_switching = (int16_t)!!allow;
+    return prev;
+}
 
 JL_DLLEXPORT int jl_in_threaded_region(void)
 {

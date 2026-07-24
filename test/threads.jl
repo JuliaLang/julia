@@ -424,6 +424,63 @@ end
     @test io_thread_test()
 end
 
+@testset "adopted threads deny task switching without opt-in" begin
+    # An adopted (foreign) thread's caller expects the entered cfunction to
+    # return, so Julia code on it may block in place (host `wait()` and be
+    # resumed by a notify), but may not be parked on other tasks' work: a
+    # switch to a *different* task errors unless the thread opts in with
+    # `jl_allow_adopted_task_switching`.
+    blocked_ok = Ref{Any}(nothing)
+    denied = Ref{Any}(nothing)
+    optin = Ref{Any}(nothing)
+    ch = Channel{Int}(1)
+    cl = function ()
+        try
+            blocked_ok[] = take!(ch) # blocking without a switch must still work
+        catch e
+            blocked_ok[] = e
+        end
+        try
+            @async nothing # a sticky task in this thread's workqueue...
+            yield()        # ...forces a switch to a different task
+            denied[] = :switched
+        catch e
+            denied[] = e
+        end
+        prev = @ccall jl_allow_adopted_task_switching(1::Cint)::Cint
+        try
+            t = @async :ran
+            yield()
+            optin[] = (Int(prev), fetch(t))
+        catch e
+            optin[] = e
+        end
+        nothing
+    end
+    function threadcallclosure(tid::Ref{UInt}, cl::Ref{F}) where {F}
+        threadwork = @cfunction cl -> cl() Cvoid (Ref{F},)
+        err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, cl::Ref{F})::Cint
+        err == 0 || Base.uv_error("uv_thread_create", err)
+        nothing
+    end
+    tid = Ref{UInt}(0)
+    clr = Ref(cl)
+    GC.@preserve clr begin
+        Base.preserve_handle(clr)
+        threadcallclosure(tid, clr)
+        put!(ch, 42) # unblock the adopted thread
+        gc_state = @ccall jl_gc_safe_enter()::Int8
+        err = @ccall uv_thread_join(tid::Ptr{UInt})::Cint
+        @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+        err == 0 || Base.uv_error("uv_thread_join", err)
+        Base.unpreserve_handle(clr)
+    end
+    @test blocked_ok[] === 42
+    @test denied[] isa ErrorException
+    @test occursin("task switch not allowed on an adopted foreign thread", (denied[]::ErrorException).msg)
+    @test optin[] === (0, :ran)
+end
+
 # Make sure default number of BLAS threads respects CPU affinity: issue #55572.
 @testset "LinearAlgebra number of default threads" begin
     if AFFINITY_SUPPORTED

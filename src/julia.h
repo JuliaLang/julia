@@ -2388,6 +2388,10 @@ JL_DLLEXPORT void JL_NORETURN jl_raise(int signo);
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT;
 JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_CANSAFEPOINT_ENTER;
+// Allow or disallow task switching on the current (adopted) thread; returns
+// the previous setting. Adopted threads default to disallowed: Julia code
+// running on them may block in place, but may not switch to other tasks.
+JL_DLLEXPORT int jl_allow_adopted_task_switching(int allow) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname) JL_NOTSAFEPOINT;
