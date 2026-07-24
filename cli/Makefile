@@ -17,7 +17,10 @@ LOADER_CFLAGS += -DGLIBCXX_LEAST_VERSION_SYMBOL=\"$(shell echo "$(CSL_NEXT_GLIBC
 endif
 
 ifeq ($(OS),WINNT)
-LOADER_LDFLAGS += -municode -mconsole -nostdlib -lntdll -lkernel32 -lpsapi
+# Even for -nostdlib freestanding code, the compiler may emit calls to memcpy/
+# memset/memmove/memcmp; gcc >= 16 does so for the loader's zero-initialized
+# path buffers, so link the mingw providers for them.
+LOADER_LDFLAGS += -municode -mconsole -nostdlib -lntdll -lkernel32 -lpsapi -lmingwex -lmsvcrt-os
 else ifeq ($(OS),Linux)
 # textoff and notext are aliases to the same option which suppress the TEXTREL warning for i686
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed -Wl,-z,notext
