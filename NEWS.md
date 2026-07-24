@@ -33,6 +33,7 @@ Language changes
     that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
     operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
     in the default operators ([#50790]).
+  - Characters can be parsed to more number types; `tryparse` now accepts characters as well as strings ([#59789])
 
 Compiler/Runtime improvements
 -----------------------------
