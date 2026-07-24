@@ -53,6 +53,10 @@ JL_DLLEXPORT int jl_compile_codeinst_fallback(jl_code_instance_t *unspec)
 }
 
 
+JL_DLLEXPORT void jl_jit_prime_crt_aliases_fallback(void)
+{
+}
+
 JL_DLLEXPORT void jl_emit_codeinsts_to_jit_fallback(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {
     for (int i = 0; i < len; ++i) {

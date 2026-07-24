@@ -1864,16 +1864,20 @@ JuliaOJIT::JuliaOJIT()
 #if defined(_CPU_X86_64_) && defined(_OS_DARWIN_)
         // LLVM 16 reverted to soft-float ABI for passing half on x86_64 Darwin
         // https://github.com/llvm/llvm-project/commit/2bcf51c7f82ca7752d1bba390a2e0cb5fdd05ca9
-        { mangle("__gnu_h2f_ieee"), { mangle("julia_half_to_float"),  JITSymbolFlags::Exported } },
-        { mangle("__extendhfsf2"),  { mangle("julia_half_to_float"),  JITSymbolFlags::Exported } },
-        { mangle("__gnu_f2h_ieee"), { mangle("julia_float_to_half"),  JITSymbolFlags::Exported } },
-        { mangle("__truncsfhf2"),   { mangle("julia_float_to_half"),  JITSymbolFlags::Exported } },
-        { mangle("__truncdfhf2"),   { mangle("julia_double_to_half"), JITSymbolFlags::Exported } },
+        // Every alias must have a DISTINCT target: two aliases in one reexport
+        // unit sharing a target register a lookup query's dependence twice,
+        // which asserts in LLVM (Core.cpp addQueryDependence) and permanently
+        // wedges the query in release builds.
+        { mangle("__gnu_h2f_ieee"), { mangle("julia_half_to_float"),      JITSymbolFlags::Exported } },
+        { mangle("__extendhfsf2"),  { mangle("julia_half_to_float_abi"),  JITSymbolFlags::Exported } },
+        { mangle("__gnu_f2h_ieee"), { mangle("julia_float_to_half"),      JITSymbolFlags::Exported } },
+        { mangle("__truncsfhf2"),   { mangle("julia_float_to_half_abi"),  JITSymbolFlags::Exported } },
+        { mangle("__truncdfhf2"),   { mangle("julia_double_to_half"),     JITSymbolFlags::Exported } },
 #else
         { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"),  JITSymbolFlags::Exported } },
-        { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"),  JITSymbolFlags::Exported } },
+        { mangle("__extendhfsf2"),  { mangle("julia__extendhfsf2"),   JITSymbolFlags::Exported } },
         { mangle("__gnu_f2h_ieee"), { mangle("julia__gnu_f2h_ieee"),  JITSymbolFlags::Exported } },
-        { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"),  JITSymbolFlags::Exported } },
+        { mangle("__truncsfhf2"),   { mangle("julia__truncsfhf2"),    JITSymbolFlags::Exported } },
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),    JITSymbolFlags::Exported } },
 #endif
         // BFloat16 conversion routines
@@ -1881,6 +1885,8 @@ JuliaOJIT::JuliaOJIT()
         { mangle("__truncdfbf2"),   { mangle("julia__truncdfbf2"),    JITSymbolFlags::Exported } },
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
+    for (auto &KV : jl_crt)
+        CRTAliasNames.add(KV.first);
 
 #ifdef _OS_OPENBSD_
     orc::SymbolMap i128_crt;
@@ -2135,6 +2141,28 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
     if (Wait)
         F.get(static_cast<JuliaTaskDispatcher &>(
             ES.getExecutorProcessControl().getDispatcher()));
+}
+
+// Materialize the compiler-rt aliases while the caller is still
+// single-threaded: the reexport unit resolves all of them through one nested
+// lookup on first touch, and on win32 that lookup has been observed to wedge
+// permanently when the first touch happens under concurrent queries (every
+// waiter then queues behind Float16/BFloat16 conversions forever; see the
+// "why does Windows CI hang" TODO at the alias definitions for an earlier
+// encounter with this area). Too early to run from the JuliaOJIT constructor.
+void JuliaOJIT::primeCRTAliases() JL_CANSAFEPOINT
+{
+    auto Result = ES.lookup({{&GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}},
+                            CRTAliasNames);
+    if (!Result)
+        jl_safe_printf("WARNING: failed to pre-resolve JIT float16 runtime aliases: %s\n",
+                       toString(Result.takeError()).c_str());
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN void jl_jit_prime_crt_aliases_impl(void) JL_CANSAFEPOINT
+{
+    if (jl_ExecutionEngine)
+        jl_ExecutionEngine->primeCRTAliases();
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void jl_jit_dump_state_impl(void) JL_NOTSAFEPOINT

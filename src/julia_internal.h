@@ -2218,6 +2218,7 @@ JL_DLLIMPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec)
 JL_DLLIMPORT int jl_compile_codeinst(jl_code_instance_t *unspec) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_tier_drain(void) JL_CANSAFEPOINT;
 JL_DLLIMPORT void jl_emit_codeinsts_to_jit(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len) JL_CANSAFEPOINT;
+JL_DLLIMPORT void jl_jit_prime_crt_aliases(void) JL_CANSAFEPOINT;
 
 typedef struct {
     LLVMOrcThreadSafeModuleRef TSM;
@@ -2291,7 +2292,7 @@ JL_DLLEXPORT void jl_tier_get_osr_stats(uint64_t *attempts, uint64_t *entered) J
 JL_DLLEXPORT uint32_t jl_tier_get_threshold(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_set_threshold(uint32_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_init(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_tier_start_worker(void);
+JL_DLLEXPORT void jl_tier_start_worker(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_tier_stop_worker(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_method_instance_t *jl_tier_worker_pop(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_quiesce(void) JL_CANSAFEPOINT;

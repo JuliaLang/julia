@@ -494,13 +494,17 @@ static void tier_worker_threadfun(void *arg) JL_NO_SAFEPOINT_ANALYSIS
     }
 }
 
-JL_DLLEXPORT void jl_tier_start_worker(void)
+JL_DLLEXPORT void jl_tier_start_worker(void) JL_CANSAFEPOINT
 {
     jl_tier_init();
     if (jl_atomic_load_relaxed(&tier_worker_stop))
         return; // shutdown already began; never start (or restart) past it
     if (jl_atomic_exchange_relaxed(&tier_worker_running, 1))
         return; // already started
+    // Resolve the JIT's compiler-rt reexport aliases before compilation can
+    // happen concurrently: their first-touch nested lookup has been observed
+    // to wedge permanently on win32 when it races other queries.
+    jl_jit_prime_crt_aliases();
     if (uv_thread_create(&tier_worker_uvthread, tier_worker_threadfun, NULL) != 0) {
         jl_atomic_store_relaxed(&tier_worker_running, 0);
         jl_atomic_store_relaxed(&tier_enabled, 0);

@@ -834,6 +834,7 @@ public:
     Error addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
     orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return CompileLayer; };
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
+    void primeCRTAliases() JL_CANSAFEPOINT;
     orc::JITDylib &createJITDylib(StringRef NamePrefix) JL_NOTSAFEPOINT;
 
     Expected<llvm::orc::ExecutorSymbolDef> findJDSymbol(orc::JITDylib &JD, StringRef Name, bool ExportedSymbolsOnly) JL_CANSAFEPOINT;
@@ -937,6 +938,7 @@ private:
     orc::ExecutionSession ES;
     orc::JITDylib &SessionJD;
     orc::JITDylib &GlobalJD;
+    orc::SymbolLookupSet CRTAliasNames;
     orc::JITDylib &JD;
     std::mutex SharedBytesMutex{};
     SharedBytesT SharedBytes;

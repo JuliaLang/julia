@@ -541,6 +541,7 @@
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_emit_codeinsts_to_jit) \
+    YY(jl_jit_prime_crt_aliases) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \
