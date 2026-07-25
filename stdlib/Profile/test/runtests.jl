@@ -80,6 +80,25 @@ test_profile()
 close(ch)
 test_has_task_profiler_sample_in_buffer()
 
+@testset "Profile.print() groupby options on a task profile" begin
+    data, lidict = Profile.retrieve()
+    # the task profiler records -1 as the thread id of a task that isn't running on
+    # one, which the grouped report has to tolerate
+    @test any(eachindex(data)) do i
+        Profile.is_block_end(data, i) &&
+            data[i - Profile.META_OFFSET_THREADID] == reinterpret(UInt, -1)
+    end
+    iobuf = IOBuffer()
+    with_logger(NullLogger()) do
+        @testset for format in [:flat, :tree]
+            @testset for groupby in Any[:none, :thread, :task, [:thread, :task], [:task, :thread]]
+                Profile.print(iobuf, data, lidict; groupby, format)
+                @test !isempty(String(take!(iobuf)))
+            end
+        end
+    end
+end
+
 Profile.clear()
 
 @profile busywait(1, 20)

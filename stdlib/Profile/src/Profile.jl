@@ -427,7 +427,8 @@ function collect_blocks(data::Vector{<:Unsigned})
     block_start = 1
     for i in eachindex(data)
         if is_block_end(data, i)
-            threadid = Int(data[i - META_OFFSET_THREADID])
+            # the task profiler records -1 for a task that isn't running on a thread
+            threadid = data[i - META_OFFSET_THREADID] % Int
             taskid = UInt(data[i - META_OFFSET_TASKID])
             push!(blocks, (threadid, taskid, block_start:i))
             block_start = i + 1
