@@ -685,6 +685,8 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         # resumed without a wake through our registration (interrupter or raw
         # throwto): disarm it, then unlink our entry under the lock
         @atomicreplace ct.waiting_on w => nothing
+        q = ct.queue
+        q === nothing || Base.list_deletefirst!(q::Base.StickyWorkqueue, ct)
         Base.relockall(c.lock, token)
         timer !== nothing && close(timer)
         Base.list_deletefirst!(Base.waitqueue(c), w)

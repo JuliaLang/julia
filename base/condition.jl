@@ -242,6 +242,11 @@ function wait(c::GenericCondition; first::Bool=false, waitee=c)
         # Clean up our wait condition.
         # TODO: Replace this with the proper cancellation protocol.
         @atomicreplace ct.waiting_on w => nothing
+        # Our wake may already have been claimed and turned into a workqueue
+        # enqueue that this unwind will never consume - drop that too, so a
+        # later `schedule` of this task does not find it spuriously queued.
+        q = ct.queue
+        q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
         # WARNING: Do not use `w` for establish a wait on any tokens - otherwise
         # we risk ABA issues by attempting to use the cached token for the lock wait.
         was_cached = ct.cached_wait_entry === w

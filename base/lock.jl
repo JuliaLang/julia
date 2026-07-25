@@ -254,6 +254,8 @@ function wait_no_relock(c::GenericCondition)
     catch
         # See disarm protocol in condition.jl
         @atomicreplace ct.waiting_on w => nothing
+        q = ct.queue
+        q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
         was_cached = ct.cached_wait_entry === w
         was_cached && (ct.cached_wait_entry = nothing)
         lock(c.lock)
