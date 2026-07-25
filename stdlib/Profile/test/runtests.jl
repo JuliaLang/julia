@@ -427,6 +427,15 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+# the elements of the flat `"<key>":[...]` array of a .heapsnapshot. Every field is
+# emitted as an unsigned decimal, and e.g. an edge's `name_or_index` can be typemax(UInt).
+# Also used by heapsnapshot_reassemble.jl, which runs under MMTk too.
+function snapshot_array(sshot::AbstractString, key::AbstractString)
+    start = last(findfirst("\"$key\":[", sshot)) + 1
+    section = strip(sshot[start:findnext(==(']'), sshot, start)-1])
+    return isempty(section) ? UInt[] : parse.(UInt, split(section, ','))
+end
+
 # FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
 @static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
@@ -493,13 +502,6 @@ end
             end
         end
     end
-end
-
-# the elements of the flat `"<key>":[...]` array of a .heapsnapshot, as integers
-function snapshot_array(sshot::AbstractString, key::AbstractString)
-    start = last(findfirst("\"$key\":[", sshot)) + 1
-    section = strip(sshot[start:findnext(==(']'), sshot, start)-1])
-    return isempty(section) ? Int[] : parse.(Int, split(section, ','))
 end
 
 # the documented streaming workflow: stream the parts, assemble offline, clean up
