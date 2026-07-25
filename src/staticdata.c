@@ -884,6 +884,13 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     else if (jl_is_module(v)) {
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
     }
+    else if (jl_is_cancel_source(v)) {
+        // Write parents - child lists are reconstruct at load time.
+        jl_cancel_source_t *cs = (jl_cancel_source_t*)v;
+        jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
+        for (size_t i = 0; i < cs->nparents; i++)
+            jl_queue_for_serialization_(s, (jl_value_t*)links[i].parent, 1, immediate);
+    }
     else if (layout->nfields > 0) {
         if (jl_options.trim) {
             if (jl_is_method(v)) {
@@ -1588,6 +1595,24 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         else if (jl_is_string(v)) {
             ios_write(f, (char*)v, sizeof(void*) + jl_string_len(v));
             write_uint8(f, '\0'); // null-terminated strings for easier C-compatibility
+        }
+        else if (jl_is_cancel_source(v)) {
+            // Variable-sized. Store parents, reset children (reconstructed on load).
+            assert(f == s->s);
+            jl_cancel_source_t *cs = (jl_cancel_source_t*)v;
+            write_pointerfield(s, jl_nothing); // child_head (weak; reset)
+            write_uint8(f, jl_atomic_load_relaxed(&cs->state));
+            write_padding(f, offsetof(jl_cancel_source_t, nparents) - sizeof(void*) - sizeof(uint8_t));
+            ios_write(f, (char*)&cs->nparents, sizeof(uint16_t));
+            write_padding(f, sizeof(jl_cancel_source_t) - offsetof(jl_cancel_source_t, nparents) - sizeof(uint16_t));
+            jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
+            for (size_t i = 0; i < cs->nparents; i++) {
+                write_pointerfield(s, (jl_value_t*)links[i].parent);
+                write_pointerfield(s, jl_nothing); // next (weak; reset)
+                write_pointer(f);                  // pprev (reset; set by relink)
+            }
+            // relink under the parents on load
+            arraylist_push(&s->fixup_objs, (void*)reloc_offset);
         }
         else if (jl_is_foreign_type(t) == 1) {
             abort(); // unreachable
@@ -2679,7 +2704,9 @@ static int strip_module(jl_module_t *m, jl_sym_t *docmeta_sym) JL_CANSAFEPOINT
                 record_field_change((jl_value_t**)&b->value, jl_nothing);
             // TODO: this is a pretty stupidly unsound way to do this, but it is way to late here to do this correctly (by calling delete_binding and getting an updated world age then dropping all partitions from older worlds)
             jl_binding_partition_t *bp = jl_atomic_load_relaxed(&b->partitions);
-            while (bp) {
+            // The last partition's `next` holds a backreference to `b`, so stop
+            // when we reach something that is no longer a partition.
+            while (bp && jl_is_binding_partition((jl_value_t*)bp)) {
                 if (jl_bkind_is_defined_constant(jl_binding_kind(bp))) {
                     // XXX: bp->kind = PARTITION_KIND_UNDEF_CONST;
                     record_field_change((jl_value_t**)&bp->restriction, NULL);
@@ -4217,6 +4244,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                     }
                 }
             }
+        }
+        else if (jl_is_cancel_source(obj)) {
+            // relink under its parents, as if newly allocated (the weak
+            // child links were dropped at serialization)
+            jl_cancel_source_relink((jl_cancel_source_t*)obj);
         }
         else {
             abort();

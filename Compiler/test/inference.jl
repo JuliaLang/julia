@@ -1449,6 +1449,7 @@ test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
 test_const_return(()->fieldtype(Dict{Int64,Nothing}, :age), Tuple{}, UInt)
 test_const_return(@eval(()->Core.sizeof($(Array{Int,0}(undef)))), Tuple{}, 2 * sizeof(Int))
 test_const_return(@eval(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2)))), Tuple{}, 4 * sizeof(Int))
+primitive type BitsizeofUInt17 17 end
 # TODO: do we want to implement these?
 # test_const_return(@eval(()->sizeof($(Array{Int,0}(undef)))), Tuple{}, sizeof(Int))
 # test_const_return(@eval(()->sizeof($(Matrix{Float32}(undef, 2, 2)))), Tuple{}, 4 * 2 * 2)
@@ -1460,6 +1461,15 @@ function sizeof_typeref(typeref)
 end
 @test @inferred(sizeof_typeref(Ref{DataType}(Int))) == sizeof(Int)
 @test find_call(only(code_typed(sizeof_typeref, (Ref{DataType},)))[1], Core.sizeof, 2)
+# Make sure Core.bitsizeof with a ::DataType as inferred input type is inferred but not constant.
+function bitsizeof_typeref(typeref)
+    return Core.bitsizeof(typeref[])
+end
+@test bitsizeof_typeref(Ref{DataType}(BitsizeofUInt17)) == 17
+let (src, rt) = only(code_typed(bitsizeof_typeref, (Ref{DataType},)))
+    @test rt === Int
+    @test find_call(src, Core.bitsizeof, 2)
+end
 # Constant `Vector` can be resized and shouldn't be optimized to a constant.
 const constvec = [1, 2, 3]
 @eval function sizeof_constvec()
@@ -1642,10 +1652,14 @@ let nfields_tfunc(@nospecialize xs...) =
         Compiler.nfields_tfunc(Compiler.fallback_lattice, xs...)
     sizeof_tfunc(@nospecialize xs...) =
         Compiler.sizeof_tfunc(Compiler.fallback_lattice, xs...)
+    bitsizeof_tfunc(@nospecialize xs...) =
+        Compiler.bitsizeof_tfunc(Compiler.fallback_lattice, xs...)
     sizeof_nothrow(@nospecialize xs...) =
         Compiler.sizeof_nothrow(xs...)
     @test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
     @test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
+    @test bitsizeof_tfunc(Type{BitsizeofUInt17}) === Const(17)
+    @test bitsizeof_tfunc(DataType) === Int
     @test !sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
     @test sizeof_nothrow(Union{Ptr, Int, Core.TypeEgal{Ptr{Int8}}, Core.TypeEgal{Int}})
     @test sizeof_nothrow(Const(Ptr))

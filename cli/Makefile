@@ -33,6 +33,15 @@ LOADER_EXE_LDFLAGS := $(LOADER_LDFLAGS)
 
 ifeq ($(OS),Darwin)
 LOADER_EXE_LDFLAGS += -Wl,-export_dynamic
+# The macOS app bundle (contrib/mac/app) uses a plain copy of this loader at
+# Contents/MacOS/julia-terminal as its main executable (Apple's notary requires
+# a real Mach-O there, not a symlink into the sealed Resources tree). From that
+# location @executable_path/../lib misses the bundled julia tree, so also carry
+# an rpath to the bundle's lib dir. In any other layout the path simply doesn't
+# exist and dyld ignores it. Baking it in at link time keeps the .app assembly
+# a pure repackage of the binary dist, needing no Mach-O tools (it runs on
+# Linux CI hosts).
+LOADER_EXE_LDFLAGS += -Wl,-rpath,'@executable_path/../Resources/julia/lib'
 endif
 
 # Build list of dependent libraries that must be opened

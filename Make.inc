@@ -1683,7 +1683,7 @@ WIN_LD_CRT_END_OBJ := $(build_private_libdir)/crtend.o
 WIN_LD_CRT_END := $(WIN_MINGW_CRT_LIBS) $(WIN_LD_CRT_END_OBJ)
 WIN_LD_STDCXX := $(build_shlibdir)/$(call versioned_libname,libstdc++,6)
 WIN_LD_ATOMIC := $(build_shlibdir)/$(call versioned_libname,libatomic,1)
-WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 $(WIN_LD_ATOMIC) -lole32
+WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -lsynchronization $(WIN_LD_ATOMIC) -lole32
 WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32
 OSLIBS += --export-all-symbols --version-script=$(BUILDROOT)/src/julia.expmap \
 	--no-whole-archive $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS)

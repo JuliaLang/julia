@@ -835,6 +835,32 @@ Stacktrace:
 sizeof(x) = Core.sizeof(x)
 
 """
+    Core.bitsizeof(T::DataType)
+    Core.bitsizeof(obj)
+
+Logical size, in bits, of the canonical binary representation of the given `DataType` `T`, if any.
+Or the logical size, in bits, of object `obj` if it is not a `DataType`.
+
+For primitive types, this may differ from `8*sizeof(T)` when the type uses byte-rounded storage
+with unused bits in the last byte.
+
+# Examples
+```jldoctest
+julia> Core.bitsizeof(Float32)
+32
+
+julia> Core.bitsizeof(1.0)
+64
+
+julia> primitive type MyUInt63 <: Unsigned 63 end
+
+julia> Core.bitsizeof(MyUInt63)
+63
+```
+"""
+Core.bitsizeof
+
+"""
     ifelse(condition::Bool, x, y)
 
 Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in

@@ -21,7 +21,7 @@ end
 
 pass() = ValidationResult(true, nothing)
 unknown() = ValidationResult(false, nothing)
-fail(st::SyntaxTree, msg="invalid syntax", loc=nothing) =
+@noinline fail(st::SyntaxTree, msg="invalid syntax", loc=nothing) =
     ValidationResult(false, [ValidationDiagnostic(
         st, msg, something(loc, LineNumberNode(0)))])
 macro fail(st, msg)
@@ -637,10 +637,10 @@ vst1_function(vcx, st) = let
     @stm st begin
         [K"function" name] -> vst1_ident(vcx, name)
         [K"function" callex body] ->
-            vst1_function_calldecl(with(f_vcx; return_ok=false), callex) &
+            vst1_function_calldecl(with(vcx; return_ok=false), callex) &
             vst1(f_vcx, body)
         [K"=" callex body] ->
-            vst1_function_calldecl(with(f_vcx; return_ok=false), callex) &
+            vst1_function_calldecl(with(vcx; return_ok=false), callex) &
             vst1(f_vcx, body)
         _ -> @fail(st, "malformed `function`")
     end
@@ -705,8 +705,8 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
         vst1_calldecl_name(vcx, t) & all(vst1, vcx, tvs)
     [K"Value"] ->
         pass() # GlobalRef works. Function? Type?
-    # ([K"::" _...], when=!vcx.toplevel) ->
-        # @fail(st, "adding methods to callable type only allowed at top level")
+    ([K"::" _...], when=!vcx.toplevel) ->
+        @fail(st, "adding methods to callable type only allowed at top level")
     [K"::" t] -> vst1(vcx, t)
     [K"::" x t] -> vst1_pparam_simple_tuple(vcx, x) & vst1(vcx, t)
     # TODO: @overlay broken in many cases, should be stricter
@@ -809,13 +809,13 @@ vst1_pparam_and_default(vcx, st; eq_is_kw, allow_val_splat) = @stm st begin
         vst1_pparam_typed_tuple(vcx, id) & @stm val begin
             [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
                 @fail(val, "splat only allowed on final positional default arg")
-            _ -> vst1(with(vcx; return_ok=true), val)
+            _ -> vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), val)
         end
     ([K"=" id val], when=eq_is_kw) ->
         vst1_pparam_typed_tuple(vcx, id) & @stm val begin
             [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
                 @fail(val, "splat only allowed on final positional default arg")
-            _ -> vst1(with(vcx; return_ok=true), val)
+            _ -> vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), val)
         end
     _ -> @fail(st, "malformed optional positional parameter; expected `=`")
 end
@@ -839,7 +839,7 @@ end
 # note no return_ok in default val, unlike positional defaults, due to bugs
 vst1_param_kw(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"kw" id val] ->
-        vst1_param(vcx, id) & vst1(vcx, val)
+        vst1_param(vcx, id) & vst1(with(vcx; toplevel=false, in_gscope=false), val)
     [K"..." _...] ->
         @fail(st, "`...` may only be used for the final keyword parameter")
     _ -> vst1_param(vcx, st) |

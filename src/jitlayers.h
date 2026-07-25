@@ -858,6 +858,10 @@ public:
     void addBytes(size_t bytes) JL_NOTSAFEPOINT;
     void printTimers() JL_NOTSAFEPOINT;
 
+    const char *objCacheDisabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.disabledNotice();
+    }
+
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
     }
@@ -889,7 +893,7 @@ protected:
     // false after calling MR.failMaterialization().
     bool linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                     jitlink::LinkGraph &G,
-                    std::unique_ptr<jl_linker_info_t> Info) JL_NOTSAFEPOINT;
+                    std::unique_ptr<jl_linker_info_t> Info) JL_CANSAFEPOINT_ENTER_LEAVE;
 
     // Return a symbol that should be linked to the call target.  The origin of
     // this symbol depends on the code instance:
@@ -903,7 +907,8 @@ protected:
     //   new module and return a symbol for it.
     orc::SymbolStringPtr linkCallTarget(orc::MaterializationResponsibility &MR,
                                         jl_code_instance_t *CI,
-                                        jl_invoke_api_t API) JL_NOTSAFEPOINT;
+                                        jl_invoke_api_t API,
+                                        const DenseMap<jl_code_instance_t *, jl_code_instance_t *> &EquivMap) JL_NOTSAFEPOINT;
 
     // If the provided CodeInstance is neither compiled nor has an ORC symbol in
     // CISymbols, look for a compatible CodeInstance in the MethodInstance's

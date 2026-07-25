@@ -811,7 +811,7 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
             # delay creating the timer until shortly before we start the poll wait
             timer = Timer(timeout_s) do t
                 timedout[] && return
-                timedout[] = true
+                @atomic timedout[] = true
                 close(fdw, mask)
             end
             try
@@ -832,7 +832,7 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
     finally
         if @isdefined(timer)
             if !timedout[]
-                timedout[] = true
+                @atomic timedout[] = true
                 close(timer)
                 close(fdw, mask)
             end

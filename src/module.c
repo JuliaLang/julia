@@ -12,15 +12,28 @@
 extern "C" {
 #endif
 
-static jl_binding_partition_t *new_binding_partition(void) JL_CANSAFEPOINT
+// A fresh partition is the last (oldest) in its chain, so its `next` field holds
+// a backreference to the owning binding rather than another partition. Callers
+// that link it ahead of another partition overwrite this.
+static jl_binding_partition_t *new_binding_partition(jl_binding_t *b) JL_CANSAFEPOINT
 {
     jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_gc_alloc(jl_current_task->ptls, sizeof(jl_binding_partition_t), jl_binding_partition_type);
     bpart->restriction = NULL;
     bpart->kind = (size_t)PARTITION_KIND_GUARD;
     jl_atomic_store_relaxed(&bpart->min_world, 0);
     jl_atomic_store_relaxed(&bpart->max_world, (size_t)-1);
-    jl_atomic_store_relaxed(&bpart->next, NULL);
+    jl_gc_wb_fresh(bpart, b);
+    jl_atomic_store_relaxed(&bpart->next, (jl_binding_partition_t*)b);
     return bpart;
+}
+
+// Whether `p`, a value loaded from a partition's `next` field (or a binding's
+// `partitions` field), refers to an actual partition, as opposed to NULL (an
+// empty chain) or the owning-binding backreference stored in the last partition
+// of a chain.
+STATIC_INLINE int is_some_partition(jl_binding_partition_t *p) JL_NOTSAFEPOINT
+{
+    return p != NULL && jl_is_binding_partition((jl_value_t*)p);
 }
 
 struct implicit_search_gap {
@@ -37,20 +50,22 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition__(jl_binding_t *b
 {
     // Iterate through the list of binding partitions, keeping track of where to insert a new one for an implicit
     // resolution if necessary.
-    while (gap->replace) {
+    while (is_some_partition(gap->replace)) {
         size_t replace_min_world = jl_atomic_load_relaxed(&gap->replace->min_world);
         if (world >= replace_min_world)
             break;
         gap->insert = &gap->replace->next;
         gap->max_world = replace_min_world - 1;
         gap->parent = (jl_value_t*)gap->replace;
+        // The last partition's `next` is the owning-binding backreference, so
+        // `gap->replace` becomes that binding (not a partition) at end-of-chain.
         gap->replace = jl_atomic_load_relaxed(gap->insert);
     }
-    if (gap->replace && world <= jl_atomic_load_relaxed(&gap->replace->max_world)) {
+    if (is_some_partition(gap->replace) && world <= jl_atomic_load_relaxed(&gap->replace->max_world)) {
         return gap->replace;
     }
-    gap->min_world = gap->replace ? jl_atomic_load_relaxed(&gap->replace->max_world) + 1 : 0;
-    if (gap->replace)
+    gap->min_world = is_some_partition(gap->replace) ? jl_atomic_load_relaxed(&gap->replace->max_world) + 1 : 0;
+    if (is_some_partition(gap->replace))
         gap->inherited_flags = gap->replace->kind & PARTITION_MASK_FLAG;
     else
         gap->inherited_flags = 0;
@@ -153,7 +168,7 @@ retry:
                 }
                 // There remains a gap - proceed
             } else {
-                if (next) {
+                if (is_some_partition(next)) {
                     size_t next_min_world = jl_atomic_load_relaxed(&next->min_world);
                     expected_prev_min_world = new_min_world;
                     for (;;) {
@@ -165,7 +180,7 @@ retry:
                                 jl_gc_wb(prev, nextnext);
                                 if (!jl_atomic_cmpswap(&prev->next, &next, nextnext)) {
                                     // `next` may have been merged into its subsequent partition - we need to retry
-                                    assert(next);
+                                    assert(is_some_partition(next));
                                     continue;
                                 }
                                 // N.B.: This can lose modifications to next->{min_world, next}.
@@ -181,13 +196,13 @@ retry:
             }
         }
     }
-    jl_binding_partition_t *new_bpart = new_binding_partition();
+    jl_binding_partition_t *new_bpart = new_binding_partition(b);
     jl_atomic_store_relaxed(&new_bpart->max_world, new_max_world);
     new_bpart->kind = new_kind;
     jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
     new_bpart->restriction = resolution.binding_or_const;
 
-    if (next) {
+    if (is_some_partition(next)) {
         // See if we can merge the next partition into this one
         size_t next_max_world = jl_atomic_load_relaxed(&next->max_world);
         if (next_max_world == new_min_world - 1 && next->kind == new_kind && next->restriction == resolution.binding_or_const) {
@@ -198,7 +213,10 @@ retry:
     }
 
     jl_atomic_store_relaxed(&new_bpart->min_world, new_min_world);
-    jl_atomic_store_relaxed(&new_bpart->next, next);
+    if (is_some_partition(next))
+        jl_atomic_store_relaxed(&new_bpart->next, next);
+    // else `new_bpart` is the last in the chain, so leave its `next` as the
+    // owning-binding backreference set by `new_binding_partition`.
     jl_gc_wb(gap.parent, new_bpart);
     if (!jl_atomic_cmpswap(gap.insert, &gap.replace, new_bpart))
         return NULL;
@@ -704,7 +722,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
         // keep the flags partitioned.
         if (need_backdate) {
             jl_binding_partition_t *prev_bpart = bpart;
-            jl_binding_partition_t *backdate_bpart = new_binding_partition();
+            jl_binding_partition_t *backdate_bpart = new_binding_partition(b);
             new_prev_bpart = backdate_bpart;
             while (1) {
                 backdate_bpart->kind = (size_t)PARTITION_KIND_BACKDATED_CONST | (prev_bpart->kind & 0xf0);
@@ -715,9 +733,9 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                 jl_atomic_store_relaxed(&backdate_bpart->max_world,
                     jl_atomic_load_relaxed(&prev_bpart->max_world));
                 prev_bpart = jl_atomic_load_relaxed(&prev_bpart->next);
-                if (!prev_bpart)
+                if (!is_some_partition(prev_bpart))
                     break;
-                jl_binding_partition_t *next_prev_bpart = new_binding_partition();
+                jl_binding_partition_t *next_prev_bpart = new_binding_partition(b);
                 jl_gc_wb(backdate_bpart, next_prev_bpart);
                 jl_atomic_store_relaxed(&backdate_bpart->next, next_prev_bpart);
                 backdate_bpart = next_prev_bpart;
@@ -1839,7 +1857,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     }
 
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);
-    jl_binding_partition_t *new_bpart = new_binding_partition();
+    jl_binding_partition_t *new_bpart = new_binding_partition(b);
     JL_GC_PUSH1(&new_bpart);
     jl_atomic_store_relaxed(&new_bpart->min_world, new_world);
     if ((kind & PARTITION_MASK_KIND) == PARTITION_FAKE_KIND_IMPLICIT_RECOMPUTE) {

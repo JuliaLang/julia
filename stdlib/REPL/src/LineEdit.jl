@@ -2940,12 +2940,25 @@ end
 
 function run_interface(terminal::TextTerminal, m::ModalInterface, s::MIState=init_state(terminal, m))
     while !s.aborted
-        buf, ok, suspend = prompt!(terminal, m, s)
-        while suspend
-            @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
+        try
             buf, ok, suspend = prompt!(terminal, m, s)
+            while suspend
+                @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
+                buf, ok, suspend = prompt!(terminal, m, s)
+            end
+            Base.invokelatest(mode(state(s)).on_done, s, buf, ok)
+        catch e
+            isa(e, InterruptException) || rethrow()
+            try
+                cancel_beep(s)
+                move_input_end(s)
+                refresh_line(s)
+                print(terminal(s), "^C\n\n")
+                transition(s, :reset)
+                refresh_line(s)
+            catch
+            end
         end
-        Base.invokelatest(mode(state(s)).on_done, s, buf, ok)
     end
 end
 

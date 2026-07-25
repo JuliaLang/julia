@@ -3678,7 +3678,7 @@ void jl_init_types(void) JL_GC_DISABLED
         jl_new_datatype(jl_symbol("BindingPartition"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(5, "restriction", "min_world", "max_world", "next", "kind"),
                         jl_svec(5, jl_any_type,
-                        jl_ulong_type, jl_ulong_type, jl_any_type/*jl_binding_partition_type*/, jl_ulong_type),
+                        jl_ulong_type, jl_ulong_type, jl_any_type/*Union{jl_binding_partition_type, jl_binding_type}*/, jl_ulong_type),
                         jl_emptysvec, 0, 1, 0);
     const static uint32_t binding_partition_atomicfields[] = { 0b01110 }; // Set fields 2, 3, 4 as atomic
     jl_binding_partition_type->name->atomicfields = binding_partition_atomicfields;
@@ -4161,6 +4161,29 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_namedtuple_type))->layout = NULL;
     jl_namedtuple_typename = ntt->name;
 
+    // Variable-sized (see jl_cancel_source_t) - only the fixed fields are exposed to
+    // julia.
+    jl_cancel_source_type = (jl_datatype_t*)
+        jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
+                        jl_emptysvec,
+                        jl_perm_symsvec(3,
+                                        "child_head",
+                                        "state",
+                                        "nparents"),
+                        jl_svec(3,
+                                jl_any_type, // Union{Nothing, CancellationTokenSource}, weak
+                                jl_uint8_type,
+                                jl_uint16_type),
+                        jl_emptysvec,
+                        0, 1, 3);
+    // Field 3 (nparents) is const; fields 1-2 (child_head, state) are atomic
+    const static uint32_t cancel_source_constfields[1]  = { 0b100 };
+    const static uint32_t cancel_source_atomicfields[1] = { 0b011 };
+    jl_cancel_source_type->name->constfields = cancel_source_constfields;
+    jl_cancel_source_type->name->atomicfields = cancel_source_atomicfields;
+    XX(cancel_source);
+    assert(jl_datatype_size(jl_cancel_source_type) == sizeof(jl_cancel_source_t));
+
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"),
                         NULL,
@@ -4271,7 +4294,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_code_instance_type->types, 19, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 0, jl_globalref_type);
     jl_svecset(jl_binding_type->types, 3, jl_array_any_type);
-    jl_svecset(jl_binding_partition_type->types, 3, jl_binding_partition_type);
+    jl_value_t *partition_next_types[2] = { (jl_value_t*)jl_binding_partition_type, (jl_value_t*)jl_binding_type };
+    jl_svecset(jl_binding_partition_type->types, 3, jl_type_union(partition_next_types, 2));
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

@@ -407,6 +407,13 @@ static size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         name = "Task";
         self_size = sizeof(jl_task_t);
     }
+    else if (jl_is_cancel_source(a)) {
+        // variable-sized: one link entry per parent follows the fixed fields
+        node_type = "jl_cancel_source_t";
+        name = "CancellationTokenSource";
+        self_size = sizeof(jl_cancel_source_t) +
+                    ((jl_cancel_source_t*)a)->nparents * sizeof(jl_cancel_parent_link_t);
+    }
     else if (jl_is_datatype(a)) {
         ios_need_close = 1;
         ios_mem(&str_, 0);

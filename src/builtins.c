@@ -98,6 +98,21 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
     return 1;
 }
 
+static inline uint8_t last_byte_mask(jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    uint32_t unused = jl_datatype_unusedbits(dt);
+    return (uint8_t)(0xff >> unused);
+}
+
+static inline int primitive_bits_equal(const void *a, const void *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    size_t sz = jl_datatype_size(dt);
+    if (sz == 0)
+        return 1;
+    return (sz <= 1 || bits_equal(a, b, sz - 1)) &&
+           ((((const uint8_t*)a)[sz - 1] ^ ((const uint8_t*)b)[sz - 1]) & last_byte_mask(dt)) == 0;
+}
+
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
@@ -143,8 +158,13 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                     return 0;
             }
             else {
-                assert(jl_datatype_nfields(ft) > 0);
-                if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
+                if (jl_datatype_nfields(ft) == 0) {
+                    // Odd-bit primitives have trailing unused bits, which are
+                    // represented as padding even though they have no fields.
+                    if (!primitive_bits_equal(ao, bo, ft))
+                        return 0;
+                }
+                else if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
                     return 0;
             }
         }
@@ -309,6 +329,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_module_tag:
         case jl_bool_tag:
         case jl_nothing_tag:
+        case jl_cancel_source_tag: // mutable: identity (a == b checked above)
             return 0;
         case jl_simplevector_tag:
             return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
@@ -346,7 +367,9 @@ inline int jl_egal__bits(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t
     if (sz == 0)
         return 1;
     size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal))
+    if (nf == 0)
+        return dt->layout->flags.haspadding ? primitive_bits_equal(a, b, dt) : bits_equal(a, b, sz);
+    if (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal)
         return bits_equal(a, b, sz);
     return compare_fields(a, b, dt);
 }
@@ -466,6 +489,12 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         // a few select pointers (notably symbol) also have special hash values
         // which may affect the stability of the objectid hash, even though
         // they don't affect egal comparison
+        if (nf == 0 && dt->layout->flags.haspadding) {
+            void *buf = alloca(sz);
+            memcpy(buf, v, sz);
+            ((uint8_t*)buf)[sz - 1] &= last_byte_mask(dt);
+            return bits_hash(buf, sz) ^ h;
+        }
         return bits_hash(v, sz) ^ h;
     }
     if (dt == jl_unionall_type)
@@ -601,7 +630,8 @@ JL_CALLABLE(jl_f_sizeof)
             else
                 jl_errorf("Argument is an incomplete %s type and does not have a definite size.", jl_symbol_name(dx->name->name));
         }
-        if (jl_is_layout_opaque(dx->layout)) // includes all GenericMemory{kind,T}
+        if (jl_is_layout_opaque(dx->layout) || // includes all GenericMemory{kind,T}
+            dx == jl_cancel_source_type)       // variable-sized (layout covers only the fixed fields)
             jl_errorf("Type %s does not have a definite size.", jl_symbol_name(dx->name->name));
         return jl_box_long(jl_datatype_size(x));
     }
@@ -613,6 +643,12 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
+    if (jl_is_cancel_source(x)) {
+        // variable-sized: one link entry per parent follows the fixed fields
+        jl_cancel_source_t *cs = (jl_cancel_source_t*)x;
+        return jl_box_long(sizeof(jl_cancel_source_t) +
+                           cs->nparents * sizeof(jl_cancel_parent_link_t));
+    }
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);
@@ -620,6 +656,26 @@ JL_CALLABLE(jl_f_sizeof)
     if (jl_is_genericmemory(x))
         sz = (sz + (dt->layout->flags.arrayelem_isunion ? 1 : 0)) * ((jl_genericmemory_t*)x)->length;
     return jl_box_long(sz);
+}
+
+JL_CALLABLE(jl_f_bitsizeof)
+{
+    JL_NARGS(bitsizeof, 1, 1);
+    jl_value_t *x = args[0];
+    if (jl_is_unionall(x) || jl_is_uniontype(x))
+        return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
+    if (jl_is_datatype(x)) {
+        jl_datatype_t *dx = (jl_datatype_t*)x;
+        if (jl_is_primitivetype(dx))
+            return jl_box_long(jl_datatype_nbits(dx));
+        return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
+    }
+    if (x == jl_bottom_type)
+        jl_error("The empty type does not have a definite size since it does not have instances.");
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
+    if (jl_is_primitivetype(dt))
+        return jl_box_long(jl_datatype_nbits(dt));
+    return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
 }
 
 JL_CALLABLE(jl_f_issubtype)
@@ -673,6 +729,14 @@ JL_CALLABLE(jl_f_current_scope)
 {
     JL_NARGS(current_scope, 0, 0);
     return jl_current_task->scope;
+}
+
+JL_CALLABLE(jl_f__new_cancel_source)
+{
+    // each argument is a parent CancellationTokenSource (checked, along
+    // with distinctness, by jl_new_cancel_source); no arguments makes a
+    // root source
+    return jl_new_cancel_source(args, nargs);
 }
 
 // apply ----------------------------------------------------------------------
@@ -1423,18 +1487,18 @@ JL_CALLABLE(jl_f_isdefinedglobal)
 {
     jl_module_t *m = NULL;
     jl_sym_t *s = NULL;
-    JL_NARGS(isdefined, 2, 3);
+    JL_NARGS(isdefined, 2, 4);
     int allow_import = 1;
     enum jl_memory_order order = jl_memory_order_unspecified;
     JL_TYPECHK(isdefined, module, args[0]);
     JL_TYPECHK(isdefined, symbol, args[1]);
-    if (nargs == 3) {
+    if (nargs >= 3) {
         JL_TYPECHK(isdefined, bool, args[2]);
         allow_import = jl_unbox_bool(args[2]);
     }
     if (nargs == 4) {
         JL_TYPECHK(isdefined, symbol, args[3]);
-        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 0);
     }
     m = (jl_module_t*)args[0];
     s = (jl_sym_t*)args[1];
@@ -2214,7 +2278,7 @@ JL_CALLABLE(jl_f__primitivetype)
         jl_errorf("invalid declaration of primitive type %s",
                   jl_symbol_name((jl_sym_t*)name));
     ssize_t nb = jl_unbox_long(vnb);
-    if (nb < 1 || nb >= (1 << 23) || (nb & 7) != 0)
+    if (nb < 1 || nb >= (1 << 23))
         jl_errorf("invalid number of bits in primitive type %s",
                   jl_symbol_name((jl_sym_t*)name));
     jl_datatype_t *dt = jl_new_primitivetype(args[1], (jl_module_t*)args[0], NULL, (jl_svec_t*)args[2], nb);
@@ -2729,6 +2793,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
+    add_builtin("CancellationTokenSource", (jl_value_t*)jl_cancel_source_type);
 
     add_builtin("AddrSpace", (jl_value_t*)jl_addrspace_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
