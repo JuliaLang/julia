@@ -990,15 +990,6 @@ static void do_critical_profile(void)
     }
 }
 
-// Count of sampling rounds abandoned because a thread could not be suspended
-// (see do_profile); read from Julia with jl_profile_suspend_failures.
-static _Atomic(uint64_t) profile_suspend_failures = 0;
-
-JL_DLLEXPORT uint64_t jl_profile_suspend_failures(void) JL_NOTSAFEPOINT
-{
-    return jl_atomic_load_relaxed(&profile_suspend_failures);
-}
-
 static void do_profile(void) JL_NOTSAFEPOINT
 {
     bt_context_t signal_context;

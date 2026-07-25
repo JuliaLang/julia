@@ -23,6 +23,15 @@ uv_mutex_t bt_data_prof_lock;
 volatile jl_bt_element_t *profile_bt_data_prof = NULL;
 volatile size_t profile_bt_size_max = 0;
 volatile size_t profile_bt_size_cur = 0;
+// Sampling rounds abandoned because a thread could not be suspended (see
+// do_profile): an empty profile buffer is otherwise indistinguishable from a
+// workload that never ran.
+_Atomic(uint64_t) profile_suspend_failures = 0;
+
+JL_DLLEXPORT uint64_t jl_profile_suspend_failures(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&profile_suspend_failures);
+}
 static volatile uint64_t nsecprof = 0;
 volatile int profile_running = 0;
 volatile int profile_all_tasks = 0;
