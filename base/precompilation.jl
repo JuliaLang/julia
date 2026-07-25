@@ -2758,8 +2758,14 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     # `EFFECTIVE_CPU_THREADS + 1` (one baseline per worker plus a spare so a lone
     # worker can fill every core during imaging); `JULIA_PRECOMPILE_THREADS`
     # overrides it. Skipped for a single task or when JULIA_IMAGE_THREADS pins a
-    # per-worker count (a hard override that bypasses the shared budget).
-    precompile_jobserver = if num_tasks > 1 && !haskey(ENV, "JULIA_IMAGE_THREADS")
+    # per-worker count (a hard override that bypasses the shared budget), unless
+    # `JULIA_PRECOMPILE_THREADS` is also set, in which case it takes precedence.
+    # Examples:
+    #   neither set                                      -> jobserver budget = EFFECTIVE_CPU_THREADS + 1
+    #   JULIA_PRECOMPILE_THREADS=8                       -> jobserver budget = 8
+    #   JULIA_IMAGE_THREADS=4                            -> no jobserver; each worker pinned to 4 threads
+    #   JULIA_IMAGE_THREADS=4 JULIA_PRECOMPILE_THREADS=8 -> jobserver budget = 8 (JULIA_IMAGE_THREADS ignored here)
+    precompile_jobserver = if num_tasks > 1 && (haskey(ENV, "JULIA_PRECOMPILE_THREADS") || !haskey(ENV, "JULIA_IMAGE_THREADS"))
         default_budget = Sys.EFFECTIVE_CPU_THREADS + 1
         budget = max(1, something(tryparse(Int, get(ENV, "JULIA_PRECOMPILE_THREADS", string(default_budget))), default_budget))
         setup_precompile_jobserver!(budget)

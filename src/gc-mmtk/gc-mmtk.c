@@ -64,12 +64,24 @@ JL_DLLEXPORT void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
 // GC Initialization and Control
 // ========================================================================= //
 
+// Registry entries (see jl_gc_set_needs_weak_processing) of threads that
+// have exited: their thread-local list is spliced in here so the entries
+// survive mutator destruction. Guarded by orphaned_weak_processing_lock
+// (thread exits may race each other; the sweep runs while no mutator does).
+// The registry stores raw object pointers (and, transitively, the interior
+// `pprev` pointers of the intrusive lists) that are never updated on object
+// movement - sound only while the binding is non-moving.
+static small_arraylist_t orphaned_weak_processing_list;
+static uv_mutex_t orphaned_weak_processing_lock;
+
 void jl_gc_init(void) {
     // TODO: use jl_options.heap_size_hint to set MMTk's fixed heap size? (see issue: https://github.com/mmtk/mmtk-julia/issues/167)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
 
     arraylist_new(&to_finalize, 0);
     arraylist_new(&finalizer_list_marked, 0);
+    small_arraylist_new(&orphaned_weak_processing_list, 0);
+    uv_mutex_init(&orphaned_weak_processing_lock);
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
@@ -197,6 +209,7 @@ void jl_start_gc_threads(void) {
 void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT {
     jl_thread_heap_common_t *heap = &ptls->gc_tls_common.heap;
     small_arraylist_new(&heap->weak_refs, 0);
+    small_arraylist_new(&heap->weak_processing_list, 0);
     small_arraylist_new(&heap->live_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&heap->free_stacks[i], 0);
@@ -216,6 +229,19 @@ void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT {
 }
 
 void jl_free_thread_gc_state(struct _jl_tls_states_t *ptls) {
+    // The weak-processing registry entries of this thread may outlive it (a
+    // linked cancellation source can escape the thread that allocated it);
+    // the sweep only enumerates active mutators, so move them to the global
+    // orphan list. Runs GC-unsafe, so it cannot race the sweep.
+    small_arraylist_t *lst = &ptls->gc_tls_common.heap.weak_processing_list;
+    if (lst->len > 0) {
+        uv_mutex_lock(&orphaned_weak_processing_lock);
+        for (size_t i = 0; i < lst->len; i++)
+            small_arraylist_push(&orphaned_weak_processing_list, lst->items[i]);
+        uv_mutex_unlock(&orphaned_weak_processing_lock);
+        lst->len = 0;
+    }
+    small_arraylist_free(lst);
     mmtk_destroy_mutator(&ptls->gc_tls.mmtk_mutator);
 }
 
@@ -649,6 +675,78 @@ static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPO
         free(d);
     gc_num.freed += freed_bytes;
     gc_num.freecall++;
+}
+
+void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    // MMTk never visits individual dead objects (lines/blocks are
+    // reclaimed wholesale), so dead objects requiring weak processing are
+    // found by scanning this registry instead.
+    small_arraylist_push(&ptls->gc_tls_common.heap.weak_processing_list, v);
+}
+
+void jl_gc_set_weak_processing_target(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    // Nothing to do: MMTk reclaims memory only after the SweepVMSpecific
+    // work packet (which runs jl_gc_sweep_weak_processing) has completed,
+    // so the memory of every object that died this cycle is still intact
+    // when the unlink pass writes into it.
+    (void)ptls;
+    (void)v;
+}
+
+// Filter one weak-processing registry: unlink the dead entries and keep
+// the live ones (see jl_gc_sweep_weak_processing).
+static void sweep_weak_processing_list(small_arraylist_t *reg) JL_NOTSAFEPOINT
+{
+    size_t n = 0;
+    size_t l = reg->len;
+    void **lst = reg->items;
+    for (size_t i = 0; i < l; i++) {
+        // dispatch on the object's type once more kinds of
+        // weakly-processed objects exist
+        jl_cancel_source_t *s = (jl_cancel_source_t*)lst[i];
+        if (mmtk_is_live_object(s)) {
+            lst[n++] = s;
+            continue;
+        }
+        jl_cancel_parent_link_t *links = jl_cancel_source_links(s);
+        for (size_t j = 0; j < s->nparents; j++) {
+            jl_value_t *next = jl_atomic_load_relaxed(&links[j].next);
+            _Atomic(jl_value_t*) *pprev = links[j].pprev;
+            jl_atomic_store_relaxed(pprev, next);
+            if (next != (jl_value_t*)jl_nothing) {
+                jl_cancel_parent_link_t *nl =
+                    jl_cancel_source_link((jl_cancel_source_t*)next, links[j].parent);
+                assert(nl != NULL);
+                nl->pprev = pprev;
+            }
+        }
+    }
+    reg->len = n;
+}
+
+// Process the dead entries of the weak_processing_list registries -
+// currently: unlink collected cancellation sources from their parents'
+// (weak, intrusive, doubly-linked) child lists, with O(1) hlist unlinks
+// whose fix-up writes land only in live or dying-this-cycle memory (see
+// the stock GC's sweep_weak_processing for the invariants). Runs from the
+// SweepVMSpecific work packet, after the mark closure (including finalizer
+// resurrection) and before the memory of dead objects is reused, so dead
+// entries' links are still intact. Covers both the active mutators'
+// registries and the entries orphaned by exited threads.
+JL_DLLEXPORT void jl_gc_sweep_weak_processing(void) JL_NOTSAFEPOINT
+{
+    void *iter = mmtk_new_mutator_iterator();
+    jl_ptls_t ptls2 = (jl_ptls_t)mmtk_get_next_mutator_tls(iter);
+    while (ptls2 != NULL) {
+        sweep_weak_processing_list(&ptls2->gc_tls_common.heap.weak_processing_list);
+        ptls2 = (jl_ptls_t)mmtk_get_next_mutator_tls(iter);
+    }
+    mmtk_close_mutator_iterator(iter);
+    uv_mutex_lock(&orphaned_weak_processing_lock);
+    sweep_weak_processing_list(&orphaned_weak_processing_list);
+    uv_mutex_unlock(&orphaned_weak_processing_lock);
 }
 
 JL_DLLEXPORT void jl_gc_mmtk_sweep_malloced_memory(void) JL_NOTSAFEPOINT

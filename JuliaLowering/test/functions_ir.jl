@@ -529,9 +529,9 @@ end
 9   (call core.svec %₆ %₇ %₈)
 10  --- method TestMod.f %₉
     slots: [slot₁/#self#(called) slot₂/x slot₃/y(single_assign)]
-    1   (= slot₃/y 1)
-    2   slot₃/y
-    3   (call slot₁/#self# slot₂/x %₂ 2)
+    1   1
+    2   (= slot₃/y %₁)
+    3   (call slot₁/#self# slot₂/x slot₃/y 2)
     4   (return %₃)
 11  latestworld
 12  TestMod.f
@@ -580,11 +580,10 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.f %₈
     slots: [slot₁/#self#(called) slot₂/x(single_assign)]
-    1   (= slot₂/x 1)
-    2   slot₂/x
-    3   slot₂/x
-    4   (call slot₁/#self# %₂ %₃)
-    5   (return %₄)
+    1   1
+    2   (= slot₂/x %₁)
+    3   (call slot₁/#self# slot₂/x slot₂/x)
+    4   (return %₃)
 10  latestworld
 11  TestMod.f
 12  (call core.TypeEqOf %₁₁)
@@ -628,9 +627,9 @@ end
 9   (call core.svec %₆ %₇ %₈)
 10  --- method TestMod.f %₉
     slots: [slot₁/#self#(called) slot₂/#arg# slot₃/y(single_assign)]
-    1   (= slot₃/y 1)
-    2   slot₃/y
-    3   (call slot₁/#self# slot₂/#arg# %₂ 2)
+    1   1
+    2   (= slot₃/y %₁)
+    3   (call slot₁/#self# slot₂/#arg# slot₃/y 2)
     4   (return %₃)
 11  latestworld
 12  TestMod.f
@@ -714,9 +713,9 @@ end
 11  (call core.svec %₈ %₉ %₁₀)
 12  --- method TestMod.f %₁₁
     slots: [slot₁/#self#(called) slot₂/x slot₃/y(single_assign)]
-    1   (= slot₃/y 1)
-    2   slot₃/y
-    3   (call slot₁/#self# slot₂/x %₂ 2)
+    1   1
+    2   (= slot₃/y %₁)
+    3   (call slot₁/#self# slot₂/x slot₃/y 2)
     4   (return %₃)
 13  latestworld
 14  TestMod.f
@@ -767,9 +766,9 @@ end
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- method TestMod.f %₁₃
     slots: [slot₁/#self#(called) slot₂/x slot₃/y(single_assign)]
-    1   (= slot₃/y (call top.vect 1))
-    2   slot₃/y
-    3   (call slot₁/#self# slot₂/x %₂ 2)
+    1   (call top.vect 1)
+    2   (= slot₃/y %₁)
+    3   (call slot₁/#self# slot₂/x slot₃/y 2)
     4   (return %₃)
 15  latestworld
 16  TestMod.f
@@ -1431,9 +1430,9 @@ end
 24  (call core.svec %₂₁ %₂₂ %₂₃)
 25  --- method TestMod.f_kw_simple %₂₄
     slots: [slot₁/#self#(called) slot₂/a(single_assign)]
-    1   (= slot₂/a 1)
-    2   slot₂/a
-    3   (call slot₁/#self# %₂ 1.0)
+    1   1
+    2   (= slot₂/a %₁)
+    3   (call slot₁/#self# slot₂/a 1.0)
     4   (return %₃)
 26  latestworld
 27  TestMod.f_kw_simple
@@ -1471,9 +1470,9 @@ end
 52  (call core.svec %₄₉ %₅₀ %₅₁)
 53  --- method TestMod.f_kw_simple %₅₂
     slots: [slot₁/#kwcall_self#(called) slot₂/kws slot₃/#self# slot₄/a(single_assign)]
-    1   (= slot₄/a 1)
-    2   slot₄/a
-    3   (call slot₁/#kwcall_self# slot₂/kws slot₃/#self# %₂ 1.0)
+    1   1
+    2   (= slot₄/a %₁)
+    3   (call slot₁/#kwcall_self# slot₂/kws slot₃/#self# slot₄/a 1.0)
     4   (return %₃)
 54  latestworld
 55  (call core.typeof core.kwcall)

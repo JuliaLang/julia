@@ -628,6 +628,15 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
         start = (char*)mem->ptr;
         len = mem->length;
     }
+    else if (vt == jl_cancel_source_type) {
+        // the (strong) `parent` slots of the trailing link entries are the
+        // only slots marked as an array (see the objarray mark with stride
+        // sizeof(jl_cancel_parent_link_t) in gc-stock.c)
+        jl_cancel_source_t *s = (jl_cancel_source_t*)obj;
+        start = (char*)jl_cancel_source_links(s);
+        len = s->nparents;
+        elsize = sizeof(jl_cancel_parent_link_t);
+    }
     if (slot < start || slot >= start + elsize * len)
         return -1;
     return (slot - start) / elsize;
