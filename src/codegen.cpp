@@ -6403,7 +6403,9 @@ static Function* gen_cfun_wrapper(
 
         // TODO: Can use use emit_call_specfun_other here?
         std::vector<Value*> args;
-        Value *result;
+        // assigned below whenever it is read back (the SRet/Union cases), but
+        // gcc cannot correlate the two conditions, so initialize it explicitly
+        Value *result = NULL;
         if (jlfunc_sret || returninfo.cc == jl_returninfo_t::Union) {
             // fuse the two sret together, or emit an alloca to hold it
             if (sig.sret && jlfunc_sret) {
