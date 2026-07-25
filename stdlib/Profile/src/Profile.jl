@@ -142,6 +142,9 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real; limitwarn::Bool = true)
+    # fast-path check; jl_profile_init also refuses (-2) under its lock, since the
+    # sampler may be concurrently writing into the buffer it would free
+    is_running() && error("profiling is running; call `Profile.stop_timer()` before calling `Profile.init()`")
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
     buffer_samples = n
     buffer_size_bytes = buffer_samples * sample_size_bytes
@@ -153,6 +156,8 @@ function init(n::Integer, delay::Real; limitwarn::Bool = true)
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64, 10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers ($(Base.format_bytes(buffer_size_bytes)))")
+    elseif status == -2
+        error("profiling is running; call `Profile.stop_timer()` before calling `Profile.init()`")
     end
 end
 
@@ -289,11 +294,11 @@ function print(io::IO,
         print_group(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
-            error(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
+            throw(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
         elseif Sys.iswindows() && in(groupby, [:thread, [:task, :thread], [:thread, :task]])
             @warn "Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report"
         end
-        any_nosamples = true
+        any_nosamples = false
         if format === :tree
             Base.print(io, "Overhead ╎ [+additional indent] Count File:Line  Function\n")
             Base.print(io, "=========================================================\n")
@@ -335,7 +340,6 @@ function print(io::IO,
                 end
             end
         elseif groupby === :task
-            threads = 1:typemax(Int)
             taskids = intersect(get_task_ids(data), tasks)
             isempty(taskids) && (any_nosamples = true)
             for taskid in taskids
@@ -345,7 +349,6 @@ function print(io::IO,
                 println(io)
             end
         elseif groupby === :thread
-            tasks = 1:typemax(UInt)
             threadids = intersect(get_thread_ids(data), threads)
             isempty(threadids) && (any_nosamples = true)
             for threadid in threadids
@@ -460,12 +463,12 @@ function retrieve(; kwargs...)
     return (data, getdict(data))
 end
 
-function getdict(data::Vector{UInt})
+function getdict(data::Vector{<:Unsigned})
     dict = LineInfoDict()
     return getdict!(dict, data)
 end
 
-function getdict!(dict::LineInfoDict, data::Vector{UInt})
+function getdict!(dict::LineInfoDict, data::Vector{<:Unsigned})
     # we don't want metadata here as we're just looking up ips
     unique_ips = unique(has_meta(data) ? strip_meta(data) : data)
     n_unique_ips = length(unique_ips)
@@ -485,8 +488,9 @@ function getdict!(dict::LineInfoDict, data::Vector{UInt})
     return dict
 end
 
-function _lookup_corrected(ip::UInt)
-    st = lookup(convert(Ptr{Cvoid}, ip))
+function _lookup_corrected(ip::Unsigned)
+    # convert through UInt: only word-size integers convert directly to Ptr
+    st = lookup(convert(Ptr{Cvoid}, UInt(ip)))
     # To correct line numbers for moving code, put it in the form expected by
     # Base.update_stackframes_callback[]
     stn = map(x->(x, 1), st)
@@ -622,8 +626,11 @@ function callers(funcname::String, bt::Vector, lidict::LineInfoFlatDict; filenam
     end
 end
 
-callers(funcname::String, bt::Vector, lidict::LineInfoDict; kwargs...) =
-    callers(funcname, flatten(bt, lidict)...; kwargs...)
+function callers(funcname::String, bt::Vector, lidict::LineInfoDict; kwargs...)
+    # metadata is not part of the lookup dict, so it must be stripped before flattening
+    bt = has_meta(bt) ? strip_meta(bt) : bt
+    return callers(funcname, flatten(bt, lidict)...; kwargs...)
+end
 callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
 callers(func::Function, bt::Vector, lidict::LineInfoFlatDict; kwargs...) =
     callers(string(func), bt, lidict; kwargs...)
@@ -650,7 +657,7 @@ function start_timer(all_tasks::Bool=false)
     check_init() # if the profile buffer hasn't been initialized, initialize with default size
     status = ccall(:jl_profile_start_timer, Cint, (Bool,), all_tasks)
     if status < 0
-        error(error_codes[status])
+        error(get(error_codes, status, "cannot start the profiling timer (error $status)"))
     end
 end
 
@@ -667,11 +674,10 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
-error_codes = Dict(
-    -1=>"cannot specify signal action for profiling",
+const error_codes = Dict(
+    -1=>Sys.iswindows() ? "cannot create the profiling thread" : "profiling is not supported on this platform",
     -2=>"cannot create the timer for profiling",
-    -3=>"cannot start the timer for profiling",
-    -4=>"cannot unblock SIGUSR1")
+    -3=>"cannot start the timer for profiling")
 
 
 """
@@ -682,11 +688,15 @@ values in `data` have meaning only on this machine in the current session, becau
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
 By default metadata such as threadid and taskid is included. Set `include_meta` to `false` to strip metadata.
+Set `limitwarn` to `false` to suppress the warnings about a full buffer or a still-running profiler.
 """
 function fetch(;include_meta = true, limitwarn = true)
     maxlen = maxlen_data()
     if maxlen == 0
         error("The profiling data buffer is not initialized. A profile has not been requested this session.")
+    end
+    if limitwarn && is_running()
+        @warn "Profiling is still running; the resulting data may be incomplete. Call `Profile.stop_timer()` before fetching."
     end
     len = len_data()
     if limitwarn && is_buffer_full()
@@ -825,7 +835,7 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         n = n[keep]
         m = m[keep]
     end
-    util_perc = (1 - (nsleeping / totalshots)) * 100
+    util_perc = totalshots == 0 ? 0.0 : (1 - (nsleeping / totalshots)) * 100
     filenamemap = FileNameMap()
     if isempty(lilist)
         if is_subsection
@@ -1160,7 +1170,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             builder_key = parent.builder_key
             builder_value = parent.builder_value
             fastkey = searchsortedfirst(builder_key, ip)
-            if fastkey < length(builder_key) && builder_key[fastkey] === ip
+            if fastkey <= length(builder_key) && builder_key[fastkey] === ip
                 # jump forward to the end of the inlining chain
                 # avoiding an extra (slow) lookup of `ip` in `lidict`
                 # and an extra chain of them in `down`
@@ -1286,7 +1296,7 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
     else
         root, nsleeping, is_task_profile = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     end
-    util_perc = (1 - (nsleeping / root.count)) * 100
+    util_perc = root.count == 0 ? 0.0 : (1 - (nsleeping / root.count)) * 100
     is_subsection || print_tree(io, root, cols, fmt, is_subsection)
     if isempty(root.down)
         if is_subsection
@@ -1373,10 +1383,11 @@ end
 
 
 """
-    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false;
+    Profile.take_heap_snapshot(filepath::AbstractString, all_one::Bool=false;
                                redact_data::Bool=true, streaming::Bool=false)
-    Profile.take_heap_snapshot(all_one::Bool=false; redact_data:Bool=true,
-                               dir::String=nothing, streaming::Bool=false)
+    Profile.take_heap_snapshot(io::IO, all_one::Bool=false; redact_data::Bool=true)
+    Profile.take_heap_snapshot(all_one::Bool=false; redact_data::Bool=true,
+                               dir::Union{Nothing,AbstractString}=nothing, streaming::Bool=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
 Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
@@ -1420,10 +1431,14 @@ end
 function take_heap_snapshot(io::IO, all_one::Bool=false; redact_data::Bool=true)
     # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
     # then reassembling it after we're done.
-    dir = tempdir()
-    prefix = joinpath(dir, "snapshot")
-    _stream_heap_snapshot(prefix, all_one, redact_data)
-    Profile.HeapSnapshot.assemble_snapshot(prefix, io)
+    prefix = tempname()
+    try
+        _stream_heap_snapshot(prefix, all_one, redact_data)
+        Profile.HeapSnapshot.assemble_snapshot(prefix, io)
+    finally
+        # a failure while streaming may have created only some of the parts
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
+    end
 end
 function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_data::Bool)
     # Nodes and edges are binary files
@@ -1455,9 +1470,10 @@ function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing, 
     if isnothing(dir)
         wd = pwd()
         fpath = joinpath(wd, fname)
+        fpath_test = fpath * ".test" # use a different test file as windows can fail to save immediately after rm-ing a file
         try
-            touch(fpath)
-            rm(fpath; force=true)
+            touch(fpath_test)
+            rm(fpath_test; force=true)
         catch
             @warn "Cannot write to current directory `$(pwd())` so saving heap snapshot to `$(tempdir())`" maxlog=1 _id=Symbol(wd)
             fpath = joinpath(tempdir(), fname)

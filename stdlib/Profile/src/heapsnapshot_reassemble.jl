@@ -2,12 +2,6 @@
 
 module HeapSnapshot
 
-"""
-    assemble_snapshot(filepath::AbstractString, out_file::AbstractString)
-
-Assemble a .heapsnapshot file from the .json files produced by `Profile.take_heap_snapshot`.
-"""
-
 # SoA layout to reduce padding
 struct Edges
     type::Vector{UInt32}       # index into `snapshot.meta.edge_types`
@@ -77,10 +71,26 @@ let _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
     end
 end
 
+"""
+    assemble_snapshot(in_prefix::AbstractString, out_file::AbstractString = in_prefix)
+
+Assemble a `.heapsnapshot` file from the four files produced by
+`Profile.take_heap_snapshot(...; streaming=true)` with prefix `in_prefix`.
+"""
 function assemble_snapshot(in_prefix, out_file::AbstractString = in_prefix)
-    open(out_file, "w") do io
-        assemble_snapshot(in_prefix, io)
+    # assemble into a temporary sibling and only replace `out_file` on success, so
+    # that a failure doesn't leave a partial snapshot or destroy a pre-existing one
+    tmp_file = tempname(dirname(abspath(out_file)); cleanup=false)
+    try
+        open(tmp_file, "w") do io
+            assemble_snapshot(in_prefix, io)
+        end
+        # `rename` replaces atomically, unlike `mv(...; force=true)` which unlinks first
+        Base.Filesystem.rename(tmp_file, out_file)
+    finally
+        rm(tmp_file; force=true)
     end
+    return nothing
 end
 
 # Manually parse and write the .json files, given that we don't have JSON import/export in
@@ -105,8 +115,12 @@ function assemble_snapshot(in_prefix, io::IO)
             node_name_idx = read(nodes_file, UInt)
             id = read(nodes_file, UInt)
             self_size = read(nodes_file, Int)
-            @assert read(nodes_file, Int) == 0 # trace_node_id
-            @assert read(nodes_file, Int8) == 0 # detachedness
+            trace_node_id = read(nodes_file, Int) # always 0 in snapshots Julia produces
+            trace_node_id == 0 ||
+                error("malformed nodes file `$(in_prefix).nodes`: nonzero trace_node_id $(trace_node_id) for node $(i)")
+            detachedness = read(nodes_file, Int8) # always 0 in snapshots Julia produces
+            detachedness == 0 ||
+                error("malformed nodes file `$(in_prefix).nodes`: nonzero detachedness $(detachedness) for node $(i)")
 
             nodes.type[i] = node_type
             nodes.name_idx[i] = node_name_idx
@@ -137,6 +151,12 @@ function assemble_snapshot(in_prefix, io::IO)
             end
         end
     end
+
+    delete!(orphans, 0) # the uber node has no incoming edges by construction
+
+    isempty(orphans) ||
+        error("malformed snapshot `$(in_prefix)`: $(length(orphans)) of $(length(nodes)) nodes have no incoming edges: ",
+              join(Iterators.take(orphans, 10), ", "), length(orphans) > 10 ? ", ..." : "")
 
     _digits_buf = zeros(UInt8, ndigits(typemax(UInt)))
     println(io, @view(preamble[1:end-1]), ",") # remove trailing "}" to reopen the object
@@ -191,6 +211,8 @@ function assemble_snapshot(in_prefix, io::IO)
         while !eof(strings_io)
             str_size = read(strings_io, UInt)
             str_bytes = read(strings_io, str_size)
+            length(str_bytes) == str_size ||
+                error("truncated strings file: `$(in_prefix).strings` (expected $(str_size) bytes, got $(length(str_bytes)))")
             str = String(str_bytes)
             if first
                 first = false
@@ -202,13 +224,6 @@ function assemble_snapshot(in_prefix, io::IO)
     end
     print(io, "]}")
 
-    # remove the uber node from the orphans
-    if 0 in orphans
-        delete!(orphans, 0)
-    end
-
-    @assert isempty(orphans) "Orphaned nodes: $(orphans), node count: $(length(nodes)), orphan node count: $(length(orphans))"
-
     return nothing
 end
 
@@ -218,10 +233,11 @@ end
 Remove files streamed during `take_heap_snapshot` in streaming mode.
 """
 function cleanup_streamed_files(prefix::AbstractString)
-    rm(string(prefix, ".metadata.json"))
-    rm(string(prefix, ".nodes"))
-    rm(string(prefix, ".edges"))
-    rm(string(prefix, ".strings"))
+    # tolerate missing files, e.g. from a failure partway through streaming
+    rm(string(prefix, ".metadata.json"); force=true)
+    rm(string(prefix, ".nodes"); force=true)
+    rm(string(prefix, ".edges"); force=true)
+    rm(string(prefix, ".strings"); force=true)
     return nothing
 end
 

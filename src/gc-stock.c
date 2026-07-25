@@ -3058,6 +3058,12 @@ extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
 extern jl_task_t *wait_empty JL_GLOBALLY_ROOTED;
 
 // mark the initial root set
+static void gc_mark_alloc_profile_root(jl_value_t *v, void *mq) JL_NOTSAFEPOINT
+{
+    gc_try_claim_and_push((jl_gc_markqueue_t*)mq, v, NULL);
+    gc_heap_snapshot_record_gc_roots(v, "alloc_profile");
+}
+
 static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     // modules
@@ -3096,6 +3102,7 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_keyset, "global_roots_keyset");
     gc_try_claim_and_push(mq, precompile_field_replace, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)precompile_field_replace, "precompile_field_replace");
+    jl_gc_foreach_alloc_profile_root(gc_mark_alloc_profile_root, mq);
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
