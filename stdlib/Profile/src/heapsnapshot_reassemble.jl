@@ -288,30 +288,37 @@ end
 
 function print_str_escape_json(stream::IO, s::AbstractString)
     print(stream, '"')
-    for c in s
-        if c == '"'
-            print(stream, "\\\"")
+    # write the string in runs, so that a stretch of characters needing no escaping
+    # costs one write rather than one per character
+    runstart = firstindex(s)
+    for (i, c) in pairs(s)
+        escaped = if c == '"'
+            "\\\""
         elseif c == '\\'
-            print(stream, "\\\\")
+            "\\\\"
         elseif c == '\b'
-            print(stream, "\\b")
+            "\\b"
         elseif c == '\f'
-            print(stream, "\\f")
+            "\\f"
         elseif c == '\n'
-            print(stream, "\\n")
+            "\\n"
         elseif c == '\r'
-            print(stream, "\\r")
+            "\\r"
         elseif c == '\t'
-            print(stream, "\\t")
+            "\\t"
         elseif '\x00' <= c <= '\x1f'
-            print(stream, "\\u", lpad(string(UInt16(c), base=16), 4, '0'))
+            string("\\u", lpad(string(UInt16(c), base=16), 4, '0'))
         elseif !isvalid(c)
             # we have to do this because vscode's viewer doesn't like the replace character
-            print(stream, "[invalid unicode character]")
+            "[invalid unicode character]"
         else
-            print(stream, c)
+            continue
         end
+        i > runstart && print(stream, SubString(s, runstart, prevind(s, i)))
+        print(stream, escaped)
+        runstart = nextind(s, i)
     end
+    runstart <= lastindex(s) && print(stream, SubString(s, runstart))
     print(stream, '"')
 end
 
