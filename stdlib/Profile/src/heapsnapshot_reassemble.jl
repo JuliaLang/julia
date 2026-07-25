@@ -112,7 +112,10 @@ function assemble_snapshot(in_prefix, io::IO)
 
     nodes = Nodes(node_count, edge_count)
 
-    orphans = Set{UInt}() # nodes that have no incoming edges
+    # whether each node has at least one incoming edge; the uber node has none by
+    # construction, so mark it up front
+    has_incoming = falses(node_count)
+    node_count > 0 && (has_incoming[1] = true)
     # Parse nodes with empty edge counts that we need to fill later.
     # Read each part file into memory up front: parsing field-at-a-time from an
     # IOStream is dominated by per-call locking overhead.
@@ -134,8 +137,6 @@ function assemble_snapshot(in_prefix, io::IO)
             nodes.id[i] = id
             nodes.self_size[i] = self_size
             nodes.edge_count[i] = 0 # edge_count
-            # populate the orphans set with node index
-            push!(orphans, i-1)
         end
     end
 
@@ -172,18 +173,17 @@ function assemble_snapshot(in_prefix, io::IO)
             nodes.edges.type[i] = edge_type
             nodes.edges.name_or_index[i] = edge_name_or_index
             nodes.edges.to_pos[i] = to_node * k_node_number_of_fields # 7 fields per node, the streaming format doesn't multiply the offset by 7
-            # remove the node from the orphans if it has at least one incoming edge
-            if to_node in orphans
-                delete!(orphans, to_node)
-            end
+            to_node < node_count ||
+                error("malformed edges file `$(in_prefix).edges`: to_node $(to_node) is out of range for $(node_count) nodes")
+            has_incoming[to_node + 1] = true
         end
     end
 
-    delete!(orphans, 0) # the uber node has no incoming edges by construction
-
-    isempty(orphans) ||
+    if !all(has_incoming)
+        orphans = findall(!, has_incoming) .- 1 # C and JSON use 0-based indexing
         error("malformed snapshot `$(in_prefix)`: $(length(orphans)) of $(length(nodes)) nodes have no incoming edges: ",
               join(Iterators.take(orphans, 10), ", "), length(orphans) > 10 ? ", ..." : "")
+    end
 
     _digits_buf = zeros(UInt8, ndigits(typemax(UInt)))
     println(io, @view(preamble[1:end-1]), ",") # remove trailing "}" to reopen the object
