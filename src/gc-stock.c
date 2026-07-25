@@ -3131,7 +3131,8 @@ static void sweep_finalizer_list(arraylist_t *list) JL_NOTSAFEPOINT
             isfreed = !gc_marked(jl_astaggedvalue(v)->bits.gc);
             isold = (list != &finalizer_list_marked &&
                      jl_astaggedvalue(v)->bits.gc == GC_OLD_MARKED &&
-                     jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED);
+                     (gc_ptr_tag(v0, GC_FIN_CFUNC_TAG) ||
+                      jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED));
         }
         if (isfreed || isold) {
             // remove from this list
