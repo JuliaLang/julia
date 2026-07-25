@@ -861,6 +861,18 @@ public:
 };
 } // namespace anonymous
 
+// Wedge diagnosis: which phase of JLMaterializationUnit::materialize a thread
+// entered last (see jl_jit_dump_state). Racy by design; a stalled
+// materialization leaves the last phase it entered visible.
+static std::atomic<const char *> LastMaterializePhase{"none"};
+static std::atomic<int> MaterializePhaseTid{-1};
+
+static void note_materialize_phase(const char *Phase) JL_NOTSAFEPOINT
+{
+    LastMaterializePhase.store(Phase, std::memory_order_relaxed);
+    MaterializePhaseTid.store(jl_threadid(), std::memory_order_relaxed);
+}
+
 class JLMaterializationUnit : public orc::MaterializationUnit {
 public:
     // Must hold LinkerMutex when calling Create and until the
@@ -930,11 +942,15 @@ public:
             Out.module->addModuleFlag(Module::Warning, "julia.cpu.features",
                                       MDString::get(*Out.ctx,
                                                     JIT.getTargetFeatureString()));
+            note_materialize_phase("objcache-get");
             Obj = JIT.OCache.get(*Out.module,
                                  [this]() JL_CANSAFEPOINT_ENTER_LEAVE {
+                                     note_materialize_phase("optimize");
                                      JIT.optimizeModule(*Out.module);
+                                     note_materialize_phase("compile");
                                      return JIT.compileModule(*Out.module);
                                  });
+            note_materialize_phase("objcache-done");
             if (!Obj) {
                 R->failMaterialization();
                 return;
@@ -970,6 +986,7 @@ public:
         JIT.publishCIs(CIs);
         jl_gc_unsafe_leave(ct->ptls, gc_state);
 
+        note_materialize_phase("linkOutput");
         if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info)))
             return;
         OL.emit(std::move(R), std::move(*G), std::move(Obj));
@@ -2185,6 +2202,9 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_jit_dump_state_impl(void) JL_NOTSAFEPOIN
     static_cast<JuliaTaskDispatcher &>(
         ES.getExecutorProcessControl().getDispatcher()).dump_wedge_state();
     jl_ExecutionEngine->dumpLinkerMutexState();
+    jl_safe_printf("jit materialize: last_phase=%s tid=%d\n",
+                   LastMaterializePhase.load(std::memory_order_relaxed),
+                   MaterializePhaseTid.load(std::memory_order_relaxed));
     // Full session dump (symbol states and pending queries): takes the
     // session lock, so it can hang if a wedged materializer holds it — keep
     // it last; the caller is a watchdog on an already-dying process.
