@@ -252,13 +252,15 @@ function wait_no_relock(c::GenericCondition)
     try
         return wait()
     catch
-        # We were resumed without a wake having been delivered through our
-        # registration (an interrupter claimed it, or a raw `throwto`).
-        # Disarm it, then unlink our entry, which requires the waitee lock -
-        # for lock parking this is a leaf spinlock, so no re-parking here.
+        # See disarm protocol in condition.jl
         @atomicreplace ct.waiting_on w => nothing
+        was_cached = ct.cached_wait_entry === w
+        was_cached && (ct.cached_wait_entry = nothing)
         lock(c.lock)
         list_deletefirst!(waitqueue(c), w)
+        if was_cached && ct.cached_wait_entry === nothing
+            ct.cached_wait_entry = w
+        end
         unlock(c.lock)
         rethrow()
     end

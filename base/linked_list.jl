@@ -7,13 +7,6 @@ mutable struct IntrusiveLinkedList{T}
     IntrusiveLinkedList{T}() where {T} = new{T}(nothing, nothing)
 end
 
-# A reference to an intrusive list together with the identity recorded in the
-# elements' `queue` field while they are enqueued (the element's "which queue am
-# I on" witness). Plain lists use the list object itself as the identity; lists
-# that are owned by some other object (a synchronized workqueue wrapper, a
-# condition, a waited-on object) record that owner instead, so that code
-# holding only the element can identify the owner - and thus the lock
-# protecting the list - from the element alone.
 struct ILLRef{T}
     list::IntrusiveLinkedList{T}
     waitee::Any # Invariant: waitqueue(waitee).list === list

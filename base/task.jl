@@ -911,10 +911,6 @@ mutable struct IntrusiveLinkedListSynchronized{T}
     lock::Threads.SpinLock
     IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
 end
-# The elements record this synchronized wrapper (not the inner list) as their
-# `queue` identity, so that an asynchronous deletion (e.g. `schedule(t, exc,
-# error=true)` yanking a task out of a sticky workqueue) dispatches back here
-# and takes the lock instead of mutating the inner list unsynchronized.
 waitqueue(W::IntrusiveLinkedListSynchronized) = ILLRef(W.queue, W)
 isempty(W::IntrusiveLinkedListSynchronized) = isempty(W.queue)
 length(W::IntrusiveLinkedListSynchronized) = length(W.queue)
@@ -970,11 +966,6 @@ workqueue_for(tid::Int) = Workqueues[tid]
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    # A task with an armed wait registration is parked, not runnable: whoever
-    # wants to wake it must claim the registration first (see the wake-claim
-    # protocol in condition.jl). Every internal wake path does; catching the
-    # misuse here keeps a stray `schedule(t)` from racing the queue's `notify`
-    # into waking `t` twice.
     (@atomic :monotonic t.waiting_on) === nothing ||
         throw(ConcurrencyViolationError("schedule: Task is registered on a wait queue"))
 
@@ -1096,16 +1087,10 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
-        # If `t` is registered on a wait queue, claim its wake so that a
-        # concurrent or later `notify` skips its registration, then
-        # opportunistically unlink the claimed entry: until `enq_work` below,
-        # `t` cannot run, so the entry cannot be reused and the unlink is
-        # safe. If the waitee's lock is unavailable the entry is left for
-        # lazy collection instead (this path must never block).
+        # Interrupt path: Unconditionally remove the wait (if any)
+        # TODO: This should use the proper cancellation system instead
         w = @atomicswap t.waiting_on = nothing
         w isa WaitEntry && try_unlink_claimed!(w)
-        # A parked task is never in a workqueue and wait registrations do not
-        # go through `t.queue`, so any queue here is a sticky workqueue.
         q = t.queue
         q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
         setfield!(t, :result, arg)

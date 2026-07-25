@@ -65,33 +65,12 @@ islocked(::AlwaysLockedST) = true
 # registration through the atomic field `t.waiting_on`. Whoever wants to wake
 # it must first claim the wake by atomically clearing that field:
 #
-#   - `notify` (holding the waitee's lock) pops an entry `w` and claims via
-#     CAS(t.waiting_on, w => nothing). The expected-value CAS makes stale
-#     entries harmless: if `t` was interrupted and has since registered
-#     elsewhere, the CAS fails and the popped corpse is simply dropped.
-#   - an interrupter (`schedule(t, exc, error=true)`) claims via an
-#     unconditional swap: it is directed at the *task*, not at any particular
-#     wait, so claiming whatever `t` is currently registered on is correct.
-#     It then opportunistically unlinks the claimed entry under the waitee's
-#     lock via `trylock` (see `try_unlink_claimed!`); if the lock is
-#     unavailable the entry stays linked and is collected lazily, either by
-#     the interrupted task's own wait cleanup or by the `notify` that pops
-#     and drops it.
-#   - wake sources directed at one *specific* wait (e.g. the timeout task of
-#     `Experimental.wait_with_timeout`) must register the wait with a fresh,
-#     single-use entry: single-use-ness is what guarantees their
-#     expected-value CAS cannot mistakenly claim a later, unrelated wait.
+# CAS(w => nothing) succeeds: the claim is won, and the owner may schedule
+# N.B.: Interrupters currently claim unconditionally, normal waiters claim
+# a specific entry. In the future this will be managed by the cancellation system.
 #
-# Entries are heap objects (rather than links folded into the Task) so that a
-# task whose interrupted wait left a stale registration behind can immediately
-# register anew - e.g. park on a lock during its cleanup - with a fresh entry.
-# To keep the common park allocation-free, each task caches one entry
-# (`t.cached_wait_entry`) and reuses it whenever it is free, i.e. not still
-# linked into some queue (`w.queue === nothing`). Reuse requires the owning
-# task to be synchronized with the unlinker: either the task unlinked the entry
-# itself, or the unlinker subsequently scheduled it. Interrupted-wait cleanup
-# temporarily removes its entry from the cache before relocking, since another
-# task may unlink that stale entry without being the task that scheduled us.
+# Entries are heap objects. A task whose interrupted wait left a stale registration
+# behind can immediately register anew - e.g. park on a lock during its cleanup - with a fresh entry.
 mutable struct WaitEntry
     task::Union{Task, Nothing}
     next::Union{WaitEntry, Nothing}
@@ -135,12 +114,8 @@ end
 Abstract implementation of a condition object
 for synchronizing task objects with a given lock.
 """
-# Mutable so that it can serve as the queue identity recorded in entries (the
-# membership witness): the witness must be an identity-stable heap object (an
-# immutable waitee would be re-boxed on every park, allocating in the steady
-# state), and the interrupt path must be able to find the queue's lock from
-# the witness alone (see `try_unlink_claimed!`).
 mutable struct GenericCondition{L<:AbstractLock}
+    # mutable for identity only
     const waitq::IntrusiveLinkedList{WaitEntry}
     const lock::L
 
@@ -151,30 +126,17 @@ end
 
 waitqueue(c::GenericCondition) = ILLRef(c.waitq, c)
 
-# Opportunistically unlink a *claimed* entry from whatever queue it is still
-# linked on, so interrupted waits do not accumulate corpses on the queue (and
-# the owner's cached entry becomes reusable right away). Precondition: the
-# caller holds the entry's claim and has not yet rescheduled the owner.
-# Every mutation of `w.queue` happens under the owning queue's lock, so the
-# racy read below is only a hint for locating that lock: `list_deletefirst!`
-# revalidates it (via the witness check) once the lock is held. The claim's
-# acquire edge on `waiting_on` guarantees the read sees the current queue or
-# `nothing`, never a stale previous waitee. Reading `nothing` can also mean
-# the claim landed mid-park, before the (still running) owner linked the
-# entry it had already armed; skipping the unlink is fine then - the entry
-# is collected lazily, exactly as on `trylock` failure (by the owner's own
-# wait cleanup or by a later notify popping and dropping it). Uses `trylock`
-# because the interrupt path must never block. The return value is a
-# best-effort "no linked corpse remains" indication (currently unused).
-#
-# The waitee kinds are matched explicitly, rather than through dynamic
-# dispatch on `trylock`/`unlock`: this path is reachable from `schedule`, so
-# it must be statically resolvable for trimmed binaries (juliac). A waitee
-# kind not matched here (a GenericCondition over a user-defined lock type)
-# just reports failure and relies on lazy collection.
+"""
+    try_unlink_claimed!(w::WaitEntry)
+
+Opportunistically attempt to unlink a wait entry from its queue. This is a memory pressure
+optimization. If the queue is locked by another task, the entry will remain linked and will
+be unlinked upon the next wakeup attempt.
+"""
 function try_unlink_claimed!(w::WaitEntry)
     q = w.queue
     q === nothing && return true
+    # Manual split for --trim
     if q isa Task
         dn = q.donenotify
         dn isa GenericCondition{Threads.SpinLock} || return false
@@ -276,18 +238,12 @@ function wait(c::GenericCondition; first::Bool=false, waitee=c)
     ret = try
         wait()
     catch
-        # We were resumed without a wake having been delivered through our
-        # registration: either an interrupter claimed it (leaving the entry
-        # linked for us to clean up), or we got a raw `throwto`. Disarm the
-        # registration first - before the relock below can register a new
-        # wait - then unlink our entry (a no-op if a `notify` already popped
-        # and dropped it).
+        # Error path - this could have come from an interrupt or other error.
+        # Clean up our wait condition.
+        # TODO: Replace this with the proper cancellation protocol.
         @atomicreplace ct.waiting_on w => nothing
-        # Do not reuse `w` while relocking: a notifier may have popped this
-        # stale entry without scheduling us and may still retain its identity
-        # for the wake-claim CAS. If relocking does not need to park and cache
-        # a replacement, restore `w` once cleanup under the old lock makes it
-        # safe to reuse again.
+        # WARNING: Do not use `w` for establish a wait on any tokens - otherwise
+        # we risk ABA issues by attempting to use the cached token for the lock wait.
         was_cached = ct.cached_wait_entry === w
         was_cached && (ct.cached_wait_entry = nothing)
         relockall(c.lock, token)
@@ -317,10 +273,6 @@ function notify(c::GenericCondition, @nospecialize(arg), all, error)
     cnt = 0
     while !isempty(c.waitq)
         w = popfirst!(waitqueue(c))
-        # An entry whose wake was already claimed by an interrupter does not
-        # count as woken: drop it and continue to the next waiter (the
-        # interrupted task resumes via whatever its claimer scheduled and
-        # will find its entry already unlinked).
         t = w.task
         if !(t isa Task && claim_wait(t, w))
             continue
