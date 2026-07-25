@@ -23,7 +23,7 @@ struct Nodes
     name_idx::Vector{UInt32} # index into `snapshot.strings`
     id::Vector{UInt}           # unique id, in julia it is the address of the object
     self_size::Vector{Int}     # size of the object itself, not including the size of its fields
-    edge_count::Vector{UInt} # number of outgoing edges
+    edge_count::Vector{UInt}   # number of outgoing edges
     # This is the main complexity of the .heapsnapshot format, and it's the reason we need
     # to read in all the data before writing it out. The edges vector contains all edges,
     # but organized by which node they came from. First, it contains all the edges coming
@@ -38,7 +38,7 @@ function Nodes(n::Int, e::Int)
         Vector{UInt32}(undef, n),
         Vector{UInt}(undef, n),
         Vector{Int}(undef, n),
-        Vector{UInt32}(undef, n),
+        Vector{UInt}(undef, n),
         Edges(e),
     )
 end
@@ -166,7 +166,7 @@ function assemble_snapshot(in_prefix, io::IO)
         for i in 1:n_edges
             seek(edges_file, (i - 1) * k_edge_record_bytes + k_edge_from_node_offset)
             from_node = read(edges_file, UInt)
-            nodes.edge_count[from_node + 1] += UInt32(1)  # C and JSON use 0-based indexing
+            nodes.edge_count[from_node + 1] += UInt(1)  # C and JSON use 0-based indexing
         end
         # position in `nodes.edges` of the next edge leaving each node
         cursor = Vector{Int}(undef, length(nodes))
