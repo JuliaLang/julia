@@ -76,6 +76,20 @@ let _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
     end
 end
 
+const k_output_chunk_bytes = 1 << 20
+
+# Hand the buffered output over to `io` once at least `limit` bytes have accumulated,
+# reusing the buffer. Pass `limit = 0` to flush what's left.
+function _maybe_flush(io::IO, buf::IOBuffer, limit::Int = k_output_chunk_bytes)
+    n = position(buf)
+    if n >= limit
+        GC.@preserve buf unsafe_write(io, pointer(buf.data), n)
+        truncate(buf, 0)
+        seekstart(buf)
+    end
+    return nothing
+end
+
 """
     assemble_snapshot(in_prefix::AbstractString, out_file::AbstractString = in_prefix)
 
@@ -186,50 +200,55 @@ function assemble_snapshot(in_prefix, io::IO)
     end
 
     _digits_buf = zeros(UInt8, ndigits(typemax(UInt)))
-    println(io, @view(preamble[1:end-1]), ",") # remove trailing "}" to reopen the object
+    # the snapshot is emitted a field at a time, and a write to an `IOStream` takes a
+    # lock and enters the runtime, so batch the output and hand it to `io` in chunks
+    out = IOBuffer(sizehint = k_output_chunk_bytes)
+    println(out, @view(preamble[1:end-1]), ",") # remove trailing "}" to reopen the object
 
-    println(io, "\"nodes\":[")
+    println(out, "\"nodes\":[")
     for i in 1:length(nodes)
-        i > 1 && println(io, ",")
-        _write_decimal_number(io, nodes.type[i], _digits_buf)
-        print(io, ",")
-        _write_decimal_number(io, nodes.name_idx[i], _digits_buf)
-        print(io, ",")
-        _write_decimal_number(io, nodes.id[i], _digits_buf)
-        print(io, ",")
-        _write_decimal_number(io, nodes.self_size[i], _digits_buf)
-        print(io, ",")
-        _write_decimal_number(io, nodes.edge_count[i], _digits_buf)
-        print(io, ",0,0")
+        i > 1 && println(out, ",")
+        _write_decimal_number(out, nodes.type[i], _digits_buf)
+        print(out, ",")
+        _write_decimal_number(out, nodes.name_idx[i], _digits_buf)
+        print(out, ",")
+        _write_decimal_number(out, nodes.id[i], _digits_buf)
+        print(out, ",")
+        _write_decimal_number(out, nodes.self_size[i], _digits_buf)
+        print(out, ",")
+        _write_decimal_number(out, nodes.edge_count[i], _digits_buf)
+        print(out, ",0,0")
+        _maybe_flush(io, out)
     end
-    print(io, "],\n")
-    print(io, "\"edges\":[")
+    print(out, "],\n")
+    print(out, "\"edges\":[")
     i = 1
     for n in 1:length(nodes)
         for _ in 1:nodes.edge_count[n]
-            i > 1 && print(io, ",")
-            println(io)
-            _write_decimal_number(io, nodes.edges.type[i], _digits_buf)
-            print(io, ",")
-            _write_decimal_number(io, nodes.edges.name_or_index[i], _digits_buf)
-            print(io, ",")
-            _write_decimal_number(io, nodes.edges.to_pos[i], _digits_buf)
+            i > 1 && print(out, ",")
+            println(out)
+            _write_decimal_number(out, nodes.edges.type[i], _digits_buf)
+            print(out, ",")
+            _write_decimal_number(out, nodes.edges.name_or_index[i], _digits_buf)
+            print(out, ",")
+            _write_decimal_number(out, nodes.edges.to_pos[i], _digits_buf)
             if !(nodes.edges.to_pos[i] % k_node_number_of_fields == 0)
                 @warn "Bug in to_pos for edge $i from node $n: $(nodes.edges.to_pos[i])"
             end
             i += 1
+            _maybe_flush(io, out)
         end
     end
-    println(io, "],")
+    println(out, "],")
 
     # not used. Required by microsoft/vscode-v8-heap-tools
     # This order of these fields is required by chrome dev tools otherwise loading fails
-    println(io, "\"trace_function_infos\":[],")
-    println(io, "\"trace_tree\":[],")
-    println(io, "\"samples\":[],")
-    println(io, "\"locations\":[],")
+    println(out, "\"trace_function_infos\":[],")
+    println(out, "\"trace_tree\":[],")
+    println(out, "\"samples\":[],")
+    println(out, "\"locations\":[],")
 
-    println(io, "\"strings\":[")
+    println(out, "\"strings\":[")
     let strings_io = IOBuffer(read(string(in_prefix, ".strings")))
         first = true
         while !eof(strings_io)
@@ -241,12 +260,14 @@ function assemble_snapshot(in_prefix, io::IO)
             if first
                 first = false
             else
-                print(io, ",\n")
+                print(out, ",\n")
             end
-            print_str_escape_json(io, str)
+            print_str_escape_json(out, str)
+            _maybe_flush(io, out)
         end
     end
-    print(io, "]}")
+    print(out, "]}")
+    _maybe_flush(io, out, 0)
 
     return nothing
 end
