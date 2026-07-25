@@ -126,7 +126,10 @@ typedef struct {
 
 // Global profile state.
 typedef struct {
-    double sample_rate;
+    // `cong(UINT64_MAX, ...)` draw at or below which an allocation is sampled. Read
+    // by recorders that have not yet joined the recorder count, so it has to be
+    // atomic even though it is only written while the profiler is stopped.
+    _Atomic(uint64_t) sample_threshold;
     jl_per_thread_alloc_profile_t *per_thread_profiles;
     size_t num_profiles;
 } jl_alloc_profile_t;
@@ -247,7 +250,12 @@ JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate)
         g_alloc_profile.num_profiles = nthreads;
     }
 
-    g_alloc_profile.sample_rate = sample_rate;
+    // `cong` draws from the open interval [0, UINT64_MAX), so a threshold of
+    // UINT64_MAX samples every allocation
+    uint64_t threshold = sample_rate >= 1.0 ? UINT64_MAX :
+                         sample_rate <= 0.0 ? 0 :
+                         (uint64_t)(sample_rate * (double)UINT64_MAX);
+    jl_atomic_store_relaxed(&g_alloc_profile.sample_threshold, threshold);
     jl_atomic_store_release(&g_alloc_profile_enabled, 1);
 }
 
@@ -326,7 +334,17 @@ void jl_gc_foreach_alloc_profile_root(jl_alloc_profile_root_cb_t f, void *env) J
 
 void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *type) JL_NOTSAFEPOINT
 {
-    size_t thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
+    jl_task_t *ct = jl_current_task;
+    // draw the sample before joining the recorder count: the RNG is thread-local, so
+    // the common case of an allocation that isn't sampled costs no shared-memory
+    // traffic beyond the relaxed threshold load. A concurrent restart can at worst
+    // have this draw against the previous session's rate, which only perturbs the
+    // sampling of the allocations in flight across the restart.
+    if (cong(UINT64_MAX, &ct->ptls->rngseed) >
+            jl_atomic_load_relaxed(&g_alloc_profile.sample_threshold))
+        return;
+
+    size_t thread_id = jl_atomic_load_relaxed(&ct->tid);
     _Atomic(int) *recording = recorder_counter(thread_id);
     jl_atomic_fetch_add(recording, 1);
     // re-check the flag under the recorder count: either we see the stop and
@@ -340,11 +358,6 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t 
             goto done; // ignore allocations on threads started after the alloc-profile started
 
         jl_per_thread_alloc_profile_t *p = &g_alloc_profile.per_thread_profiles[thread_id];
-
-        jl_ptls_t ptls = jl_current_task->ptls;
-        double sample_val = (double)cong(UINT64_MAX, &ptls->rngseed) / (double)UINT64_MAX;
-        if (sample_val > g_alloc_profile.sample_rate)
-            goto done;
 
         jl_raw_alloc_t alloc;
         alloc.type_address = type;
