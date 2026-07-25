@@ -977,6 +977,17 @@ function enq_work(t::Task)
     else
         @label not_sticky
         tp = Threads.threadpool(t)
+        if tp !== :foreign && Threads.threadpoolsize(tp) == 0
+            # The task's threadpool has no threads, so it can never run;
+            # fail it with a ConcurrencyViolationError rather than queueing
+            # it (the multiqueue heaps are unsized for empty pools, and a
+            # task queued during sysimage bootstrap would be serialized
+            # into the system image).
+            t.result = ConcurrencyViolationError("deadlock detected: cannot schedule task")
+            t._isexception = true
+            @atomic :release t._state = task_state_failed
+            return t
+        end
         if tp === :foreign || Threads.threadpoolsize(tp) == 1
             # There's only one thread in the task's assigned thread pool;
             # use its work queue.
