@@ -36,14 +36,26 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t) JL_NOTSAFEPOINT;
 ///////////////////////
 JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
+    uv_mutex_lock(&bt_data_prof_lock);
+    if (profile_running) {
+        // the sampler may be writing into the buffer we are about to free. Note this
+        // only rules out re-initializing while running: `jl_profile_stop_timer` doesn't
+        // wait for a sampler iteration already under way, and the thread samplers write
+        // without taking this lock.
+        uv_mutex_unlock(&bt_data_prof_lock);
+        return -2;
+    }
     profile_bt_size_max = maxsize;
     nsecprof = delay_nsec;
     if (profile_bt_data_prof != NULL)
         free((void*)profile_bt_data_prof);
     profile_bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
-    if (profile_bt_data_prof == NULL && maxsize > 0)
+    if (profile_bt_data_prof == NULL && maxsize > 0) {
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -1;
+    }
     profile_bt_size_cur = 0;
+    uv_mutex_unlock(&bt_data_prof_lock);
     return 0;
 }
 

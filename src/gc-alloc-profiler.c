@@ -36,9 +36,31 @@ static void alloc_array_push(alloc_array_t *a, jl_raw_alloc_t val) JL_NOTSAFEPOI
 
 static void alloc_array_clear(alloc_array_t *a) JL_NOTSAFEPOINT { a->len = 0; }
 
-// Per-thread profile: a growable array of alloc records.
+typedef struct {
+    jl_datatype_t **data;
+    size_t len;
+    size_t cap;
+} type_array_t;
+
+static void type_array_push(type_array_t *a, jl_datatype_t *val) JL_NOTSAFEPOINT
+{
+    if (a->len >= a->cap) {
+        a->cap = a->cap ? a->cap * 2 : 8;
+        a->data = (jl_datatype_t **)realloc_s(a->data, a->cap * sizeof(a->data[0]));
+    }
+    a->data[a->len++] = val;
+}
+
+#define TYPE_FILTER_SIZE 256 // must be a power of two
+
+// Per-thread profile: a growable array of alloc records, plus the types they
+// refer to, which have to be reported to the GC as roots.
 typedef struct {
     alloc_array_t allocs;
+    type_array_t type_roots;
+    // direct-mapped filter over `type_roots`, so that it doesn't grow with every
+    // sample. Owning thread only; a collision just lets a duplicate through.
+    jl_datatype_t *type_filter[TYPE_FILTER_SIZE];
 } jl_per_thread_alloc_profile_t;
 
 // Global profile state.
@@ -51,8 +73,58 @@ typedef struct {
 // == Global variables manipulated by callbacks ==
 
 static jl_alloc_profile_t g_alloc_profile;
-int g_alloc_profile_enabled = 0;
+_Atomic(int) g_alloc_profile_enabled = 0;
+// number of threads currently inside `_maybe_record_alloc_to_profile`
+static _Atomic(int) g_recording_threads = 0;
 static alloc_array_t g_combined_allocs; // Will live forever.
+
+// Must only be called while `g_alloc_profile_enabled` is 0, so that once the
+// count reaches zero no new recorder can start touching the profile arrays.
+static void wait_for_recorders(void) JL_NOTSAFEPOINT
+{
+    // a recorder can take a while (unwinding takes locks and mallocs), so back off
+    for (int spins = 0; jl_atomic_load(&g_recording_threads) != 0; spins++) {
+        if (spins < 128)
+            jl_cpu_pause();
+        else
+            jl_cpu_suspend();
+    }
+}
+
+// Disable recording and wait for in-flight recorders to leave, so that the profile
+// arrays can be read, reallocated or freed. Returns the state for `resume_recording`.
+static int suspend_recording(void) JL_NOTSAFEPOINT
+{
+    int was_enabled = jl_atomic_exchange(&g_alloc_profile_enabled, 0);
+    wait_for_recorders();
+    return was_enabled;
+}
+
+static void resume_recording(int was_enabled) JL_NOTSAFEPOINT
+{
+    if (was_enabled)
+        jl_atomic_store_release(&g_alloc_profile_enabled, 1);
+}
+
+// the recorded "type" is sometimes a sentinel rather than an object pointer;
+// keep in sync with `load_type` in stdlib/Profile/src/Allocs.jl
+static int is_object_type(jl_datatype_t *type) JL_NOTSAFEPOINT
+{
+    return !((uintptr_t)type < 4096 || (uintptr_t)type == jl_buff_tag ||
+             type == jl_gc_unknown_type_tag);
+}
+
+// keep `type` alive for as long as an alloc record refers to it
+static void record_type_root(jl_per_thread_alloc_profile_t *p, jl_datatype_t *type) JL_NOTSAFEPOINT
+{
+    if (!is_object_type(type))
+        return;
+    size_t slot = ((uintptr_t)type >> 4) & (TYPE_FILTER_SIZE - 1);
+    if (p->type_filter[slot] == type)
+        return;
+    p->type_filter[slot] = type;
+    type_array_push(&p->type_roots, type);
+}
 
 // === stack stuff ===
 
@@ -86,6 +158,9 @@ static jl_raw_backtrace_t get_raw_backtrace(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate)
 {
+    // in-flight recorders read the per-thread arrays we may be about to reallocate
+    jl_stop_alloc_profile();
+
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     size_t num_profiles = g_alloc_profile.num_profiles;
     if (num_profiles < nthreads) {
@@ -99,11 +174,15 @@ JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate)
     }
 
     g_alloc_profile.sample_rate = sample_rate;
-    g_alloc_profile_enabled = 1;
+    jl_atomic_store_release(&g_alloc_profile_enabled, 1);
 }
 
 JL_DLLEXPORT jl_profile_allocs_raw_results_t jl_fetch_alloc_profile(void)
 {
+    // in-flight recorders may be pushing onto (and thus reallocating) the
+    // per-thread arrays we are about to drain
+    int was_enabled = suspend_recording();
+
     // combine allocs
     // TODO: interleave to preserve ordering
     for (size_t i = 0; i < g_alloc_profile.num_profiles; i++) {
@@ -117,24 +196,41 @@ JL_DLLEXPORT jl_profile_allocs_raw_results_t jl_fetch_alloc_profile(void)
     jl_profile_allocs_raw_results_t result;
     result.allocs = g_combined_allocs.data;
     result.num_allocs = g_combined_allocs.len;
+
+    // recorders only ever push onto the per-thread arrays, never onto
+    // `g_combined_allocs`, so the result stays valid while recording resumes
+    resume_recording(was_enabled);
     return result;
 }
 
 JL_DLLEXPORT void jl_stop_alloc_profile(void)
 {
-    g_alloc_profile_enabled = 0;
+    // after this returns, no thread is mid-record and none can start recording,
+    // so the profile arrays are safe to read and free
+    suspend_recording();
+}
+
+JL_DLLEXPORT int jl_alloc_profile_is_running(void)
+{
+    return jl_atomic_load_acquire(&g_alloc_profile_enabled);
 }
 
 JL_DLLEXPORT void jl_free_alloc_profile(void)
 {
+    // in-flight recorders may be pushing onto the arrays we are about to free
+    int was_enabled = suspend_recording();
+
     // Free any allocs that remain in the per-thread profiles, that haven't
     // been combined yet (which happens in jl_fetch_alloc_profile()).
     for (size_t i = 0; i < g_alloc_profile.num_profiles; i++) {
-        alloc_array_t *allocs = &g_alloc_profile.per_thread_profiles[i].allocs;
-        for (size_t j = 0; j < allocs->len; j++) {
-            free(allocs->data[j].backtrace.data);
+        jl_per_thread_alloc_profile_t *p = &g_alloc_profile.per_thread_profiles[i];
+        for (size_t j = 0; j < p->allocs.len; j++) {
+            free(p->allocs.data[j].backtrace.data);
         }
-        alloc_array_clear(allocs);
+        alloc_array_clear(&p->allocs);
+        // no alloc record refers to these types any more
+        p->type_roots.len = 0;
+        memset(p->type_filter, 0, sizeof(p->type_filter));
     }
 
     // Free the allocs that have been already combined into the combined results object.
@@ -143,28 +239,56 @@ JL_DLLEXPORT void jl_free_alloc_profile(void)
     }
 
     alloc_array_clear(&g_combined_allocs);
+    resume_recording(was_enabled);
+}
+
+// == GC root marking ==
+
+// Called during GC root marking (world stopped, so no recorder can be appending to
+// `type_roots`); keeps the recorded types alive until `jl_free_alloc_profile`. Walks
+// the distinct types seen, not every record, so the mark work is bounded.
+void jl_gc_foreach_alloc_profile_root(jl_alloc_profile_root_cb_t f, void *env) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < g_alloc_profile.num_profiles; i++) {
+        type_array_t *roots = &g_alloc_profile.per_thread_profiles[i].type_roots;
+        for (size_t j = 0; j < roots->len; j++)
+            f((jl_value_t*)roots->data[j], env);
+    }
 }
 
 // == callback called into by the outside ==
 
 void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *type) JL_NOTSAFEPOINT
 {
-    size_t thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
-    if (thread_id >= g_alloc_profile.num_profiles)
-        return; // ignore allocations on threads started after the alloc-profile started
+    jl_atomic_fetch_add(&g_recording_threads, 1);
+    // re-check the flag under the recorder count: either we see the stop and
+    // leave, or the stopping thread waits for us to finish (Dekker-style
+    // synchronization; both sides use sequentially consistent operations)
+    if (!jl_atomic_load(&g_alloc_profile_enabled))
+        goto done;
 
-    alloc_array_t *allocs = &g_alloc_profile.per_thread_profiles[thread_id].allocs;
+    {
+        size_t thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
+        if (thread_id >= g_alloc_profile.num_profiles)
+            goto done; // ignore allocations on threads started after the alloc-profile started
 
-    jl_ptls_t ptls = jl_current_task->ptls;
-    double sample_val = (double)cong(UINT64_MAX, &ptls->rngseed) / (double)UINT64_MAX;
-    if (sample_val > g_alloc_profile.sample_rate)
-        return;
+        jl_per_thread_alloc_profile_t *p = &g_alloc_profile.per_thread_profiles[thread_id];
 
-    jl_raw_alloc_t alloc;
-    alloc.type_address = type;
-    alloc.backtrace = get_raw_backtrace();
-    alloc.size = size;
-    alloc.task = (void *)jl_current_task;
-    alloc.timestamp = cycleclock();
-    alloc_array_push(allocs, alloc);
+        jl_ptls_t ptls = jl_current_task->ptls;
+        double sample_val = (double)cong(UINT64_MAX, &ptls->rngseed) / (double)UINT64_MAX;
+        if (sample_val > g_alloc_profile.sample_rate)
+            goto done;
+
+        jl_raw_alloc_t alloc;
+        alloc.type_address = type;
+        alloc.backtrace = get_raw_backtrace();
+        alloc.size = size;
+        alloc.task = (void *)jl_current_task;
+        alloc.timestamp = cycleclock();
+        alloc_array_push(&p->allocs, alloc);
+        record_type_root(p, type);
+    }
+
+done:
+    jl_atomic_fetch_add(&g_recording_threads, -1);
 }
