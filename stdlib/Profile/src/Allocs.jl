@@ -332,11 +332,14 @@ function parse_flat(::Type{T}, data::Vector{Alloc}, C::Bool) where T
     n = Int[]
     m = Int[]
     lilist_idx = Dict{T, Int}()
-    recursive = Set{T}()
+    # generation at which each lilist entry was last counted; a per-record
+    # generation bump replaces an expensive Set of frames for recursion dedup
+    seen_gen = Int[]
+    gen = 0
     totalbytes = 0
     for r in data
         first = true
-        empty!(recursive)
+        gen += 1
         nb = r.size # or 1 for counting
         totalbytes += nb
         for frame in r.stacktrace
@@ -344,12 +347,12 @@ function parse_flat(::Type{T}, data::Vector{Alloc}, C::Bool) where T
             key = (T === UInt64 ? frame.pointer : frame)
             idx = get!(lilist_idx, key, length(lilist) + 1)
             if idx > length(lilist)
-                push!(recursive, key)
+                push!(seen_gen, gen)
                 push!(lilist, frame)
                 push!(n, nb)
                 push!(m, 0)
-            elseif !(key in recursive)
-                push!(recursive, key)
+            elseif seen_gen[idx] != gen
+                seen_gen[idx] = gen
                 n[idx] += nb
             end
             if first
