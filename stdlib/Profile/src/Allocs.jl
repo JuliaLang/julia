@@ -187,12 +187,23 @@ function load_type(ptr::Ptr{Type})
 end
 
 function decode(raw_results::RawResults)::AllocResults
-    raw_allocs = [unsafe_load(raw_results.allocs, i) for i in 1:raw_results.num_allocs]
-    backtraces = [load_backtrace(a.backtrace) for a in raw_allocs]
+    n_allocs = Int(raw_results.num_allocs)
     # symbol lookup dominates decoding, so do it once per unique ip, in parallel
-    # (the same approach as `Profile.getdict!`)
+    # (the same approach as `Profile.getdict!`). The backtraces are decoded into a
+    # reused buffer, rather than kept as one vector per sample, since holding a
+    # decoded copy of every backtrace at once is a lot of memory at high sample rates.
     cache = BacktraceCache()
-    unique_ips = unique(Iterators.flatten(backtraces))
+    trace = Vector{BTElement}()
+    unique_ips = Vector{BTElement}()
+    let seen = Set{BTElement}()
+        for i in 1:n_allocs
+            raw = unsafe_load(raw_results.allocs, i)
+            load_backtrace!(empty!(trace), raw.backtrace)
+            for ip in trace
+                ip in seen || (push!(seen, ip); push!(unique_ips, ip))
+            end
+        end
+    end
     if !isempty(unique_ips)
         sort!(unique_ips) # help each thread to get a disjoint set of libraries, as much as possible
         lookups = Vector{Vector{StackFrame}}(undef, length(unique_ips))
@@ -205,21 +216,24 @@ function decode(raw_results::RawResults)::AllocResults
             cache[unique_ips[i]] = lookups[i]
         end
     end
-    allocs = [
-        Alloc(
-            load_type(raw_allocs[i].type),
-            stacktrace_memoized(cache, backtraces[i]),
-            UInt(raw_allocs[i].size),
-            raw_allocs[i].task,
-            raw_allocs[i].timestamp
+    allocs = Vector{Alloc}(undef, n_allocs)
+    for i in 1:n_allocs
+        raw = unsafe_load(raw_results.allocs, i)
+        load_backtrace!(empty!(trace), raw.backtrace)
+        allocs[i] = Alloc(
+            load_type(raw.type),
+            stacktrace_memoized(cache, trace),
+            UInt(raw.size),
+            raw.task,
+            raw.timestamp
         )
-        for i in eachindex(raw_allocs)
-    ]
+    end
     return AllocResults(allocs)
 end
 
-function load_backtrace(trace::RawBacktrace)::Vector{BTElement}
-    out = Vector{BTElement}()
+load_backtrace(trace::RawBacktrace)::Vector{BTElement} = load_backtrace!(Vector{BTElement}(), trace)
+
+function load_backtrace!(out::Vector{BTElement}, trace::RawBacktrace)::Vector{BTElement}
     n = Int(trace.size)
     i = 1
     while i <= n
