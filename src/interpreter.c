@@ -538,6 +538,9 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
 // expansions and indirections through a linetable - so resolve it the same way
 // codegen's append_lineinfo does, then log the frames that differ from the previous
 // statement, as codegen's coverageVisitStmt does.
+// Codegen has no equivalent bound; overflow drops the innermost frames of a very
+// deeply nested macro expansion, which loses coverage for those rather than
+// misreporting it.
 #define COVERAGE_MAX_FRAMES 12
 typedef struct {
     const char *file[COVERAGE_MAX_FRAMES];
@@ -590,6 +593,9 @@ static void coverage_visit_stmt(jl_code_info_t *src, jl_module_t *module,
     coverage_frames_t cur;
     cur.n = 0;
     coverage_collect(src->debuginfo, mi ? (jl_value_t*)mi : NULL, module, pc, &cur);
+    if (cur.n == 0)
+        return; // no location for this statement: keep the frames we already had,
+                // as codegen's update_lineinfo does when it reports no update
     int d = 0;
     while (d < cur.n && d < prev->n &&
            cur.line[d] == prev->line[d] && cur.file[d] == prev->file[d])

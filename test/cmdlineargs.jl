@@ -704,6 +704,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         # must resolve it to the macro's own lines rather than to the call site
         let macrofile = realpath(joinpath(helperdir, "coverage_macros.jl")),
             usefile = realpath(joinpath(helperdir, "coverage_macrouse.jl"))
+            counts = Dict()
             for extra in (``, `--compile=min`), mode in (`--code-coverage=user`, `--code-coverage=all`)
                 outfile = joinpath(dir, "macro.info")
                 @test success(`$cov_exename $extra --code-coverage=$outfile $mode $usefile`)
@@ -715,7 +716,13 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 for ln in (13, 14) # the body of `@twice`, expanded into `usesmac`
                     @test get(hits, ln, 0) > 0 context=(extra, mode, ln)
                 end
+                # lines 12-14 are the macro body only; unlike line 11 they are not
+                # also a top-level statement, so every mode must agree on them.
+                # Interpreted counts drifting above compiled ones means the frames
+                # carried over between statements are not being tracked correctly.
+                counts[(string(extra), string(mode))] = [get(hits, ln, 0) for ln in 12:14]
             end
+            @test allequal(values(counts)) context=counts
         end
 
         # interpreted code is tracked too, including under --compile=min (#37059)
