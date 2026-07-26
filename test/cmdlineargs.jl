@@ -776,7 +776,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
         # the .cov writer must reproduce source lines of any length
         mktempdir() do tdir
-            srcfile = joinpath(tdir, "longline.jl")
+            srcfile = joinpath(realpath(tdir), "longline.jl")
             long = "x" ^ 4000
             write(srcfile, "f(x) = x + 1 # $long\nf(1)\n")
             pid = readchomp(`$cov_exename -E "getpid()" -L $srcfile --code-coverage=@$tdir`)
