@@ -2534,8 +2534,16 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             bool explicit_threads = false;
             threads = compute_image_thread_count(module_info, jobserver.active(), explicit_threads);
             unsigned weight_bound = 0, core_fill = 0;
-            nshards = compute_image_shard_count(module_info, threads, &weight_bound, &core_fill);
-            threads = std::min(threads, nshards);
+            if (explicit_threads) {
+                // An explicit JULIA_IMAGE_THREADS fixes the shard layout too, so
+                // that setting it to 1 still means one shard emitted whole, with
+                // no partitioning or serialize/deserialize round-trip.
+                nshards = threads;
+            }
+            else {
+                nshards = compute_image_shard_count(module_info, threads, &weight_bound, &core_fill);
+                threads = std::min(threads, nshards);
+            }
             if (getenv("JULIA_IMAGE_TIMINGS"))
                 jl_safe_printf("[image] \"text\" module weight %zu -> %u shards"
                                " (weight_bound %u, core_fill %u), up to %u threads"
