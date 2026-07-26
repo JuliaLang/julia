@@ -62,7 +62,7 @@ static uint64_t *allocLine(logdata_vec_t *vec, int line) JL_NOTSAFEPOINT
         logdata_vec_resize(vec, block + 1);
     jl_assume(vec->blocks != NULL);
     if (vec->blocks[block] == NULL) {
-        vec->blocks[block] = (logdata_block *)calloc(1, sizeof(logdata_block));
+        vec->blocks[block] = (logdata_block *)calloc_s(sizeof(logdata_block));
     }
     logdata_block *data = vec->blocks[block];
     if ((*data)[line] == 0)
