@@ -92,10 +92,12 @@ JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
     if (tracked == NULL || path == NULL)
         return 0;
     size_t tlen = strlen(tracked);
+    if (tlen == 0)
+        return 1; // no path given: everything is tracked
     while (tlen > 0 && (tracked[tlen - 1] == '/' || tracked[tlen - 1] == PATHSEPSTRING[0]))
         tlen--;
     if (tlen == 0)
-        return 1;
+        return jl_isabspath(path); // the filesystem root: every absolute path
     if (strncmp(path, tracked, tlen) != 0)
         return 0;
     char next = path[tlen];
