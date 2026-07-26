@@ -235,6 +235,8 @@ include("accumulate.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
 
+include("fmap.jl")
+
 # Combinatorics
 include("sort.jl")
 using .Sort
