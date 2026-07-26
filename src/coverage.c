@@ -102,6 +102,25 @@ JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
     return next == '\0' || next == '/' || next == PATHSEPSTRING[0];
 }
 
+// Whether code from `filename` belonging to `m` should be logged under the current
+// --code-coverage setting. `m` may be NULL when the module is unknown.
+JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT
+{
+    if (codegen_imaging_mode() || jl_generating_output() || is_skip_filename(filename))
+        return 0;
+    switch (jl_options.code_coverage) {
+    case JL_LOG_ALL:
+        return 1;
+    case JL_LOG_USER:
+        return m != NULL && jl_base_module != NULL && jl_core_module != NULL &&
+               !jl_is_submodule(m, jl_base_module) && !jl_is_submodule(m, jl_core_module);
+    case JL_LOG_PATH:
+        return jl_path_is_tracked(filename);
+    default:
+        return 0;
+    }
+}
+
 JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line)
 {
     assert(!codegen_imaging_mode());
