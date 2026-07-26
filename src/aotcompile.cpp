@@ -1884,6 +1884,28 @@ static inline void schedule_uv_thread(uv_thread_t *worker, CB &&cb)
     }, func);
 }
 
+// Whether JULIA_IMAGE_TIMINGS asked for the image timing reports. Parsed once:
+// both the per-shard timers and the shard-sizing diagnostic key off the same
+// boolean, and an invalid value should warn once rather than per emitted module.
+static bool image_report_timings() {
+    static bool report = []() {
+        const char *env = getenv("JULIA_IMAGE_TIMINGS");
+        if (!env)
+            return false;
+        char *endptr;
+        unsigned long val = strtoul(env, &endptr, 10);
+        if (endptr != env && !*endptr && val <= 1)
+            return val != 0;
+        if (StringRef("true").compare_insensitive(env) == 0)
+            return true;
+        if (StringRef("false").compare_insensitive(env) == 0)
+            return false;
+        errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
+        return false;
+    }();
+    return report;
+}
+
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization. `shards` is the
 // partition (output) count, fixing the shard layout; `threads` is the ceiling on
@@ -1916,21 +1938,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     Timer partition_timer("partition", "Partition module", timer_group);
     Timer serialize_timer("serialize", "Serialize module", timer_group);
     Timer output_timer("output", "Add outputs", timer_group);
-    bool report_timings = false;
-    if (auto env = getenv("JULIA_IMAGE_TIMINGS")) {
-        char *endptr;
-        unsigned long val = strtoul(env, &endptr, 10);
-        if (endptr != env && !*endptr && val <= 1) {
-            report_timings = val;
-        } else {
-            if (StringRef("true").compare_insensitive(env) == 0)
-                report_timings = true;
-            else if (StringRef("false").compare_insensitive(env) == 0)
-                report_timings = false;
-            else
-                errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
-        }
-    }
+    bool report_timings = image_report_timings();
     // Single-shard case: emit the whole module as shard 0 without partitioning
     // or the serialize/deserialize round-trip. Keyed on the shard count, not the
     // thread count: a single thread can still produce many shards (it just works
@@ -2544,7 +2552,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                 nshards = compute_image_shard_count(module_info, threads, &weight_bound, &core_fill);
                 threads = std::min(threads, nshards);
             }
-            if (getenv("JULIA_IMAGE_TIMINGS"))
+            if (image_report_timings())
                 jl_safe_printf("[image] \"text\" module weight %zu -> %u shards"
                                " (weight_bound %u, core_fill %u), up to %u threads"
                                " (codegen mem budget %llu MiB)\n",
