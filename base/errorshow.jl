@@ -458,6 +458,7 @@ end
 stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND_BASEPATHS", false) === true
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
+stacktrace_full_loading()::Bool = Base.get_bool_env("JULIA_STACKTRACE_FULL_LOADING", false) === true
 
 # Print `::<sig>` with structural framing (type names, braces) in the default
 # color, matching parameters and their separating commas in gray, and the
@@ -1113,6 +1114,7 @@ Stacktrace processing pipeline:
 4. `process_backtrace` filters a trace for internal implementation or redundant frames and summarizes repeated single frames:
     - `kwcall` frames removed
     - `include`-related stack frames removed
+    - code loading (`using`/`import`) stack frames collapsed to the frame that entered loading
     - Some frames that have the same location info are merged
     - Repeated frames are removed and summarized with a count
     - Output is an Any[] containing (StackFrame, count) tuple elements and this form is exposed to e.g. Revise
@@ -1243,6 +1245,83 @@ function _backtrace_simplify_include_frames!(trace)
     keepat!(trace, kept_frames)
 end
 
+# Functions making up the code loading machinery. Their frames are an implementation
+# detail of `using`/`import` and are collapsed away by
+# `_backtrace_simplify_loading_frames!` - see #52988.
+const _LOADING_INTERNAL_FUNCS = (
+    :__require, :_require_prelocked, :__require_prelocked, :_require_from_serialized,
+    :_tryrequire_from_serialized, :run_package_callbacks, :run_extension_callbacks,
+    :retry_load_extensions, :eval_import_path, :eval_import_path_all, :_eval_import,
+    :_eval_using)
+
+# The frames a collapsed run is allowed to be represented by. A run without one of
+# these is left alone, so that frames which are only incidentally part of loading
+# (e.g. `invoke_in_world`) are never hidden on their own.
+const _LOADING_ANCHOR_FUNCS = (:require, :require_stdlib, :include_package_for_output)
+
+function _is_loading_frame(frame::StackFrame)
+    mod = parentmodule(frame)
+    # Hack: allow `mod === nothing` as a workaround for inlined functions, as in
+    # `_backtrace_simplify_include_frames!`
+    (mod === Base || mod === nothing) || return false
+    file = basename(string(frame.file))
+    func = frame.func
+    if func === Symbol("macro expansion")
+        # the `@lock require_lock` and `@zone` blocks in `require`/`__require`
+        return file == "loading.jl" || file == "lock.jl"
+    elseif func === :invoke_in_world || func === :invokelatest
+        return file == "essentials.jl"
+    elseif func === :include || func === :_include
+        # `include`ing the package's own source, not a user-level `include`
+        return file == "Base.jl" || file == "loading.jl"
+    end
+    return (file == "loading.jl" || file == "module.jl") &&
+           (func in _LOADING_INTERNAL_FUNCS || func in _LOADING_ANCHOR_FUNCS)
+end
+
+_is_loading_anchor(frame::StackFrame) = frame.func in _LOADING_ANCHOR_FUNCS
+
+# For improved user experience, collapse runs of frames belonging to the code loading
+# machinery down to the single frame that entered it - see #52988. Unlike hiding
+# everything thrown through `require`, this keeps frames for user code that runs
+# during loading (e.g. a package erroring while its source is being run).
+function _backtrace_simplify_loading_frames!(trace)
+    stacktrace_full_loading() && return trace
+    kept_frames = trues(length(trace))
+    i = firstindex(trace)
+    while i <= lastindex(trace)
+        if !_is_loading_frame(trace[i][1]::StackFrame)
+            i += 1
+            continue
+        end
+        # find the extent of this run of loading frames
+        j = i
+        while j < lastindex(trace) && _is_loading_frame(trace[j+1][1]::StackFrame)
+            j += 1
+        end
+        anchor = nothing
+        for k in i:j
+            frame = trace[k][1]::StackFrame
+            if frame.func === :require || frame.func === :require_stdlib
+                anchor = k
+                break
+            elseif frame.func === :include_package_for_output
+                # precompilation runs the package in a worker process, where the whole
+                # run is machinery. Represent it by its innermost frame, which at least
+                # reports the file being run, rather than by the long `input`/`depot_path`
+                # signature of `include_package_for_output` itself.
+                anchor = i
+            end
+        end
+        if anchor !== nothing
+            kept_frames[i:j] .= false
+            kept_frames[anchor] = true
+        end
+        i = j + 1
+    end
+    keepat!(trace, kept_frames)
+end
+
 # Collapse frames that have the same location (in some cases)
 function _backtrace_collapse_repeated_locations!(trace)
     kept_frames = trues(length(trace))
@@ -1316,6 +1395,7 @@ end
 function process_backtrace(tracecount::Vector{Any})
     _backtrace_remove_kwcall_frames!(tracecount)
     _backtrace_simplify_include_frames!(tracecount)
+    _backtrace_simplify_loading_frames!(tracecount)
     _backtrace_collapse_repeated_locations!(tracecount)
     return tracecount
 end
