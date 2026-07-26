@@ -674,6 +674,20 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
         end
 
+        # the .cov writer must reproduce source lines of any length
+        mktempdir() do tdir
+            srcfile = joinpath(tdir, "longline.jl")
+            long = "x" ^ 4000
+            write(srcfile, "f(x) = x + 1 # $long\nf(1)\n")
+            pid = readchomp(`$cov_exename -E "getpid()" -L $srcfile --code-coverage=@$tdir`)
+            covfile = "$srcfile.$pid.cov"
+            got = readlines(covfile)
+            rm(covfile)
+            @test length(got) == 2
+            @test endswith(got[1], " f(x) = x + 1 # $long")
+            @test endswith(got[2], " f(1)")
+        end
+
         # is_file_tracked must not read an unset tracked path
         @test readchomp(`$cov_exename -E "Base.is_file_tracked(:foo)"`) == "false"
 

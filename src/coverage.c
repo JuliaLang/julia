@@ -210,14 +210,10 @@ static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFE
         snprintf(outpath, sizeof(outpath), "%s%s", fullpath, extension);
         FILE *outf = fopen(outpath, "wb");
         if (outf) {
-            char line[1024];
             int l = 1;
             unsigned block = 0;
-            int ret = 0;
-            while (ret != EOF && (ret = fscanf(inf, "%1023[^\n]", line)) != EOF) {
-                // Skip n non-newline chars and a single trailing newline
-                if ((ret = fscanf(inf, "%*[^\n]")) != EOF)
-                    ret = fscanf(inf, "%*1[\n]");
+            int c = getc(inf);
+            while (c != EOF) {
                 logdata_block *data = NULL;
                 if (block < values->len) {
                     data = values->blocks[block];
@@ -231,8 +227,14 @@ static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFE
                     fprintf(outf, "        -");
                 else
                     fprintf(outf, "%9" PRIu64, value - 1);
-                fprintf(outf, " %s\n", line);
-                line[0] = 0;
+                putc(' ', outf);
+                while (c != EOF && c != '\n') {
+                    putc(c, outf);
+                    c = getc(inf);
+                }
+                putc('\n', outf);
+                if (c == '\n')
+                    c = getc(inf);
             }
             fclose(outf);
         }
