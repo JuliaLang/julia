@@ -533,14 +533,89 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
     return ip;
 }
 
+// Code that the interpreter runs is never seen by codegen, so record its coverage
+// here instead. A statement's debuginfo can stand for several frames - macro
+// expansions and indirections through a linetable - so resolve it the same way
+// codegen's append_lineinfo does, then log the frames that differ from the previous
+// statement, as codegen's coverageVisitStmt does.
+#define COVERAGE_MAX_FRAMES 12
+typedef struct {
+    const char *file[COVERAGE_MAX_FRAMES];
+    int32_t line[COVERAGE_MAX_FRAMES];
+    int tracked[COVERAGE_MAX_FRAMES];
+    int n;
+} coverage_frames_t;
+
+static void coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
+                             jl_module_t *enclosing, size_t pc,
+                             coverage_frames_t *out) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (!jl_is_symbol(debuginfo->def)) // this is a path
+            func = debuginfo->def; // this is inlined
+        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
+        int32_t i = lineidx.loc;
+        if (i < 0) // pc out of range: broken debuginfo?
+            return;
+        if (i == 0 && lineidx.to == 0) // no update
+            return;
+        if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
+            // indirection node: `i` is a pc in the linetable, not a line
+            coverage_collect((jl_debuginfo_t*)debuginfo->linetable, func, enclosing, i, out);
+        }
+        else if (i > 0 && out->n < COVERAGE_MAX_FRAMES) {
+            const char *file = jl_cdi_file(debuginfo);
+            jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
+            // provenance is unrecoverable for a macro expansion; attribute it to the
+            // enclosing module only if it came from a source outside the sysimage
+            if (modu == NULL && jl_isabspath(file))
+                modu = enclosing;
+            int n = out->n++;
+            out->file[n] = file;
+            out->line[n] = i;
+            out->tracked[n] = jl_coverage_enabled_for(modu, file);
+        }
+        if (lineidx.to == 0)
+            return;
+        pc = lineidx.pc;
+        debuginfo = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, lineidx.to - 1);
+        func = NULL;
+    }
+}
+
+static void coverage_visit_stmt(jl_code_info_t *src, jl_module_t *module,
+                                jl_method_instance_t *mi, size_t pc,
+                                coverage_frames_t *prev) JL_CANSAFEPOINT
+{
+    coverage_frames_t cur;
+    cur.n = 0;
+    coverage_collect(src->debuginfo, mi ? (jl_value_t*)mi : NULL, module, pc, &cur);
+    int d = 0;
+    while (d < cur.n && d < prev->n &&
+           cur.line[d] == prev->line[d] && cur.file[d] == prev->file[d])
+        d++;
+    for (int k = d; k < cur.n; k++)
+        if (cur.tracked[k])
+            jl_coverage_visit_line(cur.file[k], strlen(cur.file[k]), cur.line[k]);
+    *prev = cur;
+}
+
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
     jl_handler_t __eh;
     size_t ns = jl_array_nrows(stmts);
     jl_task_t *ct = jl_current_task;
+    // top-level statements carry no line info here; they are logged from
+    // jl_toplevel_eval_flex instead
+    int track_coverage = !toplevel && jl_options.code_coverage != JL_LOG_NONE &&
+                         s->src->debuginfo != NULL;
+    coverage_frames_t prev_coverage;
+    prev_coverage.n = 0;
 
     while (1) {
         s->ip = ip;
+        if (track_coverage && ip < ns)
+            coverage_visit_stmt(s->src, s->module, s->mi, ip + 1, &prev_coverage);
         if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);

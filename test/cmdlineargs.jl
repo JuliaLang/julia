@@ -674,6 +674,42 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
         end
 
+        # a macro defined in another user file expands into a frame with no module
+        # in its debuginfo; that must still count as user code, and the interpreter
+        # must resolve it to the macro's own lines rather than to the call site
+        let macrofile = realpath(joinpath(helperdir, "coverage_macros.jl")),
+            usefile = realpath(joinpath(helperdir, "coverage_macrouse.jl"))
+            for extra in (``, `--compile=min`), mode in (`--code-coverage=user`, `--code-coverage=all`)
+                outfile = joinpath(dir, "macro.info")
+                @test success(`$cov_exename $extra --code-coverage=$outfile $mode $usefile`)
+                record = only(filter(contains("SF:" * macrofile),
+                                     split(read(outfile, String), "end_of_record")))
+                rm(outfile)
+                hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                            for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+                for ln in (13, 14) # the body of `@twice`, expanded into `usesmac`
+                    @test get(hits, ln, 0) > 0 context=(extra, mode, ln)
+                end
+            end
+        end
+
+        # interpreted code is tracked too, including under --compile=min (#37059)
+        let topfile = realpath(joinpath(helperdir, "coverage_toplevel.jl"))
+            for extra in (``, `--compile=min`)
+                outfile = joinpath(dir, "toplevel.info")
+                @test success(`$cov_exename $extra --code-coverage=$outfile --code-coverage=@$topfile $topfile`)
+                hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                            for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
+                rm(outfile)
+                for ln in (7, 8, 9, 14) # every top-level statement that runs
+                    @test get(hits, ln, 0) > 0 context=(extra, ln)
+                end
+                # a top-level `if` is one statement with one LineNumberNode, and its
+                # thunk carries no line info, so lines inside it are still not tracked
+                @test !haskey(hits, 10)
+            end
+        end
+
         # --code-coverage=user must not attribute inlined Base code to the calling
         # module, which used to drop .cov files into the Julia installation (#26573)
         mktempdir() do tdir
@@ -747,14 +783,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             do_test()
             """), """
+            DA:1,1
             DA:2,1
             DA:3,1
             DA:5,1
             DA:6,0
-            DA:9,1
+            DA:9,2
             DA:10,1
-            LH:5
-            LF:6
+            DA:12,1
+            LH:7
+            LF:8
             """)
         @test contains(coverage_info_for("""
             function cov_bug()
@@ -773,7 +811,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             cov_bug()
             """), """
-            DA:1,1
+            DA:1,2
             DA:2,1
             DA:3,1
             DA:4,1
@@ -781,8 +819,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             DA:8,0
             DA:11,0
             DA:13,1
-            LH:5
-            LF:8
+            DA:15,1
+            LH:6
+            LF:9
             """)
 
         # counters must survive being driven from many threads at once (#59355, #62424)
