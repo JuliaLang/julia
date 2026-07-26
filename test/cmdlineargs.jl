@@ -674,6 +674,38 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
         end
 
+        # --code-coverage=user must not attribute inlined Base code to the calling
+        # module, which used to drop .cov files into the Julia installation (#26573)
+        mktempdir() do tdir
+            srcfile = joinpath(tdir, "user.jl")
+            # `sort` inlines the optionally-generated `Base.merge`, whose body has no
+            # module recorded in its debuginfo
+            write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
+            outfile = joinpath(dir, "user.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=user $srcfile`)
+            sfs = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            rm(outfile)
+            @test !isempty(sfs)
+            # Base files are recorded under a bare relative name; user files are absolute
+            @test all(isabspath, sfs) context=sfs
+        end
+
+        # Frames with no module in their debuginfo are classified by whether their
+        # file is absolute (see `frame_is_user_code` in src/codegen.cpp). If sysimage
+        # sources ever stop being recorded relatively, that rule silently starts
+        # calling Base user code again - and the =user test above would still pass,
+        # since the leaked records would now be absolute. So assert it directly.
+        mktempdir() do tdir
+            srcfile = joinpath(realpath(tdir), "paths.jl")
+            write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
+            outfile = joinpath(dir, "paths.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=all $srcfile`)
+            sfs = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            rm(outfile)
+            @test any(!isabspath, sfs) # sysimage sources, e.g. "sort.jl"
+            @test srcfile in sfs # everything else is absolutized
+        end
+
         # the .cov writer must reproduce source lines of any length
         mktempdir() do tdir
             srcfile = joinpath(tdir, "longline.jl")
