@@ -658,6 +658,25 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isempty(got)
         rm(covfile)
 
+        # a tracked path only matches at a path component boundary
+        mktempdir() do parent
+            foo = realpath(mkdir(joinpath(parent, "Foo")))
+            foobar = realpath(mkdir(joinpath(parent, "Foobar")))
+            srcfile = joinpath(foobar, "boundary.jl")
+            write(srcfile, "f(x) = x + 1\nf(1)\n")
+            outfile = joinpath(dir, "boundary.info")
+            # "<parent>/Foo" is a string prefix of "<parent>/Foobar", but not a path prefix
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo $srcfile`)
+            @test !contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foobar $srcfile`)
+            @test contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+        end
+
+        # is_file_tracked must not read an unset tracked path
+        @test readchomp(`$cov_exename -E "Base.is_file_tracked(:foo)"`) == "false"
+
         function coverage_info_for(src::String)
             mktemp(dir) do srcfile, io
                 write(io, src); close(io)
