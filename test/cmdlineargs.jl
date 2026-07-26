@@ -719,6 +719,20 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             LH:5
             LF:8
             """)
+
+        # counters must survive being driven from many threads at once (#59355, #62424)
+        let threadfile = realpath(joinpath(helperdir, "coverage_threads.jl"))
+            outfile = joinpath(dir, "threads.info")
+            @test success(`$cov_exename -t4 --code-coverage=$outfile $threadfile`)
+            record = only(filter(contains(threadfile),
+                                 split(read(outfile, String), "end_of_record")))
+            rm(outfile)
+            hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                        for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+            for ln in 5:10 # the body of `hot`
+                @test get(hits, ln, 0) > 0
+            end
+        end
     end
 
     # --track-allocation
