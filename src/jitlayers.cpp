@@ -870,7 +870,7 @@ static std::atomic<int> MaterializePhaseTid{-1};
 static void note_materialize_phase(const char *Phase) JL_NOTSAFEPOINT
 {
     LastMaterializePhase.store(Phase, std::memory_order_relaxed);
-    MaterializePhaseTid.store(jl_threadid(), std::memory_order_relaxed);
+    MaterializePhaseTid.store(jl_atomic_load_relaxed(&jl_current_task->tid), std::memory_order_relaxed);
 }
 
 class JLMaterializationUnit : public orc::MaterializationUnit {
