@@ -842,4 +842,77 @@ using Test
         @test !haskey(meta, bind_d)
     end
 
+    @testset "group type reference inside TypeVar bounds" begin
+        # The placeholder TypeVar for a group member must be substituted even
+        # when it only appears inside another TypeVar's bounds (e.g. `<:` in
+        # covariant position, which lowers to `Vector{S} where S<:Name`).
+        struct TG_BoundSelf
+            y::Vector{<:TG_BoundSelf}
+            TG_BoundSelf(y) = new(y)
+        end
+        ft = fieldtype(TG_BoundSelf, :y)
+        @test ft == Vector{<:TG_BoundSelf}
+        @test !Base.has_free_typevars(ft)
+        @test (ft::UnionAll).var.ub === TG_BoundSelf
+
+        struct TG_BoundUnion
+            x::Union{Nothing, Vector{<:TG_BoundUnion}}
+            TG_BoundUnion(x) = new(x)
+        end
+        @test !Base.has_free_typevars(fieldtype(TG_BoundUnion, :x))
+
+        struct TG_BoundWhere
+            x::Ref{S} where S<:TG_BoundWhere
+            TG_BoundWhere(x) = new(x)
+        end
+        @test !Base.has_free_typevars(fieldtype(TG_BoundWhere, :x))
+
+        # Parametric self-reference through a bound; also checks that the
+        # default constructors can be created (they reject free typevars).
+        struct TG_BoundParam{T}
+            x::T
+            y::Dict{Symbol, <:TG_BoundParam}
+        end
+        @test !Base.has_free_typevars(fieldtype(TG_BoundParam, :y))
+        v = TG_BoundParam{Int}(1, Dict{Symbol, TG_BoundParam{Int}}())
+        @test v.x == 1
+
+        # Sibling group member referenced from inside a bound
+        typegroup
+            struct TG_BoundSibA
+                items::Vector{<:TG_BoundSibB}
+                TG_BoundSibA(items) = new(items)
+            end
+            struct TG_BoundSibB
+                owner::Union{Nothing, TG_BoundSibA}
+            end
+        end
+        ftA = fieldtype(TG_BoundSibA, :items)
+        @test !Base.has_free_typevars(ftA)
+        @test (ftA::UnionAll).var.ub === TG_BoundSibB
+        b = TG_BoundSibB(nothing)
+        a = TG_BoundSibA([b])
+        @test a.items[1] === b
+
+        # Group references in a type *parameter* bound cannot be substituted
+        # (the bound is baked into the wrapper UnionAll) and must be rejected
+        # cleanly instead of escaping as a type with free placeholder vars.
+        # On the old lowering this was an UndefVarError.
+        @test_throws ErrorException @eval struct TG_BoundParamRef{T<:Union{Nothing,Vector{TG_BoundParamRef}}}
+            x::T
+            TG_BoundParamRef{T}(x) where T = new{T}(x)
+        end
+        @test !isdefined(@__MODULE__, :TG_BoundParamRef)
+
+        # The same rebuilt TypeVar must be used consistently when the var
+        # occurs in the body, so the UnionAll stays well-formed.
+        struct TG_BoundBody
+            x::Pair{S, Vector{S}} where S<:TG_BoundBody
+            TG_BoundBody(x) = new(x)
+        end
+        ftB = fieldtype(TG_BoundBody, :x)
+        @test !Base.has_free_typevars(ftB)
+        @test ftB == Pair{S, Vector{S}} where S<:TG_BoundBody
+    end
+
 end

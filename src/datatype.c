@@ -2483,6 +2483,53 @@ static int is_typename_reachable(jl_value_t *t, jl_typename_t *target, htable_t 
 // Forward declaration
 static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map) JL_CANSAFEPOINT;
 
+// Return the first typegroup placeholder TypeVar referenced by `t`, or NULL.
+// Used to reject group-member references in positions where they cannot be
+// resolved (type parameter bounds). Type parameter structures are acyclic at
+// this point, so no visited set is needed.
+static jl_tvar_t *find_typegroup_ref(jl_value_t *t, htable_t *subst_map) JL_NOTSAFEPOINT
+{
+    if (jl_is_typevar(t)) {
+        if (ptrhash_get(subst_map, t) != HT_NOTFOUND)
+            return (jl_tvar_t*)t;
+        jl_tvar_t *tv = (jl_tvar_t*)t;
+        jl_tvar_t *found = find_typegroup_ref(tv->lb, subst_map);
+        return found ? found : find_typegroup_ref(tv->ub, subst_map);
+    }
+    if (jl_is_typeapp(t)) {
+        jl_typeapp_t *ta = (jl_typeapp_t*)t;
+        jl_tvar_t *found = find_typegroup_ref(ta->head, subst_map);
+        return found ? found : find_typegroup_ref(ta->param, subst_map);
+    }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        jl_tvar_t *found = find_typegroup_ref((jl_value_t*)ua->var, subst_map);
+        return found ? found : find_typegroup_ref(ua->body, subst_map);
+    }
+    if (jl_is_uniontype(t)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)t;
+        jl_tvar_t *found = find_typegroup_ref(u->a, subst_map);
+        return found ? found : find_typegroup_ref(u->b, subst_map);
+    }
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        jl_tvar_t *found = vm->T ? find_typegroup_ref(vm->T, subst_map) : NULL;
+        if (found)
+            return found;
+        return vm->N ? find_typegroup_ref(vm->N, subst_map) : NULL;
+    }
+    if (jl_is_datatype(t)) {
+        jl_svec_t *params = ((jl_datatype_t*)t)->parameters;
+        size_t n = jl_svec_len(params);
+        for (size_t i = 0; i < n; i++) {
+            jl_tvar_t *found = find_typegroup_ref(jl_svecref(params, i), subst_map);
+            if (found)
+                return found;
+        }
+    }
+    return NULL;
+}
+
 
 // Resolve type references, substituting TypeVars/TypeApps with their resolved DataTypes
 static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
@@ -2492,8 +2539,23 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
         jl_value_t *dt = (jl_value_t*)ptrhash_get(subst_map, t);
         if (dt != HT_NOTFOUND)
             return dt;
-        // Not a typegroup placeholder TypeVar - return as-is
-        return t;
+        // Not a typegroup placeholder TypeVar, but its bounds may still
+        // reference one (e.g. the `S` in `Vector{S} where S<:Name`). Rebuild
+        // the TypeVar if so, and record the mapping so that occurrences of
+        // the old var (e.g. in a UnionAll body) resolve to the same new var.
+        jl_tvar_t *tv = (jl_tvar_t*)t;
+        jl_value_t *lb = NULL, *ub = NULL;
+        JL_GC_PUSH2(&lb, &ub);
+        lb = resolve_type_refs(tv->lb, subst_map);
+        ub = resolve_type_refs(tv->ub, subst_map);
+        if (lb == tv->lb && ub == tv->ub) {
+            JL_GC_POP();
+            return t;
+        }
+        jl_value_t *result = (jl_value_t*)jl_new_typevar(tv->name, lb, ub);
+        ptrhash_put(subst_map, t, result);
+        JL_GC_POP();
+        return result;
     }
 
     // TypeApp -> collect head and all params from nested chain, resolve, apply
@@ -2540,14 +2602,21 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
         return result;
     }
 
-    // Regular UnionAll -> resolve body if needed
+    // Regular UnionAll -> resolve the var's bounds and the body if needed
     if (jl_is_unionall(t)) {
         jl_unionall_t *ua = (jl_unionall_t*)t;
-        jl_value_t *body = resolve_type_refs(ua->body, subst_map);
-        if (body == ua->body)
+        jl_value_t *var = NULL, *body = NULL;
+        JL_GC_PUSH2(&var, &body);
+        // Resolve the var first so that occurrences of the old var in the
+        // body get substituted with the rebuilt one.
+        var = resolve_type_refs((jl_value_t*)ua->var, subst_map);
+        body = resolve_type_refs(ua->body, subst_map);
+        if (var == (jl_value_t*)ua->var && body == ua->body) {
+            JL_GC_POP();
             return t;
-        JL_GC_PUSH1(&body);
-        jl_value_t *result = jl_type_unionall(ua->var, body);
+        }
+        assert(jl_is_typevar(var));
+        jl_value_t *result = jl_type_unionall((jl_tvar_t*)var, body);
         JL_GC_POP();
         return result;
     }
@@ -2746,6 +2815,24 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
             jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
             jl_svec_t *params = (jl_svec_t*)jl_svecref(info, 0);
+
+            // Type parameter bounds cannot reference types from the group:
+            // the bounds are baked into the wrapper UnionAll before the group
+            // types are resolved, so such references cannot be substituted.
+            // (This mirrors the old lowering, where the name was simply
+            // undefined at this point.)
+            for (size_t j = 0; j < jl_svec_len(params); j++) {
+                jl_value_t *p = jl_svecref(params, j);
+                if (jl_is_typevar(p)) {
+                    jl_tvar_t *ref = find_typegroup_ref(p, &subst_map);
+                    if (ref != NULL)
+                        jl_errorf("invalid type parameter bound in definition of %s: "
+                                  "bound of %s references %s, whose definition is not yet complete",
+                                  jl_symbol_name(tv->name),
+                                  jl_symbol_name(((jl_tvar_t*)p)->name),
+                                  jl_symbol_name(ref->name));
+                }
+            }
 
             jl_gc_write(datatypes[i], datatypes[i]->parameters, jl_svec_t, params);
 
