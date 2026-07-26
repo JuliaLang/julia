@@ -9688,7 +9688,8 @@ static jl_llvm_functions_t
                 !jl_is_submodule(mod, jl_core_module));
     };
     auto in_tracked_path = [] (StringRef file) { // falls within an explicitly set file or directory
-        return jl_options.tracked_path != NULL && file.starts_with(jl_options.tracked_path);
+        // file comes from a Symbol name or a literal, so it is NUL-terminated
+        return jl_path_is_tracked(file.data());
     };
     bool mod_is_user_mod = in_user_mod(ctx.module);
     bool mod_is_tracked = in_tracked_path(ctx.file);

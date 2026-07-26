@@ -83,6 +83,25 @@ static int is_skip_filename(const char *filename) JL_NOTSAFEPOINT
     return 0;
 }
 
+// Whether `path` falls within the file or directory named by `--code-coverage=@`
+// or `--track-allocation=@`. A prefix only counts at a path component boundary,
+// so `@/src/Foo` does not also match `/src/Foobar/x.jl`.
+JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
+{
+    const char *tracked = jl_options.tracked_path;
+    if (tracked == NULL || path == NULL)
+        return 0;
+    size_t tlen = strlen(tracked);
+    while (tlen > 0 && (tracked[tlen - 1] == '/' || tracked[tlen - 1] == PATHSEPSTRING[0]))
+        tlen--;
+    if (tlen == 0)
+        return 1;
+    if (strncmp(path, tracked, tlen) != 0)
+        return 0;
+    char next = path[tlen];
+    return next == '\0' || next == '/' || next == PATHSEPSTRING[0];
+}
+
 JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line)
 {
     assert(!codegen_imaging_mode());
