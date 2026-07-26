@@ -2224,9 +2224,12 @@ static uint64_t image_codegen_memory_budget() {
 // `fill_cap` is the concurrency to ramp toward (the effective core count). The
 // count is static -- under a jobserver the elastic pool rations the actual
 // concurrency at runtime, draining a larger shard count in waves when tokens are
-// scarce -- so it does not depend on momentary token availability. The "Image
-// generation" devdoc has the full rule. `weight_bound_out`/`core_fill_out`
-// optionally return the two terms for the JULIA_IMAGE_TIMINGS diagnostic.
+// scarce -- so it does not depend on momentary token availability. Both terms are
+// then capped at one shard per 100 module globals: a module with little content
+// has nothing to gain from splitting, and the concurrency ceiling inherits the cap
+// because the caller clamps it to the shard count. The "Image generation" devdoc
+// has the full rule. `weight_bound_out`/`core_fill_out` optionally return the two
+// terms for the JULIA_IMAGE_TIMINGS diagnostic.
 static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned fill_cap,
                                           unsigned *weight_bound_out = nullptr,
                                           unsigned *core_fill_out = nullptr) {
@@ -2244,7 +2247,14 @@ static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned fill_
         *weight_bound_out = (unsigned)weight_bound;
     if (core_fill_out)
         *core_fill_out = (unsigned)core_fill;
-    return std::max<size_t>(1, std::max(weight_bound, core_fill));
+    size_t shards = std::max<size_t>(1, std::max(weight_bound, core_fill));
+    size_t global_bound = std::max<size_t>(1, info.globals / 100);
+    if (global_bound < shards) {
+        LLVM_DEBUG(dbgs() << "Low global count limiting shards to " << global_bound
+                          << " (" << info.globals << " globals)\n");
+        shards = global_bound;
+    }
+    return (unsigned)shards;
 }
 
 static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active, bool &explicit_override) {
@@ -2285,11 +2295,9 @@ static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserve
         }
     }
 
-    auto max_threads = info.globals / 100;
-    if (max_threads < threads) {
-        LLVM_DEBUG(dbgs() << "Low global count limiting threads to " << max_threads << " (" << info.globals << "globals)\n");
-        threads = max_threads;
-    }
+    // Note: the one-shard-per-100-globals cap lives on the shard count now (see
+    // compute_image_shard_count); the caller clamps this ceiling to that count,
+    // so low-global modules are still held down to a single thread.
 
     // environment variable override
     const char *env_threads = getenv("JULIA_IMAGE_THREADS");
