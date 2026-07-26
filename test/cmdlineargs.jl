@@ -674,6 +674,31 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
         end
 
+        # constructs that have regressed before; see testhelpers/coverage_constructs.jl
+        let constructs = realpath(joinpath(helperdir, "coverage_constructs.jl"))
+            outfile = joinpath(dir, "constructs.info")
+            @test success(`$cov_exename --code-coverage=$outfile --code-coverage=@$constructs $constructs`)
+            hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                        for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
+            rm(outfile)
+            covered = [
+                9, 10, 11,      # `local` without an assignment (#39307)
+                15, 16, 17,     # `let` without an assignment (#39307)
+                23, 24,         # lines a macro adds (#41043)
+                29,
+                34, 36,         # implicit returns (#53557)
+                41, 42,         # a :foldable body that is also concrete-evaluated (#61175)
+                48,
+                55,             # the branch @static keeps (#43237)
+            ]
+            for ln in covered
+                @test get(hits, ln, 0) > 0 context=ln
+            end
+            # the branch @static discards is compiled out, so it must not be reported
+            # as an uncovered line
+            @test !haskey(hits, 57)
+        end
+
         # a macro defined in another user file expands into a frame with no module
         # in its debuginfo; that must still count as user code, and the interpreter
         # must resolve it to the macro's own lines rather than to the call site
