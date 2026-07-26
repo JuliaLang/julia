@@ -15,7 +15,7 @@ OrderStyle(::Type{Union{}}, slurp...) = Ordered()
 
 function OrderStyle(T::Type{<:Tuple})
     isconcretetype(T) || return Unordered()
-    all(map(S -> OrderStyle(S) === Ordered(), fieldtypes(T))) ? Ordered() : Unordered() # map() allows compiler to evaluate each fieldtype at compile time
+    all(map(S -> OrderStyle(S) === Ordered(), fieldtypes(T))) ? Ordered() : Unordered()
 end
 
 # trait for objects that support arithmetic
