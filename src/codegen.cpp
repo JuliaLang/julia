@@ -9693,6 +9693,19 @@ static jl_llvm_functions_t
     };
     bool mod_is_user_mod = in_user_mod(ctx.module);
     bool mod_is_tracked = in_tracked_path(ctx.file);
+    // `modu` is NULL for a frame whose provenance we cannot recover: a macro
+    // expansion, or a body produced by a generator. Falling back to `ctx.module` for
+    // all of those attributes Base code to whatever module inlined it (#26573).
+    // Sources compiled into the sysimage are recorded with relative paths while
+    // everything else is absolutized, so use that to tell them apart - a macro
+    // defined in another user file still counts as user code.
+    auto frame_is_user_code = [&] (jl_module_t *modu, StringRef file) {
+        if (modu == NULL)
+            return mod_is_user_mod && jl_isabspath(file.data());
+        if (modu == ctx.module)
+            return mod_is_user_mod;
+        return in_user_mod(modu);
+    };
     struct DebugLineTable {
         DebugLoc loc;
         StringRef file;
@@ -9738,8 +9751,6 @@ static jl_llvm_functions_t
                     DebugLineTable info;
                     info.edgeid = to;
                     jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
-                    if (modu == NULL)
-                        modu = ctx.module;
                     info.file = jl_cdi_file(debuginfo);
                     info.line = i;
                     info.line0 = 0;
@@ -9750,10 +9761,7 @@ static jl_llvm_functions_t
                     }
                     if (info.file.empty())
                         info.file = "<missing>";
-                    if (modu == ctx.module)
-                        info.is_user_code = mod_is_user_mod;
-                    else
-                        info.is_user_code = in_user_mod(modu);
+                    info.is_user_code = frame_is_user_code(modu, info.file);
                     if (debug_enabled) {
                         StringRef fname = jl_debuginfo_name(func);
                         // Encode outermost (codeinstance) debuginfo PC on
@@ -9949,16 +9957,10 @@ static jl_llvm_functions_t
             while (jl_is_debuginfo(debuginfo->linetable))
                 debuginfo = (jl_debuginfo_t*)debuginfo->linetable;
             jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
-            if (modu == NULL)
-                modu = ctx.module;
             StringRef file = jl_cdi_file(debuginfo);
             if (file.empty())
                 file = "<missing>";
-            bool is_user_code;
-            if (modu == ctx.module)
-                is_user_code = mod_is_user_mod;
-            else
-                is_user_code = in_user_mod(modu);
+            bool is_user_code = frame_is_user_code(modu, file);
             bool is_tracked = in_tracked_path(file);
             if (do_coverage(is_user_code, is_tracked)) {
                 int32_t extraline = jl_cdi_external_firstline(debuginfo);
