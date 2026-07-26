@@ -13,11 +13,9 @@ OrderStyle(::Type{Symbol}) = Ordered()
 OrderStyle(::Type{<:Any}) = Unordered()
 OrderStyle(::Type{Union{}}, slurp...) = Ordered()
 
-OrderStyle(T::Type{<:Tuple}) = _tuple_ordering(T)
-
-_tuple_ordering(::Type{Tuple{}}) = Ordered()
-function _tuple_ordering(T::Type{<:Tuple})
-    OrderStyle(fieldtype(T,1)) === Ordered() ? _tuple_ordering(Tuple{tail(fieldtypes(T))...}) : Unordered()
+function OrderStyle(T::Type{<:Tuple})
+    isconcretetype(T) || return Unordered()
+    all(map(S -> OrderStyle(S) === Ordered(), fieldtypes(T))) ? Ordered() : Unordered() # map() allows compiler to evaluate each fieldtype at compile time
 end
 
 # trait for objects that support arithmetic
