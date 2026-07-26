@@ -1167,6 +1167,39 @@ precompile_test_harness("precompiletools") do dir
     end
 end
 
+# Image sharding with empty shards: a low JULIA_IMAGE_PARTITION_WEIGHT forces the
+# pkgimage to be split into many output shards. With more shards than there are
+# gvars (and fvars), some shards end up empty, exercising that the image writer
+# (get_fvars_gvars in aotcompile.cpp) tolerates a shard with no fvars or gvars
+# instead of asserting. Here we just check that such a finely-sharded image
+# builds and loads.
+precompile_test_harness("image sharding") do load_path
+    fns = join(("@noinline f$i(x::Int) = (s = zero(x); for j in 1:8; s += x * $i + j * j; end; s)" for i in 1:50), "\n")
+    pcs = join(("precompile(f$i, (Int,))" for i in 1:50), "\n")
+    calls = join(("f$i(1)" for i in 1:50), " + ")
+    write(joinpath(load_path, "ManyShards.jl"),
+        """
+        module ManyShards
+        $fns
+        const TABLE = collect(1:16)
+        g() = $calls + sum(TABLE)
+        $pcs
+        precompile(g, ())
+        end
+        """)
+    pkgid = Base.PkgId("ManyShards")
+    # Force many small shards; this is the regime that produces empty shards.
+    withenv("JULIA_IMAGE_PARTITION_WEIGHT" => "100") do
+        cachefile, ocachefile = Base.compilecache(pkgid)
+        @test cachefile isa String
+        # when pkgimages are enabled the native image (and its shards) is built
+        Bool(Base.JLOptions().use_pkgimages) && @test isfile(ocachefile::String)
+    end
+    @test Base.isprecompiled(pkgid)
+    @eval using ManyShards
+    @test (@eval ManyShards.g()) isa Int
+end
+
 precompile_test_harness("invoke") do dir
     InvokeModule = :Invoke0x030e7e97c2365aad
     CallerModule = :Caller0x030e7e97c2365aad
