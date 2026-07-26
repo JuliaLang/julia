@@ -788,6 +788,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test endswith(got[2], " f(1)")
         end
 
+        # `@/` is the filesystem root: absolute paths only, not the relative names
+        # sysimage sources are recorded under
+        mktempdir() do tdir
+            srcfile = joinpath(realpath(tdir), "root.jl")
+            write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
+            outfile = joinpath(dir, "root.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@/ $srcfile`)
+            sfs = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            rm(outfile)
+            @test all(isabspath, sfs) context=sfs
+        end
+
         # is_file_tracked must not read an unset tracked path
         @test readchomp(`$cov_exename -E "Base.is_file_tracked(:foo)"`) == "false"
 
