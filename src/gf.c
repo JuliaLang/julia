@@ -1908,6 +1908,11 @@ static void cache_insert(
     JL_GC_POP();
 }
 
+STATIC_INLINE jl_method_instance_t *typemap_entry_linfo(jl_typemap_entry_t *entry JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed((_Atomic(jl_method_instance_t*)*)&entry->func.linfo);
+}
+
 static jl_method_instance_t *cache_result(
         jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_tupletype_t *tt, // the original tupletype of the signature
@@ -1953,17 +1958,6 @@ static jl_method_instance_t *cache_result(
     JL_GC_POP();
     return newmeth;
 }
-
-// recache_method updates a published typemap entry's func.linfo in place
-// (holding the cache writelock), while the dispatch and match fast paths read
-// it lock-free, so those accesses must be atomic: release on the store (a
-// reader that sees the new MethodInstance must see its contents) and relaxed
-// on the loads (any published value is internally consistent).
-STATIC_INLINE jl_method_instance_t *typemap_entry_linfo(jl_typemap_entry_t *entry JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
-{
-    return jl_atomic_load_relaxed((_Atomic(jl_method_instance_t*)*)&entry->func.linfo);
-}
-
 
 static void recache_method(
         jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
