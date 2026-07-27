@@ -19,9 +19,13 @@ will not be reflected, unless you use `Revise`.
 
 ## For all changes
 
-1. Run `make fix-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
-2. Add the AI tool as a Git co-author on all commits created by that tool.
-3. Whenever a pull request is opened, you MUST disclose that the pull request was written with the assistance of generative AI.
+1. Sign off every commit you create with an `Assisted-by: <tool> (<model>)` trailer naming both the
+   tool and the model behind it, for example `Assisted-by: Claude Code (Opus 5)`. Name the model,
+   not just the harness - it is what tells a later reader what actually produced the work. Do not
+   use `Co-authored-by:` for tools, and do not list a tool as an author; this trailer replaces any
+   co-author trailer your harness adds by default.
+2. Commit your work to a branch and stop there. The human author reviews it, rewords whatever you
+   drafted, and opens the pull request; posting comments and reviews on GitHub is theirs as well.
 
 ## Building Julia
 
@@ -85,8 +89,12 @@ When referencing external GitHub PRs or issues, use proper GitHub interlinking f
 When fixing CI failures, include the link to the specific CI failure in the commit message.
 Always quote macro names in backticks in commit messages and PR titles/bodies (e.g. `` `@inbounds` ``, not @inbounds), so GitHub does not notify the unrelated user with that handle.
 
-When creating pull requests:
+When preparing a pull request for the human author to open, draft the body as follows, expecting
+them to reword it:
 1. If the pull request consists of one commit only, use the body of the commit for the body of the pull request.
 2. If there are multiple commits in the pull request, follow the same guidelines for the pull request as for the commit body.
 3. Make sure that the base commit of the pull request is recent (within the past two days) - if not rebase your changes first.
-4. You MUST disclose that the pull request was written with the assistance of generative AI.
+4. Keep the "Tool assistance" section from [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)
+   in the body, and check the boxes for the parts of the work you did, naming the tool and model.
+   Leave both boxes under "Review" unchecked: only the human author can attest to their own review,
+   and your own work on the branch is not a separate tool having reviewed it.
