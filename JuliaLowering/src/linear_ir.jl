@@ -67,7 +67,7 @@ mutable struct LinearIRContext <: AbstractLoweringContext
     const is_toplevel_thunk::Bool
     const lambda_bindings::LambdaBindings
     const argmap::Dict{IdTag, IdTag}
-    const rettype_ssa::Base.RefValue{Union{Nothing,NodeId}}
+    const rettype_ssa::Base.RefValue{Union{Nothing,SyntaxTree}}
     const break_targets::Dict{String, JumpTarget}
     const break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
     const handler_token_stack::Vector{SyntaxTree}
@@ -89,7 +89,7 @@ end
 function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings)
     LinearIRContext(SyntaxList(), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(),
-                    Ref{Union{Nothing,NodeId}}(nothing),
+                    Ref{Union{Nothing,SyntaxTree}}(nothing),
                     Dict{String,JumpTarget}(), String[],
                     SyntaxList(), SyntaxList(),
                     Vector{FinallyHandler}(), Dict{String,JumpTarget}(),

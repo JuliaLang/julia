@@ -53,10 +53,9 @@ end
 
 Base.var"=="(st1::SyntaxTree, st2::SyntaxTree) = st1 === st2
 
-const NodeId = SyntaxTree
 const SourceAttrType = Union{SyntaxTree,SourceRef,LineNumberNode}
 
-function setchildren!(id::NodeId, children::AbstractVector{NodeId})
+function setchildren!(id::SyntaxTree, children::AbstractVector{SyntaxTree})
     setfield!(id, :children, children)
 end
 
@@ -352,10 +351,10 @@ end
 
 """
 Provenance notes: A SyntaxTree `st` has `.source` equal to one of:
-- NodeId (of the SyntaxTree `st` was transformed from)
+- SyntaxTree (of the SyntaxTree `st` was transformed from)
 - a reference to source text (either SourceRef or LineNumberNode).
 
-Let "textref" refer to a SyntaxTree with non-NodeId `.source`.  Every SyntaxTree
+Let "textref" refer to a SyntaxTree with non-SyntaxTree `.source`.  Every SyntaxTree
 is either a textref or has one at the end of its `.source` chain.
 
 All invariants noted in this section are awaiting the design of the "new macro"
@@ -368,7 +367,7 @@ SyntaxList of [st.source, st.source.source, ..., textref]
 function provenance(st::SyntaxTree)
     prov = SyntaxList()
     s = st.source
-    while s isa NodeId
+    while s isa SyntaxTree
         push!(prov, s)
         s = s.source
     end
@@ -377,13 +376,13 @@ end
 
 "`provenance(st)[1]`, or `st` if that's empty"
 function prov(st::SyntaxTree)
-    st.source isa NodeId ? st.source : st
+    st.source isa SyntaxTree ? st.source : st
 end
 
 "textref of st (possibly == st)"
 function prov_end(st::SyntaxTree)
     out = st
-    while out.source isa NodeId
+    while out.source isa SyntaxTree
         out = prov(out)
     end
     return out
@@ -549,25 +548,25 @@ most once.
 TODO: Likely unecessary with immutable tree
 """
 function copy_ast(ctx, ex::SyntaxTree)
-    id2 = _copy_ast(ex, Dict{NodeId, NodeId}())
+    id2 = _copy_ast(ex, Dict{SyntaxTree, SyntaxTree}())
     return id2
 end
 
-function _copy_ast(id1::NodeId, seen)
+function _copy_ast(id1::SyntaxTree, seen)
     let copied = get(seen, id1, nothing)
         isnothing(copied) || return copied
     end
     id2 = is_leaf(id1) ? mkleaf(id1) : mknode(id1, children(id1))
     seen[id1] = id2
     if !is_leaf(id1)
-        cs = NodeId[]
+        cs = SyntaxTree[]
         for cid in children(id1)
             push!(cs, _copy_ast(cid, seen))
         end
         setchildren!(id2, cs)
     end
     src1 = get(id1, :source, nothing)
-    if src1 isa NodeId
+    if src1 isa SyntaxTree
         src2 =  _copy_ast(src1, seen)
         setattr!(id2, :source, src2)
     elseif !isnothing(src1)
@@ -633,14 +632,14 @@ function _unalias_nodes(st::SyntaxTree, seen::Set{SyntaxTree},
 end
 
 """
-Give each descendent of `st` a `parent::NodeId` attribute.
+Give each descendent of `st` a `parent::SyntaxTree` attribute.
 """
 function annotate_parent!(st::SyntaxTree)
     st = unalias_nodes(st)
     mapchildren(t->_annotate_parent!(t, st), st)
 end
 
-function _annotate_parent!(st::SyntaxTree, pid::NodeId)
+function _annotate_parent!(st::SyntaxTree, pid::SyntaxTree)
     setmeta!(st, :parent, pid)
     mapchildren(t->_annotate_parent!(t, st), st)
 end

@@ -1127,7 +1127,7 @@ end
 # Failure should only be possible working on AST-internal functions.
 
 function assert_syntaxtree(st::SyntaxTree, recursive=true)
-    vr = recursive ? _assert_syntaxtree(st, NodeId[], pass()) :
+    vr = recursive ? _assert_syntaxtree(st, SyntaxTree[], pass()) :
         _assert_syntaxtree_node(st)
     @jl_assert is_known(vr) st
     if !vr.ok
@@ -1198,7 +1198,7 @@ function _assert_syntaxtree_node(st::SyntaxTree)
     vr
 end
 
-function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
+function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree}, vr)
     if st in parents
         err = "cycle detected: ["
         for p in parents

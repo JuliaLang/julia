@@ -17,7 +17,7 @@ import REPL
 
 using .JuliaSyntax: SourceAttrType, sourcetext
 
-using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
+using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError,
     ScopeLayer, SourceRef, SyntaxTree, children, flattened_provenance,
     is_leaf, mapchildren, numchildren, showprov, syntax_name, syntax_id
 

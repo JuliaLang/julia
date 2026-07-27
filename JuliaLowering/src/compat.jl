@@ -63,24 +63,24 @@ function _expr_to_est(@nospecialize(e), src::SourceAttrType)
         newleaf(src, K"Identifier", String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(e.value, src)
-        newnode(src, K"inert", NodeId[cid])
+        newnode(src, K"inert", SyntaxList(cid))
     elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
-        arg_cs = NodeId[]
+        arg_cs = SyntaxTree[]
         for name in argnames
             id = newleaf(src, K"Identifier", String(name::Symbol))
             push!(arg_cs, id)
         end
         body_id, src = _expr_to_est(e.args[2], src)
         args_block = newnode(src, K"block", arg_cs)
-        tvars_block = newnode(src, K"block", NodeId[])
+        tvars_block = newnode(src, K"block", SyntaxTree[])
         st = newnode(src, K"lambda",
-                     NodeId[args_block, tvars_block, body_id])
+                     SyntaxTree[args_block, tvars_block, body_id])
     elseif e isa Expr
         head_s = string(e.head)
         st_k = find_kind(head_s)
         src = old_src = src isa LineNumberNode ? _get_inner_lnn(e, src) : src
-        cs = NodeId[]
+        cs = SyntaxTree[]
         rm_linenodes = e.head in (:block, :toplevel)
         for arg in e.args
             if rm_linenodes && arg isa LineNumberNode

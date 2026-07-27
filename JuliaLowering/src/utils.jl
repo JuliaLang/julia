@@ -171,7 +171,7 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
     msrc = JuliaSyntax.macro_prov(ex)
     printstyled(io, string(
         indent, msrc === nothing ? "└─ " : "├─ "); color=:light_black)
-    if src isa NodeId
+    if src isa SyntaxTree
         _show_provtree(io, src, string(indent, msrc === nothing ? "   " : "│  "))
     else
         @jl_assert ex.source isa Union{LineNumberNode, SourceRef} ex

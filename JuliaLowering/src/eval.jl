@@ -416,7 +416,7 @@ end
 
 function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
                            top_sbt::Union{String, Nothing},
-                           node_sources::Dict{NodeId, Tuple{Int32, Int32}},
+                           node_sources::Dict{SyntaxTree, Tuple{Int32, Int32}},
                            spans::Vector{Tuple{Int32, Int32}})
     @jl_assert kind(st) === K"code_info" st
     locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[2]))
@@ -443,7 +443,7 @@ end
 # Populate `.debuginfo` on all K"code_info" in `st`
 function add_debuginfo!(st::SyntaxTree)
     @jl_assert kind(st) === K"code_info" st
-    node_sources = Dict{NodeId, Tuple{Int32, Int32}}()
+    node_sources = Dict{SyntaxTree, Tuple{Int32, Int32}}()
     codeinfos = SyntaxList()
     top_sf = _di_sourcefile(st)
     collect_locs!(node_sources, codeinfos, top_sf, st)

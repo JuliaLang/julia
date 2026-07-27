@@ -21,7 +21,7 @@ struct ScopeInfo
     # Own ID if lambda, else some parent ID
     lambda_id::ScopeId
     # Tree introducing this scope
-    node_id::NodeId
+    node_id::SyntaxTree
     # True in the top-level scope, and any neutral scope nested within it not
     # protected by a hard scope.  Becomes soft if `ctx.enable_soft_scopes`.
     is_permeable::Bool
@@ -29,8 +29,8 @@ struct ScopeInfo
     # should participate in standard scope resolution, but then be associated
     # with the top-level thunk by the end of this pass.
     is_lifted::Bool
-    binding_assignments::Dict{IdTag, NodeId}
-    assignments::Dict{NameKey, NodeId}
+    binding_assignments::Dict{IdTag, SyntaxTree}
+    assignments::Dict{NameKey, SyntaxTree}
     # Map from variable names to binding IDs for resolution.  Includes all
     # locals, args, sparams, and explicit globals belonging to this scope.
     # Variables captured from an outer scope are not included.  The top-level
@@ -61,7 +61,7 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     end
     s = ScopeInfo(
         id, parent_id, lambda_id, ex, is_permeable, is_lifted,
-        Dict{IdTag, NodeId}(), Dict{NameKey, NodeId}(), Dict{NameKey,IdTag}(),
+        Dict{IdTag, SyntaxTree}(), Dict{NameKey, SyntaxTree}(), Dict{NameKey,IdTag}(),
         (parent_id == 0 || k === K"lambda") ? Dict{IdTag,Bool}() : nothing)
     push!(ctx.scopes, s)
     return s

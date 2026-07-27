@@ -7,7 +7,7 @@ mutable struct BindingInfo
     const kind::Symbol              # :local :global :argument :static_parameter
     const node_id::SyntaxTree
     const mod::Union{Nothing,Module} # Set when `kind === :global`
-    type::Union{Nothing,NodeId}      # Type, for bindings declared like x::T = 10
+    type::Union{Nothing,SyntaxTree}      # Type, for bindings declared like x::T = 10
     lambda_id::Int            # from scope resolution; 0 if unresolved
     is_const::Bool            # Constant, cannot be reassigned
     is_ssa::Bool              # Single assignment, defined before use
@@ -43,7 +43,7 @@ end
 function BindingInfo(bindings::Bindings,
                      name::AbstractString, kind::Symbol, node_id::SyntaxTree;
                      mod::Union{Nothing,Module} = nothing,
-                     type::Union{Nothing,NodeId} = nothing,
+                     type::Union{Nothing,SyntaxTree} = nothing,
                      lambda_id::Int = 0,
                      is_const::Bool = false,
                      is_ssa::Bool = false,
