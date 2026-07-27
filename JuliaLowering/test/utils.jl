@@ -15,7 +15,7 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, sourcetext
+using .JuliaSyntax: SourceAttrType, sourcetext, SyntaxList
 
 using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError,
     ScopeLayer, SourceRef, SyntaxTree, children, flattened_provenance,
