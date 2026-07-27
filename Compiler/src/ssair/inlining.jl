@@ -1206,6 +1206,9 @@ function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallI
     info, edge = info_edge
     case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
     case === nothing && return nothing
+    # The runtime (`jl_f_invoke`) only accepts Method/CodeInstance/Type targets, so
+    # decline if compileable_specialization only found an uncached MethodInstance.
+    case.invoke isa CodeInstance || return nothing
     # Append the CodeInstance as a third argument to the _task call
     # Core._task(func, size) becomes Core._task(func, size, ci)
     push!(stmt.args, case.invoke)
@@ -1568,7 +1571,9 @@ function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::Indirect
                 push!(stmt.args, true)
                 push!(stmt.args, code)
             end
-        elseif isa(item1, InvokeCase)
+        elseif isa(item1, InvokeCase) && item1.invoke isa CodeInstance
+            # like handle_task_call!, an uncached MethodInstance is unusable here, since
+            # `try_resolve_finalizer!` requires a CodeInstance in this argument position
             push!(stmt.args, false)
             push!(stmt.args, item1.invoke)
         elseif isa(item1, ConstantCase)

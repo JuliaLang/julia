@@ -25,6 +25,7 @@
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "builtin_proto.h"
 #include "threading.h"
 #include "julia_assert.h"
 

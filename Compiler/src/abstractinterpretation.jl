@@ -3509,34 +3509,26 @@ function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInf
         invoke_args = Any[Const(Core.invoke), func_arg, argtypes[4]]
         invoke_arginfo = ArgInfo(nothing, invoke_args)
         invoke_future = abstract_invoke(interp, invoke_arginfo, si, vtypes, sv)
-        return Future{CallMeta}(invoke_future, interp, sv) do invoke_result, interp, sv
-            fetch_type = widenconst(invoke_result.rt)
-            fetch_error = widenconst(invoke_result.exct)
-            task_effects = invoke_result.effects
-            if fetch_type === Any && fetch_error === Any
-                rt_result = Task
-            else
-                rt_result = PartialTask(fetch_type, fetch_error)
-            end
-            info_result = IndirectCallInfo(invoke_result.info, task_effects, true)
-            return CallMeta(rt_result, Any, Effects(), info_result)
-        end
+        return Future{CallMeta}(task_callmeta, invoke_future, interp, sv)
     end
 
     # Otherwise use abstract_call for function analysis
     callinfo_future = abstract_call(interp, ArgInfo(nothing, Any[func_arg]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
-    return Future{CallMeta}(callinfo_future, interp, sv) do callinfo, interp, sv
-        fetch_type = widenconst(callinfo.rt)
-        fetch_error = widenconst(callinfo.exct)
-        task_effects = callinfo.effects
-        if fetch_type === Any && fetch_error === Any
-            rt_result = Task
-        else
-            rt_result = PartialTask(fetch_type, fetch_error)
-        end
-        info_result = IndirectCallInfo(callinfo.info, task_effects, true)
-        return CallMeta(rt_result, Any, Effects(), info_result)
+    return Future{CallMeta}(task_callmeta, callinfo_future, interp, sv)
+end
+
+# Convert the `CallMeta` of the task body call into the `CallMeta` of the `Core._task`
+# call that creates it, tracking the body's result/error types with a `PartialTask`.
+function task_callmeta(call::CallMeta, ::AbstractInterpreter, ::AbsIntState)
+    fetch_type = widenconst(call.rt)
+    fetch_error = widenconst(call.exct)
+    if fetch_type === Any && fetch_error === Any
+        rt_result = Task
+    else
+        rt_result = PartialTask(fetch_type, fetch_error)
     end
+    info_result = IndirectCallInfo(call.info, call.effects, true)
+    return CallMeta(rt_result, Any, Effects(), info_result)
 end
 
 function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, sstate::StatementState,

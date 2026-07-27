@@ -38,7 +38,7 @@ Core.get_binding_type
 ```
 
 ## Various helper functions
-```
+```@docs
 Base.quoted
 Base.isa_ast_node
 ```
@@ -98,8 +98,12 @@ JL_CALLABLE(jl_f__your_builtin)
 
 **File: `Compiler/src/tfuncs.jl`**
 ```julia
-# Add simple tfunc if no special state is required
-add_tfunc(Core._your_builtin, 2, 3, (@nospecialize(arg1), @nospecialize(arg2), @nospecialize(optional...)) -> Typ, 20)
+# Add simple tfunc if no special state is required (the tfunc always takes the
+# inference lattice as its first argument, before the builtin's own arguments)
+@nospecs function your_builtin_tfunc(𝕃::AbstractLattice, arg1, arg2, optional...)
+    return Typ
+end
+add_tfunc(Core._your_builtin, 2, 3, your_builtin_tfunc, 20)
 
 # OR for complex cases requiring AbstractInterpreter state:
 # Leave out add_tfunc and implement in abstractinterpretation.jl instead

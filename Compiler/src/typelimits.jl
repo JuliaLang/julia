@@ -405,7 +405,8 @@ end
         return false
     elseif typea isa PartialTask
         typeb isa PartialTask || return false
-        return issimplertype(𝕃, typea.fetch_type, typeb.fetch_type)
+        return issimplertype(𝕃, typea.fetch_type, typeb.fetch_type) &&
+               issimplertype(𝕃, typea.fetch_error, typeb.fetch_error)
     end
     return true
 end

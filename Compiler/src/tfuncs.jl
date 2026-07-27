@@ -3623,7 +3623,10 @@ add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)
 @nospecs function task_result_type_tfunc(𝕃::AbstractLattice, T)
     hasintersect(widenconst(T), Task) || return Union{}
     if T isa PartialTask
-        return widenconst(Const(widenconst(T.fetch_type)))
+        # fetch_type is widened at construction, but re-widen defensively since
+        # PartialTask objects also arrive from cached (serialized) rettype_const
+        # and from external AbstractInterpreters
+        return Const(widenconst(T.fetch_type))
     end
     return Type
 end
