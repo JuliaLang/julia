@@ -103,8 +103,7 @@ macro mknode(x)
 end
 
 function _debug_check_attrs(x)
-    vr = _assert_syntaxtree_node(x)
-    !vr.ok
+    assert_syntaxtree(x, false)
     x
 end
 
@@ -271,7 +270,7 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
         end
     elseif Meta.isexpr(tree, :(:=))
         ctx === nothing && throw(ArgumentError(
-            "@ast requires ctx arg for `:=` assignments $__source__"))
+            "@ast requires ctx arg for `:=` assignments $jl_line"))
         lhs = tree.args[1]
         rhs = _expand_ast_tree(ctx, srcref, tree.args[2], jl_line)
         ssadef = gensym("ssadef")

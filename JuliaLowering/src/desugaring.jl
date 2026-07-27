@@ -3314,7 +3314,7 @@ function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres
         # constructor for X (rewrite it to `X{T}(...) where T`)
         ([K"call" [K"::" _ [K"where" _...]] args...], when=begin
              t, inner_wheres = flatten_wheres(ex[1][2])
-             isempty(wheres) && kind(t) === K"curly" && get(t[1], :value, "") == "Type"
+             isempty(wheres) && kind(t) === K"curly" && t[1].value === "Type"
          end) -> let
              append!(wheres, inner_wheres)
              ex2 = @ast ctx ex [K"call" t[2] args...]

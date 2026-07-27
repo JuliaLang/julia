@@ -1,10 +1,3 @@
-"""
-Deprecated.  JuliaLowering used to store trees and their fields here, handling
-trees as an index into a larger SyntaxGraph.
-"""
-mutable struct SyntaxGraph
-end
-
 mutable struct ScopeLayer
     const mod::Module
     const escaped::Union{Nothing, ScopeLayer}
@@ -71,10 +64,16 @@ end
 function node_string(ex::SyntaxTree, depth=0)
     out = "(kind="*string(kind(ex))
     for n in sort!(collect(fieldnames(typeof(ex))))
-        if hasattr(ex, n) && n !== :kind
-            val = getproperty(ex, n)
-            val_str = val isa SyntaxTree && depth > 1 ?
-                node_string(ex, depth-1) : string(val)
+        val = getproperty(ex, n)
+        if !isnothing(val) && n !== :kind
+            val_str = if val isa SyntaxTree && depth > 1
+                node_string(val, depth-1)
+            elseif isbits(val) || val isa
+                Union{AbstractString, Symbol, Module, LineNumberNode}
+                repr(val)
+            else
+                repr(typeof(val))
+            end
             out *= ", "*string(n)*"="*val_str
         end
     end
@@ -495,10 +494,6 @@ function newleaf(prov::SourceAttrType, k::Kind)
     SyntaxTree(k, nothing, nothing, prov, context)
 end
 
-"""
-    mknode(old::SyntaxTree, children)
-
-"""
 function mknode(old::SyntaxTree, children)
     st = mkleaf(old)
     setchildren!(st, children)
@@ -1029,7 +1024,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             arg = valleaf(replace(sourcetext(st), '_'=>""))
             ret_cids = SyntaxList(mac, valleaf(nothing), arg)
             newnode(st, K"macrocall", ret_cids)
-        elseif k === K"error"
+        elseif is_error(k)
             mkleaf(st)
         elseif hasattr(st, :value) && !(k in KSet"Identifier Value" || is_literal(k))
             # certain kinds should really be identifiers.  known: &, |, :
@@ -1234,7 +1229,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 else_ = only(inner_cs)
             elseif kind(c) === K"finally"
                 finally_ = only(inner_cs)
-            elseif kind(c) === K"error"
+            elseif is_error(kind(c))
                 return mknode(st, cs) # give up
             else
                 @assert false "Illegal subclause in `try`"

@@ -317,7 +317,7 @@ function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
     end
 
     @jl_assert base_layer(sc).mod == __module__ ex0
-    ex0 = JuliaSyntax.fill_context!(ex0, sc)
+    ex0 = JuliaSyntax.fill_context(ex0, sc)
     ctx1 = MacroExpansionContext(ex0, world, true)
     ex1 = expand_forms_1(ctx1, ex0)
     # Desugaring
