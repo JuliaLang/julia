@@ -1,7 +1,6 @@
 # Lowering Pass 2 - syntax desugaring
 
 mutable struct DesugaringContext <: AbstractLoweringContext
-    const graph::SyntaxGraph
     const layer::ScopeLayer
     const bindings::Bindings
     const ssa_mapping::Dict{Int, IdTag}
@@ -109,7 +108,7 @@ end
 # It would be cleaner to do this in compat.jl.
 function relayer_global_if_unhygienic(ctx, st::SyntaxTree)
     sc = st.context::SyntaxContext
-    relayered = SyntaxList(st._graph)
+    relayered = SyntaxList()
     # TODO: is_base_layer(sc) or sc.layer == ctx.layer?
     (!is_flisp_compat(sc) || is_base_layer(sc)) && return st, relayered
     sc2 = escape_layer(sc, true)
@@ -123,7 +122,7 @@ function _relayer_global_if_unhygienic(done::SyntaxList, st::SyntaxTree, sc::Syn
     elseif k === K"::" || k === K"kw"
         n_done = length(done)
         lhs = _relayer_global_if_unhygienic(done, st[1], sc)
-        n_done == length(done) ? st : (@ast st._graph st [k lhs st[2]])
+        n_done == length(done) ? st : (@ast _ st [k lhs st[2]])
     elseif k === K"tuple" || k === K"parameters"
         mapchildren(e->_relayer_global_if_unhygienic(done, e, sc), st)
     else
@@ -169,8 +168,8 @@ function tuple_to_assignments(ctx, ex, is_const)
     # with observable side effects and ensure they're evaluated in order.
     n_lhs = numchildren(lhs)
     n_rhs = numchildren(rhs)
-    stmts = SyntaxList(ctx)
-    rhs_tmps = SyntaxList(ctx)
+    stmts = SyntaxList()
+    rhs_tmps = SyntaxList()
     for i in 1:n_rhs
         rh = rhs[i]
         r = if kind(rh) == K"..."
@@ -300,7 +299,7 @@ end
 # Lower `(lhss...) = rhs` in contexts where `rhs` must be a tuple at runtime
 # by assuming that `getfield(rhs, i)` works and is efficient.
 function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
-    stmts = SyntaxList(ctx)
+    stmts = SyntaxList()
     tmp = emit_assign_tmp(stmts, ctx, rhs, "rhs_tmp")
     for (i, lh) in enumerate(lhss)
         push!(stmts, @ast ctx assignment_srcref [K"="
@@ -321,7 +320,7 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
     n_lhs = numchildren(lhs)
     iterstate = n_lhs > 0 ? new_local_binding(ctx, rhs, "iterstate") : nothing
 
-    end_stmts = SyntaxList(ctx)
+    end_stmts = SyntaxList()
     wrap(asgn) = is_const ? (@ast ctx assignment_srcref [K"const" asgn]) : asgn
 
     i = 0
@@ -425,7 +424,7 @@ function expand_property_destruct(ctx, ex)
     params = lhs[1]
     @jl_assert kind(params) == K"parameters" ex
     rhs = ex[2]
-    stmts = SyntaxList(ctx)
+    stmts = SyntaxList()
     rhs1 = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
     for prop in children(params)
         propname = kind(prop) == K"Identifier"                           ? prop    :
@@ -471,7 +470,7 @@ function expand_tuple_destruct(ctx, ex, is_const)
         end
     end
 
-    stmts = SyntaxList(ctx)
+    stmts = SyntaxList()
     rhs1 = if is_ssa(ctx, rhs) ||
             (is_identifier_like(rhs) &&
              !any(is_same_identifier_like(kind(l) == K"..." ? l[1] : l, rhs)
@@ -602,7 +601,7 @@ function remove_argument_side_effects(ctx, stmts, ex)
         if k == K"let"
             emit_assign_tmp(stmts, ctx, ex)
         else
-            args = SyntaxList(ctx)
+            args = SyntaxList()
             for e in children(ex)
                 push!(args, _arg_to_temp(ctx, stmts, e))
             end
@@ -627,7 +626,7 @@ function replace_beginend(ctx, ex, arr, n, splats, is_last)
                 @ast ctx ex [K"call" indexfunc arr n::K"Integer"]
             end
         else
-            splat_lengths = SyntaxList(ctx)
+            splat_lengths = SyntaxList()
             for splat in splats
                 push!(splat_lengths, @ast ctx ex [K"call" "length"::K"top" splat])
             end
@@ -666,8 +665,8 @@ end
 # added to ctx.stmts.
 function process_indices(sctx::StatementListCtx, arr, idxs)
     has_splats = any(kind(i) == K"..." for i in idxs)
-    idxs_out = SyntaxList(sctx)
-    splats = SyntaxList(sctx)
+    idxs_out = SyntaxList()
+    splats = SyntaxList()
     for (n, idx0) in enumerate(idxs)
         is_splat = kind(idx0) == K"..."
         val = replace_beginend(sctx, is_splat ? idx0[1] : idx0,
@@ -725,7 +724,7 @@ function expand_dotcall(ctx, ex)
     if k == K"dotcall"
         @jl_assert numchildren(ex) >= 1 ex
         farg = ex[1]
-        args = SyntaxList(ctx)
+        args = SyntaxList()
         append!(args, ex[2:end])
         kws = remove_kw_args!(ctx, args)
         @ast ctx ex [K"call"
@@ -825,7 +824,7 @@ function check_no_return(ex)
 end
 
 function lhs_local_defs(ctx, lhs)
-    defs = SyntaxList(ctx)
+    defs = SyntaxList()
     foreach_lhs_name(lhs) do var
         push!(defs, @ast ctx var [K"local" var])
     end
@@ -858,7 +857,7 @@ function expand_generator(ctx, ex)
     body = ex[1]
     check_no_return(body)
     if numchildren(ex) > 2
-        outervar_assignments = SyntaxList(ctx)
+        outervar_assignments = SyntaxList()
         for iterspecs in ex[2:end-1]
             for iterspec in children(iterspecs)
                 foreach_lhs_name(iterspec[1]) do var
@@ -886,8 +885,8 @@ function expand_generator(ctx, ex)
         if kind(iterspecs) != K"iteration"
             throw(LoweringError(ex, """Expected `K"iteration"` iteration specification in generator"""))
         end
-        iter_ranges = SyntaxList(ctx)
-        iter_lhss = SyntaxList(ctx)
+        iter_ranges = SyntaxList()
+        iter_lhss = SyntaxList()
         for iterspec in children(iterspecs)
             @jl_assert kind(iterspec) == K"in" iterspec
             @jl_assert numchildren(iterspec) == 2 iterspec
@@ -897,7 +896,7 @@ function expand_generator(ctx, ex)
         iter_value_destructuring = if numchildren(iterspecs) == 1
             iterspecs[1][1]
         else
-            iter_lhss = SyntaxList(ctx)
+            iter_lhss = SyntaxList()
             for iterspec in children(iterspecs)
                 push!(iter_lhss, iterspec[1])
             end
@@ -943,9 +942,9 @@ function expand_comprehension_to_loops(ctx, ex)
     # TODO: check_no_break_continue
     iterspecs = gen[2]
     @jl_assert kind(iterspecs) == K"iteration" ex
-    new_iterspecs = SyntaxList(ctx)
-    iters = SyntaxList(ctx)
-    iter_defs = SyntaxList(ctx)
+    new_iterspecs = SyntaxList()
+    iters = SyntaxList()
+    iter_defs = SyntaxList()
     for iterspec in children(iterspecs)
         iter = emit_assign_tmp(iter_defs, ctx, iterspec[2], "iter")
         push!(iters, iter)
@@ -987,14 +986,14 @@ end
 # Unwraps only ONE layer of `...` and wraps sequences of non-splat args in tuples.
 # Example: `[a, b, xs..., c]` -> `[tuple(a, b), xs, tuple(c)]`
 function _wrap_unsplatted_args(ctx, call_ex, args)
-    result = SyntaxList(ctx)
-    non_splat_run = SyntaxList(ctx)
+    result = SyntaxList()
+    non_splat_run = SyntaxList()
     for arg in args
         if kind(arg) == K"..."
             # Flush any accumulated non-splat args
             if !isempty(non_splat_run)
                 push!(result, @ast ctx call_ex [K"call" "tuple"::K"core" non_splat_run...])
-                non_splat_run = SyntaxList(ctx)
+                non_splat_run = SyntaxList()
             end
             # Unwrap only ONE layer of `...` (corresponds to (cadr x) in native lowerer)
             push!(result, arg[1])
@@ -1072,7 +1071,7 @@ function expand_vcat(ctx, ex)
     if had_row_splat
         # In case there is splatting inside `hvcat`, collect each row as a
         # separate tuple and pass those to `hvcat_rows` instead (ref #38844)
-        rows = SyntaxList(ctx)
+        rows = SyntaxList()
         for e in elements
             if kind(e) == K"row"
                 push!(rows, @ast ctx e [K"tuple" children(e)...])
@@ -1087,8 +1086,8 @@ function expand_vcat(ctx, ex)
             rows...
         ]
     else
-        row_sizes = SyntaxList(ctx)
-        flat_elems = SyntaxList(ctx)
+        row_sizes = SyntaxList()
+        flat_elems = SyntaxList()
         for e in elements
             if kind(e) == K"row"
                 rowsize = numchildren(e)
@@ -1204,7 +1203,7 @@ function expand_ncat(ctx, ex)
     #   [a ; b ;;; c]
     row_major = any(ncat_contains_row, elements)
     @jl_assert !row_major || outer_dim != 2 (ex,"2D `nrow` cannot be mixed with `row` in `ncat`")
-    flat_elems = SyntaxList(ctx)
+    flat_elems = SyntaxList()
     # `ncat` syntax nests lower dimensional `nrow` inside higher dimensional
     # ones (with the exception of K"row" when `row_major` is true). Each nrow
     # spans a number of elements and we first extract that.
@@ -1235,7 +1234,7 @@ function expand_ncat(ctx, ex)
         dim_lengths[layout_dim] = Int(dimspan ÷ prev_dimspan)
         prev_dimspan = dimspan
     end
-    shape_spec = SyntaxList(ctx)
+    shape_spec = SyntaxList()
     if is_balanced
         if row_major
             dim_lengths[1], dim_lengths[2] = dim_lengths[2], dim_lengths[1]
@@ -1309,7 +1308,7 @@ function expand_assignment(ctx, ex, is_const=false)
     elseif kind(rhs) == K"="
         # Expand chains of assignments
         # a = b = rhs  ==>  rr=rhs; b=rr; a=rr
-        stmts = SyntaxList(ctx)
+        stmts = SyntaxList()
         rhs_end = rhs; while kind(rhs_end) === K"="
             rhs_end = rhs_end[2]
         end
@@ -1348,7 +1347,7 @@ function expand_assignment(ctx, ex, is_const=false)
         @jl_assert numchildren(lhs) == 2 lhs
         a = lhs[1]
         b = lhs[2]
-        stmts = SyntaxList(ctx)
+        stmts = SyntaxList()
         # TODO: Do we need these first two temporaries?
         if !is_identifier_like(a)
             a = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, a), "a_tmp")
@@ -1397,7 +1396,7 @@ function expand_assignment(ctx, ex, is_const=false)
             # Otherwise just a type assertion, eg
             # a[i]::T = rhs  ==>  (a[i]::T; a[i] = rhs)
             # a[f(x)]::T = rhs  ==>  (tmp = f(x); a[tmp]::T; a[tmp] = rhs)
-            stmts = SyntaxList(ctx)
+            stmts = SyntaxList()
             l1 = remove_argument_side_effects(ctx, stmts, lhs[1])
             # TODO: What about (f(z),y)::T = rhs? That's broken syntax and
             # needs to be detected somewhere but won't be detected here. Maybe
@@ -1433,7 +1432,7 @@ function expand_update_operator(ctx, ex)
     op = ex[2]
     rhs = ex[3]
 
-    stmts = SyntaxList(ctx)
+    stmts = SyntaxList()
 
     declT = nothing
     if kind(lhs) == K"::"
@@ -1489,7 +1488,7 @@ end
 # Expand logical conditional statements
 
 # Flatten nested && or || nodes and expand their children
-function expand_cond_children(ctx, ex, cond_kind=kind(ex), flat_children=SyntaxList(ctx))
+function expand_cond_children(ctx, ex, cond_kind=kind(ex), flat_children=SyntaxList())
     for e in children(ex)
         if kind(e) == cond_kind
             expand_cond_children(ctx, e, cond_kind, flat_children)
@@ -1579,7 +1578,7 @@ function expand_let(ctx, ex)
                     ]
                 ]
             elseif kind(lhs) == K"tuple"
-                lhs_locals = SyntaxList(ctx)
+                lhs_locals = SyntaxList()
                 foreach_lhs_name(lhs) do var
                     push!(lhs_locals, @ast ctx var [K"local" var])
                     push!(lhs_locals, @ast ctx var [K"always_defined" var])
@@ -1647,8 +1646,8 @@ end
 function expand_named_tuple(ctx, ex, kws; field_name="named tuple field",
                             element_name="named tuple element")
     name_strs = Set{String}()
-    names = SyntaxList(ctx)
-    values = SyntaxList(ctx)
+    names = SyntaxList()
+    values = SyntaxList()
     current_nt = nothing
     for kw in kws
         k = kind(kw)
@@ -1817,7 +1816,7 @@ function expand_ccall(ctx, ex)
         throw(LoweringError(ex, "More arguments than types in ccall"))
     end
     sctx = with_stmts(ctx)
-    expanded_types = SyntaxList(ctx)
+    expanded_types = SyntaxList()
     for argt in arg_types
         if kind(argt) == K"..."
             throw(LoweringError(argt, "only the trailing ccall argument type should have `...`"))
@@ -1835,12 +1834,12 @@ function expand_ccall(ctx, ex)
     # One small improvement we make here is to emit temporaries for all the
     # types used during expansion so at least we don't have their side effects
     # more than once.
-    types_for_conv = SyntaxList(ctx)
+    types_for_conv = SyntaxList()
     for argt in expanded_types
         push!(types_for_conv, emit_assign_tmp(sctx, argt))
     end
-    gc_roots = SyntaxList(ctx)
-    unsafe_args  = SyntaxList(ctx)
+    gc_roots = SyntaxList()
+    unsafe_args  = SyntaxList()
     for (i,arg) in enumerate(args)
         if i > length(expanded_types)
             raw_argt = expanded_types[end]
@@ -1927,7 +1926,7 @@ function remove_kw_args!(ctx, args::SyntaxList)
         k = kind(arg)
         if k == K"kw"
             if isnothing(kws)
-                kws = SyntaxList(ctx)
+                kws = SyntaxList()
             end
             push!(kws, arg)
         elseif k == K"parameters"
@@ -1939,7 +1938,7 @@ function remove_kw_args!(ctx, args::SyntaxList)
                 continue # ignore empty parameters (issue #18845)
             end
             if isnothing(kws)
-                kws = SyntaxList(ctx)
+                kws = SyntaxList()
             end
             append!(kws, children(arg))
         else
@@ -2018,7 +2017,7 @@ function expand_for(ctx, ex)
     # (Maybe we should filter these to remove vars not assigned in the loop?
     # But that would ideally happen after the variable analysis pass, not
     # during desugaring.)
-    copied_vars = SyntaxList(ctx)
+    copied_vars = SyntaxList()
     for iterspec in iterspecs[1:end-1]
         @jl_assert kind(iterspec) == K"in" iterspec
         lhs = iterspec[1]
@@ -2035,8 +2034,8 @@ function expand_for(ctx, ex)
         lhs = iterspec[1]
 
         outer = kind(lhs) == K"outer"
-        lhs_local_defs = SyntaxList(ctx)
-        lhs_outer_defs = SyntaxList(ctx)
+        lhs_local_defs = SyntaxList()
+        lhs_outer_defs = SyntaxList()
         if outer
             lhs = lhs[1]
         end
@@ -2201,7 +2200,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         [K"Placeholder"] -> nothing
         ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
             t2 = expand_forms_2(ctx, t)
-            push!(stmts, newnode(ex, K"decl", tree_ids(x, t2)))
+            push!(stmts, newnode(ex, K"decl", SyntaxList(x, t2)))
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
         ([K"::" [K"Placeholder"] t], when=type_decls) -> let
@@ -2237,7 +2236,7 @@ end
 function expand_decls(ctx, ex)
     declkind = kind(ex)
     @jl_assert declkind in KSet"local global" ex
-    stmts = SyntaxList(ctx)
+    stmts = SyntaxList()
     for c in children(ex)
         simple = kind(c) in KSet"Identifier :: Placeholder"
         if declkind === K"global"
@@ -2294,7 +2293,7 @@ function expand_const_decl(ctx, ex)
         [K"function" _ _] -> expand_forms_2(ctx, ex[1])
         [K"global" [K"function" _ _]] -> expand_forms_2(ctx, ex[1])
 
-        [K"global" x] -> let decls = SyntaxList(ctx)
+        [K"global" x] -> let decls = SyntaxList()
             @jl_assert kind(x) === K"=" ex
             (lhs, relayered) = relayer_global_if_unhygienic(ctx, x[1])
             make_lhs_decls(
@@ -2319,7 +2318,7 @@ end
 
 # (where (where x a b) c d) -> (x, [c d a b])
 function flatten_wheres(ex)
-    tvs = SyntaxList(ex._graph)
+    tvs = SyntaxList()
     while kind(ex) === K"where"
         append!(tvs, ex[2:end])
         ex = ex[1]
@@ -2369,7 +2368,7 @@ unused_typevars(uses::SyntaxList, tvs::SyntaxList) =
     tvs[map(!, select_used_typevars(uses, tvs))]
 
 function make_assigns(ctx, ls::SyntaxList, rs::SyntaxList)
-    out = SyntaxList(ctx.graph)
+    out = SyntaxList()
     for (l, r) in zip(ls, rs)
         push!(out, @ast ctx r [K"=" l r])
     end
@@ -2411,7 +2410,7 @@ end
 
 # (_typevar name lb ub) -> (local (= name (call core TypeVar...)))
 function assign_sparams(ctx, tvs)
-    out = SyntaxList(ctx.graph)
+    out = SyntaxList()
     for tv in tvs
         @jl_assert kind(tv) === K"_typevar" tv
         push!(out, @ast ctx tv [K"local" tv[1]])
@@ -2421,7 +2420,7 @@ function assign_sparams(ctx, tvs)
 end
 
 function method_def_sparams(ctx, src, tvs)
-    out = SyntaxList(ctx)
+    out = SyntaxList()
     for tv in tvs
         @jl_assert kind(tv) === K"_typevar" tv
         push!(out, @ast ctx tv [K"typevar" tv[1] bounds_to_typevar(ctx, tv)])
@@ -2480,11 +2479,11 @@ end
 function _untyped_arg(a)
     @jl_assert kind(a) === K"::" || kind(a) === K"_typevar" a
     aname = setmeta(a[1], :nospecialize, true)
-    @ast a._graph a [K"::" aname "Any"::K"core"]
+    @ast _ a [K"::" aname "Any"::K"core"]
 end
 
 function _expr_arg_syms(args)
-    out = SyntaxList(args.graph)
+    out = SyntaxList()
     for (i, a) in enumerate(args)
         @jl_assert kind(a) === K"::" || kind(a) === K"_typevar" a
         name = if kind(a[1]) === K"Placeholder"
@@ -2526,7 +2525,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
         @jl_assert kind(body[1]) === K"syntaxquote" body
         gen_body = est_to_dst(expand_syntaxquote(ctx, body[1][1]))
 
-        method_def_expr(ctx, src, gen_name, SyntaxList(ctx), gen_argl, gen_body,
+        method_def_expr(ctx, src, gen_name, SyntaxList(), gen_argl, gen_body,
                         @ast(ctx, src, "Any"::K"core"))
     end
 
@@ -2594,7 +2593,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
     req = pos_req_args(argl)
     passed = copy(req)
-    methods = SyntaxList(ctx.graph)
+    methods = SyntaxList()
     for i in eachindex(opt)
         @jl_assert i == length(passed)-length(req)+1 src
         wrapper_body = if all((<)(i), deps[i+1:end])
@@ -2630,9 +2629,9 @@ function expand_kw_args(ctx, kws)
         [K"parameters" xs... [K"..." va]] -> (xs, va)
         [K"parameters" xs...] -> (xs, nothing)
     end
-    kw_decls = SyntaxList(ctx.graph)
-    kw_syms = SyntaxList(ctx.graph)
-    kw_defaults = SyntaxList(ctx.graph)
+    kw_decls = SyntaxList()
+    kw_syms = SyntaxList()
+    kw_defaults = SyntaxList()
     for raw_a in kargl
         a = expand_function_arg(ctx, raw_a, false)
         @stm a begin
@@ -2649,7 +2648,7 @@ function expand_kw_args(ctx, kws)
     end
     kw_names = mapindex(kw_decls, 1)
     kw_syms = mapsyntax(x->@mknode(x; kind=K"Symbol"), kw_names)
-    restkw_list = isnothing(restkw) ? SyntaxList(ctx.graph) :
+    restkw_list = isnothing(restkw) ? SyntaxList() :
         SyntaxList(@ast ctx restkw [K"::"
             restkw [K"call" "pairs"::K"top" "NamedTuple"::K"core"]])
 
@@ -2744,7 +2743,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
         tempslot = newsym(ctx, kws, "#kwtmp#")
         keyword_only_spnames = mapindex(unused_typevars(pargl, sparams), 1)
 
-        kw_assigns = SyntaxList(ctx.graph)
+        kw_assigns = SyntaxList()
         for (tmp, sym, decl, default) in zip(kw_temps, kw_syms, kw_decls, kw_defaults)
             get_kw = @ast ctx decl [K"call" "getfield"::K"core" arg2_name sym]
             if !is_core_Any(decl[2]) &&
@@ -2842,7 +2841,7 @@ _lower_destructuring_arg(stmts, ctx, i, ex) = @stm ex begin
 end
 
 function lower_destructuring_args!(ctx, args)
-    stmts = SyntaxList(ctx.graph)
+    stmts = SyntaxList()
     for (i, a) in enumerate(args)
         args[i] = _lower_destructuring_arg(stmts, ctx, i, a)
     end
@@ -2948,11 +2947,11 @@ expand_opaque_closure(ctx, ex) = @stm ex begin
     [K"opaque_closure" argt rt_lb rt_ub allow_partial lam] -> begin
         @jl_assert kind(lam[1]) === K"tuple" ex
         check_no_parameters(ex, lam[1])
-        raw_args = append!(SyntaxList(ctx.graph), children(lam[1]))
+        raw_args = append!(SyntaxList(), children(lam[1]))
         arg_stmts = lower_destructuring_args!(ctx, raw_args)
 
         arg_names = SyntaxList(newsym(ctx, lam[1], "#self#"))
-        inner_arg_types = SyntaxList(ctx.graph)
+        inner_arg_types = SyntaxList()
         for a in raw_args
             if kind(argt) !== K"nothing" && kind(a) === K"::"
                 throw(LoweringError(a, "opaque closure argument type may not be specified both in the method signature and separately"))
@@ -3062,7 +3061,7 @@ end
 # argument to where expression -> (_typevar name expanded_lb expanded_ub)
 # used, e.g. in all `sparams`, where flisp generally uses a list (name, lb, ub)
 function typevar_bounds(ex)
-    any = @ast ex._graph ex "Any"::K"core"
+    any = @ast _ ex "Any"::K"core"
     (name, lb, ub) = bounds = @stm ex begin
         [K"Identifier"] -> (ex, any, any)
         [K"Placeholder"] -> (ex, any, any)
@@ -3071,7 +3070,7 @@ function typevar_bounds(ex)
         [K"<:" x ub] -> (x, any, ub)
         [K">:" x lb] -> (x, lb, any)
     end
-    @ast ex._graph ex [K"_typevar" name lb ub]
+    @ast _ ex [K"_typevar" name lb ub]
 end
 
 function bounds_to_typevar(ctx, ex)
@@ -3133,8 +3132,8 @@ end
 # - `typevar_stmts` are a list of statements to define a `TypeVar` for each parameter
 #   name in `typevar_names`, to be emitted prior to uses of `typevar_names`.
 function expand_typevars(ctx, type_params)
-    typevar_names = SyntaxList(ctx)
-    typevar_stmts = SyntaxList(ctx)
+    typevar_names = SyntaxList()
+    typevar_stmts = SyntaxList()
     for param in type_params
         bounds = typevar_bounds(param)
         n = bounds[1]
@@ -3308,7 +3307,7 @@ function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres
     @stm sig begin
         [K"::" x rett] -> let
             call2, ctor_self = rewrite_ctor_sig(
-                ctx, x, tname, global_tname, struct_typevars, SyntaxList(ctx))
+                ctx, x, tname, global_tname, struct_typevars, SyntaxList())
             sig2 = @ast(ctx, sig, [K"::" call2 rett])
         end
         # recognize `(_::(Type{X{T}} where T))(...)` as an inner-style
@@ -3562,7 +3561,7 @@ function _replace_type_constructors(ctx, ex)
     k = kind(ex)
     if k == K"call" && numchildren(ex) >= 1 && kind(ex[1]) == K"core" && syntax_name(ex[1]) == "apply_type"
         new_head = @ast ctx ex[1] "apply_type_or_typeapp"::K"core"
-        new_children = SyntaxList(ctx)
+        new_children = SyntaxList()
         push!(new_children, new_head)
         for i in 2:numchildren(ex)
             push!(new_children, _replace_type_constructors(ctx, ex[i]))
@@ -3598,9 +3597,9 @@ function expand_typegroup_def(ctx, ex)
     # Collect and analyze struct definitions from block children.
     # A child can be a bare K"struct" or a K"doc" wrapping a K"struct".
     entries = TypeGroupEntry[]
-    struct_names = SyntaxList(ctx)   # local name bindings (splatted into AST)
-    global_names = SyntaxList(ctx)   # global name bindings (splatted into AST)
-    info_vars = SyntaxList(ctx)      # SSA vars for struct info svecs (splatted into AST)
+    struct_names = SyntaxList()   # local name bindings (splatted into AST)
+    global_names = SyntaxList()   # global name bindings (splatted into AST)
+    info_vars = SyntaxList()      # SSA vars for struct info svecs (splatted into AST)
     struct_mod_prev = nothing
 
     for child in children(body)
@@ -3627,11 +3626,11 @@ function expand_typegroup_def(ctx, ex)
         end
         struct_name, type_params, supertype = analyze_type_sig(ctx, type_sig)
         typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
-        field_names = SyntaxList(ctx)
-        field_types = SyntaxList(ctx)
-        field_attrs = SyntaxList(ctx)
-        field_docs = SyntaxList(ctx)
-        inner_defs = SyntaxList(ctx)
+        field_names = SyntaxList()
+        field_types = SyntaxList()
+        field_attrs = SyntaxList()
+        field_docs = SyntaxList()
+        inner_defs = SyntaxList()
         _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                                inner_defs, children(type_body))
 
@@ -3672,7 +3671,7 @@ function expand_typegroup_def(ctx, ex)
     #   g. Constructor definitions
     # }
 
-    stmts = SyntaxList(ctx)
+    stmts = SyntaxList()
 
     # 2a. Declare all names as locals
     for name in struct_names
@@ -3691,7 +3690,7 @@ function expand_typegroup_def(ctx, ex)
         typevar_stmts = e.typevar_stmts
         info_var = info_vars[i]
 
-        inner_stmts = SyntaxList(ctx)
+        inner_stmts = SyntaxList()
         for tv_name in typevar_names
             push!(inner_stmts, @ast ctx e.sdef [K"local" tv_name])
         end
@@ -3736,7 +3735,7 @@ function expand_typegroup_def(ctx, ex)
 
     # 2g. Constructor definitions — placed outside the scope_block so that
     # type names in constructor bodies resolve to globals, not captured locals.
-    fdef_stmts = SyntaxList(ctx)
+    fdef_stmts = SyntaxList()
     for i in 1:n
         e = entries[i]
         if isempty(e.inner_defs)
@@ -3780,7 +3779,7 @@ function expand_typegroup_def(ctx, ex)
     push!(fdef_stmts, nothing_(ctx, ex))
 
     # Build the toplevel assertion + scope block, then do the expand and replace
-    scope_block_stmts = SyntaxList(ctx)
+    scope_block_stmts = SyntaxList()
     push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
 
     result = @ast ctx ex [K"block"
@@ -3806,11 +3805,11 @@ function expand_struct_def(ctx, ex, docs)
     end
     struct_name, type_params, supertype = analyze_type_sig(ctx, type_sig)
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
-    field_names = SyntaxList(ctx)
-    field_types = SyntaxList(ctx)
-    field_attrs = SyntaxList(ctx)
-    field_docs = SyntaxList(ctx)
-    inner_defs = SyntaxList(ctx)
+    field_names = SyntaxList()
+    field_types = SyntaxList()
+    field_attrs = SyntaxList()
+    field_docs = SyntaxList()
+    inner_defs = SyntaxList()
     _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                            inner_defs, children(type_body))
     min_initialized = minimum((_constructor_min_initialized(e) for e in inner_defs),
@@ -4008,9 +4007,9 @@ function expand_curly(ctx, ex)
     check_no_parameters(ex, "unexpected semicolon in type parameter list")
     check_no_assignment(children(ex), "misplaced assignment in type parameter list")
 
-    typevar_stmts = SyntaxList(ctx)
-    type_args = SyntaxList(ctx)
-    implicit_typevars = SyntaxList(ctx)
+    typevar_stmts = SyntaxList()
+    type_args = SyntaxList()
+    implicit_typevars = SyntaxList()
 
     i = 1
     for e in children(ex)
@@ -4080,7 +4079,7 @@ function expand_import_or_using(ctx, ex)
         paths = children(ex)
     end
     # Here we represent the paths as quoted `Expr` data structures
-    path_specs = SyntaxList(ctx)
+    path_specs = SyntaxList()
     for spec in paths
         if kind(spec) == K"as"
             @jl_assert numchildren(spec) == 2 spec
@@ -4092,7 +4091,7 @@ function expand_import_or_using(ctx, ex)
         push!(path_specs, @ast ctx spec [K"inert" path])
     end
     is_using = kind(ex) == K"using"
-    stmts = SyntaxList(ctx)
+    stmts = SyntaxList()
     if isnothing(from_path)
         for spec in path_specs
             if is_using
@@ -4454,7 +4453,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"foreigncall"
         # Assume user macros may produce this, but static_eval means desugaring
         # has already occurred.
-        args = SyntaxList(ctx)
+        args = SyntaxList()
         for i in 2:numchildren(ex)
             c = ex[i]
             if kind(c) === K"static_eval"
@@ -4497,19 +4496,16 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
 end
 
 function expand_forms_2(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector})
-    res = SyntaxList(ctx)
+    res = SyntaxList()
     for e in exs
         push!(res, expand_forms_2(ctx, e))
     end
     res
 end
 
-ensure_desugaring_attributes!(graph) = ensure_macro_attributes!(graph)
-
 @fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
-    graph = ensure_desugaring_attributes!(ex._graph)
     sl = base_layer(ex.context::SyntaxContext)
-    ctx_out = DesugaringContext(graph, sl, Bindings(), Dict{Int, IdTag}(), world)
+    ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(), world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !vr.ok

@@ -60,7 +60,7 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
             (k !== K"lambda" && parent.is_lifted)
     end
     s = ScopeInfo(
-        id, parent_id, lambda_id, ex._id, is_permeable, is_lifted,
+        id, parent_id, lambda_id, ex, is_permeable, is_lifted,
         Dict{IdTag, NodeId}(), Dict{NameKey, NodeId}(), Dict{NameKey,IdTag}(),
         (parent_id == 0 || k === K"lambda") ? Dict{IdTag,Bool}() : nothing)
     push!(ctx.scopes, s)
@@ -68,7 +68,6 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
 end
 
 mutable struct ScopeResolutionContext <: AbstractLoweringContext
-    const graph::SyntaxGraph
     const layer::ScopeLayer
     const bindings::Bindings
     # Purely for display and deterministic ordering of scope layers
@@ -264,11 +263,11 @@ function _find_scope_decls!(ctx, scope, ex)
             b = get_binding(ctx, ex[1])
             @jl_assert b.is_ssa || b.kind === :global (
                 ex, "allow local BindingId as function name?")
-            get!(scope.binding_assignments, b.id, ex[1]._id)
+            get!(scope.binding_assignments, b.id, ex[1])
         elseif k1 === K"Identifier"
             hasattr(ex[1], :mod) &&
                 explicit_declare_in_scope!(ctx, scope, ex[1], :global)
-            get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
+            get!(scope.assignments, NameKey(ex[1]), ex[1])
             get!(ctx.layer_ids, (ex[1].context::SyntaxContext).layer,
                  length(ctx.layer_ids)+1)
         else
@@ -284,10 +283,10 @@ function _find_scope_decls!(ctx, scope, ex)
             explicit_declare_in_scope!(ctx, scope, ex[1], :global)
         elseif k1 === K"BindingId"
             b = get_binding(ctx, ex[1])
-            get!(scope.binding_assignments, b.id, ex[1]._id)
+            get!(scope.binding_assignments, b.id, ex[1])
         elseif k1 === K"Identifier"
             !hasattr(ex[1], :mod) &&
-                get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
+                get!(scope.assignments, NameKey(ex[1]), ex[1])
         elseif k1 === K"Placeholder"
             # nothing to declare
         else
@@ -456,7 +455,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
             if !isnothing(binfo.type) && binfo.kind !== :global
                 throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
             end
-            binfo.type = ex_out[2]._id
+            binfo.type = ex_out[2]
         end
         ex_out
     elseif k == K"always_defined"
@@ -467,7 +466,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         # scope isa ScopeInfo && @jl_assert scope.is_lifted ex
         newscope = enter_scope!(ctx, ex)
         arg_bindings = _resolve_scopes(ctx, ex[1], newscope)
-        sparam_bindings = SyntaxList(ctx)
+        sparam_bindings = SyntaxList()
         for sp in children(ex[2])
             kind(sp) === K"Placeholder" && continue
             push!(sparam_bindings, _resolve_scopes(ctx, sp, newscope))
@@ -479,7 +478,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         else
             syntax_id(arg_bindings[1])
         end
-        body_stmts = SyntaxList(ctx)
+        body_stmts = SyntaxList()
         add_local_decls!(ctx, body_stmts, ex, newscope)
         body = _resolve_scopes(ctx, ex[3], newscope)
         if kind(body) == K"block"
@@ -499,7 +498,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
         ]
     elseif k == K"scope_block"
         newscope = enter_scope!(ctx, ex)
-        stmts = SyntaxList(ctx)
+        stmts = SyntaxList()
         add_local_decls!(ctx, stmts, ex, newscope)
         for e in children(ex)[2:end]
             push!(stmts, _resolve_scopes(ctx, e, newscope))
@@ -509,7 +508,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
     elseif k == K"method_defs"
         newscope = enter_scope!(ctx, ex)
         mname = _resolve_scopes(ctx, ex[1], scope)
-        tvs = SyntaxList(ctx.graph)
+        tvs = SyntaxList()
         for tv in children(ex[2]) # hack. flisp: replace-vars
             rhs = _resolve_scopes(ctx, tv[2], newscope)
             if kind(tv[1]) === K"Placeholder"
@@ -523,7 +522,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
                 push!(tvs, @ast ctx tv [K"=" binding_ex(ctx, bid) rhs])
             end
         end
-        stmts = SyntaxList(ctx)
+        stmts = SyntaxList()
         add_local_decls!(ctx, stmts, ex, newscope)
         push!(stmts, _resolve_scopes(ctx, ex[3], newscope))
         pop!(ctx.scope_stack)
@@ -543,7 +542,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
             end
         @ast ctx ex isglobal::K"Bool"
     elseif k == K"locals"
-        stmts = SyntaxList(ctx)
+        stmts = SyntaxList()
         locals_dict = ssavar(ctx, ex, "locals_dict")
         push!(stmts, @ast ctx ex [K"="
             locals_dict
@@ -657,7 +656,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
 end
 
 function _resolve_scopes(ctx::ScopeResolutionContext, exs::AbstractVector, scope)
-    out = SyntaxList(ctx)
+    out = SyntaxList()
     for e in exs
         push!(out, _resolve_scopes(ctx, e, scope))
     end
@@ -684,7 +683,6 @@ ClosureBindings(name_stack) =
     ClosureBindings(name_stack, Vector{LambdaBindings}(), Set{IdTag}())
 
 mutable struct VariableAnalysisContext <: AbstractLoweringContext
-    const graph::SyntaxGraph
     const layer::ScopeLayer
     const bindings::Bindings
     const scopes::Vector{ScopeInfo}
@@ -878,7 +876,7 @@ function analyze_variables!(ctx, ex)
         is_closure = kind(ex[1]) == K"BindingId" &&
             get_binding(ctx, ex[1]).kind === :local
         ctx2 = VariableAnalysisContext(
-            ctx.graph, ctx.layer, ctx.bindings, ctx.scopes,
+            ctx.layer, ctx.bindings, ctx.scopes,
             ctx.lambda_bindings, true, ctx.method_def_stack,
             ctx.closure_key_stack,
             ctx.closure_bindings, ctx.sp_typevars, ctx.tv_deps,
@@ -917,7 +915,7 @@ function analyze_variables!(ctx, ex)
             end
         end
         let ctx2 = VariableAnalysisContext(
-            ctx.graph, ctx.layer, ctx.bindings, ctx.scopes,
+            ctx.layer, ctx.bindings, ctx.scopes,
             lbs, false, ctx.method_def_stack,
             ctx.closure_key_stack, ctx.closure_bindings,
             ctx.sp_typevars, ctx.tv_deps, ctx.types_in_analysis)
@@ -940,8 +938,6 @@ function resolve_scopes(ctx::ScopeResolutionContext, ex)
     _resolve_scopes(ctx, ex, nothing)
 end
 
-ensure_scope_attributes!(graph) = ensure_desugaring_attributes!(graph)
-
 """
 This pass analyzes scopes and the names (locals/globals etc) used within them.
 
@@ -955,9 +951,8 @@ enclosing lambda form and information about variables captured by closures.
 @fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex;
                                                     soft_scope::Union{Nothing,Bool}=nothing,
                                                     world::UInt=ctx.world)
-    graph = ensure_scope_attributes!(ctx.graph)
     enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
-    ctx2 = ScopeResolutionContext(graph, ctx.layer, ctx.bindings,
+    ctx2 = ScopeResolutionContext(ctx.layer, ctx.bindings,
                                   Dict{ScopeLayer, Int}(),
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
                                   Set{NameKey}(), Dict{IdTag, IdTag}(),
@@ -965,9 +960,9 @@ enclosing lambda form and information about variables captured by closures.
                                   enable_soft_scopes,
                                   world)
     ex2 = resolve_scopes(ctx2, ex)
-    ctx3 = VariableAnalysisContext(graph, ctx2.layer, ctx2.bindings,
+    ctx3 = VariableAnalysisContext(ctx2.layer, ctx2.bindings,
                                    ctx2.scopes, lambda_bindings(ex2[1]), true,
-                                   SyntaxList(graph), Vector{ClosureKey}(),
+                                   SyntaxList(), Vector{ClosureKey}(),
                                    Dict{ClosureKey,ClosureBindings}(),
                                    ctx2.sp_typevars, ctx2.tv_deps, Set{IdTag}())
     analyze_variables!(ctx3, ex2)

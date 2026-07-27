@@ -50,8 +50,6 @@ Lexical scope ID
 """
 const ScopeId = Int
 
-JuliaSyntax.SyntaxList(ctx::AbstractLoweringContext) = SyntaxList()
-
 const DEFAULT_NODE = SyntaxTree(
     K"None", nothing, nothing, LineNumberNode(0), nothing)
 
@@ -155,7 +153,8 @@ nothing_(ctx, ex) = newleaf(ex, K"nothing")
 # Return (variable, assignment_node)
 function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
     var = ssavar(ctx, ex, name)
-    assign_var = newnode(ex, K"=", tree_ids(var, ex))
+    assign_var = @mknode(;source=ex, context=ex.context, kind=K"=",
+                         children=SyntaxList(var, ex))
     var, assign_var
 end
 
@@ -164,7 +163,7 @@ function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
         return ex
     end
     var = ssavar(ctx, ex, name)
-    push!(stmts, newnode(ex, K"=", tree_ids(var, ex)))
+    push!(stmts, newnode(ex, K"=", SyntaxList(var, ex)))
     var
 end
 
@@ -190,7 +189,7 @@ function _append_nodeids!(ids::Vector{SyntaxTree}, vals)
     end
 end
 function _append_nodeids!(ids::Vector{SyntaxTree}, vals::SyntaxList)
-    append!(ids, vals.ids)
+    append!(ids, vals)
 end
 
 function _match_kind(srcref, ex, jl_line)
@@ -271,6 +270,8 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
             Expr(:macrocall, var"@mknode", jl_line.value, kws)
         end
     elseif Meta.isexpr(tree, :(:=))
+        ctx === nothing && throw(ArgumentError(
+            "@ast requires ctx arg for `:=` assignments $__source__"))
         lhs = tree.args[1]
         rhs = _expand_ast_tree(ctx, srcref, tree.args[2], jl_line)
         ssadef = gensym("ssadef")
@@ -292,7 +293,7 @@ end
 
 Syntactic s-expression shorthand for constructing a `SyntaxTree` AST.
 
-* `ctx` - SyntaxGraph context
+* `ctx` - Lowering context
 * `srcref` - Reference to the source code from which this AST was derived.
 
 The `tree` contains syntax of the following forms:
@@ -337,10 +338,14 @@ Any `kind` can be replaced with an expression of the form
 """
 macro ast(ctx, srcref, tree)
     @gensym ctx_gs srcref_gs
-    quote
-        let $ctx_gs = $ctx, $srcref_gs = $srcref::$SyntaxTree
-            $(_expand_ast_tree(ctx_gs, srcref_gs, tree, QuoteNode(__source__)))
-        end
+    assigns = if ctx isa Symbol && all(==('_'), string(ctx))
+        :(let $srcref_gs = $srcref::$SyntaxTree
+              $(_expand_ast_tree(nothing, srcref_gs, tree, QuoteNode(__source__)))
+          end)
+    else
+        :(let $ctx_gs = $ctx, $srcref_gs = $srcref::$SyntaxTree
+              $(_expand_ast_tree(ctx_gs, srcref_gs, tree, QuoteNode(__source__)))
+          end)
     end |> esc
 end
 
@@ -491,5 +496,5 @@ with_stmts(ctx, stmts) = StatementListCtx(ctx, stmts)
 with_stmts(ctx::StatementListCtx, stmts) = StatementListCtx(ctx.ctx, stmts)
 
 function with_stmts(ctx)
-    StatementListCtx(ctx, SyntaxList(ctx))
+    StatementListCtx(ctx, SyntaxList())
 end

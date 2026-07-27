@@ -169,8 +169,8 @@ function ccall_macro_parse(ctx, exs)
     end
 
     # collect args and types
-    args = SyntaxList(ctx)
-    types = SyntaxList(ctx)
+    args = SyntaxList()
+    types = SyntaxList()
     function pusharg!(at)
         @stm at begin
             [K"::" a t] -> (push!(args, a); push!(types, t))
@@ -382,12 +382,12 @@ function _legacy_quote_to_syntax(st::SyntaxTree, depth, force::Bool)
         @mknode(st; kind=K"syntaxunquote")
     else
         depth2 = k === K"quote" ? depth + 1 : k === K"$" ? depth - 1 : depth
-        cs = SyntaxList(st._graph)
+        cs = SyntaxList()
         for c in children(st)
             # Convert multi-unquote to single unquote
             if depth2 == 1 && kind(c) === K"$" && numchildren(c) > 1
                 for c2 in children(c)
-                    push!(cs, @ast st._graph c [K"$" c2])
+                    push!(cs, @ast _ c [K"$" c2])
                 end
             else
                 push!(cs, c)

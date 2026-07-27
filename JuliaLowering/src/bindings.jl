@@ -122,8 +122,8 @@ function _new_binding(bindings::Bindings, srcref::SyntaxTree,
     # A binding is only useful when it shows up in the tree, so create its tree
     # node eagerly and share it among uses (see `binding_ex`)
     bid = next_binding_id(bindings)
-    ex = @ast srcref._graph srcref bid::K"BindingId"
-    b = BindingInfo(bindings, name, kind, ex._id; kws...)
+    ex = @ast _ srcref bid::K"BindingId"
+    b = BindingInfo(bindings, name, kind, ex; kws...)
     return b
 end
 

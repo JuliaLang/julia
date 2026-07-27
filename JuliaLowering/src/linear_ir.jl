@@ -54,7 +54,6 @@ function FinallyHandler(tagvar::SyntaxTree, target::JumpTarget)
         Vector{Tuple{Symbol, Union{Nothing,SyntaxTree}}}())
 end
 
-
 """
 Context for creating linear IR.
 
@@ -62,7 +61,6 @@ One of these is created per lambda expression to flatten the body down to
 a sequence of statements (linear IR), which eventually becomes one CodeInfo.
 """
 mutable struct LinearIRContext <: AbstractLoweringContext
-    const graph::SyntaxGraph
     const code::Vector{SyntaxTree}
     const bindings::Bindings
     const next_label_id::Base.RefValue{Int}
@@ -88,12 +86,12 @@ function rettype(ctx::LinearIRContext)
     end
 end
 
-function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings)
-    LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
+function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings)
+    LinearIRContext(SyntaxList(), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(),
                     Ref{Union{Nothing,NodeId}}(nothing),
                     Dict{String,JumpTarget}(), String[],
-                    SyntaxList(ctx), SyntaxList(ctx),
+                    SyntaxList(), SyntaxList(),
                     Vector{FinallyHandler}(), Dict{String,JumpTarget}(),
                     Vector{JumpOrigin}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
 end
@@ -161,7 +159,7 @@ function compile_args(ctx, args)
     # Otherwise, we need to use ssa values for all arguments to ensure proper
     # left-to-right evaluation semantics.
     all_simple = all(a->is_simple_arg(ctx, a), args)
-    args_out = SyntaxList(ctx)
+    args_out = SyntaxList()
     for arg in args
         arg_val = compile(ctx, arg, true, false)
         if isnothing(arg_val)
@@ -260,7 +258,7 @@ function _actually_return(ctx, ex)
     if !simple_ret_val
         ex = emit_assign_tmp(ctx, ex, "return_tmp")
     end
-    emit_pop_exception(ctx, ex, SyntaxList(ctx.graph))
+    emit_pop_exception(ctx, ex, SyntaxList())
     emit(ctx, @ast ctx ex [K"return" ex])
     return nothing
 end
@@ -503,9 +501,9 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     end_label = !in_tail_pos || has_finally_block ? make_label(ctx, ex) : nothing
     try_result = needs_value && !in_tail_pos ? new_local_binding(ctx, ex, "try_result") : nothing
 
-    enter_scope_arg = SyntaxList(ctx)
+    enter_scope_arg = SyntaxList()
     if scope !== nothing
-        args = SyntaxList(ctx)
+        args = SyntaxList()
         push!(args, scope)
         enter_scope_arg = compile_args(ctx, args)
     end
@@ -1129,7 +1127,7 @@ function renumber_body(ctx, input_code, slot_rewrites)
     # Step 1: Remove any assignments to SSA variables, record the indices of labels
     ssa_rewrites = Dict{IdTag,IdTag}()
     label_table = Dict{Int,Int}()
-    code = SyntaxList(ctx)
+    code = SyntaxList()
     for ex in input_code
         k = kind(ex)
         ex_out = nothing
@@ -1183,10 +1181,10 @@ function compile_lambda(outer_ctx, ex)
     lambda_args = ex[2]
     static_parameters = ex[3]
     ctx = LinearIRContext(
-        outer_ctx.graph, outer_ctx, k === K"toplevel_lambda", lbs)
+        outer_ctx, k === K"toplevel_lambda", lbs)
     if numchildren(ex) == 5
         tmp = ssavar(ctx, ex[5], "rett")
-        ctx.rettype_ssa[] = tmp._id
+        ctx.rettype_ssa[] = tmp
         compile(ctx, @ast(ctx, ex[5], [K"=" tmp ex[5]]), false, false)
     end
     for arg in children(lambda_args)
@@ -1242,7 +1240,7 @@ function compile_lambda(outer_ctx, ex)
         @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i
     end
-    let ns_slots = SyntaxList(ctx)
+    let ns_slots = SyntaxList()
         for (i, s) in enumerate(slots)
             if s.is_nospecialize
                 s.kind === :argument || throw(LoweringError(
@@ -1271,9 +1269,6 @@ function compile_lambda(outer_ctx, ex)
     k === K"toplevel_lambda" ? @ast(ctx, ex, [K"thunk" out]) : out
 end
 
-ensure_linearization_attributes!(graph) =
-    ensure_scope_attributes!(graph)
-
 """
 This pass converts nested ASTs in the body of a lambda into a list of
 statements (ie, Julia's linear/untyped IR).
@@ -1283,8 +1278,7 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
 `K"BindingId"` into `K"slot"`, `K"globalref"` or `K"SSAValue"` as appropriate.
 """
 @fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
-    graph = ensure_linearization_attributes!(ctx.graph)
-    ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings())
+    ctx_out = LinearIRContext(ctx, false, LambdaBindings())
     ex_out = compile_lambda(ctx_out, ex)
     ctx_out, ex_out
 end

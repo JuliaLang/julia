@@ -91,12 +91,6 @@ function node_string(ex::SyntaxTree, depth=0)
     return out
 end
 
-function Base.getproperty(ex::SyntaxTree, name::Symbol)
-    name === :_graph && return SyntaxGraph()
-    name === :_id  && return ex
-    return getfield(ex, name)
-end
-
 function Base.get(ex::SyntaxTree, name::Symbol, default)
     !hasattr(ex, name) && return default
     name === :kind  && return getfield(ex, :kind)
@@ -373,7 +367,7 @@ API.  As of writing this, the user has more freedom than they should have.
 SyntaxList of [st.source, st.source.source, ..., textref]
 """
 function provenance(st::SyntaxTree)
-    prov = SyntaxList(st._graph)
+    prov = SyntaxList()
     s = st.source
     while s isa NodeId
         push!(prov, s)
@@ -441,7 +435,7 @@ The resulting list should be in the order
 `[outermost_macrocall, innermost_macrocall, ..., expression_textref]`.
 """
 function flattened_provenance(st::SyntaxTree)
-    _flattened_provenance(st, SyntaxList(st._graph))
+    _flattened_provenance(st, SyntaxList())
 end
 
 # Only recurse on the first macro source in any source chain
@@ -463,27 +457,13 @@ function sourcetext(ex::SyntaxTree)
     view(sf, byte_range(ex))
 end
 
+# TODO (refactoring): make SyntaxList an immutable wrapper around node children
 const SyntaxList = Vector{SyntaxTree}
 
-function Base.getproperty(sl::SyntaxList, name::Symbol)
-    name === :graph && return SyntaxGraph()
-    name === :ids && return sl
-    return getfield(sl, name)
-end
-
-function SyntaxList(graph::SyntaxGraph, ids::AbstractVector{NodeId})
-    collect(ids)
-end
-
-SyntaxList(graph::SyntaxGraph) = SyntaxList()
 SyntaxList(rest::SyntaxTree...) = SyntaxTree[rest...]
-tree_ids(sts::SyntaxTree...) = NodeId[st._id for st in sts]
-
-syntax_graph_js(s::SyntaxGraph) = s
-syntax_graph_js(any) = SyntaxGraph()
 
 function mapsyntax(f, exs::AbstractVector{SyntaxTree})
-    out = SyntaxList(syntax_graph_js(exs))
+    out = SyntaxList()
     for ex in exs
         push!(out, f(ex))
     end
@@ -491,7 +471,7 @@ function mapsyntax(f, exs::AbstractVector{SyntaxTree})
 end
 
 function mapindex(sl::SyntaxList, i::Int)
-    out = SyntaxList(syntax_graph_js(sl))
+    out = SyntaxList()
     for st in sl
         push!(out, getindex(st, i))
     end
@@ -502,9 +482,9 @@ end
 # AST creation utilities
 
 """
-    newnode(graph::SyntaxGraph, prov::SourceAttrType, k::Kind, children)
+    newnode(prov::SourceAttrType, k::Kind, children)
 
-Add a new node to `graph` with reference to parsed source text `prov`.
+Create a new node with reference to parsed source text `prov`.
 """
 function newnode(prov::SourceAttrType, k::Kind, children)
     context = prov isa SyntaxTree ? prov.context : nothing
@@ -521,7 +501,7 @@ end
 """
 function mknode(old::SyntaxTree, children)
     st = mkleaf(old)
-    setchildren!(st._id, children)
+    setchildren!(st, children)
     return st
 end
 function mkleaf(old::SyntaxTree)
@@ -571,18 +551,14 @@ end
 Recursively copy AST `ex` into `ctx`.  Every node in `ex` should be copied at
 most once.
 
-TODO: This should no longer be necessary if SyntaxTree is immutable and we no
-longer need to move them between graphs.
+TODO: Likely unecessary with immutable tree
 """
 function copy_ast(ctx, ex::SyntaxTree)
-    graph1 = syntax_graph_js(ex)
-    graph2 = syntax_graph_js(ctx)
-    # @assert graph1 !== graph2 "use mktree(ex) for this"
-    id2 = _copy_ast(graph2, graph1, ex._id, Dict{NodeId, NodeId}())
+    id2 = _copy_ast(ex, Dict{NodeId, NodeId}())
     return id2
 end
 
-function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph, id1::NodeId, seen)
+function _copy_ast(id1::NodeId, seen)
     let copied = get(seen, id1, nothing)
         isnothing(copied) || return copied
     end
@@ -591,13 +567,13 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph, id1::NodeId, seen)
     if !is_leaf(id1)
         cs = NodeId[]
         for cid in children(id1)
-            push!(cs, _copy_ast(graph2, graph1, cid, seen))
+            push!(cs, _copy_ast(cid, seen))
         end
         setchildren!(id2, cs)
     end
     src1 = get(id1, :source, nothing)
     if src1 isa NodeId
-        src2 =  _copy_ast(graph2, graph1, src1, seen)
+        src2 =  _copy_ast(src1, seen)
         setattr!(id2, :source, src2)
     elseif !isnothing(src1)
         setattr!(id2, :source, src1)
@@ -665,14 +641,13 @@ end
 Give each descendent of `st` a `parent::NodeId` attribute.
 """
 function annotate_parent!(st::SyntaxTree)
-    g = syntax_graph_js(st)
     st = unalias_nodes(st)
-    mapchildren(t->_annotate_parent!(t, st._id), st)
+    mapchildren(t->_annotate_parent!(t, st), st)
 end
 
 function _annotate_parent!(st::SyntaxTree, pid::NodeId)
     setmeta!(st, :parent, pid)
-    mapchildren(t->_annotate_parent!(t, st._id), st)
+    mapchildren(t->_annotate_parent!(t, st), st)
 end
 
 #-------------------------------------------------------------------------------
@@ -945,13 +920,12 @@ end
 function build_tree(::Type{SyntaxTree}, stream::ParseStream;
                     filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
-    graph = SyntaxGraph()
     sf = Ref(SourceFile(stream; filename, first_line))
     source = SourceRef(sf, first_byte(stream), last_byte(stream))
-    cs = SyntaxList(graph)
+    cs = SyntaxList()
     for c in reverse_toplevel_siblings(cursor)
         is_trivia(c) && !is_error(c) && continue
-        push!(cs, SyntaxTree(graph, sf, c))
+        push!(cs, SyntaxTree(sf, c))
     end
     # There may be multiple non-trivia toplevel nodes (e.g. parse error)
     length(cs) === 1 && return only(cs)
@@ -959,11 +933,11 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     return id
 end
 
-function SyntaxTree(graph::SyntaxGraph, sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor)
+function SyntaxTree(sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor)
     green_id = GC.@preserve sf begin
         raw_offset, txtbuf = _unsafe_wrap_substring(sf[].code)
         offset = raw_offset - sf[].byte_offset
-        _insert_green(graph, sf, txtbuf, offset, cursor)
+        _insert_green(sf, txtbuf, offset, cursor)
     end
     gst = green_id
     out = _green_to_est(gst, 0, gst)
@@ -971,7 +945,7 @@ function SyntaxTree(graph::SyntaxGraph, sf::Base.RefValue{SourceFile}, cursor::R
     return out
 end
 
-function _insert_green(graph::SyntaxGraph, sf::Base.RefValue{SourceFile},
+function _insert_green(sf::Base.RefValue{SourceFile},
                        txtbuf::Vector{UInt8}, offset::Int,
                        cursor::RedTreeCursor)
     source = SourceRef(sf, first_byte(cursor), last_byte(cursor))
@@ -980,9 +954,9 @@ function _insert_green(graph::SyntaxGraph, sf::Base.RefValue{SourceFile},
         f != 0 && setattr!(id, :syntax_flags, f)
     end
     if !is_leaf(cursor)
-        cs = SyntaxList(graph)
+        cs = SyntaxList()
         for c in reverse(cursor)
-            push!(cs, _insert_green(graph, sf, txtbuf, offset, c))
+            push!(cs, _insert_green(sf, txtbuf, offset, c))
         end
         setchildren!(id, reverse!(cs))
     else
@@ -1026,7 +1000,6 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         return nothing
     end
 
-    graph = syntax_graph_js(st)
     k = kind(st)
     syntax_name(x) = x.value::String
     symleaf(s::String) = setattr!(newleaf(st, K"Identifier"), :value, s)
@@ -1054,7 +1027,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 v isa UInt128 ? "@uint128_str" : "@big_str"
             mac = core_globalref(macname)
             arg = valleaf(replace(sourcetext(st), '_'=>""))
-            ret_cids = tree_ids(mac, valleaf(nothing), arg)
+            ret_cids = SyntaxList(mac, valleaf(nothing), arg)
             newnode(st, K"macrocall", ret_cids)
         elseif k === K"error"
             mkleaf(st)
@@ -1078,7 +1051,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (cmdstring _...) => (macrocall Core.@cmd lno joined_str)
         cmd_arg = _string_to_est(st, cs; unwrap_literal=true)
         loc_st = valleaf(source_location(LineNumberNode, st))
-        return newnode(st, K"macrocall", tree_ids(
+        return newnode(st, K"macrocall", SyntaxList(
             core_globalref("@cmd"), loc_st, cmd_arg))
     elseif k === K"macro_name" && n_cs === 1
         # "M.@x" => (. M (macro_name x)) => (. M @x)
@@ -1094,8 +1067,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 (lhs, raw_m) = _green_to_est(cs[1], 1, inner_cs[1]), inner_cs[2]
                 mname_s = lower_identifier_name(syntax_name(raw_m), K"macro_name")
                 mname = setattr!(mkleaf(raw_m), :value, mname_s)
-                mname_inert = newnode(raw_m, K"inert", tree_ids(mname))
-                return mknode(inner_st, tree_ids(lhs, mname_inert))
+                mname_inert = newnode(raw_m, K"inert", SyntaxList(mname))
+                return mknode(inner_st, SyntaxList(lhs, mname_inert))
             else
                 return _green_to_est(parent, 1, inner_st)
             end
@@ -1108,13 +1081,13 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         op_s = string(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
-        out = newnode(st, K"unknown_head", tree_ids(lhs, rhs))
+        out = newnode(st, K"unknown_head", SyntaxList(lhs, rhs))
         return setattr!(out, :value, op_s)
     elseif k === K".op=" && n_cs === 3
         op_s = '.' * string(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
-        out = newnode(st, K"unknown_head", tree_ids(lhs, rhs))
+        out = newnode(st, K"unknown_head", SyntaxList(lhs, rhs))
         return setattr!(out, :value, op_s)
     elseif k === K"op=" && n_cs === 1
         # (op= +) => +=   (the operator name itself, eg when quoted as `:(+=)`)
@@ -1166,7 +1139,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 # (dotcall f args...) => (. f (tuple args...))
                 ret_cs = _map_green_to_est(st, cs)
                 tuple = newnode(st, K"tuple", ret_cs[2:end])
-                return newnode(st, K".", tree_ids(ret_cs[1], tuple))
+                return newnode(st, K".", SyntaxList(ret_cs[1], tuple))
             else
                 # (dotcall + args...) => (call .+ args...)
                 ret_k = K"call"
@@ -1182,8 +1155,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             lhs = _green_to_est(st, 1, cs[1])
             rhs = _green_to_est(st, 2, cs[2])
             inert_rhs = kind(rhs) in KSet"quote inert" ? rhs :
-                newnode(cs[2], K"inert", tree_ids(rhs))
-            return mknode(st, tree_ids(lhs, inert_rhs))
+                newnode(cs[2], K"inert", SyntaxList(rhs))
+            return mknode(st, SyntaxList(lhs, inert_rhs))
         elseif n_cs === 1
             # (. x) => (. x) or .x
             # TODO: This is the one place where K"parens" change the result,
@@ -1288,10 +1261,10 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             end
             g_out = mknode(st, gen_cs)
             if c !== cs[end]
-                g_out = newnode(c, K"flatten", tree_ids(g_out))
+                g_out = newnode(c, K"flatten", SyntaxList(g_out))
             end
         end
-        return setattr!(g_out, :source, st._id) # outermost provenance
+        return setattr!(g_out, :source, st) # outermost provenance
     elseif k === K"filter"
         @assert n_cs === 2
         # (filter (iteration is...) cond) => (filter cond is...)
@@ -1308,11 +1281,11 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (elseif cond body) => (elseif (block cond) body)
         # RGN->Expr block-wraps for linenodes; we do it for parity
         ret_cs = _map_green_to_est(st, cs)
-        ret_cs[1] = newnode(cs[1], K"block", tree_ids(ret_cs[1]))
+        ret_cs[1] = newnode(cs[1], K"block", SyntaxList(ret_cs[1]))
         return mknode(st, ret_cs)
     elseif k === K"->" && kind(cs[2]) !== K"block"
         ret_cs = _map_green_to_est(st, cs)
-        ret_cs[2] = newnode(cs[2], K"block", tree_ids(ret_cs[2]))
+        ret_cs[2] = newnode(cs[2], K"block", SyntaxList(ret_cs[2]))
         return mknode(st, ret_cs)
     elseif k === K"function" && n_cs >= 2 &&
         has_flags(st, SHORT_FORM_FUNCTION_FLAG)
@@ -1320,7 +1293,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # exception: no block on "x' = y", or if body is already a block
         if kind(cs[2]) !== K"block" && !is_postfix_op_call(cs[1])
             ret_cs = _map_green_to_est(st, cs)
-            ret_cs[2] = newnode(cs[2], K"block", tree_ids(ret_cs[2]))
+            ret_cs[2] = newnode(cs[2], K"block", SyntaxList(ret_cs[2]))
             return newnode(st, K"=", ret_cs)
         end
         ret_k = K"="
@@ -1331,8 +1304,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (quote something_simple) => (inert something_simple)
         ret_c = _green_to_est(st, 1, cs[1])
         return is_leaf(ret_c) && kind(ret_c) !== K"Bool" ?
-            newnode(st, K"inert", tree_ids(ret_c)) :
-            mknode(st, tree_ids(ret_c))
+            newnode(st, K"inert", SyntaxList(ret_c)) :
+            mknode(st, SyntaxList(ret_c))
     elseif k === K"do"
         ret_k = K"->"
     elseif k === K"block"
@@ -1344,9 +1317,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         if kind(parent) === K"let" && parent_i === 1 && n_cs === 1
             out = _green_to_est(st, 1, cs[1])
             return kind(out) in KSet"Identifier = ::" ? out :
-                mknode(st, tree_ids(out))
+                mknode(st, SyntaxList(out))
         elseif kind(parent) === K"struct" && parent_i === 3
-            cs_tmp = SyntaxList(graph)
+            cs_tmp = SyntaxList()
             for c in cs
                 kind(c) === K"doc" ?
                     append!(cs_tmp, preprocessed_green_children(c)) :
@@ -1359,7 +1332,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (local (tuple a b c)) => (local a b c)
         if kind(cs[1]) === K"const"
             ret_c1_cs = _map_green_to_est(st, preprocessed_green_children(cs[1]))
-            ret_cs = tree_ids(mknode(st, ret_c1_cs))
+            ret_cs = SyntaxList(mknode(st, ret_c1_cs))
             return mknode(cs[1], ret_cs)
         elseif kind(cs[1]) === K"tuple"
             cs = preprocessed_green_children(cs[1])
@@ -1404,7 +1377,7 @@ end
 
 function _map_green_to_est(parent::SyntaxTree, cs;
                            kw_in_params=false, undef_parent=false)
-    ret_cs = SyntaxList(SyntaxGraph())
+    ret_cs = SyntaxList()
     for (i, c) in enumerate(cs)
         new_c = _green_to_est(parent, undef_parent ? 0 : i, c; kw_in_params)
         @assert should_include_node(new_c)
@@ -1452,7 +1425,7 @@ end
 function _make_do_expression(st::SyntaxTree, args::SyntaxList, doex::SyntaxTree)
     ret_doex = _green_to_est(st, 0, doex)
     ret_callex = mknode(st, _map_green_to_est(st, args))
-    return newnode(st, K"do", tree_ids(ret_callex, ret_doex))
+    return newnode(st, K"do", SyntaxList(ret_callex, ret_doex))
 end
 
 # A `string` or `cmdstring` may have multiple literal strings within (from
@@ -1467,7 +1440,7 @@ end
 # Converting children-first (as _string_to_Expr does) would make this much
 # harder by converting literal strings without the parent's knowledge
 function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
-    ret_cs = SyntaxList(st._graph)
+    ret_cs = SyntaxList()
     literal_k = kind(st) === K"cmdstring" ? K"CmdString" : K"String"
     cur_str = false
     next_str = length(cs) > 0 && kind(cs[1]) === literal_k

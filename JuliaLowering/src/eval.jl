@@ -384,9 +384,6 @@ end
 
 # TODO sourcefile(::LNN) should return Symbol, not LNN
 function _di_sourcefile(st)
-    # if st.context.unexpanded isa SyntaxTree
-    #     @jl_assert st.context.unexpanded._graph === st._graph (st, "bad unexpanded: different graph") (st.context.unexpanded, "this is the unexpanded tree")
-    # end
     x = JuliaSyntax.unexpanded_sourceref(st)
     x isa LineNumberNode ? x.file : x.file[]::SourceFile
 end
@@ -396,13 +393,13 @@ function collect_locs!(node_sources, codeinfos, top_sf, st)
     if kind(st) === K"code_info"
         push!(codeinfos, st)
         # TODO: macro_source is ignored for now
-        get!(node_sources, st._id, _di_pos(st))
+        get!(node_sources, st, _di_pos(st))
         for c in children(st[2])
-            node_sources[c._id] =
+            node_sources[c] =
                 if _di_sourcefile(c) !== top_sf
                     top_sf isa SourceFile &&
                         @warn "inconsistent provenance for child" c st
-                    node_sources[st._id]
+                    node_sources[st]
                 else
                     _di_pos(c)
                 end
@@ -425,9 +422,9 @@ function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
     locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[2]))
         for c in children(st[2])
             if top_sbt isa String # precise provenance
-                push!(a, Int32(searchsortedfirst(spans, node_sources[c._id])))
+                push!(a, Int32(searchsortedfirst(spans, node_sources[c])))
             else
-                i = searchsortedfirst(spans, node_sources[c._id])
+                i = searchsortedfirst(spans, node_sources[c])
                 @jl_assert spans[i][2] == LINENODE_SPAN_END (c, "lno with span end?")
                 push!(a, spans[i][1])
             end
@@ -447,7 +444,7 @@ end
 function add_debuginfo!(st::SyntaxTree)
     @jl_assert kind(st) === K"code_info" st
     node_sources = Dict{NodeId, Tuple{Int32, Int32}}()
-    codeinfos = SyntaxList(st._graph)
+    codeinfos = SyntaxList()
     top_sf = _di_sourcefile(st)
     collect_locs!(node_sources, codeinfos, top_sf, st)
     byte_precise = _has_byte_precise_debuginfo && top_sf isa SourceFile

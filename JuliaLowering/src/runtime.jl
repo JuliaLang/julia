@@ -74,14 +74,14 @@ function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
     k = kind(st)
     inner_depth = k == K"syntaxquote" ? depth + 1 :
         k == K"syntaxunquote" ? depth - 1 : depth
-    cs_out = SyntaxList(st._graph)
+    cs_out = SyntaxList()
     for c in children(st)
         if kind(c) == K"syntaxunquote" && inner_depth == 0
             tup = vals[val_i[] += 1]::Tuple
             @jl_assert numchildren(c) == 1 st
             @jl_assert kind(c[1]) === K"..." || length(tup) == 1 st
             for v in tup
-                v2 = !(v isa SyntaxTree) ? expr_to_est(st._graph, v, c._id) : v
+                v2 = !(v isa SyntaxTree) ? expr_to_est(v, c) : v
                 push!(cs_out, v2)
             end
         else
@@ -94,7 +94,7 @@ function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     # TODO: copy probably not required if immutable
     st = mktree(st)
     val_i = Ref(0)
-    out = __interpolate_syntax((@ast st._graph st [K"None" st]), 0, vals, val_i)
+    out = __interpolate_syntax((@ast _ st [K"None" st]), 0, vals, val_i)
     @jl_assert val_i[] == length(vals) st
     @jl_assert numchildren(out) == 1 st
     out[1]
@@ -268,7 +268,7 @@ struct GeneratedFunctionStub
 end
 
 function _gen_args_from_syms(ctx, src, args, sc)
-    out = SyntaxList(ctx.graph)
+    out = SyntaxList()
     for a in args
         id = newleaf(src, K"Identifier", string(a))
         id = _est_to_dst_ident(id) # support placeholders
@@ -289,9 +289,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     #
     # TODO: Reduce duplication where possible.
 
-    graph = ensure_desugaring_attributes!(SyntaxGraph())
     __module__ = source.module
-
     sc = g.syntax_context
 
     # Run code generator - this acts like a macro expander
@@ -301,22 +299,21 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     world = Base.tls_world_age()
 
     # Lower the generated code in the lowering world
-    return invoke_in_lowering_world(_lower_generated_code, g, source, graph, sc,
+    return invoke_in_lowering_world(_lower_generated_code, g, source, sc,
                                    __module__, world, ex0)
 end
 
-function _lower_generated_code(g::GeneratedFunctionStub, source::Method, graph,
+function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
                                sc::SyntaxContext, __module__::Module,
                                world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
-        ex0 = expr_to_est(
-            graph, ex0, source_location(LineNumberNode, g.srcref))
+        ex0 = expr_to_est(ex0, source_location(LineNumberNode, g.srcref))
     end
     # TODO: rebase mistake above?
     if !(ex0 isa SyntaxTree)
         ex0 isa Expr && throw(LoweringError(
             ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
-        ex0 = expr_to_est(graph, ex0, g.srcref)
+        ex0 = expr_to_est(ex0, g.srcref)
     end
 
     @jl_assert base_layer(sc).mod == __module__ ex0

@@ -373,7 +373,7 @@ end
     g = st._graph
 
     # constructors
-    sl0 = SyntaxList(g)
+    sl0 = SyntaxList()
     @test sl0 isa SyntaxList
     @test length(sl0) == 0
     @test syntax_graph(sl0) == g

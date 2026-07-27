@@ -329,14 +329,14 @@ end
 
 function _flatten_blocks(st::SyntaxTree)
     if kind(st) === K"block"
-        out = SyntaxList(st._graph)
+        out = SyntaxList()
         for c in children(st)
             append!(out, _flatten_blocks(c))
         end
         # special case: an empty final block has value nothing
         if (length(children(st)) > 0 && kind(st[end]) === K"block" &&
             numchildren(st[end]) == 0)
-            push!(out, @ast st._graph st[end] (::K"nothing"))
+            push!(out, @ast _ st[end] (::K"nothing"))
         end
         return out
     elseif is_quoted(st)

@@ -11,7 +11,6 @@ struct ClosureInfo
 end
 
 mutable struct ClosureConversionCtx <: AbstractLoweringContext
-    const graph::SyntaxGraph
     const bindings::Bindings
     const mod::Module
     const closure_bindings::Dict{ClosureKey,ClosureBindings}
@@ -143,7 +142,7 @@ end
 function convert_global_assignment(ctx, ex, var, rhs0)
     binfo = get_binding(ctx, var)
     @jl_assert binfo.kind == :global ex var
-    stmts = SyntaxList(ctx)
+    stmts = SyntaxList()
     decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true)
     if kind(decl) !== K"TOMBSTONE"
         push!(stmts, decl)
@@ -240,7 +239,7 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
     end
     foreach(add_capt, closure_binds.capt_sp)
 
-    field_syms = SyntaxList(ctx)
+    field_syms = SyntaxList()
     if is_opaque
         field_orig_bindings = sort!(collect(capt_locals))
         # For opaque closures we don't try to generate sensible names for the
@@ -276,7 +275,7 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
         push!(field_is_box, is_boxed(ctx, id))
         field_inds[id] = i
     end
-    capt_sp2 = SyntaxList(ctx)
+    capt_sp2 = SyntaxList()
     for sp in sort!(collect(capt_sp))
         push!(capt_sp2, binding_ex(ctx, sp))
     end
@@ -345,7 +344,7 @@ function convert_local_function_decl(ctx, ex)
     type_params = mapsyntax(capt_sp) do sp
         is_self_captured(ctx, sp) ? captured_var_access(ctx, sp) : sp
     end
-    init_closure_args = SyntaxList(ctx)
+    init_closure_args = SyntaxList()
     for (id, boxed) in zip(field_orig_bindings, field_is_box)
         field_val = binding_ex(ctx, id)
         if is_self_captured(ctx, field_val)
@@ -378,9 +377,9 @@ end
 # closure definition statements to occur before the other content of `ex`.
 function map_cl_convert(ctx::ClosureConversionCtx, ex)
     if ctx.toplevel
-        toplevel_stmts = SyntaxList(ctx)
+        toplevel_stmts = SyntaxList()
         ctx2 = ClosureConversionCtx(
-            ctx.graph, ctx.bindings, ctx.mod,
+            ctx.bindings, ctx.mod,
             ctx.closure_bindings, ctx.capture_rewriting, ctx.top_bindings,
             ctx.lambda_bindings, ctx.sp_typevars, true, ctx.lifted,
             ctx.toplevel_pure, toplevel_stmts, ctx.closure_infos)
@@ -488,7 +487,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             append!(sp_ids, syntax_id(sp) for sp in cr.capt_sp)
         end
         sort!(sp_ids)
-        sps = SyntaxList(ctx)
+        sps = SyntaxList()
         for id in sp_ids
             push!(sps, binding_ex(ctx, id))
         end
@@ -533,7 +532,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         is_closure = kind(name) == K"BindingId" && get_binding(ctx, name).kind === :local
         cap_rewrite = is_closure ? ctx.closure_infos[closure_key(ctx, name)] : nothing
         ctx2 = ClosureConversionCtx(
-            ctx.graph, ctx.bindings, ctx.mod,
+            ctx.bindings, ctx.mod,
             ctx.closure_bindings, cap_rewrite,
             ctx.top_bindings, ctx.lambda_bindings, ctx.sp_typevars,
             ctx.toplevel, true, ctx.toplevel_pure, ctx.toplevel_stmts,
@@ -563,7 +562,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         capture_rewrites = ClosureInfo(
             ck, ex #=unused=#, field_syms, field_inds, capt_sp)
         ctx2 = ClosureConversionCtx(
-            ctx.graph, ctx.bindings, ctx.mod,
+            ctx.bindings, ctx.mod,
             ctx.closure_bindings, capture_rewrites, ctx.top_bindings,
             ctx.lambda_bindings, ctx.sp_typevars, false, false,
             ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos)
@@ -572,7 +571,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         rt_lb = _convert_closures(ctx, ex[3])
         rt_ub = _convert_closures(ctx, ex[4])
 
-        init_closure_args = SyntaxList(ctx)
+        init_closure_args = SyntaxList()
         for id in field_orig_bindings
             init_arg = binding_ex(ctx, id)
             if is_self_captured(ctx, init_arg)
@@ -590,7 +589,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 ex[6] # nargs
                 ex[7] # is_va
                 ex[8] # functionloc
-                closure_convert_lambda(ctx2, ex[9], SyntaxList(ctx))
+                closure_convert_lambda(ctx2, ex[9], SyntaxList())
             ]
             init_closure_args...
         ]
@@ -606,25 +605,25 @@ function closure_convert_lambda(ctx, ex, sps)
     interpolations = nothing
     if isnothing(ctx.capture_rewriting)
         # Global method which may capture locals
-        interpolations = SyntaxList(ctx)
+        interpolations = SyntaxList()
         cap_rewrite = interpolations
     else
         cap_rewrite = ctx.capture_rewriting
     end
     ctx2 = ClosureConversionCtx(
-        ctx.graph, ctx.bindings, ctx.mod,
+        ctx.bindings, ctx.mod,
         ctx.closure_bindings, cap_rewrite, ctx.top_bindings,
         lbs, ctx.sp_typevars,
         k === K"toplevel_lambda", k === K"toplevel_lambda",
         ctx.toplevel_pure && k == K"generated_lambda",
         ctx.toplevel_stmts, ctx.closure_infos)
-    lambda_children = SyntaxList(ctx)
+    lambda_children = SyntaxList()
     push!(lambda_children, ex[1])
     push!(lambda_children, ex[2])
     push!(lambda_children, @ast ctx ex[3] [K"block" sps...])
 
     # Add box initializations for arguments which are captured by an inner lambda
-    body_stmts = SyntaxList(ctx)
+    body_stmts = SyntaxList()
     for arg in children(ex[2])
         kind(arg) != K"Placeholder" || continue
         if is_boxed(ctx, arg)
@@ -682,11 +681,10 @@ Invariants:
     # TODO: ctx.mod is used instead of syntax_module(ex) beyond this point,
     # which is dubious
     lbs = lambda_bindings(ex[1])
-    ctx_out = ClosureConversionCtx(ctx.graph, ctx.bindings,
-                                   ctx.layer.mod,
+    ctx_out = ClosureConversionCtx(ctx.bindings, ctx.layer.mod,
                                    ctx.closure_bindings, nothing,
                                    lbs, lbs, ctx.sp_typevars,
-                                   false, true, true, SyntaxList(ctx.graph),
+                                   false, true, true, SyntaxList(),
                                    Dict{ClosureKey,ClosureInfo}())
     ex_out = closure_convert_lambda(ctx_out, ex, children(ex[3]))
     if !isempty(ctx_out.toplevel_stmts)

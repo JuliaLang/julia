@@ -4,8 +4,7 @@ struct ValidationDiagnostic
     loc::LineNumberNode # for noting where failures come from in this file
 end
 ValidationDiagnostic(st::SyntaxTree, msg, loc) =
-    ValidationDiagnostic(
-        SyntaxList(st._graph, NodeId[st._id]), String[msg], loc)
+    ValidationDiagnostic(SyntaxList(st), String[msg], loc)
 
 """
 The type returned by all `vst` functions.  There are three answers this can
@@ -210,7 +209,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"comprehension" xs...] ->
         # HACK: We shouldn't be creating trees here, but this is extremely rare
         # (deprecated even in 2016)
-        vst1_generator(vcx, @ast st._graph st [K"generator" xs...])
+        vst1_generator(vcx, @ast _ st [K"generator" xs...])
     [K"typed_comprehension" t [K"flatten" g]] ->
         vst1(vcx, t) & vst1_generator(vcx, g)
     [K"typed_comprehension" t g] ->
@@ -1200,7 +1199,7 @@ function _assert_syntaxtree_node(st::SyntaxTree)
 end
 
 function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
-    if st._id in parents
+    if st in parents
         err = "cycle detected: ["
         for p in parents
             err *= "\n" * node_string(p)
@@ -1211,12 +1210,12 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     # TODO: Proper traversal along .source and macro prov (need to cache results
     # to avoid exponential repeated lookups, and figure out how these edges may
     # form cycles with child edges)
-    st.source === st._id && (vr &= @fail(st, ".source equal to self ID"))
+    st.source === st && (vr &= @fail(st, ".source equal to self ID"))
     sc = get(st, :context, nothing)
     sc isa SyntaxContext &&
         sc.unexpanded === st && (vr &= @fail(st, "unexpanded equal to self"))
 
-    push!(parents, st._id)
+    push!(parents, st)
     is_leaf(st) || for c in children(st)
         vr &= _assert_syntaxtree(c, parents, vr)
     end

@@ -1388,7 +1388,7 @@ end
             $init
             ($y, x)
         end)
-        @ast q._graph q [K"syntaxinert" q]
+        @ast _ q [K"syntaxinert" q]
     end
     """)
     code = JuliaLowering.include_string(test_mod, """@make_quoted_code(x="outer x", x)""")

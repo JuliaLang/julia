@@ -5,7 +5,6 @@ end
 
 @testset "assert_syntaxtree" begin
     st = parsestmt(SyntaxTree, "function foo end")
-    g = st._graph
     @test JuliaLowering.assert_syntaxtree(st) === nothing
 
     bad_st = JuliaSyntax.newleaf(st, K"Identifier")
@@ -15,12 +14,12 @@ end
     bad_st = JuliaSyntax.newleaf(st, K"code_info")
     @test_throws "unrecognized leaf kind" JuliaLowering.assert_syntaxtree(bad_st)
 
-    setfield!(bad_st, :children, NodeId[bad_st._id])
+    setfield!(bad_st, :children, SyntaxList(bad_st))
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(bad_st)
 
-    cyc_1 = JuliaSyntax.newnode(st, K"block", NodeId[])
-    cyc_2 = JuliaSyntax.newnode(st, K"block", NodeId[cyc_1._id])
-    setfield!(cyc_1, :children, NodeId[cyc_2._id])
+    cyc_1 = JuliaSyntax.newnode(st, K"block", SyntaxList())
+    cyc_2 = JuliaSyntax.newnode(st, K"block", SyntaxList(cyc_1))
+    setfield!(cyc_1, :children, SyntaxList(cyc_2))
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_1)
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_2)
 end

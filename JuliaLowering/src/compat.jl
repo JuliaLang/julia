@@ -25,14 +25,8 @@ function is_eventually_call(e)
         e.head in (:escape, :where, :(::)) && is_eventually_call(e.args[1]))
 end
 
-function expr_to_est(@nospecialize(e),
-                     lnn::LineNumberNode=LineNumberNode(0, :none))
-    graph = ensure_desugaring_attributes!(SyntaxGraph())
-    expr_to_est(graph, e, lnn)
-end
-
-function expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
-    _expr_to_est(graph, e, src)[1]
+function expr_to_est(@nospecialize(e), src::SourceAttrType=LineNumberNode(0, :none))
+    _expr_to_est(e, src)[1]
 end
 
 function _get_inner_lnn(e::Expr, default::LineNumberNode)
@@ -64,24 +58,24 @@ end
 # unquoted, then removed in certain forms.  If `src` is not an linenode, it is
 # assumed to be a better provenance source, so linenodes in `e` are not used for
 # provenance (but still removed).
-function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
+function _expr_to_est(@nospecialize(e), src::SourceAttrType)
     st = if e isa Symbol
         newleaf(src, K"Identifier", String(e))
     elseif e isa QuoteNode
-        cid, _ = _expr_to_est(graph, e.value, src)
+        cid, _ = _expr_to_est(e.value, src)
         newnode(src, K"inert", NodeId[cid])
     elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
         for name in argnames
             id = newleaf(src, K"Identifier", String(name::Symbol))
-            push!(arg_cs, id._id)
+            push!(arg_cs, id)
         end
-        body_id, src = _expr_to_est(graph, e.args[2], src)
+        body_id, src = _expr_to_est(e.args[2], src)
         args_block = newnode(src, K"block", arg_cs)
         tvars_block = newnode(src, K"block", NodeId[])
         st = newnode(src, K"lambda",
-                     NodeId[args_block._id, tvars_block._id, body_id])
+                     NodeId[args_block, tvars_block, body_id])
     elseif e isa Expr
         head_s = string(e.head)
         st_k = find_kind(head_s)
@@ -92,7 +86,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
             if rm_linenodes && arg isa LineNumberNode
                 src isa LineNumberNode && (src = arg)
             else
-                cid, src = _expr_to_est(graph, arg, src)
+                cid, src = _expr_to_est(arg, src)
                 push!(cs, cid)
             end
         end
@@ -118,7 +112,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
     end
     @jl_assert isa_lowering_ast_node(e) || is_expr_value(st) st
 
-    return st._id, src
+    return st, src
 end
 
 # @__doc__ is brittle
@@ -202,7 +196,7 @@ function _dst_separate_dotop(st::SyntaxTree)
         !is_dotted_operator(dotop_s) && return est_to_dst(st)
         op_s = dotop_s[nextind(dotop_s,1):end]
         op_leaf = newleaf(st, K"Identifier", op_s)
-        return @ast st._graph st [K"." op_leaf]
+        return @ast _ st [K"." op_leaf]
     elseif k === K"Value" && st.value isa GlobalRef &&
         is_dotted_operator(string(st.value.name))
         @jl_assert false (st, "TODO: handle dotted globalref")
@@ -214,10 +208,10 @@ end
 function _dst_eq_to_in(st::SyntaxTree)
     return @stm st begin
         [K"filter" cond is...] ->
-            @ast st._graph st [K"filter" est_to_dst(cond)
+            @ast _ st [K"filter" est_to_dst(cond)
                        [K"iteration" mapsyntax(_dst_eq_to_in, is)...]]
         [K"=" l r] ->
-            @ast st._graph st [K"in" est_to_dst(l) est_to_dst(r)]
+            @ast _ st [K"in" est_to_dst(l) est_to_dst(r)]
     end
 end
 
@@ -225,12 +219,12 @@ function _dst_iterspec(src::SyntaxTree, sl::AbstractVector{SyntaxTree})
     return if length(sl) === 1 && kind(sl[1]) === K"filter"
         cond = sl[1][1]
         iters = sl[1][2:end]
-        @ast src._graph sl[1] [K"filter"
+        @ast _ sl[1] [K"filter"
             [K"iteration" mapsyntax(_dst_eq_to_in, iters)...]
             est_to_dst(cond)
         ]
     else
-        @ast src._graph src [K"iteration" map(_dst_eq_to_in, sl)...]
+        @ast _ src [K"iteration" map(_dst_eq_to_in, sl)...]
     end
 end
 
@@ -245,14 +239,14 @@ end
 function _dst_importpath(st::SyntaxTree)
     return @stm st begin
         [K"as" p name] ->
-            @ast st._graph st [K"as" _dst_importpath(st[1]) est_to_dst(name)]
+            @ast _ st [K"as" _dst_importpath(st[1]) est_to_dst(name)]
         [K"." xs...] ->
-            @ast st._graph st [K"importpath" mapsyntax(est_to_dst, xs)...]
+            @ast _ st [K"importpath" mapsyntax(est_to_dst, xs)...]
     end
 end
 
 _dst_eq_to_kw(st::SyntaxTree) = @stm st begin
-    [K"=" l r] -> @ast st._graph st [K"kw" l r]
+    [K"=" l r] -> @ast _ st [K"kw" l r]
     x -> x
 end
 
@@ -266,23 +260,22 @@ end
 # (a=1;)->1
 # (a=1;b=1)->1
 function _dst_fix_arglist(st::SyntaxTree)
-    g = st._graph
     @stm st begin
         [K"::" [K"call" _...] _] -> st
         [K"call" _...] -> st
         [K"tuple" xs...] -> let fixed = mapsyntax(_dst_eq_to_kw, xs)
-            fixed == xs ? st : @ast g st [K"tuple" fixed...]
+            fixed == xs ? st : @ast _ st [K"tuple" fixed...]
         end
         [K"where" x tvs...] -> let fixed = _dst_fix_arglist(x)
-            fixed == x ? st : @ast g st [K"where" fixed tvs...]
+            fixed == x ? st : @ast _ st [K"where" fixed tvs...]
         end
         [K"block" x1 x2] ->
-            @ast g st [K"tuple" _dst_eq_to_kw(x1)
+            @ast _ st [K"tuple" _dst_eq_to_kw(x1)
                        [K"parameters" _dst_eq_to_kw(x2)]]
-        [K"block" x] -> @ast g st [K"tuple" _dst_eq_to_kw(x)]
-        [K"block"] -> @ast g st [K"tuple"]
+        [K"block" x] -> @ast _ st [K"tuple" _dst_eq_to_kw(x)]
+        [K"block"] -> @ast _ st [K"tuple"]
         [K"block" _...] -> @jl_assert false st
-        x -> @ast g st [K"tuple" _dst_eq_to_kw(x)]
+        x -> @ast _ st [K"tuple" _dst_eq_to_kw(x)]
     end
 end
 
@@ -294,7 +287,7 @@ function _expand_literal_pow(st::SyntaxTree)
         numchildren(st) === 3 &&
         kind(st[1]) === K"Identifier" && syntax_name(st[1]) === "^" &&
         get(st[3], :value, nothing) isa Integer) || return st
-    @ast st._graph st [k
+    @ast _ st [k
         "literal_pow"::K"top"
         st[1] st[2]
         [K"call" [K"call" "apply_type"::K"core" "Val"::K"top" st[3]]]
@@ -325,7 +318,7 @@ end
 split_generated(st::SyntaxTree, gen_part) = @stm st begin
     (_, when=is_leaf(st)||is_quoted(st)) -> st
     [K"if" [K"generated"] gen nongen] -> if gen_part
-        @ast(st._graph, st, [K"syntaxunquote" gen])
+        @ast(_, st, [K"syntaxunquote" gen])
     else
         nongen
     end
@@ -339,7 +332,6 @@ end
 # Exceptions with unconditional meta: set meta on the tuple for a destructuring
 # arg, and the whole expression for (::T).
 function apply_arg_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
-    g = st._graph
     k = kind(st)
     if k == K"Identifier"
         if meta isa Symbol
@@ -355,7 +347,7 @@ function apply_arg_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
     elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
         c1 = st[1]
         out1 = apply_arg_meta(c1, meta)
-        c1 == out1 ? st : @ast g st [k out1 st[2:end]...]
+        c1 == out1 ? st : @ast _ st [k out1 st[2:end]...]
     elseif k == K"meta"
         # not specified what to do here if we get conflicting
         # specialize/nospecialize
@@ -370,13 +362,12 @@ function apply_arg_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
 end
 
 function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
-    g = st._graph
     @stm st begin
         [K"where" x tvs...] -> let fixed = apply_arglist_meta(x, meta)
-            fixed == x ? st : @ast g st [K"where" fixed tvs...]
+            fixed == x ? st : @ast _ st [K"where" fixed tvs...]
         end
         [K"::" x t] ->  let fixed = apply_arglist_meta(x, meta)
-            fixed == x ? st : @ast g st [K"::" fixed t]
+            fixed == x ? st : @ast _ st [K"::" fixed t]
         end
         [K"call" f args...] -> mapchildren(x->
             x == f ? strip_arg_meta(f) : apply_arg_meta(x, meta), st)
@@ -394,41 +385,39 @@ function force_readable_sparams(st)
     any(w->is_flisp_compat(w) && is_writeonly_est_name(syntax_name(w[1])),
         wheres) || return st
 
-    g = st._graph
     seen = Set{String}()
-    lt = @ast g st "<:"::K"Identifier"
+    lt = @ast _ st "<:"::K"Identifier"
     for i in eachindex(wheres)
         n = wheres[i][1]
         n_str = syntax_name(n)
         lb = _mangle_writeonly(wheres[i][2], seen)
         ub = _mangle_writeonly(wheres[i][3], seen)
         is_flisp_compat(n) && is_writeonly_est_name(n_str) && push!(seen, n_str)
-        wheres[i] = @ast g st [K"comparison" lb lt _mangle_writeonly(n, seen) lt ub]
+        wheres[i] = @ast _ st [K"comparison" lb lt _mangle_writeonly(n, seen) lt ub]
     end
     mangle = args->mapsyntax(a->_mangle_writeonly_argt(a, seen), args)
     sig2 = @stm sig begin
-        [K"::" [K"call" as...] t] -> @ast g sig [K"::" [K"call" mangle(as)...] t]
-        [K"call" as...] -> @ast g sig [K"call" mangle(as)...]
-        [K"tuple" as...] -> @ast g sig [K"tuple" mangle(as)...]
+        [K"::" [K"call" as...] t] -> @ast _ sig [K"::" [K"call" mangle(as)...] t]
+        [K"call" as...] -> @ast _ sig [K"call" mangle(as)...]
+        [K"tuple" as...] -> @ast _ sig [K"tuple" mangle(as)...]
     end
-    @ast g st [K"where" sig2 wheres...]
+    @ast _ st [K"where" sig2 wheres...]
 end
-_mangle_writeonly_argt(st, seen) = let g = st._graph; @stm st begin
+_mangle_writeonly_argt(st, seen) = @stm st begin
     [K"parameters" _...] -> mapchildren(c->_mangle_writeonly_argt(c, seen), st)
-    [K"kw" x v] -> @ast g st [K"kw" _mangle_writeonly_argt(x, seen) v]
-    [K"=" x v] -> @ast g st [K"=" _mangle_writeonly_argt(x, seen) v]
-    [K"..." x] -> @ast g st [K"..." _mangle_writeonly_argt(x, seen)]
-    [K"::" x t] -> @ast g st [K"::" x _mangle_writeonly(t, seen)]
-    [K"::" t] -> @ast g st [K"::" _mangle_writeonly(t, seen)]
-    [K"overlay" mt x] -> @ast g st [K"overlay" mt _mangle_writeonly(x, seen)]
+    [K"kw" x v] -> @ast _ st [K"kw" _mangle_writeonly_argt(x, seen) v]
+    [K"=" x v] -> @ast _ st [K"=" _mangle_writeonly_argt(x, seen) v]
+    [K"..." x] -> @ast _ st [K"..." _mangle_writeonly_argt(x, seen)]
+    [K"::" x t] -> @ast _ st [K"::" x _mangle_writeonly(t, seen)]
+    [K"::" t] -> @ast _ st [K"::" _mangle_writeonly(t, seen)]
+    [K"overlay" mt x] -> @ast _ st [K"overlay" mt _mangle_writeonly(x, seen)]
     _ -> st
-end; end
+end
 function _mangle_writeonly(st, seen)
-    g = st._graph
     k = kind(st)
     if k === K"Identifier" && !hasattr(st, :mod) && is_flisp_compat(st)
         n = syntax_name(st)
-        !(n in seen) ? st : @ast g st (string(n, "FIXME#60626")::K"Identifier")
+        !(n in seen) ? st : @ast _ st (string(n, "FIXME#60626")::K"Identifier")
     elseif is_leaf(st) || is_quoted(st) || k === K"->" || k === K"function"
         st
     else
@@ -476,7 +465,6 @@ We can assume `st` has passed `valid_st1`.  Errors arising from invalid AST
 (including finding `macrocall/escape/quote` forms) should be handled there.
 """
 function est_to_dst(st::SyntaxTree)
-    g = ensure_macro_attributes!(st._graph)
     rec = var"#self#"
     return @stm st begin
         [K"Identifier"] -> _est_to_dst_ident(st)
@@ -489,7 +477,7 @@ function est_to_dst(st::SyntaxTree)
                  (s[1:prevind(s,end)], K"op=")
 
              op_leaf = newleaf(st, K"Identifier", op_s)
-             @ast g st [out_k rec(l) op_leaf rec(r)]
+             @ast _ st [out_k rec(l) op_leaf rec(r)]
          end
         [K"comparison" cs0...] -> let cs = copy(cs0)
             for (i, c) in enumerate(cs)
@@ -498,45 +486,45 @@ function est_to_dst(st::SyntaxTree)
             @mknode(st; children=cs)
         end
         [K"'" x] ->
-            @ast g st [K"call" "'"::K"Identifier"(st) rec(x)]
+            @ast _ st [K"call" "'"::K"Identifier"(st) rec(x)]
         [K"." f [K"tuple" args...]] -> _expand_literal_pow(
-            @ast g st [K"dotcall" rec(f) _dst_sink_parameters(args)...])
+            @ast _ st [K"dotcall" rec(f) _dst_sink_parameters(args)...])
         ([K"inert" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
-            @ast g st st[1]=>K"Symbol"
+            @ast _ st st[1]=>K"Symbol"
         [K"syntaxinert" _] -> st
         [K"inert" _] -> st
         [K"module" _...] -> st
         [K"toplevel" _...] -> st
         [K"for" [K"=" _ _] body] ->
-            @ast g st [K"for" [K"iteration"(st[1]) _dst_eq_to_in(st[1])] rec(body)]
+            @ast _ st [K"for" [K"iteration"(st[1]) _dst_eq_to_in(st[1])] rec(body)]
         [K"for" [K"block" iters...] body] ->
-            @ast g st [K"for"
+            @ast _ st [K"for"
                 [K"iteration"(st[1]) mapsyntax(_dst_eq_to_in, iters)...]
                 rec(body)
             ]
         (_, when=(k = kind(st); k in KSet"tuple vect braces")) ->
-            @ast g st [k _dst_sink_parameters(children(st))...]
+            @ast _ st [k _dst_sink_parameters(children(st))...]
         (_, when=(k = kind(st); k in KSet"curly ref")) ->
-            @ast g st [k _dst_separate_dotop(st[1])
+            @ast _ st [k _dst_separate_dotop(st[1])
                        _dst_sink_parameters(children(st)[2:end])...]
         # tuple arg should not be converted or desugared
         [K"foreigncall" [K"tuple" _...] args...] ->
-            @ast g st [K"foreigncall" [K"foreignsymbol" st[1]] args...]
+            @ast _ st [K"foreigncall" [K"foreignsymbol" st[1]] args...]
         [K"foreignglobal" [K"tuple" _...]] ->
-            @ast g st [K"foreignglobal" [K"foreignsymbol" st[1]]]
+            @ast _ st [K"foreignglobal" [K"foreignsymbol" st[1]]]
         ([K"call" [K"Identifier"] sym args...],
          when=(syntax_name(st[1]) === "ccall" ||
                syntax_name(st[1]) === "cglobal")) -> if kind(sym) === K"tuple"
-             @ast g st [K"call" st[1] [K"foreignsymbol" st[2]] mapsyntax(rec, args)...]
+             @ast _ st [K"call" st[1] [K"foreignsymbol" st[2]] mapsyntax(rec, args)...]
          else
-             @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
+             @ast _ st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
          end
         [K"call" f args...] -> let
             out_k, out_f = @stm _dst_separate_dotop(f) begin
                 [K"." op] -> (K"dotcall", op)
                 f_sep -> (K"call", f_sep)
             end
-            out = @ast g st [out_k
+            out = @ast _ st [out_k
                 out_f _dst_sink_parameters(children(st)[2:end])...
             ]
             _expand_literal_pow(out)
@@ -547,14 +535,14 @@ function est_to_dst(st::SyntaxTree)
                 newleaf(cvar, K"Placeholder") : rec(cvar)
             has_finally = length(rest) >= 1 && !_is_false(rest[1])
             has_else = length(rest) === 2
-            @ast g st [K"try" rec(tryb)
+            @ast _ st [K"try" rec(tryb)
                 has_catch ? [K"catch"(catchb) cvar_out rec(catchb)] : nothing
                 has_else ? [K"else"(rest[2]) rec(rest[2])] : nothing
                 has_finally ? [K"finally"(rest[1]) rec(rest[1])] : nothing
             ]
         end
         [K"flatten" _] -> let
-            out_iters = SyntaxList(g)
+            out_iters = SyntaxList()
             next = st
             while kind(next) === K"flatten"
                 push!(out_iters, _dst_iterspec(next, next[1][2:end]))
@@ -562,57 +550,57 @@ function est_to_dst(st::SyntaxTree)
             end
             @jl_assert kind(next) === K"generator" st next
             push!(out_iters, _dst_iterspec(next, next[2:end]))
-            @ast g st [K"generator" rec(next[1]) out_iters...]
+            @ast _ st [K"generator" rec(next[1]) out_iters...]
         end
         [K"comprehension" _ _ _...] -> let
-            arg = rec(@ast g st [K"generator" children(st)...])
-            @ast g st [K"comprehension" arg]
+            arg = rec(@ast _ st [K"generator" children(st)...])
+            @ast _ st [K"comprehension" arg]
         end
         [K"generator" body iters...] ->
-            @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
+            @ast _ st [K"generator" rec(body) _dst_iterspec(st, iters)]
         ([K"=" l r], when=(is_eventually_call(l))) -> let
             # no fix_arglist needed, since this func can't be anonymous
             l = apply_arglist_meta(l, collect_body_arg_meta(r))
             l = force_readable_sparams(l)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
+                r2 = @ast _ st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
             else
                 r2 = rec(r)
             end
-            @ast g st [K"function" rec(l) r2]
+            @ast _ st [K"function" rec(l) r2]
         end
         [K"function" l r] -> let
             l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
             l = force_readable_sparams(l)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
+                r2 = @ast _ st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
             else
                 r2 = rec(r)
             end
-            @ast g st [K"function" rec(l) r2]
+            @ast _ st [K"function" rec(l) r2]
         end
         [K"->" l r] -> let
             l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
             l = force_readable_sparams(l)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
+                r2 = @ast _ st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
             else
                 r2 = rec(r)
             end
-            @ast g st [K"->" rec(l) r2]
+            @ast _ st [K"->" rec(l) r2]
         end
         [K"macro" l r] -> let
             l = apply_arglist_meta(l, collect_body_arg_meta(r))
-            @ast g st [K"macro" rec(l) rec(r)]
+            @ast _ st [K"macro" rec(l) rec(r)]
         end
         [K"do" [K"call" f args...] lam] -> let
-            @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]
+            @ast _ st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]
         end
         ([K"let" binds body], when=(kind(binds) !== K"block")) ->
-            @ast g st [K"let" [K"block"(binds) rec(binds)] rec(body)]
+            @ast _ st [K"let" [K"block"(binds) rec(binds)] rec(body)]
         (_, when=(kind(st) in KSet"using import")) -> let
             # dot_importpath = (. _...)
             # as_or_dotip = dot_importpath | (as dot_importpath name)
@@ -625,7 +613,7 @@ function est_to_dst(st::SyntaxTree)
             end
             out_cs = mapsyntax(_dst_importpath, paths)
             if !isnothing(maybe_colon)
-                out_c1 = @ast g maybe_colon [K":" out_cs...]
+                out_c1 = @ast _ maybe_colon [K":" out_cs...]
                 out_cs = SyntaxList(out_c1)
             end
             @mknode(st; children=out_cs)
@@ -638,19 +626,19 @@ function est_to_dst(st::SyntaxTree)
              # Should be handled in the function case
              newleaf(st, K"nothing")
         ([K"meta" s gen], when=get(s, :value, "") === "generated") ->
-            @ast g st [K"meta" @mknode(s; kind=K"Symbol") rec(gen)]
+            @ast _ st [K"meta" @mknode(s; kind=K"Symbol") rec(gen)]
         [K"meta" syms...] ->
-            @ast g st [K"meta" mapsyntax(
+            @ast _ st [K"meta" mapsyntax(
                 s->(kind(s) === K"Identifier" ? @mknode(s; kind=K"Symbol") : s),
                 syms)...
            ]
         [K"boundscheck" x] -> @mknode(st; children=SyntaxList())
-        [K"inbounds" [K"Identifier"]] -> newnode(st, K"inbounds_pop", SyntaxList(g))
+        [K"inbounds" [K"Identifier"]] -> newnode(st, K"inbounds_pop", SyntaxList())
         [K"core" x] -> newleaf(st, K"core", syntax_name(x))
         [K"top" x] -> newleaf(st, K"top", syntax_name(x))
         [K"static_parameter" x] -> newleaf(st, K"static_parameter", x.value::IdTag)
         [K"lambda" args sps body] -> @mknode(st; children=[args, sps, rec(body)])
-        [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
+        [K"copyast" [K"inert" ex]] -> @ast _ st [K"call"
             interpolate_expr::K"Value"
             [K"inert"(st[1]) ex]
         ]
@@ -662,9 +650,9 @@ function est_to_dst(st::SyntaxTree)
             @mknode(st; value=syntax_name(lab), children=nothing)
         [K"symbolicblock" id body] -> let s = syntax_name(id)
             if is_writeonly_est_name(s)
-                @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
+                @ast _ st [K"symbolicblock" id=>K"Placeholder" rec(body)]
             else
-                @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
+                @ast _ st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
             end
         end
         [K"unknown_head" cs...] -> let head = syntax_name(st)
@@ -684,11 +672,11 @@ function est_to_dst(st::SyntaxTree)
                     kind(fptr[1]) == K"Identifier"
                 sc = fptr[1].context::SyntaxContext
                 ident = @mknode(fptr[1]; mod=base_layer(sc).mod)
-                @ast g fptr [K"static_eval"(fptr) ident]
+                @ast _ fptr [K"static_eval"(fptr) ident]
             else
                 rec(fptr)
             end
-            @ast g st [K"cfunction"
+            @ast _ st [K"cfunction"
                 rec(typ) out_fptr
                 [K"static_eval"(rt; meta=name_hint("cfunction return type")) rec(rt)]
                 [K"static_eval"(at; meta=name_hint("cfunction argument type")) rec(at)]

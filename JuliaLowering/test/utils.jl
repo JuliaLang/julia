@@ -18,24 +18,17 @@ import REPL
 using .JuliaSyntax: SourceAttrType, sourcetext
 
 using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
-    ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,
+    ScopeLayer, SourceRef, SyntaxTree, children, flattened_provenance,
     is_leaf, mapchildren, numchildren, showprov, syntax_name, syntax_id
 
-function _ast_test_graph()
-    JuliaLowering.ensure_desugaring_attributes!(
-        JuliaLowering.ensure_macro_attributes!(SyntaxGraph()))
-end
-
-function _source_node(graph, src)
+function _source_node(src)
     SyntaxTree(K"TOMBSTONE", nothing, nothing, src, nothing)
 end
 
 macro ast_(tree)
-    # TODO: Implement this in terms of new-style macros.
     quote
-        graph = _ast_test_graph()
-        srcref = _source_node(graph, $(QuoteNode(__source__)))
-        @ast graph srcref $tree
+        srcref = _source_node($(QuoteNode(__source__)))
+        @ast _ srcref $tree
     end
 end
 

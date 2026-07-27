@@ -1,6 +1,5 @@
 # One per pass
 struct MacroExpansionContext <: AbstractLoweringContext
-    graph::SyntaxGraph
     syntax_context::SyntaxContext
     known_layers::Dict{ScopeLayer, Bool}
     world::UInt
@@ -10,7 +9,7 @@ end
 function MacroExpansionContext(st, world, recursive)
     sc = st.context::SyntaxContext
     MacroExpansionContext(
-        st._graph, sc, Dict{ScopeLayer, Bool}(base_layer(sc)=>true),
+        sc, Dict{ScopeLayer, Bool}(base_layer(sc)=>true),
         world, recursive)
 end
 
@@ -33,7 +32,7 @@ end
 
 # TODO: Implementing interpolations with a macro could give us better provenance
 function expand_quote(ctx, st)
-    unquoted = SyntaxList(ctx)
+    unquoted = SyntaxList()
     collect_unquoted!(ctx, unquoted, st, 0)
     # not just optimizations; expected e.g. in `(. mod (quote field))`
     if is_expr_value(st)
@@ -77,7 +76,7 @@ function expand_syntaxquote(ctx, st)
         kind(st[1]) === K"..." && throw(LoweringError(
             st, raw"unexpected `...` in bare `syntaxunquote` expression"))
     end
-    unquoted = collect_syntaxunquote!(ctx, SyntaxList(ctx), st, 0)
+    unquoted = collect_syntaxunquote!(ctx, SyntaxList(), st, 0)
     length(unquoted) == 0 ? @ast(ctx, st, [K"syntaxinert" st]) :
         @ast ctx st [K"call" interpolate_syntax::K"Value"
                  [K"syntaxinert" st] unquoted...]
@@ -85,7 +84,6 @@ end
 
 # Passed to the user as an implicit macro argument
 struct MacroContext <: AbstractLoweringContext
-    graph::SyntaxGraph
     macrocall::SyntaxTree
 end
 
@@ -219,7 +217,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         st, "`macrocall` requires a macro name and source location"))
     sc_in = st.context::SyntaxContext
     macname = st[1]
-    mctx = MacroContext(ctx.graph, st)
+    mctx = MacroContext(st)
     macfunc = eval_macro_name(ctx, mctx, macname)
     raw_args = st[3:end]
 
@@ -243,7 +241,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         else
             expanded isa Expr && throw(LoweringError(
                 st, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
-            expr_to_est(st._graph, expanded, st._id)
+            expr_to_est(expanded, st)
         end
     else
         macro_loc = _macrocall_expr_location(st)
@@ -266,7 +264,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
             rethrow(MacroExpansionError(mctx, st, "Error expanding macro", :all, exc))
         end
         macro_lnn = macro_loc isa MacroSource ? macro_loc.lno : macro_loc
-        st_out = expr_to_est(st._graph, st_out, macro_lnn)
+        st_out = expr_to_est(st_out, macro_lnn)
     end
     # Module scope for the returned AST is the module where this particular
     # method was defined (may be different from `parentmodule(macfunc)`)
@@ -393,10 +391,6 @@ function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
     end
 end
 
-function ensure_macro_attributes!(graph)
-    graph
-end
-
 function assert_expandable(st, l=base_layer(st.context::SyntaxContext))
     @jl_assert hasattr(st, :context) (st, "expected syntax context")
     @jl_assert base_layer(st.context::SyntaxContext) == l (st, "expected consistent layer")
@@ -408,7 +402,6 @@ end
 @fzone "JL: macroexpand" function expand_forms_1(
     st::SyntaxTree, world::UInt, recursive::Bool)
 
-    graph = ensure_macro_attributes!(st._graph)
     DEBUG && assert_expandable(st)
     ctx = MacroExpansionContext(st, world, recursive)
     st_out = expand_forms_1(ctx, st)
