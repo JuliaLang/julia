@@ -1051,9 +1051,9 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
 }
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_shard_t.
-static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, unsigned threads) {
-    SmallVector<Constant *, 0> tables(sizeof(jl_image_shard_t) / sizeof(void *) * threads);
-    for (unsigned i = 0; i < threads; i++) {
+static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, unsigned nshards) {
+    SmallVector<Constant *, 0> tables(sizeof(jl_image_shard_t) / sizeof(void *) * nshards);
+    for (unsigned i = 0; i < nshards; i++) {
         auto suffix = "_" + std::to_string(i);
         auto create_gv = [&](StringRef name, bool constant) {
             auto gv = new GlobalVariable(M, T_size, constant,
@@ -1108,11 +1108,11 @@ static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_ptr) {
 }
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_header_t.
-static GlobalVariable *emit_image_header(Module &M, unsigned threads, unsigned nfvars, unsigned ngvars) {
+static GlobalVariable *emit_image_header(Module &M, unsigned nshards, unsigned nfvars, unsigned ngvars) {
     constexpr uint32_t version = 1;
     std::array<uint32_t, 4> header{
         version,
-        threads,
+        nshards,
         nfvars,
         ngvars,
     };
@@ -1328,7 +1328,7 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
 }
 
 // Chop a module up as equally as possible by weight into threads partitions
-static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
+static SmallVector<Partition, 32> partitionModule(Module &M, unsigned nshards) {
     //Start by stripping fvars and gvars, which helpfully removes their uses as well
     DenseMap<GlobalValue *, unsigned> fvars, gvars;
     get_fvars_gvars(M, fvars, gvars);
@@ -1406,13 +1406,13 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         }
     }
 
-    SmallVector<Partition, 32> partitions(threads);
+    SmallVector<Partition, 32> partitions(nshards);
     // always get the smallest partition first
     auto pcomp = [](const Partition *p1, const Partition *p2) {
         return p1->weight > p2->weight;
     };
     std::priority_queue<Partition *, SmallVector<Partition *, 0>, decltype(pcomp)> pq(pcomp);
-    for (unsigned i = 0; i < threads; ++i) {
+    for (unsigned i = 0; i < nshards; ++i) {
         pq.push(&partitions[i]);
     }
 
@@ -1483,7 +1483,7 @@ struct ImageTimer {
         elapsed = jl_hrtime();
 #ifdef USE_TRACY
         // Emit a Tracy zone for this stage. The AOT image shards run on libuv
-        // worker threads that lack a Julia task/ptls, so JL_TIMING cannot be
+        // worker nshards that lack a Julia task/ptls, so JL_TIMING cannot be
         // used here; the raw Tracy C API works on any thread. `desc` is used as
         // the zone name so stages aggregate across shards (the shard is
         // distinguished by the named worker thread).
