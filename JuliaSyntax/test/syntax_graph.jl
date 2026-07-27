@@ -1,17 +1,28 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, prov_end, provenance, macro_prov, macro_prov_end, flattened_provenance, sourceref, unexpanded_sourceref, newleaf, mkleaf, mknode, mktree, setattr!, hasattr, SyntaxContext, ScopeLayer
+using .JuliaSyntax: SyntaxTree, SyntaxList, @stm, prov, prov_end, provenance,
+    macro_prov, macro_prov_end, flattened_provenance, sourceref,
+    unexpanded_sourceref, newleaf, newnode, mkleaf, mknode, mktree, copy_ast,
+    unalias_nodes, annotate_parent!, _setattr!, getmeta, SyntaxContext,
+    ScopeLayer, children
 
-"For filling required attrs in graphs created by hand"
-function testgraph(edge_ranges, edges, more_attrs...)
-    kinds = Dict{NodeId, Any}(map(i->(i=>K"block"), eachindex(edge_ranges)))
-    sources = Dict{NodeId, Any}(
-        map(i->(i=>LineNumberNode(i)), eachindex(edge_ranges)))
-    orig = Dict{NodeId, Any}(map(i->(i=>i), eachindex(edge_ranges)))
-    SyntaxGraph(
-        edge_ranges,
-        edges,
-        Dict{Symbol, Dict{NodeId, Any}}(
-            :kind => kinds, :source => sources,
-            :orig => orig, more_attrs...))
+"""
+Build a hand-made tree for the DAG-shaped tests below.  Each node carries a
+distinct integer in `.value` so nodes copied by `unalias_nodes` and friends can
+be traced back to the node they were copied from.
+"""
+function tnode(tag::Int, cs::SyntaxTree...)
+    st = isempty(cs) ?
+        newleaf(LineNumberNode(tag), K"Value") :
+        newnode(LineNumberNode(tag), K"block", SyntaxList(cs...))
+    _setattr!(st, :value, tag)
+end
+
+"All nodes of `st` in preorder, with one entry per occurrence"
+function flat_nodes(st::SyntaxTree, out=SyntaxList())
+    push!(out, st)
+    for c in children(st)
+        flat_nodes(c, out)
+    end
+    out
 end
 
 @testset "SyntaxTree parsing" begin
@@ -22,32 +33,31 @@ end
     @test parsestmt(SyntaxTree, "@@@"; ignore_errors=true) isa SyntaxTree
     @test parsestmt(SyntaxTree, "(a b c)"; ignore_errors=true) isa SyntaxTree
     @test parsestmt(SyntaxTree, "'a b c'"; ignore_errors=true) isa SyntaxTree
+    # Malformed literals become ErrorVal-valued leaves rather than identifiers
+    @test parsestmt(SyntaxTree, "1.e"; ignore_errors=true) isa SyntaxTree
+    @test parsestmt(SyntaxTree, "x = 1._"; ignore_errors=true) isa SyntaxTree
 end
 
 @testset "SyntaxTree provenance accessors" begin
 
     @testset "prov, prov_end, provenance, sourceref" begin
-        # 1 --> 2 --> 3     src(7-9) = line 7-9
-        # 4 --> 5 --> 6     src(i) = i + 3
-        # 7 --> 8 --> 9
-        g = testgraph([1:1, 2:2, 0:-1, 3:3, 4:4, 0:-1, 5:5, 6:6, 0:-1],
-                      [2, 3, 5, 6, 8, 9],
-                      :source => Dict{Int, SourceAttrType}(enumerate([
-                          map(i->i+3, 1:6)...
-                              map(LineNumberNode, 7:9)...])))
-        st = SyntaxTree(g, 1)
-        @test prov(st)._id == 4
-        @test prov(prov(st))._id == 7
-        @test prov(prov(prov(st)))._id == 7
+        # st3 <- st2 <- st1, with st3 referring to source text
+        st3 = tnode(3)
+        st2 = mkleaf(st3)
+        st1 = mkleaf(st2)
 
-        @test prov_end(st)._id == 7
-        @test prov_end(prov_end(st))._id == 7
+        @test prov(st1) === st2
+        @test prov(prov(st1)) === st3
+        @test prov(prov(prov(st1))) === st3
 
-        @test sourceref(st) == LineNumberNode(7)
-        @test sourceref(prov_end(st)) == LineNumberNode(7)
+        @test prov_end(st1) === st3
+        @test prov_end(prov_end(st1)) === st3
 
-        @test provenance(st).ids == NodeId[4, 7]
-        @test provenance(prov_end(st)).ids == NodeId[]
+        @test sourceref(st1) == LineNumberNode(3)
+        @test sourceref(prov_end(st1)) == LineNumberNode(3)
+
+        @test provenance(st1) == SyntaxList(st2, st3)
+        @test provenance(prov_end(st1)) == SyntaxList()
     end
 
     @testset "flattened_provenance" begin
@@ -57,24 +67,23 @@ end
             v"0.0",
             false)
 
-        g = SyntaxGraph()
-        st1 = setattr!(newleaf(LineNumberNode(1), K"Identifier"), :name_val, "st1")
-        st2 = setattr!(mkleaf(st1), :name_val, "st2")
-        st3 = setattr!(mkleaf(st2), :name_val, "st3")
+        st1 = _setattr!(newleaf(LineNumberNode(1), K"Identifier"), :value, "st1")
+        st2 = _setattr!(mkleaf(st1), :value, "st2")
+        st3 = _setattr!(mkleaf(st2), :value, "st3")
 
-        stm1 = setattr!(newleaf(LineNumberNode(1, :m), K"Identifier"), :name_val, "stm1")
-        stm2 = setattr!(mkleaf(stm1), :name_val, "stm2")
-        stm3 = setattr!(mkleaf(stm1), :name_val, "stm3")
-        stm_unused = setattr!(newleaf(LineNumberNode(0), K"Identifier"), :name_val, "stm_unused")
+        stm1 = _setattr!(newleaf(LineNumberNode(1, :m), K"Identifier"), :value, "stm1")
+        stm2 = _setattr!(mkleaf(stm1), :value, "stm2")
+        stm3 = _setattr!(mkleaf(stm1), :value, "stm3")
+        stm_unused = _setattr!(newleaf(LineNumberNode(0), K"Identifier"), :value, "stm_unused")
 
-        stmm1 = setattr!(newleaf(LineNumberNode(1, :mm), K"Identifier"), :name_val, "stmm1")
-        stmm2 = setattr!(mkleaf(stmm1), :name_val, "stmm2")
-        stmm3 = setattr!(mkleaf(stmm2), :name_val, "stmm3")
+        stmm1 = _setattr!(newleaf(LineNumberNode(1, :mm), K"Identifier"), :value, "stmm1")
+        stmm2 = _setattr!(mkleaf(stmm1), :value, "stmm2")
+        stmm3 = _setattr!(mkleaf(stmm2), :value, "stmm3")
 
-        setattr!(st1, :context, ctx_with_unexpanded(stm_unused))
-        setattr!(st2, :context, ctx_with_unexpanded(stm_unused))
-        setattr!(st3, :context, ctx_with_unexpanded(stm3))
-        setattr!(stm3, :context, ctx_with_unexpanded(stmm3))
+        _setattr!(st1, :context, ctx_with_unexpanded(stm_unused))
+        _setattr!(st2, :context, ctx_with_unexpanded(stm_unused))
+        _setattr!(st3, :context, ctx_with_unexpanded(stm3))
+        _setattr!(stm3, :context, ctx_with_unexpanded(stmm3))
 
         # julia> JL._show_provtree(stdout, st3, "")
         # st3
@@ -134,54 +143,55 @@ end
 
 @testset "SyntaxTree utils" begin
     @testset "copy_ast, mktree" begin
-        # 1 --> 2 --> 3     src(7-9) = line 7-9
-        # 4 --> 5 --> 6     src(i) = i + 3
-        # 7 --> 8 --> 9
-        g = testgraph([1:1, 2:2, 0:-1, 3:3, 4:4, 0:-1, 5:5, 6:6, 0:-1],
-                      [2, 3, 5, 6, 8, 9],
-                      :source => Dict{Int, SourceAttrType}(enumerate([
-                          map(i->i+3, 1:6)...
-                          map(LineNumberNode, 7:9)...])))
-        st = SyntaxTree(g, 1)
+        # A one-child tree whose root also has a provenance chain of its own
+        leaf = tnode(3)
+        st2 = newnode(LineNumberNode(1), K"block", SyntaxList(leaf))
+        st = mknode(st2, children(st2))   # st.source === st2
 
-        stcopy = copy_ast(new_g, st)
-        # Each node should be copied once
-        @test length(new_g.edge_ranges) === length(g.edge_ranges)
+        stcopy = copy_ast(st)
+        @test stcopy !== st
         @test st ≈ stcopy
+        @test stcopy[1] !== st[1]
+        # `.source` chains are copied too
+        @test prov(stcopy) !== prov(st)
         @test prov(st) ≈ prov(stcopy)
-        @test prov(prov(st)) ≈ prov(prov(stcopy))
 
+        # Every node is copied at most once, so aliasing is preserved
+        shared = tnode(1)
+        aliased = newnode(LineNumberNode(0), K"block", SyntaxList(shared, shared))
+        acopy = copy_ast(aliased)
+        @test aliased ≈ acopy
+        @test acopy[1] !== shared
+        @test acopy[1] === acopy[2]
+
+        # Unlike copy_ast, mktree extends the provenance chain rather than
+        # copying it
         stcopy2 = mktree(st)
-        # Only nodes 1-3 should be copied
-        @test length(g.edge_ranges) === 12
-        @test st._id != stcopy2._id
+        @test stcopy2 !== st
         @test st ≈ stcopy2
-        @test stcopy2.source === st._id
-
-        # Disallow copying into the same graph; slow for no good reason
-        @test_throws "mktree" copy_ast(st._graph, st)
+        @test stcopy2[1] !== st[1]
+        @test stcopy2.source === st
+        @test stcopy2[1].source === st[1]
     end
 
     @testset "unalias_nodes" begin
-        # 1 -+-> 2 ->-> 4    src(4) = 5
-        #    |      |       msrc(4) = 6
+        # 1 -+-> 2 -+
+        #    |      +-> 4
         #    +-> 3 -+
-        #               5
-        #               6
-        g = testgraph([1:2, 3:3, 4:4, 0:-1, 0:-1, 0:-1], [2, 3, 4, 4],
-                      :macro_source => Dict{Int, SourceAttrType}(4=>6))
-        setattr!(g, 4, :source, 5)
-
-        st = SyntaxTree(g, 1)
-        stu = JuliaSyntax.unalias_nodes(st)
-        @test st ≈ stu
-        @test length(stu._graph.edge_ranges) == 7
-        @test length(stu._graph.edges) == 4
-        # Properties of node 4 should be preserved
-        @test 4 == stu[1][1].orig == stu[2][1].orig
-        @test st[1][1].source == stu[1][1].source == stu[2][1].source
-        @test st[1][1].macro_source == stu[1][1].macro_source == stu[2][1].macro_source
-        @test stu[1][1]._id != stu[2][1]._id
+        build1() = let n4 = tnode(4)
+            tnode(1, tnode(2, n4), tnode(3, n4))
+        end
+        ref = build1()
+        st = build1()
+        src4 = st[1][1].source
+        stu = unalias_nodes(st)
+        @test stu === st                    # unaliases in place
+        @test ref ≈ stu
+        @test length(flat_nodes(stu)) == 5  # node 4 copied once
+        @test allunique(flat_nodes(stu))
+        # the copy keeps node 4's attributes, and doesn't extend its provenance
+        @test 4 == stu[1][1].value == stu[2][1].value
+        @test src4 === stu[1][1].source === stu[2][1].source
 
         #           +-> 5
         #           |
@@ -192,209 +202,75 @@ end
         #    +-> 4 -+-----+|
         #           |      |
         #           +------+
-        g = testgraph([1:3, 4:5, 6:6, 7:8, 0:-1, 0:-1, 9:9],
-                      [2, 3, 4, 5, 6, 7, 6, 6, 6])
-        st = SyntaxTree(g, 1)
-        stu = JuliaSyntax.unalias_nodes(st)
-        @test st ≈ stu
-        # node 6 should be copied three times
-        @test length(stu._graph.edge_ranges) == 10
-        @test length(stu._graph.edges) == 9
-        # the four copies of node 6 should have attrs identical to the original and distinct ids
-        @test 6 == stu[1][2].orig == stu[2][1][1].orig == stu[3][1].orig == stu[3][2].orig
-        @test stu[1][2]._id != stu[2][1][1]._id != stu[3][1]._id != stu[3][2]._id
+        build2() = let n6 = tnode(6)
+            tnode(1,
+                  tnode(2, tnode(5), n6),
+                  tnode(3, tnode(7, n6)),
+                  tnode(4, n6, n6))
+        end
+        ref = build2()
+        stu = unalias_nodes(build2())
+        @test ref ≈ stu
+        # node 6 occurs four times, so it should be copied three times
+        @test length(flat_nodes(stu)) == 10
+        @test allunique(flat_nodes(stu))
+        @test 6 == stu[1][2].value == stu[2][1][1].value ==
+            stu[3][1].value == stu[3][2].value
 
         # 1 -+-> 2 ->-> 4 -+----> 5 ->-> 7
         #    |      |      |         |
         #    +-> 3 -+      +-->-> 6 -+
         #        |            |
         #        +------------+
-        g = testgraph([1:2, 3:3, 4:5, 6:7, 8:8, 9:9, 0:-1],
-                      [2,3,4,4,6,5,6,7,7])
-        st = SyntaxTree(g, 1)
-        stu = JuliaSyntax.unalias_nodes(st)
-        @test st ≈ stu
-        @test length(stu._graph.edge_ranges) == 15
-        @test length(stu._graph.edges) == 14
-        # attrs of nodes 4-7
-        @test 4 == stu[1][1].orig == stu[2][1].orig
-        @test 5 == stu[1][1][1].orig == stu[2][1][1].orig
-        @test 6 == stu[1][1][2].orig == stu[2][1][2].orig == stu[2][2].orig
-        @test 7 == stu[1][1][1][1].orig == stu[1][1][2][1].orig ==
-            stu[2][1][1][1].orig == stu[2][1][2][1].orig == stu[2][2][1].orig
-        # ensure no duplication
-        @test stu[1][1][1][1]._id != stu[1][1][2][1]._id !=
-            stu[2][1][1][1]._id != stu[2][1][2][1]._id != stu[2][2][1]._id
-    end
-
-    @testset "prune" begin
-        # [1]-+-> 2         5 --> 6
-        #     |
-        #     +-> 3 --> 4   7
-        g = testgraph([1:2, 0:-1, 3:3, 0:-1, 4:4, 0:-1, 0:-1], [2, 3, 4, 6])
-        st = SyntaxTree(g, 1)
-        stp = JuliaSyntax.prune(st)
-        @test st ≈ stp
-        @test length(stp._graph.edge_ranges) === 4
-        @test stp.source == LineNumberNode(1)
-        @test stp[1].source == LineNumberNode(2)
-        @test stp[2].source == LineNumberNode(3)
-        @test stp[2][1].source == LineNumberNode(4)
-
-        # (also checks that the last prune didn't destroy the graph)
-        # 1 -+-> 2         5 --> 6
-        #    |
-        #    +-> 3 --> 4  [7]
-        st = SyntaxTree(g, 7)
-        stp = JuliaSyntax.prune(st)
-        @test st ≈ stp
-        @test length(stp._graph.edge_ranges) === 1
-        @test stp.orig == 7
-
-        # 1 -+->[2]->-> 4
-        #    |      |
-        #    +-> 3 -+
-        g = testgraph([1:2, 3:3, 4:4, 0:-1], [2, 3, 4, 4])
-        st = SyntaxTree(g, 2)
-        stp = JuliaSyntax.prune(st)
-        @test st ≈ stp
-        @test length(stp._graph.edge_ranges) === 2
-        @test stp.orig == 2
-        @test stp[1].orig == 4
-
-        #  9 -->[1]--> 5    src(1) = 2
-        # 10 --> 2 --> 6    src(2) = 3
-        # 11 --> 3 --> 7    src(3) = 4
-        # 12 --> 4 --> 8    else src(i) = line(i)
-        g = testgraph([1:1, 2:2, 3:3, 4:4, 0:-1, 0:-1, 0:-1, 0:-1, 5:5, 6:6, 7:7, 8:8],
-                      [5, 6, 7, 8, 1, 2, 3, 4],
-                      :source => Dict{Int, SourceAttrType}(
-                          1=>2, 2=>3, 3=>4,
-                          map(i->(i=>LineNumberNode(i)), 4:12)...))
-        st = SyntaxTree(g, 1)
-        stp = JuliaSyntax.prune(st; keep=SyntaxList(g, NodeId[4]))
-        @test st ≈ stp
-        # 1, 5, 4, 8 should remain
-        @test length(stp._graph.edge_ranges) === 4
-        @test stp.source isa NodeId
-        orig_4 = SyntaxTree(stp._graph, stp.source)
-        @test orig_4.source === LineNumberNode(4)
-        @test numchildren(orig_4) === 1
-        @test orig_4[1].source === LineNumberNode(8)
-        @test stp[1].source === LineNumberNode(5)
-
-        # Try again with node 3 explicitly marked reachable
-        stp = JuliaSyntax.prune(st, keep=SyntaxList(g, NodeId[3, 4]))
-        @test st ≈ stp
-        # 1, 5, 4, 8, and now 3, 7 as well
-        @test length(stp._graph.edge_ranges) === 6
-        @test stp.source isa NodeId
-        @test stp[1].source === LineNumberNode(5)
-
-        orig_3 = SyntaxTree(stp._graph, stp.source)
-        @test orig_3.source isa NodeId
-        orig_4 = SyntaxTree(stp._graph, orig_3.source)
-        @test orig_4.source === LineNumberNode(4)
-
-        @test numchildren(orig_3) === 1
-        @test numchildren(orig_4) === 1
-        @test orig_3[1].source === LineNumberNode(7)
-        @test orig_4[1].source === LineNumberNode(8)
-
-        # Try again with no node provenance
-        stp = JuliaSyntax.prune(st, keep=nothing)
-        @test st ≈ stp
-        @test length(stp._graph.edge_ranges) === 2
-        @test stp.source === LineNumberNode(4)
-        @test stp[1].source === LineNumberNode(5)
-
-        # [1]--> 4    src(1) = 2, msrc(1) = 3
-        #  2 --> 5
-        #  3 --> 6
-        g = testgraph([1:1, 2:2, 3:3, 0:-1, 0:-1, 0:-1], [4, 5, 6],
-                      :source => Dict{Int, SourceAttrType}(
-                          1=>2,map(i->(i=>LineNumberNode(i)), 2:6)...))
-        st = SyntaxTree(g, 1)
-        let stp = JuliaSyntax.prune(st)
-            @test st ≈ stp
-            @test length(stp._graph.edge_ranges) === 2
-            @test stp.orig == 1
-            @test stp[1].orig == 4
+        build3() = let n7 = tnode(7),
+                       n5 = tnode(5, n7),
+                       n6 = tnode(6, n7),
+                       n4 = tnode(4, n5, n6)
+            tnode(1, tnode(2, n4), tnode(3, n4, n6))
         end
-        let stp = JuliaSyntax.prune(st; keep=SyntaxList(g, NodeId[2]))
-            @test st ≈ stp
-            @test length(stp._graph.edge_ranges) === 4
-            @test stp.orig == 1
-            @test stp[1].orig == 4
-            @test prov(stp).orig == 2
-        end
-        let stp = JuliaSyntax.prune(st; keep=SyntaxList(g, NodeId[2, 3]))
-            @test st ≈ stp
-            @test prov(st) ≈ prov(stp)
-            @test length(stp._graph.edge_ranges) === 6
-        end
-
-        # test with real parsed, then copied output---not many properties we can
-        # check without fragile tests, but there are some.
-        code = "begin; x1=1; x2=2; x3=3; x4=begin; 4; end; begin; end; end"
-        st0 = parsestmt(SyntaxTree, code)
-        st0_dup1 = JuliaSyntax.mknode(st0, children(st0))
-        st0_dup2 = JuliaSyntax.mknode(st0_dup1, children(st0_dup1))
-        stp = JuliaSyntax.prune(st0_dup2; keep=st0)
-        @test st0_dup2 ≈ stp
-        @test length(stp._graph.edge_ranges) <
-            length(st0_dup2._graph.edge_ranges)
-        @test stp.source isa NodeId
-        @test SyntaxTree(stp._graph, stp.source) ≈ st0
-        @test sourcetext(stp) == code
-        # try without preserving st0
-        stp = JuliaSyntax.prune(st0_dup2, keep=nothing)
-        @test st0_dup2 ≈ stp
-        @test length(stp._graph.edge_ranges) <
-            length(st0_dup2._graph.edge_ranges)
-        @test stp.source isa SourceRef
-        @test sourcetext(stp) == code
+        ref = build3()
+        stu = unalias_nodes(build3())
+        @test ref ≈ stu
+        @test length(flat_nodes(stu)) == 15
+        @test allunique(flat_nodes(stu))
+        # attrs of nodes 4-7 survive copying
+        @test 4 == stu[1][1].value == stu[2][1].value
+        @test 5 == stu[1][1][1].value == stu[2][1][1].value
+        @test 6 == stu[1][1][2].value == stu[2][1][2].value == stu[2][2].value
+        @test 7 == stu[1][1][1][1].value == stu[1][1][2][1].value ==
+            stu[2][1][1][1].value == stu[2][1][2][1].value == stu[2][2][1].value
     end
 
     @testset "annotate_parent" begin
-        chk_parent(st, parent) = get(st, :parent, nothing) === parent &&
-            all(c->chk_parent(c, st._id), children(st))
+        chk_parent(st, parent) = getmeta(st, :parent, nothing) === parent &&
+            all(c->chk_parent(c, st), children(st))
         # 1 -+-> 2 ->-> 4 --> 5
         #    |      |
         #    +-> 3 -+
-        g = testgraph([1:2, 3:3, 4:4, 5:5, 0:-1], [2, 3, 4, 4, 5])
-        st = JuliaSyntax.annotate_parent!(SyntaxTree(g, 1))
+        st = let n4 = tnode(4, tnode(5))
+            tnode(1, tnode(2, n4), tnode(3, n4))
+        end
+        st = annotate_parent!(st)
         @test chk_parent(st, nothing)
     end
 end
 
 @testset "SyntaxList" begin
     st = parsestmt(SyntaxTree, "function foo end")
-    g = st._graph
 
-    # constructors
     sl0 = SyntaxList()
     @test sl0 isa SyntaxList
     @test length(sl0) == 0
-    @test syntax_graph(sl0) == g
-
-    sl1_id = SyntaxList(g, st._id)
-    @test sl1_id isa SyntaxList
-    @test length(sl1_id) == 1
-    @test sl1_id[1] == st
-    @test syntax_graph(sl1_id) == g
 
     sl1 = SyntaxList(st)
     @test sl1 isa SyntaxList
     @test length(sl1) == 1
-    @test sl1[1] == st
-    @test syntax_graph(sl1) == g
+    @test sl1[1] === st
 
     sl2 = SyntaxList(st, st)
     @test sl2 isa SyntaxList
     @test length(sl2) == 2
-    @test sl2[2] == st
-    @test syntax_graph(sl2) == g
+    @test sl2[2] === st
 end
 
 @testset "@stm SyntaxTree pattern-matching" begin
@@ -528,6 +404,7 @@ end
     end
 
     @testset "SyntaxList splat matching" begin
+        # NB: a splat binds a view of the parent's children, not a SyntaxList
         # trailing splat
         @test @stm st begin
             [K"call" f _...] -> true
@@ -536,7 +413,8 @@ end
             [K"call" f args...] -> kind(f) === K"Identifier"
         end
         @test @stm st begin
-            [K"call" f args...] -> args isa SyntaxList && length(args) === 3
+            [K"call" f args...] ->
+                args isa AbstractVector{SyntaxTree} && length(args) === 3
         end
         @test @stm st begin
             [K"call" f args...] -> kind(args[1]) === K"Identifier" &&
@@ -544,13 +422,14 @@ end
                 kind(args[3]) === K"call"
         end
         @test @stm st begin
-            [K"call" f a b c empty...] -> empty isa SyntaxList && length(empty) === 0
+            [K"call" f a b c empty...] ->
+                empty isa AbstractVector{SyntaxTree} && length(empty) === 0
         end
 
         # binds after splat
         @test @stm st begin
             [K"call" f args... last] ->
-                args isa SyntaxList &&
+                args isa AbstractVector{SyntaxTree} &&
                 length(args) === 2
         end
         @test @stm st begin
@@ -561,7 +440,8 @@ end
                 kind(last) === K"call"
         end
         @test @stm st begin
-            [K"call" empty... f a b c] -> empty isa SyntaxList && length(empty) === 0
+            [K"call" empty... f a b c] ->
+                empty isa AbstractVector{SyntaxTree} && length(empty) === 0
         end
     end
 
