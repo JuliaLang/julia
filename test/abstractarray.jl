@@ -1506,7 +1506,9 @@ end
     t = (1, 2)
     @test [t...; 3 4] == [1 2; 3 4]
     @test [0 t...; t... 0] == [0 1 2; 1 2 0]
-    @test_throws ArgumentError [t...; 3 4 5]
+    # Base throws ArgumentError here, but SparseArrays' hvcat override (which
+    # may be loaded from an earlier test on the same worker) throws DimensionMismatch
+    @test_throws Union{ArgumentError, DimensionMismatch} [t...; 3 4 5]
 
     @test Int[t...; 3 4] == [1 2; 3 4]
     @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
