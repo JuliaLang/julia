@@ -616,7 +616,7 @@ function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision})
     # Add in contributions of ref
     ref = r.ref * l
     sm_hi, sm_lo = add12(s_hi, ref.hi)
-    add12(sm_hi, sm_lo + ref.lo)[1]
+    add12(sm_hi, sm_lo + s_lo + ref.lo)[1]
 end
 
 # sum(1:n) as a product of two integers
