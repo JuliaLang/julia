@@ -41,6 +41,36 @@ static reservation_info_t *get_reservation(jl_method_instance_t *mi, jl_value_t 
     return (reservation_info_t *)ptrhash_get(reservations, mi);
 }
 
+// Async-safe wedge probe for watchdogs: who is waiting for an inference
+// reservation, and which thread holds the one they wait for. The engine's own
+// cycle detector only follows waits between engine participants, so a cycle
+// that runs through the JIT (a materialization waiting on inference that in
+// turn waits on that materialization) is invisible to it and shows up here.
+JL_DLLEXPORT void jl_engine_dump_state(void) JL_NOTSAFEPOINT
+{
+    if (uv_mutex_trylock(&engine_lock) != 0) {
+        jl_safe_printf("engine: lock=HELD (waiters not readable)\n");
+        return;
+    }
+    jl_safe_printf("engine: lock=free awaiting=[");
+    int any = 0;
+    for (size_t tid = 0; tid < awaiting.len; tid++) {
+        infer_key_t *key = (infer_key_t *)awaiting.items[tid];
+        if (key == NULL)
+            continue;
+        jl_method_instance_t *mi = key->mi;
+        const char *name = "?";
+        if (mi != NULL && jl_is_method(mi->def.method))
+            name = jl_symbol_name(mi->def.method->name);
+        reservation_info_t *info = get_reservation(key->mi, key->owner);
+        jl_safe_printf("%stid%d->%s(held_by_tid=%d)", any ? ", " : "", (int)tid, name,
+                       info == HT_NOTFOUND ? -1 : (int)info->tid);
+        any = 1;
+    }
+    jl_safe_printf("]\n");
+    uv_mutex_unlock(&engine_lock);
+}
+
 static void remove_reservation(jl_method_instance_t *mi, jl_value_t *owner) JL_NOTSAFEPOINT
 {
     htable_t *reservations = reservation_map_for_owner(owner);

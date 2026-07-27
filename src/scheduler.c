@@ -679,6 +679,7 @@ JL_DLLEXPORT void jl_dump_scheduler_state(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_
                        sleep_lock_free ? "free" : "HELD");
     }
     jl_tier_dump_state();
+    jl_engine_dump_state();
     jl_safe_printf("==== end scheduler state\n");
 }
 
