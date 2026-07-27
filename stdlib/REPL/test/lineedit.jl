@@ -1246,3 +1246,76 @@ end
         @test s.terminal_properties.da1 === nothing
     end
 end
+
+# Test OSC colour response parsing (see `query_colors`)
+@testset "OSC colour responses" begin
+    RGB(r, g, b) = (; r=UInt8(r), g=UInt8(g), b=UInt8(b))
+    # `awaiting` mirrors a pending `query_colors`, so the sentinel applies the palette.
+    function receive(responses...; awaiting = true)
+        props = LineEdit.TerminalProperties()
+        props.awaiting_colors = awaiting
+        for r in responses
+            LineEdit.receive_osc!(props, IOBuffer(r))
+        end
+        props
+    end
+
+    @testset "interpret_color" begin
+        @test LineEdit.interpret_color("rgb:24/27/30") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("rgb:1/2/3") == RGB(0x11, 0x22, 0x33)
+        @test LineEdit.interpret_color("rgb:242/272/303") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("rgb:2424/2727/3030") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("rgb:24242/2/3") === nothing
+        @test LineEdit.interpret_color("rgba:24/27/30/ff") == RGB(0x24, 0x27, 0x30)
+        @test LineEdit.interpret_color("#242730") === nothing
+        @test LineEdit.interpret_color("rgb:24/27") === nothing
+        @test LineEdit.interpret_color("rgb:24/27/30/ff") === nothing
+        @test LineEdit.interpret_color("rgba:24/27/30") === nothing
+        @test LineEdit.interpret_color("rgb:zz/27/30") === nothing
+    end
+
+    @testset "read_osc_response terminators" begin
+        for term in ("\a", "\e\\", "\x9c", "\x03")
+            @test LineEdit.read_osc_response(IOBuffer("10;rgb:24/27/30" * term)) == "10;rgb:24/27/30"
+        end
+        # An unterminated response ends at EOF rather than blocking.
+        @test LineEdit.read_osc_response(IOBuffer("10;rgb:24/27/30")) == "10;rgb:24/27/30"
+    end
+
+    @testset "colour accumulation" begin
+        props = receive("4;1;rgb:ff/00/00\a", "4;2;rgb:00/ff/00\a")
+        @test props.colors == [:red => RGB(0xff, 0, 0), :green => RGB(0, 0xff, 0)]
+        @test receive("4;15;rgb:ff/ff/ff\a").colors == [:bright_white => RGB(0xff, 0xff, 0xff)]
+        # Out-of-range indices and malformed specs are dropped, not stored.
+        @test isempty(receive("4;16;rgb:ff/ff/ff\a").colors)
+        @test isempty(receive("4;0;not-a-color\a").colors)
+        @test isempty(receive("nonsense\a").colors)
+    end
+
+    @testset "foreground/background sentinel" begin
+        props = receive("4;0;rgb:00/00/00\a", "10;rgb:bb/c2/cf\a", "11;rgb:24/27/30\a")
+        @test props.colors == [:black => RGB(0, 0, 0), :foreground => RGB(0xbb, 0xc2, 0xcf),
+                               :background => RGB(0x24, 0x27, 0x30)]
+        props = receive("4;0;rgb:00/00/00\a", "10;rgb:bb/c2/cf\a")
+        @test props.awaiting_colors
+        LineEdit.receive_osc!(props, IOBuffer("11;rgb:24/27/30\a"))
+        @test !props.awaiting_colors
+    end
+
+    @testset "partial response" begin
+        # A terminal that answers only fg/bg still applies its colours.
+        props = receive("10;rgb:bb/c2/cf\a", "11;rgb:24/27/30\a")
+        @test props.colors == [:foreground => RGB(0xbb, 0xc2, 0xcf), :background => RGB(0x24, 0x27, 0x30)]
+        @test !props.awaiting_colors
+        # One that answers only the palette never reaches the sentinel.
+        props = receive("4;0;rgb:00/00/00\a")
+        @test props.awaiting_colors
+        # A malformed sentinel reply still ends the query.
+        props = receive("10;garbage\a", "11;rgb:24/27/30\a")
+        @test props.colors == [:background => RGB(0x24, 0x27, 0x30)]
+        @test !props.awaiting_colors
+        # Responses outside a query are ignored.
+        props = receive("4;1;rgb:ff/00/00\a", awaiting = false)
+        @test isempty(props.colors)
+    end
+end
