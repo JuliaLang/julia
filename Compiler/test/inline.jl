@@ -1879,6 +1879,17 @@ let src = code_typed1((Task,)) do t; Core.task_result_type(t); end
     @test count(iscall((src, Core.task_result_type)), src.code) == 0
     @test src.code[end] == ReturnNode(Any)
 end
+let src = code_typed1((Union{Task,Int},)) do t; Core.task_result_type(t); end
+    # The Int path throws, so the call cannot be folded away.
+    @test count(iscall((src, Core.task_result_type)), src.code) == 1
+end
+for src in (
+        code_typed1((Int,)) do i; Core.task_result_type(i); end,
+        code_typed1(()) do; Core.task_result_type(); end,
+        code_typed1((Task,Task)) do t, u; Core.task_result_type(t, u); end)
+    # Invalid argument types and arities must retain the throwing call.
+    @test count(iscall((src, Core.task_result_type)), src.code) == 1
+end
 
 # apply `ssa_inlining_pass` multiple times
 func_mul_int(a::Int, b::Int) = Core.Intrinsics.mul_int(a, b)

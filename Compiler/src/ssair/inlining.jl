@@ -1718,7 +1718,8 @@ function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
         elseif ⊑(optimizer_lattice(state.interp), cond, Bool) && stmt.args[3] === stmt.args[4]
             return SomeCase(stmt.args[3])
         end
-    elseif f === Core.task_result_type
+    elseif (f === Core.task_result_type && length(argtypes) == 2 &&
+            ⊑(optimizer_lattice(state.interp), argtypes[2], Task))
         return SomeCase(quoted(instanceof_tfunc(type)[1]))
     end
     return nothing
