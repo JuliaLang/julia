@@ -55,7 +55,7 @@ Core.task_result_type
 
 ## Adding New Builtin Functions
 
-This section documents the process for adding a new builtin function to Julia, (using `_task` as an example).
+This section documents the process for adding a new builtin function to Julia (using `_task` as an example).
 
 ### Overview
 
@@ -109,6 +109,11 @@ add_tfunc(Core._your_builtin, 2, 3, your_builtin_tfunc, 20)
 # Leave out add_tfunc and implement in abstractinterpretation.jl instead
 ```
 
+Also model the builtin's effects: register it in `_EFFECTS_KNOWN_BUILTINS` and teach
+`builtin_effects` (and `_builtin_nothrow`, if the throwing conditions can be refined
+from the argument types) about it. Builtins that are absent from that list are
+pessimistically assumed to have fully unknown effects.
+
 #### 3. Complex Inference Integration (if `add_tfunc` was insufficient)
 
 **File: `Compiler/src/stmtinfo.jl`**
@@ -146,8 +151,9 @@ if (f !== Core.invoke &&
     # ... other functions
     f !== Core._your_builtin)  # <-- Add here
 
-# Add optimization logic in `assemble_inline_todo!`
-elseif f === Core._your_builtin
+# Add optimization logic in `assemble_inline_todo!`, dispatching on the `CallInfo`
+# recorded by inference
+elseif isa(info, YourBuiltinCallInfo)
     handle_your_builtin_call!(ir, idx, stmt, info, state)
 end
 ```
