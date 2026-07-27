@@ -117,14 +117,16 @@ info_result = IndirectCallInfo(callinfo.info, callinfo.effects, true)
 
 **File: `Compiler/src/abstractinterpretation.jl`**
 ```julia
-# Add to builtin handling in abstract_call_builtin
+# Add to the builtin-specific handling in abstract_call_known
 elseif f === Core._your_builtin
-    return Future(abstract_eval_your_builtin(interp, arginfo, si, sv))
+    return abstract_eval_your_builtin(interp, arginfo, si, vtypes, sv)
 
 # Implement custom abstract evaluation if needed
-function abstract_eval_your_builtin(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState)
+function abstract_eval_your_builtin(interp::AbstractInterpreter, arginfo::ArgInfo,
+                                    si::StmtInfo, vtypes::Union{VarTable,Nothing},
+                                    sv::AbsIntState)
     # Validation and inference logic
-    return CallMeta(return_type, exception_type, effects, call_info)
+    return Future(CallMeta(return_type, exception_type, effects, call_info))
 end
 ```
 
