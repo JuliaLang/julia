@@ -404,10 +404,19 @@ Sets the number of threads used by Garbage Collection. If unspecified is set to 
 ### [`JULIA_IMAGE_THREADS`](@id JULIA_IMAGE_THREADS)
 
 An unsigned 32-bit integer that sets the number of threads used by image
-compilation in this Julia process. The value of this variable may be
-ignored if the module is a small module. If left unspecified, the smaller
-of the value of [`JULIA_CPU_THREADS`](@ref JULIA_CPU_THREADS) or half the
-number of logical CPU cores is used in its place.
+compilation in this Julia process, and pins the number of output shards the
+image is split into to the same value. The value of this variable may be
+ignored if the module is a small module.
+
+If left unspecified, image compilation aims for all effective CPU cores, but
+bounds that by a codegen memory budget derived from the machine's total RAM
+(respecting any cgroup or container limit) so that peak memory stays in check
+on machines with many cores relative to their memory, and by
+[`JULIA_CPU_THREADS`](@ref JULIA_CPU_THREADS) if that is set. On a platform
+that does not report its memory, half the number of logical CPU cores is used
+instead. The number of shards is then sized separately from the module's
+codegen weight, so an image may be split into more shards than there are
+threads to compile them, which are worked through in waves.
 
 During parallel package precompilation, workers instead coordinate their CPU
 usage through a shared token pool sized by
