@@ -595,6 +595,18 @@ let a = []
     @test timedwait(() -> a == [1], 10) === :ok
 end
 
+@testset "wait after closing a one-shot Timer (#34366)" begin
+    t = Timer(600)
+    close(t) # test assumes that thread won't get preempted for 10 minutes...
+    @test_throws EOFError wait(t)
+
+    t = Timer(0)
+    @test wait(t) === nothing
+    @test wait(t) === nothing
+    close(t)
+    @test wait(t) === nothing
+end
+
 # make sure that we don't accidentally create a one-shot timer
 let
     t = Timer(Returns(nothing), 10, interval=0.00001)

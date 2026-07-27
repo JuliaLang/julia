@@ -74,8 +74,9 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 
 Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
 at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
-once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
-[`isopen`](@ref) to check whether a timer is still active. An inactive timer will not fire.
+once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. After a
+one-shot timer triggers, all subsequent calls to [`wait`](@ref) return immediately, even if it is closed.
+Use [`isopen`](@ref) to check whether a timer is still active. An inactive timer will not fire.
 Use `t.timeout` and `t.interval` to read the setup conditions of a `Timer` `t`.
 
 ```julia-repl
@@ -104,6 +105,10 @@ false
 
 !!! compat "Julia 1.12"
     The `timeout` and `interval` readable properties were added in Julia 1.12.
+
+!!! compat "Julia 1.14"
+    Prior to Julia 1.14, only the first call to `wait` on a triggered one-shot timer returned,
+    and subsequent calls threw an `EOFError`.
 
 """
 mutable struct Timer
@@ -195,7 +200,8 @@ function _trywait(t::Union{Timer, AsyncCondition})
         end
         iolock_end()
     end
-    @atomic :monotonic t.set = false # if there are multiple waiters, an unspecified number may short-circuit past here
+    # if there are multiple waiters, an unspecified number may short-circuit past here
+    !(t isa Timer && iszero(t.interval_ms)) && @atomic :monotonic t.set = false
     return set
 end
 
