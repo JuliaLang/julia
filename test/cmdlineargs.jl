@@ -1516,7 +1516,7 @@ end
 let n = 6000
     code = """
     f(x, ::Val{i}) where {i} = x + i
-    @generated g(x) = Expr(:call, :+, (:(f(x, Val(\$i))) for i in 1:$n)...)
+    @eval g(x) = +(\$((:(f(x, Val(\$i))) for i in 1:$n)...))
     print(g(1))
     """
     @test test_read_success(`$(Base.julia_cmd()) --startup-file=no --inline=no -e $code`) == string(sum(1:n) + n)
