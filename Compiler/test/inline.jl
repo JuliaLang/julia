@@ -1873,6 +1873,18 @@ let src = code_typed1(()) do
         end, src.code) == 1
 end
 
+# Test that no invoke target is injected when the single method match does not fully
+# cover the argument type: the task must fall back to generic dispatch so that
+# non-callable bodies still raise a MethodError when the task runs.
+abstract type TaskCallable end
+struct TaskCallableImpl <: TaskCallable end
+(::TaskCallableImpl)() = 1
+let src = code_typed1((TaskCallable,)) do f
+        return Task(f)
+    end
+    @test count(e -> iscall((src, Core._task), e) && length((e::Expr).args) == 3, src.code) == 1
+end
+
 # Test that task_result_type gets inlined to its constant value
 let src = code_typed1((Task,)) do t; Core.task_result_type(t); end
     # Should be inlined to the `Any` constant, with no call to task_result_type
