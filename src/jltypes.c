@@ -3472,11 +3472,11 @@ void export_jl_sysimg_globals(void)
     jl_##name##_type->smalltag = jl_##name##_tag;
 void jl_init_types(void) JL_GC_DISABLED
 {
-   // n.b. When adding fields to existing types, update const/atomic field bitvectors carefully:
-   //   Bits represent field positions (0-indexed).
-   //   Prefer `0b` notation (converting if needed from `0x`).
-   //   Only set bits for new atomic/const fields, shift existing bits as needed.
-   //   Only 32 bits in one field, overflow goes into the next field.
+    // n.b. When adding fields to existing types, update const/atomic field bitvectors carefully:
+    //   Bits represent field positions (0-indexed).
+    //   Prefer `0b` notation (converting if needed from `0x`).
+    //   Only set bits for new atomic/const fields, shift existing bits as needed.
+    //   Only 32 bits in one field, overflow goes into the next field.
 
     jl_module_t *core = NULL; // will need to be assigned later
     jl_task_t *ct = jl_current_task;
