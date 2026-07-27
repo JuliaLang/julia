@@ -371,6 +371,7 @@ in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed ta
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
 @noinline function wait(t::Task; throw=true)
+    # Inlining a blocking call buys nothing; this also keeps the inlineable `fetch(::Task)` small.
     _wait(t)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
@@ -573,7 +574,6 @@ is thrown.
     wait(t)
     return task_result(t)::Core.task_result_type(t)
 end
-
 
 ## lexically-scoped waiting for multiple items
 
