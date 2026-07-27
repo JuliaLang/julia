@@ -684,8 +684,7 @@ end
 
 struct PartialTask
     fetch_type
-    fetch_error
-    PartialTask(@nospecialize(fetch_type), @nospecialize(fetch_error)) = new(fetch_type, fetch_error)
+    PartialTask(@nospecialize(fetch_type)) = new(fetch_type)
 end
 
 eval(Core, quote

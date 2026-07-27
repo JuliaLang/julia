@@ -3527,15 +3527,10 @@ function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInf
 end
 
 # Convert the `CallMeta` of the task body call into the `CallMeta` of the `Core._task`
-# call that creates it, tracking the body's result/error types with a `PartialTask`.
+# call that creates it, tracking the body's result type with a `PartialTask`.
 function task_callmeta(call::CallMeta, ::AbstractInterpreter, ::AbsIntState)
     fetch_type = widenconst(call.rt)
-    fetch_error = widenconst(call.exct)
-    if fetch_type === Any && fetch_error === Any
-        rt_result = Task
-    else
-        rt_result = PartialTask(fetch_type, fetch_error)
-    end
+    rt_result = fetch_type === Any ? Task : PartialTask(fetch_type)
     info_result = IndirectCallInfo(call.info, call.effects, true)
     return CallMeta(rt_result, Any, TASK_BUILTIN_EFFECTS, info_result)
 end

@@ -405,8 +405,7 @@ end
         return false
     elseif typea isa PartialTask
         typeb isa PartialTask || return false
-        return issimplertype(𝕃, typea.fetch_type, typeb.fetch_type) &&
-               issimplertype(𝕃, typea.fetch_error, typeb.fetch_error)
+        return issimplertype(𝕃, typea.fetch_type, typeb.fetch_type)
     end
     return true
 end
@@ -733,14 +732,11 @@ end
     apt = isa(typea, PartialTask)
     bpt = isa(typeb, PartialTask)
     if apt && bpt
-        # Both are PartialTask - merge their fetch types and errors
+        # Both are PartialTask - merge their fetch types
         merged_fetch_type = tmerge(lattice, typea.fetch_type, typeb.fetch_type)
-        merged_fetch_error = tmerge(lattice, typea.fetch_error, typeb.fetch_error)
-        # If both are Any, no additional type information - return Task
-        if merged_fetch_type === Any && merged_fetch_error === Any
-            return Task
-        end
-        return PartialTask(merged_fetch_type, merged_fetch_error)
+        # Any carries no additional type information - return Task
+        merged_fetch_type === Any && return Task
+        return PartialTask(merged_fetch_type)
     elseif apt
         typea = Task
     elseif bpt
