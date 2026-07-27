@@ -222,10 +222,11 @@ end
 
 import Base: append_c_digits_fast as append_c_digits, append_nine_digits
 
+_append_d_digits_tail!(buf, pos::Int, decchar) = (buf[pos] = buf[pos + 1]; buf[pos + 1] = decchar; nothing)
+
 function append_d_digits(olength::Int, digits::Unsigned, buf, pos::Int, decchar)
     newpos = append_c_digits(olength, digits, buf, pos + 1)
-    @inbounds buf[pos] = buf[pos + 1]
-    @inbounds buf[pos + 1] = decchar
+    Base.@split_effects :nothrow _append_d_digits_tail!(buf, pos, decchar)
     return newpos # == pos + olength + 1
 end
 
@@ -294,7 +295,7 @@ for T in (Float64, Float32, Float16)
     i_max = log10pow2(e2_max)
     table_sym = Symbol("pow5invsplit_table_", string(T))
     @eval const $table_sym = Tuple(Any[pow5invsplit($T, i) for i = 0:$i_max])
-    @eval pow5invsplit_lookup(::Type{$T}, i) = @inbounds($table_sym[i+1])
+    @eval pow5invsplit_lookup(::Type{$T}, i) = ($table_sym[i+1])
 end
 
 
@@ -322,7 +323,7 @@ for T in (Float64, Float32, Float16)
     i_max = 1 - e2_min - log10pow5(-e2_min)
     table_sym = Symbol("pow5split_table_", string(T))
     @eval const $table_sym = Tuple(Any[pow5split($T, i) for i = 0:$i_max])
-    @eval pow5split_lookup(::Type{$T}, i) = @inbounds($table_sym[i+1])
+    @eval pow5split_lookup(::Type{$T}, i) = ($table_sym[i+1])
 end
 
 const DIGIT_TABLE16 = Base._dec_d100

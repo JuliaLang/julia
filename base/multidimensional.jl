@@ -401,6 +401,8 @@ module IteratorsMD
         # Eagerly do boundscheck before calculating each item of the CartesianIndex so that
         # we can pass `@inbounds` hint to inside the map and generates more efficient SIMD codes (#42115)
         @boundscheck checkbounds(iter, I...)
+        # NB: semantic `@inbounds`: with the eager check above elided by a
+        # caller's `@inbounds`, the component lookups must not re-check (#42115)
         index = map(iter.indices, I) do r, i
             @inbounds getindex(r, i)
         end
@@ -413,6 +415,7 @@ module IteratorsMD
     @inline function Base.getindex(iter::CartesianIndices{N,R},
         I::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon}, N}) where {N,R}
         @boundscheck checkbounds(iter, I...)
+        # NB: semantic `@inbounds` (see the scalar `getindex` method above; #42115)
         indices = map(iter.indices, I) do r, i
             @inbounds getindex(r, i)
         end
@@ -631,11 +634,16 @@ module IteratorsMD
     function Base.collect(inds::CartesianIndices{N, R}) where {N,R<:NTuple{N, AbstractUnitRange}}
         Base._collect_indices(axes(inds), inds)
     end
+    # Store into `dest` is outlined so its bounds check can be split off as a
+    # separate slow path (see `Core.invoke_split_effects`); the allocation of
+    # `dest` below keeps the whole of `collect` from being split at once.
+    _cartesian_collect_store!(dest::Array{T}, val::T, i::Int) where {T} = (dest[i] = val; dest)
     function Base.collect(inds::CartesianIndices)
         dest = Array{eltype(inds), ndims(inds)}(undef, size(inds))
         i = 0
-        @inbounds for a in inds
-            dest[i+=1] = a
+        for a in inds
+            i += 1
+            Base.@split_effects :nothrow _cartesian_collect_store!(dest, a, i)
         end
         dest
     end
@@ -667,7 +675,7 @@ module IteratorsMD
         return I, (I, n+1)
     end
 
-    @inline function simd_outer_range(iter::CartesianPartition)
+    @inline function _simd_outer_range_impl(iter::CartesianPartition)
         # In general, the Cartesian Partition might start and stop in the middle of the outer
         # dimensions — thus the outer range of a CartesianPartition is itself a
         # CartesianPartition.
@@ -683,7 +691,7 @@ module IteratorsMD
         # form the iterator for outer dimensions, equivalent to vec(oci), but mi is reused
         oci = CartesianIndices(tail(ci.indices))
         roci = ReshapedArray(oci, (length(oci),), tail(mi))
-        outer = @inbounds view(roci, vl:vr)
+        outer = view(roci, vl:vr)
         # Use Generator to make inner loop branchless
         @inline function skip_len_I(i::Int, I::CartesianIndex)
             l = i == 1 ? fl : first(ax1)
@@ -692,7 +700,10 @@ module IteratorsMD
         end
         (skip_len_I(i, I) for (i, I) in Iterators.enumerate(outer))
     end
-    @inline function simd_outer_range(iter::CartesianPartition{CartesianIndex{2}})
+    # Outlined so its bounds check can be split off as a separate slow path
+    # (see `Core.invoke_split_effects`).
+    @inline simd_outer_range(iter::CartesianPartition) = Base.@split_effects :nothrow _simd_outer_range_impl(iter)
+    @inline function _simd_outer_range_impl(iter::CartesianPartition{CartesianIndex{2}})
         # But for two-dimensional Partitions the above is just a simple one-dimensional range
         # over the second dimension; we don't need to worry about non-rectangular staggers in
         # higher dimensions.
@@ -701,7 +712,7 @@ module IteratorsMD
         ax, ax1 = axes(ci), Base.axes1(ci)
         fl, vl = Base.ind2sub_rs(ax, mi, first(iter.indices[1]))
         fr, vr = Base.ind2sub_rs(ax, mi, last(iter.indices[1]))
-        outer = @inbounds CartesianIndices((ci.indices[2][vl:vr],))
+        outer = CartesianIndices((ci.indices[2][vl:vr],))
         # Use Generator to make inner loop branchless
         @inline function skip_len_I(I::CartesianIndex{1})
             l = I == first(outer) ? fl : first(ax1)
@@ -710,6 +721,9 @@ module IteratorsMD
         end
         (skip_len_I(I) for I in outer)
     end
+    # Outlined so its bounds check can be split off as a separate slow path
+    # (see `Core.invoke_split_effects`).
+    @inline simd_outer_range(iter::CartesianPartition{CartesianIndex{2}}) = Base.@split_effects :nothrow _simd_outer_range_impl(iter)
     @inline simd_inner_length(iter::CartesianPartition, (_, len, _)::Tuple{Int,Int,CartesianIndex}) = len
     @propagate_inbounds simd_index(iter::CartesianPartition, (skip, _, I)::Tuple{Int,Int,CartesianIndex}, n::Int) =
         simd_index(iter.parent.parent, I, n + skip)
@@ -867,29 +881,38 @@ end
     end
 end
 # When wrapping a BitArray, lean heavily upon its internals.
-@inline function iterate(L::LogicalIndex{Int,<:BitArray})
+@inline function _iterate_impl(L::LogicalIndex{Int,<:BitArray})
     L.sum == 0 && return nothing
     Bc = L.mask.chunks
-    return iterate(L, (1, 1, (), @inbounds Bc[1]))
+    return iterate(L, (1, 1, (), Bc[1]))
 end
-@inline function iterate(L::LogicalIndex{<:CartesianIndex,<:BitArray})
+# Outlined so its bounds check can be split off as a separate slow path
+# (see `Core.invoke_split_effects`).
+iterate(L::LogicalIndex{Int,<:BitArray}) = @split_effects :nothrow _iterate_impl(L)
+@inline function _iterate_impl(L::LogicalIndex{<:CartesianIndex,<:BitArray})
     L.sum == 0 && return nothing
     Bc = L.mask.chunks
     irest = ntuple(one, ndims(L.mask)-1)
-    return iterate(L, (1, 1, irest, @inbounds Bc[1]))
+    return iterate(L, (1, 1, irest, Bc[1]))
 end
-@inline function iterate(L::LogicalIndex{<:Any,<:BitArray}, (i1, Bi, irest, c))
+# Outlined so its bounds check can be split off as a separate slow path
+# (see `Core.invoke_split_effects`).
+iterate(L::LogicalIndex{<:CartesianIndex,<:BitArray}) = @split_effects :nothrow _iterate_impl(L)
+@inline function _iterate_impl(L::LogicalIndex{<:Any,<:BitArray}, (i1, Bi, irest, c))
     Bc = L.mask.chunks
     while c == 0
         Bi >= length(Bc) && return nothing
         i1 += 64
-        @inbounds c = Bc[Bi+=1]
+        c = Bc[Bi+=1]
     end
     tz = trailing_zeros(c)
     c = _blsr(c)
     i1, irest = _overflowind(i1 + tz, irest, size(L.mask))
     return eltype(L)(i1, irest...), (i1 - tz, Bi, irest, c)
 end
+# Outlined so its bounds check can be split off as a separate slow path
+# (see `Core.invoke_split_effects`).
+iterate(L::LogicalIndex{<:Any,<:BitArray}, (i1, Bi, irest, c)) = @split_effects :nothrow _iterate_impl(L, (i1, Bi, irest, c))
 
 ## Boundscheck for Logicalindex
 # LogicalIndex: map all calls to mask
@@ -995,7 +1018,10 @@ function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, 
     shape = index_shape(I...)
     dest = similar(A, shape)
     map(length, axes(dest)) == map(length, shape) || throw_checksize_error(dest, shape)
-    _unsafe_getindex!(dest, A, I...) # usually a generated function, don't allow it to impact inference result
+    # Outlined so its bounds check can be split off as a separate slow path
+    # (see `Core.invoke_split_effects`); usually a generated function, don't
+    # allow it to impact inference result.
+    @split_effects :nothrow _unsafe_getindex!(dest, A, I...)
     return dest
 end
 
@@ -1004,7 +1030,7 @@ function _generate_unsafe_getindex!_body(N::Int)
         @inline
         D = eachindex(dest)
         Dy = _prechecked_iterate(D)
-        @inbounds @nloops $N j d->I[d] begin
+        @nloops $N j d->I[d] begin
             (idx, state) = Dy::NTuple{2,Any}
             dest[idx] = @ncall $N getindex src j
             Dy = _prechecked_iterate(D, state)
@@ -1037,6 +1063,12 @@ function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractA
     A
 end
 
+# Outlined so its bounds check can be split off as a separate slow path (see
+# `Core.invoke_split_effects`); the surrounding `unalias`/shape-check preamble
+# is left untouched since it involves an allocating call (`unalias`) that
+# keeps the whole generated body from being split at once.
+@inline _setindex_elt!(A::AbstractArray, x′::AbstractArray, idx, I::Tuple) = (setindex!(A, x′[idx], I...); A)
+
 function _generate_unsafe_setindex!_body(N::Int)
     quote
         x′ = unalias(A, x)
@@ -1045,9 +1077,10 @@ function _generate_unsafe_setindex!_body(N::Int)
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
         X = eachindex(x′)
         Xy = _prechecked_iterate(X)
-        @inbounds @nloops $N i d->I_d begin
+        @nloops $N i d->I_d begin
             (idx, state) = Xy::NTuple{2,Any}
-            @ncall $N setindex! A x′[idx] i
+            Ituple = @ntuple $N i
+            @split_effects :nothrow _setindex_elt!(A, x′, idx, Ituple)
             Xy = _prechecked_iterate(X, state)
         end
         A
@@ -1108,9 +1141,12 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
 
     return view(a, r1...) .- view(a, r0...)
 end
+# Outlined so its bounds check can be split off as a separate slow path
+# (see `Core.invoke_split_effects`).
+_diffelt(r::AbstractRange, i::Integer) = r[i+1] - r[i]
 function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
-    return [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
+    return [@split_effects :nothrow _diffelt(r, i) for i in firstindex(r):lastindex(r)-1]
 end
 
 ### from abstractarray.jl
@@ -1175,6 +1211,11 @@ end
 # And in general, checking the intersection is too much work
 _indicesmightoverlap(A::Tuple{Any, Vararg{Any}}, B::Tuple{Any, Vararg{Any}}) = true
 
+# Outlined so its bounds check can be split off as a separate slow path (see
+# `Core.invoke_split_effects`); shared by the `@generated` and plain branches
+# of `copyto!` below, which both reduce to this same per-element store.
+@inline _copyto_elt!(dest, Rdest, src′, Rsrc, ΔI, I) = (dest[Rdest[I + ΔI]] = src′[Rsrc[I]]; dest)
+
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                   src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     isempty(Rdest) && return dest
@@ -1192,12 +1233,12 @@ function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
     if @generated
         quote
             @nloops $N i (n->CRsrc.indices[n]) begin
-                @inbounds @nref($N,dest,n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N,src′,n->Rsrc.indices[n][i_n])
+                @split_effects :nothrow _copyto_elt!(dest, Rdest, src′, Rsrc, ΔI, CartesianIndex(@ntuple $N i))
             end
         end
     else
         for I in CRsrc
-            @inbounds dest[Rdest[I + ΔI]] = src′[Rsrc[I]]
+            @split_effects :nothrow _copyto_elt!(dest, Rdest, src′, Rsrc, ΔI, I)
         end
     end
     dest
@@ -1413,7 +1454,7 @@ end
         $(Symbol(:offset_, N)) = 1
         ind = 0
         Xc, Bc = X.chunks, B.chunks
-        @nloops $N i d->I[d] d->(@inbounds offset_{d-1} = offset_d + (i_d-1)*stride_d) begin
+        @nloops $N i d->I[d] d->(offset_{d-1} = offset_d + (i_d-1)*stride_d) begin
             ind += 1
             unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, offset_0), ind)
         end
@@ -1427,7 +1468,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     bind = pos_d
     cind = pos_s
     lastind = pos_d + numbits - 1
-    @inbounds while bind ≤ lastind
+    while bind ≤ lastind
         unsafe_bitsetindex!(Bc, Bool(C[cind]), bind)
         bind += 1
         cind += 1
@@ -1444,10 +1485,39 @@ end
     x == 0 || x == 1 || throw(InexactError(:try_bool_conversion, Bool, x))
 @inline unchecked_bool_convert(x::Real) = x == 1
 
-function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArray{<:Real}, pos_s::Int, numbits::Int)
-    @inbounds for i = (1:numbits) .+ (pos_s - 1)
-        try_bool_conversion(C[i])
+# The four helpers below are outlined out of `copy_to_bitarray_chunks!` so that
+# their bounds checks can be split off as separate slow paths (see
+# `Core.invoke_split_effects`): the coarse whole-function safety check is
+# blocked by ANY store combined with ANY load-feeds-branch anywhere in the
+# same function, so each lexically-separate region (pure validation, the two
+# partial-chunk stores, and the full-chunk loop) needs its own function.
+_validate_chunk!(C::StridedArray{<:Real}, rng) = (for i in rng; try_bool_conversion(C[i]); end; nothing)
+
+function _store_partial_chunk!(Bc::Vector{UInt64}, C::StridedArray{<:Real}, target::Int, lo::Int, hi::Int, ind::Int, msk::UInt64)
+    c = UInt64(0)
+    for j = lo:hi
+        c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
+        ind += 1
     end
+    Bc[target] = (Bc[target] & msk) | (c & ~msk)
+    return ind
+end
+
+function _store_full_chunks!(Bc::Vector{UInt64}, C::StridedArray{<:Real}, bind::Int, ind::Int, nc::Int)
+    for i = 1:nc
+        c = UInt64(0)
+        for j = 0:63
+            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
+            ind += 1
+        end
+        Bc[bind] = c
+        bind += 1
+    end
+    return bind, ind
+end
+
+function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArray{<:Real}, pos_s::Int, numbits::Int)
+    @split_effects :nothrow _validate_chunk!(C, (1:numbits) .+ (pos_s - 1))
 
     kd0, ld0 = get_chunks_id(pos_d)
     kd1, ld1 = get_chunks_id(pos_d + numbits - 1)
@@ -1466,35 +1536,17 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
 
     bind = kd0
     ind = pos_s
-    @inbounds if ld0 > 0
-        c = UInt64(0)
-        for j = ld0:lt0
-            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
-            ind += 1
-        end
-        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & ~msk_d0)
+    if ld0 > 0
+        ind = @split_effects :nothrow _store_partial_chunk!(Bc, C, kd0, ld0, lt0, ind, msk_d0)
         bind += 1
     end
 
     nc = _div64(numbits - ind + pos_s)
-    @inbounds for i = 1:nc
-        c = UInt64(0)
-        for j = 0:63
-            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
-            ind += 1
-        end
-        Bc[bind] = c
-        bind += 1
-    end
+    bind, ind = @split_effects :nothrow _store_full_chunks!(Bc, C, bind, ind, nc)
 
-    @inbounds if bind ≤ kd1
+    if bind ≤ kd1
         @assert bind == kd1 "bind != kd1"
-        c = UInt64(0)
-        for j = 0:ld1
-            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
-            ind += 1
-        end
-        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & ~msk_d1)
+        ind = @split_effects :nothrow _store_partial_chunk!(Bc, C, kd1, 0, ld1, ind, msk_d1)
     end
 end
 
@@ -1673,6 +1725,13 @@ function checkdims_perm(indsP::NTuple{N, AbstractUnitRange}, indsB::NTuple{N, Ab
     nothing
 end
 
+# Outlined so its bounds check can be split off as a separate slow path (see
+# `Core.invoke_split_effects`); the surrounding `checkdims_perm` precondition
+# check (inlined at the top of the generated body below) indexes `perm` with
+# a dynamic integer and so is not itself provably nothrow, which keeps the
+# whole generated body from being split at once.
+@inline _permutedims_store!(P::AbstractArray, B::AbstractArray, ind::Int, sumc::Int, offset::Int) = (P[ind] = B[sumc+offset]; P)
+
 for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @generated function permutedims!(P::$PT{$(V...)}, B::$BT{$(V...)}, perm) where $(V...)
         quote
@@ -1692,7 +1751,7 @@ for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArra
                     d->(sumc += i_d*strides[d]), # PRE
                     d->(sumc -= i_d*strides[d]), # POST
                     begin # BODY
-                        @inbounds P[ind] = B[sumc+offset]
+                        @split_effects :nothrow _permutedims_store!(P, B, ind, sumc, offset)
                         ind += 1
                     end)
 
@@ -1753,6 +1812,14 @@ unique(A::AbstractArray; dims::D = :) where {D<:Union{Colon,Integer}} = _unique_
 
 _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
 
+# Outlined so their bounds checks can be split off as separate slow paths
+# (see `Core.invoke_split_effects`); the surrounding `_unique_dims` body also
+# contains a `Dict`/`get!`/`push!`-based hashing pass and an unbounded
+# collision-resolution loop, which independently keep the whole generated
+# body from being split at once.
+_hash_store!(hashes::AbstractVector{UInt}, A::AbstractArray, k::Int, I::CartesianIndex) = (hashes[k] = hash(hashes[k], hash(A[I])); nothing)
+_collide_check!(collided::AbstractVector{Bool}, A::AbstractArray, k::Int, j::CartesianIndex, i::CartesianIndex) = (isequal(A[j], A[i]) || (collided[k] = true); nothing)
+
 @generated function _unique_dims(A::AbstractArray{T,N}, dim::Integer) where {T,N}
     quote
         1 <= dim <= $N || return copy(A)
@@ -1761,7 +1828,7 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
         # Compute hash for each row
         k = 0
         @nloops $N i A d->(if d == dim; k = i_d; end) begin
-            @inbounds hashes[k] = hash(hashes[k], hash((@nref $N A i)))
+            @split_effects :nothrow _hash_store!(hashes, A, k, CartesianIndex(@ntuple $N i))
         end
 
         # Collect index of first row for each hash
@@ -1774,16 +1841,14 @@ _unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
 
         # Check for collisions
         collided = falses(axes(A, dim))
-        @inbounds begin
+        begin
             @nloops $N i A d->(if d == dim
                 k = i_d
                 j_d = uniquerow[k]
             else
                 j_d = i_d
             end) begin
-                if !isequal((@nref $N A j), (@nref $N A i))
-                    collided[k] = true
-                end
+                @split_effects :nothrow _collide_check!(collided, A, k, CartesianIndex(@ntuple $N j), CartesianIndex(@ntuple $N i))
             end
         end
 

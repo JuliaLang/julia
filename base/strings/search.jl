@@ -344,11 +344,11 @@ function findnext(testf::Function, s::AbstractString, i::Integer)
     i = Int(i)
     z = ncodeunits(s) + 1
     1 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds i == z || isvalid(s, i) || string_index_err(s, i)
+    i == z || isvalid(s, i) || string_index_err(s, i)
     e = lastindex(s)
     while i <= e
-        testf(@inbounds s[i]) && return i
-        i = @inbounds nextind(s, i)
+        testf(s[i]) && return i
+        i = nextind(s, i)
     end
     return nothing
 end
@@ -658,7 +658,7 @@ function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{UInt8}
         push!(found, r)
         j = overlap || isempty(r) ? first(r) : last(r)
         j > e && break
-        @inbounds i = nextind(s, j)
+        i = nextind(s, j)
     end
     return found
 end
@@ -669,10 +669,10 @@ function findprev(testf::Function, s::AbstractString, i::Integer)
     z = ncodeunits(s) + 1
     0 ≤ i ≤ z || throw(BoundsError(s, i))
     i == z && return nothing
-    @inbounds i == 0 || isvalid(s, i) || string_index_err(s, i)
+    i == 0 || isvalid(s, i) || string_index_err(s, i)
     while i >= 1
-        testf(@inbounds s[i]) && return i
-        i = @inbounds prevind(s, i)
+        testf(s[i]) && return i
+        i = prevind(s, i)
     end
     return nothing
 end

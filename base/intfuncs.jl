@@ -934,33 +934,37 @@ const _dec_d100 = UInt16[
   0x3039, 0x3139, 0x3239, 0x3339, 0x3439, 0x3539, 0x3639, 0x3739, 0x3839, 0x3939
 ]
 
-function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
+function _append_c_digits_impl(olength::Int, digits::Unsigned, buf, pos::Int)
     i = olength
     while i >= 2
         d, c = divrem(digits, 0x64)
         digits = oftype(digits, d)
-        @inbounds d100 = _dec_d100[(c % Int)::Int + 1]
-        @inbounds buf[pos + i - 2] = d100 % UInt8
-        @inbounds buf[pos + i - 1] = (d100 >> 0x8) % UInt8
+        d100 = _dec_d100[(c % Int)::Int + 1]
+        buf[pos + i - 2] = d100 % UInt8
+        buf[pos + i - 1] = (d100 >> 0x8) % UInt8
         i -= 2
     end
     if i == 1
-        @inbounds buf[pos] = UInt8('0') + rem(digits, 0xa) % UInt8
+        buf[pos] = UInt8('0') + rem(digits, 0xa) % UInt8
         i -= 1
     end
     return pos + olength
 end
+append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int) =
+    @split_effects :nothrow _append_c_digits_impl(olength, digits, buf, pos)
 
-function append_nine_digits(digits::Unsigned, buf, pos::Int)
+function _append_nine_digits_impl(digits::Unsigned, buf, pos::Int)
     if digits == 0
         for _ = 1:9
-            @inbounds buf[pos] = UInt8('0')
+            buf[pos] = UInt8('0')
             pos += 1
         end
         return pos
     end
-    return @inline append_c_digits(9, digits, buf, pos) # force loop-unrolling on the length
+    return @inline _append_c_digits_impl(9, digits, buf, pos) # force loop-unrolling on the length
 end
+append_nine_digits(digits::Unsigned, buf, pos::Int) =
+    @split_effects :nothrow _append_nine_digits_impl(digits, buf, pos)
 
 function append_c_digits_fast(olength::Int, digits::Unsigned, buf, pos::Int)
     i = olength
@@ -980,6 +984,8 @@ function append_c_digits_fast(olength::Int, digits::Unsigned, buf, pos::Int)
 end
 
 
+@inline _dec_d100_at(i::Int) = _dec_d100[i]
+
 function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
     str = _string_n(n)
@@ -993,7 +999,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
             for j in 0:3
                 q, s = divrem(r32, 0x64)
                 r32 = q
-                v = @inbounds _dec_d100[1 + (s % Int)]
+                v = @split_effects :nothrow _dec_d100_at(1 + (s % Int))
                 unsafe_store!(p, (v >> 8) % UInt8, i - 2*j)
                 unsafe_store!(p, v % UInt8, i - 2*j - 1)
             end
@@ -1004,7 +1010,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
         while i >= 2
             d, r = divrem(y, 0x64)
             y = d
-            v = @inbounds _dec_d100[1 + (r % Int)]
+            v = @split_effects :nothrow _dec_d100_at(1 + (r % Int))
             unsafe_store!(p, (v >> 8) % UInt8, i)
             unsafe_store!(p, v % UInt8, i - 1)
             i -= 2
@@ -1044,6 +1050,8 @@ end
 const base36digits = UInt8['0':'9';'a':'z']
 const base62digits = UInt8['0':'9';'A':'Z';'a':'z']
 
+@inline _base_digit_at(digits::Vector{UInt8}, i::Int) = digits[i]
+
 function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     (x >= 0) | (base < 0) || throw(DomainError(x, "For negative `x`, `base` must be negative."))
     2 <= abs(base) <= 62 || throw(DomainError(base, "base must satisfy 2 ≤ abs(base) ≤ 62"))
@@ -1056,12 +1064,13 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
         i = n
         while i > neg
             if b > 0
-                unsafe_store!(p, @inbounds(digits[1 + (rem(x, b) % Int)::Int]), i)
+                r = (rem(x, b) % Int)::Int
                 x = div(x,b)
             else
-                unsafe_store!(p, @inbounds(digits[1 + (mod(x, -b) % Int)::Int]), i)
+                r = (mod(x, -b) % Int)::Int
                 x = cld(x,b)
             end
+            unsafe_store!(p, @split_effects(:nothrow, _base_digit_at(digits, 1 + r)), i)
             i -= 1
         end
         neg && unsafe_store!(p, 0x2d, 1) # UInt8('-')
@@ -1513,7 +1522,7 @@ julia> clamp.((-4:4)', 0, Inf)
 ```
 """
 function clamp!(x::AbstractArray, lo, hi)
-    @inbounds for i in eachindex(x)
+    for i in eachindex(x)
         x[i] = clamp(x[i], lo, hi)
     end
     x

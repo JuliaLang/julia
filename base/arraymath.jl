@@ -104,6 +104,10 @@ reverse!(A::AbstractArray; dims::D=:) where {D} = _reverse!(A, dims)
 _reverse!(A::AbstractArray{<:Any,N}, ::Colon) where {N} = _reverse!(A, ntuple(identity, Val{N}()))
 _reverse!(A, dim::Integer) = _reverse!(A, (Int(dim),))
 _reverse!(A, dims::NTuple{M,Integer}) where {M} = _reverse!(A, Int.(dims))
+# Swap `A[i]` and `A[iᵣ]`, outlined so the loop in `_reverse!` can invoke it
+# through `@split_effects` (instead of `@inbounds`) and still get a
+# check-free fast path once the reflected index is proven in-bounds.
+_reverse_swap_impl!(A, iᵣ, i) = A[iᵣ], A[i] = A[i], A[iᵣ]
 function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
     dims === () && return A # nothing to reverse
     dimrev = ntuple(k -> k in dims, Val{N}()) # boolean tuple indicating reversed dims
@@ -116,10 +120,10 @@ function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
     halfsz = ntuple(k -> k == dims[1] ? size(A,k) ÷ 2 : size(A,k), Val{N}())
 
     last1 = ntuple(k -> lastindex(A,k)+firstindex(A,k), Val{N}()) # offset for reversed index
-    for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(halfsz[k]), Val{N}()))
+    for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+(halfsz[k]), Val{N}()))
         iₜ = Tuple(i)
         iᵣ = CartesianIndex(ifelse.(dimrev, last1 .- iₜ, iₜ))
-        @inbounds A[iᵣ], A[i] = A[i], A[iᵣ]
+        @split_effects :nothrow _reverse_swap_impl!(A, iᵣ, i)
     end
     if M > 1 && isodd(size(A, dims[1]))
         # middle slice for odd dimensions must be recursively flipped

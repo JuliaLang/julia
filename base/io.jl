@@ -1566,7 +1566,7 @@ function countlines(io::IO; eol::AbstractChar='\n')
     while !eof(io)
         nb = readbytes!(io, a)
         @simd for i=1:nb
-            @inbounds nl += a[i] == aeol
+            nl += a[i] == aeol
         end
     end
     if nb > 0 && a[nb] != aeol

@@ -267,6 +267,10 @@ _maybe_reindex(V, I, A::Tuple{AbstractArray{<:AbstractCartesianIndex{1}}, Vararg
 _maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@inline; _maybe_reindex(V, I, tail(A)))
 function _maybe_reindex(V, I, ::Tuple{})
     @inline
+    # NB: this sits on the `unsafe_view` path, which promises *unchecked*
+    # reindexing (callers construct views whose indices may be out of bounds
+    # for the wrapped view but valid for its parent), so the `@inbounds` is
+    # semantically load-bearing rather than an optimization.
     @inbounds idxs = to_indices(V.parent, reindex(V.indices, I))
     SubArray(V.parent, idxs)
 end

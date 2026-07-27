@@ -47,7 +47,7 @@ function copy(x::PhiNode)
     values = x.values
     nvalues = length(values)
     new_values = Vector{Any}(undef, nvalues)
-    @inbounds for i = 1:nvalues
+    for i = 1:nvalues
         isassigned(values, i) || continue
         new_values[i] = copy_exprs(values[i])
     end
@@ -57,7 +57,7 @@ function copy(x::PhiCNode)
     values = x.values
     nvalues = length(values)
     new_values = Vector{Any}(undef, nvalues)
-    @inbounds for i = 1:nvalues
+    for i = 1:nvalues
         isassigned(values, i) || continue
         new_values[i] = copy_exprs(values[i])
     end
@@ -76,7 +76,7 @@ function copy_exprs(@nospecialize(x))
     end
     return x
 end
-copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(@inbounds x[i]) for i in eachindex(x)]
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in eachindex(x)]
 
 @eval exprarray(head::Symbol, arg::Array{Any,1}) = $(Expr(:new, :Expr, :head, :arg))
 
@@ -875,7 +875,56 @@ the call is generally total, it may however throw.
 """
 macro assume_effects(args...)
     lastex = args[end]
-    override = compute_assumed_settings(args[begin:end-1])
+    # Conditional effect assumptions: a setting of the form `(check(args...) && :effect...)`
+    # attaches `check` as a precondition to the defined method, under which the given
+    # effects may be assumed by the optimizer (see `Core.invoke_split_effects`).
+    regular_settings = Any[]
+    preconditions = nothing
+    for setting in args[begin:end-1]
+        if isexpr(setting, :&&)
+            effs = Any[]
+            rest = setting.args[2]
+            while isexpr(rest, :&&)
+                push!(effs, rest.args[1])
+                rest = rest.args[2]
+            end
+            push!(effs, rest)
+            cond_override = compute_assumed_settings(effs)
+            preconditions === nothing && (preconditions = Expr(:call, GlobalRef(Core, :svec)))
+            push!(preconditions.args, cond_override)
+            push!(preconditions.args, setting.args[1])
+            continue
+        end
+        push!(regular_settings, setting)
+    end
+    override = compute_assumed_settings(regular_settings)
+    if preconditions !== nothing
+        inner = unwrap_macrocalls(lastex)
+        is_function_def(inner) ||
+            throw(ArgumentError("`@assume_effects` with conditional effects requires a function definition"))
+        argnames = collect_argnames(inner)
+        fname = argnames[1]
+        isa(fname, Symbol) ||
+            throw(ArgumentError("`@assume_effects` with conditional effects requires a named function definition"))
+        # The check function receives the same arguments as the annotated method
+        # (including the function itself as the first argument)
+        for i = 3:2:length(preconditions.args)
+            preconditions.args[i] = :(($(argnames...),) -> $(preconditions.args[i]))
+        end
+        ex = lastex::Expr
+        if !iszero(encode_effects_override(override))
+            ex = pushmeta!(ex, form_purity_expr(override))
+        end
+        return quote
+            $(esc(ex))
+            # HACK: there should be a builtin way to attach preconditions to the just-
+            # defined method; this is just for demonstration purposes
+            let m = first(methods($(esc(fname))))
+                m.preconditions = $(esc(preconditions))
+            end
+            $(esc(fname))
+        end
+    end
     if is_function_def(unwrap_macrocalls(lastex))
         return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
     elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
@@ -1181,6 +1230,28 @@ function is_short_function_def(@nospecialize(ex))
 end
 is_function_def(@nospecialize(ex)) =
     return isexpr(ex, :function) || is_short_function_def(ex) || isexpr(ex, :->)
+
+# For a (long or short form) function definition, return the list of argument
+# names of its signature, with the function name as the first element.
+function collect_argnames(@nospecialize(ex))
+    (isexpr(ex, :function) || is_short_function_def(ex)) ||
+        error("preconditions are only supported on named function definitions")
+    sig = (ex::Expr).args[1]
+    while isexpr(sig, :where) || isexpr(sig, :(::))
+        sig = sig.args[1]
+    end
+    isexpr(sig, :call) || error("preconditions are only supported on named function definitions")
+    return map(sig.args) do @nospecialize(arg)
+        isexpr(arg, :parameters) && error("preconditions do not support keyword arguments")
+        isexpr(arg, :kw) && (arg = arg.args[1])
+        isa(arg, Symbol) && return arg
+        if isexpr(arg, :(::))
+            length(arg.args) == 2 && return arg.args[1]
+            return gensym() # unnamed argument
+        end
+        error("preconditions do not support this argument form: $arg")
+    end
+end
 
 function findmeta(ex::Expr)
     if is_function_def(ex)

@@ -40,6 +40,7 @@ extern "C" {
     XX(intrinsic_call,"intrinsic_call") \
     XX(invoke,"invoke") \
     XX(invoke_in_world,"invoke_in_world") \
+    XX(invoke_split_effects,"invoke_split_effects") \
     XX(invokelatest,"invokelatest") \
     XX(is,"===") \
     XX(isa,"isa") \

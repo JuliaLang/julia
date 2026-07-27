@@ -955,7 +955,7 @@ function copyto!(dest::AbstractArray, dstart::Integer, src)
     if haslength(src) && length(dest) > 0
         @boundscheck checkbounds(dest, i:(i + length(src) - 1))
         for x in src
-            @inbounds dest[i] = x
+            dest[i] = x
             i += 1
         end
     else
@@ -1024,10 +1024,10 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
     end
     val, st = y
     i = Int(dstart)
-    @inbounds dest[i] = val
+    dest[i] = val
     for val in Iterators.take(Iterators.rest(src, st), n-1)
         i += 1
-        @inbounds dest[i] = val
+        dest[i] = val
     end
     i < dmax && throw(BoundsError(dest, i))
     return dest
@@ -1082,7 +1082,9 @@ function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyl
     copyto_unaliased!(deststyle, dest, srcstyle, src′)
 end
 
-function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray) =
+    Base.@split_effects :nothrow _copyto_unaliased_impl!(deststyle, dest, srcstyle, src)
+function _copyto_unaliased_impl!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     isempty(src) && return dest
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     idf, isf = first(destinds), first(srcinds)
@@ -1092,13 +1094,13 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             # Single-index implementation
-            @inbounds for i in srcinds
+            for i in srcinds
                 dest[i + Δi] = src[i]
             end
         else
             # Dual-index implementation
             i = idf - 1
-            @inbounds for a in src
+            for a in src
                 dest[i+=1] = a
             end
         end
@@ -1107,12 +1109,12 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if iterdest == itersrc
             # Shared-iterator implementation
             for I in iterdest
-                @inbounds dest[I] = src[I]
+                dest[I] = src[I]
             end
         else
             # Dual-iterator implementation
             for (Idest, Isrc) in zip(iterdest, itersrc)
-                @inbounds dest[Idest] = src[Isrc]
+                dest[Idest] = src[Isrc]
             end
         end
     end
@@ -1139,7 +1141,7 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
     src′ = unalias(dest, src)
-    @inbounds for i = 0:n-1
+    for i = 0:n-1
         dest[dstart+i] = src′[sstart+i]
     end
     return dest
@@ -1167,7 +1169,7 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     for jsrc in jr_src
         idest = first(ir_dest)
         for isrc in ir_src
-            @inbounds B[idest,jdest] = A′[isrc,jsrc]
+            B[idest,jdest] = A′[isrc,jsrc]
             idest += step(ir_dest)
         end
         jdest += step(jr_dest)
@@ -1359,6 +1361,10 @@ end
 # To avoid invalidations from multidimensional.jl: getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...)
 @propagate_inbounds getindex(A::Array, i1::Integer, I::Integer...) = A[to_indices(A, (i1, I...))...]
 
+# NB: `unsafe_getindex`/`unsafe_setindex!` are the documented explicitly-unchecked
+# access tier: the caller vouches for the indices, and no bounds check may run
+# (not even as a guarded slow path), so the `@inbounds` here is semantically
+# load-bearing rather than an optimization.
 @inline unsafe_getindex(A::AbstractArray, I...) = @inbounds getindex(A, I...)
 
 struct CanonicalIndexError <: Exception
@@ -2238,7 +2244,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
         throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
     end
     k = 1
-    @inbounds for i=1:nr
+    for i=1:nr
         if nc != rows[i]
             throw(DimensionMismatch("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
         end
@@ -2519,7 +2525,7 @@ function _hvncat_fill_loop!(A::Array, row_first::Bool, xs::Tuple)
             for i ∈ 1:nr
                 Ai = dd + i
                 for _ ∈ 1:nc
-                    @inbounds A[Ai] = xs[k]
+                    A[Ai] = xs[k]
                     k += 1
                     Ai += nr
                 end
@@ -2527,7 +2533,7 @@ function _hvncat_fill_loop!(A::Array, row_first::Bool, xs::Tuple)
         end
     else
         for k ∈ eachindex(xs)
-            @inbounds A[k] = xs[k]
+            A[k] = xs[k]
         end
     end
 end
@@ -2548,7 +2554,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
                     i::Int = 1
                     j::Int = 1
                     @nexprs $N k -> begin
-                        @inbounds A[i, j] = xs[k]
+                        A[i, j] = xs[k]
                         j += 1
                         if j > nc
                             i += 1
@@ -2557,7 +2563,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
                     end
                 else
                     @nexprs $N k -> begin
-                        @inbounds A[k] = xs[k]
+                        A[k] = xs[k]
                     end
                 end
                 nothing
@@ -2578,7 +2584,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
                     Ai::Int = dd + i
                     j::Int = 1
                     @nexprs $N k -> begin
-                        @inbounds A[Ai] = xs[k]
+                        A[Ai] = xs[k]
                         j += 1
                         Ai += nr
                         if j > nc
@@ -2594,7 +2600,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
                     end
                 else
                     @nexprs $N k -> begin
-                        @inbounds A[k] = xs[k]
+                        A[k] = xs[k]
                     end
                 end
                 nothing
@@ -2816,12 +2822,12 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
             if !isempty(a)
                 if length(a) > 4
                     endindex = CartesianIndex(ntuple(i -> offsets[i] + cat_size(a, i), Val(N)))
-                    @inbounds A[startindex:endindex] = a
+                    A[startindex:endindex] = a
                 else
                     for ai ∈ a
-                        @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprod, N)
-                        @inbounds A[Ai] = ai
-                        @inbounds for j ∈ 1:N
+                        Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprod, N)
+                        A[Ai] = ai
+                        for j ∈ 1:N
                             inneroffsets[j] += 1
                             inneroffsets[j] < cat_size(a, j) && break
                             inneroffsets[j] = 0
@@ -2830,10 +2836,10 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
                 end
             end
         else
-            @inbounds A[startindex] = a
+            A[startindex] = a
         end
 
-        @inbounds for i ∈ (d1, d2, 3:N...)
+        for i ∈ (d1, d2, 3:N...)
             offsets[i] += cat_size(a, i)
             offsets[i] < cat_size(A, i) && break
             offsets[i] = 0
@@ -3061,7 +3067,7 @@ function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
     for x in xrest
         _stack_size_check(x, _iterator_axes(x1))
         i += 1
-        @inbounds copyto!(view(B, before..., i, after...), x)
+        copyto!(view(B, before..., i, after...), x)
     end
 end
 
@@ -3458,10 +3464,12 @@ concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
 ## 1 argument
 
-function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
+map!(f::F, dest::AbstractArray, A::AbstractArray) where F =
+    Base.@split_effects :nothrow _map1!_impl(f, dest, A)
+function _map1!_impl(f::F, dest::AbstractArray, A::AbstractArray) where F
     for (i,j) in zip(eachindex(dest),eachindex(A))
-        val = f(@inbounds A[j])
-        @inbounds dest[i] = val
+        val = f(A[j])
+        dest[i] = val
     end
     return dest
 end
@@ -3503,11 +3511,13 @@ map(f, ::AbstractDict) = error("map is not defined on dictionaries")
 map(f, ::AbstractSet) = error("map is not defined on sets")
 
 ## 2 argument
-function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
+map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F =
+    Base.@split_effects :nothrow _map2!_impl(f, dest, A, B)
+function _map2!_impl(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
     for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
-        @inbounds a, b = A[j], B[k]
+        a, b = A[j], B[k]
         val = f(a, b)
-        @inbounds dest[i] = val
+        dest[i] = val
     end
     return dest
 end
@@ -3524,9 +3534,9 @@ function map_n!(f::F, dest::AbstractArray, As) where F
     idxs = LinearIndices(dest)
     if all(x -> LinearIndices(x) == idxs, As)
         for i in idxs
-            @inbounds as = ith_all(i, As)
+            as = ith_all(i, As)
             val = f(as...)
-            @inbounds dest[i] = val
+            dest[i] = val
         end
     else
         for (i, Is...) in zip(eachindex(dest), map(eachindex, As)...)
@@ -3684,7 +3694,7 @@ function _keepat!(a::AbstractVector, inds)
         end
         ak = a[k] # must happen even when i==k for bounds checking
         if i != k
-            @inbounds a[i] = ak # k > i, so a[i] is inbounds
+            a[i] = ak # k > i, so a[i] is inbounds
         end
         prev = k
         i = nextind(a, i)
@@ -3697,7 +3707,7 @@ function _keepat!(a::AbstractVector, m::AbstractVector{Bool})
     length(m) == length(a) || throw(BoundsError(a, m))
     j = firstindex(a)
     for i in eachindex(a, m)
-        @inbounds begin
+        begin
             if m[i]
                 i == j || (a[j] = a[i])
                 j = nextind(a, j)

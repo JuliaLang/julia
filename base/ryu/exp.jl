@@ -1,3 +1,93 @@
+function _wexp_special(buf, pos, x::T, precision, hash, trimtrailingzeros, expchar, decchar) where {T <: Base.IEEEFloat}
+    if iszero(x)
+        buf[pos] = UInt8('0')
+        pos += 1
+        if precision > 0 && !trimtrailingzeros
+            buf[pos] = decchar
+            pos += 1
+            for _ = 1:precision
+                buf[pos] = UInt8('0')
+                pos += 1
+            end
+        elseif hash
+            buf[pos] = decchar
+            pos += 1
+        end
+        buf[pos] = expchar
+        buf[pos + 1] = UInt8('+')
+        buf[pos + 2] = UInt8('0')
+        buf[pos + 3] = UInt8('0')
+        return pos + 4
+    elseif isnan(x)
+        buf[pos] = UInt8('N')
+        buf[pos + 1] = UInt8('a')
+        buf[pos + 2] = UInt8('N')
+        return pos + 3
+    elseif !isfinite(x)
+        buf[pos] = UInt8('I')
+        buf[pos + 1] = UInt8('n')
+        buf[pos + 2] = UInt8('f')
+        return pos + 3
+    end
+    return -1
+end
+
+# Write a single digit, optionally followed by the decimal point (the
+# `precision <= 1` case that doesn't go through `append_d_digits`); shared by
+# the three call sites below that would otherwise duplicate this snippet.
+function _wexp_single_digit!(buf, pos, digits::UInt32, hash::Bool, decchar::UInt8)
+    buf[pos] = UInt8('0') + digits
+    pos += 1
+    if hash
+        buf[pos] = decchar
+        pos += 1
+    end
+    return pos
+end
+
+function _wexp_zeropad!(buf, pos, n::Int)
+    for _ = 1:n
+        buf[pos] = UInt8('0')
+        pos += 1
+    end
+    return pos
+end
+
+function _wexp_trim(buf, pos, decchar::UInt8, hash::Bool)
+    while buf[pos - 1] == UInt8('0')
+        pos -= 1
+    end
+    if buf[pos - 1] == decchar && !hash
+        pos -= 1
+    end
+    return pos
+end
+
+function _wexp_tail(buf, pos, e::Integer)
+    if e < 0
+        buf[pos] = UInt8('-')
+        pos += 1
+        e = -e
+    else
+        buf[pos] = UInt8('+')
+        pos += 1
+    end
+    if e >= 100
+        c = (e % 10) % UInt8
+        d100 = DIGIT_TABLE16[div(e, 10) + 1]
+        buf[pos] = d100 % UInt8
+        buf[pos + 1] = (d100 >> 0x8) % UInt8
+        buf[pos + 2] = UInt8('0') + c
+        pos += 3
+    else
+        d100 = DIGIT_TABLE16[e + 1]
+        buf[pos] = d100 % UInt8
+        buf[pos + 1] = (d100 >> 0x8) % UInt8
+        pos += 2
+    end
+    return pos
+end
+
 function writeexp(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
@@ -7,36 +97,8 @@ function writeexp(buf, pos, v::T,
     pos = append_sign(x, plus, space, buf, pos)
 
     # special cases
-    if iszero(x)
-        @inbounds buf[pos] = UInt8('0')
-        pos += 1
-        if precision > 0 && !trimtrailingzeros
-            @inbounds buf[pos] = decchar
-            pos += 1
-            for _ = 1:precision
-                @inbounds buf[pos] = UInt8('0')
-                pos += 1
-            end
-        elseif hash
-            @inbounds buf[pos] = decchar
-            pos += 1
-        end
-        @inbounds buf[pos] = expchar
-        @inbounds buf[pos + 1] = UInt8('+')
-        @inbounds buf[pos + 2] = UInt8('0')
-        @inbounds buf[pos + 3] = UInt8('0')
-        return pos + 4
-    elseif isnan(x)
-        @inbounds buf[pos] = UInt8('N')
-        @inbounds buf[pos + 1] = UInt8('a')
-        @inbounds buf[pos + 2] = UInt8('N')
-        return pos + 3
-    elseif !isfinite(x)
-        @inbounds buf[pos] = UInt8('I')
-        @inbounds buf[pos + 1] = UInt8('n')
-        @inbounds buf[pos + 2] = UInt8('f')
-        return pos + 3
-    end
+    newpos = Base.@split_effects :nothrow _wexp_special(buf, pos, x, precision, hash, trimtrailingzeros, expchar, decchar)
+    newpos >= 0 && return newpos
 
     bits = reinterpret(UInt64, x)
     mant = bits & MANTISSA_MASK
@@ -80,12 +142,7 @@ function writeexp(buf, pos, v::T,
                 if precision > 1
                     pos = append_d_digits(availableDigits, digits, buf, pos, decchar)
                 else
-                    @inbounds buf[pos] = UInt8('0') + digits
-                    pos += 1
-                    if hash
-                        @inbounds buf[pos] = decchar
-                        pos += 1
-                    end
+                    pos = Base.@split_effects :nothrow _wexp_single_digit!(buf, pos, digits % UInt32, hash, decchar)
                 end
                 printedDigits = availableDigits
                 availableDigits = 0
@@ -121,12 +178,7 @@ function writeexp(buf, pos, v::T,
                 if precision > 1
                     pos = append_d_digits(availableDigits, digits, buf, pos, decchar)
                 else
-                    @inbounds buf[pos] = UInt8('0') + digits
-                    pos += 1
-                    if hash
-                        @inbounds buf[pos] = decchar
-                        pos += 1
-                    end
+                    pos = Base.@split_effects :nothrow _wexp_single_digit!(buf, pos, digits % UInt32, hash, decchar)
                 end
                 printedDigits = availableDigits
                 availableDigits = 0
@@ -161,10 +213,7 @@ function writeexp(buf, pos, v::T,
     end
     if !iszero(printedDigits)
         if iszero(digits)
-            for _ = 1:maximum
-                @inbounds buf[pos] = UInt8('0')
-                pos += 1
-            end
+            pos = Base.@split_effects :nothrow _wexp_zeropad!(buf, pos, maximum)
         else
             pos = append_c_digits(maximum, digits, buf, pos)
         end
@@ -172,69 +221,36 @@ function writeexp(buf, pos, v::T,
         if precision > 1
             pos = append_d_digits(maximum, digits, buf, pos, decchar)
         else
-            @inbounds buf[pos] = UInt8('0') + digits
-            pos += 1
-            if hash
-                @inbounds buf[pos] = decchar
-                pos += 1
-            end
+            pos = Base.@split_effects :nothrow _wexp_single_digit!(buf, pos, digits % UInt32, hash, decchar)
         end
     end
     if !iszero(roundUp)
         roundPos = pos
         while true
             roundPos -= 1
-            if roundPos == (startpos - 1) || (@inbounds buf[roundPos]) == UInt8('-') || (plus && (@inbounds buf[roundPos]) == UInt8('+')) || (space && (@inbounds buf[roundPos]) == UInt8(' '))
-                @inbounds buf[roundPos + 1] = UInt8('1')
+            if roundPos == (startpos - 1) || buf[roundPos] == UInt8('-') || (plus && buf[roundPos] == UInt8('+')) || (space && buf[roundPos] == UInt8(' '))
+                buf[roundPos + 1] = UInt8('1')
                 e += 1
                 break
             end
-            c = roundPos > 0 ? (@inbounds buf[roundPos]) : 0x00
+            c = roundPos > 0 ? buf[roundPos] : 0x00
             if c == decchar
                 continue
             elseif c == UInt8('9')
-                @inbounds buf[roundPos] = UInt8('0')
+                buf[roundPos] = UInt8('0')
                 roundUp = 1
                 continue
             else
                 if roundUp == 2 && iseven(c)
                     break
                 end
-                @inbounds buf[roundPos] = c + 1
+                buf[roundPos] = c + 1
                 break
             end
         end
     end
-    if trimtrailingzeros
-        while @inbounds buf[pos - 1] == UInt8('0')
-            pos -= 1
-        end
-        if @inbounds buf[pos - 1] == decchar && !hash
-            pos -= 1
-        end
-    end
+    pos = trimtrailingzeros ? Base.@split_effects(:nothrow, _wexp_trim(buf, pos, decchar, hash)) : pos
     buf[pos] = expchar
     pos += 1
-    if e < 0
-        @inbounds buf[pos] = UInt8('-')
-        pos += 1
-        e = -e
-    else
-        @inbounds buf[pos] = UInt8('+')
-        pos += 1
-    end
-    if e >= 100
-        c = (e % 10) % UInt8
-        @inbounds d100 = DIGIT_TABLE16[div(e, 10) + 1]
-        @inbounds buf[pos] = d100 % UInt8
-        @inbounds buf[pos + 1] = (d100 >> 0x8) % UInt8
-        @inbounds buf[pos + 2] = UInt8('0') + c
-        pos += 3
-    else
-        @inbounds d100 = DIGIT_TABLE16[e + 1]
-        @inbounds buf[pos] = d100 % UInt8
-        @inbounds buf[pos + 1] = (d100 >> 0x8) % UInt8
-        pos += 2
-    end
-    return pos
+    return Base.@split_effects :nothrow _wexp_tail(buf, pos, e)
 end

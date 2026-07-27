@@ -254,17 +254,17 @@ typemin(::String) = typemin(String)
     n = ncodeunits(s)
     i == n + 1 && return i
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
-    @inbounds b = codeunit(s, i)
+    b = codeunit(s, i)
     (b & 0xc0 == 0x80) & (i-1 > 0) || return i
     (@noinline function _thisind_continued(s, i, n) # mark the rest of the function as a slow-path
         local b
-        @inbounds b = codeunit(s, i-1)
+        b = codeunit(s, i-1)
         between(b, 0b11000000, 0b11110111) && return i-1
         (b & 0xc0 == 0x80) & (i-2 > 0) || return i
-        @inbounds b = codeunit(s, i-2)
+        b = codeunit(s, i-2)
         between(b, 0b11100000, 0b11110111) && return i-2
         (b & 0xc0 == 0x80) & (i-3 > 0) || return i
-        @inbounds b = codeunit(s, i-3)
+        b = codeunit(s, i-3)
         between(b, 0b11110000, 0b11110111) && return i-3
         return i
     end)(s, i, n)
@@ -277,30 +277,30 @@ end
     i == 0 && return 1
     n = ncodeunits(s)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
-    @inbounds l = codeunit(s, i)
+    l = codeunit(s, i)
     between(l, 0x80, 0xf7) || return i+1
     (@noinline function _nextind_continued(s, i, n, l) # mark the rest of the function as a slow-path
         if l < 0xc0
             # handle invalid codeunit index by scanning back to the start of this index
             # (which may be the same as this index)
-            i′ = @inbounds thisind(s, i)
+            i′ = thisind(s, i)
             i′ >= i && return i+1
             i = i′
-            @inbounds l = codeunit(s, i)
+            l = codeunit(s, i)
             (l < 0x80) | (0xf8 ≤ l) && return i+1
             @assert l >= 0xc0 "invalid codeunit"
         end
         # first continuation byte
         (i += 1) > n && return i
-        @inbounds b = codeunit(s, i)
+        b = codeunit(s, i)
         b & 0xc0 ≠ 0x80 && return i
         ((i += 1) > n) | (l < 0xe0) && return i
         # second continuation byte
-        @inbounds b = codeunit(s, i)
+        b = codeunit(s, i)
         b & 0xc0 ≠ 0x80 && return i
         ((i += 1) > n) | (l < 0xf0) && return i
         # third continuation byte
-        @inbounds b = codeunit(s, i)
+        b = codeunit(s, i)
         return ifelse(b & 0xc0 ≠ 0x80, i, i+1)
     end)(s, i, n, l)
 end
@@ -431,13 +431,17 @@ const _UTF8_DFA_ACCEPT = _UTF8DFAState(4) #This state represents the start and e
 const _UTF8_DFA_INVALID = _UTF8DFAState(10) # If the state machine is ever in this state just stop
 
 # The dfa step is broken out so that it may be used in other functions. The mask was calculated to work with state shifts above
-@inline _utf_dfa_step(state::_UTF8DFAState, byte::UInt8) = @inbounds (_UTF8_DFA_TABLE[byte+1] >> state) & _UTF8DFAState(0x0000001E)
+@inline _utf_dfa_step_impl(state::_UTF8DFAState, byte::UInt8) = (_UTF8_DFA_TABLE[byte+1] >> state) & _UTF8DFAState(0x0000001E)
+@inline _utf_dfa_step(state::_UTF8DFAState, byte::UInt8) = Base.@split_effects :nothrow _utf_dfa_step_impl(state, byte)
 
-@inline function _isvalid_utf8_dfa(state::_UTF8DFAState, bytes::AbstractVector{UInt8}, first::Int = firstindex(bytes), last::Int = lastindex(bytes))
+@inline function _isvalid_utf8_dfa_impl(state::_UTF8DFAState, bytes::AbstractVector{UInt8}, first::Int, last::Int)
     for i = first:last
-       @inbounds state = _utf_dfa_step(state, bytes[i])
+       state = _utf_dfa_step(state, bytes[i])
     end
     return (state)
+end
+@inline function _isvalid_utf8_dfa(state::_UTF8DFAState, bytes::AbstractVector{UInt8}, first::Int = firstindex(bytes), last::Int = lastindex(bytes))
+    Base.@split_effects :nothrow _isvalid_utf8_dfa_impl(state, bytes, first, last)
 end
 
 @inline function  _find_nonascii_chunk(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
@@ -508,7 +512,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 @inline function iterate(s::Union{String, StringView}, i::Int=firstindex(s))
     (i % UInt) - 1 < ncodeunits(s) || return nothing
-    b = @inbounds codeunit(s, i)
+    b = codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
     return @noinline iterate_continued(s, i, u)
@@ -521,17 +525,17 @@ function iterate_continued(s, i::Int, u::UInt32)
         n = ncodeunits(s)
         # first continuation byte
         (i += 1) > n && break
-        @inbounds b = codeunit(s, i)
+        b = codeunit(s, i)
         b & 0xc0 == 0x80 || break
         u |= UInt32(b) << 16
         # second continuation byte
         ((i += 1) > n) | (u < 0xe0000000) && break
-        @inbounds b = codeunit(s, i)
+        b = codeunit(s, i)
         b & 0xc0 == 0x80 || break
         u |= UInt32(b) << 8
         # third continuation byte
         ((i += 1) > n) | (u < 0xf0000000) && break
-        @inbounds b = codeunit(s, i)
+        b = codeunit(s, i)
         b & 0xc0 == 0x80 || break
         u |= UInt32(b); i += 1
     end
@@ -550,23 +554,23 @@ function getindex_continued(s, i::Int, u::UInt32)
     @label begin
         if u < 0xc0000000
             # called from `getindex` which checks bounds
-            @inbounds isvalid(s, i) && break
+            isvalid(s, i) && break
             string_index_err(s, i)
         end
         n = ncodeunits(s)
 
         (i += 1) > n && break
-        @inbounds b = codeunit(s, i) # cont byte 1
+        b = codeunit(s, i) # cont byte 1
         b & 0xc0 == 0x80 || break
         u |= UInt32(b) << 16
 
         ((i += 1) > n) | (u < 0xe0000000) && break
-        @inbounds b = codeunit(s, i) # cont byte 2
+        b = codeunit(s, i) # cont byte 2
         b & 0xc0 == 0x80 || break
         u |= UInt32(b) << 8
 
         ((i += 1) > n) | (u < 0xf0000000) && break
-        @inbounds b = codeunit(s, i) # cont byte 3
+        b = codeunit(s, i) # cont byte 3
         b & 0xc0 == 0x80 || break
         u |= UInt32(b)
     end
@@ -583,8 +587,8 @@ end
     i, j = first(r), last(r)
     @boundscheck begin
         checkbounds(s, r)
-        @inbounds isvalid(s, i) || string_index_err(s, i)
-        @inbounds isvalid(s, j) || string_index_err(s, j)
+        isvalid(s, i) || string_index_err(s, i)
+        isvalid(s, j) || string_index_err(s, j)
     end
     # Safety: The boundscheck checked r is inbounds in s,
     # and since we also checked r is not empty, j must be inbounds in s

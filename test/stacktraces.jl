@@ -245,7 +245,9 @@ struct F49231{a,b,c,d,e,f,g} end
         stacktrace(catch_backtrace())
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,105)))
-    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
+    # the outlined `_collect_to_impl!` kernel is its own frame [5]; the `collect_to!`
+    # wrapper that tail-calls it shows up inlined as frame [6]
+    @test contains(str, "[6] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 
     st = try
         F49231{Vector,Val{'}'},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}()(1,2,3)

@@ -10,12 +10,16 @@ reversed_index(n::Int, i::Int) = n - i - 1
 reversed_index(x, i::Int, v::Val) = reversed_index(elem_count(x, v), i)::Int
 split_bit_index(x::BigFloatData, i::Int) = divrem(i, word_length(x), RoundToZero)
 
+function _get_elem_impl(x::BigFloatData{T}, i::Int, ::Val{:words}, ::Val{:ascending}) where {T}
+    return x[i + 1]::T
+end
+
 """
 `i` is the zero-based index of the wanted word in `x`, starting from
 the less significant words.
 """
-function get_elem(x::BigFloatData{T}, i::Int, ::Val{:words}, ::Val{:ascending}) where {T}
-    @inbounds return x[i + 1]::T
+function get_elem(x::BigFloatData{T}, i::Int, v1::Val{:words}, v2::Val{:ascending}) where {T}
+    Base.@split_effects :nothrow _get_elem_impl(x, i, v1, v2)
 end
 
 function get_elem(x, i::Int, v::Val, ::Val{:descending})

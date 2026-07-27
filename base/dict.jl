@@ -163,7 +163,7 @@ end
     maxprobe = 0
 
     for i = 1:sz
-        @inbounds if (olds[i] & 0x80) != 0
+        if (olds[i] & 0x80) != 0
             k = oldk[i]
             v = oldv[i]
             index, _ = hashindex(k, newsz)
@@ -244,7 +244,7 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
     index, sh = hashindex(key, sz)
     keys = h.keys
 
-    @assume_effects :terminates_locally :noub @inbounds while true
+    @assume_effects :terminates_locally :noub while true
         isslotempty(h,index) && return -1
         if sh == h.slots[index]
             k = keys[index]
@@ -277,7 +277,7 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
     avail = 0
     keys = h.keys
 
-    @inbounds while true
+    while true
         if isslotempty(h,index)
             return (avail < 0 ? avail : -index), sh
         end
@@ -304,7 +304,7 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
 
     maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
     # Check if key is not present, may need to keep searching to find slot
-    @inbounds while iter < maxallowed
+    while iter < maxallowed
         if !isslotfilled(h,index)
             h.maxprobe = iter
             return -index, sh
@@ -359,10 +359,10 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
 
     if index > 0
         h.age += 1
-        @inbounds h.keys[index] = key
-        @inbounds h.vals[index] = v
+        h.keys[index] = key
+        h.vals[index] = v
     else
-        @inbounds _setindex!(h, v, key, -index, sh)
+        _setindex!(h, v, key, -index, sh)
     end
 
     return h
@@ -374,10 +374,10 @@ function setindex!(h::Dict{K,Any}, v, key::K) where K
 
     if index > 0
         h.age += 1
-        @inbounds h.keys[index] = key
-        @inbounds h.vals[index] = v
+        h.keys[index] = key
+        h.vals[index] = v
     else
-        @inbounds _setindex!(h, v, key, -index, sh)
+        _setindex!(h, v, key, -index, sh)
     end
 
     return h
@@ -466,17 +466,17 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     end
     if index > 0
         h.age += 1
-        @inbounds h.keys[index] = key
-        @inbounds h.vals[index] = v
+        h.keys[index] = key
+        h.vals[index] = v
     else
-        @inbounds _setindex!(h, v, key, -index, sh)
+        _setindex!(h, v, key, -index, sh)
     end
     return v
 end
 
 function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
-    return index < 0 ? throw(KeyError(key)) : @assume_effects :noub @inbounds h.vals[index]::V
+    return index < 0 ? throw(KeyError(key)) : @assume_effects :noub h.vals[index]::V
 end
 
 """
@@ -503,7 +503,7 @@ get(collection, key, default)
 
 function get(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
-    @inbounds return (index < 0) ? default : h.vals[index]::V
+    return (index < 0) ? default : h.vals[index]::V
 end
 
 """
@@ -525,7 +525,7 @@ get(::Callable, collection, key)
 
 function get(default::Callable, h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
-    @inbounds return (index < 0) ? default() : h.vals[index]::V
+    return (index < 0) ? default() : h.vals[index]::V
 end
 
 """
@@ -571,11 +571,11 @@ julia> getkey(D, 'd', 'a')
 """
 function getkey(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
-    @inbounds return (index<0) ? default : h.keys[index]::K
+    return (index<0) ? default : h.keys[index]::K
 end
 
 function _pop!(h::Dict, index)
-    @inbounds val = h.vals[index]
+    val = h.vals[index]
     _delete!(h, index)
     return val
 end
@@ -617,14 +617,14 @@ end
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
     idx = skip_deleted_floor!(h)
-    @inbounds key = h.keys[idx]
-    @inbounds val = h.vals[idx]
+    key = h.keys[idx]
+    val = h.vals[idx]
     _delete!(h, idx)
     key => val
 end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
-    @inbounds begin
+    begin
     slots = h.slots
     sz = length(slots)
     _unsetindex!(h.keys, index)
@@ -681,15 +681,16 @@ function delete!(h::Dict, key)
     return h
 end
 
-function skip_deleted(h::Dict, i)
+function _skip_deleted_impl(h::Dict, i)
     L = length(h.slots)
     for i = i:L
-        @inbounds if isslotfilled(h,i)
+        if isslotfilled(h,i)
             return  i
         end
     end
     return 0
 end
+skip_deleted(h::Dict, i) = Base.@split_effects :nothrow _skip_deleted_impl(h, i)
 function skip_deleted_floor!(h::Dict)
     idx = skip_deleted(h, h.idxfloor)
     if idx != 0
@@ -714,12 +715,12 @@ length(t::Dict) = t.count
     i = skip_deleted(v.dict, i)
     i == 0 && return nothing
     vals = T <: KeySet ? v.dict.keys : v.dict.vals
-    (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
+    (vals[i], i == typemax(Int) ? 0 : i+1)
 end
 
 function filter!(pred, h::Dict{K,V}) where {K,V}
     h.count == 0 && return h
-    @inbounds for i=1:length(h.slots)
+    for i=1:length(h.slots)
         if ((h.slots[i] & 0x80) != 0) && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
             _delete!(h, i)
         end
@@ -736,8 +737,7 @@ end
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
-    # @inbounds is here so that it gets propagated to isslotfilled
-    @inbounds for i = dict.idxfloor:lastindex(vals)
+    for i = dict.idxfloor:lastindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])
         end
@@ -762,7 +762,7 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
             if !isa(v, V)
                 v = convert(V, v)::V
             end
-            @inbounds _setindex!(d1, v, k, -i, sh)
+            _setindex!(d1, v, k, -i, sh)
         end
     end
     return d1
@@ -1033,7 +1033,7 @@ end
     h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
-        leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
+        leaf = trie.data[i]::HAMT.Leaf{K,V}
         return Some{V}(leaf.val)
     end
     return nothing

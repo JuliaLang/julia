@@ -528,7 +528,7 @@ function matches_spec_range!(dest::BitVector, versions::AbstractVector{VersionNu
 
     # Assumes versions are sorted (as created in Operations.jl:1002)
     # If sorted, this avoids O(n*m) comparisons by scanning linearly
-    @inbounds for range in spec.ranges
+    for range in spec.ranges
         # Find first version that could be in range
         i = 1
         while i <= n && !(range.lower ≲ versions[i])
@@ -557,7 +557,7 @@ function Base.intersect(A::VersionSpec, B::VersionSpec)
     (isempty(A) || isempty(B)) && return copy(empty_versionspec)
     ranges = Vector{VersionRange}(undef, length(A.ranges) * length(B.ranges))
     i = 1
-    @inbounds for a in A.ranges, b in B.ranges
+    for a in A.ranges, b in B.ranges
         ranges[i] = intersect(a, b)
         i += 1
     end

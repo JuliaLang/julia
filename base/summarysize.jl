@@ -71,7 +71,7 @@ function summarysize(obj;
                 np = datatype_npointers(T)
                 nf = length(x) * np
                 idx = (i-1) ÷ np + 1
-                if @inbounds @inline isassigned(x, idx)
+                if @inline isassigned(x, idx)
                     elt = x[idx]
                     p = (i-1) % np + 1
                     if nth_pointer_isdefined(elt, p)
@@ -80,7 +80,7 @@ function summarysize(obj;
                 end
             else
                 nf = length(x)
-                if @inbounds @inline isassigned(x, i)
+                if @inline isassigned(x, i)
                     val = x[i]
                 end
             end

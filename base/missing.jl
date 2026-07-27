@@ -251,9 +251,9 @@ end
 
 IndexStyle(::Type{<:SkipMissing{T}}) where {T} = IndexStyle(T)
 eachindex(itr::SkipMissing) =
-    Iterators.filter(i -> !ismissing(@inbounds(itr.x[i])), eachindex(itr.x))
+    Iterators.filter(i -> !ismissing(@split_effects :nothrow getindex(itr.x, i)), eachindex(itr.x))
 keys(itr::SkipMissing) =
-    Iterators.filter(i -> !ismissing(@inbounds(itr.x[i])), keys(itr.x))
+    Iterators.filter(i -> !ismissing(@split_effects :nothrow getindex(itr.x, i)), keys(itr.x))
 @propagate_inbounds function getindex(itr::SkipMissing, I...)
     v = itr.x[I...]
     ismissing(v) && throw(MissingException(LazyString("the value at index ", I, " is missing")))
@@ -279,7 +279,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     i = first(inds)
     ilast = last(inds)
     for outer i in i:ilast
-        @inbounds ai = A[i]
+        ai = @split_effects :nothrow getindex(A, i)
         !ismissing(ai) && break
     end
     ismissing(ai) && return mapreduce_empty(f, op, eltype(itr))
@@ -288,7 +288,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     i += 1
     ai = missing
     for outer i in i:ilast
-        @inbounds ai = A[i]
+        ai = @split_effects :nothrow getindex(A, i)
         !ismissing(ai) && break
     end
     ismissing(ai) && return mapreduce_first(f, op, a1)
@@ -302,47 +302,16 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 # Returns nothing when the input contains only missing values, and Some(x) otherwise
-@noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
-    A = itr.x
+# NB: the `where {F, G}` forces specialization on `f` and `op`: neither is
+# called in this body (only passed on), so Julia's heuristics would otherwise
+# widen them, leaving dynamic calls
+@noinline function mapreduce_impl(f::F, op::G, itr::SkipMissing{<:AbstractArray},
+                                  ifirst::Integer, ilast::Integer, blksize::Int) where {F, G}
     if ifirst > ilast
         return nothing
-    elseif ifirst == ilast
-        @inbounds a1 = A[ifirst]
-        if ismissing(a1)
-            return nothing
-        else
-            return Some(mapreduce_first(f, op, a1))
-        end
     elseif ilast - ifirst < blksize
-        # sequential portion
-        ai = missing
-        i = ifirst
-        for outer i in i:ilast
-            @inbounds ai = A[i]
-            !ismissing(ai) && break
-        end
-        ismissing(ai) && return nothing
-        a1 = ai::eltype(itr)
-        i == typemax(typeof(i)) && return Some(mapreduce_first(f, op, a1))
-        i += 1
-        ai = missing
-        for outer i in i:ilast
-            @inbounds ai = A[i]
-            !ismissing(ai) && break
-        end
-        ismissing(ai) && return Some(mapreduce_first(f, op, a1))
-        a2 = ai::eltype(itr)
-        i == typemax(typeof(i)) && return Some(op(f(a1), f(a2)))
-        i += 1
-        v = op(f(a1), f(a2))
-        @simd for i = i:ilast
-            @inbounds ai = A[i]
-            if !ismissing(ai)
-                v = op(v, f(ai))
-            end
-        end
-        return Some(v)
+        # single element (ifirst == ilast) or sequential portion
+        return @split_effects :nothrow _mapreduce_impl_skipmissing_base(f, op, itr, ifirst, ilast)
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
@@ -358,6 +327,51 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
             return Some(op(something(v1), something(v2)))
         end
     end
+end
+
+# Base case of the `SkipMissing` `mapreduce_impl`, outlined so that its bounds
+# checks can be split off as a separate slow path (see
+# `Core.invoke_split_effects`); the element accesses are plain checked
+# `getindex` calls so that the synthesized precondition covers them.
+function _mapreduce_impl_skipmissing_base(f, op, itr::SkipMissing{<:AbstractArray},
+                                          ifirst::Integer, ilast::Integer)
+    A = itr.x
+    if ifirst == ilast
+        a1 = A[ifirst]
+        if ismissing(a1)
+            return nothing
+        else
+            return Some(mapreduce_first(f, op, a1))
+        end
+    end
+    # sequential portion
+    ai = missing
+    i = ifirst
+    for outer i in i:ilast
+        ai = A[i]
+        !ismissing(ai) && break
+    end
+    ismissing(ai) && return nothing
+    a1 = ai::eltype(itr)
+    i == typemax(typeof(i)) && return Some(mapreduce_first(f, op, a1))
+    i += 1
+    ai = missing
+    for outer i in i:ilast
+        ai = A[i]
+        !ismissing(ai) && break
+    end
+    ismissing(ai) && return Some(mapreduce_first(f, op, a1))
+    a2 = ai::eltype(itr)
+    i == typemax(typeof(i)) && return Some(op(f(a1), f(a2)))
+    i += 1
+    v = op(f(a1), f(a2))
+    @simd for i = i:ilast
+        ai = A[i]
+        if !ismissing(ai)
+            v = op(v, f(ai))
+        end
+    end
+    return Some(v)
 end
 
 """

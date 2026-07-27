@@ -165,7 +165,7 @@ new persistent tree.
         bi = BitmapIndex(h)
         i = entry_index(trie, bi)
         if isset(trie, bi)
-            next = @inbounds trie.data[i]
+            next = trie.data[i]
             if next isa Leaf{K,V}
                 # Check if key match if not we will need to grow.
                 found = next.key === h.key
@@ -174,7 +174,7 @@ new persistent tree.
             if copy
                 next = HAMT{K,V}(Base.copy(next.data), next.bitmap)
                 # :noub because entry_index is guaranteed to be inbounds for trie.data
-                @inbounds trie.data[i] = next
+                trie.data[i] = next
             end
             trie = next::HAMT{K,V}
         else
@@ -193,7 +193,7 @@ or grows the HAMT by inserting a new trie instead.
     if found # we found a slot, just set it to the new leaf
         # replace or insert
         if present # replace
-            @inbounds trie.data[i] = Leaf{K, V}(h.key, val)
+            trie.data[i] = Leaf{K, V}(h.key, val)
         else
             Base.insert!(trie.data, i, Leaf{K, V}(h.key, val))
         end
@@ -201,7 +201,7 @@ or grows the HAMT by inserting a new trie instead.
     else
         @assert present "!found && !present"
         # collision -> grow
-        leaf = @inbounds trie.data[i]::Leaf{K,V}
+        leaf = trie.data[i]::Leaf{K,V}
         leaf_h = HashState(h, leaf.key)
         if leaf_h.hash == h.hash
             error("Perfect hash collision")
@@ -209,7 +209,7 @@ or grows the HAMT by inserting a new trie instead.
         while true
             new_trie = HAMT{K, V}()
             if present
-                @inbounds trie.data[i] = new_trie
+                trie.data[i] = new_trie
             else
                 i = entry_index(trie, bi)
                 Base.insert!(trie.data, i, new_trie)

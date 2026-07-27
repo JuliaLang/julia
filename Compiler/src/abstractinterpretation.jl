@@ -2601,6 +2601,67 @@ function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, 
     return Future(CallMeta(Nothing, Any, Effects(), NoCallInfo()))
 end
 
+function abstract_invoke_split_effects(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo,
+        vtypes::Union{VarTable,Nothing}, sv::AbsIntState, max_methods::Int)
+    (; fargs, argtypes) = arginfo
+    if length(argtypes) < 3 || isvarargtype(argtypes[2])
+        return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    end
+    # First perform inference of the equivalent plain call. We may not need the
+    # precondition logic at all (e.g. if we get a constant).
+    inner_argtypes = argtypes[3:end]
+    new_arginfo = ArgInfo(fargs === nothing ? nothing : fargs[3:end], inner_argtypes)
+    call = abstract_call(interp, new_arginfo, si, vtypes, sv, max_methods)::Future{CallMeta}
+    # Find an applicable precondition that we may be able to use
+    which = argtypes[2]
+    if !(isa(which, Const) && which.val === :nothrow)
+        # TODO: Support effects other than :nothrow
+        return call
+    end
+    any(@nospecialize(t)->isvarargtype(t), inner_argtypes) && return call
+    atype = argtypes_to_type(inner_argtypes)
+    atype === Union{} && return call
+    matched, valid_worlds = findsup(atype, method_table(interp))
+    matched === nothing && return call
+    update_valid_age!(sv, get_inference_world(interp), valid_worlds)
+    m = matched.method
+    # Check for user-defined preconditions
+    local check, cond_effects
+    checkfut = nothing
+    for i = 1:2:length(m.preconditions)-1
+        cond = m.preconditions[i]
+        isa(cond, EffectsOverride) || continue
+        # TODO: Should depend on `which`
+        cond.nothrow || continue
+        check = m.preconditions[i+1]
+        cond_effects = cond
+        check_arginfo = ArgInfo(nothing, Any[Const(check), inner_argtypes...])
+        checkfut = abstract_call(interp, check_arginfo, StmtInfo(true, si.saw_latestworld), vtypes, sv, max_methods)::Future{CallMeta}
+        # TODO: What to do if multiple preconditions match
+        break
+    end
+    checkfut === nothing && return call
+    # NB: the `let` gives the closure single-assignment bindings to capture
+    # (the loop above reassigns the outer ones, which would otherwise box them)
+    return let check = check, cond_effects = cond_effects, checkfut = checkfut
+        Future{CallMeta}(isready(call) && isready(checkfut), interp, sv) do interp, sv
+            r = call[]
+            # Only use the precondition if the plain call resolved to the single method
+            # that declared it
+            info = r.info
+            if !(isa(info, MethodMatchInfo) && length(info.results) == 1 && info.results[1].method === m)
+                return r
+            end
+            rcheck = checkfut[]
+            # The check must be a boolean predicate that we may freely insert (or delete)
+            widenconst(rcheck.rt) === Bool || return r
+            is_foldable_nothrow(rcheck.effects) || return r
+            return CallMeta(r.rt, r.exct, r.effects,
+                InvokeSplitEffectsInfo(info, check, cond_effects, rcheck.info))
+        end
+    end
+end
+
 function abstract_throw(interp::AbstractInterpreter, argtypes::Vector{Any}, ::AbsIntState)
     na = length(argtypes)
     ⊔ = join(typeinf_lattice(interp))
@@ -2908,6 +2969,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_modifyop!(interp, f, argtypes, si, vtypes, sv)
         elseif f === Core.finalizer
             return abstract_finalizer(interp, argtypes, vtypes, sv)
+        elseif f === invoke_split_effects
+            return abstract_invoke_split_effects(interp, arginfo, si, vtypes, sv, max_methods)
         elseif f === applicable
             return abstract_applicable(interp, argtypes, sv, max_methods)
         elseif f === throw

@@ -941,9 +941,9 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     end
     # Initialize using the first value
     I, state = y
-    @inbounds val = bc′[I]
+    val = bc′[I]
     dest = similar(bc′, typeof(val))
-    @inbounds dest[I] = val
+    dest[I] = val
     # Now handle the remaining values
     # The typeassert gives inference a helping hand on the element type and dimensionality
     # (work-around for #28382)
@@ -1002,7 +1002,11 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
     bc′ = preprocess(dest, bc)
     # Performance may vary depending on whether `@inbounds` is placed outside the
     # for loop or not. (cf. https://github.com/JuliaLang/julia/issues/38086)
-    @inbounds @simd for I in eachindex(bc′)
+    return Base.@split_effects :nothrow _copyto_loop!(dest, bc′)
+end
+
+@inline function _copyto_loop!(dest, bc′)
+    for I in eachindex(bc′)
         dest[I] = bc′[I]
     end
     return dest
@@ -1023,26 +1027,26 @@ end
         i = first(ax1) - 1
         if ndims(bc) == 1 || bitst >= 64 - length(ax1)
             if ndims(bc) > 1 && bitst != 0
-                @inbounds @simd for j = bitst:63
+                @simd for j = bitst:63
                     remain |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
                 end
-                @inbounds destc[indc+=1] = remain
+                destc[indc+=1] = remain
                 bitst, remain = 0, UInt64(0)
             end
             while i <= last(ax1) - 64
                 z = UInt64(0)
-                @inbounds @simd for j = 0:63
+                @simd for j = 0:63
                     z |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
                 end
-                @inbounds destc[indc+=1] = z
+                destc[indc+=1] = z
             end
         end
-        @inbounds @simd for j = i+1:last(ax1)
+        @simd for j = i+1:last(ax1)
             remain |= UInt64(convert(Bool, bc′[j, I])) << (bitst & 63)
             bitst += 1
         end
     end
-    @inbounds if bitst != 0
+    if bitst != 0
         destc[indc+=1] = remain
     end
     return dest
@@ -1081,17 +1085,18 @@ liftchunks(args::Tuple{<:Bool,Vararg{Any}}) = (ifelse(args[1], typemax(UInt64), 
 ithchunk(i) = ()
 Base.@propagate_inbounds ithchunk(i, c::Vector{UInt64}, args...) = (c[i], ithchunk(i, args...)...)
 Base.@propagate_inbounds ithchunk(i, b::UInt64, args...) = (b, ithchunk(i, args...)...)
-@inline function chunkedcopyto!(dest::BitArray, bc::Broadcasted)
+@inline function _chunkedcopyto_impl!(dest::BitArray, bc::Broadcasted)
     isempty(dest) && return dest
     f = flatten(liftfuncs(bc))
     args = liftchunks(f.args)
     dc = dest.chunks
-    @simd for i in eachindex(dc)
-        @inbounds dc[i] = f.f(ithchunk(i, args...)...)
+    for i in eachindex(dc)
+        dc[i] = f.f(ithchunk(i, args...)...)
     end
-    @inbounds dc[end] &= Base._msk_end(dest)
+    dc[end] &= Base._msk_end(dest)
     return dest
 end
+chunkedcopyto!(dest::BitArray, bc::Broadcasted) = Base.@split_effects :nothrow _chunkedcopyto_impl!(dest, bc)
 
 
 @noinline throwdm(axdest, axsrc) =
@@ -1106,15 +1111,15 @@ function restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
     return copyto_nonleaf!(newdest, bc, iter, state, count+1)
 end
 
-function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
+function _copyto_nonleaf_impl!(dest, bc::Broadcasted, iter, state, count)
     T = eltype(dest)
     while true
         y = iterate(iter, state)
         y === nothing && break
         I, state = y
-        @inbounds val = bc[I]
+        val = bc[I]
         if val isa T
-            @inbounds dest[I] = val
+            dest[I] = val
         else
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
             # copy over old values, and continue
@@ -1125,6 +1130,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
     end
     return dest
 end
+copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count) = Base.@split_effects :nothrow _copyto_nonleaf_impl!(dest, bc, iter, state, count)
 
 ## Tuple methods
 
@@ -1132,7 +1138,7 @@ end
     dim = axes(bc)
     length(dim) == 1 || throw(DimensionMismatch("tuple only supports one dimension"))
     N = length(dim[1])
-    return ntuple(k -> @inbounds(_broadcast_getindex(bc, k)), Val(N))
+    return ntuple(k -> (_broadcast_getindex(bc, k)), Val(N))
 end
 
 ## scalar-range broadcast operations ##
@@ -1232,11 +1238,11 @@ Base.@propagate_inbounds dotview(B::BitArray, i::BitArray) = BitMaskedBitArray(B
 Base.show(io::IO, B::BitMaskedBitArray) = foreach(arg->show(io, arg), (typeof(B), (B.parent, B.mask)))
 # Override materialize! to prevent the BitMaskedBitArray from escaping to an overridable method
 @inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any,<:Any,typeof(identity),Tuple{Bool}}) = fill!(B, bc.args[1])
-@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!(@inbounds(view(B.parent, B.mask)), bc)
-function Base.fill!(B::BitMaskedBitArray, b::Bool)
+@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!((view(B.parent, B.mask)), bc)
+function _fill_bmba_impl!(B::BitMaskedBitArray, b::Bool)
     Bc = B.parent.chunks
     Ic = B.mask.chunks
-    @inbounds if b
+    if b
         for i = 1:length(Bc)
             Bc[i] |= Ic[i]
         end
@@ -1247,6 +1253,7 @@ function Base.fill!(B::BitMaskedBitArray, b::Bool)
     end
     return B
 end
+Base.fill!(B::BitMaskedBitArray, b::Bool) = Base.@split_effects :nothrow _fill_bmba_impl!(B, b)
 
 
 

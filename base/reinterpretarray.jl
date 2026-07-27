@@ -976,17 +976,17 @@ end
                                   ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
     if ilast.j - ifirst.j < blksize
         # sequential portion
-        @inbounds a1 = A[ifirst]
-        @inbounds a2 = A[SCI(2,ifirst.j)]
+        a1 = A[ifirst]
+        a2 = A[SCI(2,ifirst.j)]
         v = op(f(a1), f(a2))
         @simd for i = ifirst.i + 2 : K
-            @inbounds ai = A[SCI(i,ifirst.j)]
+            ai = A[SCI(i,ifirst.j)]
             v = op(v, f(ai))
         end
         # Remaining columns
         for j = ifirst.j+1 : ilast.j
             @simd for i = 1:K
-                @inbounds ai = A[SCI(i,j)]
+                ai = A[SCI(i,j)]
                 v = op(v, f(ai))
             end
         end
@@ -1011,7 +1011,7 @@ function _totuple(T::Type{All32{E,N}}, itr::Union{Array,Memory}) where {E,N}
     length(itr) >= len || _totuple_err(T)
     if isbitstype(E) && eltype(itr) === E
         v = length(itr) == len ? itr : view(itr, 1:len)
-        return @inbounds reinterpret(T, v)[1]
+        return reinterpret(T, v)[1]
     end
     elts = collect(E, Iterators.take(itr, len))
     return (elts...,)

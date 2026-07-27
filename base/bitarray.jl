@@ -120,8 +120,8 @@ num_bit_chunks(n::Int) = _div64(n+63)
 
 @inline get_chunks_id(i::Int) = _div64(i-1)+1, _mod64(i-1)
 
-function glue_src_bitchunks(src::Vector{UInt64}, k::Int, ks1::Int, msk_s0::UInt64, ls0::Int)
-    @inbounds begin
+function _glue_src_bitchunks_impl(src::Vector{UInt64}, k::Int, ks1::Int, msk_s0::UInt64, ls0::Int)
+    begin
         chunk = ((src[k] & msk_s0) >>> ls0)
         if ks1 > k && ls0 > 0
             chunk_n = (src[k + 1] & ~msk_s0)
@@ -130,6 +130,8 @@ function glue_src_bitchunks(src::Vector{UInt64}, k::Int, ks1::Int, msk_s0::UInt6
     end
     return chunk
 end
+glue_src_bitchunks(src::Vector{UInt64}, k::Int, ks1::Int, msk_s0::UInt64, ls0::Int) =
+    @split_effects :nothrow _glue_src_bitchunks_impl(src, k, ks1, msk_s0, ls0)
 
 function copy_chunks!(dest::Vector{UInt64}, pos_d::Int, src::Vector{UInt64}, pos_s::Int, numbits::Int)
     numbits == 0 && return
@@ -231,7 +233,7 @@ function copy_chunks_rtol!(chunks::Vector{UInt64}, pos_d::Int, pos_s::Int, numbi
     end
 end
 
-function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Int, numbits::Int)
+function _fill_chunks_impl!(Bc::Array{UInt64}, x::Bool, pos::Int, numbits::Int)
     numbits <= 0 && return
     k0, l0 = get_chunks_id(pos)
     k1, l1 = get_chunks_id(pos+numbits-1)
@@ -242,7 +244,7 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Int, numbits::Int)
     if k1 == k0
         msk0 &= msk1
     end
-    @inbounds if x
+    if x
         Bc[k0] |= msk0
         for k = k0+1:k1-1
             Bc[k] = u
@@ -256,6 +258,8 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Int, numbits::Int)
         k1 > k0 && (Bc[k1] &= ~msk1)
     end
 end
+fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Int, numbits::Int) =
+    @split_effects :nothrow _fill_chunks_impl!(Bc, x, pos, numbits)
 
 copy_to_bitarray_chunks!(dest::Vector{UInt64}, pos_d::Int, src::BitArray, pos_s::Int, numbits::Int) =
     copy_chunks!(dest, pos_d, src.chunks, pos_s, numbits)
@@ -270,7 +274,7 @@ function pack8bools(z::UInt64)
     return z
 end
 
-function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}, pos_s::Int, numbits::Int)
+function _copy_to_bitarray_chunks_bool_impl!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}, pos_s::Int, numbits::Int)
     kd0, ld0 = get_chunks_id(pos_d)
     kd1, ld1 = get_chunks_id(pos_d + numbits - 1)
 
@@ -288,7 +292,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
 
     bind = kd0
     ind = pos_s
-    @inbounds if ld0 > 0
+    if ld0 > 0
         c = UInt64(0)
         for j = ld0:lt0
             c |= (UInt64(C[ind]) << j)
@@ -303,7 +307,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
     if nc8 > 0
         ind8 = 1
         P8 = Ptr{UInt64}(pointer(C, ind)) # unaligned i64 pointer
-        @inbounds for i = 1:nc8
+        for i = 1:nc8
             c = UInt64(0)
             for j = 0:7
                 # unaligned load
@@ -315,7 +319,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
         end
         ind += (ind8-1) << 3
     end
-    @inbounds for i = (nc8+1):nc
+    for i = (nc8+1):nc
         c = UInt64(0)
         for j = 0:63
             c |= (UInt64(C[ind]) << j)
@@ -324,7 +328,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
         Bc[bind] = c
         bind += 1
     end
-    @inbounds if bind ≤ kd1
+    if bind ≤ kd1
         @assert bind == kd1 "bind != kd1"
         c = UInt64(0)
         for j = 0:ld1
@@ -334,6 +338,8 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
         Bc[kd1] = (Bc[kd1] & msk_d1) | (c & ~msk_d1)
     end
 end
+copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}, pos_s::Int, numbits::Int) =
+    @split_effects :nothrow _copy_to_bitarray_chunks_bool_impl!(Bc, pos_d, C, pos_s, numbits)
 
 ## More definitions in multidimensional.jl
 
@@ -425,12 +431,12 @@ function one(x::BitMatrix)
     return a
 end
 
-function copyto!(dest::BitArray, src::BitArray)
+function _copyto_bitarray_bitarray_impl!(dest::BitArray, src::BitArray)
     length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
     destc = dest.chunks; srcc = src.chunks
     nc = min(length(destc), length(srcc))
     nc == 0 && return dest
-    @inbounds begin
+    begin
         for i = 1 : nc - 1
             destc[i] = srcc[i]
         end
@@ -444,6 +450,7 @@ function copyto!(dest::BitArray, src::BitArray)
     end
     return dest
 end
+copyto!(dest::BitArray, src::BitArray) = @split_effects :nothrow _copyto_bitarray_bitarray_impl!(dest, src)
 
 function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer)
     copy_to_bitarray_chunks!(dest.chunks, Int(doffs), src, Int(soffs), Int(n))
@@ -487,7 +494,7 @@ end
 function Array{T,N}(B::BitArray{N}) where {T,N}
     A = Array{T,N}(undef, size(B))
     Bc = B.chunks
-    @inbounds for i = 1:length(A)
+    for i = 1:length(A)
         A[i] = unsafe_bitgetindex(Bc, i)
     end
     return A
@@ -502,14 +509,14 @@ function BitArray{N}(A::AbstractArray{T,N}) where N where T
     return B::BitArray{N}
 end
 
-function _copyto_bitarray!(B::BitArray, A::AbstractArray)
+function _copyto_bitarray_impl!(B::BitArray, A::AbstractArray)
     l = length(A)
     l == 0 && return B
     l > length(B) && throw(BoundsError(B, length(B)+1))
     Bc = B.chunks
     nc = num_bit_chunks(l)
     Ai = first(eachindex(A))
-    @inbounds begin
+    begin
         for i = 1:nc-1
             c = UInt64(0)
             for j = 0:63
@@ -529,6 +536,7 @@ function _copyto_bitarray!(B::BitArray, A::AbstractArray)
     end
     return B
 end
+_copyto_bitarray!(B::BitArray, A::AbstractArray) = @split_effects :nothrow _copyto_bitarray_impl!(B, A)
 
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)::T
 BitArray(x::BitArray) = copy(x)
@@ -611,7 +619,7 @@ function gen_bitarray_from_itr(itr)
     y = iterate(itr)
     while y !== nothing
         x, st = y
-        @inbounds C[ind] = x
+        C[ind] = x
         ind += 1
         if ind > bitcache_size
             resize!(B, length(B) + bitcache_size)
@@ -622,7 +630,7 @@ function gen_bitarray_from_itr(itr)
         y = iterate(itr, st)
     end
     if ind > 1
-        @inbounds C[ind:bitcache_size] .= false
+        C[ind:bitcache_size] .= false
         resize!(B, length(B) + ind - 1)
         dumpbitcache(Bc, cind, C)
     end
@@ -638,7 +646,7 @@ function fill_bitarray_from_itr!(B::BitArray, itr)
     y = iterate(itr)
     while y !== nothing
         x, st = y
-        @inbounds C[ind] = x
+        C[ind] = x
         ind += 1
         if ind > bitcache_size
             dumpbitcache(Bc, cind, C)
@@ -648,7 +656,7 @@ function fill_bitarray_from_itr!(B::BitArray, itr)
         y = iterate(itr, st)
     end
     if ind > 1
-        @inbounds C[ind:bitcache_size] .= false
+        C[ind:bitcache_size] .= false
         dumpbitcache(Bc, cind, C)
     end
     return B
@@ -714,19 +722,19 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     Xi = first(eachindex(X))
     lastXi = last(eachindex(X))
     for i = 1:lc
-        @inbounds Imsk = Ic[i]
-        @inbounds C = Bc[i]
+        Imsk = Ic[i]
+        C = Bc[i]
         u = UInt64(1)
         for j = 1:(i < lc ? 64 : last_chunk_len)
             if Imsk & u != 0
                 Xi > lastXi && throw_setindex_mismatch(X, count(I))
-                @inbounds x = convert(Bool, X[Xi])
+                x = convert(Bool, X[Xi])
                 C = ifelse(x, C | u, C & ~u)
                 Xi = nextind(X, Xi)
             end
             u <<= 1
         end
-        @inbounds Bc[i] = C
+        Bc[i] = C
     end
     if Xi != nextind(X, lastXi)
         throw_setindex_mismatch(X, count(I))
@@ -854,7 +862,7 @@ end
 
 function popfirst!(B::BitVector)
     isempty(B) && throw(ArgumentError("argument must not be empty"))
-    @inbounds begin
+    begin
         item = B[1]
 
         Bc = B.chunks
@@ -913,7 +921,7 @@ function _deleteat!(B::BitVector, i::Int)
 
     Bc = B.chunks
 
-    @inbounds begin
+    begin
         Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) >> 1)
         if length(Bc) > k
             Bc[k] |= (Bc[k + 1] << 63)
@@ -1175,7 +1183,7 @@ for f in (:+, :-)
         # promote_shape guarantees that A and B have the
         # same iteration space
         while ay !== nothing
-            @inbounds r[ri] = ($f)(ay[1], by[1])
+            r[ri] = ($f)(ay[1], by[1])
             ri += 1
             ay, by = iterate(A, ay[2]), iterate(B, by[2])
         end
@@ -1254,7 +1262,7 @@ function _reverse(A::BitArray, d::Int)
     return B
 end
 
-function _reverse!(B::BitVector, ::Colon)
+function _reverse_impl!(B::BitVector, ::Colon)
     # Basic idea: each chunk is divided into two blocks of size k = n % 64, and
     # h = 64 - k. Walk from either end (with indices i and j) reversing chunks
     # and separately ORing their two blocks into place.
@@ -1279,7 +1287,7 @@ function _reverse!(B::BitVector, ::Colon)
     u = UInt64(0)
     v = bitreverse(B.chunks[j])
     B.chunks[j] = 0
-    @inbounds while true
+    while true
         i += 1
         if i == j
             break
@@ -1307,6 +1315,7 @@ function _reverse!(B::BitVector, ::Colon)
 
     return B
 end
+_reverse!(B::BitVector, c::Colon) = @split_effects :nothrow _reverse_impl!(B, c)
 
 function (<<)(B::BitVector, i::UInt)
     n = length(B)
@@ -1432,7 +1441,7 @@ circshift!(B::BitVector, i::Integer) = circshift!(B, B, i)
 
 function bitcount(Bc::Vector{UInt64}; init::T=0) where {T}
     n::T = init
-    @inbounds for i = 1:length(Bc)
+    for i = 1:length(Bc)
         n = (n + count_ones(Bc[i])) % T
     end
     return n
@@ -1440,12 +1449,12 @@ end
 
 _count(::typeof(identity), B::BitArray, ::Colon, init) = bitcount(B.chunks; init)
 
-function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
+function _unsafe_bitfindnext_impl(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
     within_chunk_start = _mod64(start-1)
     mask = _msk64 << within_chunk_start
 
-    @inbounds begin
+    begin
         if Bc[chunk_start] & mask != 0
             return (chunk_start-1) << 6 + trailing_zeros(Bc[chunk_start] & mask) + 1
         end
@@ -1458,6 +1467,7 @@ function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
     end
     return nothing
 end
+unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int) = @split_effects :nothrow _unsafe_bitfindnext_impl(Bc, start)
 
 # returns the index of the next true element, or nothing if all false
 function findnext(B::BitArray, start::Integer)
@@ -1470,7 +1480,7 @@ end
 #findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
 
 # aux function: same as findnext(~B, start), but performed without temporaries
-function findnextnot(B::BitArray, start::Int)
+function _findnextnot_impl(B::BitArray, start::Int)
     start > 0 || throw(BoundsError(B, start))
     start > length(B) && return nothing
 
@@ -1482,7 +1492,7 @@ function findnextnot(B::BitArray, start::Int)
     within_chunk_start = _mod64(start-1)
     mask = ~(_msk64 << within_chunk_start)
 
-    @inbounds if chunk_start < l
+    if chunk_start < l
         if Bc[chunk_start] | mask != _msk64
             return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
         end
@@ -1499,6 +1509,7 @@ function findnextnot(B::BitArray, start::Int)
     end
     return nothing
 end
+findnextnot(B::BitArray, start::Int) = @split_effects :nothrow _findnextnot_impl(B, start)
 findfirstnot(B::BitArray) = findnextnot(B,1)
 
 # returns the index of the first matching element
@@ -1530,7 +1541,7 @@ function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Int)
     chunk_start = _div64(start-1)+1
     mask = _msk_end(start)
 
-    @inbounds begin
+    begin
         if Bc[chunk_start] & mask != 0
             return (chunk_start-1) << 6 + (top_set_bit(Bc[chunk_start] & mask))
         end
@@ -1562,7 +1573,7 @@ function findprevnot(B::BitArray, start::Int)
     chunk_start = _div64(start-1)+1
     mask = ~_msk_end(start)
 
-    @inbounds begin
+    begin
         if Bc[chunk_start] | mask != _msk64
             return (chunk_start-1) << 6 + (64 - leading_ones(Bc[chunk_start] | mask))
         end
@@ -1602,35 +1613,37 @@ function _findprev_int(testf::Function, B::BitArray, start::Int)
 end
 #findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
 
-function findmax(a::BitArray)
+function _findmax_impl(a::BitArray)
     isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
     m, mi = false, 1
     ti = 1
     ac = a.chunks
     for i = 1:length(ac)
-        @inbounds k = trailing_zeros(ac[i])
+        k = trailing_zeros(ac[i])
         ti += k
-        k == 64 || return (true, @inbounds keys(a)[ti])
+        k == 64 || return (true, keys(a)[ti])
     end
-    return m, @inbounds keys(a)[mi]
+    return m, keys(a)[mi]
 end
+findmax(a::BitArray) = @split_effects :nothrow _findmax_impl(a)
 
-function findmin(a::BitArray)
+function _findmin_impl(a::BitArray)
     isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
     m, mi = true, 1
     ti = 1
     ac = a.chunks
     for i = 1:length(ac)-1
-        @inbounds k = trailing_ones(ac[i])
+        k = trailing_ones(ac[i])
         ti += k
-        k == 64 || return (false, @inbounds keys(a)[ti])
+        k == 64 || return (false, keys(a)[ti])
     end
     l = Base._mod64(length(a)-1) + 1
-    @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
+    k = trailing_ones(ac[end] & Base._msk_end(l))
     ti += k
-    k == l || return (false, @inbounds keys(a)[ti])
-    return (m, @inbounds keys(a)[mi])
+    k == l || return (false, keys(a)[ti])
+    return (m, keys(a)[mi])
 end
+findmin(a::BitArray) = @split_effects :nothrow _findmin_impl(a)
 
 # findall helper functions
 # Generic case (>2 dimensions)
@@ -1680,7 +1693,7 @@ function findall(B::BitArray)
     Bi = i1 = i = 1
     irest = ntuple(one, ndims(B) - 1)
     c = Bc[1]
-    @inbounds while true
+    while true
         while c == 0
             Bi == length(Bc) && return I
             i1 += 64
@@ -1706,10 +1719,10 @@ findall(::typeof(!iszero), B::BitArray) = findall(B)
 _sum(A::BitArray, dims)    = reduce(+, A, dims=dims)
 _sum(B::BitArray, ::Colon) = count(B)
 
-function all(B::BitArray)
+function _all_impl(B::BitArray)
     isempty(B) && return true
     Bc = B.chunks
-    @inbounds begin
+    begin
         for i = 1:length(Bc)-1
             Bc[i] == _msk64 || return false
         end
@@ -1717,11 +1730,12 @@ function all(B::BitArray)
     end
     return true
 end
+all(B::BitArray) = @split_effects :nothrow _all_impl(B)
 
 function any(B::BitArray)
     isempty(B) && return false
     Bc = B.chunks
-    @inbounds begin
+    begin
         for i = 1:length(Bc)
             Bc[i] == 0 || return true
         end

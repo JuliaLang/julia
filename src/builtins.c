@@ -1873,6 +1873,17 @@ JL_CALLABLE(jl_f_invoke)
     return jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
 }
 
+// `invoke_split_effects(which::Symbol, f, args...)` is semantically equivalent to
+// `f(args...)`. The `which` argument is a hint to the optimizer that it may split
+// this call into a fast path guarded by a (user-provided or synthesized) precondition
+// under which the effect `which` may be assumed, and a fallback to the plain call.
+JL_CALLABLE(jl_f_invoke_split_effects)
+{
+    JL_NARGSV(invoke_split_effects, 2);
+    JL_TYPECHK(invoke_split_effects, symbol, args[0]);
+    return jl_apply_generic(args[1], &args[2], nargs - 2);
+}
+
 // Expr constructor for internal use ------------------------------------------
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)

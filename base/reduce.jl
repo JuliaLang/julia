@@ -249,27 +249,40 @@ foldr(op::F, itr; kw...) where {F} = mapfoldr(identity, op, itr; kw...)
 
 # This is a generic implementation of `mapreduce_impl()`,
 # certain `op` (e.g. `min` and `max`) may have their own specialized versions.
-@noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted,
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
-    if ifirst == ilast
-        @inbounds a1 = A[ifirst]
-        return mapreduce_first(f, op, a1)
-    elseif ilast - ifirst < blksize
-        # sequential portion
-        @inbounds a1 = A[ifirst]
-        @inbounds a2 = A[ifirst+1]
-        v = op(f(a1), f(a2))
-        @simd for i = ifirst + 2 : ilast
-            @inbounds ai = A[i]
-            v = op(v, f(ai))
-        end
-        return v
+@noinline function mapreduce_impl(f::F, op::G, A::AbstractArrayOrBroadcasted,
+                                  ifirst::Integer, ilast::Integer, blksize::Int) where {F, G}
+    # NB: the `where {F, G}` forces specialization on `f` and `op`: neither is
+    # called in this body (only passed on), so Julia's heuristics would
+    # otherwise widen them, leaving dynamic calls
+    if ilast - ifirst < blksize
+        # single element (ifirst == ilast) or sequential portion
+        return @split_effects :nothrow _mapreduce_impl_base(f, op, A, ifirst, ilast)
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
         v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
         return op(v1, v2)
+    end
+end
+
+# Base case of `mapreduce_impl` (`ilast - ifirst < blksize`), outlined so that
+# it can be compiled without recursion and its bounds checks can be split off
+# as a separate slow path (see `Core.invoke_split_effects`).
+function _mapreduce_impl_base(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer)
+    if ifirst == ilast
+        a1 = A[ifirst]
+        return mapreduce_first(f, op, a1)
+    else
+        # sequential portion
+        a1 = A[ifirst]
+        a2 = A[ifirst+1]
+        v = op(f(a1), f(a2))
+        @simd for i = ifirst + 2 : ilast
+            ai = A[i]
+            v = op(v, f(ai))
+        end
+        return v
     end
 end
 
@@ -439,15 +452,15 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     if n == 0
         return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
     elseif n == 1
-        @inbounds a1 = A[first(inds)]
+        a1 = A[first(inds)]
         return mapreduce_first(f, op, a1)
     elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
-        @inbounds i = first(inds)
-        @inbounds a1 = A[i]
-        @inbounds a2 = A[i+=1]
+        i = first(inds)
+        a1 = A[i]
+        a2 = A[i+=1]
         s = op(f(a1), f(a2))
         while i < last(inds)
-            @inbounds Ai = A[i+=1]
+            Ai = A[i+=1]
             s = op(s, f(Ai))
         end
         return s

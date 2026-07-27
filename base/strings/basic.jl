@@ -184,7 +184,7 @@ isempty(s::AbstractString) = iszero(ncodeunits(s)::Int)
 
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
-    @inbounds return isvalid(s, i) ? (iterate(s, i)::NTuple{2,Any})[1] : string_index_err(s, i)
+    return isvalid(s, i) ? (iterate(s, i)::NTuple{2,Any})[1] : string_index_err(s, i)
 end
 
 getindex(s::AbstractString, i::Colon) = s
@@ -196,7 +196,7 @@ getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
 function get(s::AbstractString, i::Integer, default)
-    checkbounds(Bool, s, i) ? (@inbounds s[i]) : default
+    checkbounds(Bool, s, i) ? (s[i]) : default
 end
 
 ## bounds checking ##
@@ -393,7 +393,7 @@ julia> length("jμΛIα")
 5
 ```
 """
-length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s)::Int)
+length(s::AbstractString) = return length(s, 1, ncodeunits(s)::Int)
 
 function length(s::AbstractString, i::Int, j::Int)
     @boundscheck begin
@@ -402,7 +402,7 @@ function length(s::AbstractString, i::Int, j::Int)
     end
     n = 0
     for k = i:j
-        @inbounds n += isvalid(s, k)
+        n += isvalid(s, k)
     end
     return n
 end
@@ -448,7 +448,7 @@ function thisind(s::AbstractString, i::Int)
     z = ncodeunits(s)::Int + 1
     i == z && return i
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
+    while 1 < i && !(isvalid(s, i)::Bool)
         i -= 1
     end
     return i
@@ -508,7 +508,7 @@ function prevind(s::AbstractString, i::Int, n::Int)
     @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i)::Int == i ? i : string_index_err(s, i)
     while n > 0 && 1 < i
-        @inbounds n -= isvalid(s, i -= 1)::Bool
+        n -= isvalid(s, i -= 1)::Bool
     end
     return i - n
 end
@@ -567,7 +567,7 @@ function nextind(s::AbstractString, i::Int, n::Int)
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i)::Int == i ? i : string_index_err(s, i)
     while n > 0 && i < z
-        @inbounds n -= isvalid(s, i += 1)::Bool
+        n -= isvalid(s, i += 1)::Bool
     end
     return i + n
 end
@@ -619,13 +619,15 @@ isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(s::AbstractString) = all(isascii, s)
 isascii(c::AbstractChar) = UInt32(c) < 0x80
 
-@inline function _isascii(code_units::AbstractVector{CU}, first, last) where {CU}
+@inline function _isascii_impl(code_units::AbstractVector{CU}, first, last) where {CU}
     r = zero(CU)
     for n = first:last
-        @inbounds r |= code_units[n]
+        r |= code_units[n]
     end
     return 0 ≤ r < 0x80
 end
+@inline _isascii(code_units::AbstractVector{CU}, first, last) where {CU} =
+    @split_effects :nothrow _isascii_impl(code_units, first, last)
 
 #The chunking algorithm makes the last two chunks overlap in order to keep the size fixed
 @inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
@@ -697,7 +699,7 @@ julia> first("∀ϵ≠0: ϵ²>0", 3)
 "∀ϵ≠"
 ```
 """
-first(s::AbstractString, n::Integer) = @inbounds s[1:min(end, nextind(s, 0, n))]
+first(s::AbstractString, n::Integer) = s[1:min(end, nextind(s, 0, n))]
 
 """
     last(s::AbstractString, n::Integer)
@@ -716,7 +718,7 @@ julia> last("∀ϵ≠0: ϵ²>0", 3)
 "²>0"
 ```
 """
-last(s::AbstractString, n::Integer) = @inbounds s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
+last(s::AbstractString, n::Integer) = s[max(1, prevind(s, ncodeunits(s)+1, n)):end]
 
 """
     reverseind(v, i)

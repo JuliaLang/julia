@@ -50,6 +50,14 @@ const IR_FLAG_UNUSED      = one(UInt32) << 17
 const IR_FLAG_EFIIMO      = one(UInt32) << 18
 # This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 19
+# This `GotoIfNot` is the guard branch of an inlined effect split (see
+# `ir_inline_effectsplit!`): its false target starts a self-contained fallback
+# region that ends at the split's join block and is semantically equivalent to
+# the fall-through (assume) arm, differing only in assumed effects. Nothrow
+# shadow synthesis for an enclosing kernel uses this to compose inner splits:
+# the shadow keeps the guard and turns the fallback region into `return false`,
+# while the assume variant folds the guard to the assume arm.
+const IR_FLAG_SPLIT_GUARD = one(UInt32) << 20
 
 const NUM_IR_FLAGS = 3 # sync with julia.h
 
@@ -211,13 +219,16 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     unreachable::BitSet
     bb_states::Vector{Union{Nothing,BBEntryState}}
     insert_coverage::Bool
+    # a nothrow shadow pair derived during `run_passes_ipo_safe`, cached as
+    # `CodeInstance`s by `finish!` (see ssair/shadow.jl)
+    nothrow_shadow::Any
 end
 function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
                            opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
     inlining = InliningState(sv, interp, opt_cache)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
-                             sv.unreachable, sv.bb_states, sv.insert_coverage)
+                             sv.unreachable, sv.bb_states, sv.insert_coverage, nothing)
 end
 function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter,
                            opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
@@ -250,7 +261,7 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
             for slot = 1:nslots
         ], nbbstate)
         for _ = 1:length(cfg.blocks)]
-    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_states, false)
+    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_states, false, nothing)
 end
 function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
     world = get_inference_world(interp)
@@ -271,6 +282,7 @@ include("ssair/legacy.jl")
 include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
+include("ssair/shadow.jl")
 
 function ir_to_codeinf!(opt::OptimizationState{I}, frame::InferenceState{I}, edges::SimpleVector) where {I<:AbstractInterpreter}
     ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp::I, frame.result, opt.optresult))
@@ -1072,6 +1084,7 @@ function run_passes_ipo_safe(
     @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "CC: COMPACT_1" ir = compact!(ir)
+    @pass "CC: SHADOW"    ir = derive_nothrow_shadows!(ir, sv)
     @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @zone "CC: VERIFY 2" verify_ir(ir)
     @pass "CC: COMPACT_2" ir = compact!(ir)

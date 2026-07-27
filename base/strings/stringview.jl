@@ -129,14 +129,14 @@ isvalid(s::StringViewAndSub, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) 
     i, j = first(r), last(r)
     @boundscheck begin
         checkbounds(cu, r)
-        @inbounds isvalid(s, i) || string_index_err(s, i)
-        @inbounds isvalid(s, j) || string_index_err(s, j)
+        isvalid(s, i) || string_index_err(s, i)
+        isvalid(s, j) || string_index_err(s, j)
     end
     j = nextind(s, j) - 1
     return StringView(cu[i:j])
 end
 
-function chomp(s::StringViewAndSub)
+function _chomp_impl(s::StringViewAndSub)
     cu = codeunits(s)
     ncu = length(cu)
     len = if iszero(ncu)
@@ -147,8 +147,9 @@ function chomp(s::StringViewAndSub)
         has_cr = has_lf & two_bytes & (cu[ncu - two_bytes] == 0x0d)
         ncu - (has_lf + has_cr)
     end
-    @inbounds raw_substring(s, 1, len)
+    raw_substring(s, 1, len)
 end
+chomp(s::StringViewAndSub) = @split_effects :nothrow _chomp_impl(s)
 
 function replace(io::IO, s::DenseStringViewAndSub, pat_f::Pair...; count = typemax(Int))
     return _replace_(io, s, pat_f, Int(count))

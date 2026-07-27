@@ -40,7 +40,7 @@ using Core.Intrinsics, Core.IR
 using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, MethodInstance, MethodMatch,
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     TypeEq,
-    _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
+    _apply_iterate, apply_type, compilerbarrier, donotdelete, invoke_split_effects, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
     typename, unsafe_write, write, stdout, stderr
 

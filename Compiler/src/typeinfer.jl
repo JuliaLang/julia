@@ -140,6 +140,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         inferred_result = nothing
         debuginfo = nothing
         const_flag = is_result_constabi_eligible(result)
+        nothrow_shadow = result.src isa OptimizationState ? result.src.nothrow_shadow : nothing
         discard_src = caller.cache_mode === CACHE_MODE_NULL || (const_flag && may_discard_trees(interp))
         if !discard_src
             inferred_result = transform_result_for_cache(interp, result, edges)
@@ -188,6 +189,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
             const_flags, min_world, max_world,
             ipo_effects, result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
+        if nothrow_shadow isa NothrowShadow && ci.owner === nothing &&
+           !iszero(caller.cache_mode & CACHE_MODE_GLOBAL)
+            cache_nothrow_shadows!(nothrow_shadow, ci, mi)
+        end
     elseif caller.cache_mode === CACHE_MODE_LOCAL
         result.src = transform_result_for_local_cache(interp, result)
     end

@@ -970,6 +970,31 @@ macro inbounds(blk)
 end
 
 """
+    @split_effects which f(args...)
+
+Evaluate `f(args...)`, hinting to the compiler that it may split the call into
+a fast path under which the effect `which` (currently only `:nothrow`) is
+assumed, guarded by a precondition check that establishes the assumption, and
+a fallback to the plain call. The precondition is either declared on the
+method of `f` with the conditional-effects form of [`Base.@assume_effects`](@ref),
+or synthesized by the compiler from the method's code.
+
+Unlike [`@inbounds`](@ref), this is always safe: if no usable precondition is
+found, the call behaves exactly like `f(args...)`.
+
+See also [`Core.invoke_split_effects`](@ref).
+"""
+macro split_effects(which, ex)
+    # NB: macro bodies execute in their definition world; this macro is defined
+    # very early in bootstrap, so only use builtins and Core types here (in
+    # particular no iteration, generic arithmetic, or string interpolation)
+    isa(which, QuoteNode) && (which = getfield(which, :value))
+    isa(which, Symbol) || throw(ArgumentError("`@split_effects` expects an effect name Symbol as its first argument"))
+    (isa(ex, Expr) && getfield(ex, :head) === :call) || throw(ArgumentError("`@split_effects` expects a function call (without keyword arguments)"))
+    return esc(Expr(:call, GlobalRef(Core, :invoke_split_effects), QuoteNode(which), getfield(ex, :args)...))
+end
+
+"""
     @label name
 
 Labels a statement with the symbolic label `name`. The label marks the end-point
@@ -1304,7 +1329,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
     ua = ty
     i = 1
     while i !== nparams + 1
-        @inbounds tvars[i] = (ua::UnionAll).var
+        tvars[i] = (ua::UnionAll).var
         ua = (ua::UnionAll).body
         i = i + 1
     end
@@ -1323,11 +1348,11 @@ function _defaultctors(@nospecialize(ty), functionloc)
     # all-underscore field names being write-only in lowering.
     self = Symbol("#ctor-self#")
     argnames = Array{Any,1}(Core.undef, n + 1)
-    @inbounds argnames[1] = self
+    argnames[1] = self
     i = 1
     nany = 0
     while i !== n + 1
-        @inbounds argnames[i + 1] = names[i]::Symbol
+        argnames[i + 1] = names[i]::Symbol
         if fts[i] === Any
             nany = nany + 1
         end
@@ -1338,7 +1363,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
     constrains_all = true
     i = nparams
     while i !== 0
-        @inbounds tv = tvars[i]::TypeVar
+        tv = tvars[i]::TypeVar
         constrained = false
         j = 1
         while j !== n + 1
@@ -1353,7 +1378,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
             j = i + 1
             remaining = nparams - i
             while remaining !== 0
-                @inbounds tv2 = tvars[j]::TypeVar
+                tv2 = tvars[j]::TypeVar
                 if has_typevar(tv2.ub, tv)
                     constrained = true
                     break
@@ -1379,10 +1404,10 @@ function _defaultctors(@nospecialize(ty), functionloc)
         if is_parametric
             # new(apply_type(ty, static_parameter(1), ...), args...)
             curly_args = Array{Any,1}(Core.undef, nparams + 1)
-            @inbounds curly_args[1] = ty
+            curly_args[1] = ty
             i = 1
             while i !== nparams + 1
-                @inbounds curly_args[i + 1] = Expr(:static_parameter, i)
+                curly_args[i + 1] = Expr(:static_parameter, i)
                 i = i + 1
             end
             new_target = Expr(:curly, curly_args...)
@@ -1390,10 +1415,10 @@ function _defaultctors(@nospecialize(ty), functionloc)
             new_target = Core.Argument(1)
         end
         new_args = Array{Any,1}(Core.undef, n + 1)
-        @inbounds new_args[1] = new_target
+        new_args[1] = new_target
         i = 1
         while i !== n + 1
-            @inbounds new_args[i + 1] = Core.Argument(i + 1)
+            new_args[i + 1] = Core.Argument(i + 1)
             i = i + 1
         end
         new_expr = Expr(:new, new_args...)
@@ -1404,10 +1429,10 @@ function _defaultctors(@nospecialize(ty), functionloc)
 
         # Build argdata: svec(svec(Type{ty}, ft1, ft2, ...), svec(tvars...), functionloc)
         atypes_arr = Array{Any,1}(Core.undef, n + 1)
-        @inbounds atypes_arr[1] = Core.apply_type(Type, ty)
+        atypes_arr[1] = Core.apply_type(Type, ty)
         i = 1
         while i !== n + 1
-            @inbounds atypes_arr[i + 1] = fts[i]
+            atypes_arr[i + 1] = fts[i]
             i = i + 1
         end
         outer_atypes = Core.svec(atypes_arr...)
@@ -1443,7 +1468,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
     while i !== n + 1
         ft = fts[i]
         if ft === Any
-            @inbounds new_args[i] = Core.Argument(i + 1)
+            new_args[i] = Core.Argument(i + 1)
         else
             # Use an isa check to avoid depending on convert inlining.
             # This matches the old convert-for-type-decl pattern:
@@ -1457,10 +1482,10 @@ function _defaultctors(@nospecialize(ty), functionloc)
             cnvt_ssa = Expr(:ssavalue, bidx + 1)
             isa_check = Expr(:call, GlobalRef(Core, :isa), Core.Argument(i + 1), ft_ssa)
             convert_expr = Expr(:call, GlobalRef(Base, :convert), ft_ssa, Core.Argument(i + 1))
-            @inbounds body_args[bidx] = Expr(:(=), ft_ssa, ft_expr)
-            @inbounds body_args[bidx + 1] = Expr(:(=), cnvt_ssa, Expr(:if, isa_check,
+            body_args[bidx] = Expr(:(=), ft_ssa, ft_expr)
+            body_args[bidx + 1] = Expr(:(=), cnvt_ssa, Expr(:if, isa_check,
                                                Core.Argument(i + 1), convert_expr))
-            @inbounds new_args[i] = cnvt_ssa
+            new_args[i] = cnvt_ssa
             bidx = bidx + 2
         end
         i = i + 1
@@ -1476,13 +1501,13 @@ function _defaultctors(@nospecialize(ty), functionloc)
     typedt = Core.apply_type(Type, dt)
     i = nparams
     while i !== 0
-        @inbounds typedt = UnionAll(tvars[i], typedt)
+        typedt = UnionAll(tvars[i], typedt)
         i = i - 1
     end
-    @inbounds inner_atypes_arr[1] = typedt
+    inner_atypes_arr[1] = typedt
     i = 1
     while i !== n + 1
-        @inbounds inner_atypes_arr[i + 1] = Any
+        inner_atypes_arr[i + 1] = Any
         i = i + 1
     end
     inner_atypes = Core.svec(inner_atypes_arr...)

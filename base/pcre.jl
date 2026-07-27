@@ -31,6 +31,8 @@ global PCRE_COMPILE_LOCK::Threads.SpinLock
 _tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
 _mth() = Threads.maxthreadid()
 
+_get_local_match_context_read(ctxs::Vector{Ptr{Cvoid}}, tid::Int) = ctxs[tid]
+
 function get_local_match_context()
     tid = _tid()
     ctxs = THREAD_MATCH_CONTEXTS
@@ -47,7 +49,7 @@ function get_local_match_context()
             unlock(l)
         end
     end
-    ctx = @inbounds ctxs[tid]
+    ctx = Base.@split_effects :nothrow _get_local_match_context_read(ctxs, tid)
     if ctx == C_NULL
         # slow path to allocate it
         ctx = create_match_context()

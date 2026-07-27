@@ -140,7 +140,7 @@ function pop!(s::Set, x, default)
     dict = s.dict
     index = ht_keyindex(dict, x)
     if index > 0
-        @inbounds key = dict.keys[index]
+        key = @split_effects :nothrow getindex(dict.keys, index)
         _delete!(dict, index)
         return key
     else
@@ -151,7 +151,7 @@ end
 function pop!(s::Set, x)
     index = ht_keyindex(s.dict, x)
     index < 1 && throw(KeyError(x))
-    result = @inbounds s.dict.keys[index]
+    result = @split_effects :nothrow getindex(s.dict.keys, index)
     _delete!(s.dict, index)
     result
 end
@@ -376,7 +376,7 @@ function unique!(f, A::AbstractVector; seen::Union{Nothing,Set}=nothing)
     end
 
     i = firstindex(A)::Int
-    x = @inbounds A[i]
+    x = A[i]
     y = f(x)
     if seen === nothing
         seen = Set{typeof(y)}()
@@ -385,25 +385,29 @@ function unique!(f, A::AbstractVector; seen::Union{Nothing,Set}=nothing)
     return _unique!(f, A, seen, i, i+1)
 end
 
-function _unique!(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
+function _unique!_impl(f, A::AbstractVector, seen::Set, current::Integer, i::Integer)
     while i <= lastindex(A)
-        x = @inbounds A[i]
+        x = A[i]
         y = f(x)
         if y ∉ seen
             current += 1
-            @inbounds A[current] = x
+            A[current] = x
             if y isa eltype(seen)
                 push!(seen, y)
             else
                 seen2 = convert(Set{promote_typejoin(eltype(seen), typeof(y))}, seen)
                 push!(seen2, y)
-                return _unique!(f, A, seen2, current, i+1)
+                return _unique!_impl(f, A, seen2, current, i+1)
             end
         end
         i += 1
     end
     return resize!(A, current - firstindex(A)::Int + 1)::typeof(A)
 end
+# NB: the `where {F}` forces specialization on `f`, which this wrapper only
+# forwards (Julia's heuristics would otherwise widen it, leaving a dynamic call)
+_unique!(f::F, A::AbstractVector, seen::Set, current::Integer, i::Integer) where {F} =
+    @split_effects :nothrow _unique!_impl(f, A, seen, current, i)
 
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
@@ -576,7 +580,7 @@ function allunique(A::StridedArray)
     end
 end
 
-function _indexed_allunique(A)
+function _indexed_allunique_impl(A)
     length(A) < 2 && return true
     iter = eachindex(A)
     I = iterate(iter)
@@ -584,12 +588,13 @@ function _indexed_allunique(A)
         i, s = I
         a = A[i]
         for j in Iterators.rest(iter, s)
-            isequal(a, @inbounds A[j]) && return false
+            isequal(a, A[j]) && return false
         end
         I = iterate(iter, s)
     end
     return true
 end
+_indexed_allunique(A) = @split_effects :nothrow _indexed_allunique_impl(A)
 
 function allunique(t::Tuple)
     length(t) < 32 || return _hashed_allunique(t)
@@ -949,26 +954,26 @@ function _replace!(new::Callable, res::AbstractArray, A::AbstractArray, count::I
     if count >= length(A) # simpler loop allows for SIMD
         if res === A # for optimization only
             for i in eachindex(A)
-                @inbounds Ai = A[i]
+                Ai = A[i]
                 y = new(Ai)
-                @inbounds A[i] = y
+                A[i] = y
             end
         else
             for i in eachindex(A)
-                @inbounds Ai = A[i]
+                Ai = A[i]
                 y = new(Ai)
-                @inbounds res[i] = y
+                res[i] = y
             end
         end
     else
         for i in eachindex(A)
-            @inbounds Ai = A[i]
+            Ai = A[i]
             if c < count
                 y = new(Ai)
-                @inbounds res[i] = y
+                res[i] = y
                 c += (Ai !== y)
             else
-                @inbounds res[i] = Ai
+                res[i] = Ai
             end
         end
     end
@@ -977,14 +982,14 @@ end
 
 ### specialization for Dict / Set
 
-function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) where {K,V}
+function _replace!_impl(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) where {K,V}
     # we ignore A, which is supposed to be equal to the destination t,
     # as it can generally be faster to just replace inline
     count == 0 && return t
     c = 0
     news = Pair{K,V}[]
     i = skip_deleted_floor!(t)
-    @inbounds while i != 0
+    while i != 0
         k1, v1 = t.keys[i], t.vals[i]
         x1 = Pair{K,V}(k1, v1)
         x2 = new(x1)
@@ -1008,6 +1013,10 @@ function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) whe
     end
     t
 end
+# NB: the `where {F}` forces specialization on `new`, which this wrapper only
+# forwards (Julia's heuristics would otherwise widen it, leaving a dynamic call)
+_replace!(new::F, t::Dict{K,V}, A::AbstractDict, count::Int) where {F<:Callable,K,V} =
+    @split_effects :nothrow _replace!_impl(new, t, A, count)
 
 function _replace!(new::Callable, t::Set{T}, ::AbstractSet, count::Int) where {T}
     _replace!(t.dict, t.dict, count) do kv

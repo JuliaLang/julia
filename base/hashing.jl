@@ -367,7 +367,7 @@ end
     # early on so it can actually emit the optimal result
     result = zero(UInt64)
     for i in 0:7
-        byte = @inbounds arr[idx + i]
+        byte = arr[idx + i]
         result |= UInt64(byte) << (8 * i)
     end
     return result
@@ -376,7 +376,7 @@ end
 @inline function load_le_array(::Type{UInt32}, arr::AbstractArray{UInt8}, idx)
     result = zero(UInt32)
     for i in 0:3
-        byte = @inbounds arr[idx + i]
+        byte = arr[idx + i]
         result |= UInt32(byte) << (8 * i)
     end
     return result
@@ -408,8 +408,8 @@ end
                 b = UInt64(load_le_array(UInt32, arr, firstidx + n - 4))
             end
         elseif buflen > 0
-            a = (UInt64(@inbounds arr[firstidx]) << 45) | UInt64(@inbounds arr[firstidx + n - 1])
-            b = UInt64(@inbounds arr[firstidx + div(n, 2)])
+            a = (UInt64(arr[firstidx]) << 45) | UInt64(arr[firstidx + n - 1])
+            b = UInt64(arr[firstidx + div(n, 2)])
         end
     else
         pos = 0

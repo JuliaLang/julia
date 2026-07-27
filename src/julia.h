@@ -451,6 +451,11 @@ typedef struct _jl_method_t {
     // the default recursion relation.
     jl_value_t *recursion_relation;
 
+    // svec of (::EffectsOverride, check) pairs. The effects named by the override
+    // may be assumed for a call to this method if the corresponding `check`
+    // function returns `true` when applied to the call's arguments.
+    jl_svec_t *preconditions;
+
     uint32_t nargs;
     uint32_t called;        // bit flags: whether each of the first 8 arguments is called
     uint32_t nospecialize;  // bit flags: which arguments should not be specialized

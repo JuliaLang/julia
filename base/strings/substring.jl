@@ -77,8 +77,8 @@ struct SubString{T<:AbstractString} <: AbstractString
         i ≤ j || return new(s, 0, 0)
         @boundscheck begin
             checkbounds(s, i:j)
-            @inbounds isvalid(s, i) || string_index_err(s, i)
-            @inbounds isvalid(s, j) || string_index_err(s, j)
+            isvalid(s, i) || string_index_err(s, i)
+            isvalid(s, j) || string_index_err(s, j)
         end
         return new(s, i-1, nextind(s,j)-i)
     end
@@ -114,7 +114,7 @@ end
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = @inbounds raw_substring(s, 1, Int(ncodeunits(s))::Int)
+SubString(s::AbstractString) = raw_substring(s, 1, Int(ncodeunits(s))::Int)
 SubString(s::SubString) = s
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
@@ -294,7 +294,7 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     n = sizeof(s)
     out = _string_n(n*r)
     if n == 1 # common case: repeating a single-byte string
-        @inbounds b = codeunit(s, 1)
+        b = codeunit(s, 1)
         memset(unsafe_convert(Ptr{UInt8}, out), b, r)
     else
         for i = 0:r-1

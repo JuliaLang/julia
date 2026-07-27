@@ -6,18 +6,26 @@
 # though for cheap operations like `+` this does not have much impact (20%).
 function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
     if n < 128
-        @inbounds s_ = v[i1]
-        ci1 = op(s, s_)
-        @inbounds c[i1] = ci1
-        for i = i1+1:i1+n-1
-            s_ = op(s_, @inbounds(v[i]))
-            ci = op(s, s_)
-            @inbounds c[i] = ci
-        end
+        return @split_effects :nothrow _accumulate_pairwise_base!(op, c, v, s, i1, n)
     else
         n2 = n >> 1
         s_ = _accumulate_pairwise!(op, c, v, s, i1, n2)
         s_ = op(s_, _accumulate_pairwise!(op, c, v, op(s, s_), i1+n2, n-n2))
+    end
+    return s_
+end
+
+# Base case of `_accumulate_pairwise!` (`n < 128`), outlined so that it can be
+# compiled without recursion and its bounds checks can be split off as a
+# separate slow path (see `Core.invoke_split_effects`).
+function _accumulate_pairwise_base!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
+    s_ = v[i1]
+    ci1 = op(s, s_)
+    c[i1] = ci1
+    for i = i1+1:i1+n-1
+        s_ = op(s_, v[i])
+        ci = op(s, s_)
+        c[i] = ci
     end
     return s_
 end
@@ -28,8 +36,8 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
     n = length(li)
     n == 0 && return result
     i1 = first(li)
-    v1 = reduce_first(op, @inbounds(v[i1]))
-    @inbounds result[i1] = v1
+    v1 = reduce_first(op, (v[i1]))
+    result[i1] = v1
     n == 1 && return result
     _accumulate_pairwise!(op, result, v, v1, i1+1, n-1)
     return result
@@ -371,7 +379,9 @@ function _accumulate!(op, B, A::AbstractVector, dims::Nothing, init::Some)
     _accumulate1!(op, B, v1, A, 1)
 end
 
-function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})
+# NB: the `where {F}` forces specialization on `op`, which this body only
+# forwards (Julia's heuristics would otherwise widen it, leaving dynamic calls)
+function _accumulate!(op::F, B, A, dims::Integer, init::Union{Nothing, Some}) where {F}
     dims > 0 || throw(ArgumentError("dims must be a positive integer"))
     inds_t = axes(A)
     axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
@@ -380,23 +390,31 @@ function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})
     if dims == 1
         # We can accumulate to a temporary variable, which allows
         # register usage and will be slightly faster
-        ind1 = inds_t[1]
-        for I in CartesianIndices(tail(inds_t))
-            if init === nothing
-                tmp = reduce_first(op, @inbounds(A[first(ind1), I]))
-            else
-                tmp = op(something(init), @inbounds(A[first(ind1), I]))
-            end
-            @inbounds B[first(ind1), I] = tmp
-            for i_1 = first(ind1)+1:last(ind1)
-                tmp = op(tmp, @inbounds(A[i_1, I]))
-                @inbounds B[i_1, I] = tmp
-            end
-        end
+        return @split_effects :nothrow _accumulate_dim1!(op, B, A, inds_t, init)
     else
         R1 = CartesianIndices(axes(A)[1:dims-1])   # not type-stable
         R2 = CartesianIndices(axes(A)[dims+1:end])
-        _accumulaten!(op, B, A, R1, inds_t[dims], R2, init) # use function barrier
+        @split_effects :nothrow _accumulaten!(op, B, A, R1, inds_t[dims], R2, init) # use function barrier
+    end
+    return B
+end
+
+# Body of the `dims == 1` case of `_accumulate!`, outlined so its bounds
+# checks can be split off as a separate slow path (see
+# `Core.invoke_split_effects`).
+function _accumulate_dim1!(op, B, A, inds_t, init::Union{Nothing, Some})
+    ind1 = inds_t[1]
+    for I in CartesianIndices(tail(inds_t))
+        if init === nothing
+            tmp = reduce_first(op, A[first(ind1), I])
+        else
+            tmp = op(something(init), A[first(ind1), I])
+        end
+        B[first(ind1), I] = tmp
+        for i_1 = first(ind1)+1:last(ind1)
+            tmp = op(tmp, A[i_1, I])
+            B[i_1, I] = tmp
+        end
     end
     return B
 end
@@ -405,14 +423,14 @@ end
     # Copy the initial element in each 1d vector along dimension `dim`
     ii = first(ind)
     for J in R2, I in R1
-        tmp = reduce_first(op, @inbounds(A[I, ii, J]))
-        @inbounds B[I, ii, J] = tmp
+        tmp = reduce_first(op, (A[I, ii, J]))
+        B[I, ii, J] = tmp
     end
     # Accumulate
     for J in R2, i in first(ind)+1:last(ind), I in R1
-        @inbounds Bv, Av = B[I, i-1, J], A[I, i, J]
+        Bv, Av = B[I, i-1, J], A[I, i, J]
         tmp = op(Bv, Av)
-        @inbounds B[I, i, J] = tmp
+        B[I, i, J] = tmp
     end
     B
 end
@@ -421,31 +439,39 @@ end
     # Copy the initial element in each 1d vector along dimension `dim`
     ii = first(ind)
     for J in R2, I in R1
-        tmp = op(something(init), @inbounds(A[I, ii, J]))
-        @inbounds B[I, ii, J] = tmp
+        tmp = op(something(init), (A[I, ii, J]))
+        B[I, ii, J] = tmp
     end
     # Accumulate
     for J in R2, i in first(ind)+1:last(ind), I in R1
-        @inbounds Bv, Av = B[I, i-1, J], A[I, i, J]
+        Bv, Av = B[I, i-1, J], A[I, i, J]
         tmp = op(Bv, Av)
-        @inbounds B[I, i, J] = tmp
+        B[I, i, J] = tmp
     end
     B
 end
 
-function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
+# NB: the `where {F}` forces specialization on `op` (see `_accumulate!`)
+function _accumulate1!(op::F, B, v1, A::AbstractVector, dim::Integer) where {F}
     dim > 0 || throw(ArgumentError("dim must be a positive integer"))
     inds = LinearIndices(A)
     inds == LinearIndices(B) || throw(DimensionMismatch("LinearIndices of A and B don't match"))
     dim > 1 && return copyto!(B, A)
     (i1, state) = iterate(inds)::NTuple{2,Any} # We checked earlier that A isn't empty
-    cur_val = v1
-    B[i1] = cur_val
+    B[i1] = v1
+    return @split_effects :nothrow _accumulate1_loop!(op, B, A, inds, state, v1)
+end
+
+# Loop body of `_accumulate1!`, outlined so its bounds checks can be split
+# off as a separate slow path (see `Core.invoke_split_effects`). Takes the
+# iteration state (rather than the precomputed `next` tuple) so that the
+# `iterate` call, not a `Union`-typed argument, is what crosses the boundary.
+function _accumulate1_loop!(op, B, A, inds, state, cur_val)
     next = iterate(inds, state)
     while next !== nothing
         (i, state) = next
-        cur_val = op(cur_val, @inbounds(A[i]))
-        @inbounds B[i] = cur_val
+        cur_val = op(cur_val, A[i])
+        B[i] = cur_val
         next = iterate(inds, state)
     end
     return B
