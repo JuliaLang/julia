@@ -907,9 +907,9 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
         dict::PersistentDict{K, V}, key::K, val::V) where {K, V} = @inline _keyvalueset(dict, key, val)
     global function _keyvalueset(dict::PersistentDict{K, V}, key, val) where {K, V}
         trie = dict.trie
-        h = HAMT.HashState(key)
+        h = HAMT.HashState(objectid(key))
         found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=#true)
-        HAMT.insert!(found, present, trie, i, bi, hs, val)
+        HAMT.insert!(found, present, trie, key, i, bi, hs, val)
         return new{K, V}(top)
     end
     @noinline Base.@assume_effects :effect_free :terminates_globally KeyValue.set(
@@ -918,7 +918,7 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
         dict::PersistentDict{K, V}, key::K) where {K, V} = @inline _keyvalueset(dict, key)
     global function _keyvalueset(dict::PersistentDict{K, V}, key) where {K, V}
         trie = dict.trie
-        h = HAMT.HashState(key)
+        h = HAMT.HashState(objectid(key))
         found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=#true)
         if found && present
             deleteat!(trie.data, i)
@@ -1030,7 +1030,7 @@ end
     if HAMT.islevel_empty(trie)
         return nothing
     end
-    h = HAMT.HashState(key)
+    h = HAMT.HashState(objectid(key))
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
