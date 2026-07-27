@@ -2615,6 +2615,9 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === Core._svec_ref
         na == 2 || return false
         return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const
+    elseif f === Core.task_result_type
+        na == 1 || return false
+        return argtypes[1] ⊑ Task
     end
     return false
 end
@@ -2624,7 +2627,6 @@ const _PURE_BUILTINS = Any[
     tuple,
     svec,
     ===,
-    Core.task_result_type,
     typeof,
     has_free_typevars,
     nfields,
@@ -2681,6 +2683,7 @@ const _EFFECT_FREE_BUILTINS = [
     compilerbarrier,
     Core._svec_len,
     Core._svec_ref,
+    Core.task_result_type,
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[

@@ -1613,3 +1613,10 @@ let effects = Base.infer_effects(Core.task_result_type, (Task,))
     @test Compiler.is_nothrow(effects)
     @test Compiler.is_terminates(effects)
 end
+let effects = Base.infer_effects(Core.task_result_type, (Union{Task,Int},))
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+end
+for argtypes in ((), (Int,), (Task, Task))
+    @test !Compiler.is_nothrow(Base.infer_effects(Core.task_result_type, argtypes))
+end
