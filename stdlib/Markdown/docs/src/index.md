@@ -414,7 +414,7 @@ However, unless the code rendering the Markdown special-cases that particular ad
 
 A custom title for the box can be provided as a string (in double quotes) after the admonition type.
 If no title text is specified after the admonition type, then the type name will be used as the title (e.g. `"Note"` for the `note` admonition).
-Note that admonition titles are parsed as plain strings and do not support inline Markdown or LaTeX formatting (e.g. ``\alpha`` in a title will not be rendered as math).
+Admonition titles support inline Markdown formatting, including bold, italic, code, and inline math (e.g. `!!! note "Solution for ``\alpha``"` renders the LaTeX in the title).
 
 Admonitions, like most other toplevel elements, can contain other toplevel elements (e.g. lists, images).
 

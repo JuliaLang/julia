@@ -54,7 +54,7 @@ function term(io::IO, md::Admonition, columns)
     else
         :default
     end
-    title = if isempty(md.title) md.category else md.title end
+    title = if isempty(md.title) md.category else annotprint(terminline, md.title) end
     print(io, ' '^margin, styled"{$accent,markdown_admonition:│ $title}",
           '\n', ' '^margin, styled"{$accent,markdown_admonition:│}", '\n')
     content = annotprint(term, md.content, columns - 10)

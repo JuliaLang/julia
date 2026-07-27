@@ -90,7 +90,8 @@ end
 
 function plain(io::IO, md::Admonition)
     s = sprint(plain, md.content)
-    title = md.title == uppercasefirst(md.category) ? "" : " \"$(md.title)\""
+    title_str = sprint(plaininline, md.title)
+    title = title_str == uppercasefirst(md.category) ? "" : " \"$title_str\""
     println(io, "!!! ", md.category, title)
     for line in split(rstrip(s), "\n")
         println(io, isempty(line) ? "" : "    ", line)
@@ -157,6 +158,8 @@ function plaininline(io::IO, md::Code)
         print(io, "`", md.code, "`")
     end
 end
+
+plaininline(io::IO, l::LaTeX) = print(io, "``", l.formula, "``")
 
 plaininline(io::IO, br::LineBreak) = println(io, "\\")
 

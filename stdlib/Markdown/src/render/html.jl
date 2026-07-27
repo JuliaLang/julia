@@ -120,7 +120,7 @@ end
 function html(io::IO, md::Admonition)
     withtag(io, :div, :class => "admonition $(md.category)") do
         withtag(io, :p, :class => "admonition-title") do
-            print(io, md.title)
+            htmlinline(io, md.title)
         end
         html(io, md.content)
     end
