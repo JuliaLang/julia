@@ -1739,7 +1739,8 @@ function deserialize(s::AbstractSerializer, ::Type{UnionAll})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Task})
-    t = Task(()->nothing)
+    # The task code is replaced below, so prevent attaching invoke metadata for the dummy closure.
+    t = Task(Base.inferencebarrier(()->nothing))
     deserialize_cycle(s, t)
     t.code = deserialize(s)
     t.storage = deserialize(s)
