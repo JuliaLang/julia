@@ -152,7 +152,7 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
         i !== lastindex(exc.sts) && print(io, "\n\n")
     end
 
-    if show_detail || exc.internal && !isempty(exc.sts)
+    if (show_detail || exc.internal) && !isempty(exc.sts)
         print(io, "\n\nDetailed provenance:\n  ")
         _show_provtree(io, exc.sts[1], "  ")
     end
@@ -349,7 +349,7 @@ end
 # Splat the contents of any block in `st` whose parent is also a block
 function flatten_blocks(st::SyntaxTree)
     if kind(st) === K"block"
-        mknode(st, _flatten_blocks(st))
+        @mknode(st; children=_flatten_blocks(st))
     elseif is_quoted(st)
         st
     else

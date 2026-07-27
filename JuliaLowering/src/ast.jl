@@ -66,7 +66,6 @@ This is the main operation used by syntax transformations in lowering.
 """
 macro mknode(attrs, old)
     Base.remove_linenums!(old)
-    Base.remove_linenums!(children)
     Base.remove_linenums!(attrs)
     old_gs = gensym()
     if !(isnothing(attrs) || attrs isa Expr && Meta.isexpr(attrs, :parameters))
@@ -74,25 +73,25 @@ macro mknode(attrs, old)
     end
     out_args = Vector(undef, fieldcount(SyntaxTree))
     for (i, n) in enumerate(fieldnames(SyntaxTree))
-        out_args[i] = (DEBUG && n == :jl_source) ?
-            __source__ : Expr(:(.), old_gs, QuoteNode(n))
+        out_args[i] = (DEBUG && n === :jl_source) ? __source__ :
+            n === :source ? old_gs :
+            Expr(:(.), old_gs, QuoteNode(n))
     end
     seen_attrs = Set{Symbol}()
     attrs isa Expr && for a in attrs.args
-        aname = if Meta.isexpr(a, :(kw), 2) && a.args[1] isa Symbol
-            a.args[1]::Symbol
+        (aname, aval) = if Meta.isexpr(a, :(kw), 2) && a.args[1] isa Symbol
+            (a.args[1]::Symbol, a.args[2])
         elseif a isa Symbol
-            a
+            (a, a)
         else
             throw(ArgumentError("usage: @mknode(old; attr=val...)"))
         end
-        aname in seen_attrs && throw(ArgumentError("duplicate attr provided"))
+        aname in seen_attrs && throw(ArgumentError("duplicate attr provided $__source__"))
         push!(seen_attrs, aname)
-        out_args[fieldindex(SyntaxTree, aname)] =
-            length(a.args) == 1 ? aname : a.args[2]
+        out_args[fieldindex(SyntaxTree, aname)] = aval
     end
     old === DEFAULT_NODE && !((:kind, :source, :context) ⊆ seen_attrs) &&
-        throw(ArgumentError("brand-new node from @mknode requires more attrs"))
+        throw(ArgumentError("brand-new node from @mknode requires more attrs $__source__"))
 
     out = Expr(:let,
                Expr(:block, Expr(:(=), old_gs, old)),
@@ -105,43 +104,39 @@ macro mknode(x)
     esc(Expr(:macrocall, var"@mknode", __source__, attrs, old))
 end
 
-# TODO
 function _debug_check_attrs(x)
+    vr = _assert_syntaxtree_node(x)
+    !vr.ok
     x
 end
 
 function JuliaSyntax.newleaf(prov, k, @nospecialize(value))
-    @jl_assert k === K"Value" || value !== nothing (prov, "only Value may contain nothing")
-    leaf = newleaf(prov, k)
-    if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
-            k == K"globalref" || k == K"Placeholder"
-        setattr!(leaf, :value, value)
-    elseif k == K"BindingId"
-        setattr!(leaf, :value, value)
-    elseif k == K"label"
-        setattr!(leaf, :value, value)
-    elseif k == K"symboliclabel" || k == K"symbolicgoto"
-        setattr!(leaf, :value, value)
+    context = prov isa SyntaxTree ? prov.context : nothing
+    @jl_assert k === K"Value" || value !== nothing (
+        prov, "only Value may contain nothing")
+    if k == K"Identifier" || k == K"BindingId" || k == K"Value" ||
+        k == K"core" || k == K"top" || k == K"Symbol" || k == K"globalref" ||
+        k == K"Placeholder" || k == K"label" || k == K"symboliclabel" ||
+        k == K"symbolicgoto"
+        @mknode(;kind=k, source=prov, context, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
                      softscope nothing"
-        # no attributes
+        @mknode(;kind=k, source=prov, context)
     else
         val = k == K"Integer" ? convert(Int,     value) :
               k == K"Float"   ? convert(Float64, value) :
               k == K"String"  ? convert(String,  value) :
               k == K"Char"    ? convert(Char,    value) :
-              k == K"Value"   ? value                   :
               k == K"Bool"    ? value                   :
               k == K"LambdaBindings" ? value :
               k == K"Slots" ? value :
               k == K"SSAValue" ? value :
               k == K"slot" ? value :
               k == K"static_parameter" ? value :
-              k == K"VERSION" ? value                   :
+              k == K"VERSION" ? value :
               error("Unexpected leaf kind `$k`")
-        setattr!(leaf, :value, val)
+        @mknode(;kind=k, source=prov, value=val, context)
     end
-    leaf
 end
 
 function syntax_name(st)
@@ -176,37 +171,25 @@ end
 #-------------------------------------------------------------------------------
 # @ast macro
 
-_node_id(ex::SyntaxTree) = ex._id
-
-_node_ids(::SyntaxGraph) = ()
-_node_ids(::Nothing, cs...) = _node_ids(cs...)
-_node_ids(c, cs...) = (_node_id(c), _node_ids(cs...)...)
-_node_ids(cs::SyntaxList, cs1...) = (_node_ids(cs...)..., _node_ids(cs1...)...)
-function _node_ids(cs::SyntaxList)
-    cs.ids
-end
-
-function _node_id(ex)
-    # Fallback to give a comprehensible error message for use with the @ast macro
+# Fallbacks to give comprehensible error messages for use with the @ast macro
+function _push_nodeid!(::Vector{SyntaxTree}, ex)
     error("Attempt to use `$(repr(ex))` of type `$(typeof(ex))` as an AST node. Try annotating with `::K\"your_intended_kind\"?`")
 end
-function _node_id(ex::AbstractVector{<:SyntaxTree})
-    # Fallback to give a comprehensible error message for use with the @ast macro
+function _push_nodeid!(::Vector{SyntaxTree}, ex::AbstractVector{<:SyntaxTree})
     error("Attempt to use vector as an AST node. Did you mean to splat this? (content: `$(repr(ex))`)")
 end
-
-function _push_nodeid!(ids::Vector{NodeId}, val)
-    push!(ids, _node_id(val))
+function _push_nodeid!(ids::Vector{SyntaxTree}, st::SyntaxTree)
+    push!(ids, st)
 end
-function _push_nodeid!(::Vector{NodeId}, ::Nothing)
+function _push_nodeid!(::Vector{SyntaxTree}, ::Nothing)
     nothing
 end
-function _append_nodeids!(ids::Vector{NodeId}, vals)
+function _append_nodeids!(ids::Vector{SyntaxTree}, vals)
     for v in vals
         _push_nodeid!(ids, v)
     end
 end
-function _append_nodeids!(ids::Vector{NodeId}, vals::SyntaxList)
+function _append_nodeids!(ids::Vector{SyntaxTree}, vals::SyntaxList)
     append!(ids, vals.ids)
 end
 
@@ -224,10 +207,10 @@ function _match_kind(srcref, ex, jl_line)
             append!(kws.args, args[1].args)
             popfirst!(args)
         end
-        if length(args) == 1
+        if length(args) == 1 && !Meta.isexpr(args[1], :kw)
             srcref = args[1]
         elseif length(args) > 1
-            error("Unexpected: extra srcref argument in `$ex`?")
+            error("Unexpected srcref argument in `$ex`")
         end
     else
         kind = ex
@@ -258,7 +241,7 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
         # Leaf node with copied attributes
         kind = tree.args[3]
         srcref2 = tree.args[2]
-        kws = Expr(:parameters, Expr(:kw, :kind, kind))
+        kws = Expr(:parameters, Expr(:kw, :kind, kind), Expr(:kw, :children, nothing))
         DEBUG && push!(kws.args, Expr(:kw, :jl_source, jl_line))
         Expr(:macrocall, var"@mknode", jl_line.value, kws, srcref2)
     elseif Meta.isexpr(tree, (:vcat, :hcat, :vect))
@@ -361,32 +344,7 @@ macro ast(ctx, srcref, tree)
     end |> esc
 end
 
-#-------------------------------------------------------------------------------
-# Type for `meta` attribute, to replace `Expr(:meta)`.
-# It's unclear how much flexibility we need here - is a dict good, or could we
-# just use a struct? Likely this will be sparse. Alternatively we could just
-# use individual attributes but those aren't easy to add on an ad-hoc basis in
-# the middle of a pass.
-const CompileHints = Base.ImmutableDict{Symbol,Any}
-
-function setmeta!(ex::SyntaxTree, key::Symbol, @nospecialize(val))
-    meta = begin
-        m = get(ex, :meta, nothing)
-        isnothing(m) ? CompileHints(key, val) : CompileHints(m, key, val)
-    end
-    setattr!(ex, :meta, meta)
-    ex
-end
-
-setmeta(ex::SyntaxTree, k::Symbol, @nospecialize(v)) =
-    setmeta!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), k, v)
-
-function getmeta(ex::SyntaxTree, name::Symbol, default)
-    meta = get(ex, :meta, nothing)
-    isnothing(meta) ? default : get(meta, name, default)
-end
-
-name_hint(name) = CompileHints(:name_hint, name)
+name_hint(name) = JuliaSyntax.CompileHints(:name_hint, name)
 
 #-------------------------------------------------------------------------------
 # Predicates and accessors working on expression trees

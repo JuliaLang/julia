@@ -63,9 +63,10 @@ function _rebase_layers(st, slmap, scmap)
         sc2 = scmap[sc] = SyntaxContext(sl2, sc.unexpanded, sc.version, sc.internal)
     end
     if is_leaf(st) || numchildren(st) == 0
-        setattr(st, :context, sc2)
+        @mknode(st; context=sc2)
     else
-        setattr!(mapchildren(c->_rebase_layers(c, slmap, scmap), st), :context, sc2)
+        cs = mapsyntax(c->_rebase_layers(c, slmap, scmap), children(st))
+        @mknode(st; context=sc2, children=cs)
     end
 end
 

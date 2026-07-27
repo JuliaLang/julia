@@ -70,7 +70,7 @@ function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
 end
 
 function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
-    is_leaf(st) && return mkleaf(st)
+    is_leaf(st) && return st
     k = kind(st)
     inner_depth = k == K"syntaxquote" ? depth + 1 :
         k == K"syntaxunquote" ? depth - 1 : depth
@@ -88,7 +88,7 @@ function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
             push!(cs_out, __interpolate_syntax(c, inner_depth, vals, val_i))
         end
     end
-    mknode(st, cs_out)
+    @mknode(st; children=cs_out)
 end
 function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     # TODO: copy probably not required if immutable
@@ -272,7 +272,7 @@ function _gen_args_from_syms(ctx, src, args, sc)
     for a in args
         id = newleaf(src, K"Identifier", string(a))
         id = _est_to_dst_ident(id) # support placeholders
-        id = setattr!(id, :context, sc)
+        id = @mknode(id; context=sc)
         push!(out, id)
     end
     out

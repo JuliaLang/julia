@@ -69,10 +69,13 @@ end
 
 # fallback printing.  TODO: vulnerable to invalidations
 function node_string(ex::SyntaxTree, depth=0)
-    out = ""
+    out = "(kind="*string(kind(ex))
     for n in sort!(collect(fieldnames(typeof(ex))))
-        if hasattr(ex, n)
-            out *= ", "*string(n)*"="*string(getproperty(ex, n))
+        if hasattr(ex, n) && n !== :kind
+            val = getproperty(ex, n)
+            val_str = val isa SyntaxTree && depth > 1 ?
+                node_string(ex, depth-1) : string(val)
+            out *= ", "*string(n)*"="*val_str
         end
     end
     if is_leaf(ex)
@@ -158,6 +161,22 @@ function deleteattr!(ex::SyntaxTree, name::Symbol)
     ex
 end
 
+const CompileHints = Base.ImmutableDict{Symbol,Any}
+function setmeta!(st::SyntaxTree, key::Symbol, @nospecialize(val))
+    meta = let m = get(st, :meta, nothing)
+        isnothing(m) ? CompileHints(key, val) : CompileHints(m, key, val)
+    end
+    setfield!(st, :meta, meta)
+    st
+end
+function setmeta(st::SyntaxTree, key::Symbol, @nospecialize(val))
+    setmeta!(is_leaf(st) ? mkleaf(st) : mknode(st, children(st)), key, val)
+end
+function getmeta(st, name, @nospecialize(default))
+    meta = get(st, :meta, nothing)
+    isnothing(meta) ? default : get(meta, name, default)
+end
+
 Base.setproperty!(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
     error("SyntaxTree: this can't be mutated")
 
@@ -169,7 +188,7 @@ end
 
 function numchildren(ex::SyntaxTree)
     cs = ex.children
-    isnothing(cs) ? 0 : length(ex.children)
+    isnothing(cs) ? 0 : length(cs)
 end
 
 # TODO: Better to make this an error, since it can cause nodes that were
@@ -214,7 +233,7 @@ function base_layer(sc::SyntaxContext)
     return l
 end
 
-function escape_layer(sc::SyntaxContext, recursive)
+function escape_layer(sc::SyntaxContext, recursive::Bool)
     l2 = recursive ? base_layer(sc) : sc.layer.escaped
     SyntaxContext(l2, sc.unexpanded, sc.version, sc.internal)
 end
@@ -764,8 +783,7 @@ function _stm(line::LineNumberNode, st, pats; debug=false)
     end
     push!(case_list_tail,
           :(throw(ErrorException(string(
-              "No match found for `kind=", $k_gs, "numchildren=", $nc_gs,
-              "` at ", $(string(line)))))))
+              "No match found for `", $st_gs, "` at ", $(string(line)))))))
     return esc(out_blk)
 end
 
@@ -937,7 +955,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     end
     # There may be multiple non-trivia toplevel nodes (e.g. parse error)
     length(cs) === 1 && return only(cs)
-    id = SyntaxTree(K"wrapper", reverse(cs), source, nothing)
+    id = SyntaxTree(K"wrapper", reverse(cs), nothing, source, nothing)
     return id
 end
 
@@ -1038,6 +1056,8 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             arg = valleaf(replace(sourcetext(st), '_'=>""))
             ret_cids = tree_ids(mac, valleaf(nothing), arg)
             newnode(st, K"macrocall", ret_cids)
+        elseif k === K"error"
+            mkleaf(st)
         elseif hasattr(st, :value) && !(k in KSet"Identifier Value" || is_literal(k))
             # certain kinds should really be identifiers.  known: &, |, :
             symleaf(syntax_name(st))

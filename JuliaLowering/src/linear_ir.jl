@@ -65,11 +65,11 @@ mutable struct LinearIRContext <: AbstractLoweringContext
     const graph::SyntaxGraph
     const code::Vector{SyntaxTree}
     const bindings::Bindings
-    const next_label_id::Ref{Int}
+    const next_label_id::Base.RefValue{Int}
     const is_toplevel_thunk::Bool
     const lambda_bindings::LambdaBindings
     const argmap::Dict{IdTag, IdTag}
-    const rettype_ssa::Ref{Union{Nothing,NodeId}}
+    const rettype_ssa::Base.RefValue{Union{Nothing,NodeId}}
     const break_targets::Dict{String, JumpTarget}
     const break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
     const handler_token_stack::Vector{SyntaxTree}
@@ -1100,9 +1100,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
                 if binfo.kind !== :global
                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 end
-                out = newleaf(ex, K"globalref", binfo.name)
-                !isnothing(binfo.mod) && setattr!(out, :mod, binfo.mod)
-                out
+                @mknode(ex; kind=K"globalref", value=binfo.name, mod=binfo.mod)
             end
         end
     elseif k == K"meta" || k == K"static_eval"

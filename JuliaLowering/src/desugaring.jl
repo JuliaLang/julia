@@ -96,9 +96,9 @@ end
 # guarantee there's some scope it's declared in, and that it's not declared or
 # used outside of that scope (binding capture is OK).  This is the alternative.
 function newsym(ctx, src::SyntaxTree, name::String; unused=false)
-    out = newleaf(src, unused ? K"Placeholder" : K"Identifier", name)
-    hasattr(src, :meta) && setattr!(out, :meta, src.meta)
-    setattr!(out, :context, new_internal_context(src))
+    kind = unused ? K"Placeholder" : K"Identifier"
+    out = @mknode(; kind, source=src, value=name, children=nothing,
+                  meta=src.meta, context=new_internal_context(src))
 end
 
 # In an flisp-compatible expansion, some explicit global declarations (and any
@@ -119,7 +119,7 @@ function _relayer_global_if_unhygienic(done::SyntaxList, st::SyntaxTree, sc::Syn
     k = kind(st)
     if k === K"Identifier" && is_flisp_compat(st) && st.context::SyntaxContext !== sc
         push!(done, st)
-        setattr(st, :context, sc)
+        @mknode(st; context=sc)
     elseif k === K"::" || k === K"kw"
         n_done = length(done)
         lhs = _relayer_global_if_unhygienic(done, st[1], sc)
@@ -1325,7 +1325,7 @@ function expand_assignment(ctx, ex, is_const=false)
             ex_i = ex_i[2]
         end
         # In const a = b = c, only a is const
-        is_const && setattr!(stmts[1], :kind, K"constdecl")
+        is_const && (stmts[1] = @mknode(stmts[1]; kind=K"constdecl"))
 
         out = @ast ctx ex [K"block" assign_rr reverse!(stmts)... [K"removable" rr]]
         expand_forms_2(ctx, out)
@@ -2226,8 +2226,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
     end
 
     if !isnothing(declname)
-        stmt = @ast ctx ex [declkind declname]
-        !isnothing(declmeta) && setattr!(stmt, :meta, declmeta)
+        stmt = @ast ctx ex [declkind(;meta=declmeta) declname]
         push!(stmts, stmt)
     end
     return nothing
@@ -2488,16 +2487,17 @@ function _expr_arg_syms(args)
     out = SyntaxList(args.graph)
     for (i, a) in enumerate(args)
         @jl_assert kind(a) === K"::" || kind(a) === K"_typevar" a
-        sym = setattr(a[1], :kind, K"Symbol")
-        if kind(a[1]) === K"Placeholder"
-            setattr!(sym, :value, UNUSED)
+        name = if kind(a[1]) === K"Placeholder"
+            UNUSED
         elseif (a[1].context::SyntaxContext).internal && i > 1
             # we lose context, so deduplicate names (ignoring #self# to be
             # safe).  HACK: destructured args must match the desugared rhs
-            n = syntax_name(sym)
-            contains(n, "destructured") || setattr!(sym, :value, n*"#"*string(i))
+            n = syntax_name(a[1])
+            contains(n, "destructured") ? n : n*"#"*string(i)
+        else
+            syntax_name(a[1])
         end
-        push!(out, sym)
+        push!(out, @mknode(a[1]; kind=K"Symbol", value=name))
     end
     out
 end
@@ -2648,7 +2648,7 @@ function expand_kw_args(ctx, kws)
         end
     end
     kw_names = mapindex(kw_decls, 1)
-    kw_syms = mapsyntax(x->setattr(x, :kind, K"Symbol"), kw_names)
+    kw_syms = mapsyntax(x->@mknode(x; kind=K"Symbol"), kw_names)
     restkw_list = isnothing(restkw) ? SyntaxList(ctx.graph) :
         SyntaxList(@ast ctx restkw [K"::"
             restkw [K"call" "pairs"::K"top" "NamedTuple"::K"core"]])
@@ -2697,8 +2697,9 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             string(startswith(n, '#') ? "" : "#kw_body#", n, "#"))
         # probably not desirable, but fixes eval-into-closed-module
         m1_sc = escape_layer(mtable.context::SyntaxContext, true)
-        setattr!(newsym(ctx, mtable, mangled), :context,
-                 SyntaxContext(m1_sc.layer, m1_sc.unexpanded, m1_sc.version, true))
+        @mknode(newsym(ctx, mtable, mangled);
+                context=SyntaxContext(
+                    m1_sc.layer, m1_sc.unexpanded, m1_sc.version, true))
     end
     # (1) Body method.  This contains the actual function body, and requires
     # every possible default to be filled.  `rett` is only passed here since it
@@ -2895,7 +2896,6 @@ expand_function_arg(ctx, arg, used) = @stm arg begin
     [K"::" x t] ->
         @ast ctx arg [K"::" fix_argname(ctx, x, used) t]
     [K"::" t] -> let aname = newsym(ctx, arg, "#arg#"; unused=true)
-        hasattr(arg, :meta) && setattr!(aname, :meta, arg.meta)
         @ast ctx arg [K"::" fix_argname(ctx, aname, used) t]
     end
     [K"kw" x v] ->
@@ -2999,11 +2999,9 @@ end
 function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
-        name = setattr!(mkleaf(ex), :kind, k)
-        setattr!(name, :value, "@$(syntax_name(ex))")
+        @mknode(ex; kind=k, value="@$(syntax_name(ex))", children=nothing)
     elseif k == K"Placeholder"
-        name = setattr!(mkleaf(ex), :kind, K"Identifier")
-        setattr!(name, :value, "@$(syntax_name(ex))")
+        @mknode(ex; kind=K"Identifier", value="@$(syntax_name(ex))", children=nothing)
     elseif is_valid_modref(ex)
         @jl_assert numchildren(ex) == 2 ex
         @ast ctx ex [K"." ex[1] _make_macro_name(ctx, ex[2])]
@@ -3650,7 +3648,7 @@ function expand_typegroup_def(ctx, ex)
         isnothing(struct_mod_prev) || struct_mod == struct_mod_prev || throw(
             LoweringError(ex, "typegroup of types from multiple modules"))
         struct_mod_prev = struct_mod
-        struct_globalref = setattr!(mkleaf(global_struct_name), :mod, struct_mod)
+        struct_globalref = @mknode(global_struct_name; mod=struct_mod)
         push!(global_names, struct_globalref)
         push!(info_vars, ssavar(ctx, sdef, "struct_info"))
     end
@@ -3823,7 +3821,7 @@ function expand_struct_def(ctx, ex, docs)
     newdef = ssavar(ctx, ex, "newdef")
     global_struct_name, _ = relayer_global_if_unhygienic(ctx, struct_name)
     struct_mod = syntax_module(global_struct_name)
-    struct_globalref = setattr!(mkleaf(global_struct_name), :mod, struct_mod)
+    struct_globalref = @mknode(global_struct_name; mod=struct_mod)
     if !isempty(typevar_names)
         # Generate expression like `prev_struct.body.body.parameters`
         prev_typevars = struct_globalref
@@ -4054,7 +4052,7 @@ end
 
 function _unplaceholder(st)
     k = kind(st)
-    k === K"Placeholder" ? setattr(st, :kind, K"Identifier") :
+    k === K"Placeholder" ? @mknode(st; kind=K"Identifier") :
         k === K"Identifier" ? st : @jl_assert false st
 end
 

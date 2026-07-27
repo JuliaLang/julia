@@ -97,13 +97,15 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
             end
         end
         if isnothing(st_k)
-            setattr!(newnode(old_src, K"unknown_head", cs), :value, head_s)
+            @mknode(;kind=K"unknown_head", value=head_s, source=old_src,
+                    children=cs, context=nothing)
         else
-            newnode(old_src, st_k, cs)
+            @mknode(;kind=st_k, source=old_src, children=cs, context=nothing)
         end
     elseif e isa GlobalRef
         # Represent globalref as K"Identifier" with :mod attribute
-        setattr!(newleaf(src, K"Identifier", string(e.name)), :mod, e.mod)
+        @mknode(;kind=K"Identifier", source=src, value=string(e.name),
+                mod=e.mod, context=nothing)
     else
         # We may want additional special cases for other types where
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
@@ -112,7 +114,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
             # linenode outside of block or toplevel
             src = e
         end
-        setattr!(newleaf(src, K"Value"), :value, e)
+        newleaf(src, K"Value", e)
     end
     @jl_assert isa_lowering_ast_node(e) || is_expr_value(st) st
 
@@ -290,7 +292,7 @@ function _expand_literal_pow(st::SyntaxTree)
     k = kind(st)
     (k in KSet"call dotcall" &&
         numchildren(st) === 3 &&
-        get(st[1], :value, "") === "^" &&
+        kind(st[1]) === K"Identifier" && syntax_name(st[1]) === "^" &&
         get(st[3], :value, nothing) isa Integer) || return st
     @ast st._graph st [k
         "literal_pow"::K"top"
@@ -302,7 +304,7 @@ end
 function _est_to_dst_ident(st::SyntaxTree)
     s = syntax_name(st)
     if is_writeonly_est_name(s)
-        setattr!(mkleaf(st), :kind, K"Placeholder")
+        @mknode(st; kind=K"Placeholder", children=nothing)
     else
         st
     end
@@ -493,7 +495,7 @@ function est_to_dst(st::SyntaxTree)
             for (i, c) in enumerate(cs)
                 cs[i] = iseven(i) ? _dst_separate_dotop(cs[i]) : rec(cs[i])
             end
-            mknode(st, cs)
+            @mknode(st; children=cs)
         end
         [K"'" x] ->
             @ast g st [K"call" "'"::K"Identifier"(st) rec(x)]
@@ -626,7 +628,7 @@ function est_to_dst(st::SyntaxTree)
                 out_c1 = @ast g maybe_colon [K":" out_cs...]
                 out_cs = SyntaxList(out_c1)
             end
-            mknode(st, out_cs)
+            @mknode(st; children=out_cs)
         end
 
         #-----------------------------------------------------------------------
@@ -636,25 +638,28 @@ function est_to_dst(st::SyntaxTree)
              # Should be handled in the function case
              newleaf(st, K"nothing")
         ([K"meta" s gen], when=get(s, :value, "") === "generated") ->
-            @ast g st [K"meta" setattr(s, :kind, K"Symbol") rec(gen)]
+            @ast g st [K"meta" @mknode(s; kind=K"Symbol") rec(gen)]
         [K"meta" syms...] ->
             @ast g st [K"meta" mapsyntax(
-                s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
+                s->(kind(s) === K"Identifier" ? @mknode(s; kind=K"Symbol") : s),
                 syms)...
            ]
-        [K"boundscheck" x] -> mknode(st, SyntaxList(g))
+        [K"boundscheck" x] -> @mknode(st; children=SyntaxList())
         [K"inbounds" [K"Identifier"]] -> newnode(st, K"inbounds_pop", SyntaxList(g))
         [K"core" x] -> newleaf(st, K"core", syntax_name(x))
         [K"top" x] -> newleaf(st, K"top", syntax_name(x))
         [K"static_parameter" x] -> newleaf(st, K"static_parameter", x.value::IdTag)
-        [K"lambda" args sps body] -> mknode(st, [args._id, sps._id, rec(body)._id])
+        [K"lambda" args sps body] -> @mknode(st; children=[args, sps, rec(body)])
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_expr::K"Value"
             [K"inert"(st[1]) ex]
         ]
-        [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :value, syntax_name(lab))
-        [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :value, syntax_name(lab))
-        [K"symboliclabel" lab] -> setattr!(mkleaf(st), :value, syntax_name(lab))
+        [K"symbolicgoto" lab] ->
+            @mknode(st; value=syntax_name(lab), children=nothing)
+        [K"oldsymbolicgoto" lab] ->
+            @mknode(st; value=syntax_name(lab), children=nothing)
+        [K"symboliclabel" lab] ->
+            @mknode(st; value=syntax_name(lab), children=nothing)
         [K"symbolicblock" id body] -> let s = syntax_name(id)
             if is_writeonly_est_name(s)
                 @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
@@ -678,7 +683,7 @@ function est_to_dst(st::SyntaxTree)
             out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
                     kind(fptr[1]) == K"Identifier"
                 sc = fptr[1].context::SyntaxContext
-                ident = setattr!(mkleaf(fptr[1]), :mod, base_layer(sc).mod)
+                ident = @mknode(fptr[1]; mod=base_layer(sc).mod)
                 @ast g fptr [K"static_eval"(fptr) ident]
             else
                 rec(fptr)
@@ -693,7 +698,7 @@ function est_to_dst(st::SyntaxTree)
 
         # avoid creating excess nodes
         _ -> let out_cs = mapsyntax(rec, children(st))
-            out_cs == children(st) ? st : mknode(st, out_cs)
+            out_cs == children(st) ? st : @mknode(st; children=out_cs)
         end
     end
 end

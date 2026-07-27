@@ -19,7 +19,7 @@ using .JuliaSyntax: SourceAttrType, sourcetext
 
 using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
     ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,
-    is_leaf, mapchildren, numchildren, setattr!, showprov, syntax_name, syntax_id
+    is_leaf, mapchildren, numchildren, showprov, syntax_name, syntax_id
 
 function _ast_test_graph()
     JuliaLowering.ensure_desugaring_attributes!(

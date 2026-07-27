@@ -647,7 +647,7 @@ function closure_convert_lambda(ctx, ex, sps)
         push!(lambda_children, _convert_closures(ctx2, ex[5]))
     end
 
-    lam = mknode(ex, lambda_children)
+    lam = @mknode(ex; children=lambda_children)
     if !isnothing(interpolations) && !isempty(interpolations)
         @ast ctx ex [K"call"
             replace_captured_locals::K"Value"

@@ -319,7 +319,7 @@ function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
     k = kind(st)
     absorb_esc = done && qdepth == 0 && sqdepth == 0
     out = if is_leaf(st) || numchildren(st) == 0
-        setattr(st, :context, sc)
+        st.context !== sc ? @mknode(st; context=sc) : st
     elseif k === K"escape" && absorb_esc
         if numchildren(st) !== 1
             throw(LoweringError(st, "`escape` requires one argument"))
@@ -347,9 +347,8 @@ function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
         done2 = done && !(k in KSet"macrocall inert syntaxinert")
         qdepth2 = qdepth + (k === K"quote" ? 1 : k === K"$" ? -1 : 0)
         sqdepth2 = sqdepth + (k === K"syntaxquote" ? 1 : k === K"syntaxunquote" ? -1 : 0)
-        out = mapchildren(c->apply_expansion_layer(
-            ctx, c, sc_in, done2, qdepth2, sqdepth2), st)
-        setattr!(out, :context, sc)
+        @mknode(st; context=sc, children=mapsyntax(c->apply_expansion_layer(
+            ctx, c, sc_in, done2, qdepth2, sqdepth2), children(st)))
     end
     out
 end

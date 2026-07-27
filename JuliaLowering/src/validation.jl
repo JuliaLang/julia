@@ -719,7 +719,8 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
 end
 
 strip_arg_meta(st) = @stm st begin
-    [K"meta" s arg] -> let meta_s = get(s, :value, "")::String
+    [K"meta" s arg] -> let meta_s = get(s, :value, "")
+        meta_s isa String || return st
         kind(arg) === K"meta" ? st :
             !(meta_s in ("specialize", "nospecialize")) ? st : arg
     end
@@ -921,13 +922,16 @@ end
 vst1_dotted_or_op_assign(vcx, st) = let op_s = get(st, :value, "")
     @stm st begin
         [K".=" l r] -> vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
-        (_, when=(!(op_s isa String))) -> unknown()
-        (_, when=(!Base.isoperator(op_s))) -> unknown()
-        (_, when=(isempty(op_s) || op_s[end] !== '=')) -> unknown()
-        ([K"unknown_head" l r], when=(op_s[1] === '.')) ->
-             vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
-        ([K"unknown_head" l r]) ->
-             vst1_assign_lhs(vcx, l) & vst1(vcx, r)
+        (_, when=(op_s isa String)) -> @stm st begin
+            (_, when=(!Base.isoperator(op_s))) -> unknown()
+            (_, when=(isempty(op_s) || op_s[end] !== '=')) ->
+                unknown()
+            ([K"unknown_head" l r], when=((op_s::String)[1] === '.')) ->
+                vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
+            ([K"unknown_head" l r]) ->
+                vst1_assign_lhs(vcx, l) & vst1(vcx, r)
+            _ -> unknown()
+        end
         _ -> unknown()
     end
 end
@@ -1120,11 +1124,12 @@ end
 
 #-------------------------------------------------------------------------------
 # Tree invariants assumed everywhere, including `show`, so fallback printing
-# should be used on failure.  (These checks really belong in the type system,
-# but failure should only be possible working on AST-internal functions.)
+# should be used on failure.  (These checks really belong in the type system.)
+# Failure should only be possible working on AST-internal functions.
 
-function assert_syntaxtree(st::SyntaxTree)
-    vr = _assert_syntaxtree(st, NodeId[], pass())
+function assert_syntaxtree(st::SyntaxTree, recursive=true)
+    vr = recursive ? _assert_syntaxtree(st, NodeId[], pass()) :
+        _assert_syntaxtree_node(st)
     @jl_assert is_known(vr) st
     if !vr.ok
         msg = string("assert_syntaxtree failed: ", node_string(st), "\n")
@@ -1137,6 +1142,63 @@ function assert_syntaxtree(st::SyntaxTree)
     nothing
 end
 
+function _assert_syntaxtree_node(st::SyntaxTree)
+    vr = pass()
+    for a in (:kind, :source) # TODO: context
+        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
+    end
+    if is_leaf(st)
+        if kind(st) === K"globalref" && st.mod === nothing
+            vr &= @fail(st, "leaf globalref requires module in .mod")
+        end
+        (needs_val, valtype) = @stm st begin
+            [K"Identifier"] -> (true,String)
+            [K"core"] -> (true,String)
+            [K"top"] -> (true,String)
+            [K"Symbol"] -> (true,String)
+            [K"globalref"] -> (true,String)
+            [K"Placeholder"] -> (false, Any)
+            [K"BindingId"] -> (true,IdTag)
+            [K"label"] -> (true,Int)
+            [K"symboliclabel"] -> (true,String)
+            [K"symbolicgoto"] -> (true,String)
+            [K"oldsymbolicgoto"] -> (true,String)
+            [K"Value"] -> (true,Any)
+            [K"slot"] -> (true,Int)
+            [K"static_parameter"] -> (true,Int)
+            [K"SSAValue"] -> (true,Int)
+            [K"nothing"] -> (false, Any)
+            [K"TOMBSTONE"] -> (false, Any)
+            [K"SourceLocation"] -> (false, Any)
+            [K"latestworld"] -> (false, Any)
+            [K"latestworld_if_toplevel"] -> (false, Any)
+            (_, when=JuliaSyntax.is_literal(st)) -> (true,Any)
+            (_, when=JuliaSyntax.is_trivia(st)) -> (false, Any) # green tree only
+            (_, when=JuliaSyntax.is_operator(st)) -> (true,String) # TODO: remove
+            [K"LambdaBindings"] -> (true,LambdaBindings)
+            [K"Slots"] -> (true,Vector{Slot})
+            _ -> return vr & @fail(st, "unrecognized leaf kind $(kind(st))")
+        end
+        if needs_val
+            if !(st.value isa valtype)
+                vr &= @fail(st, "needs value ::"*string(valtype))
+            end
+        end
+    else
+        # Note some kinds can show up as non-leaves too (mostly from Expr)
+        if kind(st) in KSet"""Identifier Value Placeholder BindingId label
+        Symbol SSAValue nothing TOMBSTONE SourceLocation LambdaBindings Slots"""
+            vr &= @fail(st, "Found leaf-only kind with children")
+        end
+        if kind(st) === K"unknown_head"
+            if !(get(st, :value, nothing) isa String)
+                vr &= @fail(st, string("needs value ::String"))
+            end
+        end
+    end
+    vr
+end
+
 function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     if st._id in parents
         err = "cycle detected: ["
@@ -1145,51 +1207,10 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
         end
         return vr & @fail(st, err*"]")
     end
-    for a in (:kind, :source) # TODO: context
-        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
-    end
-    if is_leaf(st)
-        # Note some kinds can show up in non-leaves too
-        required_attrs = @stm st begin
-            [K"Identifier"] -> (:value,)
-            [K"core"] -> (:value,)
-            [K"top"] -> (:value,)
-            [K"Symbol"] -> (:value,)
-            [K"globalref"] -> (:value,:mod)
-            [K"Placeholder"] -> ()
-            [K"BindingId"] -> (:value,)
-            [K"label"] -> (:value,)
-            [K"symboliclabel"] -> (:value,)
-            [K"symbolicgoto"] -> (:value,)
-            [K"oldsymbolicgoto"] -> (:value,)
-            [K"Value"] -> (:value,)
-            [K"slot"] -> (:value,)
-            [K"static_parameter"] -> (:value,)
-            [K"SSAValue"] -> (:value,)
-            [K"nothing"] -> ()
-            [K"TOMBSTONE"] -> ()
-            [K"SourceLocation"] -> ()
-            [K"latestworld"] -> ()
-            [K"latestworld_if_toplevel"] -> ()
-            (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
-            (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
-            (_, when=JuliaSyntax.is_operator(st)) -> (:value,) # TODO: remove
-            [K"LambdaBindings"] -> (:value,)
-            [K"Slots"] -> (:value,)
-            _ -> return vr & @fail(st, "unrecognized leaf kind $(kind(st))")
-        end
-    else
-        required_attrs = @stm st begin
-            [K"unknown_head" _...] -> (:value,)
-            _ -> ()
-        end
-    end
-    for a in required_attrs
-        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
-    end
-    # TODO: Proper traversal along .source and .macro_source (need to cache
-    # results to avoid exponential repeated lookups, and figure out how these
-    # edges may form cycles with child edges)
+    vr &= _assert_syntaxtree_node(st)
+    # TODO: Proper traversal along .source and macro prov (need to cache results
+    # to avoid exponential repeated lookups, and figure out how these edges may
+    # form cycles with child edges)
     st.source === st._id && (vr &= @fail(st, ".source equal to self ID"))
     sc = get(st, :context, nothing)
     sc isa SyntaxContext &&
