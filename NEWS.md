@@ -123,7 +123,7 @@ New library features
   etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
   returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
 * Calls to `wait` on one-shot `Timer`s that have already triggered no longer throw `EOFError`. Previously
-  only the first `wait` returned and subsequent `wait` calls would throw ([#62538])
+  only the first `wait` returned and subsequent `wait` calls would throw ([#62539])
 
 Standard library changes
 ------------------------
