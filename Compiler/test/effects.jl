@@ -1620,3 +1620,14 @@ end
 for argtypes in ((), (Int,), (Task, Task))
     @test !Compiler.is_nothrow(Base.infer_effects(Core.task_result_type, argtypes))
 end
+
+# Core._task effects modeling: creating a task terminates and has no UB, but
+# accesses task state (scope inheritance, parent RNG split) and may throw
+let effects = Base.infer_effects(Core._task, (Function, Int))
+    @test !Compiler.is_consistent(effects)
+    @test !Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+    @test !Compiler.is_notaskstate(effects)
+    @test Compiler.is_noub(effects)
+end

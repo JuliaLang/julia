@@ -2884,6 +2884,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # Core._structtype,
     Core._svec_len,
     Core._svec_ref,
+    Core._task,
     # Core._typebody!,
     Core._typevar,
     apply_type,
@@ -2988,6 +2989,8 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
             consistent = ALWAYS_FALSE,
             notaskstate = false,
             nothrow)
+    elseif f === Core._task
+        return TASK_BUILTIN_EFFECTS
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE

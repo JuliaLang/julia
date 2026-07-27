@@ -3479,6 +3479,15 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     return RTEffects(rt, Any, effects)
 end
 
+# Effects of the `Core._task` builtin itself; the deferred body does not run here.
+# Creating a task returns a fresh mutable object, inherits the current task's scope
+# and forks its RNG state (advancing the parent's internal RNG via `jl_rng_split`),
+# so the call is not consistent, not effect-free, and accesses task state. It may
+# throw, e.g. for an invalid stack size, but always terminates and has no UB.
+const TASK_BUILTIN_EFFECTS = Effects(EFFECTS_TOTAL;
+    consistent=ALWAYS_FALSE, effect_free=ALWAYS_FALSE, nothrow=false,
+    notaskstate=false, inaccessiblememonly=ALWAYS_FALSE)
+
 function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo,
                                     vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     argtypes = arginfo.argtypes
@@ -3498,7 +3507,7 @@ function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInf
     if isva && la < 5
         # Without a fixed invoke target, the vararg may supply any of the required
         # arguments, so only retain the builtin's guaranteed return type.
-        return Future(CallMeta(Task, Any, Effects(), NoCallInfo()))
+        return Future(CallMeta(Task, Any, TASK_BUILTIN_EFFECTS, NoCallInfo()))
     end
     func_arg = argtypes[2]
 
@@ -3528,7 +3537,7 @@ function task_callmeta(call::CallMeta, ::AbstractInterpreter, ::AbsIntState)
         rt_result = PartialTask(fetch_type, fetch_error)
     end
     info_result = IndirectCallInfo(call.info, call.effects, true)
-    return CallMeta(rt_result, Any, Effects(), info_result)
+    return CallMeta(rt_result, Any, TASK_BUILTIN_EFFECTS, info_result)
 end
 
 function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
