@@ -89,7 +89,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 30 # do not make changes without bumping the version #!
+const ser_version = 31 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -632,10 +632,9 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
-    if isdefined(t, :invoked)
-        error("cannot serialize a Task constructed with invoke info")
-        # we could serialize it though, as long as the info isn't for a CodeInstance
-    end
+    # Compiler-injected CodeInstances are process-local optimization metadata and are
+    # intentionally omitted. Other targets carry explicit Core.invoke semantics.
+    has_invoked = isdefined(t, :invoked) && !(getfield(t, :invoked) isa Core.CodeInstance)
     writetag(s.io, TASK_TAG)
     serialize(s, t.code)
     serialize(s, t.storage)
@@ -649,6 +648,10 @@ function serialize(s::AbstractSerializer, t::Task)
         serialize(s, t.result)
     end
     serialize(s, t._isexception)
+    serialize(s, has_invoked)
+    if has_invoked
+        serialize(s, getfield(t, :invoked))
+    end
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
@@ -1763,6 +1766,9 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     else
         t._isexception = true
         t.result = exc
+    end
+    if format_version(s) >= 31 && (deserialize(s)::Bool)
+        setfield!(t, :invoked, deserialize(s))
     end
     t
 end
