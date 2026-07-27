@@ -1000,8 +1000,9 @@ function bslash_completions(string::String, pos::Int, hint::Bool=false)
         # return possible matches; these cannot be mixed with regular
         # Julian completions as only latex / emoji symbols contain the leading \
         symbol_dict = startswith(s, "\\:") ? emoji_symbols : latex_symbols
-        namelist = Iterators.filter(k -> startswith(k, s), keys(symbol_dict))
-        completions = Completion[BslashCompletion(name, "$(symbol_dict[name]) $name") for name in sort!(collect(namelist))]
+        filt = startswith(s, "\\?") ? k -> contains(k, s[3:end]) : k -> startswith(k, s)
+        namelist = Iterators.filter(filt, keys(symbol_dict)) |> collect |> sort!
+        completions = Completion[BslashCompletion(name, "$(symbol_dict[name]) $name") for name in namelist]
         return (true, (completions, slashpos:pos, true))
     end
     return (false, (Completion[], 1:0, false))
