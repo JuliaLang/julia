@@ -698,6 +698,10 @@ end
     t = Task(f)
     message = "Querying a Task's `scope` field is disallowed.\nThe private `Core.current_scope()` function is better, though still an implementation detail."
     @test_throws ErrorException(message) t.scope
+    message = "Querying a Task's `invoked` field is disallowed because it is an implementation detail."
+    @test_throws ErrorException(message) t.invoked
+    message = "Setting a Task's `invoked` field directly is disallowed because it is an implementation detail."
+    @test_throws ErrorException(message) (t.invoked = nothing)
     @test t.state == :runnable
 end
 

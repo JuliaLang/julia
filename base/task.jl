@@ -176,6 +176,8 @@ const task_state_failed   = UInt8(2)
         error("""
             Querying a Task's `scope` field is disallowed.
             The private `Core.current_scope()` function is better, though still an implementation detail.""")
+    elseif field === :invoked
+        error("Querying a Task's `invoked` field is disallowed because it is an implementation detail.")
     else
         return getfield(t, field)
     end
@@ -184,6 +186,8 @@ end
 @inline function setproperty!(t::Task, field::Symbol, @nospecialize(v))
     if field === :scope
         istaskstarted(t) && error("Setting scope on a started task directly is disallowed.")
+    elseif field === :invoked
+        error("Setting a Task's `invoked` field directly is disallowed because it is an implementation detail.")
     end
     return @invoke setproperty!(t::Any, field::Symbol, v::Any)
 end
