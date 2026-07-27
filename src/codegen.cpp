@@ -6449,11 +6449,11 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     // its memory location.
 }
 
-// Reset a PhiC slot to an undefined (but GC-safe) state. Only valid where the
-// PhiC node can no longer be dynamically observed. When `dead`, the slot will
-// never be read again, so only the gc references need dropping -- the union
-// tindex does not have to be left in bounds, and a slot holding no references
-// needs no store at all.
+// Drop the gc references a PhiC slot holds, by storing null over them. Only
+// valid where the PhiC node can no longer be dynamically observed. When `dead`,
+// the slot will never be read again, so only the references need dropping -- the
+// union tindex is left stale rather than in bounds, and a slot holding no
+// references needs no store at all.
 static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi, bool dead) JL_CANSAFEPOINT
 {
     if (dead && !vi.boxroot && !vi.inline_roots)
