@@ -2070,6 +2070,7 @@ public:
     // local var info. globals are not in here.
     SmallVector<jl_varinfo_t, 0> slots;
     std::map<int, jl_varinfo_t> phic_slots;
+    std::map<int, SmallVector<int, 0>> phic_slots_for_catch; // catch_dest (1-based) -> PhiC statement indices
     std::map<int, std::pair<Value*, Value*> > scope_restore;
     std::map<jl_value_t*, AllocaInst*> eh_buffers;
     SmallVector<jl_cgval_t, 0> SAvalues;
@@ -6309,7 +6310,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
     return;
 }
 
-static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi) JL_CANSAFEPOINT;
+static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi, bool dead=false) JL_CANSAFEPOINT;
 
 static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_value_t *r) JL_CANSAFEPOINT
 {
@@ -6327,7 +6328,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_valu
         slot = emit_varinfo(ctx, it->second, jl_symbol("phic"));
         // `emit_varinfo` copied the contents somewhere rooted independently of the
         // slot, and this is the only read of it, so the slot is now dead (#52533).
-        emit_phic_slot_clear(ctx, it->second);
+        emit_phic_slot_clear(ctx, it->second, /*dead*/true);
     }
     else {
         slot = emit_expr(ctx, r, ssaidx_0based);
@@ -6449,14 +6450,39 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
 }
 
 // Reset a PhiC slot to an undefined (but GC-safe) state. Only valid where the
-// PhiC node can no longer be dynamically observed.
-static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi) JL_CANSAFEPOINT
+// PhiC node can no longer be dynamically observed. When `dead`, the slot will
+// never be read again, so only the gc references need dropping -- the union
+// tindex does not have to be left in bounds, and a slot holding no references
+// needs no store at all.
+static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi, bool dead) JL_CANSAFEPOINT
 {
+    if (dead && !vi.boxroot && !vi.inline_roots)
+        return;
     if (vi.boxroot) {
         // memory optimization: eagerly clear this gc-root now
         ctx.builder.CreateAlignedStore(Constant::getNullValue(ctx.types().T_prjlvalue), vi.boxroot, Align(sizeof(void*)), true);
     }
+    // note that a union slot may carry inline roots alongside its tindex, so this
+    // is deliberately not part of the `pTIndex` else-branch below
+    if (vi.inline_roots) {
+        // memory optimization: make gc pointers re-initialized to NULL
+        AllocaInst *ssaroots = vi.inline_roots;
+        size_t nroots = vi.inline_roots_count;
+        auto T_prjlvalue = ssaroots->getAllocatedType();
+        if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
+            nroots *= AT->getNumElements();
+            T_prjlvalue = AT->getElementType();
+        }
+        assert(T_prjlvalue == ctx.types().T_prjlvalue);
+        Value *nullval = Constant::getNullValue(T_prjlvalue);
+        auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        for (size_t i = 0; i < nroots; i++) {
+            stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), true));
+        }
+    }
     if (vi.pTIndex) {
+        if (dead)
+            return;
         // We don't care what the contents of the variable are, but it
         // does need to satisfy the union invariants (i.e. inbounds
         // tindex).
@@ -6465,24 +6491,9 @@ static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi) JL_CANSAFE
                          ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x01),
             vi.pTIndex, Align(1), true);
     }
-    else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
-        assert(vi.inline_roots || vi.value.ispointer());
-        if (vi.inline_roots) {
-            // memory optimization: make gc pointers re-initialized to NULL
-            AllocaInst *ssaroots = vi.inline_roots;
-            size_t nroots = vi.inline_roots_count;
-            auto T_prjlvalue = ssaroots->getAllocatedType();
-            if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
-                nroots *= AT->getNumElements();
-                T_prjlvalue = AT->getElementType();
-            }
-            assert(T_prjlvalue == ctx.types().T_prjlvalue);
-            Value *nullval = Constant::getNullValue(T_prjlvalue);
-            auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            for (size_t i = 0; i < nroots; i++) {
-                stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), true));
-            }
-        }
+    else {
+        assert(!vi.value.V || vi.value.constant || vi.value.typ == jl_bottom_type ||
+               vi.inline_roots || vi.value.ispointer());
     }
 }
 
@@ -6520,18 +6531,13 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val) J
 // enter block, so re-entering the region restores them.
 static void emit_phic_slots_clear_for_catch(jl_codectx_t &ctx, intptr_t catch_dest) JL_CANSAFEPOINT
 {
-    intptr_t nstmts = jl_array_nrows(ctx.code);
-    for (intptr_t i = catch_dest - 1; i < nstmts; i++) {
-        jl_value_t *stmt = jl_array_ptr_ref(ctx.code, i);
-        if (jl_is_phicnode(stmt)) {
-            auto it = ctx.phic_slots.find((int)i);
-            if (it != ctx.phic_slots.end())
-                emit_phic_slot_clear(ctx, it->second);
-        }
-        else if (stmt != jl_nothing && !jl_is_phinode(stmt)) {
-            // end of the phi block at the top of the catch block
-            break;
-        }
+    auto phics = ctx.phic_slots_for_catch.find(catch_dest);
+    if (phics == ctx.phic_slots_for_catch.end())
+        return;
+    for (int i : phics->second) {
+        auto it = ctx.phic_slots.find(i);
+        if (it != ctx.phic_slots.end())
+            emit_phic_slot_clear(ctx, it->second, /*dead*/true);
     }
 }
 
@@ -8841,6 +8847,36 @@ static jl_llvm_functions_t
 
     // determine which vars need to be volatile
     mark_volatile_vars(stmts, ctx.slots, branch_targets);
+
+    // Record the PhiC nodes of each catch block, so that `Expr(:leave, ...)` can
+    // drop the gc roots they hold. They sit in the phi block at the top of the
+    // catch block; bound the scan there so it cannot run into a following block.
+    for (i = 0; i < stmtslen; i++) {
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+        if (!jl_is_enternode(stmt))
+            continue;
+        intptr_t catch_dest = jl_enternode_catch_dest(stmt);
+        if (!catch_dest)
+            continue;
+        // Clearing at a `leave` is only sound if this is the sole handler using
+        // the block; otherwise an outer region could still read the slots.
+        auto prev = ctx.phic_slots_for_catch.find(catch_dest);
+        if (prev != ctx.phic_slots_for_catch.end()) {
+            assert(false && "catch block shared between handlers");
+            prev->second.clear(); // give up rather than clear while still readable
+            continue;
+        }
+        SmallVector<int, 0> &phics = ctx.phic_slots_for_catch[catch_dest];
+        for (intptr_t j = catch_dest - 1; j < (intptr_t)stmtslen; j++) {
+            if (j != catch_dest - 1 && branch_targets.count(j + 1))
+                break; // start of the next basic block
+            jl_value_t *cstmt = jl_array_ptr_ref(stmts, j);
+            if (jl_is_phicnode(cstmt))
+                phics.push_back(j);
+            else if (cstmt != jl_nothing && !jl_is_phinode(cstmt))
+                break; // end of the phi block
+        }
+    }
 
     // step 4. determine function signature
     if (!specsig)
