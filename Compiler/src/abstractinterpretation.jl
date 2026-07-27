@@ -3495,15 +3495,17 @@ function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInf
     if !hasintersect(widenconst(size_arg), Int)
         return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
     end
-    if isva
-        # The vararg may supply any of the required arguments, so only retain the
-        # builtin's guaranteed return type.
+    if isva && la < 5
+        # Without a fixed invoke target, the vararg may supply any of the required
+        # arguments, so only retain the builtin's guaranteed return type.
         return Future(CallMeta(Task, Any, Effects(), NoCallInfo()))
     end
     func_arg = argtypes[2]
 
-    # Handle optional Method/CodeInstance/Type argument (4th parameter) as invoke
-    if la == 4
+    # Handle the fixed Method/CodeInstance/Type argument (4th parameter) as invoke.
+    # A trailing vararg may be empty; non-empty tails throw an arity error before
+    # the deferred invoke can run.
+    if la >= 4
         invoke_args = Any[Const(Core.invoke), func_arg, argtypes[4]]
         invoke_arginfo = ArgInfo(nothing, invoke_args)
         invoke_future = abstract_invoke(interp, invoke_arginfo, si, vtypes, sv)

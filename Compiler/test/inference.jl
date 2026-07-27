@@ -7266,5 +7266,14 @@ splatted_task_inference(xs::Tuple) = Core._task(xs...)
 @test Base.infer_return_type(splatted_task_inference, (Tuple,)) === Task
 splatted_task_invalid_size(rest::Tuple) = Core._task(identity, "invalid", rest...)
 @test Base.infer_return_type(splatted_task_invalid_size, (Tuple,)) === Union{}
+splatted_task_target() = 42
+splatted_task_target(xs...) = xs
+function splatted_task_invoke(@nospecialize(rest::Tuple))
+    targets = (Tuple{Vararg}, rest...)
+    t = Core._task(splatted_task_target, 0, targets...)
+    t.donenotify = Base.ThreadSynchronizer()
+    return fetch(schedule(t))
+end
+@test Base.infer_return_type(splatted_task_invoke, (Tuple,)) === Tuple{}
 
 end # module inference
