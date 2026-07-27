@@ -49,6 +49,11 @@ private:
   /// thread is still executing a task (e.g. a large batch-module compile).
   std::atomic<int> ActiveRuns{0};
   std::atomic<uint64_t> TasksCompleted{0};
+  /// Monotonic count of task starts. Together with TasksCompleted this
+  /// distinguishes "another thread is working" from "another thread has been
+  /// stuck in the same task all along": a wedge changes neither counter,
+  /// while ActiveRuns alone stays nonzero and would mask it.
+  std::atomic<uint64_t> TasksStarted{0};
   /// Track whether the current thread is inside work_until/process_tasks.
   /// When false, dispatch runs tasks inline to avoid deadlock with callers
   /// that block on std::future (e.g. LocalTrampolinePool::reenter).
@@ -406,6 +411,7 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-fi
     {
       dispatcher_sigdefer_guard defer;
       ActiveRuns.fetch_add(1, std::memory_order_relaxed);
+      TasksStarted.fetch_add(1, std::memory_order_relaxed);
       OwnActiveRuns++;
       T->run();
       OwnActiveRuns--;
@@ -443,6 +449,7 @@ void JuliaTaskDispatcher::work_until(future_base &F) JL_NO_SAFEPOINT_ANALYSIS {
   int StalledSeconds = 0;
   bool DumpedStall = false;
   uint64_t LastCompleted = TasksCompleted.load(std::memory_order_relaxed);
+  uint64_t LastStarted = TasksStarted.load(std::memory_order_relaxed);
   while (!F.ready()) {
     process_tasks(Lock);
 
@@ -476,16 +483,21 @@ void JuliaTaskDispatcher::work_until(future_base &F) JL_NO_SAFEPOINT_ANALYSIS {
 #endif
     if (TimedOut) {
       uint64_t Completed = TasksCompleted.load(std::memory_order_relaxed);
-      if (Completed != LastCompleted ||
-          ActiveRuns.load(std::memory_order_relaxed) > OwnActiveRuns) {
+      uint64_t Started = TasksStarted.load(std::memory_order_relaxed);
+      // Only a task starting or finishing counts as progress: a task that is
+      // merely still running may be the wedge we are trying to report.
+      if (Completed != LastCompleted || Started != LastStarted) {
         LastCompleted = Completed;
+        LastStarted = Started;
         StalledSeconds = 0;
       }
       else if (++StalledSeconds >= 30 && !DumpedStall) {
         DumpedStall = true;
         errs() << "==== JuliaTaskDispatcher: work_until stalled for "
                << StalledSeconds << "s; future not completed ====\n"
-               << "TaskQueue size: " << TaskQueue.size() << "\n";
+               << "TaskQueue size: " << TaskQueue.size()
+               << ", tasks running: " << ActiveRuns.load(std::memory_order_relaxed)
+               << " (this thread: " << OwnActiveRuns << ")\n";
         if (SessionForStallDump) {
           // Drop the dispatch lock while taking the session lock to avoid
           // inverting the dispatch()-under-session-lock order.
@@ -514,6 +526,7 @@ void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) JL_NO_SAFEP
         // jl_register_jit_object), so it must run GC_UNSAFE.
         int8_t gc_state = jl_gc_unsafe_enter(jl_current_task->ptls);
         ActiveRuns.fetch_add(1, std::memory_order_relaxed);
+        TasksStarted.fetch_add(1, std::memory_order_relaxed);
         OwnActiveRuns++;
         T->run(); // n.b. JL_CANCALLBACK
         OwnActiveRuns--;
