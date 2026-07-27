@@ -646,16 +646,7 @@ end
         return PartialOpaque(ti, v.env, v.parent, v.source)
     elseif isa(v, PartialTask)
         has_free_typevars(t) && return v
-        if Task <: t
-            return v
-        end
-        ti = typeintersect(Task, t)
-        valid_as_lattice(ti, true) || return Bottom
-        if ti === Task
-            return v
-        else
-            return Bottom  # PartialTask can only be a Task
-        end
+        return Task <: t ? v : Bottom
     end
     return tmeet(widenlattice(lattice), v, t)
 end
