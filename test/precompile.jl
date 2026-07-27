@@ -1167,16 +1167,18 @@ precompile_test_harness("precompiletools") do dir
     end
 end
 
-# Image sharding with empty shards: a low JULIA_IMAGE_PARTITION_WEIGHT forces the
-# pkgimage to be split into many output shards. With more shards than there are
-# gvars (and fvars), some shards end up empty, exercising that the image writer
-# (get_fvars_gvars in aotcompile.cpp) tolerates a shard with no fvars or gvars
-# instead of asserting. Here we just check that such a finely-sharded image
-# builds and loads.
+# Image sharding: the shard count (the number of output partitions) is sized
+# independently of the codegen concurrency, so a pkgimage can be split into many
+# more shards than there are threads to compile them. A low
+# JULIA_IMAGE_PARTITION_WEIGHT forces that regime; JULIA_IMAGE_THREADS=1 forces
+# the opposite one, where the module is emitted whole as a single shard. Check
+# that an image built either way loads and runs.
 precompile_test_harness("image sharding") do load_path
-    fns = join(("@noinline f$i(x::Int) = (s = zero(x); for j in 1:8; s += x * $i + j * j; end; s)" for i in 1:50), "\n")
-    pcs = join(("precompile(f$i, (Int,))" for i in 1:50), "\n")
-    calls = join(("f$i(1)" for i in 1:50), " + ")
+    # enough functions to clear the one-shard-per-100-globals floor on sharding
+    nfuncs = 150
+    fns = join(("@noinline f$i(x::Int) = (s = zero(x); for j in 1:8; s += x * $i + j * j; end; s)" for i in 1:nfuncs), "\n")
+    pcs = join(("precompile(f$i, (Int,))" for i in 1:nfuncs), "\n")
+    calls = join(("f$i(1)" for i in 1:nfuncs), " + ")
     write(joinpath(load_path, "ManyShards.jl"),
         """
         module ManyShards
@@ -1188,14 +1190,17 @@ precompile_test_harness("image sharding") do load_path
         end
         """)
     pkgid = Base.PkgId("ManyShards")
-    # Force many small shards; this is the regime that produces empty shards.
-    withenv("JULIA_IMAGE_PARTITION_WEIGHT" => "100") do
-        cachefile, ocachefile = Base.compilecache(pkgid)
-        @test cachefile isa String
-        # when pkgimages are enabled the native image (and its shards) is built
-        Bool(Base.JLOptions().use_pkgimages) && @test isfile(ocachefile::String)
+    for env in (("JULIA_IMAGE_PARTITION_WEIGHT" => "100"),  # many shards, few threads
+                ("JULIA_IMAGE_THREADS" => "1"))            # a single whole-module shard
+        # compilecache recompiles unconditionally, so each pass rebuilds the image
+        withenv(env) do
+            cachefile, ocachefile = Base.compilecache(pkgid)
+            @test cachefile isa String
+            # when pkgimages are enabled the native image (and its shards) is built
+            Bool(Base.JLOptions().use_pkgimages) && @test isfile(ocachefile::String)
+        end
+        @test Base.isprecompiled(pkgid)
     end
-    @test Base.isprecompiled(pkgid)
     @eval using ManyShards
     @test (@eval ManyShards.g()) isa Int
 end
