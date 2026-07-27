@@ -1279,7 +1279,7 @@ function cached_return_type(code::CodeInstance)
         return PartialStruct(fallback_lattice, rettype, undefs, fields)
     elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
         return rettype_const
-    elseif isa(rettype_const, PartialTask) && rettype !== PartialTask
+    elseif isa(rettype_const, PartialTask) && rettype <: Task
         return rettype_const
     elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
         return rettype_const
