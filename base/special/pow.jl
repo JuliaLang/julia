@@ -56,19 +56,19 @@ end
 end
 
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
-    n = clamp(n, Int64)
-    n == 0 && return one(x)
-    if use_power_by_squaring(n)
-        return pow_body(x, n)
+    n64 = clamp(n, Int64)
+    n64 == 0 && return one(x)
+    if use_power_by_squaring(n64)
+        return pow_body(x, n64)
     else
-        s = ifelse(x < 0 && isodd(n), -1.0, 1.0)
+        s = ifelse(signbit(x) && isodd(n), -1.0, 1.0)
         x = abs(x)
-        y = float(n)
-        if y == n
+        y = float(n64)
+        if y == n64
             return copysign(pow_body(x, y), s)
         else
-            n2 = n % 1024
-            y = float(n - n2)
+            n2 = n64 % 1024
+            y = float(n64 - n2)
             return pow_body(x, y) * copysign(pow_body(x, n2), s)
         end
     end
@@ -77,14 +77,14 @@ end
 # @constprop aggressive to help the compiler see the switch between the integer and float
 # variants for callers with constant `y`
 @constprop :aggressive @inline function ^(x::T, n::Integer) where T <: Union{Float16, Float32}
-    n = clamp(n, Int32)
+    n32 = clamp(n, Int32)
     # Exponents greater than this will always overflow or underflow.
     # Note that NaN can pass through this, but that will end up fine.
-    n == 0 && return one(x)
-    use_power_by_squaring(n) && return pow_body(x, n)
-    s = ifelse(x < 0 && isodd(n), -one(T), one(T))
+    n32 == 0 && return one(x)
+    use_power_by_squaring(n32) && return pow_body(x, n32)
+    s = ifelse(signbit(x) && isodd(n), -one(T), one(T))
     x = abs(x)
-    return pow_body(x, widen(T)(n))
+    return copysign(pow_body(x, widen(T)(n32)), s)
 end
 
 @assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
