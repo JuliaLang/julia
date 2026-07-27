@@ -118,10 +118,14 @@ pessimistically assumed to have fully unknown effects.
 
 **File: `Compiler/src/stmtinfo.jl`**
 ```julia
-# For builtins that perform indirect calls, use IndirectCallInfo.
-# Set add_edges=true, unless the info is only for inlining and not used by inference
-#
-info_result = IndirectCallInfo(callinfo.info, callinfo.effects, true)
+# For builtins that perform deferred/indirect calls, define a `CallInfo` wrapping
+# the call information of the deferred call (see e.g. `FinalizerInfo`, `ModifyOpInfo`
+# and `TaskCallInfo`). Define `add_edges_impl` to forward the wrapped edges, unless
+# merely creating the object should not imply invalidation edges.
+struct YourBuiltinCallInfo <: CallInfo
+    info::CallInfo # the callinfo for the deferred call
+end
+add_edges_impl(edges::Vector{Any}, info::YourBuiltinCallInfo) = add_edges!(edges, info.info)
 ```
 
 **File: `Compiler/src/abstractinterpretation.jl`**

@@ -2595,7 +2595,7 @@ function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, 
         finalizer_argvec = Any[argtypes[2], argtypes[3]]
         call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false, false), vtypes, sv, #=max_methods=#1)::Future
         return Future{CallMeta}(call, interp, sv) do call, _, _
-            return CallMeta(Nothing, Any, Effects(), IndirectCallInfo(call.info, call.effects, false))
+            return CallMeta(Nothing, Any, Effects(), FinalizerInfo(call.info, call.effects))
         end
     end
     return Future(CallMeta(Nothing, Any, Effects(), NoCallInfo()))
@@ -3527,11 +3527,12 @@ function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInf
 end
 
 # Convert the `CallMeta` of the task body call into the `CallMeta` of the `Core._task`
-# call that creates it, tracking the body's result type with a `PartialTask`.
+# call that creates it, tracking the body's result type with a `PartialTask` and keeping
+# its call information for the inlining pass.
 function task_callmeta(call::CallMeta, ::AbstractInterpreter, ::AbsIntState)
     fetch_type = widenconst(call.rt)
     rt_result = fetch_type === Any ? Task : PartialTask(fetch_type)
-    info_result = IndirectCallInfo(call.info, call.effects, true)
+    info_result = TaskCallInfo(call.info)
     return CallMeta(rt_result, Any, TASK_BUILTIN_EFFECTS, info_result)
 end
 
