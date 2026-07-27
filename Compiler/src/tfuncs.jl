@@ -603,7 +603,6 @@ add_tfunc(Core.bitsizeof, 1, 1, bitsizeof_tfunc, 1)
 end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
-
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
 
 @nospecs function _svec_len_tfunc(::AbstractLattice, s)

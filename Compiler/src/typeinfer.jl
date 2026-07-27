@@ -706,7 +706,6 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
 
     # check global cache again for :invoke use, and put in the opt_cache if it wasn't there at this time
     if isdefined(result, :ci)
-
         ci = result.ci
         ipo_effects = encode_effects(result.ipo_effects)
         # populate a few fields that won't change again (and are inspected by optimization)
