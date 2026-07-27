@@ -1547,7 +1547,7 @@ static jl_value_t *inst_datatype_env(jl_value_t *dt, jl_svec_t *p, jl_value_t **
     return inst_datatype_env(ua->body, p, iparams, ntp, stack, &e, c + 1, dcache);
 }
 
-static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n, jl_deferred_typecache_t *dcache)
+static jl_value_t *apply_type_(jl_value_t *tc, jl_value_t **params, size_t n, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT
 {
     if (tc == (jl_value_t*)jl_anytuple_type)
         return jl_apply_tuple_type_v_(params, n, NULL, 1, dcache);
