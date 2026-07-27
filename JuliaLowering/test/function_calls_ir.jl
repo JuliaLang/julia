@@ -354,7 +354,7 @@ ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
 3   (call top.unsafe_convert %₁ %₂)
-4   (foreigncall (foreignsymbol (tuple-p (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
+4   (foreigncall (foreignsymbol (tuple (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
 5   (return %₄)
 
 ########################################
@@ -508,7 +508,7 @@ cglobal((:sym, lib), Int)
 #---------------------
 1   TestMod.Int
 2   (call core.apply_type top.Ptr %₁)
-3   (foreignglobal (foreignsymbol (tuple-p (inert sym) TestMod.lib)))
+3   (foreignglobal (foreignsymbol (tuple (inert sym) TestMod.lib)))
 4   (call top.bitcast %₂ %₃)
 5   (return %₄)
 

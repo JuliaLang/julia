@@ -31,7 +31,7 @@ struct SourceRef
 end
 
 mutable struct SyntaxTree
-    kind::Kind
+    const kind::Kind
     # Should be considered immutable
     children::Union{Nothing, Vector{SyntaxTree}}
     value::Any
@@ -141,17 +141,12 @@ function hasattr(ex::SyntaxTree, name::Symbol)
     return false
 end
 
-function setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
+function _setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
     setfield!(ex, name, val)
     ex
 end
-setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
-    setattr!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), name, val)
-
-function deleteattr!(ex::SyntaxTree, name::Symbol)
-    setfield!(ex, name, nothing)
-    ex
-end
+_setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
+    _setattr!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), name, val)
 
 const CompileHints = Base.ImmutableDict{Symbol,Any}
 function setmeta!(st::SyntaxTree, key::Symbol, @nospecialize(val))
@@ -253,12 +248,12 @@ function adopt_scope(sc_in::SyntaxContext, st::SyntaxTree, scmap)
         sc2 = sc_in
     end
     if is_leaf(st) || numchildren(st) == 0
-        sc2 === st_sc ? st : setattr(st, :context, sc2)
+        sc2 === st_sc ? st : _setattr(st, :context, sc2)
     else
         out = mapchildren(c->adopt_scope(sc_in, c, scmap), st)
         sc2 === st_sc ? out :
-            out !== st ? setattr!(out, :context, sc2) :
-            setattr(out, :context, sc2)
+            out !== st ? _setattr!(out, :context, sc2) :
+            _setattr(out, :context, sc2)
     end
 end
 function adopt_scope(reference::SyntaxTree, st::SyntaxTree)
@@ -267,7 +262,7 @@ function adopt_scope(reference::SyntaxTree, st::SyntaxTree)
 end
 
 function fill_context!(st::SyntaxTree, sc::SyntaxContext)
-    setattr!(st, :context, sc)
+    _setattr!(st, :context, sc)
     !is_leaf(st) && for c in children(st)
         fill_context!(c, sc)
     end
@@ -277,7 +272,7 @@ fill_context(st, sc) = fill_context!(mktree(st), sc)
 
 function remove_context!(st::SyntaxTree)
     sc = get(st, :context, nothing)
-    isnothing(sc) || JuliaSyntax.deleteattr!(st, :context)
+    isnothing(sc) || _setattr!(st, :context, nothing)
     for c in children(st)
         remove_context!(c)
     end
@@ -494,13 +489,12 @@ function newleaf(prov::SourceAttrType, k::Kind)
 end
 
 function mknode(old::SyntaxTree, children)
-    st = mkleaf(old)
-    setchildren!(st, children)
-    return st
+    SyntaxTree(old.kind, children, old.value, old, old.context,
+               old.jl_source, old.meta, old.mod, old.syntax_flags)
 end
 function mkleaf(old::SyntaxTree)
-    st = SyntaxTree(old.kind, nothing, old.value, old, old.context,
-                    old.jl_source, old.meta, old.mod, old.syntax_flags)
+    SyntaxTree(old.kind, nothing, old.value, old, old.context,
+               old.jl_source, old.meta, old.mod, old.syntax_flags)
 end
 function mktree(old::SyntaxTree)
     if is_leaf(old)
@@ -547,9 +541,8 @@ most once.
 
 TODO: Likely unecessary with immutable tree
 """
-function copy_ast(ctx, ex::SyntaxTree)
-    id2 = _copy_ast(ex, Dict{SyntaxTree, SyntaxTree}())
-    return id2
+function copy_ast(ex::SyntaxTree)
+    _copy_ast(ex, Dict{SyntaxTree, SyntaxTree}())
 end
 
 function _copy_ast(id1::SyntaxTree, seen)
@@ -568,9 +561,9 @@ function _copy_ast(id1::SyntaxTree, seen)
     src1 = get(id1, :source, nothing)
     if src1 isa SyntaxTree
         src2 =  _copy_ast(src1, seen)
-        setattr!(id2, :source, src2)
+        _setattr!(id2, :source, src2)
     elseif !isnothing(src1)
-        setattr!(id2, :source, src1)
+        _setattr!(id2, :source, src1)
     else
         throw("bad source?")
     end
@@ -607,7 +600,7 @@ function _unalias_copy_tree(old::SyntaxTree)
         mknode(old, cs)
     end
     # difference from mktree: don't add to provenance chain
-    setattr!(out, :source, old.source)
+    _setattr!(out, :source, old.source)
 end
 
 function _unalias_nodes(st::SyntaxTree, seen::Set{SyntaxTree},
@@ -945,7 +938,7 @@ function _insert_green(sf::Base.RefValue{SourceFile},
     source = SourceRef(sf, first_byte(cursor), last_byte(cursor))
     id = SyntaxTree(kind(cursor), nothing, nothing, source, nothing)
     let f = remove_flags(flags(cursor), NON_TERMINAL_FLAG)
-        f != 0 && setattr!(id, :syntax_flags, f)
+        f != 0 && _setattr!(id, :syntax_flags, f)
     end
     if !is_leaf(cursor)
         cs = SyntaxList()
@@ -957,9 +950,9 @@ function _insert_green(sf::Base.RefValue{SourceFile},
         v = parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ offset)
         if v isa Symbol
             # TODO: Fixes in JuliaSyntax to avoid ever converting to Symbol
-            setattr!(id, :value, string(v))
+            _setattr!(id, :value, string(v))
         elseif !isnothing(v)
-            setattr!(id, :value, v)
+            _setattr!(id, :value, v)
         end
     end
     return id
@@ -996,9 +989,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
     k = kind(st)
     syntax_name(x) = x.value::String
-    symleaf(s::String) = setattr!(newleaf(st, K"Identifier"), :value, s)
-    core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
-    valleaf(@nospecialize(v)) = setattr!(newleaf(st, K"Value"), :value, v)
+    symleaf(s::String) = _setattr!(newleaf(st, K"Identifier"), :value, s)
+    core_globalref(s::String) = _setattr!(symleaf(s), :mod, Core)
+    valleaf(@nospecialize(v)) = _setattr!(newleaf(st, K"Value"), :value, v)
 
     if k === K"DotsIdentifier"
         # `..`/`...` used as an ordinary identifier (eg the `..` operator, or
@@ -1060,7 +1053,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 kind(inner_cs[2]) === K"Identifier")
                 (lhs, raw_m) = _green_to_est(cs[1], 1, inner_cs[1]), inner_cs[2]
                 mname_s = lower_identifier_name(syntax_name(raw_m), K"macro_name")
-                mname = setattr!(mkleaf(raw_m), :value, mname_s)
+                mname = _setattr!(mkleaf(raw_m), :value, mname_s)
                 mname_inert = newnode(raw_m, K"inert", SyntaxList(mname))
                 return mknode(inner_st, SyntaxList(lhs, mname_inert))
             else
@@ -1076,13 +1069,13 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
         out = newnode(st, K"unknown_head", SyntaxList(lhs, rhs))
-        return setattr!(out, :value, op_s)
+        return _setattr!(out, :value, op_s)
     elseif k === K".op=" && n_cs === 3
         op_s = '.' * string(cs[2]) * '='
         lhs = _green_to_est(st, 0, cs[1])
         rhs = _green_to_est(st, 0, cs[3])
         out = newnode(st, K"unknown_head", SyntaxList(lhs, rhs))
-        return setattr!(out, :value, op_s)
+        return _setattr!(out, :value, op_s)
     elseif k === K"op=" && n_cs === 1
         # (op= +) => +=   (the operator name itself, eg when quoted as `:(+=)`)
         return symleaf(string(cs[1]) * '=')
@@ -1258,7 +1251,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 g_out = newnode(c, K"flatten", SyntaxList(g_out))
             end
         end
-        return setattr!(g_out, :source, st) # outermost provenance
+        return _setattr!(g_out, :source, st) # outermost provenance
     elseif k === K"filter"
         @assert n_cs === 2
         # (filter (iteration is...) cond) => (filter cond is...)
@@ -1366,7 +1359,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     # Recurse on `cs`.  If no children change, just return `st`.
     ret_cs = _map_green_to_est(st, cs; kw_in_params)
     return ret_cs == children(st) && ret_k == kind(st) ?
-        st : setattr!(mknode(st, ret_cs), :kind, ret_k)
+        st : newnode(st, ret_k, ret_cs)
 end
 
 function _map_green_to_est(parent::SyntaxTree, cs;
@@ -1451,7 +1444,7 @@ function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
             write(buf, c.value)
             if !next_str
                 ret_c = newleaf(st, literal_k)
-                setattr!(ret_c, :value, String(take!(buf)))
+                _setattr!(ret_c, :value, String(take!(buf)))
                 push!(ret_cs, ret_c)
             end
         else

@@ -13,7 +13,7 @@ else
 end
 
 using .JuliaSyntax: @KSet_str, @stm, Kind, SourceAttrType, SourceRef,
-    SyntaxList, SyntaxTree, byte_range, children, copy_ast, filename, first_byte,
+    SyntaxList, SyntaxTree, byte_range, children, filename, first_byte,
     flattened_provenance, hasattr, head, highlight,
     is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, newleaf,
     newnode, node_string, numchildren, provenance, setmeta, setmeta!, getmeta,
