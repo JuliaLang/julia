@@ -240,19 +240,32 @@ cd(@__DIR__) do
 
         Sys.iswindows() || atexit() do
             # This `atexit()` is a desperate attempt to collect .core dumps from
-            # any hung workers, if the CI test infrastructure decides to tear us
-            # down due to a timeout
+            # any hung test processes, if the CI test infrastructure decides to
+            # tear us down due to a timeout
             isempty(running_on) && return
             stuck = Int[]
-            # Send a `SIGQUIT` signal to any stuck workers so they produce
-            # a .core file and a stacktrace.
-            for (test, wrkr) in running_on
-                ospid = get(worker_ospids, wrkr, nothing)
-                ospid === nothing && continue
-                println(stderr, "Test $test is still running on worker $wrkr (pid $ospid) at teardown; sending SIGQUIT for a core dump.")
-                if ccall(:kill, Cint, (Cint, Cint), ospid, Base.SIGQUIT) == 0
-                    push!(stuck, ospid)
+            function quit!(pid)
+                if ccall(:kill, Cint, (Cint, Cint), pid, Base.SIGQUIT) == 0
+                    push!(stuck, pid)
                 end
+            end
+            # Send a `SIGQUIT` to the whole process tree of every stuck test so
+            # each process produces a .core file and a stacktrace, deepest
+            # first: the subprocess a test is blocked on is usually the real
+            # hang, and killing a parent first can take a child down before it
+            # dumps.
+            for (test, wrkr) in running_on
+                # A node 1 test runs in this process: signal its subprocesses,
+                # never ourselves, as we still have to finish exiting. The
+                # workers are all gone by then, so they cannot be in our subtree.
+                ospid = wrkr == 1 ? getpid() : get(worker_ospids, wrkr, nothing)
+                ospid === nothing && continue
+                subtree = reverse!(descendant_pids(ospid))
+                wrkr == 1 && isempty(subtree) && continue
+                target = (wrkr == 1 ? "" : "it and ") * "its $(length(subtree)) subprocess(es)"
+                println(stderr, "Test $test is still running on worker $wrkr (pid $ospid) at teardown; sending SIGQUIT to $target for core dumps.")
+                foreach(quit!, subtree)
+                wrkr == 1 || quit!(ospid)
             end
             alive(pid) = ccall(:kill, Cint, (Cint, Cint), pid, 0) == 0
             # This must stay comfortably below the watchdog's post-SIGTERM
@@ -394,6 +407,7 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
+            running_on[t] = 1
             before = time()
             resp, duration = try
                     r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
@@ -402,6 +416,7 @@ cd(@__DIR__) do
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
                 end
+            delete!(running_on, t)
             if length(resp) == 1
                 print_testworker_errored(t, 1, resp[1])
             else
