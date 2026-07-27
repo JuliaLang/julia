@@ -166,6 +166,8 @@ function assemble_snapshot(in_prefix, io::IO)
         for i in 1:n_edges
             seek(edges_file, (i - 1) * k_edge_record_bytes + k_edge_from_node_offset)
             from_node = read(edges_file, UInt)
+            from_node < node_count ||
+                error("malformed edges file `$(in_prefix).edges`: from_node $(from_node) is out of range for $(node_count) nodes")
             nodes.edge_count[from_node + 1] += UInt(1)  # C and JSON use 0-based indexing
         end
         # position in `nodes.edges` of the next edge leaving each node
