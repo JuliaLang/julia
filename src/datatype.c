@@ -715,6 +715,15 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
     for (i = 0; (isbitstype || isidentityfree || ismutationfree) && i < nfields; i++) {
         jl_value_t *fld = jl_field_type(st, i);
+        if (isbitstype && jl_is_datatype(fld) && ((jl_datatype_t*)fld)->layout == NULL &&
+            ((jl_datatype_t*)fld)->name->mayinlinealloc) {
+            // The field's layout (and thus its isbitstype flag) may not have
+            // been computed yet, e.g. for instantiations deferred during
+            // typegroup resolution; compute it now so the flag is accurate.
+            // The mayinlinealloc check breaks self-reference cycles: a type
+            // whose layout recursion reaches itself is boxed and never isbits.
+            jl_struct_try_layout((jl_datatype_t*)fld);
+        }
         isbitstype &= jl_isbits(fld);
         ismutationfree &= (!st->name->mutabl || jl_field_isconst(st, i)) && is_type_mutationfree(fld);
         isidentityfree &= is_type_identityfree(fld);
@@ -2481,7 +2490,7 @@ static int is_typename_reachable(jl_value_t *t, jl_typename_t *target, htable_t 
 }
 
 // Forward declaration
-static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map) JL_CANSAFEPOINT;
+static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
 
 // Return the first typegroup placeholder TypeVar referenced by `t`, or NULL.
 // Used to reject group-member references in positions where they cannot be
@@ -2532,7 +2541,7 @@ static jl_tvar_t *find_typegroup_ref(jl_value_t *t, htable_t *subst_map) JL_NOTS
 
 
 // Resolve type references, substituting TypeVars/TypeApps with their resolved DataTypes
-static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
+static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map, jl_deferred_typecache_t *dcache)
 {
     // TypeVar -> look up in substitution map
     if (jl_is_typevar(t)) {
@@ -2546,8 +2555,8 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
         jl_tvar_t *tv = (jl_tvar_t*)t;
         jl_value_t *lb = NULL, *ub = NULL;
         JL_GC_PUSH2(&lb, &ub);
-        lb = resolve_type_refs(tv->lb, subst_map);
-        ub = resolve_type_refs(tv->ub, subst_map);
+        lb = resolve_type_refs(tv->lb, subst_map, dcache);
+        ub = resolve_type_refs(tv->ub, subst_map, dcache);
         if (lb == tv->lb && ub == tv->ub) {
             JL_GC_POP();
             return t;
@@ -2579,7 +2588,7 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
         jl_value_t *cur = t;
         for (size_t i = n; i > 0; i--) {
             jl_typeapp_t *ta = (jl_typeapp_t*)cur;
-            resolved[i - 1] = resolve_type_refs(ta->param, subst_map);
+            resolved[i - 1] = resolve_type_refs(ta->param, subst_map, dcache);
             cur = ta->head;
         }
         jl_value_t *result;
@@ -2588,12 +2597,12 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
             result = jl_type_union(resolved, n);
         } else {
             // Resolve the head type
-            head = resolve_type_refs(head, subst_map);
+            head = resolve_type_refs(head, subst_map, dcache);
             // For parametric types, we need the wrapper (UnionAll), not the DataType
             if (jl_is_datatype(head) && ((jl_datatype_t*)head)->name->wrapper != NULL) {
                 head = ((jl_datatype_t*)head)->name->wrapper;
             }
-            result = jl_apply_type(head, resolved, n);
+            result = jl_apply_type_deferred(head, resolved, n, dcache);
         }
         // Cache the result
         ptrhash_put(subst_map, t, result);
@@ -2609,8 +2618,8 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
         JL_GC_PUSH2(&var, &body);
         // Resolve the var first so that occurrences of the old var in the
         // body get substituted with the rebuilt one.
-        var = resolve_type_refs((jl_value_t*)ua->var, subst_map);
-        body = resolve_type_refs(ua->body, subst_map);
+        var = resolve_type_refs((jl_value_t*)ua->var, subst_map, dcache);
+        body = resolve_type_refs(ua->body, subst_map, dcache);
         if (var == (jl_value_t*)ua->var && body == ua->body) {
             JL_GC_POP();
             return t;
@@ -2624,9 +2633,9 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
     // Regular Union -> resolve each member if needed
     if (jl_is_uniontype(t)) {
         jl_uniontype_t *u = (jl_uniontype_t*)t;
-        jl_value_t *a = resolve_type_refs(u->a, subst_map);
+        jl_value_t *a = resolve_type_refs(u->a, subst_map, dcache);
         JL_GC_PUSH1(&a);
-        jl_value_t *b = resolve_type_refs(u->b, subst_map);
+        jl_value_t *b = resolve_type_refs(u->b, subst_map, dcache);
         if (a == u->a && b == u->b) {
             JL_GC_POP();
             return t;
@@ -2640,10 +2649,10 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
     // Vararg -> resolve T and N if needed
     if (jl_is_vararg(t)) {
         jl_vararg_t *vm = (jl_vararg_t*)t;
-        jl_value_t *T = vm->T ? resolve_type_refs(vm->T, subst_map) : NULL;
+        jl_value_t *T = vm->T ? resolve_type_refs(vm->T, subst_map, dcache) : NULL;
         jl_value_t *N = NULL;
         JL_GC_PUSH2(&T, &N);
-        N = vm->N ? resolve_type_refs(vm->N, subst_map) : NULL;
+        N = vm->N ? resolve_type_refs(vm->N, subst_map, dcache) : NULL;
         if (T == vm->T && N == vm->N) {
             JL_GC_POP();
             return t;
@@ -2665,7 +2674,7 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
         JL_GC_PUSHARGS(resolved, n);
         for (size_t i = 0; i < n; i++) {
             jl_value_t *orig = jl_svecref(params, i);
-            resolved[i] = resolve_type_refs(orig, subst_map);
+            resolved[i] = resolve_type_refs(orig, subst_map, dcache);
             if (resolved[i] != orig)
                 changed = 1;
         }
@@ -2673,12 +2682,47 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
             JL_GC_POP();
             return t;
         }
-        jl_value_t *result = jl_apply_type((jl_value_t*)dt->name->wrapper, resolved, n);
+        jl_value_t *result = jl_apply_type_deferred((jl_value_t*)dt->name->wrapper, resolved, n, dcache);
         JL_GC_POP();
         return result;
     }
 
     return t;
+}
+
+// Whether `t` (transitively through parameters and bounds) references any
+// datatype in `set`. Used to drop deferred cache entries that reference a
+// discarded duplicate type after an equivalent redefinition.
+static int type_references_any(jl_value_t *t, htable_t *set) JL_NOTSAFEPOINT
+{
+    if (jl_is_datatype(t)) {
+        if (ptrhash_get(set, t) != HT_NOTFOUND)
+            return 1;
+        jl_svec_t *p = ((jl_datatype_t*)t)->parameters;
+        size_t np = jl_svec_len(p);
+        for (size_t i = 0; i < np; i++)
+            if (type_references_any(jl_svecref(p, i), set))
+                return 1;
+        return 0;
+    }
+    if (jl_is_uniontype(t))
+        return type_references_any(((jl_uniontype_t*)t)->a, set) ||
+               type_references_any(((jl_uniontype_t*)t)->b, set);
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        return type_references_any((jl_value_t*)ua->var, set) ||
+               type_references_any(ua->body, set);
+    }
+    if (jl_is_typevar(t)) {
+        jl_tvar_t *tv = (jl_tvar_t*)t;
+        return type_references_any(tv->lb, set) || type_references_any(tv->ub, set);
+    }
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        return (vm->T && type_references_any(vm->T, set)) ||
+               (vm->N && type_references_any(vm->N, set));
+    }
+    return 0;
 }
 
 // Helper to unwrap UnionAlls to get the underlying DataType
@@ -2761,14 +2805,24 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
     if (n == 0)
         return jl_f_tuple(NULL, NULL, 0);
 
-    // Allocate arrays for tracking
+    // Allocate arrays for tracking. results has one extra (rooted) slot that
+    // holds the deferred-typecache list array.
     jl_datatype_t **datatypes = (jl_datatype_t**)alloca(n * sizeof(jl_datatype_t*));
-    jl_value_t **results = (jl_value_t**)alloca(n * sizeof(jl_value_t*));
+    jl_value_t **results = (jl_value_t**)alloca((n + 1) * sizeof(jl_value_t*));
     memset(datatypes, 0, n * sizeof(jl_datatype_t*));
-    memset(results, 0, n * sizeof(jl_value_t*));
+    memset(results, 0, (n + 1) * sizeof(jl_value_t*));
 
     // GC roots for the datatypes we create
-    JL_GC_PUSHARGS(results, n);
+    JL_GC_PUSHARGS(results, n + 1);
+
+    // Types instantiated during resolution that reference the group are
+    // recorded here instead of the global type caches, and published in
+    // step 8 once the group is validated (see jl_deferred_typecache_t).
+    jl_deferred_typecache_t dcache;
+    results[n] = (jl_value_t*)jl_alloc_vec_any(0);
+    dcache.list = (jl_array_t*)results[n];
+    htable_new(&dcache.set, 0);
+    htable_new(&dcache.group, n);
 
     htable_t subst_map;
     htable_new(&subst_map, n);
@@ -2807,6 +2861,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
 
             // Build substitution map: TypeVar -> datatype
             ptrhash_put(&subst_map, tv, datatypes[i]);
+            ptrhash_put(&dcache.group, datatypes[i], datatypes[i]);
             JL_GC_POP();
         }
 
@@ -2853,6 +2908,25 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             }
         }
 
+        // Step 2.5: Precompute hash values BEFORE resolving supertypes and
+        // field types, so that types instantiated during resolution (which
+        // may embed the group's types as parameters) compute their own hashes
+        // from the final values.
+        // Note: we do NOT set isconcretetype=0 here. At this point, dt->types
+        // is still NULL (set in step 4), so jl_has_fixed_layout returns false
+        // regardless, preventing premature layout computation. Keeping
+        // isconcretetype at its correct value ensures that the layout computed
+        // in step 5b gets the correct isbitstype flag. Types instantiated
+        // during resolution that reference the group are kept out of the
+        // global type caches (recorded in dcache) and are published in
+        // step 8, only once the group is validated.
+        for (size_t i = 0; i < n; i++) {
+            jl_datatype_t *dt = unwrap_to_datatype(results[i]);
+            JL_GC_PUSH1(&dt);
+            jl_precompute_memoized_dt(dt, 0);
+            JL_GC_POP();
+        }
+
         // Step 3: Resolve supertypes (after wrapper UnionAlls are set up)
         for (size_t i = 0; i < n; i++) {
             jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
@@ -2862,7 +2936,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                 const char *type_name = jl_symbol_name(tv->name);
                 jl_value_t *resolved_super = NULL;
                 JL_GC_PUSH3(&tv, &super, &resolved_super);
-                resolved_super = resolve_type_refs(super, &subst_map);
+                resolved_super = resolve_type_refs(super, &subst_map, &dcache);
                 // Check self-subtyping before jl_check_valid_supertype, which
                 // calls jl_subtype and would crash on types with super == NULL.
                 if (jl_is_datatype(resolved_super) &&
@@ -2879,20 +2953,6 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
         // types within the group can never be valid supertypes of each other.
         // Self-subtyping is already caught by the check above.
 
-        // Step 3.5: Precompute hash values BEFORE resolving field types
-        // Note: we do NOT set isconcretetype=0 here. At this point, dt->types
-        // is still NULL (set in step 4), so jl_has_fixed_layout returns false
-        // regardless, preventing premature layout computation. Keeping
-        // isconcretetype at its correct value ensures that the layout computed
-        // in step 5b gets the correct isbitstype flag, and that Tuple types
-        // created during step 4's field type resolution are properly cacheable.
-        for (size_t i = 0; i < n; i++) {
-            jl_datatype_t *dt = unwrap_to_datatype(results[i]);
-            JL_GC_PUSH1(&dt);
-            jl_precompute_memoized_dt(dt, 0);
-            JL_GC_POP();
-        }
-
         // Step 4: Resolve field types
         for (size_t i = 0; i < n; i++) {
             jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
@@ -2903,7 +2963,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             ftypes = jl_alloc_svec(nf);
             for (size_t j = 0; j < nf; j++) {
                 jl_value_t *ft = jl_svecref(is_types, j);
-                jl_value_t *resolved = resolve_type_refs(ft, &subst_map);
+                jl_value_t *resolved = resolve_type_refs(ft, &subst_map, &dcache);
                 jl_svecset(ftypes, j, resolved);
             }
             jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
@@ -2915,6 +2975,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
     }
     JL_CATCH {
         htable_free(&subst_map);
+        htable_free(&dcache.set);
+        htable_free(&dcache.group);
         JL_GC_POP();
         jl_rethrow();
     } }
@@ -3004,7 +3066,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
             JL_GC_PUSH1(&dt);
             JL_TRY {
-                jl_reinstantiate_inner_types(dt);
+                jl_reinstantiate_inner_types(dt, &dcache);
             }
             JL_CATCH {
                 dt->name->partial = NULL;
@@ -3015,6 +3077,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
         }
     }
     JL_CATCH {
+        htable_free(&dcache.set);
+        htable_free(&dcache.group);
         JL_GC_POP();
         jl_rethrow();
     } }
@@ -3075,6 +3139,34 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                 results[i] = old;
         }
     }
+
+    // Step 8: Publish the deferred types to the global type caches. Types
+    // that reference the group were kept out of the global caches while the
+    // group was constructed; publish the ones referencing the validated
+    // types, and drop any that reference a discarded duplicate (equivalent
+    // redefinition kept the old type), so no unpublished type ever leaks
+    // into the global caches.
+    {
+        htable_t discarded;
+        htable_new(&discarded, 0);
+        size_t ndiscarded = 0;
+        for (size_t i = 0; i < n; i++) {
+            jl_datatype_t *dt = unwrap_to_datatype(results[i]);
+            if (dt != datatypes[i]) {
+                ptrhash_put(&discarded, datatypes[i], datatypes[i]);
+                ndiscarded++;
+            }
+        }
+        size_t nlist = jl_array_nrows(dcache.list);
+        for (size_t j = 0; j < nlist; j++) {
+            jl_datatype_t *e = (jl_datatype_t*)jl_array_ptr_ref(dcache.list, j);
+            if (ndiscarded == 0 || !type_references_any((jl_value_t*)e, &discarded))
+                jl_cache_type_if_absent(e);
+        }
+        htable_free(&discarded);
+    }
+    htable_free(&dcache.set);
+    htable_free(&dcache.group);
 
     // Build result tuple
     jl_value_t *result = jl_f_tuple(NULL, results, n);

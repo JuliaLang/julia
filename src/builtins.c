@@ -2475,7 +2475,7 @@ JL_CALLABLE(jl_f__typebody)
     }
     {
         JL_TRY {
-            jl_reinstantiate_inner_types(dt);
+            jl_reinstantiate_inner_types(dt, NULL);
         }
         JL_CATCH {
             dt->name->partial = NULL;

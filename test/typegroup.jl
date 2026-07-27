@@ -915,4 +915,53 @@ using Test
         @test ftB == Pair{S, Vector{S}} where S<:TG_BoundBody
     end
 
+    @testset "type cache hygiene" begin
+        # Count global Tuple-cache entries whose parameters reference a type
+        # with the given name that is NOT the currently bound one (i.e.
+        # discarded duplicates from redefinition, or types from a failed
+        # definition). Field types in these tests keep the reference as a
+        # direct Tuple parameter, so a shallow scan suffices.
+        function stale_tuple_cache_refs(name::Symbol, keep = nothing)
+            stale = 0
+            for cache in (Tuple.name.cache, Tuple.name.linearcache)
+                for e in cache
+                    e isa DataType || continue
+                    for p in e.parameters
+                        if p isa DataType && p.name.name === name && p !== keep
+                            stale += 1
+                        end
+                    end
+                end
+            end
+            return stale
+        end
+
+        # Identical redefinition keeps the old type; the tuples instantiated
+        # while constructing the discarded duplicate must not remain in the
+        # global type cache.
+        for _ in 1:3
+            @eval struct TG_CacheRedef
+                t::Tuple{TG_CacheRedef, Int}
+                TG_CacheRedef(t) = new(t)
+            end
+        end
+        @test stale_tuple_cache_refs(:TG_CacheRedef, TG_CacheRedef) == 0
+        # the kept type's field tuple is published and usable
+        @test fieldtype(TG_CacheRedef, :t) === Tuple{TG_CacheRedef, Int}
+
+        # A failed group definition must not leave cache entries referencing
+        # the never-published types.
+        @test_throws Exception @eval typegroup
+            struct TG_CacheFail
+                t::Tuple{TG_CacheFail, Int}
+                TG_CacheFail(t) = new(t)
+            end
+            struct TG_CacheFailBad
+                x::1
+            end
+        end
+        @test !isdefined(@__MODULE__, :TG_CacheFail)
+        @test stale_tuple_cache_refs(:TG_CacheFail) == 0
+    end
+
 end
