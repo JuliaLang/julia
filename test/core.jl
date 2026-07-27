@@ -9241,3 +9241,24 @@ pinned_gci_62001(::Type{<:PinnedSA62001{<:PinnedPL62001}}, ::Type{<:Type{Val{S}}
 # a generated function's generator receives the representative value
 @generated pinned_gg_62001(::Type{<:Type{Val{S}}}) where {S} = QuoteNode(S)
 @test pinned_gg_62001(Type{Val{pinned_schema_62001}}) === pinned_schema_62001
+
+# issue #52533: an unrelated try/catch should not keep values rooted in its PhiC
+# slots for the remainder of the enclosing function
+mutable struct Issue52533 end
+@noinline function issue52533(freed::Ref{Bool}, throw_::Bool)
+    b = nothing
+    try
+        x = Issue52533()
+        finalizer(_ -> (freed[] = true), x)
+        b = x
+        throw_ && Base.inferencebarrier(throw)(ErrorException("52533"))
+        Base.inferencebarrier(identity)(nothing)
+    catch
+        b isa Issue52533 && Base.donotdelete(b)
+    end
+    b = nothing
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533(Ref(false), false)  # normal exit from the try region
+@test issue52533(Ref(false), true)   # exit through the catch block

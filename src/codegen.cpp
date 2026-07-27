@@ -6309,6 +6309,8 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
     return;
 }
 
+static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi) JL_CANSAFEPOINT;
+
 static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_value_t *r) JL_CANSAFEPOINT
 {
     assert(!ctx.ssavalue_assigned[ssaidx_0based]);
@@ -6323,6 +6325,9 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_valu
             it = ctx.phic_slots.emplace(ssaidx_0based, jl_varinfo_t(ctx.builder.getContext())).first;
         }
         slot = emit_varinfo(ctx, it->second, jl_symbol("phic"));
+        // `emit_varinfo` copied the contents somewhere rooted independently of the
+        // slot, and this is the only read of it, so the slot is now dead (#52533).
+        emit_phic_slot_clear(ctx, it->second);
     }
     else {
         slot = emit_expr(ctx, r, ssaidx_0based);
@@ -6443,6 +6448,44 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     // its memory location.
 }
 
+// Reset a PhiC slot to an undefined (but GC-safe) state. Only valid where the
+// PhiC node can no longer be dynamically observed.
+static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi) JL_CANSAFEPOINT
+{
+    if (vi.boxroot) {
+        // memory optimization: eagerly clear this gc-root now
+        ctx.builder.CreateAlignedStore(Constant::getNullValue(ctx.types().T_prjlvalue), vi.boxroot, Align(sizeof(void*)), true);
+    }
+    if (vi.pTIndex) {
+        // We don't care what the contents of the variable are, but it
+        // does need to satisfy the union invariants (i.e. inbounds
+        // tindex).
+        ctx.builder.CreateAlignedStore(
+            vi.boxroot ? ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER) :
+                         ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x01),
+            vi.pTIndex, Align(1), true);
+    }
+    else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
+        assert(vi.inline_roots || vi.value.ispointer());
+        if (vi.inline_roots) {
+            // memory optimization: make gc pointers re-initialized to NULL
+            AllocaInst *ssaroots = vi.inline_roots;
+            size_t nroots = vi.inline_roots_count;
+            auto T_prjlvalue = ssaroots->getAllocatedType();
+            if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
+                nroots *= AT->getNumElements();
+                T_prjlvalue = AT->getElementType();
+            }
+            assert(T_prjlvalue == ctx.types().T_prjlvalue);
+            Value *nullval = Constant::getNullValue(T_prjlvalue);
+            auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+            for (size_t i = 0; i < nroots; i++) {
+                stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), true));
+            }
+        }
+    }
+}
+
 static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val) JL_CANSAFEPOINT
 {
     auto it = ctx.phic_slots.find(phic);
@@ -6467,38 +6510,27 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val) J
             emit_varinfo_assign(ctx, vi, rval_info, NULL, true);
         }
     }
-    if (!val) {
-        if (vi.boxroot) {
-            // memory optimization: eagerly clear this gc-root now
-            ctx.builder.CreateAlignedStore(Constant::getNullValue(ctx.types().T_prjlvalue), vi.boxroot, Align(sizeof(void*)), true);
+    if (!val)
+        emit_phic_slot_clear(ctx, vi);
+}
+
+// Clear every PhiC slot of the catch block starting at statement `catch_dest`
+// (1-based). Safe once the handler is popped: a catch block is only reached from
+// its `EnterNode`, and slot2ssa re-initializes the slots at the top of every
+// enter block, so re-entering the region restores them.
+static void emit_phic_slots_clear_for_catch(jl_codectx_t &ctx, intptr_t catch_dest) JL_CANSAFEPOINT
+{
+    intptr_t nstmts = jl_array_nrows(ctx.code);
+    for (intptr_t i = catch_dest - 1; i < nstmts; i++) {
+        jl_value_t *stmt = jl_array_ptr_ref(ctx.code, i);
+        if (jl_is_phicnode(stmt)) {
+            auto it = ctx.phic_slots.find((int)i);
+            if (it != ctx.phic_slots.end())
+                emit_phic_slot_clear(ctx, it->second);
         }
-        if (vi.pTIndex) {
-            // We don't care what the contents of the variable are, but it
-            // does need to satisfy the union invariants (i.e. inbounds
-            // tindex).
-            ctx.builder.CreateAlignedStore(
-                vi.boxroot ? ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER) :
-                             ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x01),
-                vi.pTIndex, Align(1), true);
-        }
-        else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
-            assert(vi.inline_roots || vi.value.ispointer());
-            if (vi.inline_roots) {
-                // memory optimization: make gc pointers re-initialized to NULL
-                AllocaInst *ssaroots = vi.inline_roots;
-                size_t nroots = vi.inline_roots_count;
-                auto T_prjlvalue = ssaroots->getAllocatedType();
-                if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
-                    nroots *= AT->getNumElements();
-                    T_prjlvalue = AT->getElementType();
-                }
-                assert(T_prjlvalue == ctx.types().T_prjlvalue);
-                Value *nullval = Constant::getNullValue(T_prjlvalue);
-                auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-                for (size_t i = 0; i < nroots; i++) {
-                    stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), true));
-                }
-            }
+        else if (stmt != jl_nothing && !jl_is_phinode(stmt)) {
+            // end of the phi block at the top of the catch block
+            break;
         }
     }
 }
@@ -6579,6 +6611,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     else if (head == jl_leave_sym) {
         Value *scope_to_restore = nullptr, *token = nullptr;
         SmallVector<AllocaInst*> handler_to_end;
+        SmallVector<intptr_t> catch_dests_to_clear;
         for (size_t i = 0; i < jl_expr_nargs(ex); ++i) {
             jl_value_t *arg = args[i];
             if (arg == jl_nothing)
@@ -6603,16 +6636,22 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
                 std::tie(token, scope_to_restore) = ctx.scope_restore[enter_idx];
                 ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token});
             }
-            if (jl_enternode_catch_dest(enter_stmt)) {
+            if (intptr_t catch_dest = jl_enternode_catch_dest(enter_stmt)) {
                 handler_to_end.push_back(ctx.eh_buffers[enter_stmt]);
                 // We're not actually setting up the exception frames for these, so
                 // we don't need to exit them.
                 scope_to_restore = nullptr; // restored by exception handler
+                catch_dests_to_clear.push_back(catch_dest);
             }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), handler_to_end.size())});
         for (AllocaInst *handler : handler_to_end) {
             ctx.builder.CreateLifetimeEnd(handler);
+        }
+        // Deferred until after the pop: until then an asynchronous exception could
+        // still reach the catch block and observe the cleared slots.
+        for (intptr_t catch_dest : catch_dests_to_clear) {
+            emit_phic_slots_clear_for_catch(ctx, catch_dest);
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
