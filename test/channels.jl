@@ -728,10 +728,13 @@ end
     @test fetch(schedule(t1)) === ()
 
     # Test that _task validates argument types
-    t1 = _task(f1, 0, "invalid")
-    schedule(t1)
-    @test_throws TaskFailedException fetch(t1)
     @test_throws TypeError Core._task(f1, "invalid_size")
     @test_throws TypeError Core._task(f1, "invalid_size", m)
     @test_throws ArgumentError Core._task(f1, 0, m, 1)
+    @test_throws TypeError Core._task(f1, 0, "invalid")
+    @test_throws TypeError Core._task(f1, 0, Int)
+    @test_throws TypeError Core._task(f1, 0, nothing)
+    mi = only(Base.specializations(which(f1, ())))
+    @test mi isa Core.MethodInstance
+    @test_throws TypeError Core._task(f1, 0, mi)
 end

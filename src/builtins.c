@@ -2390,8 +2390,12 @@ JL_CALLABLE(jl_f__task)
     JL_TYPECHK(_task, long, args[1]);
     size_t ssize = jl_unbox_long(args[1]);
     jl_value_t *invoke_arg = NULL;
-    if (nargs >= 3)
+    if (nargs >= 3) {
         invoke_arg = args[2];
+        if (!jl_is_method(invoke_arg) && !jl_is_code_instance(invoke_arg) &&
+            !jl_is_tuple_type(jl_unwrap_unionall(invoke_arg)))
+            jl_type_error("_task", (jl_value_t*)jl_anytuple_type_type, invoke_arg);
+    }
     jl_task_t *task = jl_new_task(start, jl_nothing, ssize);
     task->invoked = invoke_arg;
     return (jl_value_t*)task;
