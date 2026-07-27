@@ -2115,8 +2115,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
-static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active, bool &explicit_override) {
-    explicit_override = false;
+static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
@@ -2144,7 +2143,9 @@ static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserve
         threads = max_threads;
     }
 
-    // environment variable override
+    // environment variable override.
+    // this controls how many threads we request from the jobserver (if it is enabled)
+    // but the question of whether to enable it or not is decided upstream
     const char *env_threads = getenv("JULIA_IMAGE_THREADS");
     bool env_threads_set = false;
     if (env_threads) {
@@ -2174,10 +2175,6 @@ static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserve
     }
 
     threads = std::max(threads, 1u);
-
-    // An explicit JULIA_IMAGE_THREADS request takes precedence over the
-    // jobserver: honor the user's fixed count rather than rationing tokens.
-    explicit_override = env_threads_set;
 
     return threads;
 }
@@ -2370,9 +2367,8 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                 << "    clones: " << module_info.clones << "\n"
                 << "    weight: " << module_info.weight << "\n"
             );
-            bool explicit_threads = false;
-            threads = compute_image_thread_count(module_info, jobserver.active(), explicit_threads);
-            if (jobserver.active() && !explicit_threads && threads > 1) {
+            threads = compute_image_thread_count(module_info, jobserver.active());
+            if (jobserver.active() && threads > 1) {
                 // `threads` is the partition count and concurrency ceiling;
                 // add_output rations the actual pool size from the shared
                 // token budget, growing it as sibling workers finish.
