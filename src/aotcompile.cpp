@@ -1132,8 +1132,10 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
     assert(gvars_gv);
     assert(fvars_idxs);
     assert(gvars_idxs);
-    // A partition (shard) can legitimately have zero fvars or gvars, in which
-    // case the initializer is a zeroinitializer rather than a ConstantArray.
+    // A module can legitimately have zero fvars or gvars, in which case the
+    // initializer of the empty table is a zeroinitializer rather than a
+    // ConstantArray. Anything else that is not a ConstantArray would silently
+    // drop entries, so require the table to actually be empty.
     if (auto fvars_init = dyn_cast<ConstantArray>(fvars_gv->getInitializer())) {
         for (unsigned i = 0; i < fvars_init->getNumOperands(); ++i) {
             auto gv = cast<GlobalValue>(fvars_init->getOperand(i)->stripPointerCasts());
@@ -1143,6 +1145,10 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
         }
         assert(fvars.size() == fvars_init->getNumOperands());
     }
+    else {
+        assert(cast<ArrayType>(fvars_gv->getValueType())->getNumElements() == 0 &&
+               "a non-empty jl_fvars must be a ConstantArray");
+    }
     if (auto gvars_init = dyn_cast<ConstantArray>(gvars_gv->getInitializer())) {
         for (unsigned i = 0; i < gvars_init->getNumOperands(); ++i) {
             auto gv = cast<GlobalValue>(gvars_init->getOperand(i)->stripPointerCasts());
@@ -1151,6 +1157,10 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
             gvars[gv] = i;
         }
         assert(gvars.size() == gvars_init->getNumOperands());
+    }
+    else {
+        assert(cast<ArrayType>(gvars_gv->getValueType())->getNumElements() == 0 &&
+               "a non-empty jl_gvars must be a ConstantArray");
     }
     fvars_gv->eraseFromParent();
     gvars_gv->eraseFromParent();
