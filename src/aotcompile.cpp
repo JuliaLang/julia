@@ -2002,6 +2002,9 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
 
     output_timer.startTimer();
     uint64_t image_wall_start = jl_hrtime();
+    // Widest the pool ever actually got, which under a jobserver can be well
+    // below `threads`; the occupancy report below is relative to this.
+    unsigned peak_threads = 0;
 
     // Compile the partitions with a pool of worker threads pulling from a
     // shared queue. The partition count fixes the shard layout; the pool size
@@ -2088,6 +2091,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
             initial_pool = 1 + held_tokens;
         }
         live_threads = initial_pool;
+        peak_threads = initial_pool;
         while (spawned < initial_pool)
             spawn_worker();
 
@@ -2105,6 +2109,8 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                     std::lock_guard<std::mutex> lock(pool_mutex);
                     held_tokens += got;
                     live_threads += got;
+                    if (live_threads > peak_threads)
+                        peak_threads = live_threads;
                 }
                 for (unsigned k = 0; k < got; k++)
                     spawn_worker();
@@ -2151,15 +2157,17 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         }
         dbgs() << "]\n";
         // Occupancy = avg shards busy over the codegen window (sum of shard wall
-        // time / overall wall); straggler = slowest shard vs mean. Low values mean
-        // the shard count outran useful parallelism, or the partition was imbalanced.
+        // time / overall wall), against the widest the pool actually got rather
+        // than the `threads` ceiling, which a jobserver may never let it reach.
+        // Straggler = slowest shard vs mean. Low values mean the shard count
+        // outran useful parallelism, or the partition was imbalanced.
         double wall_s = image_wall_ns / 1e9;
         double sum_s = shard_sum / 1e9;
         double mean_s = sum_s / shards;
         double max_s = shard_max / 1e9;
         dbgs() << formatv("Shard occupancy: {0:F1}/{1} threads busy (sum {2:F1}s / wall {3:F1}s); "
                           "straggler {4:F2}x (slowest {5:F2}s vs mean {6:F2}s)\n",
-                          wall_s > 0 ? sum_s / wall_s : 0.0, threads,
+                          wall_s > 0 ? sum_s / wall_s : 0.0, peak_threads,
                           sum_s, wall_s,
                           mean_s > 0 ? max_s / mean_s : 0.0, max_s, mean_s);
     }
