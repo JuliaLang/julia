@@ -989,7 +989,9 @@ public:
         note_materialize_phase("linkOutput");
         if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info)))
             return;
+        note_materialize_phase("jitlink-emit");
         OL.emit(std::move(R), std::move(*G), std::move(Obj));
+        note_materialize_phase("done");
     }
 
     StringRef getName() const override JL_NOTSAFEPOINT
@@ -2490,6 +2492,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             continue;
         }
         JL_GC_PROMISE_ROOTED(CI);
+        note_materialize_phase("linkOutput/call-targets");
         auto Dest = linkCallTarget(MR, CI, API, EquivMap);
         if (!Dest) {
             Lock.unlock();
@@ -2546,6 +2549,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     }
     cantFail(JD.define(orc::absoluteSymbols(std::move(GlobalSyms))));
 
+    note_materialize_phase("linkOutput/debuginfo");
     DebuginfoPlugin->notifyMaterializingWithInfo(MR, G, ObjBuf, std::move(Info));
 
     // Define the tojlinvoke trampolines collected by linkCallTarget only after
@@ -2555,6 +2559,8 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     auto Trampolines = std::move(PendingTrampolines);
     PendingTrampolines.clear();
     Lock.unlock();
+    if (!Trampolines.empty())
+        note_materialize_phase("linkOutput/define-trampolines");
     for (auto &MU : Trampolines) {
         if (auto Err = JD.define(MU)) {
 #ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
