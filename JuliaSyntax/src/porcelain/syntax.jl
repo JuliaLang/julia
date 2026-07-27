@@ -1,3 +1,5 @@
+# Data structures used by macro-expansion and lowering
+
 mutable struct ScopeLayer
     const mod::Module
     const escaped::Union{Nothing, ScopeLayer}
@@ -539,7 +541,7 @@ end
 Recursively copy AST `ex` into `ctx`.  Every node in `ex` should be copied at
 most once.
 
-TODO: Likely unecessary with immutable tree
+TODO: Likely unnecessary with immutable tree
 """
 function copy_ast(ex::SyntaxTree)
     _copy_ast(ex, Dict{SyntaxTree, SyntaxTree}())
