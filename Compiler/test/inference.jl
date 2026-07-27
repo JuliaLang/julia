@@ -7261,4 +7261,10 @@ end === String
     fetch(Threads.@spawn sin(i))
 end === Float64
 
+# Unknown splats must be handled conservatively, while a fixed invoke target remains precise.
+splatted_task_inference(xs::Tuple) = Core._task(xs...)
+@test Base.infer_return_type(splatted_task_inference, (Tuple,)) === Task
+splatted_task_invalid_size(rest::Tuple) = Core._task(identity, "invalid", rest...)
+@test Base.infer_return_type(splatted_task_invalid_size, (Tuple,)) === Union{}
+
 end # module inference

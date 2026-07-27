@@ -3481,19 +3481,24 @@ end
 
 function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo,
                                     vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    (; fargs, argtypes) = arginfo
+    argtypes = arginfo.argtypes
     la = length(argtypes)
-    𝕃ᵢ = typeinf_lattice(interp)
-    if !isempty(argtypes) && !isvarargtype(argtypes[end])
-        if !(3 <= la <= 4)
-            return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
-        end
-    elseif isempty(argtypes) || la > 5
+    isva = !isempty(argtypes) && isvarargtype(argtypes[end])
+    if isva
+        la > 5 && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+        size_arg = argtype_by_index(argtypes, 3)
+    elseif !(3 <= la <= 4)
         return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+    else
+        size_arg = argtypes[3]
     end
-    size_arg = argtypes[3]
     if !hasintersect(widenconst(size_arg), Int)
         return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+    end
+    if isva
+        # The vararg may supply any of the required arguments, so only retain the
+        # builtin's guaranteed return type.
+        return Future(CallMeta(Task, Any, Effects(), NoCallInfo()))
     end
     func_arg = argtypes[2]
 
