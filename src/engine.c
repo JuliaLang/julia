@@ -46,7 +46,7 @@ static reservation_info_t *get_reservation(jl_method_instance_t *mi, jl_value_t 
 // cycle detector only follows waits between engine participants, so a cycle
 // that runs through the JIT (a materialization waiting on inference that in
 // turn waits on that materialization) is invisible to it and shows up here.
-JL_DLLEXPORT void jl_engine_dump_state(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_engine_dump_state(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
 {
     if (uv_mutex_trylock(&engine_lock) != 0) {
         jl_safe_printf("engine: lock=HELD (waiters not readable)\n");
