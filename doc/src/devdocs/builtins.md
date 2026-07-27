@@ -84,7 +84,7 @@ Adding a new builtin function requires changes across multiple subsystems in Jul
 **File: `src/builtins.c`**
 ```c
 // Implement the C function
-JL_CALLABLE(jl__your_builtin)
+JL_CALLABLE(jl_f__your_builtin)
 {
     JL_NARGS(_your_builtin, 2, 3);
     JL_TYPECHK(_your_builtin, long, args[1]);
