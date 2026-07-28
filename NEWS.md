@@ -130,7 +130,9 @@ New library features
   returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
 * When the display height is too small to show any array entries, the `text/plain` array display
   (used e.g. by the REPL and when logging values with `@info` etc.) now shows as many entries as
-  fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
+  fit on a single line, truncated to the display width, instead of showing no data at all. For
+  vectors, the single-line form is used whenever it shows more entries than the vertical layout
+  would, so short-but-wide displays no longer show less data than taller-but-narrower ones ([#62543]).
 
 Standard library changes
 ------------------------

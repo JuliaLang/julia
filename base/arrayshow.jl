@@ -387,12 +387,29 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
         io = IOContext(io, :limit => false)
     end
 
-    if get(io, :limit, false)::Bool
-        # when there is no vertical room to show even one row of entries
-        # plus a vertical ellipsis, show as many entries as fit on a single
-        # line, truncated to the terminal width (#58323)
+    # the single-line form is only for a display of its own: nested inside
+    # another container's display (`print_matrix_row` tries this method first,
+    # and keeps its output when it has no line breaks) it would repeat the
+    # element's type on every row and overflow the width
+    if get(io, :limit, false)::Bool && !haskey(io, :SHOWN_SET)
+        # show as many entries as fit on a single line, truncated to the
+        # terminal width, when that displays more of the array than the
+        # vertical layout would (#58323)
         screenheight = displaysize(io)[1] - 4
-        if screenheight <= 0 || (screenheight == 1 && (ndims(X) > 2 || size(X, 1) > 1))
+        oneline = if screenheight <= 0
+            true
+        elseif X isa AbstractVector
+            # the vertical layout shows every entry when they fit, and
+            # otherwise screenheight-1 entries plus a ⋮ line; prefer it
+            # unless the single line would show strictly more
+            length(X) > screenheight &&
+                (screenheight == 1 || _oneline_element_count(io, X) > screenheight - 1)
+        else
+            # for matrices and higher, each vertical line packs a whole row
+            # of entries, so it is preferred whenever any row fits
+            screenheight == 1 && (ndims(X) > 2 || size(X, 1) > 1)
+        end
+        if oneline
             print(io, ' ')
             return _show_oneline_truncated(io, X)
         end
@@ -411,6 +428,41 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     # 4) show actual content
     recur_io = IOContext(io, :SHOWN_SET => X)
     print_array(recur_io, X)
+end
+
+# number of elements of the single-line form of `show(io, X)` that would be
+# fully shown within the width budget used by `_show_oneline_truncated`
+function _oneline_element_count(io::IO, X::AbstractVector)
+    budget = displaysize(io)[2] - textwidth(sprint(summary, X; context=io)) - 2
+    # `_show_oneline_truncated` prints at least 8 columns of the array, so on a
+    # display too narrow for that the line would overrun the width: leave those
+    # to the vertical layout
+    budget < 8 && return 0
+    ctx = IOContext(io, :typeinfo => eltype(X), :compact => true)
+    axs = axes1(X)
+    elided = length(X) > 20
+    inds = if elided
+        # the single-line form shows the first and last 10 elements
+        Iterators.flatten((range(first(axs), length=10), range(stop=last(axs), length=10)))
+    else
+        axs
+    end
+    used = 2 # opening bracket, plus the closing one or the truncation mark
+    n = 0
+    for i in inds
+        # the "  …  " elision `show_vector` puts between the leading and
+        # trailing halves widens the separator before the trailing ones
+        elided && n == 10 && (used += 3)
+        s = isassigned(X, i) ? sprint(show, X[i]; context=ctx, sizehint=16) : undef_ref_str
+        # an element whose `show` spans multiple lines ends the single line
+        # there, since that is where the truncation cuts it
+        '\n' in s && return n
+        used += textwidth(s)
+        used > budget && break
+        n += 1
+        used += 2 # ", " separator
+    end
+    return n
 end
 
 function _show_oneline_truncated(io::IO, X::AbstractArray)

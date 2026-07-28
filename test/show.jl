@@ -1833,10 +1833,60 @@ end
     @test arrstr(A, 5) == "2-element Vector{Int64}: [1, 2]"
     @test arrstr(A, 6) == "2-element Vector{Int64}:\n 1\n 2"
     push!(A, 3)
-    @test arrstr(A, 6) == "3-element Vector{Int64}:\n 1\n ⋮"
+    @test arrstr(A, 6) == "3-element Vector{Int64}: [1, 2, 3]"
+
+    # a single line is preferred whenever it shows more entries than the
+    # vertical layout would (#58323)
+    v = collect(Int64, 1:100)  # `Int64` explicitly, so the summary is the same on 32-bit
+    @test arrstr(v, 10) ==
+        "100-element Vector{Int64}: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10  …  91, 92, 93, 94, 9…"
+    # ...but not on displays too narrow to fit more entries than rows
+    @test sprint((io,A)->show(IOContext(io, :displaysize => (10, 40), :limit => true), "text/plain", A), v) ==
+        "100-element Vector{Int64}:\n   1\n   2\n   3\n   ⋮\n  99\n 100"
+    # a display wide enough for every entry the compact form shows, elision
+    # included, uses the line even at the standard height
+    @test sprint((io,A)->show(IOContext(io, :displaysize => (24, 120), :limit => true), "text/plain", A), v) ==
+        "100-element Vector{Int64}: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10  …  91, 92, 93, 94, 95, 96, 97, 98, 99, 100]"
+    # ...nor for entries too wide to fit more on a line than rows
+    @test arrstr(fill("abcdefghijklmnopqrstuvwxyz", 30), 6) ==
+        "30-element Vector{String}:\n \"abcdefghijklmnopqrstuvwxyz\"\n ⋮"
     # the summary already names the type, so the single-line form should
     # not repeat it as an array literal prefix (on any platform)
     @test arrstr(Int8[1, 2], 4) == "2-element Vector{Int8}: [1, 2]"
+
+    # nested inside another array's display the single-line form would repeat
+    # the element type on every row, so it is only used at the top level
+    @test arrstr([collect(Int64, 1:5) .+ i for i in 1:100], 7) ==
+        "100-element Vector{Vector{Int64}}:\n [2, 3, 4, 5, 6]\n ⋮\n [101, 102, 103, 104, 105]"
+
+    # a display too narrow for the single line's minimum width keeps the
+    # vertical layout rather than overrunning the width
+    @test sprint((io,A)->show(IOContext(io, :displaysize => (6, 34), :limit => true), "text/plain", A), v) ==
+        "100-element Vector{Int64}:\n 1\n ⋮"
+
+    @testset "elements with multi-line `show`" begin
+        struct MultiLine; n::Int; end
+        Base.show(io::IO, m::MultiLine) = print(io, "MultiLine(\n  n = ", m.n, "\n)")
+        struct CompactOneLine; n::Int; end
+        Base.show(io::IO, m::CompactOneLine) = get(io, :compact, false) ?
+            print(io, "CompactOneLine(", m.n, ")") : print(io, "CompactOneLine(\n  ", m.n, "\n)")
+
+        # the single line is truncated at the first line break, so such an
+        # element only counts towards it up to that point: here to nothing,
+        # leaving the vertical layout to win
+        @test arrstr(fill(MultiLine(1), 30), 6) ==
+            "30-element Vector{$MultiLine}:\n MultiLine(\n  n = 1\n)\n ⋮"
+        # elements before it still count, so a line showing more of them wins
+        @test arrstr(Any[1, 2, 3, MultiLine(4)], 6) == "4-element Vector{Any}: [1, 2, 3, MultiLine(…"
+        # an element that is only multi-line when not `:compact` does not
+        # break the single line, which shows it compactly (the width has to
+        # allow for the summary, whose length depends on the current module)
+        C = fill(CompactOneLine(1), 30)
+        Csummary = sprint(summary, C)
+        cols = textwidth(Csummary) + 44
+        @test startswith(sprint((io,A)->show(IOContext(io, :displaysize => (6, cols), :limit => true), "text/plain", A), C),
+                         "$Csummary: [CompactOneLine(1), CompactOneLine(1)")
+    end
 
     @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"
     @test arrstr(zeros(4, 30), 4) == "4×30 Matrix{Float64}: [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;…"
