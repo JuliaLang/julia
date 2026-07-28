@@ -284,8 +284,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"foreignglobal" fname] -> vst1(vcx, fname) # TODO: could be stricter
     [K"cfunction" [K"Value"] f rt at [K"inert" [K"Identifier"]]] ->
         vst1(vcx, f) & vst1(vcx, rt) & vst1(vcx, at)
-    [K"cconv" tup nreq] -> (get(tup, :value, nothing) isa Tuple &&
-        get(nreq, :value, nothing) isa Int) ? pass() :
+    [K"cconv" tup nreq] -> (tup.value isa Tuple && nreq.value isa Int) ? pass() :
         @fail(st, "expected (cconv convention_tuple n_req_args)")
     [K"tryfinally" t f] -> vst1(vcx, t) & vst1(vcx, f)
     [K"tryfinally" t f scope] -> vst1(vcx, t) & vst1(vcx, f) & vst1(vcx, scope)
@@ -718,7 +717,7 @@ vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
 end
 
 strip_arg_meta(st) = @stm st begin
-    [K"meta" s arg] -> let meta_s = get(s, :value, "")
+    [K"meta" s arg] -> let meta_s = est_syntax_name(s, "")
         meta_s isa String || return st
         kind(arg) === K"meta" ? st :
             !(meta_s in ("specialize", "nospecialize")) ? st : arg
@@ -918,19 +917,16 @@ end
 #
 # Note simple `op` and `.op` are calls to (dotted) identifiers, so this special
 # handling isn't necessary.
-vst1_dotted_or_op_assign(vcx, st) = let op_s = get(st, :value, "")
+vst1_dotted_or_op_assign(vcx, st) = let op_s = est_syntax_name(st, "")
     @stm st begin
         [K".=" l r] -> vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
-        (_, when=(op_s isa String)) -> @stm st begin
-            (_, when=(!Base.isoperator(op_s))) -> unknown()
-            (_, when=(isempty(op_s) || op_s[end] !== '=')) ->
-                unknown()
-            ([K"unknown_head" l r], when=((op_s::String)[1] === '.')) ->
-                vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
-            ([K"unknown_head" l r]) ->
-                vst1_assign_lhs(vcx, l) & vst1(vcx, r)
-            _ -> unknown()
-        end
+        (_, when=(!Base.isoperator(op_s))) -> unknown()
+        (_, when=(isempty(op_s) || op_s[end] !== '=')) ->
+            unknown()
+        ([K"unknown_head" l r], when=((op_s::String)[1] === '.')) ->
+            vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
+        ([K"unknown_head" l r]) ->
+            vst1_assign_lhs(vcx, l) & vst1(vcx, r)
         _ -> unknown()
     end
 end
@@ -1143,9 +1139,7 @@ end
 
 function _assert_syntaxtree_node(st::SyntaxTree)
     vr = pass()
-    for a in (:kind, :source) # TODO: context
-        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
-    end
+    # TODO: assert st has context (parser doesn't add any)
     if is_leaf(st)
         if kind(st) === K"globalref" && st.mod === nothing
             vr &= @fail(st, "leaf globalref requires module in .mod")
@@ -1190,7 +1184,7 @@ function _assert_syntaxtree_node(st::SyntaxTree)
             vr &= @fail(st, "Found leaf-only kind with children")
         end
         if kind(st) === K"unknown_head"
-            if !(get(st, :value, nothing) isa String)
+            if !(st.value isa String)
                 vr &= @fail(st, string("needs value ::String"))
             end
         end
@@ -1211,7 +1205,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree}, vr)
     # to avoid exponential repeated lookups, and figure out how these edges may
     # form cycles with child edges)
     st.source === st && (vr &= @fail(st, ".source equal to self ID"))
-    sc = get(st, :context, nothing)
+    sc = st.context
     sc isa SyntaxContext &&
         sc.unexpanded === st && (vr &= @fail(st, "unexpanded equal to self"))
 
@@ -1251,7 +1245,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     latestworld latestworld_if_toplevel symbolicgoto oldsymbolicgoto symboliclabel TOMBSTONE
     """ ? pass() : @fail(st, "unrecognized leaf kind $(kind(st))")
 
-    [K"call" [K"static_eval" cg] xs...] -> get(cg, :value, nothing) === "cglobal" ?
+    [K"call" [K"static_eval" cg] xs...] -> est_syntax_name(cg, "") === "cglobal" ?
         all(vst2, vcx, xs) : @fail(st, "expected (call (static_eval cglobal) _...)")
     [K"call" xs...] -> all(vst2, vcx, xs)
     [K"block" xs...] -> all(vst2, vcx, xs)

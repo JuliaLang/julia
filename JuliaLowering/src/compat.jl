@@ -25,6 +25,10 @@ function is_eventually_call(e)
         e.head in (:escape, :where, :(::)) && is_eventually_call(e.args[1]))
 end
 
+function est_syntax_name(st, default)
+    kind(st) in KSet"Identifier unknown_head" ? st.value::String : default
+end
+
 function expr_to_est(@nospecialize(e), src::SourceAttrType=LineNumberNode(0, :none))
     _expr_to_est(e, src)[1]
 end
@@ -129,7 +133,7 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
     if kind(st) === K"Identifier"
         # @jl_assert scope layer is base
         n = Symbol(syntax_name(st))
-        mod = get(st, :mod, nothing)
+        mod = st.mod
         !isnothing(mod) ? GlobalRef(mod, n) : n
     elseif is_leaf(st) && is_expr_value(st)
         v = st.value
@@ -286,7 +290,7 @@ function _expand_literal_pow(st::SyntaxTree)
     (k in KSet"call dotcall" &&
         numchildren(st) === 3 &&
         kind(st[1]) === K"Identifier" && syntax_name(st[1]) === "^" &&
-        get(st[3], :value, nothing) isa Integer) || return st
+        st[3].value isa Integer) || return st
     @ast _ st [k
         "literal_pow"::K"top"
         st[1] st[2]
@@ -415,7 +419,7 @@ _mangle_writeonly_argt(st, seen) = @stm st begin
 end
 function _mangle_writeonly(st, seen)
     k = kind(st)
-    if k === K"Identifier" && !hasattr(st, :mod) && is_flisp_compat(st)
+    if k === K"Identifier" && isnothing(st.mod) && is_flisp_compat(st)
         n = syntax_name(st)
         !(n in seen) ? st : @ast _ st (string(n, "FIXME#60626")::K"Identifier")
     elseif is_leaf(st) || is_quoted(st) || k === K"->" || k === K"function"
@@ -489,7 +493,7 @@ function est_to_dst(st::SyntaxTree)
             @ast _ st [K"call" "'"::K"Identifier"(st) rec(x)]
         [K"." f [K"tuple" args...]] -> _expand_literal_pow(
             @ast _ st [K"dotcall" rec(f) _dst_sink_parameters(args)...])
-        ([K"inert" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
+        ([K"inert" [K"Identifier"]], when=isnothing(st[1].mod)) ->
             @ast _ st st[1]=>K"Symbol"
         [K"syntaxinert" _] -> st
         [K"inert" _] -> st
@@ -622,10 +626,10 @@ function est_to_dst(st::SyntaxTree)
         #-----------------------------------------------------------------------
         # Heads not emitted from parsing
         ([K"meta" s vs...],
-         when=(meta=get(s, :value, ""); meta in ("nospecialize", "specialize"))) ->
+         when=(meta=est_syntax_name(s, ""); meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
              newleaf(st, K"nothing")
-        ([K"meta" s gen], when=get(s, :value, "") === "generated") ->
+        ([K"meta" s gen], when=est_syntax_name(s, "") === "generated") ->
             @ast _ st [K"meta" @mknode(s; kind=K"Symbol") rec(gen)]
         [K"meta" syms...] ->
             @ast _ st [K"meta" mapsyntax(

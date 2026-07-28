@@ -2259,7 +2259,7 @@ function expand_decls(ctx, ex)
             [K"function" x _] -> x
         end
         # type decls are handled elsewhere unless simple
-        make_lhs_decls(ctx, stmts, declkind, get(ex, :meta, nothing), lhs, simple)
+        make_lhs_decls(ctx, stmts, declkind, ex.meta, lhs, simple)
         simple || push!(stmts, expand_forms_2(ctx, c))
     end
     newnode(ex, K"block", stmts)
@@ -2297,7 +2297,7 @@ function expand_const_decl(ctx, ex)
             @jl_assert kind(x) === K"=" ex
             (lhs, relayered) = relayer_global_if_unhygienic(ctx, x[1])
             make_lhs_decls(
-                ctx, decls, K"global", get(ex[1], :meta, nothing), lhs, false)
+                ctx, decls, K"global", ex[1].meta, lhs, false)
             for x in relayered
                 push!(decls, @ast ctx x [K"relayered_global" x])
             end

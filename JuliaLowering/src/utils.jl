@@ -29,7 +29,8 @@ function _value_string(ex)
               (ex.value isa SourceRef ?
               "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
               ex.value isa SyntaxContext ? "SyntaxContext(#=omitted=#)" : repr(ex.value)) :
-            hasattr(ex, :value) ? repr(ex.value) : "::K\"$(untokenize(k))\""
+              ex.value !== nothing ? repr(ex.value) : "::K\"$(untokenize(k))\""
+
     if kind(ex) in KSet"BindingId slot SSAValue static_parameter label"
         idstr = subscript_str(syntax_id(ex))
         str = "$(str)$idstr"
@@ -61,11 +62,11 @@ function _show_syntax_tree(io, ex, indent, show_kinds, @nospecialize(parent_sc))
     std_attrs = Set([:value,:kind,:syntax_flags,:source,:context])
     attrstr = join([attrsummary(n, getproperty(ex, n))
                     for n in fieldnames(typeof(ex)) if n ∉ std_attrs &&
-                        hasattr(ex, n)], ",")
+                        getproperty(ex, n) !== nothing], ",")
     print(io, rpad(treestr, 60))
     print(io, " | ")
-    sc = get(ex, :context, nothing)
-    if hasattr(ex, :context) && sc !== parent_sc
+    sc = ex.context
+    if sc isa SyntaxContext && sc !== parent_sc
         print(io, sc)
         print(io, ",")
     end
@@ -160,7 +161,7 @@ end
 
 function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, ex)
-    if hasattr(ex, :jl_source)
+    if ex.source !== nothing
         printstyled(io, " @$(ex.jl_source)", color=:light_black)
     end
     prov = provenance(ex)

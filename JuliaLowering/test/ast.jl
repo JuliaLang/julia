@@ -1,5 +1,4 @@
 let node = JS.newleaf(LineNumberNode(1), K"Value", nothing)
-    @test JS.hasattr(node, :value)
     @test node.value === nothing
 end
 

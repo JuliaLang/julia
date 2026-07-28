@@ -40,7 +40,7 @@ end
 # escaped :toplevel st, then eval st in mod B, but flisp does the same thing by
 # spamming globalrefs to mod A throughout st).
 function rebase_layers(st, mod::Module, ver::VersionNumber)
-    out = if !hasattr(st, :context)
+    out = if st.context === nothing
         # assert zero context
         sc = SyntaxContext(mod, ver)
         fill_context!(st, sc)

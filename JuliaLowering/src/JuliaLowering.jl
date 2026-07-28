@@ -14,11 +14,10 @@ end
 
 using .JuliaSyntax: @KSet_str, @stm, Kind, SourceAttrType, SourceRef,
     SyntaxList, SyntaxTree, byte_range, children, filename, first_byte,
-    flattened_provenance, hasattr, head, highlight,
+    flattened_provenance, head, highlight,
     is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, newleaf,
     newnode, node_string, numchildren, provenance, setmeta, setmeta!, getmeta,
-    CompileHints,
-    source_location, sourcefile, sourceref, mapindex, mktree,
+    CompileHints, source_location, sourcefile, sourceref, mapindex, mktree,
     ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
     syntax_module, is_flisp_compat, adopt_scope, remove_context, fill_context!,
     fill_context, JL_NEW_SYNTAX_VERSION, JL_OLD_SYNTAX_VERSION

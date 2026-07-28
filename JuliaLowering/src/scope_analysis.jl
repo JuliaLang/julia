@@ -49,20 +49,22 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
         lambda_id = id
         is_permeable = k == K"toplevel_lambda"
         is_lifted = false
+        lambda_bindings = Dict{IdTag, Bool}()
     else
         @jl_assert k in KSet"lambda method_defs scope_block" ex
         parent = ctx.scopes[parent_id]
         lambda_id = k === K"lambda" ? id : parent.lambda_id
         is_permeable = (k === K"scope_block" &&
             kind(ex[1]) === K"neutral_scope" &&
-            parent_id !== 0 && parent.is_permeable)
+            parent_id != 0 && parent.is_permeable)
         is_lifted = k === K"method_defs" ||
             (k !== K"lambda" && parent.is_lifted)
+        lambda_bindings = k === K"lambda" ? Dict{IdTag, Bool}() : nothing
     end
     s = ScopeInfo(
         id, parent_id, lambda_id, ex, is_permeable, is_lifted,
-        Dict{IdTag, SyntaxTree}(), Dict{NameKey, SyntaxTree}(), Dict{NameKey,IdTag}(),
-        (parent_id == 0 || k === K"lambda") ? Dict{IdTag,Bool}() : nothing)
+        Dict{IdTag, SyntaxTree}(), Dict{NameKey, SyntaxTree}(),
+        Dict{NameKey,IdTag}(), lambda_bindings)
     push!(ctx.scopes, s)
     return s
 end
@@ -161,7 +163,7 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol;
         declaration_scope = top_scope(ctx)
     else
         declaration_scope = scope
-        mod = hasattr(ex, :mod) ?
+        mod = ex.mod isa Module ?
             throw(LoweringError(ex, "cannot use GlobalRef as local identifier")) : nothing
     end
     is_internal = (ex.context::SyntaxContext).internal ||
@@ -242,8 +244,8 @@ function _typevar_refs!(out, ctx, ex)
 end
 
 function _record_layer!(ctx, ex)
-    !hasattr(ex, :context) && return
-    sl = (ex.context::SyntaxContext).layer
+    ex.context isa SyntaxContext || return
+    sl = ex.context.layer
     get!(ctx.layer_ids, sl, length(ctx.layer_ids)+1)
 end
 
@@ -265,7 +267,7 @@ function _find_scope_decls!(ctx, scope, ex)
                 ex, "allow local BindingId as function name?")
             get!(scope.binding_assignments, b.id, ex[1])
         elseif k1 === K"Identifier"
-            hasattr(ex[1], :mod) &&
+            ex[1].mod isa Module &&
                 explicit_declare_in_scope!(ctx, scope, ex[1], :global)
             get!(scope.assignments, NameKey(ex[1]), ex[1])
             get!(ctx.layer_ids, (ex[1].context::SyntaxContext).layer,
@@ -285,7 +287,7 @@ function _find_scope_decls!(ctx, scope, ex)
             b = get_binding(ctx, ex[1])
             get!(scope.binding_assignments, b.id, ex[1])
         elseif k1 === K"Identifier"
-            !hasattr(ex[1], :mod) &&
+            ex[1].mod === nothing &&
                 get!(scope.assignments, NameKey(ex[1]), ex[1])
         elseif k1 === K"Placeholder"
             # nothing to declare
@@ -414,7 +416,7 @@ function _resolve_scopes(ctx::ScopeResolutionContext, ex::SyntaxTree,
     @jl_assert scope isa ScopeInfo || k === K"lambda" ||
         k === K"toplevel_lambda" || k === K"generated_lambda" ex
     if k == K"Identifier"
-        if (mod = get(ex, :mod, nothing); !isnothing(mod))
+        if (mod = ex.mod; !isnothing(mod))
             return new_global_binding(ctx, ex, syntax_name(ex), mod)
         end
         b = resolve_name(ctx, ex)

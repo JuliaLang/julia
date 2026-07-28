@@ -4,7 +4,6 @@ mutable struct ScopeLayer
     const mod::Module
     const escaped::Union{Nothing, ScopeLayer}
 end
-Base.var"=="(si1::ScopeLayer, si2::ScopeLayer) = si1 === si2
 
 """
 Each node has a SyntaxContext describing its macro expansion and syntax version.
@@ -53,8 +52,6 @@ function SyntaxTree(kind::Kind, children, @nospecialize(value), source, context)
                nothing, nothing, nothing, UInt16(0))
 end
 
-Base.var"=="(st1::SyntaxTree, st2::SyntaxTree) = st1 === st2
-
 const SourceAttrType = Union{SyntaxTree,SourceRef,LineNumberNode}
 
 function setchildren!(id::SyntaxTree, children::AbstractVector{SyntaxTree})
@@ -62,7 +59,7 @@ function setchildren!(id::SyntaxTree, children::AbstractVector{SyntaxTree})
 end
 
 # fallback printing.  TODO: vulnerable to invalidations
-function node_string(ex::SyntaxTree, depth=0)
+function node_string(ex::SyntaxTree, depth=2)
     out = "(kind="*string(kind(ex))
     for n in sort!(collect(fieldnames(typeof(ex))))
         val = getproperty(ex, n)
@@ -91,18 +88,6 @@ function node_string(ex::SyntaxTree, depth=0)
     return out
 end
 
-function Base.get(ex::SyntaxTree, name::Symbol, default)
-    !hasattr(ex, name) && return default
-    name === :kind  && return getfield(ex, :kind)
-    name === :source  && return getfield(ex, :source)
-    name === :context  && return getfield(ex, :context)
-    name === :value && let val = getfield(ex, :value)
-        k = getfield(ex, :kind)
-        (!isnothing(val) || k === K"Value") && return val
-    end
-    getfield(ex, name)
-end
-
 function Base.getindex(ex::SyntaxTree, i::Integer)
     ex.children[i]
 end
@@ -119,28 +104,13 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
         return false
     end
     if is_leaf(ex1)
-        return hasattr(ex1, :value) == hasattr(ex2, :value) &&
-               get(ex1, :value, nothing) == get(ex2, :value, nothing)
+        return ex1.value == ex2.value
     else
         if numchildren(ex1) != numchildren(ex2)
             return false
         end
         return all(c1 ≈ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
     end
-end
-
-function hasattr(ex::SyntaxTree, name::Symbol)
-    name === :kind && return true
-    # children is not an attr
-    name === :value && return getfield(ex, :value) !== nothing ||
-        (getfield(ex, :kind) === K"Value")
-    name === :source && return true
-    name === :context && return getfield(ex, :context) !== nothing
-    name === :jl_source && return getfield(ex, :jl_source) !== nothing
-    name === :meta && return getfield(ex, :meta) !== nothing
-    name === :mod && return getfield(ex, :mod) !== nothing
-    name === :syntax_flags && return true
-    return false
 end
 
 function _setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
@@ -152,7 +122,7 @@ _setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
 
 const CompileHints = Base.ImmutableDict{Symbol,Any}
 function setmeta!(st::SyntaxTree, key::Symbol, @nospecialize(val))
-    meta = let m = get(st, :meta, nothing)
+    meta = let m = st.meta
         isnothing(m) ? CompileHints(key, val) : CompileHints(m, key, val)
     end
     setfield!(st, :meta, meta)
@@ -162,7 +132,7 @@ function setmeta(st::SyntaxTree, key::Symbol, @nospecialize(val))
     setmeta!(is_leaf(st) ? mkleaf(st) : mknode(st, children(st)), key, val)
 end
 function getmeta(st, name, @nospecialize(default))
-    meta = get(st, :meta, nothing)
+    meta = st.meta
     isnothing(meta) ? default : get(meta, name, default)
 end
 
@@ -229,7 +199,7 @@ end
 
 syntax_module(sc::SyntaxContext) = sc.layer.mod
 function syntax_module(st::SyntaxTree)
-    st_mod = get(st, :mod, nothing)
+    st_mod = st.mod
     st_mod === nothing || return st_mod::Module
     syntax_module(st.context::SyntaxContext)
 end
@@ -240,7 +210,7 @@ is_flisp_compat(st::SyntaxTree) = is_flisp_compat(st.context)
 # Unconditional; tramples existing scope, and includes quoted forms.  Only
 # changes layer where it needs changing.
 function adopt_scope(sc_in::SyntaxContext, st::SyntaxTree, scmap)
-    st_sc = get(st, :context, nothing)
+    st_sc = st.context
     sc2 = st_sc isa SyntaxContext ? get(scmap, st_sc, nothing) : nothing
     if isnothing(sc2) && st_sc isa SyntaxContext
         sc2 = scmap[st_sc] = st_sc.layer === sc_in.layer ? st_sc :
@@ -273,7 +243,7 @@ end
 fill_context(st, sc) = fill_context!(mktree(st), sc)
 
 function remove_context!(st::SyntaxTree)
-    sc = get(st, :context, nothing)
+    sc = st.context
     isnothing(sc) || _setattr!(st, :context, nothing)
     for c in children(st)
         remove_context!(c)
@@ -393,7 +363,7 @@ end
 
 "The last macro expansion `st` was involved in, or nothing"
 function macro_prov(st::SyntaxTree)
-    sc = get(st, :context, nothing)
+    sc = st.context
     isnothing(sc) && return nothing
     msrc = (sc::SyntaxContext).unexpanded
     isnothing(msrc) ? nothing : msrc::typeof(st)
@@ -560,7 +530,7 @@ function _copy_ast(id1::SyntaxTree, seen)
         end
         setchildren!(id2, cs)
     end
-    src1 = get(id1, :source, nothing)
+    src1 = id1.source
     if src1 isa SyntaxTree
         src2 =  _copy_ast(src1, seen)
         _setattr!(id2, :source, src2)
@@ -1009,7 +979,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             symleaf(name)
         elseif k === K"VERSION"
             valleaf(version_to_expr(st))
-        elseif (v = get(st, :value, nothing); v isa Union{Int128,UInt128,BigInt})
+        elseif (v = st.value; v isa Union{Int128,UInt128,BigInt})
             # syntax TODO: likely unnecessary; this is just to match RGN->Expr,
             # which added this to match flisp parsing text->Expr.
             macname = v isa Int128 ? "@int128_str" :
@@ -1020,7 +990,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             newnode(st, K"macrocall", ret_cids)
         elseif is_error(k)
             mkleaf(st)
-        elseif hasattr(st, :value) && !(k in KSet"Identifier Value" || is_literal(k))
+        elseif st.value isa String && !(k in KSet"Identifier Value" || is_literal(k))
             # certain kinds should really be identifiers.  known: &, |, :
             symleaf(syntax_name(st))
         else

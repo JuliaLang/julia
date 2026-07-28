@@ -44,7 +44,7 @@ function expand_quote(ctx, st)
         kind(st[1]) === K"..." && throw(LoweringError(
             st, raw"unexpected `...` in bare `$` expression"))
         @ast ctx st st[1]
-    elseif kind(st) === K"Identifier" && !hasattr(st, :mod)
+    elseif kind(st) === K"Identifier" && st.mod === nothing
         @jl_assert isempty(unquoted) st
         @ast ctx st [K"inert" st]
     else
@@ -312,7 +312,7 @@ Implementation notes:
 function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
                                qdepth, sqdepth)
     @jl_assert known_layer(ctx, base_layer(sc_in)) st
-    sc0 = get(st, :context, nothing)::Union{Nothing, SyntaxContext}
+    sc0 = st.context
     sc = (isnothing(sc0) || !known_layer(ctx, sc0.layer)) ? sc_in : sc0
     k = kind(st)
     absorb_esc = done && qdepth == 0 && sqdepth == 0
@@ -392,7 +392,7 @@ function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
 end
 
 function assert_expandable(st, l=base_layer(st.context::SyntaxContext))
-    @jl_assert hasattr(st, :context) (st, "expected syntax context")
+    @jl_assert st.context isa SyntaxContext (st, "expected syntax context")
     @jl_assert base_layer(st.context::SyntaxContext) == l (st, "expected consistent layer")
     !is_leaf(st) && for c in children(st)
         assert_expandable(c, l)
