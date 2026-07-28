@@ -13,6 +13,95 @@ include("buildkitetestjson.jl")
 
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
 const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL", "15")) * 60 # minutes
+# Warn when the host load average exceeds this multiple of the CPU count
+const oversub_interval = parse(Int, get(ENV, "JULIA_TEST_OVERSUBSCRIPTION_INTERVAL", "30")) # seconds
+const oversub_factor = parse(Float64, get(ENV, "JULIA_TEST_OVERSUBSCRIPTION_FACTOR", "1.25"))
+
+# Parse a `ps` TIME field ([[DD-]HH:]MM:SS[.ss]) into seconds.
+function parse_cpu_time(s)
+    s = strip(s)
+    days = 0
+    d = findfirst('-', s)
+    if d !== nothing
+        dd = tryparse(Int, s[1:prevind(s, d)])
+        dd === nothing && return nothing
+        days = dd
+        s = s[nextind(s, d):end]
+    end
+    total = 0.0
+    mult = 1.0
+    for p in Iterators.reverse(split(s, ':'))
+        v = tryparse(Float64, p)
+        v === nothing && return nothing
+        total += v * mult
+        mult *= 60
+    end
+    return total + days * 86400
+end
+
+# Cumulative CPU time (seconds, user+sys) and parent link for every process, so callers
+# can difference successive snapshots to derive utilization. `pcpu` is avoided because it
+# is unreliable on some platforms (e.g. FreeBSD reports ~0). Empty on Windows.
+function proc_cpu_times()
+    Sys.iswindows() && return (Dict{Int,Float64}(), Dict{Int,Vector{Int}}())
+    # macOS CI runs under a sandbox that forbids spawning `ps` (EPERM), so use libproc
+    # syscalls there; elsewhere one `ps` snapshot is simplest and works.
+    return Sys.isapple() ? proc_cpu_times_libproc() : proc_cpu_times_ps()
+end
+
+function proc_cpu_times_ps()
+    cputime = Dict{Int,Float64}()
+    children = Dict{Int,Vector{Int}}()
+    try
+        # Separate `-o` flags (not `-o pid=,ppid=,time=`): some BSD `ps` treat the text
+        # after the first `=` as a header, collapsing the output to one column.
+        raw = read(`ps -A -o pid= -o ppid= -o time=`, String)
+        for line in eachline(IOBuffer(raw))
+            f = split(line)
+            length(f) == 3 || continue
+            pid = tryparse(Int, f[1])
+            ppid = tryparse(Int, f[2])
+            secs = parse_cpu_time(f[3])
+            (pid === nothing || ppid === nothing || secs === nothing) && continue
+            cputime[pid] = secs
+            push!(get!(children, ppid, Int[]), pid)
+        end
+    catch
+    end
+    return (cputime, children)
+end
+
+# macOS: gather CPU time and parent links via libproc, without spawning a subprocess.
+# proc_pid_rusage reports user+system time in mach ticks (converted with mach_timebase);
+# proc_pidinfo(PROC_PIDTBSDINFO) yields the parent pid. Both only succeed for own-uid
+# processes, which is all we need. Empty if the timebase or pid list is unavailable.
+function proc_cpu_times_libproc()
+    cputime = Dict{Int,Float64}()
+    children = Dict{Int,Vector{Int}}()
+    tb = Ref((UInt32(0), UInt32(0)))
+    ccall(:mach_timebase_info, Cint, (Ptr{Cvoid},), tb) == 0 || return (cputime, children)
+    numer, denom = tb[]
+    (numer == 0 || denom == 0) && return (cputime, children)
+    scale = numer / denom / 1e9  # mach ticks -> seconds (numer/denom is 1/1 on Intel)
+    npids = ccall(:proc_listallpids, Cint, (Ptr{Cvoid}, Cint), C_NULL, 0)
+    npids > 0 || return (cputime, children)
+    pids = Vector{Cint}(undef, npids + 128)  # headroom for pids spawned since the count
+    got = ccall(:proc_listallpids, Cint, (Ptr{Cint}, Cint), pids, sizeof(Cint) * length(pids))
+    rb = Ref(ntuple(_ -> UInt64(0), 16))  # rusage_info_v0: uuid[16B], ri_user_time, ri_system_time, ...
+    bi = Ref(ntuple(_ -> UInt32(0), 40))  # proc_bsdinfo: pbi_ppid is the 5th uint32
+    for i in 1:min(got, length(pids))
+        pid = Int(pids[i])
+        pid > 0 || continue
+        if ccall(:proc_pid_rusage, Cint, (Cint, Cint, Ptr{Cvoid}), pid, 0, rb) == 0
+            t = rb[]
+            cputime[pid] = (t[3] + t[4]) * scale
+        end
+        if ccall(:proc_pidinfo, Cint, (Cint, Cint, UInt64, Ptr{Cvoid}, Cint), pid, 3, 0, bi, 160) > 0
+            push!(get!(children, Int(bi[][5]), Int[]), pid)
+        end
+    end
+    return (cputime, children)
+end
 
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
@@ -84,16 +173,19 @@ move_to_node1("Distributed")
 move_to_node1("gc")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
+# Run (pre)compilation-heavy tests serially to avoid oversubscription
+move_to_node1("compileall")
+move_to_node1("cmdlineargs")
+move_to_node1("JuliaLowering")
+move_to_node1("JuliaLowering_stdlibs")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
 # Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
-# as well get them all started early. JuliaLowering_stdlibs both takes a while and
-# uses a lot of memory at the beginning so try to run it early to keep total memory
-# use flatter.
-for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
+# as well get them all started early.
+for prependme in ["LinearAlgebra", "Pkg"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
@@ -232,11 +324,18 @@ cd(@__DIR__) do
         # but don't do this on Windows, because it may deadlock in the kernel
         running_tests = Dict{String, DateTime}()
 
+        # OS pid of each running test's worker (cached per worker id, which is fresh on recycle)
+        running_test_pids = Dict{String, Int}()
+        worker_pids = Dict{Int, Int}()
+
         # Track timeout timers for each test
         test_timers = Dict{String, Timer}()
 
         # Which worker each in-flight test is running on
         running_on = Dict{String, Int}()
+
+        # Serial tests run on node 1 rather than a tracked worker.
+        current_node1_test = Ref{Union{Nothing,String}}(nothing)
 
         Sys.iswindows() || atexit() do
             # This `atexit()` is a desperate attempt to collect .core dumps from
@@ -293,6 +392,70 @@ cd(@__DIR__) do
             end
             Base.errormonitor(stdin_monitor)
         end
+        oversub_timer = let host_cpus = length(Sys.cpu_info()), test_cpus = n
+            prev_cputime, _ = proc_cpu_times()  # baseline so the first tick reports one interval
+            prev_t = time()
+            Timer(oversub_interval, interval=oversub_interval) do timer
+                load1 = Sys.loadavg()[1]
+                cputime, children = proc_cpu_times()
+                dt = max(time() - prev_t, 1.0)
+                # Summed CPU% (100 == one core) accrued over each worker's process subtree
+                # during the interval, so subprocesses a test spawns count toward it.
+                subtree_pct = function (roots)
+                    total = 0.0
+                    stack = collect(roots)
+                    seen = Set{Int}()
+                    while !isempty(stack)
+                        p = pop!(stack)
+                        p in seen && continue
+                        push!(seen, p)
+                        haskey(cputime, p) || continue
+                        d = cputime[p] - get(prev_cputime, p, 0.0)
+                        d > 0 && (total += d)
+                        append!(stack, get(children, p, Int[]))
+                    end
+                    return 100 * total / dt
+                end
+
+                names = sort!(collect(keys(running_tests)))
+                pcts = [haskey(running_test_pids, t) ?
+                    subtree_pct((running_test_pids[t],)) : nothing for t in names]
+                self_d = get(cputime, getpid(), 0.0) - get(prev_cputime, getpid(), 0.0)
+                self_pct = 100 * max(self_d, 0.0) / dt
+                # Include tracked workers as roots because rr may reparent them outside
+                # the coordinator's process subtree.
+                roots = [getpid()]
+                append!(roots, (running_test_pids[t] for t in names
+                                if haskey(running_test_pids, t)))
+                owned = subtree_pct(roots)
+                host_overloaded = load1 > host_cpus * oversub_factor
+                suite_overloaded = owned > test_cpus * 100 * oversub_factor
+                if host_overloaded || suite_overloaded
+                    active = join((p === nothing ? t :
+                        string(t, " (", round(p / 100; digits=1), " cores)")
+                        for (t, p) in zip(names, pcts)), ", ")
+                    node1 = current_node1_test[]
+                    running = isempty(active) ?
+                        (node1 === nothing ? "" : "; node1: $node1") :
+                        "; running: $active"
+                    @lock print_lock begin
+                        host_overloaded && printstyled(
+                            "⚠ host oversubscription: load average ",
+                            round(load1; digits=1), " vs ", host_cpus,
+                            " CPU threads", running, "\n"; color=:yellow)
+                        suite_overloaded && printstyled(
+                            "⚠ test-suite oversubscription: ",
+                            round(owned / 100; digits=1), " CPU cores vs ",
+                            test_cpus, "-core budget (self ",
+                            round(self_pct / 100; digits=1), " cores, ",
+                            length(names), "/", test_cpus, " workers active)",
+                            running, "\n"; color=:yellow)
+                    end
+                end
+                prev_cputime = cputime
+                prev_t = time()
+            end
+        end
         o_ts_duration = @elapsed Experimental.@sync begin
             for p in workers()
                 @async begin
@@ -302,6 +465,7 @@ cd(@__DIR__) do
                         running_tests[test] = now()
                         wrkr = p
                         running_on[test] = wrkr
+                        running_test_pids[test] = get!(() -> remotecall_fetch(getpid, p), worker_pids, p)
 
                         # Create a timer for this test to report long-running status
                         test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
@@ -339,6 +503,7 @@ cd(@__DIR__) do
                             end
                         delete!(running_tests, test)
                         delete!(running_on, test)
+                        delete!(running_test_pids, test)
                         if haskey(test_timers, test)
                             close(test_timers[test])
                             delete!(test_timers, test)
@@ -394,6 +559,7 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
+            current_node1_test[] = t
             before = time()
             resp, duration = try
                     r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
@@ -401,6 +567,8 @@ cd(@__DIR__) do
                 catch e
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
+                finally
+                    current_node1_test[] = nothing
                 end
             if length(resp) == 1
                 print_testworker_errored(t, 1, resp[1])
@@ -429,6 +597,9 @@ cd(@__DIR__) do
         end
         if @isdefined test_timers
             foreach(close, values(test_timers))
+        end
+        if @isdefined oversub_timer
+            close(oversub_timer)
         end
     end
 
