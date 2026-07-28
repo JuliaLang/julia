@@ -47,7 +47,7 @@ version = "0.1.1"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.5.3+0"
+version = "1.5.7+0"
 
     [deps.CompilerSupportLibraries_jll.syntax]
     julia_version = "1.6.0"
@@ -77,11 +77,11 @@ version = "1.11.0"
 
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "569d876841fa6d61946e90eeaf5a89c1dd513a4a"
+git-tree-sha1 = "521a88f82e52920a3c72b8f43090e23ab3687657"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaDebug/JuliaInterpreter.jl.git"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.11.1"
+version = "0.11.4"
 
     [deps.JuliaInterpreter.syntax]
     julia_version = "1.10.0"
@@ -105,7 +105,7 @@ version = "1.11.0"
 [[deps.LibGit2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "LibSSH2_jll", "Libdl", "OpenSSL_jll", "PCRE2_jll", "Zlib_jll"]
 uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
-version = "1.9.4+0"
+version = "1.9.6+0"
 
     [deps.LibGit2_jll.syntax]
     julia_version = "1.9.0"
@@ -113,7 +113,7 @@ version = "1.9.4+0"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "OpenSSL_jll", "Zlib_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.11.101+0"
+version = "1.11.103+0"
 
     [deps.LibSSH2_jll.syntax]
     julia_version = "1.8.0"
@@ -127,11 +127,11 @@ version = "1.11.0"
 
 [[deps.LoweredCodeUtils]]
 deps = ["CodeTracking", "Compiler", "JuliaInterpreter"]
-git-tree-sha1 = "8b6ba8759d80f313a92545246c8dad2a7e8e7b4e"
+git-tree-sha1 = "1d4c737ab26f51ceed52ab2019c09b7660eb7440"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaDebug/LoweredCodeUtils.jl.git"
 uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
-version = "3.7.2"
+version = "3.8.0"
 
     [deps.LoweredCodeUtils.syntax]
     julia_version = "1.10.0"
@@ -212,11 +212,11 @@ version = "1.11.0"
 
 [[deps.Revise]]
 deps = ["CRC32c", "CodeTracking", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "UUIDs"]
-git-tree-sha1 = "b5cd84845f2f7c892d4ad0b89f6b8ee0427727e9"
+git-tree-sha1 = "6098400ed73008c45f5f47b35ae114475436ad37"
 repo-rev = "master"
 repo-url = "https://github.com/timholy/Revise.jl.git"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
-version = "3.16.0"
+version = "3.16.2"
 
     [deps.Revise.extensions]
     DistributedExt = "Distributed"

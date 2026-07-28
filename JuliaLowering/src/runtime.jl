@@ -129,7 +129,7 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol,
                             length(field_names))
     Core._setsuper!(type, Core.Function)
     Core.declare_const(mod, closure_type_name, type)
-    Core._typebody!(false, type, Core.svec(field_types...))
+    Core._typebody!(type, Core.svec(field_types...))
     type
 end
 
