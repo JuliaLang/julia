@@ -186,27 +186,54 @@ function load_type(ptr::Ptr{Type})
     return unsafe_pointer_to_objref(ptr)
 end
 
-function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
-    Alloc(
-        load_type(raw_alloc.type),
-        stacktrace_memoized(cache, load_backtrace(raw_alloc.backtrace)),
-        UInt(raw_alloc.size),
-        raw_alloc.task,
-        raw_alloc.timestamp
-    )
-end
-
 function decode(raw_results::RawResults)::AllocResults
+    n_allocs = Int(raw_results.num_allocs)
+    # symbol lookup dominates decoding, so do it once per unique ip, in parallel
+    # (the same approach as `Profile.getdict!`). The backtraces are decoded into a
+    # reused buffer, rather than kept as one vector per sample, since holding a
+    # decoded copy of every backtrace at once is a lot of memory at high sample rates.
     cache = BacktraceCache()
-    allocs = [
-        decode_alloc(cache, unsafe_load(raw_results.allocs, i))
-        for i in 1:raw_results.num_allocs
-    ]
+    trace = Vector{BTElement}()
+    unique_ips = Vector{BTElement}()
+    let seen = Set{BTElement}()
+        for i in 1:n_allocs
+            raw = unsafe_load(raw_results.allocs, i)
+            load_backtrace!(empty!(trace), raw.backtrace)
+            for ip in trace
+                ip in seen || (push!(seen, ip); push!(unique_ips, ip))
+            end
+        end
+    end
+    if !isempty(unique_ips)
+        sort!(unique_ips) # help each thread to get a disjoint set of libraries, as much as possible
+        lookups = Vector{Vector{StackFrame}}(undef, length(unique_ips))
+        @sync for part in Iterators.partition(eachindex(unique_ips), div(length(unique_ips), Threads.threadpoolsize(), RoundUp))
+            Threads.@spawn for i in part
+                lookups[i] = lookup(unique_ips[i])
+            end
+        end
+        for i in eachindex(unique_ips)
+            cache[unique_ips[i]] = lookups[i]
+        end
+    end
+    allocs = Vector{Alloc}(undef, n_allocs)
+    for i in 1:n_allocs
+        raw = unsafe_load(raw_results.allocs, i)
+        load_backtrace!(empty!(trace), raw.backtrace)
+        allocs[i] = Alloc(
+            load_type(raw.type),
+            stacktrace_memoized(cache, trace),
+            UInt(raw.size),
+            raw.task,
+            raw.timestamp
+        )
+    end
     return AllocResults(allocs)
 end
 
-function load_backtrace(trace::RawBacktrace)::Vector{BTElement}
-    out = Vector{BTElement}()
+load_backtrace(trace::RawBacktrace)::Vector{BTElement} = load_backtrace!(Vector{BTElement}(), trace)
+
+function load_backtrace!(out::Vector{BTElement}, trace::RawBacktrace)::Vector{BTElement}
     n = Int(trace.size)
     i = 1
     while i <= n
@@ -319,11 +346,14 @@ function parse_flat(::Type{T}, data::Vector{Alloc}, C::Bool) where T
     n = Int[]
     m = Int[]
     lilist_idx = Dict{T, Int}()
-    recursive = Set{T}()
+    # generation at which each lilist entry was last counted; a per-record
+    # generation bump replaces an expensive Set of frames for recursion dedup
+    seen_gen = Int[]
+    gen = 0
     totalbytes = 0
     for r in data
         first = true
-        empty!(recursive)
+        gen += 1
         nb = r.size # or 1 for counting
         totalbytes += nb
         for frame in r.stacktrace
@@ -331,12 +361,12 @@ function parse_flat(::Type{T}, data::Vector{Alloc}, C::Bool) where T
             key = (T === UInt64 ? frame.pointer : frame)
             idx = get!(lilist_idx, key, length(lilist) + 1)
             if idx > length(lilist)
-                push!(recursive, key)
+                push!(seen_gen, gen)
                 push!(lilist, frame)
                 push!(n, nb)
                 push!(m, 0)
-            elseif !(key in recursive)
-                push!(recursive, key)
+            elseif seen_gen[idx] != gen
+                seen_gen[idx] = gen
                 n[idx] += nb
             end
             if first
