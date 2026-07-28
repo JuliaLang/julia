@@ -1245,6 +1245,13 @@ CFI_NORETURN
             JL_TIMING(ROOT, ROOT);
             // Check if we can use optimized invocation
             if (ct->invoked != NULL) {
+                // The `code`/`invoked` fields are mutable from Julia (`setfield!`), so the
+                // pair read here need not be the pair that was validated when the task was
+                // constructed (`jl_f__task`) or injected by inlining. Soundness relies on
+                // `jl_f_invoke` re-checking the argument against the target's signature and
+                // world bounds at this point: calling a CodeInstance's specptr directly
+                // without those checks would turn a field mutation into an ABI mismatch
+                // (undefined behavior), not a Julia-level error.
                 jl_value_t *invoke_args[2] = {ct->start, ct->invoked};
                 res = jl_f_invoke(NULL, invoke_args, 2);
             }

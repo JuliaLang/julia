@@ -1204,6 +1204,12 @@ end
         end
         s00 = s
     elseif isa(s00, PartialTask)
+        # N.B.: Do not use `PartialTask.fetch_type` to refine any field load here (e.g.
+        # `:result`). Task fields are mutable, so `fetch_type` is not an invariant of the
+        # current field contents; it is only sound as the *checked* side of the `typeassert`
+        # in `fetch` (via `task_result_type_tfunc`). Refining the load itself would let the
+        # optimizer prove that typeassert and delete it, turning a field mutation into
+        # silent type confusion instead of a runtime `TypeError`.
         s00 = Task
     end
     return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)

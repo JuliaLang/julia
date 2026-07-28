@@ -572,6 +572,10 @@ is thrown.
 """
 @inline function fetch(t::Task)
     wait(t)
+    # This typeassert looks redundant, but is required for soundness and must not be
+    # removed: `Task.code`/`Task.result` are mutable, so the precise type inference
+    # may derive here (via `PartialTask`) is a claim that must be re-checked at
+    # runtime, not a proven fact.
     return task_result(t)::Core.task_result_type(t)
 end
 
