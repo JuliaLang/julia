@@ -605,6 +605,41 @@ end
     @test wait(t) === nothing
     close(t)
     @test wait(t) === nothing
+
+    waiters = [Threads.@spawn wait(t) for _ in 1:8]
+    @test all(w -> fetch(w) === nothing, waiters)
+
+    for i in 1:100
+        t = Timer(isodd(i) ? 0 : 0.001)
+        racers = [Threads.@spawn begin
+                for _ in 1:rand(0:8)
+                    yield()
+                end
+                try
+                    wait(t)
+                    wait(t)
+                    true
+                catch e
+                    e isa EOFError || rethrow()
+                    false
+                end
+            end for _ in 1:4]
+        for _ in 1:rand(0:8)
+            yield()
+        end
+        close(t)
+        outcomes = map(fetch, racers)
+        @test all(outcomes) || !any(outcomes)
+    end
+
+    t = Timer(0, interval=600)
+    @test wait(t) === nothing
+    waiter = @task wait(t)
+    yield(waiter)
+    @test timedwait(() -> waiter.queue === t.cond.waitq, 10) === :ok
+    close(t)
+    @test_throws TaskFailedException wait(waiter)
+    @test waiter.result isa EOFError
 end
 
 # make sure that we don't accidentally create a one-shot timer
