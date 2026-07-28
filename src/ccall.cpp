@@ -55,7 +55,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 }
 
 typedef struct {
-    jl_value_t *gcroot[2];     // GC roots for strings [f_name, f_lib]
+    jl_value_t *gcroot[4];     // GC roots [f_name, f_lib, lib_id, lib_name]
 
     // Static name resolution (compile-time known)
     const char *f_name;        // static function name
@@ -64,6 +64,12 @@ typedef struct {
     // Dynamic name resolution (simple runtime expressions)
     jl_value_t *f_name_expr;   // expression for function name
     jl_value_t *f_lib_expr;    // expression for library name
+
+    // Frozen `AbstractLibrary` identity, present only when method.c expanded
+    // the target to a 4-tuple (fname, lib_ref, lib_id, lib_name). Both are
+    // non-NULL together; the runtime re-checks them at first-call time.
+    jl_value_t *lib_id;        // value returned by dlid() at definition time
+    jl_value_t *lib_name;      // value returned by dlname() at definition time
 
     // Runtime pointer
     Value *jl_ptr;             // callable pointer expression result
@@ -225,7 +231,17 @@ static Value *runtime_sym_lookup(
             lib_val = boxed(ctx, emit_expr(ctx, symarg.f_lib_expr));
         else
             lib_val = ConstantPointerNull::get(ctx.types().T_prjlvalue);
-        llvmf = irbuilder.CreateCall(prepare_call(jllazydlsym_func), {lib_val, fname_val});
+        if (symarg.lib_id != nullptr) {
+            // `AbstractLibrary` target: re-check the identity frozen at
+            // definition time before binding. See jl_lazy_load_and_lookup_verified.
+            Value *id_val = track_pjlvalue(ctx, literal_pointer_val(ctx, symarg.lib_id));
+            Value *name_val = track_pjlvalue(ctx, literal_pointer_val(ctx, symarg.lib_name));
+            llvmf = irbuilder.CreateCall(prepare_call(jllazydlsym_verified_func),
+                                         {lib_val, fname_val, id_val, name_val});
+        }
+        else {
+            llvmf = irbuilder.CreateCall(prepare_call(jllazydlsym_func), {lib_val, fname_val});
+        }
     }
     StoreInst *store = irbuilder.CreateAlignedStore(llvmf, llvmgv, Align(sizeof(void*)));
     store->setAtomic(AtomicOrdering::Release);
@@ -633,9 +649,13 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     out.f_lib = nullptr;
     out.f_name_expr = nullptr;
     out.f_lib_expr = nullptr;
+    out.lib_id = nullptr;
+    out.lib_name = nullptr;
     out.jl_ptr = nullptr;
     out.gcroot[0] = nullptr;
     out.gcroot[1] = nullptr;
+    out.gcroot[2] = nullptr;
+    out.gcroot[3] = nullptr;
 
     // Check if this is a tuple (normalized by julia-syntax.scm)
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
@@ -660,8 +680,11 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
                 }
              }
         }
-        else if (nargs == 2) {
+        else if (nargs == 2 || nargs == 4) {
             // Two element tuple: (func_name, lib_name)
+            // Four element tuple: (func_name, lib_ref, lib_id, lib_dlname),
+            // produced by abstract_library_expand in method.c when lib_ref
+            // resolves to an `AbstractLibrary`.
             jl_value_t *fname_arg = jl_array_ptr_ref(tuple_args, 0);
             jl_value_t *lib_arg = jl_array_ptr_ref(tuple_args, 1);
             out.f_name_expr = fname_arg;
@@ -688,6 +711,13 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
                 else if (jl_is_string(lib_val)) {
                     out.f_lib = jl_string_data(lib_val);
                 }
+            }
+
+            if (nargs == 4) {
+                out.lib_id = jl_array_ptr_ref(tuple_args, 2);
+                out.lib_name = jl_array_ptr_ref(tuple_args, 3);
+                out.gcroot[2] = out.lib_id;
+                out.gcroot[3] = out.lib_name;
             }
         }
     }
@@ -725,7 +755,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
         // Name lookup form
         native_sym_arg_t sym = {};
-        JL_GC_PUSH2(&sym.gcroot[0], &sym.gcroot[1]);
+        JL_GC_PUSH4(&sym.gcroot[0], &sym.gcroot[1], &sym.gcroot[2], &sym.gcroot[3]);
         interpret_foreignsymbol(ctx, sym, arg);
         Value *res = runtime_sym_lookup(ctx, sym, ctx.f);
         JL_GC_POP();
@@ -1466,7 +1496,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
-    JL_GC_PUSH4(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1]);
+    JL_GC_PUSH6(&rt, &at, &symarg.gcroot[0], &symarg.gcroot[1],
+                &symarg.gcroot[2], &symarg.gcroot[3]);
 
     CallingConv::ID cc = CallingConv::C;
     bool llvmcall = false;

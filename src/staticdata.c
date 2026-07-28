@@ -122,7 +122,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    6
+#define NUM_TAGS    9
 
 // An array of special references that need to be restored from the sysimg
 static void get_tags(jl_value_t **tags[NUM_TAGS])
@@ -134,7 +134,10 @@ static void get_tags(jl_value_t **tags[NUM_TAGS])
     INSERT_TAG(jl_module_init_order);
     INSERT_TAG(jl_typeinf_func);
     INSERT_TAG(jl_compile_and_emit_func);
+    INSERT_TAG(jl_libdl_dlid_func);
+    INSERT_TAG(jl_libdl_dlname_func);
     INSERT_TAG(jl_libdl_dlopen_func);
+    INSERT_TAG(jl_abstractlibrary_type);
     // n.b. must update NUM_TAGS when you add something here
 #undef INSERT_TAG
     assert(i == NUM_TAGS - 1);

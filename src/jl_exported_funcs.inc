@@ -287,6 +287,7 @@
     XX(jl_is_unary_and_binary_operator) \
     XX(jl_is_unary_operator) \
     XX(jl_lazy_load_and_lookup) \
+    XX(jl_lazy_load_and_lookup_verified) \
     XX(jl_load) \
     XX(jl_load_) \
     XX(jl_load_and_lookup) \

@@ -2120,3 +2120,104 @@ const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
 end
+
+# Tests for `Libdl.AbstractLibrary`: `ccall`/`cglobal` freeze a library's
+# `dlid()`/`dlname()` where the call is written and re-check them at first-call
+# time, so a subtype that violates the stable-identity contract errors instead
+# of silently binding to a different library.
+using Libdl: AbstractLibrary, LazyLibrary, LazyLibraryPath, dlid, dlname
+
+# A subtype whose reported identity changes on every query — violates the
+# stable-identity contract that `AbstractLibrary` subtypes promise.
+mutable struct ShiftyLibrary <: AbstractLibrary
+    path::String
+    n::Int
+end
+Libdl.dlname(l::ShiftyLibrary) = (l.n += 1; string(basename(l.path), l.n))
+Libdl.dlid(l::ShiftyLibrary) = Base.UUID(UInt128(hash(l.path)))
+Libdl.dlopen(l::ShiftyLibrary, flags::Integer = Libdl.RTLD_LAZY; kwargs...) =
+    Libdl.dlopen(l.path, flags; kwargs...)
+
+const ccalltest_path = Libdl.dlpath(libccalltest)
+const named_ccalltest = LazyLibrary(LazyLibraryPath(dirname(ccalltest_path),
+                                                    basename(ccalltest_path)))
+const shifty_ccalltest = ShiftyLibrary(ccalltest_path, 0)
+
+echo_p_named(x) = ccall((:test_echo_p, named_ccalltest), Ptr{Cvoid}, (Ptr{Cvoid},), x)
+echo_p_shifty(x) = ccall((:test_echo_p, shifty_ccalltest), Ptr{Cvoid}, (Ptr{Cvoid},), x)
+
+@testset "AbstractLibrary identity" begin
+    @test LazyLibrary <: AbstractLibrary
+
+    # A LazyLibrary built from a plain string has no stable name, so it opts
+    # out of the frozen-identity path rather than inventing one.
+    @test dlname(LazyLibrary(ccalltest_path)) === nothing
+
+    # One built from a LazyLibraryPath reports its last path piece, and the
+    # id is a pure function of that name (stable across distinct handles).
+    @test dlname(named_ccalltest) == basename(ccalltest_path)
+    @test dlid(named_ccalltest) isa Base.UUID
+    @test dlid(named_ccalltest) == dlid(LazyLibrary(LazyLibraryPath(
+        dirname(ccalltest_path), basename(ccalltest_path))))
+
+    # ccall through an AbstractLibrary global resolves normally.
+    p = Ptr{Cvoid}(UInt(0xdeadbeef))
+    @test echo_p_named(p) === p
+
+    # A subtype that breaks the contract is caught when the symbol is first
+    # resolved, rather than silently binding to whatever it names now.
+    @test_throws ErrorException echo_p_shifty(p)
+end
+
+# Verify the `AbstractLibrary` expansion at the lowering level: a library that
+# reports a stable identity gets frozen into the ccall target tuple, and one
+# that doesn't is left alone.
+module TestAbstractLibraryLowering
+using Test, Libdl
+
+@test isabstracttype(Libdl.AbstractLibrary)
+@test LazyLibrary <: Libdl.AbstractLibrary
+
+struct MyLib <: Libdl.AbstractLibrary
+    id::String
+end
+Libdl.dlid(lib::MyLib) = Base.UUID(UInt128(hash(lib.id)))
+Libdl.dlname(lib::MyLib) = lib.id
+const mylib = MyLib("libtest")
+
+uses_mylib() = ccall((:my_symbol, mylib), Cint, ())
+let fptr = only(code_lowered(uses_mylib)).code[1].args[1]
+    @test fptr.head === :tuple
+    @test length(fptr.args) == 4
+    @test fptr.args[1] == QuoteNode(:my_symbol)
+    @test fptr.args[2] == GlobalRef(@__MODULE__, :mylib)
+    @test fptr.args[3] == Base.UUID(UInt128(hash("libtest")))
+    @test fptr.args[4] == "libtest"
+end
+
+# A subtype that declines to provide an identity is left unexpanded.
+struct NoIdLib <: Libdl.AbstractLibrary end
+Libdl.dlid(::NoIdLib) = nothing
+Libdl.dlname(::NoIdLib) = nothing
+const noidlib = NoIdLib()
+
+uses_noidlib() = ccall((:my_symbol, noidlib), Cint, ())
+let fptr = only(code_lowered(uses_noidlib)).code[1].args[1]
+    @test fptr.head === :tuple
+    @test length(fptr.args) == 2
+end
+
+# Plain string libraries keep their existing 2-element shape.
+uses_string_lib() = ccall((:foo, "libbar"), Cint, ())
+let fptr = only(code_lowered(uses_string_lib)).code[1].args[1]
+    @test fptr.head === :tuple
+    @test length(fptr.args) == 2
+end
+
+# cglobal goes through the same expansion.
+uses_mylib_cglobal() = cglobal((:my_global, mylib))
+let fptr = only(code_lowered(uses_mylib_cglobal)).code[1].args[1]
+    @test fptr.head === :tuple
+    @test length(fptr.args) == 4
+end
+end

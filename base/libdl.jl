@@ -9,7 +9,8 @@ import Base: DL_LOAD_PATH, isdebugbuild
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
-    dlpath, find_library, dlext, dllist, LazyLibrary, LazyLibraryPath, BundledLazyLibraryPath
+    dlpath, find_library, dlext, dllist, dlid, dlname, AbstractLibrary,
+    LazyLibrary, LazyLibraryPath, BundledLazyLibraryPath
 
 """
     DL_LOAD_PATH
@@ -352,6 +353,35 @@ end
 (init::InitialDependencies)() = copy(init.dependencies)
 
 """
+    AbstractLibrary
+
+Abstract supertype for library handles that carry a stable identity the compiler can
+rely on. Subtypes must implement [`dlid`](@ref) and [`dlname`](@ref).
+
+A subtype promises that both values are invariant for the life of the handle. `ccall`
+and `cglobal` freeze them where the library is referenced and verify them when the
+symbol is first resolved, so a subtype whose identity changes will raise an error
+rather than silently bind to the wrong library.
+"""
+abstract type AbstractLibrary end
+
+"""
+    dlid(lib::AbstractLibrary)
+
+Return a stable identifier for `lib`, used by the compiler to identify the library
+at link time. See also [`dlname`](@ref) and [`AbstractLibrary`](@ref).
+"""
+function dlid end
+
+"""
+    dlname(lib::AbstractLibrary) -> Union{String, Nothing}
+
+Return the name the compiler should use to refer to `lib` at link time, or `nothing`
+if `lib` has no stable name. See also [`dlid`](@ref) and [`AbstractLibrary`](@ref).
+"""
+function dlname end
+
+"""
     LazyLibrary(name; flags = <default dlopen flags>,
                 dependencies = LazyLibrary[], on_load_callback = nothing)
 
@@ -398,7 +428,7 @@ For more examples including platform-specific libraries, lazy path construction,
 migration from `__init__()` patterns, see the manual section on
 [Using LazyLibrary for Lazy Loading](@ref man-lazylibrary).
 """
-mutable struct LazyLibrary
+mutable struct LazyLibrary <: AbstractLibrary
     # Name and flags to open with
     const path
     const flags::UInt32
@@ -456,9 +486,18 @@ function add_dependency!(ll::LazyLibrary, dep::LazyLibrary)
     end
 end
 
+# The last (usually static) element of the path is used as the library name.
+# A `LazyLibrary` built from a plain string has no stable name to offer.
+dlname(ll::LazyLibrary) = ll.path isa LazyLibraryPath ? string(last(ll.path.pieces)) : nothing
+dlid(ll::LazyLibrary) = Base.UUID(UInt128(hash(dlname(ll)))) # TODO: replace with a real UUID (provided via the LazyLibrary constructor)
+
 # Register `jl_libdl_dlopen_func` so that `ccall()` lowering knows
-# how to call `dlopen()`.
+# how to call `dlopen()`, and `dlid`/`dlname` + `AbstractLibrary` so that
+# `ccall`/`cglobal` lowering can freeze and verify a library's identity.
+Base.unsafe_store!(cglobal(:jl_libdl_dlid_func, Any), dlid)
+Base.unsafe_store!(cglobal(:jl_libdl_dlname_func, Any), dlname)
 Base.unsafe_store!(cglobal(:jl_libdl_dlopen_func, Any), dlopen)
+Base.unsafe_store!(cglobal(:jl_abstractlibrary_type, Any), AbstractLibrary)
 
 function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
     handle = @atomic :acquire ll.handle

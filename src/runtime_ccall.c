@@ -19,7 +19,11 @@
 #include "support/strhash.h"
 
 // --- library symbol lookup ---
+jl_value_t *jl_libdl_dlid_func JL_GLOBALLY_ROOTED;
+jl_value_t *jl_libdl_dlname_func JL_GLOBALLY_ROOTED;
 jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
+jl_value_t *jl_abstractlibrary_type JL_GLOBALLY_ROOTED; // TODO: move to be handled like other types
+                                                        //       (maybe just move to Core)
 
 // map from user-specified lib names to handles
 static htable_t libMap;
@@ -62,6 +66,31 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *
 
 // jl_load_and_lookup, but with library computed at run time on first call
 JL_DLLEXPORT
+// Verify that an `AbstractLibrary` still reports the identity that was frozen
+// where the ccall/cglobal was written, then resolve the symbol as usual.
+//
+// Subtypes of `AbstractLibrary` opt into a stable-identity contract: dlid() and
+// dlname() must be invariant for the life of the handle. Enforce it here, at
+// first-call time, so a violation is a clear error instead of a silent bind to
+// whatever the library resolves to now.
+JL_DLLEXPORT void *jl_lazy_load_and_lookup_verified(jl_value_t *lib_val, jl_value_t *f_name,
+                                                    jl_value_t *expected_id,
+                                                    jl_value_t *expected_name)
+{
+    if (jl_libdl_dlid_func == NULL || jl_libdl_dlname_func == NULL)
+        jl_error("AbstractLibrary identity check requires Libdl to be loaded");
+    jl_value_t *actual_id = NULL;
+    jl_value_t *actual_name = NULL;
+    JL_GC_PUSH2(&actual_id, &actual_name);
+    actual_id = jl_apply_generic(jl_libdl_dlid_func, &lib_val, 1);
+    actual_name = jl_apply_generic(jl_libdl_dlname_func, &lib_val, 1);
+    if (!jl_egal(actual_id, expected_id) || !jl_egal(actual_name, expected_name))
+        jl_errorf("ccall: AbstractLibrary identity changed since definition "
+                  "(dlid()/dlname() must be stable for AbstractLibrary subtypes)");
+    JL_GC_POP();
+    return jl_lazy_load_and_lookup(lib_val, f_name);
+}
+
 void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
 {
     void *lib_ptr;
