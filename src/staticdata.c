@@ -3534,6 +3534,7 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             .data = sysimg,
             .size = len,
             .base = 0,
+            .heap_checksum = -1,
         };
         return jl_sysimage_buf;
     }
@@ -3614,10 +3615,11 @@ static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len)
     // Only parse the header here; for incremental images the dependency
     // modules are not known yet, so the full cache validation happens later,
     // against the decompressed buffer.
-    uint32_t checksum = jl_read_verify_header(&f, &pkgimage, &dataendpos, &datastartpos);
-    if (checksum == 0)
+    uint32_t checksum;
+    int err = jl_read_verify_header(&f, &pkgimage, &checksum, &dataendpos, &datastartpos);
+    if (err != 0)
         jl_error("Precompile file header verification checks failed.");
-    if (image->heap_checksum != 0 && checksum != image->heap_checksum)
+    if (image->heap_checksum != -1 && checksum != image->heap_checksum)
         jl_error("Image checksum mismatch: the heap image (.ji) was not "
                  "compiled for use with this native image.");
     // jl_read_verify_header leaves the stream just past the dataendpos field
@@ -4462,17 +4464,17 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 }
 
 static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_t *checksum,
-                                          uint32_t expect_checksum, int64_t *dataendpos,
+                                          int64_t expect_checksum, int64_t *dataendpos,
                                           int64_t *datastartpos) JL_CANSAFEPOINT
 {
     uint8_t pkgimage = 0;
     if (ios_eof(f) ||
-        0 == (*checksum = jl_read_verify_header(f, &pkgimage, dataendpos, datastartpos))) {
+        jl_read_verify_header(f, &pkgimage, checksum, dataendpos, datastartpos) != 0) {
         return jl_get_exceptionf(jl_errorexception_type,
                                  "Precompile file header verification checks failed.");
     }
-    // .ji images with no corresponding native image have expect_checksum = 0.
-    if (expect_checksum != 0 && *checksum != expect_checksum) {
+    // .ji images with no corresponding native image have expect_checksum = -1.
+    if (expect_checksum != -1 && *checksum != expect_checksum) {
         return jl_get_exceptionf(jl_errorexception_type,
                                  "Image checksum mismatch: the heap image (.ji) was not "
                                  "compiled for use with this native image.");
@@ -4637,6 +4639,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
             "Cache file \"%s\" not found.\n", fname);
     }
     jl_image_t pkgimage = {};
+    pkgimage.heap_checksum = -1;
     jl_value_t *ret = jl_restore_package_image_from_stream(&f, &pkgimage, depmods, completeinfo, pkgname, 1);
     ios_close(&f);
     return ret;

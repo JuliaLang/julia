@@ -2367,7 +2367,9 @@ typedef struct {
     const char *data;
     size_t size;
     uint64_t base;
-    uint32_t heap_checksum; // Must match checksum from .ji header
+    // Must match checksum from .ji header, or -1 if we have no corresponding
+    // native image for the heap image.
+    uint64_t heap_checksum;
 } jl_image_buf_t;
 
 struct _jl_image_t;

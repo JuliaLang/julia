@@ -1019,10 +1019,9 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT uint32_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos, int64_t *datastartpos) JL_CANSAFEPOINT
+JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint8_t *pkgimage, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos) JL_CANSAFEPOINT
 {
     uint16_t bom;
-    uint32_t checksum = 0;
     if (!(readstr_verify(s, JI_MAGIC, 0) &&
           read_uint16(s) == JI_FORMAT_VERSION &&
           ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
@@ -1030,19 +1029,19 @@ JL_DLLEXPORT uint32_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t
           readstr_verify(s, JL_BUILD_UNAME, 1) &&
           readstr_verify(s, JL_BUILD_ARCH, 1) &&
           readstr_verify(s, JULIA_VERSION_STRING, 1)))
-        return 0;
+        return -1;
 
     *pkgimage = read_uint8(s);
 
     if (*pkgimage &&
         !(readstr_verify(s, jl_git_branch(), 1) && readstr_verify(s, jl_git_commit(), 1)))
-        return 0;
+        return -1;
 
-    checksum = read_uint32(s);
+    *checksum = read_uint32(s);
     *datastartpos = (int64_t)read_uint64(s);
     *dataendpos = (int64_t)read_uint64(s);
 
-    return checksum;
+    return 0;
 }
 
 // Returns `depmodidxs` where `j = depmodidxs[i]` corresponds to the blob `depmods[j]` in `write_mod_list`

@@ -1577,10 +1577,11 @@ end
         # compressed split pkgimage was requested.
         open(ji_file) do io
             pkgimage = Ref{UInt8}()
+            checksum = Ref{UInt32}()
             dataendpos = Ref{Int64}()
             datastartpos = Ref{Int64}()
-            checksum = ccall(:jl_read_verify_header, UInt32, (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Int64}, Ptr{Int64}), io.ios, pkgimage, dataendpos, datastartpos)
-            @test checksum != 0
+            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), io.ios, pkgimage, checksum, dataendpos, datastartpos)
+            @test err == 0
             @test pkgimage[] == 1
             seek(io, datastartpos[])
             zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]

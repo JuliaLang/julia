@@ -53,7 +53,9 @@ struct _jl_image_t {
     uint32_t ngvars;
     jl_image_fptrs_t fptrs;
     void **jl_small_typeof;
-    uint32_t heap_checksum; // Must match checksum from .ji header
+    // Must match checksum from .ji header, or -1 if we have no corresponding
+    // native image for the heap image.
+    uint64_t heap_checksum;
 };
 
 // The header for each image
