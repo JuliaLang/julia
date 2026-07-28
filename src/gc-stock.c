@@ -2225,13 +2225,13 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
             }
             else {
                 new_obj = (jl_value_t *)gc_read_stack(&rts[i], offset, lb, ub);
-                if (gc_ptr_tag(new_obj, 1)) {
+                if (gc_ptr_tag(new_obj, GC_FIN_CFUNC_TAG)) {
                     // handle tagged pointers in finalizer list
-                    new_obj = (jl_value_t *)gc_ptr_clear_tag(new_obj, 1);
+                    new_obj = (jl_value_t *)gc_ptr_clear_tag(new_obj, GC_FIN_CFUNC_TAG);
                     // skip over the finalizer fptr
                     i++;
                 }
-                if (gc_ptr_tag(new_obj, 2))
+                if (gc_ptr_tag(new_obj, GC_FIN_COBJ_TAG))
                     continue;
                 // conservatively check for the presence of any smalltag type, instead of just NULL
                 // in the very unlikely event that codegen decides to root the result of julia.typeof
@@ -2337,12 +2337,12 @@ static void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_va
         new_obj = *slot;
         if (__unlikely(new_obj == NULL))
             continue;
-        if (gc_ptr_tag(new_obj, 1)) {
-            new_obj = (jl_value_t *)gc_ptr_clear_tag(new_obj, 1);
+        if (gc_ptr_tag(new_obj, GC_FIN_CFUNC_TAG)) {
+            new_obj = (jl_value_t *)gc_ptr_clear_tag(new_obj, GC_FIN_CFUNC_TAG);
             fl_begin++;
             assert(fl_begin < fl_end);
         }
-        if (gc_ptr_tag(new_obj, 2))
+        if (gc_ptr_tag(new_obj, GC_FIN_COBJ_TAG))
             continue;
         gc_try_claim_and_push(mq, new_obj, NULL);
         if (fl_parent != NULL) {
@@ -3114,7 +3114,7 @@ static void sweep_finalizer_list(arraylist_t *list) JL_NOTSAFEPOINT
     size_t j = 0;
     for (size_t i=0; i < len; i+=2) {
         void *v0 = items[i];
-        void *v = gc_ptr_clear_tag(v0, 3);
+        void *v = gc_ptr_clear_tag(v0, GC_FIN_TAG_MASK);
         if (__unlikely(!v0)) {
             // remove from this list
             continue;
@@ -3123,7 +3123,7 @@ static void sweep_finalizer_list(arraylist_t *list) JL_NOTSAFEPOINT
         void *fin = items[i+1];
         int isfreed;
         int isold;
-        if (gc_ptr_tag(v0, 2)) {
+        if (gc_ptr_tag(v0, GC_FIN_COBJ_TAG)) {
             isfreed = 1;
             isold = 0;
         }
@@ -3131,7 +3131,8 @@ static void sweep_finalizer_list(arraylist_t *list) JL_NOTSAFEPOINT
             isfreed = !gc_marked(jl_astaggedvalue(v)->bits.gc);
             isold = (list != &finalizer_list_marked &&
                      jl_astaggedvalue(v)->bits.gc == GC_OLD_MARKED &&
-                     jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED);
+                     (gc_ptr_tag(v0, GC_FIN_CFUNC_TAG) ||
+                      jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED));
         }
         if (isfreed || isold) {
             // remove from this list

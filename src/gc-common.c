@@ -168,8 +168,8 @@ void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
 
 void run_finalizer(jl_task_t *ct, void *o, void *ff)
 {
-    int ptr_finalizer = gc_ptr_tag(o, 1);
-    o = gc_ptr_clear_tag(o, 3);
+    int ptr_finalizer = gc_ptr_tag(o, GC_FIN_CFUNC_TAG);
+    o = gc_ptr_clear_tag(o, GC_FIN_TAG_MASK);
     if (ptr_finalizer) {
         ((void (*)(void*))ff)((void*)o);
         return;
@@ -207,7 +207,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
     for (size_t i = 0; i < len; i += 2) {
         void *v = items[i];
         int move = 0;
-        if (o == (jl_value_t*)gc_ptr_clear_tag(v, 1)) {
+        if (o == (jl_value_t*)gc_ptr_clear_tag(v, GC_FIN_CFUNC_TAG)) {
             void *f = items[i + 1];
             move = 1;
             arraylist_push(copied_list, v);
@@ -449,14 +449,14 @@ void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT
 {
-    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | GC_FIN_CFUNC_TAG), f);
 }
 
 // schedule f(v) to call at the next quiescent interval (aka after the next safepoint/region on all threads)
 JL_DLLEXPORT void jl_gc_add_quiescent(jl_ptls_t ptls, void **v, void *f) JL_NOTSAFEPOINT
 {
-    assert(!gc_ptr_tag(v, 3));
-    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 3), f);
+    assert(!gc_ptr_tag(v, GC_FIN_TAG_MASK));
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | GC_FIN_TAG_MASK), f);
 }
 
 JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT
