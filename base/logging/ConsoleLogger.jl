@@ -145,8 +145,6 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
                           :limit => logger.show_limited)
         for (key, val) in kwargs
             key === :maxlog && continue
-            # width budget accounts for the "│   key = " prefix so that
-            # single-line values can be truncated to fit the terminal
             keyio = IOContext(valio,
                               :displaysize => (rows_per_value,
                                                dsize[2] - 7 - textwidth(string(key))))

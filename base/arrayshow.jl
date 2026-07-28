@@ -413,17 +413,10 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     print_array(recur_io, X)
 end
 
-# single-line fallback for when the vertical space in `displaysize` is too
-# small to show any rows of the array: print the compact array `show`,
-# truncated to the width remaining after the already-printed summary
 function _show_oneline_truncated(io::IO, X::AbstractArray)
     cols = displaysize(io)[2]
-    # the line so far holds the summary followed by ": "
     used = textwidth(sprint(summary, X; context=io)) + 2
     width = max(cols - used, 8)
-    # the summary already names the type, so no prefix is needed on the
-    # array literal (`:typeinfo` must be the array type, not the eltype,
-    # since e.g. a `Vector{Int64}` literal needs a prefix on 32-bit systems)
     ctx = IOContext(io, :typeinfo => typeof(X), :compact => true)
     str = sprint(show, X; context=ctx, sizehint=min(4width, 4096))
     print(io, _truncate_at_width_or_chars(get(io, :color, false)::Bool, str, width))
