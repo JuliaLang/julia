@@ -648,6 +648,9 @@ void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
     jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
 }
 
+extern jl_mutex_t global_roots_lock;
+extern jl_mutex_t finalizers_lock;
+
 // Async-safe debugging dump of the sleep/wake protocol state, for watchdogs
 // diagnosing a wedged scheduler (every field is read with relaxed atomics and
 // printed with jl_safe_printf; no locks are taken, so this cannot itself hang).
@@ -680,6 +683,27 @@ JL_DLLEXPORT void jl_dump_scheduler_state(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_
     }
     jl_tier_dump_state();
     jl_engine_dump_state();
+    // Remaining global julia locks a wedged compile could be blocked on.
+    // jl_mutex_t records its owner task, so report the owning thread rather
+    // than just held/free.
+    {
+        struct { const char *name; jl_mutex_t *lock; } probes[] = {
+            {"typecache", &typecache_lock},
+            {"world_counter", &world_counter_lock},
+            {"global_roots", &global_roots_lock},
+            {"finalizers", &finalizers_lock},
+        };
+        jl_safe_printf("julia locks:");
+        for (size_t i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
+            jl_task_t *owner = jl_atomic_load_relaxed(&probes[i].lock->owner);
+            if (owner == NULL)
+                jl_safe_printf(" %s=free", probes[i].name);
+            else
+                jl_safe_printf(" %s=tid%d", probes[i].name,
+                               (int)jl_atomic_load_relaxed(&owner->tid));
+        }
+        jl_safe_printf("\n");
+    }
     jl_safe_printf("==== end scheduler state\n");
 }
 

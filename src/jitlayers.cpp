@@ -1043,13 +1043,17 @@ public:
 
         jl_task_t *ct = jl_current_task;
         uint8_t state = jl_gc_unsafe_enter(ct->ptls);
+        note_materialize_phase("trampoline/emit-tojlinvoke");
         Function *F = emit_tojlinvoke(CI, "", Out);
-        if (API == JL_INVOKE_SPECSIG)
+        if (API == JL_INVOKE_SPECSIG) {
+            note_materialize_phase("trampoline/emit-specsig");
             F = emit_specsig_to_fptr1(Out, CI, F); // may safepoint
+        }
         jl_gc_unsafe_leave(ct->ptls, state);
         F->setLinkage(GlobalValue::ExternalLinkage);
         F->setName(*Sym);
 
+        note_materialize_phase("trampoline/replace");
         std::unique_lock Lock{JIT.LinkerMutex};
         if (auto Err = R->replace(
                 std::make_unique<JLMaterializationUnit>(JLMaterializationUnit::Create(
