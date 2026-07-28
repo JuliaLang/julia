@@ -3717,6 +3717,8 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap)
     }
     else {
         *dest = (char *)malloc(size);
+        if (*dest == NULL)
+            goto error;
         ios_bufmode(&s, bm_none);
         ios_readall(&s, *dest, size);
     }
