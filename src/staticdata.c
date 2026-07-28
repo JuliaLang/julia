@@ -3692,6 +3692,9 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap)
         abort();
     memcpy(ji_path, lib_path, ji_path_len);
     snprintf(ji_path + ji_path_len, sizeof ji_path - ji_path_len, ".ji");
+#ifdef _OS_WINDOWS_
+    free((char *)lib_path);
+#endif
 
     ios_t s;
     size_t size;
