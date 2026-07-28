@@ -4478,6 +4478,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
         return jl_get_exceptionf(jl_errorexception_type,
                                  "Precompile file header verification checks failed.");
     }
+
     // .ji images with no corresponding native image have expect_checksum = -1.
     if (expect_checksum != -1 && *checksum != expect_checksum) {
         return jl_get_exceptionf(jl_errorexception_type,
@@ -4486,7 +4487,10 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
     }
 
     // Syntax version mismatch is not fatal to load
-    if (pkgimage) {
+    if (depmods) {
+        if (!pkgimage)
+            return jl_get_exceptionf(jl_errorexception_type, "Cache file is for system image");
+
         if (!jl_match_cache_flags_current(read_uint8(f)))
             return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
 
