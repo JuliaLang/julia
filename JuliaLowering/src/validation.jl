@@ -1056,7 +1056,8 @@ vst1_generator(vcx, st) = let
             vst1(vcx, cond) &
             all(vst1_iter, vcx, is)
         [K"generator" val is...] ->
-            vst1(vcx, val) & all(vst1_iter, vcx, is)
+            vst1(with(vcx; readable_underscore=true), val) &
+            all(vst1_iter, vcx, is)
         [K"generator" _...] -> @fail(st, "malformed `generator`")
         _ -> @fail(st, "expected `generator`")
     end
