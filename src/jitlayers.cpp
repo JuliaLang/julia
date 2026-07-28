@@ -861,16 +861,18 @@ public:
 };
 } // namespace anonymous
 
-// Wedge diagnosis: which phase of JLMaterializationUnit::materialize a thread
-// entered last (see jl_jit_dump_state). Racy by design; a stalled
-// materialization leaves the last phase it entered visible.
-static std::atomic<const char *> LastMaterializePhase{"none"};
-static std::atomic<int> MaterializePhaseTid{-1};
+// Wedge diagnosis: which phase of a materialization each thread entered last
+// (see jl_jit_dump_state). Per thread on purpose: with one global slot, a
+// thread that finishes its own materialization overwrites the phase of the
+// thread that is actually stuck, which is exactly the case being diagnosed.
+#define JL_MATERIALIZE_PHASE_SLOTS 128
+static std::atomic<const char *> MaterializePhase[JL_MATERIALIZE_PHASE_SLOTS];
 
 static void note_materialize_phase(const char *Phase) JL_NOTSAFEPOINT
 {
-    LastMaterializePhase.store(Phase, std::memory_order_relaxed);
-    MaterializePhaseTid.store(jl_atomic_load_relaxed(&jl_current_task->tid), std::memory_order_relaxed);
+    int tid = jl_atomic_load_relaxed(&jl_current_task->tid);
+    if (tid >= 0 && tid < JL_MATERIALIZE_PHASE_SLOTS)
+        MaterializePhase[tid].store(Phase, std::memory_order_relaxed);
 }
 
 class JLMaterializationUnit : public orc::MaterializationUnit {
@@ -991,7 +993,7 @@ public:
             return;
         note_materialize_phase("jitlink-emit");
         OL.emit(std::move(R), std::move(*G), std::move(Obj));
-        note_materialize_phase("done");
+        note_materialize_phase(NULL); // finished: leave no phase for this thread
     }
 
     StringRef getName() const override JL_NOTSAFEPOINT
@@ -1055,6 +1057,7 @@ public:
 
         note_materialize_phase("trampoline/replace");
         std::unique_lock Lock{JIT.LinkerMutex};
+        struct phase_clear { ~phase_clear() JL_NOTSAFEPOINT { note_materialize_phase(NULL); } } clear_phase;
         if (auto Err = R->replace(
                 std::make_unique<JLMaterializationUnit>(JLMaterializationUnit::Create(
                     JIT, OL,
@@ -2208,9 +2211,18 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_jit_dump_state_impl(void) JL_NOTSAFEPOIN
     static_cast<JuliaTaskDispatcher &>(
         ES.getExecutorProcessControl().getDispatcher()).dump_wedge_state();
     jl_ExecutionEngine->dumpLinkerMutexState();
-    jl_safe_printf("jit materialize: last_phase=%s tid=%d\n",
-                   LastMaterializePhase.load(std::memory_order_relaxed),
-                   MaterializePhaseTid.load(std::memory_order_relaxed));
+    jl_safe_printf("jit materialize phases:");
+    int any_phase = 0;
+    for (int tid = 0; tid < JL_MATERIALIZE_PHASE_SLOTS; tid++) {
+        const char *Phase = MaterializePhase[tid].load(std::memory_order_relaxed);
+        if (Phase == NULL)
+            continue;
+        jl_safe_printf(" tid%d=%s", tid, Phase);
+        any_phase = 1;
+    }
+    if (!any_phase)
+        jl_safe_printf(" none");
+    jl_safe_printf("\n");
     // Full session dump (symbol states and pending queries): takes the
     // session lock, so it can hang if a wedged materializer holds it — keep
     // it last; the caller is a watchdog on an already-dying process.
