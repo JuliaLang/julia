@@ -403,9 +403,61 @@ function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::Si
     return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any, Any), mod, typevars, struct_infos, old_types)
 end
 
-# Stub apply_type_or_typeapp: before TypeApp is defined, just forward to apply_type.
-# This is replaced with the full version after TypeApp is defined.
+# n.b. TypeApp and apply_type_or_typeapp must be defined before the first
+# struct definition, whose lowered field-type thunks may call them.
+# TypeApp: lazy type application for typegroup blocks.
+# Represents a single type application step, like UnionAll represents a single where binding.
+# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
+# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
+struct TypeApp
+    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
+    param::Any           # Single type parameter
+    function TypeApp(@nospecialize(head), @nospecialize(param))
+        return new(head, param)
+    end
+end
+
+# Check if a value contains a TypeApp anywhere in its structure
+function _contains_typeapp(@nospecialize(x))
+    if x isa TypeApp
+        return true
+    end
+    if x isa UnionAll
+        return _contains_typeapp(x.body)
+    end
+    return false
+end
+
 function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
+    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
+    if tc isa TypeVar || tc isa TypeApp
+        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
+        n = nfields(params)
+        result = tc
+        i = 1
+        while Intrinsics.sle_int(i, n)
+            result = TypeApp(result, getfield(params, i))
+            i = Intrinsics.add_int(i, 1)
+        end
+        return result
+    end
+    # Any param contains TypeApp => must defer
+    n = nfields(params)
+    i = 1
+    while Intrinsics.sle_int(i, n)
+        if _contains_typeapp(getfield(params, i))
+            # Build nested TypeApp chain for all params
+            result = tc
+            j = 1
+            while Intrinsics.sle_int(j, n)
+                result = TypeApp(result, getfield(params, j))
+                j = Intrinsics.add_int(j, 1)
+            end
+            return result
+        end
+        i = Intrinsics.add_int(i, 1)
+    end
+    # All concrete -- real apply_type
     return apply_type(tc, params...)
 end
 
@@ -1206,62 +1258,6 @@ struct Pair{A, B}
         @inline
         return new(a::A, b::B)
     end
-end
-
-# TypeApp: lazy type application for typegroup blocks.
-# Represents a single type application step, like UnionAll represents a single where binding.
-# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
-# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
-struct TypeApp
-    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
-    param::Any           # Single type parameter
-    function TypeApp(@nospecialize(head), @nospecialize(param))
-        return new(head, param)
-    end
-end
-
-# Check if a value contains a TypeApp anywhere in its structure
-function _contains_typeapp(@nospecialize(x))
-    if x isa TypeApp
-        return true
-    end
-    if x isa UnionAll
-        return _contains_typeapp(x.body)
-    end
-    return false
-end
-
-function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
-    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
-    if tc isa TypeVar || tc isa TypeApp
-        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
-        n = nfields(params)
-        result = tc
-        i = 1
-        while sle_int(i, n)
-            result = TypeApp(result, getfield(params, i))
-            i = add_int(i, 1)
-        end
-        return result
-    end
-    # Any param contains TypeApp => must defer
-    n = nfields(params)
-    i = 1
-    while sle_int(i, n)
-        if _contains_typeapp(getfield(params, i))
-            # Build nested TypeApp chain for all params
-            result = tc
-            j = 1
-            while sle_int(j, n)
-                result = TypeApp(result, getfield(params, j))
-                j = add_int(j, 1)
-            end
-            return result
-        end
-        i = add_int(i, 1)
-    end
-    # All concrete -- real apply_type
-    return apply_type(tc, params...)
 end
 
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
