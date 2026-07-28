@@ -421,7 +421,10 @@ function _show_oneline_truncated(io::IO, X::AbstractArray)
     # the line so far holds the summary followed by ": "
     used = textwidth(sprint(summary, X; context=io)) + 2
     width = max(cols - used, 8)
-    ctx = IOContext(io, :typeinfo => eltype(X), :compact => true)
+    # the summary already names the type, so no prefix is needed on the
+    # array literal (`:typeinfo` must be the array type, not the eltype,
+    # since e.g. a `Vector{Int64}` literal needs a prefix on 32-bit systems)
+    ctx = IOContext(io, :typeinfo => typeof(X), :compact => true)
     str = sprint(show, X; context=ctx, sizehint=min(4width, 4096))
     print(io, _truncate_at_width_or_chars(get(io, :color, false)::Bool, str, width))
 end

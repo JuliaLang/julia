@@ -1834,6 +1834,9 @@ end
     @test arrstr(A, 6) == "2-element Vector{Int64}:\n 1\n 2"
     push!(A, 3)
     @test arrstr(A, 6) == "3-element Vector{Int64}:\n 1\n ⋮"
+    # the summary already names the type, so the single-line form should
+    # not repeat it as an array literal prefix (on any platform)
+    @test arrstr(Int8[1, 2], 4) == "2-element Vector{Int8}: [1, 2]"
 
     @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"
     @test arrstr(zeros(4, 30), 4) == "4×30 Matrix{Float64}: [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;…"
