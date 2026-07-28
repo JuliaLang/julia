@@ -2221,3 +2221,34 @@ let fptr = only(code_lowered(uses_mylib_cglobal)).code[1].args[1]
     @test length(fptr.args) == 4
 end
 end
+
+# Native-link policy: libraries named here are bound by direct external symbol
+# reference when emitting an image. The policy must never affect JIT codegen,
+# so that JIT-compiled IR stays independent of it (and therefore cacheable).
+@testset "native-link policy" begin
+    @test ccall(:jl_is_native_link_lib, Cint, (Cstring,), "libnotregistered") == 0
+    ccall(:jl_add_native_link_lib, Cvoid, (Cstring,), "libpolicytest")
+    @test ccall(:jl_is_native_link_lib, Cint, (Cstring,), "libpolicytest") == 1
+    @test ccall(:jl_is_native_link_lib, Cint, (Cstring,), "libnotregistered") == 0
+    # duplicate registration is harmless
+    ccall(:jl_add_native_link_lib, Cvoid, (Cstring,), "libpolicytest")
+    @test ccall(:jl_is_native_link_lib, Cint, (Cstring,), "libpolicytest") == 1
+
+    # foreign-deps export path round-trips and can be cleared
+    @test ccall(:jl_get_foreign_deps_export_path, Ptr{Cchar}, ()) == C_NULL
+    ccall(:jl_set_foreign_deps_export_path, Cvoid, (Cstring,), "/tmp/deps.json")
+    @test unsafe_string(ccall(:jl_get_foreign_deps_export_path, Cstring, ())) == "/tmp/deps.json"
+    ccall(:jl_set_foreign_deps_export_path, Cvoid, (Cstring,), "")
+    @test ccall(:jl_get_foreign_deps_export_path, Ptr{Cchar}, ()) == C_NULL
+
+    # Registering the library behind a live ccall must not change what the JIT
+    # emits: still a lazy runtime lookup, no direct external reference.
+    ccall(:jl_add_native_link_lib, Cvoid, (Cstring,), dlname(named_ccalltest))
+    ir = sprint(io -> code_llvm(io, echo_p_named, Tuple{Ptr{Cvoid}};
+                                raw=true, dump_module=false, optimize=true, debuginfo=:none))
+    @test occursin("jl_lazy_load_and_lookup", ir)
+    @test !occursin("@test_echo_p", ir)
+    # and it still resolves correctly at runtime
+    p = Ptr{Cvoid}(UInt(0xfeedface))
+    @test echo_p_named(p) === p
+end

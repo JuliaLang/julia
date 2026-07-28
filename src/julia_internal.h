@@ -531,6 +531,19 @@ extern JL_DLLEXPORT jl_value_t *jl_libdl_dlid_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_libdl_dlname_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_value_t *jl_abstractlibrary_type JL_GLOBALLY_ROOTED;
+
+// Native-link policy: `AbstractLibrary` dlnames that AOT codegen should bind
+// via direct external symbol references instead of lazy runtime lookup.
+// Populated before AOT codegen runs (e.g. by juliac's `--link-native=`).
+// Process-local; not part of the sysimage. Consulted only when emitting an
+// image, so JIT-compiled IR is unaffected and stays cacheable.
+JL_DLLEXPORT void jl_add_native_link_lib(const char *name) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_is_native_link_lib(const char *name) JL_NOTSAFEPOINT;
+
+// Foreign-deps export: when set to a non-empty path, AOT codegen writes a JSON
+// manifest of every ccall/cglobal usage site there.
+JL_DLLEXPORT void jl_set_foreign_deps_export_path(const char *path) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_get_foreign_deps_export_path(void) JL_NOTSAFEPOINT;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
 void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;

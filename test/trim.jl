@@ -7,8 +7,12 @@
 # `run_juliac` and `run_cc` helpers below; `ARGS[1]` is the bundle directory.
 # Each project's `runtests.jl` is then run in a subprocess (activated in the
 # project's own environment) with the bundle directory as `ARGS[1]`.
+#
+# This file also hosts checks on other AOT-emitted output that need a real image
+# compile to observe, and so cannot live in the ordinary unit-test files.
 using Test
 using Pkg
+using Libdl
 
 const TRIM_DIR = joinpath(@__DIR__, "trim")
 const BUILDROOT = get(ENV, "JULIA_TEST_BUILDROOT", abspath(joinpath(@__DIR__, "..")))
@@ -99,6 +103,55 @@ end
                 rm(outdir; recursive=true, force=true)
                 rm(tmpdir; recursive=true, force=true)
             end
+        end
+    end
+end
+
+# Native linking is an AOT-only facility: a library registered with
+# `jl_add_native_link_lib` has its symbols bound by direct external reference
+# rather than resolved at run time, and that decision is only taken when
+# emitting an image. Exercising it therefore needs a real `--output-o` compile,
+# which is why this lives here rather than in `test/ccall.jl`.
+@testset "native-link + foreign-deps manifest" begin
+    libpath = Libdl.dlpath("libccalltest")
+    libfile = basename(libpath)
+    mktempdir() do dir
+        script = joinpath(dir, "probe.jl")
+        objfile = joinpath(dir, "probe.a")
+        manifest = joinpath(dir, "foreign-deps.json")
+        # `Base.Libc.Libdl` rather than `using Libdl`: the load path is not
+        # initialized in `--output-o` mode.
+        write(script, """
+            const Libdl = Base.Libc.Libdl
+            const CCALLTEST = Libdl.LazyLibrary(
+                Libdl.LazyLibraryPath($(repr(dirname(libpath))), $(repr(libfile))))
+            ccall(:jl_add_native_link_lib, Cvoid, (Cstring,), $(repr(libfile)))
+            ccall(:jl_set_foreign_deps_export_path, Cvoid, (Cstring,), $(repr(manifest)))
+            native_echo() = ccall((:test_echo_p, CCALLTEST), Ptr{Cvoid}, (Ptr{Cvoid},), C_NULL)
+            Base.Experimental.entrypoint(native_echo, ())
+            """)
+        run(`$(Base.julia_cmd()) --startup-file=no --history-file=no
+             --output-o $objfile --output-incremental=no $script`)
+        @test isfile(objfile)
+        @test isfile(manifest)
+
+        json = read(manifest, String)
+        # The registered library's symbol is bound natively, and is filed under
+        # the library's `dlname` rather than a sentinel.
+        @test occursin(libfile, json)
+        @test occursin("{\"symbol\": \"test_echo_p\", \"kind\": \"ccall\", \"linkage\": \"native\"}", json)
+        # Libraries that were not registered keep the lazy lookup, so the policy
+        # is what flips the decision rather than the AOT path itself.
+        @test occursin("\"linkage\": \"lazy\"", json)
+        @test !occursin("{\"symbol\": \"test_echo_p\", \"kind\": \"ccall\", \"linkage\": \"lazy\"}", json)
+
+        # And the emitted object really does leave the symbol undefined for the
+        # system linker, rather than resolving it through the runtime.
+        nmprog = Sys.which("llvm-nm")
+        nmprog === nothing && (nmprog = Sys.which("nm"))
+        if nmprog !== nothing
+            syms = read(`$nmprog $objfile`, String)
+            @test occursin(r"\bU\s+_?test_echo_p\b", syms)
         end
     end
 end

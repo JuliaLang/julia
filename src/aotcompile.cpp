@@ -4,6 +4,10 @@
 #include "platform.h"
 
 // target support
+#include <map>
+#include <set>
+#include <tuple>
+
 #include <llvm/TargetParser/Triple.h>
 #include "llvm/Support/CodeGen.h"
 #include <llvm/ADT/Statistic.h>
@@ -867,6 +871,139 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
     }
 }
 
+static void emit_json_string(raw_ostream &os, const char *str)
+{
+    os << '"';
+    for (const char *p = str; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        switch (c) {
+        case '"':  os << "\\\""; break;
+        case '\\': os << "\\\\"; break;
+        case '\n': os << "\\n"; break;
+        case '\r': os << "\\r"; break;
+        case '\t': os << "\\t"; break;
+        default:
+            if (c < 0x20)
+                os << format("\\u%04x", (unsigned)c);
+            else
+                os << (char)c;
+        }
+    }
+    os << '"';
+}
+
+// Render a frozen identity value for the manifest. `dlid` returns an opaque
+// user-chosen value (a `Base.UUID` for `LazyLibrary`), so fall back to the
+// standard value printer for anything that isn't a plain string/symbol.
+static std::string format_jl_value(jl_value_t *v)
+{
+    if (v == NULL || v == jl_nothing)
+        return "<unknown>";
+    if (jl_is_string(v))
+        return std::string(jl_string_data(v), jl_string_len(v));
+    if (jl_is_symbol(v))
+        return std::string(jl_symbol_name((jl_sym_t*)v));
+    // Prefer the value's own `string` rendering (a `Base.UUID` prints in its
+    // canonical form, which is what a build tool wants to read), falling back
+    // to the raw value printer if that errors for a user-defined type.
+    jl_value_t *str = NULL;
+    JL_TRY {
+        jl_value_t *strfn = jl_get_global(jl_base_module, jl_symbol("string"));
+        if (strfn != NULL)
+            str = jl_call1(strfn, v);
+    }
+    JL_CATCH {
+        str = NULL;
+    }
+    if (str != NULL && jl_is_string(str))
+        return std::string(jl_string_data(str), jl_string_len(str));
+    ios_t buf;
+    ios_mem(&buf, 64);
+    JL_STREAM *s = (JL_STREAM*)&buf;
+    jl_static_show(s, v);
+    std::string out(buf.buf, buf.size);
+    ios_close(&buf);
+    return out;
+}
+
+// Human-readable key for the library a site refers to. Sites whose library
+// isn't statically known get a sentinel rather than being dropped, so the
+// manifest is a complete account of what the image may need at runtime.
+static std::string foreign_dep_lib_key(const jl_foreign_dep_t &dep)
+{
+    if (dep.lib_name != nullptr && jl_is_string(dep.lib_name))
+        return std::string(jl_string_data(dep.lib_name));
+    if (dep.lib == nullptr)
+        return "<rtld-default>";
+    if ((intptr_t)dep.lib == (intptr_t)JL_EXE_LIBNAME)
+        return "<exe>";
+    if ((intptr_t)dep.lib == (intptr_t)JL_LIBJULIA_DL_LIBNAME)
+        return "<libjulia>";
+    if ((intptr_t)dep.lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return "<libjulia-internal>";
+    return std::string(dep.lib);
+}
+
+// Write a JSON manifest of every ccall/cglobal usage site, grouped by library.
+// Each entry records the symbol, the kind of site, and whether it was bound by
+// a direct external symbol reference (`native`) or left to runtime lookup
+// (`lazy`).
+static void aot_export_foreign_deps(jl_codegen_output_t &out, const char *path)
+{
+    std::map<std::string, SmallVector<const jl_foreign_dep_t *, 0>> by_lib;
+    for (const auto &dep : out.foreign_deps)
+        by_lib[foreign_dep_lib_key(dep)].push_back(&dep);
+
+    std::error_code EC;
+    raw_fd_ostream os(path, EC, sys::fs::OF_Text);
+    if (EC) {
+        jl_safe_printf("WARNING: could not open foreign-deps export path %s: %s\n",
+                       path, EC.message().c_str());
+        return;
+    }
+    os << "{\n  \"libraries\": {\n";
+    bool first_lib = true;
+    for (auto &[lib, deps] : by_lib) {
+        if (!first_lib)
+            os << ",\n";
+        first_lib = false;
+        os << "    ";
+        emit_json_string(os, lib.c_str());
+        os << ": {\n";
+        // library_id is present only for AbstractLibrary targets, where the
+        // identity was frozen at the call site.
+        const jl_foreign_dep_t *with_id = nullptr;
+        for (auto *dep : deps)
+            if (dep->lib_id != nullptr) { with_id = dep; break; }
+        if (with_id) {
+            os << "      \"library_id\": ";
+            emit_json_string(os, format_jl_value(with_id->lib_id).c_str());
+            os << ",\n";
+        }
+        os << "      \"symbols\": [\n";
+        // One entry per distinct (symbol, kind, linkage); a symbol referenced
+        // from many call sites is a single dependency.
+        std::set<std::tuple<std::string, bool, bool>> seen;
+        bool first_sym = true;
+        for (auto *dep : deps) {
+            auto key = std::make_tuple(std::string(dep->func ? dep->func : "<dynamic>"),
+                                       dep->is_cglobal, dep->native_linked);
+            if (!seen.insert(key).second)
+                continue;
+            if (!first_sym)
+                os << ",\n";
+            first_sym = false;
+            os << "        {\"symbol\": ";
+            emit_json_string(os, std::get<0>(key).c_str());
+            os << ", \"kind\": " << (dep->is_cglobal ? "\"cglobal\"" : "\"ccall\"");
+            os << ", \"linkage\": " << (dep->native_linked ? "\"native\"" : "\"lazy\"");
+            os << "}";
+        }
+        os << "\n      ]\n    }";
+    }
+    os << "\n  }\n}\n";
+}
+
 static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
                                       jl_array_t *ci_order, const jl_cgparams_t *cgparams,
                                       int external_linkage) JL_CANSAFEPOINT
@@ -939,6 +1076,8 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     emit_always_inline(out,
                        [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
     emit_llvmcall_modules(out);
+    if (const char *foreign_deps_path = jl_get_foreign_deps_export_path())
+        aot_export_foreign_deps(out, foreign_deps_path);
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     aot_link_output(out);
     // including generating cfunction thunks

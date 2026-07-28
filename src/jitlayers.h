@@ -408,6 +408,20 @@ private:
     StringMap<unsigned> counter;
 };
 
+// One record per ccall/cglobal usage site, collected during codegen so the
+// AOT pipeline can emit a foreign-dependency manifest. Strings point into
+// interned/AST-owned storage that outlives codegen; `lib_id` / `lib_name` are
+// the `AbstractLibrary` identity frozen at the call site (NULL when the target
+// is not an AbstractLibrary).
+struct jl_foreign_dep_t {
+    const char *func;          // symbol name, NULL if dynamic
+    const char *lib;           // static library string or sentinel, NULL if dynamic
+    jl_value_t *lib_id;        // dlid() frozen at definition time, or NULL
+    jl_value_t *lib_name;      // dlname() frozen at definition time, or NULL
+    bool is_cglobal;           // cglobal site rather than ccall
+    bool native_linked;        // bound via a direct external symbol reference
+};
+
 struct jl_linker_info_t {
     DenseMap<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>> ci_funcs;
     DenseMap<std::pair<jl_code_instance_t *, jl_invoke_api_t>, orc::SymbolStringPtr>
@@ -461,6 +475,7 @@ public:
     DenseMap<jl_code_instance_t *, jl_llvm_functions_t> ci_funcs;
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
 
+    SmallVector<jl_foreign_dep_t,0> foreign_deps;
     SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
     jl_array_t *temporary_roots = nullptr;
