@@ -716,7 +716,13 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 static const int JI_FORMAT_VERSION = 14;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
-static int64_t write_header(ios_t *s, uint8_t pkgimage) JL_CANSAFEPOINT
+
+// This .ji is for an incremental image and not a system image.
+static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;
+// This .ji must be loaded from the associated native image (.so/.dylib/.dll).
+static const uint32_t JI_FLAG_SPLIT = 1 << 1;
+
+static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
 {
     ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
     write_uint16(s, JI_FORMAT_VERSION);
@@ -725,8 +731,8 @@ static int64_t write_header(ios_t *s, uint8_t pkgimage) JL_CANSAFEPOINT
     ios_write(s, JL_BUILD_UNAME, strlen(JL_BUILD_UNAME)+1);
     ios_write(s, JL_BUILD_ARCH, strlen(JL_BUILD_ARCH)+1);
     ios_write(s, JULIA_VERSION_STRING, strlen(JULIA_VERSION_STRING)+1);
-    write_uint8(s, pkgimage);
-    if (pkgimage) {
+    write_uint32(s, flags);
+    if (flags & JI_FLAG_PKGIMAGE) {
         const char *branch = jl_git_branch(), *commit = jl_git_commit();
         ios_write(s, branch, strlen(branch)+1);
         ios_write(s, commit, strlen(commit)+1);
@@ -1019,7 +1025,7 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint8_t *pkgimage, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos) JL_CANSAFEPOINT
+JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint32_t *flags, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos) JL_CANSAFEPOINT
 {
     uint16_t bom;
     if (!(readstr_verify(s, JI_MAGIC, 0) &&
@@ -1031,9 +1037,9 @@ JL_DLLEXPORT int jl_read_verify_header(ios_t *s, uint8_t *pkgimage, uint32_t *ch
           readstr_verify(s, JULIA_VERSION_STRING, 1)))
         return -1;
 
-    *pkgimage = read_uint8(s);
+    *flags = read_uint32(s);
 
-    if (*pkgimage &&
+    if ((*flags & JI_FLAG_PKGIMAGE) &&
         !(readstr_verify(s, jl_git_branch(), 1) && readstr_verify(s, jl_git_commit(), 1)))
         return -1;
 

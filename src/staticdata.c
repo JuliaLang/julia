@@ -3391,7 +3391,8 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     ext_foreign_cis = jl_alloc_vec_any(0);
 
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
-    int64_t checksumpos = write_header(f, !!worklist);
+    int64_t checksumpos = write_header(f, (worklist ? JI_FLAG_PKGIMAGE : 0) |
+                                              (emit_split ? JI_FLAG_SPLIT : 0));
     if (worklist) {
         if (_native_data != NULL) {
             if (suppress_precompile)
@@ -3399,7 +3400,8 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
             *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order, ext_foreign_cis);
         }
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos);
-    } else if (_native_data != NULL) {
+    }
+    else if (_native_data != NULL) {
         *_native_data = jl_create_native(NULL, jl_options.trim, 0, jl_atomic_load_acquire(&jl_world_counter), mod_array, NULL, jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, module_init_order, ext_foreign_cis);
     }
     if (_native_data != NULL)
@@ -3609,14 +3611,14 @@ static char *jl_image_alloc_pages(size_t size)
 static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len)
 {
     ios_t f;
-    uint8_t pkgimage = 0;
+    uint32_t flags = 0;
     int64_t datastartpos = 0, dataendpos = 0;
     ios_static_buffer(&f, data, len);
     // Only parse the header here; for incremental images the dependency
     // modules are not known yet, so the full cache validation happens later,
     // against the decompressed buffer.
     uint32_t checksum;
-    int err = jl_read_verify_header(&f, &pkgimage, &checksum, &dataendpos, &datastartpos);
+    int err = jl_read_verify_header(&f, &flags, &checksum, &dataendpos, &datastartpos);
     if (err != 0)
         jl_error("Precompile file header verification checks failed.");
     if (image->heap_checksum != -1 && checksum != image->heap_checksum)
@@ -4472,9 +4474,9 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
                                           int64_t expect_checksum, int64_t *dataendpos,
                                           int64_t *datastartpos) JL_CANSAFEPOINT
 {
-    uint8_t pkgimage = 0;
+    uint32_t flags = 0;
     if (ios_eof(f) ||
-        jl_read_verify_header(f, &pkgimage, checksum, dataendpos, datastartpos) != 0) {
+        jl_read_verify_header(f, &flags, checksum, dataendpos, datastartpos) != 0) {
         return jl_get_exceptionf(jl_errorexception_type,
                                  "Precompile file header verification checks failed.");
     }
@@ -4488,7 +4490,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
 
     // Syntax version mismatch is not fatal to load
     if (depmods) {
-        if (!pkgimage)
+        if (!(flags & JI_FLAG_PKGIMAGE))
             return jl_get_exceptionf(jl_errorexception_type, "Cache file is for system image");
 
         if (!jl_match_cache_flags_current(read_uint8(f)))

@@ -1576,13 +1576,14 @@ end
         # The heap payload in the .ji must be zstd-compressed exactly when a
         # compressed split pkgimage was requested.
         open(ji_file) do io
-            pkgimage = Ref{UInt8}()
+            flags = Ref{UInt32}()
             checksum = Ref{UInt32}()
             dataendpos = Ref{Int64}()
             datastartpos = Ref{Int64}()
-            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), io.ios, pkgimage, checksum, dataendpos, datastartpos)
+            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), io.ios, flags, checksum, dataendpos, datastartpos)
             @test err == 0
-            @test pkgimage[] == 1
+            @test flags[] & Base.JI_FLAG_PKGIMAGE != 0
+            @test (flags[] & Base.JI_FLAG_SPLIT != 0) == native
             seek(io, datastartpos[])
             zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
             @test (read(io, 4) == zstd_magic) == (native && compress)

@@ -3727,12 +3727,15 @@ function object_build_id(obj)
     return module_build_id(mod::Module)
 end
 
-function isvalid_cache_header(f::IOStream)
-    pkgimage = Ref{UInt8}()
-    checksum = Ref{UInt32}()
-    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), f.ios, pkgimage, checksum, Ref{Int64}(), Ref{Int64}())
+const JI_FLAG_PKGIMAGE::UInt32 = 1 << 0
+const JI_FLAG_SPLIT::UInt32 = 1 << 1
 
-    if err == 0 && pkgimage[] != 1
+function isvalid_cache_header(f::IOStream)
+    flags = Ref{UInt32}()
+    checksum = Ref{UInt32}()
+    err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), f.ios, flags, checksum, Ref{Int64}(), Ref{Int64}())
+
+    if err == 0 && (flags[] & JI_FLAG_PKGIMAGE == 0)
         @debug "Cache header was for a system image"
         return nothing # We somehow read the header for a system image
     end
