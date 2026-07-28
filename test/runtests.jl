@@ -90,11 +90,9 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Move LinearAlgebra, Pkg and SparseArrays tests to the front, because they take a
-# while, so we might as well get them all started early. SparseArrays in particular
-# runs as a single test set for close to an hour on slow platforms (e.g. i686) and
-# dominates the critical path if started late.
-for prependme in ["LinearAlgebra", "Pkg", "SparseArrays"]
+# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
+# as well get them all started early.
+for prependme in ["LinearAlgebra", "Pkg"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
