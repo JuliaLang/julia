@@ -188,6 +188,8 @@ end
         istaskstarted(t) && error("Setting scope on a started task directly is disallowed.")
     elseif field === :invoked
         error("Setting a Task's `invoked` field directly is disallowed because it is an implementation detail.")
+    elseif field === :result
+        error("Setting a Task's `result` field directly is disallowed. The result of a task is determined by the return value of its code; to pass a value to a suspended task, use `schedule(t, val)` or `yieldto(t, val)` instead.")
     end
     return @invoke setproperty!(t::Any, field::Symbol, v::Any)
 end
@@ -1010,7 +1012,7 @@ function enq_work(t::Task)
             # it (the multiqueue heaps are unsized for empty pools, and a
             # task queued during sysimage bootstrap would be serialized
             # into the system image).
-            t.result = ConcurrencyViolationError("deadlock detected: cannot schedule task")
+            setfield!(t, :result, ConcurrencyViolationError("deadlock detected: cannot schedule task"))
             t._isexception = true
             @atomic :release t._state = task_state_failed
             return t

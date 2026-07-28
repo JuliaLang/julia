@@ -702,6 +702,8 @@ end
     @test_throws ErrorException(message) t.invoked
     message = "Setting a Task's `invoked` field directly is disallowed because it is an implementation detail."
     @test_throws ErrorException(message) (t.invoked = nothing)
+    message = "Setting a Task's `result` field directly is disallowed. The result of a task is determined by the return value of its code; to pass a value to a suspended task, use `schedule(t, val)` or `yieldto(t, val)` instead."
+    @test_throws ErrorException(message) (t.result = 42)
     @test t.state == :runnable
 end
 

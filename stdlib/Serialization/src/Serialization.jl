@@ -1757,7 +1757,7 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     else
         @assert false
     end
-    t.result = deserialize(s)
+    setfield!(t, :result, deserialize(s))
     exc = deserialize(s)
     if exc === nothing
         t._isexception = false
@@ -1765,7 +1765,7 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
         t._isexception = exc
     else
         t._isexception = true
-        t.result = exc
+        setfield!(t, :result, exc)
     end
     if format_version(s) >= 31 && (deserialize(s)::Bool)
         setfield!(t, :invoked, deserialize(s))
