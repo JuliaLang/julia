@@ -533,8 +533,18 @@ public:
     JuliaVariable(const JuliaVariable&) = delete;
     JuliaVariable(const JuliaVariable&&) = delete;
     GlobalVariable *realize(Module *m) {
-        if (GlobalValue *V = m->getNamedValue(name))
-            return cast<GlobalVariable>(V);
+        if (GlobalValue *V = m->getNamedValue(name)) {
+            auto var = cast<GlobalVariable>(V);
+            // The declaration may have been created while emitting for a
+            // different target -- an external consumer such as GPUCompiler.jl
+            // can drive codegen with its own module -- in which case it was not
+            // marked below and COFF has no fallback for unmarked data.
+            if (var->isDeclaration() && !var->isDSOLocal() &&
+                    var->getDLLStorageClass() == GlobalValue::DefaultStorageClass &&
+                    Triple(m->getTargetTriple()).isOSWindows())
+                var->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLImportStorageClass);
+            return var;
+        }
         auto T_size = m->getDataLayout().getIntPtrType(m->getContext());
         auto var = new GlobalVariable(*m, _type(T_size),
                 isconst, GlobalVariable::ExternalLinkage,
