@@ -63,6 +63,12 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
+  - The return type of `fetch(::Task)` is now inferred precisely when inference can determine the code
+    the task was created to run (for example `fetch(Threads.@spawn f(x))`), instead of always being
+    `Any`. Correspondingly, assigning to the `result` field of a `Task` via property syntax
+    (`t.result = v`) now throws an error: the result of a task is determined by the return value of its
+    code, and the runtime and the compiler now rely on this correspondence. To pass a value to a
+    suspended task, use `schedule(t, val)` or `yieldto(t, val)` ([#59221]).
   - New functions `Threads.atomic_fence_heavy` and `Threads.atomic_fence_light` provide support for
     asymmetric atomic fences, speeding up atomic synchronization where one side of the synchronization
     runs significantly less often than the other ([#60311]).
