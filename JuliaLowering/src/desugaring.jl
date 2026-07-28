@@ -2861,7 +2861,7 @@ end
 function expand_function_arg1(ctx, arg)
     if kind(arg) === K"overlay"
         _, _, x = expand_function_arg1(ctx, arg[2])
-        return true, arg[1], x
+        return true, expand_forms_2(ctx, arg[1]), x
     end
     aname = @stm arg begin
         [K"::" [K"Identifier"] t] -> arg[1]
@@ -2937,14 +2937,21 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
         keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
+    elseif overlay
+        mtmp = ssavar(ctx, mtable)
+        @ast ctx src [K"block"
+            [K"method_defs" (::K"nothing")
+                method_def_sparams(ctx, src, sparams)
+                [K"block" [K"=" mtmp method_def_expr(
+                    ctx, src, mtable, sparams, argl, body, rett)]]]
+            mtmp]
     else
         @ast ctx src [K"block"
-            (overlay || kind(mtable) === K"nothing") ? nothing : [K"function_decl" mtable]
+            (kind(mtable) === K"nothing") ? nothing : [K"function_decl" mtable]
             [K"method_defs" mtable
                 method_def_sparams(ctx, src, sparams)
                 [K"block" method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
-                # TODO: overlay should return the method
-                [K"removable" mtable]]
+            [K"removable" mtable]]
     end
 end
 

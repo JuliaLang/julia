@@ -870,11 +870,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             else
                 lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
-            # Method definition: define_method(module, fname_or_mt, sig, code)
             emit(ctx, @ast ctx ex [K"call" "define_method"::K"core"
                                    ctx.mod::K"Value" fname sig lam])
-            @jl_assert !needs_value && !in_tail_pos ex
-            nothing
         end
         emit_latestworld(ctx, ex)
         res

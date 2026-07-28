@@ -2302,16 +2302,16 @@ end
 end
 
 @testset "method table overlays" begin
-    OverlayModule = Module()
+    OverlayModule = @newmod()
 
     @eval OverlayModule Base.Experimental.@MethodTable mt
-    @test_broken JL.include_string(OverlayModule, """
+    @test JL.include_string(OverlayModule, """
         Base.Experimental.@overlay mt function sin(x::Float64); 1; end
     """) isa Method
-    @test_broken JL.include_string(OverlayModule, """
+    @test JL.include_string(OverlayModule, """
         Base.Experimental.@overlay mt cos(x::Float64) = 2
     """) isa Method
-    @test_broken JL.include_string(OverlayModule, """
+    @test JL.include_string(OverlayModule, """
         Base.Experimental.@overlay mt tan(x::T) where {T} = 3
     """) isa Method
 
@@ -2328,4 +2328,12 @@ end
         @test isempty(ms)
     end
 
+    # anything may go in first arg
+    @test JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay @__MODULE__().mt identity(x::Int) = x
+    """) isa Method
+    let ms = Base._methods_by_ftype(
+        Tuple{typeof(identity), Int}, nothing, 1, Base.get_world_counter())
+        @test only(ms).method.module === Base
+    end
 end
