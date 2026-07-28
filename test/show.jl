@@ -1827,18 +1827,20 @@ end
         end
     end
     A = Int64[1]
-    @test arrstr(A, 4) == "1-element Vector{Int64}: …"
+    @test arrstr(A, 4) == "1-element Vector{Int64}: [1]"
     @test arrstr(A, 5) == "1-element Vector{Int64}:\n 1"
     push!(A, 2)
-    @test arrstr(A, 5) == "2-element Vector{Int64}:\n ⋮"
+    @test arrstr(A, 5) == "2-element Vector{Int64}: [1, 2]"
     @test arrstr(A, 6) == "2-element Vector{Int64}:\n 1\n 2"
     push!(A, 3)
     @test arrstr(A, 6) == "3-element Vector{Int64}:\n 1\n ⋮"
 
-    @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: …"
-    @test arrstr(zeros(4, 30), 4) == "4×30 Matrix{Float64}: …"
-    @test arrstr(zeros(4, 3), 5)  == "4×3 Matrix{Float64}:\n ⋮      ⋱  "
-    @test arrstr(zeros(4, 30), 5) == "4×30 Matrix{Float64}:\n ⋮      ⋱  "
+    @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"
+    @test arrstr(zeros(4, 30), 4) == "4×30 Matrix{Float64}: [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;…"
+    @test arrstr(zeros(4, 3), 5)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"
+    @test arrstr(zeros(4, 30), 5) == "4×30 Matrix{Float64}: [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;…"
+    @test arrstr(zeros(1, 30), 5) == "1×30 Matrix{Float64}:\n" *
+        " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0"
     @test arrstr(zeros(4, 3), 6)  == "4×3 Matrix{Float64}:\n 0.0  0.0  0.0\n ⋮         "
     @test arrstr(zeros(4, 30), 6) ==
               string("4×30 Matrix{Float64}:\n",
@@ -1864,7 +1866,7 @@ end
             true
         end
         M = MyBigFill(4, (big(2)^65, 3))
-        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: …"
+        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: [4 4 4; 4 4 4; … ; 4 4 4; 4 4 4]"
         @test arrstr(M, 8) == "36893488147419103232×3 $MyBigFill{$Int, 2}:\n 4  4  4\n 4  4  4\n ⋮     \n 4  4  4"
     end
 end
