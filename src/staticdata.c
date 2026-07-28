@@ -213,6 +213,17 @@ JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
         return 0;
     uint8_t in_image = jl_astaggedvalue(obj)->bits.in_image != 0;
     assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
+#ifndef NDEBUG
+    if (eyt_tree_is_in_range(&image_tree, (uintptr_t)obj) != in_image) {
+        // print enough context to identify the object before aborting
+        jl_datatype_t *ty = (jl_datatype_t*)jl_typeof(obj);
+        jl_safe_printf("jl_object_in_image inconsistency: obj %p header %zx "
+                       "bits.in_image %d not matching image tree, typeof %p (%s)\n",
+                       (void*)obj, (size_t)jl_astaggedvalue(obj)->header, (int)in_image,
+                       (void*)ty,
+                       jl_is_datatype(ty) ? jl_symbol_name(ty->name->name) : "<?>");
+    }
+#endif
     assert(eyt_tree_is_in_range(&image_tree, (uintptr_t)obj) == in_image);
     return in_image;
 }
@@ -603,6 +614,15 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_datatype_t *dt = (jl_datatype_t*)v;
         // ensure all type parameters are recached
         jl_queue_for_serialization_(s, (jl_value_t*)dt->parameters, 1, 1);
+#ifndef NDEBUG
+        if (jl_is_datatype_singleton(dt) &&
+            eyt_tree_is_in_range(&image_tree, (uintptr_t)dt->instance) !=
+                (jl_astaggedvalue(dt->instance)->bits.in_image != 0)) {
+            jl_safe_printf("singleton instance with inconsistent in_image bit: type %s.%s\n",
+                           jl_symbol_name(dt->name->module->name),
+                           jl_symbol_name(dt->name->name));
+        }
+#endif
         if (jl_is_datatype_singleton(dt) && needs_uniquing(dt->instance, s->query_cache)) {
             assert(jl_needs_serialization(s, dt->instance)); // should be true, since we visited dt
             // do not visit dt->instance for our template object as it leads to unwanted cycles here
