@@ -651,15 +651,22 @@ let code = """
     victim.sticky = false
     done = Channel{Bool}(1)
     calls = Ref(0)
-    trypop = q -> nothing                # never a task: keep polling
+    # The throw must land on the post-publish recheck, the check_empty from
+    # inside the sleep transition. Don't count calls: how many quick polls
+    # precede the transition varies (two normally, one under rr or a
+    # JULIA_DEBUG_SLEEPWAKE build, where the spin is skipped). The recheck is
+    # the only check_empty immediately preceded by another check_empty, since
+    # the loop calls trypop before each quick poll but sleep_thread does not.
+    after_check = Ref(false)
+    trypop = q -> (after_check[] = false; nothing)   # never a task: keep polling
     checkempty = () -> begin
         calls[] += 1
-        # with JULIA_THREAD_SLEEP_THRESHOLD=1 the third call is the
-        # post-publish recheck (1: quick check, 2: quick check past the
-        # threshold, 3: recheck after sleep_check_state = sleeping)
-        calls[] < 3 && return true
-        schedule(victim)
-        error("boom")
+        if after_check[]                 # second in a row: we are past publish
+            schedule(victim)
+            error("boom")
+        end
+        after_check[] = true
+        return true
     end
     a = Task(() -> begin
         try
