@@ -345,7 +345,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
     n = rest = 0
-    local last = nothing
+    last = nothing
 
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
