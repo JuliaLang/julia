@@ -106,10 +106,18 @@ for options in ((format=:tree, C=true),
     Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     if isempty(str)
-        # an empty buffer means no sample was ever collected; report whether
-        # sampling rounds were being abandoned because a thread (e.g. an
-        # adopted one) could not be suspended
-        @error "empty profile" options len_data=Profile.len_data() nthreads=Threads.maxthreadid() suspend_failures=ccall(:jl_profile_suspend_failures, UInt64, ())
+        # Samples may have been collected and then all filtered out while
+        # printing, so summarize what is actually in the buffer: how many
+        # blocks, which threads they came from, and how many instruction
+        # pointers they carry.
+        local data = Profile.fetch()
+        local nblocks = count(Base.Fix1(Profile.is_block_end, data), eachindex(data))
+        local tids = Set{UInt}()
+        for i in eachindex(data)
+            Profile.is_block_end(data, i) || continue
+            push!(tids, data[i - Profile.META_OFFSET_THREADID])
+        end
+        @error "empty profile" options len_data=Profile.len_data() nthreads=Threads.maxthreadid() suspend_failures=ccall(:jl_profile_suspend_failures, UInt64, ()) nblocks nips=length(data) - nblocks * (Profile.nmeta + 1) threadids=sort!(collect(tids))
     end
     @test !isempty(str)
     file, _ = mktemp()
