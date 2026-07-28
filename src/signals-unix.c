@@ -1207,7 +1207,6 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             // Let's forbid threads from running GC while we're trying to exit,
             // also let's make sure we're not in the middle of GC.
             jl_gc_enable_from_nonmutator(0);
-            jl_safepoint_wait_gc(NULL);
             jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
         }
         else if (critical) {

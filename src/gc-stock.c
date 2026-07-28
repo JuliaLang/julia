@@ -3521,8 +3521,11 @@ JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on)
 {
     if (on)
         jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
-    else
+    else {
         jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+        // pass NULL as a special token to indicate we are running on an unmanaged task
+        jl_safepoint_wait_gc(NULL);
+    }
 }
 
 JL_DLLEXPORT int jl_gc_is_globally_enabled(void)

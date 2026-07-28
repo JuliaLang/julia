@@ -242,8 +242,28 @@ JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on)
 {
     if (on)
         mmtk_enable_collection();
-    else
-        mmtk_disable_collection();
+    else {
+        while (1) {
+            // Capture the GC epoch *before* attempting to disable, so that if the epoch advances
+            // between this call and mmtk_wait_for_new_gc_epoch() below, we don't miss the
+            // notification and wait forever.
+            uint64_t gc_epoch = mmtk_gc_epoch();
+            int result = mmtk_disable_collection();
+            if (result == MMTK_DISABLE_COLLECTION_OK) {
+                break;
+            } else if (result == MMTK_DISABLE_COLLECTION_RETRY) {
+                // This thread isn't a registered mutator, so there's no safepoint to cooperate with by
+                // stopping itself.
+                // pass NULL as a special token to indicate we are running on an unmanaged task
+                jl_safepoint_wait_gc(NULL);
+            } else {
+                assert(result == MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH);
+                // Unlike jl_gc_enable(), this thread is not a registered mutator.
+                // We don't need to enter GC safe region. Just block on the cond var.
+                mmtk_wait_for_new_gc_epoch(gc_epoch);
+            }
+        }
+    }
 }
 
 JL_DLLEXPORT int jl_gc_is_globally_enabled(void)
