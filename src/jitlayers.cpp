@@ -2511,8 +2511,14 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         note_materialize_phase("linkOutput/call-targets");
         auto Dest = linkCallTarget(MR, CI, API, EquivMap);
         if (!Dest) {
+            // Every MaterializationResponsibility must be resolved, emitted or
+            // failed: dropping one leaves its symbols claimed forever and any
+            // query on them never completes. linkCallTarget used to fail the
+            // materialization itself on its error path; it no longer has one,
+            // so do it here.
             Lock.unlock();
             PendingTrampolines.clear();
+            MR.failMaterialization();
             return false;
         }
         if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);
