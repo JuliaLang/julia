@@ -525,6 +525,33 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         juliapersonality_func->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
     }
 
+    if (TT.isOSWindows()) {
+        // Any global variable still left as a declaration at this point is
+        // resolved from outside the image, i.e. from libjulia: the module has
+        // been merged but not yet split into partitions, so cross-partition
+        // references are all still definitions here.
+        //
+        // Such data has to be referenced through the import table. COFF can
+        // resolve an unmarked *function* through an import thunk, but there is
+        // no equivalent for data, and images are linked with
+        // --disable-auto-import --disable-runtime-pseudo-reloc, so an unmarked
+        // data reference fails to link outright.
+        //
+        // JuliaVariable::realize normally marks these when it creates them, but
+        // it only does so when the module it is creating them in targets
+        // Windows, and it returns any existing declaration untouched. A global
+        // first created while emitting for another target -- as happens when an
+        // external consumer such as GPUCompiler.jl drives codegen with its own
+        // module -- therefore keeps an unmarked declaration, which then poisons
+        // every reference to that symbol once the modules are linked together.
+        //Safe b/c context is locked by params
+        for (GlobalVariable &G : clone.getModuleUnlocked()->globals()) {
+            if (G.isDeclaration() && !G.hasLocalLinkage() && !G.isDSOLocal() &&
+                    G.getDLLStorageClass() == GlobalValue::DefaultStorageClass)
+                G.setDLLStorageClass(GlobalValue::DLLImportStorageClass);
+        }
+    }
+
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
     if (policy == CompilationPolicy::Default) {
