@@ -3496,11 +3496,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
 // collector entry point and control
 _Atomic(uint32_t) jl_gc_disable_counter = 1;
 
-JL_DLLEXPORT uint32_t jl_get_gc_disable_counter(void)
-{
-    return jl_atomic_load_acquire(&jl_gc_disable_counter);
-}
-
 JL_DLLEXPORT int jl_gc_enable(int on)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
@@ -3522,7 +3517,7 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     return prev;
 }
 
-JL_DLLEXPORT void jl_gc_globally_enable_no_check(int on)
+JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on)
 {
     if (on)
         jl_atomic_fetch_add(&jl_gc_disable_counter, -1);

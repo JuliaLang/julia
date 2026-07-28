@@ -313,9 +313,11 @@ pub const MMTK_DISABLE_COLLECTION_RETRY: i32 = 1;
 /// retry.
 pub const MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH: i32 = 2;
 
+use mmtk::GcStatus;
+
 #[no_mangle]
 pub extern "C" fn mmtk_disable_collection() -> i32 {
-    use mmtk::GcStatus;
+    assert!(SINGLETON.get_gc_status() != GcStatus::Uninitialized);
     match memory_manager::disable_collection(&SINGLETON) {
         Ok(_) => MMTK_DISABLE_COLLECTION_OK,
         Err(GcStatus::PauseRequested) => MMTK_DISABLE_COLLECTION_RETRY,
@@ -335,11 +337,13 @@ pub extern "C" fn mmtk_disable_collection() -> i32 {
 
 #[no_mangle]
 pub extern "C" fn mmtk_enable_collection() -> i32 {
+    assert!(SINGLETON.get_gc_status() != GcStatus::Uninitialized);
     memory_manager::enable_collection(&SINGLETON) as i32
 }
 
 #[no_mangle]
 pub extern "C" fn mmtk_is_collection_enabled() -> i32 {
+    assert!(SINGLETON.get_gc_status() != GcStatus::Uninitialized);
     memory_manager::is_collection_enabled(&SINGLETON) as i32
 }
 

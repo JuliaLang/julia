@@ -238,7 +238,7 @@ JL_DLLEXPORT uint64_t jl_gc_get_hard_heap_limit(void)
     return jl_options.hard_heap_limit;
 }
 
-JL_DLLEXPORT void jl_gc_globally_enable_no_check(int on)
+JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on)
 {
     if (on)
         mmtk_enable_collection();
@@ -281,6 +281,8 @@ JL_DLLEXPORT int jl_gc_enable(int on)
                 // pause start) and retry.
                 // It is also possible that safepoints are not yet enabled. We will retry as well.
                 jl_gc_safepoint_(ptls);
+                // Avoid busy wait
+                jl_cpu_pause();
             } else {
                 assert(result == MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH);
                 // A stop-the-world pause is active, or a concurrent GC's background work is
