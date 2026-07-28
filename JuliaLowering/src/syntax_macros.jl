@@ -435,7 +435,7 @@ function _ensure_syntax_version(st, ver::VersionNumber)
     if is_leaf(st) || numchildren(st) == 0
         st_sc == sc ? st : @mknode(st; context=sc)
     else
-        out = mapchildren(c->_ensure_syntax_version(c, ver), children(st))
+        out = mapchildren(c->_ensure_syntax_version(c, ver), st)
         (st_sc === sc && out === st) ? out : @mknode(st; context=sc)
     end
 end

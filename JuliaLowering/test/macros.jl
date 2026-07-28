@@ -22,6 +22,21 @@ fl_eval(test_mod, :(global mvar = "global mvar"))
     @test JuliaLowering.include_string(
         test_mod, "JuliaLowering.@syntax_version"; expr_compat_mode=true) ==
         JuliaSyntax.JL_OLD_SYNTAX_VERSION
+
+    # TODO: test the version of returned syntax
+    @test JuliaLowering.include_string(@newmod(), """
+    JuliaLowering.@syntax_version JuliaSyntax.JL_NEW_SYNTAX_VERSION macro m(); end
+    """; expr_compat_mode=false) isa Function
+    @test JuliaLowering.include_string(@newmod(), """
+    JuliaLowering.@syntax_version JuliaSyntax.JL_NEW_SYNTAX_VERSION macro m(); end
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(@newmod(), """
+    JuliaLowering.@syntax_version JuliaSyntax.JL_OLD_SYNTAX_VERSION macro m(); end
+    """; expr_compat_mode=false) isa Function
+    @test JuliaLowering.include_string(@newmod(), """
+    JuliaLowering.@syntax_version JuliaSyntax.JL_OLD_SYNTAX_VERSION macro m(); end
+    """; expr_compat_mode=true) isa Function
 end
 
 # Basic checks that arbitrary nesting of transparent macros (no new syntax in new
