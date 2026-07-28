@@ -655,7 +655,6 @@ end
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
-                    sidx = 0
                 end
                 # Deal with the main body of elements
                 while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)

@@ -1386,7 +1386,7 @@ end
 function _cosc(x::Union{Float32, Float64})
     if x isa Float32
         pols = _cosc_f32
-    elseif x isa Float64
+    else
         pols = _cosc_f64
     end
     _cos_cardinal_eval(x, pols)

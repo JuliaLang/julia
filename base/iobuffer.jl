@@ -643,7 +643,7 @@ end
         # If we can't fit all the requested data in the new buffer, we need to
         # fit as much as possible, so we must compact
         if !iszero(reclaimable_bytes)
-            desired_size -= compact!(io)
+            compact!(io)
         end
         # Max out the buffer size if we want more than the buffer size
         if length(io.data) < io.maxsize
