@@ -366,6 +366,35 @@ end
 Core.eval(Main, main_ex)
 
 # Task
+# Runnable tasks drop CodeInstance hints but preserve explicit invoke targets.
+serialization_task_result() = 42
+create_serialization_stream() do s
+    t = Task(serialization_task_result)
+    serialize(s, t)
+    seek(s, 0)
+    r = deserialize(s)
+    @test fetch(schedule(r)) === 42
+    @test fetch(schedule(t)) === 42
+end
+
+serialization_task_invoke() = 43
+serialization_task_invoke(x...) = x
+function serialization_task_with_invoke(@nospecialize(f), @nospecialize(invoked))
+    t = Core._task(f, 0, invoked)
+    t.donenotify = Base.ThreadSynchronizer()
+    return t
+end
+for invoked in (Tuple{Vararg}, which(serialization_task_invoke, (Vararg,)))
+    create_serialization_stream() do s
+        t = serialization_task_with_invoke(serialization_task_invoke, invoked)
+        serialize(s, t)
+        seek(s, 0)
+        r = deserialize(s)
+        @test fetch(schedule(r)) === ()
+        @test fetch(schedule(t)) === ()
+    end
+end
+
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)

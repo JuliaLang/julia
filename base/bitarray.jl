@@ -303,7 +303,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
     if nc8 > 0
         ind8 = 1
         P8 = Ptr{UInt64}(pointer(C, ind)) # unaligned i64 pointer
-        @inbounds for i = 1:nc8
+        @inbounds for _ = 1:nc8
             c = UInt64(0)
             for j = 0:7
                 # unaligned load
@@ -315,7 +315,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
         end
         ind += (ind8-1) << 3
     end
-    @inbounds for i = (nc8+1):nc
+    @inbounds for _ = (nc8+1):nc
         c = UInt64(0)
         for j = 0:63
             c |= (UInt64(C[ind]) << j)
@@ -630,7 +630,6 @@ function gen_bitarray_from_itr(itr)
 end
 
 function fill_bitarray_from_itr!(B::BitArray, itr)
-    n = length(B)
     C = Vector{Bool}(undef, bitcache_size)
     Bc = B.chunks
     ind = 1
@@ -708,7 +707,6 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     Ic = I.chunks
     length(Bc) == length(Ic) || throw_boundserror(B, I)
     lc = length(Bc)
-    lx = length(X)
     last_chunk_len = _mod64(length(B)-1)+1
 
     Xi = first(eachindex(X))
@@ -717,7 +715,7 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
         @inbounds Imsk = Ic[i]
         @inbounds C = Bc[i]
         u = UInt64(1)
-        for j = 1:(i < lc ? 64 : last_chunk_len)
+        for _ = 1:(i < lc ? 64 : last_chunk_len)
             if Imsk & u != 0
                 Xi > lastXi && throw_setindex_mismatch(X, count(I))
                 @inbounds x = convert(Bool, X[Xi])
@@ -1145,7 +1143,7 @@ function (-)(B::BitArray)
     for i = 1:length(Bc)-1
         u = UInt64(1)
         c = Bc[i]
-        for j = 1:64
+        for _ = 1:64
             if c & u != 0
                 A[ind] = -1
             end
@@ -1155,7 +1153,7 @@ function (-)(B::BitArray)
     end
     u = UInt64(1)
     c = Bc[end]
-    for j = 0:_mod64(l-1)
+    for _ = 0:_mod64(l-1)
         if c & u != 0
             A[ind] = -1
         end
@@ -1854,7 +1852,6 @@ function hcat(A::Union{BitMatrix,BitVector}...)
     nargs = length(A)
     nrows = size(A[1], 1)
     ncols = 0
-    dense = true
     for j = 1:nargs
         Aj = A[j]
         nd = ndims(Aj)
@@ -1919,7 +1916,7 @@ write(s::IO, B::BitArray) = write(s, B.chunks)
 function read!(s::IO, B::BitArray)
     n = length(B)
     Bc = B.chunks
-    nc = length(read!(s, Bc))
+    read!(s, Bc)
     if length(Bc) > 0 && Bc[end] & _msk_end(n) ≠ Bc[end]
         Bc[end] &= _msk_end(n) # ensure that the BitArray is not broken
         throw(DimensionMismatch("read mismatch, found non-zero bits after BitArray length"))

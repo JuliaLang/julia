@@ -3691,6 +3691,48 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     return recollect;
 }
 
+// collector entry point and control
+_Atomic(uint32_t) jl_gc_disable_counter = 1;
+
+JL_DLLEXPORT int jl_gc_enable(int on)
+{
+    JL_SIGATOMIC_BEGIN();
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
+        }
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+        // check if the GC is running and wait for it to finish
+        jl_gc_safepoint_(ptls);
+    }
+    JL_SIGATOMIC_END();
+    return prev;
+}
+
+JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on)
+{
+    if (on)
+        jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    else {
+        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+        // pass NULL as a special token to indicate we are running on an unmanaged task
+        jl_safepoint_wait_gc(NULL);
+    }
+}
+
+JL_DLLEXPORT int jl_gc_is_globally_enabled(void)
+{
+    return !jl_atomic_load_acquire(&jl_gc_disable_counter);
+}
+
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 {
     JL_PROBE_GC_BEGIN(collection);

@@ -649,8 +649,8 @@ function range_start_stop_length(start::T, stop::T, len::Integer) where {T<:IEEE
         return steprangelen_hp(T, start, zero(T), 0, len, 1)
     end
     # Attempt to find exact rational approximations
-    start_n, start_d = rat(start)
-    stop_n, stop_d = rat(stop)
+    _, start_d = rat(start)
+    _, stop_d = rat(stop)
     if start_d != 0 && stop_d != 0
         den = lcm_unchecked(start_d, stop_d)
         m = maxintfloat(T, Int)

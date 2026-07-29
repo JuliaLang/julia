@@ -648,6 +648,7 @@ typedef struct {
     _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
+    uint8_t concrete_only; // Bool: inference refuses to commit (records no backedge) at non-concrete call sites
 } jl_typename_t;
 
 typedef struct {

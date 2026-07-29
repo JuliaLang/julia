@@ -193,6 +193,7 @@ macro deprecate(old, new, export_old=true)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
         callexpr = old.head === :call ? old : old.args[1]
+        maybe_export = nothing
         if callexpr.head === :call
             fnexpr = callexpr.args[1]
             if fnexpr isa Expr && fnexpr.head === :curly
@@ -204,8 +205,6 @@ macro deprecate(old, new, export_old=true)
                 else
                     cannot_export_nonsymbol()
                 end
-            else
-                maybe_export = nothing
             end
         else
             error("invalid usage of @deprecate")

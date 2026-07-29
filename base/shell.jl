@@ -137,7 +137,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                 popfirst!(st)
             end
         elseif interpolate && !in_single_quotes && c == '$'
-            i = consume_upto!(arg, s, i, j)
+            consume_upto!(arg, s, i, j)
             result = parse_dollar_interp(st, s)
             s = result[2]
             last_arg = result[3]
@@ -153,7 +153,6 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                 elseif redirect_mode === :stdout; seg_stdout = re
                 else; seg_stderr = re; end
                 empty!(arg)
-                redirect_mode = :none
             elseif redirect_mode == :none && (!isempty(arg) || word_has_special)
                 append_2to1!(args, arg)
             end
@@ -226,7 +225,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                     end
                 elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
-                    k, c′ = peek(st)::P
+                    _, c′ = peek(st)::P
                     if c′ == '"' || c′ == '$' || c′ == '\\'
                         i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)

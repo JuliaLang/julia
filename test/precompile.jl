@@ -703,7 +703,9 @@ precompile_test_harness(false) do dir
     FooBar3_file = joinpath(dir, "FooBar3.jl")
     FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
     write(FooBar3_inc, "x=1\n")
-    for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
+    for code in ["Core.eval(Base, :(x=1))",
+                 "Base.include(Base, \"FooBar3_inc.jl\")",
+                 "Core.define_method(Base, :FooBar3_closed_module_gf)"]
         write(FooBar3_file, """
         module FooBar3
         $code

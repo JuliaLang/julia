@@ -264,6 +264,92 @@ JL_DLLEXPORT uint64_t jl_gc_get_hard_heap_limit(void)
     return jl_options.hard_heap_limit;
 }
 
+JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on)
+{
+    if (on)
+        mmtk_enable_collection();
+    else {
+        while (1) {
+            // Capture the GC epoch *before* attempting to disable, so that if the epoch advances
+            // between this call and mmtk_wait_for_new_gc_epoch() below, we don't miss the
+            // notification and wait forever.
+            uint64_t gc_epoch = mmtk_gc_epoch();
+            int result = mmtk_disable_collection();
+            if (result == MMTK_DISABLE_COLLECTION_OK) {
+                break;
+            } else if (result == MMTK_DISABLE_COLLECTION_RETRY) {
+                // This thread isn't a registered mutator, so there's no safepoint to cooperate with by
+                // stopping itself.
+                // pass NULL as a special token to indicate we are running on an unmanaged task
+                jl_safepoint_wait_gc(NULL);
+                jl_cpu_pause();
+            } else {
+                assert(result == MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH);
+                // Unlike jl_gc_enable(), this thread is not a registered mutator.
+                // We don't need to enter GC safe region. Just block on the cond var.
+                mmtk_wait_for_new_gc_epoch(gc_epoch);
+            }
+        }
+    }
+}
+
+JL_DLLEXPORT int jl_gc_is_globally_enabled(void)
+{
+    return mmtk_is_collection_enabled();
+}
+
+JL_DLLEXPORT int jl_gc_enable(int on)
+{
+    JL_SIGATOMIC_BEGIN();
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        int now_enabled = mmtk_enable_collection();
+        if (now_enabled) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
+        }
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        while (1) {
+            // Capture the GC epoch *before* attempting to disable, so that if the epoch advances
+            // between this call and mmtk_wait_for_new_gc_epoch() below, we don't miss the
+            // notification and wait forever.
+            uint64_t gc_epoch = mmtk_gc_epoch();
+            int result = mmtk_disable_collection();
+            if (result == MMTK_DISABLE_COLLECTION_OK) {
+                break;
+            } else if (result == MMTK_DISABLE_COLLECTION_RETRY) {
+                // A GC pause has been requested in MMTk but mutators have not all stopped yet. This
+                // thread may itself be one of the ones the pause is waiting to stop, so do a
+                // safepoint check (which is exactly how a mutator cooperates with letting the
+                // pause start) and retry.
+                // It is also possible that safepoints are not yet enabled. We will retry as well.
+                jl_gc_safepoint_(ptls);
+                // Avoid busy wait
+                jl_cpu_pause();
+            } else {
+                assert(result == MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH);
+                // A stop-the-world pause is active, or a concurrent GC's background work is
+                // running. Block until the next GC epoch instead.
+                //
+                // This thread must enter a GC-safe state before blocking here: the wait can only
+                // be woken by a future stop-the-world pause completing (see resume_mutators() in
+                // the mmtk_julia binding). This mirrors the same jl_gc_safe_enter/leave pattern used around other
+                // blocking waits elsewhere in the runtime (e.g. _jl_mutex_wait in threading.c).
+                int8_t gc_state = jl_gc_safe_enter(ptls);
+                mmtk_wait_for_new_gc_epoch(gc_epoch);
+                jl_gc_safe_leave(ptls, gc_state);
+            }
+        }
+    }
+    JL_SIGATOMIC_END();
+    return prev;
+}
+
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
 {
     // Just do a safe point for general maybe_collect
@@ -291,7 +377,7 @@ static inline void malloc_maybe_collect(jl_ptls_t ptls, size_t sz)
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (!mmtk_is_collection_enabled()) {
         size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
@@ -312,7 +398,7 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
 
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (!mmtk_is_collection_enabled()) {
         size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
@@ -359,7 +445,7 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     gc_num.time_to_safepoint = duration;
     gc_num.total_time_to_safepoint += duration;
 
-    if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (mmtk_is_collection_enabled()) {
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
 #ifndef __clang_gcanalyzer__
         mmtk_block_thread_for_gc();

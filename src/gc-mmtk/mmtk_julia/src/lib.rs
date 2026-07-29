@@ -79,15 +79,27 @@ pub static BLOCK_FOR_GC: AtomicBool = AtomicBool::new(false);
 pub static WORLD_HAS_STOPPED: AtomicBool = AtomicBool::new(false);
 
 #[no_mangle]
-pub static DISABLED_GC: AtomicBool = AtomicBool::new(false);
-
-#[no_mangle]
 pub static USER_TRIGGERED_GC: AtomicIsize = AtomicIsize::new(0);
 
 lazy_static! {
     pub static ref STW_COND: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
+        Arc::new((Mutex::new(0), Condvar::new()));
+
+    // The GC epoch: notified by `VMCollection::resume_mutators()` every time a stop-the-world
+    // pause ends (including the pause that ends a concurrent GC's background-work phase). Used
+    // to wake a mutator that's retrying `mmtk_disable_collection()` after it failed with
+    // `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH` (status `InPause`/`InConcurrentGC`; see
+    // `mmtk_wait_for_new_gc_epoch()`), since mmtk-core has no more targeted hook for "a pause or
+    // concurrent GC just ended" specifically.
+    //
+    // The guarded `u64` is the epoch counter, incremented on every notification: a waiter should
+    // capture its current value (`mmtk_gc_epoch()`) before giving up on
+    // `mmtk_disable_collection()`, then wait until the epoch differs from that captured value,
+    // rather than waiting unconditionally -- this avoids missing a notification that arrives
+    // between the failed disable attempt and the start of the wait.
+    pub static ref GC_EPOCH_COND: Arc<(Mutex<u64>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
 
     // We create a boxed mutator with MMTk core, and we mem copy its content to jl_tls_state_t (shallow copy).
@@ -104,7 +116,6 @@ extern "C" {
     pub fn jl_gc_scan_julia_exc_obj(obj: Address, closure: Address, process_slot: ProcessSlotFn);
     pub fn jl_gc_get_stackbase(tid: i16) -> usize;
     pub fn jl_throw_out_of_memory_error();
-    pub fn jl_get_gc_disable_counter() -> u32;
     pub fn jl_gc_mmtk_sweep_malloced_memory();
     pub fn jl_gc_sweep_weak_processing();
     pub fn jl_gc_sweep_stack_pools_and_mtarraylist_buffers();

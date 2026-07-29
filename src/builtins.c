@@ -1672,6 +1672,43 @@ JL_CALLABLE(jl_f_declare_const)
     return nargs > 2 ? args[2] : jl_nothing;
 }
 
+// define_method(module::Module, name::Symbol) - declare generic function
+// define_method(module::Module, fname_or_mt, argdata, code) - define method
+JL_CALLABLE(jl_f_define_method)
+{
+    if (nargs != 2 && nargs != 4)
+        jl_error("define_method requires 2 or 4 arguments");
+    JL_TYPECHK(define_method, module, args[0]);
+    jl_module_t *module = (jl_module_t *)args[0];
+    jl_check_top_level_effect(module, "define_method");
+
+    // Generic function declaration: define_method(module, name)
+    if (nargs == 2) {
+        JL_TYPECHK(define_method, symbol, args[1]);
+        jl_sym_t *fname = (jl_sym_t*)args[1];
+        return jl_declare_const_gf(module, fname);
+    }
+
+    // Method definition: define_method(module, fname_or_mt, argdata, code)
+    jl_value_t *fname = args[1];
+    JL_TYPECHK(define_method, simplevector, args[2]);
+    jl_svec_t *argdata = (jl_svec_t*)args[2];
+    if (jl_svec_len(argdata) != 3 ||
+            !jl_is_svec(jl_svecref(argdata, 0)) ||
+            jl_svec_len((jl_svec_t*)jl_svecref(argdata, 0)) == 0 ||
+            !jl_is_svec(jl_svecref(argdata, 1)) ||
+            !jl_is_linenode(jl_svecref(argdata, 2)))
+        jl_error("define_method: invalid argument data");
+    if (!jl_is_code_info(args[3]) && !jl_is_expr(args[3]))
+        jl_error("define_method: method body must be a CodeInfo or Expr");
+    jl_methtable_t *mt = NULL;
+    if (jl_is_mtable(fname))
+        mt = (jl_methtable_t*)fname;
+    jl_value_t *meth = args[3];
+    jl_method_t *ret = jl_method_def(argdata, mt, (jl_code_info_t*)meth, module);
+    return (jl_value_t *)ret;
+}
+
 // import, using --------------------------------------------------------------
 
 // Import binding `from.sym` as `asname` into `to`:
@@ -2383,25 +2420,30 @@ JL_CALLABLE(jl_f__svec_ref)
     return jl_svecref(s, idx-1);
 }
 
-static int equiv_field_types(jl_value_t *old, jl_value_t *ft) JL_CANSAFEPOINT
+JL_CALLABLE(jl_f__task)
 {
-    size_t nf = jl_svec_len(ft);
-    if (jl_svec_len(old) != nf)
-        return 0;
-    size_t i;
-    for (i = 0; i < nf; i++) {
-        jl_value_t *ta = jl_svecref(old, i);
-        jl_value_t *tb = jl_svecref(ft, i);
-        if (jl_has_free_typevars(ta)) {
-            if (!jl_has_free_typevars(tb) || !jl_types_struct_equiv(ta, tb))
-                return 0;
-        }
-        else if (jl_has_free_typevars(tb) || jl_typetagof(ta) != jl_typetagof(tb) ||
-                 !jl_types_equal(ta, tb)) {
-            return 0;
-        }
+    JL_NARGS(_task, 2, 3);
+    jl_value_t *start = args[0];
+    JL_TYPECHK(_task, long, args[1]);
+    size_t ssize = jl_unbox_long(args[1]);
+    jl_value_t *invoke_arg = NULL;
+    if (nargs >= 3) {
+        invoke_arg = args[2];
+        if (!jl_is_method(invoke_arg) && !jl_is_code_instance(invoke_arg) &&
+            !jl_is_tuple_type(jl_unwrap_unionall(invoke_arg)))
+            jl_type_error("_task", (jl_value_t*)jl_anytuple_type_type, invoke_arg);
     }
-    return 1;
+    jl_task_t *task = jl_new_task(start, jl_nothing, ssize);
+    task->invoked = invoke_arg;
+    return (jl_value_t*)task;
+}
+
+JL_CALLABLE(jl_f_task_result_type)
+{
+    JL_NARGS(task_result_type, 1, 1);
+    JL_TYPECHK(task_result_type, task, args[0]);
+    // Without inference, this returns Any, but inference can inject other Types here
+    return (jl_value_t*)jl_any_type;
 }
 
 // If a field can reference its enclosing type, then the inlining
@@ -2414,7 +2456,7 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft) JL_CANSAFEPOINT
 // would be possible, so we cannot change the layout now if so.
 // affects_layout is a (conservative) analysis of layout_uses_free_typevars
 // freevars is a (conservative) analysis of what calling jl_has_bound_typevars from name->wrapper gives (TODO: just call this instead?)
-static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT
+int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT
 {
     if (freevars && !jl_has_free_typevars(p))
         freevars = 0;
@@ -2466,62 +2508,16 @@ static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layou
 
 JL_CALLABLE(jl_f__typebody)
 {
-    JL_NARGS(_typebody!, 2, 3);
-    jl_value_t *prev = args[0];
-    jl_value_t *tret = args[1];
-    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[1]);
+    JL_NARGS(_typebody!, 1, 2);
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
     JL_TYPECHK(_typebody!, datatype, (jl_value_t*)dt);
-    if (nargs == 3) {
-        jl_value_t *ft = args[2];
+    if (nargs == 2) {
+        jl_value_t *ft = args[1];
         JL_TYPECHK(_typebody!, simplevector, ft);
         size_t nf = jl_svec_len(ft);
         jl_check_field_types((jl_svec_t*)ft, dt->name->name);
-        // Optimization: To avoid lots of unnecessary churning, lowering contains an optimization
-        // that re-uses the typevars of an existing definition (if any exists) for compute the field
-        // types. If such a previous type exists, there are two possibilities:
-        //  1. The field types are identical, we don't need to do anything and can proceed with the
-        //     old type as if it was the new one.
-        //  2. The field types are not identical, in which case we need to rename the typevars
-        //     back to their equivalents in the new type before proceeding.
-        if (prev == jl_false) {
-            if (dt->types != NULL)
-                jl_errorf("Internal Error: Expected type fields to be unset");
-        } else {
-            jl_datatype_t *prev_dt = (jl_datatype_t*)jl_unwrap_unionall(prev);
-            JL_TYPECHK(_typebody!, datatype, (jl_value_t*)prev_dt);
-            // Field types in `ft` reference the new stub `dt`; substitute them
-            // with references to `prev_dt` before comparing, so self-referential
-            // structs (e.g. `next::R`) and types whose fields embed the type as
-            // a parameter (e.g. `v::Vector{T}`) are recognized as equivalent.
-            jl_svec_t *ft_subst = (jl_svec_t*)ft;
-            jl_value_t *sub = NULL;
-            JL_GC_PUSH2(&ft_subst, &sub);
-            for (size_t i = 0; i < nf; i++) {
-                jl_value_t *fld = jl_svecref(ft, i);
-                sub = jl_substitute_datatype(fld, dt, prev_dt);
-                if (sub != fld) {
-                    if (ft_subst == (jl_svec_t*)ft)
-                        ft_subst = jl_svec_copy((jl_svec_t*)ft);
-                    jl_svecset(ft_subst, i, sub);
-                }
-            }
-            int eq = equiv_field_types((jl_value_t*)prev_dt->types, (jl_value_t*)ft_subst);
-            JL_GC_POP();
-            if (eq) {
-                tret = prev;
-                goto have_type;
-            }
-            if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
-                jl_errorf("Internal Error: Types should not have been considered equivalent");
-            for (size_t i = 0; i < nf; i++) {
-                jl_value_t *elt = jl_svecref(ft, i);
-                for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
-                    // Only the last svecset matters for semantics, but we re-use the GC root
-                    elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
-                    jl_svecset(ft, i, elt);
-                }
-            }
-        }
+        if (dt->types != NULL)
+            jl_errorf("Internal Error: Expected type fields to be unset");
         jl_gc_write(dt, dt->types, jl_svec_t, (jl_svec_t*)ft);
         // If a supertype can reference the same type, then we may not be
         // able to compute the layout of the object before needing to
@@ -2542,7 +2538,7 @@ JL_CALLABLE(jl_f__typebody)
     }
     {
         JL_TRY {
-            jl_reinstantiate_inner_types(dt);
+            jl_reinstantiate_inner_types(dt, NULL);
         }
         JL_CATCH {
             dt->name->partial = NULL;
@@ -2551,12 +2547,11 @@ JL_CALLABLE(jl_f__typebody)
     }
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
-have_type:
-    return tret;
+    return args[0];
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical
-static int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
+int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
 {
     jl_datatype_t *dta = (jl_datatype_t*)jl_unwrap_unionall(ta);
     if (!jl_is_datatype(dta))
