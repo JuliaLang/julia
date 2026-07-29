@@ -356,6 +356,10 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEPO
     uv_tty_reset_mode();
     if (sig == SIGILL)
         jl_fprint_sigill(ios_safe_stderr, context);
+    // si_addr is only valid for fault-generated signals (positive si_code),
+    // not for signals sent by kill/sigqueue and friends
+    if ((sig == SIGSEGV || sig == SIGBUS) && info->si_code > 0)
+        jl_safe_fprintf(ios_safe_stderr, "Fault at memory address: %p\n", info->si_addr);
     jl_task_t *ct = jl_get_current_task();
     jl_fprint_critical_error(ios_safe_stderr, sig, info->si_code, jl_to_bt_context(context), ct);
     if (ct)
