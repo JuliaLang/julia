@@ -672,7 +672,7 @@ static void jl_try_deliver_sigint(void) JL_NOTSAFEPOINT
 static int thread0_exit_signo = 0;
 static void jl_exit_thread0_cb(void) JL_CANSAFEPOINT
 {
-    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    jl_gc_enable_from_nonmutator(1);
     jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(thread0_exit_signo);
@@ -1217,8 +1217,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 //#endif
             // Let's forbid threads from running GC while we're trying to exit,
             // also let's make sure we're not in the middle of GC.
-            jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-            jl_safepoint_wait_gc(NULL);
+            jl_gc_enable_from_nonmutator(0);
             jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
         }
         else if (critical) {
