@@ -892,6 +892,12 @@ end
     @test sum(0:0.000001:1) == 500000.5
     @test sum(0:0.1:10) == 505.
 end
+@testset "sum(::StepRangeLen) includes the low word of the step contribution" begin
+    # the low part `s_lo` of the step sum used to be dropped, giving a 1-2 ULP error
+    # (e.g. 43.65000000000001 instead of 43.65)
+    @test sum(range(-3.5, 4.4, length=97)) == 43.65
+    @test sum(range(-3.5, 4.4, length=97)) == Float64(sum(big, range(-3.5, 4.4, length=97)))
+end
 @testset "broadcasted operations with scalars" for T in (Int, UInt, Int128)
     @test broadcast(-, T(1):3, 2) === T(1)-2:1
     @test broadcast(-, T(1):3, 0.25) === range(T(1)-0.25, length=T(3)) == T(1)-0.25:3-0.25

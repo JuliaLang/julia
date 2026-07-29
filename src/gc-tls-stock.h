@@ -59,6 +59,11 @@ typedef struct {
     _Atomic(size_t) gc_sweeps_requested;
     _Atomic(size_t) gc_stack_sweep_requested;
     arraylist_t sweep_objs;
+    // dead objects requiring weak processing (currently:
+    // dead-but-still-linked cancellation sources) found by this thread
+    // during the current sweep; processed (and the list drained) by
+    // sweep_weak_processing before the world restarts
+    small_arraylist_t weak_processing_objs;
 } jl_gc_tls_states_t;
 
 #ifdef __cplusplus

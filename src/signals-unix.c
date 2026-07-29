@@ -672,7 +672,7 @@ static void jl_try_deliver_sigint(void) JL_NOTSAFEPOINT
 static int thread0_exit_signo = 0;
 static void jl_exit_thread0_cb(void) JL_CANSAFEPOINT
 {
-    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    jl_gc_enable_from_nonmutator(1);
     jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(thread0_exit_signo);
@@ -792,12 +792,18 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
     sigprof.sigev_notify = SIGEV_SIGNAL;
     sigprof.sigev_signo = SIGUSR1;
     sigprof.sigev_value.sival_ptr = &timerprof;
+    // hold the lock so that `jl_profile_init` cannot free the buffer while we transition to running.
+    // Safe to hold across `timer_settime`: SIGUSR1 is blocked in every thread and consumed by the
+    // dedicated `signal_listener` thread via `sigwait`, so no in-thread handler can run here and
+    // deadlock trying to take this same lock.
+    uv_mutex_lock(&bt_data_prof_lock);
     // Because SIGUSR1 is multipurpose, set `profile_running` before so that we know that the first SIGUSR1 came from the timer
     profile_running = 1;
     profile_all_tasks = all_tasks;
     if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1) {
         profile_running = 0;
         profile_all_tasks = 0;
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -2;
     }
 
@@ -809,8 +815,10 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
     if (timer_settime(timerprof, 0, &itsprof, NULL) == -1) {
         profile_running = 0;
         profile_all_tasks = 0;
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -3;
     }
+    uv_mutex_unlock(&bt_data_prof_lock);
     return 0;
 }
 
@@ -1209,8 +1217,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 //#endif
             // Let's forbid threads from running GC while we're trying to exit,
             // also let's make sure we're not in the middle of GC.
-            jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-            jl_safepoint_wait_gc(NULL);
+            jl_gc_enable_from_nonmutator(0);
             jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
         }
         else if (critical) {

@@ -18,8 +18,8 @@ let old_active_project = Base.active_project()
         Base.Experimental.register_error_hint(Base.UndefVarError_hint, UndefVarError)
 
         # n.b.: these must be run in `Main`, so that type-printing is equivalent
-        # when running via Pkg.test() (e.g. "SyntaxGraph" should be printed instead
-        # of "JuliaLowering.SyntaxGraph")
+        # when running via Pkg.test() (e.g. "SomeType" should be printed instead
+        # of "JuliaLowering.SomeType")
         @eval Main using JuliaLowering
         Core.include(Main, joinpath(@__DIR__, "runtests.jl")) # run the actual tests
     finally

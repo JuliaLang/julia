@@ -119,7 +119,11 @@ let
     end
 end
 
-@test !vst1_ok(Expr(:nothing))
+if JL.DEBUG
+    @test_throws ErrorException vst1_ok(Expr(:nothing))
+else
+    @test !vst1_ok(Expr(:nothing))
+end
 @test vst1_ok(Expr(:block, nothing))
 @test vst1_ok(Expr(:block, GlobalRef(Core, :nothing)))
 

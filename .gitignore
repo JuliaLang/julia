@@ -52,3 +52,4 @@ repo_key
 
 # Buildkite: Ignore any agent keys (public or private) we have stored
 agent_key*
+contrib/ci-timing/Manifest.toml

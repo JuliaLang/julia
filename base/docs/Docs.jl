@@ -65,8 +65,7 @@ function.
 
 include("bindings.jl")
 
-import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
-import .Base: Callable, with_output_color
+import .Base.Meta: quot, isexpr, unblock, unescape
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
@@ -673,7 +672,6 @@ function docm(source::LineNumberNode, mod::Module, ex)
     else
         return simple_lookup_doc(ex)
     end
-    return nothing
 end
 # Drop incorrect line numbers produced by nested macro calls.
 docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)

@@ -137,6 +137,13 @@ typedef enum {
 JL_DLLEXPORT int jl_gc_enable(int on);
 // Returns whether the collector is enabled.
 JL_DLLEXPORT int jl_gc_is_enabled(void);
+// Enables or disables (depending on the value of the argument) the collector from a non-mutator.
+// This function should not access ptls, and should not call safepoints either.
+// However, when on == 0 (this function disables GC), this function may block until GC is successfully disabled.
+JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on) JL_NOTSAFEPOINT;
+// Returns whether the collector is globally enabled. No safepoint should be invoked in this
+// call either.
+JL_DLLEXPORT int jl_gc_is_globally_enabled(void) JL_NOTSAFEPOINT;
 // Sets a soft limit to Julia's heap.
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) JL_NOTSAFEPOINT;
 // Runs a GC cycle. This function's parameter determines whether we're running an

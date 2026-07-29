@@ -928,8 +928,11 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
     timerprof.tv_sec = nsecprof/GIGA;
     timerprof.tv_nsec = nsecprof%GIGA;
 
+    // hold the lock so that `jl_profile_init` cannot free the buffer while we transition to running
+    uv_mutex_lock(&bt_data_prof_lock);
     profile_running = 1;
     profile_all_tasks = all_tasks;
+    uv_mutex_unlock(&bt_data_prof_lock);
     // ensure the alarm is running
     ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
     HANDLE_MACH_ERROR("clock_alarm", ret);

@@ -121,7 +121,7 @@ function ccall_macro_parse(ctx, exs)
     ex = exs[end]
     for opt in opts
         @stm opt begin
-            [K"=" [K"Identifier"] val] -> if opt[1].name_val != "gc_safe"
+            [K"=" [K"Identifier"] val] -> if syntax_name(opt[1]) != "gc_safe"
                 throw(MacroExpansionError(opt[1], "unknown option name for ccall"))
             elseif !(kind(val) in KSet"Bool Value")
                 throw(MacroExpansionError(val, "gc_safe must be true or false"))
@@ -169,8 +169,8 @@ function ccall_macro_parse(ctx, exs)
     end
 
     # collect args and types
-    args = SyntaxList(ctx)
-    types = SyntaxList(ctx)
+    args = SyntaxList()
+    types = SyntaxList()
     function pusharg!(at)
         @stm at begin
             [K"::" a t] -> (push!(args, a); push!(types, t))
@@ -262,7 +262,7 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
                 ]
             ]
         ]
-        [K"unknown_head"(name_val="latestworld-if-toplevel")]
+        [K"unknown_head"(;value="latestworld-if-toplevel")]
         val
     ]
 end
@@ -366,7 +366,7 @@ function var"@legacy_quote_to_syntax"(__context__::MacroContext, st)
     if is_flisp_compat(__context__.macrocall)
         st
     elseif kind(st) === K"inert"
-        setattr(st, :kind, K"syntaxinert") # parser simplifies quote to inert
+        @mknode(st; kind=K"syntaxinert") # parser simplifies quote to inert
     else
         _legacy_quote_to_syntax(st, 0, false)
     end
@@ -375,26 +375,26 @@ function _legacy_quote_to_syntax(st::SyntaxTree, depth, force::Bool)
     k = kind(st)
     if k === K"quote" && depth == 0 && (force || !is_flisp_compat(st))
         @jl_assert numchildren(st) == 1 st
-        cs = mapsyntax(c->_legacy_quote_to_syntax(c, depth+1, force), children(st))
-        setattr(mknode(st, cs), :kind, K"syntaxquote")
+        @mknode(st; kind=K"syntaxquote", children=
+            mapsyntax(c->_legacy_quote_to_syntax(c, depth+1, force), children(st)))
     elseif k === K"$" && depth == 1 && (force || !is_flisp_compat(st))
         @jl_assert numchildren(st) == 1 (st, "bad multi-syntaxunquote")
-        setattr(mknode(st, children(st)), :kind, K"syntaxunquote")
+        @mknode(st; kind=K"syntaxunquote")
     else
         depth2 = k === K"quote" ? depth + 1 : k === K"$" ? depth - 1 : depth
-        cs = SyntaxList(st._graph)
+        cs = SyntaxList()
         for c in children(st)
             # Convert multi-unquote to single unquote
             if depth2 == 1 && kind(c) === K"$" && numchildren(c) > 1
                 for c2 in children(c)
-                    push!(cs, @ast st._graph c [K"$" c2])
+                    push!(cs, @ast _ c [K"$" c2])
                 end
             else
                 push!(cs, c)
             end
         end
         cs_out = mapsyntax(c->_legacy_quote_to_syntax(c, depth2, force), cs)
-        cs_out == children(st) ? st : mknode(st, cs_out)
+        cs_out == children(st) ? st : @mknode(st; children=cs_out)
     end
 end
 macro legacy_quote_to_syntax(x)
@@ -433,10 +433,9 @@ function _ensure_syntax_version(st, ver::VersionNumber)
         SyntaxContext(st_sc.layer, st_sc.unexpanded, ver, st_sc.internal)
 
     if is_leaf(st) || numchildren(st) == 0
-        st_sc == sc ? st : setattr(st, :context, sc)
+        st_sc == sc ? st : @mknode(st; context=sc)
     else
-        out = mapchildren(c->_ensure_syntax_version(c, ver), st._graph, st)
-        st_sc == sc ? out :
-            out !== st ? setattr!(out, :context, sc) : setattr(out, :context, sc)
+        out = mapchildren(c->_ensure_syntax_version(c, ver), st)
+        (st_sc === sc && out === st) ? out : @mknode(st; context=sc)
     end
 end

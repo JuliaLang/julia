@@ -221,6 +221,20 @@ pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
             );
 
             return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_cancel_source_tag as usize) << 4) {
+            // Variable-sized: `nparents` {parent, next, pprev} link entries
+            // follow the fixed fields.
+            let cs = obj_address.to_ptr::<jl_cancel_source_t>();
+            let np = (*cs).nparents as usize;
+            let dtsz = std::mem::size_of::<jl_cancel_source_t>()
+                + np * std::mem::size_of::<jl_cancel_parent_link_t>();
+            debug_assert!(
+                dtsz + JULIA_HEADER_SIZE <= 2032,
+                "size {} greater than minimum!",
+                dtsz + JULIA_HEADER_SIZE
+            );
+
+            return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
         } else if vtag_usize == ((jl_small_typeof_tags_jl_string_tag as usize) << 4) {
             let length = object.to_raw_address().load::<usize>();
             let dtsz = length + std::mem::size_of::<usize>() + 1;

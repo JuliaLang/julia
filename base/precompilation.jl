@@ -1,8 +1,8 @@
 module Precompilation
 
-using Base: CoreLogging, PkgId, UUID, SHA1, StaleCacheKey, parsed_toml, project_file_name_uuid, project_names,
-            project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
-            base_project, env_project_file, isdefined
+using Base: CoreLogging, PkgId, UUID, SHA1, StaleCacheKey, parsed_toml,
+            project_file_manifest_path, get_deps, preferences_names,
+            base_project, isdefined
 
 const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{PkgId,Config}
@@ -1462,7 +1462,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     end
 
     # If waiting for a specific package, spawn a watcher that exits when it's done
-    pkg_watcher = if wait_for_pkg !== nothing
+    if wait_for_pkg !== nothing
         Threads.@spawn :samepool begin
             @lock BG.pkg_done begin
                 # Wait for the package to appear in pending_pkgids (it may not be
@@ -1547,7 +1547,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
         end
 
         wait(task; throw=false)
-    catch e
+    catch
         # Clean up on error
         @lock BG BG.monitoring = false
         if key_task !== nothing
@@ -1919,11 +1919,9 @@ function spawn_print_loop!(s::PrecompileSession)
             t = Timer(0; interval=1/10)
             anim_chars = ["◐","◓","◑","◒"]
             i = 1
-            last_length = 0
             bar = MiniProgressBar(; indent=0, header = "Precompiling packages ", color = :green, percentage=false, always_reprint=true)
             bar.max = s.n_total - s.n_already_precomp
             final_loop = false
-            n_print_rows = 0
             last_poll_time = time()
             cpu_pcts = Dict{Int32, Float64}()
             rss_bytes = Dict{Int32, UInt64}()
@@ -2026,7 +2024,6 @@ function spawn_print_loop!(s::PrecompileSession)
                             println(iostr, Base._truncate_at_width_or_chars(true, line, termwidth))
                         end
                     end
-                    last_length = length(pkg_queue_show)
                     n_print_rows = count("\n", str_)
                     s.printloop_should_exit = s.interrupted_or_done && final_loop
                     final_loop = s.interrupted_or_done
@@ -2056,7 +2053,7 @@ function spawn_print_loop!(s::PrecompileSession)
 end
 
 function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::PrecompileJob, pipe, single_requested_pkg::Bool)
-    pkg, config = pkg_config
+    pkg, _ = pkg_config
     liveprinting = false
     thistaskwaiting = false
     while !eof(pipe)
@@ -2102,12 +2099,12 @@ function precompile_pkgs_maybe_cachefile_lock(f, s::PrecompileSession, pkg_confi
         return f()
     end
     pkg, config = pkg_config
-    flags, cacheflags = config
+    _, cacheflags = config
     stale_age = Base.compilecache_pidlock_stale_age
     pidfile = Base.compilecache_pidfile_path(pkg, flags=cacheflags)
     cachefile = @invokelatest Base.trymkpidlock_hook(f, pidfile; stale_age)
     if cachefile === false
-        pid, hostname, age = @invokelatest Base.parse_pidfile_hook(pidfile)
+        pid, hostname, _ = @invokelatest Base.parse_pidfile_hook(pidfile)
         job.lock_holder = if isempty(hostname) || hostname == gethostname()
             if pid == getpid()
                 "an async task in this process (pidfile: $pidfile)"
@@ -2618,7 +2615,7 @@ function report_precompile_results!(s::PrecompileSession)
                     plural1 = length(std_outputs) == 1 ? "y" : "ies"
                     print(iostr, "  ", color_string("$(length(std_outputs))", Base.warn_color(), s.hascolor), " dependenc$(plural1) had output during precompilation:")
                     for (pkg_config, err) in std_outputs
-                        pkg, config = pkg_config
+                        pkg, _ = pkg_config
                         err = if pkg == s.pkg_liveprinted
                             "[Output was shown above]"
                         else

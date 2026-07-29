@@ -505,6 +505,8 @@ function sizeof_nothrow(@nospecialize(x))
     xw = widenconst(x)
     isType(xw) && !isconstType(xw) && return false
     x = unwrap_unionall(t)
+    # instances are variable-sized, so the type itself has no definite size
+    x === Core.CancellationTokenSource && return false
     if isconcrete
         if isa(x, DataType) && x.layout != C_NULL
             # there's just a few concrete types with an opaque layout
@@ -1201,6 +1203,14 @@ end
             end
         end
         s00 = s
+    elseif isa(s00, PartialTask)
+        # N.B.: Do not use `PartialTask.fetch_type` to refine any field load here (e.g.
+        # `:result`). Task fields are mutable, so `fetch_type` is not an invariant of the
+        # current field contents; it is only sound as the *checked* side of the `typeassert`
+        # in `fetch` (via `task_result_type_tfunc`). Refining the load itself would let the
+        # optimizer prove that typeassert and delete it, turning a field mutation into
+        # silent type confusion instead of a runtime `TypeError`.
+        s00 = Task
     end
     return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
 end
@@ -1499,7 +1509,7 @@ end
             elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
                 RT = PartialStruct(fallback_lattice, RT, Union{Nothing,Bool}[false,false], Any[TF, TF2])
             end
-            info = ModifyOpInfo(callinfo.info)
+            info = IndirectCallInfo(callinfo.info, callinfo.effects, true)
             return CallMeta(RT, Any, Effects(), info)
         end
     end
@@ -2611,6 +2621,9 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === Core._svec_ref
         na == 2 || return false
         return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const
+    elseif f === Core.task_result_type
+        na == 1 || return false
+        return argtypes[1] ⊑ Task
     end
     return false
 end
@@ -2676,6 +2689,7 @@ const _EFFECT_FREE_BUILTINS = [
     compilerbarrier,
     Core._svec_len,
     Core._svec_ref,
+    Core.task_result_type,
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -2689,6 +2703,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     fieldtype,
     isa,
     nfields,
+    Core.task_result_type,
     throw,
     Core.throw_methoderror,
     tuple,
@@ -2875,6 +2890,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # Core._structtype,
     Core._svec_len,
     Core._svec_ref,
+    Core._task,
     # Core._typebody!,
     Core._typevar,
     apply_type,
@@ -2921,6 +2937,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # setglobalonce!,
     swapfield!,
     # swapglobal!,
+    Core.task_result_type,
     throw,
     tuple,
     typeassert,
@@ -2978,6 +2995,8 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
             consistent = ALWAYS_FALSE,
             notaskstate = false,
             nothrow)
+    elseif f === Core._task
+        return TASK_BUILTIN_EFFECTS
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
@@ -3373,7 +3392,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         # llvmcall can do arbitrary things
         return Effects()
     elseif f === atomic_pointermodify
-        # atomic_pointermodify has memory effects, plus any effects from the ModifyOpInfo
+        # atomic_pointermodify has memory effects, plus any effects from the IndirectCallInfo
         return Effects()
     end
     is_effect_free = _is_effect_free_infer(f)
@@ -3609,6 +3628,18 @@ add_tfunc(modifyglobal!, 4, 5, @nospecs((𝕃::AbstractLattice, args...)->Any), 
 add_tfunc(replaceglobal!, 4, 6, @nospecs((𝕃::AbstractLattice, args...)->Any), 3)
 add_tfunc(setglobalonce!, 3, 5, @nospecs((𝕃::AbstractLattice, args...)->Bool), 3)
 add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)->Type), 0)
+
+@nospecs function task_result_type_tfunc(𝕃::AbstractLattice, T)
+    hasintersect(widenconst(T), Task) || return Union{}
+    if T isa PartialTask
+        # fetch_type is widened at construction, but re-widen defensively since
+        # PartialTask objects also arrive from cached (serialized) rettype_const
+        # and from external AbstractInterpreters
+        return Const(widenconst(T.fetch_type))
+    end
+    return Type
+end
+add_tfunc(Core.task_result_type, 1, 1, task_result_type_tfunc, 0)
 
 # foreigncall
 # ===========

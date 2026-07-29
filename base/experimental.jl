@@ -623,37 +623,29 @@ end
 # 3. Task N: the task that notifies the Condition being waited on.
 #
 # Typical flow:
-# - W enters the Condition's wait queue.
+# - W registers on the Condition's wait queue with a fresh, single-use
+#   WaitEntry `w` (see the wake-claim protocol in condition.jl).
 # - W creates T and stops running (calls wait()).
 # - T, when scheduled, waits on a Timer.
 # - Two common outcomes:
-#   - N notifies the Condition.
-#     - W starts running, closes the Timer, sets waiter_left and returns
-#       the notify'ed value.
-#     - The closed Timer throws an EOFError to T which simply ends.
+#   - N notifies the Condition: N claims W's wake (clearing W's
+#     `waiting_on`) and pops `w`. W starts running, closes the Timer and
+#     returns the notify'ed value. The closed Timer throws an EOFError
+#     to T which simply ends.
 #   - The Timer expires.
-#     - T starts running and locks the Condition.
-#     - T confirms that waiter_left is unset and that W is still in the
-#       Condition's wait queue; it then removes W from the wait queue,
-#       sets dosched to true and unlocks the Condition.
-#     - If dosched is true, T schedules W with the special :timed_out
-#       value.
-#     - T ends.
+#     - T starts running, locks the Condition, and tries to claim W's
+#       wake via CAS(W.waiting_on, w => nothing). Because `w` is
+#       single-use, the claim can only succeed while W is still parked
+#       in *this* wait - never in a later wait of W, even one on the
+#       same Condition.
+#     - If the claim succeeds, T removes `w` from the wait queue,
+#       unlocks the Condition and schedules W with the special
+#       :timed_out value.
 #     - W runs and returns :timed_out.
 #
-# Some possible interleavings:
-# - N notifies the Condition but the Timer expires and T starts running
-#   before W:
-#   - W closing the expired Timer is benign.
-#   - T will find that W is no longer in the Condition's wait queue
-#     (which is protected by a lock) and will not schedule W.
-# - N notifies the Condition; W runs and calls wait on the Condition
-#   again before the Timer expires:
-#   - W sets waiter_left before leaving. When T runs, it will find that
-#     waiter_left is set and will not schedule W.
-#
-# The lock on the Condition's wait queue and waiter_left together
-# ensure proper synchronization and behavior of the tasks involved.
+# The single CAS on W's `waiting_on` arbitrates every race between N, T
+# and any interrupter: whoever wins the claim (and only that entity)
+# schedules W.
 
 """
     wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
@@ -669,38 +661,44 @@ millisecond.
 """
 function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
     ct = current_task()
-    Base._wait2(c, ct, first)
+    # This wait has a wake source directed at it specifically (the timeout
+    # task below), so it must register with a fresh, single-use entry: only
+    # single-use-ness guarantees that the timeout task's expected-entry CAS
+    # cannot claim a later, unrelated wait of `ct`.
+    w = Base._wait2(c, ct, first; entry=Base.WaitEntry(ct))
     token = Base.unlockall(c.lock)
 
     timer::Union{Timer, Nothing} = nothing
-    waiter_left::Union{Threads.Atomic{Bool}, Nothing} = nothing
     if timeout > 0.0
         timer = Timer(timeout)
-        waiter_left = Threads.Atomic{Bool}(false)
         # start a task to wait on the timer
-        t = _wait_with_timeout_task(c, ct, timer, waiter_left)
+        t = _wait_with_timeout_task(c, ct, w, timer)
         t.sticky = false
         Threads._spawn_set_thrpool(t, :interactive)
         schedule(t)
     end
 
+    local res
     try
         res = wait()
-        if timer !== nothing
-            close(timer)
-            @atomic waiter_left[] = true
-        end
-        return res
     catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
-        rethrow()
-    finally
+        # resumed without a wake through our registration (interrupter or raw
+        # throwto): disarm it, then unlink our entry under the lock
+        @atomicreplace ct.waiting_on w => nothing
+        q = ct.queue
+        q === nothing || Base.list_deletefirst!(q::Base.StickyWorkqueue, ct)
         Base.relockall(c.lock, token)
+        timer !== nothing && close(timer)
+        Base.list_deletefirst!(Base.waitqueue(c), w)
+        rethrow()
     end
+    # a normal wake (notify or timeout) claimed and unlinked our registration
+    Base.relockall(c.lock, token)
+    timer !== nothing && close(timer)
+    return res
 end
 
-function _wait_with_timeout_task(c::GenericCondition, ct::Task, timer::Timer,
-    waiter_left::Threads.Atomic{Bool})
+function _wait_with_timeout_task(c::GenericCondition, ct::Task, w::Base.WaitEntry, timer::Timer)
     return Task() do
         try
             wait(timer)
@@ -710,12 +708,13 @@ function _wait_with_timeout_task(c::GenericCondition, ct::Task, timer::Timer,
         end
         dosched = false
         lock(c.lock)
-        # Confirm that the waiting task is still in the wait queue and remove it. If
-        # the task is not in the wait queue, it must have been notified already so we
-        # don't do anything here.
-        if !waiter_left[] && ct.queue === c.waitq
+        # Claim the wake of the specific wait `w` was registered for; `w` is
+        # single-use, so a successful claim means `ct` is still parked in
+        # that wait. If the claim fails (already notified or interrupted),
+        # do nothing.
+        if Base.claim_wait(ct, w)
             dosched = true
-            Base.list_deletefirst!(c.waitq, ct)
+            Base.list_deletefirst!(Base.waitqueue(c), w)
         end
         unlock(c.lock)
         # send the waiting task a timeout

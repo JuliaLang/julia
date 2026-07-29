@@ -89,7 +89,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 30 # do not make changes without bumping the version #!
+const ser_version = 31 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -572,6 +572,43 @@ function serialize(s::AbstractSerializer, mc::Core.MethodCache)
     error("cannot serialize MethodCache objects")
 end
 
+# Only the (strong) parent links and the state bytes are serialized; the
+# weak intrusive child lists are rebuilt on deserialization by relinking
+# the source under its parents as if it were newly constructed (which also
+# re-inherits the parents' current cancellation state).
+function serialize(s::AbstractSerializer, src::Core.CancellationTokenSource)
+    serialize_cycle_header(s, src) && return
+    np = Int(src.nparents)
+    serialize(s, np % Int64)  # fixed width: streams are word-size independent
+    for i in 1:np
+        serialize(s, Base._cancel_parent(src, i))
+    end
+    serialize(s, @atomic src.state)
+    nothing
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.CancellationTokenSource})
+    np = Int(deserialize(s)::Int64)
+    parents = Vector{Any}(undef, np)
+    for i in 1:np
+        parents[i] = deserialize(s)::Core.CancellationTokenSource
+    end
+    src = Core._new_cancel_source(parents...)::Core.CancellationTokenSource
+    deserialize_cycle(s, src)
+    state = deserialize(s)::UInt8
+    if state != 0x00
+        # reject severities the API cannot produce rather than letting a
+        # corrupt stream inject an unescalatable bogus level
+        if !(state == 0x1 || state == 0x3 || state == 0x4)
+            throw(ArgumentError("invalid cancellation severity $(repr(state)) in serialized CancellationTokenSource"))
+        end
+        # CAS-max with whatever the relinking inherited from the parents;
+        # severities only ever escalate
+        Base._raise_state!(src, state)
+    end
+    return src
+end
+
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
@@ -595,6 +632,9 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
+    # Compiler-injected CodeInstances are process-local optimization metadata and are
+    # intentionally omitted. Other targets carry explicit Core.invoke semantics.
+    has_invoked = isdefined(t, :invoked) && !(getfield(t, :invoked) isa Core.CodeInstance)
     writetag(s.io, TASK_TAG)
     serialize(s, t.code)
     serialize(s, t.storage)
@@ -608,6 +648,10 @@ function serialize(s::AbstractSerializer, t::Task)
         serialize(s, t.result)
     end
     serialize(s, t._isexception)
+    serialize(s, has_invoked)
+    if has_invoked
+        serialize(s, getfield(t, :invoked))
+    end
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
@@ -1553,6 +1597,46 @@ function deserialize_expr(s::AbstractSerializer, len)
     resolve_ref_immediately(s, e)
     e.head = deserialize(s)::Symbol
     e.args = Any[ deserialize(s) for i = 1:len ]
+
+    # Rewrite old :method expressions to define_method calls
+    if e.head === :method
+        mod = current_module[]
+        if mod === nothing
+            # No current module context, keep the :method expression and hope for the best
+            # This shouldn't happen in practice for deserialization of top-level code
+            return e
+        end
+
+        if len == 1
+            # Short form: (:method name) → (call Core.define_method module (inert name))
+            name = e.args[1]
+            if name isa GlobalRef
+                # Extract module and name from GlobalRef
+                mod_ref = name.mod
+                sym = name.name
+                e = Expr(:call, GlobalRef(Core, :define_method), mod_ref, QuoteNode(sym))
+            else
+                # Simple symbol - use the current module
+                e = Expr(:call, GlobalRef(Core, :define_method), mod, QuoteNode(name))
+            end
+        elseif len == 3
+            # Long form: (:method name_or_mt sigtype code) → (call Core.define_method module name_or_mt sigtype code)
+            name_or_mt = e.args[1]
+            sigtype = e.args[2]
+            code = e.args[3]
+            if name_or_mt isa Symbol
+                name_or_mt = QuoteNode(name_or_mt)
+                e = Expr(:call, GlobalRef(Core, :define_method), mod, name_or_mt, sigtype, code)
+            elseif name_or_mt isa GlobalRef
+                mod_ref = name_or_mt.mod
+                sym = name_or_mt.name
+                e = Expr(:call, GlobalRef(Core, :define_method), mod_ref, QuoteNode(sym), sigtype, code)
+            else
+                # name_or_mt is already something else (like false or a method table)
+                e = Expr(:call, GlobalRef(Core, :define_method), mod, name_or_mt, sigtype, code)
+            end
+        end
+    end
     e
 end
 
@@ -1698,7 +1782,8 @@ function deserialize(s::AbstractSerializer, ::Type{UnionAll})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Task})
-    t = Task(()->nothing)
+    # The task code is replaced below, so prevent attaching invoke metadata for the dummy closure.
+    t = Task(Base.inferencebarrier(()->nothing))
     deserialize_cycle(s, t)
     t.code = deserialize(s)
     t.storage = deserialize(s)
@@ -1712,7 +1797,7 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     else
         @assert false
     end
-    t.result = deserialize(s)
+    setfield!(t, :result, deserialize(s))
     exc = deserialize(s)
     if exc === nothing
         t._isexception = false
@@ -1720,7 +1805,10 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
         t._isexception = exc
     else
         t._isexception = true
-        t.result = exc
+        setfield!(t, :result, exc)
+    end
+    if format_version(s) >= 31 && (deserialize(s)::Bool)
+        setfield!(t, :invoked, deserialize(s))
     end
     t
 end

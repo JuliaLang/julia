@@ -6,7 +6,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_expr (inert (block (call-i + ($ x) 1))) %₂)
+3   (call JuliaLowering.interpolate_expr (inert (block (call + ($ x) 1))) %₂)
 4   (return %₃)
 
 ########################################
@@ -26,7 +26,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_expr (inert (block (quote (block (call-i + ($ ($ x)) 1))))) %₂)
+3   (call JuliaLowering.interpolate_expr (inert (block (quote (block (call + ($ ($ x)) 1))))) %₂)
 4   (return %₃)
 
 ########################################
@@ -80,7 +80,8 @@ function Base.:(==)() end
 5   (call core.svec)
 6   SourceLocation::1:1
 7   (call core.svec %₄ %₅ %₆)
-8   --- method core.nothing %₇
+8   (call core.define_method TestMod core.nothing %₇
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (return core.nothing)
 9   latestworld

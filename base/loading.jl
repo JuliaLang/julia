@@ -2340,7 +2340,9 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
         for each in package_locks
             cond2 = each[2][2]
             assert_havelock(cond2.lock)
-            for waiting in cond2.waitq
+            for w in cond2.waitq
+                waiting = w.task
+                waiting isa Task || continue
                 push!(waiters, waiting => (each[2][1] => each[1]))
             end
         end
@@ -3410,8 +3412,6 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
                            internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
                            report_timing::Bool=false)
     @nospecialize internal_stderr internal_stdout
-    rm(output, force=true)   # Remove file if it exists
-    output_o === nothing || rm(output_o, force=true)
     depot_path = String[abspath(x) for x in DEPOT_PATH]
     dl_load_path = String[abspath(x) for x in DL_LOAD_PATH]
     load_path = String[abspath(x) for x in Base.load_path()]

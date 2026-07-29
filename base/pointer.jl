@@ -78,7 +78,7 @@ function unsafe_convert(::Type{Ptr{Cvoid}}, a::GenericMemoryRef{<:Any,T,Core.CPU
     MemT = typeof(mem)
     arrayelem = datatype_arrayelem(MemT)
     elsz = datatype_layoutsize(MemT)
-    isboxed = 1; isunion = 2
+    isunion = 2
     if arrayelem == isunion || elsz == 0
         offset = UInt(offset) * elsz
         offset += unsafe_convert(Ptr{Cvoid}, mem)

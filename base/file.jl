@@ -616,7 +616,7 @@ function prepare_for_deletion(path::AbstractString)
     catch ex
         ex isa IOError || ex isa SystemError || rethrow()
     end
-    for (root, dirs, files) in walkdir(path; onerror=x->())
+    for (root, dirs, _) in walkdir(path; onerror=x->())
         for dir in dirs
             dpath = joinpath(root, dir)
             try
@@ -675,7 +675,7 @@ end
 
 function temp_cleanup_purge_all()
     may_need_gc = Ref(false)
-    @lock TEMP_CLEANUP_LOCK filter!(TEMP_CLEANUP) do (path, asap)
+    @lock TEMP_CLEANUP_LOCK filter!(TEMP_CLEANUP) do (path, _)
         try
             ispath(path) || return false
             may_need_gc[] = true
@@ -752,7 +752,7 @@ function _tempname(parent::AbstractString, suffix::AbstractString, max_tries::In
 
     prefix = joinpath(parent, temp_prefix)
     filename = nothing
-    for i in 1:max_tries
+    for _ in 1:max_tries
         filename = string(prefix, _rand_filename(), suffix)
         if ispath(filename)
             filename = nothing
