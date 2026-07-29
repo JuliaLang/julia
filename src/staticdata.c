@@ -3598,9 +3598,8 @@ static char *jl_image_alloc_pages(size_t size)
 #else
         err = strerror(errno);
 #endif
-        jl_printf(JL_STDERR, "ERROR: failed to allocate memory for system image: %s\n",
-                  err);
-        jl_exit(1);
+        jl_safe_printf("ERROR: failed to allocate memory for system image: %s\n", err);
+        abort();
     }
     return data;
 }
@@ -3669,10 +3668,8 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap)
 {
     const char *lib_path = jl_pathname_for_handle(handle);
-    if (!lib_path) {
-        jl_printf(JL_STDERR, "unable to find path to native image\n");
-        abort();
-    }
+    if (!lib_path)
+        jl_error("unable to find path to native image\n");
 
     // Replace the file extension with ".ji". The "extension" starts at the
     // first '.' after the last path separator, so e.g. "/foo/bar/baz.so.1.2.3"
