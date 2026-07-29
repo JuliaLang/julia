@@ -3536,7 +3536,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             .data = sysimg,
             .size = len,
             .base = 0,
-            .heap_checksum = -1,
         };
         return jl_sysimage_buf;
     }
@@ -3621,7 +3620,7 @@ static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len)
     int err = jl_read_verify_header(&f, &flags, &checksum, &dataendpos, &datastartpos);
     if (err != 0)
         jl_error("Precompile file header verification checks failed.");
-    if (image->heap_checksum != -1 && checksum != image->heap_checksum)
+    if (image->is_split && checksum != image->heap_checksum)
         jl_error("Image checksum mismatch: the heap image (.ji) was not "
                  "compiled for use with this native image.");
     // jl_read_verify_header leaves the stream just past the dataendpos field
@@ -3739,6 +3738,7 @@ error:
 JL_DLLEXPORT void jl_image_unpack_split(void *handle, jl_image_buf_t *image)
 {
     image->size = jl_image_get_split_ji(handle, (char **)&image->data, 1);
+    image->is_split = 1;
     jl_image_load_metadata(handle, image);
 }
 
@@ -3746,6 +3746,7 @@ JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image
 {
     char *comp_data;
     size_t comp_size = jl_image_get_split_ji(handle, &comp_data, 0);
+    image->is_split = 1;
     jl_image_load_metadata(handle, image);
     jl_image_decompress(image, comp_data, comp_size);
     free(comp_data);
@@ -3770,6 +3771,7 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOI
         .data = NULL,
         .size = 0,
         .base = 0,
+        .is_split = 0,
     };
 
     // verification passed, lookup the buffer pointers
@@ -4471,7 +4473,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 }
 
 static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_t *checksum,
-                                          int64_t expect_checksum, int64_t *dataendpos,
+                                          bool_t is_split, uint32_t expect_checksum, int64_t *dataendpos,
                                           int64_t *datastartpos) JL_CANSAFEPOINT
 {
     uint32_t flags = 0;
@@ -4481,12 +4483,10 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
                                  "Precompile file header verification checks failed.");
     }
 
-    // .ji images with no corresponding native image have expect_checksum = -1.
-    if (expect_checksum != -1 && *checksum != expect_checksum) {
-        return jl_get_exceptionf(jl_errorexception_type,
-                                 "Image checksum mismatch: the heap image (.ji) was not "
-                                 "compiled for use with this native image.");
-    }
+    if (is_split != !!(flags & JI_FLAG_SPLIT))
+        return jl_get_exceptionf(jl_errorexception_type, "Expected %s image, but got %s",
+                                 is_split ? "split" : "standalone",
+                                 flags & JI_FLAG_SPLIT ? "split" : "standalone");
 
     if (!!depmods != !!(flags & JI_FLAG_PKGIMAGE))
         return jl_get_exceptionf(jl_errorexception_type,
@@ -4494,6 +4494,11 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
                                  depmods ? "pkgimage" : "system image",
                                  flags & JI_FLAG_PKGIMAGE ? "pkgimage" : "system image");
 
+    if (is_split && *checksum != expect_checksum) {
+        return jl_get_exceptionf(jl_errorexception_type,
+                                 "Image checksum mismatch: the heap image (.ji) was not "
+                                 "compiled for use with this native image.");
+    }
 
     if (depmods) {
         // Syntax version mismatch is not fatal to load
@@ -4525,8 +4530,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     uint32_t checksum = 0;
     int64_t dataendpos = 0;
     int64_t datastartpos = 0;
-    jl_value_t *verify_fail = jl_validate_cache_file(
-        f, depmods, &checksum, image->heap_checksum, &dataendpos, &datastartpos);
+    jl_value_t *verify_fail =
+        jl_validate_cache_file(f, depmods, &checksum, image->is_split, image->heap_checksum,
+                               &dataendpos, &datastartpos);
 
     if (verify_fail)
         return verify_fail;
@@ -4627,8 +4633,9 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image) JL_
     JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
     uint32_t checksum;
     int64_t dataendpos, datastartpos;
-    jl_value_t *exc = jl_validate_cache_file(f, NULL, &checksum, image->heap_checksum,
-                                             &dataendpos, &datastartpos);
+    jl_value_t *exc =
+        jl_validate_cache_file(f, NULL, &checksum, image->is_split, image->heap_checksum,
+                               &dataendpos, &datastartpos);
     if (exc)
         jl_throw(exc);
     ios_t f_payload;
@@ -4654,7 +4661,6 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
             "Cache file \"%s\" not found.\n", fname);
     }
     jl_image_t pkgimage = {};
-    pkgimage.heap_checksum = -1;
     jl_value_t *ret = jl_restore_package_image_from_stream(&f, &pkgimage, depmods, completeinfo, pkgname, 1);
     ios_close(&f);
     return ret;
