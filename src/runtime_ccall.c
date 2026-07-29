@@ -392,6 +392,10 @@ void *jl_update_dispatch_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr)
             return f;
         }
         mi = jl_get_specialization1((jl_tupletype_t*)sigt, world);
+        // A match that only partially covers `sigt` must keep dispatching at call
+        // time: wiring it directly would bypass the MethodError for uncovered calls.
+        if (mi != jl_nothing && !jl_subtype(sigt, ((jl_method_instance_t*)mi)->def.method->sig))
+            mi = jl_nothing;
         // Reuse the adapter if its target remains valid.
         if (f != NULL) {
             jl_value_t *last_invokee = tr->last_invokee;

@@ -1180,6 +1180,7 @@ precompile_test_harness("cfunction adapter serialization") do dir
               const_target(x::Cint) = Cint(42)                               # const-return
               args_target(x::Cint...) = length(x) % Cint                     # vararg (boxed args ABI)
               unresolved_target(x::Float64) = x                              # no method for (Cint,)
+              partial_target(x::Float32) = x + Float32(1)                    # partially covers (Any,)
               function run_widen(x::Cint)
                   cf = @cfunction(box_target, Any, (Cint,))
                   GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Any, (Cint,), x)
@@ -1200,6 +1201,10 @@ precompile_test_harness("cfunction adapter serialization") do dir
                   cf = @cfunction(unresolved_target, Cint, (Cint,))
                   GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
               end
+              function run_partial(x)             # partial cover -> dynamic-dispatch adapter (#62246)
+                  cf = @cfunction(partial_target, Any, (Any,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Any, (Any,), x)
+              end
               function run_dispatch(x::Cint)      # abstract `Any` arg -> dynamic-dispatch adapter
                   cf = @cfunction(box_target, Any, (Any,))
                   GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Any, (Any,), x)
@@ -1216,6 +1221,9 @@ precompile_test_harness("cfunction adapter serialization") do dir
               precompile(run_const, (Cint,))
               precompile(run_args, (Cint,))
               precompile(run_unresolved, (Cint,))
+              precompile(run_partial, (Float32,))
+              precompile(run_partial, (Cint,))
+              precompile(partial_target, (Float32,))
               precompile(run_dispatch, (Cint,))
               precompile(run_dup, (Cint,))
               precompile(llvm_version, ())
@@ -1236,6 +1244,8 @@ precompile_test_harness("cfunction adapter serialization") do dir
     @test Base.invokelatest(M.run_const, Cint(3)) == Cint(42)
     @test Base.invokelatest(M.run_args, Cint(9)) == Cint(1)
     @test_throws MethodError Base.invokelatest(M.run_unresolved, Cint(3))
+    @test Base.invokelatest(M.run_partial, Float32(1.5)) === Float32(2.5)
+    @test_throws MethodError Base.invokelatest(M.run_partial, Cint(3))
     @test Base.invokelatest(M.run_dispatch, Cint(5)) === Cint(5)
     @test Base.invokelatest(M.run_dup, Cint(5)) === (Cint(5), Cint(5))
     if Bool(Base.JLOptions().use_pkgimages)
@@ -1256,6 +1266,8 @@ precompile_test_harness("cfunction adapter serialization") do dir
             println("dispatch=", M.run_dispatch(Cint(5)))
             println("dup=", M.run_dup(Cint(5)))
             println("unresolved=", try; M.run_unresolved(Cint(3)); "no-error"; catch e; e isa MethodError ? "MethodError" : "other-error"; end)
+            println("partial=", M.run_partial(Float32(1.5)))
+            println("partial_miss=", try; M.run_partial(Cint(3)); "no-error"; catch e; e isa MethodError ? "MethodError" : "other-error"; end)
             @eval M box_target(x::Cint) = x + Cint(100)
             println("redef=", Base.invokelatest(M.run_widen, Cint(5)))
             """
@@ -1276,6 +1288,8 @@ precompile_test_harness("cfunction adapter serialization") do dir
         @test occursin("dispatch=5", out)          # cached dynamic-dispatch adapter
         @test occursin("dup=(5, 5)", out)          # shared trampoline, both sites wired
         @test occursin("unresolved=MethodError", out)
+        @test occursin("partial=2.5", out)         # partial cover dispatches via the unspecialized adapter
+        @test occursin("partial_miss=MethodError", out)
         @test occursin("redef=105", out)           # dispatcher re-query after redefinition
     end
 end
@@ -1295,7 +1309,7 @@ precompile_test_harness("cross-image dispatch trampolines") do dir
                           Tuple{typeof(target), Cint}, Cint, Cint(1), Cint(0))
           precompile(run, (Cint,))
           precompile(trampoline, ())
-          # Ensure serialization sanitizes a previously resolved record.
+          # Ensure serialization sanitizes a previously resolved DispatchTrampoline.
           const warm = run(Cint(0))
           end
           """)
@@ -1352,7 +1366,7 @@ precompile_test_harness("cross-image dispatch trampolines") do dir
             @test success(proc)
             return String(take!(outbuf))
         end
-        # The hot record loads unresolved and retargets to B without codegen.
+        # The hot DispatchTrampoline loads unresolved and retargets to B without codegen.
         out = crosstrampoline_child("""
             using CrossTrampolineA, CrossTrampolineB
             GC.gc(); GC.gc(); GC.gc()
@@ -1367,14 +1381,14 @@ precompile_test_harness("cross-image dispatch trampolines") do dir
             println("invokee_ok=", getfield(tr, :last_invokee) isa Union{Core.ABIAdapter, Core.CodeInstance})
             """; codegen = false)
         @test occursin("pre_invokee_defined=false", out)  # incremental images carry no hint
-        @test occursin("pre_fptr_null=true", out)   # hot record sanitized at serialization
+        @test occursin("pre_fptr_null=true", out)   # hot DispatchTrampoline sanitized at serialization
         @test occursin("pre_world=0", out)          # unresolved sentinel: no validity claim
         @test occursin("a_run=101", out)            # A-image site reaches B-image target
         @test occursin("b_runb=101", out)
         @test occursin("post_world_current=true", out)  # poll published validity
         @test occursin("post_fptr_set=true", out)
         @test occursin("invokee_ok=true", out)
-        # The same record can instead retarget to C.
+        # The same DispatchTrampoline can instead retarget to C.
         out = crosstrampoline_child("""
             using CrossTrampolineA, CrossTrampolineC
             GC.gc(); GC.gc()

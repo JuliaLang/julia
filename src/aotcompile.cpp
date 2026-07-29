@@ -572,6 +572,10 @@ static jl_code_instance_t *resolve_trampoline_invokee(jl_abi_t from_abi,
     jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
     if ((jl_value_t*)mi == jl_nothing)
         return nullptr;
+    // A match that only partially covers `sigt` must keep dispatching at call time:
+    // wiring it directly would bypass the MethodError for uncovered calls.
+    if (!jl_subtype(sigt, mi->def.method->sig))
+        return nullptr;
     auto it = compiled_mi.find(mi);
     if (it == compiled_mi.end())
         return nullptr;
