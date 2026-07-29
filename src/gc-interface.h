@@ -137,7 +137,7 @@ typedef enum {
 JL_DLLEXPORT int jl_gc_enable(int on);
 // Returns whether the collector is enabled.
 JL_DLLEXPORT int jl_gc_is_enabled(void);
-// Tnables or disables (depending on the value of the argument) the collector from a non-mutator.
+// Enables or disables (depending on the value of the argument) the collector from a non-mutator.
 // This function should not access ptls, and should not call safepoints either.
 // However, when on == 0 (this function disables GC), this function may block until GC is successfully disabled.
 JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on) JL_NOTSAFEPOINT;

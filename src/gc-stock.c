@@ -3498,6 +3498,7 @@ _Atomic(uint32_t) jl_gc_disable_counter = 1;
 
 JL_DLLEXPORT int jl_gc_enable(int on)
 {
+    JL_SIGATOMIC_BEGIN();
     jl_ptls_t ptls = jl_current_task->ptls;
     int prev = !ptls->disable_gc;
     ptls->disable_gc = (on == 0);
@@ -3514,6 +3515,7 @@ JL_DLLEXPORT int jl_gc_enable(int on)
         // check if the GC is running and wait for it to finish
         jl_gc_safepoint_(ptls);
     }
+    JL_SIGATOMIC_END();
     return prev;
 }
 

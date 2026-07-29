@@ -256,6 +256,7 @@ JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on)
                 // stopping itself.
                 // pass NULL as a special token to indicate we are running on an unmanaged task
                 jl_safepoint_wait_gc(NULL);
+                jl_cpu_pause();
             } else {
                 assert(result == MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH);
                 // Unlike jl_gc_enable(), this thread is not a registered mutator.
@@ -273,6 +274,7 @@ JL_DLLEXPORT int jl_gc_is_globally_enabled(void)
 
 JL_DLLEXPORT int jl_gc_enable(int on)
 {
+    JL_SIGATOMIC_BEGIN();
     jl_ptls_t ptls = jl_current_task->ptls;
     int prev = !ptls->disable_gc;
     ptls->disable_gc = (on == 0);
@@ -318,6 +320,7 @@ JL_DLLEXPORT int jl_gc_enable(int on)
             }
         }
     }
+    JL_SIGATOMIC_END();
     return prev;
 }
 
