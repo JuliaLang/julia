@@ -274,6 +274,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         ScopeLayer(mod_for_ast, sc_in.layer), st,
         (has_new_macro ? JL_NEW_SYNTAX_VERSION : JL_OLD_SYNTAX_VERSION), false)
     st_out2 = apply_expansion_layer(ctx, st_out, sc2, true, 0, 0)
+    has_new_macro || _note_32026_hack!(st_out2, sc2)
     !ctx.recursive ? st_out2 : expand_forms_1(ctx, st_out2)
 end
 

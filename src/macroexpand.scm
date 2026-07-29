@@ -304,7 +304,7 @@
 ;; given the LHS of e.g. `x::Int -> y`, wrap the signature in `tuple` to normalize
 (define (tuple-wrap-arrow-sig e)
   (cond ((atom? e)             `(tuple ,e))
-        ((eq? (car e) 'where)  `(where ,(tuple-wrap-arrow-arglist (cadr e)) ,@(cddr e)))
+        ((eq? (car e) 'where)  `(where ,(tuple-wrap-arrow-sig (cadr e)) ,@(cddr e)))
         ((eq? (car e) 'tuple)  e)
         ((eq? (car e) 'escape) `(escape ,(tuple-wrap-arrow-sig (cadr e))))
         (else                  `(tuple ,e))))
@@ -599,6 +599,9 @@
         ((eq? (car e) 'escape)  '())
         ((eq? (car e) 'hygienic-scope)
          (resume-on-escape (lambda (e) (find-assigned-vars-in-expansion e outer)) (cadr e) 0))
+        ;; N.B. the `(not outer)` check means function defs not nested in any
+        ;; (non-hygienic-scope) expression are missed, and resolved to the
+        ;; macro-definition-module global (#32026).
         ((and (not outer) (function-def? e))
          ;; pick up only function name
          (let ((fname (cond ((eq? (car e) '=) (decl-var* (cadr e)))
