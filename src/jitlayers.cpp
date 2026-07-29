@@ -2134,6 +2134,14 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         }
     }
 
+    if (Exports.empty())
+        // Nothing of ours is still registered (a tier promotion can supersede
+        // every symbol while this call is being set up), so there is nothing
+        // to publish. Returning here also avoids handing ORC an empty query
+        // whose completion callback is dispatched as a task that then has to
+        // be waited for.
+        return;
+
     JuliaTaskDispatcher::future<void> F;
     auto Callback = [this, CIs = SmallVector<jl_code_instance_t *, 1>(CIs),
                      P = Wait ? std::optional(F.get_promise()) :
