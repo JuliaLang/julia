@@ -57,6 +57,12 @@ private:
   /// Tasks handed to dispatch(), whether run inline or queued. If this
   /// exceeds TasksStarted then a task was accepted and never run.
   std::atomic<uint64_t> TasksDispatched{0};
+  /// Type name of the task each thread is currently running, so a wedged
+  /// task can be identified even when it belongs to an ORC-internal type
+  /// that our own instrumentation does not cover.
+  static constexpr int RunningTaskSlots = 128;
+  static constexpr size_t RunningTaskDescMax = 96;
+  char RunningTaskDesc[RunningTaskSlots][RunningTaskDescMax] = {};
   /// Track whether the current thread is inside work_until/process_tasks.
   /// When false, dispatch runs tasks inline to avoid deadlock with callers
   /// that block on std::future (e.g. LocalTrampolinePool::reenter).
@@ -67,6 +73,24 @@ private:
   static inline thread_local int OwnActiveRuns = 0;
 
 public:
+  // ORC gives every task a printable description; RTTI is off in this build,
+  // so use that to name whichever task a thread is inside.
+  void note_running_task(Task *T) JL_NOTSAFEPOINT {
+    int tid = jl_atomic_load_relaxed(&jl_current_task->tid);
+    if (tid < 0 || tid >= RunningTaskSlots)
+      return;
+    if (T == nullptr) {
+      RunningTaskDesc[tid][0] = '\0';
+      return;
+    }
+    SmallString<RunningTaskDescMax> Buf;
+    raw_svector_ostream OS{Buf};
+    T->printDescription(OS);
+    size_t n = Buf.size() < RunningTaskDescMax - 1 ? Buf.size() : RunningTaskDescMax - 1;
+    memcpy(RunningTaskDesc[tid], Buf.data(), n);
+    RunningTaskDesc[tid][n] = '\0';
+  }
+
   /// Async-safe debugging dump for wedge watchdogs: relaxed reads and a
   /// trylock probe only, so it cannot itself hang.
   void dump_wedge_state() JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS {
@@ -84,6 +108,17 @@ public:
                    LockFree ? "free" : "HELD");
     if (LockFree)
       jl_safe_printf(" queued=%zu", NQueued);
+    jl_safe_printf("\n");
+    jl_safe_printf("jit running tasks:");
+    int any_task = 0;
+    for (int tid = 0; tid < RunningTaskSlots; tid++) {
+      if (RunningTaskDesc[tid][0] == '\0')
+        continue;
+      jl_safe_printf(" tid%d=[%s]", tid, RunningTaskDesc[tid]);
+      any_task = 1;
+    }
+    if (!any_task)
+      jl_safe_printf(" none");
     jl_safe_printf("\n");
   }
 
@@ -419,7 +454,9 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-fi
       ActiveRuns.fetch_add(1, std::memory_order_relaxed);
       TasksStarted.fetch_add(1, std::memory_order_relaxed);
       OwnActiveRuns++;
+      note_running_task(T.get());
       T->run();
+      note_running_task(nullptr);
       OwnActiveRuns--;
       ActiveRuns.fetch_sub(1, std::memory_order_relaxed);
       TasksCompleted.fetch_add(1, std::memory_order_relaxed);
@@ -534,7 +571,9 @@ void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) JL_NO_SAFEP
         ActiveRuns.fetch_add(1, std::memory_order_relaxed);
         TasksStarted.fetch_add(1, std::memory_order_relaxed);
         OwnActiveRuns++;
+        note_running_task(T.get());
         T->run(); // n.b. JL_CANCALLBACK
+        note_running_task(nullptr);
         OwnActiveRuns--;
         ActiveRuns.fetch_sub(1, std::memory_order_relaxed);
         TasksCompleted.fetch_add(1, std::memory_order_relaxed);
