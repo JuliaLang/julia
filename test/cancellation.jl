@@ -331,10 +331,11 @@ end
                 yield()
             end
         end
-        try
-            wait(inner)
-        catch
-        end
+        # A cancellable wait would be interrupted by the delivery before
+        # `inner` observes the cancellation at its own cancellation point;
+        # the assertion is about `inner`'s own observation, so wait for its
+        # completion shielded.
+        Base._wait(inner, nothing)
         inner_result[] = inner.result
     end
     spin_started = timedwait(() -> istaskstarted(t2), 30.0)

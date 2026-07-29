@@ -54,59 +54,9 @@ islocked(::AlwaysLockedST) = true
 
 ## condition variables
 
-# A task's registration on a wait queue. All fields are plain: `next` and
-# `queue` are protected by the waitee's lock (`queue` holds the queue's
-# identity - see `waitqueue` - while the entry is enqueued, acting as the
-# "am I registered, and on what" witness, and `nothing` otherwise); `task`
-# is written by the owning task before enqueueing, so it is ordered by the
-# same lock for lock-holding readers.
-#
-# The wake-claim protocol: a parked task `t` points to its current
-# registration through the atomic field `t.waiting_on`. Whoever wants to wake
-# it must first claim the wake by atomically clearing that field:
-#
-# CAS(w => nothing) succeeds: the claim is won, and the owner may schedule
-# N.B.: Interrupters currently claim unconditionally, normal waiters claim
-# a specific entry. In the future this will be managed by the cancellation system.
-#
-# Entries are heap objects. A task whose interrupted wait left a stale registration
-# behind can immediately register anew - e.g. park on a lock during its cleanup - with a fresh entry.
-mutable struct WaitEntry
-    task::Union{Task, Nothing}
-    next::Union{WaitEntry, Nothing}
-    queue::Any
-    WaitEntry(task::Union{Task, Nothing}) = new(task, nothing, nothing)
-end
-
-# Return the cached entry of `waiter` if it is free, else a fresh (and newly
-# cached) one.
-function _cached_wait_entry(waiter::Task)
-    w = waiter.cached_wait_entry
-    if w isa WaitEntry && w.queue === nothing
-        w.task = waiter
-    else
-        w = WaitEntry(waiter)
-        waiter.cached_wait_entry = w
-    end
-    return w
-end
-
-@noinline function _wait_registration_error()
-    throw(ConcurrencyViolationError("Task is already registered on a wait queue"))
-end
-
-# Publish `w` as `waiter`'s only armed wait registration.
-function _arm_wait(waiter::Task, w::WaitEntry)
-    armed = @atomicreplace :release :monotonic waiter.waiting_on nothing => w
-    armed.success || _wait_registration_error()
-    return w
-end
-
-# Claim the wake of the wait that `w` was registered for (returns whether the
-# claim succeeded). `w` must be an entry armed for `t` by `_wait2`.
-function claim_wait(t::Task, w::WaitEntry)
-    return (@atomicreplace t.waiting_on w => nothing).success
-end
+# (The WaitEntry registration type and the wake-claim protocol live in
+# cancellation.jl, which is included earlier in bootstrap: registrations
+# carry the cancellation half of a parked wait.)
 
 """
     GenericCondition
@@ -134,27 +84,31 @@ optimization. If the queue is locked by another task, the entry will remain link
 be unlinked upon the next wakeup attempt.
 """
 function try_unlink_claimed!(w::WaitEntry)
-    q = w.queue
-    q === nothing && return true
-    # Manual split for --trim
-    if q isa Task
-        dn = q.donenotify
-        dn isa GenericCondition{Threads.SpinLock} || return false
-        return _try_unlink_from!(dn, q, w)
-    elseif q isa GenericCondition{Threads.SpinLock}
-        return _try_unlink_from!(q, q, w)
-    elseif q isa GenericCondition{ReentrantLock}
-        return _try_unlink_from!(q, q, w)
-    elseif q isa GenericCondition{AlwaysLockedST}
-        return _try_unlink_from!(q, q, w)
+    ok = true
+    for slot in slots(w)
+        q = slot.owner
+        q === nothing && continue
+        # Manual split for --trim (every waitq's identity is its
+        # condition - see waitqueue)
+        if q isa GenericCondition{Threads.SpinLock}
+            _try_unlink_from!(q, w) || (ok = false)
+        elseif q isa GenericCondition{ReentrantLock}
+            _try_unlink_from!(q, w) || (ok = false)
+        elseif q isa GenericCondition{AlwaysLockedST}
+            _try_unlink_from!(q, w) || (ok = false)
+        elseif q isa CancellationTokenSource
+            # sticky source registrations stay in place
+        else
+            ok = false
+        end
     end
-    return false
+    return ok
 end
 
-function _try_unlink_from!(c::GenericCondition, @nospecialize(waitee), w::WaitEntry)
+function _try_unlink_from!(c::GenericCondition, w::WaitEntry)
     trylock(c.lock) || return false
     try
-        list_deletefirst!(ILLRef(c.waitq, waitee), w)
+        list_deletefirst!(waitqueue(c), w)
     finally
         unlock(c.lock)
     end
@@ -165,25 +119,27 @@ show(io::IO, c::GenericCondition) = print(io, GenericCondition, "(", c.lock, ")"
 
 assert_havelock(c::GenericCondition) = assert_havelock(c.lock)
 lock(c::GenericCondition) = lock(c.lock)
+# (the `cancel`-forwarding lock method for ReentrantLock-backed conditions
+# lives in lock.jl, after ReentrantLock is defined)
 unlock(c::GenericCondition) = unlock(c.lock)
 trylock(c::GenericCondition) = trylock(c.lock)
 islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
-# have waiter wait for c: register `waiter` on c's wait queue (with `waitee`
-# recorded as the queue identity) and arm the registration for a wake.
+# have waiter wait for c: register `waiter` on c's wait queue (the queue's
+# identity is the condition itself) and arm the registration for a wake.
 # Returns the registration entry.
 function _wait2(c::GenericCondition, waiter::Task, first::Bool=false;
-                waitee=c, entry::Union{WaitEntry, Nothing}=nothing)
+                entry::Union{WaitEntry, Nothing}=nothing)
     ct = current_task()
     assert_havelock(c)
     w = entry === nothing ? _cached_wait_entry(waiter) : entry
     _arm_wait(waiter, w)
     if first
-        pushfirst!(ILLRef(c.waitq, waitee), w)
+        pushfirst!(waitqueue(c), w)
     else
-        push!(ILLRef(c.waitq, waitee), w)
+        push!(waitqueue(c), w)
     end
     # since _wait2 is similar to schedule, we should observe the sticky bit now
     if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
@@ -223,43 +179,121 @@ proceeding.
 function wait end
 
 """
-    wait(c::GenericCondition; first::Bool=false)
+    wait(c::GenericCondition; first::Bool=false, cancel=Base.DEFAULT_CANCEL)
 
 Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notify`.
 
 If the keyword `first` is set to `true`, the waiter will be put _first_
 in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
+
+The `cancel` keyword argument controls which cancellation token may interrupt
+the wait (throwing the [`CancellationRequest`](@ref) into the waiter): by
+default the scoped token (see `Base.CANCEL_TOKEN`); pass a
+[`CancellationToken`](@ref) to override it, or `nothing` to make the wait
+non-cancellable.
 """
-function wait(c::GenericCondition; first::Bool=false, waitee=c)
+wait(c::GenericCondition; first::Bool=false,
+     cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    wait(c, check_cancel_arg(cancel); first)
+
+# Cleanup of a park that was resumed without a wake having been delivered
+# through its registration `w`: either an interrupter claimed the wake
+# (leaving the entry linked for us to clean up), or the task got a raw
+# `throwto`. The caller rethrows afterwards, with whatever lock state
+# `relock` established. In order:
+#  1. Disarm the registration - before the relock in step 2 can register a
+#     new wait. When the disarm loses, a claimer got the wake: its
+#     schedule is either already enqueued or still in flight under the
+#     waitee's lock.
+#  2. Run `relock` with the cached entry blanked: a notifier may have popped
+#     the stale entry without scheduling us and may still retain its
+#     identity for the wake-claim CAS, so `w` must not be reused (e.g. by a
+#     park inside `relock`) before the unlink below.
+#  3. Unlink `w` from the waitee's queue (a no-op if a `notify` already
+#     popped and dropped it).
+#  4. Drop a claimed-and-enqueued wake this unwind will never consume, so a
+#     later wait of this task does not consume it spuriously. This runs
+#     after the relock on purpose: a notifier that claimed our wake did so
+#     under the waitee's lock, so once `relock` returns, its enqueue has
+#     landed and the drop here is deterministic - dropping before the
+#     relock would race the notifier's in-flight schedule and leak the
+#     wake into the task's next wait. (If the *relock itself* parked and
+#     consumed the stale wake as a spurious lock wake, its acquire loop
+#     re-tested and re-parked - lock parks tolerate spurious wakes - and
+#     there is nothing left to drop. A claim-less raw wake delivered
+#     outside any lock - the documented-unsafe `schedule(t, exc,
+#     error=true)` of a running task - can still land after this drop;
+#     that hazard is the primitive's, not this path's.)
+#  5. Now `w` is safe to reuse: restore it to its cache unless the relock
+#     parked and cached a replacement. In that case `w` is unreachable
+#     garbage (unarmed, off every waitq), so retire it: its sticky source
+#     registration must be counted dead for pruning, or a long-lived
+#     source would retain the task through the orphaned entry.
+function _interrupted_wait_cleanup(relock, c::GenericCondition, w::WaitEntry)
+    ct = current_task()
+    @atomicreplace ct.waiting_on w => nothing
+    was_plain = ct.cached_wait_entry === w
+    was_cancel = !was_plain && ct.cached_cancel_entry === w
+    was_plain && (ct.cached_wait_entry = nothing)
+    was_cancel && (ct.cached_cancel_entry = nothing)
+    relock()
+    list_deletefirst!(waitqueue(c), w)
+    q = ct.queue
+    q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
+    if was_plain
+        if ct.cached_wait_entry === nothing
+            ct.cached_wait_entry = w
+        else
+            retire_cancellation_entry!(w)
+        end
+    elseif was_cancel
+        if ct.cached_cancel_entry === nothing
+            ct.cached_cancel_entry = w
+        else
+            retire_cancellation_entry!(w)
+        end
+    end
+    return nothing
+end
+
+# `min_severity` is the lowest severity that may wake (cancel) this wait -
+# the comparisons are inclusive on both the registration and walk sides. A
+# teardown wait that re-parks after acknowledging a delivery at severity
+# `s` must therefore pass `s + 0x01` (exclusive staging), so a re-cancel at
+# the acknowledged severity leaves it parked and only an escalation wakes
+# it; see e.g. _uv_write_cancelled_finish.
+function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
+              min_severity::UInt8=0x00)
     ct = current_task()
     assert_havelock(c)
-    w = _wait2(c, ct, first; waitee)
+    src = cancel_source(tok)
+    # entry check: throw before enqueueing anything (skipped for teardown
+    # waits that re-park after acknowledging a severity)
+    src === nothing || min_severity != 0x00 || checkcancel(src)
+    entry = src === nothing ? nothing : _cancel_wait_entry(ct, src, min_severity)
+    w = _wait2(c, ct, first; entry)
+    if src !== nothing && !register_cancellation!(src, w)
+        # The governing source is already cancelled and the wake was claimed
+        # back for us: withdraw the waitee-queue registration (the sticky
+        # source registration stays) and deliver the cancellation ourselves.
+        list_deletefirst!(waitqueue(c), w)
+        _deliver_refused_cancellation(src)
+    end
     token = unlockall(c.lock)
     ret = try
         wait()
     catch
-        # Error path - this could have come from an interrupt or other error.
-        # Clean up our wait condition.
-        # TODO: Replace this with the proper cancellation protocol.
-        @atomicreplace ct.waiting_on w => nothing
-        # Our wake may already have been claimed and turned into a workqueue
-        # enqueue that this unwind will never consume - drop that too, so a
-        # later `schedule` of this task does not find it spuriously queued.
-        q = ct.queue
-        q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
-        # WARNING: Do not use `w` for establish a wait on any tokens - otherwise
-        # we risk ABA issues by attempting to use the cached token for the lock wait.
-        was_cached = ct.cached_wait_entry === w
-        was_cached && (ct.cached_wait_entry = nothing)
-        relockall(c.lock, token)
-        list_deletefirst!(ILLRef(c.waitq, waitee), w)
-        if was_cached && ct.cached_wait_entry === nothing
-            ct.cached_wait_entry = w
-        end
+        # resumed without a wake through `w`; see _interrupted_wait_cleanup
+        _interrupted_wait_cleanup(() -> relockall(c.lock, token), c, w)
         rethrow()
     end
-    # a normal wake implies our claim was won and our entry already unlinked
+    # a normal wake implies our claim was won and our waitee-queue entry was
+    # already unlinked by the notifier (a wake that arrived as a value from
+    # something other than this waitee's notify leaves the entry to us - the
+    # delete below is a no-op in the common case); the sticky source
+    # registration needs no cleanup at all
     relockall(c.lock, token)
+    list_deletefirst!(waitqueue(c), w)
     return ret
 end
 
@@ -278,7 +312,11 @@ function notify(c::GenericCondition, @nospecialize(arg), all, error)
     cnt = 0
     while !isempty(c.waitq)
         w = popfirst!(waitqueue(c))
-        t = w.task
+        # An entry whose wake was already claimed by an interrupter does not
+        # count as woken: drop it and continue to the next waiter (the
+        # interrupted task resumes via whatever its claimer scheduled and
+        # will find its entry already unlinked).
+        t = @atomic :monotonic w.task
         if !(t isa Task && claim_wait(t, w))
             continue
         end
@@ -296,13 +334,7 @@ notify_error(c::GenericCondition, err) = notify(c, err, true, true)
 
 Return `true` if no tasks are waiting on the condition, `false` otherwise.
 """
-function isempty(c::GenericCondition)
-    for w in c.waitq
-        t = w.task
-        t isa Task && (@atomic t.waiting_on) === w && return false
-    end
-    return true
-end
+isempty(c::GenericCondition) = _waitq_isempty(waitqueue(c))
 
 
 # default (Julia v1.0) is currently single-threaded

@@ -312,14 +312,16 @@ function task_local_storage(body::Function, key, val)
 end
 
 # just wait for a task to be done, no error propagation
-function _wait(t::Task)
+_wait(t::Task; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _wait(t, resolve_cancel_token(cancel))
+function _wait(t::Task, tok::MaybeToken; min_severity::UInt8=0x00)
     t === current_task() && throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
         try
             while !istaskdone(t)
-                wait(donenotify; waitee=t)
+                wait(donenotify, tok; min_severity=min_severity)
             end
         finally
             unlock(donenotify)
@@ -328,7 +330,7 @@ function _wait(t::Task)
     nothing
 end
 
-waitqueue(t::Task) = ILLRef((t.donenotify::ThreadSynchronizer).waitq, t)
+waitqueue(t::Task) = waitqueue(t.donenotify::ThreadSynchronizer)
 
 # have `waiter` wait for `t`
 function _wait2(t::Task, waiter::Task)
@@ -363,18 +365,26 @@ function _wait2(t::Task, waiter::Task)
 end
 
 """
-    wait(t::Task; throw=true)
+    wait(t::Task; throw=true, cancel=Base.DEFAULT_CANCEL)
 
 Wait for a `Task` to finish.
 
 The keyword `throw` (defaults to `true`) controls whether a failed task results
 in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed task.
 
+The `cancel` keyword argument controls which cancellation token may interrupt
+the wait (see [`CancellationToken`](@ref)); by default the scoped token. A
+cancelled wait throws the [`CancellationRequest`](@ref) and leaves `t`
+unaffected: cancellation reaches `t` only through its own governing token
+(e.g. when both waiter and waitee run under the same cancelled scope).
+
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
-@noinline function wait(t::Task; throw=true)
+wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    wait(t, check_cancel_arg(cancel); throw)
+@noinline function wait(t::Task, tok::MaybeToken; throw=true)
     # Inlining a blocking call buys nothing; this also keeps the inlineable `fetch(::Task)` small.
-    _wait(t)
+    _wait(t, tok)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
     end
@@ -572,8 +582,10 @@ Wait for a [`Task`](@ref) to finish, then return its result value.
 If the task fails with an exception, a [`TaskFailedException`](@ref) (which wraps the failed task)
 is thrown.
 """
-@inline function fetch(t::Task)
-    wait(t)
+@inline function fetch(t::Task; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # `cancel` governs the *wait* for the task: a cancellation unwinds this
+    # fetch, the fetched task keeps running.
+    wait(t; cancel)
     # This typeassert looks redundant, but is required for soundness and must not be
     # removed: `Task.code`/`Task.result` are mutable, so the precise type inference
     # may derive here (via `PartialTask`) is a claim that must be re-checked at
@@ -585,6 +597,19 @@ end
 
 struct ScheduledAfterSyncException <: Exception
     values::Vector{Any}
+end
+
+function showerror(io::IO, cr::CancellationRequest)
+    print(io, "CancellationRequest: ")
+    if cr === CANCEL_REQUEST_SAFE
+        print(io, "Safe Cancellation (CANCEL_REQUEST_SAFE)")
+    elseif cr === CANCEL_REQUEST_ABANDON_EXTERNAL
+        print(io, "Abandonment of External Resources (CANCEL_REQUEST_ABANDON_EXTERNAL)")
+    elseif cr === CANCEL_REQUEST_ABANDON_ALL
+        print(io, "Task Abandonment (CANCEL_REQUEST_ABANDON_ALL)")
+    else
+        print(io, "Unknown ($(cr.request))")
+    end
 end
 
 function showerror(io::IO, ex::ScheduledAfterSyncException)
@@ -871,6 +896,12 @@ end
 
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
+    # a sticky cancellation-source registration of this task is garbage now
+    w = t.cached_cancel_entry
+    if w isa WaitEntry2
+        o = @atomic :monotonic w.owner2
+        o isa CancellationTokenSource && _note_dead_registration!(o)
+    end
     # `finish_task` sets `sigatomic` before entering this function
     err = istaskfailed(t)
     result = task_result(t)
@@ -1117,6 +1148,32 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     maybe_record_enqueued!(t)
     enq_work(t)
     return t
+end
+
+# Deliver `exc` into the parked wait whose wake the caller already claimed
+# by CASing `t.waiting_on` from `w` to nothing (the cancellation walk).
+# Unlike `schedule(t, exc, error=true)` - whose unconditional swap *takes*
+# a claim - this must not re-claim: the claim was the wake ticket. If a
+# claim-less wake (a raw interrupter, `throwto`) resumed the task first and
+# it has since registered a new wait, the claimed park no longer exists and
+# the delivery is dropped - a task still eligibly parked under the
+# cancelled source is impossible (its registration recheck refuses), and
+# anything else must not observe this request.
+function deliver_claimed_wake!(t::Task, w::WaitEntry, @nospecialize(exc))
+    (@atomic :monotonic t.waiting_on) === nothing || return nothing
+    # the claimed waitee-queue entry stays linked (the walk does not take
+    # waitee locks); collect it opportunistically like an interrupter would
+    try_unlink_claimed!(w)
+    # a pending wake somebody enqueued claim-lessly is superseded by the
+    # cancellation delivery, like an interrupt overriding a claimed value
+    q = t.queue
+    q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
+    t._state === task_state_runnable || return nothing
+    setfield!(t, :result, exc)
+    setfield!(t, :_isexception, true)
+    maybe_record_enqueued!(t)
+    enq_work(t)
+    return nothing
 end
 
 """

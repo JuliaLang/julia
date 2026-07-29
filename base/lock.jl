@@ -191,9 +191,13 @@ wait for it to become available.
 
 Each `lock` must be matched by an [`unlock`](@ref).
 """
-@inline function lock(rl::ReentrantLock)
-    trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+@inline function lock(rl::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    trylock(rl) || (@noinline function slowlock(rl::ReentrantLock, cancel::CancelTokenArg)
         Threads.lock_profiling() && Threads.inc_lock_conflict_count()
+        # resolve the scoped default once; a cancelled acquisition throws the
+        # CancellationRequest without the lock held
+        tok = resolve_cancel_token(cancel)
         c = rl.cond_wait
         ct = current_task()
         iteration = 1
@@ -236,33 +240,37 @@ Each `lock` must be matched by an [`unlock`](@ref).
             end
 
             # It was locked, so now wait for the unlock to notify us
-            wait_no_relock(c)
+            wait_no_relock(c, tok)
 
             # Loop back and try locking again
             iteration = 1
         end
-    end)(rl)
+    end)(rl, cancel)
     return
 end
 
-function wait_no_relock(c::GenericCondition)
+function wait_no_relock(c::GenericCondition, tok::MaybeToken)
     ct = current_task()
-    w = _wait2(c, ct)
+    src = cancel_source(tok)
+    entry = src === nothing ? nothing : _cancel_wait_entry(ct, src, 0x00)
+    w = _wait2(c, ct; entry)
+    if src !== nothing && !register_cancellation!(src, w)
+        # The governing token is already cancelled (e.g. it was cancelled
+        # while we were still spinning and thus not interruptibly waiting)
+        # and the wake was claimed back for us: don't park. (The sticky
+        # source registration stays.)
+        list_deletefirst!(waitqueue(c), w)
+        unlock(c.lock)
+        _deliver_refused_cancellation(src)
+    end
     unlockall(c.lock)
     try
+        # a normal wake needs no source-registration cleanup (sticky)
         return wait()
     catch
-        # See disarm protocol in condition.jl
-        @atomicreplace ct.waiting_on w => nothing
-        q = ct.queue
-        q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
-        was_cached = ct.cached_wait_entry === w
-        was_cached && (ct.cached_wait_entry = nothing)
-        lock(c.lock)
-        list_deletefirst!(waitqueue(c), w)
-        if was_cached && ct.cached_wait_entry === nothing
-            ct.cached_wait_entry = w
-        end
+        # resumed without a wake through `w`; see _interrupted_wait_cleanup
+        # (no relock for the caller: the lock is retaken only for the unlink)
+        _interrupted_wait_cleanup(() -> lock(c.lock), c, w)
         unlock(c.lock)
         rethrow()
     end
@@ -319,7 +327,11 @@ function unlockall(rl::ReentrantLock)
 end
 
 function relockall(rl::ReentrantLock, n::UInt32)
-    lock(rl)
+    # The reacquire is the cleanup half of a wait whose outcome (including a
+    # cancellation) has already been delivered: it must not itself be
+    # cancellable, or a cancelled scope would throw out of here without the
+    # lock and the caller's queue cleanup would run unlocked.
+    lock(rl; cancel=nothing)
     old = @atomicswap :not_atomic rl.reentrancy_cnt = n
     old == 0x0000_0001 || concurrency_violation()
     return
