@@ -54,6 +54,12 @@ const DEFAULT_NODE = SyntaxTree(
     K"None", nothing, nothing, LineNumberNode(0), nothing)
 
 const LOWERING_FLAG_SYNTHESIZED = UInt8(0x01)
+const LOWERING_FLAG_FORWARDING_METHOD = UInt8(0x02)
+
+_forwarding_method_flags(is_forwarding_method::Bool) =
+    is_forwarding_method ? LOWERING_FLAG_FORWARDING_METHOD : UInt8(0)
+_forwarding_method_flags(ex::SyntaxTree) =
+    ex.lowering_flags & LOWERING_FLAG_FORWARDING_METHOD
 
 function _mark_synthesized!(node::SyntaxTree)
     setfield!(node, :lowering_flags, node.lowering_flags | LOWERING_FLAG_SYNTHESIZED)
@@ -207,6 +213,15 @@ the same site (or any later pass) creates from that srcref via [`@ast`](@ref),
 so individual passes don't have to hand-propagate through every recreation.
 """
 is_synthesized(ex::SyntaxTree) = !iszero(ex.lowering_flags & LOWERING_FLAG_SYNTHESIZED)
+
+"""
+    is_forwarding_method(ex::SyntaxTree) -> Bool
+
+Return `true` if `ex` is a `K"method"` generated to initialize default
+arguments or route a keyword call to the method containing the user-written
+body.
+"""
+is_forwarding_method(ex::SyntaxTree) = !iszero(_forwarding_method_flags(ex))
 
 #-------------------------------------------------------------------------------
 # @ast macro
