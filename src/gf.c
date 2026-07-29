@@ -3266,7 +3266,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
 
     int invalidated = 0;
     int precompiled_status = jl_atomic_load_relaxed(&method->dispatch_status);
-    // Always set LATEST_WHICH and carry over NO_LOSERS from initialization and accross precompilation
+    // Always set LATEST_WHICH and carry over NO_LOSERS from initialization and across precompilation
     int dispatch_bits = METHOD_SIG_LATEST_WHICH | (precompiled_status & METHOD_SIG_NO_LOSERS);
     // Holds the set of all intersecting methods not more specific than this one.
     interferences = (jl_genericmemory_t*)jl_atomic_load_relaxed(&method->interferences);
