@@ -27,6 +27,9 @@ function add_one(x::Cint)::Cint
     return x + 1
 end
 
+cfunc_target(x::Cint) = x + Cint(1)
+cfunc_any(@nospecialize(x)) = Cint(7)
+
 function _test_cat()
     # hcat
     _cat1a = hcat(randn(3), rand(3), randn(3))
@@ -113,6 +116,11 @@ function @main(args::Vector{String})::Cint
     println(Core.stdout, _test_cat())
     println(Core.stdout, "Version: ", v"1.1")
     println(Core.stdout, "# preferences: ", length(Base.get_preferences()))
+
+    cf1 = @cfunction(cfunc_target, Cint, (Cint,))
+    println(Core.stdout, "cfunc: ", GC.@preserve cf1 ccall(Base.unsafe_convert(Ptr{Cvoid}, cf1), Cint, (Cint,), Cint(41)))
+    cf2 = @cfunction(cfunc_any, Cint, (Any,))
+    println(Core.stdout, "cfunc_any: ", GC.@preserve cf2 ccall(Base.unsafe_convert(Ptr{Cvoid}, cf2), Cint, (Any,), 1.5))
 
     for i = 1:10
         # https://github.com/JuliaLang/julia/issues/60846
