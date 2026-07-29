@@ -930,6 +930,7 @@ public:
     // During materialization: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_CANSAFEPOINT_ENTER_LEAVE override // NOLINT[julia-first-decl-annotations]
     {
+        note_materialize_phase("chunk/enter");
         auto &ES = R->getExecutionSession();
 
         std::unique_ptr<MemoryBuffer> Obj;
@@ -955,6 +956,7 @@ public:
             note_materialize_phase("objcache-done");
             if (!Obj) {
                 R->failMaterialization();
+                note_materialize_phase(NULL);
                 return;
             }
             // Save some memory
@@ -989,8 +991,10 @@ public:
         jl_gc_unsafe_leave(ct->ptls, gc_state);
 
         note_materialize_phase("linkOutput");
-        if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info)))
+        if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info))) {
+            note_materialize_phase(NULL);
             return;
+        }
         note_materialize_phase("jitlink-emit");
         OL.emit(std::move(R), std::move(*G), std::move(Obj));
         note_materialize_phase(NULL); // finished: leave no phase for this thread
@@ -1038,6 +1042,7 @@ public:
     // During materialization: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_CANSAFEPOINT_ENTER_LEAVE override // NOLINT[julia-first-decl-annotations]
     {
+        note_materialize_phase("trampoline/enter");
         auto Ctx = std::make_unique<LLVMContext>();
         auto Mod =
             jl_create_llvm_module(*Sym, *Ctx, JIT.getDataLayout(), JIT.getTargetTriple());

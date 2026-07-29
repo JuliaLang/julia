@@ -54,6 +54,9 @@ private:
   /// stuck in the same task all along": a wedge changes neither counter,
   /// while ActiveRuns alone stays nonzero and would mask it.
   std::atomic<uint64_t> TasksStarted{0};
+  /// Tasks handed to dispatch(), whether run inline or queued. If this
+  /// exceeds TasksStarted then a task was accepted and never run.
+  std::atomic<uint64_t> TasksDispatched{0};
   /// Track whether the current thread is inside work_until/process_tasks.
   /// When false, dispatch runs tasks inline to avoid deadlock with callers
   /// that block on std::future (e.g. LocalTrampolinePool::reenter).
@@ -73,7 +76,9 @@ public:
       NQueued = TaskQueue.size();
       DispatchMutex.unlock();
     }
-    jl_safe_printf("jit dispatcher: active_runs=%d tasks_completed=%llu dispatch_mutex=%s",
+    jl_safe_printf("jit dispatcher: dispatched=%llu started=%llu active_runs=%d tasks_completed=%llu dispatch_mutex=%s",
+                   (unsigned long long)TasksDispatched.load(std::memory_order_relaxed),
+                   (unsigned long long)TasksStarted.load(std::memory_order_relaxed),
                    ActiveRuns.load(std::memory_order_relaxed),
                    (unsigned long long)TasksCompleted.load(std::memory_order_relaxed),
                    LockFree ? "free" : "HELD");
@@ -400,6 +405,7 @@ struct dispatcher_sigdefer_guard {
 };
 
 void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-first-decl-annotations)
+  TasksDispatched.fetch_add(1, std::memory_order_relaxed);
   if (!InCooperativeContext) {
     // Not inside work_until/process_tasks — run inline to prevent deadlock
     // with callers that block on std::future (e.g. LocalTrampolinePool::reenter).
