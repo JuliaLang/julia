@@ -5530,6 +5530,15 @@ g_max_methods(x) = f_max_methods(x)
 @test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
 @test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
 
+# Test that `Core.TypeName.concrete_only` makes inference give up at call sites with
+# non-concrete argument types while keeping concrete call sites precise
+function f_concrete_only end
+typeof(f_concrete_only).name.concrete_only = true
+f_concrete_only(x) = 1
+g_concrete_only(x) = f_concrete_only(x)
+@test only(Base.return_types(g_concrete_only, Tuple{Int})) === Int
+@test only(Base.return_types(g_concrete_only, Tuple{Integer})) === Any
+
 # Test that a module-wise `@max_methods` works as expected
 module Test43370
 using Test

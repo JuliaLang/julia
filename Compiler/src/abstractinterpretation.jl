@@ -140,6 +140,17 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
 
     (; valid_worlds, applicable) = matches
     update_valid_age!(sv, get_inference_world(interp), valid_worlds) # need to record the negative world now, since even if we don't generate any useful information, inlining might want to add an invoke edge and it won't have this information anymore
+    # Concrete-only functions refuse to commit (and record no backedge) when any
+    # applicable match has a non-concrete signature, regardless of scope. This is the
+    # generalization of the top-level `!isdispatchtuple` bail below to a per-function opt-in.
+    if is_concrete_only(func)
+        for i = 1:length(applicable)
+            if !isdispatchtuple(applicable[i].match.spec_types)
+                add_remark!(interp, sv, "Refusing to infer non-concrete call site for concrete-only function")
+                return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+            end
+        end
+    end
     if bail_out_toplevel_call(interp, sv)
         local napplicable = length(applicable)
         for i = 1:napplicable
