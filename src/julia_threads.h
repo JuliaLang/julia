@@ -351,6 +351,7 @@ typedef struct _jl_task_t {
     // A `Base.WaitEntry` cached for reuse across parks (or `nothing`), so the
     // common single-registration park does not allocate. Owned by this task.
     jl_value_t *cached_wait_entry;
+    jl_value_t *invoked; // Method/CodeInstance/tuple Type for optimized task invocation
 
 // hidden state:
 

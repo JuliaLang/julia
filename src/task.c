@@ -25,6 +25,7 @@
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "builtin_proto.h"
 #include "threading.h"
 #include "julia_assert.h"
 
@@ -1097,6 +1098,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->tls = jl_nothing;
     jl_atomic_store_relaxed(&t->_state, JL_TASK_STATE_RUNNABLE);
     t->start = start;
+    t->invoked = NULL;
     t->result = jl_nothing;
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
@@ -1241,7 +1243,21 @@ CFI_NORETURN
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT, ROOT);
-            res = jl_apply(&ct->start, 1);
+            // Check if we can use optimized invocation
+            if (ct->invoked != NULL) {
+                // The `code`/`invoked` fields are mutable from Julia (`setfield!`), so the
+                // pair read here need not be the pair that was validated when the task was
+                // constructed (`jl_f__task`) or injected by inlining. Soundness relies on
+                // `jl_f_invoke` re-checking the argument against the target's signature and
+                // world bounds at this point: calling a CodeInstance's specptr directly
+                // without those checks would turn a field mutation into an ABI mismatch
+                // (undefined behavior), not a Julia-level error.
+                jl_value_t *invoke_args[2] = {ct->start, ct->invoked};
+                res = jl_f_invoke(NULL, invoke_args, 2);
+            }
+            else {
+                res = jl_apply(&ct->start, 1);
+            }
         }
         JL_CATCH {
             res = jl_current_exception(ct);
@@ -1251,6 +1267,7 @@ CFI_NORETURN
 skip_pop_exception:;
     }
     jl_gc_write(ct, ct->result, jl_value_t, res);
+    ct->invoked = NULL;
     jl_finish_task(ct);
     jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
@@ -1550,6 +1567,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->tls = jl_nothing;
     jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     ct->start = NULL;
+    ct->invoked = NULL;
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);

@@ -3472,6 +3472,12 @@ void export_jl_sysimg_globals(void)
     jl_##name##_type->smalltag = jl_##name##_tag;
 void jl_init_types(void) JL_GC_DISABLED
 {
+    // n.b. When adding fields to existing types, update const/atomic field bitvectors carefully:
+    //   Bits represent field positions (0-indexed).
+    //   Prefer `0b` notation (converting if needed from `0x`).
+    //   Only set bits for new atomic/const fields, shift existing bits as needed.
+    //   Only 32 bits in one field, overflow goes into the next field.
+
     jl_module_t *core = NULL; // will need to be assigned later
     jl_task_t *ct = jl_current_task;
 
@@ -4335,7 +4341,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(29,
+                        jl_perm_symsvec(30,
                                         "next",
                                         "queue",
                                         "storage",
@@ -4364,8 +4370,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "running_time_ns",
                                         "finished_at",
                                         "waiting_on",
-                                        "cached_wait_entry"),
-                        jl_svec(29,
+                                        "cached_wait_entry",
+                                        "invoked"),
+                        jl_svec(30,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -4393,6 +4400,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint64_type,
                                 jl_uint64_type,
                                 jl_uint64_type,
+                                jl_any_type,
                                 jl_any_type,
                                 jl_any_type),
                         jl_emptysvec,
@@ -4558,6 +4566,7 @@ void post_boot_hooks(void)
     jl_partial_struct_type = (jl_datatype_t*)core("PartialStruct");
     jl_interconditional_type = (jl_datatype_t*)core("InterConditional");
     jl_partial_opaque_type = (jl_datatype_t*)core("PartialOpaque");
+    jl_partial_task_type = (jl_datatype_t*)core("PartialTask");
     jl_inter_must_alias_type = (jl_datatype_t*)core("InterMustAlias");
 
     export_jl_small_typeof();

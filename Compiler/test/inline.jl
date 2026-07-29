@@ -1854,6 +1854,55 @@ let src = code_typed1((AtomicMemoryRef{Int},)) do a
     @test count(isinvokemodify(:+), src.code) == 1
 end
 
+# Core._task handling
+# ===================
+# Test that _task inlines properly with const prop
+f_task_invoke() = 42
+let src = code_typed1(()) do
+        return Task(f_task_invoke)
+    end
+    m = which(f_task_invoke, ())
+    @test count(e -> begin
+            if iscall((src, Core._task), e) && e isa Expr && e.head === :call && length(e.args) == 4
+                ci = e.args[4]
+                if ci isa CodeInstance && ci.def.def === m
+                    return true
+                end
+            end
+            return false
+        end, src.code) == 1
+end
+
+# Test that no invoke target is injected when the single method match does not fully
+# cover the argument type: the task must fall back to generic dispatch so that
+# non-callable bodies still raise a MethodError when the task runs.
+abstract type TaskCallable end
+struct TaskCallableImpl <: TaskCallable end
+(::TaskCallableImpl)() = 1
+let src = code_typed1((TaskCallable,)) do f
+        return Task(f)
+    end
+    @test count(e -> iscall((src, Core._task), e) && length((e::Expr).args) == 3, src.code) == 1
+end
+
+# Test that task_result_type gets inlined to its constant value
+let src = code_typed1((Task,)) do t; Core.task_result_type(t); end
+    # Should be inlined to the `Any` constant, with no call to task_result_type
+    @test count(iscall((src, Core.task_result_type)), src.code) == 0
+    @test src.code[end] == ReturnNode(Any)
+end
+let src = code_typed1((Union{Task,Int},)) do t; Core.task_result_type(t); end
+    # The Int path throws, so the call cannot be folded away.
+    @test count(iscall((src, Core.task_result_type)), src.code) == 1
+end
+for src in (
+        code_typed1((Int,)) do i; Core.task_result_type(i); end,
+        code_typed1(()) do; Core.task_result_type(); end,
+        code_typed1((Task,Task)) do t, u; Core.task_result_type(t, u); end)
+    # Invalid argument types and arities must retain the throwing call.
+    @test count(iscall((src, Core.task_result_type)), src.code) == 1
+end
+
 # apply `ssa_inlining_pass` multiple times
 func_mul_int(a::Int, b::Int) = Core.Intrinsics.mul_int(a, b)
 multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)

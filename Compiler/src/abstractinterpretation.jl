@@ -2595,7 +2595,7 @@ function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, 
         finalizer_argvec = Any[argtypes[2], argtypes[3]]
         call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false, false), vtypes, sv, #=max_methods=#1)::Future
         return Future{CallMeta}(call, interp, sv) do call, _, _
-            return CallMeta(Nothing, Any, Effects(), FinalizerInfo(call.info, call.effects))
+            return CallMeta(Nothing, Any, Effects(), IndirectCallInfo(call.info, call.effects, false))
         end
     end
     return Future(CallMeta(Nothing, Any, Effects(), NoCallInfo()))
@@ -2934,6 +2934,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return Future(abstract_eval_isdefinedglobal(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.get_binding_type
             return Future(abstract_eval_get_binding_type(interp, sv, argtypes))
+        elseif f === Core._task
+            return abstract_eval_task_builtin(interp, arginfo, si, vtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, vtypes, sv)
         ft = popfirst!(argtypes)
@@ -3475,6 +3477,67 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     consistent = !ismutabletype(rt) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
     effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
     return RTEffects(rt, Any, effects)
+end
+
+# Effects of the `Core._task` builtin itself; the deferred body does not run here.
+# Creating a task returns a fresh mutable object, inherits the current task's scope
+# and forks its RNG state (advancing the parent's internal RNG via `jl_rng_split`),
+# so the call is not consistent, not effect-free, and accesses task state. It may
+# throw, e.g. for an invalid stack size, but always terminates and has no UB.
+const TASK_BUILTIN_EFFECTS = Effects(EFFECTS_TOTAL;
+    consistent=ALWAYS_FALSE, effect_free=ALWAYS_FALSE, nothrow=false,
+    notaskstate=false, inaccessiblememonly=ALWAYS_FALSE)
+
+function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo,
+                                    vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
+    argtypes = arginfo.argtypes
+    la = length(argtypes)
+    isva = !isempty(argtypes) && isvarargtype(argtypes[end])
+    if isva
+        la > 5 && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+        size_arg = argtype_by_index(argtypes, 3)
+    elseif !(3 <= la <= 4)
+        return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+    else
+        size_arg = argtypes[3]
+    end
+    if !hasintersect(widenconst(size_arg), Int)
+        return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+    end
+    if isva && la < 5
+        # Without a fixed invoke target, the vararg may supply any of the required
+        # arguments, so only retain the builtin's guaranteed return type.
+        return Future(CallMeta(Task, Any, TASK_BUILTIN_EFFECTS, NoCallInfo()))
+    end
+    func_arg = argtypes[2]
+
+    # Handle the fixed Method/CodeInstance/Type argument (4th parameter) as invoke.
+    # A trailing vararg may be empty; non-empty tails throw an arity error before
+    # the deferred invoke can run.
+    if la >= 4
+        invoke_args = Any[Const(Core.invoke), func_arg, argtypes[4]]
+        invoke_arginfo = ArgInfo(nothing, invoke_args)
+        invoke_future = abstract_invoke(interp, invoke_arginfo, si, vtypes, sv)
+        return Future{CallMeta}(task_callmeta, invoke_future, interp, sv)
+    end
+
+    # Otherwise use abstract_call for function analysis
+    callinfo_future = abstract_call(interp, ArgInfo(nothing, Any[func_arg]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
+    return Future{CallMeta}(task_callmeta, callinfo_future, interp, sv)
+end
+
+# Convert the `CallMeta` of the task body call into the `CallMeta` of the `Core._task`
+# call that creates it, tracking the body's result/error types with a `PartialTask`.
+function task_callmeta(call::CallMeta, ::AbstractInterpreter, ::AbsIntState)
+    fetch_type = widenconst(call.rt)
+    fetch_error = widenconst(call.exct)
+    if fetch_type === Any && fetch_error === Any
+        rt_result = Task
+    else
+        rt_result = PartialTask(fetch_type, fetch_error)
+    end
+    info_result = IndirectCallInfo(call.info, call.effects, true)
+    return CallMeta(rt_result, Any, TASK_BUILTIN_EFFECTS, info_result)
 end
 
 function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
@@ -4339,6 +4402,8 @@ end
             fields[i] = a
         end
         anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, _getundefs(rt), fields)
+    elseif isa(rt, PartialTask)
+        return rt # already widened, by construction
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512

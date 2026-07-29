@@ -2420,6 +2420,32 @@ JL_CALLABLE(jl_f__svec_ref)
     return jl_svecref(s, idx-1);
 }
 
+JL_CALLABLE(jl_f__task)
+{
+    JL_NARGS(_task, 2, 3);
+    jl_value_t *start = args[0];
+    JL_TYPECHK(_task, long, args[1]);
+    size_t ssize = jl_unbox_long(args[1]);
+    jl_value_t *invoke_arg = NULL;
+    if (nargs >= 3) {
+        invoke_arg = args[2];
+        if (!jl_is_method(invoke_arg) && !jl_is_code_instance(invoke_arg) &&
+            !jl_is_tuple_type(jl_unwrap_unionall(invoke_arg)))
+            jl_type_error("_task", (jl_value_t*)jl_anytuple_type_type, invoke_arg);
+    }
+    jl_task_t *task = jl_new_task(start, jl_nothing, ssize);
+    task->invoked = invoke_arg;
+    return (jl_value_t*)task;
+}
+
+JL_CALLABLE(jl_f_task_result_type)
+{
+    JL_NARGS(task_result_type, 1, 1);
+    JL_TYPECHK(task_result_type, task, args[0]);
+    // Without inference, this returns Any, but inference can inject other Types here
+    return (jl_value_t*)jl_any_type;
+}
+
 // If a field can reference its enclosing type, then the inlining
 // recursive depth is not statically bounded for some layouts, so we cannot
 // inline it. The only way fields can reference this type (due to
