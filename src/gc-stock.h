@@ -41,11 +41,7 @@
 extern "C" {
 #endif
 
-#ifdef GC_SMALL_PAGE
-#define GC_PAGE_LG2 12 // log2(size of a page)
-#else
-#define GC_PAGE_LG2 14 // log2(size of a page)
-#endif
+#define GC_PAGE_LG2 16 // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2)
 #define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
 
@@ -137,15 +133,13 @@ typedef struct _jl_gc_pagemeta_t {
     // Invalid if pool that owns this page is allocating objects from this page
     uint16_t nfree;
     uint16_t osize;           // Size of each object in this page
-    uint16_t fl_begin_offset; // Offset of first free object in this page
-    uint16_t fl_end_offset;   // Offset of last free object in this page
+    uint32_t fl_begin_offset; // Offset of first free object in this page (UINT32_MAX if none)
+    uint32_t fl_end_offset;   // Offset of last free object in this page
     uint16_t thread_n;        // Thread id of the heap that owns this page
     char *data;               // Pointer to the start of the regions where objects are allocated
 } jl_gc_pagemeta_t;
 
 extern jl_gc_page_stack_t global_page_pool_lazily_freed;
-extern jl_gc_page_stack_t global_page_pool_clean;
-extern jl_gc_page_stack_t global_page_pool_freed;
 
 /*
  * Simple lock-free stack implementation for `jl_gc_page_stack_t`.
@@ -282,38 +276,20 @@ extern gc_heapstatus_t gc_heap_stats;
  *     address spaces by subdividing memory into regions.
  */
 
-#ifdef GC_SMALL_PAGE
-#ifdef _P64
-#define REGION0_PG_COUNT (1 << 16)
-#define REGION1_PG_COUNT (1 << 18)
-#define REGION2_PG_COUNT (1 << 18)
-#define REGION0_INDEX(p) (((uintptr_t)(p) >> 12) & 0xFFFF) // shift by GC_PAGE_LG2
-#define REGION1_INDEX(p) (((uintptr_t)(p) >> 28) & 0x3FFFF)
-#define REGION_INDEX(p)  (((uintptr_t)(p) >> 46) & 0x3FFFF)
-#else
-#define REGION0_PG_COUNT (1 << 10)
-#define REGION1_PG_COUNT (1 << 10)
-#define REGION2_PG_COUNT (1 << 0)
-#define REGION0_INDEX(p) (((uintptr_t)(p) >> 12) & 0x3FF) // shift by GC_PAGE_LG2
-#define REGION1_INDEX(p) (((uintptr_t)(p) >> 22) & 0x3FF)
-#define REGION_INDEX(p)  (0)
-#endif
-#else
 #ifdef _P64
 #define REGION0_PG_COUNT (1 << 16)
 #define REGION1_PG_COUNT (1 << 16)
-#define REGION2_PG_COUNT (1 << 18)
-#define REGION0_INDEX(p) (((uintptr_t)(p) >> 14) & 0xFFFF) // shift by GC_PAGE_LG2
-#define REGION1_INDEX(p) (((uintptr_t)(p) >> 30) & 0xFFFF)
-#define REGION_INDEX(p)  (((uintptr_t)(p) >> 46) & 0x3FFFF)
+#define REGION2_PG_COUNT (1 << 16)
+#define REGION0_INDEX(p) (((uintptr_t)(p) >> 16) & 0xFFFF) // shift by GC_PAGE_LG2
+#define REGION1_INDEX(p) (((uintptr_t)(p) >> 32) & 0xFFFF)
+#define REGION_INDEX(p)  (((uintptr_t)(p) >> 48) & 0xFFFF)
 #else
 #define REGION0_PG_COUNT (1 << 8)
-#define REGION1_PG_COUNT (1 << 10)
+#define REGION1_PG_COUNT (1 << 8)
 #define REGION2_PG_COUNT (1 << 0)
-#define REGION0_INDEX(p) (((uintptr_t)(p) >> 14) & 0xFF) // shift by GC_PAGE_LG2
-#define REGION1_INDEX(p) (((uintptr_t)(p) >> 22) & 0x3FF)
+#define REGION0_INDEX(p) (((uintptr_t)(p) >> 16) & 0xFF) // shift by GC_PAGE_LG2
+#define REGION1_INDEX(p) (((uintptr_t)(p) >> 24) & 0xFF)
 #define REGION_INDEX(p)  (0)
-#endif
 #endif
 
 #define GC_PAGE_UNMAPPED        0
@@ -473,6 +449,19 @@ STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOIN
     return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
 }
 
+// Partially-free pages are bucketed by occupancy so that allocation refills from
+// the fullest bucket first, leaving the emptiest pages to drain to fully free
+// rather than being topped up. Bucket 0 is the fullest.
+#define GC_OCCUPANCY_BUCKETS 4
+
+STATIC_INLINE int gc_occupancy_bucket(size_t free_bytes, size_t capacity_bytes) JL_NOTSAFEPOINT
+{
+    assert(free_bytes > 0 && free_bytes <= capacity_bytes);
+    // callers pass a constant capacity where they can, so this is a multiply
+    size_t b = (GC_OCCUPANCY_BUCKETS * free_bytes) / capacity_bytes;
+    return (int)(b < GC_OCCUPANCY_BUCKETS ? b : GC_OCCUPANCY_BUCKETS - 1);
+}
+
 extern int gc_first_tid;
 
 STATIC_INLINE int gc_first_parallel_collector_thread_id(void) JL_NOTSAFEPOINT
@@ -533,6 +522,118 @@ STATIC_INLINE void gc_check_ptls_of_parallel_collector_thread(jl_ptls_t ptls) JL
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
 }
 
+// =========================================================================== //
+// Page allocator (gc-pages.c)
+//
+// Serves both the pool pages and, for heap memory larger than the pool limit,
+// big pages -- which come from here instead of malloc.
+// Following mimalloc's design, each "big page" holds a single size class
+// (mimalloc bin spacing: 4 classes per power of two), and the page size for a
+// class is chosen so that a page holds at least 6 objects, bounding the
+// unusable remainder plus rounding waste at roughly 1/6 of the page:
+//  - classes <= 10 KiB:  64 KiB pages
+//  - classes <= 80 KiB:  512 KiB pages
+//  - classes <= 256 KiB: 2 MiB pages (a whole slab)
+//  - larger: "huge" objects, each in its own dedicated OS mapping aligned to
+//    2 MiB.
+// Pages are carved out of 2 MiB slabs as aligned runs of 64 KiB units,
+// tracked by a per-slab bitmap of free units. All page sizes -- including
+// the GC's pool pages, which are one unit -- share the same slabs, and freed
+// runs coalesce implicitly in the bitmap. Slabs come from large (64 MB)
+// 2 MiB-aligned OS mappings and are the unit of commit/decommit and of
+// transparent huge pages.
+//
+// The GC is the synchronization point: memory on these paths is freed only
+// while the world is stopped during sweep, so page free lists have a single
+// writer at any time and need no atomics (unlike mimalloc's design).
+// =========================================================================== //
+
+#define GC_SLAB_LG2 21 // log2(size of a slab)
+#define GC_SLAB_SZ ((size_t)1 << GC_SLAB_LG2)
+// smallest big size class; everything smaller is pool-allocated (or, for
+// MEMDEBUG builds where everything is "big", rounded up to this class)
+#define GC_BIG_CLASS_MIN_SZ 2048
+// largest size class allocated from a shared page (mimalloc's rule: a whole-
+// slab page must hold at least 8); larger allocations get a huge mapping
+#define GC_BIG_CLASS_MAX_SZ (GC_SLAB_SZ / 8)
+// largest class stored in 64 KiB pages resp. 512 KiB pages (>= 6 objects each)
+#define GC_BIG_SMALL_PAGE_MAX_SZ 10240
+#define GC_BIG_MEDIUM_PAGE_MAX_SZ 81920
+// number of big classes: 4 per power of two plus the base class.
+// Must be kept in sync with JL_GC_N_BIG_CLASSES in `src/gc-tls-stock.h`
+#define GC_N_BIG_CLASSES JL_GC_N_BIG_CLASSES
+static_assert(GC_N_BIG_CLASSES == 4 * (GC_SLAB_LG2 - 14) + 1, "");
+
+// big page states
+#define GC_BIG_PAGE_FREE    0 // unused, tracked in its slab's free-page map
+#define GC_BIG_PAGE_CURRENT 1 // some thread's active allocation page
+#define GC_BIG_PAGE_FULL    2 // no free slots; floating until sweep frees one
+#define GC_BIG_PAGE_PARTIAL 3 // has free slots; in the global per-class stack
+
+typedef struct _jl_gc_bigpagemeta_t {
+    struct _jl_gc_bigpagemeta_t *next;       // link in the per-class partial-page stack
+    struct _jl_gc_bigpagemeta_t *sweep_next; // link in the sweep-touched list
+    char *data;     // start of the page (aligned to the page size)
+    void *freelist; // singly-linked list of free slots (threaded through the slots)
+    char *bump;     // start of the never-yet-allocated tail of the page
+    uint32_t nfree; // free slots (freelist plus bump region)
+    uint32_t nobjs; // slot capacity of the page for its current size class
+    uint32_t osize; // slot size (== size class)
+    uint8_t page_lg2; // log2 of the page size (16, 19, or GC_SLAB_LG2)
+    uint8_t szclass;
+    uint8_t state;
+    uint8_t on_sweep_list;
+} jl_gc_bigpagemeta_t;
+
+// slabs are carved at 64 KiB granularity ("units")
+#define GC_UNIT_LG2 16
+static_assert(GC_UNIT_LG2 == GC_PAGE_LG2, "pool pages must be one slab unit");
+#define GC_UNITS_PER_SLAB (1 << (GC_SLAB_LG2 - GC_UNIT_LG2))
+
+typedef struct _jl_gc_slabmeta_t {
+    // links in the partial-slab list (some units free); `next` doubles as the
+    // free-slab list link (all units free)
+    struct _jl_gc_slabmeta_t *next;
+    struct _jl_gc_slabmeta_t *prev;
+    char *data;       // the slab (GC_SLAB_SZ-aligned); for huge, start of the object
+    // base and size of the OS reservation this slab came from. Set on a huge
+    // allocation's own metadata, and on the first slab of a slab block (where
+    // it only keeps the reservation releasable; blocks are never unmapped).
+    void *map_base;
+    size_t map_sz;
+    size_t usable_sz; // bytes charged to the heap (huge only)
+    uint8_t is_huge;
+    uint8_t resident;     // memory is committed / not madvised away
+    uint8_t free_sweeps;  // sweeps ended with this slab fully free (see finish_sweep)
+    uint32_t free_unit_map; // bitmap of free 64 KiB units (coalescing oracle)
+    // heads of the free-segment lists, one per shared page size (1 and 8 units);
+    // a wholly free slab is released to the free-slab list instead
+    void *free_segs[2];
+    // first unit of the big page covering each unit (meaningless for units
+    // holding pool pages, which are looked up through their own metadata)
+    uint8_t unit_page_start[GC_UNITS_PER_SLAB];
+    // metadata for big pages carved from this slab; entry i describes the
+    // page starting at unit i (lazily allocated, then kept)
+    jl_gc_bigpagemeta_t *pages;
+    // metadata for pool pages carved from this slab, one per unit
+    // (lazily allocated, then kept)
+    struct _jl_gc_pagemeta_t *pool_pages;
+} jl_gc_slabmeta_t;
+
+extern uv_mutex_t gc_big_lock;
+void jl_gc_init_big_pages(void);
+// Allocate `allocsz` bytes (64-byte aligned). Returns NULL on OOM. Stores the
+// number of bytes actually reserved for the allocation in `*usable_sz`.
+void *jl_gc_big_mem_alloc(jl_ptls_t ptls, size_t allocsz, size_t *usable_sz);
+// Free an allocation made by `jl_gc_big_mem_alloc`, returning its usable size.
+// May only be called while the world is stopped during GC sweep.
+size_t jl_gc_big_mem_free(void *p) JL_NOTSAFEPOINT;
+// Redistribute swept pages and return fully-free memory to the OS.
+// Must be called at the end of sweep, after the last `jl_gc_big_mem_free`.
+void jl_gc_big_mem_finish_sweep(void) JL_NOTSAFEPOINT;
+// Release the current allocation pages of a thread that is shutting down.
+void jl_gc_big_mem_thread_exit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+
 extern uintptr_t gc_bigval_sentinel_tag;
 extern bigval_t *oldest_generation_of_bigvals;
 
@@ -591,8 +692,6 @@ void jl_gc_debug_init(void) JL_NOTSAFEPOINT;
 extern uv_mutex_t gc_perm_lock;
 
 // GC pages
-extern uv_mutex_t gc_pages_lock;
-void jl_gc_init_page(void) JL_NOTSAFEPOINT;
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
 NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
 

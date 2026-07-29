@@ -1,103 +1,863 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+// Slab-based page allocator: pool pages, big pages for objects above the pool
+// limit, and malloc'd Memory buffers. See the overview comment in gc-stock.h.
+
 #include "gc-common.h"
 #include "gc-stock.h"
-#ifndef _OS_WINDOWS_
-#  include <sys/resource.h>
-#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-uv_mutex_t gc_pages_lock;
+uv_mutex_t gc_big_lock;
+
+static size_t gc_big_class_sz[GC_N_BIG_CLASSES];
+
+// Map an allocation size (<= GC_BIG_CLASS_MAX_SZ) to its size class.
+STATIC_INLINE int gc_big_szclass(size_t sz) JL_NOTSAFEPOINT
+{
+    if (sz <= GC_BIG_CLASS_MIN_SZ)
+        return 0;
+    // 4 classes per power of two: for sz in (2^lg, 2^(lg+1)], class sizes are
+    // 2^lg + (r+1) * 2^(lg-2) for r in 0:3
+    int lg = 63 - __builtin_clzll((uint64_t)(sz - 1));
+    size_t base = (size_t)1 << lg;
+    int sub = (int)((sz - base - 1) >> (lg - 2));
+    int c = 4 * (lg - 11) + sub + 1;
+    assert(c > 0 && c < GC_N_BIG_CLASSES);
+    assert(gc_big_class_sz[c] >= sz && (c == 0 || gc_big_class_sz[c - 1] < sz));
+    return c;
+}
+
+// log2 of the page size used for a size class (mimalloc's tiering rule:
+// a page must hold several objects of its class, see gc-stock.h)
+STATIC_INLINE int gc_big_page_lg2(size_t class_sz) JL_NOTSAFEPOINT
+{
+    if (class_sz <= GC_BIG_SMALL_PAGE_MAX_SZ)
+        return 16; // 64 KiB
+    if (class_sz <= GC_BIG_MEDIUM_PAGE_MAX_SZ)
+        return 19; // 512 KiB
+    return GC_SLAB_LG2; // a whole slab
+}
+
+// per-class stacks of pages with free slots; popped lock-free by mutators,
+// (re)filled only during sweep while the world is stopped. Refill prefers the
+// fullest bucket (see gc_occupancy_bucket).
+typedef struct {
+    _Atomic(jl_gc_bigpagemeta_t *) bottom;
+} gc_big_page_stack_t;
+
+static gc_big_page_stack_t gc_big_partial_pages[GC_N_BIG_CLASSES][GC_OCCUPANCY_BUCKETS];
+
+STATIC_INLINE int gc_big_page_bucket(jl_gc_bigpagemeta_t *pg) JL_NOTSAFEPOINT
+{
+    return gc_occupancy_bucket((size_t)pg->nfree * pg->osize,
+                               (size_t)1 << pg->page_lg2);
+}
+
+STATIC_INLINE void gc_big_stack_push(gc_big_page_stack_t *st, jl_gc_bigpagemeta_t *pg) JL_NOTSAFEPOINT
+{
+    // only called during sweep with the world stopped, no CAS needed
+    pg->next = jl_atomic_load_relaxed(&st->bottom);
+    jl_atomic_store_relaxed(&st->bottom, pg);
+}
+
+STATIC_INLINE jl_gc_bigpagemeta_t *gc_big_stack_pop(gc_big_page_stack_t *st) JL_NOTSAFEPOINT
+{
+    while (1) {
+        jl_gc_bigpagemeta_t *pg = jl_atomic_load_relaxed(&st->bottom);
+        if (pg == NULL)
+            return NULL;
+        if (jl_atomic_cmpswap(&st->bottom, &pg, pg->next))
+            return pg;
+        jl_cpu_pause();
+    }
+}
+
+// ======================================================================== //
+// slab map: two-level radix tree from `addr >> GC_SLAB_LG2` to slab metadata.
+// Every address handed out by this allocator has its containing (2 MiB-
+// aligned) slab registered here; huge mappings are 2 MiB-aligned so their
+// base address identifies them uniquely.
+// ======================================================================== //
+
+#ifdef _P64
+#define GC_SLAB_MAP0_BITS 16 // bits 21..36
+#define GC_SLAB_MAP1_BITS 9  // bits 37..45
+#define GC_SLAB_MAP2_BITS 18 // bits 46..63
+#else
+// Only bits 21..31 exist above the slab shift, so a single leaf level covers the
+// whole address space and the upper levels collapse to one entry each.
+#define GC_SLAB_MAP0_BITS 11 // bits 21..31
+#define GC_SLAB_MAP1_BITS 0
+#define GC_SLAB_MAP2_BITS 0
+#endif
+
+typedef struct {
+    jl_gc_slabmeta_t *meta[1 << GC_SLAB_MAP0_BITS];
+} gc_slab_map0_t;
+
+typedef struct {
+    gc_slab_map0_t *map0[1 << GC_SLAB_MAP1_BITS];
+} gc_slab_map1_t;
+
+static gc_slab_map1_t *gc_slab_map[1 << GC_SLAB_MAP2_BITS];
+
+// Requires `gc_big_lock` when `create` is set. Lookups without `create` may
+// run without the lock: interior nodes are never freed, and leaf slots are
+// only read for addresses this allocator handed out (whose entries were
+// published before the allocation was visible to anyone).
+static jl_gc_slabmeta_t **gc_slab_map_slot(void *p, int create) JL_NOTSAFEPOINT
+{
+    // 64-bit even on 32-bit targets: the shift counts below exceed the width of
+    // a 32-bit pointer, which would be undefined behaviour on `uintptr_t`.
+    uint64_t a = (uint64_t)(uintptr_t)p;
+    unsigned i2 = (unsigned)((a >> (GC_SLAB_LG2 + GC_SLAB_MAP0_BITS + GC_SLAB_MAP1_BITS)) & ((1 << GC_SLAB_MAP2_BITS) - 1));
+    gc_slab_map1_t *m1 = gc_slab_map[i2];
+    if (m1 == NULL) {
+        if (!create)
+            return NULL;
+        m1 = (gc_slab_map1_t*)calloc_s(sizeof(gc_slab_map1_t));
+        gc_slab_map[i2] = m1;
+    }
+    unsigned i1 = (unsigned)((a >> (GC_SLAB_LG2 + GC_SLAB_MAP0_BITS)) & ((1 << GC_SLAB_MAP1_BITS) - 1));
+    gc_slab_map0_t *m0 = m1->map0[i1];
+    if (m0 == NULL) {
+        if (!create)
+            return NULL;
+        m0 = (gc_slab_map0_t*)calloc_s(sizeof(gc_slab_map0_t));
+        m1->map0[i1] = m0;
+    }
+    return &m0->meta[(size_t)((a >> GC_SLAB_LG2) & ((1 << GC_SLAB_MAP0_BITS) - 1))];
+}
+
+STATIC_INLINE jl_gc_slabmeta_t *gc_slab_map_lookup(void *p) JL_NOTSAFEPOINT
+{
+    jl_gc_slabmeta_t **slot = gc_slab_map_slot(p, 0);
+    return slot == NULL ? NULL : *slot;
+}
+
+// ======================================================================== //
+// OS memory
+// ======================================================================== //
+
+static int gc_use_hugepages = 1;
+
+#ifndef MAP_NORESERVE // not defined in POSIX, FreeBSD, etc.
+#define MAP_NORESERVE (0)
+#endif
+
+// Reserve a GC_SLAB_SZ-aligned region of `sz` bytes (a multiple of
+// GC_SLAB_SZ). On POSIX the memory is immediately usable; on Windows it is
+// only reserved and each slab must be committed before use.
+// Updates bytes_mapped; the caller is responsible for bytes_resident.
+// `raw_base_out`, if non-NULL, receives the base of the underlying OS mapping
+// (needed to release it on Windows; equal to the returned pointer on POSIX).
+static char *gc_reserve_aligned(size_t sz, void **raw_base_out) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    // over-reserve to align; the unused head/tail cannot be released
+    // separately on Windows, so it is simply never committed
+    char *mem = (char*)VirtualAlloc(NULL, sz + GC_SLAB_SZ, MEM_RESERVE, PAGE_READWRITE);
+    if (mem == NULL)
+        return NULL;
+    char *base = (char*)LLT_ALIGN((uintptr_t)mem, GC_SLAB_SZ);
+    if (raw_base_out != NULL)
+        *raw_base_out = mem;
+#else
+    char *mem = (char*)mmap(0, sz + GC_SLAB_SZ, PROT_READ | PROT_WRITE,
+                            MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mem == MAP_FAILED)
+        return NULL;
+    char *base = (char*)LLT_ALIGN((uintptr_t)mem, GC_SLAB_SZ);
+    // trim the unaligned head and tail
+    if (base != mem)
+        munmap(mem, base - mem);
+    munmap(base + sz, mem + GC_SLAB_SZ - base);
+    if (raw_base_out != NULL)
+        *raw_base_out = base;
+#ifdef MADV_HUGEPAGE
+    if (gc_use_hugepages)
+        madvise(base, sz, MADV_HUGEPAGE);
+#endif
+#endif
+    // On Windows the head/tail of the over-reservation cannot be released
+    // separately, so the whole reservation stays charged to bytes_mapped;
+    // on POSIX it has been trimmed away and only `sz` remains mapped.
+#ifdef _OS_WINDOWS_
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped, sz + GC_SLAB_SZ);
+#else
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped, sz);
+#endif
+    return base;
+}
+
+// Commit a decommitted (or never-committed) slab. Returns 0 on failure.
+static int gc_slab_commit(char *data) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    if (VirtualAlloc(data, GC_SLAB_SZ, MEM_COMMIT, PAGE_READWRITE) == NULL)
+        return 0;
+#endif
+    // POSIX: MADV_FREE/DONTNEED memory recommits transparently on touch
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, GC_SLAB_SZ);
+    return 1;
+}
+
+static void gc_slab_decommit(char *data) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    VirtualFree(data, GC_SLAB_SZ, MEM_DECOMMIT);
+#elif defined(MADV_FREE)
+    static _Atomic(int) supports_madv_free = 1;
+    if (jl_atomic_load_relaxed(&supports_madv_free)) {
+        if (madvise(data, GC_SLAB_SZ, MADV_FREE) == -1) {
+            assert(errno == EINVAL);
+            jl_atomic_store_relaxed(&supports_madv_free, 0);
+        }
+    }
+    if (!jl_atomic_load_relaxed(&supports_madv_free))
+        madvise(data, GC_SLAB_SZ, MADV_DONTNEED);
+#else
+    madvise(data, GC_SLAB_SZ, MADV_DONTNEED);
+#endif
+    msan_unpoison(data, GC_SLAB_SZ);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -(int64_t)GC_SLAB_SZ);
+}
+
+// ======================================================================== //
+// slab management (all under gc_big_lock)
+// ======================================================================== //
+
+#define GC_SLAB_BLOCK_NSLABS 32 // 64 MB blocks
+
+static jl_gc_slabmeta_t *gc_partial_slabs; // slabs with some (not all) units free
+static jl_gc_slabmeta_t *gc_free_slabs;    // fully free slabs
+
+static void gc_partial_slab_link(jl_gc_slabmeta_t **head, jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
+{
+    s->prev = NULL;
+    s->next = *head;
+    if (*head != NULL)
+        (*head)->prev = s;
+    *head = s;
+}
+
+static void gc_partial_slab_unlink(jl_gc_slabmeta_t **head, jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
+{
+    if (s->prev != NULL)
+        s->prev->next = s->next;
+    else
+        *head = s->next;
+    if (s->next != NULL)
+        s->next->prev = s->prev;
+    s->next = s->prev = NULL;
+}
+
+// Requires `gc_big_lock`. The slab must be fully free and not on the
+// partial-slab list.
+static void gc_release_slab(jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
+{
+    assert(s->free_unit_map == UINT32_MAX);
+    assert(s->free_segs[0] == NULL && s->free_segs[1] == NULL &&
+           "releasing a slab that still has free segments registered");
+    s->next = gc_free_slabs;
+    gc_free_slabs = s;
+    s->free_sweeps = 0;
+}
+
+// Map a new block of slabs, register them, and return one of them; the rest
+// go onto the free-slab list. Returns NULL if the OS is out of memory.
+static jl_gc_slabmeta_t *gc_alloc_slab_block(void) JL_NOTSAFEPOINT
+{
+    int nslabs = GC_SLAB_BLOCK_NSLABS;
+    char *base;
+    void *raw_base;
+    while (1) {
+        base = gc_reserve_aligned((size_t)nslabs << GC_SLAB_LG2, &raw_base);
+        if (base != NULL)
+            break;
+        if (nslabs == 1)
+            return NULL;
+        nslabs = nslabs / 4 > 0 ? nslabs / 4 : 1;
+    }
+#ifndef _OS_WINDOWS_
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, (size_t)nslabs << GC_SLAB_LG2);
+#endif
+    jl_gc_slabmeta_t *metas = (jl_gc_slabmeta_t*)calloc_s(nslabs * sizeof(jl_gc_slabmeta_t));
+    for (int i = 0; i < nslabs; i++) {
+        jl_gc_slabmeta_t *s = &metas[i];
+        s->data = base + ((size_t)i << GC_SLAB_LG2);
+        s->free_unit_map = UINT32_MAX;
+#ifdef _OS_WINDOWS_
+        s->resident = 0;
+#else
+        s->resident = 1;
+#endif
+        *gc_slab_map_slot(s->data, 1) = s;
+        if (i != 0) {
+            s->next = gc_free_slabs;
+            gc_free_slabs = s;
+        }
+    }
+    // Remember the base of the OS reservation on the block's first slab. Slab
+    // blocks are never unmapped (only decommitted slab by slab), but on Windows
+    // this is the only pointer VirtualFree would accept, so dropping it would
+    // make the reservation permanently unreleasable.
+    metas[0].map_base = raw_base;
+    metas[0].map_sz = (size_t)nslabs << GC_SLAB_LG2;
+    return &metas[0];
+}
+
+// Take a fully-free slab. Returns NULL if the OS is out of memory.
+static jl_gc_slabmeta_t *gc_take_slab(void) JL_NOTSAFEPOINT
+{
+    jl_gc_slabmeta_t *s = gc_free_slabs;
+    if (s != NULL) {
+        gc_free_slabs = s->next;
+        s->next = NULL;
+        s->free_sweeps = 0;
+    }
+    else {
+        s = gc_alloc_slab_block();
+        if (s == NULL)
+            return NULL;
+    }
+    if (!s->resident) {
+        if (!gc_slab_commit(s->data)) {
+            // undo and report OOM
+            s->next = gc_free_slabs;
+            gc_free_slabs = s;
+            return NULL;
+        }
+        s->resident = 1;
+    }
+    return s;
+}
+
+// Segment size levels: 0 -> 1 unit (64 KiB), 1 -> 8 units (512 KiB),
+// 2 -> 32 units (whole slab). A page is always one of these three sizes.
+static const int gc_level_nunits[3] = {1, 8, GC_UNITS_PER_SLAB};
+
+STATIC_INLINE int gc_seg_level(int nunits) JL_NOTSAFEPOINT
+{
+    return nunits == 1 ? 0 : nunits == 8 ? 1 : 2;
+}
+
+// A free segment threads its list links through its own (free) page memory.
+// It carries no size class, so any class of the matching page size can reuse
+// it: only the three page sizes, not the size classes, can fragment.
+typedef struct _gc_free_seg_t {
+    struct _gc_free_seg_t *next;
+    struct _gc_free_seg_t *prev;
+} gc_free_seg_t;
+
+STATIC_INLINE gc_free_seg_t *gc_seg_at(jl_gc_slabmeta_t *s, int u) JL_NOTSAFEPOINT
+{
+    return (gc_free_seg_t*)(s->data + ((size_t)u << GC_UNIT_LG2));
+}
+
+STATIC_INLINE int gc_seg_unit(jl_gc_slabmeta_t *s, gc_free_seg_t *n) JL_NOTSAFEPOINT
+{
+    return (int)(((char*)n - s->data) >> GC_UNIT_LG2);
+}
+
+// free_unit_map bits for the run of `nunits` units starting at unit `u`
+STATIC_INLINE uint32_t gc_unit_run_mask(int u, int nunits) JL_NOTSAFEPOINT
+{
+    return (nunits >= GC_UNITS_PER_SLAB ? UINT32_MAX : ((uint32_t)1 << nunits) - 1) << u;
+}
+
+#ifndef JL_NDEBUG
+// Requires `gc_big_lock`. The free-segment lists live inside the free page
+// memory itself, so a stale list entry turns the `n->prev->next` store in
+// `gc_seg_unlink` into a wild write that no other invariant would catch.
+// Check the lists against `free_unit_map`, which is the authoritative oracle:
+// every free unit must be covered by exactly one segment, at the right level,
+// aligned to that level, and the links must be consistent both ways.
+static void gc_seg_verify(jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
+{
+    uint32_t covered = 0;
+    for (int lvl = 0; lvl < 2; lvl++) {
+        int nunits = gc_level_nunits[lvl];
+        gc_free_seg_t *prev = NULL;
+        int guard = 0;
+        for (gc_free_seg_t *n = (gc_free_seg_t*)s->free_segs[lvl]; n != NULL; n = n->next) {
+            assert(++guard <= GC_UNITS_PER_SLAB && "cycle in free-segment list");
+            assert(n->prev == prev && "broken free-segment back link");
+            int u = gc_seg_unit(s, n);
+            assert(u >= 0 && u < GC_UNITS_PER_SLAB && "free segment outside its slab");
+            assert(u % nunits == 0 && "free segment misaligned for its level");
+            uint32_t run = gc_unit_run_mask(u, nunits);
+            assert((s->free_unit_map & run) == run && "free segment covers an allocated unit");
+            assert((covered & run) == 0 && "free unit covered by two segments");
+            covered |= run;
+            prev = n;
+        }
+    }
+    // A fully-free slab is released to the free-slab list and keeps no
+    // segments; every other slab must have each free unit in a segment.
+    assert((covered == s->free_unit_map ||
+            (s->free_unit_map == UINT32_MAX && covered == 0)) &&
+           "free unit not covered by any segment");
+}
+#else
+#define gc_seg_verify(s) ((void)0)
+#endif
+
+// Requires `gc_big_lock`. Push the unit run at `u` onto its slab's level-`lvl`
+// free-segment list.
+STATIC_INLINE void gc_seg_push(jl_gc_slabmeta_t *s, int lvl, int u) JL_NOTSAFEPOINT
+{
+    gc_free_seg_t *n = gc_seg_at(s, u);
+    msan_unpoison(n, sizeof(*n));
+    gc_free_seg_t *head = (gc_free_seg_t*)s->free_segs[lvl];
+    n->prev = NULL;
+    n->next = head;
+    if (head != NULL)
+        head->prev = n;
+    s->free_segs[lvl] = n;
+}
+
+#ifndef JL_NDEBUG
+// Requires `gc_big_lock`. Is `n` really on the level-`lvl` list of `s`?
+static int gc_seg_on_list(jl_gc_slabmeta_t *s, int lvl, gc_free_seg_t *n) JL_NOTSAFEPOINT
+{
+    int guard = 0;
+    for (gc_free_seg_t *m = (gc_free_seg_t*)s->free_segs[lvl]; m != NULL; m = m->next) {
+        if (m == n)
+            return 1;
+        if (++guard > GC_UNITS_PER_SLAB)
+            break;
+    }
+    return 0;
+}
+#endif
+
+// Requires `gc_big_lock`. Unlink a known-present segment from its list.
+STATIC_INLINE void gc_seg_unlink(jl_gc_slabmeta_t *s, int lvl, gc_free_seg_t *n) JL_NOTSAFEPOINT
+{
+    // The links live in the free page memory itself, so unlinking a segment
+    // that is not actually on the list stores through whatever the last user of
+    // that page left behind -- i.e. an arbitrary wild write. Catch it here.
+    assert(gc_seg_on_list(s, lvl, n) && "unlinking a free segment that is not on its list");
+    if (n->prev != NULL)
+        n->prev->next = n->next;
+    else
+        s->free_segs[lvl] = n->next;
+    if (n->next != NULL)
+        n->next->prev = n->prev;
+}
+
+// Requires `gc_big_lock`. Return a free run of `gc_level_nunits[lvl]` units,
+// splitting a larger segment (or a fresh slab) when the level is empty.
+// `*s_out` receives the owning slab; returns the first unit or -1 on OOM.
+static int gc_get_segment(int lvl, jl_gc_slabmeta_t **s_out) JL_NOTSAFEPOINT
+{
+    // reuse a same-size free segment from any partial slab; a whole-slab page has
+    // no segment list, since a wholly free slab is on the free-slab list instead
+    if (lvl != 2) {
+        for (jl_gc_slabmeta_t *s = gc_partial_slabs; s != NULL; s = s->next) {
+            gc_free_seg_t *n = (gc_free_seg_t*)s->free_segs[lvl];
+            if (n != NULL) {
+                gc_seg_unlink(s, lvl, n);
+                *s_out = s;
+                return gc_seg_unit(s, n);
+            }
+        }
+    }
+    else {
+        // a whole-slab page needs a fresh (or wholly free) slab
+        jl_gc_slabmeta_t *s = gc_take_slab();
+        if (s == NULL)
+            return -1;
+        gc_partial_slab_link(&gc_partial_slabs, s);
+        *s_out = s;
+        return 0;
+    }
+    // split a segment one size up: keep the first child, free the rest, so a
+    // whole group is broken only when no loose unit of this size is left.
+    jl_gc_slabmeta_t *s;
+    int pu = gc_get_segment(lvl + 1, &s);
+    if (pu < 0)
+        return -1;
+    int child = gc_level_nunits[lvl];
+    int parent = gc_level_nunits[lvl + 1];
+    for (int off = child; off < parent; off += child)
+        gc_seg_push(s, lvl, pu + off);
+    *s_out = s;
+    return pu;
+}
+
+// Requires `gc_big_lock`. Claim an aligned run of `nunits` (1, 8, or 32) units.
+// Returns NULL if the OS is out of memory.
+static jl_gc_slabmeta_t *gc_carve_units(int nunits, int *unit_out) JL_NOTSAFEPOINT
+{
+    jl_gc_slabmeta_t *s;
+    int u = gc_get_segment(gc_seg_level(nunits), &s);
+    if (u < 0)
+        return NULL;
+    assert(u % nunits == 0 && "carved run is misaligned for its size");
+    uint32_t run = gc_unit_run_mask(u, nunits);
+    assert((s->free_unit_map & run) == run);
+    s->free_unit_map &= ~run;
+    if (s->free_unit_map == 0)
+        gc_partial_slab_unlink(&gc_partial_slabs, s); // now full
+    gc_seg_verify(s);
+    *unit_out = u;
+    return s;
+}
+
+// Requires `gc_big_lock`. Return an aligned run of units to its slab, then
+// coalesce as far up the size levels as the free-unit map allows; a fully-free
+// slab moves to the free-slab list.
+static void gc_free_units(jl_gc_slabmeta_t *s, int u, int nunits) JL_NOTSAFEPOINT
+{
+    int lvl = gc_seg_level(nunits);
+    gc_seg_verify(s);
+    assert(u % nunits == 0 && "freed run is misaligned for its size");
+    uint32_t run = gc_unit_run_mask(u, nunits);
+    assert((s->free_unit_map & run) == 0);
+    int was_full = s->free_unit_map == 0;
+    s->free_unit_map |= run;
+    if (was_full)
+        gc_partial_slab_link(&gc_partial_slabs, s);
+    // coalesce: while the parent-aligned group of this segment is entirely
+    // free, absorb the sibling segments and rise a level.
+    while (lvl < 2) {
+        int parent = gc_level_nunits[lvl + 1];
+        int group = (u / parent) * parent;
+        uint32_t pmask = parent >= GC_UNITS_PER_SLAB ? UINT32_MAX
+                       : (((uint32_t)1 << parent) - 1) << group;
+        if ((s->free_unit_map & pmask) != pmask)
+            break; // parent not fully free: this segment stays at its level
+        int child = gc_level_nunits[lvl];
+        for (int off = 0; off < parent; off += child) {
+            int cu = group + off;
+            if (cu != u) // the freed run is not on any list yet
+                gc_seg_unlink(s, lvl, gc_seg_at(s, cu));
+        }
+        u = group;
+        lvl++;
+    }
+    if (lvl == 2) {
+        // whole slab free
+        gc_partial_slab_unlink(&gc_partial_slabs, s);
+        gc_release_slab(s);
+    }
+    else {
+        gc_seg_push(s, lvl, u);
+    }
+    gc_seg_verify(s);
+}
+
+// ======================================================================== //
+// big pages
+// ======================================================================== //
+
+// Take a fresh page for `szclass` from the slab layer and make it the
+// caller's current page. Returns NULL if the OS is out of memory.
+static NOINLINE jl_gc_bigpagemeta_t *gc_big_fresh_page(int szclass) JL_NOTSAFEPOINT
+{
+    size_t osize = gc_big_class_sz[szclass];
+    int page_lg2 = gc_big_page_lg2(osize);
+    int nunits = 1 << (page_lg2 - GC_UNIT_LG2);
+    uv_mutex_lock(&gc_big_lock);
+    int u;
+    jl_gc_slabmeta_t *s = gc_carve_units(nunits, &u);
+    if (s == NULL) {
+        uv_mutex_unlock(&gc_big_lock);
+        return NULL;
+    }
+    if (s->pages == NULL)
+        s->pages = (jl_gc_bigpagemeta_t*)calloc_s(GC_UNITS_PER_SLAB * sizeof(jl_gc_bigpagemeta_t));
+    for (int j = 0; j < nunits; j++)
+        s->unit_page_start[u + j] = (uint8_t)u;
+    uv_mutex_unlock(&gc_big_lock);
+
+    jl_gc_bigpagemeta_t *pg = &s->pages[u];
+    pg->data = s->data + ((size_t)u << GC_UNIT_LG2);
+    pg->page_lg2 = (uint8_t)page_lg2;
+    pg->szclass = szclass;
+    pg->osize = (uint32_t)osize;
+    pg->nobjs = (uint32_t)(((size_t)1 << page_lg2) / osize);
+    pg->nfree = pg->nobjs;
+    pg->freelist = NULL;
+    pg->bump = pg->data;
+    pg->sweep_next = NULL;
+    pg->on_sweep_list = 0;
+    return pg;
+}
+
+// ======================================================================== //
+// huge allocations
+// ======================================================================== //
+
+static void *gc_huge_alloc(size_t allocsz, size_t *usable_sz)
+{
+    size_t sz = LLT_ALIGN(allocsz, jl_page_size);
+    size_t map_sz = LLT_ALIGN(sz, GC_SLAB_SZ);
+    // reserve at slab granularity so the base address owns its slab-map slots
+    void *raw_base;
+    char *base = gc_reserve_aligned(map_sz, &raw_base);
+    if (base == NULL)
+        return NULL;
+    jl_gc_slabmeta_t *s = (jl_gc_slabmeta_t*)calloc_s(sizeof(jl_gc_slabmeta_t));
+    s->is_huge = 1;
+    s->data = base;
+    s->map_base = raw_base;
+    s->map_sz = map_sz;
+    s->usable_sz = sz;
+    s->resident = 1;
+#ifdef _OS_WINDOWS_
+    if (VirtualAlloc(base, sz, MEM_COMMIT, PAGE_READWRITE) == NULL) {
+        VirtualFree(raw_base, 0, MEM_RELEASE);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped,
+                                    -(int64_t)(map_sz + GC_SLAB_SZ));
+        free(s);
+        return NULL;
+    }
+#endif
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, sz);
+    uv_mutex_lock(&gc_big_lock);
+    *gc_slab_map_slot(base, 1) = s;
+    uv_mutex_unlock(&gc_big_lock);
+    *usable_sz = sz;
+    return base;
+}
+
+static size_t gc_huge_free(jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
+{
+    size_t usable = s->usable_sz;
+    // Take the lock: the slab map is also read without it (gc_slab_map_lookup)
+    // and grown under it (gc_slab_map_slot(.., 1)) by other threads, including
+    // the concurrent page sweeper.
+    uv_mutex_lock(&gc_big_lock);
+    jl_gc_slabmeta_t **slot = gc_slab_map_slot(s->data, 0);
+    assert(slot != NULL && *slot == s && "huge allocation missing from the slab map");
+    if (slot != NULL)
+        *slot = NULL;
+    uv_mutex_unlock(&gc_big_lock);
+#ifdef _OS_WINDOWS_
+    // releases the whole over-reservation, head and tail included
+    VirtualFree(s->map_base, 0, MEM_RELEASE);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped,
+                                -(int64_t)(s->map_sz + GC_SLAB_SZ));
+#else
+    munmap(s->data, s->map_sz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped, -(int64_t)s->map_sz);
+#endif
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -(int64_t)usable);
+    free(s);
+    return usable;
+}
+
+void *jl_gc_big_mem_alloc(jl_ptls_t ptls, size_t allocsz, size_t *usable_sz)
+{
+    if (allocsz > GC_BIG_CLASS_MAX_SZ)
+        return gc_huge_alloc(allocsz, usable_sz);
+    int c = gc_big_szclass(allocsz);
+    size_t osize = gc_big_class_sz[c];
+    *usable_sz = osize;
+    jl_gc_bigpagemeta_t *pg = ptls->gc_tls.big_pages[c];
+    while (1) {
+        if (pg != NULL) {
+            void *p = pg->freelist;
+            if (p != NULL) {
+                pg->freelist = *(void**)p;
+                pg->nfree--;
+                return p;
+            }
+            if (pg->bump + osize <= pg->data + (size_t)pg->nobjs * osize) {
+                p = pg->bump;
+                pg->bump += osize;
+                pg->nfree--;
+                return p;
+            }
+            assert(pg->nfree == 0);
+            pg->state = GC_BIG_PAGE_FULL; // retire; sweep picks it back up
+        }
+        // take the fullest available partial page so emptier pages drain
+        pg = NULL;
+        for (int b = 0; b < GC_OCCUPANCY_BUCKETS && pg == NULL; b++)
+            pg = gc_big_stack_pop(&gc_big_partial_pages[c][b]);
+        if (pg == NULL) {
+            pg = gc_big_fresh_page(c);
+            if (pg == NULL) {
+                ptls->gc_tls.big_pages[c] = NULL;
+                return NULL;
+            }
+        }
+        pg->state = GC_BIG_PAGE_CURRENT;
+        ptls->gc_tls.big_pages[c] = pg;
+    }
+}
+
+// ======================================================================== //
+// sweep integration
+// ======================================================================== //
+
+// pages that received at least one free slot during the current sweep
+static jl_gc_bigpagemeta_t *gc_sweep_touched_pages;
+
+// pages given up by exiting threads while they still had free slots, linked
+// through `next`. They are on no per-class stack, so nothing but the next
+// sweep will ever hand their remaining slots out again. Requires `gc_big_lock`.
+static jl_gc_bigpagemeta_t *gc_orphaned_pages;
+
+size_t jl_gc_big_mem_free(void *p) JL_NOTSAFEPOINT
+{
+    jl_gc_slabmeta_t *s = gc_slab_map_lookup(p);
+    assert(s != NULL && "freeing a pointer not allocated by jl_gc_big_mem_alloc");
+    if (s->is_huge) {
+        assert(p == s->data);
+        return gc_huge_free(s);
+    }
+    int u = (int)(((uintptr_t)p >> GC_UNIT_LG2) & (GC_UNITS_PER_SLAB - 1));
+    jl_gc_bigpagemeta_t *pg = &s->pages[s->unit_page_start[u]];
+    assert(pg->state != GC_BIG_PAGE_FREE);
+    *(void**)p = pg->freelist;
+    pg->freelist = p;
+    pg->nfree++;
+    if (!pg->on_sweep_list) {
+        pg->on_sweep_list = 1;
+        pg->sweep_next = gc_sweep_touched_pages;
+        gc_sweep_touched_pages = pg;
+    }
+    return pg->osize;
+}
+
+// Return a fully-free page's units to its slab. Requires `gc_big_lock`.
+static void gc_big_release_page(jl_gc_bigpagemeta_t *pg) JL_NOTSAFEPOINT
+{
+    jl_gc_slabmeta_t *s = gc_slab_map_lookup(pg->data);
+    int u = (int)((pg->data - s->data) >> GC_UNIT_LG2);
+    assert(&s->pages[u] == pg);
+    pg->state = GC_BIG_PAGE_FREE;
+    pg->freelist = NULL;
+    gc_free_units(s, u, 1 << (pg->page_lg2 - GC_UNIT_LG2));
+}
+
+// Requires `gc_big_lock`. Not a current page and not on the sweep list.
+static void gc_big_dispose_page(jl_gc_bigpagemeta_t *pg) JL_NOTSAFEPOINT
+{
+    assert(pg->state != GC_BIG_PAGE_CURRENT);
+    if (pg->nfree == pg->nobjs) {
+        gc_big_release_page(pg);
+    }
+    else if (pg->nfree > 0) {
+        pg->state = GC_BIG_PAGE_PARTIAL;
+        gc_big_stack_push(&gc_big_partial_pages[pg->szclass][gc_big_page_bucket(pg)], pg);
+    }
+    else {
+        pg->state = GC_BIG_PAGE_FULL;
+    }
+}
+
+// Give up the current allocation pages of a thread that is going away. Sweep
+// only ever re-sorts pages that are not GC_BIG_PAGE_CURRENT, so pages left
+// pointing at a dead thread would keep their units forever.
+void jl_gc_big_mem_thread_exit(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&gc_big_lock);
+    for (int c = 0; c < GC_N_BIG_CLASSES; c++) {
+        jl_gc_bigpagemeta_t *pg = ptls->gc_tls.big_pages[c];
+        if (pg == NULL)
+            continue;
+        ptls->gc_tls.big_pages[c] = NULL;
+        assert(pg->state == GC_BIG_PAGE_CURRENT);
+        if (pg->nfree == pg->nobjs && !pg->on_sweep_list) {
+            // nothing live in it: hand the units straight back
+            gc_big_release_page(pg);
+        }
+        else {
+            // Can't push to a per-class stack outside stop-the-world; queue it
+            // for the next sweep to re-sort.
+            pg->state = GC_BIG_PAGE_FULL;
+            if (!pg->on_sweep_list) {
+                pg->next = gc_orphaned_pages;
+                gc_orphaned_pages = pg;
+            }
+        }
+    }
+    uv_mutex_unlock(&gc_big_lock);
+}
+
+void jl_gc_big_mem_finish_sweep(void) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&gc_big_lock);
+    // The per-class partial stacks and the sweep-touched list may overlap, and
+    // pages in the stacks may have become fully free (which requires removing
+    // them, impossible in-place). Drain everything and re-sort.
+    for (int c = 0; c < GC_N_BIG_CLASSES; c++) {
+        jl_gc_bigpagemeta_t *pg;
+        jl_gc_bigpagemeta_t *untouched = NULL;
+        for (int b = 0; b < GC_OCCUPANCY_BUCKETS; b++) {
+            while ((pg = gc_big_stack_pop(&gc_big_partial_pages[c][b])) != NULL) {
+                if (pg->on_sweep_list)
+                    continue; // will be re-sorted from the sweep-touched list
+                pg->next = untouched;
+                untouched = pg;
+            }
+        }
+        while (untouched != NULL) {
+            pg = untouched;
+            untouched = pg->next;
+            gc_big_dispose_page(pg);
+        }
+    }
+    // Pages orphaned by exiting threads, before the sweep-touched list for the
+    // same reason the per-class stacks are drained first: a page can be on both,
+    // and disposing it twice would push it onto two bucket stacks.
+    jl_gc_bigpagemeta_t *orphan = gc_orphaned_pages;
+    gc_orphaned_pages = NULL;
+    while (orphan != NULL) {
+        jl_gc_bigpagemeta_t *nxt = orphan->next;
+        orphan->next = NULL;
+        if (!orphan->on_sweep_list)
+            gc_big_dispose_page(orphan); // else re-sorted from the list below
+        orphan = nxt;
+    }
+    jl_gc_bigpagemeta_t *pg = gc_sweep_touched_pages;
+    gc_sweep_touched_pages = NULL;
+    while (pg != NULL) {
+        jl_gc_bigpagemeta_t *nxt = pg->sweep_next;
+        pg->sweep_next = NULL;
+        pg->on_sweep_list = 0;
+        if (pg->state != GC_BIG_PAGE_CURRENT)
+            gc_big_dispose_page(pg);
+        pg = nxt;
+    }
+    // Return cold slabs to the OS. Every sweep end is a heap low point, so a
+    // slab that was already free at the end of the previous sweep and is still
+    // free now was not needed for a whole GC cycle; decommit it.
+    for (jl_gc_slabmeta_t *s = gc_free_slabs; s != NULL; s = s->next) {
+        if (!s->resident)
+            continue;
+        if (s->free_sweeps == 0) {
+            s->free_sweeps = 1;
+        }
+        else {
+            gc_slab_decommit(s->data);
+            s->resident = 0;
+        }
+    }
+    uv_mutex_unlock(&gc_big_lock);
+}
+
+// ======================================================================== //
+// pool pages: one slab unit each. Freed units return to their slab's bitmap;
+// memory is returned to the OS only in whole slabs (see
+// jl_gc_big_mem_finish_sweep), which also keeps transparent huge pages intact.
+// ======================================================================== //
 
 JL_DLLEXPORT uint64_t jl_get_pg_size(void)
 {
     return GC_PAGE_SZ;
 }
 
-// Try to allocate memory in chunks to permit faster allocation
-// and improve memory locality of the pools
-#ifdef _P64
-#define DEFAULT_BLOCK_PG_ALLOC (4096) // 64 MB
-#else
-#define DEFAULT_BLOCK_PG_ALLOC (1024) // 16 MB
-#endif
-#define MIN_BLOCK_PG_ALLOC (1) // 16 KB
-
-static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
-
-void jl_gc_init_page(void)
-{
-    if (GC_PAGE_SZ * block_pg_cnt < jl_page_size)
-        block_pg_cnt = jl_page_size / GC_PAGE_SZ; // exact division
-}
-
-#ifndef MAP_NORESERVE // not defined in POSIX, FreeBSD, etc.
-#define MAP_NORESERVE (0)
-#endif
-
-// Try to allocate a memory block for multiple pages
-// Return `NULL` if allocation failed. Result is aligned to `GC_PAGE_SZ`.
-static char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
-{
-    size_t pages_sz = GC_PAGE_SZ * pg_cnt;
-#ifdef _OS_WINDOWS_
-    char *mem = (char*)VirtualAlloc(NULL, pages_sz + GC_PAGE_SZ,
-                                    MEM_RESERVE, PAGE_READWRITE);
-    if (mem == NULL)
-        return NULL;
-#else
-    if (GC_PAGE_SZ > jl_page_size)
-        pages_sz += GC_PAGE_SZ;
-    char *mem = (char*)mmap(0, pages_sz, PROT_READ | PROT_WRITE,
-                            MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (mem == MAP_FAILED)
-        return NULL;
-#endif
-    if (GC_PAGE_SZ > jl_page_size)
-        // round data pointer up to the nearest gc_page_data-aligned
-        // boundary if mmap didn't already do so.
-        mem = (char*)gc_page_data(mem + GC_PAGE_SZ - 1);
-    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped, pages_sz);
-    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, pages_sz);
-    return mem;
-}
-
-// Allocate the memory for a new page. Starts with `block_pg_cnt` number
-// of pages. Decrease 4x every time so that there is enough space for a few
-// more chunks (or other allocations). The final page count is recorded
-// and will be used as the starting count next time. If the page count is
-// smaller `MIN_BLOCK_PG_ALLOC` a `jl_memory_exception` is thrown.
-// Assumes `gc_pages_lock` is acquired, the lock is released before the
-// exception is thrown.
-STATIC_INLINE char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT_LEAVE_ENTER
-{
-    unsigned pg_cnt = block_pg_cnt;
-    char *mem = NULL;
-    while (1) {
-        if (__likely((mem = jl_gc_try_alloc_pages_(pg_cnt))))
-            break;
-        size_t min_block_pg_alloc = MIN_BLOCK_PG_ALLOC;
-        if (GC_PAGE_SZ * min_block_pg_alloc < jl_page_size)
-            min_block_pg_alloc = jl_page_size / GC_PAGE_SZ; // exact division
-        if (pg_cnt >= 4 * min_block_pg_alloc) {
-            pg_cnt /= 4;
-            block_pg_cnt = pg_cnt;
-        }
-        else if (pg_cnt > min_block_pg_alloc) {
-            block_pg_cnt = pg_cnt = min_block_pg_alloc;
-        }
-        else {
-            uv_mutex_unlock(&gc_pages_lock);
-            jl_throw(jl_memory_exception);
-        }
-    }
-    return mem;
-}
-
-// get a new page, either from the freemap
+// get a new page, either from a slab with free units
 // or from the kernel if none are available
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
 {
@@ -105,116 +865,67 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    jl_gc_pagemeta_t *meta = NULL;
-
-    // try to get page from `pool_lazily_freed`
-    meta = pop_lf_back(&global_page_pool_lazily_freed);
-    if (meta != NULL) {
-        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
-        // page is already mapped
-        return meta;
-    }
-
-    // try to get page from `pool_clean`
-    meta = pop_lf_back(&global_page_pool_clean);
+    // try to get a page that was lazily freed during the last sweep
+    jl_gc_pagemeta_t *meta = pop_lf_back(&global_page_pool_lazily_freed);
     if (meta != NULL) {
         gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
 
-    // try to get page from `pool_freed`
-    meta = pop_lf_back(&global_page_pool_freed);
-    if (meta != NULL) {
-        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, GC_PAGE_SZ);
-        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
-        goto exit;
-    }
-
-    uv_mutex_lock(&gc_pages_lock);
-    // another thread may have allocated a large block while we were waiting...
-    meta = pop_lf_back(&global_page_pool_clean);
-    if (meta != NULL) {
-        uv_mutex_unlock(&gc_pages_lock);
-        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
-        goto exit;
-    }
-    {
-        // must map a new set of pages
-        char *data = jl_gc_try_alloc_pages();
-        meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
-        for (int i = 0; i < block_pg_cnt; i++) {
-            jl_gc_pagemeta_t *pg = &meta[i];
-            pg->data = data + GC_PAGE_SZ * i;
-            gc_alloc_map_maybe_create(pg->data);
-            if (i == 0) {
-                gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
-            }
-            else {
-                push_lf_back(&global_page_pool_clean, pg);
-            }
-        }
-        uv_mutex_unlock(&gc_pages_lock);
-    }
-exit:
+    uv_mutex_lock(&gc_big_lock);
+    int u;
+    jl_gc_slabmeta_t *s = gc_carve_units(1, &u);
+    if (s == NULL) {
+        uv_mutex_unlock(&gc_big_lock);
 #ifdef _OS_WINDOWS_
-    // The page was previously only reserved (jl_gc_try_alloc_pages_) or has been
-    // decommitted (jl_gc_free_page), so it needs to be committed before use. This
-    // charges the page against the system commit limit and can fail when that is
-    // exhausted; returning it anyway would hand out memory that raises an access
-    // violation on first touch, so undo and report out-of-memory instead (as
-    // jl_gc_try_alloc_pages does when the reservation itself fails).
-    if (VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE) == NULL) {
-        gc_alloc_map_set(meta->data, GC_PAGE_FREED);
-        push_lf_back(&global_page_pool_freed, meta);
-        jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -(int64_t)GC_PAGE_SZ);
         SetLastError(last_error);
+#endif
         errno = last_errno;
         jl_throw(jl_memory_exception);
     }
+    if (s->pool_pages == NULL)
+        s->pool_pages = (jl_gc_pagemeta_t*)calloc_s(GC_UNITS_PER_SLAB * sizeof(jl_gc_pagemeta_t));
+    meta = &s->pool_pages[u];
+    if (meta->data == NULL) {
+        meta->data = s->data + ((size_t)u << GC_UNIT_LG2);
+        gc_alloc_map_maybe_create(meta->data);
+    }
+    uv_mutex_unlock(&gc_big_lock);
+    gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
+exit:
+#ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
     errno = last_errno;
     return meta;
 }
 
-// return a page to the freemap allocator
+// return a page's unit to its slab; whole-slab decommit happens at the end of sweep
 NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
-    void *p = pg->data;
-    gc_alloc_map_set((char*)p, GC_PAGE_FREED);
-    // tell the OS we don't need these pages right now
-    size_t decommit_size = GC_PAGE_SZ;
-    if (GC_PAGE_SZ < jl_page_size) {
-        // ensure so we don't release more memory than intended
-        size_t n_pages = jl_page_size / GC_PAGE_SZ; // exact division
-        decommit_size = jl_page_size;
-        void *otherp = (void*)((uintptr_t)p & ~(jl_page_size - 1)); // round down to the nearest physical page
-        p = otherp;
-        while (n_pages--) {
-            if (gc_alloc_map_is_set((char*)otherp)) {
-                return;
-            }
-            otherp = (void*)((char*)otherp + GC_PAGE_SZ);
-        }
+    gc_alloc_map_set(pg->data, GC_PAGE_FREED);
+    msan_unpoison(pg->data, GC_PAGE_SZ);
+    uv_mutex_lock(&gc_big_lock);
+    jl_gc_slabmeta_t *s = gc_slab_map_lookup(pg->data);
+    assert(s != NULL && !s->is_huge);
+    int u = (int)(((uintptr_t)pg->data >> GC_UNIT_LG2) & (GC_UNITS_PER_SLAB - 1));
+    gc_free_units(s, u, 1);
+    uv_mutex_unlock(&gc_big_lock);
+}
+
+void jl_gc_init_big_pages(void)
+{
+    uv_mutex_init(&gc_big_lock);
+    gc_big_class_sz[0] = GC_BIG_CLASS_MIN_SZ;
+    for (int c = 1; c < GC_N_BIG_CLASSES; c++) {
+        int q = (c - 1) / 4, r = (c - 1) % 4;
+        gc_big_class_sz[c] = ((size_t)GC_BIG_CLASS_MIN_SZ << q) +
+            (size_t)(r + 1) * ((size_t)(GC_BIG_CLASS_MIN_SZ / 4) << q);
     }
-#ifdef _OS_WINDOWS_
-    VirtualFree(p, decommit_size, MEM_DECOMMIT);
-#elif defined(MADV_FREE)
-    static int supports_madv_free = 1;
-    if (supports_madv_free) {
-        if (madvise(p, decommit_size, MADV_FREE) == -1) {
-            assert(errno == EINVAL);
-            supports_madv_free = 0;
-        }
-    }
-    if (!supports_madv_free) {
-        madvise(p, decommit_size, MADV_DONTNEED);
-    }
-#else
-    madvise(p, decommit_size, MADV_DONTNEED);
-#endif
-    msan_unpoison(p, decommit_size);
-    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -decommit_size);
+    assert(gc_big_class_sz[GC_N_BIG_CLASSES - 1] == GC_BIG_CLASS_MAX_SZ);
+    char *env = getenv("JULIA_GC_HUGEPAGES");
+    if (env != NULL && env[0] == '0')
+        gc_use_hugepages = 0;
 }
 
 #ifdef __cplusplus

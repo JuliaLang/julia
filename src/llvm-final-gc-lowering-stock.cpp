@@ -19,6 +19,13 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         // This is strongly architecture and OS dependent
         int osize;
         int offset = jl_gc_classify_pools(sz, &osize);
+        // `offset` is baked into the emitted code, so codegen's view of the ptls
+        // layout must match the runtime's. A stale object file here silently
+        // corrupts the heap on the first pool allocation, so check it.
+        assert((offset < 0 ||
+                (offset == (int)(intptr_t)&((jl_ptls_t)0)->gc_tls.heap.norm_pools[jl_gc_szclass(sz + sizeof(jl_taggedvalue_t))] &&
+                 osize == jl_gc_sizeclasses[jl_gc_szclass(sz + sizeof(jl_taggedvalue_t))])) &&
+               "codegen and runtime disagree about the GC pool layout");
         if (offset < 0) {
             newI = builder.CreateCall(
                 bigAllocFunc,

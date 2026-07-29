@@ -4982,8 +4982,8 @@ partialsort(a,b) = 0
 end
 @test M15455.partialsort(1,2)==0
 
-# check that medium-sized array is 64-byte aligned (#15139)
-@test Int(pointer(Vector{Float64}(undef, 1024))) % 64 == 0
+# too large to pool, so cache-aligned (#15139); see ARRAY_CACHE_ALIGN_THRESHOLD
+@test Int(pointer(Vector{Float64}(undef, 4096))) % 64 == 0
 
 # PR #15413
 # Make sure arrayset can handle `Array{T}` (where `T` is a type and not a

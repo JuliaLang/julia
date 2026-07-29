@@ -44,10 +44,10 @@ typedef struct {
     // Number of `realloc` calls (never reset by the runtime)
     uint64_t realloc;
     // Number of pool allocation calls (never reset by the runtime)
-    // NOTE: Julia's stock GC uses an internal (pool) allocator for objects up to 2032 bytes.
-    // Larger objects are allocated through `malloc/calloc`.
+    // NOTE: Julia's stock GC uses an internal (pool) allocator for objects up to 10232 bytes.
+    // Larger objects are allocated through the big-object allocator.
     uint64_t poolalloc;
-    // Number of allocations for "big objects" (non-array objects larger than 2032 bytes)
+    // Number of allocations for "big objects" (non-array objects larger than 10232 bytes)
     // (never reset by the runtime)
     uint64_t bigalloc;
     // Number of `free` calls (never reset by the runtime)
