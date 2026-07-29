@@ -232,36 +232,52 @@ static void gc_slab_decommit(char *data) JL_NOTSAFEPOINT
 
 #define GC_SLAB_BLOCK_NSLABS 32 // 64 MB blocks
 
-static jl_gc_slabmeta_t *gc_partial_slabs; // slabs with some (not all) units free
-static jl_gc_slabmeta_t *gc_free_slabs;    // fully free slabs
+// Slabs with some (not all) units free, bucketed by occupancy so that carving
+// prefers the fullest slab and the emptiest ones drain to wholly free (and so
+// become decommittable). Without this, a slab lands at the head of the list
+// exactly when something in it is freed, and would be the first refilled.
+static jl_gc_slabmeta_t *gc_partial_slabs[GC_OCCUPANCY_BUCKETS];
+static jl_gc_slabmeta_t *gc_free_slabs; // fully free slabs
 
-static void gc_partial_slab_link(jl_gc_slabmeta_t **head, jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
+// Requires `gc_big_lock`. The slab must have some, but not all, units free.
+static void gc_partial_slab_link(jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
 {
+    assert(s->partial_bucket < 0 && "slab is already on a partial list");
+    assert(s->free_unit_map != 0 && s->free_unit_map != UINT32_MAX);
+    int b = gc_occupancy_bucket((size_t)__builtin_popcount(s->free_unit_map) << GC_UNIT_LG2,
+                                GC_SLAB_SZ);
+    s->partial_bucket = (int8_t)b;
     s->prev = NULL;
-    s->next = *head;
-    if (*head != NULL)
-        (*head)->prev = s;
-    *head = s;
+    s->next = gc_partial_slabs[b];
+    if (s->next != NULL)
+        s->next->prev = s;
+    gc_partial_slabs[b] = s;
 }
 
-static void gc_partial_slab_unlink(jl_gc_slabmeta_t **head, jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
+// Requires `gc_big_lock`. No-op if the slab is not on a partial list. The
+// bucket is remembered rather than recomputed, so this stays correct however
+// `free_unit_map` has changed since the slab was linked.
+static void gc_partial_slab_unlink(jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
 {
+    int b = s->partial_bucket;
+    if (b < 0)
+        return;
     if (s->prev != NULL)
         s->prev->next = s->next;
     else
-        *head = s->next;
+        gc_partial_slabs[b] = s->next;
     if (s->next != NULL)
         s->next->prev = s->prev;
     s->next = s->prev = NULL;
+    s->partial_bucket = -1;
 }
 
-// Requires `gc_big_lock`. The slab must be fully free and not on the
+// Requires `gc_big_lock`. The slab must be fully free and not on a
 // partial-slab list.
 static void gc_release_slab(jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
 {
     assert(s->free_unit_map == UINT32_MAX);
-    assert(s->free_segs[0] == NULL && s->free_segs[1] == NULL &&
-           "releasing a slab that still has free segments registered");
+    assert(s->partial_bucket < 0);
     s->next = gc_free_slabs;
     gc_free_slabs = s;
     s->free_sweeps = 0;
@@ -290,6 +306,7 @@ static jl_gc_slabmeta_t *gc_alloc_slab_block(void) JL_NOTSAFEPOINT
         jl_gc_slabmeta_t *s = &metas[i];
         s->data = base + ((size_t)i << GC_SLAB_LG2);
         s->free_unit_map = UINT32_MAX;
+        s->partial_bucket = -1; // wholly free: on the free-slab list, not a partial one
 #ifdef _OS_WINDOWS_
         s->resident = 0;
 #else
@@ -336,32 +353,13 @@ static jl_gc_slabmeta_t *gc_take_slab(void) JL_NOTSAFEPOINT
     return s;
 }
 
-// Segment size levels: 0 -> 1 unit (64 KiB), 1 -> 8 units (512 KiB),
-// 2 -> 32 units (whole slab). A page is always one of these three sizes.
-static const int gc_level_nunits[3] = {1, 8, GC_UNITS_PER_SLAB};
-
-STATIC_INLINE int gc_seg_level(int nunits) JL_NOTSAFEPOINT
-{
-    return nunits == 1 ? 0 : nunits == 8 ? 1 : 2;
-}
-
-// A free segment threads its list links through its own (free) page memory.
-// It carries no size class, so any class of the matching page size can reuse
-// it: only the three page sizes, not the size classes, can fragment.
-typedef struct _gc_free_seg_t {
-    struct _gc_free_seg_t *next;
-    struct _gc_free_seg_t *prev;
-} gc_free_seg_t;
-
-STATIC_INLINE gc_free_seg_t *gc_seg_at(jl_gc_slabmeta_t *s, int u) JL_NOTSAFEPOINT
-{
-    return (gc_free_seg_t*)(s->data + ((size_t)u << GC_UNIT_LG2));
-}
-
-STATIC_INLINE int gc_seg_unit(jl_gc_slabmeta_t *s, gc_free_seg_t *n) JL_NOTSAFEPOINT
-{
-    return (int)(((char*)n - s->data) >> GC_UNIT_LG2);
-}
+// A page is always 1 unit (64 KiB), 8 units (512 KiB), or a whole slab.
+// `free_unit_map` is the only record of which units of a slab are free: runs
+// are found by masking it, and freed runs coalesce implicitly when their bits
+// go back. A free run carries no size class, so any class of the matching page
+// size can reuse it: only the three page sizes, not the size classes, can
+// fragment.
+#define GC_UNITS_PER_MEDIUM 8
 
 // free_unit_map bits for the run of `nunits` units starting at unit `u`
 STATIC_INLINE uint32_t gc_unit_run_mask(int u, int nunits) JL_NOTSAFEPOINT
@@ -369,187 +367,110 @@ STATIC_INLINE uint32_t gc_unit_run_mask(int u, int nunits) JL_NOTSAFEPOINT
     return (nunits >= GC_UNITS_PER_SLAB ? UINT32_MAX : ((uint32_t)1 << nunits) - 1) << u;
 }
 
-#ifndef JL_NDEBUG
-// Requires `gc_big_lock`. The free-segment lists live inside the free page
-// memory itself, so a stale list entry turns the `n->prev->next` store in
-// `gc_seg_unlink` into a wild write that no other invariant would catch.
-// Check the lists against `free_unit_map`, which is the authoritative oracle:
-// every free unit must be covered by exactly one segment, at the right level,
-// aligned to that level, and the links must be consistent both ways.
-static void gc_seg_verify(jl_gc_slabmeta_t *s) JL_NOTSAFEPOINT
+// mask of the units belonging to the 8-unit group containing unit `u`
+STATIC_INLINE uint32_t gc_medium_group_mask(int u) JL_NOTSAFEPOINT
 {
-    uint32_t covered = 0;
-    for (int lvl = 0; lvl < 2; lvl++) {
-        int nunits = gc_level_nunits[lvl];
-        gc_free_seg_t *prev = NULL;
-        int guard = 0;
-        for (gc_free_seg_t *n = (gc_free_seg_t*)s->free_segs[lvl]; n != NULL; n = n->next) {
-            assert(++guard <= GC_UNITS_PER_SLAB && "cycle in free-segment list");
-            assert(n->prev == prev && "broken free-segment back link");
-            int u = gc_seg_unit(s, n);
-            assert(u >= 0 && u < GC_UNITS_PER_SLAB && "free segment outside its slab");
-            assert(u % nunits == 0 && "free segment misaligned for its level");
-            uint32_t run = gc_unit_run_mask(u, nunits);
-            assert((s->free_unit_map & run) == run && "free segment covers an allocated unit");
-            assert((covered & run) == 0 && "free unit covered by two segments");
-            covered |= run;
-            prev = n;
-        }
+    return (uint32_t)0xff << (u & ~(GC_UNITS_PER_MEDIUM - 1));
+}
+
+// Units of `free` that lie in an entirely free 8-unit group. Handing one of
+// these out to a 64 KiB page destroys a 512 KiB page's worth of contiguity.
+STATIC_INLINE uint32_t gc_units_in_full_groups(uint32_t free) JL_NOTSAFEPOINT
+{
+    uint32_t full = 0;
+    for (int u = 0; u < GC_UNITS_PER_SLAB; u += GC_UNITS_PER_MEDIUM) {
+        uint32_t m = gc_medium_group_mask(u);
+        if ((free & m) == m)
+            full |= m;
     }
-    // A fully-free slab is released to the free-slab list and keeps no
-    // segments; every other slab must have each free unit in a segment.
-    assert((covered == s->free_unit_map ||
-            (s->free_unit_map == UINT32_MAX && covered == 0)) &&
-           "free unit not covered by any segment");
-}
-#else
-#define gc_seg_verify(s) ((void)0)
-#endif
-
-// Requires `gc_big_lock`. Push the unit run at `u` onto its slab's level-`lvl`
-// free-segment list.
-STATIC_INLINE void gc_seg_push(jl_gc_slabmeta_t *s, int lvl, int u) JL_NOTSAFEPOINT
-{
-    gc_free_seg_t *n = gc_seg_at(s, u);
-    msan_unpoison(n, sizeof(*n));
-    gc_free_seg_t *head = (gc_free_seg_t*)s->free_segs[lvl];
-    n->prev = NULL;
-    n->next = head;
-    if (head != NULL)
-        head->prev = n;
-    s->free_segs[lvl] = n;
+    return full;
 }
 
-#ifndef JL_NDEBUG
-// Requires `gc_big_lock`. Is `n` really on the level-`lvl` list of `s`?
-static int gc_seg_on_list(jl_gc_slabmeta_t *s, int lvl, gc_free_seg_t *n) JL_NOTSAFEPOINT
+// Requires `gc_big_lock`. First unit of an aligned free run of `nunits` units
+// in some partial slab, or -1 if no partial slab has one. Under
+// `avoid_breakup`, a single unit is taken only from outside an entirely free
+// 8-unit group; the caller retries without it, so a group is broken up only
+// once no loose unit is left in *any* slab -- keeping 512 KiB pages
+// allocatable for as long as possible.
+static int gc_find_in_partials(int nunits, int avoid_breakup,
+                               jl_gc_slabmeta_t **s_out) JL_NOTSAFEPOINT
 {
-    int guard = 0;
-    for (gc_free_seg_t *m = (gc_free_seg_t*)s->free_segs[lvl]; m != NULL; m = m->next) {
-        if (m == n)
-            return 1;
-        if (++guard > GC_UNITS_PER_SLAB)
-            break;
-    }
-    return 0;
-}
-#endif
-
-// Requires `gc_big_lock`. Unlink a known-present segment from its list.
-STATIC_INLINE void gc_seg_unlink(jl_gc_slabmeta_t *s, int lvl, gc_free_seg_t *n) JL_NOTSAFEPOINT
-{
-    // The links live in the free page memory itself, so unlinking a segment
-    // that is not actually on the list stores through whatever the last user of
-    // that page left behind -- i.e. an arbitrary wild write. Catch it here.
-    assert(gc_seg_on_list(s, lvl, n) && "unlinking a free segment that is not on its list");
-    if (n->prev != NULL)
-        n->prev->next = n->next;
-    else
-        s->free_segs[lvl] = n->next;
-    if (n->next != NULL)
-        n->next->prev = n->prev;
-}
-
-// Requires `gc_big_lock`. Return a free run of `gc_level_nunits[lvl]` units,
-// splitting a larger segment (or a fresh slab) when the level is empty.
-// `*s_out` receives the owning slab; returns the first unit or -1 on OOM.
-static int gc_get_segment(int lvl, jl_gc_slabmeta_t **s_out) JL_NOTSAFEPOINT
-{
-    // reuse a same-size free segment from any partial slab; a whole-slab page has
-    // no segment list, since a wholly free slab is on the free-slab list instead
-    if (lvl != 2) {
-        for (jl_gc_slabmeta_t *s = gc_partial_slabs; s != NULL; s = s->next) {
-            gc_free_seg_t *n = (gc_free_seg_t*)s->free_segs[lvl];
-            if (n != NULL) {
-                gc_seg_unlink(s, lvl, n);
-                *s_out = s;
-                return gc_seg_unit(s, n);
+    // Fullest bucket first. Note this is the inner preference: not breaking up
+    // a free 8-unit group loses a whole page size and outranks draining a slab,
+    // so the caller sweeps every bucket with `avoid_breakup` before retrying.
+    for (int b = 0; b < GC_OCCUPANCY_BUCKETS; b++) {
+        for (jl_gc_slabmeta_t *s = gc_partial_slabs[b]; s != NULL; s = s->next) {
+            uint32_t free = s->free_unit_map;
+            int u;
+            if (nunits == 1) {
+                if (avoid_breakup)
+                    free &= ~gc_units_in_full_groups(free);
+                if (free == 0)
+                    continue;
+                u = __builtin_ctz(free);
             }
+            else {
+                assert(nunits == GC_UNITS_PER_MEDIUM);
+                // a whole free slab would be on the free-slab list, not here, so
+                // there is no larger run for this to break up
+                uint32_t groups = gc_units_in_full_groups(free);
+                if (groups == 0)
+                    continue;
+                u = __builtin_ctz(groups);
+            }
+            *s_out = s;
+            return u;
         }
     }
-    else {
-        // a whole-slab page needs a fresh (or wholly free) slab
-        jl_gc_slabmeta_t *s = gc_take_slab();
-        if (s == NULL)
-            return -1;
-        gc_partial_slab_link(&gc_partial_slabs, s);
-        *s_out = s;
-        return 0;
-    }
-    // split a segment one size up: keep the first child, free the rest, so a
-    // whole group is broken only when no loose unit of this size is left.
-    jl_gc_slabmeta_t *s;
-    int pu = gc_get_segment(lvl + 1, &s);
-    if (pu < 0)
-        return -1;
-    int child = gc_level_nunits[lvl];
-    int parent = gc_level_nunits[lvl + 1];
-    for (int off = child; off < parent; off += child)
-        gc_seg_push(s, lvl, pu + off);
-    *s_out = s;
-    return pu;
+    return -1;
 }
 
 // Requires `gc_big_lock`. Claim an aligned run of `nunits` (1, 8, or 32) units.
 // Returns NULL if the OS is out of memory.
 static jl_gc_slabmeta_t *gc_carve_units(int nunits, int *unit_out) JL_NOTSAFEPOINT
 {
-    jl_gc_slabmeta_t *s;
-    int u = gc_get_segment(gc_seg_level(nunits), &s);
-    if (u < 0)
-        return NULL;
+    jl_gc_slabmeta_t *s = NULL;
+    int u = -1;
+    // Reuse space in a slab already in use before committing a fresh one. A
+    // whole-slab page can never fit in a partial slab, so don't bother looking.
+    if (nunits != GC_UNITS_PER_SLAB) {
+        u = gc_find_in_partials(nunits, 1, &s);
+        if (u < 0 && nunits == 1)
+            u = gc_find_in_partials(nunits, 0, &s);
+    }
+    if (u < 0) {
+        s = gc_take_slab(); // arrives on no list
+        if (s == NULL)
+            return NULL;
+        u = 0;
+    }
     assert(u % nunits == 0 && "carved run is misaligned for its size");
     uint32_t run = gc_unit_run_mask(u, nunits);
     assert((s->free_unit_map & run) == run);
+    // relink rather than mutate in place: the slab's occupancy, and hence its
+    // bucket, changes here
+    gc_partial_slab_unlink(s);
     s->free_unit_map &= ~run;
-    if (s->free_unit_map == 0)
-        gc_partial_slab_unlink(&gc_partial_slabs, s); // now full
-    gc_seg_verify(s);
+    if (s->free_unit_map != 0)
+        gc_partial_slab_link(s);
     *unit_out = u;
     return s;
 }
 
-// Requires `gc_big_lock`. Return an aligned run of units to its slab, then
-// coalesce as far up the size levels as the free-unit map allows; a fully-free
-// slab moves to the free-slab list.
+// Requires `gc_big_lock`. Return an aligned run of units to its slab, where it
+// coalesces with any adjacent free run; a fully-free slab moves to the
+// free-slab list, from where it can be decommitted.
 static void gc_free_units(jl_gc_slabmeta_t *s, int u, int nunits) JL_NOTSAFEPOINT
 {
-    int lvl = gc_seg_level(nunits);
-    gc_seg_verify(s);
     assert(u % nunits == 0 && "freed run is misaligned for its size");
     uint32_t run = gc_unit_run_mask(u, nunits);
     assert((s->free_unit_map & run) == 0);
-    int was_full = s->free_unit_map == 0;
+    gc_partial_slab_unlink(s); // no-op for a slab with no free units left
     s->free_unit_map |= run;
-    if (was_full)
-        gc_partial_slab_link(&gc_partial_slabs, s);
-    // coalesce: while the parent-aligned group of this segment is entirely
-    // free, absorb the sibling segments and rise a level.
-    while (lvl < 2) {
-        int parent = gc_level_nunits[lvl + 1];
-        int group = (u / parent) * parent;
-        uint32_t pmask = parent >= GC_UNITS_PER_SLAB ? UINT32_MAX
-                       : (((uint32_t)1 << parent) - 1) << group;
-        if ((s->free_unit_map & pmask) != pmask)
-            break; // parent not fully free: this segment stays at its level
-        int child = gc_level_nunits[lvl];
-        for (int off = 0; off < parent; off += child) {
-            int cu = group + off;
-            if (cu != u) // the freed run is not on any list yet
-                gc_seg_unlink(s, lvl, gc_seg_at(s, cu));
-        }
-        u = group;
-        lvl++;
-    }
-    if (lvl == 2) {
-        // whole slab free
-        gc_partial_slab_unlink(&gc_partial_slabs, s);
+    if (s->free_unit_map == UINT32_MAX)
         gc_release_slab(s);
-    }
-    else {
-        gc_seg_push(s, lvl, u);
-    }
-    gc_seg_verify(s);
+    else
+        gc_partial_slab_link(s);
 }
 
 // ======================================================================== //
@@ -605,6 +526,7 @@ static void *gc_huge_alloc(size_t allocsz, size_t *usable_sz)
         return NULL;
     jl_gc_slabmeta_t *s = (jl_gc_slabmeta_t*)calloc_s(sizeof(jl_gc_slabmeta_t));
     s->is_huge = 1;
+    s->partial_bucket = -1; // huge slabs are never carved into units
     s->data = base;
     s->map_base = raw_base;
     s->map_sz = map_sz;

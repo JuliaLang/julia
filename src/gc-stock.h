@@ -605,10 +605,12 @@ typedef struct _jl_gc_slabmeta_t {
     uint8_t is_huge;
     uint8_t resident;     // memory is committed / not madvised away
     uint8_t free_sweeps;  // sweeps ended with this slab fully free (see finish_sweep)
-    uint32_t free_unit_map; // bitmap of free 64 KiB units (coalescing oracle)
-    // heads of the free-segment lists, one per shared page size (1 and 8 units);
-    // a wholly free slab is released to the free-slab list instead
-    void *free_segs[2];
+    // occupancy bucket whose partial-slab list this slab is on, or -1 for none
+    int8_t partial_bucket;
+    // bitmap of free 64 KiB units: the only record of which units are in use,
+    // so freed runs coalesce implicitly and only the three page sizes -- not
+    // the size classes -- can fragment
+    uint32_t free_unit_map;
     // first unit of the big page covering each unit (meaningless for units
     // holding pool pages, which are looked up through their own metadata)
     uint8_t unit_page_start[GC_UNITS_PER_SLAB];
