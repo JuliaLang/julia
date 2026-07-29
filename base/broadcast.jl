@@ -654,6 +654,8 @@ Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple, I) = A[I[1]]
 # Everything else falls back to dynamically dropping broadcasted indices based upon its axes
 Base.@propagate_inbounds _broadcast_getindex(A, I) = A[newindex(A, I)]
+# convert so elements and inference match the declared eltype even when `getindex` infers wider
+Base.@propagate_inbounds _broadcast_getindex(A::AbstractArray, I) = convert(eltype(A), A[newindex(A, I)])::eltype(A)
 
 # In some cases, it's more efficient to sort out which dimensions should be dropped
 # ahead of time (often when the size checks aren't able to be lifted out of the loop).
@@ -666,7 +668,7 @@ struct Extruded{T, K, D}
     defaults::D # A tuple of integers, specifying the index to use when keeps[i] is false (as defaults[i])
 end
 @inline axes(b::Extruded) = axes(b.x)
-Base.@propagate_inbounds _broadcast_getindex(b::Extruded, i) = b.x[newindex(i, b.keeps, b.defaults)]
+Base.@propagate_inbounds _broadcast_getindex(b::Extruded, i) = convert(eltype(b.x), b.x[newindex(i, b.keeps, b.defaults)])::eltype(b.x)
 extrude(x::AbstractArray) = Extruded(x, newindexer(x)...)
 extrude(x) = x
 
@@ -740,20 +742,9 @@ broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
-_broadcast_getindex_eltype(bc::Broadcasted) = combine_eltypes(bc.f, bc.args)
-_broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
-
-eltypes(::Tuple{}) = Tuple{}
-eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
-eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
-eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
-# eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
-
-# Inferred eltype of result of broadcast(f, args...)
-function combine_eltypes(f, args::Tuple)
-    argT = eltypes(args)
-    argT === Union{} && return Union{}
-    return promote_typejoin_union(Base._return_type(f, argT))
+function result_eltype(bc::Broadcasted)
+    rettype = Base._return_type(_broadcast_getindex, Tuple{typeof(bc), eltype(eachindex(bc))})
+    return promote_typejoin_union(rettype)
 end
 
 ## Broadcasting core
@@ -925,7 +916,7 @@ copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
 @inline function copy(bc::Broadcasted)
-    ElType = combine_eltypes(bc.f, bc.args)
+    ElType = result_eltype(bc)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
         return copyto!(similar(bc, ElType), bc)
