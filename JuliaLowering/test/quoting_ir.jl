@@ -80,7 +80,8 @@ function Base.:(==)() end
 5   (call core.svec)
 6   SourceLocation::1:1
 7   (call core.svec %₄ %₅ %₆)
-8   --- method core.nothing %₇
+8   (call core.define_method TestMod core.nothing %₇
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   (return core.nothing)
 9   latestworld

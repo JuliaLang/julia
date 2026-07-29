@@ -2340,7 +2340,9 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
         for each in package_locks
             cond2 = each[2][2]
             assert_havelock(cond2.lock)
-            for waiting in cond2.waitq
+            for w in cond2.waitq
+                waiting = w.task
+                waiting isa Task || continue
                 push!(waiters, waiting => (each[2][1] => each[1]))
             end
         end

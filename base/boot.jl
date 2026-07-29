@@ -212,6 +212,8 @@
 #    @atomic last_started_running_at::UInt64
 #    @atomic running_time_ns::UInt64
 #    @atomic finished_at::UInt64
+#    @atomic waiting_on::Any
+#    cached_wait_entry::Any
 #end
 
 export
@@ -680,6 +682,12 @@ struct PartialOpaque
     PartialOpaque(@nospecialize(typ::Type), @nospecialize(env), parent::MethodInstance, source) = new(typ, env, parent, source)
 end
 
+struct PartialTask
+    fetch_type
+    fetch_error
+    PartialTask(@nospecialize(fetch_type), @nospecialize(fetch_error)) = new(fetch_type, fetch_error)
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
@@ -733,10 +741,6 @@ function CodeInstance(
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
-
-function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
-    return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
-end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 

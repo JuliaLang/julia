@@ -9,24 +9,24 @@ baremodule Iterators
 import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
+    @inline, Pair, Pairs, IndexLinear, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
-    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
+    @propagate_inbounds, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
-    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
-    any, eachindex, ntuple, zero, prod, identity, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
+    :, |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
+    any, eachindex, ntuple, zero, identity, reduce, in, firstindex, lastindex,
+    tail, fieldtypes, min, max, zero, oneunit, promote, promote_shape, LazyString,
     afoldl, mod1, @default_eltype
 using .Core
 using Core: @doc
 
 using Base:
-    cld, fld, resize!, IndexCartesian, Checked
+    cld, resize!, IndexCartesian, Checked
 using .Checked: checked_mul
 
 import Base:
     first, last,
-    isempty, length, size, axes, ndims,
+    length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype, promote_typejoin,
     haskey, keys, values, pairs,
     getindex, setindex!, get, iterate,
@@ -276,7 +276,7 @@ CartesianIndex(1, 2) d
 CartesianIndex(2, 2) e
 ```
 
-See also [`IndexStyle`](@ref), [`axes`](@ref).
+See also [`Base.IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 

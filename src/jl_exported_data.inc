@@ -106,6 +106,7 @@
     XX(pair_type, jl_value_t*) \
     XX(partial_opaque_type, jl_datatype_t*) \
     XX(partial_struct_type, jl_datatype_t*) \
+    XX(partial_task_type, jl_datatype_t*) \
     XX(phicnode_type, jl_datatype_t*) \
     XX(phinode_type, jl_datatype_t*) \
     XX(pinode_type, jl_datatype_t*) \

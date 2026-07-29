@@ -397,7 +397,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
         *has_defs = 1;
         return;
     }
-    else if (head == jl_method_sym || jl_is_toplevel_only_expr(v)) {
+    else if (jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
     }
     else if (head == jl_cfunction_sym) {
@@ -432,7 +432,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
                 *has_ccall = 1;
             }
             // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
-            if (called == BUILTIN(_typebody) || called == BUILTIN(declare_const)) {
+            if (called == BUILTIN(_typebody) || called == BUILTIN(declare_const) || called == BUILTIN(define_method)) {
                 *has_defs = 1;
             }
         }
@@ -504,7 +504,7 @@ static int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     jl_sym_t *head = ex->head;
     if (head == jl_module_sym || head == jl_export_sym || head == jl_public_sym ||
         head == jl_thunk_sym || head == jl_toplevel_sym || head == jl_error_sym ||
-        head == jl_incomplete_sym || head == jl_method_sym) {
+        head == jl_incomplete_sym) {
         return 0;
     }
     return 1;
@@ -782,7 +782,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
-JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname) JL_CANSAFEPOINT
+JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, const char *fname) JL_CANSAFEPOINT
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("%s cannot be used in a generated function", fname);

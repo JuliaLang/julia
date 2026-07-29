@@ -537,7 +537,7 @@ include("hi.jl")
 # Const function assignment syntax (legacy)
 const f(x::Int)::Int = x+1
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
 3   TestMod.f
 4   (call core.TypeEqOf %₃)
@@ -546,7 +546,8 @@ const f(x::Int)::Int = x+1
 7   (call core.svec)
 8   SourceLocation::1:6
 9   (call core.svec %₆ %₇ %₈)
-10  --- method TestMod.f %₉
+10  (call core.define_method TestMod TestMod.f %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read)]
     1   TestMod.Int
     2   TestMod.+
