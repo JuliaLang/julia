@@ -28,6 +28,51 @@ volatile size_t profile_bt_size_cur = 0;
 // workload that never ran.
 _Atomic(uint64_t) profile_suspend_failures = 0;
 
+// Wedge diagnosis of last resort: the program counter and stack pointer of
+// every thread, with no symbolization and no unwinding. Printing a real
+// backtrace is not safe here — unwinding on Windows goes through DbgHelp
+// behind jl_in_stackwalk, and a watchdog that suspends a thread which may
+// hold that lock (or the loader lock) and then calls DbgHelp itself
+// deadlocks, which is why jl_print_task_backtraces hangs on a wedged win32
+// process. Raw registers are enough to symbolize offline against the binary.
+JL_DLLEXPORT void jl_dump_thread_pcs(void) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    jl_safe_printf("==== thread program counters\n");
+    for (int tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = allstates[tid];
+        if (ptls2 == NULL)
+            continue;
+        HANDLE h = ptls2->system_id;
+        if (SuspendThread(h) == (DWORD)-1) {
+            jl_safe_printf("thread %d: suspend failed\n", tid);
+            continue;
+        }
+        CONTEXT ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.ContextFlags = CONTEXT_CONTROL;
+        if (GetThreadContext(h, &ctx)) {
+#if defined(_CPU_X86_64_)
+            jl_safe_printf("thread %d: pc=0x%llx sp=0x%llx\n", tid,
+                           (unsigned long long)ctx.Rip, (unsigned long long)ctx.Rsp);
+#else
+            jl_safe_printf("thread %d: pc=0x%lx sp=0x%lx\n", tid,
+                           (unsigned long)ctx.Eip, (unsigned long)ctx.Esp);
+#endif
+        }
+        else {
+            jl_safe_printf("thread %d: GetThreadContext failed\n", tid);
+        }
+        ResumeThread(h);
+    }
+    jl_safe_printf("==== end thread program counters\n");
+#else
+    // Elsewhere the ordinary task dump works, so there is nothing to add.
+#endif
+}
+
 JL_DLLEXPORT uint64_t jl_profile_suspend_failures(void) JL_NOTSAFEPOINT
 {
     return jl_atomic_load_relaxed(&profile_suspend_failures);

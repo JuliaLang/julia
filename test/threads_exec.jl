@@ -37,6 +37,11 @@ function _watchdog_native(::Ptr{Cvoid})
     catch
     end
     try
+        # raw registers first: this cannot hang, unlike the task dump below
+        ccall(:jl_dump_thread_pcs, Cvoid, ())
+    catch
+    end
+    try
         ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0)
     catch
     end
