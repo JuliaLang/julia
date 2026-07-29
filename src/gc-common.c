@@ -752,6 +752,14 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
         len = s->nparents;
         elsize = sizeof(jl_cancel_parent_link_t);
     }
+    else if (vt == jl_wait_entry_type) {
+        // the `owner`/`next` slots of the trailing wait slots are marked as
+        // strided arrays (see gc-stock.c)
+        jl_wait_entry_t *w = (jl_wait_entry_t*)obj;
+        start = (char*)jl_wait_entry_slots(w);
+        len = w->nslots;
+        elsize = sizeof(jl_wait_slot_t);
+    }
     if (slot < start || slot >= start + elsize * len)
         return -1;
     return (slot - start) / elsize;

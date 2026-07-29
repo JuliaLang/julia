@@ -313,12 +313,31 @@ struct _jl_cancel_source_t {
     // Weak (spliced by the GC): most recently attached live child;
     // `jl_nothing`-terminated. Union{Nothing, CancellationTokenSource}.
     _Atomic(jl_value_t*) child_head;
+    // Parked waiters: a lock-free intrusive singly-linked LIFO of wait
+    // entries (any kind, linked through their source slot), where the
+    // cancellation walk finds tasks blocked under this source. Strong
+    // references (the GC's special-cased marking traces the head).
+    // Registration CAS-pushes here; entries are never unlinked on the wake
+    // path (they stay registered across parks and are collected by walks) -
+    // interior links are rewritten only under `walk_lock`. See the
+    // registration protocol in base/cancellation.jl.
+    _Atomic(jl_value_t*) waiters_head;   // Union{Nothing, Base.WaitEntry}
+    // Serializes walks (cancellation delivery, pruning, owner-side
+    // unregistration) against each other; never taken on park/wake paths.
+    // A sleeping lock (Union{Nothing, Base.ReentrantLock}, strong),
+    // installed lazily by the first walker.
+    _Atomic(jl_value_t*) walk_lock;
     // 0x00 = uncancelled; otherwise the (nonzero) severity at which the
     // source is cancelled (0x1 SAFE, 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL).
     // Monotonic (CAS-max).
     _Atomic(uint8_t) state;
     // Number of parent links following the fixed fields. Const.
     uint16_t nparents;
+    // Dead registrations on the waiter list (retired entries and entries of
+    // completed tasks), counted at retirement/task teardown; crossing the
+    // threshold triggers a pruning walk. Approximate (relaxed); walks reset
+    // it.
+    _Atomic(uint32_t) dead_count;
     // jl_cancel_parent_link_t links[nparents];  (see jl_cancel_source_links)
 };
 
@@ -328,6 +347,49 @@ static inline jl_cancel_parent_link_t *jl_cancel_source_links(jl_cancel_source_t
 {
     // The struct size is already pointer-aligned on all supported platforms.
     return (jl_cancel_parent_link_t*)((char*)src + sizeof(jl_cancel_source_t));
+}
+
+// A wait registration slot: `owner` is the waitable this slot registers on
+// (a condition/waitee, a cancellation source, ...) and doubles as the
+// membership witness (`jl_nothing` = free); `next` is the intrusive link of
+// the owner's waiter list (links point at whole entries - a traversal finds
+// its slot in each entry by scanning for its own identity); `aux` carries
+// per-registration payload (e.g. the minimum delivery severity of a
+// cancellation-source slot). Both object slots are strong references.
+// `owner` is atomic, accessed relaxed: scans read every slot's owner from
+// threads that do not hold that slot's protecting lock, tolerating stale
+// values (any ordering an owner read needs is supplied by the surrounding
+// protocol). `next` and `aux` stay plain under their owner's discipline
+// (the waitee's lock, the source's registration protocol/walk lock, or the
+// owning task) - see base/cancellation.jl.
+typedef struct {
+    _Atomic(jl_value_t*) owner;
+    jl_value_t *next;
+    uint64_t aux;
+} jl_wait_slot_t;
+
+// The variable-sized "many" wait-entry kind (Core.WaitEntryN): `nslots`
+// slots follow the fixed fields. The 1- and 2-slot kinds are ordinary Julia
+// structs (Base.WaitEntry1/WaitEntry2) with the same slot semantics; this
+// kind serves wait-any over arbitrarily many waitables (waitany/waitall).
+// Only the fixed fields are exposed to the Julia field system; slots are
+// reached through the jl_wait_entry_slot_* accessors. Like the slot
+// `owner`s, `task` is atomic, accessed relaxed: walkers read (and scrub) it
+// without holding any of the entry owner's locks, tolerating staleness (a
+// wake claim is validated by the task's `waiting_on` CAS, never by the
+// `task` read alone). `next` and `aux` stay plain under their owner's
+// discipline.
+typedef struct {
+    JL_DATA_TYPE
+    _Atomic(jl_value_t*) task;   // Union{Nothing, Task}; nothing marks a retired entry
+    uint32_t nslots;    // const
+    // uint32_t padding
+    // jl_wait_slot_t slots[nslots];  (see jl_wait_entry_slots)
+} jl_wait_entry_t;
+
+static inline jl_wait_slot_t *jl_wait_entry_slots(jl_wait_entry_t *w) JL_NOTSAFEPOINT
+{
+    return (jl_wait_slot_t*)((char*)w + sizeof(jl_wait_entry_t));
 }
 
 // The link entry connecting `child` to `parent` (which must be one of its
@@ -382,9 +444,20 @@ typedef struct _jl_task_t {
     // it (notify via CAS against the specific entry, an interrupter via swap)
     // owns waking the task. See the wake-claim protocol in base/condition.jl.
     _Atomic(jl_value_t*) waiting_on;
-    // A `Base.WaitEntry` cached for reuse across parks (or `nothing`), so the
-    // common single-registration park does not allocate. Owned by this task.
+    // The wait entries cached for reuse across this task's parks (or
+    // `nothing`), so the common park does not allocate. Owned by this task.
+    // Plain (shielded) and cancellable parks arm *distinct* entries: the
+    // cancellation walk's expected-entry claim CAS is its only sound
+    // eligibility gate, so an entry registered on a source must never be
+    // armed for a wait that is not cancellable under it (see the wake-claim
+    // protocol in base/cancellation.jl and tla/WaitClaim.tla).
+    // The `Base.WaitEntry1` for plain parks - never registered on a source.
     jl_value_t *cached_wait_entry;
+    // The `Base.WaitEntry2` for cancellable parks. Its cancellation-source
+    // slot is sticky - the entry stays on the source's waiter list across
+    // parks, so only the first cancellable park under a source pays a
+    // registration.
+    jl_value_t *cached_cancel_entry;
     jl_value_t *invoked; // Method/CodeInstance/tuple Type for optimized task invocation
     // The cancellation token source last published by a cancellation point on
     // this task ("the token governing the compute currently running here").
