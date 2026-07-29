@@ -659,13 +659,24 @@ If `timeout` is specified, cancel the `wait` when it expires and return
 `:timed_out`. The minimum value for `timeout` is 0.001 seconds, i.e. 1
 millisecond.
 """
-function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0,
+                           cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     ct = current_task()
+    tok = Base.check_cancel_arg(cancel)
+    src = Base.cancel_source(tok)
     # This wait has a wake source directed at it specifically (the timeout
     # task below), so it must register with a fresh, single-use entry: only
     # single-use-ness guarantees that the timeout task's expected-entry CAS
     # cannot claim a later, unrelated wait of `ct`.
-    w = Base._wait2(c, ct, first; entry=Base.WaitEntry(ct))
+    w = Base._wait2(c, ct, first;
+                    entry=(src === nothing ? Base.WaitEntry1(ct) : Base.WaitEntry2(ct)))
+    if src !== nothing && !Base.register_cancellation!(src, w)
+        # The governing token is already cancelled and the wake was claimed
+        # back for us: don't park.
+        Base.list_deletefirst!(Base.waitqueue(c), w)
+        Base.retire_cancellation_entry!(w)
+        Base._deliver_refused_cancellation(src)
+    end
     token = Base.unlockall(c.lock)
 
     timer::Union{Timer, Nothing} = nothing
@@ -690,18 +701,23 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         Base.relockall(c.lock, token)
         timer !== nothing && close(timer)
         Base.list_deletefirst!(Base.waitqueue(c), w)
+        # single-use entry: hand its sticky source registration to pruning
+        src === nothing || Base.retire_cancellation_entry!(w)
         rethrow()
     end
     # a normal wake (notify or timeout) claimed and unlinked our registration
     Base.relockall(c.lock, token)
     timer !== nothing && close(timer)
+    src === nothing || Base.retire_cancellation_entry!(w)
     return res
 end
 
 function _wait_with_timeout_task(c::GenericCondition, ct::Task, w::Base.WaitEntry, timer::Timer)
     return Task() do
         try
-            wait(timer)
+            # not cancellable: this is internal mechanism; closing the timer
+            # wakes it in all exit paths of wait_with_timeout
+            wait(timer; cancel=nothing)
         catch e
             # if the timer was closed, the waiting task has been scheduled; do nothing
             e isa EOFError && return

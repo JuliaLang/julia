@@ -210,6 +210,13 @@ Each `lock` must be matched by an [`unlock`](@ref).
                 if result.success
                     rl.reentrancy_cnt = 0x0000_0001
                     @atomic :release rl.locked_by = ct
+                    # Mirror the park path's refusal (see wait_no_relock): a
+                    # token that got cancelled while we were spinning must
+                    # not hand out the lock - release it and deliver.
+                    if tok !== nothing && iscancelled(tok.source)
+                        unlock(rl)
+                        checkcancel(tok.source)
+                    end
                     return
                 end
                 GC.enable_finalizers()
@@ -248,6 +255,13 @@ Each `lock` must be matched by an [`unlock`](@ref).
     end)(rl, cancel)
     return
 end
+
+# ReentrantLock-backed conditions (Threads.Condition) forward `cancel` into
+# the lock acquisition, so operations that resolved a token (or an explicit
+# `nothing` shield) can make their preliminary lock honor it instead of the
+# ambient scope - see e.g. the Channel operations.
+lock(c::GenericCondition{ReentrantLock}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    lock(c.lock; cancel)
 
 function wait_no_relock(c::GenericCondition, tok::MaybeToken)
     ct = current_task()
@@ -354,6 +368,15 @@ See also [`@lock`](@ref).
 """
 function lock(f, l::AbstractLock)
     lock(l)
+    try
+        return f()
+    finally
+        unlock(l)
+    end
+end
+
+function lock(f, l::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    lock(l; cancel)
     try
         return f()
     finally
@@ -538,11 +561,18 @@ end
 Wait for one of the `sem_size` permits to be available,
 blocking until one can be acquired.
 """
-function acquire(s::Semaphore)
-    lock(s.cond_wait)
+function acquire(s::Semaphore; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    # the preliminary lock honors the operation's token (or explicit
+    # shield), not the ambient scope
+    lock(s.cond_wait; cancel)
     try
-        while s.curr_cnt >= s.sem_size
-            wait(s.cond_wait)
+        if s.curr_cnt >= s.sem_size
+            tok = resolve_cancel_token(cancel)
+            while s.curr_cnt >= s.sem_size
+                # a cancelled wait throws before the permit is taken
+                wait(s.cond_wait, tok)
+            end
         end
         s.curr_cnt = s.curr_cnt + 1
     finally
@@ -575,8 +605,8 @@ end
     This method requires at least Julia 1.8.
 
 """
-function acquire(f, s::Semaphore)
-    acquire(s)
+function acquire(f, s::Semaphore; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    acquire(s; cancel)
     try
         return f()
     finally
@@ -660,20 +690,23 @@ mutable struct Event
     Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
 end
 
-function wait(e::Event)
+function wait(e::Event; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
     if e.autoreset
         (@atomicswap :acquire_release e.set = false) && return
     else
         (@atomic e.set) && return # full barrier also
     end
-    lock(e.notify) # acquire barrier
+    # the preliminary lock honors the operation's token (or explicit
+    # shield), not the ambient scope
+    lock(e.notify; cancel) # acquire barrier
     try
         if e.autoreset
             (@atomicswap :acquire_release e.set = false) && return
         else
             e.set && return
         end
-        wait(e.notify)
+        wait(e.notify, resolve_cancel_token(cancel))
     finally
         unlock(e.notify) # release barrier
     end

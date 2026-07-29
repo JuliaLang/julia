@@ -413,7 +413,8 @@ completed tasks, and the other consists of uncompleted tasks.
 !!! compat "Julia 1.12"
     This function requires at least Julia 1.12.
 """
-waitany(tasks; throw=true) = _wait_multiple(collect_tasks(tasks), throw)
+waitany(tasks; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _wait_multiple(collect_tasks(tasks), throw, false, false, check_cancel_arg(cancel))
 
 """
     waitall(tasks; failfast=true, throw=true) -> (done_tasks, remaining_tasks)
@@ -433,7 +434,8 @@ completed tasks, and the other consists of uncompleted tasks.
 !!! compat "Julia 1.12"
     This function requires at least Julia 1.12.
 """
-waitall(tasks; failfast=true, throw=true) = _wait_multiple(collect_tasks(tasks), throw, true, failfast)
+waitall(tasks; failfast=true, throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _wait_multiple(collect_tasks(tasks), throw, true, failfast, check_cancel_arg(cancel))
 
 function collect_tasks(waiting_tasks)
     tasks = Task[]
@@ -444,13 +446,14 @@ function collect_tasks(waiting_tasks)
     return tasks
 end
 
-function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false)
+function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false,
+                        tok::Union{Nothing, CancellationToken}=default_cancel_token())
     if (all && !failfast) || length(tasks) <= 1
         exception = false
         # Force everything to finish synchronously for the case of waitall
         # with failfast=false
         for t in tasks
-            _wait(t)
+            _wait(t, tok)
             exception |= istaskfailed(t)
         end
         if exception && throwexc
@@ -507,16 +510,34 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    while nremaining > 0
-        exception && failfast && break
-        i = take!(chan)
-        t = tasks[i]
-        waiter_tasks[i] = sentinel
-        done_mask[i] = true
-        exception |= istaskfailed(t)
-        nremaining -= 1
-        # stop early if requested
-        all || break
+    try
+        while nremaining > 0
+            exception && failfast && break
+            i = tok === nothing ? take!(chan) : take!(chan; cancel=tok)
+            t = tasks[i]
+            waiter_tasks[i] = sentinel
+            done_mask[i] = true
+            exception |= istaskfailed(t)
+            nremaining -= 1
+            # stop early if requested
+            all || break
+        end
+    catch
+        # The wait was interrupted (e.g. by cancellation of the current scope):
+        # deregister our waiter tasks before propagating, claiming each
+        # never-started waiter's wake so a concurrent completion notify skips
+        # it (same as the remaining-tasks cleanup below).
+        for i in findall(.~done_mask)
+            waiter = waiter_tasks[i]
+            waiter === sentinel && continue
+            donenotify = tasks[i].donenotify::ThreadSynchronizer
+            lock(donenotify)
+            w = @atomicswap waiter.waiting_on = nothing
+            w isa WaitEntry && list_deletefirst!(waitqueue(tasks[i]), w)
+            unlock(donenotify)
+        end
+        close(chan)
+        rethrow()
     end
 
     close(chan)

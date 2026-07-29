@@ -896,7 +896,11 @@ function write(to::IO, from::GenericIOBuffer)
     return written
 end
 
-function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
+# writing to an in-memory buffer never blocks; accept (and entry-gate)
+# `cancel` so that explicit-token writes forwarded here (e.g.
+# `write(io, ::String; cancel=...)`) keep working
+function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    precheck_cancel_arg(cancel)
     ensureroom(to, nb)
     size = to.size
     append = to.append
@@ -981,7 +985,12 @@ function occursin(delim::UInt8, buf::GenericIOBuffer)
     return in(delim, view(buf.data, buf.ptr:buf.size))
 end
 
-function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
+# Reading from an in-memory buffer never blocks, but the write to `out`
+# may: an explicit token (or `nothing` shield) is forwarded to it, so
+# shielded chains (e.g. `readline(stream; cancel=nothing)`, which lands
+# here through the stream's copyuntil) compose; the sentinel keeps the
+# plain call, which any IO's write supports.
+function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -989,12 +998,20 @@ function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     if !keep && nout > 0 && data[nout] == delim
         nout -= 1
     end
-    write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    if cancel === DEFAULT_CANCEL
+        write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    else
+        write(out, view(io.data, io.ptr:io.ptr+nout-1); cancel)
+    end
     io.ptr += nread
     return out
 end
 
-function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
+function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(cancel)
+    @cancel_check tok
+    # the resolved token (or explicit shield) governs the inner copyuntil,
+    # which does the actual blocking reads
     # If the data is copied into the middle of the buffer of `out` instead of appended to the end,
     # and !keep, and the line copied ends with \r\n, then the copyuntil (even if keep=false)
     # will overwrite one too many bytes with the new \r byte.
@@ -1002,7 +1019,7 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
     # Could perhaps be done better
     if !out.append && out.ptr < out.size + 1
         newbuf = IOBuffer()
-        copyuntil(newbuf, s, 0x0a, keep=true)
+        copyuntil(newbuf, s, 0x0a; keep=true, cancel=tok)
         v = take!(newbuf)
         # Remove \r\n or \n if present
         if !keep
@@ -1013,12 +1030,14 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
                 pop!(v)
             end
         end
-        write(out, v)
+        # `tok` is resolved above: the write to `out` runs under it (or its
+        # explicit shield), not the ambient scope
+        write(out, v; cancel=tok)
         return out
     else
         # Else, we can just copy the data directly into the buffer, and then
         # subtract the last one or two bytes depending on `keep`.
-        copyuntil(out, s, 0x0a, keep=true)
+        copyuntil(out, s, 0x0a; keep=true, cancel=tok)
         line = out.data
         i = out.size
         if keep || i == out.offset_or_compacted || line[i] != 0x0a
@@ -1036,7 +1055,7 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
     end
 end
 
-function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
+function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -1046,13 +1065,20 @@ function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
         nout -= 1
         nout > 0 && data[nout] == 0x0d && (nout -= 1)
     end
-    write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    if cancel === DEFAULT_CANCEL
+        write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    else
+        write(out, view(io.data, io.ptr:io.ptr+nout-1); cancel)
+    end
     io.ptr += nread
     return out
 end
 
-copyline(out::IO, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
-copyline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
+# reading from an in-memory buffer never blocks, but the write to `out`
+# may; an explicit token (or shield) is forwarded to it (see copyuntil
+# above)
+copyline(out::IO, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) = _copyline(out, io; keep, cancel)
+copyline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL) = _copyline(out, io; keep, cancel)
 
 
 # copy-free crc32c of IOBuffer:
