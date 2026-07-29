@@ -556,10 +556,31 @@ function est_to_dst(st::SyntaxTree)
             push!(out_iters, _dst_iterspec(next, next[2:end]))
             @ast _ st [K"generator" rec(next[1]) out_iters...]
         end
-        [K"comprehension" _ _ _...] -> let
-            arg = rec(@ast _ st [K"generator" children(st)...])
-            @ast _ st [K"comprehension" arg]
+        [K"comprehension" xs...] -> let
+            arg = rec(length(xs) == 1 ? xs[1] :
+                @ast _ st [K"generator" children(st)...])
+            if kind(arg) === K"generator"
+                @ast _ st [K"comprehension" arg]
+            else
+                @ast _ st [K"call" "collect"::K"top" arg]
+            end
         end
+        # hack: `[_ for _ in rhs]`, `[f(_) for _ in rhs]` works
+        ([K"generator" body [K"=" u2 rhs]],
+         when=is_flisp_compat(st) &&
+             is_writeonly_est_name(est_syntax_name(u2, "")) && begin
+                 u2name=est_syntax_name(u2, "")
+                 func = @stm body begin
+                     ([K"call" func [K"Identifier"]],
+                      when=est_syntax_name(body[2], "")===u2name &&
+                          !is_dotted_operator(est_syntax_name(body[1], ""))) -> func
+                     ([K"Identifier"],
+                      when=est_syntax_name(body, "")===u2name) ->
+                         @ast _ st ("identity"::K"top")
+                     _ -> nothing
+                 end
+                 func !== nothing
+             end) -> @ast _ st [K"call" "Generator"::K"top" rec(func) rec(rhs)]
         [K"generator" body iters...] ->
             @ast _ st [K"generator" rec(body) _dst_iterspec(st, iters)]
         ([K"=" l r], when=(is_eventually_call(l))) -> let

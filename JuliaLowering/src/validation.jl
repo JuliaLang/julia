@@ -1056,7 +1056,8 @@ vst1_generator(vcx, st) = let
             vst1(vcx, cond) &
             all(vst1_iter, vcx, is)
         [K"generator" val is...] ->
-            vst1(vcx, val) & all(vst1_iter, vcx, is)
+            vst1(with(vcx; readable_underscore=true), val) &
+            all(vst1_iter, vcx, is)
         [K"generator" _...] -> @fail(st, "malformed `generator`")
         _ -> @fail(st, "expected `generator`")
     end
@@ -1284,10 +1285,9 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"lambda" _...] -> vst2_lam(vcx, st)
     [K"function_decl" x] -> vst2_ident(vcx, x)
     [K"function_type" x] -> vst2(vcx, x)
-    # TODO: check that mtable is equal to the method_defs arg 1?
     [K"method" mtable argtypes lam] -> !vcx.in_method_defs ?
         @fail(st, "method outside of method_defs") :
-        (kind(mtable) === K"nothing" ? pass() : vst2_ident_val(vcx, mtable)) &
+        (kind(mtable) === K"nothing" ? pass() : vst2(vcx, mtable)) &
         vst2(vcx, argtypes) & vst2_lam(vcx, lam)
     [K"method_defs" id [K"block" sps...] body] ->
         (kind(id) === K"nothing" ? pass() : vst2_ident_val(vcx, id)) &

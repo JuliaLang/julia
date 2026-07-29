@@ -36,6 +36,13 @@ end
     """) === (nothing, nothing)
     @test JuliaLowering.include_string(test_mod, "(() -> (global x_tail_decl4))()") === nothing
 
+    # non-simple is fine to read from for some reason
+    @test JuliaLowering.include_string(
+        test_mod, "_ = global tail_decl_typed::Int") === nothing
+    @test Base.binding_kind(test_mod, :tail_decl_typed) == Base.PARTITION_KIND_GLOBAL
+    @test JuliaLowering.include_string(
+        test_mod, "_ = global _______________::Int") === nothing
+
     # disallowed in value position otherwise
     @test_throws LoweringError JuliaLowering.include_string(test_mod, """
     function f_value_global_decl()
@@ -354,13 +361,14 @@ end
 
     # setproperty form: decl is ignored (this is misleading, syntax TODO)
     @gensym sym
+    @eval test_mod mutable struct with_mutable_a; a; end
     @testset let ex =
         Expr(:let, Expr(:block),
              Expr(:block,
-                  Expr(declkind, Expr(:(=), sym, (;a=1))),
-                  Expr(declkind, Expr(:(=), Expr(:., sym, :a), 2)),
-                  Expr(:tuple, sym)))
-        @test_broken jl_eval(test_mod, ex) == ((;a=2),)
+                  Expr(:(=), sym, :(with_mutable_a(1))),
+                  Expr(declkind, Expr(:(=), Expr(:., sym, QuoteNode(:a)), 2)),
+                  sym))
+        @test jl_eval(test_mod, ex).a == 2
         Core.@latestworld
         @test !isdefined(test_mod, sym)
     end

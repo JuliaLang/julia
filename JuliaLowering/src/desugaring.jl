@@ -2222,6 +2222,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         end
         [K"..." x] -> nothing # from recursion above
         [K"ref" _ _...] -> nothing # decl is ignored; syntax TODO
+        [K"." _ _] -> nothing # decl is ignored; syntax TODO
     end
 
     if !isnothing(declname)
@@ -2237,8 +2238,10 @@ function expand_decls(ctx, ex)
     declkind = kind(ex)
     @jl_assert declkind in KSet"local global" ex
     stmts = SyntaxList()
+    val_nothing = !(numchildren(ex) == 1 && is_leaf(children(ex)[1]))
     for c in children(ex)
         simple = kind(c) in KSet"Identifier :: Placeholder"
+        val_nothing &= simple
         if declkind === K"global"
             if kind(c) === K"="
                 (lhs, relayered) = relayer_global_if_unhygienic(ctx, c[1]);
@@ -2262,6 +2265,8 @@ function expand_decls(ctx, ex)
         make_lhs_decls(ctx, stmts, declkind, ex.meta, lhs, simple)
         simple || push!(stmts, expand_forms_2(ctx, c))
     end
+    # flisp quirk: if not a plain `global x` or `local x`, value is readable
+    val_nothing && push!(stmts, @ast ctx ex (::K"nothing"))
     newnode(ex, K"block", stmts)
 end
 
@@ -2856,7 +2861,7 @@ end
 function expand_function_arg1(ctx, arg)
     if kind(arg) === K"overlay"
         _, _, x = expand_function_arg1(ctx, arg[2])
-        return true, arg[1], x
+        return true, expand_forms_2(ctx, arg[1]), x
     end
     aname = @stm arg begin
         [K"::" [K"Identifier"] t] -> arg[1]
@@ -2932,14 +2937,21 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
         keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
+    elseif overlay
+        mtmp = ssavar(ctx, mtable)
+        @ast ctx src [K"block"
+            [K"method_defs" (::K"nothing")
+                method_def_sparams(ctx, src, sparams)
+                [K"block" [K"=" mtmp method_def_expr(
+                    ctx, src, mtable, sparams, argl, body, rett)]]]
+            mtmp]
     else
         @ast ctx src [K"block"
-            (overlay || kind(mtable) === K"nothing") ? nothing : [K"function_decl" mtable]
+            (kind(mtable) === K"nothing") ? nothing : [K"function_decl" mtable]
             [K"method_defs" mtable
                 method_def_sparams(ctx, src, sparams)
                 [K"block" method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
-                # TODO: overlay should return the method
-                [K"removable" mtable]]
+            [K"removable" mtable]]
     end
 end
 
@@ -3412,21 +3424,30 @@ end
 #
 # This function should do as much as `new-call`, but does not use curlyargs
 # or ctor_sparams, so may be missing something.
-function _rewrite_ctor_new_calls(ctx, ex, global_struct_name, ctor_sparams,
+function _rewrite_ctor_new_calls(ctx, ex0, global_struct_name, ctor_sparams,
                                        struct_typevars, ctor_self, field_types)
-    if is_leaf(ex)
-        return ex
-    elseif !_is_new_call(ex)
+    if is_leaf(ex0)
+        return ex0
+    elseif !_is_new_call(ex0)
         return mapchildren(
             e->_rewrite_ctor_new_calls(ctx, e, global_struct_name, ctor_sparams,
                                        struct_typevars, ctor_self, field_types),
-            ex
+            ex0
         )
     end
     # Rewrite a call to new()
-    kw_arg_i = findfirst(e->(k = kind(e); k == K"kw" || k == K"parameters"), children(ex))
-    if !isnothing(kw_arg_i)
-        throw(LoweringError(ex[kw_arg_i], "`new` does not accept keyword arguments"))
+    e0args = children(ex0)
+    kw_arg_i = findfirst(e->(k = kind(e); k == K"kw"), e0args)
+    ex = if !isnothing(kw_arg_i)
+        throw(LoweringError(e0args[kw_arg_i], "`new` does not accept keyword arguments"))
+    elseif kind(e0args[end]) === K"parameters" # flisp oversight
+        if is_flisp_compat(ex0)
+            @mknode(ex0; children=e0args[1:end-1])
+        else
+            throw(LoweringError(e0args[end], "`new` does not accept keyword arguments"))
+        end
+    else
+        ex0
     end
     full_struct_type = if kind(ex[1]) == K"curly"
         # new{A,B}(...)

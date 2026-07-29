@@ -2038,6 +2038,19 @@ end
         calls_versioned_macro(Tuple{Int}, Val(1))
     end """; expr_compat_mode) == 1
 
+    # (AI) pkgeval reduction: `(. value macroname)` should work
+    @test (let m = Module()
+               jl_eval(m, :(module RM5b; macro mm(ex); esc(ex); end; end); expr_compat_mode=true)
+               rm = Core.eval(m, :RM5b)
+               jl_eval(m, quote
+                           @generated function fr5b(x)
+                               Expr(:macrocall, Expr(:., $rm, QuoteNode(Symbol("@mm"))),
+                                    LineNumberNode(1), :(x[1]))
+                           end
+                       end; expr_compat_mode=true)
+               jl_eval(m, :(fr5b([7, 8])); expr_compat_mode=true)
+           end) == 7
+
     @testset "(AI) anonymous args promoted by optional/keyword args" begin
         # A `@generated` method with >=2 anonymous args (`::T` or `_`) whose
         # placeholder slots get promoted to `#arg#` identifiers because the
@@ -2289,16 +2302,16 @@ end
 end
 
 @testset "method table overlays" begin
-    OverlayModule = Module()
+    OverlayModule = @newmod()
 
     @eval OverlayModule Base.Experimental.@MethodTable mt
-    @test_broken JL.include_string(OverlayModule, """
+    @test JL.include_string(OverlayModule, """
         Base.Experimental.@overlay mt function sin(x::Float64); 1; end
     """) isa Method
-    @test_broken JL.include_string(OverlayModule, """
+    @test JL.include_string(OverlayModule, """
         Base.Experimental.@overlay mt cos(x::Float64) = 2
     """) isa Method
-    @test_broken JL.include_string(OverlayModule, """
+    @test JL.include_string(OverlayModule, """
         Base.Experimental.@overlay mt tan(x::T) where {T} = 3
     """) isa Method
 
@@ -2315,4 +2328,12 @@ end
         @test isempty(ms)
     end
 
+    # anything may go in first arg
+    @test JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay @__MODULE__().mt identity(x::Int) = x
+    """) isa Method
+    let ms = Base._methods_by_ftype(
+        Tuple{typeof(identity), Int}, nothing, 1, Base.get_world_counter())
+        @test only(ms).method.module === Base
+    end
 end
