@@ -916,8 +916,10 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             else
                 lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
-            emit_assign_tmp(ctx, @ast ctx ex [K"call" "define_method"::K"core"
-                                              ctx.mod::K"Value" fname sig lam])
+            emit_assign_tmp(ctx, @ast ctx ex [
+                K"call"(;lowering_flags=_forwarding_method_flags(ex))
+                "define_method"::K"core" ctx.mod::K"Value" fname sig lam
+            ])
         end
         emit_latestworld(ctx, ex)
         out = if in_tail_pos
