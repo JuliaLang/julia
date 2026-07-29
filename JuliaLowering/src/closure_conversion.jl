@@ -500,7 +500,8 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         mtable = kind(ex[1]) === K"BindingId" &&
             haskey(ctx.closure_bindings, closure_key(ctx, ex[1])) ?
             @ast(ctx, ex[1], (::K"nothing")) : _convert_closures(ctx, ex[1])
-        @ast ctx ex [K"method"
+        @ast ctx ex [
+            K"method"(;lowering_flags=_forwarding_method_flags(ex))
             mtable
             [K"call" "svec"::K"core"
                 _convert_closures(ctx, ex[2])

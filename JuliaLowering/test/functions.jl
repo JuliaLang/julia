@@ -2268,6 +2268,40 @@ end
     @test_throws UndefVarError test_mod.f_generated_return_delete_me()
 end
 
+# Forwarding method definition calls retain their role after linearization.
+@testset "forwarding method flag" begin
+    function lowered_methods(code::String)
+        tree = JuliaLowering.lower(test_mod, parsestmt(SyntaxTree, code))
+        methods = SyntaxTree[]
+        function collect_methods!(node::SyntaxTree)
+            if kind(node) === K"call" && numchildren(node) == 5 &&
+                kind(node[1]) === K"core" && node[1].value == "define_method"
+                push!(methods, node)
+            end
+            for child in children(node)
+                collect_methods!(child)
+            end
+        end
+        collect_methods!(tree)
+        return methods
+    end
+
+    let methods = lowered_methods("f_forwarding_plain(x) = x")
+        @test length(methods) == 1
+        @test !JuliaLowering.is_forwarding_method(only(methods))
+    end
+
+    let methods = lowered_methods("f_forwarding_pos(x=1, y=x, z=y) = x + y + z")
+        @test count(JuliaLowering.is_forwarding_method, methods) == 3
+        @test count(!JuliaLowering.is_forwarding_method, methods) == 1
+    end
+
+    let methods = lowered_methods("f_forwarding_kw(x=1; y=x) = x + y")
+        @test count(JuliaLowering.is_forwarding_method, methods) == 4
+        @test count(!JuliaLowering.is_forwarding_method, methods) == 1
+    end
+end
+
 @testset "Broadcast" begin
     @test JuliaLowering.include_string(test_mod, """
     let x = [1,2], y = [3,4], z = [5,6]

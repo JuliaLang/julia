@@ -2469,19 +2469,22 @@ end
 # - one containing the body
 # - possibly one generated method
 function method_def_expr(ctx, src, mtable, sparams, argl, body,
-                         rett=@ast(ctx, src, "Any"::K"core"))
+                         rett=@ast(ctx, src, "Any"::K"core");
+                         is_forwarding_method::Bool=false)
     @jl_assert length(argl) > 0 src
     @jl_assert kind(argl[end]) !== K"parameters" src argl[end]
     if length(pos_opt_args(argl)) > 0
         return optional_positional_defs(
-            ctx, src, mtable, sparams, argl, body, rett)
+            ctx, src, mtable, sparams, argl, body, rett, is_forwarding_method)
     elseif kind(body) === K"_generated_body"
         return generated_method_defs(
             ctx, src, mtable, sparams, argl, body, rett)
     end
     # Needs to be done per method, not per function (may create ssavalues)
     arg_types = mapsyntax(a->expand_forms_2(ctx, a[2]), argl)
-    @ast ctx src [K"method" mtable
+    @ast ctx src [
+        K"method"(;lowering_flags=_forwarding_method_flags(is_forwarding_method))
+        mtable
         [K"call" "svec"::K"core" arg_types...]
         [K"lambda"(body)
             [K"block" mapindex(argl, 1)...]
@@ -2579,7 +2582,10 @@ end
 # check that static params in `::type` are not referenced in later defaults, and
 # use `(let (= arg default) body)` to handle references to `arg`. (flisp likely
 # does this search to accomplish what we do with scope_nest)
-function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
+function optional_positional_defs(
+        ctx, src, mtable, sparams, argl, body, rett,
+        is_forwarding_method::Bool
+    )
     opt = pos_opt_args(argl)
     opt_decls = mapindex(opt, 1)
     opt_names = mapindex(opt_decls, 1)
@@ -2626,7 +2632,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
         # this function and method_def_expr need sp bounds because of this
         push!(methods, method_def_expr(
             ctx, src, mtable, used_typevars(passed, sparams),
-            passed, wrapper_body))
+            passed, wrapper_body; is_forwarding_method=true))
         push!(passed, opt_decls[i])
     end
     if length(opt) + length(req) < length(argl)
@@ -2634,7 +2640,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
         @jl_assert length(passed) == length(opt) + length(req) == length(argl) - 1 src
         push!(passed, argl[end])
     end
-    push!(methods, method_def_expr(ctx, src, mtable, sparams, passed, body, rett))
+    push!(methods, method_def_expr(ctx, src, mtable, sparams, passed, body, rett; is_forwarding_method))
     @ast ctx src [K"block" methods...]
 end
 
@@ -2738,7 +2744,8 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
         end
         method_def_expr(
             ctx, src, mtable, pos_sparams, pargl,
-            @ast(ctx, src, [K"block" [K"return" body2]]))
+            @ast(ctx, src, [K"block" [K"return" body2]]);
+            is_forwarding_method=true)
     end
     # (3) Core.kwcall(arg2::NamedTuple, pargl...) methods (one per optarg).
     # - for each kwarg:
@@ -2827,7 +2834,8 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
             arg2 = @ast ctx arg2_name [K"::" arg2_name "NamedTuple"::K"core"]
             method_def_expr(
                 ctx, src, mtable, pos_sparams,
-                SyntaxList(arg1, arg2, pargl...), kwcall_body)
+                SyntaxList(arg1, arg2, pargl...), kwcall_body;
+                is_forwarding_method=true)
         end
     end
     @ast ctx src [K"block"
@@ -4520,6 +4528,7 @@ function expand_forms_2(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector}
     end
     res
 end
+
 
 @fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
     sl = base_layer(ex.context::SyntaxContext)
