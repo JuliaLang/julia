@@ -1162,15 +1162,13 @@ end
 # Error: Closure outside any top level context
 # (Should only happen in a user-visible way when lowering code emitted
 #  from a `@generated` function code generator.)
-@ast_ [K"lambda"(is_toplevel_thunk=false, toplevel_pure=false)
+@ast_ [K"generated_lambda"
     [K"block"]
     [K"block"]
     [K"->" [K"tuple"] [K"block"]]
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
+#= line 1 =# - invalid syntax: unknown form `generated_lambda` or number of arguments 3
 Expression:
-  (call JuliaLowering.eval_closure_type Main.TestMod :##->###3 (call core.svec) (call core.svec) (call core.svec))
-Containing expressions:
-  (call JuliaLowering.eval_closure_type Main.TestMod :##->###3 (call core.svec) (call core.svec) (call core.svec))
+  (generated_lambda (block) (block) (-> (tuple) (block)))

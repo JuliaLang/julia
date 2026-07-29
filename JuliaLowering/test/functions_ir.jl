@@ -2202,7 +2202,7 @@ end
     1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
     2   (call JuliaLowering.interpolate_expr (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
     3   (call core.tuple %₂)
-    4   (call JuliaLowering.interpolate_syntax (syntaxinert (block (= nongen_stuff (call bothgen x y)) (syntaxunquote (block (call JuliaLowering.interpolate_expr (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff))) %₃)
+    4   (call JuliaLowering.interpolate_syntax (syntaxinert (block (= nongen_stuff (call bothgen x y)) (syntaxunquote (block (call JuliaLowering.interpolate_expr (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple nongen_stuff maybe_gen_stuff))) %₃)
     5   (return %₄)
 14  latestworld
 15  TestMod.f_partially_generated

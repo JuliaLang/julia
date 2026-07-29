@@ -6,7 +6,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_expr (inert (block (call-i + ($ x) 1))) %₂)
+3   (call JuliaLowering.interpolate_expr (inert (block (call + ($ x) 1))) %₂)
 4   (return %₃)
 
 ########################################
@@ -26,7 +26,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_expr (inert (block (quote (block (call-i + ($ ($ x)) 1))))) %₂)
+3   (call JuliaLowering.interpolate_expr (inert (block (quote (block (call + ($ ($ x)) 1))))) %₂)
 4   (return %₃)
 
 ########################################

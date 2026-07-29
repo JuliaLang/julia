@@ -1,37 +1,36 @@
-struct ClosureInfo{Attrs}
+struct ClosureInfo
     closure_key::ClosureKey
     # Global name of the type of the closure
-    type_name::SyntaxTree{Attrs}
+    type_name::SyntaxTree
     # Names of fields for use with getfield, in order
-    field_names::SyntaxList{Attrs, Vector{NodeId}}
+    field_names::Vector{SyntaxTree}
     # Map from the original BindingId of closed-over vars to the index of the
     # associated field in the closure type.
     field_inds::Dict{IdTag,Int}
-    capt_sp::SyntaxList{Attrs, Vector{NodeId}}
+    capt_sp::Vector{SyntaxTree}
 end
 
-struct ClosureConversionCtx{Attrs} <: AbstractLoweringContext
-    graph::SyntaxGraph{Attrs}
-    bindings::Bindings
-    mod::Module
-    closure_bindings::Dict{ClosureKey,ClosureBindings}
-    capture_rewriting::Union{Nothing,ClosureInfo{Attrs},
-                             SyntaxList{Attrs, Vector{NodeId}}}
-    top_bindings::LambdaBindings
-    lambda_bindings::LambdaBindings
-    sp_typevars::Dict{IdTag, IdTag}
+mutable struct ClosureConversionCtx <: AbstractLoweringContext
+    const bindings::Bindings
+    const mod::Module
+    const closure_bindings::Dict{ClosureKey,ClosureBindings}
+    const capture_rewriting::Union{Nothing,ClosureInfo,
+                                   Vector{SyntaxTree}}
+    const top_bindings::LambdaBindings
+    const lambda_bindings::LambdaBindings
+    const sp_typevars::Dict{IdTag, IdTag}
     # True if we're in a section of code which preserves top-level sequencing
     # such that closure types can be emitted inline with other code.
-    toplevel::Bool
+    const toplevel::Bool
     # toplevel, or contained by method_defs and no lambda within it
-    lifted::Bool
+    const lifted::Bool
     # True if this expression should not have toplevel effects, namely, it
     # should not declare the globals it references.  This allows generated
     # functions to refer to globals that have already been declared, without
     # triggering the "function body AST not pure" error.
-    toplevel_pure::Bool
-    toplevel_stmts::SyntaxList{Attrs, Vector{NodeId}}
-    closure_infos::Dict{ClosureKey,ClosureInfo{Attrs}}
+    const toplevel_pure::Bool
+    const toplevel_stmts::Vector{SyntaxTree}
+    const closure_infos::Dict{ClosureKey,ClosureInfo}
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)
@@ -42,7 +41,7 @@ end
 function captured_var_access(ctx, ex)
     cap_rewrite = ctx.capture_rewriting
     if cap_rewrite isa ClosureInfo
-        field_sym = cap_rewrite.field_names[cap_rewrite.field_inds[ex.var_id]]
+        field_sym = cap_rewrite.field_names[cap_rewrite.field_inds[syntax_id(ex)]]
         @ast ctx ex [K"call"
             "getfield"::K"core"
             binding_ex(ctx, current_lambda_bindings(ctx).self)
@@ -131,10 +130,10 @@ function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing)
         (::K"latestworld")
         (::K"nothing")
     ]
-    ctx.toplevel_pure && return newleaf(ctx, decl, K"TOMBSTONE")
+    ctx.toplevel_pure && return newleaf(decl, K"TOMBSTONE")
     if !ctx.toplevel
         push!(ctx.toplevel_stmts, decl)
-        newleaf(ctx, decl, K"TOMBSTONE")
+        newleaf(decl, K"TOMBSTONE")
     else
         return decl
     end
@@ -143,7 +142,7 @@ end
 function convert_global_assignment(ctx, ex, var, rhs0)
     binfo = get_binding(ctx, var)
     @jl_assert binfo.kind == :global ex var
-    stmts = SyntaxList(ctx)
+    stmts = SyntaxList()
     decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true)
     if kind(decl) !== K"TOMBSTONE"
         push!(stmts, decl)
@@ -240,7 +239,7 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
     end
     foreach(add_capt, closure_binds.capt_sp)
 
-    field_syms = SyntaxList(ctx)
+    field_syms = SyntaxList()
     if is_opaque
         field_orig_bindings = sort!(collect(capt_locals))
         # For opaque closures we don't try to generate sensible names for the
@@ -276,7 +275,7 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
         push!(field_is_box, is_boxed(ctx, id))
         field_inds[id] = i
     end
-    capt_sp2 = SyntaxList(ctx)
+    capt_sp2 = SyntaxList()
     for sp in sort!(collect(capt_sp))
         push!(capt_sp2, binding_ex(ctx, sp))
     end
@@ -324,8 +323,8 @@ function convert_local_function_decl(ctx, ex)
         ctx.mod,
         string("#", join(closure_binds.name_stack, "#"), "##"))
     global_clstruct = new_global_binding(ctx, ex, name_str, ctx.mod)
-    sp_syms = mapsyntax(sp->newleaf(ctx, sp, K"Symbol",
-                                    get_binding(ctx, sp.var_id::IdTag).name),
+    sp_syms = mapsyntax(sp->newleaf(sp, K"Symbol",
+                                    get_binding(ctx, syntax_id(sp)).name),
                         capt_sp)
     define_clstruct = type_ex = @ast ctx ex [K"call"
         eval_closure_type::K"Value"
@@ -345,7 +344,7 @@ function convert_local_function_decl(ctx, ex)
     type_params = mapsyntax(capt_sp) do sp
         is_self_captured(ctx, sp) ? captured_var_access(ctx, sp) : sp
     end
-    init_closure_args = SyntaxList(ctx)
+    init_closure_args = SyntaxList()
     for (id, boxed) in zip(field_orig_bindings, field_is_box)
         field_val = binding_ex(ctx, id)
         if is_self_captured(ctx, field_val)
@@ -378,20 +377,20 @@ end
 # closure definition statements to occur before the other content of `ex`.
 function map_cl_convert(ctx::ClosureConversionCtx, ex)
     if ctx.toplevel
-        toplevel_stmts = SyntaxList(ctx)
+        toplevel_stmts = SyntaxList()
         ctx2 = ClosureConversionCtx(
-            ctx.graph, ctx.bindings, ctx.mod,
+            ctx.bindings, ctx.mod,
             ctx.closure_bindings, ctx.capture_rewriting, ctx.top_bindings,
             ctx.lambda_bindings, ctx.sp_typevars, true, ctx.lifted,
             ctx.toplevel_pure, toplevel_stmts, ctx.closure_infos)
-        res = mapchildren(e->_convert_closures(ctx2, e), ctx2, ex)
+        res = mapchildren(e->_convert_closures(ctx2, e), ex)
         if isempty(toplevel_stmts)
             res
         else
             @ast ctx ex [K"block" toplevel_stmts... res]
         end
     else
-        mapchildren(e->_convert_closures(ctx, e), ctx, ex)
+        mapchildren(e->_convert_closures(ctx, e), ex)
     end
 end
 
@@ -440,7 +439,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             # [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
             make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, _convert_closures(ctx, ex[2]))
         else
-            newleaf(ctx, ex, K"TOMBSTONE")
+            newleaf(ex, K"TOMBSTONE")
         end
     elseif k == K"global"
         # Leftover `global` forms become weak globals.
@@ -462,9 +461,9 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         elseif !binfo.is_always_defined
             @ast ctx ex [K"newvar" var]
         else
-            newleaf(ctx, ex, K"TOMBSTONE")
+            newleaf(ex, K"TOMBSTONE")
         end
-    elseif k == K"lambda"
+    elseif k == K"lambda" || k == K"toplevel_lambda" || k == K"generated_lambda"
         @jl_assert false (ex, "lambda should be at top level or in `method`")
     elseif k == K"function_decl"
         func_name = ex[1]
@@ -483,16 +482,16 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         @jl_assert ctx.lifted ex
         # The method sp svec needs every sp the body and sig capture
         cr = ctx.capture_rewriting
-        sp_ids = IdTag[c.var_id::IdTag for c in children(ex[3][2])]
+        sp_ids = IdTag[syntax_id(c) for c in children(ex[3][3])]
         if cr isa ClosureInfo
-            append!(sp_ids, sp.var_id::IdTag for sp in cr.capt_sp)
+            append!(sp_ids, syntax_id(sp) for sp in cr.capt_sp)
         end
         sort!(sp_ids)
-        sps = SyntaxList(ctx)
+        sps = SyntaxList()
         for id in sp_ids
             push!(sps, binding_ex(ctx, id))
         end
-        tvs = mapsyntax(c->binding_ex(ctx, ctx.sp_typevars[c.var_id::IdTag]), sps)
+        tvs = mapsyntax(c->binding_ex(ctx, ctx.sp_typevars[syntax_id(c)]), sps)
 
         # rm method table argument if it's a closure id, since it's unnecessary
         # and requires the `(= id (new ...))` call to be lifted above the
@@ -521,7 +520,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             else
                 # flisp: fix-function-arg-type
                 tvs = mapsyntax(
-                    sp->binding_ex(ctx, ctx.sp_typevars[sp.var_id::IdTag]),
+                    sp->binding_ex(ctx, ctx.sp_typevars[syntax_id(sp)]),
                     ci.capt_sp)
                 @ast ctx ex [K"call" "apply_type"::K"core" ci.type_name tvs...]
             end
@@ -533,7 +532,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         is_closure = kind(name) == K"BindingId" && get_binding(ctx, name).kind === :local
         cap_rewrite = is_closure ? ctx.closure_infos[closure_key(ctx, name)] : nothing
         ctx2 = ClosureConversionCtx(
-            ctx.graph, ctx.bindings, ctx.mod,
+            ctx.bindings, ctx.mod,
             ctx.closure_bindings, cap_rewrite,
             ctx.top_bindings, ctx.lambda_bindings, ctx.sp_typevars,
             ctx.toplevel, true, ctx.toplevel_pure, ctx.toplevel_stmts,
@@ -563,7 +562,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         capture_rewrites = ClosureInfo(
             ck, ex #=unused=#, field_syms, field_inds, capt_sp)
         ctx2 = ClosureConversionCtx(
-            ctx.graph, ctx.bindings, ctx.mod,
+            ctx.bindings, ctx.mod,
             ctx.closure_bindings, capture_rewrites, ctx.top_bindings,
             ctx.lambda_bindings, ctx.sp_typevars, false, false,
             ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos)
@@ -572,7 +571,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         rt_lb = _convert_closures(ctx, ex[3])
         rt_ub = _convert_closures(ctx, ex[4])
 
-        init_closure_args = SyntaxList(ctx)
+        init_closure_args = SyntaxList()
         for id in field_orig_bindings
             init_arg = binding_ex(ctx, id)
             if is_self_captured(ctx, init_arg)
@@ -590,7 +589,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 ex[6] # nargs
                 ex[7] # is_va
                 ex[8] # functionloc
-                closure_convert_lambda(ctx2, ex[9], SyntaxList(ctx))
+                closure_convert_lambda(ctx2, ex[9], SyntaxList())
             ]
             init_closure_args...
         ]
@@ -600,31 +599,32 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
 end
 
 function closure_convert_lambda(ctx, ex, sps)
-    @jl_assert kind(ex) == K"lambda" ex
-    lambda_bindings = ex.lambda_bindings::LambdaBindings
+    k = kind(ex)
+    @jl_assert k in KSet"lambda toplevel_lambda generated_lambda" ex
+    lbs = lambda_bindings(ex[1])
     interpolations = nothing
     if isnothing(ctx.capture_rewriting)
         # Global method which may capture locals
-        interpolations = SyntaxList(ctx)
+        interpolations = SyntaxList()
         cap_rewrite = interpolations
     else
         cap_rewrite = ctx.capture_rewriting
     end
     ctx2 = ClosureConversionCtx(
-        ctx.graph, ctx.bindings, ctx.mod,
+        ctx.bindings, ctx.mod,
         ctx.closure_bindings, cap_rewrite, ctx.top_bindings,
-        lambda_bindings, ctx.sp_typevars,
-        ex.is_toplevel_thunk, ex.is_toplevel_thunk,
-        ctx.toplevel_pure && ex.toplevel_pure,
+        lbs, ctx.sp_typevars,
+        k === K"toplevel_lambda", k === K"toplevel_lambda",
+        ctx.toplevel_pure && k == K"generated_lambda",
         ctx.toplevel_stmts, ctx.closure_infos)
-    lambda_children = SyntaxList(ctx)
-    args = ex[1]
-    push!(lambda_children, args)
-    push!(lambda_children, @ast ctx ex[2] [K"block" sps...])
+    lambda_children = SyntaxList()
+    push!(lambda_children, ex[1])
+    push!(lambda_children, ex[2])
+    push!(lambda_children, @ast ctx ex[3] [K"block" sps...])
 
     # Add box initializations for arguments which are captured by an inner lambda
-    body_stmts = SyntaxList(ctx)
-    for arg in children(args)
+    body_stmts = SyntaxList()
+    for arg in children(ex[2])
         kind(arg) != K"Placeholder" || continue
         if is_boxed(ctx, arg)
             push!(body_stmts, @ast ctx arg [K"="
@@ -634,19 +634,19 @@ function closure_convert_lambda(ctx, ex, sps)
         end
     end
     # Convert body.
-    input_body_stmts = kind(ex[3]) != K"block" ? ex[3:3] : ex[3][1:end]
+    input_body_stmts = kind(ex[4]) != K"block" ? ex[4:4] : ex[4][1:end]
     for e in input_body_stmts
         push!(body_stmts, _convert_closures(ctx2, e))
     end
-    push!(lambda_children, @ast ctx2 ex[3] [K"block" body_stmts...])
+    push!(lambda_children, @ast ctx2 ex[4] [K"block" body_stmts...])
 
-    if numchildren(ex) > 3
+    if numchildren(ex) > 4
         # Convert return type
-        @jl_assert numchildren(ex) == 4 ex
-        push!(lambda_children, _convert_closures(ctx2, ex[4]))
+        @jl_assert numchildren(ex) == 5 ex
+        push!(lambda_children, _convert_closures(ctx2, ex[5]))
     end
 
-    lam = setattr!(mknode(ex, lambda_children), :lambda_bindings, lambda_bindings)
+    lam = @mknode(ex; children=lambda_children)
     if !isnothing(interpolations) && !isempty(interpolations)
         @ast ctx ex [K"call"
             replace_captured_locals::K"Value"
@@ -676,18 +676,17 @@ Invariants:
 * Any new binding IDs must be added to the enclosing lambda locals
 """
 @fzone "JL: closures" function convert_closures(
-    ctx::VariableAnalysisContext, ex::SyntaxTree{Attrs}
-) where Attrs
+    ctx::VariableAnalysisContext, ex::SyntaxTree
+)
     # TODO: ctx.mod is used instead of syntax_module(ex) beyond this point,
     # which is dubious
-    ctx_out = ClosureConversionCtx(ctx.graph, ctx.bindings,
-                                   ctx.layer.mod,
+    lbs = lambda_bindings(ex[1])
+    ctx_out = ClosureConversionCtx(ctx.bindings, ctx.layer.mod,
                                    ctx.closure_bindings, nothing,
-                                   ex.lambda_bindings, ex.lambda_bindings,
-                                   ctx.sp_typevars,
-                                   false, true, true, SyntaxList(ctx.graph),
-                                   Dict{ClosureKey,ClosureInfo{Attrs}}())
-    ex_out = closure_convert_lambda(ctx_out, ex, children(ex[2]))
+                                   lbs, lbs, ctx.sp_typevars,
+                                   false, true, true, SyntaxList(),
+                                   Dict{ClosureKey,ClosureInfo}())
+    ex_out = closure_convert_lambda(ctx_out, ex, children(ex[3]))
     if !isempty(ctx_out.toplevel_stmts)
         throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
     end
