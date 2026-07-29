@@ -684,7 +684,7 @@ function homedir(username::AbstractString)
     # For the current user, just return homedir().
     current_user = try
         Sys.username()
-    catch
+    catch err
         err isa IOError || rethrow()
         nothing
     end
