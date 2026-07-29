@@ -537,6 +537,15 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
       if (Decl && declHasAnnotation(Decl, "julia_not_safepoint"))
         notSafepoint = true;
       if (Callee) {
+#if LLVM_VERSION_MAJOR >= 22
+        // Clang 22 removed ElaboratedType; a typedef'd type is now a
+        // TypedefType directly, with no elaborated wrapper to unpeel.
+        if (const TypedefType *TDT =
+                dyn_cast<TypedefType>(Callee->getType())) {
+          if (declHasAnnotation(TDT->getDecl(), "julia_not_safepoint"))
+            notSafepoint = true;
+        } else if (isa<CXXPseudoDestructorExpr>(Callee)) {
+#else
         if (const ElaboratedType *ET =
                 dyn_cast<ElaboratedType>(Callee->getType())) {
           if (const TypedefType *TDT =
@@ -545,6 +554,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
               notSafepoint = true;
           }
         } else if (isa<CXXPseudoDestructorExpr>(Callee)) {
+#endif
           // A pseudo-destructor is an expression that looks like a member
           // access to a destructor of a scalar type. It has no run-time
           // semantics beyond evaluating the base expression (which would have
@@ -1791,8 +1801,13 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   return false;
 }
 
+#if LLVM_VERSION_MAJOR >= 22
+void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
+                          bool /*AtDeclInit*/, CheckerContext &C) const {
+#else
 void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
                           CheckerContext &C) const {
+#endif
   auto State = C.getState();
   const MemRegion *R = LVal.getAsRegion();
   if (!R) {
