@@ -388,7 +388,8 @@ axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 
 has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
-elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
+elsize(::Type{<:ReinterpretArray{T,<:Any,S,A}}) where {T,S,A} =
+    sizeof(T) == sizeof(S) ? elsize(A) : sizeof(T)
 cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
@@ -400,12 +401,15 @@ unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} =
     end
 end
 
-check_ptr_indexable(a::ReinterpretArray, sz = elsize(a)) = check_ptr_indexable(parent(a), sz)
-check_ptr_indexable(a::ReshapedArray, sz) = check_ptr_indexable(parent(a), sz)
-check_ptr_indexable(a::FastContiguousSubArray, sz) = check_ptr_indexable(parent(a), sz)
-check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
-check_ptr_indexable(a::Memory, sz) = true
-check_ptr_indexable(a::AbstractArray, sz) = false
+function check_ptr_indexable(a::ReinterpretArray{T,<:Any,S}) where {T,S}
+    sizeof(T) === sizeof(S) && return false
+    p = parent(a)
+    return check_ptr_indexable(p) && elsize(p) === sizeof(S)
+end
+check_ptr_indexable(a::ReshapedArray) = check_ptr_indexable(parent(a))
+check_ptr_indexable(a::FastContiguousSubArray) = check_ptr_indexable(parent(a))
+check_ptr_indexable(a::Union{Array, Memory}) = true
+check_ptr_indexable(a::AbstractArray) = false
 
 @propagate_inbounds getindex(a::ReshapedReinterpretArray{T,0}) where {T} = a[firstindex(a)]
 
@@ -442,7 +446,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
     GC.@preserve ap return unsafe_load(p)
 end
 
@@ -591,7 +595,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
     GC.@preserve ap unsafe_store!(p, v)
     return a
 end
