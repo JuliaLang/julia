@@ -38,8 +38,11 @@
 //   JL_NONNULL  Mark a pointer (argument, field, or return value) that is never
 //               NULL. On Clang with the nullability feature it expands to the
 //               real `_Nonnull` qualifier (the analyzer then flags passing or
-//               storing NULL where a non-null pointer is required); on every
-//               other compiler `_Nonnull`, and hence JL_NONNULL, is nothing.
+//               storing NULL where a non-null pointer is required, and assumes
+//               a value loaded from it is not NULL, which also avoids false
+//               positives on paths where the analyzer has lost track of the
+//               field's value); on every other compiler `_Nonnull`, and hence
+//               JL_NONNULL, is nothing.
 //
 // -- Safepoint annotations (on function prototypes) --
 //

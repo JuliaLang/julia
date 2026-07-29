@@ -166,7 +166,7 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *root_task;
     struct _jl_timing_block_t *timing_stack;
     // This is the location of our copy_stack
-    void *stackbase;
+    void *JL_NONNULL stackbase;
     size_t stacksize;
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
