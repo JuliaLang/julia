@@ -98,6 +98,10 @@ const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
 const STATUS_PREEMPT_BIT = 0x40
 const SEVERITY_MASK = 0x3f
 
+# A request's payload is the plain severity; kept as an accessor for the
+# delivery layer's comparisons.
+severity(cr::CancellationRequest) = cr.request
+
 """
     cancel_severity(src::CancellationTokenSource) -> Union{Nothing, CancellationRequest}
     cancel_severity(tok::CancellationToken)

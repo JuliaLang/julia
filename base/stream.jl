@@ -101,9 +101,10 @@ end
 
 bytesavailable(s::LibuvStream) = bytesavailable(s.buffer)
 
-function eof(s::LibuvStream)
+function eof(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
     bytesavailable(s) > 0 && return false
-    wait_readnb(s, 1)
+    wait_readnb(s, 1, resolve_cancel_token(cancel))
     # This function is race-y if used from multiple threads, but we guarantee
     # it to never return true until the stream is definitively exhausted
     # and that we won't return true if there's a readerror pending (it'll instead get thrown).
@@ -386,7 +387,7 @@ function check_open(x::Union{LibuvStream, LibuvServer})
     end
 end
 
-function wait_readnb(x::LibuvStream, nb::Int)
+function wait_readnb(x::LibuvStream, nb::Int, tok::MaybeToken=default_cancel_token())
     # fast path before iolock acquire
     bytesavailable(x.buffer) >= nb && return
     open = isopen(x) && x.status != StatusEOF # must precede readerror check
@@ -410,7 +411,7 @@ function wait_readnb(x::LibuvStream, nb::Int)
             x.throttle = max(nb, x.throttle)
             start_reading(x) # ensure we are reading
             iolock_end()
-            wait(x.cond)
+            wait(x.cond, tok)
             unlock(x.cond)
             iolock_begin()
             lock(x.cond)
@@ -431,12 +432,205 @@ function wait_readnb(x::LibuvStream, nb::Int)
     nothing
 end
 
-function closewrite(s::LibuvStream)
+## Waits on libuv requests
+#
+# A libuv request (write, shutdown, UDP send, DNS lookup) is issued under the
+# iolock with its data field C_NULL and completes by a callback (also run
+# under the iolock) that wakes the parked issuer through the standard
+# wake-claim protocol. The request's data field tracks who owns freeing it:
+#   pointer to the wait entry - a waiter is parked on the request;
+#   C_NULL                    - the completion callback has run; the waiter
+#                               owns the request;
+#   UV_REQ_DETACHED           - the waiter departed (interrupted/refused
+#                               wait, or fire-and-forget): the callback owns
+#                               freeing it, plus any buffer root recorded in
+#                               `_detached_uvreq_roots`.
+
+# Sentinel for a uv request's data field: see above.
+const UV_REQ_DETACHED = Ptr{Cvoid}(UInt(0x1))
+
+# Aux flag on a uv write wait's *witness* slot (the slot whose owner is the
+# stream; its aux is otherwise unused): set, under the iolock, immediately
+# before Julia itself issues `uv_cancel` on a write request it keeps
+# awaiting, so the completion callback can tell a Julia-requested
+# cancellation (UV_ECANCELED is then the expected outcome, delivered as a
+# partial-count wake) from a close-induced one (a real write error - libuv
+# also fails queued writes with UV_ECANCELED when the stream closes).
+# Cleared whenever the slot is released for reuse (_release_slot!/
+# _clear_uv_witness!). The detach path (_end_uvreq_wait!) does not set it:
+# there the request is detached in the same iolock critical section, so no
+# callback can observe a waiter - the flag only matters to waited requests.
+const _UVREQ_AUX_CANCEL_REQUESTED = UInt64(0x1)
+
+function _mark_uvreq_cancel_requested!(w::WaitEntry, @nospecialize(witness))
+    i = _find_slot(w, witness)
+    i == 0 || _set_slot_aux!(w, i, _slot_aux(w, i) | _UVREQ_AUX_CANCEL_REQUESTED)
+    return nothing
+end
+
+# Whether the waiter flagged this request's cancellation as its own. Read
+# by the completion callback (under the iolock) *before* the claim releases
+# the witness slot.
+function _uvreq_cancel_requested(req::Ptr{Cvoid})
+    d = uv_req_data(req)
+    (d == C_NULL || d == UV_REQ_DETACHED) && return false
+    w = unsafe_pointer_to_objref(d)::WaitEntry
+    for slot in slots(w)
+        o = slot.owner
+        (o === nothing || o isa CancellationTokenSource) && continue
+        return slot.aux & _UVREQ_AUX_CANCEL_REQUESTED != 0
+    end
+    return false
+end
+
+# Buffers of detached write requests. A detached request keeps referencing
+# the caller's memory until its completion callback runs - long after the
+# issuing frame, whose GC.@preserve was the buffer's only root, has unwound.
+# When the write's Julia owner is known it is rooted here, keyed by the
+# request, and released by the completion callback. Guarded by the iolock
+# (callbacks run under it). Raw-pointer writes (the generic unsafe_write
+# interface) have no discoverable owner - their contract is pointer validity
+# for the duration of the call - and detaching them retains the pre-existing
+# hazard; owner-carrying entry points avoid it.
+const _detached_uvreq_roots = IdDict{Ptr{Cvoid}, Any}()
+
+function _root_detached_uvreq!(req::Ptr{Cvoid}, @nospecialize(owner))
+    owner === nothing || (_detached_uvreq_roots[req] = owner)
+    return nothing
+end
+_unroot_detached_uvreq!(req::Ptr{Cvoid}) =
+    (isempty(_detached_uvreq_roots) || delete!(_detached_uvreq_roots, req); nothing)
+
+# The entry check of a cancellable uv operation, made under the iolock
+# before the request is issued: when `src` is already cancelled, release the
+# iolock and throw the request - before the operation has any side effects.
+function _iolocked_checkcancel(src::Union{Nothing, CancellationTokenSource})
+    if src !== nothing && iscancelled(src)
+        iolock_end()
+        checkcancel(src)
+    end
+    return nothing
+end
+
+# Arm the wait for the issued uv request `req`: pick the wait entry (with a
+# cancellation-source slot when governed by `src`), arm it, record `witness`
+# (the waitee identity - the handle, or the request itself when there is
+# none) as the entry's reuse gate, and point the request at the entry.
+# Leaves the caller's iolock held, inside a sigatomic section.
+function _begin_uvreq_wait!(src::Union{Nothing, CancellationTokenSource},
+                            @nospecialize(witness), req::Ptr{Cvoid})
+    ct = current_task()
+    w = src === nothing ? _cached_wait_entry(ct) : _cancel_wait_entry(ct, src, 0x00)
+    _arm_wait(ct, w)
+    _set_wait_witness!(w, witness)
+    preserve_handle(ct)
+    sigatomic_begin()
+    uv_req_set_data(req, pointer_from_objref(w))
+    return w
+end
+
+# Wind down a uv request wait (caller holds the iolock, at the sigatomic
+# level of the wait): resolve the request's ownership, release the wait
+# witness, disarm the registration (a no-op when a claimer already did),
+# and unwind the iolock, the sigatomic section, and the handle preservation.
+# When the completion callback has already run (data == C_NULL) the request
+# is ours to free; otherwise - the wait was interrupted or refused, or the
+# task was resumed by an unexpected `schedule` - the request is detached for
+# the callback to free, `uv_cancel`ed first when `trycancel` is set (so e.g.
+# an abandoned write stops spamming the stream), with `owner` kept rooted
+# until then. The sticky source registration needs no cleanup at all.
+function _end_uvreq_wait!(w::WaitEntry, @nospecialize(witness), req::Ptr{Cvoid},
+                          trycancel::Bool, @nospecialize(owner))
+    ct = current_task()
+    if uv_req_data(req) == C_NULL
+        Libc.free(req)
+    else
+        trycancel && ccall(:uv_cancel, Cint, (Ptr{Cvoid},), req) # ignore any errors
+        uv_req_set_data(req, UV_REQ_DETACHED)
+        _root_detached_uvreq!(req, owner)
+    end
+    _clear_wait_witness!(w, witness)
+    @atomicreplace ct.waiting_on w => nothing
+    # Drop a claimed-and-enqueued wake an interrupted teardown will never
+    # consume. The completion callback claims and schedules under the
+    # iolock this function holds, so the drop is deterministic here (cf.
+    # step 4 of _interrupted_wait_cleanup).
+    q = ct.queue
+    q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
+    iolock_end()
+    sigatomic_end()
+    unpreserve_handle(ct)
+    return nothing
+end
+
+# Park on the completion of the issued uv request `req` and return the value
+# its completion callback delivers. A cancellation of `src` interrupts the
+# wait and throws the CancellationRequest - without parking at all when
+# `src` got cancelled between the caller's entry check and the registration
+# here; either way the request is left to its callback (see
+# _end_uvreq_wait!). The caller must have issued `req` under the still-held
+# iolock - so the callback cannot have run yet - and gets it back with the
+# iolock released.
+function _wait_uvreq(src::Union{Nothing, CancellationTokenSource}, @nospecialize(witness),
+                     req::Ptr{Cvoid}, trycancel::Bool, @nospecialize(owner))
+    w = _begin_uvreq_wait!(src, witness, req)
+    if src !== nothing && !register_cancellation!(src, w)
+        # the wake was claimed back for us: don't park
+        _end_uvreq_wait!(w, witness, req, trycancel, owner)
+        _deliver_refused_cancellation(src)
+    end
+    iolock_end()
+    local r
+    try
+        sigatomic_end()
+        r = wait()
+        sigatomic_begin()
+    catch
+        # (catch restored the sigatomic level from the try entry)
+        iolock_begin()
+        _end_uvreq_wait!(w, witness, req, trycancel, owner)
+        rethrow()
+    end
+    iolock_begin()
+    _end_uvreq_wait!(w, witness, req, trycancel, owner)
+    return r
+end
+
+# Completion-callback side of the wait (runs under the iolock): resolve
+# request ownership and claim the parked waiter's wake. Returns the task to
+# schedule, or `nothing` when there is nobody to wake - either no waiter
+# remains (fire-and-forget, or the waiter departed and detached the request,
+# which is freed here together with any recorded buffer root), or a
+# canceller claimed the wake first (the waiter's teardown then observes
+# data == C_NULL and takes over the request).
+function _claim_uvreq_waiter(req::Ptr{Cvoid})
+    d = uv_req_data(req)
+    if d == C_NULL || d == UV_REQ_DETACHED
+        _unroot_detached_uvreq!(req)
+        Libc.free(req)
+        return nothing
+    end
+    # mark the callback as done; the waiter (which inspects the request
+    # under the iolock) owns freeing it
+    uv_req_set_data(req, C_NULL)
+    w = unsafe_pointer_to_objref(d)::WaitEntry
+    t = @atomic :monotonic w.task
+    if t isa Task && claim_wait(t, w)
+        _clear_uv_witness!(w)
+        return t
+    end
+    return nothing
+end
+
+function closewrite(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     iolock_begin()
     if !iswritable(s)
         iolock_end()
         return
     end
+    src = cancel_source(resolve_cancel_token(cancel))
+    # entry check: throw before issuing the shutdown request
+    _iolocked_checkcancel(src)
     req = Libc.malloc(_sizeof_uv_shutdown)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     err = ccall(:uv_shutdown, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -445,32 +639,9 @@ function closewrite(s::LibuvStream)
         Libc.free(req)
         uv_error("shutdown", err)
     end
-    ct = current_task()
-    preserve_handle(ct)
-    sigatomic_begin()
-    uv_req_set_data(req, ct)
-    iolock_end()
-    local status
-    try
-        sigatomic_end()
-        status = wait()::Cint
-        sigatomic_begin()
-    finally
-        # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
-        sigatomic_end()
-        iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::StickyWorkqueue, ct)
-        if uv_req_data(req) != C_NULL
-            # req is still alive,
-            # so make sure we won't get spurious notifications later
-            uv_req_set_data(req, C_NULL)
-        else
-            # done with req
-            Libc.free(req)
-        end
-        iolock_end()
-        unpreserve_handle(ct)
-    end
+    # A shutdown request itself cannot be cancelled, so an interrupted wait
+    # detaches it (its completion callback frees it).
+    status = _wait_uvreq(src, s, req, false, nothing)::Cint
     if isopen(s)
         if status < 0 || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
             close(s)
@@ -487,7 +658,10 @@ function wait_close(x::Union{LibuvStream, LibuvServer})
     lock(x.cond)
     try
         while isopen(x)
-            wait(x.cond)
+            # close is the cleanup primitive: its completion wait is shielded
+            # from cancellation (completion depends only on the event loop,
+            # not on any peer, so this wait is bounded)
+            wait(x.cond, nothing)
         end
     finally
         unlock(x.cond)
@@ -917,25 +1091,26 @@ end
 # bulk read / write
 
 readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a)) = readbytes!(s, a, Int(nb))
-function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
+function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     iolock_begin()
     sbuf = s.buffer
     @assert sbuf.seekable == false "buffer should not be seekable"
     @assert sbuf.maxsize >= nb "insufficient buffer size"
 
-    function wait_locked(s, buf, nb)
+    function wait_locked(s, buf, nb, tok)
         while bytesavailable(buf) < nb
             s.readerror === nothing || throw(s.readerror)
             isopen(s) || break
             s.status != StatusEOF || break
             iolock_end()
-            wait_readnb(s, nb)
+            wait_readnb(s, nb, tok)
             iolock_begin()
         end
     end
 
     if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
-        wait_locked(s, sbuf, nb)
+        wait_locked(s, sbuf, nb, tok)
     end
     if bytesavailable(sbuf) >= nb
         nread = readbytes!(sbuf, a, nb)
@@ -945,7 +1120,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         nread = try
             s.buffer = newbuf
             write(newbuf, sbuf)
-            wait_locked(s, newbuf, nb)
+            wait_locked(s, newbuf, nb, tok)
             bytesavailable(newbuf)
         finally
             s.buffer = sbuf
@@ -957,33 +1132,34 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     return nread
 end
 
-function read(stream::LibuvStream)
-    wait_readnb(stream, typemax(Int))
+function read(stream::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    wait_readnb(stream, typemax(Int), resolve_cancel_token(precheck_cancel_arg(cancel)))
     iolock_begin()
     bytes = take!(stream.buffer)
     iolock_end()
     return bytes
 end
 
-function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
+function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     iolock_begin()
     sbuf = s.buffer
     @assert sbuf.seekable == false "buffer should not be seekable"
     @assert sbuf.maxsize >= nb "insufficient buffer size"
 
-    function wait_locked(s, buf, nb)
+    function wait_locked(s, buf, nb, tok)
         while bytesavailable(buf) < nb
             s.readerror === nothing || throw(s.readerror)
             isopen(s) || throw(EOFError())
             s.status != StatusEOF || throw(EOFError())
             iolock_end()
-            wait_readnb(s, nb)
+            wait_readnb(s, nb, tok)
             iolock_begin()
         end
     end
 
     if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
-        wait_locked(s, sbuf, Int(nb))
+        wait_locked(s, sbuf, Int(nb), tok)
     end
     if bytesavailable(sbuf) >= nb
         unsafe_read(sbuf, p, nb)
@@ -992,7 +1168,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
-            wait_locked(s, newbuf, Int(nb))
+            wait_locked(s, newbuf, Int(nb), tok)
         finally
             s.buffer = sbuf
         end
@@ -1001,13 +1177,14 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
-function read(this::LibuvStream, ::Type{UInt8})
+function read(this::LibuvStream, ::Type{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
     iolock_begin()
     sbuf = this.buffer
     @assert sbuf.seekable == false "buffer should not be seekable"
     while bytesavailable(sbuf) < 1
         iolock_end()
-        eof(this) && throw(EOFError())
+        eof(this; cancel) && throw(EOFError())
         iolock_begin()
     end
     c = read(sbuf, UInt8)
@@ -1015,8 +1192,8 @@ function read(this::LibuvStream, ::Type{UInt8})
     return c
 end
 
-function readavailable(this::LibuvStream)
-    wait_readnb(this, 1) # unlike the other `read` family of functions, this one doesn't guarantee error reporting
+function readavailable(this::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    wait_readnb(this, 1, resolve_cancel_token(precheck_cancel_arg(cancel))) # unlike the other `read` family of functions, this one doesn't guarantee error reporting
     iolock_begin()
     buf = this.buffer
     @assert buf.seekable == false "buffer should not be seekable"
@@ -1025,7 +1202,8 @@ function readavailable(this::LibuvStream)
     return bytes
 end
 
-function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
+function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     iolock_begin()
     buf = x.buffer
     @assert buf.seekable == false "buffer should not be seekable"
@@ -1041,7 +1219,7 @@ function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
                     x.status != StatusEOF || break
                     start_reading(x) # ensure we are reading
                     iolock_end()
-                    wait(x.cond)
+                    wait(x.cond, tok)
                     unlock(x.cond)
                     iolock_begin()
                     lock(x.cond)
@@ -1055,60 +1233,194 @@ function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
             end
         end
     end
-    copyuntil(out, buf, c; keep)
+    # thread the resolved token (or explicit shield): the in-memory copy's
+    # write to `out` is itself token-gated
+    copyuntil(out, buf, c; keep, cancel=tok)
     iolock_end()
     return out
 end
 
-uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))
+uv_write(s::LibuvStream, p::Vector{UInt8}, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    GC.@preserve p _uv_write_owned(s, pointer(p), UInt(sizeof(p)), cancel, p)
 
-# caller must have acquired the iolock
-function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    uvw = uv_write_async(s, p, n)
-    status = uv_write_wait(uvw)
-    if status < 0
-        throw(_UVError("write", status))
+# Issue the write and wait for its completion, delivering a cancellation of
+# `tok` by interrupting the wait (the caller adds the post-write cancellation
+# point that turns a cancelled-but-completed write into a throw). The caller
+# must have acquired the iolock, which is released before returning.
+function _uv_write_wait(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
+                        tok::MaybeToken, @nospecialize(owner))
+    src = cancel_source(tok)
+    # entry check: throw before handing anything to libuv
+    _iolocked_checkcancel(src)
+    local uvw, lastn
+    try
+        uvw, lastn = uv_write_async(s, p, n)
+    catch
+        # E.g. the stream was (or gets) closed: release the iolock so that
+        # errors propagate without it.
+        iolock_end()
+        rethrow()
     end
-    return Int(n)
-end
-
-# wait for the write request to complete and return its status,
-# caller must have acquired the iolock, which is released before waiting
-function uv_write_wait(uvw::Ptr{Cvoid})
-    ct = current_task()
-    preserve_handle(ct)
-    sigatomic_begin()
-    uv_req_set_data(uvw, ct)
+    # Whether the write went out as a single request: only then may a
+    # cancellation `uv_cancel` it - see _uv_write_cancelled_finish. (The
+    # wait is on the *last* request either way: completion callbacks run in
+    # order unless a request is dequeued by uv_cancel.)
+    single = lastn == n
+    w = _begin_uvreq_wait!(src, s, uvw)
+    if src !== nothing && !register_cancellation!(src, w)
+        # The token was cancelled since the entry check and the wake was
+        # claimed back for us: don't park. Resolve the in-flight write and
+        # report the bytes that reached the OS; the caller observes the
+        # cancellation at its next cancellation point.
+        iolock_end()
+        nwritten = _uv_write_cancelled_finish(s, w, uvw,
+            severity(cancel_severity(src)::CancellationRequest), src, owner, single)
+        return Int(n - lastn + nwritten)
+    end
     iolock_end()
-    local status
+    local nwritten::Csize_t
+    creq = nothing
     try
         sigatomic_end()
         # wait for the last chunk to complete (or error)
         # assume that any errors would be sticky,
         # (so we don't need to monitor the error status of the intermediate writes)
-        status = wait()::Cint
+        nwritten = wait()::Csize_t
         sigatomic_begin()
-    finally
-        # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
-        sigatomic_end()
-        iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::StickyWorkqueue, ct)
-        if uv_req_data(uvw) != C_NULL
-            # uvw is still alive,
-            # so make sure we won't get spurious notifications later
-            uv_req_set_data(uvw, C_NULL)
+    catch err
+        # (catch restored the sigatomic level from the try entry)
+        if err isa CancellationRequest
+            # Cancellation is an expected outcome of a write, not an error:
+            # resolve the request's ownership below and return the partial
+            # count - the caller's next cancellation point (re)delivers the
+            # request. (The delivery is level-triggered, so nothing is
+            # lost by not propagating this throw.)
+            creq = err
         else
-            # done with uvw
-            Libc.free(uvw)
+            # interrupted by something other than a cancellation (an
+            # interrupter or raw throwto); a split write must not be
+            # uv_cancel'ed on detach (see _uv_write_cancelled_finish)
+            iolock_begin()
+            _end_uvreq_wait!(w, s, uvw, single, owner)
+            rethrow()
         end
-        iolock_end()
-        unpreserve_handle(ct)
     end
-    return status
+    if creq !== nothing
+        nwritten = _uv_write_cancelled_finish(s, w, uvw, severity(creq), src, owner, single)
+    else
+        # normal completion (or the wake lost the race to a completion that
+        # ran anyway): the callback handed us the request to free
+        iolock_begin()
+        _end_uvreq_wait!(w, s, uvw, single, owner)
+    end
+    return Int(n - lastn + nwritten)
 end
 
-# helper function for uv_write that returns the uv_write_t struct for the write
-# rather than waiting on it, caller must hold the iolock
+# Resolve the ownership of a cancelled write's uv request and return the
+# last chunk's partial write count (0 when the request had to be detached
+# without awaiting its completion). For SAFE cancellations this awaits the
+# completion callback, so the caller's buffer is provably no longer in use
+# by the OS when this returns; only a severity escalation interrupts that
+# bounded wait. `single` says whether the write went out as one request;
+# only then is the request `uv_cancel`ed. Enters with the iolock released
+# at the sigatomic level of the interrupted wait; unwinds both and the
+# handle preservation.
+function _uv_write_cancelled_finish(s::LibuvStream, w::WaitEntry, uvw::Ptr{Cvoid},
+                                    sev::UInt8, src::CancellationTokenSource,
+                                    @nospecialize(owner), single::Bool)
+    ct = current_task()
+    nwritten::Csize_t = 0
+    awaited = false
+    iolock_begin()
+    d = uv_req_data(uvw)
+    if d == C_NULL
+        # the completion callback already ran (it lost the wake claim): the
+        # request is ours and knows the count
+        awaited = true
+        nwritten = ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), uvw)
+    else
+        # The write is still in flight. Only a write issued as a *single*
+        # request may be asked to cancel: our libuv patch dequeues the
+        # targeted request out of order and completes it with UV_ECANCELED,
+        # so cancelling the last chunk of a split write would say nothing
+        # about the earlier chunks - they could still be queued, still
+        # referencing the buffer, when the "cancelled" callback fires. For
+        # a split write even a SAFE cancellation therefore awaits the last
+        # callback *without* uv_cancel: nothing is dequeued, completion
+        # stays in-order, and the last chunk's callback implies every
+        # earlier chunk is done with the buffer.
+        if single
+            # flag the request as cancelled-by-us first (on the witness
+            # slot's aux, under the iolock), so the completion callback can
+            # tell our UV_ECANCELED from a close-induced one - see
+            # uv_writecb_task
+            _mark_uvreq_cancel_requested!(w, s)
+            ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
+        end
+        if sev < severity(CANCEL_REQUEST_ABANDON_EXTERNAL)
+            # SAFE cancellation: await the completion callback, so that the
+            # caller's buffer is provably no longer in use when this
+            # returns. Only a severity escalation may interrupt this bounded
+            # teardown wait: stage the raised eligibility floor, then re-arm
+            # the (still registered) entry - the re-park needs no new
+            # registration.
+            slots(w)[_find_slot(w, src)].aux = UInt64(sev + 0x01)
+            _arm_wait(ct, w)
+            if register_cancellation!(src, w)
+                iolock_end()
+                try
+                    nwritten = wait()::Csize_t
+                    awaited = true
+                catch
+                    # escalated (or interrupted) during the teardown wait:
+                    # fall through to detach
+                end
+                iolock_begin()
+                if !awaited && uv_req_data(uvw) == C_NULL
+                    # the callback ran anyway (our wake lost a race)
+                    awaited = true
+                    nwritten = ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), uvw)
+                end
+            end
+            # (a refused registration means the state already escalated)
+        end
+    end
+    # Not awaited (abandoning severity, or an escalation during teardown):
+    # _end_uvreq_wait! detaches the request - the completion callback frees
+    # it - keeping the written buffer rooted until it does; the last chunk's
+    # count is then unknown and reported as 0. (No re-cancel: for a single
+    # request the uv_cancel above was already issued; a split write must
+    # never be uv_cancel'ed - the detached last chunk completing in order is
+    # what keeps the rooted buffer valid for the earlier chunks.)
+    _end_uvreq_wait!(w, s, uvw, false, owner)
+    return nwritten
+end
+
+function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL,
+                  owner=nothing)
+    return _uv_write_owned(s, p, n, cancel, owner)
+end
+
+# Positional core of uv_write: an `owner::Any` keyword call is not statically
+# resolvable (the NamedTuple type is abstract), which breaks trimmed builds.
+function _uv_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, cancel::CancelTokenArg,
+                         @nospecialize(owner))
+    tok = resolve_cancel_token(cancel)
+    # branch on the token explicitly: a Union-typed `tok` alongside the
+    # deliberately unspecialized `owner` leaves the callee unresolvable
+    # for trimmed builds
+    nb = tok === nothing ? _uv_write_wait(s, p, n, nothing, owner) :
+                           _uv_write_wait(s, p, n, tok, owner)
+    # nb < n means the wait was cancelled: the write reports the partial
+    # count (like a short write) and the cancellation itself is delivered at
+    # the caller's next cancellation point - level-triggered, nothing is
+    # lost by returning normally here.
+    return nb
+end
+
+# helper function for uv_write that returns the uv_write_t struct of the last
+# chunk's write (and that chunk's size) rather than waiting on it, caller must
+# hold the iolock
 function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     check_open(s)
     while true
@@ -1128,7 +1440,7 @@ function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         n -= nwrite
         p += nwrite
         if n == 0
-            return uvw
+            return uvw, nwrite
         end
     end
 end
@@ -1138,7 +1450,55 @@ end
 # - smaller writes are buffered, final uv write on flush or when buffer full
 # - large isbits arrays are unbuffered and written directly
 
-function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+function write(s::LibuvStream, a::Vector{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    # Like the generic unsafe_write fallback below, but carrying the buffer's
+    # owner so a detached (abandoned) write keeps it rooted; see
+    # _detached_uvreq_roots.
+    GC.@preserve a begin
+        return Int(_unsafe_write_owned(s, pointer(a), UInt(sizeof(a)), cancel, a))
+    end
+end
+
+# The public String path must be owner-carrying for the same reason: the
+# generic method (strings/io.jl) preserves the string only until
+# unsafe_write returns, but an abandoning cancellation can detach the
+# in-flight request, which then references the string until its completion
+# callback runs.
+function write(s::LibuvStream, str::Union{String, SubString{String}};
+               cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    GC.@preserve str begin
+        return Int(_unsafe_write_owned(s, pointer(str), UInt(sizeof(str)), cancel, str))
+    end
+end
+
+# Owner-carrying counterpart of the generic `write(::IO, ::Array)` methods,
+# again so a detached request keeps the array rooted (bits element types
+# only; others error in the generic method anyway).
+function write(s::LibuvStream, a::Array; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    if isbitstype(eltype(a))
+        cancel = precheck_cancel_arg(cancel)
+        GC.@preserve a begin
+            return Int(_unsafe_write_owned(s, Ptr{UInt8}(pointer(a)), UInt(sizeof(a)), cancel, a))
+        end
+    end
+    return invoke(write, Tuple{IO, AbstractArray}, s, a; cancel)
+end
+
+# Raw-pointer writes have no discoverable owner: the caller's documented
+# contract is pointer validity for the duration of the call - which an
+# abandoning cancellation extends past the return, until the detached
+# request's completion callback has run (see _detached_uvreq_roots). The
+# owner-carrying entry points above (Vector{UInt8}, Array, String) do not
+# have this hazard and are what the public `write` paths use.
+function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    return _unsafe_write_owned(s, p, n, cancel, nothing)
+end
+
+function _unsafe_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, cancel::CancelTokenArg,
+                             @nospecialize(owner))
     while true
         # try to add to the send buffer
         iolock_begin()
@@ -1153,19 +1513,49 @@ function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         bytesavailable(buf) == 0 && break
         # perform flush(s)
         arr = take!(buf)
-        uv_write(s, arr)
+        nb = uv_write(s, arr, cancel)
+        # a cancelled flush-write returns short: splice the unwritten tail
+        # back (ahead of concurrent appends) so no buffered byte is lost -
+        # the next iteration's write delivers the (level-triggered)
+        # cancellation at its entry check
+        nb < length(arr) && _requeue_unwritten!(s, arr, nb)
     end
     # perform the output to the kernel
-    return uv_write(s, p, n)
+    return _uv_write_owned(s, p, n, cancel, owner)
 end
 
-function flush(s::LibuvStream)
+# Splice the unwritten tail of a cancelled buffered-flush write back to the
+# *front* of `s.sendbuf` - ahead of anything appended while the write was in
+# flight, preserving stream order. `arr` was taken off the send buffer and
+# only its first `nwritten` bytes reached the stream.
+function _requeue_unwritten!(s::LibuvStream, arr::Vector{UInt8}, nwritten::Int)
+    nwritten < length(arr) || return nothing
+    iolock_begin()
+    buf = s.sendbuf
+    if buf !== nothing
+        appended = bytesavailable(buf) > 0 ? take!(buf) : nothing
+        write(buf, @view arr[nwritten+1:end])
+        appended === nothing || write(buf, appended)
+    end
+    iolock_end()
+    return nothing
+end
+
+# Cancellation contract of flush: a cancellation interrupts the wait, but
+# never silently discards data - buffered bytes that did not reach the
+# stream are put back in the send buffer, the partial state is left
+# consistent, and the CancellationRequest itself is delivered at the
+# caller's next cancellation point (delivery is level-triggered).
+function flush(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
     iolock_begin()
     buf = s.sendbuf
     if buf !== nothing
         if bytesavailable(buf) > 0
             arr = take!(buf)
-            uv_write(s, arr)
+            nb = uv_write(s, arr, cancel)
+            # cancelled short: requeue the unwritten tail rather than drop it
+            nb < length(arr) && _requeue_unwritten!(s, arr, nb)
             return
         end
     end
@@ -1173,15 +1563,11 @@ function flush(s::LibuvStream)
     # errors from it: previously queued writes have already reported their
     # errors to their writers, and the peer closing the stream after a
     # completed exchange must not make flush throw
-    local uvw
     try
-        uvw = uv_write_async(s, Ptr{UInt8}(Base.eventloop()), UInt(0))
+        _uv_write_owned(s, Ptr{UInt8}(Base.eventloop()), UInt(0), cancel, nothing)
     catch ex
         ex isa IOError || rethrow()
-        iolock_end()
-        return
     end
-    uv_write_wait(uvw) # discard the status
     return
 end
 
@@ -1206,32 +1592,38 @@ function write(s::LibuvStream, b::UInt8)
         end
         iolock_end()
     end
-    return write(s, Ref{UInt8}(b))
+    # carry the Ref as the owner (rather than the generic ownerless
+    # `write(s, ::Ref)` path): an abandoning cancellation may detach the
+    # in-flight request, which must keep the byte's storage rooted
+    r = Ref{UInt8}(b)
+    GC.@preserve r begin
+        return Int(_unsafe_write_owned(s, unsafe_convert(Ptr{UInt8}, r), UInt(1), DEFAULT_CANCEL, r))
+    end
 end
 
 function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
-    d = uv_req_data(req)
-    if d != C_NULL
-        uv_req_set_data(req, C_NULL) # let the Task know we got the writecb
-        t = unsafe_pointer_to_objref(d)::Task
-        schedule(t, status)
-    else
-        # no owner for this req, safe to just free it
-        Libc.free(req)
+    # An expected-by-the-waiter UV_ECANCELED must be read off the entry
+    # before the claim below releases the witness slot.
+    cancel_requested = status == UV_ECANCELED && _uvreq_cancel_requested(req)
+    t = _claim_uvreq_waiter(req)
+    if t !== nothing
+        if status == 0 || cancel_requested
+            # For writes cancelled by the waiter, this is the partial write
+            # count.
+            schedule(t, ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), req))
+        else
+            # A real error - including a close-induced UV_ECANCELED (libuv
+            # fails still-queued writes with it when the stream closes),
+            # which must not masquerade as a benign short write.
+            schedule(t, _UVError("write", status); error=true)
+        end
     end
     nothing
 end
 
 function uv_shutdowncb_task(req::Ptr{Cvoid}, status::Cint)
-    d = uv_req_data(req)
-    if d != C_NULL
-        uv_req_set_data(req, C_NULL) # let the Task know we got the shutdowncb
-        t = unsafe_pointer_to_objref(d)::Task
-        schedule(t, status)
-    else
-        # no owner for this req, safe to just free it
-        Libc.free(req)
-    end
+    t = _claim_uvreq_waiter(req)
+    t === nothing || schedule(t, status)
     nothing
 end
 
@@ -1541,7 +1933,15 @@ end
 
 isopen(s::BufferStream) = s.status != StatusClosed
 
-closewrite(s::BufferStream) = close(s)
+# BufferStream <: LibuvStream, so every keyword-accepting LibuvStream
+# method a `cancel=` call would select must be re-specialized here: keyword
+# calls dispatch only among keyword-accepting methods, and the LibuvStream
+# ones touch fields (handle, sendbuf) a BufferStream does not have.
+function closewrite(s::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # closing is in-memory and immediate: entry gate only
+    precheck_cancel_arg(cancel)
+    close(s)
+end
 
 function close(s::BufferStream)
     lock(s.cond) do
@@ -1553,16 +1953,18 @@ end
 uvfinalize(s::BufferStream) = nothing
 setup_stdio(stream::BufferStream, child_readable::Bool) = invoke(setup_stdio, Tuple{IO, Bool}, stream, child_readable)
 
-function read(s::BufferStream, ::Type{UInt8})
+function read(s::BufferStream, ::Type{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     nread = lock(s.cond) do
-        wait_readnb(s, 1)
+        wait_readnb(s, 1, tok)
         read(s.buffer, UInt8)
     end
     return nread
 end
-function unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt)
+function unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     lock(s.cond) do
-        wait_readnb(s, Int(nb))
+        wait_readnb(s, Int(nb), tok)
         unsafe_read(s.buffer, a, nb)
         nothing
     end
@@ -1572,17 +1974,18 @@ bytesavailable(s::BufferStream) = bytesavailable(s.buffer)
 isreadable(s::BufferStream) = (isopen(s) || bytesavailable(s) > 0) && s.buffer.readable
 iswritable(s::BufferStream) = isopen(s) && s.buffer.writable
 
-function wait_readnb(s::BufferStream, nb::Int)
+function wait_readnb(s::BufferStream, nb::Int, tok::MaybeToken=default_cancel_token())
     lock(s.cond) do
         while isopen(s) && bytesavailable(s.buffer) < nb
-            wait(s.cond)
+            wait(s.cond, tok)
         end
     end
 end
 
-function readavailable(this::BufferStream)
+function readavailable(this::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     bytes = lock(this.cond) do
-        wait_readnb(this, 1)
+        wait_readnb(this, 1, tok)
         buf = this.buffer
         @assert buf.seekable == false "buffer should not be seekable"
         take!(buf)
@@ -1590,31 +1993,33 @@ function readavailable(this::BufferStream)
     return bytes
 end
 
-function read(stream::BufferStream)
+function read(stream::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     bytes = lock(stream.cond) do
-        wait_close(stream)
+        wait_close(stream, tok)
         take!(stream.buffer)
     end
     return bytes
 end
 
-function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
+function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     sbuf = s.buffer
     @assert sbuf.seekable == false "buffer should not be seekable"
     @assert sbuf.maxsize >= nb "insufficient buffer size"
 
-    function wait_locked(s, buf, nb)
+    function wait_locked(s, buf, nb, tok)
         while bytesavailable(buf) < nb
             s.readerror === nothing || throw(s.readerror)
             isopen(s) || break
             s.status != StatusEOF || break
-            wait_readnb(s, nb)
+            wait_readnb(s, nb, tok)
         end
     end
 
     bytes = lock(s.cond) do
         if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
-            wait_locked(s, sbuf, nb)
+            wait_locked(s, sbuf, nb, tok)
         end
         if bytesavailable(sbuf) >= nb
             nread = readbytes!(sbuf, a, nb)
@@ -1624,7 +2029,7 @@ function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
             nread = try
                 s.buffer = newbuf
                 write(newbuf, sbuf)
-                wait_locked(s, newbuf, nb)
+                wait_locked(s, newbuf, nb, tok)
                 bytesavailable(newbuf)
             finally
                 s.buffer = sbuf
@@ -1639,20 +2044,23 @@ end
 
 show(io::IO, s::BufferStream) = print(io, "BufferStream(bytes waiting=", bytesavailable(s.buffer), ", isopen=", isopen(s), ")")
 
-function readuntil(s::BufferStream, c::UInt8; keep::Bool=false)
+function readuntil(s::BufferStream, c::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     bytes = lock(s.cond) do
         while isopen(s) && !occursin(c, s.buffer)
-            wait(s.cond)
+            # a cancelled wait unwinds with the buffer intact (nothing has
+            # been consumed until the delimiter is present)
+            wait(s.cond, tok)
         end
         readuntil(s.buffer, c, keep=keep)
     end
     return bytes
 end
 
-function wait_close(s::BufferStream)
+function wait_close(s::BufferStream, tok::MaybeToken=default_cancel_token())
     lock(s.cond) do
         while isopen(s)
-            wait(s.cond)
+            wait(s.cond, tok)
         end
     end
 end
@@ -1661,7 +2069,39 @@ start_reading(s::BufferStream) = Int32(0)
 stop_reading(s::BufferStream) = nothing
 
 write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
-function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
+# BufferStream writes are in-memory: no uv request can outlive the caller, so
+# the LibuvStream method's detached-owner bookkeeping does not apply here.
+function write(s::BufferStream, a::Vector{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # the write itself is in-memory and cannot block for long (the advisory
+    # lock's park runs under the ambient scope): the explicit token only
+    # gates at entry
+    precheck_cancel_arg(cancel)
+    GC.@preserve a begin
+        return Int(unsafe_write(s, pointer(a), UInt(sizeof(a))))
+    end
+end
+# In-memory counterparts of the owner-carrying LibuvStream methods (which
+# must not apply here: they track uv requests and the send buffer).
+function write(s::BufferStream, str::Union{String, SubString{String}};
+               cancel::CancelTokenArg=DEFAULT_CANCEL)
+    precheck_cancel_arg(cancel)
+    GC.@preserve str begin
+        return Int(unsafe_write(s, pointer(str), UInt(sizeof(str))))
+    end
+end
+function write(s::BufferStream, a::Array; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    precheck_cancel_arg(cancel)
+    if isbitstype(eltype(a))
+        GC.@preserve a begin
+            return Int(unsafe_write(s, Ptr{UInt8}(pointer(a)), UInt(sizeof(a))))
+        end
+    end
+    return invoke(write, Tuple{IO, AbstractArray}, s, a)
+end
+function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # in-memory write, cannot block for long: entry gate only (see the
+    # BufferStream `write` above)
+    precheck_cancel_arg(cancel)
     nwrite = lock(s.cond) do
         check_open(s)
         rv = unsafe_write(s.buffer, p, nb)
@@ -1671,10 +2111,11 @@ function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
     return nwrite
 end
 
-function eof(s::BufferStream)
+function eof(s::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(precheck_cancel_arg(cancel))
     bytesavailable(s) > 0 && return false
     iseof = lock(s.cond) do
-        wait_readnb(s, 1)
+        wait_readnb(s, 1, tok)
         return !isopen(s) && bytesavailable(s) <= 0
     end
     return iseof
@@ -1682,7 +2123,9 @@ end
 
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.
 buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes = true; s)
-function flush(s::BufferStream)
+function flush(s::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # in-memory flush (a notify), nothing to wait for: entry gate only
+    precheck_cancel_arg(cancel)
     lock(s.cond) do
         check_open(s)
         notify(s.cond)
