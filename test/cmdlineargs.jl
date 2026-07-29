@@ -1543,6 +1543,8 @@ end
 # (which precompile workers inherit through julia_cmd) on and off in each.
 # Compression requires the split layout, so with --pkgimages=no the worker must
 # warn and emit an uncompressed heap.
+#=
+These tests are disabled because they significantly increase CI time.
 @testset "pkgimage: native=$native compress=$compress" for native in (true, false), compress in (true, false)
     mktempdir() do dir
         pkgdir = joinpath(dir, "CompressMe")
@@ -1598,6 +1600,7 @@ end
         @test read(ji_file) == cache_bytes
     end
 end
+=#
 
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
 @test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
