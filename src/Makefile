@@ -101,6 +101,7 @@ CODEGEN_SRCS_HASH := codegen.cpp jitlayers.cpp aotcompile.cpp debuginfo.cpp disa
 	debug-registry.h debuginfo.h intrinsics.h jitlayers.h julia-task-dispatcher.h \
 	llvm-alloc-helpers.h llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-pass-helpers.h \
 	llvm-version.h passes.h \
+	julia.h julia_threads.h julia_internal.h julia_fasttls.h \
 	$(GC_CODEGEN_SRCS_HASH)
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \

@@ -431,7 +431,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq)
+        cb = first(t.cond.waitq).task::Task
         Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
@@ -446,7 +446,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq)
+        cb = first(t.cond.waitq).task::Task
         Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
@@ -460,7 +460,7 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq)
+        cb = first(async.cond.waitq).task::Task
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -496,7 +496,7 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq)
+        cb = first(async.cond.waitq).task::Task
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event

@@ -343,6 +343,15 @@ typedef struct _jl_task_t {
     // timestamp this task finished (i.e. entered state DONE or FAILED).
     _Atomic(uint64_t) finished_at;
 
+    // This task's current registration on a wait queue (a `Base.WaitEntry`),
+    // or `nothing`. Doubles as the wake-claim word: whoever atomically clears
+    // it (notify via CAS against the specific entry, an interrupter via swap)
+    // owns waking the task. See the wake-claim protocol in base/condition.jl.
+    _Atomic(jl_value_t*) waiting_on;
+    // A `Base.WaitEntry` cached for reuse across parks (or `nothing`), so the
+    // common single-registration park does not allocate. Owned by this task.
+    jl_value_t *cached_wait_entry;
+
 // hidden state:
 
     // id of owning thread - does not need to be defined until the task runs

@@ -212,6 +212,8 @@
 #    @atomic last_started_running_at::UInt64
 #    @atomic running_time_ns::UInt64
 #    @atomic finished_at::UInt64
+#    @atomic waiting_on::Any
+#    cached_wait_entry::Any
 #end
 
 export

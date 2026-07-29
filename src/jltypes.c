@@ -4335,7 +4335,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(27,
+                        jl_perm_symsvec(29,
                                         "next",
                                         "queue",
                                         "storage",
@@ -4362,8 +4362,10 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "first_enqueued_at",
                                         "last_started_running_at",
                                         "running_time_ns",
-                                        "finished_at"),
-                        jl_svec(27,
+                                        "finished_at",
+                                        "waiting_on",
+                                        "cached_wait_entry"),
+                        jl_svec(29,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -4390,16 +4392,18 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint64_type,
                                 jl_uint64_type,
                                 jl_uint64_type,
-                                jl_uint64_type),
+                                jl_uint64_type,
+                                jl_any_type,
+                                jl_any_type),
                         jl_emptysvec,
                         0, 1, 6);
     XX(task);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
     // Set field 20 (metrics_enabled) as const
-    // Set fields 8 (_state) and 24-27 (metric counters) as atomic
+    // Set fields 8 (_state), 24-27 (metric counters) and 28 (waiting_on) as atomic
     const static uint32_t task_constfields[1]  = { 0b00000000000010000000000000000000 };
-    const static uint32_t task_atomicfields[1] = { 0b00000111100000000000000010000000 };
+    const static uint32_t task_atomicfields[1] = { 0b00001111100000000000000010000000 };
     jl_task_type->name->constfields = task_constfields;
     jl_task_type->name->atomicfields = task_atomicfields;
 
