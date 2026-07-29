@@ -414,12 +414,20 @@ void *jl_update_dispatch_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr)
                 return f;
             }
         }
-        JL_UNLOCK(&trampoline_lock);
-        // slow: infer the target outside the lock (this is very slow)
-        codeinst = mi != jl_nothing ? jl_type_infer((jl_method_instance_t*)mi, world, SOURCE_MODE_ABI, jl_options.trim) : NULL;
-        if (codeinst != NULL)
-            jl_compile_codeinst(codeinst);
-        JL_LOCK(&trampoline_lock);
+        // Prefer an already-compiled target: no inference / JIT required.
+        codeinst = mi != jl_nothing ? jl_method_compiled((jl_method_instance_t*)mi, world) : NULL;
+        // An ABI-override CodeInstance is compiled for a different ABI than its
+        // MethodInstance declares; the adapter shortcut must not match against it.
+        if (codeinst != NULL && codeinst->def != mi)
+            codeinst = NULL;
+        if (mi != jl_nothing && codeinst == NULL) {
+            JL_UNLOCK(&trampoline_lock);
+            // slow: infer the target outside the lock (this is very slow)
+            codeinst = jl_type_infer((jl_method_instance_t*)mi, world, SOURCE_MODE_ABI, jl_options.trim);
+            if (codeinst != NULL)
+                jl_compile_codeinst(codeinst);
+            JL_LOCK(&trampoline_lock);
+        }
     } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart if the world moved under us
     // double-check another thread didn't already install for this world
     size_t lwv = jl_atomic_load_relaxed(&tr->last_world);
