@@ -155,7 +155,8 @@ end
 const NO_CHILDREN = SyntaxTree[]
 
 function children(ex::SyntaxTree)
-    is_leaf(ex) ? NO_CHILDREN : ex.children
+    cs = ex.children
+    cs === nothing ? NO_CHILDREN : cs
 end
 
 function head(ex::SyntaxTree)
