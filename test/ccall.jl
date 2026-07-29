@@ -2129,6 +2129,7 @@ abi_narrow_target(x::Cint) = Core.compilerbarrier(:type, x + Cint(1))     # infe
 abi_const_target(x::Cint) = Cint(42)                                      # const-return (JL_INVOKE_CONST)
 abi_args_target(x::Cint...) = length(x) % Cint                            # vararg (JL_INVOKE_ARGS)
 abi_unresolved_target(x::Float64) = x                                     # no method for (Cint,)
+abi_partial_target(x::Float32, y::Cint) = x + Float32(y)                  # partially covers (Any, Cint)
 abi_uncompilable_target(x::Cint) =                                        # codegen fails to emit
     Base.llvmcall("this is not LLVM IR", Cint, Tuple{Cint}, x)
 
@@ -2212,6 +2213,16 @@ end
             n0 = adapter_count()
             @test ccall(fptr, Any, (Any,), Cint(3)) === Cint(4)
             @test adapter_count() > n0
+        end
+    end
+
+    # A single partially-covering method keeps dispatching at call time, so uncovered
+    # arguments raise MethodError instead of being reinterpreted (#62246).
+    let cf = @cfunction(abi_partial_target, Any, (Any, Cint))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            @test ccall(fptr, Any, (Any, Cint), Float32(1.5), Cint(2)) === Float32(3.5)
+            @test_throws MethodError ccall(fptr, Any, (Any, Cint), 1.5, Cint(2))
         end
     end
 
