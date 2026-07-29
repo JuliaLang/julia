@@ -4488,11 +4488,15 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
                                  "compiled for use with this native image.");
     }
 
-    // Syntax version mismatch is not fatal to load
-    if (depmods) {
-        if (!(flags & JI_FLAG_PKGIMAGE))
-            return jl_get_exceptionf(jl_errorexception_type, "Cache file is for system image");
+    if (!!depmods != !!(flags & JI_FLAG_PKGIMAGE))
+        return jl_get_exceptionf(jl_errorexception_type,
+                                 "Expected %s, but cache file is for %s",
+                                 depmods ? "pkgimage" : "system image",
+                                 flags & JI_FLAG_PKGIMAGE ? "pkgimage" : "system image");
 
+
+    if (depmods) {
+        // Syntax version mismatch is not fatal to load
         if (!jl_match_cache_flags_current(read_uint8(f)))
             return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
 
