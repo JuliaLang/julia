@@ -1290,6 +1290,11 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
 
     if is_builtin(optimizer_lattice(state.interp), sig)
         let f = sig.f
+            if f === Core._typed_callable
+                # `_typed_callable` has NoCallInfo, so handle it before method-call inlining.
+                handle_typed_callable_call!(ir, idx, stmt, sig)
+                return nothing
+            end
             if (f !== Core.invoke &&
                 f !== Core.finalizer &&
                 f !== modifyfield! &&
@@ -1531,6 +1536,23 @@ function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::Indirect
     stmt.head = :invoke_modify
     pushfirst!(stmt.args, case.invoke)
     ir[SSAValue(idx)][:stmt] = stmt
+    return nothing
+end
+
+# Rewrite `Core._typed_callable(f, A, R)` to include a statically resolved trampoline.
+# The trampoline performs latest-world dispatch and therefore needs no backedge.
+function handle_typed_callable_call!(ir::IRCode, idx::Int, stmt::Expr, sig::Signature)
+    argtypes = sig.argtypes
+    length(argtypes) == 4 || return nothing # only rewrite the unresolved form
+    ft = widenconst(argtypes[2])
+    isdispatchelem(ft) || return nothing
+    AT, A_exact = instanceof_tfunc(argtypes[3])
+    RT, R_exact = instanceof_tfunc(argtypes[4])
+    (A_exact && R_exact && isa(AT, DataType) && AT <: Tuple && isa(RT, Type)) || return nothing
+    (has_free_typevars(AT) || has_free_typevars(RT)) && return nothing
+    # Use the same signature key as `jl_new_typed_callable`.
+    tr = ccall(:jl_get_typed_callable_trampoline, Any, (Any, Any, Any), ft, AT, RT)
+    insert!(stmt.args, 2, tr) # _typed_callable(f, A, R) -> _typed_callable(tr, f, A, R)
     return nothing
 end
 

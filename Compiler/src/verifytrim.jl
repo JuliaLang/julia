@@ -393,7 +393,9 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             atype = argtypes_to_type(argtypes)
 
             mi = compileable_specialization_for_call(interp, atype)
-            if mi !== nothing
+            # A partially-covering method is served by call-time dispatch, which is
+            # unavailable under --trim.
+            if mi !== nothing && atype <: (mi.def::Method).sig
                 # n.b.: Codegen may choose unpredictably to emit this `@cfunction` as a dynamic invoke or a full
                 # dynamic call, but in either case it guarantees that the required adapter(s) are emitted. All
                 # that we are required to verify here is that the callee CodeInstance is covered.
@@ -462,8 +464,11 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
             sig = item[2]::Type
             mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t), sig, this_world)
             asrt = Any
-            valid = if mi !== nothing
-                mi = mi::MethodInstance
+            # A partially-covering method requires dynamic dispatch to check for Method
+            # coverage. We could allow this but we choose not to because of the implicitly
+            # degraded ABI (better to point this out to the user instead of having
+            # `@ccallable` allocating on an important function boundary etc)
+            valid = if mi isa MethodInstance && sig <: (mi.def::Method).sig
                 ci = get(caches, mi, nothing)
                 if ci isa CodeInstance
                     # TODO: should we find a way to indicate to the user that this gets called via ccallable?

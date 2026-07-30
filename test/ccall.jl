@@ -2120,3 +2120,152 @@ const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
 end
+
+# Exercise matching, converting, constant, boxed, and dynamic-dispatch adapter paths.
+# Targets are global because bare-name `@cfunction` requires a compile-time-known function.
+abi_match_target(x::Cint) = x + Cint(1)                                   # Cint -> Cint
+abi_widen_target(x::Cint) = x                                             # well-inferred Cint
+abi_narrow_target(x::Cint) = Core.compilerbarrier(:type, x + Cint(1))     # inferred ::Any
+abi_const_target(x::Cint) = Cint(42)                                      # const-return (JL_INVOKE_CONST)
+abi_args_target(x::Cint...) = length(x) % Cint                            # vararg (JL_INVOKE_ARGS)
+abi_unresolved_target(x::Float64) = x                                     # no method for (Cint,)
+abi_partial_target(x::Float32, y::Cint) = x + Float32(y)                  # partially covers (Any, Cint)
+abi_uncompilable_target(x::Cint) =                                        # codegen fails to emit
+    Base.llvmcall("this is not LLVM IR", Cint, Tuple{Cint}, x)
+
+# Count TypeMap entries, one per distinct `sigt`.
+function typemap_entry_count(cache)
+    n = 0
+    cache === nothing || Base.visit(_ -> (n += 1), cache)
+    return n
+end
+
+@testset "abi adapter cache" begin
+    adapter_count() = typemap_entry_count(getfield(Core.abi_adapters, :cache))
+
+    # Matching ABI uses the target specptr directly.
+    let cf = @cfunction(abi_match_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Cint, (Cint,), Cint(3)) == Cint(4)
+            @test adapter_count() == n0
+        end
+    end
+
+    # Widening requires a cached boxing adapter.
+    let cf = @cfunction(abi_widen_target, Any, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Any, (Cint,), Cint(5)) === Cint(5)
+            n1 = adapter_count()
+            @test n1 > n0
+            @test ccall(fptr, Any, (Cint,), Cint(6)) === Cint(6)
+            @test adapter_count() == n1
+        end
+    end
+
+    # Narrowing converts a boxed result to the declared C type.
+    let cf = @cfunction(abi_narrow_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Cint, (Cint,), Cint(7)) == Cint(8)
+            @test adapter_count() > n0
+        end
+    end
+
+    # Const-return CodeInstances require an adapter.
+    let cf = @cfunction(abi_const_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Cint, (Cint,), Cint(3)) == Cint(42)
+            @test adapter_count() > n0
+        end
+    end
+
+    # Varargs exercise the boxed-args ABI.
+    let cf = @cfunction(abi_args_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Cint, (Cint,), Cint(9)) == Cint(1)
+            @test adapter_count() > n0
+        end
+    end
+
+    # A missing specialization uses dynamic dispatch.
+    let cf = @cfunction(abi_unresolved_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test_throws MethodError ccall(fptr, Cint, (Cint,), Cint(3))
+            @test adapter_count() > n0
+        end
+    end
+
+    # An abstract signature dispatches successfully at call time.
+    let cf = @cfunction(abi_match_target, Any, (Any,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Any, (Any,), Cint(3)) === Cint(4)
+            @test adapter_count() > n0
+        end
+    end
+
+    # A single partially-covering method keeps dispatching at call time, so uncovered
+    # arguments raise MethodError instead of being reinterpreted (#62246).
+    let cf = @cfunction(abi_partial_target, Any, (Any, Cint))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            @test ccall(fptr, Any, (Any, Cint), Float32(1.5), Cint(2)) === Float32(3.5)
+            @test_throws MethodError ccall(fptr, Any, (Any, Cint), 1.5, Cint(2))
+        end
+    end
+
+    # Failed emission falls back to dynamic dispatch instead of caching a broken target.
+    let cf = @cfunction(abi_uncompilable_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            @test_throws ErrorException ccall(fptr, Cint, (Cint,), Cint(3))
+        end
+    end
+end
+
+# A fresh sysimage should contain fallback dynamic-dispatch adapters to be able to re-enter the
+# interpreter if invalidated + running without JIT available (#61949).
+@testset "eager-unspecialized adapters serialized into the sysimage" begin
+    countexpr = "n = 0; c = getfield(Core.abi_adapters, :cache); c === nothing || Base.visit(_ -> (global n += 1), c); print(n)"
+    out = readchomp(`$(Base.julia_cmd()) --startup-file=no -e $countexpr`)
+    @test parse(Int, out) > 0
+end
+
+# Trampolines are canonicalized by (sigt, rt, specsig, kind) by type-equality, not by type-identity
+@testset "dispatch trampoline cache" begin
+    trampoline_target(x::Int) = x
+    entries() = typemap_entry_count(getfield(Core.dispatch_trampolines, :cache))
+    get_trampoline(sigt, rt, specsig=true) = ccall(:jl_get_dispatch_trampoline, Any,
+                             (Any, Any, Cint, Cint), sigt, rt, Cint(specsig), Cint(0))::Core.DispatchTrampoline
+    sigt = Tuple{typeof(trampoline_target), Int}
+    n0 = entries()
+    a = get_trampoline(sigt, Int)
+    b = get_trampoline(sigt, Int)
+    @test a === b                            # canonical: same (sigt, rt, specsig) -> same DispatchTrampoline
+    @test getfield(a, :sigt) === sigt
+    @test getfield(a, :rt) === Int
+    @test entries() == n0 + 1
+    c = get_trampoline(sigt, Float64)        # same sigt, different rt -> distinct DispatchTrampoline, same entry
+    @test c !== a
+    @test entries() == n0 + 1
+    s = get_trampoline(sigt, Int, false)     # same (sigt, rt), different specsig -> distinct DispatchTrampoline, same entry
+    @test s !== a
+    @test getfield(s, :specsig) === UInt8(0)
+    @test entries() == n0 + 1
+    @test get_trampoline(sigt, Int) === a    # original DispatchTrampoline still canonical for specsig=true
+    d = get_trampoline(Tuple{typeof(trampoline_target), Float64}, Int) # different sigt -> new entry
+    @test d !== a
+    @test entries() == n0 + 2
+end

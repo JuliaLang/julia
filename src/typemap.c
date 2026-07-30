@@ -455,6 +455,197 @@ exit:
     }
 }
 
+// jl_typemap_list_t: two-tier cache that:
+//  1. Maps `sigt` to a list of items, then
+//  2. Selects an item from the list via a user-provided `match` / `hash`
+//
+// Intrusive data structure. Uses a combined linked-list / hashmap representation
+// for buckets, depending on size. Entry objects must have a `next` field for the
+// linked-list representation and encode their own keys for `match` / `hash`.
+//
+// Same concurrency requirements as the underlying TypeMap: Mutation is serialized
+// by the owning cache's writelock; readers need no lock, but a cache miss is
+// possibly spurious in the presence of concurrent writers.
+
+static inline _Atomic(jl_value_t*) *typemap_list_next(jl_value_t *v, size_t next_offset) JL_NOTSAFEPOINT
+{
+    return (_Atomic(jl_value_t*)*)((char*)v + next_offset);
+}
+
+// Return the first matching item in the list.
+static jl_value_t *typemap_list_find(jl_typemap_list_t *map, jl_value_t *head JL_PROPAGATES_ROOT,
+        void *key) JL_CANSAFEPOINT
+{
+    const jl_typemap_list_config_t *cfg = map->config;
+    for (jl_value_t *e = head; e != NULL; e = jl_atomic_load_acquire(typemap_list_next(e, cfg->next_offset))) {
+        JL_GC_PROMISE_ROOTED(e); // rooted by the cache (items are never removed)
+        if (cfg->match(e, key))
+            return e;
+    }
+    return NULL;
+}
+
+// Return the exact TypeMap entry for `sigt`.
+static jl_typemap_entry_t *typemap_list_entry(jl_typemap_list_t *map JL_PROPAGATES_ROOT,
+        jl_value_t *sigt) JL_CANSAFEPOINT
+{
+    jl_typemap_t *tm = jl_atomic_load_relaxed(&map->root);
+    if ((jl_value_t*)tm == jl_nothing)
+        return NULL;
+    struct jl_typemap_assoc search = { sigt, jl_atomic_load_acquire(&jl_world_counter), NULL };
+    return jl_typemap_assoc_by_type(tm, &search, /*offs*/0, /*subtype*/0);
+}
+
+// Caller holds the cache writelock; `v`'s next field is NULL.
+static void typemap_list_append(jl_value_t *head, jl_value_t *v,
+        size_t next_offset) JL_NOTSAFEPOINT
+{
+    jl_value_t *tail = head;
+    for (;;) {
+        jl_value_t *n = jl_atomic_load_relaxed(typemap_list_next(tail, next_offset));
+        if (n == NULL)
+            break;
+        tail = n;
+    }
+    jl_gc_write_atomic(tail, *typemap_list_next(tail, next_offset), jl_value_t, v, release);
+}
+
+static size_t typemap_table_maxprobe(size_t len) JL_NOTSAFEPOINT
+{
+    return len > 128 ? len >> 3 : 16;
+}
+
+static jl_value_t *typemap_table_find(jl_typemap_list_t *map, jl_genericmemory_t *tbl,
+        uintptr_t hash, void *key) JL_CANSAFEPOINT
+{
+    const jl_typemap_list_config_t *cfg = map->config;
+    size_t len = tbl->length;
+    size_t mask = len - 1;
+    size_t maxprobe = typemap_table_maxprobe(len);
+    _Atomic(jl_value_t*) *slots = (_Atomic(jl_value_t*)*)tbl->ptr;
+    for (size_t i = hash & mask, p = 0; p < maxprobe; i = (i + 1) & mask, p++) {
+        jl_value_t *e = jl_atomic_load_acquire(&slots[i]);
+        if (e == NULL)
+            return NULL;
+        JL_GC_PROMISE_ROOTED(e); // rooted by the table (rooted by the caller)
+        if (cfg->match(e, key))
+            return e;
+    }
+    return NULL;
+}
+
+// Caller holds the cache writelock.
+static int typemap_table_assign(const jl_typemap_list_config_t *cfg, jl_genericmemory_t *tbl,
+        jl_value_t *v) JL_NOTSAFEPOINT
+{
+    size_t len = tbl->length;
+    size_t mask = len - 1;
+    size_t maxprobe = typemap_table_maxprobe(len);
+    _Atomic(jl_value_t*) *slots = (_Atomic(jl_value_t*)*)tbl->ptr;
+    uintptr_t hash = cfg->hash(v);
+    for (size_t i = hash & mask, p = 0; p < maxprobe; i = (i + 1) & mask, p++) {
+        if (jl_atomic_load_relaxed(&slots[i]) == NULL) {
+            jl_atomic_store_release(&slots[i], v);
+            jl_gc_wb(tbl, v);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Build a `len`-slot table holding `v` plus every item in `old` (a list or a
+// smaller table); NULL if `len` cannot satisfy the probe bound.
+static jl_genericmemory_t *typemap_table_rebuild(jl_typemap_list_t *map, jl_value_t *old,
+        jl_value_t *v, size_t len) JL_CANSAFEPOINT
+{
+    const jl_typemap_list_config_t *cfg = map->config;
+    jl_genericmemory_t *tbl = jl_alloc_memory_any(len);
+    JL_GC_PUSH1(&tbl);
+    int ok = typemap_table_assign(cfg, tbl, v);
+    if (ok && jl_is_genericmemory(old)) {
+        jl_genericmemory_t *old_table = (jl_genericmemory_t*)old;
+        _Atomic(jl_value_t*) *slots = (_Atomic(jl_value_t*)*)old_table->ptr;
+        for (size_t i = 0; ok && i < old_table->length; i++) {
+            jl_value_t *e = jl_atomic_load_relaxed(&slots[i]);
+            if (e != NULL)
+                ok = typemap_table_assign(cfg, tbl, e);
+        }
+    }
+    else if (ok) {
+        // The list's links are left untouched, so concurrent readers of the old
+        // representation keep a complete view of pre-existing items.
+        for (jl_value_t *e = old; ok && e != NULL;
+             e = jl_atomic_load_relaxed(typemap_list_next(e, cfg->next_offset)))
+            ok = typemap_table_assign(cfg, tbl, e);
+    }
+    JL_GC_POP();
+    return ok ? tbl : NULL;
+}
+
+// Return the item matching (`sigt`, `match(key)`); NULL if absent. `hash` is the
+// query key's hash under the cache's scheme.
+//
+// A miss may be spurious due to a concurrent writer, unless holding the owning
+// cache's writelock.
+JL_DLLEXPORT jl_value_t *jl_typemap_list_lookup(jl_typemap_list_t *map JL_PROPAGATES_ROOT,
+        jl_value_t *sigt, uintptr_t hash, void *key) JL_CANSAFEPOINT
+{
+    jl_typemap_entry_t *te = typemap_list_entry(map, sigt);
+    if (te == NULL)
+        return NULL;
+    jl_value_t *bucket = jl_atomic_load_acquire((_Atomic(jl_value_t*)*)&te->func.value);
+    if (bucket == NULL)
+        return NULL;
+    jl_value_t *r;
+    // Keep a concurrently swapped-out table alive across safepoints in `match`.
+    JL_GC_PUSH1(&bucket);
+    if (jl_is_genericmemory(bucket))
+        r = typemap_table_find(map, (jl_genericmemory_t*)bucket, hash, key);
+    else
+        r = typemap_list_find(map, bucket, key);
+    JL_GC_POP();
+    return r;
+}
+
+// Insert an absent item. Caller holds the cache writelock.
+JL_DLLEXPORT void jl_typemap_list_insert(jl_typemap_list_t *map, jl_value_t *owner,
+        jl_value_t *sigt, jl_value_t *v) JL_CANSAFEPOINT
+{
+    const jl_typemap_list_config_t *cfg = map->config;
+    jl_typemap_entry_t *te = typemap_list_entry(map, sigt);
+    if (te == NULL) {
+        jl_typemap_entry_t *newentry = jl_typemap_alloc((jl_tupletype_t*)sigt, NULL,
+                jl_emptysvec, v, 1, ~(size_t)0);
+        JL_GC_PUSH1(&newentry);
+        jl_typemap_insert(&map->root, owner, newentry, /*offs*/0);
+        JL_GC_POP();
+        return;
+    }
+    jl_value_t *repr = jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)&te->func.value);
+    if (!jl_is_genericmemory(repr)) {
+        size_t count = 1;
+        for (jl_value_t *n = repr; (n = jl_atomic_load_relaxed(typemap_list_next(n, cfg->next_offset))) != NULL; )
+            count++;
+        if (count < cfg->max_list_count) {
+            typemap_list_append(repr, v, cfg->next_offset);
+            return;
+        }
+    }
+    else if (typemap_table_assign(cfg, (jl_genericmemory_t*)repr, v)) {
+        return;
+    }
+    // Promote the list or grow the table. The old representation is left intact, so
+    // concurrent readers can only miss `v` itself (rechecked under the writelock).
+    jl_genericmemory_t *tbl = NULL;
+    JL_GC_PUSH1(&tbl);
+    size_t len = jl_is_genericmemory(repr) ? ((jl_genericmemory_t*)repr)->length * 2 : 16;
+    while ((tbl = typemap_table_rebuild(map, repr, v, len)) == NULL)
+        len *= 2;
+    jl_atomic_store_release((_Atomic(jl_value_t*)*)&te->func.value, (jl_value_t*)tbl);
+    jl_gc_wb(te, tbl);
+    JL_GC_POP();
+}
+
 static unsigned jl_supertype_height(jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     unsigned height = 1;

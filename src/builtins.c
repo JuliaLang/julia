@@ -2719,6 +2719,9 @@ void jl_init_intrinsic_functions(void)
     // codegen for it later.
     jl_opaque_closure_method = jl_mk_builtin_func(oc, jl_symbol("OpaqueClosure"), jl_f_opaque_closure_call); // TODO: awkwardly not actually declared a Builtin, even though it relies on being handled by the special cases for Builtin everywhere else
 
+    jl_datatype_t *tc = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_typed_callable_type);
+    jl_typed_callable_method = jl_mk_builtin_func(tc, jl_symbol("TypedCallable"), jl_f_typed_callable_call);
+
 #define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
 #define ADD_HIDDEN(name, nargs)
 #define ALIAS ADD_I
@@ -2738,7 +2741,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // Builtins are specially considered available from world 0
     for (int i = 0; i < jl_n_builtins; i++) {
         if (i == jl_builtin_id_intrinsic_call ||
-            i == jl_builtin_id_opaque_closure_call)
+            i == jl_builtin_id_opaque_closure_call ||
+            i == jl_builtin_id_typed_callable_call)
             continue;
         jl_sym_t *sname = jl_symbol(jl_builtin_names[i]);
         jl_value_t *builtin = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
@@ -2747,6 +2751,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
         jl_builtin_instances[i] = builtin;
     }
     add_builtin("OpaqueClosure", (jl_value_t*)jl_opaque_closure_type);
+    add_builtin("TypedCallable", (jl_value_t*)jl_typed_callable_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
 
     // builtin types
@@ -2771,12 +2776,15 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
-    add_builtin("methodtable", (jl_value_t*)jl_method_table);
     add_builtin("MethodCache", (jl_value_t*)jl_methcache_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);
     add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
     add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
+    add_builtin("ABIAdapter", (jl_value_t*)jl_abi_adapter_type);
+    add_builtin("ABIAdapterCache", (jl_value_t*)jl_abi_adapter_cache_type);
+    add_builtin("DispatchTrampoline", (jl_value_t*)jl_dispatch_trampoline_type);
+    add_builtin("DispatchTrampolineCache", (jl_value_t*)jl_dispatch_trampoline_cache_type);
     add_builtin("Symbol", (jl_value_t*)jl_symbol_type);
     add_builtin("SSAValue", (jl_value_t*)jl_ssavalue_type);
     add_builtin("SlotNumber", (jl_value_t*)jl_slotnumber_type);
@@ -2834,6 +2842,11 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("AbstractString", (jl_value_t*)jl_abstractstring_type);
     add_builtin("String", (jl_value_t*)jl_string_type);
+
+    // global cache singletons
+    add_builtin("abi_adapters", (jl_value_t*)jl_abi_adapters);
+    add_builtin("dispatch_trampolines", (jl_value_t*)jl_dispatch_trampolines);
+    add_builtin("methodtable", (jl_value_t*)jl_method_table);
 
     // ensure that primitive types are fully allocated (since jl_init_types is incomplete)
     assert(jl_atomic_load_relaxed(&jl_world_counter) == 1);

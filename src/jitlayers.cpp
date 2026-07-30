@@ -313,47 +313,10 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
     return {std::move(ctx), std::move(mod), std::move(info)};
 }
 
-// Return a specptr that is ABI-compatible with `from_abi` which invokes `codeinst`.
-//
-// If `codeinst` is NULL, the returned specptr instead performs a standard `apply_generic`
-// call via a dynamic dispatch.
-extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
-                                jl_code_instance_t *codeinst)
+// JIT an adapter from `from_abi` to `target`, returning its specptr
+static void *jit_adapter(jl_abi_t from_abi, jl_code_instance_t *codeinst,
+                         void *target, bool target_specsig, jl_callptr_t invoke) JL_CANSAFEPOINT
 {
-    void *target = nullptr;
-    bool target_specsig = false;
-    jl_callptr_t invoke = nullptr;
-    if (codeinst != nullptr) {
-        uint8_t specsigflags;
-        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-        void *specptr = nullptr;
-        jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, /* waitcompile */ 1);
-        if (invoke != nullptr) {
-            if (invoke == jl_fptr_const_return_addr) {
-                target = nullptr;
-                target_specsig = false;
-            }
-            else if (invoke == jl_fptr_args_addr) {
-                assert(specptr != nullptr);
-                if (!from_abi.specsig && jl_subtype(codeinst->rettype, from_abi.rt))
-                    return specptr; // no adapter required
-
-                target = specptr;
-                target_specsig = false;
-            }
-            else if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) {
-                assert(specptr != nullptr);
-                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
-                    return specptr; // no adapter required
-
-                target = specptr;
-                target_specsig = true;
-            }
-        }
-    }
-
-    orc::ThreadSafeModule result_m;
     std::string gf_thunk_name;
     auto ctx = std::make_unique<LLVMContext>();
     auto mod = jl_create_llvm_module("gfthunk", *ctx, jl_ExecutionEngine->getDataLayout(),
@@ -388,6 +351,39 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
     uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
     assert(Addr);
     return (void*)Addr;
+}
+
+// Return a specptr that is ABI-compatible with `from_abi` which invokes `codeinst`.
+//
+// If `codeinst` is NULL, the returned specptr instead performs a standard `apply_generic`
+// call via a dynamic dispatch.
+// If `invokee` is non-NULL, it is set to the owner of the specptr, either the provided
+// `codeinst` or an ABIAdapter if one was required.
+static void *jl_get_abi_adapter(jl_abi_t from_abi, jl_code_instance_t *codeinst,
+                                jl_value_t **invokee) JL_CANSAFEPOINT
+{
+    void *target = nullptr;
+    int target_specsig = 0;
+    jl_callptr_t invoke = nullptr;
+    void *f = jl_lookup_abi_adapter(from_abi, codeinst, &target, &target_specsig, &invoke, invokee);
+    if (f != nullptr)
+        return f;
+
+    // Compile outside the cache lock; insertion chooses a winner.
+    void *fptr = jit_adapter(from_abi, codeinst, target, target_specsig, invoke);
+    if (codeinst != nullptr && invoke == nullptr) {
+        // Do not cache an adapter built while the target was unpublished.
+        return fptr;
+    }
+    return jl_insert_abi_adapter(from_abi, codeinst, fptr, invokee);
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
+                                jl_code_instance_t *codeinst, jl_value_t **invokee) JL_CANSAFEPOINT
+{
+    (void)ct;
+    return jl_get_abi_adapter(from_abi, codeinst, invokee);
 }
 
   // lock for places where only single threaded behavior is implemented, so we need GC support

@@ -183,7 +183,7 @@ JL_DLLEXPORT char *jl_format_filename(const char *output_pattern) JL_NOTSAFEPOIN
 }
 
 
-static uv_mutex_t trampoline_lock; // for accesses to the cache and freelist
+static uv_mutex_t cfun_lock; // for accesses to the @cfunction nest cache and freelist
 
 static void *trampoline_freelist;
 
@@ -236,14 +236,14 @@ static void trampoline_deleter(void **f) JL_NOTSAFEPOINT
     f[0] = NULL;
     f[2] = NULL;
     f[3] = NULL;
-    uv_mutex_lock(&trampoline_lock);
+    uv_mutex_lock(&cfun_lock);
     if (tramp)
         trampoline_free(tramp);
     if (fobj && cache)
         ptrhash_remove((htable_t*)cache, fobj);
     if (nval)
         free(nval);
-    uv_mutex_unlock(&trampoline_lock);
+    uv_mutex_unlock(&cfun_lock);
 }
 
 typedef void *(*init_trampoline_t)(void *tramp, void **nval) JL_NOTSAFEPOINT;
@@ -263,7 +263,7 @@ jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t **vals)
 {
     // lookup (fobj, vals) in cache
-    uv_mutex_lock(&trampoline_lock);
+    uv_mutex_lock(&cfun_lock);
     if (!cache->table)
         htable_new(cache, 1);
     if (fill != jl_emptysvec) {
@@ -275,7 +275,7 @@ jl_value_t *jl_get_cfunction_trampoline(
         }
     }
     void *tramp = ptrhash_get(cache, (void*)fobj);
-    uv_mutex_unlock(&trampoline_lock);
+    uv_mutex_unlock(&cfun_lock);
     if (tramp != HT_NOTFOUND) {
         assert((jl_datatype_t*)jl_typeof(tramp) == result_type);
         return (jl_value_t*)tramp;
@@ -326,26 +326,15 @@ jl_value_t *jl_get_cfunction_trampoline(
         free(nval);
         jl_rethrow();
     }
-    uv_mutex_lock(&trampoline_lock);
+    uv_mutex_lock(&cfun_lock);
     tramp = trampoline_alloc();
     ((void**)result)[0] = tramp;
     init_trampoline(tramp, nval);
     ptrhash_put(cache, (void*)fobj, result);
-    uv_mutex_unlock(&trampoline_lock);
+    uv_mutex_unlock(&cfun_lock);
     return result;
 }
 JL_GCC_IGNORE_STOP
-
-struct cfuncdata_t {
-    _Atomic(void *) fptr;
-    _Atomic(size_t) last_world;
-    jl_code_instance_t** plast_codeinst;
-    jl_code_instance_t* last_codeinst;
-    void *unspecialized;
-    jl_value_t *const *const declrt;
-    jl_value_t *const *const sigt;
-    size_t flags;
-};
 
 static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL_NOTSAFEPOINT
 {
@@ -353,7 +342,7 @@ static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL
     return jl_is_method(mi->def.method) ? jl_symbol_name(mi->def.method->name) : "top-level scope";
 }
 
-static jl_mutex_t cfun_lock;
+static jl_mutex_t trampoline_lock; // guards dispatch-trampoline resolve / publish
 
 // (get_abi_converter / method table mutating thread)
 // release jl_world_counter
@@ -368,87 +357,119 @@ static jl_mutex_t cfun_lock;
 // The above ordering requirements are intended to guarantee that if the
 // dispatch site observes last_world == jl_world_counter then the loaded
 // fptr is consistent with both of them, meaning it was published for
-// exactly that world.
-JL_DLLEXPORT
-void *jl_get_abi_converter(jl_task_t *ct, void *data)
+// exactly that world. fptr must never be reset to NULL after it is
+// published as valid.
+static jl_code_instance_t *invokee_ci(jl_value_t *last_invokee) JL_NOTSAFEPOINT
 {
-    struct cfuncdata_t *cfuncdata = (struct cfuncdata_t*)data;
-    jl_value_t *sigt = *cfuncdata->sigt;
+    if (last_invokee == NULL)
+        return NULL;
+    if (jl_is_abi_adapter(last_invokee))
+        return ((jl_abi_adapter_t*)last_invokee)->ci;
+    return (jl_code_instance_t*)last_invokee; // a bare CodeInstance (declared ABI matched its specptr)
+}
+
+// Refresh a dispatch trampoline for dispatch in the current latest world.
+JL_DLLEXPORT
+void *jl_update_dispatch_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr) JL_CANSAFEPOINT
+{
+    jl_value_t *sigt = tr->sigt;
     JL_GC_PROMISE_ROOTED(sigt);
-    jl_value_t *declrt = *cfuncdata->declrt;
-    JL_GC_PROMISE_ROOTED(declrt);
-    int specsig = cfuncdata->flags & 1;
+    jl_value_t *rt = tr->rt;
+    JL_GC_PROMISE_ROOTED(rt);
     jl_value_t *mi;
     jl_code_instance_t *codeinst;
     size_t world;
-    // check first, while behind this lock, of the validity of the current contents of this cfunc thunk
-    JL_LOCK(&cfun_lock);
+    JL_LOCK(&trampoline_lock);
     do {
-        size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
-        void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
-        jl_code_instance_t *last_ci = cfuncdata->plast_codeinst ? *cfuncdata->plast_codeinst : NULL;
-        JL_GC_PROMISE_ROOTED(last_ci); // cached CI is retained by the MI cache or by an image literal root slot
+        size_t last_world_v = jl_atomic_load_relaxed(&tr->last_world);
+        void *f = jl_atomic_load_relaxed(&tr->fptr);
         world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (world == last_world_v) {
-            JL_UNLOCK(&cfun_lock);
+            assert(f != NULL); // `last_world` is only ever published after `fptr`
+            JL_UNLOCK(&trampoline_lock);
             return f;
         }
         mi = jl_get_specialization1((jl_tupletype_t*)sigt, world);
+        // A match that only partially covers `sigt` must keep dispatching at call
+        // time: wiring it directly would bypass the MethodError for uncovered calls.
+        if (mi != jl_nothing && !jl_subtype(sigt, ((jl_method_instance_t*)mi)->def.method->sig))
+            mi = jl_nothing;
+        // Reuse the adapter if its target remains valid.
         if (f != NULL) {
-            if (last_ci == NULL) {
-                if (mi == jl_nothing) {
-                    jl_atomic_store_release(&cfuncdata->last_world, world);
-                    JL_UNLOCK(&cfun_lock);
-                    return f;
-                }
-            }
-            else {
-                if ((jl_value_t*)jl_get_ci_mi(last_ci) == mi && jl_atomic_load_relaxed(&last_ci->max_world) >= world) { // same dispatch and source
-                    jl_atomic_store_release(&cfuncdata->last_world, world);
-                    JL_UNLOCK(&cfun_lock);
-                    return f;
-                }
+            jl_value_t *last_invokee = tr->last_invokee;
+            JL_GC_PROMISE_ROOTED(last_invokee); // retained by the adapter/MI cache
+            assert(last_invokee != NULL); // published together with `fptr` (see below)
+            jl_code_instance_t *last_ci = invokee_ci(last_invokee);
+            int still_valid;
+            if (last_ci == NULL) // dynamic-dispatch adapter: correct while dispatch finds no specialization
+                still_valid = mi == jl_nothing;
+            else
+                still_valid = (jl_value_t*)jl_get_ci_mi(last_ci) == mi &&
+                              jl_atomic_load_relaxed(&last_ci->max_world) >= world;
+            if (still_valid) {
+                jl_atomic_store_release(&tr->last_world, world);
+                JL_UNLOCK(&trampoline_lock);
+                return f;
             }
         }
-        JL_UNLOCK(&cfun_lock);
-        // next, try to figure out what the target should look like (outside of the lock since this is very slow)
-        codeinst = mi != jl_nothing ? jl_type_infer((jl_method_instance_t*)mi, world, SOURCE_MODE_ABI, jl_options.trim) : NULL;
-        // relock for the remainder of the function
-        JL_LOCK(&cfun_lock);
-    } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart entirely, since jl_world_counter changed thus jl_get_specialization1 might have changed
-    // double-check if the values were set on another thread
-    size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
-    void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
-    if (world == last_world_v) {
-        JL_UNLOCK(&cfun_lock);
-        return f; // another thread fixed this up while we were away
+        // Prefer an already-compiled target: no inference / JIT required.
+        codeinst = mi != jl_nothing ? jl_method_compiled((jl_method_instance_t*)mi, world) : NULL;
+        // An ABI-override CodeInstance is compiled for a different ABI than its
+        // MethodInstance declares; the adapter shortcut must not match against it.
+        if (codeinst != NULL && codeinst->def != mi)
+            codeinst = NULL;
+        if (mi != jl_nothing && codeinst == NULL) {
+            JL_UNLOCK(&trampoline_lock);
+            // slow: infer the target outside the lock (this is very slow)
+            codeinst = jl_type_infer((jl_method_instance_t*)mi, world, SOURCE_MODE_ABI, jl_options.trim);
+            if (codeinst != NULL)
+                jl_compile_codeinst(codeinst);
+            JL_LOCK(&trampoline_lock);
+        }
+    } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart if the world moved under us
+    // double-check another thread didn't already install for this world
+    size_t lwv = jl_atomic_load_relaxed(&tr->last_world);
+    void *f = jl_atomic_load_relaxed(&tr->fptr);
+    if (world == lwv) {
+        assert(f != NULL); // `last_world` is only ever published after `fptr`
+        JL_UNLOCK(&trampoline_lock);
+        return f;
     }
-    int is_opaque_closure = 0;
-    jl_abi_t from_abi = { sigt, declrt, specsig, is_opaque_closure };
-    if (codeinst == NULL) {
-        // Generate an adapter to a dynamic dispatch
-        if (cfuncdata->unspecialized == NULL)
-            cfuncdata->unspecialized = jl_jit_abi_converter(ct, from_abi, NULL);
-
-        f = cfuncdata->unspecialized;
-    } else {
+    // If the world advanced but the dispatch target is unchanged from the one `fptr` was
+    // built for, the existing adapter is still correct -- reuse it (no re-JIT).
+    if (f != NULL && codeinst == invokee_ci(tr->last_invokee)) {
+        jl_atomic_store_release(&tr->last_world, world);
+        JL_UNLOCK(&trampoline_lock);
+        return f;
+    }
+    // @cfunction warns when the declared C return type cannot match the resolved target's
+    // rettype (skip must-not-return targets, occasionally required by the C API for error
+    // callbacks even though memory errors are then likely). TypedCallable adapters enforce
+    // their declared return type instead.
+    if ((jl_abi_kind_t)tr->kind == JL_ABI_STD && codeinst != NULL) {
         jl_value_t *astrt = codeinst->rettype;
         if (astrt != (jl_value_t*)jl_bottom_type &&
-            jl_type_intersection(astrt, declrt) == jl_bottom_type) {
-            // Do not warn if the function never returns since it is
-            // occasionally required by the C API (typically error callbacks)
-            // even though we're likely to encounter memory errors in that case
-            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance((jl_method_instance_t*)mi));
-        }
-        f = jl_jit_abi_converter(ct, from_abi, codeinst);
+            jl_type_intersection(astrt, rt) == jl_bottom_type)
+            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n",
+                      name_from_method_instance((jl_method_instance_t*)mi));
     }
-
-    cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
-    cfuncdata->last_codeinst = codeinst;
-    jl_atomic_store_release(&cfuncdata->fptr, f);
-    jl_atomic_store_release(&cfuncdata->last_world, world);
-    JL_UNLOCK(&cfun_lock);
+    // Fall back to dynamic dispatch if emission left the target unpublished.
+    // This should only happen if the emission failed due to a compilation error, etc.
+    if (codeinst != NULL && !jl_is_compiled_codeinst(codeinst))
+        codeinst = NULL;
+    // Keep the CodeInstance or ABIAdapter used to derive fptr.
+    jl_value_t *new_invokee = NULL;
+    jl_abi_t adapter_abi = jl_trampoline_abi(tr);
+    JL_GC_PUSH1(&adapter_abi.sigt);
+    f = jl_jit_abi_converter(ct, adapter_abi, codeinst, &new_invokee);
+    JL_GC_POP();
+    // Published fptrs always have an invokee for later validation.
+    assert(new_invokee != NULL);
+    jl_gc_write(tr, tr->last_invokee, jl_value_t, new_invokee);
+    jl_atomic_store_release(&tr->fptr, f);
+    jl_atomic_store_release(&tr->last_world, world);
+    JL_UNLOCK(&trampoline_lock);
     return f;
 }
 
@@ -456,5 +477,5 @@ void jl_init_runtime_ccall(void)
 {
     JL_MUTEX_INIT(&libmap_lock, "libmap_lock");
     strhash_new(&libMap, 16);
-    uv_mutex_init(&trampoline_lock);
+    uv_mutex_init(&cfun_lock);
 }

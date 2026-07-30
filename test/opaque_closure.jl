@@ -423,7 +423,6 @@ let (bt, did_gc) = make_oc_and_collect_bt()
     GC.gc(true); GC.gc(true); GC.gc(true);
     @test did_gc[]
     @test all(stacktrace(bt)) do frame
-        frame.from_c && return true
         li = frame.linfo
         isa(li, Core.CodeInstance) && (li = li.def)
         isa(li, Core.ABIOverride) && (li = li.def)

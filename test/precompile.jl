@@ -1169,6 +1169,310 @@ precompile_test_harness("precompiletools") do dir
     end
 end
 
+precompile_test_harness("cfunction adapter serialization") do dir
+    CFuncMod = :CFuncAdapter0x6f2c1d8a
+    write(joinpath(dir, "$CFuncMod.jl"),
+          """
+          module $CFuncMod
+              llvm_version() = ccall(:jl_get_LLVM_VERSION, UInt32, ())       # 0 = no-codegen stub
+              box_target(x::Cint) = x                                        # well-inferred Cint
+              any_target(x::Cint) = Core.compilerbarrier(:type, x + Cint(1)) # inferred ::Any
+              const_target(x::Cint) = Cint(42)                               # const-return
+              args_target(x::Cint...) = length(x) % Cint                     # vararg (boxed args ABI)
+              unresolved_target(x::Float64) = x                              # no method for (Cint,)
+              partial_target(x::Float32) = x + Float32(1)                    # partially covers (Any,)
+              function run_widen(x::Cint)
+                  cf = @cfunction(box_target, Any, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Any, (Cint,), x)
+              end
+              function run_narrow(x::Cint)
+                  cf = @cfunction(any_target, Cint, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+              end
+              function run_const(x::Cint)
+                  cf = @cfunction(const_target, Cint, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+              end
+              function run_args(x::Cint)
+                  cf = @cfunction(args_target, Cint, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+              end
+              function run_unresolved(x::Cint)
+                  cf = @cfunction(unresolved_target, Cint, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+              end
+              function run_partial(x)             # partial cover -> dynamic-dispatch adapter (#62246)
+                  cf = @cfunction(partial_target, Any, (Any,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Any, (Any,), x)
+              end
+              function run_dispatch(x::Cint)      # abstract `Any` arg -> dynamic-dispatch adapter
+                  cf = @cfunction(box_target, Any, (Any,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Any, (Any,), x)
+              end
+              function run_dup(x::Cint)           # two call sites, same (sigt, rt) -> one trampoline
+                  cf1 = @cfunction(box_target, Any, (Cint,))
+                  cf2 = @cfunction(box_target, Any, (Cint,))
+                  r1 = GC.@preserve cf1 ccall(Base.unsafe_convert(Ptr{Cvoid}, cf1), Any, (Cint,), x)
+                  r2 = GC.@preserve cf2 ccall(Base.unsafe_convert(Ptr{Cvoid}, cf2), Any, (Cint,), x)
+                  (r1, r2)
+              end
+              precompile(run_widen, (Cint,))
+              precompile(run_narrow, (Cint,))
+              precompile(run_const, (Cint,))
+              precompile(run_args, (Cint,))
+              precompile(run_unresolved, (Cint,))
+              precompile(run_partial, (Float32,))
+              precompile(run_partial, (Cint,))
+              precompile(partial_target, (Float32,))
+              precompile(run_dispatch, (Cint,))
+              precompile(run_dup, (Cint,))
+              precompile(llvm_version, ())
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(CFuncMod)))
+    M = Base.require(Main, CFuncMod)
+    function adapter_count()
+        n = 0
+        cache = getfield(Core.abi_adapters, :cache)
+        cache === nothing || Base.visit(_ -> (n += 1), cache)
+        return n
+    end
+    n0 = adapter_count()
+    # invokelatest: the run_* methods are defined in a world newer than this function's.
+    @test Base.invokelatest(M.run_widen, Cint(5)) === Cint(5)
+    @test Base.invokelatest(M.run_narrow, Cint(7)) == Cint(8)
+    @test Base.invokelatest(M.run_const, Cint(3)) == Cint(42)
+    @test Base.invokelatest(M.run_args, Cint(9)) == Cint(1)
+    @test_throws MethodError Base.invokelatest(M.run_unresolved, Cint(3))
+    @test Base.invokelatest(M.run_partial, Float32(1.5)) === Float32(2.5)
+    @test_throws MethodError Base.invokelatest(M.run_partial, Cint(3))
+    @test Base.invokelatest(M.run_dispatch, Cint(5)) === Cint(5)
+    @test Base.invokelatest(M.run_dup, Cint(5)) === (Cint(5), Cint(5))
+    if Bool(Base.JLOptions().use_pkgimages)
+        # First use reuses the adapters restored from the pkgimage.
+        @test adapter_count() == n0
+
+        # Repeat with codegen disabled, including retargeting after method redefinition
+        # through the serialized dynamic-dispatch adapter (julia#61949).
+        sep = Sys.iswindows() ? ";" : ":"
+        script = """
+            using $CFuncMod
+            const M = $CFuncMod
+            println("llvm=", M.llvm_version())
+            println("widen=", M.run_widen(Cint(5)))
+            println("narrow=", M.run_narrow(Cint(7)))
+            println("const=", M.run_const(Cint(3)))
+            println("args=", M.run_args(Cint(9)))
+            println("dispatch=", M.run_dispatch(Cint(5)))
+            println("dup=", M.run_dup(Cint(5)))
+            println("unresolved=", try; M.run_unresolved(Cint(3)); "no-error"; catch e; e isa MethodError ? "MethodError" : "other-error"; end)
+            println("partial=", M.run_partial(Float32(1.5)))
+            println("partial_miss=", try; M.run_partial(Cint(3)); "no-error"; catch e; e isa MethodError ? "MethodError" : "other-error"; end)
+            @eval M box_target(x::Cint) = x + Cint(100)
+            println("redef=", Base.invokelatest(M.run_widen, Cint(5)))
+            """
+        outbuf = IOBuffer(); errbuf = IOBuffer()
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                     "JULIA_LOAD_CODEGEN_LIB" => "0",
+                     "JULIA_LOAD_PATH" => dir * sep * "@stdlib",
+                     "JULIA_DEPOT_PATH" => first(DEPOT_PATH) * sep)
+        proc = run(pipeline(ignorestatus(cmd), stdout=outbuf, stderr=errbuf))
+        out = String(take!(outbuf))
+        success(proc) || println(stderr, "codegen-free child failed:\n", String(take!(errbuf)))
+        @test success(proc)
+        @test occursin("llvm=0", out)              # codegen really was absent
+        @test occursin("widen=5", out)             # cached specsig-widening adapter
+        @test occursin("narrow=8", out)            # cached narrowing adapter
+        @test occursin("const=42", out)            # cached const-return adapter
+        @test occursin("args=1", out)              # cached boxed-args adapter
+        @test occursin("dispatch=5", out)          # cached dynamic-dispatch adapter
+        @test occursin("dup=(5, 5)", out)          # shared trampoline, both sites wired
+        @test occursin("unresolved=MethodError", out)
+        @test occursin("partial=2.5", out)         # partial cover dispatches via the unspecialized adapter
+        @test occursin("partial_miss=MethodError", out)
+        @test occursin("redef=105", out)           # dispatcher re-query after redefinition
+    end
+end
+
+# Shared trampolines load unresolved and retarget through adapters from the composed images.
+precompile_test_harness("cross-image dispatch trampolines") do dir
+    write(joinpath(dir, "CrossTrampolineA.jl"),
+          """
+          module CrossTrampolineA
+          target(x::Integer) = Cint(x + 1)
+          function run(x::Cint)
+              cf = @cfunction(target, Cint, (Cint,))
+              GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+          end
+          # Canonical trampoline for `run`.
+          trampoline() = ccall(:jl_get_dispatch_trampoline, Any, (Any, Any, Cint, Cint),
+                          Tuple{typeof(target), Cint}, Cint, Cint(1), Cint(0))
+          precompile(run, (Cint,))
+          precompile(trampoline, ())
+          # Ensure serialization sanitizes a previously resolved DispatchTrampoline.
+          const warm = run(Cint(0))
+          end
+          """)
+    Base.compilecache(Base.PkgId("CrossTrampolineA"))
+    write(joinpath(dir, "CrossTrampolineB.jl"),
+          """
+          module CrossTrampolineB
+          using CrossTrampolineA
+          CrossTrampolineA.target(x::Cint) = x + Cint(100)   # more specific: retargets A's trampoline
+          function runb(x::Cint)
+              cf = @cfunction(CrossTrampolineA.target, Cint, (Cint,))
+              GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+          end
+          precompile(runb, (Cint,))
+          precompile(CrossTrampolineA.run, (Cint,))
+          end
+          """)
+    Base.compilecache(Base.PkgId("CrossTrampolineB"))
+    write(joinpath(dir, "CrossTrampolineC.jl"),
+          """
+          module CrossTrampolineC
+          using CrossTrampolineA
+          CrossTrampolineA.target(x::Signed) = Cint(x + 1000)   # between A's Integer and B's Cint
+          function runc(x::Cint)
+              cf = @cfunction(CrossTrampolineA.target, Cint, (Cint,))
+              GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+          end
+          precompile(runc, (Cint,))
+          precompile(CrossTrampolineA.run, (Cint,))
+          end
+          """)
+    Base.compilecache(Base.PkgId("CrossTrampolineC"))
+    write(joinpath(dir, "CrossTrampolineAll.jl"),
+          """
+          module CrossTrampolineAll
+          using CrossTrampolineA, CrossTrampolineB, CrossTrampolineC
+          # Materialize every entry point needed without codegen.
+          precompile(CrossTrampolineA.run, (Cint,))
+          precompile(CrossTrampolineB.runb, (Cint,))
+          precompile(CrossTrampolineC.runc, (Cint,))
+          end
+          """)
+    Base.compilecache(Base.PkgId("CrossTrampolineAll"))
+    if Bool(Base.JLOptions().use_pkgimages)
+        sep = Sys.iswindows() ? ";" : ":"
+        function crosstrampoline_child(script; codegen::Bool)
+            outbuf = IOBuffer(); errbuf = IOBuffer()
+            cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+            cmd = addenv(cmd, "JULIA_LOAD_PATH" => dir * sep * "@stdlib",
+                              "JULIA_DEPOT_PATH" => first(DEPOT_PATH) * sep)
+            codegen || (cmd = addenv(cmd, "JULIA_LOAD_CODEGEN_LIB" => "0"))
+            proc = run(pipeline(ignorestatus(cmd), stdout=outbuf, stderr=errbuf))
+            success(proc) || println(stderr, "cross-image child failed:\n", String(take!(errbuf)))
+            @test success(proc)
+            return String(take!(outbuf))
+        end
+        # The hot DispatchTrampoline loads unresolved and retargets to B without codegen.
+        out = crosstrampoline_child("""
+            using CrossTrampolineA, CrossTrampolineB
+            GC.gc(); GC.gc(); GC.gc()
+            tr = CrossTrampolineA.trampoline()
+            println("pre_invokee_defined=", isdefined(tr, :last_invokee))
+            println("pre_fptr_null=", getfield(tr, :fptr, :monotonic) == C_NULL)
+            println("pre_world=", getfield(tr, :last_world, :acquire))
+            println("a_run=", CrossTrampolineA.run(Cint(1)))
+            println("b_runb=", CrossTrampolineB.runb(Cint(1)))
+            println("post_world_current=", getfield(tr, :last_world, :acquire) == Base.get_world_counter())
+            println("post_fptr_set=", getfield(tr, :fptr, :monotonic) != C_NULL)
+            println("invokee_ok=", getfield(tr, :last_invokee) isa Union{Core.ABIAdapter, Core.CodeInstance})
+            """; codegen = false)
+        @test occursin("pre_invokee_defined=false", out)  # incremental images carry no hint
+        @test occursin("pre_fptr_null=true", out)   # hot DispatchTrampoline sanitized at serialization
+        @test occursin("pre_world=0", out)          # unresolved sentinel: no validity claim
+        @test occursin("a_run=101", out)            # A-image site reaches B-image target
+        @test occursin("b_runb=101", out)
+        @test occursin("post_world_current=true", out)  # poll published validity
+        @test occursin("post_fptr_set=true", out)
+        @test occursin("invokee_ok=true", out)
+        # The same DispatchTrampoline can instead retarget to C.
+        out = crosstrampoline_child("""
+            using CrossTrampolineA, CrossTrampolineC
+            GC.gc(); GC.gc()
+            println("a_run=", CrossTrampolineA.run(Cint(1)))
+            println("c_runc=", CrossTrampolineC.runc(Cint(1)))
+            """; codegen = false)
+        @test occursin("a_run=1001", out)
+        @test occursin("c_runc=1001", out)
+        # The composed world chooses B's most-specific target.
+        out = crosstrampoline_child("""
+            using CrossTrampolineAll, CrossTrampolineA, CrossTrampolineB, CrossTrampolineC
+            println("a_run=", CrossTrampolineA.run(Cint(1)))
+            println("b_runb=", CrossTrampolineB.runb(Cint(1)))
+            println("c_runc=", CrossTrampolineC.runc(Cint(1)))
+            """; codegen = false)
+        @test occursin("a_run=101", out)
+        @test occursin("b_runb=101", out)
+        @test occursin("c_runc=101", out)
+        # An in-session definition retargets every image-loaded site.
+        out = crosstrampoline_child("""
+            using CrossTrampolineA, CrossTrampolineB
+            println("before=", CrossTrampolineA.run(Cint(1)))
+            @eval CrossTrampolineA target(x::Cint) = x + Cint(7)
+            println("a_run=", Base.invokelatest(CrossTrampolineA.run, Cint(1)))
+            println("b_runb=", Base.invokelatest(CrossTrampolineB.runb, Cint(1)))
+            """; codegen = true)
+        @test occursin("before=101", out)
+        @test occursin("a_run=8", out)
+        @test occursin("b_runb=8", out)
+    end
+end
+
+precompile_test_harness("TypedCallable trampoline serialization") do dir
+    TCMod = :TCAdapter0x3a91be07
+    write(joinpath(dir, "$TCMod.jl"),
+          """
+          module $TCMod
+              llvm_version() = ccall(:jl_get_LLVM_VERSION, UInt32, ())  # 0 = no-codegen stub
+              target(x::Int) = x * 3
+              # Serialize an adapter resolved during optimization.
+              @noinline make_tc() = Core.TypedCallable{Tuple{Int},Int}(target)
+              call_tc(t::Core.TypedCallable{Tuple{Int},Int}, x) = t(x)
+              driver(x) = call_tc(make_tc(), x)
+              # Also serialize a trampoline stored in a top-level value.
+              const TC = Core.TypedCallable{Tuple{Int},Int}(target)
+              call_const(x) = TC(x)
+              precompile(driver, (Int,))
+              precompile(call_const, (Int,))
+              precompile(llvm_version, ())
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(TCMod)))
+    M = Base.require(Main, TCMod)
+    @test Base.invokelatest(M.driver, 5) === 15
+    @test Base.invokelatest(M.call_const, 7) === 21
+    # Deserialized trampolines re-resolve at the latest world.
+    @eval M target(x::Int) = x * 100
+    @test Base.invokelatest(M.driver, 5) === 500
+    @test Base.invokelatest(M.call_const, 7) === 700
+    if Bool(Base.JLOptions().use_pkgimages)
+        # Require the serialized adapter by disabling code generation.
+        sep = Sys.iswindows() ? ";" : ":"
+        script = """
+            using $TCMod
+            const M = $TCMod
+            println("llvm=", M.llvm_version())
+            println("driver=", M.driver(5))
+            println("const=", M.call_const(7))
+            """
+        outbuf = IOBuffer(); errbuf = IOBuffer()
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                     "JULIA_LOAD_CODEGEN_LIB" => "0",
+                     "JULIA_LOAD_PATH" => dir * sep * "@stdlib",
+                     "JULIA_DEPOT_PATH" => first(DEPOT_PATH) * sep)
+        proc = run(pipeline(ignorestatus(cmd), stdout=outbuf, stderr=errbuf))
+        out = String(take!(outbuf))
+        success(proc) || println(stderr, "codegen-free child failed:\n", String(take!(errbuf)))
+        @test success(proc)
+        @test occursin("llvm=0", out)
+        @test occursin("driver=15", out)
+        @test occursin("const=21", out)
+    end
+end
+
 precompile_test_harness("invoke") do dir
     InvokeModule = :Invoke0x030e7e97c2365aad
     CallerModule = :Caller0x030e7e97c2365aad
