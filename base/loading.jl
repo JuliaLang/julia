@@ -1371,42 +1371,55 @@ function cache_file_entry(pkg::PkgId)
         uuid === nothing ? pkg.name : package_slug(uuid)
 end
 
-function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
-    paths = String[]
+# Return cache candidates from `depot`, with pkgimages first. Do not open or
+# stat entries here; invalid entries are rejected during validation.
+function cachefile_candidates_in_depot(pkg::PkgId, depot::String)
     entrypath, entryfile = cache_file_entry(pkg)
-    for path in DEPOT_PATH
-        path = joinpath(path, entrypath)
-        isdir(path) || continue
-        for file in readdir(path, sort = false) # no sort given we sort later
-            if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
-                 (pkg.uuid !== nothing && startswith(file, entryfile * "_") &&
-                  endswith(file, ".ji")))
-                 continue
-            end
-            filepath = joinpath(path, file)
-            isfile_casesensitive(filepath) && push!(paths, filepath)
+    dir = joinpath(depot, entrypath)
+    isdir(dir) || return String[]
+    entries = readdir(dir, sort = false)
+    paths = String[]
+    npkgimage = 0
+    use_pkgimages = JLOptions().use_pkgimages != 0
+    dlext_suffix = "." * Libc.Libdl.dlext
+    for file in entries
+        if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
+             (pkg.uuid !== nothing && startswith(file, entryfile * "_") &&
+              endswith(file, ".ji")))
+             continue
+        end
+        filepath = joinpath(dir, file)
+        if use_pkgimages && string(chopsuffix(file, ".ji"), dlext_suffix) in entries
+            npkgimage += 1
+            insert!(paths, npkgimage, filepath)
+        else
+            push!(paths, filepath)
         end
     end
+    return paths
+end
+
+# Search the depot containing Sys.STDLIB first for bundled stdlibs.
+function cache_search_depots(sourcepath::String, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
+    startswith(sourcepath, Sys.STDLIB) || return DEPOT_PATH
+    return sort(DEPOT_PATH, by = depot -> !startswith(Sys.STDLIB, depot))
+end
+
+# Search one depot at a time and stop enumerating once a candidate is accepted.
+function lazy_cachefile_candidates(pkg::PkgId, sourcepath::String, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
+    return Iterators.flatten(cachefile_candidates_in_depot(pkg, depot)
+                             for depot in cache_search_depots(sourcepath, DEPOT_PATH))
+end
+
+function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
+    paths = String[]
+    for depot in DEPOT_PATH
+        append!(paths, cachefile_candidates_in_depot(pkg, depot))
+    end
     if length(paths) > 1
-        function sort_by(path)
-            # when using pkgimages, consider those cache files first
-            pkgimage = if JLOptions().use_pkgimages != 0
-                io = open(path, "r")
-                try
-                    if iszero(isvalid_cache_header(io))
-                        false
-                    else
-                        _, _, _, _, _, _, flags = parse_cache_header(io, path)
-                        CacheFlags(flags).use_pkgimages
-                    end
-                finally
-                    close(io)
-                end
-            else
-                false
-            end
-            (; pkgimage, mtime=mtime(path))
-        end
+        use_pkgimages = JLOptions().use_pkgimages != 0
+        # Prefer caches with a pkgimage, then those used most recently.
+        sort_by(path) = (; pkgimage=(use_pkgimages && isfile(ocachefile_from_cachefile(path))), mtime=mtime(path))
         function sort_lt(a, b)
             if a.pkgimage != b.pkgimage
                 return a.pkgimage < b.pkgimage
@@ -2192,7 +2205,7 @@ end
 # returns the set of modules restored if the cache load succeeded
 @constprop :none function _require_search_from_serialized(pkg::PkgId, sourcespec::PkgLoadSpec, build_id::UInt128, stalecheck::Bool; reasons=nothing, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
     assert_havelock(require_lock)
-    paths = find_all_in_cache_path(pkg, DEPOT_PATH)
+    paths = lazy_cachefile_candidates(pkg, sourcespec.path, DEPOT_PATH)
     newdeps = PkgId[]
     try_build_ids = UInt128[build_id]
     if build_id == UInt128(0)
@@ -2205,7 +2218,7 @@ end
         end
     end
     for build_id in try_build_ids
-        @label next_path for path_to_try in paths::Vector{String}
+        @label next_path for path_to_try in paths
             staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons, stalecheck)
             if staledeps === true
                 continue
@@ -2250,7 +2263,7 @@ end
                     @assert canstart_loading(modkey, modbuild_id, stalecheck) === nothing
                     package_locks[modkey] = (current_task(), Threads.Condition(require_lock), modbuild_id)
                     startedloading = i
-                    modpaths = find_all_in_cache_path(modkey, DEPOT_PATH)
+                    modpaths = lazy_cachefile_candidates(modkey, modspec.path, DEPOT_PATH)
                     for modpath_to_try in modpaths
                         modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try; stalecheck)
                         if modstaledeps === true
