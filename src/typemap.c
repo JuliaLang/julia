@@ -1179,6 +1179,36 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
     }
 }
 
+// Test whether a single method-cache entry matches the concrete call
+// `(arg1, args...)` of `n` total arguments in `world`, applying the same tests
+// as `jl_typemap_entry_assoc_exact` does for one entry. Entries with guard
+// signatures or with signatures that require a subtyping test (`issimplesig`
+// unset) are rejected, so that a match implies the entry can be used directly
+// and the check itself stays cheap. Used by the callsite-associative dispatch
+// cache in gf.c, which may hold entries with non-leaf (e.g. `@nospecialize`d
+// or Vararg) signatures.
+int jl_cache_entry_matches(jl_typemap_entry_t *ml, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world)
+{
+    if (world < jl_atomic_load_relaxed(&ml->min_world) || world > jl_atomic_load_relaxed(&ml->max_world))
+        return 0;
+    if (ml->guardsigs != jl_emptysvec || !ml->issimplesig)
+        return 0;
+    size_t lensig = jl_nparams(ml->sig);
+    if (!(lensig == n || (ml->va && lensig <= n + 1)))
+        return 0;
+    if (ml->isleafsig)
+        return sig_match_leaf(arg1, args, jl_svec_data(ml->sig->parameters), n);
+    if (ml->simplesig != (void*)jl_nothing) {
+        size_t lensimplesig = jl_nparams(ml->simplesig);
+        int isva = lensimplesig > 0 && jl_is_vararg(jl_tparam(ml->simplesig, lensimplesig - 1));
+        if (!(lensig == n || (isva && lensimplesig <= n + 1)))
+            return 0;
+        if (!sig_match_simple(arg1, args, n, jl_svec_data(ml->simplesig->parameters), isva, lensimplesig))
+            return 0;
+    }
+    return sig_match_simple(arg1, args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig);
+}
+
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world)
 {
     // some manually-unrolled common special cases

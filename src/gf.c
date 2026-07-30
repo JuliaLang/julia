@@ -4717,10 +4717,25 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
 #define LOOP_BODY(_i) do { \
             i = _i; \
             entry = jl_atomic_load_relaxed(&call_cache[cache_idx[i]]); \
-            if (entry && nargs == jl_svec_len(entry->sig->parameters) && \
-                sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
-                world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) { \
-                goto have_entry; \
+            if (entry) { \
+                if (entry->isleafsig) { \
+                    if (nargs == jl_svec_len(entry->sig->parameters) && \
+                        sig_match_fast(FT, args, jl_svec_data(entry->sig->parameters), nargs) && \
+                        world >= jl_atomic_load_relaxed(&entry->min_world) && world <= jl_atomic_load_relaxed(&entry->max_world)) { \
+                        goto have_entry; \
+                    } \
+                } \
+                else { \
+                    /* root `entry` since jl_cache_entry_matches may safepoint, and \
+                     * a concurrent overwrite of the cache slot could otherwise \
+                     * drop the last reference to it */ \
+                    int matches; \
+                    JL_GC_PUSH1(&entry); \
+                    matches = jl_cache_entry_matches(entry, F, args, nargs, world); \
+                    JL_GC_POP(); \
+                    if (matches) \
+                        goto have_entry; \
+                } \
             } \
         } while (0);
     LOOP_BODY(0);
@@ -4757,8 +4772,10 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
                 }
             }
         }
-        if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-            // put the entry into the cache if it's valid for a leafsig lookup,
+        if (entry != NULL && entry->issimplesig && entry->guardsigs == jl_emptysvec) {
+            // put the entry into the cache if a fast per-entry match
+            // (`jl_cache_entry_matches`) can be used for it, i.e. anything but
+            // signatures that require a subtyping test or guard entries,
             // using pick_which to slightly randomize where it ends up
             // (intentionally not atomically synchronized, since we're just using it for randomness)
             // TODO: use the thread's `cong` instead as a source of randomness

@@ -1931,6 +1931,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
 
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t *arg1, jl_value_t **args, size_t n, int8_t offs, size_t world) JL_CANSAFEPOINT;
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *mn, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world) JL_CANSAFEPOINT;
+int jl_cache_entry_matches(jl_typemap_entry_t *ml, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world) JL_CANSAFEPOINT;
 STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(
     jl_typemap_t *ml_or_cache JL_PROPAGATES_ROOT,
     jl_value_t *arg1, jl_value_t **args, size_t n, int8_t offs, size_t world) JL_CANSAFEPOINT
