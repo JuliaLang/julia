@@ -1350,7 +1350,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
             !applicable(argextype, farg, ci, sptypes) && continue # TODO: Why is this failing during bootstrap
             ftyp = widenconst(argextype(farg, ci, sptypes))
 
-            if ftyp === typeof(Core.finalizer) && length(stmt.args) == 3
+            if ftyp === typeof(Core.finalizer) && 3 <= length(stmt.args) <= 5
                 finalizer = argextype(stmt.args[2], ci, sptypes)
                 obj = argextype(stmt.args[3], ci, sptypes)
                 atype = argtypes_to_type(Any[finalizer, obj])

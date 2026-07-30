@@ -16,6 +16,8 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     @test lines[3] == "arg1"
     @test lines[4] == "arg2"
     @test parse(Float64, lines[5]) isa Float64
+    @test lines[6] == "finalizers: 27 32"
+    @test lines[7] == "collected: 0 kept, 10 dropped"
 
     basic_jll_exe = joinpath(bindir, "basic_jll" * exe_suffix)
     lines = split(readchomp(`$basic_jll_exe`), "\n")
