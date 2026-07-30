@@ -9,11 +9,14 @@ function Core.Task(@nospecialize(f), reserved_stack::Int=0)
 end
 
 """
+    CapturedException(ex) <: Exception
     CapturedException(ex, bt) <: Exception
 
 Wrap an exception `ex` and its backtrace `bt` in a serializable container. `bt`
-must be a vector that [`StackTraces.stacktrace`](@ref) can process (typically
-the result of [`catch_backtrace`](@ref)).
+may be a raw backtrace as returned by [`backtrace`](@ref) or
+[`catch_backtrace`](@ref), or a vector of [`StackTraces.StackFrame`](@ref)s as
+returned by [`StackTraces.stacktrace`](@ref). If omitted, the stored backtrace
+is empty.
 """
 struct CapturedException <: Exception
     ex::Any
@@ -21,10 +24,16 @@ struct CapturedException <: Exception
     caused_by::ExceptionStack
 end
 
-CapturedException(ex, bt_raw::Vector) =
-    CapturedException(ex, _process_captured_bt(bt_raw), ExceptionStack(NamedTuple{(:exception, :backtrace)}[]))
+CapturedException(ex) = CapturedException(ex, Any[], ExceptionStack())
 
-_process_captured_bt(bt::Vector, frame_limit=100) = process_backtrace(stacktrace(bt))[1:min(frame_limit, end)]
+CapturedException(ex, bt_raw::Vector) =
+    CapturedException(ex, stacktrace(bt_raw))
+
+CapturedException(ex, frames::Vector{StackFrame}) =
+    CapturedException(ex, _process_captured_bt(frames), ExceptionStack())
+
+_process_captured_bt(frames::Vector{StackFrame}, frame_limit=100) =
+    process_backtrace(frames)[1:min(frame_limit, end)]
 
 """
     capture_exception(ex, bt)::Exception
@@ -40,12 +49,12 @@ capture_exception(ex, bt) = CapturedException(ex, bt)
 function capture_exception(stk::ExceptionStack)
     isempty(stk) && throw(ArgumentError("cannot capture an empty exception stack"))
     head = last(stk)
-    head_captured = capture_exception(head.exception, something(head.backtrace, Any[]))
+    head_captured = capture_exception(head.exception, something(head.backtrace, StackFrame[]))
     head_captured isa CapturedException || return head_captured
     causes = ExceptionStack(NamedTuple{(:exception, :backtrace)}[
         (;
             exception = e.exception,
-            backtrace = _process_captured_bt(something(e.backtrace, Any[]))
+            backtrace = e.backtrace === nothing ? Any[] : _process_captured_bt(stacktrace(e.backtrace))
         )
         for e in Iterators.take(stk, length(stk) - 1)
     ])

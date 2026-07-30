@@ -96,6 +96,25 @@ let
     @test occursin("root cause", rendered)
 end
 
+# field-wise reconstruction, as done by Distributed's ClusterSerializer
+let
+    e = try; error("processed"); catch e; CapturedException(e, catch_backtrace()); end
+    e2 = CapturedException(e.ex, e.processed_bt, Base.ExceptionStack())
+    @test e2.processed_bt == e.processed_bt
+    @test isempty(e2.caused_by)
+end
+
+# construction from stacktrace frames and without a backtrace
+let
+    e = try; error("frames"); catch e; CapturedException(e, stacktrace(catch_backtrace())); end
+    @test e isa CapturedException
+    @test !isempty(e.processed_bt)
+    @test e.processed_bt[1][1] isa Base.StackTraces.StackFrame
+    e2 = CapturedException(ErrorException("bare"))
+    @test isempty(e2.processed_bt)
+    @test isempty(e2.caused_by)
+end
+
 # issue #61440
 let buffer = Vector{Any}(undef, 5)
     asyncmap!(batch -> map(x -> x[1]^2, batch), buffer, 1:5; batch_size=2)
