@@ -387,7 +387,8 @@ function metadata(__source__, __module__, expr, ismodule)
     return :($(Dict{Symbol,Any})($(args...)))
 end
 
-function keyworddoc(__source__, __module__, str, def::Base.BaseDocs.Keyword)
+const EntryKind = Union{Base.BaseDocs.Keyword,Base.BaseDocs.Parameter}
+function entrydoc(__source__, __module__, str, def::EntryKind)
     @nospecialize str
     docstr = esc(docexpr(__source__, __module__, lazy_iterpolate(str), metadata(__source__, __module__, def, false)))
     return :($setindex!($(keywords), $docstr, $(esc(quot(def.name)))); nothing)
@@ -729,7 +730,7 @@ function _docm(source::LineNumberNode, mod::Module, meta, x, define::Bool = true
     #   kw"if", kw"else"
     #
     doc =
-    isa(x, Base.BaseDocs.Keyword) ? keyworddoc(source, mod, meta, x) :
+    isa(x, EntryKind) ? entrydoc(source, mod, meta, x) :
 
     # Method / macro definitions and "call" syntax.
     #
