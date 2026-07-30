@@ -375,11 +375,11 @@ struct jl_codegen_call_target_t {
     // neither = unused
 };
 
-// reification of a call to jl_jit_abi_convert, so that it isn't necessary to parse the Modules to recover this info
-struct cfunc_decl_t {
-    jl_abi_t abi;
-    llvm::GlobalVariable *cfuncdata;
-};
+// The caller ABI a DispatchTrampoline was keyed on (canonical type objects).
+inline jl_abi_t jl_trampoline_abi(jl_dispatch_trampoline_t *tr) JL_NOTSAFEPOINT
+{
+    return {tr->sigt, tr->rt, tr->specsig != 0, (jl_abi_kind_t)tr->kind};
+}
 
 std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx,
                                               const DataLayout &DL, const Triple &triple,
@@ -461,7 +461,12 @@ public:
     DenseMap<jl_code_instance_t *, jl_llvm_functions_t> ci_funcs;
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
 
-    SmallVector<cfunc_decl_t,0> cfuncs;
+    // Trampolines for reified @cfunction/@ccallable constructions.
+    SmallVector<jl_dispatch_trampoline_t*,0> cfuncs;
+    // Materialized ABIAdapters and their emitted functions, retained for serialization.
+    SmallVector<std::pair<jl_abi_adapter_t*, Function*>, 0> adapter_funcs;
+    // AOT-resolved trampoline targets retained for serialization.
+    DenseMap<jl_dispatch_trampoline_t*, jl_value_t*> trampoline_invokees;
     std::map<void*, GlobalVariable*> global_targets;
     jl_array_t *temporary_roots = nullptr;
     SmallSet<jl_value_t *, 8> temporary_roots_set;

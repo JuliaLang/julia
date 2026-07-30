@@ -388,6 +388,38 @@ show(io::IO, ms::MethodList) = show_method_table(io, ms)
 show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
 show(io::IO, mt::Core.MethodTable) = print(io, mt.module, ".", mt.name, " is a Core.MethodTable with ", length(mt), " methods.")
 
+# Items in one `jl_typemap_list_t` bucket: an intrusive `next`-linked list, or, once
+# re-indexed, an open-addressed table holding one item per assigned slot (re-indexing
+# abandons the `next` links rather than relinking, so they must not be followed there).
+function _cache_bucket_count(@nospecialize b)
+    n = 0
+    if b isa Memory{Any}
+        for i in 1:length(b)
+            isassigned(b, i) && (n += 1)
+        end
+        return n
+    end
+    r = b
+    while true
+        n += 1
+        isdefined(r, :next, :acquire) || break
+        r = getfield(r, :next, :acquire)
+    end
+    return n
+end
+
+# Total ABIAdapters / DispatchTrampolines in a `jl_typemap_list_t`
+function _cache_item_count(c)
+    total = Ref(0)
+    tm = getfield(c, :cache)
+    tm === nothing || visit(b -> (total[] += _cache_bucket_count(b); nothing), tm)
+    return total[]
+end
+show(io::IO, c::Core.ABIAdapterCache) = print(io, "Core.ABIAdapterCache with ",
+    _cache_item_count(c), " adapters.")
+show(io::IO, c::Core.DispatchTrampolineCache) = print(io, "Core.DispatchTrampolineCache with ",
+    _cache_item_count(c), " trampolines.")
+
 function inbase(m::Module)
     if m == Base
         true

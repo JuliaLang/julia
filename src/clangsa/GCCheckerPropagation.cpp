@@ -367,6 +367,10 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_unionall_t") ||
                    Name.ends_with_insensitive("jl_methtable_t") ||
                    Name.ends_with_insensitive("jl_methcache_t") ||
+                   Name.ends_with_insensitive("jl_abi_adapter_t") ||
+                   Name.ends_with_insensitive("jl_abi_adapter_cache_t") ||
+                   Name.ends_with_insensitive("jl_dispatch_trampoline_t") ||
+                   Name.ends_with_insensitive("jl_dispatch_trampoline_cache_t") ||
                    Name.ends_with_insensitive("jl_cgval_t") ||
                    Name.ends_with_insensitive("jl_codectx_t") ||
                    Name.ends_with_insensitive("jl_code_instance_t") ||
@@ -385,6 +389,7 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("interpreter_state") ||
                    Name.ends_with_insensitive("jl_typeenv_t") ||
                    Name.ends_with_insensitive("jl_stenv_t") ||
+                   Name.ends_with_insensitive("jl_typemap_list_t") ||
                    Name.ends_with_insensitive("set_world") ||
                    Name.ends_with_insensitive("jl_codectx_t") ||
                    Name.ends_with_insensitive("jl_codegen_params_t") ||

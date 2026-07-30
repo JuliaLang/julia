@@ -553,6 +553,7 @@
     YY(jl_dump_fptr_asm) \
     YY(jl_emit_native) \
     YY(jl_get_function_id) \
+    YY(jl_get_trampoline_invokee) \
     YY(jl_struct_to_llvm) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \

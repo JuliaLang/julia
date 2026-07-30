@@ -1053,6 +1053,79 @@ typedef struct _jl_methtable_t {
     jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
 } jl_methtable_t;
 
+// A cached thunk from a caller ABI to a CodeInstance (or `jl_apply_generic`).
+typedef struct _jl_abi_adapter_t {
+    JL_DATA_TYPE
+
+    // caller ABI
+    jl_value_t *sigt;
+    jl_value_t *rt;
+    uint8_t specsig;
+    uint8_t kind;                // jl_abi_kind_t of the caller ABI
+
+    // callee target
+    jl_code_instance_t *ci;      // target CodeInstance - NULL for an adapter to dynamic dispatch (`jl_apply_generic`)
+    _Atomic(void*) fptr;         // adapter fptr
+
+    _Atomic(struct _jl_abi_adapter_t*) next;
+} jl_abi_adapter_t;
+
+// Latest-world dispatch "trampoline" (cache) for a single invoke target.
+typedef struct _jl_dispatch_trampoline_t {
+    JL_DATA_TYPE
+
+    // dispatch target
+    jl_value_t *sigt;
+
+    // fptr ABI
+    jl_value_t *rt;              // declared return type
+    uint8_t kind;                // invokee / fptr jl_abi_kind_t
+    uint8_t specsig;
+
+    // Note that `sigt` is *not* the same as the ABI / `sigt` corresponding to fptr.
+    // The invokee ABI is a fixed function of the target + ABI details above though.
+
+    jl_value_t *last_invokee;
+    _Atomic(void*) fptr;         // copied from last_invokee
+    _Atomic(size_t) last_world;  // world for which `fptr`/`last_invokee` are valid, 0 = unresolved
+
+    _Atomic(struct _jl_dispatch_trampoline_t*) next;
+} jl_dispatch_trampoline_t;
+
+#define JL_TYPEMAP_LIST_NO_HASHMAP (~(unsigned)0)
+
+// Named so the safepoint annotations attach to the function type itself: on a member
+// declarator they would apply to the member, leaving calls through the pointer unanalyzed.
+typedef uintptr_t (*jl_typemap_list_hash_t)(jl_value_t *item) JL_NOTSAFEPOINT;
+typedef int (*jl_typemap_list_match_t)(jl_value_t *item, void *key) JL_CANSAFEPOINT;
+
+typedef struct {
+    size_t next_offset;           // offsetof the item's intrusive `next` field
+    unsigned max_list_count;      // max bucket size before switch from linked-list to hashmap
+    jl_typemap_list_hash_t hash;
+    jl_typemap_list_match_t match;
+} jl_typemap_list_config_t;
+
+typedef struct _jl_typemap_list_t {
+    _Atomic(jl_typemap_t*) root;
+// hidden fields:
+    const jl_typemap_list_config_t *config;
+} jl_typemap_list_t;
+
+typedef struct _jl_abi_adapter_cache_t {
+    JL_DATA_TYPE
+    jl_typemap_list_t cache;
+// hidden fields:
+    jl_mutex_t writelock;
+} jl_abi_adapter_cache_t;
+
+typedef struct _jl_dispatch_trampoline_cache_t {
+    JL_DATA_TYPE
+    jl_typemap_list_t cache;
+// hidden fields:
+    jl_mutex_t writelock;
+} jl_dispatch_trampoline_cache_t;
+
 typedef struct {
     JL_DATA_TYPE
     jl_sym_t *head;
@@ -1770,6 +1843,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_module(v)      jl_typetagis(v,jl_module_tag<<4)
 #define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
 #define jl_is_mcache(v)      jl_typetagis(v,jl_methcache_type)
+#define jl_is_dispatch_trampoline(v)  jl_typetagis(v,jl_dispatch_trampoline_type)
+#define jl_is_abi_adapter(v) jl_typetagis(v,jl_abi_adapter_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
 #define jl_is_cancel_source(v) jl_typetagis(v,jl_cancel_source_tag<<4)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)
