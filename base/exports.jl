@@ -1016,6 +1016,7 @@ export
     readlink,
     rm,
     samefile,
+    scandir,
     stat,
     symlink,
     tempdir,
