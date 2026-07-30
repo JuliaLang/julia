@@ -22,6 +22,10 @@ New language features
 Language changes
 ----------------
 
+  - The implementation of non-scalar indexed assignment (`A[I...] = X`) now matches its
+    documentation, throwing `DimensionMismatch` on incompatible shapes that the previous
+    implementation would permit, and allowing non-1-based axes on the right-hand value (`X`)
+    that would previously have been forbidden ([#59025]).
   - `Type{T} <: S` now holds only if every type `==` to `T` is an instance of `S`, fixing a
     long-standing soundness hole where e.g. `Type{Int} <: DataType` held even though types like
     `Tuple{S} where S<:Int` are `==` (and `isa`) their canonical spelling without being `DataType`s.
