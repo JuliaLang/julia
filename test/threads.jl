@@ -98,14 +98,23 @@ let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no th
         println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config starting")
         p = run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr), wait = false)
         if Sys.iswindows() && Sys.WORD_SIZE == 32
-            # backstop above the child's native watchdog (1500s): if even that
-            # thread is dead, report whether the child is spinning or asleep
-            # (cpu-time delta across 15s), then kill it
+            # Backstop above the child's own watchdog (1500s). Observe the
+            # child from here rather than from inside it: on 32-bit Windows the
+            # in-process unwinder only ever walks the main thread (jl_unw_step
+            # passes hMainThread to StackWalk64) and it needs DbgHelp, which a
+            # watchdog inside a wedged process must not touch. Nothing this
+            # does takes a lock in the target.
             if timedwait(() -> process_exited(p), 1800.0) !== :ok
                 pid = getpid(p)
                 for _ in 1:2
                     run(ignorestatus(`wmic process where processid=$pid get kernelmodetime,usermodetime`))
                     sleep(15)
+                end
+                try
+                    include(joinpath(@__DIR__, "windows_thread_dump.jl"))
+                    invokelatest(getfield(Main, :WindowsThreadDump).dump, pid)
+                catch e
+                    @error "external thread dump failed" exception=(e, catch_backtrace())
                 end
                 kill(p, Base.SIGKILL)
             end
