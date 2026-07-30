@@ -121,7 +121,7 @@ static jl_value_t *jl_deser_symbol(uint8_t tag)
 
 // --- encoding ---
 
-static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal);
+static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) JL_CANSAFEPOINT;
 #define jl_encode_value(s, v) jl_encode_value_((s), (jl_value_t*)(v), 0)
 
 static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
@@ -130,7 +130,7 @@ static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
         s->relocatability = 0;
 }
 
-static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
+static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v) JL_CANSAFEPOINT
 {
     jl_array_t *rs = s->method->roots;
     int i, l = jl_array_nrows(rs);
@@ -168,7 +168,7 @@ static void jl_encode_int32(jl_ircode_state *s, int32_t x)
     }
 }
 
-static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
+static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v) JL_CANSAFEPOINT
 {
     rle_reference rr = {.key = -1, .index = -1};
 
@@ -203,7 +203,7 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
     }
 }
 
-static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, size_t offset, size_t len)
+static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, size_t offset, size_t len) JL_CANSAFEPOINT
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typetagof(mem);
     size_t i;
@@ -321,7 +321,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
         write_uint8(s->s, TAG_LONG_SSAVALUE);
         write_uint16(s->s, ((jl_ssavalue_t*)v)->id);
     }
-    else if (jl_typetagis(v, jl_slotnumber_type) && jl_slot_number(v) <= UINT16_MAX && jl_slot_number(v) >= 0) {
+    else if (jl_is_slotnumber(v) && jl_slot_number(v) <= UINT16_MAX && jl_slot_number(v) >= 0) {
         write_uint8(s->s, TAG_SLOTNUMBER);
         write_uint16(s->s, jl_slot_number(v));
     }
@@ -572,9 +572,9 @@ static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t 
 
 // --- decoding ---
 
-static jl_value_t *jl_decode_value(jl_ircode_state *s);
+static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_CANSAFEPOINT;
 
-static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     size_t i, len;
     if (tag == TAG_SVEC)
@@ -589,7 +589,7 @@ static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag)
     return (jl_value_t*)sv;
 }
 
-static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t *mty, size_t nel)
+static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t *mty, size_t nel) JL_CANSAFEPOINT
 {
     jl_genericmemory_t *m = jl_alloc_genericmemory(mty, nel);
     JL_GC_PUSH1(&m);
@@ -598,7 +598,7 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
         jl_value_t **data = (jl_value_t**)m->ptr;
         size_t i, numel = m->length;
         for (i = 0; i < numel; i++) {
-            jl_gc_write(m, data[i], jl_decode_value(s));
+            jl_gc_write(m, data[i], jl_value_t, jl_decode_value(s));
         }
     }
     else if (layout->first_ptr >= 0) {
@@ -613,7 +613,7 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
                 jl_value_t **fld = &((jl_value_t**)data)[ptr];
                 if ((char*)fld != start)
                     ios_readall(s->s, start, (const char*)fld - start);
-                jl_gc_write(m, *fld, jl_decode_value(s));
+                jl_gc_write(m, *fld, jl_value_t, jl_decode_value(s));
                 start = (char*)&fld[1];
             }
             data += elsz;
@@ -630,9 +630,7 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
     return m;
 }
 
-JL_DLLEXPORT jl_array_t *jl_alloc_array_nd(jl_value_t *atype, size_t *dims, size_t ndims);
-
-static jl_value_t *jl_decode_value_array1d(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_array1d(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     int16_t ndims = 1;
     size_t dim0 = jl_unbox_long(jl_decode_value(s));
@@ -654,7 +652,7 @@ static jl_value_t *jl_decode_value_array1d(jl_ircode_state *s, uint8_t tag)
     return (jl_value_t*)a;
 }
 
-static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     size_t i, len;
     jl_sym_t *head = NULL;
@@ -679,13 +677,13 @@ static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag)
     jl_value_t **data = jl_array_ptr_data(e->args);
     jl_value_t *owner = jl_array_owner(e->args);
     for (i = 0; i < len; i++) {
-        jl_gc_write(owner, data[i], jl_decode_value(s));
+        jl_gc_write(owner, data[i], jl_value_t, jl_decode_value(s));
     }
     JL_GC_POP();
     return (jl_value_t*)e;
 }
 
-static jl_value_t *jl_decode_value_phi(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_phi(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     size_t i, len_e, len_v;
     if (tag == TAG_PHINODE) {
@@ -708,13 +706,13 @@ static jl_value_t *jl_decode_value_phi(jl_ircode_state *s, uint8_t tag)
     }
     jl_value_t **data_v = jl_array_ptr_data(v);
     for (i = 0; i < len_v; i++) {
-        jl_gc_write(jl_array_owner(v), data_v[i], jl_decode_value(s));
+        jl_gc_write(jl_array_owner(v), data_v[i], jl_value_t, jl_decode_value(s));
     }
     JL_GC_POP();
     return phi;
 }
 
-static jl_value_t *jl_decode_value_phic(jl_ircode_state *s, uint8_t tag)
+static jl_value_t *jl_decode_value_phic(jl_ircode_state *s, uint8_t tag) JL_CANSAFEPOINT
 {
     size_t i, len;
     if (tag == TAG_PHICNODE)
@@ -727,13 +725,13 @@ static jl_value_t *jl_decode_value_phic(jl_ircode_state *s, uint8_t tag)
     phic = jl_new_struct(jl_phicnode_type, v);
     jl_value_t **data = jl_array_ptr_data(v);
     for (i = 0; i < len; i++) {
-        jl_gc_write(jl_array_owner(v), data[i], jl_decode_value(s));
+        jl_gc_write(jl_array_owner(v), data[i], jl_value_t, jl_decode_value(s));
     }
     JL_GC_POP();
     return phic;
 }
 
-static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s)
+static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s) JL_CANSAFEPOINT
 {
     jl_module_t *mod = (jl_module_t*)jl_decode_value(s);
     JL_GC_PROMISE_ROOTED(mod);
@@ -742,7 +740,7 @@ static jl_value_t *jl_decode_value_globalref(jl_ircode_state *s)
     return jl_module_globalref(mod, var);
 }
 
-static jl_value_t *jl_decode_value_any(jl_ircode_state *s)
+static jl_value_t *jl_decode_value_any(jl_ircode_state *s) JL_CANSAFEPOINT
 {
     jl_datatype_t *dt = (jl_datatype_t*)jl_decode_value(s);
     JL_GC_PROMISE_ROOTED(dt); // (JL_ALWAYS_LEAFTYPE)
@@ -763,7 +761,7 @@ static jl_value_t *jl_decode_value_any(jl_ircode_state *s)
             jl_value_t **fld = &((jl_value_t**)data)[ptr];
             if ((char*)fld != start)
                 ios_readall(s->s, start, (const char*)fld - start);
-            jl_gc_write(v, *fld, jl_decode_value(s));
+            jl_gc_write(v, *fld, jl_value_t, jl_decode_value(s));
             start = (char*)&fld[1];
         }
         JL_GC_POP();
@@ -1020,7 +1018,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     ios_mem(&dest, 0);
 
     if (m->roots == NULL) {
-        jl_gc_write(m, m->roots, jl_alloc_vec_any(0));
+        jl_gc_write(m, m->roots, jl_array_t, jl_alloc_vec_any(0));
     }
     jl_value_t *edges = code->edges;
     jl_ircode_state s = {
@@ -1142,7 +1140,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->inlining_cost = jl_decode_inlining_cost(read_uint8(s.s));
 
     size_t nslots = read_int32(s.s);
-    jl_gc_write(code, code->slotflags, jl_alloc_array_1d(jl_array_uint8_type, nslots));
+    jl_gc_write(code, code->slotflags, jl_array_t, jl_alloc_array_1d(jl_array_uint8_type, nslots));
     ios_readall(s.s, jl_array_data(code->slotflags, char), nslots);
 
     if (flags.bits.nargsmatchesmethod) {
@@ -1152,14 +1150,14 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     }
 
     size_t i, l = read_uint64(s.s);
-    jl_gc_write(code, code->code, jl_alloc_array_1d(jl_array_any_type, l));
+    jl_gc_write(code, code->code, jl_array_t, jl_alloc_array_1d(jl_array_any_type, l));
     for (i = 0; i < l; i++) {
         s.ssaid = i;
         jl_array_ptr_set(code->code, i, jl_decode_value(&s));
     }
     s.ssaid = 0;
-    jl_gc_write(code, code->ssavaluetypes, jl_decode_value(&s));
-    jl_gc_write(code, code->ssaflags, jl_alloc_array_1d(jl_array_uint32_type, l));
+    jl_gc_write(code, code->ssavaluetypes, jl_value_t, jl_decode_value(&s));
+    jl_gc_write(code, code->ssaflags, jl_array_t, jl_alloc_array_1d(jl_array_uint32_type, l));
     uint32_t *ssaflags_data = jl_array_data(code->ssaflags, uint32_t);
     if (flags.bits.has_ssaflags)
         ios_readall(s.s, (char*)ssaflags_data, l * sizeof(*ssaflags_data));
@@ -1167,20 +1165,20 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         memset(ssaflags_data, 0, l * sizeof(*ssaflags_data));
 
     if (m->is_for_opaque_closure) {
-        jl_gc_write(code, code->slottypes, jl_decode_value(&s));
+        jl_gc_write(code, code->slottypes, jl_value_t, jl_decode_value(&s));
     }
 
     slotnames = jl_decode_value(&s);
     if (!jl_is_string(slotnames))
         slotnames = m->slot_syms;
-    jl_gc_write(code, code->slotnames, jl_uncompress_argnames(slotnames));
+    jl_gc_write(code, code->slotnames, jl_array_t, jl_uncompress_argnames(slotnames));
 
     if (metadata) {
         jl_debuginfo_t *new_debuginfo = jl_atomic_load_relaxed(&metadata->debuginfo);
         jl_gc_wb(code, new_debuginfo);
         code->debuginfo = new_debuginfo;
     } else
-        jl_gc_write(code, code->debuginfo, m->debuginfo);
+        jl_gc_write(code, code->debuginfo, jl_debuginfo_t, m->debuginfo);
     assert(code->debuginfo);
     assert(jl_array_nrows(code->code) == codelocs_nstmts(code->debuginfo->codelocs) || jl_string_len(code->debuginfo->codelocs) == 0);
 
@@ -1191,11 +1189,11 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     ios_close(s.s);
     JL_UNLOCK(&m->writelock); // Might GC
     if (metadata) {
-        jl_gc_write(code, code->parent, jl_get_ci_mi(metadata));
-        jl_gc_write(code, code->rettype, metadata->rettype);
+        jl_gc_write(code, code->parent, jl_method_instance_t, jl_get_ci_mi(metadata));
+        jl_gc_write(code, code->rettype, jl_value_t, metadata->rettype);
         code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
         code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
-        jl_gc_write(code, code->edges, (jl_value_t*)s.edges);
+        jl_gc_write(code, code->edges, jl_value_t, (jl_value_t*)s.edges);
     }
     JL_GC_POP();
 

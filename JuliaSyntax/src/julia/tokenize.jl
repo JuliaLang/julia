@@ -447,6 +447,15 @@ function emit_operator_or_compound_assign(l::Lexer, kind::Kind, prec::Precedence
     return emit_operator(l, kind, prec)
 end
 
+# Emit wrapping arithmetic operators with their own kind so `+%=`, `-%=`, and
+# `*%=` can round-trip to distinct update-assignment heads.
+function emit_wrapping_operator_or_compound_assign(l::Lexer, kind::Kind, prec::PrecedenceLevel)
+    if compound_assign_follows(l)
+        return emit_operator(l, kind, PREC_COMPOUND_ASSIGN)
+    end
+    return emit_operator(l, kind, prec)
+end
+
 function emit_trivia(l::Lexer, kind::Kind)
     tok = RawToken(kind, startpos(l), position(l) - 1, PREC_NONE)
     l.last_token = kind
@@ -922,6 +931,8 @@ end
 function lex_plus(l::Lexer)
     if accept(l, '+')
         return emit_operator(l, K"++", PREC_PLUS)
+    elseif accept(l, '%')
+        return emit_wrapping_operator_or_compound_assign(l, K"+%", PREC_PLUS)
     end
     return emit_operator_or_compound_assign(l, K"+", PREC_PLUS)
 end
@@ -935,6 +946,8 @@ function lex_minus(l::Lexer)
         end
     elseif l.last_token != K"." && accept(l, '>')
         return emit_operator(l, K"->", PREC_ARROW)
+    elseif accept(l, '%')
+        return emit_wrapping_operator_or_compound_assign(l, K"-%", PREC_PLUS)
     end
     return emit_operator_or_compound_assign(l, K"-", PREC_PLUS)
 end
@@ -942,6 +955,8 @@ end
 function lex_star(l::Lexer)
     if accept(l, '*')
         return emit(l, K"Error**") # "**" is an invalid operator; use ^
+    elseif accept(l, '%')
+        return emit_wrapping_operator_or_compound_assign(l, K"*%", PREC_TIMES)
     end
     return emit_operator_or_compound_assign(l, K"*", PREC_TIMES)
 end
@@ -1005,7 +1020,7 @@ function lex_digit(l::Lexer, kind)
             accept(l, "+-−")
             if accept_batch(l, isdigit)
                 pc,ppc = dpeekchar(l)
-                if pc === '.' && !is_dottable_operator_start_char(ppc)
+                if pc === '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
                     readchar(l)
                     return emit(l, K"ErrorInvalidNumericConstant") # `1.e1.`
                 end
@@ -1026,7 +1041,7 @@ function lex_digit(l::Lexer, kind)
         accept(l, "+-−")
         if accept_batch(l, isdigit)
             pc,ppc = dpeekchar(l)
-            if pc === '.' && !is_dottable_operator_start_char(ppc)
+            if pc === '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
                 accept(l, '.')
                 return emit(l, K"ErrorInvalidNumericConstant") # `1e1.`
             end
@@ -1055,8 +1070,8 @@ function lex_digit(l::Lexer, kind)
                 end
                 # Check for invalid trailing decimal point
                 # https://github.com/JuliaLang/julia/issues/60189
-                pc = peekchar(l)
-                if pc == '.'
+                pc,ppc = dpeekchar(l)
+                if pc == '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
                     accept_batch(l, c->(c == '.' || isdigit(c)))
                     # `0x1p3.` `0x1p3.2` `0x1.5p2.3`
                     return emit(l, K"ErrorInvalidNumericConstant")

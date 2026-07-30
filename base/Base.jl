@@ -32,6 +32,8 @@ end
 
 # metaprogramming
 include("meta.jl")
+using .Meta
+using .Meta: is_id_char
 
 # Strings
 include("multimedia.jl")
@@ -100,7 +102,11 @@ include("set.jl")
 include("io.jl")
 include("iobuffer.jl")
 
+# Dynamic scopes (types only; the ScopedValues API is included much later)
+include("scope.jl")
+
 # Concurrency (part 1)
+include("cancellation.jl")
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")

@@ -17,6 +17,7 @@ JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, size_t *num, void 
 JL_DLLEXPORT void jl_get_llvm_gv_inits_fallback(void *native_code, size_t *num, void **inits) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, size_t *num_els, jl_code_instance_t *fns) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_cis_fallback(void *native_code, size_t *num_els, jl_code_instance_t **CIs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_mi_cache_order_fallback(void *native_code, size_t *num_els, jl_code_instance_t **CIs) UNAVAILABLE
 
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
@@ -60,10 +61,10 @@ JL_DLLEXPORT void jl_emit_codeinsts_to_jit_fallback(jl_code_instance_t **codeins
         if (jl_is_code_info(inferred))
             continue;
         if (jl_is_svec(src->edges)) {
-            jl_gc_write_atomic(codeinst, codeinst->inferred, (jl_value_t*)src->edges, release);
+            jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, (jl_value_t*)src->edges, release);
         }
-        jl_gc_write_atomic(codeinst, codeinst->debuginfo, src->debuginfo, release);
-        jl_gc_write_atomic(codeinst, codeinst->inferred, (jl_value_t*)src, release);
+        jl_gc_write_atomic(codeinst, codeinst->debuginfo, jl_debuginfo_t, src->debuginfo, release);
+        jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, (jl_value_t*)src, release);
     }
 }
 
@@ -84,9 +85,19 @@ JL_DLLEXPORT void jl_teardown_codegen_fallback(void) JL_NOTSAFEPOINT
 {
 }
 
+JL_DLLEXPORT void jl_decorate_llvm_module_fallback(LLVMModuleRef m) JL_NOTSAFEPOINT
+{
+    (void)m;
+}
+
 JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
 {
     return 0;
+}
+
+JL_DLLEXPORT const char *jl_objcache_disabled_notice_fallback(void)
+{
+    return NULL;
 }
 
 JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)
@@ -98,7 +109,7 @@ JL_DLLEXPORT void jl_jit_unregister_ci_fallback(jl_code_instance_t *ci)
 }
 
 JL_DLLEXPORT void *jl_create_native_fallback(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis) UNAVAILABLE
-JL_DLLEXPORT void *jl_emit_native_fallback(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) UNAVAILABLE
+JL_DLLEXPORT void *jl_emit_native_fallback(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {
@@ -133,7 +144,7 @@ JL_DLLEXPORT jl_value_t *jl_get_libllvm_fallback(void) JL_NOTSAFEPOINT
     return jl_nothing;
 }
 
-JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
+JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr) JL_NOTSAFEPOINT
 {
     return 0;
 }

@@ -240,7 +240,7 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    maxprobe < sz || throw(AssertionError()) # This error will never trigger, but is needed for terminates_locally to be valid
+    maxprobe < sz || throw(h) # This error will never trigger, but is needed for terminates_locally to be valid
     index, sh = hashindex(key, sz)
     keys = h.keys
 
@@ -908,7 +908,7 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
     global function _keyvalueset(dict::PersistentDict{K, V}, key, val) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=#true)
+        found, present, trie, i, bi, top, hs = HAMT.path(trie, h, #=persistent=#true)
         HAMT.insert!(found, present, trie, i, bi, hs, val)
         return new{K, V}(top)
     end
@@ -919,7 +919,7 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
     global function _keyvalueset(dict::PersistentDict{K, V}, key) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=#true)
+        found, present, trie, i, bi, top, _ = HAMT.path(trie, h, #=persistent=#true)
         if found && present
             deleteat!(trie.data, i)
             HAMT.unset!(trie, bi)
@@ -1031,7 +1031,7 @@ end
         return nothing
     end
     h = HAMT.HashState(key)
-    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
+    found, present, trie, i, _, _, _ = HAMT.path(trie, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
         return Some{V}(leaf.val)

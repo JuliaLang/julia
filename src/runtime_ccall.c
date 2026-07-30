@@ -25,7 +25,7 @@ jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 static htable_t libMap;
 static jl_mutex_t libmap_lock;
 
-void *jl_get_library_(const char *f_lib, int throw_err)
+void *jl_get_library_(const char *f_lib, int throw_err) JL_CANSAFEPOINT
 {
     if (f_lib == NULL)
         return jl_RTLD_DEFAULT_handle;
@@ -72,7 +72,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
     else if (jl_is_string(f_name))
         fname_str = jl_string_data(f_name);
     else
-        jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, f_name);
+        jl_type_error("cglobal/ccall function name", (jl_value_t*)jl_symbol_type, f_name);
 
     if (lib_val) {
         if (jl_is_symbol(lib_val))
@@ -82,7 +82,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
         else if (jl_libdl_dlopen_func != NULL) {
             lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lib_val, 1));
         } else
-            jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
+            jl_type_error("cglobal/ccall", (jl_value_t*)jl_symbol_type, lib_val);
     }
     else {
         // If the user didn't supply a library name, try to find it now from the runtime value of f_name
@@ -97,7 +97,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
 // miscellany
 
 JL_DLLEXPORT
-jl_value_t *jl_get_JIT(void)
+jl_value_t *jl_get_JIT(void) JL_CANSAFEPOINT
 {
     const char *JITName = "ORCJIT";
     return jl_pchar_to_string(JITName, strlen(JITName));
@@ -378,7 +378,6 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
     jl_value_t *declrt = *cfuncdata->declrt;
     JL_GC_PROMISE_ROOTED(declrt);
     int specsig = cfuncdata->flags & 1;
-    size_t nargs = jl_nparams(sigt);
     jl_value_t *mi;
     jl_code_instance_t *codeinst;
     size_t world;
@@ -426,7 +425,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         return f; // another thread fixed this up while we were away
     }
     int is_opaque_closure = 0;
-    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure };
+    jl_abi_t from_abi = { sigt, declrt, specsig, is_opaque_closure };
     if (codeinst == NULL) {
         // Generate an adapter to a dynamic dispatch
         if (cfuncdata->unspecialized == NULL)

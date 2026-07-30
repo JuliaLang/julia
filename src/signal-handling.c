@@ -10,6 +10,10 @@
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
 #endif
+#ifdef _OS_LINUX_
+#include <sys/prctl.h>
+#include <sys/syscall.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,22 +32,34 @@ volatile int profile_running = 0;
 volatile int profile_all_tasks = 0;
 static const uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
-JL_DLLEXPORT void jl_profile_stop_timer(void);
-JL_DLLEXPORT int jl_profile_start_timer(uint8_t);
+JL_DLLEXPORT void jl_profile_stop_timer(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_profile_start_timer(uint8_t) JL_NOTSAFEPOINT;
 
 ///////////////////////
 // Utility functions //
 ///////////////////////
 JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
+    uv_mutex_lock(&bt_data_prof_lock);
+    if (profile_running) {
+        // the sampler may be writing into the buffer we are about to free. Note this
+        // only rules out re-initializing while running: `jl_profile_stop_timer` doesn't
+        // wait for a sampler iteration already under way, and the thread samplers write
+        // without taking this lock.
+        uv_mutex_unlock(&bt_data_prof_lock);
+        return -2;
+    }
     profile_bt_size_max = maxsize;
     nsecprof = delay_nsec;
     if (profile_bt_data_prof != NULL)
         free((void*)profile_bt_data_prof);
     profile_bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
-    if (profile_bt_data_prof == NULL && maxsize > 0)
+    if (profile_bt_data_prof == NULL && maxsize > 0) {
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -1;
+    }
     profile_bt_size_cur = 0;
+    uv_mutex_unlock(&bt_data_prof_lock);
     return 0;
 }
 
@@ -111,7 +127,13 @@ static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 #endif
 }
 
-int jl_lock_profile(void)
+void jl_lock_profile(void)
+{
+    int got = jl_trylock_profile();
+    assert(got); (void)got;
+}
+
+int jl_trylock_profile(void)
 {
     uintptr_t held = jl_lock_profile_rd_held();
     if (held == -1)
@@ -135,7 +157,7 @@ int jl_lock_profile(void)
     return 1;
 }
 
-JL_DLLEXPORT void jl_unlock_profile(void)
+JL_DLLEXPORT void jl_unlock_profile(void) JL_NO_SAFEPOINT_ANALYSIS
 {
     uintptr_t held = jl_lock_profile_rd_held();
     assert(held && held != -1);
@@ -164,7 +186,7 @@ int jl_lock_profile_wr(void)
     return 1;
 }
 
-void jl_unlock_profile_wr(void)
+void jl_unlock_profile_wr(void) JL_NO_SAFEPOINT_ANALYSIS
 {
     uintptr_t held = jl_lock_profile_rd_held();
     assert(held == -1);
@@ -210,7 +232,7 @@ static int *profile_get_randperm(int size)
 }
 
 
-JL_DLLEXPORT int jl_profile_is_buffer_full(void)
+JL_DLLEXPORT int jl_profile_is_buffer_full(void) JL_NOTSAFEPOINT
 {
     // Declare buffer full if there isn't enough room to sample even just the
     // thread metadata and one max-sized frame. The `+ 6` is for the two block
@@ -218,13 +240,10 @@ JL_DLLEXPORT int jl_profile_is_buffer_full(void)
     return profile_bt_size_cur + ((JL_BT_MAX_ENTRY_SIZE + 1) + 6) > profile_bt_size_max;
 }
 
-NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
-NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
-
 #define PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE (0)
 #define PROFILE_TASK_DEBUG_FORCE_STOP_THREAD_FAILURE (0)
 
-void jl_profile_task(void)
+void jl_profile_task(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
 {
     if (jl_profile_is_buffer_full()) {
         // Buffer full: Delete the timer
@@ -271,7 +290,7 @@ collect_backtrace:
         return;
     }
 
-    jl_record_backtrace_result_t r = {0, INT16_MAX};
+    jl_record_backtrace_result_t r = {0, -1};
     jl_bt_element_t *bt_data_prof = (jl_bt_element_t*)(profile_bt_data_prof + profile_bt_size_cur);
     size_t bt_size_max = profile_bt_size_max - profile_bt_size_cur - 1;
     if (t == NULL || PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE) {
@@ -292,7 +311,7 @@ collect_backtrace:
     profile_bt_size_cur += r.bt_size;
 
     // store threadid but add 1 as 0 is preserved to indicate end of block
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = (uintptr_t)r.tid + 1;
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = r.tid == -1 ? -1 : (uintptr_t)r.tid + 1;
 
     // store task id (never null)
     profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)t;
@@ -381,7 +400,7 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 }
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
-void jl_fprint_sigill(ios_t *s, void *_ctx);
+static void jl_fprint_sigill(ios_t *s, void *_ctx);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
     || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
     || (defined(_OS_LINUX_) && defined(_CPU_ARM_)) \
@@ -423,7 +442,7 @@ JL_DLLEXPORT void jl_set_peek_cond(uv_async_t *cond)
     JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
 }
 
-static void jl_check_profile_autostop(void)
+static void jl_check_profile_autostop(void) JL_NOTSAFEPOINT
 {
     if (profile_show_peek_cond_loc != NULL && profile_autostop_time != -1.0 && jl_hrtime() > profile_autostop_time) {
         profile_autostop_time = -1.0;
@@ -444,6 +463,113 @@ static void jl_check_profile_autostop(void)
 static void stack_overflow_warning(void)
 {
     jl_safe_printf("Warning: detected a stack overflow; program state may be corrupted, so further execution might be unreliable.\n");
+}
+
+// Async-signal-safe replacement for libc strsignal(). We call this from fatal-signal
+// handlers, and glibc's strsignal() is not async-signal-safe: it routes through gettext
+// (to localize the description), which calls malloc(). If the interrupted thread already
+// held the malloc arena lock, that reentrant malloc() self-deadlocks. A fixed table of
+// string literals avoids gettext/malloc entirely and is portable across libc flavors
+// (musl/BSD/macOS lack glibc's sigdescr_np/sigabbrev_np). Cases are #ifdef-guarded so this
+// compiles wherever a given signal is (or is not) defined.
+static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
+{
+    switch (sig) {
+#ifdef SIGHUP
+    case SIGHUP:     return "Hangup";
+#endif
+#ifdef SIGINT
+    case SIGINT:     return "Interrupt";
+#endif
+#ifdef SIGQUIT
+    case SIGQUIT:    return "Quit";
+#endif
+#ifdef SIGILL
+    case SIGILL:     return "Illegal instruction";
+#endif
+#ifdef SIGTRAP
+    case SIGTRAP:    return "Trace/breakpoint trap";
+#endif
+#ifdef SIGABRT
+    case SIGABRT:    return "Aborted";
+#endif
+#if defined(SIGABRT_COMPAT) && (!defined(SIGABRT) || SIGABRT_COMPAT != SIGABRT)
+    case SIGABRT_COMPAT: return "Aborted";
+#endif
+#ifdef SIGBUS
+    case SIGBUS:     return "Bus error";
+#endif
+#ifdef SIGFPE
+    case SIGFPE:     return "Floating point exception";
+#endif
+#ifdef SIGKILL
+    case SIGKILL:    return "Killed";
+#endif
+#ifdef SIGUSR1
+    case SIGUSR1:    return "User defined signal 1";
+#endif
+#ifdef SIGSEGV
+    case SIGSEGV:    return "Segmentation fault";
+#endif
+#ifdef SIGUSR2
+    case SIGUSR2:    return "User defined signal 2";
+#endif
+#ifdef SIGPIPE
+    case SIGPIPE:    return "Broken pipe";
+#endif
+#ifdef SIGALRM
+    case SIGALRM:    return "Alarm clock";
+#endif
+#ifdef SIGTERM
+    case SIGTERM:    return "Terminated";
+#endif
+#ifdef SIGBREAK
+    case SIGBREAK:   return "Break";
+#endif
+#ifdef SIGSTKFLT
+    case SIGSTKFLT:  return "Stack fault";
+#endif
+#ifdef SIGCHLD
+    case SIGCHLD:    return "Child exited";
+#endif
+#ifdef SIGCONT
+    case SIGCONT:    return "Continued";
+#endif
+#ifdef SIGSTOP
+    case SIGSTOP:    return "Stopped (signal)";
+#endif
+#ifdef SIGTSTP
+    case SIGTSTP:    return "Stopped";
+#endif
+#ifdef SIGTTIN
+    case SIGTTIN:    return "Stopped (tty input)";
+#endif
+#ifdef SIGTTOU
+    case SIGTTOU:    return "Stopped (tty output)";
+#endif
+#ifdef SIGURG
+    case SIGURG:     return "Urgent I/O condition";
+#endif
+#ifdef SIGXCPU
+    case SIGXCPU:    return "CPU time limit exceeded";
+#endif
+#ifdef SIGXFSZ
+    case SIGXFSZ:    return "File size limit exceeded";
+#endif
+#ifdef SIGVTALRM
+    case SIGVTALRM:  return "Virtual timer expired";
+#endif
+#ifdef SIGPROF
+    case SIGPROF:    return "Profiling timer expired";
+#endif
+#ifdef SIGWINCH
+    case SIGWINCH:   return "Window changed";
+#endif
+#ifdef SIGSYS
+    case SIGSYS:     return "Bad system call";
+#endif
+    default:         return "Unknown signal";
+    }
 }
 
 #if defined(_WIN32)
@@ -484,7 +610,7 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
 #endif
 }
 
-void jl_fprint_sigill(ios_t *s, void *_ctx)
+static void jl_fprint_sigill(ios_t *s, void *_ctx)
 {
     char *pc = (char*)jl_get_pc_from_ctx(_ctx);
     // unsupported platform
@@ -575,13 +701,11 @@ void jl_fprint_sigill(ios_t *s, void *_ctx)
 #endif
 }
 
-void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-
 // make it invalid for a task to return from this point to its stack
 // this is generally quite a foolish operation, but does free you up to do
 // arbitrary things on this stack now without worrying about corrupt state that
 // existed already on it
-void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
+void jl_task_frame_noreturn(jl_task_t *ct)
 {
     jl_set_safe_restore(NULL);
     if (ct) {
@@ -591,8 +715,10 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         // Force all locks to drop. Is this a good idea? Of course not. But the alternative would probably deadlock instead of crashing.
         jl_ptls_t ptls = ct->ptls;
         small_arraylist_t *locks = &ptls->locks;
+#ifndef __clang_safetyanalysis__
         for (size_t i = locks->len; i > 0; i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
+#endif
         locks->len = 0;
         ptls->in_pure_callback = 0;
         ptls->in_finalizer = 0;
@@ -611,6 +737,9 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
     size_t i, n = ct ? *bt_size : 0;
+    // Threads unknown to Julia have no ptls, and hence no pre-allocated
+    // backtrace buffer; a small stack buffer is used for them instead.
+    jl_bt_element_t bt_data_foreign[JL_BT_MAX_ENTRY_SIZE * 8];
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jl_fprint_backtrace in jl_exit)
         // and also resets the state of ct and ptls so that some code can run on this task again
@@ -636,9 +765,9 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
         if (si_code)
-            jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, jl_strsignal(sig));
         else
-            jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, jl_strsignal(sig));
         if (sig == SIGQUIT) {
             jl_print_task_backtraces(0);
         }
@@ -649,9 +778,29 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
         // is properly rooted.
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
     }
+    else if (context) {
+        // The faulting thread was not created or adopted by Julia (e.g. a
+        // thread started by foreign code that crashed without ever calling
+        // into Julia), so it has no Julia task or backtrace buffer. Record a
+        // native-only backtrace into the local buffer instead, so that at
+        // least the faulting instruction pointer is reported.
+#ifdef _OS_LINUX_
+        char thread_name[16]; // the kernel limits thread names to 16 bytes (TASK_COMM_LEN)
+        if (prctl(PR_GET_NAME, (unsigned long)thread_name, 0, 0, 0) != 0)
+            thread_name[0] = '\0';
+        jl_safe_fprintf(s, "unknown thread \"%s\" (os tid %ld); this thread is not managed by Julia, no Julia backtrace available\n",
+                        thread_name, (long)syscall(SYS_gettid));
+#else
+        jl_safe_fprintf(s, "unknown thread; this thread is not managed by Julia, no Julia backtrace available\n");
+#endif
+        bt_data = bt_data_foreign;
+        n = rec_backtrace_ctx(bt_data, sizeof(bt_data_foreign) / sizeof(jl_bt_element_t), context, NULL);
+    }
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
         jl_fprint_bt_entry_codeloc(s, bt_data + i);
     }
+    if (n == 0 && context)
+        jl_safe_fprintf(s, "no backtrace could be recorded from the signal context\n");
     jl_gc_debug_fprint_status(s);
     jl_gc_debug_fprint_critical_error(s);
 }

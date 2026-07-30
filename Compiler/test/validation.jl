@@ -125,10 +125,11 @@ end
     @test errors[1].kind === Compiler.SSAFLAGS_MISMATCH
 end
 
-@testset "NON_TOP_LEVEL_METHOD" begin
+@testset "INVALID_EXPR_HEAD for :method" begin
+    # :method is no longer a valid Expr head (replaced by Core.define_method builtin)
     c = copy(c0)
     c.code[1] = Expr(:method, :dummy)
     errors = Compiler.validate_code(c)
     @test length(errors) == 1
-    @test errors[1].kind === Compiler.NON_TOP_LEVEL_METHOD
+    @test errors[1].kind === Compiler.INVALID_EXPR_HEAD
 end

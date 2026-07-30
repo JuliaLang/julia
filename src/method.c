@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
+static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at) JL_CANSAFEPOINT
 {
     if (jl_is_svec(rt))
         jl_errorf("%s: missing return type", where);
@@ -39,13 +39,13 @@ void jl_add_scanned_method(jl_module_t *m, jl_method_t *meth)
 {
     JL_LOCK(&m->lock);
     if (m->scanned_methods == jl_nothing) {
-        jl_gc_write(m, m->scanned_methods, (jl_value_t*)jl_alloc_vec_any(0));
+        jl_gc_write(m, m->scanned_methods, jl_value_t, (jl_value_t*)jl_alloc_vec_any(0));
     }
     jl_array_ptr_1d_push((jl_array_t*)m->scanned_methods, (jl_value_t*)meth);
     JL_UNLOCK(&m->lock);
 }
 
-JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
+JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src) JL_CANSAFEPOINT
 {
     if (!jl_atomic_fetch_or(&m->did_scan_source, 1)) {
         jl_code_info_t *code = NULL;
@@ -73,10 +73,91 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
     }
 }
 
+static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const char *kind) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *fptr = jl_exprarg(e, 0);
+    if (jl_is_quotenode(fptr)) {
+        if (jl_is_string(jl_quotenode_value(fptr)) || jl_is_tuple(jl_quotenode_value(fptr)))
+            fptr = jl_quotenode_value(fptr);
+    }
+    if (jl_is_tuple(fptr)) {
+        jl_expr_t *tupex = jl_exprn(jl_tuple_sym, jl_nfields(fptr));
+        jl_value_t *v = NULL;
+        JL_GC_PUSH2(&tupex, &v);
+        for (long i = 0; i < jl_nfields(fptr); i++) {
+            v = jl_fieldref(fptr, i);
+            if (!jl_is_string(v))
+                v = jl_new_struct(jl_quotenode_type, v);
+            jl_exprargset(tupex, i, v);
+        }
+        jl_exprargset(e, 0, tupex);
+        fptr = (jl_value_t*)tupex;
+        JL_GC_POP();
+    }
+    if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == jl_tuple_sym) {
+        jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
+        size_t nargs_tuple = jl_expr_nargs(tuple_expr);
+        if (nargs_tuple == 0)
+            jl_errorf("%s function name cannot be empty tuple", kind);
+        if (nargs_tuple > 2)
+            jl_errorf("%s function name tuple can have at most 2 elements", kind);
+        for (size_t i = 0; i < nargs_tuple; i++) {
+            jl_value_t *arg = jl_exprarg(tuple_expr, i);
+            if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_dot_sym) {
+                jl_expr_t *dot_expr = (jl_expr_t*)arg;
+                if (jl_expr_nargs(dot_expr) != 2)
+                    jl_errorf("%s function name: invalid dot expression", kind);
+                jl_value_t *mod_expr = jl_exprarg(dot_expr, 0);
+                jl_value_t *sym_expr = jl_exprarg(dot_expr, 1);
+                if (!(jl_is_quotenode(sym_expr) && jl_is_symbol(jl_quotenode_value(sym_expr))))
+                    jl_type_error("ccall/cglobal name dot expression", (jl_value_t*)jl_symbol_type, sym_expr);
+                JL_TRY {
+                    jl_value_t *mod_val = jl_toplevel_eval(module, mod_expr);
+                    JL_TYPECHK(ccall/cglobal name dot expression, module, mod_val);
+                    JL_GC_PROMISE_ROOTED(mod_val);
+                    jl_sym_t *sym = (jl_sym_t*)jl_quotenode_value(sym_expr);
+                    jl_value_t *globalref = jl_module_globalref((jl_module_t*)mod_val, sym);
+                    jl_exprargset(tuple_expr, i, globalref);
+                }
+                JL_CATCH {
+                    if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                        jl_errorf("could not evaluate %s function/library name (it might depend on a local variable)", kind);
+                    else
+                        jl_rethrow();
+                }
+            }
+            else if (jl_is_quotenode(arg)) {
+                if (i == 0) {
+                    jl_value_t *quoted_val = jl_quotenode_value(arg);
+                    if (!jl_is_symbol(quoted_val) && !jl_is_string(quoted_val)) {
+                        char namebuf[64];
+                        snprintf(namebuf, sizeof(namebuf), "%s function name", kind);
+                        jl_type_error(namebuf, (jl_value_t*)jl_symbol_type, jl_quotenode_value(arg));
+                    }
+                }
+            }
+            else if (!jl_is_globalref(arg) && jl_isa_ast_node(arg)) {
+                char namebuf[64];
+                snprintf(namebuf, sizeof(namebuf), "%s %s name", kind, i == 0 ? "function" : "library");
+                jl_type_error(namebuf, (jl_value_t*)jl_symbol_type, arg);
+            }
+        }
+    }
+    else if (jl_is_string(fptr) || (jl_is_quotenode(fptr) && jl_is_symbol(jl_quotenode_value(fptr)))) {
+        jl_expr_t *tupex = jl_exprn(jl_tuple_sym, 1);
+        jl_exprargset(tupex, 0, fptr);
+        jl_exprargset(e, 0, tupex);
+    }
+    else {
+        // preserve argument (1-arg, pointer form)
+    }
+}
+
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
-                                              int binding_effects)
+                                              int binding_effects) JL_CANSAFEPOINT
 {
     if (jl_is_symbol(expr)) {
         jl_errorf("Found raw symbol %s in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.",
@@ -124,7 +205,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         if (typ == (jl_value_t*)jl_voidpointer_type) {
             jl_value_t *a = jl_exprarg(e, 1);
             JL_TYPECHK(cfunction method definition, quotenode, a);
-            jl_gc_write(a, *(jl_value_t**)a, jl_toplevel_eval(module, *(jl_value_t**)a));
+            jl_gc_write(a, *(jl_value_t**)a, jl_value_t, jl_toplevel_eval(module, *(jl_value_t**)a));
         }
         jl_value_t *rt = jl_exprarg(e, 2);
         jl_value_t *at = jl_exprarg(e, 3);
@@ -158,88 +239,9 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         return expr;
     }
     if (e->head == jl_foreigncall_sym) {
-        JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects, gc_safe))
+        JL_NARGSV(ccall method definition, 5); // (target, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
-        jl_value_t *fptr = jl_exprarg(e, 0);
-        // Handle dot expressions in tuple arguments for ccall by converting to GlobalRef eagerly
-        jl_sym_t *tuple_sym = jl_symbol("tuple");
-        if (jl_is_quotenode(fptr)) {
-            if (jl_is_string(jl_quotenode_value(fptr)) || jl_is_tuple(jl_quotenode_value(fptr)))
-                fptr = jl_quotenode_value(fptr);
-        }
-        if (jl_is_tuple(fptr)) {
-            // convert literal Tuple to Expr tuple
-            jl_expr_t *tupex = jl_exprn(tuple_sym, jl_nfields(fptr));
-            jl_value_t *v = NULL;
-            JL_GC_PUSH2(&tupex, &v);
-            for (long i = 0; i < jl_nfields(fptr); i++) {
-                v = jl_fieldref(fptr, i);
-                if (!jl_is_string(v))
-                    v = jl_new_struct(jl_quotenode_type, v);
-                jl_exprargset(tupex, i, v);
-            }
-            jl_exprargset(e, 0, tupex);
-            fptr = (jl_value_t*)tupex;
-            JL_GC_POP();
-        }
-        if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == tuple_sym) {
-            // verify Expr tuple can be interpreted and handle
-            jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
-            size_t nargs_tuple = jl_expr_nargs(tuple_expr);
-            if (nargs_tuple == 0)
-                jl_error("ccall function name cannot be empty tuple");
-            if (nargs_tuple > 2)
-                jl_error("ccall function name tuple can have at most 2 elements");
-            // Validate tuple elements are not more complicated than inference/codegen can safely handle
-            for (size_t i = 0; i < nargs_tuple; i++) {
-                jl_value_t *arg = jl_exprarg(tuple_expr, i);
-                // Handle dot expressions by converting to a GlobalRef
-                if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_dot_sym) {
-                    jl_expr_t *dot_expr = (jl_expr_t*)arg;
-                    if (jl_expr_nargs(dot_expr) != 2)
-                        jl_error("ccall function name: invalid dot expression");
-                    jl_value_t *mod_expr = jl_exprarg(dot_expr, 0);
-                    jl_value_t *sym_expr = jl_exprarg(dot_expr, 1);
-                    if (!(jl_is_quotenode(sym_expr) && jl_is_symbol(jl_quotenode_value(sym_expr))))
-                        jl_type_error("ccall name dot expression", (jl_value_t*)jl_symbol_type, sym_expr);
-                    JL_TRY {
-                        // Evaluate the module expression
-                        jl_value_t *mod_val = jl_toplevel_eval(module, mod_expr);
-                        JL_TYPECHK(ccall name dot expression, module, mod_val);
-                        JL_GC_PROMISE_ROOTED(mod_val);
-                        // Create GlobalRef from evaluated module and quoted symbol
-                        jl_sym_t *sym = (jl_sym_t*)jl_quotenode_value(sym_expr);
-                        jl_value_t *globalref = jl_module_globalref((jl_module_t*)mod_val, sym);
-                        jl_exprargset(tuple_expr, i, globalref);
-                    }
-                    JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
-                            jl_error("could not evaluate ccall function/library name (it might depend on a local variable)");
-                        else
-                            jl_rethrow();
-                    }
-                }
-                else if (jl_is_quotenode(arg)) {
-                    if (i == 0) {
-                        // function name must be a symbol or string, library can be anything
-                        jl_value_t *quoted_val = jl_quotenode_value(arg);
-                        if (!jl_is_symbol(quoted_val) && !jl_is_string(quoted_val))
-                            jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, jl_quotenode_value(arg));
-                    }
-                }
-                else if (!jl_is_globalref(arg) && jl_isa_ast_node(arg)) {
-                    jl_type_error(i == 0 ? "ccall function name" : "ccall library name", (jl_value_t*)jl_symbol_type, arg);
-                }
-            }
-        }
-        else if (jl_is_string(fptr) || (jl_is_quotenode(fptr) && jl_is_symbol(jl_quotenode_value(fptr)))) {
-            // convert String to Expr (String,)
-            // convert QuoteNode(Symbol) to Expr (QuoteNode(Symbol),)
-            jl_expr_t *tupex = jl_exprn(tuple_sym, 1);
-            jl_exprargset(tupex, 0, fptr);
-            jl_exprargset(e, 0, tupex);
-            fptr = (jl_value_t*)tupex;
-        }
+        normalize_foreignsymbol(e, module, "ccall");
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
         if (!jl_is_type(rt)) {
@@ -279,6 +281,10 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
             JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
             JL_TYPECHK(ccall method definition, bool, jl_get_nth_field(cc, 2));
         }
+    }
+    if (e->head == jl_foreignglobal_sym) {
+        JL_NARGS(cglobal method definition, 1, 1); // (target)
+        normalize_foreignsymbol(e, module, "cglobal");
     }
     if (e->head == jl_call_sym && nargs > 0 &&
             jl_is_globalref(jl_exprarg(e, 0))) {
@@ -320,12 +326,12 @@ JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_modu
     }
 }
 
-jl_value_t *expr_arg1(jl_value_t *expr) {
+static jl_value_t *expr_arg1(jl_value_t *expr) {
     jl_array_t *args = ((jl_expr_t*)expr)->args;
     return jl_array_ptr_ref(args, 0);
 }
 
-static jl_value_t *alloc_edges(arraylist_t *edges_list)
+static jl_value_t *alloc_edges(arraylist_t *edges_list) JL_CANSAFEPOINT
 {
     jl_value_t *jledges = (jl_value_t*)jl_alloc_svec(edges_list->len);
     jl_value_t *jledges2 = NULL;
@@ -356,7 +362,7 @@ static jl_value_t *alloc_edges(arraylist_t *edges_list)
     return jledges;
 }
 
-static void add_edge(arraylist_t *edges_list, arraylist_t *inlinestack, int32_t *p_to, int32_t *p_pc)
+static void add_edge(arraylist_t *edges_list, arraylist_t *inlinestack, int32_t *p_to, int32_t *p_pc) JL_CANSAFEPOINT
 {
     jl_value_t *locinfo = (jl_value_t*)arraylist_pop(inlinestack);
     jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 0);
@@ -398,7 +404,7 @@ static void add_edge(arraylist_t *edges_list, arraylist_t *inlinestack, int32_t 
     *p_pc = (i - 2) / 3 + 1;
 }
 
-jl_debuginfo_t *jl_linetable_to_debuginfo(jl_array_t *codelocs_any, jl_array_t *linetable)
+static jl_debuginfo_t *jl_linetable_to_debuginfo(jl_array_t *codelocs_any, jl_array_t *linetable) JL_CANSAFEPOINT
 {
     size_t nlocs = jl_array_nrows(codelocs_any);
     jl_value_t *toplocinfo = jl_array_ptr_ref(linetable, 0);
@@ -460,14 +466,14 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
 
     jl_array_t *codelocs_any = (jl_array_t*)jl_exprarg(ir, 3);
     jl_array_t *linetable = (jl_array_t*)jl_exprarg(ir, 4);
-    jl_gc_write(li, li->debuginfo, jl_linetable_to_debuginfo(codelocs_any, linetable));
+    jl_gc_write(li, li->debuginfo, jl_debuginfo_t, jl_linetable_to_debuginfo(codelocs_any, linetable));
 
     assert(jl_is_expr(bodyex));
     jl_array_t *body = bodyex->args;
-    jl_gc_write(li, li->code, body);
+    jl_gc_write(li, li->code, jl_array_t, body);
     size_t n = jl_array_nrows(body);
     jl_value_t **bd = (jl_value_t**)jl_array_ptr_data((jl_array_t*)li->code);
-    jl_gc_write(li, li->ssaflags, jl_alloc_array_1d(jl_array_uint32_type, n));
+    jl_gc_write(li, li->ssaflags, jl_array_t, jl_alloc_array_1d(jl_array_uint32_type, n));
     int inbounds_depth = 0; // number of stacked inbounds
     // isempty(inline_flags): no user callsite inline annotation
     // last(inline_flags) == 1: callsite inline region
@@ -591,7 +597,9 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
         else {
             if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_assign_sym)
                 st = jl_exprarg(st, 1);
-            if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym))
+            if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym ||
+                                   ((jl_expr_t*)st)->head == jl_foreignglobal_sym ||
+                                   ((jl_expr_t*)st)->head == jl_cfunction_sym))
                 li->has_fcall = 1;
         }
         if (is_flag_stmt)
@@ -626,9 +634,9 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     jl_value_t *ssavalue_types = jl_array_ptr_ref(vinfo, 2);
     assert(jl_is_long(ssavalue_types));
     size_t nssavalue = jl_unbox_long(ssavalue_types);
-    jl_gc_write(li, li->slotnames, jl_alloc_array_1d(jl_array_symbol_type, nslots));
-    jl_gc_write(li, li->slotflags, jl_alloc_array_1d(jl_array_uint8_type, nslots));
-    jl_gc_write(li, li->ssavaluetypes, jl_box_long(nssavalue));
+    jl_gc_write(li, li->slotnames, jl_array_t, jl_alloc_array_1d(jl_array_symbol_type, nslots));
+    jl_gc_write(li, li->slotflags, jl_array_t, jl_alloc_array_1d(jl_array_uint8_type, nslots));
+    jl_gc_write(li, li->ssavaluetypes, jl_value_t, jl_box_long(nssavalue));
 
     // Flags that need to be copied to slotflags
     const uint8_t vinfo_mask = 8 | 16 | 32 | 64;
@@ -707,7 +715,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
 
 // invoke (compiling if necessary) the jlcall function pointer for a method template
 static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
-        size_t world, jl_svec_t *sparam_vals, jl_value_t **args, uint32_t nargs)
+        size_t world, jl_svec_t *sparam_vals, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT
 {
     size_t n_sparams = jl_svec_len(sparam_vals);
     jl_value_t **gargs;
@@ -716,6 +724,14 @@ static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
     gargs[0] = jl_box_ulong(world);
     gargs[1] = (jl_value_t*)def;
     memcpy(&gargs[2], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
+    // Generators receive the sparam values; a pinned env uncertainty marker is
+    // defined up to type equality and reads as its `==`-representative
+    // (genuinely undefined sparams still pass their marker through).
+    for (size_t i = 0; i < n_sparams; i++) {
+        jl_value_t *v = jl_sparam_defined_value(gargs[2 + i]);
+        if (v != NULL)
+            gargs[2 + i] = v;
+    }
     memcpy(&gargs[2 + n_sparams], args, (def->nargs - def->isva) * sizeof(void*));
     if (def->isva)
         gargs[totargs - 1] = jl_f_tuple(NULL, &args[def->nargs - 1], nargs - def->nargs + 1);
@@ -913,7 +929,7 @@ jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_s
     return new_linfo;
 }
 
-JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
+JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src) JL_CANSAFEPOINT
 {
     uint8_t j;
     uint8_t called = 0;
@@ -1000,7 +1016,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                     jl_error("duplicate @generated function body");
                 jl_value_t *gexpr = jl_exprarg(st, 1);
                 // the frontend would put (new (core GeneratedFunctionStub) funcname argnames sp) here, for example
-                jl_gc_write(m, m->generator, jl_toplevel_eval(m->module, gexpr));
+                jl_gc_write(m, m->generator, jl_value_t, jl_toplevel_eval(m->module, gexpr));
                 st = jl_nothing;
             }
             else if (nargs == 1 && jl_exprarg(st, 0) == (jl_value_t*)jl_generated_only_sym) {
@@ -1023,15 +1039,15 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     if (src->nargs == 0)
         src->nargs = m->nargs;
     assert(m->nargs == src->nargs);
-    jl_gc_write(src, src->code, copy);
-    jl_gc_write(m, m->slot_syms, jl_compress_argnames(src->slotnames));
+    jl_gc_write(src, src->code, jl_array_t, copy);
+    jl_gc_write(m, m->slot_syms, jl_value_t, jl_compress_argnames(src->slotnames));
     if (gen_only) {
         m->source = NULL;
     }
     else {
-        jl_gc_write(m, m->debuginfo, src->debuginfo);
-        jl_gc_write(m, m->source, (jl_value_t*)src);
-        jl_gc_write(m, m->source, (jl_value_t*)jl_compress_ir(m, NULL));
+        jl_gc_write(m, m->debuginfo, jl_debuginfo_t, src->debuginfo);
+        jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)src);
+        jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)jl_compress_ir(m, NULL));
     }
     JL_GC_POP();
 }
@@ -1152,7 +1168,7 @@ void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t o
             }
             if (insb == 0) {
                 // All were deleted
-                jl_gc_write(mi, mi->backedges, NULL);
+                jl_gc_write(mi, mi->backedges, jl_array_t, NULL);
             } else {
                 jl_array_del_end(backedges, n - insb);
             }
@@ -1184,7 +1200,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
     m->line = jl_linenode_line(functionloc);
     if (isinferred) {
-        jl_gc_write(m, m->slot_syms, jl_compress_argnames(ci->slotnames));
+        jl_gc_write(m, m->slot_syms, jl_value_t, jl_compress_argnames(ci->slotnames));
     } else {
         jl_method_set_source(m, ci);
     }
@@ -1422,7 +1438,7 @@ static uint64_t current_root_id(jl_array_t *root_blocks)
 }
 
 // Add a new block of `len` roots with key `modid` (module id)
-static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
+static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len) JL_CANSAFEPOINT
 {
     assert(jl_is_array(root_blocks));
     jl_array_grow_end(root_blocks, 2);
@@ -1433,13 +1449,13 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
 }
 
 // Allocate storage for roots
-static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
+static void prepare_method_for_roots(jl_method_t *m, uint64_t modid) JL_CANSAFEPOINT
 {
     if (!m->roots) {
-        jl_gc_write(m, m->roots, jl_alloc_vec_any(0));
+        jl_gc_write(m, m->roots, jl_array_t, jl_alloc_vec_any(0));
     }
     if (!m->root_blocks && modid != 0) {
-        jl_gc_write(m, m->root_blocks, jl_alloc_array_1d(jl_array_uint64_type, 0));
+        jl_gc_write(m, m->root_blocks, jl_array_t, jl_alloc_array_1d(jl_array_uint64_type, 0));
     }
 }
 

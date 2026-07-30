@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import .Base: unsafe_convert, lock, trylock, unlock, islocked, wait, notify, AbstractLock
+import .Base: lock, trylock, unlock, islocked, AbstractLock
 
 export SpinLock
 public PaddedSpinLock

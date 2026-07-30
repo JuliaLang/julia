@@ -168,8 +168,8 @@ void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
 
 void run_finalizer(jl_task_t *ct, void *o, void *ff)
 {
-    int ptr_finalizer = gc_ptr_tag(o, 1);
-    o = gc_ptr_clear_tag(o, 3);
+    int ptr_finalizer = gc_ptr_tag(o, GC_FIN_CFUNC_TAG);
+    o = gc_ptr_clear_tag(o, GC_FIN_TAG_MASK);
     if (ptr_finalizer) {
         ((void (*)(void*))ff)((void*)o);
         return;
@@ -207,7 +207,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
     for (size_t i = 0; i < len; i += 2) {
         void *v = items[i];
         int move = 0;
-        if (o == (jl_value_t*)gc_ptr_clear_tag(v, 1)) {
+        if (o == (jl_value_t*)gc_ptr_clear_tag(v, GC_FIN_CFUNC_TAG)) {
             void *f = items[i + 1];
             move = 1;
             arraylist_push(copied_list, v);
@@ -253,7 +253,7 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOI
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
 // to be held for the current thread and will release the lock when the
 // function returns.
-static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE
+static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE_WITH_CANSAFEPOINT
 {
     // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
     // of `finalizer`) in a finalizer:
@@ -276,8 +276,6 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
 }
 
 static uint64_t finalizer_rngState[JL_RNG_SIZE];
-
-void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
 {
@@ -451,14 +449,14 @@ void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT
 {
-    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | GC_FIN_CFUNC_TAG), f);
 }
 
 // schedule f(v) to call at the next quiescent interval (aka after the next safepoint/region on all threads)
 JL_DLLEXPORT void jl_gc_add_quiescent(jl_ptls_t ptls, void **v, void *f) JL_NOTSAFEPOINT
 {
-    assert(!gc_ptr_tag(v, 3));
-    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 3), f);
+    assert(!gc_ptr_tag(v, GC_FIN_TAG_MASK));
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | GC_FIN_TAG_MASK), f);
 }
 
 JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT
@@ -528,7 +526,7 @@ JL_DLLEXPORT void * jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc(ptls, sz, ty);
 }
 
-JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
+JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz) JL_CANSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return jl_gc_alloc(ptls, sz, NULL);
@@ -541,18 +539,18 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc_(ptls, sz, ty);
 }
 
-JL_DLLEXPORT void *jl_malloc(size_t sz)
+JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 {
     return jl_gc_counted_malloc(sz);
 }
 
 //_unchecked_calloc does not check for potential overflow of nm*sz
-STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
+STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT {
     size_t nmsz = nm*sz;
     return jl_gc_counted_calloc(nmsz, 1);
 }
 
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT
 {
     if (nm > SSIZE_MAX/sz)
         return NULL;
@@ -567,7 +565,7 @@ JL_DLLEXPORT void jl_free(void *p)
     }
 }
 
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
+JL_DLLEXPORT void *jl_realloc(void *p, size_t sz) JL_CANSAFEPOINT
 {
     size_t old = p ? memory_block_usable_size(p, 0) : 0;
     return jl_gc_counted_realloc_with_old_size(p, old, sz);
@@ -630,6 +628,15 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
         start = (char*)mem->ptr;
         len = mem->length;
     }
+    else if (vt == jl_cancel_source_type) {
+        // the (strong) `parent` slots of the trailing link entries are the
+        // only slots marked as an array (see the objarray mark with stride
+        // sizeof(jl_cancel_parent_link_t) in gc-stock.c)
+        jl_cancel_source_t *s = (jl_cancel_source_t*)obj;
+        start = (char*)jl_cancel_source_links(s);
+        len = s->nparents;
+        elsize = sizeof(jl_cancel_parent_link_t);
+    }
     if (slot < start || slot >= start + elsize * len)
         return -1;
     return (slot - start) / elsize;
@@ -638,10 +645,6 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
 // =========================================================================== //
 // GC Control
 // =========================================================================== //
-
-JL_DLLEXPORT uint32_t jl_get_gc_disable_counter(void) {
-    return jl_atomic_load_acquire(&jl_gc_disable_counter);
-}
 
 JL_DLLEXPORT int jl_gc_is_enabled(void)
 {
@@ -657,31 +660,6 @@ JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
 
 JL_DLLEXPORT int jl_is_gc_logging_enabled(void) {
     return gc_logging_enabled;
-}
-
-
-// collector entry point and control
-_Atomic(uint32_t) jl_gc_disable_counter = 1;
-
-JL_DLLEXPORT int jl_gc_enable(int on)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    int prev = !ptls->disable_gc;
-    ptls->disable_gc = (on == 0);
-    if (on && !prev) {
-        // disable -> enable
-        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
-            gc_num.allocd += gc_num.deferred_alloc;
-            gc_num.deferred_alloc = 0;
-        }
-    }
-    else if (prev && !on) {
-        // enable -> disable
-        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-        // check if the GC is running and wait for it to finish
-        jl_gc_safepoint_(ptls);
-    }
-    return prev;
 }
 
 // =========================================================================== //

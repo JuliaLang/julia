@@ -394,7 +394,7 @@ end
 
 # Return true if `f` was accepted `n` times
 @inline function accept_n(l::Parser, n, f::F)::Bool where {F}
-    for i in 1:n
+    for _ in 1:n
         if !accept(l, f)
             return false
         end
@@ -482,7 +482,7 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         skip_ws_comment(l)
         # SPEC: "There must be a newline (or EOF) after a key/value pair."
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
-            c = eat_char(l)
+            eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
     end
@@ -822,9 +822,6 @@ function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=tru
 end
 
 function parse_number_or_date_start(l::Parser)
-    integer = true
-    read_dot = false
-
     set_marker!(l)
     sgn = 1
     parsed_sign = false
@@ -913,8 +910,7 @@ function parse_number_or_date_start(l::Parser)
         accept(l, x-> x == '+' || x == '-')
         # SPEC: (which follows the same rules as decimal integer values but may include leading zeros)
         read_digit = accept_batch(l, isdigit)
-        ate, read_underscore = @try accept_batch_underscore(l, isdigit, !read_digit)
-        contains_underscore |= read_underscore
+        _, read_underscore = @try accept_batch_underscore(l, isdigit, !read_digit)
     end
     if !ok_end_value(peek(l))
         eat_char(l)
@@ -1145,7 +1141,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
         if accept(l, '.')
             set_marker!(l)
             found_fractional_digit = false
-            for i in 1:3
+            for _ in 1:3
                 found_fractional_digit |= accept(l, isdigit)
             end
             if !found_fractional_digit

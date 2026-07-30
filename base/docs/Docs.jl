@@ -65,8 +65,7 @@ function.
 
 include("bindings.jl")
 
-import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
-import .Base: Callable, with_output_color
+import .Base.Meta: quot, isexpr, unblock, unescape
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
@@ -413,10 +412,12 @@ function objectdoc(__source__, __module__, str, def, expr, sig = :(Union{}))
                 exdef = Expr(:block, exdef)
             end
             val = :val
-            exdef = Expr(:(=), val, exdef)
+            # if-true hack: val should not be recognized as a struct field,
+            # including by @kwdef
+            exdef = Expr(:if, true, Expr(:(=), val, exdef))
         end
         # Note: we want to avoid introducing line number nodes here (issue #24468) for def
-        return Expr(:block, exdef, docex, val)
+        return Expr(:block, exdef, docex, Expr(:if, true, val))
     end
 end
 
@@ -671,7 +672,6 @@ function docm(source::LineNumberNode, mod::Module, ex)
     else
         return simple_lookup_doc(ex)
     end
-    return nothing
 end
 # Drop incorrect line numbers produced by nested macro calls.
 docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)

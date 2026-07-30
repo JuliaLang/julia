@@ -586,7 +586,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             JULIA_PASS(FPM.addPass(ExpandAtomicModifyPass())); // after LateLowerGCPass so that all IPO is valid
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
-        JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native)));
+        JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native, options.tls_getters)));
         MPM.addPass(RemoveJuliaAddrspacesPass()); //TODO: Make this conditional on arches (GlobalISel doesn't like our addrspaces)
         if (O.getSpeedupLevel() >= 1) {
             FunctionPassManager FPM;
@@ -728,7 +728,7 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 
         FunctionAnalysisManager FAM;
         // Register the AA manager first so that our version is the one used.
-        FAM.registerPass([&] JL_NOTSAFEPOINT {
+        FAM.registerPass([&]() JL_NOTSAFEPOINT {
             AAManager AA;
             if (O.getSpeedupLevel() >= 2) {
                 AA.registerFunctionAnalysis<BasicAA>();
@@ -739,8 +739,8 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
             return AA;
         });
         // Register our TargetLibraryInfoImpl.
-        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetIRAnalysis(TM.getTargetIRAnalysis()); });
-        FAM.registerPass([&] JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(TM.getTargetTriple())); });
+        FAM.registerPass([&]() JL_NOTSAFEPOINT { return llvm::TargetIRAnalysis(TM.getTargetIRAnalysis()); });
+        FAM.registerPass([&]() JL_NOTSAFEPOINT { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(TM.getTargetTriple())); });
         return FAM;
     }
 

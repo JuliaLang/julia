@@ -62,6 +62,9 @@ tests = [
         "a .= b"      =>  "(.= a b)"
         "a += b"      =>  "(op= a + b)"
         "a .+= b"     =>  "(.op= a + b)"
+        with_version(v"1.14", "a +%= b" => "(op= a +% b)")
+        with_version(v"1.14", "a -%= b" => "(op= a -% b)")
+        with_version(v"1.14", "a *%= b" => "(op= a *% b)")
         "a, b = c, d" =>  "(= (tuple a b) (tuple c d))"
         "x, = xs"     =>  "(= (tuple x) xs)"
         "[a ~b]"      =>  "(hcat a (call-pre ~ b))"
@@ -87,6 +90,8 @@ tests = [
         # token `=`) are not compound assignments
         "a +== b"   => "(call-i a + (call-pre (error ==) b))"
         "a -=> b"   => "(call-i a - (call-pre (error =>) b))"
+        with_version(v"1.14", "a +%== b" => "(call-i a +% (call-pre (error ==) b))")
+        with_version(v"1.14", "a -%=> b" => "(call-i a -% (call-pre (error =>) b))")
         "a >>>== b" => "(call-i a >>> (call-pre (error ==) b))"
         "a .+== b"  => "(dotcall-i a + (call-pre (error ==) b))"
     ],
@@ -157,6 +162,8 @@ tests = [
     ],
     JuliaSyntax.parse_range => [
         "a..b"       => "(call-i a (DotsIdentifier-2) b)"
+        "-1e10..2"   => "(call-i -1.0e10 (DotsIdentifier-2) 2)"
+        "0x1p3..2"   => "(call-i 8.0 (DotsIdentifier-2) 2)"
         "a..+b"      => "(call-i a (DotsIdentifier-2) (error-t) (call-pre + b))"
         # `..` may be directly followed by the operand-starting operators `: :: $ '`
         "a..:b"      => "(call-i a (DotsIdentifier-2) (quote-: b))"
@@ -177,6 +184,8 @@ tests = [
     JuliaSyntax.parse_expr => [
         "a - b - c"  => "(call-i (call-i a - b) - c)"
         "a + b + c"  => "(call-i a + b c)"
+        with_version(v"1.14", "a +% b +% c" => "(call-i a +% b c)")
+        with_version(v"1.14", "a -% b -% c" => "(call-i (call-i a -% b) -% c)")
         "a + b .+ c" => "(dotcall-i (call-i a + b) + c)"
         # parse_with_chains:
         # The following are two elements of an hcat
@@ -192,6 +201,7 @@ tests = [
     ],
     JuliaSyntax.parse_term => [
         "a * b * c"  => "(call-i a * b c)"
+        with_version(v"1.14", "a *% b *% c" => "(call-i a *% b c)")
         "a .* b"     => "(dotcall-i a * b)"
         "-2*x"       => "(call-i -2 * x)"
     ],
@@ -878,8 +888,12 @@ tests = [
         "\$=" =>  "(error (op= \$))"
         "⊻="  =>  "(error (op= ⊻))"
         ".+=" =>  "(error (.op= +))"
+        with_version(v"1.14", "+%=" => "(error (op= +%))")
+        with_version(v"1.14", "-%=" => "(error (op= -%))")
+        with_version(v"1.14", "*%=" => "(error (op= *%))")
         # Normal operators
         "+"  =>  "+"
+        with_version(v"1.14", "+%" => "+%")
         # Assignment-precedence operators which can be used as identifiers
         "~"  =>  "~"
         "≔"  =>  "≔"
@@ -1244,6 +1258,9 @@ parsestmt_with_kind_tests = [
     # get the Kind K"Identifier"
     "+"      => "+::Identifier"
     "a + b"  => "(call-i a::Identifier +::Identifier b::Identifier)"
+    ((v=v"1.14",), "a +% b") => "(call-i a::Identifier +%::Identifier b::Identifier)"
+    ((v=v"1.14",), "a -% b") => "(call-i a::Identifier -%::Identifier b::Identifier)"
+    ((v=v"1.14",), "a *% b") => "(call-i a::Identifier *%::Identifier b::Identifier)"
     "a .+ b" => "(dotcall-i a::Identifier +::Identifier b::Identifier)"
     "a |> b" => "(call-i a::Identifier |>::Identifier b::Identifier)"
     "a => b" => "(call-i a::Identifier =>::Identifier b::Identifier)"
@@ -1275,10 +1292,14 @@ parsestmt_with_kind_tests = [
     ":(=)"   => "(quote-: (parens =::=))"
     "a := b" => "(:= a::Identifier b::Identifier)"
     "a += b" => "(op= a::Identifier +::Identifier b::Identifier)"
+    ((v=v"1.14",), "a +%= b") => "(op= a::Identifier +%::Identifier b::Identifier)"
     "a .+= b" => "(.op= a::Identifier +::Identifier b::Identifier)"
+    ((v=v"1.14",), "a .+%= b") => "(.op= a::Identifier +%::Identifier b::Identifier)"
     "a >>= b" => "(op= a::Identifier >>::Identifier b::Identifier)"
     ":+="    => "(quote-: (op= +::Identifier))"
+    ((v=v"1.14",), ":+%=") => "(quote-: (op= +%::Identifier))"
     ":.+="   => "(quote-: (.op= +::Identifier))"
+    ((v=v"1.14",), ":.+%=") => "(quote-: (.op= +%::Identifier))"
     # str/cmd macro name kinds
     "x\"str\""   => """(macrocall x::StrMacroName (string-r "str"::String))"""
     "x`str`"     => """(macrocall x::CmdMacroName (cmdstring-r "str"::CmdString))"""

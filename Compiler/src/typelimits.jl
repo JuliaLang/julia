@@ -119,6 +119,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         end
     elseif isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
+        # (this branch also covers `TypeEgal`, whose `Type{...}` widenings are supertypes)
         tt = type_parameter(t)
         ttu = unwrap_unionall(tt) # TODO: use a helper that preserves nested Type structure after #50692 is fixed
         # must forbid nesting through this if we detect that potentially occurring
@@ -402,6 +403,10 @@ end
             return false
         end
         return false
+    elseif typea isa PartialTask
+        typeb isa PartialTask || return false
+        return issimplertype(𝕃, typea.fetch_type, typeb.fetch_type) &&
+               issimplertype(𝕃, typea.fetch_error, typeb.fetch_error)
     end
     return true
 end
@@ -722,6 +727,24 @@ end
         typea = widenlattice(wl, typea)
     elseif bpo
         typeb = widenlattice(wl, typeb)
+    end
+
+    # type-lattice for PartialTask wrapper
+    apt = isa(typea, PartialTask)
+    bpt = isa(typeb, PartialTask)
+    if apt && bpt
+        # Both are PartialTask - merge their fetch types and errors
+        merged_fetch_type = tmerge(lattice, typea.fetch_type, typeb.fetch_type)
+        merged_fetch_error = tmerge(lattice, typea.fetch_error, typeb.fetch_error)
+        # If both are Any, no additional type information - return Task
+        if merged_fetch_type === Any && merged_fetch_error === Any
+            return Task
+        end
+        return PartialTask(merged_fetch_type, merged_fetch_error)
+    elseif apt
+        typea = Task
+    elseif bpt
+        typeb = Task
     end
 
     return tmerge(wl, typea, typeb)

@@ -200,7 +200,7 @@ end
 """
     unique(itr)
 
-Return an array containing only the unique elements of collection `itr`,
+Return an `AbstractArray` containing only the unique elements of collection `itr`,
 as determined by [`isequal`](@ref) and [`hash`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
@@ -264,7 +264,7 @@ unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin]:r[begin])
 """
     unique(f, itr)
 
-Return an array containing one value from `itr` for each unique value produced by `f`
+Return an `AbstractArray` containing one value from `itr` for each unique value produced by `f`
 applied to elements of `itr`.
 
 # Examples
@@ -526,7 +526,7 @@ function _hashed_allunique(C)
     seen = Set{@default_eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
-        for i in OneTo(1000)
+        for _ in OneTo(1000)
             v, s = something(x)
             in!(v, seen) && return false
             x = iterate(C, s)
@@ -544,6 +544,11 @@ end
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+
+# ncodeunits is O(1) and bounds character count; match StridedArray's short cutoff.
+function allunique(s::AbstractString)
+    ncodeunits(s) < 32 ? _indexed_allunique(s) : _hashed_allunique(s)
+end
 
 function allunique(A::StridedArray)
     if length(A) < 32

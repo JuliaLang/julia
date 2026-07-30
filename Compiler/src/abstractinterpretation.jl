@@ -140,6 +140,17 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
 
     (; valid_worlds, applicable) = matches
     update_valid_age!(sv, get_inference_world(interp), valid_worlds) # need to record the negative world now, since even if we don't generate any useful information, inlining might want to add an invoke edge and it won't have this information anymore
+    # Concrete-only functions refuse to commit (and record no backedge) when any
+    # applicable match has a non-concrete signature, regardless of scope. This is the
+    # generalization of the top-level `!isdispatchtuple` bail below to a per-function opt-in.
+    if is_concrete_only(func)
+        for i = 1:length(applicable)
+            if !isdispatchtuple(applicable[i].match.spec_types)
+                add_remark!(interp, sv, "Refusing to infer non-concrete call site for concrete-only function")
+                return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+            end
+        end
+    end
     if bail_out_toplevel_call(interp, sv)
         local napplicable = length(applicable)
         for i = 1:napplicable
@@ -2430,6 +2441,9 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
     canconst = true
     if isa(a3, Const)
         body = a3.val
+    elseif isconstType(a3)
+        # the body value is pinned exactly (`===`)
+        body = type_parameter(a3)
     elseif isType(a3)
         body = type_parameter(a3)
         canconst = false
@@ -2592,7 +2606,7 @@ function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, 
         finalizer_argvec = Any[argtypes[2], argtypes[3]]
         call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false, false), vtypes, sv, #=max_methods=#1)::Future
         return Future{CallMeta}(call, interp, sv) do call, _, _
-            return CallMeta(Nothing, Any, Effects(), FinalizerInfo(call.info, call.effects))
+            return CallMeta(Nothing, Any, Effects(), IndirectCallInfo(call.info, call.effects, false))
         end
     end
     return Future(CallMeta(Nothing, Any, Effects(), NoCallInfo()))
@@ -2931,6 +2945,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return Future(abstract_eval_isdefinedglobal(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.get_binding_type
             return Future(abstract_eval_get_binding_type(interp, sv, argtypes))
+        elseif f === Core._task
+            return abstract_eval_task_builtin(interp, arginfo, si, vtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, vtypes, sv)
         ft = popfirst!(argtypes)
@@ -3256,16 +3272,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
-    if e.head === :call && length(e.args) ≥ 1
-        # TODO: We still have non-linearized cglobal
-        @assert e.args[1] === Core.tuple || e.args[1] === GlobalRef(Core, :tuple)
-    else
-        @assert e.head !== :(=)
-        # Some of our tests expect us to handle invalid IR here and error later
-        # - permit that for now.
-        # @assert false "Unexpected EXPR head in value position"
-        merge_effects!(interp, sv, EFFECTS_UNKNOWN)
-    end
+    @assert e.head !== :(=)
+    # Some of our tests expect us to handle invalid IR here and error later
+    # - permit that for now.
+    # @assert false "Unexpected EXPR head in value position"
+    merge_effects!(interp, sv, EFFECTS_UNKNOWN)
     return Any
 end
 
@@ -3477,6 +3488,67 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     consistent = !ismutabletype(rt) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
     effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
     return RTEffects(rt, Any, effects)
+end
+
+# Effects of the `Core._task` builtin itself; the deferred body does not run here.
+# Creating a task returns a fresh mutable object, inherits the current task's scope
+# and forks its RNG state (advancing the parent's internal RNG via `jl_rng_split`),
+# so the call is not consistent, not effect-free, and accesses task state. It may
+# throw, e.g. for an invalid stack size, but always terminates and has no UB.
+const TASK_BUILTIN_EFFECTS = Effects(EFFECTS_TOTAL;
+    consistent=ALWAYS_FALSE, effect_free=ALWAYS_FALSE, nothrow=false,
+    notaskstate=false, inaccessiblememonly=ALWAYS_FALSE)
+
+function abstract_eval_task_builtin(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo,
+                                    vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
+    argtypes = arginfo.argtypes
+    la = length(argtypes)
+    isva = !isempty(argtypes) && isvarargtype(argtypes[end])
+    if isva
+        la > 5 && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+        size_arg = argtype_by_index(argtypes, 3)
+    elseif !(3 <= la <= 4)
+        return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+    else
+        size_arg = argtypes[3]
+    end
+    if !hasintersect(widenconst(size_arg), Int)
+        return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+    end
+    if isva && la < 5
+        # Without a fixed invoke target, the vararg may supply any of the required
+        # arguments, so only retain the builtin's guaranteed return type.
+        return Future(CallMeta(Task, Any, TASK_BUILTIN_EFFECTS, NoCallInfo()))
+    end
+    func_arg = argtypes[2]
+
+    # Handle the fixed Method/CodeInstance/Type argument (4th parameter) as invoke.
+    # A trailing vararg may be empty; non-empty tails throw an arity error before
+    # the deferred invoke can run.
+    if la >= 4
+        invoke_args = Any[Const(Core.invoke), func_arg, argtypes[4]]
+        invoke_arginfo = ArgInfo(nothing, invoke_args)
+        invoke_future = abstract_invoke(interp, invoke_arginfo, si, vtypes, sv)
+        return Future{CallMeta}(task_callmeta, invoke_future, interp, sv)
+    end
+
+    # Otherwise use abstract_call for function analysis
+    callinfo_future = abstract_call(interp, ArgInfo(nothing, Any[func_arg]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
+    return Future{CallMeta}(task_callmeta, callinfo_future, interp, sv)
+end
+
+# Convert the `CallMeta` of the task body call into the `CallMeta` of the `Core._task`
+# call that creates it, tracking the body's result/error types with a `PartialTask`.
+function task_callmeta(call::CallMeta, ::AbstractInterpreter, ::AbsIntState)
+    fetch_type = widenconst(call.rt)
+    fetch_error = widenconst(call.exct)
+    if fetch_type === Any && fetch_error === Any
+        rt_result = Task
+    else
+        rt_result = PartialTask(fetch_type, fetch_error)
+    end
+    info_result = IndirectCallInfo(call.info, call.effects, true)
+    return CallMeta(rt_result, Any, TASK_BUILTIN_EFFECTS, info_result)
 end
 
 function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
@@ -3709,11 +3781,10 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, ssta
         return abstract_eval_new_opaque_closure(interp, e, sstate, sv)
     elseif ehead === :foreigncall
         return abstract_eval_foreigncall(interp, e, sstate, sv)
+    elseif ehead === :foreignglobal
+        return abstract_eval_foreignglobal(interp, e, sstate, sv)
     elseif ehead === :cfunction
         return abstract_eval_cfunction(interp, e, sstate, sv)
-    elseif ehead === :method
-        rt = (length(e.args) == 1) ? Any : Method
-        return RTEffects(rt, Any, EFFECTS_UNKNOWN)
     elseif ehead === :copyast
         return abstract_eval_copyast(interp, e, sstate, sv)
     elseif ehead === :invoke || ehead === :invoke_modify
@@ -3796,6 +3867,21 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
         effects = override_effects(effects, override)
     end
     return RTEffects(t, Any, effects)
+end
+
+function abstract_eval_foreignglobal(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
+    arg = e.args[1]
+    # Evaluate the arguments to constrain the world for codegen
+    if isexpr(arg, :tuple)
+        for elt in arg.args
+            abstract_eval_value(interp, elt, sstate, sv)
+            #TODO: implement abstract_eval_nonlinearized_foreigncall_name correctly?
+            #      (see foreigncall implementation above)
+        end
+    else
+        abstract_eval_value(interp, arg, sstate, sv)
+    end
+    return RTEffects(Ptr{Cvoid}, Any, EFFECTS_UNKNOWN)
 end
 
 function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, sstate::StatementState, sv::AbsIntState)
@@ -4143,12 +4229,7 @@ end
             (; rt, exct, effects, refinements) = abstract_eval_special_value(interp, stmt, sstate, frame)
         else
             hd = stmt.head
-            if hd === :method
-                fname = stmt.args[1]
-                if isa(fname, SlotNumber)
-                    changes = StateUpdate(fname, VarState(Any, frame.currpc, #= undef =# false))
-                end
-            elseif (hd === :code_coverage_effect ||
+            if (hd === :code_coverage_effect ||
                     # :boundscheck can be narrowed to Bool
                     (hd !== :boundscheck && is_meta_expr(stmt)))
                 rt = Nothing
@@ -4332,6 +4413,8 @@ end
             fields[i] = a
         end
         anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, _getundefs(rt), fields)
+    elseif isa(rt, PartialTask)
+        return rt # already widened, by construction
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512
@@ -4818,15 +4901,6 @@ end
 # Core transfer function: update an alias table for a single statement.
 # Handles assignments (`y = x`) and `NewvarNode` declaration
 function update_alias_table!(aliases::Vector{Int}, @nospecialize(stmt), code::Vector{Any})
-    if isa(stmt, Expr) && stmt.head === :method && length(stmt.args) >= 1
-        fname = stmt.args[1]
-        if isa(fname, SlotNumber)
-            # :method can assign to a slot without an explicit `=` wrapper.
-            # Kill alias information for that slot and any slots pointing to it.
-            clear_slot_aliases!(aliases, slot_id(fname))
-        end
-        return
-    end
     if isa(stmt, NewvarNode)
         # When a slot is killed, also clear any slots that alias it, since
         # those aliases are now stale (the target has a new undefined value).
@@ -4911,6 +4985,10 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
         # since we probably formed these types with `typesubstract`,
         # the comparison is likely simple
+    elseif condt.isdefined && then_or_else === :then && vtype.undef
+         # For `@isdefined slot`, the type may not be a refinement
+         # but the `.undef` information still can be
+         return StateRefinement(condt.slot, oldtyp, #= undef =# false)
     else
         return nothing
     end

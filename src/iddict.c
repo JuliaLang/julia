@@ -8,7 +8,7 @@
 #define keyhash(k) jl_object_id_(jl_typetagof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val);
+static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz)
 {
@@ -61,7 +61,7 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
             }
             if (jl_egal(key, k2)) {
                 if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL) {
-                    jl_gc_write_atomic(a, tab[index + 1], val, release);
+                    jl_gc_write_atomic(a, tab[index + 1], jl_value_t, val, release);
                     return 0;
                 }
                 // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
@@ -79,8 +79,8 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            jl_gc_write_atomic(a, tab[empty_slot], key, release);
-            jl_gc_write_atomic(a, tab[empty_slot + 1], val, release);
+            jl_gc_write_atomic(a, tab[empty_slot], jl_value_t, key, release);
+            jl_gc_write_atomic(a, tab[empty_slot + 1], jl_value_t, val, release);
             return 1;
         }
 

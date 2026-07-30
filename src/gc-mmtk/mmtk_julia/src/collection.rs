@@ -1,0 +1,192 @@
+use crate::SINGLETON;
+use crate::{
+    jl_gc_prepare_to_collect, jl_gc_update_stats, jl_hrtime, jl_throw_out_of_memory_error,
+};
+use crate::{JuliaVM, USER_TRIGGERED_GC};
+use log::{info, trace};
+use mmtk::util::alloc::AllocationError;
+use mmtk::util::heap::GCTriggerPolicy;
+use mmtk::util::opaque_pointer::*;
+use mmtk::vm::{Collection, GCThreadContext};
+use mmtk::Mutator;
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
+
+use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
+
+pub static GC_START: AtomicU64 = AtomicU64::new(0);
+
+use std::collections::HashSet;
+use std::sync::RwLock;
+use std::thread::ThreadId;
+
+lazy_static! {
+    static ref GC_THREADS: RwLock<HashSet<ThreadId>> = RwLock::new(HashSet::new());
+}
+
+pub(crate) fn register_gc_thread() {
+    let id = std::thread::current().id();
+    GC_THREADS.write().unwrap().insert(id);
+}
+pub(crate) fn unregister_gc_thread() {
+    let id = std::thread::current().id();
+    GC_THREADS.write().unwrap().remove(&id);
+}
+pub(crate) fn is_gc_thread() -> bool {
+    let id = std::thread::current().id();
+    GC_THREADS.read().unwrap().contains(&id)
+}
+
+pub struct VMCollection {}
+
+impl Collection<JuliaVM> for VMCollection {
+    fn stop_all_mutators<F>(_tls: VMWorkerThread, mut mutator_visitor: F)
+    where
+        F: FnMut(&'static mut Mutator<JuliaVM>),
+    {
+        // Wait for all mutators to stop and all finalizers to run
+        while !AtomicBool::load(&WORLD_HAS_STOPPED, Ordering::SeqCst) {
+            // Stay here while the world has not stopped
+            // FIXME add wait var
+        }
+
+        assert!(
+            crate::api::mmtk_is_collection_enabled() != 0,
+            "Collection is disabled when threads are stopped for a GC. This is a concurrency bug, see https://github.com/mmtk/mmtk-julia/issues/278."
+        );
+
+        trace!("Stopped the world!");
+
+        // Tell MMTk the stacks are ready.
+        {
+            use mmtk::vm::ActivePlan;
+            for mutator in crate::active_plan::VMActivePlan::mutators() {
+                info!("stop_all_mutators: visiting {:?}", mutator.mutator_tls);
+                mutator_visitor(mutator);
+            }
+        }
+
+        // Record the start time of the GC
+        let now = unsafe { jl_hrtime() };
+        trace!("gc_start = {}", now);
+        GC_START.store(now, Ordering::Relaxed);
+    }
+
+    fn resume_mutators(_tls: VMWorkerThread) {
+        // Get the end time of the GC
+        let end = unsafe { jl_hrtime() };
+        trace!("gc_end = {}", end);
+        let gc_time = end - GC_START.load(Ordering::Relaxed);
+        unsafe {
+            jl_gc_update_stats(
+                gc_time,
+                crate::api::mmtk_used_bytes(),
+                is_current_gc_nursery(),
+            )
+        }
+
+        // Holding the mutex here guarantees that any mutator that observed
+        // `BLOCK_FOR_GC == true` is already enqueued in `wait()` by the time
+        // we call `notify_all`.
+        let (lock, cvar) = &*STW_COND.clone();
+        let count = lock.lock().unwrap();
+        AtomicBool::store(&BLOCK_FOR_GC, false, Ordering::SeqCst);
+        AtomicBool::store(&WORLD_HAS_STOPPED, false, Ordering::SeqCst);
+        cvar.notify_all();
+        drop(count);
+
+        // `resume_mutators()` is called after every stop-the-world pause, including the pause
+        // that ends a concurrent GC's background-work phase (there's no more targeted mmtk-core
+        // hook for that specifically). Advance the GC epoch to wake any mutator retrying
+        // `mmtk_disable_collection()` after it failed with
+        // `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH`: since a pause just completed, it's
+        // worth retrying (the retry is cheap; if it still fails, the mutator just waits again).
+        let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
+        let mut epoch = lock.lock().unwrap();
+        *epoch = epoch.wrapping_add(1);
+        cvar.notify_all();
+        drop(epoch);
+
+        info!(
+            "Live bytes = {}, total bytes = {}",
+            crate::api::mmtk_used_bytes(),
+            crate::api::mmtk_total_bytes()
+        );
+
+        trace!("Resuming mutators.");
+    }
+
+    fn block_for_gc(_tls: VMMutatorThread) {
+        info!("Triggered GC!");
+
+        unsafe { jl_gc_prepare_to_collect() };
+
+        info!("Finished blocking mutator for GC!");
+    }
+
+    fn spawn_gc_thread(_tls: VMThread, ctx: GCThreadContext<JuliaVM>) {
+        // Just drop the join handle. The thread will run until the process quits.
+        let _ = std::thread::Builder::new()
+            .name("MMTk Worker".to_string())
+            .spawn(move || {
+                use mmtk::util::opaque_pointer::*;
+                use mmtk::util::Address;
+
+                // Remember this GC thread
+                register_gc_thread();
+
+                // Start the worker loop
+                let worker_tls = VMWorkerThread(VMThread(OpaquePointer::from_address(unsafe {
+                    Address::from_usize(thread_id::get())
+                })));
+                match ctx {
+                    GCThreadContext::Worker(w) => {
+                        mmtk::memory_manager::start_worker(&SINGLETON, worker_tls, w)
+                    }
+                }
+
+                // The GC thread quits somehow. Unregister this GC thread
+                unregister_gc_thread();
+            });
+    }
+
+    fn schedule_finalization(_tls: VMWorkerThread) {}
+
+    fn out_of_memory(_tls: VMThread, _err_kind: AllocationError) {
+        println!("Out of Memory!");
+        unsafe { jl_throw_out_of_memory_error() };
+    }
+
+    fn vm_live_bytes() -> usize {
+        crate::api::JULIA_MALLOC_BYTES.load(Ordering::SeqCst)
+    }
+
+    fn create_gc_trigger() -> Box<dyn GCTriggerPolicy<JuliaVM>> {
+        use crate::gc_trigger::*;
+        Box::new(JuliaGCTrigger::new())
+    }
+}
+
+pub fn is_current_gc_nursery() -> bool {
+    match crate::SINGLETON.get_plan().generational() {
+        Some(gen) => gen.is_current_gc_nursery(),
+        None => false,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_block_thread_for_gc() {
+    AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
+
+    let (lock, cvar) = &*STW_COND.clone();
+    let mut count = lock.lock().unwrap();
+
+    info!("Blocking for GC!");
+
+    AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
+
+    while AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) {
+        count = cvar.wait(count).unwrap();
+    }
+
+    AtomicIsize::store(&USER_TRIGGERED_GC, 0, Ordering::SeqCst);
+}

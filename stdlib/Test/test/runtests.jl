@@ -1097,6 +1097,11 @@ uninferable_small_union(i) = (1, nothing)[i]
 @test_throws ErrorException @inferred(Missing, uninferable_small_union(1))
 @test_throws ErrorException @inferred(Missing, uninferable_small_union(2))
 @test_throws ArgumentError @inferred(nothing, uninferable_small_union(1))
+let T = Core.TypeVar(:T)
+    f_free_typevar_result() = Rational{T}
+    err = @test_throws ErrorException @inferred(f_free_typevar_result())
+    @test occursin("return type Type{Rational{T}} does not match inferred return type", err.value.msg)
+end
 
 # Ensure @inferred only evaluates the arguments once
 inferred_test_global = 0
@@ -1148,6 +1153,28 @@ end
     @test !occursin("include(", msg)
     @test occursin("at " * f * ":3", msg)
     @test occursin("at " * f * ":4", msg)
+    rm(f; force=true)
+end
+
+@testset "backtraces in exceptions thrown outside of @test" begin
+    # the backtrace is anchored at the enclosing @testset: frames below it
+    # (include machinery, script/test-harness drivers) say nothing about the
+    # failure
+    local f = tempname() * ".jl"
+    write(f,
+    """
+    using Test
+    @testset "outer" begin
+        error("boom")
+    end
+    """)
+    local msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=devnull), String)
+    @test occursin("Got exception outside of a @test", msg)
+    # frame paths contract the home dir to `~` (e.g. the temp dir on Windows)
+    @test occursin(Base.contractuser(f) * ":3", msg)
+    @test !occursin("include(", msg)
+    @test !occursin("exec_options", msg)
+    @test !occursin("_start()", msg)
     rm(f; force=true)
 end
 

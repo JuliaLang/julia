@@ -50,14 +50,18 @@ static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
     return *DebugRegistry;
 }
 
+namespace {
 struct debug_link_info {
     StringRef filename;
     uint32_t crc32;
 };
+}  // anonymous namespace
 
 #if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
-extern "C" void __register_frame(void*) JL_NOTSAFEPOINT;
-extern "C" void __deregister_frame(void*) JL_NOTSAFEPOINT;
+extern "C" {
+    JL_DLLIMPORT extern void __register_frame(void*) JL_NOTSAFEPOINT;
+    JL_DLLIMPORT extern void __deregister_frame(void*) JL_NOTSAFEPOINT;
+}
 
 template <typename callback>
 static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f) JL_NOTSAFEPOINT
@@ -84,7 +88,8 @@ static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
 
 jl_code_instance_t *JITDebugInfoRegistry::lookupCodeInstance(size_t pointer)
 {
-    jl_lock_profile();
+    if (!jl_trylock_profile())
+        return nullptr;
     auto region = cimap.lower_bound(pointer);
     jl_code_instance_t *linfo = NULL;
     if (region != cimap.end() && pointer < region->first + region->second.first)
@@ -99,6 +104,25 @@ JITDebugInfoRegistry::getObjectMap()
 {
     return objectmap;
 }
+
+#ifdef __clang_safetyanalysis__
+// Clang's thread-safety analysis drops the capability attributes when it
+// *implicitly* instantiates a member function of a class template (the
+// JL_NOTSAFEPOINT_ENTER on Locked<T>::operator* is lost), so it no longer sees
+// the accessor as entering the no-safepoint region. Force explicit
+// instantiations that carry the attribute for each Locked<T> accessor used
+// below, which the analyzer then honors. This is only needed for -D__clang_safetyanalysis__;
+// normal builds instantiate implicitly as usual.
+template JL_NOTSAFEPOINT_ENTER
+JITDebugInfoRegistry::Locked<llvm::DenseMap<uint64_t, JITDebugInfoRegistry::image_info_t>>::LockT
+JITDebugInfoRegistry::Locked<llvm::DenseMap<uint64_t, JITDebugInfoRegistry::image_info_t>>::operator*();
+template JL_NOTSAFEPOINT_ENTER
+JITDebugInfoRegistry::Locked<llvm::DenseMap<uint64_t, JITDebugInfoRegistry::image_info_t>>::ConstLockT
+JITDebugInfoRegistry::Locked<llvm::DenseMap<uint64_t, JITDebugInfoRegistry::image_info_t>>::operator*() const;
+template JL_NOTSAFEPOINT_ENTER
+JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
+JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::operator*();
+#endif
 
 void JITDebugInfoRegistry::add_image_info(image_info_t info) {
     (**this->image_info)[info.base] = info;
@@ -122,11 +146,13 @@ JITDebugInfoRegistry::get_objfile_map() {
 
 JITDebugInfoRegistry::JITDebugInfoRegistry() { }
 
+namespace {
 struct unw_table_entry
 {
     int32_t start_ip_offset;
     int32_t fde_offset;
 };
+}  // anonymous namespace
 
 // some actions aren't signal (especially profiler) safe so we acquire a lock
 // around them to establish a mutual exclusion with unwinding from a signal
@@ -390,7 +416,7 @@ void JITDebugInfoRegistry::registerJITObject(
 
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            const jl_linker_info_t &Info) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
+                            const jl_linker_info_t &Info)
 {
     // Opaque-closure code instances are not otherwise reachable through their
     // method, so promote them to global roots here, before entering the
@@ -507,14 +533,17 @@ static int lookup_pointer(
         }
         else {
             int havelock = jl_lock_profile_wr();
-            assert(havelock); (void)havelock;
-            auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-            jl_unlock_profile_wr();
+            assert(havelock); // we got it earlier on this thread, so we can get it again
+            if (havelock) {
+                auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+                jl_unlock_profile_wr();
 #if JL_LLVM_VERSION < 210000
-            info = std::move(lineinfo);
+                info = std::move(lineinfo);
 #else
-            info = std::move(lineinfo.value());
+                if (lineinfo)
+                    info = std::move(*lineinfo);
 #endif
+            }
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -1318,7 +1347,7 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
-extern "C" jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT_CODEGEN jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
 {
     return getJITDebugRegistry().lookupCodeInstance((size_t)p);
 }
@@ -1691,10 +1720,11 @@ extern "C" JL_DLLEXPORT_CODEGEN
 uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr) JL_NOTSAFEPOINT
 {
     // Might be called from unmanaged thread
-    jl_lock_profile();
+    uint64_t ipstart = 0;
+    if (!jl_trylock_profile())
+        return ipstart;
     auto &objmap = getJITDebugRegistry().getObjectMap();
     auto it = objmap.lower_bound(dwAddr);
-    uint64_t ipstart = 0; // ip of the start of the section (if found)
     if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
         ipstart = (uint64_t)(uintptr_t)(*it).first;
     }

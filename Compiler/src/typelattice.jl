@@ -4,9 +4,9 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct/InterConditional/InterMustAlias are defined in Core,
+# N.B.: Const/PartialStruct/InterConditional/InterMustAlias/PartialTask are defined in Core,
 # to allow them to be used inside the global code cache.
-import Core: Const, InterConditional, PartialStruct, InterMustAlias
+import Core: Const, InterConditional, PartialStruct, InterMustAlias, PartialTask
 
 function may_form_limited_typ(@nospecialize(aty), @nospecialize(bty), @nospecialize(xty))
     if aty isa LimitedAccuracy
@@ -502,6 +502,14 @@ end
     elseif isa(b, PartialOpaque)
         return false
     end
+    if isa(a, PartialTask)
+        if isa(b, PartialTask)
+            return ⊑(lattice, a.fetch_type, b.fetch_type) && ⊑(lattice, a.fetch_error, b.fetch_error)
+        end
+        return ⊑(widenlattice(lattice), Task, b)
+    elseif isa(b, PartialTask)
+        return false
+    end
     return ⊑(widenlattice(lattice), a, b)
 end
 
@@ -569,6 +577,11 @@ end
         return is_lattice_equal(lattice, a.env, b.env)
     end
     isa(b, PartialOpaque) && return false
+    if isa(a, PartialTask)
+        isa(b, PartialTask) || return false
+        return is_lattice_equal(lattice, a.fetch_type, b.fetch_type) && is_lattice_equal(lattice, a.fetch_error, b.fetch_error)
+    end
+    isa(b, PartialTask) && return false
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
 
@@ -631,6 +644,9 @@ end
         ti = typeintersect(widev, t)
         valid_as_lattice(ti, true) || return Bottom
         return PartialOpaque(ti, v.env, v.parent, v.source)
+    elseif isa(v, PartialTask)
+        has_free_typevars(t) && return v
+        return Task <: t ? v : Bottom
     end
     return tmeet(widenlattice(lattice), v, t)
 end
@@ -688,10 +704,15 @@ Widens extended lattice element `x` to native `Type` representation.
 """
 widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
-widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
+# a closed type value widens to the egality kind, mirroring how `jl_inst_arg_tuple_type`
+# keys runtime dispatch (`Const(v) ⊑ TypeEgal{v} ⊑ Type{v}`); an open one only to its
+# `==`-class `Type{v}`
+widenconst(c::Const) = (v = c.val; isa(v, Type) ?
+    (has_free_typevars(v) ? Type{v} : Core.TypeEgal{v}) : typeof(v))
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
+widenconst(t::PartialTask) = Task
 @nospecializeinfer widenconst(@nospecialize t::AnyType) = t
 widenconst(::TypeVar) = error("unhandled TypeVar")
 widenconst(::TypeofVararg) = error("unhandled Vararg")

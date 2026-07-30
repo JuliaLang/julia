@@ -391,7 +391,9 @@ julia> lock(my_locked_array) do x
 Julia supports accessing and modifying values *atomically*, that is, in a thread-safe way to avoid
 [race conditions](https://en.wikipedia.org/wiki/Race_condition). A value (which must be of a primitive
 type) can be wrapped as [`Threads.Atomic`](@ref) to indicate it must be accessed in this way.
-Here we can see an example:
+Here we can see an example using the [`Threads.atomic_add!`](@ref) function; the
+[`@atomic` reference interface](@ref man-atomic-reference) described below is now preferred for
+new code:
 
 ```julia-repl
 julia> i = Threads.Atomic{Int}(0);
@@ -453,6 +455,73 @@ julia> @threads for i in 1:1000
 julia> acc[]
 1000
 ```
+
+#### [The `@atomic` reference interface](@id man-atomic-reference)
+
+While the [`Threads.atomic_add!`](@ref) family of functions shown above is still supported, the
+recommended interface for a single atomic location is the reference form of the
+[`@atomic`](@ref Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap),
+[`@atomicreplace`](@ref Base.@atomicreplace), and [`@atomiconce`](@ref Base.@atomiconce) macros. It
+spells out each operation explicitly, makes read-modify-write updates such as `a[] += 1`
+unambiguously atomic (rather than silently racy), and lets the memory ordering be given as an
+optional first argument (defaulting to `:sequentially_consistent`):
+
+```julia-repl
+julia> a = Threads.Atomic{Int}(0)
+Base.Threads.Atomic{Int64}(0)
+
+julia> @atomic a[] = 10          # atomic store
+10
+
+julia> @atomic a[]               # atomic load
+10
+
+julia> @atomic :monotonic a[]    # atomic load with an explicit memory ordering
+10
+
+julia> @atomic a[] += 1          # atomic read-modify-write, returns the new value
+11
+
+julia> @atomicswap a[] = 0       # atomic exchange, returns the old value
+11
+
+julia> @atomicreplace a[] 0 => 5 # atomic compare-and-swap
+(old = 0, success = true)
+```
+
+The same macros also operate on the elements of an [`AtomicMemory`](@ref) and on `@atomic` struct
+fields (see [Per-field atomics](@ref man-atomics) below), so the same syntax covers scalars,
+arrays, and fields.
+
+The [`Threads.Atomic`](@ref) type is a standalone, [`Ref`](@ref)-like atomic cell. Like `Ref`, it
+is a useful building block and is not going to be removed, but an `@atomic` field of a mutable
+struct (see [Per-field atomics](@ref man-atomics) below) is usually preferable when you have the
+choice, since it avoids the extra indirection.
+
+The `Threads.atomic_*` functions predate these macros and still work, but the macros are the
+recommended way to operate on an atomic cell because they read more clearly and let you choose the
+memory ordering. The table below shows how to translate them. Note that the `atomic_*` functions
+return the **old** value, whereas `@atomic a[] op= v` returns the **new** value and
+`@atomic a[] op v` returns an `old => new` pair (use `.first`/`.second` to recover the individual
+values):
+
+| Legacy call | `@atomic` equivalent |
+|:--- |:--- |
+| `atomic_add!(a, v)` | `@atomic a[] += v` |
+| `atomic_sub!(a, v)` | `@atomic a[] -= v` |
+| `atomic_and!(a, v)` | `@atomic a[] &= v` |
+| `atomic_or!(a, v)` | `@atomic a[] \|= v` |
+| `atomic_xor!(a, v)` | `@atomic a[] ⊻= v` |
+| `atomic_max!(a, v)` | `@atomic a[] max v` |
+| `atomic_min!(a, v)` | `@atomic a[] min v` |
+| `atomic_xchg!(a, v)` | `@atomicswap a[] = v` |
+| `atomic_cas!(a, cmp, new)` | `@atomicreplace a[] cmp => new` |
+
+Storing with the plain `a[] = v` form on a `Threads.Atomic` is deprecated (because uses such as
+`a[] += 1` look atomic but are not); use `@atomic a[] = v` instead.
+
+!!! compat "Julia 1.14"
+    The reference form of the `@atomic` macros on `Threads.Atomic` requires at least Julia 1.14.
 
 
 #### [Per-field atomics](@id man-atomics)

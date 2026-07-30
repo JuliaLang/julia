@@ -459,7 +459,7 @@ function closewrite(s::LibuvStream)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::StickyWorkqueue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we won't get spurious notifications later
@@ -1065,6 +1065,16 @@ uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(
 # caller must have acquired the iolock
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     uvw = uv_write_async(s, p, n)
+    status = uv_write_wait(uvw)
+    if status < 0
+        throw(_UVError("write", status))
+    end
+    return Int(n)
+end
+
+# wait for the write request to complete and return its status,
+# caller must have acquired the iolock, which is released before waiting
+function uv_write_wait(uvw::Ptr{Cvoid})
     ct = current_task()
     preserve_handle(ct)
     sigatomic_begin()
@@ -1082,7 +1092,7 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::StickyWorkqueue, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -1094,10 +1104,7 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         iolock_end()
         unpreserve_handle(ct)
     end
-    if status < 0
-        throw(_UVError("write", status))
-    end
-    return Int(n)
+    return status
 end
 
 # helper function for uv_write that returns the uv_write_t struct for the write
@@ -1162,7 +1169,19 @@ function flush(s::LibuvStream)
             return
         end
     end
-    uv_write(s, Ptr{UInt8}(Base.eventloop()), UInt(0)) # zero write from a random pointer to flush current queue
+    # zero write from a random pointer to flush current queue, ignoring any
+    # errors from it: previously queued writes have already reported their
+    # errors to their writers, and the peer closing the stream after a
+    # completed exchange must not make flush throw
+    local uvw
+    try
+        uvw = uv_write_async(s, Ptr{UInt8}(Base.eventloop()), UInt(0))
+    catch ex
+        ex isa IOError || rethrow()
+        iolock_end()
+        return
+    end
+    uv_write_wait(uvw) # discard the status
     return
 end
 
@@ -1223,7 +1242,7 @@ _fd(x::Union{OS_HANDLE, RawFD}) = x
 function _fd(x::Union{LibuvStream, LibuvServer})
     fd = Ref{OS_HANDLE}(INVALID_OS_HANDLE)
     if x.status != StatusUninit && x.status != StatusClosed && x.handle != C_NULL
-        err = ccall(:uv_fileno, Int32, (Ptr{Cvoid}, Ptr{OS_HANDLE}), x.handle, fd)
+        ccall(:uv_fileno, Int32, (Ptr{Cvoid}, Ptr{OS_HANDLE}), x.handle, fd)
         # handle errors by returning INVALID_OS_HANDLE
     end
     return fd[]

@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const max_ccall_threads = parse(Int, get(ENV, "UV_THREADPOOL_SIZE", "4"))
-const thread_notifiers = Union{Event, Nothing}[nothing for i in 1:max_ccall_threads]
 const threadcall_restrictor = Semaphore(max_ccall_threads)
-const threadcall_lock = Threads.SpinLock()
 
 """
     @threadcall((cfunc, clib), rettype, (argtypes...), argvals...)
@@ -30,78 +28,82 @@ macro threadcall(f, rettype, argtypes, argvals...)
     argtypes = map(esc, argtypes.args)
     argvals = map(esc, argvals)
 
-    # construct non-allocating wrapper to call C function
-    wrapper = :(function (fptr::Ptr{Cvoid}, args_ptr::Ptr{Cvoid}, retval_ptr::Ptr{Cvoid})
-        p = args_ptr
-        # the rest of the body is created below
-    end)
-    body = wrapper.args[2].args
-    args = Symbol[]
-    for (i, T) in enumerate(argtypes)
-        arg = Symbol("arg", i)
-        push!(body, :($arg = unsafe_load(convert(Ptr{$T}, p))))
-        push!(body, :(p += Core.sizeof($T)))
-        push!(args, arg)
-    end
-    push!(body, :(ret = ccall(fptr, $rettype, ($(argtypes...),), $(args...))))
-    push!(body, :(unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)))
-    push!(body, :(return Int(Core.sizeof($rettype))))
+    # `cconvert` and `unsafe_convert` each argument on the calling thread:
+    # cconvert may allocate or run arbitrary Julia code, and computing the
+    # unsafe_convert'd C representation here keeps all of that off the libuv
+    # worker thread, which only makes the raw call. The cconverted values are
+    # captured by the wrapper closure and GC.@preserve'd around the worker-thread
+    # ccall so their C representations (e.g. interior pointers) stay valid.
+    roots = [Symbol("root", i) for i in 1:length(argvals)]
+    args  = [Symbol("arg", i) for i in 1:length(argvals)]
+    rootbinds = [:($(roots[i]) = cconvert($(argtypes[i]), $(argvals[i]))) for i in 1:length(argvals)]
+    argbinds  = [:($(args[i]) = unsafe_convert($(argtypes[i]), $(roots[i]))) for i in 1:length(argvals)]
+    call = :(result[] = ccall(cfptr, $rettype, ($(argtypes...),), $(args...)))
+    # keep the cconverted values alive while their C representations are in use
+    body = isempty(roots) ? call : :(GC.@preserve $(roots...) $call)
 
-    # return code to generate wrapper function and send work request to thread queue
-    wrapper = Expr(:var"hygienic-scope", wrapper, @__MODULE__, __source__)
-    return :(let fun_ptr = @cfunction($wrapper, Int, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}))
+    return quote
         # use cglobal to look up the function on the calling thread
-        do_threadcall(fun_ptr, cglobal($f), $rettype, Any[$(argtypes...)], Any[$(argvals...)])
-    end)
+        cfptr = cglobal($f)
+        $(rootbinds...)
+        $(argbinds...)
+        result = Ref{$rettype}()
+        # closure that performs the actual call on the worker thread and stores
+        # the result into the captured cell
+        wrapper = function ()
+            $body
+            return
+        end
+        do_threadcall(wrapper, result)
+    end
 end
 
-function do_threadcall(fun_ptr::Ptr{Cvoid}, cfptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, argvals::Vector)
-    # generate function pointer
-    c_notify_fun = @cfunction(
-        function notify_fun(idx)
-            global thread_notifiers
-            notify(thread_notifiers[idx])
-            return
-        end, Cvoid, (Cint,))
+# call wrapper invoked on the libuv worker thread. `F` is the concrete type of
+# the work closure, so `f()` is fully devirtualized; the closure is delivered
+# by value through the `Ref{F}` cfunction argument in `do_threadcall`.
+function threadcall_run(f::F) where F
+    f()
+    return
+end
 
-    # cconvert, root and unsafe_convert arguments
-    roots = Any[]
-    args_size = isempty(argtypes) ? 0 : sum(Core.sizeof, argtypes)
-    args_arr = Vector{UInt8}(undef, args_size)
-    ptr = pointer(args_arr)
-    for (T, x) in zip(argtypes, argvals)
-        isbitstype(T) || throw(ArgumentError("threadcall requires isbits argument types"))
-        y = cconvert(T, x)
-        push!(roots, y)
-        unsafe_store!(convert(Ptr{T}, ptr), unsafe_convert(T, y)::T)
-        ptr += Core.sizeof(T)
-    end
+# called from the libuv event loop once the queued work has finished, to wake
+# up the task waiting in `do_threadcall`
+function threadcall_notify(ct::Task, ctx::RefValue{Any})
+    schedule(ct)
+    unpreserve_handle(ct)
+    unpreserve_handle(ctx)
+    return
+end
 
-    # create return buffer
-    ret_arr = Vector{UInt8}(undef, Core.sizeof(rettype))
+function do_threadcall(wrapper::F, result::Ref{T}) where {F, T}
+    # a plain (non-closure) call wrapper, specialized to `F` via the `Ref{F}`
+    # argument type; the closure is handed to C as an opaque context pointer
+    c_run = @cfunction(threadcall_run, Cvoid, (Ref{F},))
+    # function pointer used to notify us when the work is done
+    c_notify_fun = @cfunction(threadcall_notify, Cvoid, (Ref{Task}, Ref{RefValue{Any}},))
+
+    # box the closure so wrapper has a stable address to preserve
+    # pass as Ptr{Cvoid} to pass that stable address
+    ctx = RefValue{Any}(wrapper)
 
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)
-    idx = -1
-    @lock threadcall_lock begin
-        idx = findfirst(isequal(nothing), thread_notifiers)::Int
-        thread_notifiers[idx] = Event()
-    end
-
-    GC.@preserve args_arr ret_arr roots begin
+    try
+        ct = current_task()
+        # keep the waiting task and the boxed closure alive until the worker thread
+        # has finished and woken us back up: the task so the notifier can find it by
+        # pointer, and the closure box so its captured values survive
+        preserve_handle(ct)
+        preserve_handle(ctx)
         # queue up the work to be done
         ccall(:jl_queue_work, Cvoid,
-            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid}, Cint),
-            fun_ptr, cfptr, args_arr, ret_arr, c_notify_fun, idx)
+            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Any, Ref{RefValue{Any}}),
+            c_run, ctx, c_notify_fun, ct, ctx)
 
-        # wait for a result & return it
-        wait(thread_notifiers[idx])
-        @lock threadcall_lock begin
-            thread_notifiers[idx] = nothing
-        end
+        # wait for a result
+        wait()
+    finally
         release(threadcall_restrictor)
-
-        r = unsafe_load(convert(Ptr{rettype}, pointer(ret_arr)))
     end
-    return r
+    return result[]
 end

@@ -677,7 +677,7 @@ To illustrate of the different scheduling strategies, consider the following fun
 ```julia-repl
 julia> function busywait(seconds)
             tstart = time_ns()
-            while (time_ns() - tstart) / 1e9 < seconds
+            while (time_ns() -% tstart) / 1e9 < seconds
             end
         end
 

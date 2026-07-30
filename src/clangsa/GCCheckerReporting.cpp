@@ -37,27 +37,32 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
   unsigned OldSafepointDisabled = PrevN->getState()->get<SafepointDisabledAt>();
   if (NewSafepointDisabled != OldSafepointDisabled) {
     const Decl *D = &N->getCodeDecl();
-    const AnnotateAttr *Ann = declHasAnnotation(D, "julia_not_safepoint");
     PathDiagnosticLocation Pos;
     if (OldSafepointDisabled == (unsigned)-1) {
+      const AnnotateAttr *Ann = declHasAnnotation(D, "julia_not_safepoint");
+      if (!Ann)
+        Ann = declHasAnnotation(D, "julia_notsafepoint_leave");
       if (Ann) {
         Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
         return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
-      } else {
-        PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
-            N->getLocationContext(), BRC.getSourceManager());
-        if (Pos.isValid())
-          return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
-        //N->getLocation().dump();
       }
+      PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
+          N->getLocationContext(), BRC.getSourceManager());
+      if (Pos.isValid())
+        return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
     } else if (NewSafepointDisabled == (unsigned)-1) {
+      const AnnotateAttr *Ann = declHasAnnotation(D, "julia_safepoint_enter");
+      if (Ann) {
+        Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
+        return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
+      }
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
           N->getLocationContext(), BRC.getSourceManager());
       if (Pos.isValid())
         return makePDP(Pos, "Safepoints re-enabled here");
-      //N->getLocation().dump();
     }
     // n.b. there may be no position here to report if they were disabled by julia_notsafepoint_enter/leave
+    // N->getLocation().dump();
   }
   return nullptr;
 }

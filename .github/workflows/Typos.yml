@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout the JuliaLang/julia repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
       - name: Check spelling with typos
@@ -40,12 +40,12 @@ jobs:
             | tar -xz -C "${{ runner.temp }}/typos" ./typos
           "${{ runner.temp }}/typos/typos" --version
 
-          echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/new_typos.jsonl || true
+          echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --config .github/_typos.toml --format json >> ${{ runner.temp }}/new_typos.jsonl || true
           git checkout FETCH_HEAD -- $OLD_FILES
           if [ -z "$OLD_FILES" ]; then
             touch "${{ runner.temp }}/old_typos.jsonl" # No old files, so no old typos.
           else
-            echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/old_typos.jsonl || true
+            echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --config .github/_typos.toml --format json >> ${{ runner.temp }}/old_typos.jsonl || true
           fi
 
 
