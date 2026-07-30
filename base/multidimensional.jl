@@ -1129,28 +1129,79 @@ function mapreduce_kernel_commutative(f, op, A, init, inds::AbstractArray)
     return _mapreduce_kernel_commutative(f, op, A, init, inds)
 end
 
-# This special internal method must have at least 8 indices and allows passing
-# optional scalar leading and trailing dimensions
-function _mapreduce_kernel_commutative(f, op, A, init, inds, leading=(), trailing=())
-    i1, iN = firstindex(inds), lastindex(inds)
-    n = length(inds)
-    @nexprs 8 N->a_N = @inbounds A[leading..., inds[i1+(N-1)], trailing...]
-    @nexprs 8 N->v_N = _mapreduce_start(f, op, A, init, a_N)
-    for batch in 1:(n>>3)-1
-        i = i1 + batch*8
-        @nexprs 8 N->a_N = @inbounds A[leading..., inds[i+(N-1)], trailing...]
-        @nexprs 8 N->fa_N = f(a_N)
-        @nexprs 8 N->v_N = op(v_N, fa_N)
+# These special internal methods allow passing optional scalar leading and trailing
+# dimensions and require at least as many indices as they have accumulator lanes.
+#
+# The lane count and the *serial* chain that combines the lanes at the end are both
+# load-bearing for vectorization: LLVM's SLP vectorizer only recognizes the lanes as a
+# single reduction when the final combine is a serial `op(v_1, op(v_2, ...))` chain,
+# and 8 lanes are too few for it to form full-width integer vectors or hide
+# floating-point add latency. But that only applies where the lane loads are
+# contiguous and actually vectorize — with no `leading` dimensions the indices step
+# the array's first dimension. Strided lanes (any `leading`) never vectorize, and
+# there 16 scalar accumulator chains only add register pressure, so those methods
+# keep 8 lanes. Callers must supply at least 16 or 8 indices, respectively.
+for (W, shift, L) in ((16, 4, :(Tuple{})), (8, 3, :Tuple))
+    combine = Symbol(:v_, W)
+    for N in W-1:-1:1
+        combine = :(op($(Symbol(:v_, N)), $combine))
     end
-    v = op(op(op(v_1, v_2), op(v_3, v_4)), op(op(v_5, v_6), op(v_7, v_8)))
-    i = i1 + (n>>3)*8 - 1
-    i == iN && return v
-    for i in i+1:iN
-        ai = @inbounds A[leading..., inds[i], trailing...]
-        v = op(v, f(ai))
+    @eval begin
+        function _mapreduce_kernel_commutative(f, op, A, init, inds, leading::$L, trailing=())
+            i1, iN = firstindex(inds), lastindex(inds)
+            n = length(inds)
+            @nexprs $W N->a_N = @inbounds A[leading..., inds[i1+(N-1)], trailing...]
+            @nexprs $W N->v_N = _mapreduce_start(f, op, A, init, a_N)
+            for batch in 1:(n>>$shift)-1
+                i = i1 + batch*$W
+                @nexprs $W N->a_N = @inbounds A[leading..., inds[i+(N-1)], trailing...]
+                @nexprs $W N->fa_N = f(a_N)
+                @nexprs $W N->v_N = op(v_N, fa_N)
+            end
+            v = $combine
+            i = i1 + (n>>$shift)*$W - 1
+            i == iN && return v
+            for i in i+1:iN
+                ai = @inbounds A[leading..., inds[i], trailing...]
+                v = op(v, f(ai))
+            end
+            return v
+        end
     end
-    return v
+    # The value-space variant below only pays off where the lane loads are contiguous
+    # and vectorize; for strided lanes the positional method above is faster, so
+    # strided (`leading::Tuple`) unit-range calls intentionally fall back to it.
+    W == 16 || continue
+    @eval begin
+        # For unit ranges, index by the range's own (consecutive) values rather than by
+        # position: indexing `A` at `j+(N-1)` lets LLVM prove the lane loads contiguous
+        # and vectorize them, which it cannot do through the positional `inds[i+(N-1)]`
+        # computation above. Every intermediate value below stays within
+        # `first(inds):last(inds)`, so this is also safe for ranges abutting `typemax`
+        # (issue #38627).
+        function _mapreduce_kernel_commutative(f, op, A, init, inds::AbstractUnitRange, leading::$L, trailing=())
+            j1, n = first(inds), length(inds)
+            @nexprs $W N->a_N = @inbounds A[leading..., j1+(N-1), trailing...]
+            @nexprs $W N->v_N = _mapreduce_start(f, op, A, init, a_N)
+            for batch in 1:(n>>$shift)-1
+                j = j1 + batch*$W
+                @nexprs $W N->a_N = @inbounds A[leading..., j+(N-1), trailing...]
+                @nexprs $W N->fa_N = f(a_N)
+                @nexprs $W N->v_N = op(v_N, fa_N)
+            end
+            v = $combine
+            j = j1 + (n>>$shift)*$W - 1
+            j == last(inds) && return v
+            for j in j+1:last(inds)
+                ai = @inbounds A[leading..., j, trailing...]
+                v = op(v, f(ai))
+            end
+            return v
+        end
+    end
 end
+_mapreduce_kernel_commutative(f, op, A, init, inds) =
+    _mapreduce_kernel_commutative(f, op, A, init, inds, (), ())
 
 function mapreduce_kernel_commutative(f::F, op::G, A, init, inds::CartesianIndices{N}) where {N,F,G}
     N == 0 && return _mapreduce_start(f, op, A, init, A[inds[]])
@@ -1158,7 +1209,8 @@ function mapreduce_kernel_commutative(f::F, op::G, A, init, inds::CartesianIndic
     is = inds.indices[1]
     js = inds.indices[2]
     if length(is) == 1 && length(js) >= 8
-        # It's quite useful to optimize this case for dimensional reductions
+        # It's quite useful to optimize this case for dimensional reductions;
+        # these lanes are strided, so this routes to the 8-lane kernel methods
         i = only(is)
         outer = CartesianIndices(tail(tail(inds.indices)))
         o1, s = iterate(outer)
@@ -1167,7 +1219,7 @@ function mapreduce_kernel_commutative(f::F, op::G, A, init, inds::CartesianIndic
             v = op(v, _mapreduce_kernel_commutative(f, op, A, init, js, (i,), o.I))
         end
         return v
-    elseif length(is) < 8 # TODO: tune this number
+    elseif length(is) < 16 # TODO: tune this number
         # These small cases could be further optimized
         return mapreduce_kernel_commutative(i->f(A[i]), op, inds, init, HasShape{N}(), length(inds))[1]
     else

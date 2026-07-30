@@ -1094,3 +1094,18 @@ end
     B = copy(A); @test all!(!, view(B, :, 1:1, 1:1),B) == all(!, A; dims=(2,3))
     B = copy(A); @test all!(!, view(B, 1:1, 1:1, 1:1),B) == all(!, A; dims=(1,2,3))
 end
+
+# The commutative reduction kernel processes 16 fixed accumulator lanes; make sure the
+# dimension lengths spanning that boundary (and the thresholds routing to it) stay exact
+@testset "reduction kernel lane-count boundaries" begin
+    for n in 6:18, T in (Int32, Float64)
+        v = T <: Integer ? T.(rand(-100:100, n)) : rand(T, n)
+        M = reshape(v, 1, n, 1)
+        MV = @view M[1:end, 1:end, 1:end]
+        @test sum(MV; dims=(1,2)) ≈ sum(M; dims=(1,2)) ≈ reshape([sum(v)], 1, 1, 1)
+        W = repeat(v, 1, 3)
+        WV = @view W[1:end, 1:end, 1:end, 1:end]
+        @test sum(WV; dims=1) ≈ sum(W; dims=1)
+        @test vec(sum(WV; dims=2)) ≈ 3 .* v
+    end
+end
