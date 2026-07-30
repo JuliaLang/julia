@@ -155,3 +155,7 @@ end # module
 if abspath(PROGRAM_FILE) == @__FILE__
     WindowsThreadDump.dump(parse(Int, ARGS[1]))
 end
+
+# Value of `include(...)`, so a caller does not have to know which module the
+# include landed in (test files run inside a module created by the harness).
+WindowsThreadDump.dump

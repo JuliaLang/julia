@@ -111,8 +111,10 @@ let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no th
                     sleep(15)
                 end
                 try
-                    include(joinpath(@__DIR__, "windows_thread_dump.jl"))
-                    invokelatest(getfield(Main, :WindowsThreadDump).dump, pid)
+                    # include returns the dump function itself: this file is
+                    # evaluated inside whatever module the harness made for it
+                    dumpfn = include(joinpath(@__DIR__, "windows_thread_dump.jl"))
+                    invokelatest(dumpfn, pid)
                 catch e
                     @error "external thread dump failed" exception=(e, catch_backtrace())
                 end
