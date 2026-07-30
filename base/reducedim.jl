@@ -54,6 +54,39 @@ keep_first_trues(t) = t[1] ? (true, keep_first_trues(tail(t))...) : ntuple(Retur
 # These functions aren't used in the implementation here, but are used widely in the ecosystem
 promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
 promote_union(T) = T
+
+function check_reducedims(R, A)
+    # Check whether R has compatible dimensions w.r.t. A for reduction
+    #
+    # It returns an integer value (useful for choosing implementation)
+    # - If it reduces only along leading dimensions, e.g. sum(A, dims=1) or sum(A, dims=(1,2)),
+    #   it returns the length of the leading slice. For the two examples above,
+    #   it will be size(A, 1) or size(A, 1) * size(A, 2).
+    # - Otherwise, e.g. sum(A, dims=2) or sum(A, dims=(1,3)), it returns 0.
+    #
+    ndims(R) <= ndims(A) || throw(DimensionMismatch("cannot reduce $(ndims(A))-dimensional array to $(ndims(R)) dimensions"))
+    lsiz = 1
+    had_nonreduc = false
+    for i = 1:ndims(A)
+        Ri, Ai = axes(R, i), axes(A, i)
+        sRi, sAi = length(Ri), length(Ai)
+        if sRi == 1
+            if sAi > 1
+                if had_nonreduc
+                    lsiz = 0  # to reduce along i, but some previous dimensions were non-reducing
+                else
+                    lsiz *= sAi  # if lsiz was set to zero, it will stay to be zero
+                end
+            end
+        else
+            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(axes(A)) with output with indices $(axes(R))"))
+            had_nonreduc = true
+        end
+    end
+    return lsiz
+end
+
+reducedim1(R, A) = length(axes1(R)) == 1
 _realtype(::Type{<:Complex}) = Real
 _realtype(::Type{Complex{T}}) where T<:Real = T
 _realtype(T::Type) = T
