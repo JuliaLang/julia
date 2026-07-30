@@ -1080,10 +1080,49 @@ end
 
 # Reduction support for CartesianIndices
 halves(inds::CartesianIndices) = map(CartesianIndices∘tuple, _halves(inds.indices)...)
-function mapreduce_kernel(f, op, A, init, inds::CartesianIndices{N}) where {N}
+
+# Once the pairwise recursion has peeled a CartesianIndices chunk down to a single
+# column (all trailing dimensions singleton), recurse on the leading range alone:
+# the generic `halves` splitting above rebuilds the full index tuple at every node,
+# which can rival the cost of the actual kernel work for long columns. A single
+# column has only one element order, so this is restricted to commutative ops purely
+# to keep the reassociation-tree shape a `mapreduce_pairwise` implementation detail
+# there. The leaves still construct a (single-column) CartesianIndices and dispatch
+# through `mapreduce_kernel` so that arrays with specialized kernels — sparse and
+# structured matrices, for example — retain them on this path.
+@inline function mapreduce_pairwise(f::F, op::G, A, init, inds::CartesianIndices{N}) where {F,G,N}
+    if N > 0 && is_commutative_op(op)
+        is = inds.indices[1]
+        outer = CartesianIndices(tail(inds.indices))
+        if length(outer) == 1 && length(is) >= 16
+            # A short single column is a single kernel leaf; only longer columns
+            # need the range-halving recursion (and its type-stabilizing re-index)
+            length(is) <= max(16, pairwise_blocksize(f, op)) &&
+                return mapreduce_kernel(f, op, A, init, inds)
+            return mapreduce_pairwise_column(f, op, A, init, _sliceall(is), only(outer).I)
+        end
+    end
+    return mapreduce_pairwise_split(f, op, A, init, inds)
+end
+function mapreduce_pairwise_column(f::F, op::G, A, init, is::AbstractUnitRange, trailing) where {F,G}
+    if length(is) <= max(16, pairwise_blocksize(f, op))
+        return mapreduce_kernel(f, op, A, init, CartesianIndices((is, map(i -> i:i, trailing)...)))
+    else
+        h1, h2 = halves(is)
+        return op(mapreduce_pairwise_column(f, op, A, init, h1, trailing),
+                  mapreduce_pairwise_column(f, op, A, init, h2, trailing))
+    end
+end
+# The thin `@inline` dispatchers here keep the per-call overhead low: dimensional
+# reductions funnel one `mapreduce_kernel` call through them per pairwise leaf —
+# once per `pairwise_blocksize` elements — where a non-inlined hop is measurable.
+@inline function mapreduce_kernel(f, op, A, init, inds::CartesianIndices{N}) where {N}
     N == 0 && return _mapreduce_start(f, op, A, init, A[inds[]])
     N == 1 && return mapreduce_kernel(f, op, A, init, inds.indices[1])
     is_commutative_op(op) && return mapreduce_kernel_commutative(f, op, A, init, inds)
+    return _mapreduce_kernel_noncommutative(f, op, A, init, inds)
+end
+function _mapreduce_kernel_noncommutative(f, op, A, init, inds::CartesianIndices)
     r = inds.indices[1]
     if length(r) == 1
         # A one-element inner loop is less-than-helpful
@@ -1171,8 +1210,7 @@ for (W, shift, L) in ((16, 4, :(Tuple{})), (8, 3, :Tuple))
     # The value-space variant below only pays off where the lane loads are contiguous
     # and vectorize; for strided lanes the positional method above is faster, so
     # strided (`leading::Tuple`) unit-range calls intentionally fall back to it.
-    W == 16 || continue
-    @eval begin
+    W == 16 && @eval begin
         # For unit ranges, index by the range's own (consecutive) values rather than by
         # position: indexing `A` at `j+(N-1)` lets LLVM prove the lane loads contiguous
         # and vectorize them, which it cannot do through the positional `inds[i+(N-1)]`
@@ -1203,9 +1241,19 @@ end
 _mapreduce_kernel_commutative(f, op, A, init, inds) =
     _mapreduce_kernel_commutative(f, op, A, init, inds, (), ())
 
-function mapreduce_kernel_commutative(f::F, op::G, A, init, inds::CartesianIndices{N}) where {N,F,G}
+@inline function mapreduce_kernel_commutative(f::F, op::G, A, init, inds::CartesianIndices{N}) where {N,F,G}
     N == 0 && return _mapreduce_start(f, op, A, init, A[inds[]])
     N == 1 && return mapreduce_kernel_commutative(f, op, A, init, inds.indices[1])
+    is = inds.indices[1]
+    trailing = tail(inds.indices)
+    if length(is) >= 16 && all(map(isone∘length, trailing))
+        # A single long column: dimensional reductions funnel one such call through
+        # here per pairwise leaf, so skip the general outer-loop machinery below
+        return _mapreduce_kernel_commutative(f, op, A, init, is, (), map(first, trailing))
+    end
+    return _mapreduce_kernel_commutative_cartesian(f, op, A, init, inds)
+end
+function _mapreduce_kernel_commutative_cartesian(f::F, op::G, A, init, inds::CartesianIndices{N}) where {N,F,G}
     is = inds.indices[1]
     js = inds.indices[2]
     if length(is) == 1 && length(js) >= 8

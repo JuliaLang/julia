@@ -524,7 +524,13 @@ function mapreduce_pairwise(f::F, op::G, itr, init, S::IteratorSize) where {F, G
     return v
 end
 
-function mapreduce_pairwise(f::F, op::G, A, init, inds) where {F,G}
+mapreduce_pairwise(f::F, op::G, A, init, inds) where {F,G} =
+    mapreduce_pairwise_split(f, op, A, init, inds)
+# This is a separate function so specialized `mapreduce_pairwise` methods (like the
+# CartesianIndices one in multidimensional.jl) can share the generic split recursion
+# Inlined so that below-blocksize callers reach `mapreduce_kernel` without an
+# intermediate call: dimensional reductions make one such call per output
+@inline function mapreduce_pairwise_split(f::F, op::G, A, init, inds) where {F,G}
     if length(inds) <= max(10, pairwise_blocksize(f, op))
         return mapreduce_kernel(f, op, A, init, inds)
     else
