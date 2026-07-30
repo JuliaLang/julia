@@ -695,6 +695,9 @@ end
     SubString{T}(ss)
 end
 
+@deprecate _unsetindex!(A) Base.unsetindex!(A) false
+@deprecate _unsetindex!(A, i) Base.unsetindex!(A, i) false
+
 # `a[] = v` on a `Threads.Atomic` (the `setindex!` form) is a footgun: read-modify-write
 # expressions such as `a[] += 1` look atomic but expand to a separate non-atomic load and
 # store. Steer users to the explicit `@atomic` form. This is written by hand rather than

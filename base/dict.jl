@@ -223,8 +223,8 @@ function empty!(h::Dict{K,V}) where V where K
     fill!(h.slots, 0x0)
     sz = length(h.slots)
     for i in 1:sz
-        _unsetindex!(h.keys, i)
-        _unsetindex!(h.vals, i)
+        unsetindex!(h.keys, i)
+        unsetindex!(h.vals, i)
     end
     h.ndel = 0
     h.count = 0
@@ -627,8 +627,8 @@ function _delete!(h::Dict{K,V}, index) where {K,V}
     @inbounds begin
     slots = h.slots
     sz = length(slots)
-    _unsetindex!(h.keys, index)
-    _unsetindex!(h.vals, index)
+    unsetindex!(h.keys, index)
+    unsetindex!(h.vals, index)
     # if the next slot is empty we don't need a tombstone
     # and can remove all tombstones that were required by the element we just deleted
     ndel = 1
