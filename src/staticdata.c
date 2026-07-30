@@ -3651,7 +3651,7 @@ static char *jl_image_alloc_pages(size_t size)
 
 // Decompress a compressed image payload found after the .ji header in data, and
 // return a buffer containing the uncompressed header and payload.
-static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len)
+static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len) JL_CANSAFEPOINT
 {
     ios_t f;
     uint32_t flags = 0;
@@ -3710,7 +3710,7 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image) JL_C
 #endif
 }
 
-static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap)
+static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
 {
     const char *lib_path = jl_pathname_for_handle(handle);
     if (!lib_path)
@@ -3777,14 +3777,14 @@ error:
     abort();
 }
 
-JL_DLLEXPORT void jl_image_unpack_split(void *handle, jl_image_buf_t *image)
+JL_DLLEXPORT void jl_image_unpack_split(void *handle, jl_image_buf_t *image) JL_CANSAFEPOINT
 {
     image->size = jl_image_get_split_ji(handle, (char **)&image->data, 1);
     image->is_split = 1;
     jl_image_load_metadata(handle, image);
 }
 
-JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image)
+JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image) JL_CANSAFEPOINT
 {
     char *comp_data;
     size_t comp_size = jl_image_get_split_ji(handle, &comp_data, 0);
