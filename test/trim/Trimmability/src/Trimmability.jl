@@ -21,10 +21,38 @@ area(c::Circle) = pi*c.radius^2
 sum_areas(v::Vector{Shape}) = sum(area, v)
 
 mutable struct Foo; x::Int; end
+
+# To check that objects embedded in emitted code are retained (kept[] == 0): we did not lose any roots
+const kept = Base.RefValue{Int}(0)
+# To check that some objects died (dropped[] > 0): GC + finalizers fired
+const dropped = Base.RefValue{Int}(0)
+note_kept(x::Foo) = (kept[] += 1; nothing)
+note_dropped(x::Foo) = (dropped[] += 1; nothing)
+
 const storage = Foo[]
 function add_one(x::Cint)::Cint
-    push!(storage, Foo(x))
+    entry = Foo(x)
+    finalizer(note_kept, entry)
+    push!(storage, entry)
     return x + 1
+end
+
+let captured = Foo[]
+    global @noinline function add_one_captured(x::Cint)::Cint
+        entry = Foo(x)
+        finalizer(note_kept, entry)
+        push!(captured, entry)
+        return x + 1
+    end
+end
+
+const box = Base.RefValue{Any}(nothing)
+@noinline function drop_one(x::Cint)
+    entry = Foo(x)
+    finalizer(note_dropped, entry)
+    box[] = entry
+    box[] = nothing
+    return nothing
 end
 
 const fin_total = Base.RefValue{Int}(0)
@@ -164,12 +192,17 @@ function @main(args::Vector{String})::Cint
     for i = 1:10
         # https://github.com/JuliaLang/julia/issues/60846
         add_one(Cint(i))
+        add_one_captured(Cint(i))
+        drop_one(Cint(i))
         GC.gc()
     end
+    GC.gc(true)
 
     let (counted, logged) = finalizer_check()
         println(Core.stdout, "finalizers: ", counted, " ", logged)
     end
+
+    println(Core.stdout, "collected: ", kept[], " kept, ", dropped[], " dropped")
 
     try
         sock = connect("localhost", 4900)
