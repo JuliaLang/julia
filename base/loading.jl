@@ -1636,6 +1636,54 @@ function run_package_callbacks(modkey::PkgId)
     nothing
 end
 
+"""
+    Base.CACHE_FETCH_HOOK
+
+An optional callable consulted when `require` or precompilation has determined
+that no valid compile cache exists for a package and it is about to compile
+one. Called as
+
+    hook(pkg::PkgId, sourcepath::String)::Bool
+
+Returning `true` indicates the hook may have placed a cachefile in one of the
+`DEPOT_PATH` compile cache directories (e.g. by fetching it from a cache
+server); the caller then rescans the cache candidates and revalidates them
+through the normal staleness machinery, falling back to compiling if nothing
+valid appeared. Any other return value — or a thrown error, which is caught
+and logged at debug level — proceeds directly to compilation.
+
+The hook is advisory and its output is untrusted: fetched files undergo the
+same validation as any other cache candidate. Implementations must not load
+non-sysimage code, and must be safe to call from concurrent tasks. The hook
+is never invoked from output-generating (precompile worker) processes, nor
+reentrantly.
+"""
+const CACHE_FETCH_HOOK = Ref{Any}(nothing)
+
+"""
+    Base.maybe_fetch_cache(pkg::PkgId, sourcepath::String) -> Bool
+
+Invoke `CACHE_FETCH_HOOK` under its safety guards (never while generating
+output, never reentrantly, errors demoted to `false`). Returns whether the
+caller should rescan the compile cache candidates.
+"""
+function maybe_fetch_cache(pkg::PkgId, sourcepath::String)
+    h = CACHE_FETCH_HOOK[]
+    h === nothing && return false
+    generating_output() && return false
+    tls = task_local_storage()
+    haskey(tls, :in_cache_fetch_hook) && return false
+    tls[:in_cache_fetch_hook] = true
+    try
+        return @invokelatest(h(pkg, sourcepath)) === true
+    catch err
+        @debug "CACHE_FETCH_HOOK failed" pkg exception=(err, catch_backtrace())
+        return false
+    finally
+        delete!(tls, :in_cache_fetch_hook)
+    end
+end
+
 
 ##############
 # Extensions #
@@ -2879,6 +2927,7 @@ function __require_prelocked(pkg::PkgId, env)
     set_pkgorigin_version_path(pkg, path)
 
     parallel_precompile_attempted = Ref(false) # being safe to avoid getting stuck in a precompilepkgs loop
+    cache_fetch_attempted = Ref(false)         # the cache-fetch hook gets one shot, then we compile
     reasons = Dict{Symbol,Int}()
     # attempt to load the module file via the precompile cache locations
     if JLOptions().use_compiled_modules != 0
@@ -2914,7 +2963,8 @@ function __require_prelocked(pkg::PkgId, env)
                 @goto load_from_cache
             end
             # spawn off a new incremental pre-compile task for recursive `require` calls
-            loaded = let spec = spec, reasons = reasons, parallel_precompile_attempted = parallel_precompile_attempted
+            loaded = let spec = spec, reasons = reasons, parallel_precompile_attempted = parallel_precompile_attempted,
+                         cache_fetch_attempted = cache_fetch_attempted
                 maybe_cachefile_lock(pkg, spec.path) do
                     # double-check the search now that we have lock
                     m = _require_search_from_serialized(pkg, spec, UInt128(0), true)
@@ -2925,6 +2975,13 @@ function __require_prelocked(pkg::PkgId, env)
 
                     unlock(require_lock)
                     try
+                        # a cache-fetch hook gets one chance to materialize a
+                        # cachefile before we spend time compiling; returning
+                        # `nothing` retries the cache search from the top
+                        if !cache_fetch_attempted[] && CACHE_FETCH_HOOK[] !== nothing
+                            cache_fetch_attempted[] = true
+                            maybe_fetch_cache(pkg, spec.path) && return nothing
+                        end
                         if !generating_output() && !parallel_precompile_attempted[] && !disable_parallel_precompile && @isdefined(Precompilation)
                             parallel_precompile_attempted[] = true
                             # Note that we use @invokelatest here to avoid world
