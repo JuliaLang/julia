@@ -1884,8 +1884,15 @@ function compilecache_freshest_path(pkg::PkgId;
         cachepath_cache::Dict{PkgId, Vector{String}}=Dict{PkgId, Vector{String}}(),
         cachepaths::Vector{String}=get(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
         sourcepath::Union{String,Nothing}=Base.locate_package(pkg),
-        flags::CacheFlags=CacheFlags())
+        flags::CacheFlags=CacheFlags(),
+        # this is a query, not a load: full-file corruption checks are skipped by
+        # default; a corrupted cache is rejected at load time anyway
+        verify_checksums::Bool=false)
     isnothing(sourcepath) && error("Cannot locate source for $(repr("text/plain", pkg))")
+    @lock require_lock begin
+    set_cache = LOADING_CACHE[] === nothing
+    set_cache && (LOADING_CACHE[] = LoadingCache())
+    try
     try_build_ids = UInt128[UInt128(0)]
     if !ignore_loaded
         let loaded = get(loaded_precompiles, pkg, nothing)
@@ -1898,7 +1905,7 @@ function compilecache_freshest_path(pkg::PkgId;
     end
     for build_id in try_build_ids
         for path_to_try in cachepaths
-            staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try; ignore_loaded, requested_flags=flags)
+            staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try; ignore_loaded, requested_flags=flags, verify_checksums)
             if staledeps === true
                 continue
             end
@@ -1910,7 +1917,7 @@ function compilecache_freshest_path(pkg::PkgId;
                 modpaths = get(() -> find_all_in_cache_path(modkey), cachepath_cache, modkey)
                 for modpath_to_try in modpaths::Vector{String}
                     stale_cache_key = (modkey, modbuild_id, modpath, modpath_to_try, ignore_loaded, flags)::StaleCacheKey
-                    if get!(() -> stale_cachefile(modkey, modbuild_id, modpath, modpath_to_try; ignore_loaded, requested_flags=flags) === true,
+                    if get!(() -> stale_cachefile(modkey, modbuild_id, modpath, modpath_to_try; ignore_loaded, requested_flags=flags, verify_checksums) === true,
                             stale_cache, stale_cache_key)
                         continue
                     end
@@ -1928,6 +1935,11 @@ function compilecache_freshest_path(pkg::PkgId;
             return path_to_try
             @label check_next_path
         end
+    end
+    return nothing
+    finally
+        set_cache && (LOADING_CACHE[] = nothing)
+    end
     end
 end
 
@@ -4034,6 +4046,14 @@ function list_reasons(reasons::Dict{String,Int})
 end
 list_reasons(::Nothing) = ""
 
+function in_package_store(path::String)
+    for depot in DEPOT_PATH
+        prefix = joinpath(depot, "packages", "")
+        startswith(path, prefix) && return true
+    end
+    return false
+end
+
 function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::String, reasons::Union{Dict{String,Int},Nothing}=nothing)
     for chi in includes
         f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
@@ -4072,6 +4092,11 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
                 @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
                 record_reason(reasons, "file size changed")
                 return true
+            end
+            # a read-only file in the content-addressed package store cannot have
+            # changed since precompilation, so trust the recorded hash
+            if !isdir(fstat) && filemode(fstat) & 0o222 == 0 && in_package_store(f)
+                continue
             end
             hash = isdir(fstat) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
             if hash != hash_req
@@ -4134,12 +4159,13 @@ end
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
-@constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing)
-    return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded, requested_flags, reasons)
+@constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
+    return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
-                                          reasons::Union{Dict{String,Int},Nothing}=nothing, stalecheck::Bool=true)
+                                          reasons::Union{Dict{String,Int},Nothing}=nothing, stalecheck::Bool=true,
+                                          verify_checksums::Bool=true)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
     io = try
         open(cachefile, "r")
@@ -4297,17 +4323,19 @@ end
             end
         end
 
-        if !isvalid_file_crc(io)
-            @debug "Rejecting cache file $cachefile because it has an invalid checksum"
-            record_reason(reasons, "cache file checksum is invalid")
-            return true
-        end
-
-        if pkgimage
-            if !isvalid_pkgimage_crc(io, ocachefile::String)
-                @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
-                record_reason(reasons, "native code cache checksum is invalid")
+        if verify_checksums
+            if !isvalid_file_crc(io)
+                @debug "Rejecting cache file $cachefile because it has an invalid checksum"
+                record_reason(reasons, "cache file checksum is invalid")
                 return true
+            end
+
+            if pkgimage
+                if !isvalid_pkgimage_crc(io, ocachefile::String)
+                    @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
+                    record_reason(reasons, "native code cache checksum is invalid")
+                    return true
+                end
             end
         end
 
