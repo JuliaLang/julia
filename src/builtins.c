@@ -1680,14 +1680,18 @@ JL_CALLABLE(jl_f_define_method)
         jl_error("define_method requires 2 or 4 arguments");
     JL_TYPECHK(define_method, module, args[0]);
     jl_module_t *module = (jl_module_t *)args[0];
-    jl_check_top_level_effect(module, "define_method");
 
     // Generic function declaration: define_method(module, name)
+    // No eager top-level-effect check here: declaring an already-existing
+    // generic function is a no-op, which must remain legal for closed modules
+    // during incremental precompilation. Creating a genuinely new binding is
+    // still caught by check_safe_newbinding.
     if (nargs == 2) {
         JL_TYPECHK(define_method, symbol, args[1]);
         jl_sym_t *fname = (jl_sym_t*)args[1];
         return jl_declare_const_gf(module, fname);
     }
+    jl_check_top_level_effect(module, "define_method");
 
     // Method definition: define_method(module, fname_or_mt, argdata, code)
     jl_value_t *fname = args[1];
