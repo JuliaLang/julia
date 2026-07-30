@@ -1506,7 +1506,7 @@ or finalizers run).
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-unsetindex!(A::AbstractArray, i::Integer) = unsetindex!(A, to_index(i))
+function unsetindex! end
 
 """
     parent(A)

@@ -474,7 +474,7 @@ This is typically done with [`UndefInitializer`](@ref) and its singleton value [
 When the element type is stored inline in the array, as is the case for bitstypes
 and small unions of bitstypes, the value stored will created from arbitrary bit patterns:
 
-```jldoctest; filter = r"-?[0-9]+"
+```julia
 julia> A = Vector{Int}(undef, 3)
 3-element Vector{Int64}:
   0

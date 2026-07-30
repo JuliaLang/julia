@@ -205,6 +205,7 @@ false
 """
 isbitsunion(u::Type) = u isa Union && allocatedinline(u)
 
+unsetindex!(A::Array, i::Integer) = unsetindex!(A, to_index(i))
 function unsetindex!(A::Array, i::Int)
     @inline
     @boundscheck checkbounds(A, i)

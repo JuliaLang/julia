@@ -99,13 +99,13 @@ See the section of uninitialized memory in the manual for more details.
 
 # Examples
 ```jldoctest
-julia> ref = MemoryRef(fill!(Memory{Int}(undef, 3), 4)); ref[]
+julia> ref = memoryref(fill!(Memory{Int}(undef, 3), 4)); ref[]
 4
 
 julia> Base.unsetindex!(ref); ref[] isa Int # specific value not guaranteed
 true
 
-julia> ref = MemoryRef(fill!(Memory{String}(undef, 3), "abc")); ref[]
+julia> ref = memoryref(fill!(Memory{String}(undef, 3), "abc")); ref[]
 "abc"
 
 julia> Base.unsetindex!(ref); ref[]
@@ -119,7 +119,7 @@ ERROR: UndefRefError: access to undefined reference
 unsetindex!(A::MemoryRef) = (@_propagate_inbounds_meta; Core.memoryrefunset!(A, :not_atomic, @_boundscheck); A)
 
 """
-    unsetindex!(A::Union{Memory, Array}, i::Int) -> A
+    unsetindex!(A::Union{Memory, Array}, i::Integer) -> A
 
 Unset the reference from `A` at index `i` to its underlying value and return `A`.
 This leaves the slot as it was uninitialized.
@@ -146,6 +146,8 @@ ERROR: UndefRefError: access to undefined reference
     This function requires at least Julia 1.14.
 """
 unsetindex!(A::Memory, i::Int) = (@_propagate_inbounds_meta; unsetindex!(memoryref(A, i)); A)
+unsetindex!(A::Union{Array, Memory}, i::Integer) = unsetindex!(A, to_index(i))
+
 
 elsize(@nospecialize _::Type{A}) where {T,A<:GenericMemory{<:Any,T}} = aligned_sizeof(T) # XXX: probably supposed to be the stride?
 sizeof(a::GenericMemory) = Core.sizeof(a)
