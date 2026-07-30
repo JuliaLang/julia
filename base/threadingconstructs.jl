@@ -44,7 +44,7 @@ to the Julia process, with atomic-acquire semantics. The result will always be
 greater than or equal to [`threadid()`](@ref) as well as `threadid(task)` for
 any task you were able to observe before calling `maxthreadid`.
 """
-maxthreadid() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
+maxthreadid() = Int(unsafe_load(cglobal(:jl_n_threads, Cint), :acquire))
 
 """
     Threads.nthreads(:default | :interactive)::Int
@@ -677,7 +677,7 @@ To illustrate of the different scheduling strategies, consider the following fun
 ```julia-repl
 julia> function busywait(seconds)
             tstart = time_ns()
-            while (time_ns() - tstart) / 1e9 < seconds
+            while (time_ns() -% tstart) / 1e9 < seconds
             end
         end
 

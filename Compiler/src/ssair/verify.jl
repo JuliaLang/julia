@@ -25,7 +25,8 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-is_toplevel_expr_head(head::Symbol) = head === :method || head === :thunk
+is_toplevel_expr_head(head::Symbol) = head === :thunk
+is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int,
     allow_frontend_forms::Bool, @nospecialize(raise_error))
     if isa(op, SSAValue)
@@ -397,14 +398,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     # blocks, which isn't allowed for regular SSA values, so
                     # we skip the validation below.
                     continue
-                elseif stmt.head === :foreigncall
+                elseif stmt.head === :foreigncall || stmt.head === :foreignglobal
                     isforeigncall = true
-                elseif stmt.head === :call
-                    f = stmt.args[1]
-                    if f isa GlobalRef && f.name === :cglobal
-                        # TODO: these are not yet linearized
-                        continue
-                    end
                 elseif stmt.head === :leave
                     for i in 1:length(stmt.args)
                         arg = stmt.args[i]

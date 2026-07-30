@@ -254,7 +254,7 @@ function iterate(itr::AsyncCollector)
     return iterate(itr, AsyncCollectorState(chnl, worker_tasks, exec_func, itr.batch_size, nothing))
 end
 
-function wait_done(itr::AsyncCollector, state::AsyncCollectorState)
+function wait_done(state::AsyncCollectorState)
     close(state.chnl)
 
     # wait for all tasks to finish
@@ -272,7 +272,7 @@ function iterate(itr::AsyncCollector, state::AsyncCollectorState)
         iterate(itr.enumerator, state.enum_state) :
         iterate(itr.enumerator)
     if isnothing(y)
-        wait_done(itr, state)
+        wait_done(state)
         return nothing
     end
     (i, args), state.enum_state = y

@@ -506,7 +506,7 @@ For example, given the following method definition:
 
     g(x::T, y::T) where T<:Integer = ...
 
-it is _invalid_ to optimize a cal site like `g(x::Any, y::Any)` into:
+it is _invalid_ to optimize a call site like `g(x::Any, y::Any)` into:
 
     if isa(x, Integer) && isa(y, Integer)
         [inlined/resolved g(x::Integer, y::Integer)]
@@ -720,7 +720,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
                             # replace singleton types with their equivalent Const object
                             p = Const(p.instance)
                         elseif isconstType(p)
-                            p = Const(p.parameters[1])
+                            p = Const(type_parameter(p))
                         end
                         push!(def_argtypes, p)
                     end
@@ -767,6 +767,13 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
     return new_argtypes
 end
 
+function has_typeegal_slot(@nospecialize(atype))
+    for p in (atype::DataType).parameters
+        p isa Core.TypeEgal && return true
+    end
+    return false
+end
+
 function compileable_specialization(code::Union{MethodInstance,CodeInstance}, effects::Effects,
     et::InliningEdgeTracker, @nospecialize(info::CallInfo), state::InliningState)
     mi = code isa CodeInstance ? code.def : code
@@ -776,27 +783,36 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
         if atype !== new_atype
-            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
-            sparams = sp_[2]::SimpleVector
+            (_, sparams) = typeintersect_env(new_atype, method.sig)
             mi_invoke = specialize_method(method, new_atype, sparams)
             mi_invoke === nothing && return nothing
-            code = mi_invoke
         end
     else
         # If this caller does not want us to optimize calls to use their
         # declared compilesig, then it is also likely they would handle sparams
         # incorrectly if there were any unknown typevars, so we conservatively return nothing
-        if any(@nospecialize(t)->isa(t, TypeVar), mi.sparam_vals)
+        if any(@nospecialize(t)->isa(t, SimpleVector), mi.sparam_vals)
             return nothing
         end
     end
+    if unionall_depth(method.sig) != length(sparams) || !validate_sparams(sparams)
+        return nothing
+    end
     # prefer using a CodeInstance gotten from the cache, since that is where the invoke target should get compiled to normally
     # TODO: can this code be gotten directly from inference sometimes?
-    code = get(code_cache(state), mi_invoke, nothing)
-    code isa InferenceResult && (code = code.ci)
-    if !isa(code, CodeInstance)
-        #println("missing code for ", mi_invoke, " for ", mi)
-        code = mi_invoke
+    # A normalized compileable signature can have a less precise ABI for TypeEgal
+    # arguments, forcing boxed argument passing for non-recursive invokes, so a
+    # directly supplied inferred edge for the actual call signature wins there.
+    keep_direct_edge = code isa CodeInstance && mi !== mi_invoke && has_typeegal_slot(atype)
+    if !keep_direct_edge
+        cached = get(code_cache(state), mi_invoke, nothing)
+        cached isa InferenceResult && (cached = cached.ci)
+        if cached isa CodeInstance
+            code = cached
+        elseif !(code isa CodeInstance && code.def === mi_invoke)
+            #println("missing code for ", mi_invoke, " for ", mi)
+            code = mi_invoke
+        end
     end
     add_inlining_edge!(et, code) # to the code and edges
     return InvokeCase(code, effects, info)
@@ -855,7 +871,7 @@ end
 function validate_sparams(sparams::SimpleVector)
     for i = 1:length(sparams)
         spᵢ = sparams[i]
-        (isa(spᵢ, TypeVar) || isvarargtype(spᵢ)) && return false
+        (isa(spᵢ, SimpleVector) || has_free_typevars(spᵢ) || isvarargtype(spᵢ)) && return false
     end
     return true
 end
@@ -1023,7 +1039,6 @@ function call_sig(ir::IRCode, stmt::Expr)
     has_free_typevars(ft) && return nothing
     f = singleton_type(ft)
     f === Core.Intrinsics.llvmcall && return nothing
-    f === Core.Intrinsics.cglobal && return nothing
     argtypes = Vector{Any}(undef, length(stmt.args))
     argtypes[1] = ft
     for i = (offset+1):length(stmt.args)
@@ -1180,6 +1195,37 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info::Call
             stmt.args[3] = newT
         end
     end
+    return nothing
+end
+
+function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo, state::InliningState)
+    length(stmt.args) == 3 || return
+    # Extract the CodeInstance from the inference result if available
+    info_edge = extract_indirect_invoke(info)
+    info_edge === nothing && return nothing
+    info, edge = info_edge
+    case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
+    case === nothing && return nothing
+    # The runtime (`jl_f_invoke`) only accepts Method/CodeInstance/Type targets, so
+    # decline if compileable_specialization only found an uncached MethodInstance.
+    case.invoke isa CodeInstance || return nothing
+    # Append the CodeInstance as a third argument to the _task call
+    # Core._task(func, size) becomes Core._task(func, size, ci)
+    push!(stmt.args, case.invoke)
+    ir[SSAValue(idx)][:stmt] = stmt
+    return nothing
+end
+
+function extract_indirect_invoke(info::IndirectCallInfo)
+    info = info.info
+    info isa MethodResultPure && (info = info.info)
+    info isa MethodMatchInfo || return nothing
+    length(info.edges) == length(info.results) == 1 || return nothing
+    match = info.results[1]::MethodMatch
+    match.fully_covers || return nothing
+    edge = info.edges[1]
+    edge === nothing && return nothing
+    return info, edge
 end
 
 # As a matter of convenience, this pass also computes effect-freenes.
@@ -1249,7 +1295,8 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
                 f !== modifyfield! &&
                 f !== Core.modifyglobal! &&
                 f !== Core.memoryrefmodify! &&
-                f !== atomic_pointermodify)
+                f !== atomic_pointermodify &&
+                f !== Core._task)
                 # No inlining defined for most builtins (just invoke/apply/typeassert/finalizer), so attempt an early exit for them
                 return nothing
             end
@@ -1475,15 +1522,10 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
     return nothing
 end
 
-function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOpInfo, state::InliningState)
-    info = info.info
-    info isa MethodResultPure && (info = info.info)
-    info isa MethodMatchInfo || return nothing
-    length(info.edges) == length(info.results) == 1 || return nothing
-    match = info.results[1]::MethodMatch
-    match.fully_covers || return nothing
-    edge = info.edges[1]
-    edge === nothing && return nothing
+function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo, state::InliningState)
+    info_edge = extract_indirect_invoke(info)
+    info_edge === nothing && return nothing
+    info, edge = info_edge
     case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
     case === nothing && return nothing
     stmt.head = :invoke_modify
@@ -1492,7 +1534,7 @@ function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOp
     return nothing
 end
 
-function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::FinalizerInfo,
+function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo,
                                 state::InliningState)
     # Finalizers don't return values, so if their execution is not observable,
     # we can just not register them
@@ -1527,7 +1569,9 @@ function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::Finalize
                 push!(stmt.args, true)
                 push!(stmt.args, code)
             end
-        elseif isa(item1, InvokeCase)
+        elseif isa(item1, InvokeCase) && item1.invoke isa CodeInstance
+            # like handle_task_call!, an uncached MethodInstance is unusable here, since
+            # `try_resolve_finalizer!` requires a CodeInstance in this argument position
             push!(stmt.args, false)
             push!(stmt.args, item1.invoke)
         elseif isa(item1, ConstantCase)
@@ -1600,14 +1644,22 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         # handle special cased builtins
+        f = sig.f
         if isa(info, OpaqueClosureCallInfo)
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
-        elseif isa(info, ModifyOpInfo)
-            handle_modifyop!_call!(ir, idx, stmt, info, state)
-        elseif sig.f === Core.invoke
+        elseif isa(info, IndirectCallInfo)
+            if f === Core.finalizer
+                handle_finalizer_call!(ir, idx, stmt, info, state)
+            elseif f === modifyfield! ||
+                   f === Core.modifyglobal! ||
+                   f === Core.memoryrefmodify! ||
+                   f === atomic_pointermodify
+                handle_modifyop!_call!(ir, idx, stmt, info, state)
+            elseif f === Core._task
+                handle_task_call!(ir, idx, stmt, info, state)
+            end
+        elseif f === Core.invoke
             handle_invoke_call!(todo, ir, idx, stmt, info, flag, sig, state)
-        elseif isa(info, FinalizerInfo)
-            handle_finalizer_call!(ir, idx, stmt, info, state)
         else
             # cascade to the generic (and extendable) handler
             handle_call!(todo, ir, idx, stmt, info, flag, sig, state)
@@ -1669,6 +1721,9 @@ function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
         elseif ⊑(optimizer_lattice(state.interp), cond, Bool) && stmt.args[3] === stmt.args[4]
             return SomeCase(stmt.args[3])
         end
+    elseif (f === Core.task_result_type && length(argtypes) == 2 &&
+            ⊑(optimizer_lattice(state.interp), argtypes[2], Task))
+        return SomeCase(quoted(instanceof_tfunc(type)[1]))
     end
     return nothing
 end
@@ -1709,7 +1764,7 @@ function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, flag::UInt3
         return SomeCase(unionall_call)
     elseif is_return_type(f)
         if isconstType(type)
-            return SomeCase(quoted(type.parameters[1]))
+            return SomeCase(quoted(type_parameter(type)))
         elseif isa(type, Const)
             return SomeCase(quoted(type.val))
         end
@@ -1722,15 +1777,32 @@ struct SSASubstitute
     arg_replacements::Vector{Any}
     spvals_ssa::Union{Nothing,SSAValue}
     inlined_at::NTuple{3,Int32} # TODO: add a map also, so that ssaidx doesn't need to equal inlined_idx?
+    # lazily-computed `sptypes_from_meth_instance(mi)`, shared across all
+    # marker-sparam substitutions of this inlined item
+    sptypes_cache::RefValue{Union{Nothing,Vector{VarState}}}
+end
+SSASubstitute(mi::MethodInstance, arg_replacements::Vector{Any},
+              spvals_ssa::Union{Nothing,SSAValue}, inlined_at::NTuple{3,Int32}) =
+    SSASubstitute(mi, arg_replacements, spvals_ssa, inlined_at,
+                  RefValue{Union{Nothing,Vector{VarState}}}(nothing))
+
+function cached_sptypes(ssa_substitute::SSASubstitute)
+    sptypes = ssa_substitute.sptypes_cache[]
+    sptypes === nothing || return sptypes
+    return ssa_substitute.sptypes_cache[] = sptypes_from_meth_instance(ssa_substitute.mi)
 end
 
-function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
+function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int,
+                       do_isdefined::Bool, @nospecialize(typ = Any))
     ret = insert_node!(
-        removable_if_unused(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), Any)))
+        removable_if_unused(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), typ)))
     tcheck_not = nothing
     if do_isdefined
+        # The caller handles guaranteed-defined static parameters before this
+        # fallback. At runtime, SimpleVector is the undefined sentinel for
+        # sparams.
         tcheck = insert_node!(
-            removable_if_unused(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
+            removable_if_unused(NewInstruction(Expr(:call, Core.isa, ret, Core.SimpleVector), Bool)))
         tcheck_not = insert_node!(
             removable_if_unused(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
     end
@@ -1749,22 +1821,32 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
         if head === :static_parameter
             spidx = e.args[1]::Int
             val = sparam_vals[spidx]
-            if !isa(val, TypeVar) && val !== Vararg
+            val_uncertain = isa(val, SimpleVector) || has_free_typevars(val)
+            if !val_uncertain && val !== Vararg
                 return quoted(val)
             else
                 flag = subst_inst[:flag]
-                maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && isa(val, TypeVar)
-                (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef)
+                if isa(val, SimpleVector)
+                    spstate = cached_sptypes(ssa_substitute)[spidx]
+                    maybe_undef = spstate.undef && !has_flag(flag, IR_FLAG_NOTHROW)
+                    typ = spstate.undef ? Any : spstate.typ
+                else
+                    maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && val_uncertain
+                    typ = Any
+                end
+                (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef, typ)
                 if maybe_undef
                     insert_node!(
-                        NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing))
+                        NewInstruction(Expr(:throw_undef_if_not, sp_at_idx(ssa_substitute.mi.def.sig, spidx).name, tcheck_not), Nothing))
                 end
                 return ret
             end
         elseif head === :isdefined && isa(e.args[1], Expr) && e.args[1].head === :static_parameter
             spidx = (e.args[1]::Expr).args[1]::Int
             val = sparam_vals[spidx]
-            if !isa(val, TypeVar)
+            if !isa(val, SimpleVector)
+                return true
+            elseif val[2]::Bool
                 return true
             else
                 (_, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, true)

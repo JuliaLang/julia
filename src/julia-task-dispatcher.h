@@ -7,12 +7,15 @@ using namespace llvm::orc;
 template <typename U> struct future_value_storage {
   // Union disables default construction/destruction semantics, allowing us to
   // use placement new/delete for precise control over value lifetime
-  union {
+  // Explicit ctor / dtor is necessary to avoid older clang analyzer versions making mistakes about the union being initialized.
+  union _value_storage {
     U value_;
-  };
+    _value_storage() JL_NOTSAFEPOINT {}
+    ~_value_storage() JL_NOTSAFEPOINT {}
+  } storage;
 
-  future_value_storage() {}
-  ~future_value_storage() {}
+  future_value_storage() JL_NOTSAFEPOINT {}
+  ~future_value_storage() JL_NOTSAFEPOINT {}
 };
 
 template <> struct future_value_storage<void> {
@@ -22,12 +25,12 @@ template <> struct future_value_storage<void> {
 struct JuliaTaskDispatcher : public TaskDispatcher {
     /// Forward declarations
     class future_base;
-    void dispatch(std::unique_ptr<Task> T) override;
+    void dispatch(std::unique_ptr<Task> T) override JL_CANSAFEPOINT; // NOLINT(julia-first-decl-annotations)
     void shutdown() override;
-    void work_until(future_base &F);
+    void work_until(future_base &F) JL_CANSAFEPOINT;
 
 protected:
-  void process_tasks(jl_unique_gcsafe_lock &Lock) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+  void process_tasks(jl_unique_gcsafe_lock &Lock) JL_CANSAFEPOINT_ENTER_LEAVE;
 
 private:
   /// C++ does not support non-static thread_local variables, so this needs to
@@ -82,7 +85,7 @@ public:
   bool valid() const JL_NOTSAFEPOINT { return state_ != nullptr; }
 
   /// Wait for the future to be ready, helping with task dispatch
-  void wait(JuliaTaskDispatcher &D) {
+  void wait(JuliaTaskDispatcher &D) JL_CANSAFEPOINT {
     // Keep helping with task dispatch until our future is ready
     if (!ready()) {
       D.work_until(*this);
@@ -94,24 +97,26 @@ public:
 
 protected:
   struct state_base {
+    state_base() JL_NOTSAFEPOINT = default;
+    ~state_base() JL_NOTSAFEPOINT = default;
     std::atomic<FutureStatus> status_{FutureStatus::NotReady};
   };
 
-  future_base(state_base *state) : state_(state) {}
-  future_base() = default;
+  future_base(state_base *state) JL_NOTSAFEPOINT : state_(state) {}
+  future_base() JL_NOTSAFEPOINT = default;
 
   /// Only allow deleting the future once it is invalid
-  ~future_base() {
+  ~future_base() JL_NOTSAFEPOINT {
     if (state_)
       report_fatal_error("get() must be called before future destruction (ensuring promise::set_value memory is valid)");
   }
 
   // Move constructor and assignment
-  future_base(future_base &&other) noexcept : state_(other.state_) {
+  future_base(future_base &&other) noexcept JL_NOTSAFEPOINT : state_(other.state_) {
     other.state_ = nullptr;
   }
 
-  future_base &operator=(future_base &&other) noexcept {
+  future_base &operator=(future_base &&other) noexcept JL_NOTSAFEPOINT {
     if (this != &other) {
       this->~future_base();
       state_ = other.state_;
@@ -137,8 +142,8 @@ protected:
 ///   from the future.
 /// - The future is in an invalid state until get_promise() has been called.
 /// - Waiting operations (get(&D), wait(&D)) help dispatch other tasks while
-///   blocked, requiring an additional argument of which TaskDispatcher object
-///   of where all associated work will be scheduled.
+///   blocked, requiring an additional argument indicating which TaskDispatcher
+///   object all associated work will be scheduled on.
 /// - While `wait` may be called multiple times and on multiple threads, all of
 ///   them must have returned before calling `get` on exactly one thread.
 /// - Must call get() exactly once before destruction (enforced with
@@ -160,16 +165,16 @@ protected:
 
 template <typename T> class future : public future_base {
 public:
-  future() : future_base(nullptr) {}
+  future() JL_NOTSAFEPOINT : future_base(nullptr) {}
   future(const future &) = delete;
   future &operator=(const future &) = delete;
-  future(future &&) = default;
-  future &operator=(future &&) = default;
+  future(future &&) JL_NOTSAFEPOINT = default;
+  future &operator=(future &&) JL_NOTSAFEPOINT = default;
 
   /// Get the value, helping with task dispatch while waiting.
   /// This will destroy the underlying value, so this must be called exactly
   /// once, which returns the future to the initial state.
-  T get(JuliaTaskDispatcher &D) {
+  T get(JuliaTaskDispatcher &D) JL_CANSAFEPOINT {
     if (!valid())
       report_fatal_error("get() must only be called once, after get_promise()");
     wait(D);
@@ -179,7 +184,7 @@ public:
   }
 
   /// Get the associated promise (must only be called once)
-  promise<T> get_promise() {
+  promise<T> get_promise() JL_NOTSAFEPOINT {
     if (valid())
       report_fatal_error("get_promise() can only be called once");
     auto state_ = new state();
@@ -193,12 +198,15 @@ private:
   // Template the state struct with EBCO so that future<void> has no wasted
   // overhead for the value. The declaration of future_value_storage is far
   // above here since GCC doesn't implement it properly when nested.
-  struct state : future_base::state_base, future_value_storage<T> {};
+  struct state : future_base::state_base, future_value_storage<T> {
+    state() JL_NOTSAFEPOINT = default;
+    ~state() JL_NOTSAFEPOINT = default;
+  };
 
   template <typename U = T>
-  typename std::enable_if<!std::is_void<U>::value, U>::type take_value(state *state_) {
-    T result = std::move(state_->value_);
-    state_->value_.~T();
+  typename std::enable_if<!std::is_void<U>::value, U>::type take_value(state *state_) JL_NOTSAFEPOINT {
+    T result = std::move(state_->storage.value_);
+    state_->storage.value_.~T();
     delete state_;
     return result;
   }
@@ -259,9 +267,9 @@ template <typename T> class promise {
   friend class future<T>;
 
 public:
-  promise() : state_(nullptr) {}
+  promise() JL_NOTSAFEPOINT : state_(nullptr) {}
 
-  ~promise() {
+  ~promise() JL_NOTSAFEPOINT {
     // Assert proper promise lifecycle: ensure set_value was called if promise was valid.
     // This can catch deadlocks where a promise is created but set_value() is
     // never called, though only if the promise is moved from instead of
@@ -272,12 +280,12 @@ public:
   promise(const promise &) = delete;
   promise &operator=(const promise &) = delete;
 
-  promise(promise &&other) noexcept
+  promise(promise &&other) noexcept JL_NOTSAFEPOINT
       : state_(other.state_) {
     other.state_ = nullptr;
   }
 
-  promise &operator=(promise &&other) noexcept {
+  promise &operator=(promise &&other) noexcept JL_NOTSAFEPOINT {
     if (this != &other) {
       this->~promise();
       state_ = other.state_;
@@ -291,22 +299,22 @@ public:
   // In C++20, this std::conditional weirdness can probably be replaced just
   // with requires. It ensures that we don't try to define a method for `void&`,
   // but that if the user calls set_value(v) for any value v that they get a
-  // member function error, instead of no member named 'value_'.
+  // member function error, instead of no member named 'storage.value_'.
   template <typename U = T>
   void
   set_value(const typename std::conditional<std::is_void<T>::value,
-                                            std::nullopt_t, T>::type &value) const {
+                                            std::nullopt_t, T>::type &value) const JL_NOTSAFEPOINT {
     assert(state_ && "set_value() can only be called once");
-    new (&state_->value_) T(value);
+    new (&state_->storage.value_) T(value);
     state_->status_.store(FutureStatus::Ready, std::memory_order_release);
     state_ = nullptr;
   }
 
   template <typename U = T>
   void set_value(typename std::conditional<std::is_void<T>::value,
-                                           std::nullopt_t, T>::type &&value) const {
+                                           std::nullopt_t, T>::type &&value) const JL_NOTSAFEPOINT {
     assert(state_ && "set_value() can only be called once");
-    new (&state_->value_) T(std::move(value));
+    new (&state_->storage.value_) T(std::move(value));
     state_->status_.store(FutureStatus::Ready, std::memory_order_release);
     state_ = nullptr;
   }
@@ -320,20 +328,20 @@ public:
   set_value(std::nullopt_t &&value) = delete;
 
   template <typename U = T>
-  typename std::enable_if<std::is_void<U>::value, void>::type set_value() const {
+  typename std::enable_if<std::is_void<U>::value, void>::type set_value() const JL_NOTSAFEPOINT {
     assert(state_ && "set_value() can only be called once");
     state_->status_.store(FutureStatus::Ready, std::memory_order_release);
     state_ = nullptr;
   }
 
   /// Swap with another promise
-  void swap(promise &other) noexcept {
+  void swap(promise &other) noexcept JL_NOTSAFEPOINT {
     using std::swap;
     swap(state_, other.state_);
   }
 
 private:
-  explicit promise(typename future<T>::state *state)
+  explicit promise(typename future<T>::state *state) JL_NOTSAFEPOINT
       : state_(state) {}
 
   mutable typename future<T>::state *state_;
@@ -341,7 +349,21 @@ private:
 
 }; // class JuliaTaskDispatcher
 
-void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
+// Dispatcher work is not unwind-safe, so deliver pending SIGINTs at a later
+// safepoint instead of raising an InterruptException inside it.
+struct dispatcher_sigdefer_guard {
+  jl_ptls_t ptls;
+  dispatcher_sigdefer_guard() JL_NOTSAFEPOINT : ptls(jl_current_task->ptls) {
+    ptls->defer_signal++;
+    jl_signal_fence();
+  }
+  ~dispatcher_sigdefer_guard() JL_NOTSAFEPOINT {
+    jl_signal_fence();
+    ptls->defer_signal--;
+  }
+};
+
+void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-first-decl-annotations)
   if (!InCooperativeContext) {
     // Not inside work_until/process_tasks — run inline to prevent deadlock
     // with callers that block on std::future (e.g. LocalTrampolinePool::reenter).
@@ -350,8 +372,9 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
     // continuations that fulfill the caller's std::future can fire before
     // we return.
     InCooperativeContext = true;
-    T->run();
     {
+      dispatcher_sigdefer_guard defer;
+      T->run();
       jl_unique_gcsafe_lock Lock{DispatchMutex};
       process_tasks(Lock);
     }
@@ -372,6 +395,7 @@ void JuliaTaskDispatcher::shutdown() {
 void JuliaTaskDispatcher::work_until(future_base &F) {
   bool WasCooperative = InCooperativeContext;
   InCooperativeContext = true;
+  dispatcher_sigdefer_guard defer;
   jl_unique_gcsafe_lock Lock{DispatchMutex};
   while (!F.ready()) {
     process_tasks(Lock);
@@ -388,12 +412,13 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
   InCooperativeContext = WasCooperative;
 }
 
-void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) {
+// not analyzed, since it cannot represent the native unlock (normally implies a notsafepoint_leave)
+void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) JL_NO_SAFEPOINT_ANALYSIS {
     while (!TaskQueue.empty()) {
         auto T = TaskQueue.pop_back_val();
 
         Lock.native.unlock();
-        T->run();
+        T->run(); // n.b. JL_CANCALLBACK
         Lock.native.lock();
 
         WorkFinishedCV.notify_all();
@@ -415,7 +440,7 @@ safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolLookupSet Symbols, LookupKind K = LookupKind::Static,
            SymbolState RequiredState = SymbolState::Ready,
-           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister) {
+           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister) JL_CANSAFEPOINT {
   JuliaTaskDispatcher::future<MSVCPExpected<SymbolMap>> PromisedFuture;
   auto NotifyComplete = [PromisedResult = PromisedFuture.get_promise()](Expected<SymbolMap> R) {
     PromisedResult.set_value(std::move(R));
@@ -429,7 +454,7 @@ Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready) {
+           SymbolState RequiredState = SymbolState::Ready) JL_CANSAFEPOINT {
   SymbolLookupSet Names({Name});
 
   if (auto ResultMap = safelookup(ES, SearchOrder, std::move(Names), LookupKind::Static,
@@ -444,13 +469,13 @@ safelookup(ExecutionSession &ES,
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready) {
+           SymbolState RequiredState = SymbolState::Ready) JL_CANSAFEPOINT {
   return safelookup(ES, makeJITDylibSearchOrder(SearchOrder), Name, RequiredState);
 }
 
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, StringRef Name,
-           SymbolState RequiredState = SymbolState::Ready) {
+           SymbolState RequiredState = SymbolState::Ready) JL_CANSAFEPOINT {
   return safelookup(ES, SearchOrder, ES.intern(Name), RequiredState);
 }

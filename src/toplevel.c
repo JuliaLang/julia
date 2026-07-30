@@ -30,7 +30,7 @@ JL_DLLEXPORT _Atomic(int) jl_lineno = 0; // need to update jl_fprint_critical_er
 // current file name
 JL_DLLEXPORT _Atomic(const char *) jl_filename = "none"; // need to update jl_fprint_critical_error if this is TLS
 
-static jl_value_t *jl_eval_toplevel_stmts(jl_module_t *JL_NONNULL m, jl_array_t *stmts, int fast, int need_value, const char **toplevel_filename, int *toplevel_lineno);
+static jl_value_t *jl_eval_toplevel_stmts(jl_module_t *JL_NONNULL m, jl_array_t *stmts, int fast, int need_value, const char **toplevel_filename, int *toplevel_lineno) JL_CANSAFEPOINT;
 
 htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
@@ -83,7 +83,7 @@ void jl_module_run_initializer(jl_module_t *m)
     }
 }
 
-static void jl_register_root_module(jl_module_t *m)
+static void jl_register_root_module(jl_module_t *m) JL_CANSAFEPOINT
 {
     jl_value_t *register_module_func = NULL;
     assert(jl_base_module);
@@ -92,7 +92,11 @@ static void jl_register_root_module(jl_module_t *m)
     jl_value_t *args[2];
     args[0] = register_module_func;
     args[1] = (jl_value_t*)m;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     jl_apply(args, 2);
+    ct->world_age = last_age;
 }
 
 jl_array_t *jl_get_loaded_modules(void)
@@ -105,13 +109,13 @@ jl_array_t *jl_get_loaded_modules(void)
     return NULL;
 }
 
-static int jl_is__toplevel__mod(jl_module_t *mod, jl_task_t *ct)
+static int jl_is__toplevel__mod(jl_module_t *mod, jl_task_t *ct) JL_CANSAFEPOINT
 {
     return jl_base_module &&
         (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
 }
 
-JL_DLLEXPORT void jl_setup_new_module(jl_module_t *m, jl_value_t *syntax_version)
+JL_DLLEXPORT void jl_setup_new_module(jl_module_t *m, jl_value_t *syntax_version) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
@@ -130,7 +134,7 @@ JL_DLLEXPORT void jl_setup_new_module(jl_module_t *m, jl_value_t *syntax_version
 }
 
 JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym_t *name, jl_value_t *syntax_version,
-                                              int std_imports, const char *filename, int lineno)
+                                              int std_imports, const char *filename, int lineno) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     int is_parent__toplevel__ = jl_is__toplevel__mod(parent_module, ct);
@@ -145,8 +149,7 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
     JL_UNLOCK(&jl_modules_mutex);
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
-    newm->file = jl_symbol(filename);
-    jl_gc_wb_knownold(newm, newm->file);
+    jl_gc_write(newm, newm->file, jl_sym_t, jl_symbol(filename));
     newm->line = lineno;
 
     // add standard imports unless baremodule
@@ -173,7 +176,7 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
     return newm;
 }
 
-JL_DLLEXPORT void jl_end_new_module(jl_module_t *newm) {
+JL_DLLEXPORT void jl_end_new_module(jl_module_t *newm) JL_CANSAFEPOINT {
     jl_value_t *form = NULL;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);
@@ -221,7 +224,7 @@ JL_DLLEXPORT void jl_end_new_module(jl_module_t *newm) {
     JL_GC_POP();
 }
 
-static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex, const char **toplevel_filename, int *toplevel_lineno)
+static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex, const char **toplevel_filename, int *toplevel_lineno) JL_CANSAFEPOINT
 {
     assert(ex->head == jl_module_sym);
 
@@ -266,7 +269,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     return (jl_value_t*)newm;
 }
 
-static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast, const char **toplevel_filename, int *toplevel_lineno)
+static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast, const char **toplevel_filename, int *toplevel_lineno) JL_CANSAFEPOINT
 {
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 3);
@@ -287,7 +290,6 @@ static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x
     return args[0];
 }
 
-extern void check_safe_newbinding(jl_module_t *m, jl_sym_t *var);
 void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong) {
     // create uninitialized mutable binding for "global x" decl sometimes or probably
     jl_module_t *gm;
@@ -325,9 +327,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 check_safe_newbinding(gm, gs);
                 if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
                     bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
-                    bpart->restriction = global_type;
-                    if (global_type)
-                        jl_gc_wb(bpart, global_type);
+                    jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
                     continue;
                 } else {
                     jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
@@ -377,7 +377,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int *has_defs, int *has_opaque)
+static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int *has_defs, int *has_opaque) JL_CANSAFEPOINT
 {
     if (!jl_is_expr(v))
         return;
@@ -397,7 +397,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
         *has_defs = 1;
         return;
     }
-    else if (head == jl_method_sym || jl_is_toplevel_only_expr(v)) {
+    else if (jl_is_toplevel_only_expr(v)) {
         *has_defs = 1;
     }
     else if (head == jl_cfunction_sym) {
@@ -432,7 +432,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
                 *has_ccall = 1;
             }
             // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
-            if (called == BUILTIN(_typebody) || called == BUILTIN(declare_const)) {
+            if (called == BUILTIN(_typebody) || called == BUILTIN(declare_const) || called == BUILTIN(define_method)) {
                 *has_defs = 1;
             }
         }
@@ -463,7 +463,7 @@ int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile)
     return 0;
 }
 
-static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int *has_loops, int *has_opaque, int *forced_compile)
+static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int *has_loops, int *has_opaque, int *forced_compile) JL_CANSAFEPOINT
 {
     size_t i;
     *has_loops = 0;
@@ -496,7 +496,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == jl_incomplete_sym);
 }
 
-int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
+static int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 {
     if (!jl_is_expr(e))
         return 0;
@@ -504,7 +504,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     jl_sym_t *head = ex->head;
     if (head == jl_module_sym || head == jl_export_sym || head == jl_public_sym ||
         head == jl_thunk_sym || head == jl_toplevel_sym || head == jl_error_sym ||
-        head == jl_incomplete_sym || head == jl_method_sym) {
+        head == jl_incomplete_sym) {
         return 0;
     }
     return 1;
@@ -524,7 +524,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instan
     return ci;
 }
 
-JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
+JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module) JL_CANSAFEPOINT
 {
     jl_method_instance_t *mi = jl_new_method_instance_uninit();
     mi->specTypes = (jl_value_t*)jl_emptytuple_type;
@@ -532,17 +532,16 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *
     JL_GC_PUSH1(&mi);
 
     jl_code_instance_t *ci = jl_new_codeinst_for_uninferred(mi, src);
-    jl_atomic_store_relaxed(&mi->cache, ci);
-    jl_gc_wb(mi, ci);
+    jl_gc_write_atomic(mi, mi->cache, jl_code_instance_t, ci, relaxed);
 
     JL_GC_POP();
     return mi;
 }
 
-// Eval `throw(ErrorException(msg)))` in module `m`.
+// Eval `throw(exc)` in module `m`.
 // Used in `jl_toplevel_eval_flex` instead of `jl_throw` so that the error
 // location in julia code gets into the backtrace.
-static void jl_eval_throw(jl_module_t *m, jl_value_t *exc, const char *filename, int lineno)
+static void jl_eval_throw(jl_module_t *m, jl_value_t *exc, const char *filename, int lineno) JL_CANSAFEPOINT
 {
     jl_value_t *throw_ex = (jl_value_t*)jl_exprn(jl_call_sym, 2);
     JL_GC_PUSH1(&throw_ex);
@@ -553,7 +552,7 @@ static void jl_eval_throw(jl_module_t *m, jl_value_t *exc, const char *filename,
 }
 
 // Format error message and call jl_eval
-static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, const char* fmt, ...)
+static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, const char* fmt, ...) JL_CANSAFEPOINT
 {
     va_list args;
     va_start(args, fmt);
@@ -726,8 +725,8 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
     // start of this block.
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     const char *last_filename = jl_atomic_load_relaxed(&jl_filename);
-    int toplevel_lineno = 0;
-    const char* toplevel_filename = jl_debuginfo_firstline(thk->debuginfo, &toplevel_lineno);
+    int toplevel_lineno = jl_cdi_firstline_all(thk->debuginfo);
+    const char *toplevel_filename = jl_cdi_file(thk->debuginfo);
     jl_atomic_store_relaxed(&jl_lineno, toplevel_lineno);
     jl_atomic_store_relaxed(&jl_filename, toplevel_filename);
 
@@ -783,7 +782,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
-JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
+JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, const char *fname) JL_CANSAFEPOINT
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("%s cannot be used in a generated function", fname);
@@ -845,7 +844,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 // `filename`. This is used during bootstrap, but the real Base.include() is
 // implemented in Julia code.
 static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
-                                     jl_value_t *filename)
+                                     jl_value_t *filename) JL_CANSAFEPOINT
 {
     if (!jl_is_string(text) || !jl_is_string(filename)) {
         jl_errorf("Expected `String`s for `text` and `filename`");
@@ -905,7 +904,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
 }
 
 // Synchronously read content of entire file into a julia String
-static jl_value_t *jl_file_content_as_string(jl_value_t *filename)
+static jl_value_t *jl_file_content_as_string(jl_value_t *filename) JL_CANSAFEPOINT
 {
     const char *fname = jl_string_data(filename);
     ios_t f;
@@ -924,7 +923,7 @@ static jl_value_t *jl_file_content_as_string(jl_value_t *filename)
 
 // Load and parse julia code from the file `filename`. Eval the resulting
 // statements into `module` after applying `mapexpr` to each one.
-JL_DLLEXPORT jl_value_t *jl_load_(jl_module_t *module, jl_value_t *filename)
+JL_DLLEXPORT jl_value_t *jl_load_(jl_module_t *module, jl_value_t *filename) JL_CANSAFEPOINT
 {
     jl_value_t *text = jl_file_content_as_string(filename);
     JL_GC_PUSH1(&text);
@@ -965,7 +964,7 @@ JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
 //--------------------------------------------------
 // Code loading helpers for bootstrap
 
-JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
+JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str) JL_CANSAFEPOINT
 {
     size_t sz = 1024;
     char path[1024];
@@ -982,7 +981,7 @@ JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
     return jl_cstr_to_string(path);
 }
 
-JL_DLLEXPORT jl_value_t *jl_prepend_string(jl_value_t *prefix, jl_value_t *str)
+JL_DLLEXPORT jl_value_t *jl_prepend_string(jl_value_t *prefix, jl_value_t *str) JL_CANSAFEPOINT
 {
     char path[1024];
     const char *pstr = (const char*)jl_string_data(prefix);

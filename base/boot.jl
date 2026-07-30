@@ -3,7 +3,17 @@
 # commented-out definitions are implemented in C
 
 #abstract type Any <: Any end
-#abstract type Type{T} end
+#abstract type AnyType end
+#struct TypeEq <: AnyType
+#    T
+#end
+#const Type = TypeEq(T) where T
+# TypeEgal{T} is the egality-based dual of TypeEq{T}: its only instance is `T`
+# itself (matched by `===`), used internally for dispatch-cache specialization.
+# Free typevars are disallowed inside TypeEgal.
+#struct TypeEgal <: AnyType
+#    T
+#end
 
 #abstract type Vararg{T} end
 
@@ -15,7 +25,7 @@
 #    name::Symbol
 #end
 
-#mutable struct DataType <: Type
+#mutable struct DataType <: AnyType
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
@@ -29,7 +39,7 @@
 #    pointerfree::Bool
 #end
 
-#struct Union <: Type
+#struct Union <: AnyType
 #    a
 #    b
 #end
@@ -40,7 +50,7 @@
 #    ub::Type
 #end
 
-#struct UnionAll
+#struct UnionAll <: AnyType
 #    var::TypeVar
 #    body
 #end
@@ -202,12 +212,14 @@
 #    @atomic last_started_running_at::UInt64
 #    @atomic running_time_ns::UInt64
 #    @atomic finished_at::UInt64
+#    @atomic waiting_on::Any
+#    cached_wait_entry::Any
 #end
 
 export
     # key types
-    Any, DataType, Vararg, NTuple,
-    Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    Any, TypeEq, Type, DataType, Vararg, NTuple,
+    Tuple, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
     Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
@@ -282,7 +294,26 @@ end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
-      (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
+      (f::typeof(Typeof))(x) = begin
+          $(_expr(:meta,:nospecialize,:x))
+          if isa(x,Type)
+              has_free_typevars(x) ? Type{x} : TypeEgal{x}
+          else
+              typeof(x)
+          end
+      end
+      end)
+
+# like `Typeof`, but yields the equality kind `Type{x}` for type values; used
+# by lowering to spell the callee self-type of method definitions, so equal
+# UnionAll spellings share the constructor method they define
+function TypeEqOf end
+ccall(:jl_toplevel_eval_in, Any, (Any, Any),
+      Core, quote
+      (f::typeof(TypeEqOf))(x) = begin
+          $(_expr(:meta,:nospecialize,:x))
+          isa(x,Type) ? Type{x} : typeof(x)
+      end
       end)
 
 function iterate end
@@ -326,8 +357,9 @@ macro _foldable_meta()
         #=:nortcall=#true))
 end
 
-macro inline()   Expr(:meta, :inline)   end
-macro noinline() Expr(:meta, :noinline) end
+macro inline()      Expr(:meta, :inline)      end
+macro noinline()    Expr(:meta, :noinline)    end
+macro nospecializeinfer() Expr(:meta, :nospecializeinfer) end
 
 macro _boundscheck() Expr(:boundscheck) end
 
@@ -351,8 +383,6 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 # will be inserted by the frontend for closures
 _typeof_captured_variable(@nospecialize t) = (@_total_meta; t isa Type && has_free_typevars(t) ? typeof(t) : Typeof(t))
 
-has_free_typevars(@nospecialize t) = (@_total_meta; ccall(:jl_has_free_typevars, Int32, (Any,), t) === Int32(1))
-
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
 # deprecated internal functions:
@@ -364,6 +394,74 @@ kwftype(@nospecialize(t)) = typeof(kwcall)
 # occasionally in user code from eltype).
 Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
 kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
+
+# resolve_typegroup must be defined before any struct definition, since all structs
+# are now lowered using the typegroup mechanism (for #60919 safety).
+function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector, old_types::SimpleVector)
+    n = _svec_len(typevars)
+    if n === 0
+        return ()
+    end
+    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any, Any), mod, typevars, struct_infos, old_types)
+end
+
+# n.b. TypeApp and apply_type_or_typeapp must be defined before the first
+# struct definition, whose lowered field-type thunks may call them.
+# TypeApp: lazy type application for typegroup blocks.
+# Represents a single type application step, like UnionAll represents a single where binding.
+# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
+# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
+struct TypeApp
+    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
+    param::Any           # Single type parameter
+    function TypeApp(@nospecialize(head), @nospecialize(param))
+        return new(head, param)
+    end
+end
+
+# Check if a value contains a TypeApp anywhere in its structure
+function _contains_typeapp(@nospecialize(x))
+    if x isa TypeApp
+        return true
+    end
+    if x isa UnionAll
+        return _contains_typeapp(x.body)
+    end
+    return false
+end
+
+function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
+    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
+    if tc isa TypeVar || tc isa TypeApp
+        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
+        n = nfields(params)
+        result = tc
+        i = 1
+        while Intrinsics.sle_int(i, n)
+            result = TypeApp(result, getfield(params, i))
+            i = Intrinsics.add_int(i, 1)
+        end
+        return result
+    end
+    # Any param contains TypeApp => must defer
+    n = nfields(params)
+    i = 1
+    while Intrinsics.sle_int(i, n)
+        if _contains_typeapp(getfield(params, i))
+            # Build nested TypeApp chain for all params
+            result = tc
+            j = 1
+            while Intrinsics.sle_int(j, n)
+                result = TypeApp(result, getfield(params, j))
+                j = Intrinsics.add_int(j, 1)
+            end
+            return result
+        end
+        i = Intrinsics.add_int(i, 1)
+    end
+    # All concrete -- real apply_type
+    return apply_type(tc, params...)
+end
 
 abstract type Exception end
 struct ErrorException <: Exception
@@ -467,9 +565,9 @@ MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typema
 
 struct AssertionError <: Exception
     msg::AbstractString
-    AssertionError(msg::AbstractString) = new(msg)
+    AssertionError(msg::AbstractString) = (@noinline; new(msg))
 end
-AssertionError() = AssertionError("")
+AssertionError() = (@noinline; AssertionError(""))
 
 struct FieldError <: Exception
     type::DataType
@@ -584,6 +682,12 @@ struct PartialOpaque
     PartialOpaque(@nospecialize(typ::Type), @nospecialize(env), parent::MethodInstance, source) = new(typ, env, parent, source)
 end
 
+struct PartialTask
+    fetch_type
+    fetch_error
+    PartialTask(@nospecialize(fetch_type), @nospecialize(fetch_error)) = new(fetch_type, fetch_error)
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
@@ -600,7 +704,7 @@ eval(Core, quote
         isa(f, String) && (f = Symbol(f))
         return $(Expr(:new, :LineNumberNode, :l, :f))
     end
-    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo}, edges::SimpleVector, codelocs::String) =
+    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo,String}, edges::SimpleVector, codelocs::String) =
         $(Expr(:new, :DebugInfo, :def, :linetable, :edges, :codelocs))
     DebugInfo(def::Union{Method,MethodInstance,Symbol}) =
         $(Expr(:new, :DebugInfo, :def, nothing, Core.svec(), ""))
@@ -637,10 +741,6 @@ function CodeInstance(
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
-
-function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
-    return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
-end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
@@ -868,8 +968,8 @@ struct CoreSTDERR <: IO
 end
 const stdout = CoreSTDOUT()
 const stderr = CoreSTDERR()
-io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
-io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDERR) = Intrinsics.pointerref(cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
 
 unsafe_write(io::IO, x::Ptr{UInt8}, nb::UInt) =
     (ccall(:jl_uv_puts, Cvoid, (Ptr{Cvoid}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
@@ -1164,71 +1264,9 @@ struct Pair{A, B}
     end
 end
 
-# TypeApp: lazy type application for typegroup blocks.
-# Represents a single type application step, like UnionAll represents a single where binding.
-# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
-# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
-struct TypeApp
-    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
-    param::Any           # Single type parameter
-    function TypeApp(@nospecialize(head), @nospecialize(param))
-        return new(head, param)
-    end
-end
-
-# Check if a value contains a TypeApp anywhere in its structure
-function _contains_typeapp(@nospecialize(x))
-    if x isa TypeApp
-        return true
-    end
-    if x isa UnionAll
-        return _contains_typeapp(x.body)
-    end
-    return false
-end
-
-function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
-    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
-    if tc isa TypeVar || tc isa TypeApp
-        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
-        n = nfields(params)
-        result = tc
-        i = 1
-        while sle_int(i, n)
-            result = TypeApp(result, getfield(params, i))
-            i = add_int(i, 1)
-        end
-        return result
-    end
-    # Any param contains TypeApp => must defer
-    n = nfields(params)
-    i = 1
-    while sle_int(i, n)
-        if _contains_typeapp(getfield(params, i))
-            # Build nested TypeApp chain for all params
-            result = tc
-            j = 1
-            while sle_int(j, n)
-                result = TypeApp(result, getfield(params, j))
-                j = add_int(j, 1)
-            end
-            return result
-        end
-        i = add_int(i, 1)
-    end
-    # All concrete -- real apply_type
-    return apply_type(tc, params...)
-end
-
-function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector)
-    n = _svec_len(typevars)
-    if n === 0
-        return ()
-    end
-    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any), mod, typevars, struct_infos)
-end
-
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
+    @nospecializeinfer
+    @noinline
     world = ccall(:jl_get_tls_world_age, UInt, ()) # tls_world_age()
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
@@ -1270,14 +1308,14 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-# Special inference support to avoid execess specialization of these methods.
+# Special inference support to avoid excess specialization of these methods.
 # TODO: Replace this by a generic heuristic.
 (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
 
-# Used only be the magic @VERSION macro
+# Used only by the magic @VERSION macro
 struct MacroSource
     lno::Any # ::LineNumberNode, but needs to be a pointer
     syntax_ver::Any # ::VersionNumber =#

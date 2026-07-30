@@ -302,7 +302,7 @@ end
 # https://github.com/JuliaArrays/StaticArrays.jl/issues/1155
 @test Base.return_types() do
     typeintersect(Int, Integer)
-end |> only === Type{Int}
+end |> only === Core.TypeEgal{Int}
 
 if bc_opt == bc_default
     # Array/Memory escape analysis

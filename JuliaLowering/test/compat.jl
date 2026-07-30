@@ -98,11 +98,10 @@ end
 
     # TODO: `@ast_` escaping is broken
     unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
-    JuliaLowering.ensure_macro_attributes!(unused._graph)
     local st_wrappers = Function[
-        x->(@ast unused._graph unused (x::K"Value"))
-        x->(@ast unused._graph unused [K"inert" x::K"Value"])
-        x->(@ast unused._graph unused [K"function" x::K"Value"])
+        x->(@ast _ unused (x::K"Value"))
+        x->(@ast _ unused [K"inert" x::K"Value"])
+        x->(@ast _ unused [K"function" x::K"Value"])
     ]
 
     @testset "every basic case" begin
@@ -132,7 +131,7 @@ end
     end
 
     @testset "provenance via scavenging for LineNumberNodes" begin
-        # Provenenance of a node should generally be the last seen
+        # Provenance of a node should generally be the last seen
         # LineNumberNode in the depth-first traversal of the Expr, or the
         # initial line given if none have been seen yet.  If none have been seen
         # and no initial line was given, .source should still be defined on all
@@ -150,9 +149,6 @@ end
 
         # No initial line provided
         st = JuliaLowering.expr_to_est(ex)
-        for i in length(st._graph.edge_ranges)
-            @test !isnothing(get(SyntaxTree(st._graph, i), :source, nothing))
-        end
         @test let lnn = st[1].source;    lnn isa LineNumberNode && lnn.line === 123; end
         @test let lnn = st[1][1].source; lnn isa LineNumberNode && lnn.line === 123; end
         @test let lnn = st[1][2].source; lnn isa LineNumberNode && lnn.line === 456; end

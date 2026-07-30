@@ -2,7 +2,7 @@
 
 ## How inference works
 
-In Julia compiler, "type inference" refers to the process of deducing the types of later
+In the Julia compiler, "type inference" refers to the process of deducing the types of later
 values from the types of input values. Julia's approach to inference has been described in
 the blog posts below:
 1. [Shows a simplified implementation of the data-flow analysis algorithm, that Julia's type inference routine is based on.](https://aviatesk.github.io/posts/data-flow-problem/)

@@ -708,7 +708,7 @@ end
     A[1] .= 0
     @test A[1] == [0, 0, 0]
     @test_throws Base.CanonicalIndexError A[2] .= 0
-    @test_throws MethodError A[3] .= 0
+    @test_throws ArgumentError A[3] .= 0
     A = [[1, 2, 3], 4:5]
     A[1] .= 0
     @test A[1] isa Vector{Int}
@@ -1038,6 +1038,33 @@ f(a,b,c,d,e) = @. a = a + 1*(b+c+d+e)
 @allocated f(u,k1,k2,k3,k4)
 @test (@allocated f(u,k1,k2,k3,k4)) == 0
 
+@testset "issue #1282 (StaticArrays)" begin
+    struct Style1282{N} <: Broadcast.AbstractArrayStyle{N} end
+    struct Vec1282 <: AbstractVector{Float64}; data::NTuple{3, Float64}; end
+    struct Row1282 <: AbstractMatrix{Float64}; parent::Vec1282; end
+
+    Base.size(::Vec1282) = (3,)
+    Base.size(::Row1282) = (1, 3)
+    Base.getindex(v::Vec1282, i::Int) = v.data[i]
+    Base.getindex(r::Row1282, i::Int, j::Int) = r.parent[j]
+    Broadcast.BroadcastStyle(::Type{<:Vec1282}) = Style1282{1}()
+    Broadcast.BroadcastStyle(::Type{<:Row1282}) = Style1282{2}()
+    Broadcast.BroadcastStyle(::Style1282{M}, ::Style1282{N}) where {M,N} = Style1282{max(M, N)}()
+    Broadcast.BroadcastStyle(::Style1282{N}, ::Broadcast.DefaultArrayStyle{0}) where {N} = Style1282{N}()
+    @inline Base.copy(bc::Broadcast.Broadcasted{Style1282{2}}) = ntuple(i -> bc[i], 9)
+
+    function static_broadcast_loop(a, x, n)
+        s = 0.0
+        for i in 1:n
+            y = broadcast(*, a*i, x, Row1282(x))
+            s += y[1] + y[9]
+        end
+        return s
+    end
+    x = Vec1282((1.0, 1.0, 1.0))
+    @test (@allocated static_broadcast_loop(1e-5, x, 1000)) == 0
+end
+
 ret =  @macroexpand @.([Int, Number] <: Real)
 @test ret == :([Int, Number] .<: Real)
 
@@ -1223,4 +1250,12 @@ end
     bc = Base.broadcasted(identity, a)
     @test bc[1] == bc[CartesianIndex(1)] == bc[1, CartesianIndex()]
     @test a .+ [1 2] == a.a .+ [1 2]
+end
+
+@testset "issue #45086" begin
+    for x in (1, "Hello, World!", :foo, nothing, missing, 1=>2, CartesianIndex(1,2))
+        err = try; x .= x; catch e; e; end
+        @test err isa ArgumentError
+        @test occursin("cannot broadcast-assign", sprint(showerror, err))
+    end
 end

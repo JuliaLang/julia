@@ -103,4 +103,4 @@ find_artifact_dir() = artifact_dir
 dev_jll() = error("stdlib JLLs cannot be dev'ed")
 best_wrapper = nothing
 
-end  # module libLLD_jll
+end  # module LLD_jll

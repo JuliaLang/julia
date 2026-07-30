@@ -70,7 +70,7 @@ expression.
 
 !!! compat "Julia 1.11"
     The special entry point `Main.main` was added in Julia 1.11. For compatibility with prior julia versions,
-    add an explicit `@isdefined(var"@main") ? (@main) : exit(main(ARGS))` at the end of your scripts.
+    add an explicit `@static @isdefined(var"@main") ? (@main) : exit(main(ARGS))` at the end of your scripts.
 
 Only the `main` binding in the `Main` module has this behavior and only if
 the macro `@main` was used within the defining module.

@@ -127,6 +127,20 @@ function uses_frontend_opaque(x)
 end
 @test uses_frontend_opaque(10)(8) == 18
 
+# `Core.Compiler.return_type` on OpaqueClosure values observes the return type
+# declared by the OC type without inspecting the OC source.
+let oc = @opaque Tuple{Int}->Real x -> 2x
+    @test isa(oc, OpaqueClosure{Tuple{Int}, Real})
+    @test Base.Compiler.return_type(oc, Tuple{Int}) == Real
+    @test Core.Compiler.return_type(oc, Tuple{String}) == Union{}
+end
+let oc = @opaque x -> 2x
+    @test Base.Compiler.return_type(oc, Tuple{Int}) === typeof(oc).parameters[2]
+end
+let oc = @opaque x::Int -> 2x
+    @test Base.Compiler.return_type(oc, Tuple{Int}) === typeof(oc).parameters[2]
+end
+
 # World age mechanism
 module test_world_age
 
@@ -146,7 +160,6 @@ test_oc_world_age() = 1
 g_world_age = @opaque ()->test_oc_world_age()
 @test g_world_age() == 1
 @test isa(mk_oc_world_age(), OpaqueClosure{Tuple{}, Int})
-
 end # module test_world_age
 
 function maybe_vararg(isva::Bool)
@@ -179,7 +192,7 @@ end
 # cannot specify types both on arguments and separately
 @test_throws ErrorException @eval @opaque Tuple{Any}->_ (x::Int)->x
 
-# Vargarg in complied mode
+# Vararg in compiled mode
 mk_va_opaque() = @opaque (x...)->x
 @test mk_va_opaque()(1) == (1,)
 @test mk_va_opaque()(1,2) == (1,2)
@@ -343,6 +356,46 @@ for f in (const_int, const_int_barrier)
     end
 end
 
+@testset "OC stacktraces" begin
+    local oc = (@opaque (x::Bool, y::String)->throw(y))
+    let buf = IOBuffer()
+        try
+            oc(true, "foo")
+            @test false
+        catch e
+            @test e == "foo"
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::String)", s)
+    end
+
+    local function calls_oc(); oc(true, "bar"); end
+    let buf = IOBuffer()
+        try
+            calls_oc()
+            @test false
+        catch e
+            @test e == "bar"
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::String)", s)
+    end
+
+    local oc_calls_oc = (@opaque ()->oc(true, "baz"))
+    let buf = IOBuffer()
+        try
+            oc_calls_oc()
+            @test false
+        catch e
+            @test e == "baz"
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::String)", s)
+    end
+end
 
 # Attempting to construct an opaque closure backtrace after the oc is GC'ed
 f_oc_throws() = error("oops")
@@ -369,13 +422,13 @@ end
 let (bt, did_gc) = make_oc_and_collect_bt()
     GC.gc(true); GC.gc(true); GC.gc(true);
     @test did_gc[]
-    @test any(stacktrace(bt)) do frame
+    @test all(stacktrace(bt)) do frame
+        frame.from_c && return true
         li = frame.linfo
         isa(li, Core.CodeInstance) && (li = li.def)
         isa(li, Core.ABIOverride) && (li = li.def)
-        isa(li, Core.MethodInstance) || return false
-        isa(li.def, Method) || return false
-        return li.def.is_for_opaque_closure
+        isa(li, Core.MethodInstance) && (li = li.def)
+        return isa(li, Method) || isa(li, Core.CodeInfo) || li === nothing
     end
 end
 
@@ -433,3 +486,16 @@ end
 
 # 49659: signature-scoped typevar shouldn't fail in lowering
 @test_throws "must be a tuple type" @opaque ((x::T,y::T) where {T}) -> 123
+
+@testset "invoke OC" begin
+    let oc = @opaque (x::Int) -> x + 1
+        @test invoke(oc, Tuple{Int}, 5) == 6
+    end
+    let oc = @opaque (a::Int, b::Int) -> a * b
+        @test invoke(oc, Tuple{Int, Int}, 3, 4) == 12
+    end
+    let c = 10
+        oc = @opaque (x::Int) -> x + c
+        @test invoke(oc, Tuple{Int}, 5) == 15
+    end
+end

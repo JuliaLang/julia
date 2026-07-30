@@ -25,6 +25,7 @@
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "builtin_proto.h"
 #include "threading.h"
 #include "julia_assert.h"
 
@@ -36,14 +37,15 @@
 extern "C" {
 #endif
 
-#if defined(_COMPILER_ASAN_ENABLED_)
-#if __GLIBC__
+#if defined(__GLIBC__)
 #include <dlfcn.h>
 // Bypass the ASAN longjmp wrapper - we are unpoisoning the stack ourselves,
 // since ASAN normally unpoisons far too much.
 // c.f. interceptor in jl_dlopen as well
-void (*real_siglongjmp)(jmp_buf _Buf, int _Value) = NULL;
+siglongjmp_func_t real_siglongjmp = (siglongjmp_func_t)&siglongjmp;
 #endif
+
+#if defined(_COMPILER_ASAN_ENABLED_)
 static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_ucontext_t *from, jl_ucontext_t *to) {
     if (to->copy_stack)
         __sanitizer_start_switch_fiber(&from->asan_fake_stack, (char*)ptls->stackbase - ptls->stacksize, ptls->stacksize);
@@ -68,7 +70,7 @@ static inline void sanitizer_finish_switch_fiber(jl_ucontext_t *last, jl_ucontex
 #endif
 
 #if defined(_COMPILER_TSAN_ENABLED_)
-// must defined as macros, since the function containing them must not return before the longjmp
+// must be defined as macros, since the function containing them must not return before the longjmp
 #define tsan_destroy_ctx(_ptls, _ctx) do { \
         jl_ucontext_t *_tsan_macro_ctx = (_ctx); \
         if (_tsan_macro_ctx != &(_ptls)->root_task->ctx) { \
@@ -138,7 +140,7 @@ JL_NO_ASAN void *memcpy_a16_noasan(uint64_t *dest, const uint64_t *src, size_t n
   return dest;
 }
 
-/* Copy stack are allocated as regular bigval objects and do no go through free_stack,
+/* Copy stacks are allocated as regular bigval objects and do not go through free_stack,
    which would otherwise unpoison it before returning to the GC pool */
 static void asan_free_copy_stack(void *stkbuf, size_t bufsz) {
     __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
@@ -178,7 +180,7 @@ static void JL_NO_ASAN JL_NO_MSAN memcpy_stack_a16(uint64_t *to, uint64_t *from,
 #endif
 }
 
-static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt)
+static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt) JL_CANSAFEPOINT
 {
     char *frame_addr = (char*)((uintptr_t)jl_get_frame_addr() & ~15);
     char *stackbase = (char*)ptls->stackbase;
@@ -188,6 +190,7 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     if (lastt->ctx.bufsz < nb) {
         asan_free_copy_stack(lastt->ctx.stkbuf, lastt->ctx.bufsz);
         buf = (void*)jl_gc_alloc_buf(ptls, nb);
+        jl_gc_wb(lastt, buf);
         lastt->ctx.stkbuf = buf;
         lastt->ctx.bufsz = nb;
     }
@@ -418,7 +421,7 @@ JL_DLLEXPORT jl_task_t *jl_get_next_task(void) JL_NOTSAFEPOINT
 const char tsan_state_corruption[] = "TSAN state corrupted. Exiting HARD!\n";
 #endif
 
-JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
+JL_NO_ASAN static void ctx_switch(jl_task_t *lastt) JL_CANSAFEPOINT
 {
     jl_ptls_t ptls = lastt->ptls;
     jl_task_t **pt = &ptls->next_task;
@@ -460,6 +463,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
         jl_stack_context_t copy_ctx;
     } lasttstate;
 
+    jl_gc_wb_back(lastt);
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
@@ -500,7 +504,6 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     // move the barrier back instead of walking the shadow stack again here to check if that is required
     // even if killed (dropping the stack) and just the scope field matters,
     // let the gc figure that out next time it does a quick mark
-    jl_gc_wb_back(lastt);
 
     // set up global state for new task and clear global state for old task
     t->ptls = ptls;
@@ -656,7 +659,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     sanitizer_finish_switch_fiber(&ptls->previous_task->ctx, &lastt->ctx);
 }
 
-JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
+JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -712,13 +715,13 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     jl_gc_unsafe_leave(ptls, gc_state);
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_NOTSAFEPOINT_ENTER // n.b. this does not actually enter a safepoint
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
 {
     jl_set_next_task(*pt);
     jl_switch();
 }
 
-JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
+JL_DLLEXPORT JL_NORETURN void JL_NO_SAFEPOINT_ANALYSIS jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 {
     // NULL exception objects are used when rethrowing. we don't have a handler to process
     // the exception stack, so at least report the exception at the top of the stack.
@@ -775,7 +778,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack() /* Nothing */
 #endif
 
-static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
+static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED) JL_CANSAFEPOINT_ENTER
 {
     JL_GC_PUSH1(&exception);
     jl_ptls_t ptls = ct->ptls;
@@ -804,7 +807,7 @@ static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_M
 }
 
 // record backtrace and raise an error
-JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
+JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
 {
     assert(e != NULL);
     jl_jmp_buf *safe_restore = jl_get_safe_restore();
@@ -820,7 +823,7 @@ JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
 }
 
 // rethrow with current excstack state
-JL_DLLEXPORT void jl_rethrow(void)
+JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow(void)
 {
     jl_task_t *ct = jl_current_task;
     jl_excstack_t *excstack = ct->excstack;
@@ -829,7 +832,7 @@ JL_DLLEXPORT void jl_rethrow(void)
     throw_internal(ct, NULL);
 }
 
-JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
+JL_DLLEXPORT void JL_NO_SAFEPOINT_ANALYSIS jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
 {
     // TODO: Should uses of `rethrow(exc)` be replaced with a normal throw, now
     // that exception stacks allow root cause analysis?
@@ -841,41 +844,6 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     jl_excstack_raw(excstack)[excstack->top-1].jlvalue = e;
     JL_GC_PROMISE_ROOTED(e);
     throw_internal(ct, NULL);
-}
-
-/* This is xoshiro256++ 1.0, used for tasklocal random number generation in Julia.
-   This implementation is intended for embedders and internal use by the runtime, and is
-   based on the reference implementation at https://prng.di.unimi.it
-
-   Credits go to David Blackman and Sebastiano Vigna for coming up with this PRNG.
-   They described xoshiro256++ in "Scrambled Linear Pseudorandom Number Generators",
-   ACM Trans. Math. Softw., 2021.
-
-   There is a pure Julia implementation in stdlib that tends to be faster when used from
-   within Julia, due to inlining and more aggressive architecture-specific optimizations.
-*/
-uint64_t jl_genrandom(uint64_t rngState[4]) JL_NOTSAFEPOINT
-{
-    uint64_t s0 = rngState[0];
-    uint64_t s1 = rngState[1];
-    uint64_t s2 = rngState[2];
-    uint64_t s3 = rngState[3];
-
-    uint64_t t = s1 << 17;
-    uint64_t tmp = s0 + s3;
-    uint64_t res = ((tmp << 23) | (tmp >> 41)) + s0;
-    s2 ^= s0;
-    s3 ^= s1;
-    s1 ^= s2;
-    s0 ^= s3;
-    s2 ^= t;
-    s3 = (s3 << 45) | (s3 >> 19);
-
-    rngState[0] = s0;
-    rngState[1] = s1;
-    rngState[2] = s2;
-    rngState[3] = s3;
-    return res;
 }
 
 /*
@@ -1125,15 +1093,18 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     }
     t->next = jl_nothing;
     t->queue = jl_nothing;
+    jl_atomic_store_relaxed(&t->waiting_on, jl_nothing);
+    t->cached_wait_entry = jl_nothing;
     t->tls = jl_nothing;
     jl_atomic_store_relaxed(&t->_state, JL_TASK_STATE_RUNNABLE);
     t->start = start;
+    t->invoked = NULL;
     t->result = jl_nothing;
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
+    jl_gc_wb_fresh(t, ct->scope);
     t->scope = ct->scope;
-    jl_gc_wb_fresh(t, t->scope);
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
@@ -1176,7 +1147,7 @@ JL_DLLEXPORT jl_task_t *jl_get_current_task(void)
 }
 
 // Do one-time initializations for task system
-void jl_init_tasks(void) JL_GC_DISABLED
+void jl_init_tasks(void)
 {
     char *acs = getenv("JULIA_COPY_STACKS");
     if (acs) {
@@ -1195,24 +1166,24 @@ void jl_init_tasks(void) JL_GC_DISABLED
         exit(1);
     }
 #endif
-#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
-    void *libc_handle = dlopen("libc.so.6", RTLD_NOW | RTLD_NOLOAD);
-    if (libc_handle) {
-        *(void**)&real_siglongjmp = dlsym(libc_handle, "siglongjmp");
-        dlclose(libc_handle);
-    }
-    if (real_siglongjmp == NULL) {
-        jl_safe_printf("failed to get real siglongjmp\n");
-        exit(1);
+#if defined(__GLIBC__)
+    if (jl_running_under_sanitizer(/*recheck*/0)) {
+        void *libc_handle = dlopen("libc.so.6", RTLD_NOW | RTLD_NOLOAD);
+        if (libc_handle) {
+            void *real = dlsym(libc_handle, "siglongjmp");
+            if (real)
+                *(void**)&real_siglongjmp = real;
+            dlclose(libc_handle);
+        }
     }
 #endif
 }
 
 #if defined(_COMPILER_ASAN_ENABLED_)
-static void NOINLINE JL_NORETURN _start_task(void);
+static void NOINLINE JL_NORETURN _start_task(void) JL_CANSAFEPOINT;
 #endif
 
-static void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void)
+static void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void) JL_CANSAFEPOINT
 {
 CFI_NORETURN
 #if defined(_COMPILER_ASAN_ENABLED_)
@@ -1272,7 +1243,21 @@ CFI_NORETURN
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT, ROOT);
-            res = jl_apply(&ct->start, 1);
+            // Check if we can use optimized invocation
+            if (ct->invoked != NULL) {
+                // The `code`/`invoked` fields are mutable from Julia (`setfield!`), so the
+                // pair read here need not be the pair that was validated when the task was
+                // constructed (`jl_f__task`) or injected by inlining. Soundness relies on
+                // `jl_f_invoke` re-checking the argument against the target's signature and
+                // world bounds at this point: calling a CodeInstance's specptr directly
+                // without those checks would turn a field mutation into an ABI mismatch
+                // (undefined behavior), not a Julia-level error.
+                jl_value_t *invoke_args[2] = {ct->start, ct->invoked};
+                res = jl_f_invoke(NULL, invoke_args, 2);
+            }
+            else {
+                res = jl_apply(&ct->start, 1);
+            }
         }
         JL_CATCH {
             res = jl_current_exception(ct);
@@ -1281,8 +1266,8 @@ CFI_NORETURN
         }
 skip_pop_exception:;
     }
-    ct->result = res;
-    jl_gc_wb(ct, ct->result);
+    jl_gc_write(ct, ct->result, jl_value_t, res);
+    ct->invoked = NULL;
     jl_finish_task(ct);
     jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
@@ -1479,16 +1464,16 @@ CFI_NORETURN
 #elif defined(_CPU_AARCH64_)
     asm volatile(
         " mov sp, %0;\n"
-        " mov x29, xzr;\n" // Clear link register (x29) and frame pointer
-        " mov x30, xzr;\n" // (x30) to terminate unwinder.
+        " mov x29, xzr;\n" // Clear frame pointer (x29)
+        " mov x30, xzr;\n" // and link register (x30) to terminate unwinder.
         " br %1;\n" // call `fn` with fake stack frame
         " brk #0x1" // abort
         : : "r" (stk), "r"(fn) : "memory" );
 #elif defined(_CPU_ARM_)
     // A "i" constraint on `&start_task` works only on clang and not on GCC.
     asm(" mov sp, %0;\n"
-        " mov lr, #0;\n" // Clear link register (lr) and frame pointer
-        " mov fp, #0;\n" // (fp) to terminate unwinder.
+        " mov lr, #0;\n" // Clear link register (lr)
+        " mov fp, #0;\n" // and frame pointer (fp) to terminate unwinder.
         " bx %1;\n" // call `fn` with fake stack frame.  While `bx` can change
                     // the processor mode to thumb, this will never happen
                     // because all our addresses are word-aligned.
@@ -1577,14 +1562,17 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ctx.started = 1;
     ct->next = jl_nothing;
     ct->queue = jl_nothing;
+    jl_atomic_store_relaxed(&ct->waiting_on, jl_nothing);
+    ct->cached_wait_entry = jl_nothing;
     ct->tls = jl_nothing;
     jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     ct->start = NULL;
+    ct->invoked = NULL;
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
+    jl_gc_wb_fresh(ct, jl_nothing);
     ct->scope = jl_nothing;
-    jl_gc_wb_knownold(ct, ct->scope);
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;
@@ -1628,7 +1616,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     if (always_copy_stacks) {
         // when this is set, we will attempt to corrupt the process stack to switch tasks,
         // although this is unreliable, and thus not recommended
-        ptls->stackbase = jl_get_frame_addr();
+        ptls->stackbase = (void*)((uintptr_t)jl_get_frame_addr() & ~(uintptr_t)15);
         ptls->stacksize =  (char*)ptls->stackbase - (char*)stack_lo;
     }
     else {
@@ -1663,6 +1651,169 @@ JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t) JL_NOTSAFEPOINT
 JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
 {
     return t->threadpoolid;
+}
+
+
+// cancellation token sources -----------------------------------------------
+
+// CAS-max the source's state to `sev` (a nonzero severity); returns whether
+// the state was raised. Mirrors `Base._raise_state!`.
+static int cancel_source_raise_state(jl_cancel_source_t *src, uint8_t sev) JL_NOTSAFEPOINT
+{
+    uint8_t old = jl_atomic_load_relaxed(&src->state);
+    while (1) {
+        if (old >= sev)
+            return 0;
+        if (jl_atomic_cmpswap(&src->state, &old, sev))
+            return 1;
+    }
+}
+
+// Link `src` - whose link entries have `parent` filled in and `next`/`pprev`
+// reset - into each parent's (intrusive, weak) child list and inherit the
+// parents' cancellation state.
+// Shared between construction and image reload.
+static void cancel_source_attach(jl_cancel_source_t *src) JL_NOTSAFEPOINT
+{
+    jl_cancel_parent_link_t *links = jl_cancel_source_links(src);
+    size_t np = src->nparents;
+    uint8_t sev = 0;
+    for (size_t i = 0; i < np; i++) {
+        jl_cancel_source_t *p = links[i].parent;
+        // Prepend to p's child list. No write barrier: the edge is weak and
+        // never traced.
+        links[i].pprev = &p->child_head;
+        jl_value_t *head = jl_atomic_load_relaxed(&p->child_head);
+        while (1) {
+            jl_atomic_store_relaxed(&links[i].next, head);
+            if (jl_atomic_cmpswap(&p->child_head, &head, (jl_value_t*)src))
+                break;
+        }
+        if (head != jl_nothing) {
+            // Fix the displaced head's back-pointer. Only this attacher may
+            // write it (the CAS made us the unique predecessor), and no
+            // safepoint separates the CAS from this store.
+            jl_cancel_parent_link_t *hl = jl_cancel_source_link((jl_cancel_source_t*)head, p);
+            assert(hl != NULL);
+            hl->pprev = &links[i].next;
+        }
+        // Level-triggered attachment: the seq_cst publication above and the
+        // seq_cst load below pair with the walk's (seq_cst state access;
+        // child_head read) so that either the canceller's walk observes
+        // this node, or this load observes the cancelled state.
+        uint8_t pst = jl_atomic_load(&p->state);
+        if (pst > sev)
+            sev = pst;
+    }
+    if (sev != 0)
+        cancel_source_raise_state(src, sev);
+}
+
+// Create a new cancellation token source underneath the given (distinct)
+// parent sources - none makes a root.
+JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
+{
+    jl_task_t *ct = jl_current_task;
+    if (np > UINT16_MAX)
+        jl_error("CancellationTokenSource: too many parents");
+    for (size_t i = 0; i < np; i++) {
+        jl_value_t *p = parents[i];
+        if (!jl_is_cancel_source(p))
+            jl_type_error("CancellationTokenSource", (jl_value_t*)jl_cancel_source_type, p);
+        // Duplicate parents would create two link entries whose `parent`
+        // halves are identical, breaking the sibling-list traversal (which
+        // locates the entry by scanning for the parent).
+        for (size_t j = 0; j < i; j++) {
+            if (parents[j] == p)
+                jl_error("CancellationTokenSource: duplicate parent");
+        }
+    }
+    jl_cancel_source_t *src = (jl_cancel_source_t*)jl_gc_alloc(
+        ct->ptls, sizeof(jl_cancel_source_t) + np * sizeof(jl_cancel_parent_link_t),
+        jl_cancel_source_type);
+    jl_set_typetagof(src, jl_cancel_source_tag, 0);
+    if (np > 0) {
+        // a linked source must be unlinked from its parents' sibling lists
+        // when it dies (a root is never on any list and needs nothing)
+        jl_gc_set_needs_weak_processing(ct->ptls, (jl_value_t*)src);
+        // and the unlink writes into each parent's `child_head`/sibling
+        // slots, so a parent that dies in the same cycle as its children
+        // must keep its memory until the unlink pass has run
+        for (size_t i = 0; i < np; i++)
+            jl_gc_set_weak_processing_target(ct->ptls, parents[i]);
+    }
+    jl_atomic_store_relaxed(&src->child_head, jl_nothing);
+    jl_atomic_store_relaxed(&src->state, 0);
+    src->nparents = (uint16_t)np;
+    // Initialize every link entry before publishing the node under *any*
+    // parent: a concurrent cancellation walk that reaches the node through
+    // one parent scans all of its entries.
+    // N.B.: No safepoints from this point until return - the source is an inconsistent
+    // state.
+    jl_cancel_parent_link_t *links = jl_cancel_source_links(src);
+    for (size_t i = 0; i < np; i++) {
+        links[i].parent = (jl_cancel_source_t*)parents[i];
+        jl_atomic_store_relaxed(&links[i].next, jl_nothing);
+        links[i].pprev = NULL;
+    }
+    cancel_source_attach(src);
+    return (jl_value_t*)src;
+}
+
+// Push a (re)inherited cancelled state down `src`'s already-attached
+// children.
+static void cancel_source_propagate_state(jl_cancel_source_t *src) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&src->state) == 0)
+        return;
+    htable_t visited;
+    htable_new(&visited, 0);
+    arraylist_t wl;
+    arraylist_new(&wl, 0);
+    arraylist_push(&wl, src);
+    ptrhash_put(&visited, src, (void*)1);
+    while (wl.len > 0) {
+        jl_cancel_source_t *n = (jl_cancel_source_t*)wl.items[--wl.len];
+        uint8_t sev = jl_atomic_load(&n->state);
+        jl_value_t *c = jl_atomic_load(&n->child_head);
+        while (c != (jl_value_t*)jl_nothing) {
+            jl_cancel_source_t *cs = (jl_cancel_source_t*)c;
+            cancel_source_raise_state(cs, sev);
+            if (ptrhash_get(&visited, cs) == HT_NOTFOUND) {
+                ptrhash_put(&visited, cs, (void*)1);
+                arraylist_push(&wl, cs);
+            }
+            jl_cancel_parent_link_t *link = jl_cancel_source_link(cs, n);
+            assert(link != NULL);
+            c = jl_atomic_load(&link->next);
+        }
+    }
+    arraylist_free(&wl);
+    htable_free(&visited);
+}
+
+JL_DLLEXPORT void jl_cancel_source_relink(jl_cancel_source_t *src) JL_NOTSAFEPOINT
+{
+    cancel_source_attach(src);
+    cancel_source_propagate_state(src);
+}
+
+// The i-th (0-based) parent of `src` (a strong, const link).
+JL_DLLEXPORT jl_value_t *jl_cancel_source_parent(jl_cancel_source_t *src, size_t i)
+{
+    if (i >= src->nparents)
+        jl_bounds_error_int((jl_value_t*)src, i + 1);
+    return (jl_value_t*)jl_cancel_source_links(src)[i].parent;
+}
+
+// The sibling after `child` on `parent`'s child list (`nothing` at the
+// end). `child` must currently be a child of `parent`.
+JL_DLLEXPORT jl_value_t *jl_cancel_source_next_child(jl_cancel_source_t *parent, jl_cancel_source_t *child)
+{
+    jl_cancel_parent_link_t *link = jl_cancel_source_link(child, parent);
+    if (link == NULL)
+        jl_error("CancellationTokenSource: not a child of the given parent");
+    return jl_atomic_load(&link->next);
 }
 
 

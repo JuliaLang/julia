@@ -158,6 +158,87 @@ function generate_markdown(basename)
 end
 generate_markdown("NEWS")
 
+function split_skill_markdown(path)
+    lines = split(read(path, String), '\n'; keepempty=true)
+    if isempty(lines) || strip(lines[1]) != "---"
+        error("Agent Skill $path does not start with YAML frontmatter")
+    end
+    closing = nothing
+    for i in 2:length(lines)
+        if strip(lines[i]) == "---"
+            closing = i
+            break
+        end
+    end
+    closing === nothing && error("Agent Skill $path has no closing frontmatter delimiter")
+    frontmatter = join(lines[2:closing-1], "\n")
+    body = join(lines[closing+1:end], "\n")
+    return frontmatter, replace(body, r"^(\r?\n)+" => "")
+end
+
+function parse_skill_frontmatter(frontmatter, path)
+    metadata = Pair{String,String}[]
+    for line in split(frontmatter, '\n')
+        isempty(strip(line)) && continue
+        parts = split(line, ':'; limit=2)
+        length(parts) == 2 || error("Unable to parse frontmatter line in $path: $line")
+        push!(metadata, strip(parts[1]) => strip(parts[2]))
+    end
+    return metadata
+end
+
+function skill_metadata_value(metadata, key, path)
+    i = findfirst(pair -> first(pair) == key, metadata)
+    i === nothing && error("Agent Skill $path is missing required frontmatter field: $key")
+    return last(metadata[i])
+end
+
+function render_skill_metadata(metadata)
+    lines = ["!!! note \"Agent Skill metadata\""]
+    for (key, value) in metadata
+        rendered = key == "name" ? "`$value`" : value
+        rendered = replace(rendered, "\n" => "\n      ")
+        push!(lines, "    - `$key`: $rendered")
+    end
+    return join(lines, "\n")
+end
+
+function insert_skill_metadata(body, metadata)
+    lines = split(body, '\n'; keepempty=true)
+    if !isempty(lines) && startswith(lines[1], "# ")
+        return string(lines[1], "\n\n", metadata, "\n\n", join(lines[2:end], "\n"))
+    else
+        return string(metadata, "\n\n", body)
+    end
+end
+
+function generate_agent_skill_docs()
+    skills_dir = joinpath(buildrootdoc, "src", "devdocs", "agents", "skills")
+    pages = String[]
+    isdir(skills_dir) || return pages
+    for skill in sort(readdir(skills_dir))
+        skill_dir = joinpath(skills_dir, skill)
+        path = joinpath(skill_dir, "SKILL.md")
+        isfile(path) || continue
+        frontmatter, body = split_skill_markdown(path)
+        metadata = parse_skill_frontmatter(frontmatter, path)
+        name = skill_metadata_value(metadata, "name", path)
+        name == skill || error("Agent Skill $path has name '$name' but its directory is '$skill'")
+        source_rel = "doc/src/devdocs/agents/skills/$skill/SKILL.md"
+        write(
+            joinpath(skill_dir, "index.md"),
+            """
+            ```@meta
+            EditURL = "https://github.com/JuliaLang/julia/blob/master/$source_rel"
+            ```
+
+            """ * insert_skill_metadata(body, render_skill_metadata(metadata)))
+        push!(pages, "devdocs/agents/skills/$skill/index.md")
+    end
+    return pages
+end
+AgentSkillDocs = generate_agent_skill_docs()
+
 Manual = [
     "manual/getting-started.md",
     "manual/installation.md",
@@ -259,6 +340,7 @@ DevDocs = [
         "devdocs/stdio.md",
         "devdocs/boundscheck.md",
         "devdocs/locks.md",
+        "devdocs/scheduler-wakeup.md",
         "devdocs/offset-arrays.md",
         "devdocs/require.md",
         "devdocs/inference.md",
@@ -277,6 +359,7 @@ DevDocs = [
         "devdocs/backtraces.md",
         "devdocs/debuggingtips.md",
         "devdocs/valgrind.md",
+        "devdocs/gc-debug.md",
         "devdocs/external_profilers.md",
         "devdocs/sanitizers.md",
         "devdocs/probes.md",
@@ -300,6 +383,10 @@ DevDocs = [
         "devdocs/contributing/formatting.md",
         "devdocs/contributing/git-workflow.md",
         "devdocs/contributing/aiagents.md"
+    ],
+    "Agentic Devdocs" => [
+        "Index" => "devdocs/agents/README.md",
+        "Agent Skills" => AgentSkillDocs,
     ]
 ]
 

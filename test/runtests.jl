@@ -37,14 +37,12 @@ if use_revise
     Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
     Pkg.instantiate()
     using Revise
-    union!(Revise.stdlib_names, Symbol.(STDLIBS))
     push!(DEPOT_PATH, popfirst!(DEPOT_PATH))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
         ENV["JULIA_REVISE_WORKER_ONLY"] = "1"
         using Revise
         const STDLIBS = $STDLIBS
-        union!(Revise.stdlib_names, Symbol.(STDLIBS))
         revise_trackall()
     end
 end
@@ -93,7 +91,7 @@ limited_worker_rss && move_to_node1("Distributed")
 
 # Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
 # as well get them all started early. JuliaLowering_stdlibs both takes a while and
-# uses a lot of a memory at the beginning so try to run it early to keep total memory
+# uses a lot of memory at the beginning so try to run it early to keep total memory
 # use flatter.
 for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
@@ -237,6 +235,48 @@ cd(@__DIR__) do
         # Track timeout timers for each test
         test_timers = Dict{String, Timer}()
 
+        # Which worker each in-flight test is running on
+        running_on = Dict{String, Int}()
+
+        Sys.iswindows() || atexit() do
+            # This `atexit()` is a desperate attempt to collect .core dumps from
+            # any hung test processes, if the CI test infrastructure decides to
+            # tear us down due to a timeout
+            isempty(running_on) && return
+            stuck = Int[]
+            function quit!(pid)
+                if ccall(:kill, Cint, (Cint, Cint), pid, Base.SIGQUIT) == 0
+                    push!(stuck, pid)
+                end
+            end
+            # Send a `SIGQUIT` to the whole process tree of every stuck test so
+            # each process produces a .core file and a stacktrace, deepest
+            # first: the subprocess a test is blocked on is usually the real
+            # hang, and killing a parent first can take a child down before it
+            # dumps.
+            for (test, wrkr) in running_on
+                # A node 1 test runs in this process: signal its subprocesses,
+                # never ourselves, as we still have to finish exiting. The
+                # workers are all gone by then, so they cannot be in our subtree.
+                ospid = wrkr == 1 ? getpid() : get(worker_ospids, wrkr, nothing)
+                ospid === nothing && continue
+                subtree = reverse!(descendant_pids(ospid))
+                wrkr == 1 && isempty(subtree) && continue
+                target = (wrkr == 1 ? "" : "it and ") * "its $(length(subtree)) subprocess(es)"
+                println(stderr, "Test $test is still running on worker $wrkr (pid $ospid) at teardown; sending SIGQUIT to $target for core dumps.")
+                foreach(quit!, subtree)
+                wrkr == 1 || quit!(ospid)
+            end
+            alive(pid) = ccall(:kill, Cint, (Cint, Cint), pid, 0) == 0
+            # This must stay comfortably below the watchdog's post-SIGTERM
+            # escalation timeout (JL_KILL_TIMEOUT) so that we exit before it
+            # escalates.
+            deadline = time() + 300
+            while time() < deadline && any(alive, stuck)
+                sleep(1)
+            end
+        end
+
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
@@ -274,6 +314,7 @@ cd(@__DIR__) do
                         test = popfirst!(tests)
                         running_tests[test] = now()
                         wrkr = p
+                        running_on[test] = wrkr
 
                         # Create a timer for this test to report long-running status
                         test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
@@ -310,6 +351,7 @@ cd(@__DIR__) do
                                 Any[CapturedException(e, catch_backtrace())], time() - before
                             end
                         delete!(running_tests, test)
+                        delete!(running_on, test)
                         if haskey(test_timers, test)
                             close(test_timers[test])
                             delete!(test_timers, test)
@@ -323,7 +365,7 @@ cd(@__DIR__) do
                             elseif n > 1
                                 # the worker encountered some failure, recycle it
                                 # so future tests get a fresh environment
-                                rmprocs(wrkr, waitfor=rmwait_timeout)
+                                rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
                                 if use_revise
@@ -336,7 +378,7 @@ cd(@__DIR__) do
                                 # the worker has reached the max-rss limit, recycle it
                                 # so future tests start with a smaller working set
                                 if n > 1
-                                    rmprocs(wrkr, waitfor=rmwait_timeout)
+                                    rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
                                     p = addprocs_with_testenv(1)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
                                     if use_revise
@@ -350,7 +392,7 @@ cd(@__DIR__) do
                     end
                     if p != 1
                         # Free up memory =)
-                        rmprocs(p, waitfor=rmwait_timeout)
+                        rmprocs_with_testenv(p, waitfor=rmwait_timeout)
                     end
                 end
             end
@@ -365,6 +407,7 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
+            running_on[t] = 1
             before = time()
             resp, duration = try
                     r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
@@ -373,6 +416,7 @@ cd(@__DIR__) do
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
                 end
+            delete!(running_on, t)
             if length(resp) == 1
                 print_testworker_errored(t, 1, resp[1])
             else
@@ -404,7 +448,7 @@ cd(@__DIR__) do
     end
 
     #=
-`   Construct a testset on the master node which will hold results from all the
+    Construct a testset on the master node which will hold results from all the
     test files run on workers and on node1. The loop goes through the results,
     inserting them as children of the overall testset if they are testsets,
     handling errors otherwise.

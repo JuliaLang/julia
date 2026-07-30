@@ -688,3 +688,8 @@ function goto_into_while_break()
     end
 end
 @test goto_into_while_break() === nothing
+
+# empty label
+@test Core.eval(@__MODULE__,
+                Expr(:symbolicblock, Symbol(""),
+                     Expr(:break, Symbol(""), 1))) == 1

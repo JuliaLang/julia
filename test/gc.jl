@@ -65,6 +65,7 @@ end
     run_gctest("gc/linkedlist.jl")
     run_gctest("gc/objarray.jl")
     run_gctest("gc/chunks.jl")
+    run_gctest("gc/copyto.jl")
 end
 
 #FIXME: Issue #57103 disabling tests for MMTk, since

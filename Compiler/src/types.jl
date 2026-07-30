@@ -71,7 +71,7 @@ A special wrapper that represents a local variable of a method being analyzed.
 This does not participate in the native type system nor the inference lattice, and it thus
 should be always unwrapped to `v.typ` when performing any type or lattice operations on it.
 
-`v.undef` represents undefined-ness of this static parameter. If `true`, it means that the
+`v.undef` represents undefined-ness of this local variable. If `true`, it means that the
 variable _may_ be undefined at runtime, otherwise it is guaranteed to be defined.
 If `v.typ === Bottom` it means that the variable is strictly undefined.
 
@@ -263,6 +263,7 @@ struct InferenceParams
     assume_bindings_static::Bool
     ignore_recursion_hardlimit::Bool
     force_enable_inference::Bool
+    cache_owner::Any
 
     function InferenceParams(
         max_methods::Int,
@@ -275,6 +276,7 @@ struct InferenceParams
         assume_bindings_static::Bool,
         ignore_recursion_hardlimit::Bool,
         force_enable_inference::Bool,
+        @nospecialize(cache_owner),
     )
         return new(
             max_methods,
@@ -287,6 +289,7 @@ struct InferenceParams
             assume_bindings_static,
             ignore_recursion_hardlimit,
             force_enable_inference,
+            cache_owner,
         )
     end
 end
@@ -301,7 +304,8 @@ function InferenceParams(
         #=aggressive_constant_propagation::Bool=# false,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false,
-        #=force_enable_inference::Bool=# false
+        #=force_enable_inference::Bool=# false,
+        #=cache_owner=# nothing
     );
     max_methods::Int = params.max_methods,
     max_union_splitting::Int = params.max_union_splitting,
@@ -313,6 +317,7 @@ function InferenceParams(
     assume_bindings_static::Bool = params.assume_bindings_static,
     ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit,
     force_enable_inference::Bool = params.force_enable_inference,
+    cache_owner = params.cache_owner,
 )
     return InferenceParams(
         max_methods,
@@ -325,6 +330,7 @@ function InferenceParams(
         assume_bindings_static,
         ignore_recursion_hardlimit,
         force_enable_inference,
+        cache_owner,
     )
 end
 
@@ -472,7 +478,7 @@ InferenceParams(interp::NativeInterpreter) = interp.inf_params
 OptimizationParams(interp::NativeInterpreter) = interp.opt_params
 get_inference_world(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
-cache_owner(::NativeInterpreter) = nothing
+cache_owner(interp::NativeInterpreter) = interp.inf_params.cache_owner
 
 engine_reserve(interp::AbstractInterpreter, mi::MethodInstance) = engine_reserve(mi, cache_owner(interp))
 engine_reserve(mi::MethodInstance, @nospecialize owner) = ccall(:jl_engine_reserve, Any, (Any, Any), mi, owner)::CodeInstance
@@ -495,6 +501,11 @@ function add_remark! end
 may_optimize(::AbstractInterpreter) = true
 may_compress(::AbstractInterpreter) = true
 may_discard_trees(::AbstractInterpreter) = true
+may_discard_trees(::NativeInterpreter) =
+    ccall(:jl_get_type_infer_preserve_ir, Int8, ()) == 0
+precompile_keep_ir(::AbstractInterpreter) = false
+precompile_keep_ir(::NativeInterpreter) =
+    ccall(:jl_get_precompile_keep_ir, Int8, ()) != 0
 
 """
     method_table(interp::AbstractInterpreter)::MethodTableView
@@ -532,6 +543,19 @@ It also bails out from local statement/frame inference when any lattice element 
 but `AbstractInterpreter` doesn't provide a specific interface for configuring it.
 """
 function bail_out_toplevel_call end, function bail_out_call end, function bail_out_apply end
+
+"""
+    widen_call_result(interp::AbstractInterpreter, si::StmtInfo, state::CallInferenceState,
+                      sv::AbsIntState) -> Bool
+
+Decide whether to widen `state.rettype` of the currently-inferred call to `Any` before
+returning the result to the enclosing frame. By default this returns
+`call_result_unused(si) && !(state.rettype === Bottom)`: when the call has no SSA consumer,
+precise return type information is locally useless, so widening lets downstream `=== Any`
+short-circuits (e.g. the cycle backedge revisit filter in `update_cycle_worklists!`) elide
+redundant work; `Bottom` is preserved so that always-throw behavior remains observable.
+"""
+function widen_call_result end
 
 """
     infer_compilation_signature(::AbstractInterpreter)::Bool

@@ -116,8 +116,7 @@ begin
         @test any(iscall((src, pr48932_callee)), src.code)
     end
 
-    let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee))))
-        # Base.method_instance(pr48932_callee, (Any,))
+    let mi = only(Base.method_instances(pr48932_callee, Tuple, Base.get_world_counter()))
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
@@ -281,7 +280,7 @@ begin take!(GLOBAL_BUFFER)
         @test any(isinvoke(:pr48932_callee_inlined), src.code)
     end
 
-    let mi = Base.method_instance(pr48932_callee_inlined, (Int,))
+    let mi = only(Base.method_instances(pr48932_callee_inlined, (Any,), Base.get_world_counter()))
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
@@ -291,7 +290,7 @@ begin take!(GLOBAL_BUFFER)
         @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
-    let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
+    let mi = only(Base.method_instances(pr48932_caller_inlined, (Int,), Base.get_world_counter()))
         ci = mi.cache
         @test !isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
@@ -302,7 +301,7 @@ begin take!(GLOBAL_BUFFER)
     @test "42" == String(take!(GLOBAL_BUFFER))
 
     # test that we added the backedge from `pr48932_callee_inlined` to `pr48932_caller_inlined`:
-    # this redefinition below should invalidate the cache of `pr48932_callee_inlined` but not that of `pr48932_caller_inlined`
+    # this redefinition below should invalidate the cache of both `pr48932_callee_inlined` and `pr48932_caller_inlined`
     @noinline pr48932_callee_inlined(@nospecialize x) = (print(GLOBAL_BUFFER, x); nothing)
 
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inlined, Tuple{Any}))))
@@ -371,4 +370,38 @@ begin
     @test isdefined(callee_mi, :backedges)
     pr61102_callee(x::Int) = 3x
     @test !isdefined(callee_mi, :backedges)
+end
+
+# `Core.TypeName.concrete_only`: inference records no backedge at call sites with
+# non-concrete argument types, so adding a more-specific method later does not
+# invalidate the caller's compiled code
+abstract type COStyle end
+struct CODefStyle <: COStyle end
+struct COFill end
+function co_callee end
+typeof(co_callee).name.concrete_only = true
+co_callee(::COStyle, op, x) = 1
+struct COBox
+    s::COStyle
+    x::Any
+end
+co_caller(b::COBox) = co_callee(b.s, zero, b.x)
+
+# the non-concrete call site gives up to `Any`
+@test Base.return_types((COBox,); interp=InvalidationTester()) do b
+    co_caller(b)
+end |> only === Any
+
+let mi = Base.method_instance(co_caller, (COBox,))
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+end
+
+# add a more-specific method; the caller must remain valid
+co_callee(::CODefStyle, op, x::COFill) = 2
+let mi = Base.method_instance(co_caller, (COBox,))
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
 end

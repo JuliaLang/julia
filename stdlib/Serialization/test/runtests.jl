@@ -184,7 +184,7 @@ create_serialization_stream() do s # immutable struct with 1 field
     @test invokelatest(deserialize, s) == utype
 end
 
-create_serialization_stream() do s # immutable struct with 2 field
+create_serialization_stream() do s # immutable struct with 2 fields
     usertype = "SerializeSomeType4"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2)"))
@@ -193,7 +193,7 @@ create_serialization_stream() do s # immutable struct with 2 field
     @test invokelatest(deserialize, s) === utval
 end
 
-create_serialization_stream() do s # immutable struct with 3 field
+create_serialization_stream() do s # immutable struct with 3 fields
     usertype = "SerializeSomeType5"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2,3)"))
@@ -202,13 +202,25 @@ create_serialization_stream() do s # immutable struct with 3 field
     @test invokelatest(deserialize, s) === utval
 end
 
-create_serialization_stream() do s # immutable struct with 4 field
+create_serialization_stream() do s # immutable struct with 4 fields
     usertype = "SerializeSomeType6"
     eval(Meta.parse("struct $(usertype){T}; a::T; b::T; c::T; d::T; end"))
     utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
     @test invokelatest(deserialize, s) === utval
+end
+
+create_serialization_stream() do s # union types
+    serialize(s, Union{Int,Float64})
+    serialize(s, Union{Int,Missing})
+    serialize(s, Union{Int,Float64,String})
+    serialize(s, [Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}])
+    seek(s, 0)
+    @test deserialize(s) === Union{Int,Float64}
+    @test deserialize(s) === Union{Int,Missing}
+    @test deserialize(s) === Union{Int,Float64,String}
+    @test deserialize(s) == Type[Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}]
 end
 
 # Expression
@@ -354,6 +366,35 @@ end
 Core.eval(Main, main_ex)
 
 # Task
+# Runnable tasks drop CodeInstance hints but preserve explicit invoke targets.
+serialization_task_result() = 42
+create_serialization_stream() do s
+    t = Task(serialization_task_result)
+    serialize(s, t)
+    seek(s, 0)
+    r = deserialize(s)
+    @test fetch(schedule(r)) === 42
+    @test fetch(schedule(t)) === 42
+end
+
+serialization_task_invoke() = 43
+serialization_task_invoke(x...) = x
+function serialization_task_with_invoke(@nospecialize(f), @nospecialize(invoked))
+    t = Core._task(f, 0, invoked)
+    t.donenotify = Base.ThreadSynchronizer()
+    return t
+end
+for invoked in (Tuple{Vararg}, which(serialization_task_invoke, (Vararg,)))
+    create_serialization_stream() do s
+        t = serialization_task_with_invoke(serialization_task_invoke, invoked)
+        serialize(s, t)
+        seek(s, 0)
+        r = deserialize(s)
+        @test fetch(schedule(r)) === ()
+        @test fetch(schedule(t)) === ()
+    end
+end
+
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
@@ -693,15 +734,18 @@ end
     for i in 1:10
         old_m[i] = i^2
     end
-    old_x = memoryref(old_m, 5)
-    @test old_x[] == 25
-    old_d = Dict(:x => old_x)
+    # Test roundtrip at every offset
+    for idx in 1:10
+        old_x = memoryref(old_m, idx)
+        @test old_x[] == idx^2
+        old_d = Dict(:x => old_x)
 
-    old_str = sprint(serialize, old_d)
-    new_d = deserialize(IOBuffer(old_str))
+        old_str = sprint(serialize, old_d)
+        new_d = deserialize(IOBuffer(old_str))
 
-    @test new_d[:x] isa MemoryRef
-    @test new_d[:x][] == 25
+        @test new_d[:x] isa MemoryRef
+        @test new_d[:x][] == idx^2
+    end
 end
 
 @testset "Memory" begin
@@ -717,4 +761,69 @@ end
 
     @test new_d[:m] isa Memory
     @test new_d[:m][5] == 125
+end
+
+@testset "CancellationTokenSource" begin
+    using Base: cancel!, CancellationToken, CancellationTokenSource
+    # a diamond: identity sharing of parents must survive the round-trip
+    root = CancellationTokenSource()
+    left = CancellationTokenSource(CancellationToken(root))
+    right = CancellationTokenSource(CancellationToken(root))
+    child = CancellationTokenSource(CancellationToken(left), CancellationToken(right))
+    buf = IOBuffer()
+    serialize(buf, (root, left, right, child))
+    seekstart(buf)
+    r2, l2, rt2, c2 = deserialize(buf)
+    @test r2 isa CancellationTokenSource && c2.nparents == 2
+    @test Base._cancel_parent(c2, 1) === l2 && Base._cancel_parent(c2, 2) === rt2
+    @test Base._cancel_parent(l2, 1) === r2 && Base._cancel_parent(rt2, 1) === r2
+    @test !Base.iscancelled(c2)
+    # the deserialized graph is relinked: cancelling its root reaches the leaf
+    cancel!(r2)
+    @test Base.iscancelled(c2) && Base.iscancelled(l2) && Base.iscancelled(rt2)
+    # ...without affecting the original graph
+    @test !Base.iscancelled(root) && !Base.iscancelled(child)
+
+    # cancellation state round-trips
+    src = CancellationTokenSource()
+    cancel!(src, Base.CANCEL_REQUEST_ABANDON_EXTERNAL)
+    buf = IOBuffer()
+    serialize(buf, src)
+    seekstart(buf)
+    s2 = deserialize(buf)
+    @test Base.cancel_severity(s2) === Base.CANCEL_REQUEST_ABANDON_EXTERNAL
+
+    # the copy is independent: cancelling the original after serialization
+    # does not affect the deserialized graph
+    p = CancellationTokenSource()
+    c = CancellationTokenSource(CancellationToken(p))
+    buf = IOBuffer()
+    serialize(buf, (p, c))
+    seekstart(buf)
+    cancel!(p) # does not affect the serialized bytes
+    p3, c3 = deserialize(buf)
+    @test !Base.iscancelled(c3) # p3 was not cancelled at relink time
+
+    # deserializing under an already-cancelled parent is born cancelled:
+    # a stream may legally record a cancelled parent with an uncancelled
+    # child (e.g. the serializer raced an in-flight cancel! walk); the
+    # child inherits the state when it relinks under the parent
+    p = CancellationTokenSource()
+    c = CancellationTokenSource(CancellationToken(p))
+    Base._raise_state!(p, 0x01) # cancel p without walking to c
+    @test !Base.iscancelled(c)
+    buf = IOBuffer()
+    serialize(buf, c) # parents serialize first, with their state
+    seekstart(buf)
+    c4 = deserialize(buf)
+    @test Base.iscancelled(Base._cancel_parent(c4, 1))
+    @test Base.iscancelled(c4)
+
+    # a corrupt stream cannot inject an out-of-range severity
+    src = CancellationTokenSource()
+    buf = IOBuffer()
+    serialize(buf, src)
+    data = take!(buf)
+    data[end] = 0xbf # state byte: invalid severity 0xbf
+    @test_throws ArgumentError deserialize(IOBuffer(data))
 end

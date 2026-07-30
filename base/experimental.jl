@@ -393,7 +393,7 @@ For a detailed definition of `:consistent`-cy, consult the corresponding section
 !!! note
     Note that the requirements for `:consistent`-cy include not only that the return values
     are egal, but also that the manner of termination is the same. However, it's important
-    to aware that when they throw exceptions, the exceptions themselves don't necessarily
+    to be aware that when they throw exceptions, the exceptions themselves don't necessarily
     have to be egal. In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is
     required to also throw one, but the exact exceptions may differ.
 
@@ -463,6 +463,29 @@ used with the [`Base.Experimental.@overlay`](@ref) macro to define methods for a
 without adding them to the global method table.
 """
 :@MethodTable
+
+"""
+   Experimental.@make_all_arithmetic_checked()
+
+This macro defines methods that overwrite the base definition of basic arithmetic (+,-,*),
+to use their checked variants instead. Explicitly overflowing arithmetic operators (+%,-%,*%)
+are not affected.
+
+!!! warning
+    This macro is temporary and will likely be replaced by a more complete mechanism in the
+    future. It is subject to change or removal without notice.
+"""
+macro make_all_arithmetic_checked()
+    esc(quote
+        Base.:(-)(x::Base.BitInteger)                         = Base.Checked.checked_neg(x)
+        Base.:(-)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_sub(x, y)
+        Base.:(-)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_sub(x, y)
+        Base.:(+)(x::Base.Int, y::Base.Int)                    = Base.Checked.checked_add(x, y)
+        Base.:(+)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_add(x, y)
+        Base.:(*)(x::T, y::T) where {T<:Base.BitInteger}       = Base.Checked.checked_mul(x, y)
+        Base.:(-)(x::Base.AbstractChar, y::Base.AbstractChar)  = Base.Int(x) - Base.Int(y)
+    end)
+end
 
 """
     Base.Experimental.make_io_thread()
@@ -558,7 +581,7 @@ function task_running_time_ns(t::Task=current_task())
     if t == current_task()
         # These metrics fields can't update while we're running.
         # But since we're running we need to include the time since we last started running!
-        return t.running_time_ns + (time_ns() - t.last_started_running_at)
+        return t.running_time_ns +% (time_ns() -% t.last_started_running_at)
     else
         return t.running_time_ns
     end
@@ -583,8 +606,8 @@ function task_wall_time_ns(t::Task=current_task())
     start_at = t.first_enqueued_at
     start_at == 0 && return UInt64(0)
     end_at = t.finished_at
-    end_at == 0 && return time_ns() - start_at
-    return end_at - start_at
+    end_at == 0 && return time_ns() -% start_at
+    return end_at -% start_at
 end
 
 # wait_with_timeout
@@ -600,37 +623,29 @@ end
 # 3. Task N: the task that notifies the Condition being waited on.
 #
 # Typical flow:
-# - W enters the Condition's wait queue.
+# - W registers on the Condition's wait queue with a fresh, single-use
+#   WaitEntry `w` (see the wake-claim protocol in condition.jl).
 # - W creates T and stops running (calls wait()).
 # - T, when scheduled, waits on a Timer.
 # - Two common outcomes:
-#   - N notifies the Condition.
-#     - W starts running, closes the Timer, sets waiter_left and returns
-#       the notify'ed value.
-#     - The closed Timer throws an EOFError to T which simply ends.
+#   - N notifies the Condition: N claims W's wake (clearing W's
+#     `waiting_on`) and pops `w`. W starts running, closes the Timer and
+#     returns the notify'ed value. The closed Timer throws an EOFError
+#     to T which simply ends.
 #   - The Timer expires.
-#     - T starts running and locks the Condition.
-#     - T confirms that waiter_left is unset and that W is still in the
-#       Condition's wait queue; it then removes W from the wait queue,
-#       sets dosched to true and unlocks the Condition.
-#     - If dosched is true, T schedules W with the special :timed_out
-#       value.
-#     - T ends.
+#     - T starts running, locks the Condition, and tries to claim W's
+#       wake via CAS(W.waiting_on, w => nothing). Because `w` is
+#       single-use, the claim can only succeed while W is still parked
+#       in *this* wait - never in a later wait of W, even one on the
+#       same Condition.
+#     - If the claim succeeds, T removes `w` from the wait queue,
+#       unlocks the Condition and schedules W with the special
+#       :timed_out value.
 #     - W runs and returns :timed_out.
 #
-# Some possible interleavings:
-# - N notifies the Condition but the Timer expires and T starts running
-#   before W:
-#   - W closing the expired Timer is benign.
-#   - T will find that W is no longer in the Condition's wait queue
-#     (which is protected by a lock) and will not schedule W.
-# - N notifies the Condition; W runs and calls wait on the Condition
-#   again before the Timer expires:
-#   - W sets waiter_left before leaving. When T runs, it will find that
-#     waiter_left is set and will not schedule W.
-#
-# The lock on the Condition's wait queue and waiter_left together
-# ensure proper synchronization and behavior of the tasks involved.
+# The single CAS on W's `waiting_on` arbitrates every race between N, T
+# and any interrupter: whoever wins the claim (and only that entity)
+# schedules W.
 
 """
     wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
@@ -646,38 +661,44 @@ millisecond.
 """
 function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
     ct = current_task()
-    Base._wait2(c, ct, first)
+    # This wait has a wake source directed at it specifically (the timeout
+    # task below), so it must register with a fresh, single-use entry: only
+    # single-use-ness guarantees that the timeout task's expected-entry CAS
+    # cannot claim a later, unrelated wait of `ct`.
+    w = Base._wait2(c, ct, first; entry=Base.WaitEntry(ct))
     token = Base.unlockall(c.lock)
 
     timer::Union{Timer, Nothing} = nothing
-    waiter_left::Union{Threads.Atomic{Bool}, Nothing} = nothing
     if timeout > 0.0
         timer = Timer(timeout)
-        waiter_left = Threads.Atomic{Bool}(false)
         # start a task to wait on the timer
-        t = _wait_with_timeout_task(c, ct, timer, waiter_left)
+        t = _wait_with_timeout_task(c, ct, w, timer)
         t.sticky = false
         Threads._spawn_set_thrpool(t, :interactive)
         schedule(t)
     end
 
+    local res
     try
         res = wait()
-        if timer !== nothing
-            close(timer)
-            waiter_left[] = true
-        end
-        return res
     catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
-        rethrow()
-    finally
+        # resumed without a wake through our registration (interrupter or raw
+        # throwto): disarm it, then unlink our entry under the lock
+        @atomicreplace ct.waiting_on w => nothing
+        q = ct.queue
+        q === nothing || Base.list_deletefirst!(q::Base.StickyWorkqueue, ct)
         Base.relockall(c.lock, token)
+        timer !== nothing && close(timer)
+        Base.list_deletefirst!(Base.waitqueue(c), w)
+        rethrow()
     end
+    # a normal wake (notify or timeout) claimed and unlinked our registration
+    Base.relockall(c.lock, token)
+    timer !== nothing && close(timer)
+    return res
 end
 
-function _wait_with_timeout_task(c::GenericCondition, ct::Task, timer::Timer,
-    waiter_left::Threads.Atomic{Bool})
+function _wait_with_timeout_task(c::GenericCondition, ct::Task, w::Base.WaitEntry, timer::Timer)
     return Task() do
         try
             wait(timer)
@@ -687,12 +708,13 @@ function _wait_with_timeout_task(c::GenericCondition, ct::Task, timer::Timer,
         end
         dosched = false
         lock(c.lock)
-        # Confirm that the waiting task is still in the wait queue and remove it. If
-        # the task is not in the wait queue, it must have been notified already so we
-        # don't do anything here.
-        if !waiter_left[] && ct.queue === c.waitq
+        # Claim the wake of the specific wait `w` was registered for; `w` is
+        # single-use, so a successful claim means `ct` is still parked in
+        # that wait. If the claim fails (already notified or interrupted),
+        # do nothing.
+        if Base.claim_wait(ct, w)
             dosched = true
-            Base.list_deletefirst!(c.waitq, ct)
+            Base.list_deletefirst!(Base.waitqueue(c), w)
         end
         unlock(c.lock)
         # send the waiting task a timeout
@@ -777,7 +799,7 @@ end
 """
     Base.Experimental.@set_syntax_version ver
 
-Sets the syntax version to the current module to `ver`. This overrides settings of `syntax.julia_version` or
+Sets the syntax version of the current module to `ver`. This overrides settings of `syntax.julia_version` or
 `compat.julia` from Project.toml.
 
 !!! compat "Julia 1.14"

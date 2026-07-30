@@ -341,10 +341,10 @@ end
             Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
         pop!(need_to_handle_undef_sparam, which(Base._eltype_ntuple, Tuple{Type{Tuple{Any}}}))
+        pop!(need_to_handle_undef_sparam, which(Base.reduce_empty_iter, (Any, Tuple{Vararg{T}} where T, Base.HasEltype)))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
         @test_broken isempty(need_to_handle_undef_sparam)
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
-        pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
         @test isempty(need_to_handle_undef_sparam)
     end
@@ -352,6 +352,7 @@ end
 
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
+    @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})
 end
 
 # test a case where specificity is not transitive over subtyping

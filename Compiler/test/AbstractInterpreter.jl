@@ -166,7 +166,7 @@ gpu_factorial3(x::Int) = myfactorial(x, raise_on_gpu3)
 @test Base.infer_effects(gpu_factorial2, (Int,); interp=MTOverlayInterp()) |> Compiler.is_consistent_overlay
 let effects = Base.infer_effects(gpu_factorial3, (Int,); interp=MTOverlayInterp())
     # check if `@consistent_overlay` together works with `@assume_effects`
-    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intetionally) undefined.
+    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intentionally) undefined.
     @test Compiler.is_consistent_overlay(effects)
     @test Compiler.is_foldable(effects)
 end

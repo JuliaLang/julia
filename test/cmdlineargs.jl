@@ -498,6 +498,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_NUM_GC_THREADS" => "2,1") do
             @test read(`$exename -e $code`, String) == "3"
         end
+
+        # invalid JULIA_NUM_GC_THREADS values must be rejected at startup
+        # like `--gcthreads`, not crash the GC later (e.g. `=0` used to
+        # underflow the mark-thread count and segfault at the first collection)
+        for ngc in ("0", "-1", "abc", "32767", "2,2", "2,-1", "2,1x")
+            withenv("JULIA_NUM_GC_THREADS" => ngc) do
+                @test errors_not_signals(`$exename -e $code`)
+            end
+        end
     end
 
     # --machine-file
@@ -609,7 +618,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
-            # there may be atrailing separator here so use rstrip
+            # there may be a trailing separator here so use rstrip
             @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), Base.Filesystem.path_separator[1]))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
         end
@@ -766,7 +775,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
     # --print-before/--print-after with pass names is broken on Windows due to no-gnu-unique issues
     if !Sys.iswindows()
-        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization") do
+        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization", "JULIA_OBJCACHE" => "0") do
             let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
                 code = code[3]
@@ -1307,6 +1316,23 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test startswith(txt, r"ERROR: (syntax: incomplete|ParseError:)")
 end
 
+# uncaught errors in `-e` and script files must not leak driver frames
+# (exec_options, _start, eval/include machinery) into the printed backtrace
+let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+    script = tempname() * ".jl"
+    write(script, "f() = error(\"boom\")\nf()\n")
+    for cmd in (`$exename -e 'f() = error("boom"); f()'`, `$exename $script`)
+        (success, out, err) = readchomperrors(cmd)
+        @test !success
+        @test occursin("boom", err)
+        @test occursin("top-level scope", err)
+        @test !occursin("exec_options", err)
+        @test !occursin("_start", err)
+        @test !occursin("__script_entry", err)
+    end
+    rm(script; force=true)
+end
+
 # Issue #29855
 for yn in ("no", "yes")
     exename = `$(Base.julia_cmd()) --inline=no --startup-file=no --color=no --inline=$yn`
@@ -1492,4 +1518,18 @@ end
 end
 
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
-@test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
+# Compiling a single entry point whose inferred call graph contains thousands of
+# CodeInstances used to overflow the stack in the JIT linker's recursive task
+# dispatcher (threshold ~4k with an 8MB stack); `--inline=no` keeps every callee as a
+# separately-linked function so they all land in one lookup batch.
+let n = 6000
+    code = """
+    f(x, ::Val{i}) where {i} = x + i
+    @eval g(x) = +(\$((:(f(x, Val(\$i))) for i in 1:$n)...))
+    print(g(1))
+    """
+    @test test_read_success(`$(Base.julia_cmd()) --startup-file=no --inline=no -e $code`) == string(sum(1:n) + n)
+end
+
+# https://github.com/JuliaLang/julia/issues/59103
+@test test_read_success(setenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"

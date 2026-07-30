@@ -30,7 +30,7 @@ static const int NumArgFPRs = 8;
 // needPassByRef call, otherwise avail_gprs is wrong
 int avail_gprs, avail_fprs;
 
-// preferred type is determined in the same time of use_sret & needPassByRef
+// preferred type is determined at the same time as use_sret & needPassByRef
 // cache it here to avoid computing it again in preferred_llvm_type
 Type *cached_llvmtype = NULL;
 
@@ -80,7 +80,7 @@ Type *get_llvm_inttype(jl_datatype_t *dt, LLVMContext &ctx) const
     return Type::getIntNTy(ctx, nb * 8);
 }
 
-bool should_use_fp_conv(jl_datatype_t *dt, ElementType &ele1, ElementType &ele2) const
+bool should_use_fp_conv(jl_datatype_t *dt, ElementType &ele1, ElementType &ele2) const JL_CANSAFEPOINT
 {
     if (jl_is_primitivetype(dt)) {
         size_t dsz = jl_datatype_size(dt);
@@ -179,7 +179,7 @@ Type *get_llvm_inttype_byxlen(size_t xlen, LLVMContext &ctx) const
 }
 
 Type *classify_arg(jl_datatype_t *ty, int &avail_gprs, int &avail_fprs, bool &onstack,
-                   LLVMContext &ctx) const
+                   LLVMContext &ctx) const JL_CANSAFEPOINT
 {
     onstack = false;
     if (ty == jl_nothing_type) {
@@ -282,7 +282,7 @@ Type *classify_arg(jl_datatype_t *ty, int &avail_gprs, int &avail_fprs, bool &on
     return get_llvm_inttype(ty, ctx);
 }
 
-bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) override
+bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) override JL_CANSAFEPOINT
 {
     bool onstack = false;
     int gprs = 2;
@@ -298,7 +298,7 @@ bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) override
 }
 
 bool needPassByRef(jl_datatype_t *ty, AttrBuilder &ab, LLVMContext &ctx,
-                   Type *Ty) override
+                   Type *Ty) override JL_CANSAFEPOINT
 {
     bool onstack = false;
     this->cached_llvmtype =

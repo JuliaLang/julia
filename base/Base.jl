@@ -32,6 +32,8 @@ end
 
 # metaprogramming
 include("meta.jl")
+using .Meta
+using .Meta: is_id_char
 
 # Strings
 include("multimedia.jl")
@@ -100,7 +102,11 @@ include("set.jl")
 include("io.jl")
 include("iobuffer.jl")
 
+# Dynamic scopes (types only; the ScopedValues API is included much later)
+include("scope.jl")
+
 # Concurrency (part 1)
+include("cancellation.jl")
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")
@@ -275,7 +281,6 @@ include("errorshow.jl")
 include("util.jl")
 
 include("initdefs.jl")
-Filesystem.__postinit__()
 
 # worker threads
 include("threadcall.jl")
@@ -343,6 +348,7 @@ set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
 
+Filesystem.__postinit__()
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 

@@ -83,6 +83,14 @@ module AbstractIrrationalExamples
     )
 end
 
+macro big_expr(n, x)
+    x = esc(x)
+    for _ in 1:n
+        x = :($x + 1 - 1)
+    end
+    x
+end
+
 @testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
 
 @test Threads.threadid() == 1
@@ -383,8 +391,8 @@ end
 function test_atomic_write(commbuf::CommBuf, n::Int)
     for i in 1:n
         # The atomic stores guarantee that var1 >= var2
-        commbuf.var1[] = i
-        commbuf.var2[] = i
+        @atomic commbuf.var1[] = i
+        @atomic commbuf.var2[] = i
     end
     commbuf.correct_write = true
 end
@@ -436,8 +444,8 @@ function test_fence(p::Peterson, id::Int, n::Int)
     correct = true
     otherid = mod1(id+1,2)
     for i in 1:n
-        p.flag[id][] = 1
-        p.turn[] = otherid
+        @atomic p.flag[id][] = 1
+        @atomic p.turn[] = otherid
         atomic_fence()
         while p.flag[otherid][] != 0 && p.turn[] == otherid
             # busy wait
@@ -445,11 +453,11 @@ function test_fence(p::Peterson, id::Int, n::Int)
             ccall(:jl_gc_safepoint, Cvoid, ())
         end
         # critical section
-        p.critical[id][] = 1
+        @atomic p.critical[id][] = 1
         correct &= p.critical[otherid][] == 0
-        p.critical[id][] = 0
+        @atomic p.critical[id][] = 0
         # end of critical section
-        p.flag[id][] = 0
+        @atomic p.flag[id][] = 0
     end
     p.correct[id] = correct
 end
@@ -520,7 +528,7 @@ let atomictypes = (Int8, Int16, Int32, Int64, Int128,
                    Float16, Float32, Float64)
     for T in atomictypes
         var = Atomic{T}()
-        var[] = 42
+        @atomic var[] = 42
         @test var[] === T(42)
         old = atomic_xchg!(var, T(13))
         @test old === T(42)
@@ -1165,7 +1173,7 @@ end
     end
 end
 
-# @spawn racying with sync_end
+# @spawn racing with sync_end
 
 hidden_spawn(f) = Threads.@spawn f()
 
@@ -1216,7 +1224,7 @@ function check_sync_end_race()
             # Useful for tuning the test:
             @debug "`check_sync_end_race` done" threadpoolsize(:default) ncompleted nnotscheduled nerror
         finally
-            done[] = true
+            @atomic done[] = true
         end
     end
     return nothing
@@ -1224,6 +1232,33 @@ end
 
 @testset "Racy `@spawn`" begin
     @test check_sync_end_race() === nothing
+end
+
+@testset "no lost wakeups under bursty spawn (#61820, #50425)" begin
+    # A multiqueue insert wakes one thread in the pool; bursts of tasks spawned
+    # across an idle pool must all still run to completion (regression smoke test
+    # that wake-one does not drop wakeups).
+    for pool in (:default, :interactive)
+        nt = Threads.threadpoolsize(pool)
+        n = 50 * nt
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn pool Threads.atomic_add!(done, 1)
+        end
+        @test timedwait(() -> done[] == n, 60.0) === :ok
+    end
+    # nested spawns must also complete
+    let n = 20 * Threads.threadpoolsize(:default)
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn begin
+                a = Threads.@spawn Threads.atomic_add!(done, 1)
+                b = Threads.@spawn Threads.atomic_add!(done, 1)
+                fetch(a); fetch(b)
+            end
+        end
+        @test timedwait(() -> done[] == 2n, 60.0) === :ok
+    end
 end
 
 # issue #41546, thread-safe package loading
@@ -1276,7 +1311,7 @@ end
     end
 end
 
-#Thread safety of threacall
+# Thread safety of threadcall
 function threadcall_threads()
     Threads.@threads for i = 1:8
         ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
@@ -1469,6 +1504,9 @@ end
             Rational{I}(c)
         end
         function is_racy_rational_from_irrational()
+            # `local` is needed to avoid sharing (and racily clobbering) the
+            # outer function's `task`/`ok` while it is fetching them
+            local task, ok
             worker_count = 10 * Threads.nthreads()
             task = ConcurrencyUtilities.run_concurrently_in_new_task(construct, worker_count)
             schedule(task)
@@ -1715,5 +1753,52 @@ end
 end
 
 include("threads_comprehensions.jl")
+
+# This test is designed to trigger the performance regression from #60241:
+#   Thread 1                           Thread 2
+#   --------                           --------
+#   call f()
+#     infer f(), g()
+#     emit LLVM IR f()
+#       set f() invoke
+#     emit LLVM IR g() (slow!)         call f()
+#       ...                              materialize f()
+#       ...                                emit trampoline for g()
+#                                        run f()
+#                                          tojlinvoke trampoline for g()
+#     call f()
+#       f() already materialized
+#
+# We can tell the trampoline was generated if calling f() with a large integer
+# allocates (the trampoline will box the integer).
+
+@testset "Race invoke trampolines" begin
+    for i=1:10
+        @eval begin
+            @noinline function g(x)
+                x = @big_expr(4000, x)
+                if x > 0
+                    f(x-1)
+                else
+                    0
+                end
+            end
+
+            @noinline function f(x)
+                if x > 0
+                    g(x-1)
+                else
+                    0
+                end
+            end
+
+            t = Threads.@spawn f(10)
+            f(10)
+            wait(t)
+        end
+
+        @test @eval @allocations(f(10000)) == 0
+    end
+end
 
 end # main testset

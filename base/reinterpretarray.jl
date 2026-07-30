@@ -24,6 +24,11 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         @noinline
         throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T, "` which is a singleton type")))
     end
+    function throwbitpadding(S::Type, T::Type, U::Type)
+        @noinline
+        throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T,
+            "` because type `", U, "` contains non-byte-aligned primitive fields")))
+    end
 
     global reinterpret
 
@@ -79,6 +84,8 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
+        has_bit_padding(T) && throwbitpadding(S, T, T)
+        has_bit_padding(S) && throwbitpadding(S, T, S)
         (N != 0 || sizeof(T) == sizeof(S)) || throwsize0(S, T, "different")
         if N != 0 && sizeof(S) != sizeof(T)
             ax1 = axes(a)[1]
@@ -116,6 +123,8 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
+        has_bit_padding(T) && throwbitpadding(S, T, T)
+        has_bit_padding(S) && throwbitpadding(S, T, S)
         if sizeof(S) == sizeof(T)
             N = ndims(a)
         elseif sizeof(S) > sizeof(T)
@@ -388,7 +397,8 @@ axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 
 has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
-elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
+elsize(::Type{<:ReinterpretArray{T,<:Any,S,A}}) where {T,S,A} =
+    sizeof(T) == sizeof(S) ? elsize(A) : sizeof(T)
 cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
@@ -400,12 +410,15 @@ unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} =
     end
 end
 
-check_ptr_indexable(a::ReinterpretArray, sz = elsize(a)) = check_ptr_indexable(parent(a), sz)
-check_ptr_indexable(a::ReshapedArray, sz) = check_ptr_indexable(parent(a), sz)
-check_ptr_indexable(a::FastContiguousSubArray, sz) = check_ptr_indexable(parent(a), sz)
-check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
-check_ptr_indexable(a::Memory, sz) = true
-check_ptr_indexable(a::AbstractArray, sz) = false
+function check_ptr_indexable(a::ReinterpretArray{T,<:Any,S}) where {T,S}
+    sizeof(T) === sizeof(S) && return false
+    p = parent(a)
+    return check_ptr_indexable(p) && elsize(p) === sizeof(S)
+end
+check_ptr_indexable(a::ReshapedArray) = check_ptr_indexable(parent(a))
+check_ptr_indexable(a::FastContiguousSubArray) = check_ptr_indexable(parent(a))
+check_ptr_indexable(a::Union{Array, Memory}) = true
+check_ptr_indexable(a::AbstractArray) = false
 
 @propagate_inbounds getindex(a::ReshapedReinterpretArray{T,0}) where {T} = a[firstindex(a)]
 
@@ -442,7 +455,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
     GC.@preserve ap return unsafe_load(p)
 end
 
@@ -591,7 +604,7 @@ end
     @boundscheck checkbounds(a, inds...)
     li = _to_linear_index(a, inds...)
     ap = cconvert(Ptr{T}, a)
-    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
+    p = unsafe_convert(Ptr{T}, ap) + elsize(a) * (li - 1)
     GC.@preserve ap unsafe_store!(p, v)
     return a
 end
@@ -646,7 +659,6 @@ end
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
-                    sidx = 0
                 end
                 # Deal with the main body of elements
                 while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)
@@ -743,9 +755,7 @@ end
     CyclePadding(padding, total_size)
 
 Cycles an iterator of `Padding` structs, restarting the padding at `total_size`.
-E.g. if `padding` is all the padding in a struct and `total_size` is the total
-aligned size of that array, `CyclePadding` will correspond to the padding in an
-infinite vector of such structs.
+E.g. if `padding` is all the padding in a struct and `total_size` is the total aligned size of that struct, `CyclePadding` will correspond to the padding in an infinite vector of such structs.
 """
 struct CyclePadding{P}
     padding::P
@@ -770,6 +780,11 @@ end
 """
 @assume_effects :foldable function padding(T::DataType, baseoffset::Int = 0)
     pads = Padding[]
+    if isprimitivetype(T)
+        Core.bitsizeof(T) % 8 == 0 || throw(ArgumentError(LazyString(
+            "padding cannot be computed for non-byte-aligned primitive type ", T)))
+        return Core.svec()
+    end
     last_end::Int = baseoffset
     for i = 1:fieldcount(T)
         offset = baseoffset + Int(fieldoffset(T, i))
@@ -829,11 +844,30 @@ end
 end
 
 @assume_effects :foldable function packedsize(::Type{T}) where T
+    if isprimitivetype(T)
+        Core.bitsizeof(T) % 8 == 0 || throw(ArgumentError(LazyString(
+            "packed size cannot be computed for non-byte-aligned primitive type ", T)))
+        return Core.bitsizeof(T) >> 3
+    end
     pads = padding(T)
     return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
 end
 
-@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
+@assume_effects :foldable function ispacked(::Type{T}) where T
+    isprimitivetype(T) && return Core.bitsizeof(T) == sizeof(T) * 8
+    return isempty(padding(T))
+end
+
+@assume_effects :foldable function has_bit_padding(::Type{T}) where T
+    if isprimitivetype(T)
+        return Core.bitsizeof(T) % 8 != 0
+    end
+    T isa Union && return any(has_bit_padding, uniontypes(T))
+    for i in 1:fieldcount(T)
+        has_bit_padding(fieldtype(T, i)) && return true
+    end
+    return false
+end
 
 function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
     writeoffset = 0
@@ -871,6 +905,10 @@ end
     # handle non-primitive types
     isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
     isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
+    has_bit_padding(Out) && throw(ArgumentError(LazyString(
+        "cannot `reinterpret` type ", Out, " containing non-byte-aligned primitive fields")))
+    has_bit_padding(In) && throw(ArgumentError(LazyString(
+        "cannot `reinterpret` type ", In, " containing non-byte-aligned primitive fields")))
     inpackedsize = packedsize(In)
     outpackedsize = packedsize(Out)
     inpackedsize == outpackedsize ||
@@ -967,3 +1005,17 @@ end
 
 mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP} =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
+
+# Fast path for `NTuple{N,E}(::Union{Array,Memory})` with `N >= 32`: when the
+# eltype matches and is isbits, the storage is layout-identical to the tuple,
+# so a single `reinterpret` load suffices (O(1) in N, unlike the All32 fallback).
+function _totuple(T::Type{All32{E,N}}, itr::Union{Array,Memory}) where {E,N}
+    len = N + 32
+    length(itr) >= len || _totuple_err(T)
+    if isbitstype(E) && eltype(itr) === E
+        v = length(itr) == len ? itr : view(itr, 1:len)
+        return @inbounds reinterpret(T, v)[1]
+    end
+    elts = collect(E, Iterators.take(itr, len))
+    return (elts...,)
+end

@@ -332,7 +332,7 @@ version of Julia.
 
 ## Design inspiration
 
-This design was heavily inspired by [JEPS-429](https://openjdk.org/jeps/429),
+This design was heavily inspired by [JEP 429](https://openjdk.org/jeps/429),
 which in turn was inspired by dynamically scoped free variables in many Lisp dialects. In particular Interlisp-D and its deep binding strategy.
 
-A prior design discussed was context variables ala [PEPS-567](https://peps.python.org/pep-0567/) and implemented in Julia as [ContextVariablesX.jl](https://github.com/tkf/ContextVariablesX.jl).
+A prior design discussed was context variables à la [PEP 567](https://peps.python.org/pep-0567/) and implemented in Julia as [ContextVariablesX.jl](https://github.com/tkf/ContextVariablesX.jl).

@@ -9,31 +9,31 @@ baremodule Iterators
 import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
+    @inline, Pair, Pairs, IndexLinear, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
-    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
+    @propagate_inbounds, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
-    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
-    any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
+    :, |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
+    any, eachindex, ntuple, zero, identity, reduce, in, firstindex, lastindex,
+    tail, fieldtypes, min, max, zero, oneunit, promote, promote_shape, LazyString,
     afoldl, mod1, @default_eltype
 using .Core
 using Core: @doc
 
 using Base:
-    cld, fld, resize!, IndexCartesian, Checked
+    cld, resize!, IndexCartesian, Checked
 using .Checked: checked_mul
 
 import Base:
     first, last,
-    isempty, length, size, axes, ndims,
+    length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype, promote_typejoin,
     haskey, keys, values, pairs,
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
 export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth, findeach
-public accumulate, filter, map, peel, reverse, Stateful
+public accumulate, filter, map, peel, reverse, Reverse, Stateful
 
 """
     Iterators.map(f, iterators...)
@@ -71,6 +71,8 @@ end
 and_iteratorsize(isz::T, ::T) where {T} = isz
 and_iteratorsize(::HasLength, ::HasShape) = HasLength()
 and_iteratorsize(::HasShape, ::HasLength) = HasLength()
+and_iteratorsize(::HasShape{N}, ::HasShape{N}) where {N} = HasShape{N}()
+and_iteratorsize(::HasShape, ::HasShape) = HasLength()
 and_iteratorsize(a, b) = SizeUnknown()
 
 and_iteratoreltype(iel::T, ::T) where {T} = iel
@@ -110,6 +112,16 @@ julia> foreach(println, Iterators.reverse(1:5))
 """
 reverse(itr) = Reverse(itr)
 
+"""
+    Iterators.Reverse{T}
+
+A type representing a reverse-order iterator for an iterator of type `T`, which
+is stored in the `itr` field.  Typically returned by [`Iterators.reverse(itr::T)`](@ref),
+which constructs an `Iterators.Reverse{T}` wrapper around `itr` by default.
+
+To support lazy reverse-order iteration, a type `T` should either implement an [`iterate`](@ref)
+method for `Iterators.Reverse{T}` or overload `Iterators.reverse` to return a different type.
+"""
 struct Reverse{T}
     itr::T
 end
@@ -136,6 +148,10 @@ function iterate(A::Reverse, state=(reverse(eachindex(A.itr)),))
     idx, itrs = y
     (A.itr[idx], (state[1], itrs))
 end
+
+# Guard against invalidations due to spurious `Reverse{Union{}}` intersections
+iterate(r::Reverse{Union{}}) = throw(ArgumentError("cannot iterate a reversed iterator of type Union{}"))
+iterate(r::Reverse{Union{}}, state) = throw(ArgumentError("cannot iterate a reversed iterator of type Union{}"))
 
 reverse(R::AbstractRange) = Base.reverse(R) # copying ranges is cheap
 reverse(G::Generator) = Generator(G.f, reverse(G.iter))
@@ -260,7 +276,7 @@ CartesianIndex(1, 2) d
 CartesianIndex(2, 2) e
 ```
 
-See also [`IndexStyle`](@ref), [`axes`](@ref).
+See also [`Base.IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 
@@ -310,10 +326,10 @@ end
 haskey(v::Pairs, key) = key in keys(v)
 keys(v::Pairs) = getfield(v, :itr) === nothing ? keys(getfield(v, :data)) : getfield(v, :itr)
 values(v::Pairs) = getfield(v, :data) # TODO: this should be a view of data subset by itr
-getindex(v::Pairs, key) = getfield(v, :data)[key]
-setindex!(v::Pairs, value, key) = (getfield(v, :data)[key] = value; v)
-get(v::Pairs, key, default) = get(getfield(v, :data), key, default)
-get(f::Base.Callable, v::Pairs, key) = get(f, getfield(v, :data), key)
+getindex(v::Pairs, key) = values(v)[key]
+setindex!(v::Pairs, value, key) = (values(v)[key] = value; v)
+get(v::Pairs, key, default) = get(values(v), key, default)
+get(f::Base.Callable, v::Pairs, key) = get(f, values(v), key)
 
 # zip
 
@@ -399,13 +415,21 @@ _promote_tuple_shape((m,)::Tuple{Integer}, (n,)::Tuple{Integer}) = (min(m, n),)
 _promote_tuple_shape(a, b) = promote_shape(a, b)
 _promote_tuple_shape(a, b...) = _promote_tuple_shape(a, _promote_tuple_shape(b...))
 _promote_tuple_shape(a) = a
-eltype(::Type{Zip{Is}}) where {Is<:Tuple} = TupleOrBottom(map(eltype, fieldtypes(Is))...)
+# bind the tuple length `N` as a static parameter: `fieldtypes` needs an
+# egality-pinned `Is` to fold, while the sparam binds through `==` (#61323).
+# NOTE: an indefinite-length `Is` (e.g. `Tuple{Vararg{Vector{Int}}}`) matches
+# no `N`, so type-level queries on such (necessarily abstract) `Zip`/`Product`
+# types skip these methods and fall back to the generic trait defaults (they
+# used to raise a TypeError from `_counttuple`)
+eltype(::Type{Zip{Is}}) where {N, Is<:Tuple{Vararg{Any, N}}} = TupleOrBottom(ntuple(n -> eltype(fieldtype(Is, n)), N)...)
 #eltype(::Type{Zip{Tuple{}}}) = Tuple{}
 #eltype(::Type{Zip{Tuple{A}}}) where {A} = Tuple{eltype(A)}
 #eltype(::Type{Zip{Tuple{A, B}}}) where {A, B} = Tuple{eltype(A), eltype(B)}
+
 @inline isdone(z::Zip) = _zip_any_isdone(z.is, Base.map(_ -> (), z.is))
 @inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, Base.map(tuple, ss))
-@inline function _zip_any_isdone(is, ss)
+
+@inline function _zip_any_isdone(is::Tuple, ss::Tuple)
     d1 = isdone(is[1], ss[1]...)
     d1 === true && return true
     return d1 | _zip_any_isdone(tail(is), tail(ss))
@@ -429,36 +453,36 @@ end
     return _zip_iterate_interleave(xs1, xs2, ds)
 end
 
-@propagate_inbounds function _zip_iterate_some(is, ss, ds::Tuple{T,Vararg{Any}}, f::T) where T
+@propagate_inbounds function _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{T,Vararg{Any}}, f::T) where T
     x = iterate(is[1], ss[1]...)
     x === nothing && return nothing
     y = _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
     y === nothing && return nothing
     return (x, y...)
 end
-@propagate_inbounds _zip_iterate_some(is, ss, ds::Tuple{Any,Vararg{Any}}, f) =
+@propagate_inbounds _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{Any,Vararg{Any}}, f) =
     _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
 _zip_iterate_some(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Any) = ()
 
-function _zip_iterate_interleave(xs1, xs2, ds)
+function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple)
     t = _zip_iterate_interleave(tail(xs1), xs2, tail(ds))
     ((xs1[1][1], t[1]...), (xs1[1][2], t[2]...))
 end
-function _zip_iterate_interleave(xs1, xs2, ds::Tuple{Bool,Vararg{Any}})
+function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple{Bool,Vararg{Any}})
     t = _zip_iterate_interleave(xs1, tail(xs2), tail(ds))
     ((xs2[1][1], t[1]...), (xs2[1][2], t[2]...))
 end
 _zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
 
-function _zip_isdone(is, ss)
+function _zip_isdone(is::Tuple, ss::Tuple)
     d = isdone(is[1], ss[1]...)
     d´, ds = _zip_isdone(tail(is), tail(ss))
     return (d === true || d´, (d, ds...))
 end
 _zip_isdone(::Tuple{}, ::Tuple{}) = (false, ())
 
-IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratorsize(ntuple(n -> IteratorSize(fieldtype(Is, n)), _counttuple(Is)::Int)...)
-IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratoreltype(ntuple(n -> IteratorEltype(fieldtype(Is, n)), _counttuple(Is)::Int)...)
+IteratorSize(::Type{Zip{Is}}) where {N, Is<:Tuple{Vararg{Any, N}}} = zip_iteratorsize(ntuple(n -> IteratorSize(fieldtype(Is, n)), N)...)
+IteratorEltype(::Type{Zip{Is}}) where {N, Is<:Tuple{Vararg{Any, N}}} = zip_iteratoreltype(ntuple(n -> IteratorEltype(fieldtype(Is, n)), N)...)
 
 zip_iteratorsize() = IsInfinite()
 zip_iteratorsize(I) = I
@@ -839,7 +863,7 @@ length(d::Drop) = _diff_length(d.xs, 1:d.n, IteratorSize(d.xs), HasLength())
 
 function iterate(it::Drop)
     y = iterate(it.xs)
-    for i in 1:it.n
+    for _ in 1:it.n
         y === nothing && return y
         y = iterate(it.xs, y[2])
     end
@@ -859,7 +883,7 @@ end
 """
     takewhile(pred, iter)
 
-An iterator that generates element from `iter` as long as predicate `pred` is true,
+An iterator that generates elements from `iter` as long as predicate `pred` is true,
 afterwards, drops every element.
 
 !!! compat "Julia 1.4"
@@ -906,7 +930,7 @@ end
 """
     dropwhile(pred, iter)
 
-An iterator that drops element from `iter` as long as predicate `pred` is true,
+An iterator that drops elements from `iter` as long as predicate `pred` is true,
 afterwards, returns every element.
 
 !!! compat "Julia 1.4"
@@ -1105,8 +1129,8 @@ true
 product(iters...) = ProductIterator(iters)
 
 IteratorSize(::Type{ProductIterator{Tuple{}}}) = HasShape{0}()
-IteratorSize(::Type{ProductIterator{T}}) where {T<:Tuple} =
-    prod_iteratorsize(ntuple(n -> IteratorSize(fieldtype(T, n)), _counttuple(T)::Int)..., HasShape{0}())
+IteratorSize(::Type{ProductIterator{T}}) where {N, T<:Tuple{Vararg{Any, N}}} =
+    prod_iteratorsize(ntuple(n -> IteratorSize(fieldtype(T, n)), N)..., HasShape{0}())
 
 prod_iteratorsize() = HasShape{0}()
 prod_iteratorsize(I) = I
@@ -1145,15 +1169,15 @@ length(P::ProductIterator) = reduce(checked_mul, size(P); init=1)
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
 
-function IteratorEltype(::Type{ProductIterator{T}}) where {T<:Tuple}
-    E = ntuple(n -> IteratorEltype(fieldtype(T, n)), _counttuple(T)::Int)
+function IteratorEltype(::Type{ProductIterator{T}}) where {N, T<:Tuple{Vararg{Any, N}}}
+    E = ntuple(n -> IteratorEltype(fieldtype(T, n)), N)
     any(I -> I == EltypeUnknown(), E) && return EltypeUnknown()
     return E[end]
 end
 
 eltype(::Type{ProductIterator{I}}) where {I} = _prod_eltype(I)
 _prod_eltype(::Type{Tuple{}}) = Tuple{}
-_prod_eltype(::Type{I}) where {I<:Tuple} = TupleOrBottom(ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...)
+_prod_eltype(::Type{I}) where {N, I<:Tuple{Vararg{Any, N}}} = TupleOrBottom(ntuple(n -> eltype(fieldtype(I, n)), N)...)
 
 iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
@@ -1250,8 +1274,12 @@ flatten(itr) = Flatten(itr)
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
 
 # For tuples, we statically know the element type of each index, so we can compute
-# this at compile time.
-function eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}}
+# this at compile time. Like `Zip`'s `eltype`, bind the length `N` as a static
+# parameter: `fieldtypes` needs an egality-pinned `I` to fold (#61323).
+function eltype(::Type{Flatten{I}}) where {N, I<:Tuple{Vararg{Any, N}}}
+    afoldl((T, i) -> promote_typejoin(T, eltype(i)), Union{}, ntuple(n -> fieldtype(I, n), N)...)
+end
+function eltype(::Type{Flatten{I}}) where {I<:NamedTuple}
     afoldl((T, i) -> promote_typejoin(T, eltype(i)), Union{}, fieldtypes(I)...)
 end
 
@@ -1541,7 +1569,7 @@ approx_iter_type(itrT::Type) = _approx_iter_type(itrT, Base._return_type(iterate
 # having to typesplit on Nothing
 function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
     valstate === nothing && return nothing
-    val, st = valstate
+    _, st = valstate
     return iterate(itr, st)
 end
 function _approx_iter_type(itrT::Type, vstate::Type)
@@ -1562,7 +1590,7 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(Base.EOFError())
     else
         val, state = vs
-        Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
+        setfield!(s, :nextvalstate, iterate(s.itr, state))
         return val
     end
 end

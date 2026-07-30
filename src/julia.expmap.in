@@ -29,6 +29,7 @@
     _jl_timing_*;
     JLJIT*;
     llvmGetPassPluginInfo*;
+    MMTK_*;
 
     /* freebsd */
     environ*;

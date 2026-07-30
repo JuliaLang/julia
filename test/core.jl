@@ -37,9 +37,9 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :flags, :precompile, :time_compile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :flags, :time_compile]),
         (Core.Method, [:primary_world, :did_scan_source, :dispatch_status, :interferences]),
-        (Core.MethodInstance, [:cache, :flags, :dispatch_status]),
+        (Core.MethodInstance, [:cache, :flags, :dispatch_status, :precompile]),
         (Core.MethodTable, [:defs]),
         (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
@@ -48,7 +48,7 @@ for (T, c) in (
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
-        (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
+        (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at, :waiting_on]),
         (Core.BindingPartition, [:min_world, :max_world, :next]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
@@ -195,7 +195,7 @@ f11840(::DataType) = "DataType"
 f11840(::UnionAll) = "UnionAll"
 f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 @test f11840(Type) == "UnionAll"
-@test f11840(Type.body) == "DataType"
+@test f11840(Type.body) == "Type"
 @test f11840(Union{Int,Int8}) == "Type"
 @test f11840(Tuple) == "Tuple"
 @test f11840(TT11840) == "Tuple"
@@ -231,6 +231,40 @@ h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Union{Vector.body, Matrix.body}) == '2'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
+
+# issue #61242: free-TypeVar bodies and their enclosing UnionAlls bind as
+# distinct type objects.
+let f61242(::Type{T}) where T = T
+    @test f61242(Vector.body) === Vector.body
+    @test f61242(Vector) === Vector
+end
+let g61242(::Type{T}) where T = T
+    @test g61242(Vector) === Vector
+    @test g61242(Vector.body) === Vector.body
+end
+
+# sparam definedness must agree across `==`-equal representations of a type
+# argument (#61323): a closed `==`-keyed callsite may fold `@isdefined`, an
+# abstract one (where some member leaves the var unbound) must not
+let S = Tuple{S2} where S2<:Int
+    fdef(t::Type{<:Tuple{Vararg{E}}}) where E = @isdefined(E) ? E : :undef
+    @test S == Tuple{Int} && S !== Tuple{Int}
+    @test fdef(Tuple{Int}) === Int
+    @test fdef(S) === Int
+    feq(tarr, i) = fdef(tarr[i])
+    @test feq(Type{Tuple{Int}}[S, Tuple{Int}], 1) === Int
+    @test feq(Type{Tuple{Int}}[S, Tuple{Int}], 2) === Int
+    @test feq(Type{<:Tuple{Vararg{Int,N}} where N}[Tuple{}], 1) === :undef
+end
+# the same rule is a property of the `Type{<:X}` *range*, not of `Vararg`: a
+# fixed-length tuple range still admits the `Union{}` (Bottom) member, which
+# binds no parameter, so a barrier call through it folds `@isdefined` to false
+# rather than leaking the env-uncertainty marker (#61323)
+let frng(t::Type{<:Tuple{E}}) where E = @isdefined(E) ? E : :undef
+    feqr(tarr, i) = frng(tarr[i])
+    @test feqr(Type{<:Tuple{Int}}[Tuple{Int}], 1) === Int
+    @test feqr(Type{<:Tuple{Int}}[Union{}], 1) === :undef
+end
 
 # show that we don't make the cache confused by using alternative representations
 # when specificity is reversed
@@ -346,6 +380,15 @@ end
 @test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
 @test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
 
+# issue #61876: a UnionAll operand over a bounded type parameter must still join
+# to the common wrapper rather than collapsing to Any (a free TypeVar parameter
+# no longer subtypes a bounded wrapper var, so typejoin detects shared families
+# by type name).
+abstract type AbstractCfg61876{O<:Integer} end
+struct Cfg61876{O<:Integer, T} <: AbstractCfg61876{O} end
+@test typejoin(Cfg61876{<:Integer, Tuple{Int,Int}}, Cfg61876{Int, Tuple{Int}}) === Cfg61876
+@test typejoin(Cfg61876{<:Integer, Int}, AbstractCfg61876{Int}) === AbstractCfg61876
+
 # issue #26321
 struct T26321{N,S<:NTuple{N}}
     t::S
@@ -362,14 +405,113 @@ end
 
 @test Base.return_types() do
     typejoin(Int, UInt)
-end  |> only == Type{typejoin(Int, UInt)}
+end  |> only == Core.TypeEgal{typejoin(Int, UInt)}
 @test Base.return_types() do
     typejoin(Int, UInt, Float64)
-end  |> only == Type{typejoin(Int, UInt, Float64)}
+end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 
 @test typejoin(1, 2) === Any
 @test typejoin(1, 2, 3) === Any
 @test typejoin(Int, Int, 3) === Any
+
+# issue #61915: typejoin must stay sound when an operand is a `Type{X}` kind. Because
+# `typeof(Type{X})` is not a `DataType` under the TypeEq kind, joining a kind with an
+# unrelated non-`Type` operand must give `Any`, not `Type`.
+@test typejoin(Symbol, Type{Int}) === Any
+@test typejoin(Type{Int}, Symbol) === Any
+@test typejoin(Type{Int}, Int) === Any
+@test typejoin(Type{Int}, String) === Any
+@test typejoin(Type{Int}, Type{Float64}) === Type
+@test typejoin(Type{Int}, Type) === Type
+@test typejoin(Type{Int}, DataType) === Type
+@test typejoin(Symbol, Type{Int}) === typejoin(Type{Int}, Symbol)
+@test typejoin(DataType, Type{Int}) === typejoin(Type{Int}, DataType)
+@test typejoin(Core.TypeEgal{Int}, Core.TypeEgal{String}) === DataType
+@test typejoin(Core.TypeEgal{Int}, DataType) === DataType
+@test typejoin(Core.TypeEgal{Int}, Type{String}) === Type
+@test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, Int) == 1
+@test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, String) == 0
+
+# `isType` covers both type-object kinds; use split predicates when exactness matters.
+@test Base.isType(Type{Int})
+@test Base.isType(Core.TypeEgal{Int})
+@test Base.isTypeEq(Type{Int})
+@test !Base.isTypeEq(Core.TypeEgal{Int})
+@test !Base.isTypeEgal(Type{Int})
+@test Base.isTypeEgal(Core.TypeEgal{Int})
+
+# issue #61915: a method whose function type is `Type{Foo{...} where ...}` must derive its
+# name as `Foo`, not `:Any` (argument_datatypename has to unwrap the wrapped UnionAll).
+struct UA61915{T,N,A<:AbstractArray{T,N}}
+    a::A
+end
+UA61915{T}(a) where {T} = UA61915{T,ndims(a),typeof(a)}(a)
+@test all(m -> m.name === :UA61915, methods(UA61915))
+@test which(UA61915{Int}, (Vector{Int},)).name === :UA61915
+@test ccall(:jl_argument_datatype, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array)
+@test ccall(:jl_argument_datatype, Any, (Any,), Union{Tuple{Int},Tuple{Int,Int}}) === nothing
+@test ccall(:jl_argument_datatypename, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array).name
+@test ccall(:jl_argument_datatypename, Any, (Any,), Union{Tuple{Int},Tuple{Int,Int}}) === Tuple.name
+
+# issue #62001: a runtime-constructed UnionAll that is `==`-but-not-`===` the interned
+# `Foo{lines}` (differing only in a bound typevar's name) must still dispatch and run
+# correctly. `Core.TypeEgal` is `===`-keyed, so the two reps get distinct egal
+# MethodInstances instead of the cache binding one to a non-`===` argument (which would
+# trip the `Expr(:invoke)` validity check).
+struct Foo62001{F,T} end
+struct lines62001 end
+@noinline g62001(::Type{P}, x) where {P} = (P, x)
+Base.@assume_effects :foldable mkrep62001() = Foo62001{lines62001, ArgType} where ArgType
+caller62001(x) = g62001(mkrep62001(), x)
+let canon = Foo62001{lines62001}
+    # precondition for the scenario: the runtime-constructed rep must be a
+    # distinct `==` spelling, otherwise the test passes vacuously
+    rep = mkrep62001()
+    @test rep == canon
+    @test rep !== canon
+    g62001(canon, 1.0)                # create the canonical egal MethodInstance + cache
+    @test caller62001(1.0) == (canon, 1.0)
+end
+
+# a `TypeEgal` dispatch key pins the argument by object identity: instantiating
+# the key must not normalize a `==`-equal but non-egal spelling underneath it
+# (here the `Tuple{S} where S<:Int` union component normalizes to `Tuple{Int}`)
+let X = Union{Tuple{S} where S<:Int, Vector{T}} where T
+    @test g62001(X, 1) === (X, 1)
+end
+
+# a `Type{Union{}}` dispatch slot is an exact equality key (the bottom object is
+# the unique instance of its `Type`), so it must remain a compileable spelling
+# even when the method does not declare the slot as a concrete `Type{X}`
+let m = which(g62001, (Type{Union{}}, Int))
+    sig = Tuple{typeof(g62001), Type{Union{}}, Int}
+    @test Base.isdispatchtuple(sig)
+    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, m.sig)
+    @test ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), sig, tienv[2], m) == 1
+end
+
+# a static parameter pinned both by an egality-certain position (an invariant
+# type-tag descent) and by an `==`-only position (a bare argument value seen
+# through `Type{T}`) must bind the canonical type-tag spelling, in either
+# argument order: by-type queries and the runtime MethodInstances they cover
+# then agree on the binding, which is what lets inference treat it as egal
+pinnedspell1_62001(x::Ref{T}, y::Type{T}) where {T} = T
+pinnedspell2_62001(y::Type{T}, x::Ref{T}) where {T} = T
+pinnedspell_valonly_62001(y::Type{T}) where {T} = T
+pinnedspell_fold_62001(x::Ref{T}, y::Type{T}) where {T} = T === Int
+pinnedspell_caller_62001(a, r) = pinnedspell_fold_62001(a, r[]::Type{Int})
+let W = Union{S1,S2} where {S1<:Int,S2<:Int}
+    # precondition: a distinct `==` spelling of Int
+    @test W == Int
+    @test W !== Int
+    @test pinnedspell1_62001(Ref(1), W) === Int
+    @test pinnedspell2_62001(W, Ref(1)) === Int
+    # with no egality-certain position, the binding is the value itself
+    @test pinnedspell_valonly_62001(W) === W
+    # dynamic dispatch and the devirtualized (`==`-keyed) path agree
+    @test pinnedspell_fold_62001(Ref(1), W) === true
+    @test pinnedspell_caller_62001(Ref(1), Ref{Any}(W)) === true
+end
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
@@ -394,6 +536,123 @@ for T in (Nothing, Missing)
     end
     @test Base.promote_typejoin(T, Union{}) === T
     @test Base.promote_typejoin(Union{}, T) === T
+end
+
+# PR #61915: `promote_typejoin_union` must handle `Type{X}` (a `TypeEq` kind), not error
+@test Base.promote_typejoin_union(Type{Int}) === Type{Int}
+@test Base.promote_typejoin_union(Union{Type{Int}, Type{String}}) === Type
+@test fieldtype.(Tuple{Int,Float32,Int}, [1, 2, 3]) == [Int, Float32, Int]
+@test typeof.(Any[Int, "x", 1.0]) == [DataType, String, Float64]
+# PR #61915: dispatching `::Type{Type{T}}` on a `TypeEq`-typed value (e.g. iterating a
+# tuple of `Type{X}` values) must not infer `Union{}` (which crashed via `unreachable`)
+let get_param(::Type{Type{T}}) where {T} = T
+    @test Tuple(get_param(t) for t in (Type{Int}, Type{Float64})) === (Int, Float64)
+end
+
+# PR #61915: dispatch onto an `@nospecialize`d `::Core.AnyType` method with a type-valued
+# argument must hit the method cache (a miss re-runs the full lookup, which allocates).
+# The extra methods keep inference from devirtualizing the call site outright.
+struct AnyTypeCache61915a end
+struct AnyTypeCache61915b end
+anytype_dispatch_61915(::Int8) = 1
+anytype_dispatch_61915(@nospecialize t::Core.AnyType) = 2
+anytype_dispatch_61915(::TypeVar) = 3
+anytype_dispatch_61915(::AnyTypeCache61915a) = 4
+anytype_dispatch_61915(::AnyTypeCache61915b) = 5
+let r = Ref{Any}(Int)
+    @noinline callit() = anytype_dispatch_61915(r[])
+    @test callit() == 2          # dispatches to the `::Core.AnyType` method
+    callit()                     # warmup: populate the method cache
+    @test @allocated(callit()) == 0
+end
+
+# kind-typed (e.g. `::DataType`) and `::Core.AnyType` cache entries must stay reachable
+# (allocation-free dispatch) after the typemap node holding them splits into a level
+anytype_levelsplit_61915(@nospecialize x::Integer) = 1
+anytype_levelsplit_61915(@nospecialize x::AbstractString) = 2
+anytype_levelsplit_61915(@nospecialize x::AbstractFloat) = 3
+anytype_levelsplit_61915(@nospecialize x::AbstractVector) = 4
+anytype_levelsplit_61915(@nospecialize x::Exception) = 5
+anytype_levelsplit_61915(@nospecialize x::IO) = 6
+anytype_levelsplit_61915(@nospecialize x::Function) = 7
+anytype_levelsplit_61915(@nospecialize x::DataType) = 8
+anytype_levelsplit_61915(@nospecialize x::Core.AnyType) = 9
+let f = Ref{Any}(anytype_levelsplit_61915), r = Ref{Any}(Int)
+    @noinline callit() = f[](r[])
+    # populate one widened cache entry per method so the typemap node splits into a level
+    for a in Any[1, "", 1.0, [1], ErrorException(""), IOBuffer(), sin, Int, Union{Int,Char}]
+        r[] = a
+        callit(); callit()
+    end
+    r[] = Int                      # typeof(Int) === DataType: the `::DataType` method
+    @test callit() == 8
+    callit()
+    @test @allocated(callit()) == 0
+    r[] = Union{Int,Char}          # typeof is the `Union` kind: the `::AnyType` method
+    @test callit() == 9
+    callit()
+    @test @allocated(callit()) == 0
+end
+# union-mixed queries take the full-scan intersection path over the method definitions,
+# which must also reach the kind-keyed bucket
+@test any(m -> m.sig == Tuple{typeof(anytype_levelsplit_61915), DataType},
+          methods(anytype_levelsplit_61915, (Union{Type{Int}, Int},)))
+
+# `Core.TypeofBottom` methods filed with the kinds: method matching and dispatch with
+# `Type{...}`-represented queries (e.g. for the value `Union{}`) must reach them after
+# a level split instead of using a less specific `::Type` method
+anytype_bottom_61915(::Core.TypeofBottom) = 0
+anytype_bottom_61915(@nospecialize ::Type) = 1
+anytype_bottom_61915(::Integer) = 2
+anytype_bottom_61915(::AbstractString) = 3
+anytype_bottom_61915(::AbstractFloat) = 4
+anytype_bottom_61915(::AbstractVector) = 5
+anytype_bottom_61915(::Exception) = 6
+anytype_bottom_61915(::IO) = 7
+anytype_bottom_61915(::Function) = 8
+let f = Ref{Any}(anytype_bottom_61915), r = Ref{Any}(Union{})
+    @noinline callit() = f[](r[])
+    @test callit() == 0
+    @test length(methods(anytype_bottom_61915, (Type,))) == 2
+end
+
+# Compiled calls must keep the `Type{Union{}}` singleton key when binding static
+# parameters for `::Type{T}` methods.
+@noinline typeofbottom_sparam_62001(::Type{T}) where {T} = Vector{T}()
+typeofbottom_sparam_call_62001() = typeofbottom_sparam_62001(Core.TypeofBottom.instance)
+@test typeofbottom_sparam_call_62001() == Union{}[]
+
+# Precompile hints should canonicalize `Core.TypeofBottom` to the singleton
+# `Type{Union{}}` dispatch spelling.
+@test precompile(Tuple{typeof(Base.typejoin), Core.TypeofBottom, Any})
+@test precompile(Tuple{typeof(Base.typejoin), Any, Core.TypeofBottom})
+
+# Exception edges carrying `Union{}` use a PhiC slot typed as the `Type{Union{}}` singleton.
+function typeofbottom_phic_62001(sig)
+    try
+        (Base.inferencebarrier(identity))(nothing)
+    catch
+        Base.inferencebarrier(sig)
+    end
+    return sig
+end
+@test precompile(Tuple{typeof(typeofbottom_phic_62001), Core.TypeofBottom})
+@test typeofbottom_phic_62001(Union{}) === Union{}
+
+# specializations are deduplicated by type equality (`Type == Core.AnyType`), so
+# `specTypes` carries whichever representation was interned first and
+# `jl_isa_compileable_sig` must accept both
+anytype_compilesig_61915(io::IO, T::Type) = 1
+let m = only(methods(anytype_compilesig_61915))
+    miA = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any),
+                m, Tuple{typeof(anytype_compilesig_61915), IOBuffer, Core.AnyType}, Core.svec())
+    miB = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any),
+                m, Tuple{typeof(anytype_compilesig_61915), IOBuffer, Type}, Core.svec())
+    @test miA === miB
+    for S in (Type, Core.AnyType)
+        sig = Tuple{typeof(anytype_compilesig_61915), IOBuffer, S}
+        @test ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), sig, Core.svec(), m) == 1
+    end
 end
 
 @test promote_type(Bool,Bottom) === Bool
@@ -577,6 +836,18 @@ sptest4(x::T, y::T) where {T} = 42
 sptest4(x::T, y) where {T} = 44
 @test sptest4(1,2) == 42
 @test sptest4(1, "cat") == 44
+
+# A method that binds a where-parameter across two arms of a Union: when the
+# argument satisfies the signature only with `T` left unconstrained, dispatch
+# must succeed without throwing in static-parameter matching.
+abstract type SPTestArr5{S,T,N} end
+sptest5(positions::AbstractVector{<:Union{NTuple{N,T}, SPTestArr5{Tuple{N}, T, 1}}}) where {N, T <: Real} =
+    (N, @isdefined(T) ? T : nothing)
+@test sptest5([(1.0, 2.0)]) === (2, Float64)        # T uniquely bound to Float64
+let (n, t) = sptest5([(1, 2.0)])
+    @test n === 2
+    @test t === nothing || t === Union{Int, Float64} || t === Real
+end
 
 # closures
 function clotest()
@@ -851,13 +1122,17 @@ end
 let f = g -> x -> g(x)
     @test f(Int)(1.0) === 1
     @test @inferred(f(Int)) isa Function
-    @test fieldtype(typeof(f(Int)), 1) === Type{Int}
+    @test fieldtype(typeof(f(Int)), 1) === Core.TypeEgal{Int}
     @test @inferred(f(Rational{Int})) isa Function
-    @test fieldtype(typeof(f(Rational{Int})), 1) === Type{Rational{Int}}
-    @test_broken @inferred(f(Rational)) isa Function
-    @test fieldtype(typeof(f(Rational)), 1) === Type{Rational}
-    @test_broken @inferred(f(Rational{Core.TypeVar(:T)})) isa Function
+    @test fieldtype(typeof(f(Rational{Int})), 1) === Core.TypeEgal{Rational{Int}}
+    @test @inferred(f(Rational)) isa Function
+    @test fieldtype(typeof(f(Rational)), 1) === Core.TypeEgal{Rational}
+    @test f(Rational{Core.TypeVar(:T)}) isa Function
     @test fieldtype(typeof(f(Rational{Core.TypeVar(:T)})), 1) === DataType
+end
+let T = Core.TypeVar(:T), g = Base.Generator(Rational{T}, 1:1)
+    @test g.f === Rational{T}
+    @test fieldtype(typeof(g), :f) === DataType
 end
 let f() = (T = Rational{Core.TypeVar(:T)}; () -> T)
     @test f() isa Function
@@ -3617,6 +3892,12 @@ function f11355(arg::DataType)
     end
     return 100
 end
+function f11355(arg::TypeEq)
+    if Base.type_parameter(arg) <: Tuple
+        return 200
+    end
+    return 100
+end
 let t = Tuple{Type{Vector{Int}}}
     @test f11355(t) == 100
     t = Tuple{Type{Dict{K} where K}}
@@ -3936,7 +4217,7 @@ struct B
     a::A
 end
 @eval function f1()
-    # Emitting this direction is not recommended but it can come from `convert` that does not
+    # Emitting this directly is not recommended but it can come from `convert` that does not
     # return the correct type.
     $(Expr(:new, B, 1))
 end
@@ -5910,10 +6191,18 @@ end
 
 # make sure VecElement Tuple has the C alignment and ABI for supported types
 primitive type Int24 24 end
+primitive type VecUInt63 63 end
+vecuint63(x) = Core.Intrinsics.trunc_int(VecUInt63, UInt64(x))
+@noinline second_vecuint63(v) = Core.Intrinsics.zext_int(UInt64, v[2].value)
 @test Base.datatype_alignment(NTuple{10,VecElement{Int16}}) == 32
 @test Base.datatype_alignment(NTuple{10,VecElement{Int24}}) == 4
 @test Base.datatype_alignment(NTuple{10,VecElement{Int64}}) == 128
 @test Base.datatype_alignment(NTuple{10,VecElement{Int128}}) == 256
+let v = (VecElement(vecuint63(1)), VecElement(vecuint63(2)))
+    @test fieldoffset(typeof(v), 2) == 8
+    @test Core.Intrinsics.zext_int(UInt64, getfield(v, 2).value) == 2
+    @test second_vecuint63(v) == 2
+end
 
 # issue #21516
 struct T21516
@@ -6306,7 +6595,7 @@ initvalue2(::Type{T}) where {T <: Number} = T(1)
 U = unboxedunions[1]
 
 @noinline compare(a, b) = (a === b) # make sure we are testing code-generation of `is`
-egal(x, y) = (ccall(:jl_egal, Cint, (Any, Any), x, y) != 0) # make sure we are NOT testing code-generate of `is`
+egal(x, y) = (ccall(:jl_egal, Cint, (Any, Any), x, y) != 0) # make sure we are NOT testing code-generation of `is`
 
 mutable struct UnionField
     u::U
@@ -7138,7 +7427,7 @@ end
 # issue #21004
 const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
 @test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
-@test_throws UndefVarError(:T, :static_parameter) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+@test_throws MethodError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
 
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
@@ -7731,7 +8020,7 @@ end
 struct B40050 <: Ref{Tuple{B40050}}
 end
 @test string((B40050(),)) == "($B40050(),)"
-@test_broken isbitstype(Tuple{B40050})
+@test isbitstype(Tuple{B40050})
 
 # issue #41654
 struct X41654 <: Ref{X41654}
@@ -7836,9 +8125,33 @@ using Test
 struct T36104
     v::Vector{M36104.T36104}
 end
+const orig_T36104 = T36104
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
 end
+@test T36104 === orig_T36104
+# issue #61789: self-referential struct redefinition must reuse the binding
+struct R61789
+    x
+    next::R61789
+end
+const orig_R61789 = R61789
+struct R61789
+    x
+    next::R61789
+end
+@test R61789 === orig_R61789
+# negative case: a field type that genuinely differs must produce a new type
+struct R61789neg
+    x
+    next::R61789neg
+end
+const orig_R61789neg = R61789neg
+struct R61789neg
+    x::Int
+    next::R61789neg
+end
+@test R61789neg !== orig_R61789neg
 struct S36104{K,V}
     v::S36104{K,V}
     S36104{K,V}() where {K,V} = new()
@@ -8078,6 +8391,32 @@ let vnull1 = NullableHomogeneousPointerImmutable(),
     @test vnull2 !== v2
     @test !unopt_jl_egal(vnull2, v2)
     @test !opt_jl_egal(vnull2, v2)
+end
+
+# #62095 - egal on large structs (> 512 bytes) with both ptrs and bits has
+# incorrect alias info
+struct MixedGC
+    obj::Base.RefValue{Int}
+    bits::Int
+end
+# 65 elements, so it's large enough to fail on both 32 and 64 bit
+let x = ntuple(i -> MixedGC(Base.RefValue(i), i), Val(65))
+    y = ntuple(i -> MixedGC(x[i].obj, i*2), Val(65))
+    z = ntuple(i -> MixedGC(Base.RefValue(i), i), Val(65))
+
+    @test unopt_jl_egal(x, x)
+    @test unopt_jl_egal(y, y)
+    @test unopt_jl_egal(z, z)
+    @test !unopt_jl_egal(x, y)
+    @test !unopt_jl_egal(x, z)
+    @test !unopt_jl_egal(y, z)
+
+    @test opt_jl_egal(x, x)
+    @test opt_jl_egal(y, y)
+    @test opt_jl_egal(z, z)
+    @test !opt_jl_egal(x, y)
+    @test !opt_jl_egal(x, z)
+    @test !opt_jl_egal(y, z)
 end
 
 # Make sure non-allbits union is handled correctly
@@ -8431,8 +8770,20 @@ end
 @test Int isa Type{Union{Int,T1}} where {T1}
 @test Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}}} where {T1}
 @test Int isa Union{Union, Type{Union{Int,T1}}} where {T1}
-@test_broken Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}} where {T1}}
-@test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
+@test Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}} where {T1}}
+@test Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
+
+# Compiled `isa(::Type, ::Type{T})` must check the type value, not only `typeof`.
+@noinline isa_type_unionall_62001(v::Type) = v isa Type{UnionAll}
+@noinline isa_typeegal_unionall_62001(v::Type) = v isa Core.TypeEgal{UnionAll}
+@test isa_type_unionall_62001(UnionAll)
+@test isa_typeegal_unionall_62001(UnionAll)
+
+mutable struct TypeFieldUnionAll62001{T}
+    t::Type{T}
+end
+@noinline construct_typefield_unionall_62001(T::Type, v::Type) = T(v)
+@test construct_typefield_unionall_62001(TypeFieldUnionAll62001{UnionAll}, UnionAll).t === UnionAll
 
 let M = @__MODULE__
     Core.eval(M, :(global a_typed_global))
@@ -8546,7 +8897,7 @@ let load_path = mktempdir()
             end
             """)
 
-        # when referring an method table in another module,
+        # when referring to a method table in another module,
         # the overlay method needs to be discovered explicitly
         Bar = Base.require(Main, :Bar)
         @test length(Bar.mt) == 0
@@ -8783,3 +9134,151 @@ module AmbiguousUsing60659
     using .D, .A
     @test_throws UndefVarError X
 end
+
+# Behavior of TypeVar with lower bound
+f_def_typevar_with_lowerbound(x::T) where {T>:Int} = @isdefined(T) ? T : false
+let r = f_def_typevar_with_lowerbound(1.0)
+    @test r === false || r === Union{Int, Float64}
+end
+f_value_typevar_with_lowerbound(x::T) where {T>:Int} = T
+@test_throws UndefVarError(:T, :static_parameter) f_value_typevar_with_lowerbound(1.0)
+
+# Static parameters constrained indirectly through other static-parameter bounds
+# are defined.
+f1_sparam_defined_62099(t::Type{E}) where E = @isdefined(E)
+f2_sparam_defined_62099(t::Type{T}) where {E, T<:E} = @isdefined(E)
+f3_sparam_defined_62099(t::Type{T}) where {E, E<:T<:E} = @isdefined(E)
+ftuple_sparam_defined_62099(t::Type{T}) where {E, T<:Tuple{E}} = @isdefined(E)
+fvararg_sparam_defined_62099(t::Type{T}) where {E, T<:Tuple{Vararg{E}}} = @isdefined(E)
+g1_sparam_value_62099(t::Type{E}) where E = E
+g2_sparam_value_62099(t::Type{T}) where {E, T<:E} = E
+gtuple_sparam_value_62099(t::Type{T}) where {E, T<:Tuple{E}} = E
+gvararg_sparam_value_62099(t::Type{T}) where {E, T<:Tuple{Vararg{E}}} = E
+for T in (Int, Integer, Real, Any, Union{Int,String}, Type{Int}, Vector)
+    @test f1_sparam_defined_62099(T)
+    @test f2_sparam_defined_62099(T)
+    @test f3_sparam_defined_62099(T)
+    @test ftuple_sparam_defined_62099(Tuple{T})
+    @test fvararg_sparam_defined_62099(Tuple{T})
+end
+@test !fvararg_sparam_defined_62099(Tuple{})
+@test g1_sparam_value_62099(Type{Int}) === Type{Int}
+@test g2_sparam_value_62099(Type{Int}) === Type{Int}
+@test gtuple_sparam_value_62099(Tuple{Type{Int}}) === Type{Int}
+@test gvararg_sparam_value_62099(Tuple{Type{Int}}) === Type{Int}
+
+# An inferred / constant-folded type must not contain a `(tvar, constrains_bool)`
+# SimpleVector pair as a type parameter. The intersection-env svec format must
+# stay confined to env entries; downstream consumers of intersection results
+# (apply_type, return_type inference) must unwrap before using values as types.
+struct _EnvLeak_Foo{N} end
+function _envleak_build(n::Int)
+    VD = Vector{_EnvLeak_Foo{n}}
+    a = VD(undef, 1)
+    b = unsafe_wrap(VD, pointer(a), 1)
+    return typeof(b)
+end
+@test _envleak_build(3) === Vector{_EnvLeak_Foo{3}}
+
+# (#61914) when transforming UnionAll of Union to Union of UnionAll, don't
+# re-wrap members of the union that were not beneath the UnionAll with the type
+# variable.
+let T = TypeVar(:T)
+    a = UnionAll(T, Union{Vector{T}, Int64})
+    @test Union{T, a} == Union{a, T} == Union{T, Int64, Vector}
+end
+
+# Vector/Memory with Type{Union{}} elements: the element layout aliases the
+# typeof(Union{}) singleton (cf. normalize_typeofbottom_layout_alias), so the
+# elements are stored inline with zero size and reads produce the value
+# Union{} itself
+let v = Vector{Type{Union{}}}()
+    push!(v, Union{})
+    @test v[1] === Union{}
+    @test length(v) == 1
+    @test Base.elsize(typeof(v)) == 0
+    @test Base.aligned_sizeof(Type{Union{}}) == 0
+    @test copy(v)[1] === Union{}
+    @test eltype(similar(v)) == Type{Union{}}
+    # the type object Type{Union{}} is not an element of Type{Union{}}
+    @test_throws MethodError push!(v, Type{Union{}})
+    m = Memory{Type{Union{}}}(undef, 2)
+    m[1] = Union{}
+    @test m[1] === Union{} && m[2] === Union{}
+    u = Vector{Union{Type{Union{}},Int}}()
+    push!(u, 3)
+    push!(u, Union{})
+    @test u[1] === 3 && u[2] === Union{}
+end
+
+# Pinned static-parameter uncertainty markers (`==`-only bindings) must be
+# defined and read as their `==`-representative in every runtime consumer
+# (compiled sparam loads, the inlined `_compute_sparams` path, generated
+# function expansion); an egal-pinned dispatch tuple must bind such sparams by
+# identity in the first place, even through nested equality wrappers
+# (`Type{<:Type{Val{S}}}`, cf. the CompTime.jl/ACSets.jl pattern).
+struct PinnedSchema62001{A,B,C,D,E,F} end
+abstract type PinnedPL62001 end
+struct PinnedDP62001 <: PinnedPL62001 end
+struct PinnedSA62001{X} end
+const pinned_schema_62001 = PinnedSchema62001{Symbol, Tuple{:S,:T}, Tuple{(:ts,:T,:S)}, Tuple{:Name}, Tuple{(:sname,:S,:Name)}, Tuple{}}
+@noinline pinned_gc_62001(::Type{<:PinnedSA62001{<:PinnedPL62001}}, ::Type{<:Type{Val{S}}}, ::Type{<:Type{Val{Ts}}}, ::Type, ::Type{<:Type{Val{f}}}, ::Type) where {S,Ts,f} =
+    (S, Ts, f, @isdefined(S))
+pinned_gci_62001(::Type{<:PinnedSA62001{<:PinnedPL62001}}, ::Type{<:Type{Val{S}}}, ::Type{<:Type{Val{Ts}}}, ::Type, ::Type{<:Type{Val{f}}}, ::Type) where {S,Ts,f} =
+    (S, Ts, f)
+# The first dispatch happens inside a generator, where inference is
+# unavailable: the callee runs through generically-compiled code that reads
+# its sparams at runtime (non-inlined callee), or through the inlined
+# `_compute_sparams` path (inlinable callee).
+@generated pinned_trigger_62001(x) =
+    QuoteNode(pinned_gc_62001(PinnedSA62001{<:PinnedDP62001}, Type{Val{pinned_schema_62001}}, Type{Val{Tuple{Int}}}, Any, Type{Val{:x}}, Any))
+@generated pinned_trigger_inl_62001(x) =
+    QuoteNode(pinned_gci_62001(PinnedSA62001{<:PinnedDP62001}, Type{Val{pinned_schema_62001}}, Type{Val{Tuple{Int}}}, Any, Type{Val{:x}}, Any))
+@test pinned_trigger_62001(1) === (pinned_schema_62001, Tuple{Int}, :x, true)
+@test pinned_trigger_inl_62001(1) === (pinned_schema_62001, Tuple{Int}, :x)
+@test invokelatest(pinned_gci_62001, PinnedSA62001{<:PinnedDP62001}, Type{Val{pinned_schema_62001}}, Type{Val{Tuple{Int}}}, Any, Type{Val{:x}}, Any) ===
+    (pinned_schema_62001, Tuple{Int}, :x)
+# a generated function's generator receives the representative value
+@generated pinned_gg_62001(::Type{<:Type{Val{S}}}) where {S} = QuoteNode(S)
+@test pinned_gg_62001(Type{Val{pinned_schema_62001}}) === pinned_schema_62001
+
+# issue #52533: an unrelated try/catch should not keep values rooted in its PhiC
+# slots for the remainder of the enclosing function
+mutable struct Issue52533 end
+@noinline function issue52533(freed::Ref{Bool}, throw_::Bool)
+    b = nothing
+    try
+        x = Issue52533()
+        finalizer(_ -> (freed[] = true), x)
+        b = x
+        throw_ && Base.inferencebarrier(throw)(ErrorException("52533"))
+        Base.inferencebarrier(identity)(nothing)
+    catch
+        b isa Issue52533 && Base.donotdelete(b)
+    end
+    b = nothing
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533(Ref(false), false)  # normal exit from the try region
+@test issue52533(Ref(false), true)   # exit through the catch block
+
+# ... and this holds for a value the try region never touches on the executed
+# path: slot2ssa snapshots each PhiC variable into its slot ahead of the `enter`,
+# so the region pins whatever the variable held on the way in
+@noinline issue52533_never() = Base.inferencebarrier(false)::Bool
+@noinline function issue52533_beside(freed::Ref{Bool})
+    b = Issue52533()
+    finalizer(_ -> (freed[] = true), b)
+    Base.donotdelete(b)
+    try
+        Base.inferencebarrier(identity)(nothing)
+        issue52533_never() && (b = nothing)
+    catch
+        b === nothing || Base.donotdelete(b)
+    end
+    b = nothing
+    GC.gc(true); GC.gc(true)
+    return freed[]
+end
+@test issue52533_beside(Ref(false))

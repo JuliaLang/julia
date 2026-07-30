@@ -47,8 +47,7 @@ static const size_t sig_stack_size = 8 * 1024 * 1024;
 #include "julia_assert.h"
 
 // helper function for returning the unw_context_t inside a ucontext_t
-// (also used by stackwalk.c)
-bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT
+static bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT
 {
 #ifdef __APPLE__
     return (bt_context_t*)&((ucontext64_t*)sigctx)->uc_mcontext64->__ss;
@@ -65,8 +64,6 @@ bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT
 
 static int thread0_exit_count = 0;
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
-
-int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf);
 
 #if !defined(_OS_DARWIN_)
@@ -201,7 +198,7 @@ static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr) JL_NOTSAFEPOINT
 
 // Modify signal context `_ctx` so that `fptr` will execute when the signal returns
 // The function `fptr` itself must not return.
-JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
+JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void) JL_CANSAFEPOINT, int sig, void *_ctx)
 {
     // Modifying the ucontext should work but there is concern that
     // sigreturn oriented programming mitigation can work against us
@@ -353,12 +350,16 @@ static int is_addr_on_stack(jl_task_t *ct, void *addr) JL_NOTSAFEPOINT
             (char*)addr < (char*)ct->ctx.stkbuf + ct->ctx.bufsz);
 }
 
-static void sigdie_handler(int sig, siginfo_t *info, void *context)
+static void sigdie_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEPOINT
 {
     signal(sig, SIG_DFL);
     uv_tty_reset_mode();
     if (sig == SIGILL)
         jl_fprint_sigill(ios_safe_stderr, context);
+    // si_addr is only valid for fault-generated signals (positive si_code),
+    // not for signals sent by kill/sigqueue and friends
+    if ((sig == SIGSEGV || sig == SIGBUS) && info->si_code > 0)
+        jl_safe_fprintf(ios_safe_stderr, "Fault at memory address: %p\n", info->si_addr);
     jl_task_t *ct = jl_get_current_task();
     jl_fprint_critical_error(ios_safe_stderr, sig, info->si_code, jl_to_bt_context(context), ct);
     if (ct)
@@ -425,7 +426,7 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 }
 #endif
 
-static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx);
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx) JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1);
 
 #if defined(HAVE_MACH)
 #include "signals-mach.c"
@@ -511,7 +512,7 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context) JL_NOTSAF
             is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
 }
 
-JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
+JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEPOINT
 {
     assert(sig == SIGSEGV || sig == SIGBUS);
     jl_jmp_buf *saferestore = jl_get_safe_restore();
@@ -535,7 +536,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         // thread. That will quickly be rectified when we rerun the faulting
         // instruction and end up right back here, or we start to run the
         // exception handler and immediately hit the safepoint there.
-        if (ct->ptls->defer_signal) {
+        if (ct->ptls->defer_signal || ct->eh == NULL) {
             jl_safepoint_defer_sigint();
         }
         else if (jl_safepoint_consume_sigint()) {
@@ -573,8 +574,10 @@ static int exit_signal_cond = -1;
 static int signal_caught_cond = -1;
 static int signals_inflight = 0;
 
-static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx) JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1)
 {
+    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return 0;
     int err;
     pthread_mutex_lock(&in_signal_lock);
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -655,7 +658,7 @@ void jl_thread_resume(int tid)
 
 // Throw jl_interrupt_exception if the master thread is in a signal async region
 // or if SIGINT happens too often.
-static void jl_try_deliver_sigint(void)
+static void jl_try_deliver_sigint(void) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     jl_safepoint_enable_sigint();
@@ -671,9 +674,9 @@ static void jl_try_deliver_sigint(void)
 // Write only by signal handling thread, read only by main thread
 // no sync necessary.
 static int thread0_exit_signo = 0;
-static void jl_exit_thread0_cb(void)
+static void jl_exit_thread0_cb(void) JL_CANSAFEPOINT
 {
-    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    jl_gc_enable_from_nonmutator(1);
     jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(thread0_exit_signo);
@@ -705,7 +708,7 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 //     is reached
 //  3: raise `thread0_exit_signo` and try to exit
 //  4: no-op
-void usr2_handler(int sig, siginfo_t *info, void *ctx)
+void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL)
@@ -746,13 +749,14 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
     if (request == 2) {
         int force = jl_check_force_sigint();
-        if (force || (!ptls->defer_signal && ptls->io_wait)) {
+        jl_jmp_buf *saferestore = jl_get_safe_restore();
+        int can_throw = saferestore != NULL || ct->eh != NULL;
+        if (can_throw && (force || (!ptls->defer_signal && ptls->io_wait))) {
             jl_safepoint_consume_sigint();
             if (force)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
             // Force a throw
             jl_clear_force_sigint();
-            jl_jmp_buf *saferestore = jl_get_safe_restore();
             if (saferestore) // restarting jl_ or profile
                 jl_longjmp_in_ctx(sig, ctx, *saferestore);
             else
@@ -792,12 +796,18 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
     sigprof.sigev_notify = SIGEV_SIGNAL;
     sigprof.sigev_signo = SIGUSR1;
     sigprof.sigev_value.sival_ptr = &timerprof;
+    // hold the lock so that `jl_profile_init` cannot free the buffer while we transition to running.
+    // Safe to hold across `timer_settime`: SIGUSR1 is blocked in every thread and consumed by the
+    // dedicated `signal_listener` thread via `sigwait`, so no in-thread handler can run here and
+    // deadlock trying to take this same lock.
+    uv_mutex_lock(&bt_data_prof_lock);
     // Because SIGUSR1 is multipurpose, set `profile_running` before so that we know that the first SIGUSR1 came from the timer
     profile_running = 1;
     profile_all_tasks = all_tasks;
     if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1) {
         profile_running = 0;
         profile_all_tasks = 0;
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -2;
     }
 
@@ -809,8 +819,10 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
     if (timer_settime(timerprof, 0, &itsprof, NULL) == -1) {
         profile_running = 0;
         profile_all_tasks = 0;
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -3;
     }
+    uv_mutex_unlock(&bt_data_prof_lock);
     return 0;
 }
 
@@ -848,7 +860,7 @@ static void allocate_segv_handler(void)
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
-    act.sa_sigaction = segv_handler;
+    act.sa_sigaction = segv_handler; // NOLINT(julia-first-decl-annotations)
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
@@ -917,6 +929,7 @@ static void jl_sigsetset(sigset_t *sset)
 }
 
 #ifdef HAVE_KEVENT
+static void sigint_handler(int sig);
 static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 {
     if (*sigqueue == -1)
@@ -929,7 +942,8 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
     }
     else {
         // kqueue gets signals before SIG_IGN, but does not remove them from pending (unlike sigwait)
-        signal(sig, SIG_IGN);
+        // Installing SIG_IGN for SIGINT can race with its handler installation.
+        signal(sig, sig == SIGINT ? sigint_handler : SIG_IGN);
     }
 }
 #endif
@@ -980,7 +994,7 @@ static void do_critical_profile(void)
     }
 }
 
-static void do_profile(void)
+static void do_profile(void) JL_NOTSAFEPOINT
 {
     bt_context_t signal_context;
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
@@ -1026,7 +1040,7 @@ static void do_profile(void)
         // store cpu cycle clock
         profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
 
-        // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
+        // store whether thread is sleeping (don't ever encode a state as `0` since it is preserved to indicate end of block)
         int state = jl_atomic_load_relaxed(&ptls2->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
         profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
 
@@ -1040,7 +1054,7 @@ static void do_profile(void)
 }
 #endif
 
-static void *signal_listener(void *arg)
+static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 {
     sigset_t sset;
     int sig, critical, profile;
@@ -1207,8 +1221,7 @@ static void *signal_listener(void *arg)
 //#endif
             // Let's forbid threads from running GC while we're trying to exit,
             // also let's make sure we're not in the middle of GC.
-            jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-            jl_safepoint_wait_gc(NULL);
+            jl_gc_enable_from_nonmutator(0);
             jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
         }
         else if (critical) {
@@ -1223,7 +1236,7 @@ static void *signal_listener(void *arg)
             jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), n_threads_running, nthreads);
 #endif
 
-            jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
+            jl_safe_printf("\nsignal (%d): %s\n", sig, jl_strsignal(sig));
             size_t i;
             for (i = 0; i < signal_bt_size; i += jl_bt_entry_size(signal_bt_data + i)) {
                 jl_fprint_bt_entry_codeloc(ios_safe_stderr, signal_bt_data + i);
@@ -1260,7 +1273,7 @@ void restore_signals(void)
     }
 }
 
-static void fpe_handler(int sig, siginfo_t *info, void *context)
+static void fpe_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEPOINT
 {
     (void)info;
     jl_jmp_buf *saferestore = jl_get_safe_restore();
@@ -1296,13 +1309,13 @@ static void sigint_handler(int sig)
 }
 
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
-static void sigtrap_handler(int sig, siginfo_t *info, void *context)
+static void sigtrap_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEPOINT
 {
     uintptr_t pc = ((ucontext_t*)context)->uc_mcontext->__ss.__pc; // TODO: Do this in linux as well
     uint32_t* code = (uint32_t*)(pc);                              // https://gcc.gnu.org/legacy-ml/gcc-patches/2013-11/msg02228.html
     if (*code == 0xd4200020) { // brk #0x1 which is what LLVM defines as trap
         signal(sig, SIG_DFL);
-        sig = SIGILL; // redefine this as as an "unreachable reached" error message
+        sig = SIGILL; // redefine this as an "unreachable reached" error message
         sigdie_handler(sig, info, context);
     }
 }
@@ -1313,7 +1326,7 @@ void jl_install_default_signal_handlers(void)
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
-    actf.sa_sigaction = fpe_handler;
+    actf.sa_sigaction = fpe_handler; // NOLINT(julia-first-decl-annotations)
     actf.sa_flags = SA_SIGINFO;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
@@ -1322,7 +1335,7 @@ void jl_install_default_signal_handlers(void)
     struct sigaction acttrap;
     memset(&acttrap, 0, sizeof(struct sigaction));
     sigemptyset(&acttrap.sa_mask);
-    acttrap.sa_sigaction = sigtrap_handler;
+    acttrap.sa_sigaction = sigtrap_handler; // NOLINT(julia-first-decl-annotations)
     acttrap.sa_flags = SA_SIGINFO;
     if (sigaction(SIGTRAP, &acttrap, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
@@ -1350,7 +1363,7 @@ void jl_install_default_signal_handlers(void)
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
-    act.sa_sigaction = usr2_handler;
+    act.sa_sigaction = usr2_handler; // NOLINT(julia-first-decl-annotations)
     act.sa_flags = SA_SIGINFO | SA_RESTART;
     if (sigaction(SIGUSR2, &act, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
@@ -1362,7 +1375,7 @@ void jl_install_default_signal_handlers(void)
     struct sigaction act_die;
     memset(&act_die, 0, sizeof(struct sigaction));
     sigemptyset(&act_die.sa_mask);
-    act_die.sa_sigaction = sigdie_handler;
+    act_die.sa_sigaction = sigdie_handler; // NOLINT(julia-first-decl-annotations)
     act_die.sa_flags = SA_SIGINFO | SA_RESETHAND;
     if (sigaction(SIGILL, &act_die, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));

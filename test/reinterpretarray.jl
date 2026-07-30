@@ -5,6 +5,8 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
 using .Main.OffsetArrays
 isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
 using .Main: TSlow, WrapperArray
+isdefined(Main, :StridedArrays) || @eval Main include("testhelpers/StridedArrays.jl")
+using .Main.StridedArrays
 
 tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)
@@ -239,85 +241,53 @@ let A = collect(reshape(1:20, 5, 4))
     @test reshape(R, :) isa StridedArray
 end
 
-function check_strides(A::AbstractArray)
-    # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
-    dims = ntuple(identity, ndims(A))
-    map(i -> stride(A, i), dims) == strides(A) || return false
-    # Test strides via value check.
-    for i in eachindex(IndexLinear(), A)
-        A[i] === Base.unsafe_load(pointer(A, i)) || return false
-    end
-    return true
-end
-
 @testset "strides for NonReshapedReinterpretArray" begin
     A = WrapperArray(Array{Int32}(reshape(1:88, 11, 8)))
     for viewax2 in (1:8, 1:2:6, 7:-1:1, 5:-2:1, 2:3:8, 7:-6:1, 3:5:11)
         # dim1 is contiguous
         for T in (Int16, Float32)
-            @test check_strides(reinterpret(T, view(A, 1:8, viewax2)))
+            check_strided_get(reinterpret(T, view(A, 1:8, viewax2)))
         end
         if mod(step(viewax2), 2) == 0
-            @test check_strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+            check_strided_get(reinterpret(Int64, view(A, 1:8, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+            check_strides_throws("Parent's strides", reinterpret(Int64, view(A, 1:8, viewax2)))
         end
         # non-integer-multiplied classified
         if mod(step(viewax2), 3) == 0
-            @test check_strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+            check_strided_get(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+            check_strides_throws("Parent's strides", reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         end
         if mod(step(viewax2), 5) == 0
-            @test check_strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+            check_strided_get(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+            check_strides_throws("Parent's strides", reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
         end
         # dim1 is not contiguous
         for T in (Int16, Int64)
-            @test_throws "Parent must" strides(reinterpret(T, view(A, 8:-1:1, viewax2)))
+            check_strides_throws("Parent must", reinterpret(T, view(A, 8:-1:1, viewax2)))
         end
-        @test check_strides(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
+        check_strided_get(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
     end
     # issue 46113
     A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
-    @test check_strides(A)
+    check_strided_get(A)
 end
 
 @testset "strides for ReshapedReinterpretArray" begin
     A = WrapperArray(Array{Int32}(reshape(1:192, 3, 8, 8)))
     for viewax1 in (1:8, 1:2:8, 8:-1:1, 8:-2:1), viewax2 in (1:2, 4:-1:1)
         for T in (Int16, Float32)
-            @test check_strides(reinterpret(reshape, T, view(A, 1:2, viewax1, viewax2)))
-            @test check_strides(reinterpret(reshape, T, view(A, 1:2:3, viewax1, viewax2)))
+            check_strided_get(reinterpret(reshape, T, view(A, 1:2, viewax1, viewax2)))
+            check_strided_get(reinterpret(reshape, T, view(A, 1:2:3, viewax1, viewax2)))
         end
         if mod(step(viewax1), 2) == 0
-            @test check_strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+            check_strided_get(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
         else
             @test_throws "Parent's strides" strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
         end
         @test_throws "Parent must" strides(reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2)))
-    end
-end
-
-@testset "strides" begin
-    a = rand(10)
-    b = view(a,2:2:10)
-    A = rand(10,10)
-    B = view(A, 2:2:10, 2:2:10)
-
-    @test strides(a) == (1,)
-    @test strides(b) == (2,)
-    @test strides(A) == (1,10)
-    @test strides(B) == (2,20)
-
-    for M in (a, b, A, B)
-        @inferred strides(M)
-        strides_M = strides(M)
-
-        for (i, _stride) in enumerate(collect(strides_M))
-            @test _stride == stride(M, i)
-        end
     end
 end
 
@@ -418,8 +388,15 @@ A2 = S2[S2(0, 0)]
 test_many_wrappers((A1, A2), (identity, wrapper)) do (A1_, A2_)
     A1, A2 = deepcopy(A1_), deepcopy(A2_)
     @test reinterpret(S1, A2)[1] == S1(0, 0)
-    @test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S2(1, 2))
+    @test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S1(1, 2))
+    check_strided_get(reinterpret(S1, A2))
     @test_throws Base.PaddingError reinterpret(S2, A1)[1]
+    check_strided_set(
+        reinterpret(S2, deepcopy(A1_)),
+        reinterpret(S2, deepcopy(A1_)),
+        [S2(1, 2)],
+        (a, b) -> parent(a) == parent(b),
+    )
     reinterpret(S2, A1)[1] = S2(1, 2)
     @test A1[1] == S1(1, 2)
 end
@@ -691,4 +668,205 @@ end
     x = 0xabcdef01234567
     @test reinterpret(reshape, UInt8, fill(x)) == [0x67, 0x45, 0x23, 0x01, 0xef, 0xcd, 0xab, 0x00]
     @test reinterpret(reshape, UInt8, [x]) == [0x67; 0x45; 0x23; 0x01; 0xef; 0xcd; 0xab; 0x00;;]
+end
+
+@testset "primitive reinterpret alignment" begin
+    primitive type RUInt24 24 end
+    primitive type RUInt40 40 end
+    primitive type RUInt48 48 end
+    primitive type RUInt17 17 end
+    primitive type RUInt23 23 end
+    primitive type RUInt63 63 end
+
+    @test Base.ispacked(RUInt24)
+    @test Base.ispacked(RUInt40)
+    @test Base.ispacked(RUInt48)
+    @test !Base.datatype_haspadding(RUInt24)
+    @test !Base.datatype_haspadding(RUInt40)
+    @test !Base.datatype_haspadding(RUInt48)
+    @test Base.packedsize(RUInt24) == 3
+    @test Base.packedsize(RUInt40) == 5
+    @test Base.packedsize(RUInt48) == 6
+    @test !Base.ispacked(RUInt17)
+    @test !Base.ispacked(RUInt23)
+    @test !Base.ispacked(RUInt63)
+    @test Base.datatype_haspadding(RUInt17)
+    @test Base.datatype_haspadding(RUInt23)
+    @test Base.datatype_haspadding(RUInt63)
+
+    r24 = reinterpret(RUInt24, (0xaa, 0xbb, 0xcc))
+    @test reinterpret(NTuple{3, UInt8}, r24) === (0xaa, 0xbb, 0xcc)
+
+    r40 = reinterpret(RUInt40, (0x01, 0x02, 0x03, 0x04, 0x05))
+    @test reinterpret(NTuple{5, UInt8}, r40) === (0x01, 0x02, 0x03, 0x04, 0x05)
+
+    r48 = reinterpret(RUInt48, (0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f))
+    @test reinterpret(NTuple{6, UInt8}, r48) === (0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f)
+
+    @test_throws ArgumentError Base.padding(RUInt17)
+    @test_throws ArgumentError Base.packedsize(RUInt17)
+    @test_throws ArgumentError Base.padding(RUInt23)
+    @test_throws ArgumentError Base.packedsize(RUInt23)
+    @test_throws ArgumentError Base.padding(RUInt63)
+    @test_throws ArgumentError Base.packedsize(RUInt63)
+
+    @test_throws ArgumentError reinterpret(RUInt17, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(RUInt23, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(RUInt63, ntuple(i -> UInt8(i), 8))
+
+    struct RHasUInt17
+        x::RUInt17
+        y::UInt8
+    end
+    struct RHasUnionUInt17
+        x::Union{UInt8, RUInt17}
+    end
+    @test_throws ArgumentError reinterpret(RHasUInt17, (0x01, 0x02, 0x03, 0x04))
+    @test_throws ArgumentError reinterpret(RHasUnionUInt17, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(
+        NTuple{4, UInt8},
+        RHasUInt17(Core.Intrinsics.trunc_int(RUInt17, UInt32(1)), 0x02),
+    )
+
+    # Dense odd-bit arrays use allocation-size strides and reject byte reinterpretation.
+    for (T, W, storage_size, allocation_size) in (
+        (RUInt23, UInt32, 3, 4),
+        (RUInt63, UInt64, 8, 8),
+    )
+        values = Core.Intrinsics.trunc_int.(T, W[1, 2, 3])
+        memory = Memory{T}(undef, 3)
+        memory .= values
+        @test sizeof(T) == storage_size
+        @test Base.elsize(memory) == allocation_size
+        @test Core.Intrinsics.zext_int.(W, memory) == W[1, 2, 3]
+        memory[2] = Core.Intrinsics.trunc_int(T, W(4))
+        @test Core.Intrinsics.zext_int(W, memory[2]) == 4
+
+        array = Array(memory)
+        @test Base.elsize(array) == allocation_size
+        @test Core.Intrinsics.zext_int.(W, array) == W[1, 4, 3]
+        array[3] = Core.Intrinsics.trunc_int(T, W(5))
+        @test Core.Intrinsics.zext_int(W, array[3]) == 5
+
+        @test_throws ArgumentError reinterpret(UInt8, memory)
+        @test_throws ArgumentError reinterpret(UInt8, array)
+        @test_throws ArgumentError reinterpret(T, zeros(UInt8, storage_size))
+    end
+end
+
+@testset "elsize for ReinterpretArray with aligned types" begin
+    primitive type RInt24 24 end
+    primitive type RAlsoInt24 24 end
+    RInt24(x::Int) = Core.Intrinsics.trunc_int(RInt24, x)
+    RAlsoInt24(x::Int) = Core.Intrinsics.trunc_int(RAlsoInt24, x)
+    Base.zero(::Type{RInt24}) = RInt24(0)
+    Base.zero(::Type{RAlsoInt24}) = RAlsoInt24(0)
+
+    # sizeof(T) == sizeof(S): elsize delegates through parent chain
+    a = zeros(RInt24, 3)
+    b = reinterpret(RAlsoInt24, a)
+    @test Base.elsize(b) == Base.elsize(a) == 4
+
+    # View-wrapped parent: delegates through SubArray to Array
+    v = view(a, 1:2)
+    c = reinterpret(RAlsoInt24, v)
+    @test Base.elsize(c) == 4
+
+    # Reshape-variant with packed parent: sizeof(T) != sizeof(S) → sizeof(T)
+    d = reinterpret(reshape, UInt8, zeros(RInt24, 6))
+    @test Base.elsize(d) == sizeof(UInt8)
+
+    # sizeof(T) != sizeof(S) flat reinterpret
+    e = reinterpret(UInt8, zeros(Int32, 5))
+    @test Base.elsize(e) == sizeof(UInt8)
+    f = reinterpret(Int32, zeros(UInt8, 20))
+    @test Base.elsize(f) == sizeof(Int32)
+end
+
+@testset "ReinterpretArray with Memory parent and aligned types" begin
+    primitive type NInt24 24 end
+    primitive type NAlsoInt24 24 end
+    NInt24(x::Int) = Core.Intrinsics.trunc_int(NInt24, x)
+    NAlsoInt24(x::Int) = Core.Intrinsics.trunc_int(NAlsoInt24, x)
+    Base.zero(::Type{NInt24}) = NInt24(0)
+    Base.zero(::Type{NAlsoInt24}) = NAlsoInt24(0)
+
+    mem = Memory{NInt24}(undef, 3)
+    mem[1] = NInt24(10); mem[2] = NInt24(20); mem[3] = NInt24(30)
+    b = reinterpret(NAlsoInt24, mem)
+
+    @test Base.elsize(b) == Base.elsize(mem) == 4
+    @test b[1] == reinterpret(NAlsoInt24, NInt24(10))
+    @test b[2] == reinterpret(NAlsoInt24, NInt24(20))
+    @test b[3] == reinterpret(NAlsoInt24, NInt24(30))
+
+    b[2] = reinterpret(NAlsoInt24, NInt24(99))
+    @test b[2] == reinterpret(NAlsoInt24, NInt24(99))
+    @test b[1] == reinterpret(NAlsoInt24, NInt24(10))
+    @test b[3] == reinterpret(NAlsoInt24, NInt24(30))
+end
+
+@testset "ReinterpretArray over non-DenseArray parents" begin
+    # elsize should throw MethodError for non-Dense parents
+    r = reinterpret(UInt, 1:6)
+    @test_throws MethodError Base.elsize(r)
+
+    # But indexing should still work via _getindex_ra
+    @test r[2] == 2
+    @test length(r) == 6
+    @test collect(r) == UInt[1, 2, 3, 4, 5, 6]
+
+    # Reshape wrapping a non-Dense parent must also work
+    rr = reinterpret(UInt, reshape(1:6, 2, 3))
+    @test rr[2] == 2
+    @test rr[4] == 4
+end
+
+@testset "Padded-parent write routes to data byte, not padding byte" begin
+    primitive type PadInt24 24 end
+    PadInt24(x::Int) = Core.Intrinsics.trunc_int(PadInt24, x)
+    Base.zero(::Type{PadInt24}) = PadInt24(0)
+
+    # Array backing: elementwise path writes to correct data bytes
+    a = zeros(PadInt24, 2)
+    b = reinterpret(UInt8, a)
+    b[2] = 0xab                     # packed byte 2 = second data byte of element 1
+    @test a[1] === PadInt24(0xab00 % Int)
+    @test a[2] === PadInt24(0)
+    b[4] = 0xcd                     # packed byte 4 = first data byte of element 2
+    @test a[2] === PadInt24(0xcd % Int)
+
+    # Memory backing: same-size reinterpret also takes elementwise path
+    mem = Memory{PadInt24}(undef, 2)
+    mem[1] = PadInt24(0); mem[2] = PadInt24(0)
+    b = reinterpret(UInt8, mem)
+    b[2] = 0xab
+    @test mem[1] === PadInt24(0xab00 % Int)
+    @test mem[2] === PadInt24(0)
+    b[4] = 0xcd
+    @test mem[2] === PadInt24(0xcd % Int)
+end
+
+@testset "getindex/setindex! pointer path with aligned types" begin
+    primitive type PInt24 24 end
+    primitive type PAlsoInt24 24 end
+    PInt24(x::Int) = Core.Intrinsics.trunc_int(PInt24, x)
+    PAlsoInt24(x::Int) = Core.Intrinsics.trunc_int(PAlsoInt24, x)
+    Base.zero(::Type{PInt24}) = PInt24(0)
+    Base.zero(::Type{PAlsoInt24}) = PAlsoInt24(0)
+
+    a = zeros(PInt24, 3)
+    a[1] = PInt24(10)
+    a[2] = PInt24(20)
+    a[3] = PInt24(30)
+    b = reinterpret(PAlsoInt24, a)
+
+    @test b[1] == reinterpret(PAlsoInt24, PInt24(10))
+    @test b[2] == reinterpret(PAlsoInt24, PInt24(20))
+    @test b[3] == reinterpret(PAlsoInt24, PInt24(30))
+
+    b[2] = reinterpret(PAlsoInt24, PInt24(99))
+    @test b[2] == reinterpret(PAlsoInt24, PInt24(99))
+    @test b[1] == reinterpret(PAlsoInt24, PInt24(10))
+    @test b[3] == reinterpret(PAlsoInt24, PInt24(30))
 end

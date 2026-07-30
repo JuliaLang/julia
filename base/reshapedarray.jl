@@ -50,7 +50,7 @@ eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedI
     return $(Expr(:new, :(Array{T,N}), :ref, :dims))
 end
 
-## reshape!(::Array, ::Dims) returns the original array, but must have the same dimensions and length as the original
+## reshape!(::Array, ::Dims) returns the original array, but the new dimensions must have the same total length as the original
 # see also resize! for a similar operation that can change the length
 function reshape!(a::Array{T,N}, dims::NTuple{N,Int}) where {T,N}
     len = Core.checked_dims(dims...) # make sure prod(dims) doesn't overflow (and because of the comparison to length(a))

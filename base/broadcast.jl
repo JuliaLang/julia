@@ -8,8 +8,7 @@ Module containing the broadcasting implementation.
 module Broadcast
 
 using .Base.Cartesian
-using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, promote_typejoin_union,
-             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias, negate
+using .Base: OneTo, tail, isoperator, promote_typejoin, promote_typejoin_union, unalias, negate
 import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, BroadcastFunction
 
@@ -194,10 +193,12 @@ end
 struct AndAnd end
 const andand = AndAnd()
 broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
+typeof(broadcasted).name.concrete_only = true
+
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
     # Vararg type signature to specialize on args count. This is necessary for performance
-    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    # and inexpensive because this should only ever get called with 1+N = length(bc.args)
     broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a && bcf.f(args...), a, bcf.args...)
 end
 struct OrOr end
@@ -206,7 +207,7 @@ broadcasted(::OrOr, a, b) = broadcasted((a, b) -> a || b, a, b)
 function broadcasted(::OrOr, a, bc::Broadcasted)
     bcf = flatten(bc)
     # Vararg type signature to specialize on args count. This is necessary for performance
-    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    # and inexpensive because this should only ever get called with 1+N = length(bc.args)
     broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a || bcf.f(args...), a, bcf.args...)
 end
 
@@ -574,7 +575,7 @@ Two methods are supported, both allowing for `I` to be specified as either a [`C
 an `Int`.
 
 * `newindex(argument, I)` dynamically constrains `I` based upon the axes of `argument`.
-* `newindex(I, keep, default)` constrains `I` using the pre-computed tuples `keeps` and `defaults`.
+* `newindex(I, keep, default)` constrains `I` using the pre-computed tuples `keep` and `default`.
     * `keep` is a tuple of `Bool`s, where `keep[d] == true` means that dimension `d` in `I` should be preserved as is
     * `default` is a tuple of Integers, specifying what index to use in dimension `d` when `keep[d] == false`.
     Any remaining indices in `I` beyond the length of the `keep` tuple are truncated. The `keep` and `default`
@@ -701,6 +702,8 @@ Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 
 @inline _broadcast_getindex_evalf(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)  # not propagate_inbounds
 
+const BroadcastScalars = Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}
+
 """
     Broadcast.broadcastable(x)
 
@@ -729,7 +732,7 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}) = Ref(x)
+broadcastable(x::BroadcastScalars) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
@@ -832,7 +835,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 
 ```
 """
-broadcast(f::Tf, As...) where {Tf} = materialize(broadcasted(f, As...))
+@inline broadcast(f::Tf, As...) where {Tf} = materialize(broadcasted(f, As...))
 
 # special cases defined for performance
 @inline broadcast(f, x::Number...) = f(x...)
@@ -904,8 +907,14 @@ end
 @inline function materialize!(dest, bc::Broadcasted{<:Any})
     return materialize!(combine_styles(dest, bc), dest, bc)
 end
+
 @inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{<:Any})
     return copyto!(dest, instantiate(Broadcasted(bc.style, bc.f, bc.args, axes(dest))))
+end
+
+materialize!(dest::Union{BroadcastScalars,Number,AbstractChar}, bc::Broadcasted{<:Any}) = _throw_unwritable_dest(dest)
+@noinline function _throw_unwritable_dest(@nospecialize dest)
+    throw(ArgumentError(LazyString("cannot broadcast-assign (`.=`) into a value of type ", typeof(dest))))
 end
 
 ## general `copy` methods
@@ -1035,7 +1044,7 @@ end
         end
     end
     @inbounds if bitst != 0
-        destc[indc+=1] = remain
+        destc[indc+1] = remain
     end
     return dest
 end

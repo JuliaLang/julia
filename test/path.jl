@@ -232,7 +232,7 @@ using Main: samepath
             # while isabspath does not allow this. FIXME?
             @test splitdrive(S("::")) == ("::", "")
             @test splitdrive(S("🍎:")) != ("🍎:", "")
-            # The behavior is different for long baths, where he drive letter can
+            # The behavior is different for long paths, where the drive letter can
             # contain multiple codeunits (such as unicode chars or multiple chars)
             # if it is followed by a delimiter, because it is then captured as a
             # UNC path with the server name ?. FIXME?

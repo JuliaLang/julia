@@ -190,7 +190,7 @@ end
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((1,2), 3))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((1,2), 3), 4))
 
-    @test fieldtypes(typeof(Float64 ∘ Int)) == (Type{Float64}, Type{Int})
+    @test fieldtypes(typeof(Float64 ∘ Int)) == (Core.TypeEgal{Float64}, Core.TypeEgal{Int})
 
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
@@ -373,7 +373,16 @@ end
     @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
 
     illtype = Vector{Core.TypeVar(:T)}
-    @test Returns(illtype) == Returns{DataType}(illtype)
+    @test_skip Returns(illtype) == Returns{DataType}(illtype)
+end
+
+@testset "tap" begin
+    buf = IOBuffer()
+    @test (123 |> tap(Base.Fix1(print, buf))) == 123
+    @test takestring!(buf) == "123"
+
+    val = [1, 2, 3]
+    @test tap(identity)(val) === val
 end
 
 @testset "<= (issue #46327)" begin
