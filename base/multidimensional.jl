@@ -1118,13 +1118,13 @@ function mapreduce_kernel_commutative(f, op, A, init, inds::AbstractArray)
     if length(inds) < 16
         # Iterate by value; position arithmetic like `firstindex(inds)+1` can
         # overflow for indices that abut typemax (issue #38627)
-        (j, s) = iterate(inds)::Tuple
-        v_1 = _mapreduce_start(f, op, A, init, @inbounds A[j])
-        for j in Iterators.rest(inds, s)
+        (j, rest) = Iterators.peel(inds)::Tuple
+        v = _mapreduce_start(f, op, A, init, @inbounds A[j])
+        for j in rest
             a = @inbounds A[j]
-            v_1 = op(v_1, f(a))
+            v = op(v, f(a))
         end
-        return v_1
+        return v
     end
     return _mapreduce_kernel_commutative(f, op, A, init, inds)
 end

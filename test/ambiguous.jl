@@ -467,7 +467,7 @@ end
         expected_undef_sparam = Any[
             Tuple{typeof(Base._totuple), Type{Tuple{Vararg{E}}}, Any, Vararg{Any}} where E,
             Tuple{typeof(Base._eltype_ntuple), Type{<:Tuple{Vararg{E}}}} where E,
-            Tuple{typeof(Base.reduce_empty_iter), Any, Tuple{Vararg{T}}, Base.HasEltype} where T,
+            Tuple{typeof(Base._empty_eltype), Tuple{Vararg{T}}, Base.HasEltype} where T,
             Tuple{typeof(float), AbstractArray{Union{Missing, T}}} where T,
             Tuple{typeof(Base._cat), Any, Vararg{AbstractArray{T}}} where T,
         ]
@@ -486,7 +486,7 @@ end
             # the raw reads are `@isdefined`-guarded and safe at runtime, but
             # verifying that the guard dominates the read would need dataflow
             Tuple{typeof(Base._eltype_ntuple), Type{<:Tuple{Vararg{E}}}} where E,
-            Tuple{typeof(Base.reduce_empty_iter), Any, Tuple{Vararg{T}}, Base.HasEltype} where T,
+            Tuple{typeof(Base._empty_eltype), Tuple{Vararg{T}}, Base.HasEltype} where T,
             # `T` is unbound only for element type `Missing`, whose calls dispatch to the more specific `float(::AbstractArray{Missing})`
             Tuple{typeof(float), AbstractArray{Union{Missing, T}}} where T,
             # `N` is unbound only for element type `Union{}`, whose calls are dispatch-ambiguous with the `<:ScalarIndex` and `<:AbstractCartesianIndex{0}` methods, erroring before the body
