@@ -27,6 +27,53 @@ function add_one(x::Cint)::Cint
     return x + 1
 end
 
+const fin_total = Base.RefValue{Int}(0)
+const fin_log = Int[]
+
+# Test various forms of fully de-virtualized / partially de-virtualized
+# and inlineable / non-inlineable finalizers
+fin_inline_local(x::Base.RefValue{Int}) = (fin_total[] += x[]; nothing)
+fin_inline_escaping(x::Base.RefValue{Int}) = (fin_total[] += x[]; nothing)
+@noinline fin_call_local(x::Base.RefValue{Int}) = (fin_total[] += x[]; nothing)
+@noinline fin_call_escaping(x::Base.RefValue{Int}) = (fin_total[] += x[]; nothing)
+fin_throws_escaping(x::Base.RefValue{Int}) = (push!(fin_log, x[]); nothing)
+
+@noinline function local_finalizers()
+    a = Base.RefValue{Int}(1)
+    finalizer(fin_inline_local, a)
+    b = Base.RefValue{Int}(2)
+    finalizer(fin_call_local, b)
+    return nothing
+end
+
+const escapee = Base.RefValue{Any}(nothing)
+@noinline function escaping_finalizers()
+    r = Base.RefValue{Int}(8)
+    finalizer(fin_inline_escaping, r)
+    escapee[] = r
+    finalize(r)
+    s = Base.RefValue{Int}(16)
+    finalizer(fin_call_escaping, s)
+    escapee[] = s
+    finalize(s)
+    t = Base.RefValue{Int}(32)
+    finalizer(fin_throws_escaping, t)
+    escapee[] = t
+    finalize(t)
+    escapee[] = nothing
+    return nothing
+end
+
+@noinline function finalizer_check()
+    local_finalizers()
+    escaping_finalizers()
+    total = 0
+    for x in fin_log
+        total += x
+    end
+    return (fin_total[], total)
+end
+
 function _test_cat()
     # hcat
     _cat1a = hcat(randn(3), rand(3), randn(3))
@@ -118,6 +165,10 @@ function @main(args::Vector{String})::Cint
         # https://github.com/JuliaLang/julia/issues/60846
         add_one(Cint(i))
         GC.gc()
+    end
+
+    let (counted, logged) = finalizer_check()
+        println(Core.stdout, "finalizers: ", counted, " ", logged)
     end
 
     try

@@ -16,4 +16,5 @@ outdir = ARGS[1]
     @test parse(Float64, lines[6]) isa Float64
     @test lines[7] == "Version: 1.1.0"
     @test lines[8] == "# preferences: 0"
+    @test lines[9] == "finalizers: 27 32"
 end
