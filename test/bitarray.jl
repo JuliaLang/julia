@@ -1511,6 +1511,22 @@ timesofar("reductions")
         end
     end
 
+    # Constant maps preserve destination bits beyond the input collection.
+    @testset "map! with a longer destination" begin
+        for l in [0, 1, 63, 64, 65, 127, 128, 129]
+            src = bitrand(l)
+            dest = trues(l + 65)
+            @test map!(zero, dest, src) === dest
+            @test dest == vcat(falses(l), trues(65))
+
+            dest = falses(l + 65)
+            @test map!(one, dest, src) === dest
+            @test dest == vcat(trues(l), falses(65))
+        end
+        @test_throws DimensionMismatch map!(zero, falses(1), bitrand(2))
+        @test_throws DimensionMismatch map!(one, falses(1), bitrand(2))
+    end
+
     @testset "Issue #17970" begin
         A17970 = [1,2,3] .== [3,2,1]
         B17970 = map(x -> x ? 1 : 2, A17970)

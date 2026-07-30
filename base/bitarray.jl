@@ -1747,8 +1747,8 @@ map(::typeof(one), A::BitArray) = fill!(similar(A), true)
 map(::typeof(identity), A::BitArray) = copy(A)
 
 map!(::Union{typeof(~), typeof(!)}, dest::BitArray, A::BitArray) = bit_map!(~, dest, A)
-map!(::typeof(zero), dest::BitArray, A::BitArray) = fill!(dest, false)
-map!(::typeof(one), dest::BitArray, A::BitArray) = fill!(dest, true)
+map!(::typeof(zero), dest::BitArray, A::BitArray) = bit_map_constant!(dest, A, false)
+map!(::typeof(one), dest::BitArray, A::BitArray) = bit_map_constant!(dest, A, true)
 map!(::typeof(identity), dest::BitArray, A::BitArray) = copyto!(dest, A)
 
 for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
@@ -1772,6 +1772,12 @@ function bit_map(f::F, A::BitArray, B::BitArray) where F
     AB = zip(A, B)
     dest = similar(BitArray, _similar_shape(AB, IteratorSize(AB)))
     bit_map!(f, dest, A, B)
+end
+
+function bit_map_constant!(dest::BitArray, A::BitArray, x::Bool)
+    length(A) <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of collection"))
+    fill_chunks!(dest.chunks, x, 1, length(A))
+    return dest
 end
 
 function bit_map!(f::F, dest::BitArray, A::BitArray) where F
