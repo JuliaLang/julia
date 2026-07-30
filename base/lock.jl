@@ -248,7 +248,7 @@ end
 function wait_no_relock(c::GenericCondition)
     ct = current_task()
     w = _wait2(c, ct)
-    token = unlockall(c.lock)
+    unlockall(c.lock)
     try
         return wait()
     catch

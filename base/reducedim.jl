@@ -269,7 +269,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     end
     indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsRt)
-    if reducedim1(R, A)
+    if reducedim1(R)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(axes1(R))
         for IA in CartesianIndices(indsAt)
@@ -1025,7 +1025,7 @@ function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     ks = keys(A)
     y = iterate(ks)
     zi = zero(eltype(ks))
-    if reducedim1(Rval, A)
+    if reducedim1(Rval)
         i1 = first(axes1(Rval))
         for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
@@ -1218,7 +1218,7 @@ function _findminmax_inittype(f, A::AbstractArray)
     return v0 isa T ? T : Missing <: eltype(A) ? Union{Missing, typeof(v0)} : typeof(v0)
 end
 
-reducedim1(R, A) = length(axes1(R)) == 1
+reducedim1(R) = length(axes1(R)) == 1
 
 """
     argmin(A; dims) -> indices
