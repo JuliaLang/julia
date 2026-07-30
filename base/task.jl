@@ -447,7 +447,7 @@ function collect_tasks(waiting_tasks)
 end
 
 function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false,
-                        tok::Union{Nothing, CancellationToken}=default_cancel_token())
+                        tok::MaybeToken=default_cancel_token())
     if (all && !failfast) || length(tasks) <= 1
         exception = false
         # Force everything to finish synchronously for the case of waitall
@@ -490,74 +490,97 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    chan = Channel{Int}(Inf)
-    sentinel = current_task()
-    waiter_tasks = fill(sentinel, length(tasks))
-
+    # Park on all remaining tasks at once through a single multi-slot wait
+    # entry - one slot per pending task plus one for the governing
+    # cancellation source. Each task's completion notify claims the entry
+    # through the standard wake-claim protocol; the entry stays registered
+    # on the still-pending tasks across re-parks, so `waitall` re-arms it
+    # instead of re-registering after every completion.
+    ct = current_task()
+    src = cancel_source(tok)
+    src === nothing || checkcancel(src)
+    w = WaitEntryN(ct, nremaining + (src === nothing ? 0 : 1))
+    registered = falses(length(tasks))
+    function unlink_multiwait!()
+        for i in findall(registered)
+            t = tasks[i]
+            donenotify = t.donenotify::ThreadSynchronizer
+            lock(donenotify)
+            list_deletefirst!(waitqueue(t), w)
+            unlock(donenotify)
+            registered[i] = false
+        end
+        src === nothing || retire_cancellation_entry!(w)
+        return nothing
+    end
+    _arm_wait(ct, w)
     for (i, done) in enumerate(done_mask)
         done && continue
         t = tasks[i]
+        donenotify = t.donenotify::ThreadSynchronizer
+        lock(donenotify)
         if istaskdone(t)
+            unlock(donenotify)
             done_mask[i] = true
             exception |= istaskfailed(t)
             nremaining -= 1
-            exception && failfast && break
         else
-            waiter = @task put!(chan, i)
-            waiter.sticky = false
-            _wait2(t, waiter)
-            waiter_tasks[i] = waiter
-        end
-    end
-
-    try
-        while nremaining > 0
-            exception && failfast && break
-            i = tok === nothing ? take!(chan) : take!(chan; cancel=tok)
-            t = tasks[i]
-            waiter_tasks[i] = sentinel
-            done_mask[i] = true
-            exception |= istaskfailed(t)
-            nremaining -= 1
-            # stop early if requested
-            all || break
-        end
-    catch
-        # The wait was interrupted (e.g. by cancellation of the current scope):
-        # deregister our waiter tasks before propagating, claiming each
-        # never-started waiter's wake so a concurrent completion notify skips
-        # it (same as the remaining-tasks cleanup below).
-        for i in findall(.~done_mask)
-            waiter = waiter_tasks[i]
-            waiter === sentinel && continue
-            donenotify = tasks[i].donenotify::ThreadSynchronizer
-            lock(donenotify)
-            w = @atomicswap waiter.waiting_on = nothing
-            w isa WaitEntry && list_deletefirst!(waitqueue(tasks[i]), w)
+            # a duplicate of an already-registered task shares its slot (the
+            # completion rescan below accounts for every index of it)
+            if _find_slot(w, donenotify) == 0
+                push!(waitqueue(t), w)
+                registered[i] = true
+            end
             unlock(donenotify)
         end
-        close(chan)
+    end
+    if src !== nothing && !register_cancellation!(src, w)
+        # The governing source is already cancelled and the wake was claimed
+        # back for us: withdraw and deliver.
+        unlink_multiwait!()
+        _deliver_refused_cancellation(src)
+    end
+    try
+        while true
+            # collect completions (a wake happens-after its completing
+            # notify, so the istaskdone reads below observe it)
+            for (i, done) in enumerate(done_mask)
+                done && continue
+                t = tasks[i]
+                if istaskdone(t)
+                    done_mask[i] = true
+                    exception |= istaskfailed(t)
+                    nremaining -= 1
+                end
+            end
+            if nremaining == 0 || (!all && any(done_mask)) || (exception && failfast)
+                # Disarm; when the disarm loses to a concurrent claim,
+                # consume the wake it scheduled (possibly rethrowing a
+                # delivered cancellation) so it cannot linger in the run
+                # queue.
+                (@atomicreplace ct.waiting_on w => nothing).success || wait()
+                break
+            end
+            wait()
+            # re-arm before rescanning: a completion that lands between the
+            # rescan and the next park must be able to claim the entry
+            _arm_wait(ct, w)
+        end
+    catch
+        # The wait was interrupted (e.g. by cancellation of the current
+        # scope): disarm, withdraw the registrations, and drop a wake this
+        # unwind will never consume. The drop runs after the unlink walk on
+        # purpose: a completion notify that claimed our wake did so under
+        # its donenotify lock, so the lock round-trips in
+        # `unlink_multiwait!` make its enqueue visible and the drop
+        # deterministic (cf. step 4 of _interrupted_wait_cleanup).
+        @atomicreplace ct.waiting_on w => nothing
+        unlink_multiwait!()
+        q = ct.queue
+        q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
         rethrow()
     end
-
-    close(chan)
-
-    # now just read which tasks finished directly: the channel is not needed anymore for that
-    # repeat until we get (acquire) the list of all dependent-exited tasks
-    changed = true
-    while changed
-        changed = false
-        for (i, done) in enumerate(done_mask)
-            done && continue
-            t = tasks[i]
-            if istaskdone(t)
-                done_mask[i] = true
-                exception |= istaskfailed(t)
-                nremaining -= 1
-                changed = true
-            end
-        end
-    end
+    unlink_multiwait!()
 
     if nremaining == 0
         if throwexc && exception
@@ -566,25 +589,12 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
         return tasks, Task[]
     else
-        remaining_mask = .~done_mask
-        for i in findall(remaining_mask)
-            waiter = waiter_tasks[i]
-            waiter === sentinel && continue
-            donenotify = tasks[i].donenotify::ThreadSynchronizer
-            lock(donenotify)
-            # Claim the never-started waiter's wake so that a concurrent
-            # completion notify skips it, then unlink its registration (a
-            # no-op if a notify already popped it).
-            w = @atomicswap waiter.waiting_on = nothing
-            w isa WaitEntry && list_deletefirst!(waitqueue(tasks[i]), w)
-            unlock(donenotify)
-        end
         done_tasks = tasks[done_mask]
         if throwexc && exception
             exceptions = [TaskFailedException(t) for t in done_tasks if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else
-            return done_tasks, tasks[remaining_mask]
+            return done_tasks, tasks[.~done_mask]
         end
     end
 end
