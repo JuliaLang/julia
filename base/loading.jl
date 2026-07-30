@@ -3815,8 +3815,12 @@ function restore_depot_path(path::AbstractString, depot::AbstractString)
     replace(path, r"^@depot" => depot; count=1)
 end
 
-function resolve_depot(inc::AbstractString)
+function resolve_depot(inc::AbstractString, hint::Union{String, Nothing}=nothing)
     startswith(inc, string("@depot", Filesystem.pathsep())) || return :not_relocatable
+    # Cache files usually come from one depot, so try the previous match first.
+    if hint !== nothing && ispath(restore_depot_path(inc, hint))
+        return hint
+    end
     for depot in DEPOT_PATH
         ispath(restore_depot_path(inc, depot)) && return depot
     end
@@ -3938,7 +3942,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     any_no_depot_found = false
     multiple_depots_found = false
     for src in srcfiles
-        depot = resolve_depot(src)
+        depot = resolve_depot(src, srcdepot)
         if depot === :not_relocatable
             any_not_relocatable = true
         elseif depot === :no_depot_found
@@ -3966,7 +3970,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     # unlike include() files, we allow each relocatable include_dependency() file to resolve
     # to a separate depot, #52161
     for inc in includes_depfiles
-        depot = resolve_depot(inc.filename)
+        depot = resolve_depot(inc.filename, srcdepot)
         if depot === :no_depot_found
             @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", _group=:relocatable)
         elseif depot === :not_relocatable
@@ -4390,7 +4394,14 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
             record_reason(reasons, :unresolved_depot)
             return true
         end
-        if !ispath(f)
+        fstat = try
+            stat(f)
+        catch err
+            err isa IOError || err isa SystemError || rethrow()
+            # Match ispath's behavior for inaccessible paths.
+            StatStruct()
+        end
+        if !ispath(fstat)
             _f = fixup_stdlib_path(f)
             if _f != f && isfile(_f) && startswith(_f, Sys.STDLIB)
                 continue
@@ -4401,7 +4412,7 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
         end
         if ftime_req >= 0.0
             # this is an include_dependency for which we only recorded the mtime
-            ftime = mtime(f)
+            ftime = mtime(fstat)
             is_stale = ( ftime != ftime_req ) &&
                        ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
                        ( ftime != ceil(ftime_req) ) &&            # PR: #47433 Compensate for CirceCI's truncating of timestamps in its caching
@@ -4414,7 +4425,6 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
                 return true
             end
         else
-            fstat = stat(f)
             fsize = filesize(fstat)
             if fsize != fsize_req
                 @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
