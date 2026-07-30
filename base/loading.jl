@@ -1885,9 +1885,12 @@ function compilecache_freshest_path(pkg::PkgId;
         cachepaths::Vector{String}=get(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
         sourcepath::Union{String,Nothing}=Base.locate_package(pkg),
         flags::CacheFlags=CacheFlags(),
-        # this is a query, not a load: full-file corruption checks are skipped by
-        # default; a corrupted cache is rejected at load time anyway
-        verify_checksums::Bool=false)
+        # skipping the full-file corruption checks is only safe for advisory
+        # queries (e.g. `isprecompiled`): a caller whose verdict decides what
+        # gets loaded without further validation (like the precompilation
+        # driver) must keep them on, so that a corrupted cache is recompiled
+        # rather than reported as loadable
+        verify_checksums::Bool=true)
     isnothing(sourcepath) && error("Cannot locate source for $(repr("text/plain", pkg))")
     @lock require_lock begin
     set_cache = LOADING_CACHE[] === nothing
@@ -1957,7 +1960,7 @@ fresh julia session specify `ignore_loaded=true`.
     This function requires at least Julia 1.10.
 """
 function isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
-    path = compilecache_freshest_path(pkg; ignore_loaded)
+    path = compilecache_freshest_path(pkg; ignore_loaded, verify_checksums=false)
     return !isnothing(path)
 end
 
@@ -1971,7 +1974,7 @@ associated cache is relocatable.
     This function requires at least Julia 1.11.
 """
 function isrelocatable(pkg::PkgId)
-    path = compilecache_freshest_path(pkg)
+    path = compilecache_freshest_path(pkg; verify_checksums=false)
     isnothing(path) && return false
     io = open(path, "r")
     try
