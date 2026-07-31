@@ -290,7 +290,7 @@ _nslots(w::WaitEntryN) = Int(w.nslots)
 # identity witnesses whose staleness the protocols tolerate, and where an
 # owner read carries ordering obligations, the ordering is supplied
 # elsewhere (the waitee's lock, or the seq_cst publish/recheck dance of
-# `register_cancellation!`).
+# the source registration - `SourceWait` in base/park.jl).
 @inline _slot_owner(w::WaitEntry1, i::Int) = @atomic :monotonic w.owner1
 @inline _slot_owner(w::WaitEntry2, i::Int) =
     i == 1 ? (@atomic :monotonic w.owner1) : (@atomic :monotonic w.owner2)
@@ -584,55 +584,10 @@ end
     return h isa WaitEntry ? h : nothing
 end
 
-# Register the armed wait entry `w` (see `_cancel_wait_entry`/`_arm_wait`)
-# on `src`'s waiter list, so the cancellation walk can find and claim the
-# parked task, and close the arm-vs-cancel race. Returns `false` when `src`
-# was already cancelled at `w.min_severity` or above *and* this call claimed
-# the wake back: the caller must withdraw its waitee-side state and deliver
-# the refusal itself (`_deliver_refused_cancellation`); the sticky source
-# registration stays. Returns `true` when the park should proceed -
-# including when a concurrent cancellation walk claimed the freshly armed
-# entry, in which case its wake delivers the request into the park.
-function register_cancellation!(src::CancellationTokenSource, w::WaitEntry)
-    i = _find_slot(w, src)
-    if i == 0
-        # First park under `src`: claim a slot (the slot's `owner` is the
-        # push ticket - setting it before the publishing CAS orders it for
-        # any walk that can see the entry) and publish the entry with a
-        # lock-free push.
-        slot = slots(w)[_acquire_slot!(w, src)]
-        while true
-            h = _waiters_head(src)
-            slot.next = h
-            # seq_cst, pairing with the cancellation walk's state-write-
-            # then-head-read: if the walk's head read misses this push, this
-            # push is later in the total order, so the state recheck below
-            # observes the raised state (same dance as the child-attach in
-            # jl_new_cancel_source).
-            if (@atomicreplace :sequentially_consistent :monotonic src.waiters_head h => w).success
-                break
-            end
-        end
-    else
-        slot = slots(w)[i]
-        # Sticky re-arm (the entry is already registered on `src`): upgrade
-        # this thread's arm-then-recheck to the store-load ordering the
-        # race argument needs (the arm CAS itself is only `release`).
-        Core.Intrinsics.atomic_fence(:sequentially_consistent, :system)
-    end
-    # Post-publication recheck: either the concurrent cancellation walk
-    # observes our push/arm, or we observe its state write here.
-    st = @atomic :sequentially_consistent src.state
-    if st != 0x00 && st >= slot.aux % UInt8
-        t = (@atomic :monotonic w.task)::Task
-        if (@atomicreplace t.waiting_on w => nothing).success
-            return false
-        end
-        # A concurrent walk claimed the wake first; its schedule delivers
-        # the request into the park.
-    end
-    return true
-end
+# (Source registration - the sticky lock-free push, the re-arm fence, and
+# the post-publication state recheck - lives in base/park.jl as
+# `SourceWait`'s `wait_enqueue!`/`wait_recheck` methods; the refusal is
+# the driver's fired path.)
 
 # Owner-side physical unregistration of `w` from `src`'s waiter list: an
 # O(list) walk under the walk lock. Used on the rare paths that must drop a
@@ -675,7 +630,7 @@ function unregister_cancellation!(src::CancellationTokenSource, w::WaitEntry)
     return nothing
 end
 
-# Deliver the cancellation that made `register_cancellation!` refuse (the
+# Deliver the cancellation that made a source registration refuse (the
 # caller has already withdrawn its waitee-side registration and released
 # any locks the throw must not hold).
 @noinline function _deliver_refused_cancellation(src::CancellationTokenSource)
@@ -778,7 +733,8 @@ function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
     # seq_cst: the S-ordered counterpart of a registrant's seq_cst push -
     # a push this read misses is later in the total order, so that
     # registrant's state recheck observes the cancellation (see
-    # register_cancellation!); pairs with the seq_cst state read the caller
+    # `SourceWait`'s registration, base/park.jl); pairs with the seq_cst
+    # state read the caller
     # performed under the walk lock.
     x = @atomic :sequentially_consistent node.waiters_head
     w = x isa WaitEntry ? x : nothing
@@ -816,7 +772,7 @@ function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
             # (the minimum delivery severity) is only meaningful for the arm
             # it was staged for, and reading it after observing the arm pins
             # it to that arm or a later one. An arm this (seq_cst, pairing
-            # with the re-arm fence in register_cancellation!) read misses
+            # with the source registration's re-arm fence) read misses
             # is covered by its own post-arm state recheck, so skipping it
             # here is sound. The claim CAS itself may still land on a
             # *later* arm of the same entry than the one whose aux was
@@ -854,7 +810,7 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
     # own raise of the node was lost, this load is the walk's sole operation
     # on the state that can order the winner's write before the child_head
     # read below; it also pairs with the seq_cst push/arm-fence in
-    # `register_cancellation!` (state write before walk on this side, push
+    # the source registration (state write before walk on this side, push
     # or arm before state recheck on the registrant's).
     st = @atomic :sequentially_consistent node.state
     sev < st && (sev = st)

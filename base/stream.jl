@@ -1304,11 +1304,19 @@ function _uv_write_wait(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
     # order unless a request is dequeued by uv_cancel.)
     single = lastn == n
     w = _begin_uvreq_wait!(src, s, uvw)
-    if src !== nothing && !register_cancellation!(src, w)
-        # The token was cancelled since the entry check and the wake was
-        # claimed back for us: don't park. Resolve the in-flight write and
-        # report the bytes that reached the OS; the caller observes the
-        # cancellation at its next cancellation point.
+    refused = false
+    if src !== nothing
+        sw = SourceWait(src, 0x00)
+        wait_enqueue!(sw, w, false)
+        # a lost self-claim means a concurrent walk claimed the freshly
+        # armed entry: its wake delivers the request into the park below
+        refused = wait_recheck(sw, w) && disarm!(current_task(), w)
+    end
+    if refused
+        # The token was cancelled since the entry check and the recheck's
+        # self-claim won the wake back: don't park. Resolve the in-flight
+        # write and report the bytes that reached the OS; the caller
+        # observes the cancellation at its next cancellation point.
         iolock_end()
         nwritten = _uv_write_cancelled_finish(s, w, uvw,
             severity(cancel_severity(src)::CancellationRequest), src, owner, single)
@@ -1409,8 +1417,10 @@ function _uv_write_cancelled_finish(s::LibuvStream, w::WaitEntry, uvw::Ptr{Cvoid
             # the (still registered) entry - the re-park needs no new
             # registration.
             slots(w)[_find_slot(w, src)].aux = UInt64(sev + 0x01)
+            sw = SourceWait(src, UInt8(sev + 0x01))
             _arm_wait(ct, w)
-            if register_cancellation!(src, w)
+            wait_enqueue!(sw, w, false)  # sticky: the seq_cst re-arm fence
+            if !(wait_recheck(sw, w) && disarm!(ct, w))
                 iolock_end()
                 try
                     nwritten = wait()::Csize_t
