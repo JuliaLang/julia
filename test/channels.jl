@@ -431,7 +431,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq)
+        cb = first(t.cond.waitq).task::Task
         Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
@@ -446,7 +446,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq)
+        cb = first(t.cond.waitq).task::Task
         Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
@@ -460,7 +460,7 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq)
+        cb = first(async.cond.waitq).task::Task
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -496,7 +496,7 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq)
+        cb = first(async.cond.waitq).task::Task
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -745,5 +745,45 @@ end
     t = Task(f)
     message = "Querying a Task's `scope` field is disallowed.\nThe private `Core.current_scope()` function is better, though still an implementation detail."
     @test_throws ErrorException(message) t.scope
+    message = "Querying a Task's `invoked` field is disallowed because it is an implementation detail."
+    @test_throws ErrorException(message) t.invoked
+    message = "Setting a Task's `invoked` field directly is disallowed because it is an implementation detail."
+    @test_throws ErrorException(message) (t.invoked = nothing)
+    message = "Setting a Task's `result` field directly is disallowed. The result of a task is determined by the return value of its code; to pass a value to a suspended task, use `schedule(t, val)` or `yieldto(t, val)` instead."
+    @test_throws ErrorException(message) (t.result = 42)
     @test t.state == :runnable
+end
+
+function _task(@nospecialize(f), stack::Int, @nospecialize(invoke))
+    t = Core._task(f, stack, invoke)
+    t.donenotify = Base.ThreadSynchronizer()
+    return t
+end
+@testset "Core._task with invoke arguments" begin
+    # Test _task with invoke Type argument
+    f1() = 43
+    f1(x...) = x
+    t1 = _task(f1, 0, Tuple{})
+    @test fetch(schedule(t1)) === 43
+    t1 = _task(f1, 0, Tuple{Vararg})
+    @test fetch(schedule(t1)) === ()
+    t1 = _task(f1, 0, Tuple{typeof(f1)})
+    schedule(t1)
+    @test_throws TaskFailedException fetch(t1)
+
+    # Test _task with Method argument
+    m = which(f1, (Vararg,))
+    t1 = _task(f1, 0, m)
+    @test fetch(schedule(t1)) === ()
+
+    # Test that _task validates argument types
+    @test_throws TypeError Core._task(f1, "invalid_size")
+    @test_throws TypeError Core._task(f1, "invalid_size", m)
+    @test_throws ArgumentError Core._task(f1, 0, m, 1)
+    @test_throws TypeError Core._task(f1, 0, "invalid")
+    @test_throws TypeError Core._task(f1, 0, Int)
+    @test_throws TypeError Core._task(f1, 0, nothing)
+    mi = only(Base.specializations(which(f1, ())))
+    @test mi isa Core.MethodInstance
+    @test_throws TypeError Core._task(f1, 0, mi)
 end

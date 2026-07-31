@@ -89,7 +89,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 30 # do not make changes without bumping the version #!
+const ser_version = 31 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -632,6 +632,9 @@ function serialize(s::AbstractSerializer, t::Task)
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
+    # Compiler-injected CodeInstances are process-local optimization metadata and are
+    # intentionally omitted. Other targets carry explicit Core.invoke semantics.
+    has_invoked = isdefined(t, :invoked) && !(getfield(t, :invoked) isa Core.CodeInstance)
     writetag(s.io, TASK_TAG)
     serialize(s, t.code)
     serialize(s, t.storage)
@@ -645,6 +648,10 @@ function serialize(s::AbstractSerializer, t::Task)
         serialize(s, t.result)
     end
     serialize(s, t._isexception)
+    serialize(s, has_invoked)
+    if has_invoked
+        serialize(s, getfield(t, :invoked))
+    end
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
@@ -1590,6 +1597,46 @@ function deserialize_expr(s::AbstractSerializer, len)
     resolve_ref_immediately(s, e)
     e.head = deserialize(s)::Symbol
     e.args = Any[ deserialize(s) for i = 1:len ]
+
+    # Rewrite old :method expressions to define_method calls
+    if e.head === :method
+        mod = current_module[]
+        if mod === nothing
+            # No current module context, keep the :method expression and hope for the best
+            # This shouldn't happen in practice for deserialization of top-level code
+            return e
+        end
+
+        if len == 1
+            # Short form: (:method name) → (call Core.define_method module (inert name))
+            name = e.args[1]
+            if name isa GlobalRef
+                # Extract module and name from GlobalRef
+                mod_ref = name.mod
+                sym = name.name
+                e = Expr(:call, GlobalRef(Core, :define_method), mod_ref, QuoteNode(sym))
+            else
+                # Simple symbol - use the current module
+                e = Expr(:call, GlobalRef(Core, :define_method), mod, QuoteNode(name))
+            end
+        elseif len == 3
+            # Long form: (:method name_or_mt sigtype code) → (call Core.define_method module name_or_mt sigtype code)
+            name_or_mt = e.args[1]
+            sigtype = e.args[2]
+            code = e.args[3]
+            if name_or_mt isa Symbol
+                name_or_mt = QuoteNode(name_or_mt)
+                e = Expr(:call, GlobalRef(Core, :define_method), mod, name_or_mt, sigtype, code)
+            elseif name_or_mt isa GlobalRef
+                mod_ref = name_or_mt.mod
+                sym = name_or_mt.name
+                e = Expr(:call, GlobalRef(Core, :define_method), mod_ref, QuoteNode(sym), sigtype, code)
+            else
+                # name_or_mt is already something else (like false or a method table)
+                e = Expr(:call, GlobalRef(Core, :define_method), mod, name_or_mt, sigtype, code)
+            end
+        end
+    end
     e
 end
 
@@ -1735,7 +1782,8 @@ function deserialize(s::AbstractSerializer, ::Type{UnionAll})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Task})
-    t = Task(()->nothing)
+    # The task code is replaced below, so prevent attaching invoke metadata for the dummy closure.
+    t = Task(Base.inferencebarrier(()->nothing))
     deserialize_cycle(s, t)
     t.code = deserialize(s)
     t.storage = deserialize(s)
@@ -1749,7 +1797,7 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     else
         @assert false
     end
-    t.result = deserialize(s)
+    setfield!(t, :result, deserialize(s))
     exc = deserialize(s)
     if exc === nothing
         t._isexception = false
@@ -1757,7 +1805,10 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
         t._isexception = exc
     else
         t._isexception = true
-        t.result = exc
+        setfield!(t, :result, exc)
+    end
+    if format_version(s) >= 31 && (deserialize(s)::Bool)
+        setfield!(t, :invoked, deserialize(s))
     end
     t
 end

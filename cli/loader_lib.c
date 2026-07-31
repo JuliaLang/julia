@@ -122,6 +122,41 @@ static void *load_library(const char * rel_path, const char * src_dir, int allow
     return handle;
 }
 
+// case-insensitive strcmp
+static int istrcmp(const char *val, const char *token) {
+    for (; *token; val++, token++) {
+        char c = *val;
+        if (c >= 'A' && c <= 'Z')
+            c += 'a' - 'A';
+        if (c != *token)
+            return 0;
+    }
+    return *val == '\0';
+}
+
+// intended to match Base.get_bool_env
+static int env_var_bool(const char *name, int *value) {
+#if defined(_OS_WINDOWS_)
+    char val[8];
+    DWORD val_len = GetEnvironmentVariableA(name, val, sizeof(val));
+    if (val_len == 0 || val_len >= sizeof(val)) /* unset, or too long to be a token */
+        return 0;
+#else
+    const char *val = getenv(name);
+    if (val == NULL)
+        return 0;
+#endif
+    if (istrcmp(val, "t") || istrcmp(val, "true") || istrcmp(val, "y") || istrcmp(val, "yes") || istrcmp(val, "1")) {
+        *value = 1;
+        return 1;
+    }
+    if (istrcmp(val, "f") || istrcmp(val, "false") || istrcmp(val, "n") || istrcmp(val, "no") || istrcmp(val, "0")) {
+        *value = 0;
+        return 1;
+    }
+    return 0;
+}
+
 static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 #ifdef _OS_WINDOWS_
     return GetProcAddress((HMODULE) lib_handle, symbol_name);
@@ -328,13 +363,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                 int probe_successful = 0;
 
                 // Check to see if the user has disabled libstdc++ probing
-                char *probevar = getenv("JULIA_PROBE_LIBSTDCXX");
-                if (probevar) {
-                    if (strcmp(probevar, "1") == 0 || strcmp(probevar, "yes") == 0)
-                        do_probe = 1;
-                    else if (strcmp(probevar, "0") == 0 || strcmp(probevar, "no") == 0)
-                        do_probe = 0;
-                }
+                env_var_bool("JULIA_PROBE_LIBSTDCXX", &do_probe);
                 if (do_probe) {
                     const char *cxxpath = libstdcxxprobe();
                     if (cxxpath) {
@@ -367,7 +396,10 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                 libjulia_internal = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 1);
             } else if (special_idx == 2) {
                 // This special library is `libjulia-codegen`
-                libjulia_codegen = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 0);
+                int load_codegen = 1;
+                env_var_bool("JULIA_LOAD_CODEGEN_LIB", &load_codegen);
+                if (load_codegen)
+                    libjulia_codegen = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 0);
             }
             special_idx++;
         } else {

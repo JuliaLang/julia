@@ -40,12 +40,12 @@ jobs:
             | tar -xz -C "${{ runner.temp }}/typos" ./typos
           "${{ runner.temp }}/typos/typos" --version
 
-          echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/new_typos.jsonl || true
+          echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --config .github/_typos.toml --format json >> ${{ runner.temp }}/new_typos.jsonl || true
           git checkout FETCH_HEAD -- $OLD_FILES
           if [ -z "$OLD_FILES" ]; then
             touch "${{ runner.temp }}/old_typos.jsonl" # No old files, so no old typos.
           else
-            echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/old_typos.jsonl || true
+            echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --config .github/_typos.toml --format json >> ${{ runner.temp }}/old_typos.jsonl || true
           fi
 
 

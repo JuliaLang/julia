@@ -118,6 +118,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         if isa(result_type, Const)
             rettype_const = result_type.val
             const_flags = const_flag ? 0x3 : 0x2
+        elseif isa(result_type, PartialTask)
+            rettype_const = result_type
+            const_flags = 0x2
         elseif isa(result_type, PartialOpaque)
             rettype_const = result_type
             const_flags = 0x2
@@ -1276,6 +1279,8 @@ function cached_return_type(code::CodeInstance)
         return PartialStruct(fallback_lattice, rettype, undefs, fields)
     elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
         return rettype_const
+    elseif isa(rettype_const, PartialTask) && rettype <: Task
+        return rettype_const
     elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
         return rettype_const
     elseif isa(rettype_const, InterMustAlias) && rettype !== InterMustAlias
@@ -1665,7 +1670,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
             !applicable(argextype, farg, ci, sptypes) && continue # TODO: Why is this failing during bootstrap
             ftyp = argextype_widened(farg, ci, sptypes)
 
-            if ftyp === typeof(Core.finalizer) && length(stmt.args) == 3
+            if ftyp === typeof(Core.finalizer) && 3 <= length(stmt.args) <= 5
                 finalizer = argextype(stmt.args[2], ci, sptypes)
                 obj = argextype(stmt.args[3], ci, sptypes)
                 atype = argtypes_to_type(Any[finalizer, obj])

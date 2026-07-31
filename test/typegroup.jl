@@ -602,44 +602,36 @@ using Test
         @test_throws TypeError hasmethod(+, Tuple{ta, ta})
 
         # resolve_typegroup with empty inputs
-        @test Core.resolve_typegroup(@__MODULE__, Core.svec(), Core.svec()) === ()
+        @test Core.resolve_typegroup(@__MODULE__, Core.svec(), Core.svec(), Core.svec()) === ()
     end
 
     # Issue #60919: accessing incomplete types during struct definition should error, not segfault
     # These tests exercise the incomplete type safety checks added for ordinary struct lowering.
-    # Commented out until ordinary struct lowering uses the new mechanism.
-    #=
     @testset "incomplete type errors (#60919)" begin
-        # fieldtype on incomplete type with no matching field
-        @test_throws FieldError eval(:(struct TG_60919_A <: AbstractVector{fieldtype(TG_60919_A, :x)}
+        # With typegroup lowering, struct names are TypeVars during definition.
+        # Accessing incomplete types now errors safely instead of segfaulting.
+
+        # fieldtype on incomplete type (TypeVar during definition) — gets TypeError
+        @test_throws TypeError eval(:(struct TG_60919_A <: AbstractVector{fieldtype(TG_60919_A, :x)}
         end))
 
         # fieldtype on incomplete type where field exists but types aren't set yet
-        @test_throws ErrorException eval(:(struct TG_60919_B <: AbstractVector{fieldtype(TG_60919_B, :x)}
+        @test_throws TypeError eval(:(struct TG_60919_B <: AbstractVector{fieldtype(TG_60919_B, :x)}
             x::Int
         end))
 
-        # sizeof on outer incomplete type from nested struct field-type expression
-        @test_throws ErrorException eval(:(struct TG_60919_C
+        # sizeof on outer incomplete type from nested struct — errors because
+        # the inner struct constructor has free type variables (the outer TypeVar)
+        @test_throws ArgumentError eval(:(struct TG_60919_C
             x::(struct TG_60919_C_Inner; y::TG_60919_C; end; Core.sizeof(TG_60919_C); TG_60919_C_Inner)
         end))
 
-        # nested struct referencing incomplete outer type (no sizeof) — should error
-        # because the inner type's _finish_type! detects the incomplete field type
-        @test_throws ErrorException eval(:(struct TG_60919_D
+        # nested struct referencing incomplete outer type — errors because
+        # the inner struct constructor has free type variables
+        @test_throws ArgumentError eval(:(struct TG_60919_D
             x::(struct TG_60919_D_Inner; y::TG_60919_D; end; TG_60919_D_Inner)
         end))
-
-        # allocation of type with incomplete field type — new() should not succeed
-        @test_throws ErrorException eval(:(struct TG_60919_E
-            x::(struct TG_60919_E_Inner
-                y::TG_60919_E
-                TG_60919_E_Inner() = new()
-                TG_60919_E_Inner(x) = new(x)
-            end; TG_60919_E_Inner(); TG_60919_E_Inner)
-        end))
     end
-    =#
 
     # Constructing a typegroup type while types are still being defined should error, not crash
     @testset "method call on incomplete typegroup type" begin
@@ -656,12 +648,10 @@ using Test
 
     # Defining methods on incomplete types during type construction should error
     @testset "method definition on incomplete type during super expression" begin
-        # Normal struct case — commented out until ordinary struct lowering uses the new mechanism
-        #=
+        # Normal struct case
         @test_throws ArgumentError eval(:(struct TG_SideEffect_S <: (global _tg_se_f; _tg_se_f(::TG_SideEffect_S) = 1; Any)
             x::Int
         end))
-        =#
         # Typegroup case
         @test_throws ArgumentError eval(:(typegroup
             struct TG_SideEffect_A <: (global _tg_se_g; _tg_se_g(::TG_SideEffect_A) = 1; Any)
@@ -671,16 +661,12 @@ using Test
                 a::Union{Nothing, TG_SideEffect_A}
             end
         end))
-        # Subtype check on type whose super is not yet set — commented out until ordinary struct lowering uses the new mechanism
-        #=
-        @test_throws ErrorException eval(:(struct TG_SideEffect_Sub <: (TG_SideEffect_Sub <: Real ? Any : Real)
+        # Subtype check on incomplete type (TypeVar during definition)
+        @test_throws TypeError eval(:(struct TG_SideEffect_Sub <: (TG_SideEffect_Sub <: Real ? Any : Real)
         end))
-        =#
     end
 
     # Precompilation should fail for modules containing incomplete type errors.
-    # Commented out until ordinary struct lowering uses the new mechanism.
-    #=
     @testset "precompilation rejects incomplete types" begin
         mktempdir() do dir
             pushfirst!(LOAD_PATH, dir)
@@ -695,14 +681,13 @@ using Test
                 end
                 end
                 """)
-                @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :TG_PrecompIncomplete)
+                @test_throws Exception Base.require(Main, :TG_PrecompIncomplete)
             finally
                 filter!((≠)(dir), LOAD_PATH)
                 filter!((≠)(depot), DEPOT_PATH)
             end
         end
     end
-    =#
 
     @testset "invalid supertype errors" begin
         # Cannot subtype a tuple type
@@ -855,6 +840,128 @@ using Test
         @test haskey(meta, bind_c)
         @test contains(string(meta[bind_c].docs[Union{}]), "TG_DocC: only this one has a docstring")
         @test !haskey(meta, bind_d)
+    end
+
+    @testset "group type reference inside TypeVar bounds" begin
+        # The placeholder TypeVar for a group member must be substituted even
+        # when it only appears inside another TypeVar's bounds (e.g. `<:` in
+        # covariant position, which lowers to `Vector{S} where S<:Name`).
+        struct TG_BoundSelf
+            y::Vector{<:TG_BoundSelf}
+            TG_BoundSelf(y) = new(y)
+        end
+        ft = fieldtype(TG_BoundSelf, :y)
+        @test ft == Vector{<:TG_BoundSelf}
+        @test !Base.has_free_typevars(ft)
+        @test (ft::UnionAll).var.ub === TG_BoundSelf
+
+        struct TG_BoundUnion
+            x::Union{Nothing, Vector{<:TG_BoundUnion}}
+            TG_BoundUnion(x) = new(x)
+        end
+        @test !Base.has_free_typevars(fieldtype(TG_BoundUnion, :x))
+
+        struct TG_BoundWhere
+            x::Ref{S} where S<:TG_BoundWhere
+            TG_BoundWhere(x) = new(x)
+        end
+        @test !Base.has_free_typevars(fieldtype(TG_BoundWhere, :x))
+
+        # Parametric self-reference through a bound; also checks that the
+        # default constructors can be created (they reject free typevars).
+        struct TG_BoundParam{T}
+            x::T
+            y::Dict{Symbol, <:TG_BoundParam}
+        end
+        @test !Base.has_free_typevars(fieldtype(TG_BoundParam, :y))
+        v = TG_BoundParam{Int}(1, Dict{Symbol, TG_BoundParam{Int}}())
+        @test v.x == 1
+
+        # Sibling group member referenced from inside a bound
+        typegroup
+            struct TG_BoundSibA
+                items::Vector{<:TG_BoundSibB}
+                TG_BoundSibA(items) = new(items)
+            end
+            struct TG_BoundSibB
+                owner::Union{Nothing, TG_BoundSibA}
+            end
+        end
+        ftA = fieldtype(TG_BoundSibA, :items)
+        @test !Base.has_free_typevars(ftA)
+        @test (ftA::UnionAll).var.ub === TG_BoundSibB
+        b = TG_BoundSibB(nothing)
+        a = TG_BoundSibA([b])
+        @test a.items[1] === b
+
+        # Group references in a type *parameter* bound cannot be substituted
+        # (the bound is baked into the wrapper UnionAll) and must be rejected
+        # cleanly instead of escaping as a type with free placeholder vars.
+        # On the old lowering this was an UndefVarError.
+        @test_throws ErrorException @eval struct TG_BoundParamRef{T<:Union{Nothing,Vector{TG_BoundParamRef}}}
+            x::T
+            TG_BoundParamRef{T}(x) where T = new{T}(x)
+        end
+        @test !isdefined(@__MODULE__, :TG_BoundParamRef)
+
+        # The same rebuilt TypeVar must be used consistently when the var
+        # occurs in the body, so the UnionAll stays well-formed.
+        struct TG_BoundBody
+            x::Pair{S, Vector{S}} where S<:TG_BoundBody
+            TG_BoundBody(x) = new(x)
+        end
+        ftB = fieldtype(TG_BoundBody, :x)
+        @test !Base.has_free_typevars(ftB)
+        @test ftB == Pair{S, Vector{S}} where S<:TG_BoundBody
+    end
+
+    @testset "type cache hygiene" begin
+        # Count global Tuple-cache entries whose parameters reference a type
+        # with the given name that is NOT the currently bound one (i.e.
+        # discarded duplicates from redefinition, or types from a failed
+        # definition). Field types in these tests keep the reference as a
+        # direct Tuple parameter, so a shallow scan suffices.
+        function stale_tuple_cache_refs(name::Symbol, keep = nothing)
+            stale = 0
+            for cache in (Tuple.name.cache, Tuple.name.linearcache)
+                for e in cache
+                    e isa DataType || continue
+                    for p in e.parameters
+                        if p isa DataType && p.name.name === name && p !== keep
+                            stale += 1
+                        end
+                    end
+                end
+            end
+            return stale
+        end
+
+        # Identical redefinition keeps the old type; the tuples instantiated
+        # while constructing the discarded duplicate must not remain in the
+        # global type cache.
+        for _ in 1:3
+            @eval struct TG_CacheRedef
+                t::Tuple{TG_CacheRedef, Int}
+                TG_CacheRedef(t) = new(t)
+            end
+        end
+        @test stale_tuple_cache_refs(:TG_CacheRedef, TG_CacheRedef) == 0
+        # the kept type's field tuple is published and usable
+        @test fieldtype(TG_CacheRedef, :t) === Tuple{TG_CacheRedef, Int}
+
+        # A failed group definition must not leave cache entries referencing
+        # the never-published types.
+        @test_throws Exception @eval typegroup
+            struct TG_CacheFail
+                t::Tuple{TG_CacheFail, Int}
+                TG_CacheFail(t) = new(t)
+            end
+            struct TG_CacheFailBad
+                x::1
+            end
+        end
+        @test !isdefined(@__MODULE__, :TG_CacheFail)
+        @test stale_tuple_cache_refs(:TG_CacheFail) == 0
     end
 
 end

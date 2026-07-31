@@ -32,6 +32,8 @@ end
 
 # metaprogramming
 include("meta.jl")
+using .Meta
+using .Meta: is_id_char
 
 # Strings
 include("multimedia.jl")

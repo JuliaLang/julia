@@ -431,17 +431,17 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
                         get_stack_addr(rts.shift::<Address>(i as isize), offset, lb, ub);
 
                     let slot = read_stack(rts.shift::<Address>(i as isize), offset, lb, ub);
-                    use crate::julia_finalizer::gc_ptr_tag;
+                    use crate::julia_finalizer::{gc_ptr_tag, GC_FIN_CFUNC_TAG, GC_FIN_TAG_MASK};
                     // malloced pointer tagged in jl_gc_add_quiescent
                     // skip both the next element (native function), and the object
-                    if slot & 3usize == 3 {
+                    if slot & GC_FIN_TAG_MASK == GC_FIN_TAG_MASK {
                         i += 2;
                         continue;
                     }
 
                     // pointer is not malloced but function is native, so skip it
-                    if gc_ptr_tag(slot, 1) {
-                        process_offset_slot(closure, real_addr, 1);
+                    if gc_ptr_tag(slot, GC_FIN_CFUNC_TAG) {
+                        process_offset_slot(closure, real_addr, GC_FIN_CFUNC_TAG);
                         i += 2;
                         continue;
                     }

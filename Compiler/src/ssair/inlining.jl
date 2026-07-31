@@ -1195,6 +1195,36 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info::Call
             stmt.args[3] = newT
         end
     end
+    return nothing
+end
+
+function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::TaskCallInfo, state::InliningState)
+    length(stmt.args) == 3 || return nothing
+    # Extract the CodeInstance from the inference result if available
+    info_edge = extract_indirect_invoke(info.info)
+    info_edge === nothing && return nothing
+    info, edge = info_edge
+    case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
+    case === nothing && return nothing
+    # The runtime (`jl_f_invoke`) only accepts Method/CodeInstance/Type targets, so
+    # decline if compileable_specialization only found an uncached MethodInstance.
+    case.invoke isa CodeInstance || return nothing
+    # Append the CodeInstance as a third argument to the _task call
+    # Core._task(func, size) becomes Core._task(func, size, ci)
+    push!(stmt.args, case.invoke)
+    ir[SSAValue(idx)][:stmt] = stmt
+    return nothing
+end
+
+function extract_indirect_invoke(@nospecialize info::CallInfo)
+    info isa MethodResultPure && (info = info.info)
+    info isa MethodMatchInfo || return nothing
+    length(info.edges) == length(info.results) == 1 || return nothing
+    match = info.results[1]::MethodMatch
+    match.fully_covers || return nothing
+    edge = info.edges[1]
+    edge === nothing && return nothing
+    return info, edge
 end
 
 # As a matter of convenience, this pass also computes effect-freenes.
@@ -1264,7 +1294,8 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
                 f !== modifyfield! &&
                 f !== Core.modifyglobal! &&
                 f !== Core.memoryrefmodify! &&
-                f !== atomic_pointermodify)
+                f !== atomic_pointermodify &&
+                f !== Core._task)
                 # No inlining defined for most builtins (just invoke/apply/typeassert/finalizer), so attempt an early exit for them
                 return nothing
             end
@@ -1491,14 +1522,9 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
 end
 
 function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOpInfo, state::InliningState)
-    info = info.info
-    info isa MethodResultPure && (info = info.info)
-    info isa MethodMatchInfo || return nothing
-    length(info.edges) == length(info.results) == 1 || return nothing
-    match = info.results[1]::MethodMatch
-    match.fully_covers || return nothing
-    edge = info.edges[1]
-    edge === nothing && return nothing
+    info_edge = extract_indirect_invoke(info.info)
+    info_edge === nothing && return nothing
+    info, edge = info_edge
     case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
     case === nothing && return nothing
     stmt.head = :invoke_modify
@@ -1542,7 +1568,9 @@ function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::Finalize
                 push!(stmt.args, true)
                 push!(stmt.args, code)
             end
-        elseif isa(item1, InvokeCase)
+        elseif isa(item1, InvokeCase) && item1.invoke isa CodeInstance
+            # like handle_task_call!, an uncached MethodInstance is unusable here, since
+            # `try_resolve_finalizer!` requires a CodeInstance in this argument position
             push!(stmt.args, false)
             push!(stmt.args, item1.invoke)
         elseif isa(item1, ConstantCase)
@@ -1619,6 +1647,8 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, ModifyOpInfo)
             handle_modifyop!_call!(ir, idx, stmt, info, state)
+        elseif isa(info, TaskCallInfo)
+            handle_task_call!(ir, idx, stmt, info, state)
         elseif sig.f === Core.invoke
             handle_invoke_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, FinalizerInfo)
@@ -1684,6 +1714,9 @@ function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
         elseif ⊑(optimizer_lattice(state.interp), cond, Bool) && stmt.args[3] === stmt.args[4]
             return SomeCase(stmt.args[3])
         end
+    elseif (f === Core.task_result_type && length(argtypes) == 2 &&
+            ⊑(optimizer_lattice(state.interp), argtypes[2], Task))
+        return SomeCase(quoted(instanceof_tfunc(type)[1]))
     end
     return nothing
 end

@@ -1732,6 +1732,7 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     end
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
+    LineEdit.query_colors(repl.mistate.terminal_properties, terminal(repl))
     # Copy prompt_ready_event from repl to mistate (used by precompilation)
     if isdefined(repl, :prompt_ready_event) && repl.prompt_ready_event !== nothing
         repl.mistate.prompt_ready_event = repl.prompt_ready_event
