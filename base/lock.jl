@@ -264,30 +264,14 @@ lock(c::GenericCondition{ReentrantLock}; cancel::CancelTokenArg=DEFAULT_CANCEL) 
     lock(c.lock; cancel)
 
 function wait_no_relock(c::GenericCondition, tok::MaybeToken)
-    ct = current_task()
+    # relock=false: a normal wake returns without retaking the lock (the
+    # notifier's handoff popped our entry), the refusal releases before
+    # throwing (e.g. a token cancelled while we were still spinning and
+    # thus not interruptibly waiting), and the interrupted cleanup retakes
+    # the lock only for its unlink
     src = cancel_source(tok)
-    entry = src === nothing ? nothing : _cancel_wait_entry(ct, src, 0x00)
-    w = _wait2(c, ct; entry)
-    if src !== nothing && !register_cancellation!(src, w)
-        # The governing token is already cancelled (e.g. it was cancelled
-        # while we were still spinning and thus not interruptibly waiting)
-        # and the wake was claimed back for us: don't park. (The sticky
-        # source registration stays.)
-        list_deletefirst!(waitqueue(c), w)
-        unlock(c.lock)
-        _deliver_refused_cancellation(src)
-    end
-    unlockall(c.lock)
-    try
-        # a normal wake needs no source-registration cleanup (sticky)
-        return wait()
-    catch
-        # resumed without a wake through `w`; see _interrupted_wait_cleanup
-        # (no relock for the caller: the lock is retaken only for the unlink)
-        _interrupted_wait_cleanup(() -> lock(c.lock), c, w)
-        unlock(c.lock)
-        rethrow()
-    end
+    src === nothing && return park!((c,), false, false)
+    return park!((c, SourceWait(src, 0x00)), false, false)
 end
 
 

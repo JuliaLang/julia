@@ -127,14 +127,33 @@ islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
+## GenericCondition as a waitable (see base/park.jl): the lock-carried
+## kind - its lock is caller-held from before phase 4 into the suspend
+## bracket, which is what makes its recheck vacuous.
+function wait_enqueue!(c::GenericCondition, w::WaitEntry, first::Bool)
+    if first
+        pushfirst!(waitqueue(c), w)
+    else
+        push!(waitqueue(c), w)
+    end
+    return true
+end
+wait_release!(c::GenericCondition) = unlockall(c.lock)
+wait_reacquire!(c::GenericCondition, token) = relockall(c.lock, token)
+function wait_dequeue!(c::GenericCondition, w::WaitEntry, why::UInt8)
+    # under the (re)acquired lock on every path that reaches here; a no-op
+    # when a notify already popped the entry
+    list_deletefirst!(waitqueue(c), w)
+    return nothing
+end
+
 # have waiter wait for c: register `waiter` on c's wait queue (the queue's
 # identity is the condition itself) and arm the registration for a wake.
 # Returns the registration entry.
-function _wait2(c::GenericCondition, waiter::Task, first::Bool=false;
-                entry::Union{WaitEntry, Nothing}=nothing)
+function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
     ct = current_task()
     assert_havelock(c)
-    w = entry === nothing ? _cached_wait_entry(waiter) : entry
+    w = _cached_wait_entry(waiter)
     _arm_wait(waiter, w)
     if first
         pushfirst!(waitqueue(c), w)
@@ -196,65 +215,8 @@ wait(c::GenericCondition; first::Bool=false,
      cancel::CancelTokenArg=DEFAULT_CANCEL) =
     wait(c, check_cancel_arg(cancel); first)
 
-# Cleanup of a park that was resumed without a wake having been delivered
-# through its registration `w`: either an interrupter claimed the wake
-# (leaving the entry linked for us to clean up), or the task got a raw
-# `throwto`. The caller rethrows afterwards, with whatever lock state
-# `relock` established. In order:
-#  1. Disarm the registration - before the relock in step 2 can register a
-#     new wait. When the disarm loses, a claimer got the wake: its
-#     schedule is either already enqueued or still in flight under the
-#     waitee's lock.
-#  2. Run `relock` with the cached entry blanked: a notifier may have popped
-#     the stale entry without scheduling us and may still retain its
-#     identity for the wake-claim CAS, so `w` must not be reused (e.g. by a
-#     park inside `relock`) before the unlink below.
-#  3. Unlink `w` from the waitee's queue (a no-op if a `notify` already
-#     popped and dropped it).
-#  4. Drop a claimed-and-enqueued wake this unwind will never consume, so a
-#     later wait of this task does not consume it spuriously. This runs
-#     after the relock on purpose: a notifier that claimed our wake did so
-#     under the waitee's lock, so once `relock` returns, its enqueue has
-#     landed and the drop here is deterministic - dropping before the
-#     relock would race the notifier's in-flight schedule and leak the
-#     wake into the task's next wait. (If the *relock itself* parked and
-#     consumed the stale wake as a spurious lock wake, its acquire loop
-#     re-tested and re-parked - lock parks tolerate spurious wakes - and
-#     there is nothing left to drop. A claim-less raw wake delivered
-#     outside any lock - the documented-unsafe `schedule(t, exc,
-#     error=true)` of a running task - can still land after this drop;
-#     that hazard is the primitive's, not this path's.)
-#  5. Now `w` is safe to reuse: restore it to its cache unless the relock
-#     parked and cached a replacement. In that case `w` is unreachable
-#     garbage (unarmed, off every waitq), so retire it: its sticky source
-#     registration must be counted dead for pruning, or a long-lived
-#     source would retain the task through the orphaned entry.
-function _interrupted_wait_cleanup(relock, c::GenericCondition, w::WaitEntry)
-    ct = current_task()
-    @atomicreplace ct.waiting_on w => nothing
-    was_plain = ct.cached_wait_entry === w
-    was_cancel = !was_plain && ct.cached_cancel_entry === w
-    was_plain && (ct.cached_wait_entry = nothing)
-    was_cancel && (ct.cached_cancel_entry = nothing)
-    relock()
-    list_deletefirst!(waitqueue(c), w)
-    q = ct.queue
-    q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
-    if was_plain
-        if ct.cached_wait_entry === nothing
-            ct.cached_wait_entry = w
-        else
-            retire_cancellation_entry!(w)
-        end
-    elseif was_cancel
-        if ct.cached_cancel_entry === nothing
-            ct.cached_cancel_entry = w
-        else
-            retire_cancellation_entry!(w)
-        end
-    end
-    return nothing
-end
+# (The interrupted-wait cleanup lives in base/park.jl as
+# interrupted_park_cleanup!, shared by every park site.)
 
 # `min_severity` is the lowest severity that may wake (cancel) this wait -
 # the comparisons are inclusive on both the registration and walk sides. A
@@ -264,37 +226,16 @@ end
 # it; see e.g. _uv_write_cancelled_finish.
 function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
               min_severity::UInt8=0x00)
-    ct = current_task()
     assert_havelock(c)
     src = cancel_source(tok)
     # entry check: throw before enqueueing anything (skipped for teardown
     # waits that re-park after acknowledging a severity)
     src === nothing || min_severity != 0x00 || checkcancel(src)
-    entry = src === nothing ? nothing : _cancel_wait_entry(ct, src, min_severity)
-    w = _wait2(c, ct, first; entry)
-    if src !== nothing && !register_cancellation!(src, w)
-        # The governing source is already cancelled and the wake was claimed
-        # back for us: withdraw the waitee-queue registration (the sticky
-        # source registration stays) and deliver the cancellation ourselves.
-        list_deletefirst!(waitqueue(c), w)
-        _deliver_refused_cancellation(src)
-    end
-    token = unlockall(c.lock)
-    ret = try
-        wait()
-    catch
-        # resumed without a wake through `w`; see _interrupted_wait_cleanup
-        _interrupted_wait_cleanup(() -> relockall(c.lock, token), c, w)
-        rethrow()
-    end
-    # a normal wake implies our claim was won and our waitee-queue entry was
-    # already unlinked by the notifier (a wake that arrived as a value from
-    # something other than this waitee's notify leaves the entry to us - the
-    # delete below is a no-op in the common case); the sticky source
-    # registration needs no cleanup at all
-    relockall(c.lock, token)
-    list_deletefirst!(waitqueue(c), w)
-    return ret
+    # the refusal (a cancelled source at the registration recheck) throws
+    # with the lock held, like a normal-wake return - the caller's unlock
+    # discipline covers both
+    src === nothing && return park!((c,), true, first)
+    return park!((c, SourceWait(src, min_severity)), true, first)
 end
 
 """

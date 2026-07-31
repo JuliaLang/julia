@@ -554,9 +554,54 @@ function _end_uvreq_wait!(w::WaitEntry, @nospecialize(witness), req::Ptr{Cvoid},
     # Drop a claimed-and-enqueued wake an interrupted teardown will never
     # consume. The completion callback claims and schedules under the
     # iolock this function holds, so the drop is deterministic here (cf.
-    # step 4 of _interrupted_wait_cleanup).
+    # the interrupted cleanup in base/park.jl).
     q = ct.queue
     q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
+    iolock_end()
+    sigatomic_end()
+    unpreserve_handle(ct)
+    return nothing
+end
+
+## An in-flight libuv request as a waitable (see base/park.jl): the
+## held-resource kind. The caller issues the request under the iolock and
+## keeps it held into `park!` - the completion callback runs under that
+## same lock, so the recheck is vacuous - and the request's data pointer
+## doubles as the completion/detach handshake: the dequeue resolves its
+## ownership on every exit path (callback already ran => we free it;
+## otherwise it is detached to the callback, `uv_cancel`ed when
+## requested, with the write's buffer kept rooted until then). The
+## dequeue also consumes the reacquired iolock/sigatomic bracket.
+struct UvReqWait
+    req::Ptr{Cvoid}
+    witness::Any      # the waitee identity (the handle, or the request)
+    owner::Any        # buffer root for a detached request
+    trycancel::Bool
+end
+
+function wait_enqueue!(x::UvReqWait, w::WaitEntry, first::Bool)
+    ct = current_task()
+    _set_wait_witness!(w, x.witness)
+    preserve_handle(ct)
+    sigatomic_begin()
+    uv_req_set_data(x.req, pointer_from_objref(w))
+    return true
+end
+
+wait_release!(x::UvReqWait) = (iolock_end(); sigatomic_end(); nothing)
+wait_reacquire!(x::UvReqWait, token) = (sigatomic_begin(); iolock_begin(); nothing)
+
+function wait_dequeue!(x::UvReqWait, w::WaitEntry, why::UInt8)
+    ct = current_task()
+    req = x.req
+    if uv_req_data(req) == C_NULL
+        Libc.free(req)
+    else
+        x.trycancel && ccall(:uv_cancel, Cint, (Ptr{Cvoid},), req) # ignore any errors
+        uv_req_set_data(req, UV_REQ_DETACHED)
+        _root_detached_uvreq!(req, x.owner)
+    end
+    _clear_wait_witness!(w, x.witness)
     iolock_end()
     sigatomic_end()
     unpreserve_handle(ct)
@@ -567,33 +612,19 @@ end
 # its completion callback delivers. A cancellation of `src` interrupts the
 # wait and throws the CancellationRequest - without parking at all when
 # `src` got cancelled between the caller's entry check and the registration
-# here; either way the request is left to its callback (see
-# _end_uvreq_wait!). The caller must have issued `req` under the still-held
-# iolock - so the callback cannot have run yet - and gets it back with the
-# iolock released.
+# here; either way the request is left to its callback (see the dequeue
+# above). The caller must have issued `req` under the still-held iolock -
+# so the callback cannot have run yet - and gets it back with the iolock
+# released.
 function _wait_uvreq(src::Union{Nothing, CancellationTokenSource}, @nospecialize(witness),
                      req::Ptr{Cvoid}, trycancel::Bool, @nospecialize(owner))
-    w = _begin_uvreq_wait!(src, witness, req)
-    if src !== nothing && !register_cancellation!(src, w)
-        # the wake was claimed back for us: don't park
-        _end_uvreq_wait!(w, witness, req, trycancel, owner)
-        _deliver_refused_cancellation(src)
+    ct = current_task()
+    uvw = UvReqWait(req, witness, owner, trycancel)
+    if src === nothing
+        return park!((uvw,), _cached_wait_entry(ct), true, false)
+    else
+        return park!((uvw, SourceWait(src, 0x00)), _cancel_wait_entry(ct, src, 0x00), true, false)
     end
-    iolock_end()
-    local r
-    try
-        sigatomic_end()
-        r = wait()
-        sigatomic_begin()
-    catch
-        # (catch restored the sigatomic level from the try entry)
-        iolock_begin()
-        _end_uvreq_wait!(w, witness, req, trycancel, owner)
-        rethrow()
-    end
-    iolock_begin()
-    _end_uvreq_wait!(w, witness, req, trycancel, owner)
-    return r
 end
 
 # Completion-callback side of the wait (runs under the iolock): resolve

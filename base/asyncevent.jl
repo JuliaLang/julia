@@ -468,3 +468,51 @@ function timedwait(testcb, timeout::Real; pollint::Real=0.1)
     end
     return :timed_out
 end
+
+## A deadline as a waitable (see base/park.jl): `TimeoutWait(dt)` in a
+## park's waitables wakes the wait with `:timed_out` after `dt` seconds.
+## Its enqueue - running inside `park!`, after the arm - starts the timer
+## and spawns the claimer task, which wakes the parked task through the
+## standard expected-entry claim CAS. That CAS is a *specific-wait* waker:
+## it is only sound against a fresh, single-use entry (which the entry
+## cache contract supplies automatically - any non-canonical waitable
+## shape gets a fresh entry), since entry identity is what scopes the
+## claim to this wait and not a later one of the same task. The claimed
+## waitq registration is left for the driver's lazy settle; the dequeue
+## closes the timer on every exit path.
+mutable struct TimeoutWait
+    const timeout::Float64
+    timer::Union{Timer, Nothing}
+    TimeoutWait(timeout::Real) = new(Float64(timeout), nothing)
+end
+
+function wait_enqueue!(x::TimeoutWait, w::WaitEntry, first::Bool)
+    ct = current_task()
+    timer = Timer(x.timeout)
+    x.timer = timer
+    t = Task() do
+        try
+            # not cancellable: internal mechanism; closing the timer wakes
+            # this task on every exit path of the governed wait
+            wait(timer; cancel=nothing)
+        catch e
+            # a closed timer means the wait ended first; do nothing
+            e isa EOFError && return
+            rethrow()
+        end
+        if (@atomicreplace ct.waiting_on w => nothing).success
+            schedule(ct, :timed_out)
+        end
+    end
+    t.sticky = false
+    Threads._spawn_set_thrpool(t, :interactive)
+    schedule(t)
+    return true
+end
+
+function wait_dequeue!(x::TimeoutWait, w::WaitEntry, why::UInt8)
+    timer = x.timer
+    timer === nothing || close(timer)
+    x.timer = nothing
+    return nothing
+end
