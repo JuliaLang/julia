@@ -148,6 +148,37 @@ ERROR: UndefRefError: access to undefined reference
 unsetindex!(A::Memory, i::Int) = (@_propagate_inbounds_meta; unsetindex!(memoryref(A, i)); A)
 unsetindex!(A::Union{Array, Memory}, i::Integer) = unsetindex!(A, to_index(i))
 
+"""
+    unsetindex!(::AtomicMemoryRef, ordering::Symbol)
+
+Same as `unsetindex!(::MemoryRef)`, but the index is atomically unset with the
+atomic memory ordering set by `ordering`.
+Currently, `ordering` may be `:unordered`, `:monotonic`, `:release`,
+or `:sequentially_consistent`. See the manual on atomics for the meaning of these
+orderings.
+"""
+function unsetindex!(A::AtomicMemoryRef, order::Symbol)
+    @_propagate_inbounds_meta
+    Core.memoryrefunset!(A, order, @_boundscheck)
+    return A
+end
+
+"""
+    unsetindex!(A::AtomicMemory, order::Symbol, i::Integer)
+
+Same as `unsetindex!(::Memory, ::Integer)`, but the index is atomically unset with the
+atomic memory ordering set by `ordering`.
+Currently, `ordering` may be `:unordered`, `:monotonic`, `:release`,
+or `:sequentially_consistent`. See the manual on atomics for the meaning of these
+orderings.
+"""
+function unsetindex!(A::AtomicMemory, order::Symbol, i::Int)
+    @_propagate_inbounds_meta
+    unsetindex!(memoryref(A, i), order)
+    return A
+end
+
+unsetindex!(A::AtomicMemory, order::Symbol, i::Integer) = unsetindex!(A, order, to_index(i))
 
 elsize(@nospecialize _::Type{A}) where {T,A<:GenericMemory{<:Any,T}} = aligned_sizeof(T) # XXX: probably supposed to be the stride?
 sizeof(a::GenericMemory) = Core.sizeof(a)
