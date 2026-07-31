@@ -1095,6 +1095,18 @@ end
     B = copy(A); @test all!(!, view(B, 1:1, 1:1, 1:1),B) == all(!, A; dims=(1,2,3))
 end
 
+# The in-place reduction forwards for PermutedDimsArray must accept (and forward) the
+# full keyword surface of `mapreduce!`; `sum!` and friends always pass `update`
+@testset "in-place reductions over PermutedDimsArray" begin
+    A = rand(4, 3)
+    P = PermutedDimsArray(A, (2, 1))
+    @test sum!(zeros(1, 4), P) ≈ sum(Matrix(P); dims=1)
+    @test sum!(zeros(3, 1), P) ≈ sum(Matrix(P); dims=2)
+    r = fill(1.0, 1, 4)
+    @test sum!(r, P; init=false) ≈ sum(Matrix(P); dims=1) .+ 1
+    @test maximum!(fill(-Inf, 1, 4), P) ≈ maximum(Matrix(P); dims=1)
+end
+
 # The commutative reduction kernel processes 16 fixed accumulator lanes; make sure the
 # dimension lengths spanning that boundary (and the thresholds routing to it) stay exact
 @testset "reduction kernel lane-count boundaries" begin
