@@ -67,7 +67,27 @@ $(LIBSSH2_SRC_PATH)/libssh2-unconst-backport.patch-applied: $(LIBSSH2_SRC_PATH)/
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-unconst-backport.patch
 	echo 1 > $@
 
-$(LIBSSH2_SRC_PATH)/source-patched: $(LIBSSH2_SRC_PATH)/libssh2-unconst-backport.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66032.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-unconst-backport.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66032.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66033.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66032.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66033.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66034.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66033.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66034.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66035.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66034.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66035.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/source-patched: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66035.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-patched
