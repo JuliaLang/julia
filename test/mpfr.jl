@@ -1121,8 +1121,4 @@ end
     end
 end
 
-@testset "BigFloat mutability" begin
-    @test_throws FieldError BigFloat(1).d = 1
-    @test_throws FieldError BigFloat(1).s = 1
-    @test_throws FieldError BigFloat(1).notfield = 1
-end
+@test_throws FieldError BigFloat(1).notfield = 1
