@@ -249,7 +249,7 @@ end # os-test
 #TODO: Make these more efficient
 function length(::EnvDict)
     i = 0
-    for (k,v) in ENV
+    for _ in ENV
         i += 1
     end
     return i

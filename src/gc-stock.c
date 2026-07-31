@@ -2225,13 +2225,13 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
             }
             else {
                 new_obj = (jl_value_t *)gc_read_stack(&rts[i], offset, lb, ub);
-                if (gc_ptr_tag(new_obj, 1)) {
+                if (gc_ptr_tag(new_obj, GC_FIN_CFUNC_TAG)) {
                     // handle tagged pointers in finalizer list
-                    new_obj = (jl_value_t *)gc_ptr_clear_tag(new_obj, 1);
+                    new_obj = (jl_value_t *)gc_ptr_clear_tag(new_obj, GC_FIN_CFUNC_TAG);
                     // skip over the finalizer fptr
                     i++;
                 }
-                if (gc_ptr_tag(new_obj, 2))
+                if (gc_ptr_tag(new_obj, GC_FIN_COBJ_TAG))
                     continue;
                 // conservatively check for the presence of any smalltag type, instead of just NULL
                 // in the very unlikely event that codegen decides to root the result of julia.typeof
@@ -2337,12 +2337,12 @@ static void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_va
         new_obj = *slot;
         if (__unlikely(new_obj == NULL))
             continue;
-        if (gc_ptr_tag(new_obj, 1)) {
-            new_obj = (jl_value_t *)gc_ptr_clear_tag(new_obj, 1);
+        if (gc_ptr_tag(new_obj, GC_FIN_CFUNC_TAG)) {
+            new_obj = (jl_value_t *)gc_ptr_clear_tag(new_obj, GC_FIN_CFUNC_TAG);
             fl_begin++;
             assert(fl_begin < fl_end);
         }
-        if (gc_ptr_tag(new_obj, 2))
+        if (gc_ptr_tag(new_obj, GC_FIN_COBJ_TAG))
             continue;
         gc_try_claim_and_push(mq, new_obj, NULL);
         if (fl_parent != NULL) {
@@ -3114,7 +3114,7 @@ static void sweep_finalizer_list(arraylist_t *list) JL_NOTSAFEPOINT
     size_t j = 0;
     for (size_t i=0; i < len; i+=2) {
         void *v0 = items[i];
-        void *v = gc_ptr_clear_tag(v0, 3);
+        void *v = gc_ptr_clear_tag(v0, GC_FIN_TAG_MASK);
         if (__unlikely(!v0)) {
             // remove from this list
             continue;
@@ -3123,7 +3123,7 @@ static void sweep_finalizer_list(arraylist_t *list) JL_NOTSAFEPOINT
         void *fin = items[i+1];
         int isfreed;
         int isold;
-        if (gc_ptr_tag(v0, 2)) {
+        if (gc_ptr_tag(v0, GC_FIN_COBJ_TAG)) {
             isfreed = 1;
             isold = 0;
         }
@@ -3131,7 +3131,8 @@ static void sweep_finalizer_list(arraylist_t *list) JL_NOTSAFEPOINT
             isfreed = !gc_marked(jl_astaggedvalue(v)->bits.gc);
             isold = (list != &finalizer_list_marked &&
                      jl_astaggedvalue(v)->bits.gc == GC_OLD_MARKED &&
-                     jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED);
+                     (gc_ptr_tag(v0, GC_FIN_CFUNC_TAG) ||
+                      jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED));
         }
         if (isfreed || isold) {
             // remove from this list
@@ -3688,6 +3689,48 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     reset_thread_gc_counts();
 
     return recollect;
+}
+
+// collector entry point and control
+_Atomic(uint32_t) jl_gc_disable_counter = 1;
+
+JL_DLLEXPORT int jl_gc_enable(int on)
+{
+    JL_SIGATOMIC_BEGIN();
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
+        }
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+        // check if the GC is running and wait for it to finish
+        jl_gc_safepoint_(ptls);
+    }
+    JL_SIGATOMIC_END();
+    return prev;
+}
+
+JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on)
+{
+    if (on)
+        jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    else {
+        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+        // pass NULL as a special token to indicate we are running on an unmanaged task
+        jl_safepoint_wait_gc(NULL);
+    }
+}
+
+JL_DLLEXPORT int jl_gc_is_globally_enabled(void)
+{
+    return !jl_atomic_load_acquire(&jl_gc_disable_counter);
 }
 
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)

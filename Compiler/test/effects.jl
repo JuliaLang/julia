@@ -1605,3 +1605,29 @@ end
 # issue #61590
 @test !Compiler.is_consistent(Base.infer_effects(getproperty, (Core.TypeName, Symbol)))
 @test !Compiler.is_consistent(Base.infer_effects(getfield, (Core.TypeName, Symbol)))
+
+# task_result_type effects modeling (should have !consistent effect)
+let effects = Base.infer_effects(Core.task_result_type, (Task,))
+    @test !Compiler.is_consistent(effects)  # !consistent bit should be set
+    @test Compiler.is_effect_free(effects)
+    @test Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+end
+let effects = Base.infer_effects(Core.task_result_type, (Union{Task,Int},))
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+end
+for argtypes in ((), (Int,), (Task, Task))
+    @test !Compiler.is_nothrow(Base.infer_effects(Core.task_result_type, argtypes))
+end
+
+# Core._task effects modeling: creating a task terminates and has no UB, but
+# accesses task state (scope inheritance, parent RNG split) and may throw
+let effects = Base.infer_effects(Core._task, (Function, Int))
+    @test !Compiler.is_consistent(effects)
+    @test !Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+    @test !Compiler.is_notaskstate(effects)
+    @test Compiler.is_noub(effects)
+end

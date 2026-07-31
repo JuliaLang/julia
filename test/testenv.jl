@@ -42,6 +42,38 @@ if !@isdefined(testenv_defined)
     # hook in runtests.jl can signal workers that have hung in the meantime.
     const worker_ospids = Dict{Int, Int}()
 
+    # Best-effort enumeration of the direct children of `pid`.
+    function child_pids(pid::Integer)
+        children = Int[]
+        try
+            # On Linux, read /proc. Elsewhere, ask pgrep.
+            if Sys.islinux()
+                for tid in readdir("/proc/$pid/task")
+                    append!(children, parse.(Int, split(read("/proc/$pid/task/$tid/children", String))))
+                end
+            else
+                # `pgrep -P` exits non-zero when there are no matches
+                append!(children, parse.(Int, split(read(ignorestatus(`pgrep -P $pid`), String))))
+            end
+        catch
+            # the process may have exited already; return what we have
+        end
+        return children
+    end
+
+    # Best-effort enumeration of the live descendants (children, grandchildren, ...)
+    # of `pid`, ordered parents-before-children.
+    function descendant_pids(pid::Integer)
+        pids = Int[]
+        queue = Int[pid]
+        while !isempty(queue)
+            children = child_pids(popfirst!(queue))
+            append!(pids, children)
+            append!(queue, children)
+        end
+        return pids
+    end
+
     function addprocs_with_testenv(X; rr_allowed=true, kwargs...)
         exename = rr_allowed ? `$rr_exename $test_exename` : test_exename
         if X isa Integer

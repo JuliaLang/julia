@@ -469,6 +469,17 @@ struct ModifyOpInfo <: CallInfo
 end
 add_edges_impl(edges::Vector{Any}, info::ModifyOpInfo) = add_edges!(edges, info.info)
 
+"""
+    info::TaskCallInfo <: CallInfo
+
+Represents a resolved call of `Core._task(f, size)`. `info.info` wraps the call
+information of the deferred `f()` call that runs when the created task is scheduled.
+"""
+struct TaskCallInfo <: CallInfo
+    info::CallInfo # the callinfo for the deferred `f()` call
+end
+add_edges_impl(edges::Vector{Any}, info::TaskCallInfo) = add_edges!(edges, info.info)
+
 struct VirtualMethodMatchInfo <: CallInfo
     info::Union{MethodMatchInfo,UnionSplitInfo,InvokeCallInfo}
 end
