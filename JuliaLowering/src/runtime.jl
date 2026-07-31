@@ -271,7 +271,7 @@ function _gen_args_from_syms(ctx, src, args, sc)
     out = SyntaxList()
     for a in args
         id = newleaf(src, K"Identifier", string(a))
-        id = _est_to_dst_ident(id) # support placeholders
+        id = est_to_dst_ident(SyntaxCompatContext(), id) # support placeholders
         id = @mknode(id; context=sc)
         push!(out, id)
     end

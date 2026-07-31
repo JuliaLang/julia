@@ -1360,6 +1360,7 @@ vst2_ident_val(vcx, st) = @stm st begin
     [K"BindingId"] -> pass()
     [K"core"] -> pass()
     [K"top"] -> pass()
+    [K"thisfunction"] -> pass()
     _ -> @fail(st, "expected identifier (val)")
 end
 
