@@ -223,7 +223,17 @@ void jl_lock_profile(void)
     assert(got); (void)got;
 }
 
+// Blocking, apart from the recursion guard: callers such as rec_backtrace use
+// this before touching jl_in_stackwalk, and treat failure as "no backtrace at
+// all", so they must not lose the lock merely because it is contended.
 int jl_trylock_profile(void)
+{
+    return jl_lock_profile_rd(1);
+}
+
+// Never waits. For callers that already hold jl_in_stackwalk and therefore
+// cannot afford to wait for the debug-info lock (see jl_lock_profile_rd).
+int jl_trylock_profile_nowait(void)
 {
     return jl_lock_profile_rd(0);
 }
