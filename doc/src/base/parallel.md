@@ -58,6 +58,28 @@ Base.@lock
 Base.Lockable
 ```
 
+## Cancellation
+
+Cooperative cancellation of blocked waits and (in future steps of this work)
+running computations is organized around cancellation token sources and the
+tokens they hand out. Blocking operations across `Base`, `Sockets` and
+`FileWatching` accept a `cancel` keyword argument governing which token may
+interrupt them; the scoped default is [`Base.CANCEL_TOKEN`](@ref).
+
+```@docs
+Base.CancellationTokenSource
+Base.CancellationToken
+Base.CancellationRequest
+Base.cancel!
+Base.iscancelled
+Base.cancel_severity
+Base.CANCEL_TOKEN
+Base.@cancel_check
+Base.CANCEL_REQUEST_SAFE
+Base.CANCEL_REQUEST_ABANDON_EXTERNAL
+Base.CANCEL_REQUEST_ABANDON_ALL
+```
+
 ## Channels
 
 ```@docs
