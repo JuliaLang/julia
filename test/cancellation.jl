@@ -1072,7 +1072,7 @@ end
     expect_cancelled(t)
     close(p2)
 
-    # live cancellation: blocked write - the cancelled write returns the
+    # live cancellation: blocked write - `writepartial` returns the
     # partial byte count; the cancellation is delivered at the writer's
     # next cancellation point
     p3 = linked_pipe()
@@ -1081,7 +1081,7 @@ end
     tok3 = CancellationToken(src3)
     nwritten3 = Ref{Any}(nothing)
     t3 = @async begin
-        nwritten3[] = write(p3.in, big; cancel=tok3)
+        nwritten3[] = writepartial(p3.in, big; cancel=tok3)
         Base.@cancel_check tok3
     end
     sleep(0.5)
@@ -1132,23 +1132,37 @@ end
     p = linked_pipe()
     try
         # A write far exceeding the OS pipe buffer blocks until cancelled.
-        # The cancelled write does not throw: it returns the partial byte
-        # count (for a SAFE cancellation only once the completion callback
-        # has provably released the buffer), and the cancellation is
-        # delivered at the writer's next cancellation point.
+        # `write` throws the CancellationRequest (after the in-flight
+        # request is resolved - for a SAFE cancellation only once the
+        # completion callback has provably released the buffer); callers
+        # prepared for short counts use `writepartial`, which returns the
+        # partial byte count and leaves delivery to the next cancellation
+        # point.
+        big = zeros(UInt8, BIG_WRITE)
+        t, src = cancellable() do
+            write(p, big)
+        end
+        @test timedwait(() -> parked_on(t, p.in), 10.0) == :ok
+        cancel!(src)
+        expect_cancelled(t)
+    finally
+        close(p)
+    end
+    p2 = linked_pipe()
+    try
         big = zeros(UInt8, BIG_WRITE)
         nwritten = Ref{Any}(nothing)
         t, src = cancellable() do
-            nwritten[] = write(p, big)
+            nwritten[] = writepartial(p2.in, big)
             Base.@cancel_check
         end
-        @test timedwait(() -> parked_on(t, p.in), 10.0) == :ok
+        @test timedwait(() -> parked_on(t, p2.in), 10.0) == :ok
         cancel!(src)
         expect_cancelled(t)
         @test nwritten[] isa Int
         @test 0 <= nwritten[] < length(big)
     finally
-        close(p)
+        close(p2)
     end
 end
 
@@ -1158,9 +1172,8 @@ end
         # A blocked write keeps the shutdown request (which queues behind it)
         # from completing; the closewrite wait must still be interruptible.
         big = zeros(UInt8, BIG_WRITE)
-        # (the cancelled write itself returns a partial count; the trailing
-        # cancellation point delivers the request)
-        tw, srcw = cancellable(() -> (write(p, big); Base.@cancel_check))
+        # (the cancelled write itself throws the request)
+        tw, srcw = cancellable(() -> write(p, big))
         @test timedwait(() -> parked_on(tw, p.in), 10.0) == :ok
         ts, srcs = cancellable(() -> closewrite(p.in))
         @test timedwait(() -> parked_on(ts, p.in), 5.0) == :ok
@@ -1433,7 +1446,7 @@ end
         # a big direct write fills the OS pipe buffer and parks, so the
         # flush below queues behind it and cannot complete
         big = zeros(UInt8, BIG_WRITE)
-        tw, srcw = cancellable(() -> (write(p.in, big); Base.@cancel_check))
+        tw, srcw = cancellable(() -> write(p.in, big))
         @test timedwait(() -> parked_on(tw, p.in), 10.0) == :ok
         data = UInt8['a', 'b', 'c', 'd']
         write(p.in, data) # lands in the send buffer
@@ -1442,10 +1455,9 @@ end
         tf = @async flush(p.in; cancel=CancellationToken(srcf))
         @test timedwait(() -> parked_on(tf, p.in), 10.0) == :ok
         cancel!(srcf)
-        # flush returns normally (delivery is level-triggered, at the
-        # caller's next cancellation point) but must not discard the bytes:
-        # the unwritten tail is back in the send buffer
-        wait(tf)
+        # flush throws, but must not discard the bytes: the unwritten tail
+        # is back in the send buffer for a later flush to retry
+        expect_cancelled(tf)
         @test bytesavailable(p.in.sendbuf) == 4
         cancel!(srcw)
         @test_throws TaskFailedException wait(tw)

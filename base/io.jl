@@ -328,6 +328,19 @@ Base.RefValue{MyStruct}(MyStruct(42.0))
 ```
 """
 function write end
+
+"""
+    writepartial(io::IO, x) -> Int
+
+Write `x` to `io` with partial-write cancellation semantics: where
+[`write`](@ref) throws the `CancellationRequest` when its governing
+cancellation token is cancelled mid-write, `writepartial` returns the
+number of bytes the stream had already accepted, and the (level-triggered)
+cancellation is delivered at the next cancellation point instead. Callers
+using it must be prepared for short counts. For IO types whose writes
+cannot block on cancellable resources it is equivalent to `write`.
+"""
+writepartial(io::IO, x) = write(io, x)
 typeof(write).name.max_methods = UInt8(1)
 
 read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
@@ -484,6 +497,7 @@ for f in (:flush, :closewrite)
                                     $(f)(pipe_writer(io)::IO; cancel)
 end
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
+writepartial(io::AbstractPipe, x) = writepartial(pipe_writer(io)::IO, x)
 write(to::IO, from::AbstractPipe) = write(to, pipe_reader(from))
 unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL) =
     (cancel === DEFAULT_CANCEL ? unsafe_write(pipe_writer(io)::IO, p, nb) :

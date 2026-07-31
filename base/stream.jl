@@ -1271,15 +1271,21 @@ function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false, cancel::
     return out
 end
 
-uv_write(s::LibuvStream, p::Vector{UInt8}, cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    GC.@preserve p _uv_write_owned(s, pointer(p), UInt(sizeof(p)), cancel, p)
+uv_write(s::LibuvStream, p::Vector{UInt8}, cancel::CancelTokenArg=DEFAULT_CANCEL,
+         partial::Bool=false) =
+    GC.@preserve p _uv_write_owned(s, pointer(p), UInt(sizeof(p)), cancel, p, partial)
 
 # Issue the write and wait for its completion, delivering a cancellation of
-# `tok` by interrupting the wait (the caller adds the post-write cancellation
-# point that turns a cancelled-but-completed write into a throw). The caller
-# must have acquired the iolock, which is released before returning.
+# `tok` by interrupting the wait. A cancelled wait first resolves the
+# in-flight request per the severity (SAFE awaits the completion callback,
+# so the buffer is provably out of OS hands); then, with `partial` unset,
+# the CancellationRequest is thrown - bytes already accepted stay written -
+# and with `partial` set the count of accepted bytes is returned and the
+# (level-triggered) cancellation is left to the caller's next cancellation
+# point. The caller must have acquired the iolock, which is released before
+# returning.
 function _uv_write_wait(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
-                        tok::MaybeToken, @nospecialize(owner))
+                        tok::MaybeToken, @nospecialize(owner), partial::Bool)
     src = cancel_source(tok)
     # entry check: throw before handing anything to libuv
     _iolocked_checkcancel(src)
@@ -1306,6 +1312,9 @@ function _uv_write_wait(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
         iolock_end()
         nwritten = _uv_write_cancelled_finish(s, w, uvw,
             severity(cancel_severity(src)::CancellationRequest), src, owner, single)
+        # level-triggered: the throw below (and any later cancellation
+        # point) reads the current severity
+        partial || checkcancel(src)
         return Int(n - lastn + nwritten)
     end
     iolock_end()
@@ -1338,6 +1347,10 @@ function _uv_write_wait(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
     end
     if creq !== nothing
         nwritten = _uv_write_cancelled_finish(s, w, uvw, severity(creq), src, owner, single)
+        # the in-flight request is resolved (SAFE: the buffer is provably
+        # out of OS hands); deliver the cancellation now unless the caller
+        # asked for the partial count
+        partial || checkcancel(src::CancellationTokenSource)
     else
         # normal completion (or the wake lost the race to a completion that
         # ran anyway): the callback handed us the request to free
@@ -1429,23 +1442,24 @@ end
 
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL,
                   owner=nothing)
-    return _uv_write_owned(s, p, n, cancel, owner)
+    return _uv_write_owned(s, p, n, cancel, owner, false)
 end
 
 # Positional core of uv_write: an `owner::Any` keyword call is not statically
 # resolvable (the NamedTuple type is abstract), which breaks trimmed builds.
 function _uv_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, cancel::CancelTokenArg,
-                         @nospecialize(owner))
+                         @nospecialize(owner), partial::Bool)
     tok = resolve_cancel_token(cancel)
     # branch on the token explicitly: a Union-typed `tok` alongside the
     # deliberately unspecialized `owner` leaves the callee unresolvable
     # for trimmed builds
-    nb = tok === nothing ? _uv_write_wait(s, p, n, nothing, owner) :
-                           _uv_write_wait(s, p, n, tok, owner)
-    # nb < n means the wait was cancelled: the write reports the partial
-    # count (like a short write) and the cancellation itself is delivered at
-    # the caller's next cancellation point - level-triggered, nothing is
-    # lost by returning normally here.
+    nb = tok === nothing ? _uv_write_wait(s, p, n, nothing, owner, partial) :
+                           _uv_write_wait(s, p, n, tok, owner, partial)
+    # With `partial` set, nb < n means the wait was cancelled: the write
+    # reports the count of accepted bytes (like a short write) and the
+    # cancellation itself is delivered at the caller's next cancellation
+    # point - level-triggered, nothing is lost by returning normally here.
+    # Without it, a cancelled wait has already thrown.
     return nb
 end
 
@@ -1487,7 +1501,14 @@ function write(s::LibuvStream, a::Vector{UInt8}; cancel::CancelTokenArg=DEFAULT_
     # owner so a detached (abandoned) write keeps it rooted; see
     # _detached_uvreq_roots.
     GC.@preserve a begin
-        return Int(_unsafe_write_owned(s, pointer(a), UInt(sizeof(a)), cancel, a))
+        return Int(_unsafe_write_owned(s, pointer(a), UInt(sizeof(a)), cancel, a, false))
+    end
+end
+
+function writepartial(s::LibuvStream, a::Vector{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    GC.@preserve a begin
+        return Int(_unsafe_write_owned(s, pointer(a), UInt(sizeof(a)), cancel, a, true))
     end
 end
 
@@ -1500,7 +1521,15 @@ function write(s::LibuvStream, str::Union{String, SubString{String}};
                cancel::CancelTokenArg=DEFAULT_CANCEL)
     cancel = precheck_cancel_arg(cancel)
     GC.@preserve str begin
-        return Int(_unsafe_write_owned(s, pointer(str), UInt(sizeof(str)), cancel, str))
+        return Int(_unsafe_write_owned(s, pointer(str), UInt(sizeof(str)), cancel, str, false))
+    end
+end
+
+function writepartial(s::LibuvStream, str::Union{String, SubString{String}};
+                      cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel = precheck_cancel_arg(cancel)
+    GC.@preserve str begin
+        return Int(_unsafe_write_owned(s, pointer(str), UInt(sizeof(str)), cancel, str, true))
     end
 end
 
@@ -1511,7 +1540,17 @@ function write(s::LibuvStream, a::Array; cancel::CancelTokenArg=DEFAULT_CANCEL)
     if isbitstype(eltype(a))
         cancel = precheck_cancel_arg(cancel)
         GC.@preserve a begin
-            return Int(_unsafe_write_owned(s, Ptr{UInt8}(pointer(a)), UInt(sizeof(a)), cancel, a))
+            return Int(_unsafe_write_owned(s, Ptr{UInt8}(pointer(a)), UInt(sizeof(a)), cancel, a, false))
+        end
+    end
+    return invoke(write, Tuple{IO, AbstractArray}, s, a; cancel)
+end
+
+function writepartial(s::LibuvStream, a::Array; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    if isbitstype(eltype(a))
+        cancel = precheck_cancel_arg(cancel)
+        GC.@preserve a begin
+            return Int(_unsafe_write_owned(s, Ptr{UInt8}(pointer(a)), UInt(sizeof(a)), cancel, a, true))
         end
     end
     return invoke(write, Tuple{IO, AbstractArray}, s, a; cancel)
@@ -1525,11 +1564,11 @@ end
 # have this hazard and are what the public `write` paths use.
 function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
     cancel = precheck_cancel_arg(cancel)
-    return _unsafe_write_owned(s, p, n, cancel, nothing)
+    return _unsafe_write_owned(s, p, n, cancel, nothing, false)
 end
 
 function _unsafe_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, cancel::CancelTokenArg,
-                             @nospecialize(owner))
+                             @nospecialize(owner), partial::Bool)
     while true
         # try to add to the send buffer
         iolock_begin()
@@ -1544,15 +1583,21 @@ function _unsafe_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, cancel::Can
         bytesavailable(buf) == 0 && break
         # perform flush(s)
         arr = take!(buf)
-        nb = uv_write(s, arr, cancel)
-        # a cancelled flush-write returns short: splice the unwritten tail
-        # back (ahead of concurrent appends) so no buffered byte is lost -
-        # the next iteration's write delivers the (level-triggered)
-        # cancellation at its entry check
-        nb < length(arr) && _requeue_unwritten!(s, arr, nb)
+        nb = uv_write(s, arr, cancel, true)
+        if nb < length(arr)
+            # a cancelled flush-write returns short: splice the unwritten
+            # tail back (ahead of concurrent appends) so no buffered byte
+            # is lost, then deliver - or, for the partial form, let the
+            # next iteration's entry check deliver (level-triggered)
+            _requeue_unwritten!(s, arr, nb)
+            if !partial
+                tok = resolve_cancel_token(cancel)
+                tok === nothing || checkcancel(tok.source)
+            end
+        end
     end
     # perform the output to the kernel
-    return _uv_write_owned(s, p, n, cancel, owner)
+    return _uv_write_owned(s, p, n, cancel, owner, partial)
 end
 
 # Splice the unwritten tail of a cancelled buffered-flush write back to the
@@ -1572,11 +1617,10 @@ function _requeue_unwritten!(s::LibuvStream, arr::Vector{UInt8}, nwritten::Int)
     return nothing
 end
 
-# Cancellation contract of flush: a cancellation interrupts the wait, but
-# never silently discards data - buffered bytes that did not reach the
-# stream are put back in the send buffer, the partial state is left
-# consistent, and the CancellationRequest itself is delivered at the
-# caller's next cancellation point (delivery is level-triggered).
+# Cancellation contract of flush: a cancellation interrupts the wait and
+# throws, but never silently discards data - buffered bytes that did not
+# reach the stream are put back in the send buffer (a later flush retries
+# them) and the partial state is left consistent.
 function flush(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     cancel = precheck_cancel_arg(cancel)
     iolock_begin()
@@ -1584,9 +1628,15 @@ function flush(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     if buf !== nothing
         if bytesavailable(buf) > 0
             arr = take!(buf)
-            nb = uv_write(s, arr, cancel)
-            # cancelled short: requeue the unwritten tail rather than drop it
-            nb < length(arr) && _requeue_unwritten!(s, arr, nb)
+            nb = uv_write(s, arr, cancel, true)
+            if nb < length(arr)
+                # cancelled short: requeue the unwritten tail rather than
+                # drop it - it stays buffered for a later flush - then
+                # deliver the cancellation
+                _requeue_unwritten!(s, arr, nb)
+                tok = resolve_cancel_token(cancel)
+                tok === nothing || checkcancel(tok.source)
+            end
             return
         end
     end
@@ -1595,7 +1645,7 @@ function flush(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     # errors to their writers, and the peer closing the stream after a
     # completed exchange must not make flush throw
     try
-        _uv_write_owned(s, Ptr{UInt8}(Base.eventloop()), UInt(0), cancel, nothing)
+        _uv_write_owned(s, Ptr{UInt8}(Base.eventloop()), UInt(0), cancel, nothing, false)
     catch ex
         ex isa IOError || rethrow()
     end
@@ -1628,7 +1678,7 @@ function write(s::LibuvStream, b::UInt8)
     # in-flight request, which must keep the byte's storage rooted
     r = Ref{UInt8}(b)
     GC.@preserve r begin
-        return Int(_unsafe_write_owned(s, unsafe_convert(Ptr{UInt8}, r), UInt(1), DEFAULT_CANCEL, r))
+        return Int(_unsafe_write_owned(s, unsafe_convert(Ptr{UInt8}, r), UInt(1), DEFAULT_CANCEL, r, false))
     end
 end
 

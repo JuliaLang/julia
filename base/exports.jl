@@ -943,6 +943,7 @@ export
     unsafe_read,
     unsafe_write,
     write,
+    writepartial,
 
 # multimedia I/O
     AbstractDisplay,
