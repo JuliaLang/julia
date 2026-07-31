@@ -503,9 +503,14 @@ static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots)
         auto get_global_root = [val, &method_roots]() JL_CANSAFEPOINT {
             if (jl_is_globally_rooted(val))
                 return val;
-            jl_value_t *mval = method_roots.get(val);
-            if (mval)
-                return mval;
+            // `--trim` / `--strip-ir` drop all method roots in the serializer
+            // under the assumption that they root only objects for compressed
+            // IR so any roots for codegen must be stored separately
+            if (!(jl_options.trim || jl_options.strip_ir)) {
+                jl_value_t *mval = method_roots.get(val);
+                if (mval)
+                    return mval;
+            }
             return jl_as_global_root(val, 1);
         };
         jl_value_t *mval = get_global_root();
@@ -816,22 +821,10 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
 
 static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_compiled_functions_t &compiled_functions) JL_NOTSAFEPOINT
 {
-    jl_value_t *def = ci->def;
-    jl_value_t *owner = ci->owner;
-    jl_value_t *rettype = ci->rettype;
-    size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
-    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
     for (auto it = compiled_functions.begin(), E = compiled_functions.end(); it != E; ++it) {
         auto codeinst = it->first;
-        if (codeinst != ci &&
-            jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
-            jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
-            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
-            jl_egal(codeinst->def, def) &&
-            jl_egal(codeinst->owner, owner) &&
-            jl_egal(codeinst->rettype, rettype)) {
+        if (codeinst != ci && jl_is_ci_equiv(ci, codeinst, 0))
             return it;
-        }
     }
     return compiled_functions.end();
 }
@@ -847,8 +840,11 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
             continue;
 
         auto it = out.ci_funcs.find(ci);
-        if (it == out.ci_funcs.end())
-            it = get_ci_equiv_compiled(ci, out.ci_funcs);
+        if (it == out.ci_funcs.end()) {
+            auto equiv = get_ci_equiv_compiled(ci, out.ci_funcs);
+            if (equiv != out.ci_funcs.end())
+                it = equiv;
+        }
         jl_codeinst_funcs_t<Value *> funcs;
         if (it != out.ci_funcs.end()) {
             funcs = {it->second.invoke_api, it->second.invoke, it->second.specptr};
@@ -2124,8 +2120,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
-static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active, bool &explicit_override) {
-    explicit_override = false;
+static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
@@ -2153,7 +2148,9 @@ static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserve
         threads = max_threads;
     }
 
-    // environment variable override
+    // environment variable override.
+    // this controls how many threads we request from the jobserver (if it is enabled)
+    // but the question of whether to enable it or not is decided upstream
     const char *env_threads = getenv("JULIA_IMAGE_THREADS");
     bool env_threads_set = false;
     if (env_threads) {
@@ -2183,10 +2180,6 @@ static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserve
     }
 
     threads = std::max(threads, 1u);
-
-    // An explicit JULIA_IMAGE_THREADS request takes precedence over the
-    // jobserver: honor the user's fixed count rather than rationing tokens.
-    explicit_override = env_threads_set;
 
     return threads;
 }
@@ -2379,9 +2372,8 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                 << "    clones: " << module_info.clones << "\n"
                 << "    weight: " << module_info.weight << "\n"
             );
-            bool explicit_threads = false;
-            threads = compute_image_thread_count(module_info, jobserver.active(), explicit_threads);
-            if (jobserver.active() && !explicit_threads && threads > 1) {
+            threads = compute_image_thread_count(module_info, jobserver.active());
+            if (jobserver.active() && threads > 1) {
                 // `threads` is the partition count and concurrency ceiling;
                 // add_output rations the actual pool size from the shared
                 // token budget, growing it as sibling workers finish.

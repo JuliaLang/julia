@@ -101,6 +101,7 @@ CODEGEN_SRCS_HASH := codegen.cpp jitlayers.cpp aotcompile.cpp debuginfo.cpp disa
 	debug-registry.h debuginfo.h intrinsics.h jitlayers.h julia-task-dispatcher.h \
 	llvm-alloc-helpers.h llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-pass-helpers.h \
 	llvm-version.h passes.h \
+	julia.h julia_threads.h julia_internal.h julia_fasttls.h \
 	$(GC_CODEGEN_SRCS_HASH)
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
@@ -601,6 +602,11 @@ endif
 libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-internal-debug libjulia-internal-release: $(PUBLIC_HEADER_TARGETS)
+
+ifneq ($(USE_SYSTEM_LMDB),1)
+$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIBLMDB)
+$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIBLMDB)
+endif
 
 $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(CODEGEN_OBJS) $(BUILDDIR)/support/libsupport.a $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT)
 	@$(call PRINT_LINK, $(call link-dll,$@, \

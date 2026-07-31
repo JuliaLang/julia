@@ -2070,6 +2070,7 @@ public:
     // local var info. globals are not in here.
     SmallVector<jl_varinfo_t, 0> slots;
     std::map<int, jl_varinfo_t> phic_slots;
+    std::map<int, SmallVector<int, 0>> phic_slots_for_catch; // catch_dest (1-based) -> PhiC statement indices
     std::map<int, std::pair<Value*, Value*> > scope_restore;
     std::map<jl_value_t*, AllocaInst*> eh_buffers;
     SmallVector<jl_cgval_t, 0> SAvalues;
@@ -6309,6 +6310,8 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
     return;
 }
 
+static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi, bool dead=false) JL_CANSAFEPOINT;
+
 static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_value_t *r) JL_CANSAFEPOINT
 {
     assert(!ctx.ssavalue_assigned[ssaidx_0based]);
@@ -6323,6 +6326,9 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_valu
             it = ctx.phic_slots.emplace(ssaidx_0based, jl_varinfo_t(ctx.builder.getContext())).first;
         }
         slot = emit_varinfo(ctx, it->second, jl_symbol("phic"));
+        // `emit_varinfo` copied the contents somewhere rooted independently of the
+        // slot, and this is the only read of it, so the slot is now dead (#52533).
+        emit_phic_slot_clear(ctx, it->second, /*dead*/true);
     }
     else {
         slot = emit_expr(ctx, r, ssaidx_0based);
@@ -6443,6 +6449,54 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     // its memory location.
 }
 
+// Drop the gc references a PhiC slot holds, by storing null over them. Only
+// valid where the PhiC node can no longer be dynamically observed. When `dead`,
+// the slot will never be read again, so only the references need dropping -- the
+// union tindex is left stale rather than in bounds, and a slot holding no
+// references needs no store at all.
+static void emit_phic_slot_clear(jl_codectx_t &ctx, jl_varinfo_t &vi, bool dead) JL_CANSAFEPOINT
+{
+    if (dead && !vi.boxroot && !vi.inline_roots)
+        return;
+    if (vi.boxroot) {
+        // memory optimization: eagerly clear this gc-root now
+        ctx.builder.CreateAlignedStore(Constant::getNullValue(ctx.types().T_prjlvalue), vi.boxroot, Align(sizeof(void*)), true);
+    }
+    // note that a union slot may carry inline roots alongside its tindex, so this
+    // is deliberately not part of the `pTIndex` else-branch below
+    if (vi.inline_roots) {
+        // memory optimization: make gc pointers re-initialized to NULL
+        AllocaInst *ssaroots = vi.inline_roots;
+        size_t nroots = vi.inline_roots_count;
+        auto T_prjlvalue = ssaroots->getAllocatedType();
+        if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
+            nroots *= AT->getNumElements();
+            T_prjlvalue = AT->getElementType();
+        }
+        assert(T_prjlvalue == ctx.types().T_prjlvalue);
+        Value *nullval = Constant::getNullValue(T_prjlvalue);
+        auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        for (size_t i = 0; i < nroots; i++) {
+            stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), true));
+        }
+    }
+    if (vi.pTIndex) {
+        if (dead)
+            return;
+        // We don't care what the contents of the variable are, but it
+        // does need to satisfy the union invariants (i.e. inbounds
+        // tindex).
+        ctx.builder.CreateAlignedStore(
+            vi.boxroot ? ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER) :
+                         ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x01),
+            vi.pTIndex, Align(1), true);
+    }
+    else {
+        assert(!vi.value.V || vi.value.constant || vi.value.typ == jl_bottom_type ||
+               vi.inline_roots || vi.value.ispointer());
+    }
+}
+
 static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val) JL_CANSAFEPOINT
 {
     auto it = ctx.phic_slots.find(phic);
@@ -6467,39 +6521,23 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val) J
             emit_varinfo_assign(ctx, vi, rval_info, NULL, true);
         }
     }
-    if (!val) {
-        if (vi.boxroot) {
-            // memory optimization: eagerly clear this gc-root now
-            ctx.builder.CreateAlignedStore(Constant::getNullValue(ctx.types().T_prjlvalue), vi.boxroot, Align(sizeof(void*)), true);
-        }
-        if (vi.pTIndex) {
-            // We don't care what the contents of the variable are, but it
-            // does need to satisfy the union invariants (i.e. inbounds
-            // tindex).
-            ctx.builder.CreateAlignedStore(
-                vi.boxroot ? ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER) :
-                             ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x01),
-                vi.pTIndex, Align(1), true);
-        }
-        else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
-            assert(vi.inline_roots || vi.value.ispointer());
-            if (vi.inline_roots) {
-                // memory optimization: make gc pointers re-initialized to NULL
-                AllocaInst *ssaroots = vi.inline_roots;
-                size_t nroots = vi.inline_roots_count;
-                auto T_prjlvalue = ssaroots->getAllocatedType();
-                if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
-                    nroots *= AT->getNumElements();
-                    T_prjlvalue = AT->getElementType();
-                }
-                assert(T_prjlvalue == ctx.types().T_prjlvalue);
-                Value *nullval = Constant::getNullValue(T_prjlvalue);
-                auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-                for (size_t i = 0; i < nroots; i++) {
-                    stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), true));
-                }
-            }
-        }
+    if (!val)
+        emit_phic_slot_clear(ctx, vi);
+}
+
+// Clear every PhiC slot of the catch block starting at statement `catch_dest`
+// (1-based). Safe once the handler is popped: a catch block is only reached from
+// its `EnterNode`, and slot2ssa re-initializes the slots at the top of every
+// enter block, so re-entering the region restores them.
+static void emit_phic_slots_clear_for_catch(jl_codectx_t &ctx, intptr_t catch_dest) JL_CANSAFEPOINT
+{
+    auto phics = ctx.phic_slots_for_catch.find(catch_dest);
+    if (phics == ctx.phic_slots_for_catch.end())
+        return;
+    for (int i : phics->second) {
+        auto it = ctx.phic_slots.find(i);
+        if (it != ctx.phic_slots.end())
+            emit_phic_slot_clear(ctx, it->second, /*dead*/true);
     }
 }
 
@@ -6579,6 +6617,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     else if (head == jl_leave_sym) {
         Value *scope_to_restore = nullptr, *token = nullptr;
         SmallVector<AllocaInst*> handler_to_end;
+        SmallVector<intptr_t> catch_dests_to_clear;
         for (size_t i = 0; i < jl_expr_nargs(ex); ++i) {
             jl_value_t *arg = args[i];
             if (arg == jl_nothing)
@@ -6603,16 +6642,22 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
                 std::tie(token, scope_to_restore) = ctx.scope_restore[enter_idx];
                 ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token});
             }
-            if (jl_enternode_catch_dest(enter_stmt)) {
+            if (intptr_t catch_dest = jl_enternode_catch_dest(enter_stmt)) {
                 handler_to_end.push_back(ctx.eh_buffers[enter_stmt]);
                 // We're not actually setting up the exception frames for these, so
                 // we don't need to exit them.
                 scope_to_restore = nullptr; // restored by exception handler
+                catch_dests_to_clear.push_back(catch_dest);
             }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), handler_to_end.size())});
         for (AllocaInst *handler : handler_to_end) {
             ctx.builder.CreateLifetimeEnd(handler);
+        }
+        // Deferred until after the pop: until then an asynchronous exception could
+        // still reach the catch block and observe the cleared slots.
+        for (intptr_t catch_dest : catch_dests_to_clear) {
+            emit_phic_slots_clear_for_catch(ctx, catch_dest);
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
@@ -7175,7 +7220,7 @@ static std::string get_function_name(bool specsig, bool needsparams, const char 
     return funcName.str();
 }
 
-static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_value_t *jlretty, jl_value_t *declrt, jl_returninfo_t &f, unsigned nargs, int retarg, bool is_opaque_closure, StringRef funcName,
+static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_value_t *jlretty, jl_value_t *declrt, jl_returninfo_t &f, int retarg, bool is_opaque_closure, StringRef funcName,
         Module *M, jl_codegen_output_t &out) JL_CANSAFEPOINT;
 
 Function *get_or_emit_fptr1(StringRef preal_decl, Module *M)
@@ -7312,7 +7357,6 @@ static jl_value_t *get_oc_type(jl_value_t *calltype, jl_value_t *rettype) JL_CAN
 static void emit_specsig_to_specsig(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc, unsigned return_roots,
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
-        size_t nargs,
         jl_codegen_output_t &out,
         Value *target,
         jl_value_t *targetsig,
@@ -7329,6 +7373,7 @@ static void emit_specsig_to_specsig(
     DebugLoc noDbg;
     ctx.builder.SetCurrentDebugLocation(noDbg);
     Function::arg_iterator AI = gf_thunk->arg_begin();
+    size_t nargs = jl_nparams(calltype);
     SmallVector<jl_cgval_t, 0> myargs(nargs);
     if (cc == jl_returninfo_t::SRet || cc == jl_returninfo_t::Union)
         ++AI;
@@ -7467,11 +7512,10 @@ static void emit_specsig_to_specsig(
 void emit_specsig_to_fptr1(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc, unsigned return_roots,
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
-        size_t nargs,
         jl_codegen_output_t &out,
         Value *target)
 {
-    emit_specsig_to_specsig(gf_thunk, cc, return_roots, calltype, rettype, is_for_opaque_closure, nargs, out, target, calltype, rettype, nullptr, nullptr);
+    emit_specsig_to_specsig(gf_thunk, cc, return_roots, calltype, rettype, is_for_opaque_closure, out, target, calltype, rettype, nullptr, nullptr);
 }
 
 // Helper for JIT linking.
@@ -7479,7 +7523,6 @@ Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci
                                 Value *func)
 {
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
-    size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
     bool is_opaque_closure =
         jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
 
@@ -7493,7 +7536,7 @@ Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci
                              ci->rettype, is_opaque_closure);
     Function *spec_func = cast<Function>(info.decl.getCallee());
     emit_specsig_to_fptr1(spec_func, info.cc, info.return_roots, specTypes, ci->rettype,
-                          is_opaque_closure, nrealargs, out, func);
+                          is_opaque_closure, out, func);
     return spec_func;
 }
 
@@ -7534,7 +7577,6 @@ static void emit_fptr1_wrapper(Module *M, StringRef gf_thunk_name, Value *target
 static void emit_specsig_to_specsig(
         Module *M, StringRef gf_thunk_name,
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
-        size_t nargs,
         jl_codegen_output_t &out,
         Value *target,
         jl_value_t *targetsig,
@@ -7546,7 +7588,7 @@ static void emit_specsig_to_specsig(
     Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
     jl_init_function(gf_thunk, out);
     gf_thunk->setAttributes(AttributeList::get(gf_thunk->getContext(), {returninfo.attrs, gf_thunk->getAttributes()}));
-    emit_specsig_to_specsig(gf_thunk, returninfo.cc, returninfo.return_roots, calltype, rettype, is_for_opaque_closure, nargs, out, target, targetsig, targetrt, targetspec, rettype_const);
+    emit_specsig_to_specsig(gf_thunk, returninfo.cc, returninfo.return_roots, calltype, rettype, is_for_opaque_closure, out, target, targetsig, targetrt, targetspec, rettype_const);
 }
 
 std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Value *target, bool target_specsig)
@@ -7566,14 +7608,14 @@ std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_c
         jl_value_t *abi = get_ci_abi(codeinst);
         jl_returninfo_t targetspec = get_specsig_function(out, M, target, "", abi, codeinst->rettype, target_is_opaque_closure);
         if (from_abi.specsig)
-            emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, from_abi.nargs, out,
+            emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, out,
                     target, mi->specTypes, codeinst->rettype, &targetspec, nullptr);
         else
-            gen_invoke_wrapper(mi, abi, codeinst->rettype, from_abi.rt, targetspec, from_abi.nargs, -1, from_abi.is_opaque_closure, gf_thunk_name, M, out);
+            gen_invoke_wrapper(mi, abi, codeinst->rettype, from_abi.rt, targetspec, -1, from_abi.is_opaque_closure, gf_thunk_name, M, out);
     }
     else {
         if (from_abi.specsig)
-            emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, from_abi.nargs, out,
+            emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, out,
                     target, mi->specTypes, codeinst->rettype, nullptr, nullptr);
         else
             emit_fptr1_wrapper(M, gf_thunk_name, target, nullptr, from_abi.rt, codeinst->rettype, out);
@@ -7601,7 +7643,7 @@ std::string emit_abi_dispatcher(jl_codegen_output_t &out, jl_abi_t from_abi, jl_
         raw_string_ostream(gf_thunk_name) << JL_SYM_PROTO_SPECSIG;
     raw_string_ostream(gf_thunk_name) << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1) << "_gfthunk";
     if (from_abi.specsig)
-        emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, from_abi.nargs, out,
+        emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, out,
                 target, from_abi.sigt, codeinst ? codeinst->rettype : (jl_value_t*)jl_any_type, nullptr, nullptr);
     else
         emit_fptr1_wrapper(M, gf_thunk_name, target, nullptr, from_abi.rt, codeinst ? codeinst->rettype : (jl_value_t*)jl_any_type, out);
@@ -7614,7 +7656,7 @@ std::string emit_abi_constreturn(jl_codegen_output_t &out, jl_abi_t from_abi, jl
     std::string gf_thunk_name;
     raw_string_ostream(gf_thunk_name) << JL_SYM_SPECPTR_CONST << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     if (from_abi.specsig) {
-        emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, from_abi.nargs, out,
+        emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, out,
                 nullptr, from_abi.sigt, jl_typeof(rettype_const), nullptr, rettype_const);
     }
     else {
@@ -7631,8 +7673,7 @@ std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
 
-    size_t nargs = specsig ? jl_nparams(sigt) : 0;
-    jl_abi_t abi = {sigt, rt, nargs, specsig, is_opaque_closure};
+    jl_abi_t abi = {sigt, rt, specsig, is_opaque_closure};
 
     return emit_abi_constreturn(out, abi, codeinst->rettype_const);
 }
@@ -7692,7 +7733,7 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
                 cw->setAttributes(getcaller->getAttributes());
                 return cw;
             });
-        jl_abi_t cfuncabi = {sigt, declrt, nargs, specsig, is_opaque_closure};
+        jl_abi_t cfuncabi = {sigt, declrt, specsig, is_opaque_closure};
         ctx.emission_context.cfuncs.push_back({cfuncabi, cfuncdata});
         if (specsig) {
             // TODO: could we force this to guarantee passing a box for `f` here (since we
@@ -8288,7 +8329,7 @@ const char *jl_generate_ccallable(jl_codegen_output_t &out, jl_value_t *nameval,
 
 // generate a julia-callable function that calls f (AKA lam)
 // if is_opaque_closure, then generate the OC invoke, rather than a real invoke
-static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_value_t *jlretty, jl_value_t *declrt, jl_returninfo_t &f, unsigned nargs, int retarg, bool is_opaque_closure, StringRef funcName,
+static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_value_t *jlretty, jl_value_t *declrt, jl_returninfo_t &f, int retarg, bool is_opaque_closure, StringRef funcName,
         Module *M, jl_codegen_output_t &out)
 {
     ++GeneratedInvokeWrappers;
@@ -8316,6 +8357,7 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_va
     ctx.builder.SetCurrentDebugLocation(noDbg);
     allocate_gc_frame(ctx, b0);
 
+    size_t nargs = jl_nparams(abi);
     SmallVector<jl_cgval_t, 0> argv(nargs);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     for (size_t i = 0; i < nargs; ++i) {
@@ -8806,6 +8848,36 @@ static jl_llvm_functions_t
     // determine which vars need to be volatile
     mark_volatile_vars(stmts, ctx.slots, branch_targets);
 
+    // Record the PhiC nodes of each catch block, so that `Expr(:leave, ...)` can
+    // drop the gc roots they hold. They sit in the phi block at the top of the
+    // catch block; bound the scan there so it cannot run into a following block.
+    for (i = 0; i < stmtslen; i++) {
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+        if (!jl_is_enternode(stmt))
+            continue;
+        intptr_t catch_dest = jl_enternode_catch_dest(stmt);
+        if (!catch_dest)
+            continue;
+        // Clearing at a `leave` is only sound if this is the sole handler using
+        // the block; otherwise an outer region could still read the slots.
+        auto prev = ctx.phic_slots_for_catch.find(catch_dest);
+        if (prev != ctx.phic_slots_for_catch.end()) {
+            assert(false && "catch block shared between handlers");
+            prev->second.clear(); // give up rather than clear while still readable
+            continue;
+        }
+        SmallVector<int, 0> &phics = ctx.phic_slots_for_catch[catch_dest];
+        for (intptr_t j = catch_dest - 1; j < (intptr_t)stmtslen; j++) {
+            if (j != catch_dest - 1 && branch_targets.count(j + 1))
+                break; // start of the next basic block
+            jl_value_t *cstmt = jl_array_ptr_ref(stmts, j);
+            if (jl_is_phicnode(cstmt))
+                phics.push_back(j);
+            else if (cstmt != jl_nothing && !jl_is_phinode(cstmt))
+                break; // end of the phi block
+        }
+    }
+
     // step 4. determine function signature
     if (!specsig)
         ctx.nReqArgs--;  // function not part of argArray in jlcall
@@ -8873,8 +8945,7 @@ static jl_llvm_functions_t
 
         declarations.invoke_api = JL_INVOKE_SPECSIG;
         auto invoke_name = out.make_name(JL_SYMBOL_INVOKE_DEF, JL_INVOKE_SPECSIG, ctx.name);
-        size_t nparams = jl_nparams(abi);
-        gen_invoke_wrapper(lam, abi, jlrettype, jlrettype, returninfo, nparams, retarg,
+        gen_invoke_wrapper(lam, abi, jlrettype, jlrettype, returninfo, retarg,
                            ctx.is_opaque_closure, invoke_name, M,
                            ctx.emission_context);
         declarations.invoke = M->getFunction(invoke_name);
@@ -10353,9 +10424,8 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(jl_codegen_output_t &out, jl_metho
         jl_returninfo_t returninfo = get_specsig_function(out, M, NULL, funcName, mi->specTypes, rettype, true);
         Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
         jl_init_function(gf_thunk, ctx.emission_context);
-        size_t nrealargs = jl_nparams(mi->specTypes);
         emit_specsig_to_fptr1(gf_thunk, returninfo.cc, returninfo.return_roots,
-                mi->specTypes, rettype, true, nrealargs, ctx.emission_context,
+                mi->specTypes, rettype, true, ctx.emission_context,
                 prepare_call_in(gf_thunk->getParent(), jlopaque_closure_call_func)); // TODO: this could call emit_oc_call directly
         declarations.specptr = gf_thunk;
     }

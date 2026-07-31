@@ -40,7 +40,7 @@ end
 # escaped :toplevel st, then eval st in mod B, but flisp does the same thing by
 # spamming globalrefs to mod A throughout st).
 function rebase_layers(st, mod::Module, ver::VersionNumber)
-    out = if !hasattr(st, :context)
+    out = if st.context === nothing
         # assert zero context
         sc = SyntaxContext(mod, ver)
         fill_context!(st, sc)
@@ -63,10 +63,10 @@ function _rebase_layers(st, slmap, scmap)
         sc2 = scmap[sc] = SyntaxContext(sl2, sc.unexpanded, sc.version, sc.internal)
     end
     if is_leaf(st) || numchildren(st) == 0
-        setattr(st, :context, sc2)
+        @mknode(st; context=sc2)
     else
-        setattr!(mapchildren(c->_rebase_layers(c, slmap, scmap), st._graph, st),
-                 :context, sc2)
+        cs = mapsyntax(c->_rebase_layers(c, slmap, scmap), children(st))
+        @mknode(st; context=sc2, children=cs)
     end
 end
 
@@ -94,13 +94,13 @@ end
 # We might consider changing at least the second of these choices, depending on
 # how we end up putting this into Base.
 
-struct LoweringIterator{Attrs}
+struct LoweringIterator
     ver::VersionNumber # later stored in module?
-    todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
+    todo::Vector{Tuple{SyntaxTree, Bool, Int}}
 end
 
-function lower_init(ex::SyntaxTree{T}, ver) where {T}
-    LoweringIterator{T}(ver, [(ex, false, 0)])
+function lower_init(ex::SyntaxTree, ver)
+    LoweringIterator(ver, [(ex, false, 0)])
 end
 
 function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
@@ -133,16 +133,16 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         push!(iter.todo, (ex, false, 1))
         return lower_step(iter, mod, world; soft_scope)
     elseif k == K"module"
-        (version, notbare, name, body) = @stm ex begin
-            [K"module" version nb_st name body] ->
-                (version.value, nb_st.value, name, body)
-            [K"module" nb_st name body] ->
-                (nothing, nb_st.value, name, body)
+        (version, notbare, mname, body) = @stm ex begin
+            [K"module" version nb_st mname body] ->
+                (version.value, nb_st.value, mname, body)
+            [K"module" nb_st mname body] ->
+                (nothing, nb_st.value, mname, body)
         end
-        if kind(name) != K"Identifier"
-            throw(LoweringError(name, "Expected module name"))
+        if kind(mname) != K"Identifier"
+            throw(LoweringError(mname, "Expected module name"))
         end
-        newmod_name = Symbol(name.name_val)
+        newmod_name = Symbol(syntax_name(mname))
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
@@ -167,6 +167,17 @@ function codeinfo_has_image_globalref(@nospecialize(e))
     else
         return false
     end
+end
+
+function codeinfo_has_fcall(@nospecialize(e))
+    if e isa Expr
+        if e.head === :(=)
+            return codeinfo_has_fcall(e.args[2])
+        end
+        return e.head === :foreigncall || e.head === :foreignglobal ||
+            e.head === :cfunction
+    end
+    return false
 end
 
 const _CodeInfo_need_ver = v"1.12.0-DEV.512"
@@ -373,9 +384,6 @@ end
 
 # TODO sourcefile(::LNN) should return Symbol, not LNN
 function _di_sourcefile(st)
-    # if st.context.unexpanded isa SyntaxTree
-    #     @jl_assert st.context.unexpanded._graph === st._graph (st, "bad unexpanded: different graph") (st.context.unexpanded, "this is the unexpanded tree")
-    # end
     x = JuliaSyntax.unexpanded_sourceref(st)
     x isa LineNumberNode ? x.file : x.file[]::SourceFile
 end
@@ -385,13 +393,13 @@ function collect_locs!(node_sources, codeinfos, top_sf, st)
     if kind(st) === K"code_info"
         push!(codeinfos, st)
         # TODO: macro_source is ignored for now
-        get!(node_sources, st._id, _di_pos(st))
-        for c in children(st[1])
-            node_sources[c._id] =
+        get!(node_sources, st, _di_pos(st))
+        for c in children(st[2])
+            node_sources[c] =
                 if _di_sourcefile(c) !== top_sf
                     top_sf isa SourceFile &&
                         @warn "inconsistent provenance for child" c st
-                    node_sources[st._id]
+                    node_sources[st]
                 else
                     _di_pos(c)
                 end
@@ -408,15 +416,15 @@ end
 
 function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
                            top_sbt::Union{String, Nothing},
-                           node_sources::Dict{NodeId, Tuple{Int32, Int32}},
+                           node_sources::Dict{SyntaxTree, Tuple{Int32, Int32}},
                            spans::Vector{Tuple{Int32, Int32}})
     @jl_assert kind(st) === K"code_info" st
-    locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[1]))
-        for c in children(st[1])
+    locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[2]))
+        for c in children(st[2])
             if top_sbt isa String # precise provenance
-                push!(a, Int32(searchsortedfirst(spans, node_sources[c._id])))
+                push!(a, Int32(searchsortedfirst(spans, node_sources[c])))
             else
-                i = searchsortedfirst(spans, node_sources[c._id])
+                i = searchsortedfirst(spans, node_sources[c])
                 @jl_assert spans[i][2] == LINENODE_SPAN_END (c, "lno with span end?")
                 push!(a, spans[i][1])
             end
@@ -426,17 +434,17 @@ function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
         a
     end
 
-    setattr!(st, :debuginfo, Core.DebugInfo(
+    setmeta!(st, :debuginfo, Core.DebugInfo(
         file, top_sbt, Core.svec(),
         @ccall(jl_compress_codelocs((-1)::Int32, locs::Any,
-                                    numchildren(st[1])::Csize_t)::String)))
+                                    numchildren(st[2])::Csize_t)::String)))
 end
 
 # Populate `.debuginfo` on all K"code_info" in `st`
 function add_debuginfo!(st::SyntaxTree)
     @jl_assert kind(st) === K"code_info" st
-    node_sources = Dict{NodeId, Tuple{Int32, Int32}}()
-    codeinfos = SyntaxList(st._graph)
+    node_sources = Dict{SyntaxTree, Tuple{Int32, Int32}}()
+    codeinfos = SyntaxList()
     top_sf = _di_sourcefile(st)
     collect_locs!(node_sources, codeinfos, top_sf, st)
     byte_precise = _has_byte_precise_debuginfo && top_sf isa SourceFile
@@ -519,7 +527,9 @@ end
 
 # Convert SyntaxTree to the CodeInfo+Expr data structures understood by the
 # Julia runtime
-function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
+function to_code_info(ex::SyntaxTree)
+    slots = ex[1].value::Vector{Slot}
+    meta = ex.meta
     nargs = sum((s.kind==:argument for s in slots), init=0)
     slotnames = Vector{Symbol}(undef, length(slots))
     slot_rename_inds = Dict{String,Int}()
@@ -545,13 +555,12 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
             slot.is_called        << 6   # SLOT_CALLED        | -
     end
 
-    stmts = map(_to_lowered_expr, children(ex[1]))
+    stmts = map(_to_lowered_expr, children(ex[2]))
     has_image_globalref = any(codeinfo_has_image_globalref, stmts)
-    ssaflags = compute_ssaflags(ex[1])
+    ssaflags = compute_ssaflags(ex[2])
     propagate_inbounds =
         get(meta, :propagate_inbounds, false)
-    # TODO: Set true if there's a foreigncall
-    has_fcall = false
+    has_fcall = any(codeinfo_has_fcall, stmts)
     nospecializeinfer =
         get(meta, :nospecializeinfer, false)
     inlining =
@@ -578,11 +587,11 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     inlining_cost       = 0xffff
     rettype             = Any
 
-    @jl_assert(length(stmts) == numchildren(ex[1]), ex)
+    @jl_assert(length(stmts) == numchildren(ex[2]), ex)
 
     _CodeInfo(
         stmts,
-        ex.debuginfo,
+        getmeta(ex, :debuginfo, nothing),
         ssavaluetypes,
         ssaflags,
         slotnames,
@@ -608,8 +617,8 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
 end
 
 @fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
-    ensure_attributes!(ex._graph; debuginfo=Any)
-    add_debuginfo!(ex)
+    @jl_assert kind(ex) in KSet"thunk code_info" ex
+    add_debuginfo!(kind(ex) === K"thunk" ? ex[1] : ex)
     _to_lowered_expr(ex)
 end
 
@@ -620,26 +629,24 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"nothing"
         nothing
     elseif k == K"core"
-        GlobalRef(Core, Symbol(ex.name_val::String))
+        GlobalRef(Core, Symbol(syntax_name(ex)))
     elseif k == K"top"
-        GlobalRef(Base, Symbol(ex.name_val::String))
+        GlobalRef(Base, Symbol(syntax_name(ex)))
     elseif k == K"globalref"
-        GlobalRef(ex.mod::Module, Symbol(ex.name_val::String))
+        GlobalRef(ex.mod::Module, Symbol(syntax_name(ex)))
     elseif k == K"Identifier"
-        # Implicitly refers to name in parent module
-        # TODO: Should we even have plain identifiers at this point or should
-        # they all effectively be resolved into GlobalRef earlier?
-        Symbol(ex.name_val::String)
+        # TODO: assert false (only reachable from simdloop?)
+        Symbol(syntax_name(ex))
     elseif k == K"SourceLocation"
         QuoteNode(source_location(LineNumberNode, ex))
     elseif k == K"Symbol"
-        QuoteNode(Symbol(ex.name_val::String))
+        QuoteNode(Symbol(syntax_name(ex)))
     elseif k == K"slot"
-        Core.SlotNumber(ex.var_id::IdTag)
+        Core.SlotNumber(syntax_id(ex))
     elseif k == K"static_parameter"
-        Expr(:static_parameter, ex.var_id::IdTag)
+        Expr(:static_parameter, syntax_id(ex))
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id::IdTag)
+        Core.SSAValue(syntax_id(ex))
     elseif k == K"return"
         v = _to_lowered_expr(ex[1])
         @jl_assert Base.Compiler.is_valid_return(v) ex
@@ -649,32 +656,21 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"syntaxinert"
         ex[1]
     elseif k == K"code_info"
-        ir = to_code_info(ex, ex.slots, ex.meta)
-        if ex.is_toplevel_thunk
-            Expr(:thunk, ir) # TODO: Maybe nice to just return a CodeInfo here?
-        else
-            ir
-        end
+        to_code_info(ex)
     elseif k == K"Value"
         @jl_assert !isa_lowering_ast_node(ex.value) (
             ex, string("smuggling AST through Value is asking for trouble; ",
                        "find a SyntaxTree representation"))
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
-        Core.GotoNode(ex[1].id)
+        Core.GotoNode(syntax_id(ex[1]))
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(_to_lowered_expr(ex[1]), ex[2].id)
+        Core.GotoIfNot(_to_lowered_expr(ex[1]), syntax_id(ex[2]))
     elseif k == K"enter"
-        catch_idx = ex[1].id
+        catch_idx = syntax_id(ex[1])
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2]))
-    elseif k == K"method"
-        cs = map(_to_lowered_expr, children(ex))
-        # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
-        cs1 = cs[1]
-        c1 = cs1 isa QuoteNode ? cs1.value : cs1
-        Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
         Core.NewvarNode(_to_lowered_expr(ex[1]))
     elseif k == K"opaque_closure_method"
@@ -705,7 +701,7 @@ function _to_lowered_expr(ex::SyntaxTree)
         ret = Expr(:cfunction)
         for (i, e) in enumerate(children(ex))
             if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
-                push!(ret.args, QuoteNode(Symbol(e[1].name_val::String)))
+                push!(ret.args, QuoteNode(Symbol(syntax_name(e[1]))))
             else
                 push!(ret.args, _to_lowered_expr(e))
             end
@@ -728,6 +724,7 @@ function _to_lowered_expr(ex::SyntaxTree)
                k == K"leave"     ? :leave      :
                k == K"isdefined" ? :isdefined  :
                k == K"loopinfo"  ? :loopinfo   :
+               k == K"thunk"     ? :thunk      :
                k == K"boundscheck"       ? :boundscheck       :
                k == K"latestworld"       ? :latestworld       :
                k == K"pop_exception"     ? :pop_exception     :
@@ -758,7 +755,7 @@ function _foreignsymbol_expr(ex)
         _to_lowered_expr(ex)
     else
         k = kind(ex)
-        Expr(Symbol((k === K"unknown_head" ? ex.name_val : untokenize(k))::String),
+        Expr(Symbol((k === K"unknown_head" ? syntax_name(ex) : untokenize(k))::String),
              map(_foreignsymbol_expr, children(ex))...)
     end
 end

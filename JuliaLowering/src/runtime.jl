@@ -70,31 +70,31 @@ function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
 end
 
 function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
-    is_leaf(st) && return mkleaf(st)
+    is_leaf(st) && return st
     k = kind(st)
     inner_depth = k == K"syntaxquote" ? depth + 1 :
         k == K"syntaxunquote" ? depth - 1 : depth
-    cs_out = SyntaxList(st._graph)
+    cs_out = SyntaxList()
     for c in children(st)
         if kind(c) == K"syntaxunquote" && inner_depth == 0
             tup = vals[val_i[] += 1]::Tuple
             @jl_assert numchildren(c) == 1 st
             @jl_assert kind(c[1]) === K"..." || length(tup) == 1 st
             for v in tup
-                v2 = !(v isa SyntaxTree) ? expr_to_est(st._graph, v, c._id) :
-                   copy_ast(st._graph, v)
+                v2 = !(v isa SyntaxTree) ? expr_to_est(v, c) : v
                 push!(cs_out, v2)
             end
         else
             push!(cs_out, __interpolate_syntax(c, inner_depth, vals, val_i))
         end
     end
-    mknode(st, cs_out)
+    @mknode(st; children=cs_out)
 end
 function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
-    st = copy_ast(ensure_macro_attributes!(SyntaxGraph()), st)
+    # TODO: copy probably not required if immutable
+    st = mktree(st)
     val_i = Ref(0)
-    out = __interpolate_syntax((@ast st._graph st [K"None" st]), 0, vals, val_i)
+    out = __interpolate_syntax((@ast _ st [K"None" st]), 0, vals, val_i)
     @jl_assert val_i[] == length(vals) st
     @jl_assert numchildren(out) == 1 st
     out[1]
@@ -129,7 +129,7 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol,
                             length(field_names))
     Core._setsuper!(type, Core.Function)
     Core.declare_const(mod, closure_type_name, type)
-    Core._typebody!(false, type, Core.svec(field_types...))
+    Core._typebody!(type, Core.svec(field_types...))
     type
 end
 
@@ -137,11 +137,24 @@ end
 function replace_captured_locals(ci_in::Core.CodeInfo, locals::Core.SimpleVector)
     ci = copy(ci_in)
     for (i, ex) in enumerate(ci.code)
-        if Meta.isexpr(ex, :captured_local)
-            ci.code[i] = locals[ex.args[1]::Int]
-        end
+        ci.code[i] = _replace_captured_locals(ex, locals)
     end
     ci
+end
+function _replace_captured_locals(@nospecialize(e), locals)
+    if e isa Expr
+        if e.head === :captured_local
+            v = locals[e.args[1]::Int]
+            isa_lowering_ast_node(v) ? QuoteNode(v) : v
+        else
+            # could possibly limit to foreigncall
+            Expr(e.head, map(a->_replace_captured_locals(a, locals), e.args)...)
+        end
+    elseif e isa QuoteNode
+        QuoteNode(_replace_captured_locals(e.value, locals))
+    else
+        e
+    end
 end
 
 #--------------------------------------------------
@@ -254,11 +267,12 @@ struct GeneratedFunctionStub
     spnames::Core.SimpleVector
 end
 
-function _gen_args_from_syms(ctx, src, args)
-    out = SyntaxList(ctx.graph)
+function _gen_args_from_syms(ctx, src, args, sc)
+    out = SyntaxList()
     for a in args
-        id = newleaf(syntax_graph(ctx), src, K"Identifier", string(a))
+        id = newleaf(src, K"Identifier", string(a))
         id = _est_to_dst_ident(id) # support placeholders
+        id = @mknode(id; context=sc)
         push!(out, id)
     end
     out
@@ -275,9 +289,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     #
     # TODO: Reduce duplication where possible.
 
-    graph = ensure_desugaring_attributes!(SyntaxGraph())
     __module__ = source.module
-
     sc = g.syntax_context
 
     # Run code generator - this acts like a macro expander
@@ -287,38 +299,34 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     world = Base.tls_world_age()
 
     # Lower the generated code in the lowering world
-    return invoke_in_lowering_world(_lower_generated_code, g, source, graph, sc,
+    return invoke_in_lowering_world(_lower_generated_code, g, source, sc,
                                    __module__, world, ex0)
 end
 
-function _lower_generated_code(g::GeneratedFunctionStub, source::Method, graph,
+function _lower_generated_code(g::GeneratedFunctionStub, source::Method,
                                sc::SyntaxContext, __module__::Module,
                                world::UInt, @nospecialize(ex0))
     if ex0 isa Expr
-        ex0 = expr_to_est(
-            graph, ex0, source_location(LineNumberNode, g.srcref))
+        ex0 = expr_to_est(ex0, source_location(LineNumberNode, g.srcref))
     end
-    if ex0 isa SyntaxTree
-        if !is_compatible_graph(graph, ex0)
-            ex0 = copy_ast(graph, ex0)
-        end
-    else
+    # TODO: rebase mistake above?
+    if !(ex0 isa SyntaxTree)
         ex0 isa Expr && throw(LoweringError(
             ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
-        ex0 = expr_to_est(graph, ex0, g.srcref)
+        ex0 = expr_to_est(ex0, g.srcref)
     end
 
     @jl_assert base_layer(sc).mod == __module__ ex0
-    ex0 = JuliaSyntax.fill_context!(ex0, sc)
+    ex0 = JuliaSyntax.fill_context(ex0, sc)
     ctx1 = MacroExpansionContext(ex0, world, true)
     ex1 = expand_forms_1(ctx1, ex0)
     # Desugaring
     ctx2, ex2 = expand_forms_2(ex1, world)
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
-    ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.argnames)...]
-        [K"block" _gen_args_from_syms(ctx2, ex1, g.spnames)...]
+    ex2 = @ast ctx2 ex0 [K"generated_lambda"
+        [K"block" _gen_args_from_syms(ctx2, ex1, g.argnames, sc)...]
+        [K"block" _gen_args_from_syms(ctx2, ex1, g.spnames, sc)...]
         ex2
     ]
     ctx3, ex3 = resolve_scopes(ctx2, ex2)

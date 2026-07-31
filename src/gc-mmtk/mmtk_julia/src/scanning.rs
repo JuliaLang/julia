@@ -229,8 +229,9 @@ impl Default for SweepVMSpecific {
 
 impl<VM: VMBinding> GCWork<VM> for SweepVMSpecific {
     fn do_work(&mut self, _worker: &mut GCWorker<VM>, _mmtk: &'static MMTK<VM>) {
-        // call sweep malloced arrays and sweep stack pools
+        // call sweep malloced arrays, cancellation-source child lists, and sweep stack pools
         unsafe { jl_gc_mmtk_sweep_malloced_memory() }
+        unsafe { crate::jl_gc_sweep_weak_processing() }
         unsafe { jl_gc_sweep_stack_pools_and_mtarraylist_buffers() }
         self.swept = true;
     }

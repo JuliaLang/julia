@@ -100,12 +100,35 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
+__script_entry_include(mod::Module, path::String) = _include(identity, mod, path)
+__script_entry_include_string(mod::Module, code::String, filename::String) =
+    include_string(mod, code, filename)
+__script_entry_eval(mod::Module, @nospecialize(ex)) = Core.eval(mod, ex)
+
+is_driver_entry(frame) = !frame.from_c &&
+    (startswith(String(frame.func), "__repl_entry") ||
+     startswith(String(frame.func), "__script_entry"))
+
+# `eval`/`include` machinery a driver entry runs user code through; directly
+# above the cut these frames cannot belong to user code
+function is_driver_machinery(frame)
+    frame.from_c && return false
+    mod = parentmodule(frame)
+    (mod === Base || mod === Core || mod === nothing) || return false
+    return frame.func in (:eval, :include_string, :_include, :include)
+end
+
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
-        # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && startswith(String(frame.func), "__repl_entry"), bt)
-        eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
+        # remove REPL/driver frames from interactive printing
+        eval_ind = findlast(is_driver_entry, bt)
+        if eval_ind !== nothing
+            deleteat!(bt, eval_ind:length(bt))
+            while !isempty(bt) && is_driver_machinery(bt[end])
+                pop!(bt)
+            end
+        end
     end
     return bt
 end
@@ -148,8 +171,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 lasterr = scrub_repl_backtrace(lasterr)
                 istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
-                errcount = 0
-                lasterr = nothing
             else
                 ast = __repl_entry_client_lower(Main, ast)
                 value = __repl_entry_client_eval(Main, ast)
@@ -318,13 +339,13 @@ function exec_options(opts)
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'
-            Core.eval(Main, parse_input_line(arg; mod=Main))
+            __script_entry_eval(Main, parse_input_line(arg; mod=Main))
         elseif cmd == 'E'
-            invokelatest(show, Core.eval(Main, parse_input_line(arg; mod=Main)))
+            invokelatest(show, __script_entry_eval(Main, parse_input_line(arg; mod=Main)))
             println()
         elseif cmd == 'm'
             entrypoint = push!(split(arg, "."), "main")
-            Base.eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
+            __script_entry_eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
             if !invokelatest(should_use_main_entrypoint)
                 error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
             end
@@ -332,7 +353,7 @@ function exec_options(opts)
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode
-                include(Main, arg)
+                __script_entry_include(Main, arg)
             else
                 # TODO: Move this logic to Distributed and use a callback
                 @sync for p in invokelatest(Main.procs)
@@ -350,9 +371,9 @@ function exec_options(opts)
         end
         try
             if PROGRAM_FILE == "-"
-                include_string(Main, read(stdin, String), "stdin")
+                __script_entry_include_string(Main, read(stdin, String), "stdin")
             else
-                include(Main, PROGRAM_FILE)
+                __script_entry_include(Main, PROGRAM_FILE)
             end
         catch
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
@@ -391,9 +412,9 @@ end
 
 function load_julia_startup()
     global_file = _global_julia_startup_file()
-    (global_file !== nothing) && include(Main, global_file)
+    (global_file !== nothing) && __script_entry_include(Main, global_file)
     local_file = _local_julia_startup_file()
-    (local_file !== nothing) && include(Main, local_file)
+    (local_file !== nothing) && __script_entry_include(Main, local_file)
     return nothing
 end
 
@@ -461,7 +482,6 @@ function run_fallback_repl(interactive::Bool)
                 for stmt in ex.args
                     eval_user_input(stderr, stmt, true)
                 end
-                body = ex.args
             else
                 eval_user_input(stderr, ex, true)
             end
@@ -517,7 +537,7 @@ function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::B
     finally
         popdisplay(d)
         active_repl = last_active_repl
-        active_repl_backend = last_active_repl_backend
+        global active_repl_backend = last_active_repl_backend
     end
     nothing
 end

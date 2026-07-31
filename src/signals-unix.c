@@ -356,6 +356,10 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEPO
     uv_tty_reset_mode();
     if (sig == SIGILL)
         jl_fprint_sigill(ios_safe_stderr, context);
+    // si_addr is only valid for fault-generated signals (positive si_code),
+    // not for signals sent by kill/sigqueue and friends
+    if ((sig == SIGSEGV || sig == SIGBUS) && info->si_code > 0)
+        jl_safe_fprintf(ios_safe_stderr, "Fault at memory address: %p\n", info->si_addr);
     jl_task_t *ct = jl_get_current_task();
     jl_fprint_critical_error(ios_safe_stderr, sig, info->si_code, jl_to_bt_context(context), ct);
     if (ct)
@@ -532,7 +536,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         // thread. That will quickly be rectified when we rerun the faulting
         // instruction and end up right back here, or we start to run the
         // exception handler and immediately hit the safepoint there.
-        if (ct->ptls->defer_signal) {
+        if (ct->ptls->defer_signal || ct->eh == NULL) {
             jl_safepoint_defer_sigint();
         }
         else if (jl_safepoint_consume_sigint()) {
@@ -672,7 +676,7 @@ static void jl_try_deliver_sigint(void) JL_NOTSAFEPOINT
 static int thread0_exit_signo = 0;
 static void jl_exit_thread0_cb(void) JL_CANSAFEPOINT
 {
-    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    jl_gc_enable_from_nonmutator(1);
     jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(thread0_exit_signo);
@@ -745,13 +749,14 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
     jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
     if (request == 2) {
         int force = jl_check_force_sigint();
-        if (force || (!ptls->defer_signal && ptls->io_wait)) {
+        jl_jmp_buf *saferestore = jl_get_safe_restore();
+        int can_throw = saferestore != NULL || ct->eh != NULL;
+        if (can_throw && (force || (!ptls->defer_signal && ptls->io_wait))) {
             jl_safepoint_consume_sigint();
             if (force)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
             // Force a throw
             jl_clear_force_sigint();
-            jl_jmp_buf *saferestore = jl_get_safe_restore();
             if (saferestore) // restarting jl_ or profile
                 jl_longjmp_in_ctx(sig, ctx, *saferestore);
             else
@@ -791,12 +796,18 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
     sigprof.sigev_notify = SIGEV_SIGNAL;
     sigprof.sigev_signo = SIGUSR1;
     sigprof.sigev_value.sival_ptr = &timerprof;
+    // hold the lock so that `jl_profile_init` cannot free the buffer while we transition to running.
+    // Safe to hold across `timer_settime`: SIGUSR1 is blocked in every thread and consumed by the
+    // dedicated `signal_listener` thread via `sigwait`, so no in-thread handler can run here and
+    // deadlock trying to take this same lock.
+    uv_mutex_lock(&bt_data_prof_lock);
     // Because SIGUSR1 is multipurpose, set `profile_running` before so that we know that the first SIGUSR1 came from the timer
     profile_running = 1;
     profile_all_tasks = all_tasks;
     if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1) {
         profile_running = 0;
         profile_all_tasks = 0;
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -2;
     }
 
@@ -808,8 +819,10 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
     if (timer_settime(timerprof, 0, &itsprof, NULL) == -1) {
         profile_running = 0;
         profile_all_tasks = 0;
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -3;
     }
+    uv_mutex_unlock(&bt_data_prof_lock);
     return 0;
 }
 
@@ -916,6 +929,7 @@ static void jl_sigsetset(sigset_t *sset)
 }
 
 #ifdef HAVE_KEVENT
+static void sigint_handler(int sig);
 static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 {
     if (*sigqueue == -1)
@@ -928,7 +942,8 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
     }
     else {
         // kqueue gets signals before SIG_IGN, but does not remove them from pending (unlike sigwait)
-        signal(sig, SIG_IGN);
+        // Installing SIG_IGN for SIGINT can race with its handler installation.
+        signal(sig, sig == SIGINT ? sigint_handler : SIG_IGN);
     }
 }
 #endif
@@ -1212,8 +1227,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 //#endif
             // Let's forbid threads from running GC while we're trying to exit,
             // also let's make sure we're not in the middle of GC.
-            jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-            jl_safepoint_wait_gc(NULL);
+            jl_gc_enable_from_nonmutator(0);
             jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
         }
         else if (critical) {

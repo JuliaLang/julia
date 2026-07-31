@@ -128,6 +128,8 @@ fn main() {
         .allowlist_item("jl_task_t")
         .allowlist_item("jl_datatype_t")
         .allowlist_item("jl_weakref_t")
+        .allowlist_item("jl_cancel_source_t")
+        .allowlist_item("jl_cancel_parent_link_t")
         .allowlist_item("jl_binding_partition_t")
         .allowlist_item("jl_bt_element_t")
         .allowlist_item("jl_taggedvalue_t")

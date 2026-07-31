@@ -74,11 +74,11 @@ mutable struct ReentrantLock <: AbstractLock
     #            |            | potentially never getting woken up).
     @atomic havelock::UInt8
     # offset32 = 28, offset64 = 32
-    cond_wait::ThreadSynchronizer # 2 words
-    # offset32 = 36, offset64 = 48
-    # sizeof32 = 20, sizeof64 = 32
+    cond_wait::ThreadSynchronizer # 1 word (mutable, held by reference)
+    # offset32 = 32, offset64 = 40
+    # sizeof32 = 16, sizeof64 = 24
     # now add padding to make this a full cache line to minimize false sharing between objects
-    _::NTuple{Int === Int32 ? 2 : 3, Int}
+    _::NTuple{Int === Int32 ? 3 : 4, Int}
     # offset32 = 44, offset64 = 72 == sizeof+offset
     # sizeof32 = 28, sizeof64 = 56
 
@@ -247,12 +247,23 @@ end
 
 function wait_no_relock(c::GenericCondition)
     ct = current_task()
-    _wait2(c, ct)
-    token = unlockall(c.lock)
+    w = _wait2(c, ct)
+    unlockall(c.lock)
     try
         return wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        # See disarm protocol in condition.jl
+        @atomicreplace ct.waiting_on w => nothing
+        q = ct.queue
+        q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
+        was_cached = ct.cached_wait_entry === w
+        was_cached && (ct.cached_wait_entry = nothing)
+        lock(c.lock)
+        list_deletefirst!(waitqueue(c), w)
+        if was_cached && ct.cached_wait_entry === nothing
+            ct.cached_wait_entry = w
+        end
+        unlock(c.lock)
         rethrow()
     end
 end

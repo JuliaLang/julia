@@ -29,8 +29,6 @@ let
         "comprehension",
         "typed_comprehension",
         "comparison",
-        "<:",
-        ">:",
         "::",
         ".&&",
         ".||",
@@ -78,8 +76,6 @@ let
         "primitive",
         "module",
         "local-def",
-        "<:",
-        ">:",
         "::",
         "where",
         "curly",
@@ -99,6 +95,8 @@ let
         "export",
         "string",
         "&&",
+        "<:",
+        ">:",
         "-->",
         "&&",
         "||",
@@ -121,13 +119,19 @@ let
     end
 end
 
-@test !vst1_ok(Expr(:nothing))
+if JL.DEBUG
+    @test_throws ErrorException vst1_ok(Expr(:nothing))
+else
+    @test !vst1_ok(Expr(:nothing))
+end
 @test vst1_ok(Expr(:block, nothing))
 @test vst1_ok(Expr(:block, GlobalRef(Core, :nothing)))
 
 @test vst1_ok(Expr(:-->, 1))
 @test vst1_ok(Expr(:-->, 1, 2))
 @test vst1_ok(Expr(:-->, 1, 2, 3))
+@test vst1_ok(Expr(:-->, Expr(:..., Expr(:tuple, 1, 2, 3))))
+@test vst1_ok(Expr(:-->, Expr(:kw, :foo, 1)))
 
 @test vst1_ok(Expr(:const, :a, 1))
 

@@ -3,7 +3,6 @@
 module MultiplicativeInverses
 
 import Base: div, divrem, mul_hi, rem, unsigned, mod
-using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
 unsigned(::Type{Bool}) = UInt

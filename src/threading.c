@@ -466,9 +466,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 {
     // `jl_init_threadtls` puts us in a GC unsafe region, so ensure GC isn't running.
     // we can't use a normal safepoint because we don't have signal handlers yet.
-    jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-    // pass NULL as a special token to indicate we are running on an unmanaged task
-    jl_safepoint_wait_gc(NULL);
+    jl_gc_enable_from_nonmutator(0);
     // this check is coupled with the one in `jl_safepoint_wait_gc`, where we observe if a
     // foreign thread has asked to disable the GC, guaranteeing the order of events.
 
@@ -481,7 +479,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi); // assumes the GC is disabled
     JL_GC_PROMISE_ROOTED(ct);
     uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
-    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    jl_gc_enable_from_nonmutator(1);
     jl_init_task_lock(ct);
     return &ct->gcstack;
 }
@@ -797,17 +795,18 @@ void jl_init_threading(void)
     if (jl_n_markthreads == -1) { // --gcthreads not specified
         if ((cp = getenv(NUM_GC_THREADS_NAME))) { // ENV[NUM_GC_THREADS_NAME] specified
             errno = 0;
-            jl_n_markthreads = (uint64_t)strtol(cp, &endptr, 10) - 1;
-            if (errno != 0 || endptr == cp || nthreads <= 0)
-                jl_n_markthreads = 0;
+            long nmarkthreads = strtol(cp, &endptr, 10);
+            if (errno != 0 || endptr == cp || nmarkthreads < 1 || nmarkthreads >= INT16_MAX)
+                jl_errorf("julia: %s=<n>[,<m>]; n must be an integer >= 1", NUM_GC_THREADS_NAME);
+            jl_n_markthreads = nmarkthreads - 1;
             cp = endptr;
             if (*cp == ',') {
                 cp++;
                 errno = 0;
-                jl_n_sweepthreads = strtol(cp, &endptri, 10);
-                if (errno != 0 || endptri == cp || jl_n_sweepthreads < 0) {
-                    jl_n_sweepthreads = 0;
-                }
+                long nsweepthreads = strtol(cp, &endptri, 10);
+                if (errno != 0 || endptri == cp || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
+                    jl_errorf("julia: %s=<n>,<m>; m must be 0 or 1", NUM_GC_THREADS_NAME);
+                jl_n_sweepthreads = (int)nsweepthreads;
             }
         }
         else {

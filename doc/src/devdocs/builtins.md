@@ -37,12 +37,167 @@ Core.memoryrefsetonce!
 Core.get_binding_type
 ```
 
+## Various helper functions
+```@docs
+Base.quoted
+Base.isa_ast_node
+```
+
 ## Other
 
 ```@docs
 Core.IntrinsicFunction
 Core.Intrinsics
 Core.IR
-Base.quoted
-Base.isa_ast_node
+Core._task
+Core.task_result_type
+```
+
+## Adding New Builtin Functions
+
+This section documents the process for adding a new builtin function to Julia (using `_task` as an example).
+
+### Overview
+
+Adding a new builtin function requires changes across multiple subsystems in Julia:
+1. C runtime implementation
+2. Julia inference integration
+3. Complex inference integration (if required)
+4. Optimization passes (if applicable)
+5. Codegen changes (if applicable)
+
+### Step-by-Step Process
+
+#### 1. Add to Builtin Function Registry
+
+**File: `src/builtin_proto.h`**
+```c
+// Add to JL_BUILTIN_FUNCTIONS macro (alphabetically)
+#define JL_BUILTIN_FUNCTIONS(XX) \
+    // ... other functions
+    XX(_using, "_using") \
+    XX(_your_builtin,"_your_builtin") \          // <-- Add your function here
+    XX(applicable,"applicable") \
+    // ... other functions
+```
+
+**File: `src/builtins.c`**
+```c
+// Implement the C function
+JL_CALLABLE(jl_f__your_builtin)
+{
+    JL_NARGS(_your_builtin, 2, 3);
+    JL_TYPECHK(_your_builtin, long, args[1]);
+    return _your_builtin_impl(args, nargs);
+}
+```
+
+**Argument validation**: Always validate argument count and types in the C implementation.
+
+#### 2. Julia Inference Integration
+
+**File: `Compiler/src/tfuncs.jl`**
+```julia
+# Add simple tfunc if no special state is required (the tfunc always takes the
+# inference lattice as its first argument, before the builtin's own arguments)
+@nospecs function your_builtin_tfunc(𝕃::AbstractLattice, arg1, arg2, optional...)
+    return Typ
+end
+add_tfunc(Core._your_builtin, 2, 3, your_builtin_tfunc, 20)
+
+# OR for complex cases requiring AbstractInterpreter state:
+# Leave out add_tfunc and implement in abstractinterpretation.jl instead
+```
+
+Also model the builtin's effects: register it in `_EFFECTS_KNOWN_BUILTINS` and teach
+`builtin_effects` (and `_builtin_nothrow`, if the throwing conditions can be refined
+from the argument types) about it. Builtins that are absent from that list are
+pessimistically assumed to have fully unknown effects.
+
+#### 3. Complex Inference Integration (if `add_tfunc` was insufficient)
+
+**File: `Compiler/src/stmtinfo.jl`**
+```julia
+# For builtins that perform deferred/indirect calls, define a `CallInfo` wrapping
+# the call information of the deferred call (see e.g. `FinalizerInfo`, `ModifyOpInfo`
+# and `TaskCallInfo`). Define `add_edges_impl` to forward the wrapped edges, unless
+# merely creating the object should not imply invalidation edges.
+struct YourBuiltinCallInfo <: CallInfo
+    info::CallInfo # the callinfo for the deferred call
+end
+add_edges_impl(edges::Vector{Any}, info::YourBuiltinCallInfo) = add_edges!(edges, info.info)
+```
+
+**File: `Compiler/src/abstractinterpretation.jl`**
+```julia
+# Add to the builtin-specific handling in abstract_call_known
+elseif f === Core._your_builtin
+    return abstract_eval_your_builtin(interp, arginfo, si, vtypes, sv)
+
+# Implement custom abstract evaluation if needed
+function abstract_eval_your_builtin(interp::AbstractInterpreter, arginfo::ArgInfo,
+                                    si::StmtInfo, vtypes::Union{VarTable,Nothing},
+                                    sv::AbsIntState)
+    # Validation and inference logic
+    return Future(CallMeta(return_type, exception_type, effects, call_info))
+end
+```
+
+#### 4. Optimization Passes (if applicable)
+
+For example, if the operator has a special inlining:
+
+**File: `Compiler/src/ssair/inlining.jl`**
+```julia
+# Add to special builtin handling
+if (f !== Core.invoke &&
+    f !== Core.finalizer &&
+    # ... other functions
+    f !== Core._your_builtin)  # <-- Add here
+
+# Add optimization logic in `assemble_inline_todo!`, dispatching on the `CallInfo`
+# recorded by inference
+elseif isa(info, YourBuiltinCallInfo)
+    handle_your_builtin_call!(ir, idx, stmt, info, state)
+end
+```
+
+#### 5. Documentation
+
+**File: `base/docs/basedocs.jl`**
+```julia
+"""
+    Core._your_builtin(arg1, arg2) -> ReturnType
+    Core._your_builtin(arg1, arg2, optional_arg) -> ReturnType
+
+This builtin is an implementation detail used by [higher-level function] and should
+not be called directly by end-users. Use `HigherLevelFunction(args...)` instead.
+
+Brief description of what the builtin does and its parameters.
+The optional third argument `optional_arg` can be a [description of types/purpose].
+"""
+Core._your_builtin
+```
+
+**File: `doc/src/devdocs/builtins.md`**
+```julia
+# Add to the @docs block in the appropriate section
+Core._your_builtin
+```
+
+#### 6. Testing
+
+**File: `Compiler/test/effects.jl`**
+```julia
+# Add test for effects modeling (if your builtin has specific effects)
+let effects = Base.infer_effects(Core._your_builtin, (ArgType,))
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_nothrow(effects)
+end
+```
+
+**File: `Compiler/test/inference.jl`**
+```julia
+# Add test for return type inference
+@test Base.infer_return_type(Core._your_builtin, (ArgType,)) === ExpectedReturnType
 ```

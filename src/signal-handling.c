@@ -10,6 +10,10 @@
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
 #endif
+#ifdef _OS_LINUX_
+#include <sys/prctl.h>
+#include <sys/syscall.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,14 +40,26 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t) JL_NOTSAFEPOINT;
 ///////////////////////
 JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
+    uv_mutex_lock(&bt_data_prof_lock);
+    if (profile_running) {
+        // the sampler may be writing into the buffer we are about to free. Note this
+        // only rules out re-initializing while running: `jl_profile_stop_timer` doesn't
+        // wait for a sampler iteration already under way, and the thread samplers write
+        // without taking this lock.
+        uv_mutex_unlock(&bt_data_prof_lock);
+        return -2;
+    }
     profile_bt_size_max = maxsize;
     nsecprof = delay_nsec;
     if (profile_bt_data_prof != NULL)
         free((void*)profile_bt_data_prof);
     profile_bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
-    if (profile_bt_data_prof == NULL && maxsize > 0)
+    if (profile_bt_data_prof == NULL && maxsize > 0) {
+        uv_mutex_unlock(&bt_data_prof_lock);
         return -1;
+    }
     profile_bt_size_cur = 0;
+    uv_mutex_unlock(&bt_data_prof_lock);
     return 0;
 }
 
@@ -721,6 +737,9 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
     size_t i, n = ct ? *bt_size : 0;
+    // Threads unknown to Julia have no ptls, and hence no pre-allocated
+    // backtrace buffer; a small stack buffer is used for them instead.
+    jl_bt_element_t bt_data_foreign[JL_BT_MAX_ENTRY_SIZE * 8];
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jl_fprint_backtrace in jl_exit)
         // and also resets the state of ct and ptls so that some code can run on this task again
@@ -759,9 +778,29 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
         // is properly rooted.
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
     }
+    else if (context) {
+        // The faulting thread was not created or adopted by Julia (e.g. a
+        // thread started by foreign code that crashed without ever calling
+        // into Julia), so it has no Julia task or backtrace buffer. Record a
+        // native-only backtrace into the local buffer instead, so that at
+        // least the faulting instruction pointer is reported.
+#ifdef _OS_LINUX_
+        char thread_name[16]; // the kernel limits thread names to 16 bytes (TASK_COMM_LEN)
+        if (prctl(PR_GET_NAME, (unsigned long)thread_name, 0, 0, 0) != 0)
+            thread_name[0] = '\0';
+        jl_safe_fprintf(s, "unknown thread \"%s\" (os tid %ld); this thread is not managed by Julia, no Julia backtrace available\n",
+                        thread_name, (long)syscall(SYS_gettid));
+#else
+        jl_safe_fprintf(s, "unknown thread; this thread is not managed by Julia, no Julia backtrace available\n");
+#endif
+        bt_data = bt_data_foreign;
+        n = rec_backtrace_ctx(bt_data, sizeof(bt_data_foreign) / sizeof(jl_bt_element_t), context, NULL);
+    }
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
         jl_fprint_bt_entry_codeloc(s, bt_data + i);
     }
+    if (n == 0 && context)
+        jl_safe_fprintf(s, "no backtrace could be recorded from the signal context\n");
     jl_gc_debug_fprint_status(s);
     jl_gc_debug_fprint_critical_error(s);
 }

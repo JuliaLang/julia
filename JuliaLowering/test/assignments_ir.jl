@@ -45,7 +45,7 @@ begin
     a = b() = c = d
 end
 #---------------------
-1   (method TestMod.b)
+1   (call core.define_method TestMod :b)
 2   latestworld
 3   TestMod.b
 4   (call core.TypeEqOf %₃)
@@ -53,7 +53,8 @@ end
 6   (call core.svec)
 7   SourceLocation::3:9
 8   (call core.svec %₅ %₆ %₇)
-9   --- method TestMod.b %₈
+9   (call core.define_method TestMod TestMod.b %₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/c(!read,single_assign)]
     1   TestMod.d
     2   (= slot₂/c %₁)
@@ -367,3 +368,11 @@ f() += y
 LoweringError:
 (if false end, b) += 2
 #└──────────┘ ── invalid syntax in left-hand side of assignment
+
+########################################
+# Error: Updating assignment to ssavalue (JuliaLang/julia#30062)
+f(), x += 10, 20
+#---------------------
+LoweringError:
+f(), x += 10, 20
+└────┘ ── invalid multiple assignment location

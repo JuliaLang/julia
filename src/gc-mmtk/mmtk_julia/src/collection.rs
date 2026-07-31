@@ -1,7 +1,6 @@
 use crate::SINGLETON;
 use crate::{
-    jl_gc_prepare_to_collect, jl_gc_update_stats, jl_get_gc_disable_counter, jl_hrtime,
-    jl_throw_out_of_memory_error,
+    jl_gc_prepare_to_collect, jl_gc_update_stats, jl_hrtime, jl_throw_out_of_memory_error,
 };
 use crate::{JuliaVM, USER_TRIGGERED_GC};
 use log::{info, trace};
@@ -50,6 +49,11 @@ impl Collection<JuliaVM> for VMCollection {
             // FIXME add wait var
         }
 
+        assert!(
+            crate::api::mmtk_is_collection_enabled() != 0,
+            "Collection is disabled when threads are stopped for a GC. This is a concurrency bug, see https://github.com/mmtk/mmtk-julia/issues/278."
+        );
+
         trace!("Stopped the world!");
 
         // Tell MMTk the stacks are ready.
@@ -80,11 +84,27 @@ impl Collection<JuliaVM> for VMCollection {
             )
         }
 
+        // Holding the mutex here guarantees that any mutator that observed
+        // `BLOCK_FOR_GC == true` is already enqueued in `wait()` by the time
+        // we call `notify_all`.
+        let (lock, cvar) = &*STW_COND.clone();
+        let count = lock.lock().unwrap();
         AtomicBool::store(&BLOCK_FOR_GC, false, Ordering::SeqCst);
         AtomicBool::store(&WORLD_HAS_STOPPED, false, Ordering::SeqCst);
-
-        let (_, cvar) = &*STW_COND.clone();
         cvar.notify_all();
+        drop(count);
+
+        // `resume_mutators()` is called after every stop-the-world pause, including the pause
+        // that ends a concurrent GC's background-work phase (there's no more targeted mmtk-core
+        // hook for that specifically). Advance the GC epoch to wake any mutator retrying
+        // `mmtk_disable_collection()` after it failed with
+        // `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH`: since a pause just completed, it's
+        // worth retrying (the retry is cheap; if it still fails, the mutator just waits again).
+        let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
+        let mut epoch = lock.lock().unwrap();
+        *epoch = epoch.wrapping_add(1);
+        cvar.notify_all();
+        drop(epoch);
 
         info!(
             "Live bytes = {}, total bytes = {}",
@@ -138,10 +158,6 @@ impl Collection<JuliaVM> for VMCollection {
 
     fn vm_live_bytes() -> usize {
         crate::api::JULIA_MALLOC_BYTES.load(Ordering::SeqCst)
-    }
-
-    fn is_collection_enabled() -> bool {
-        unsafe { jl_get_gc_disable_counter() == 0 }
     }
 
     fn create_gc_trigger() -> Box<dyn GCTriggerPolicy<JuliaVM>> {

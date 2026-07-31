@@ -30,7 +30,6 @@ else
     end
 end
 
-#-------------------------------------------------------------------------------
 abstract type AbstractLoweringContext end
 
 """
@@ -40,10 +39,6 @@ Lowering passes prior to scope resolution return `nothing` and bindings are
 collected later.
 """
 current_lambda_bindings(::AbstractLoweringContext) = nothing
-
-function JuliaSyntax.syntax_graph(ctx::AbstractLoweringContext)
-    ctx.graph
-end
 
 """
 Unique symbolic identity for a variable, constant, label, or other entity
@@ -55,57 +50,110 @@ Lexical scope ID
 """
 const ScopeId = Int
 
-JuliaSyntax.SyntaxList(ctx::AbstractLoweringContext) = SyntaxList(syntax_graph(ctx))
+const DEFAULT_NODE = SyntaxTree(
+    K"None", nothing, nothing, LineNumberNode(0), nothing)
 
-function JuliaSyntax.newleaf(ctx::AbstractLoweringContext,
-                    prov::Union{SyntaxTree, SourceAttrType},
-                    k::Kind)
-    newleaf(syntax_graph(ctx), prov, k)
+"""
+    @mknode(old; attr=val...)
+
+Create a node `new` that is an immutable update of `old`, but setting `old` as
+its provenance, and setting jl_source to macrocall's location.  `attrs` may
+override `old`'s fields (so if `old` is not provided, some attrs are required.)
+
+This is the main operation used by syntax transformations in lowering.
+"""
+macro mknode(attrs, old)
+    Base.remove_linenums!(old)
+    Base.remove_linenums!(attrs)
+    old_gs = gensym()
+    if !(isnothing(attrs) || attrs isa Expr && Meta.isexpr(attrs, :parameters))
+        throw(ArgumentError("usage: @mknode(old; attr=val...)"))
+    end
+    out_args = Vector(undef, fieldcount(SyntaxTree))
+    for (i, n) in enumerate(fieldnames(SyntaxTree))
+        out_args[i] = (DEBUG && n === :jl_source) ? __source__ :
+            n === :source ? old_gs :
+            Expr(:(.), old_gs, QuoteNode(n))
+    end
+    seen_attrs = Set{Symbol}()
+    attrs isa Expr && for a in attrs.args
+        (aname, aval) = if Meta.isexpr(a, :(kw), 2) && a.args[1] isa Symbol
+            (a.args[1]::Symbol, a.args[2])
+        elseif a isa Symbol
+            (a, a)
+        else
+            throw(ArgumentError("usage: @mknode(old; attr=val...)"))
+        end
+        aname in seen_attrs && throw(ArgumentError("duplicate attr provided $__source__"))
+        push!(seen_attrs, aname)
+        out_args[fieldindex(SyntaxTree, aname)] = aval
+    end
+    old === DEFAULT_NODE && !((:kind, :source, :context) ⊆ seen_attrs) &&
+        throw(ArgumentError("brand-new node from @mknode requires more attrs $__source__"))
+
+    out = Expr(:let,
+               Expr(:block, Expr(:(=), old_gs, old)),
+               Expr(:block, Expr(:call, SyntaxTree, out_args...)))
+    DEBUG && (out.args[end] = Expr(:call, _debug_check_attrs, out.args[end]))
+    esc(out)
+end
+macro mknode(x)
+    (old, attrs) = Meta.isexpr(x, :parameters) ? (DEFAULT_NODE, x) : (x, nothing)
+    esc(Expr(:macrocall, var"@mknode", __source__, attrs, old))
 end
 
-function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
-    @jl_assert k === K"Value" || value !== nothing (prov, "only Value may contain nothing")
-    leaf = newleaf(ctx, prov, k)
-    if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
-            k == K"globalref" || k == K"Placeholder"
-        setattr!(leaf._graph, leaf._id, :name_val, value)
-    elseif k == K"BindingId"
-        setattr!(leaf._graph, leaf._id, :var_id, value)
-    elseif k == K"label"
-        setattr!(leaf._graph, leaf._id, :id, value)
-    elseif k == K"symboliclabel" || k == K"symbolicgoto"
-        setattr!(leaf._graph, leaf._id, :name_val, value)
+function _debug_check_attrs(x)
+    assert_syntaxtree(x, false)
+    x
+end
+
+function JuliaSyntax.newleaf(prov, k, @nospecialize(value))
+    context = prov isa SyntaxTree ? prov.context : nothing
+    @jl_assert k === K"Value" || value !== nothing (
+        prov, "only Value may contain nothing")
+    if k == K"Identifier" || k == K"BindingId" || k == K"Value" ||
+        k == K"core" || k == K"top" || k == K"Symbol" || k == K"globalref" ||
+        k == K"Placeholder" || k == K"label" || k == K"symboliclabel" ||
+        k == K"symbolicgoto"
+        @mknode(;kind=k, source=prov, context, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
                      softscope nothing"
-        # no attributes
+        @mknode(;kind=k, source=prov, context)
     else
         val = k == K"Integer" ? convert(Int,     value) :
               k == K"Float"   ? convert(Float64, value) :
               k == K"String"  ? convert(String,  value) :
               k == K"Char"    ? convert(Char,    value) :
-              k == K"Value"   ? value                   :
               k == K"Bool"    ? value                   :
-              k == K"VERSION" ? value                   :
+              k == K"LambdaBindings" ? value :
+              k == K"Slots" ? value :
+              k == K"SSAValue" ? value :
+              k == K"slot" ? value :
+              k == K"static_parameter" ? value :
+              k == K"VERSION" ? value :
               error("Unexpected leaf kind `$k`")
-        setattr!(leaf._graph, leaf._id, :value, val)
+        @mknode(;kind=k, source=prov, value=val, context)
     end
-    leaf
 end
 
-JuliaSyntax.newnode(ctx::AbstractLoweringContext,
-                    prov::Union{SyntaxTree, SourceAttrType},
-                    k::Kind, cs) =
-    newnode(syntax_graph(ctx), prov, k, cs)
+function syntax_name(st)
+    @jl_assert kind(st) in KSet"""
+    Identifier Placeholder Symbol core top globalref symboliclabel symbolicgoto
+    unknown_head oldsymbolicgoto
+    """ st
+    st.value::String
+end
 
 # Convenience functions to create leaf nodes referring to identifiers within
 # the Core and Top modules.
-nothing_(ctx, ex) = newleaf(ctx, ex, K"nothing")
+nothing_(ctx, ex) = newleaf(ex, K"nothing")
 
 # Assign `ex` to an SSA variable.
 # Return (variable, assignment_node)
 function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
     var = ssavar(ctx, ex, name)
-    assign_var = newnode(ctx, ex, K"=", tree_ids(var, ex))
+    assign_var = @mknode(;source=ex, context=ex.context, kind=K"=",
+                         children=SyntaxList(var, ex))
     var, assign_var
 end
 
@@ -114,114 +162,86 @@ function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
         return ex
     end
     var = ssavar(ctx, ex, name)
-    push!(stmts, newnode(ctx, ex, K"=", tree_ids(var, ex)))
+    push!(stmts, newnode(ex, K"=", SyntaxList(var, ex)))
     var
 end
 
 #-------------------------------------------------------------------------------
 # @ast macro
 
-_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_compatible_graph(graph, ex); ex._id)
-
-_node_ids(::SyntaxGraph) = ()
-_node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)
-_node_ids(graph::SyntaxGraph, c, cs...) = (_node_id(graph, c), _node_ids(graph, cs...)...)
-_node_ids(graph::SyntaxGraph, cs::SyntaxList, cs1...) = (_node_ids(graph, cs...)..., _node_ids(graph, cs1...)...)
-function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
-    check_compatible_graph(graph, cs)
-    cs.ids
-end
-
-function _node_id(::SyntaxGraph, ex)
-    # Fallback to give a comprehensible error message for use with the @ast macro
+# Fallbacks to give comprehensible error messages for use with the @ast macro
+function _push_nodeid!(::Vector{SyntaxTree}, ex)
     error("Attempt to use `$(repr(ex))` of type `$(typeof(ex))` as an AST node. Try annotating with `::K\"your_intended_kind\"?`")
 end
-function _node_id(::SyntaxGraph, ex::AbstractVector{<:SyntaxTree})
-    # Fallback to give a comprehensible error message for use with the @ast macro
+function _push_nodeid!(::Vector{SyntaxTree}, ex::AbstractVector{<:SyntaxTree})
     error("Attempt to use vector as an AST node. Did you mean to splat this? (content: `$(repr(ex))`)")
 end
-
-function _push_nodeid!(graph::SyntaxGraph, ids::Vector{NodeId}, val)
-    push!(ids, _node_id(graph, val))
+function _push_nodeid!(ids::Vector{SyntaxTree}, st::SyntaxTree)
+    push!(ids, st)
 end
-function _push_nodeid!(::SyntaxGraph, ::Vector{NodeId}, ::Nothing)
+function _push_nodeid!(::Vector{SyntaxTree}, ::Nothing)
     nothing
 end
-function _append_nodeids!(graph::SyntaxGraph, ids::Vector{NodeId}, vals)
+function _append_nodeids!(ids::Vector{SyntaxTree}, vals)
     for v in vals
-        _push_nodeid!(graph, ids, v)
+        _push_nodeid!(ids, v)
     end
 end
-function _append_nodeids!(graph::SyntaxGraph, ids::Vector{NodeId}, vals::SyntaxList)
-    check_compatible_graph(graph, vals)
-    append!(ids, vals.ids)
+function _append_nodeids!(ids::Vector{SyntaxTree}, vals::SyntaxList)
+    append!(ids, vals)
 end
 
-function _match_srcref(ex)
-    if Meta.isexpr(ex, :macrocall) && ex.args[1] == Symbol("@HERE")
-        QuoteNode(ex.args[2])
-    else
-        esc(ex)
-    end
-end
-
-function _kw_to_pair(ex)
-    if ex isa Expr && ex.head === :kw && ex.args[1] isa Symbol
-        (QuoteNode(ex.args[1]), esc(ex.args[2]))
-    elseif ex isa Symbol
-        (QuoteNode(ex), esc(ex))
-    else
-        @assert false "invalid keyword form in @ast $ex"
-    end
-end
-
-function _match_kind(srcref, ex)
-    kws = []
+function _match_kind(srcref, ex, jl_line)
+    kws = Expr(:parameters)
+    seen = Set{Symbol}()
     if Meta.isexpr(ex, :call)
-        kind = esc(ex.args[1])
+        kind = ex.args[1]
         args = ex.args[2:end]
         if Meta.isexpr(args[1], :parameters)
-            kws = map(_kw_to_pair, args[1].args)
+            for a in args[1].args
+                a isa Symbol && push!(seen, a)
+                Meta.isexpr(a, :kw, 2) && a.args[1] isa Symbol && push!(seen, a.args[1])
+            end
+            append!(kws.args, args[1].args)
             popfirst!(args)
         end
-        while length(args) >= 1 && Meta.isexpr(args[end], :kw)
-            pushfirst!(kws, _kw_to_pair(pop!(args)))
-        end
-        if length(args) == 1
-            return (kind, _match_srcref(args[1]), kws)
+        if length(args) == 1 && !Meta.isexpr(args[1], :kw)
+            srcref = args[1]
         elseif length(args) > 1
-            error("Unexpected: extra srcref argument in `$ex`?")
+            error("Unexpected srcref argument in `$ex`")
         end
     else
-        kind = esc(ex)
+        kind = ex
     end
-    return (kind, srcref, kws)
+    :source in seen || push!(kws.args, Expr(:kw, :source, srcref))
+    :kind in seen || push!(kws.args, Expr(:kw, :kind, kind))
+    :context in seen || push!(kws.args, Expr(
+        :kw, :context, Expr(:., srcref, QuoteNode(:context))))
+    DEBUG && push!(kws.args, Expr(:kw, :jl_source, jl_line))
+    return kws
 end
 
 function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
     if Meta.isexpr(tree, :(::))
         # Leaf node
         if length(tree.args) == 2
-            val = esc(tree.args[1])
+            val = tree.args[1]
             kindspec = tree.args[2]
         else
             val = nothing
             kindspec = tree.args[1]
         end
-        let (kind, srcref, kws) = _match_kind(srcref, kindspec)
-            n = isnothing(val) ? :(newleaf($ctx, $srcref, $kind)) :
-                :(newleaf($ctx, $srcref, $kind, $val))
-            for (attr, val) in kws
-                n = :(setattr!($n, $attr, $val))
-            end
-            DEBUG ? :(setattr!($n, :jl_source, $jl_line)) : n
+        let kws = _match_kind(srcref, kindspec, jl_line)
+            !isnothing(val) && push!(kws.args, Expr(:kw, :value, val))
+            Expr(:macrocall, var"@mknode", jl_line.value, kws)
         end
     elseif Meta.isexpr(tree, :call) && tree.args[1] === :(=>)
         # Leaf node with copied attributes
-        kind = esc(tree.args[3])
-        srcref2 = esc(tree.args[2])
-        n = :(setattr!(mkleaf($srcref2), :kind, $kind))
-        DEBUG ? :(setattr!($n, :jl_source, $jl_line)) : n
+        kind = tree.args[3]
+        srcref2 = tree.args[2]
+        kws = Expr(:parameters, Expr(:kw, :kind, kind), Expr(:kw, :children, nothing))
+        DEBUG && push!(kws.args, Expr(:kw, :jl_source, jl_line))
+        Expr(:macrocall, var"@mknode", jl_line.value, kws, srcref2)
     elseif Meta.isexpr(tree, (:vcat, :hcat, :vect))
         # Interior node
         flatargs = []
@@ -232,39 +252,38 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
                 push!(flatargs, a)
             end
         end
-        children_ex = :(let child_ids = Vector{NodeId}(), graph = syntax_graph($ctx)
+        children_ex = :(let child_ids = Vector{$SyntaxTree}()
         end)
         child_stmts = children_ex.args[2].args
         for a in flatargs[2:end]
             child = _expand_ast_tree(ctx, srcref, a, jl_line)
             if Meta.isexpr(child, :(...))
-                push!(child_stmts, :(_append_nodeids!(graph, child_ids, $(child.args[1]))))
+                push!(child_stmts, :($_append_nodeids!(child_ids, $(child.args[1]))))
             else
-                push!(child_stmts, :(_push_nodeid!(graph, child_ids, $child)))
+                push!(child_stmts, :($_push_nodeid!(child_ids, $child)))
             end
         end
         push!(child_stmts, :(child_ids))
-        let (kind, srcref, kws) = _match_kind(srcref, flatargs[1])
-            n = :(newnode($ctx, $srcref, $kind, $children_ex))
-            for (attr, val) in kws
-                n = :(setattr!($n, $attr, $val))
-            end
-            DEBUG ? :(setattr!($n, :jl_source, $jl_line)) : n
+        let kws = _match_kind(srcref, flatargs[1], jl_line)
+            push!(kws.args, Expr(:kw, :children, children_ex))
+            Expr(:macrocall, var"@mknode", jl_line.value, kws)
         end
     elseif Meta.isexpr(tree, :(:=))
+        ctx === nothing && throw(ArgumentError(
+            "@ast requires ctx arg for `:=` assignments $jl_line"))
         lhs = tree.args[1]
         rhs = _expand_ast_tree(ctx, srcref, tree.args[2], jl_line)
         ssadef = gensym("ssadef")
         quote
-            ($(esc(lhs)), $ssadef) = assign_tmp($ctx, $rhs, $(string(lhs)))
+            ($lhs, $ssadef) = assign_tmp($ctx, $rhs, $(string(lhs)))
             $ssadef
         end
     elseif Meta.isexpr(tree, :macrocall)
-        esc(tree)
+        tree
     elseif tree isa Expr
         Expr(tree.head, map(a->_expand_ast_tree(ctx, srcref, a, jl_line), tree.args)...)
     else
-        esc(tree)
+        tree
     end
 end
 
@@ -273,7 +292,7 @@ end
 
 Syntactic s-expression shorthand for constructing a `SyntaxTree` AST.
 
-* `ctx` - SyntaxGraph context
+* `ctx` - Lowering context
 * `srcref` - Reference to the source code from which this AST was derived.
 
 The `tree` contains syntax of the following forms:
@@ -288,12 +307,8 @@ The `tree` contains syntax of the following forms:
 
 Any `kind` can be replaced with an expression of the form
 * `kind(srcref)` - override the source reference for this node and its children
-* `kind(attr=val)` - set an additional attribute
+* `kind(;attr=val)` - set an additional attribute
 * `kind(srcref; attr₁=val₁, attr₂=val₂)` - the general form
-
-In any place `srcref` is used, the special form `@HERE()` can be used to instead
-to indicate that the "primary" location of the source is the location where
-`@HERE` occurs.
 
 
 # Examples
@@ -321,39 +336,19 @@ to indicate that the "primary" location of the source is the location where
 ```
 """
 macro ast(ctx, srcref, tree)
-    quote
-        ctx = $(esc(ctx))
-        srcref = $(_match_srcref(srcref))::$SyntaxTree
-        $(_expand_ast_tree(:ctx, :srcref, tree, QuoteNode(__source__)))
-    end
+    @gensym ctx_gs srcref_gs
+    assigns = if ctx isa Symbol && all(==('_'), string(ctx))
+        :(let $srcref_gs = $srcref::$SyntaxTree
+              $(_expand_ast_tree(nothing, srcref_gs, tree, QuoteNode(__source__)))
+          end)
+    else
+        :(let $ctx_gs = $ctx, $srcref_gs = $srcref::$SyntaxTree
+              $(_expand_ast_tree(ctx_gs, srcref_gs, tree, QuoteNode(__source__)))
+          end)
+    end |> esc
 end
 
-#-------------------------------------------------------------------------------
-# Type for `meta` attribute, to replace `Expr(:meta)`.
-# It's unclear how much flexibility we need here - is a dict good, or could we
-# just use a struct? Likely this will be sparse. Alternatively we could just
-# use individual attributes but those aren't easy to add on an ad-hoc basis in
-# the middle of a pass.
-const CompileHints = Base.ImmutableDict{Symbol,Any}
-
-function setmeta!(ex::SyntaxTree, key::Symbol, @nospecialize(val))
-    meta = begin
-        m = get(ex, :meta, nothing)
-        isnothing(m) ? CompileHints(key, val) : CompileHints(m, key, val)
-    end
-    setattr!(ex, :meta, meta)
-    ex
-end
-
-setmeta(ex::SyntaxTree, k::Symbol, @nospecialize(v)) =
-    setmeta!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), k, v)
-
-function getmeta(ex::SyntaxTree, name::Symbol, default)
-    meta = get(ex, :meta, nothing)
-    isnothing(meta) ? default : get(meta, name, default)
-end
-
-name_hint(name) = CompileHints(:name_hint, name)
+name_hint(name) = JuliaSyntax.CompileHints(:name_hint, name)
 
 #-------------------------------------------------------------------------------
 # Predicates and accessors working on expression trees
@@ -367,7 +362,7 @@ function extension_type(ex)
     @jl_assert kind(ex) == K"assert" ex
     @jl_assert numchildren(ex) >= 1 ex
     @jl_assert kind(ex[1]) == K"Symbol" ex
-    ex[1].name_val
+    syntax_name(ex[1])
 end
 
 function is_eventually_call(ex::SyntaxTree)
@@ -407,7 +402,7 @@ function is_valid_modref(ex)
 end
 
 function is_core_Any(ex)
-    kind(ex) === K"core" && ex.name_val::String === "Any"
+    kind(ex) === K"core" && syntax_name(ex) === "Any"
 end
 
 function is_simple_atom(ctx, ex)
@@ -473,9 +468,9 @@ end
 # Context wrapper which helps to construct a list of statements to be executed
 # prior to some expression. Useful when we need to use subexpressions multiple
 # times.
-struct StatementListCtx{Ctx, Attrs} <: AbstractLoweringContext
+struct StatementListCtx{Ctx} <: AbstractLoweringContext
     ctx::Ctx
-    stmts::SyntaxList{Attrs, Vector{NodeId}}
+    stmts::Vector{SyntaxTree}
 end
 
 function Base.getproperty(ctx::StatementListCtx, field::Symbol)
@@ -500,5 +495,5 @@ with_stmts(ctx, stmts) = StatementListCtx(ctx, stmts)
 with_stmts(ctx::StatementListCtx, stmts) = StatementListCtx(ctx.ctx, stmts)
 
 function with_stmts(ctx)
-    StatementListCtx(ctx, SyntaxList(ctx))
+    StatementListCtx(ctx, SyntaxList())
 end

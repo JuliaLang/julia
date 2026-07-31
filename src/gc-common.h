@@ -186,10 +186,13 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 // list of another thread
 extern jl_mutex_t finalizers_lock;
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
-// If an object pointer has the lowest bit set, the next pointer is an unboxed c function pointer.
-// If an object pointer has the second lowest bit set, the current pointer is a c object pointer.
+// If an object pointer has `GC_FIN_CFUNC_TAG` set, the next pointer is an unboxed c function pointer.
+// If an object pointer has `GC_FIN_COBJ_TAG` set, the current pointer is a c object pointer.
 //   It must be aligned at least 4, and it finalized immediately (at "quiescence").
 // `to_finalize` should not have tagged pointers.
+#define GC_FIN_CFUNC_TAG 1
+#define GC_FIN_COBJ_TAG  2
+#define GC_FIN_TAG_MASK  3
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 

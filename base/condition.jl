@@ -54,19 +54,111 @@ islocked(::AlwaysLockedST) = true
 
 ## condition variables
 
+# A task's registration on a wait queue. All fields are plain: `next` and
+# `queue` are protected by the waitee's lock (`queue` holds the queue's
+# identity - see `waitqueue` - while the entry is enqueued, acting as the
+# "am I registered, and on what" witness, and `nothing` otherwise); `task`
+# is written by the owning task before enqueueing, so it is ordered by the
+# same lock for lock-holding readers.
+#
+# The wake-claim protocol: a parked task `t` points to its current
+# registration through the atomic field `t.waiting_on`. Whoever wants to wake
+# it must first claim the wake by atomically clearing that field:
+#
+# CAS(w => nothing) succeeds: the claim is won, and the owner may schedule
+# N.B.: Interrupters currently claim unconditionally, normal waiters claim
+# a specific entry. In the future this will be managed by the cancellation system.
+#
+# Entries are heap objects. A task whose interrupted wait left a stale registration
+# behind can immediately register anew - e.g. park on a lock during its cleanup - with a fresh entry.
+mutable struct WaitEntry
+    task::Union{Task, Nothing}
+    next::Union{WaitEntry, Nothing}
+    queue::Any
+    WaitEntry(task::Union{Task, Nothing}) = new(task, nothing, nothing)
+end
+
+# Return the cached entry of `waiter` if it is free, else a fresh (and newly
+# cached) one.
+function _cached_wait_entry(waiter::Task)
+    w = waiter.cached_wait_entry
+    if w isa WaitEntry && w.queue === nothing
+        w.task = waiter
+    else
+        w = WaitEntry(waiter)
+        waiter.cached_wait_entry = w
+    end
+    return w
+end
+
+@noinline function _wait_registration_error()
+    throw(ConcurrencyViolationError("Task is already registered on a wait queue"))
+end
+
+# Publish `w` as `waiter`'s only armed wait registration.
+function _arm_wait(waiter::Task, w::WaitEntry)
+    armed = @atomicreplace :release :monotonic waiter.waiting_on nothing => w
+    armed.success || _wait_registration_error()
+    return w
+end
+
+# Claim the wake of the wait that `w` was registered for (returns whether the
+# claim succeeded). `w` must be an entry armed for `t` by `_wait2`.
+function claim_wait(t::Task, w::WaitEntry)
+    return (@atomicreplace t.waiting_on w => nothing).success
+end
+
 """
     GenericCondition
 
 Abstract implementation of a condition object
 for synchronizing task objects with a given lock.
 """
-struct GenericCondition{L<:AbstractLock}
-    waitq::IntrusiveLinkedList{Task}
-    lock::L
+mutable struct GenericCondition{L<:AbstractLock}
+    # mutable for identity only
+    const waitq::IntrusiveLinkedList{WaitEntry}
+    const lock::L
 
-    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), L())
-    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), l)
-    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{Task}(), l)
+    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{WaitEntry}(), L())
+    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{WaitEntry}(), l)
+    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{WaitEntry}(), l)
+end
+
+waitqueue(c::GenericCondition) = ILLRef(c.waitq, c)
+
+"""
+    try_unlink_claimed!(w::WaitEntry)
+
+Opportunistically attempt to unlink a wait entry from its queue. This is a memory pressure
+optimization. If the queue is locked by another task, the entry will remain linked and will
+be unlinked upon the next wakeup attempt.
+"""
+function try_unlink_claimed!(w::WaitEntry)
+    q = w.queue
+    q === nothing && return true
+    # Manual split for --trim
+    if q isa Task
+        dn = q.donenotify
+        dn isa GenericCondition{Threads.SpinLock} || return false
+        return _try_unlink_from!(dn, q, w)
+    elseif q isa GenericCondition{Threads.SpinLock}
+        return _try_unlink_from!(q, q, w)
+    elseif q isa GenericCondition{ReentrantLock}
+        return _try_unlink_from!(q, q, w)
+    elseif q isa GenericCondition{AlwaysLockedST}
+        return _try_unlink_from!(q, q, w)
+    end
+    return false
+end
+
+function _try_unlink_from!(c::GenericCondition, @nospecialize(waitee), w::WaitEntry)
+    trylock(c.lock) || return false
+    try
+        list_deletefirst!(ILLRef(c.waitq, waitee), w)
+    finally
+        unlock(c.lock)
+    end
+    return true
 end
 
 show(io::IO, c::GenericCondition) = print(io, GenericCondition, "(", c.lock, ")")
@@ -79,14 +171,19 @@ islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
-# have waiter wait for c
-function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
+# have waiter wait for c: register `waiter` on c's wait queue (with `waitee`
+# recorded as the queue identity) and arm the registration for a wake.
+# Returns the registration entry.
+function _wait2(c::GenericCondition, waiter::Task, first::Bool=false;
+                waitee=c, entry::Union{WaitEntry, Nothing}=nothing)
     ct = current_task()
     assert_havelock(c)
+    w = entry === nothing ? _cached_wait_entry(waiter) : entry
+    _arm_wait(waiter, w)
     if first
-        pushfirst!(c.waitq, waiter)
+        pushfirst!(ILLRef(c.waitq, waitee), w)
     else
-        push!(c.waitq, waiter)
+        push!(ILLRef(c.waitq, waitee), w)
     end
     # since _wait2 is similar to schedule, we should observe the sticky bit now
     if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
@@ -99,7 +196,7 @@ function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
         tid = Threads.threadid()
         ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
     end
-    return
+    return w
 end
 
 """
@@ -133,18 +230,37 @@ Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notif
 If the keyword `first` is set to `true`, the waiter will be put _first_
 in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
 """
-function wait(c::GenericCondition; first::Bool=false)
+function wait(c::GenericCondition; first::Bool=false, waitee=c)
     ct = current_task()
-    _wait2(c, ct, first)
+    assert_havelock(c)
+    w = _wait2(c, ct, first; waitee)
     token = unlockall(c.lock)
-    try
-        return wait()
+    ret = try
+        wait()
     catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
-        rethrow()
-    finally
+        # Error path - this could have come from an interrupt or other error.
+        # Clean up our wait condition.
+        # TODO: Replace this with the proper cancellation protocol.
+        @atomicreplace ct.waiting_on w => nothing
+        # Our wake may already have been claimed and turned into a workqueue
+        # enqueue that this unwind will never consume - drop that too, so a
+        # later `schedule` of this task does not find it spuriously queued.
+        q = ct.queue
+        q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
+        # WARNING: Do not use `w` for establish a wait on any tokens - otherwise
+        # we risk ABA issues by attempting to use the cached token for the lock wait.
+        was_cached = ct.cached_wait_entry === w
+        was_cached && (ct.cached_wait_entry = nothing)
         relockall(c.lock, token)
+        list_deletefirst!(ILLRef(c.waitq, waitee), w)
+        if was_cached && ct.cached_wait_entry === nothing
+            ct.cached_wait_entry = w
+        end
+        rethrow()
     end
+    # a normal wake implies our claim was won and our entry already unlinked
+    relockall(c.lock, token)
+    return ret
 end
 
 """
@@ -161,7 +277,11 @@ function notify(c::GenericCondition, @nospecialize(arg), all, error)
     assert_havelock(c)
     cnt = 0
     while !isempty(c.waitq)
-        t = popfirst!(c.waitq)
+        w = popfirst!(waitqueue(c))
+        t = w.task
+        if !(t isa Task && claim_wait(t, w))
+            continue
+        end
         schedule(t, arg, error=error)
         cnt += 1
         all || break
@@ -176,7 +296,13 @@ notify_error(c::GenericCondition, err) = notify(c, err, true, true)
 
 Return `true` if no tasks are waiting on the condition, `false` otherwise.
 """
-isempty(c::GenericCondition) = isempty(c.waitq)
+function isempty(c::GenericCondition)
+    for w in c.waitq
+        t = w.task
+        t isa Task && (@atomic t.waiting_on) === w && return false
+    end
+    return true
+end
 
 
 # default (Julia v1.0) is currently single-threaded

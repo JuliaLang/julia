@@ -648,6 +648,7 @@ typedef struct {
     _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
+    uint8_t concrete_only; // Bool: inference refuses to commit (records no backedge) at non-concrete call sites
 } jl_typename_t;
 
 typedef struct {
@@ -714,7 +715,8 @@ typedef struct {
         // If set, this type's egality can be determined entirely by comparing
         // the non-padding bits of this datatype.
         uint16_t isbitsegal : 1;
-        uint16_t padding : 8;
+        uint16_t unused_bits : 3;
+        uint16_t padding : 5;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -899,7 +901,10 @@ typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
     jl_value_t *restriction;
     _Atomic(size_t) min_world;
     _Atomic(size_t) max_world;
-    _Atomic(struct _jl_binding_partition_t *) next;
+    // The next (older) partition in the chain. The last (oldest) partition in
+    // the chain instead stores a backreference to the owning `jl_binding_t`, so
+    // the chain can be walked circularly.
+    _Atomic(struct _jl_binding_partition_t *) next; // more precisely, _Atomic( union { jl_binding_partition_t *pb; jl_binding_t *b; } )
     size_t kind;
 } jl_binding_partition_t;
 
@@ -1116,6 +1121,7 @@ typedef struct {
     XX(quotenode) \
     XX(typeeq) \
     XX(typeegal) \
+    XX(cancel_source) \
     /* Add new tags here to keep existing builds ABI stable - we don't guarantee ABI \
        stability, but it'll help PkgEval to not break it unnecessarily */ \
     /* end of JL_SMALL_TYPEOF */
@@ -1573,8 +1579,16 @@ STATIC_INLINE const jl_datatype_layout_t *jl_datatype_layout(jl_datatype_t *t) J
 }
 #define jl_datatype_size(t)    (jl_datatype_layout((jl_datatype_t*)(t))->size)
 #define jl_datatype_align(t)   (jl_datatype_layout((jl_datatype_t*)(t))->alignment)
-#define jl_datatype_nbits(t)   ((jl_datatype_layout((jl_datatype_t*)(t))->size)*8)
 #define jl_datatype_nfields(t) (jl_datatype_layout((jl_datatype_t*)(t))->nfields)
+STATIC_INLINE uint32_t jl_datatype_unusedbits(jl_datatype_t *t) JL_NOTSAFEPOINT
+{
+    return jl_datatype_layout(t)->flags.unused_bits;
+}
+STATIC_INLINE uint32_t jl_datatype_nbits(jl_datatype_t *t) JL_NOTSAFEPOINT
+{
+    const jl_datatype_layout_t *layout = jl_datatype_layout(t);
+    return layout->size * 8 - layout->flags.unused_bits;
+}
 
 JL_DLLEXPORT void *jl_symbol_name(jl_sym_t *s);
 // inline version with strong type check to detect typos in a `->name` chain
@@ -1757,6 +1771,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
 #define jl_is_mcache(v)      jl_typetagis(v,jl_methcache_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
+#define jl_is_cancel_source(v) jl_typetagis(v,jl_cancel_source_tag<<4)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
@@ -2534,6 +2549,10 @@ struct _jl_handler_t {
 #define JL_TASK_STATE_FAILED   2
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t nparents) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_cancel_source_parent(jl_cancel_source_t *src, size_t i);
+JL_DLLEXPORT jl_value_t *jl_cancel_source_next_child(jl_cancel_source_t *parent, jl_cancel_source_t *child) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_cancel_source_relink(jl_cancel_source_t *src) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_CANSAFEPOINT_ENTER_LEAVE;
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;

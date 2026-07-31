@@ -118,6 +118,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         if isa(result_type, Const)
             rettype_const = result_type.val
             const_flags = const_flag ? 0x3 : 0x2
+        elseif isa(result_type, PartialTask)
+            rettype_const = result_type
+            const_flags = 0x2
         elseif isa(result_type, PartialOpaque)
             rettype_const = result_type
             const_flags = 0x2
@@ -1276,6 +1279,8 @@ function cached_return_type(code::CodeInstance)
         return PartialStruct(fallback_lattice, rettype, undefs, fields)
     elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
         return rettype_const
+    elseif isa(rettype_const, PartialTask) && rettype <: Task
+        return rettype_const
     elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
         return rettype_const
     elseif isa(rettype_const, InterMustAlias) && rettype !== InterMustAlias
@@ -1665,7 +1670,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
             !applicable(argextype, farg, ci, sptypes) && continue # TODO: Why is this failing during bootstrap
             ftyp = argextype_widened(farg, ci, sptypes)
 
-            if ftyp === typeof(Core.finalizer) && length(stmt.args) == 3
+            if ftyp === typeof(Core.finalizer) && 3 <= length(stmt.args) <= 5
                 finalizer = argextype(stmt.args[2], ci, sptypes)
                 obj = argextype(stmt.args[3], ci, sptypes)
                 atype = argtypes_to_type(Any[finalizer, obj])
@@ -1723,6 +1728,12 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
             markinspected!(workqueue, callee)
             continue
         end
+        let cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
+            if cached !== callee
+                markinspected!(workqueue, callee)
+                continue
+            end
+        end
         src = ci_get_source(interp, callee)
         if !isa(src, CodeInfo)
             newcallee = typeinf_ext(workqueue.interp, callee.def, source_mode) # always SOURCE_MODE_ABI
@@ -1740,14 +1751,15 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         sptypes = sptypes_from_meth_instance(mi)
         collectinvokes!(workqueue, src, sptypes)
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-            cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
-            if cached === callee
-                # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
-                code_cache(workqueue.interp)[mi] = callee
-            else
-                # use an existing CI from the cache, if there is available one that is compatible
-                callee === ci && (ci = cached)
-                callee = cached
+            let cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, 0x0)::CodeInstance
+                if cached === callee
+                    # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
+                    code_cache(workqueue.interp)[mi] = callee
+                else
+                    # use an existing CI from the cache, if there is available one that is compatible
+                    callee === ci && (ci = cached)
+                    callee = cached
+                end
             end
         end
         push!(codeinsts, callee)
@@ -1836,12 +1848,13 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
                                 enqueue_unprepared_invokes)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-                    cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, world)::CodeInstance
-                    if cached === callee
-                        code_cache(interp)[mi] = callee
-                    else
-                        # Use an existing CI from the cache, if there is available one that is compatible
-                        callee = cached
+                    let cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, 0x0)::CodeInstance
+                        if cached === callee
+                            code_cache(interp)[mi] = callee
+                        else
+                            # Use an existing CI from the cache, if there is available one that is compatible
+                            callee = cached
+                        end
                     end
                 end
                 push!(codeinfos, callee)
@@ -1952,7 +1965,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         ci = ci::CodeInstance
         mi = get_ci_mi(ci)
         return !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, ci)) ||
-            ccall(:jl_get_ci_equiv, Any, (Any, UInt), ci, ci.min_world)::CodeInstance !== ci
+            ccall(:jl_get_ci_equiv, Any, (Any, UInt), ci, 0x0)::CodeInstance !== ci
     end
 
     return Core.svec(codeinfos, cis)
