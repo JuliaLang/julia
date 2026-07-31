@@ -554,6 +554,13 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
     w = acquire_wait_entry!(ct, ws)
     park!(ws, w, true, false)
     while true
+        # the caller-side cancellation check the driver's nothing-return
+        # contract requires: a fired source recheck (or any cancelled
+        # state - delivery is level-triggered) withdraws and throws here
+        if src !== nothing && iscancelled(src)
+            withdraw!(ws, w)
+            checkcancel(src)
+        end
         # collect completions (a wake happens-after its completing notify,
         # so the istaskdone reads below observe it)
         for (i, done) in enumerate(done_mask)

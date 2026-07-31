@@ -231,11 +231,14 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
     # entry check: throw before enqueueing anything (skipped for teardown
     # waits that re-park after acknowledging a severity)
     src === nothing || min_severity != 0x00 || checkcancel(src)
-    # the refusal (a cancelled source at the registration recheck) throws
-    # with the lock held, like a normal-wake return - the caller's unlock
-    # discipline covers both
     src === nothing && return park!((c,), true, first)
-    return park!((c, SourceWait(src, min_severity)), true, first)
+    r = park!((c, SourceWait(src, min_severity)), true, first)
+    # `nothing` may be a fired source recheck (the refusal) or a legit
+    # nothing-valued notify: re-derive with the same check the entry made.
+    # Level-triggered either way - and thrown with the lock held, like a
+    # normal-wake return, so the caller's unlock discipline covers both.
+    r === nothing && checkcancel(src)
+    return r
 end
 
 """

@@ -643,10 +643,14 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
     if timeout > 0.0
         tw = Base.TimeoutWait(timeout)
         src === nothing && return Base.park!((c, tw), true, first)
-        return Base.park!((c, Base.SourceWait(src, 0x00), tw), true, first)
+        r = Base.park!((c, Base.SourceWait(src, 0x00), tw), true, first)
+        r === nothing && Base.checkcancel(src)
+        return r
     else
         src === nothing && return Base.park!((c,), true, first)
-        return Base.park!((c, Base.SourceWait(src, 0x00)), true, first)
+        r = Base.park!((c, Base.SourceWait(src, 0x00)), true, first)
+        r === nothing && Base.checkcancel(src)
+        return r
     end
 end
 

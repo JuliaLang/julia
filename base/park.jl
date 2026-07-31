@@ -31,12 +31,6 @@
 #                                        declined (one-shot waitables)
 #   wait_recheck(x, w) -> Bool           phase 5, after ALL enqueues;
 #                                        vacuous default
-#   wait_fired(x, w)                     fired outcome, after a WON
-#                                        self-claim: predicate kinds
-#                                        return, the source throws
-#   wait_fired_throws(x) -> Bool         compile-time kind property: does
-#                                        wait_fired throw? (drives the
-#                                        full-withdraw-before-throw rule)
 #   wait_dequeue!(x, w, why) -> Nothing  withdraw x's slot per policy
 #   wait_release!(x) -> token            suspend bracket for protection
 #   wait_reacquire!(x, token)            held across phases 4-5
@@ -51,16 +45,13 @@
 
 # why-codes for wait_dequeue!
 const WAKE_VALUE       = 0x00  # normal wake consumed (lazy settle)
-const WAKE_FIRED       = 0x01  # fired; self-claim won; loop continues
-const WAKE_REFUSED     = 0x02  # throwing fired (source refusal)
+const WAKE_FIRED       = 0x01  # fired; self-claim won; no suspend
 const WAKE_INTERRUPTED = 0x03  # exceptional wake (cleanup path)
 const WAKE_WITHDRAWN   = 0x04  # withdraw! - the caller is done waiting
 
 function wait_enqueue! end
 function wait_dequeue! end
-function wait_fired end
 wait_recheck(@nospecialize(x), w::WaitEntry) = false
-wait_fired_throws(@nospecialize(x)) = false
 wait_release!(@nospecialize(x)) = nothing
 wait_reacquire!(@nospecialize(x), token) = nothing
 
@@ -108,9 +99,11 @@ disarm!(ct::Task, w::WaitEntry) = (@atomicreplace ct.waiting_on w => nothing).su
 
 Park the current task on the waitables `ws` (any flat iterable - one
 element per slot) through the six-phase protocol. Returns the consumed
-wake's payload, or `nothing` when a waitable fired before the suspend
-(callers rescan their own predicates; a value-carrying wait cannot be
-ambiguous - its only fireable tuple-mate is the source, which throws).
+wake's payload, or `nothing` when a waitable fired before the suspend.
+The driver never throws a fired outcome: on a `nothing` return the
+caller re-derives what happened from its own conditions - in particular
+a park governed by a `SourceWait` must re-check cancellation
+(`checkcancel`), which throws the refusal exactly like its entry check.
 
 `relock` selects whether the phase-4 protection is reacquired after the
 wake (and kept across an exceptional unwind); `first` puts the waiter at
@@ -126,12 +119,13 @@ follow the per-kind release/reacquire hooks; on the throwing fired path
 @inline function park!(ws, relock::Bool, first::Bool)
     ct = current_task()
     w = acquire_wait_entry!(ct, ws)
-    r = park!(ws, w, relock, first)
+    r = park!(ws, w, relock, first, true)
     release_wait_entry!(ct, w)
     return r
 end
 
-function park!(ws, w::WaitEntry, relock::Bool, first::Bool)
+function park!(ws, w::WaitEntry, relock::Bool, first::Bool,
+               fired_dequeues_all::Bool=false)
     ct = current_task()
     _arm_wait(ct, w)                                     # 3
     fired = false
@@ -151,24 +145,29 @@ function park!(ws, w::WaitEntry, relock::Bool, first::Bool)
         end
     end
     if fired && disarm!(ct, w)
-        if wait_fired_throws(fx)
-            # the throwing fired path (the refusal): full withdrawal under
-            # the still-held phase-4 protection, release per policy, throw
+        # The driver never throws a fired outcome: it returns `nothing`
+        # and the caller re-derives what happened from its own conditions
+        # (for a fired source, the same `checkcancel` its entry made -
+        # level-triggered, the state is still cancelled).
+        if fired_dequeues_all
+            # this park is over and nobody else will withdraw (the
+            # one-shot/owning-caller lifecycle): dequeue everything under
+            # the still-held phase-4 protection (sticky kinds no-op),
+            # then release per policy
             for x in ws
-                wait_dequeue!(x, w, WAKE_REFUSED)
+                wait_dequeue!(x, w, WAKE_FIRED)
             end
-            release_wait_entry!(ct, w)
             if !relock
                 for x in ws
                     wait_release!(x)
                 end
             end
-            wait_fired(fx, w)
-            error("wait_fired of a throwing waitable kind returned")
+        else
+            # the multi-wait loop: eagerly dequeue the fired slot only
+            # (so a later repark! recheck cannot re-fire on it); the rest
+            # stay registered for the loop
+            wait_dequeue!(fx, w, WAKE_FIRED)
         end
-        # returning fired: eagerly dequeue the fired slot (so a later
-        # repark! recheck cannot re-fire on it) and let the caller rescan
-        wait_dequeue!(fx, w, WAKE_FIRED)
         return nothing
     end
     # not fired, or the self-claim lost (a claimer owns our wake): suspend
@@ -213,14 +212,8 @@ function repark!(ws, w::WaitEntry)
         end
     end
     if fired && disarm!(ct, w)
-        if wait_fired_throws(fx)
-            for x in ws
-                wait_dequeue!(x, w, WAKE_REFUSED)
-            end
-            release_wait_entry!(ct, w)
-            wait_fired(fx, w)
-            error("wait_fired of a throwing waitable kind returned")
-        end
+        # fired => `nothing`; the loop's caller re-derives the outcome
+        # (checkcancel for its source) and owns the withdrawal
         wait_dequeue!(fx, w, WAKE_FIRED)
         return nothing
     end
@@ -362,6 +355,4 @@ function wait_recheck(x::SourceWait, w::WaitEntry)
     return st != 0x00 && st >= x.floor
 end
 
-wait_fired_throws(x::SourceWait) = true
-wait_fired(x::SourceWait, w::WaitEntry) = _deliver_refused_cancellation(x.src)
 wait_dequeue!(x::SourceWait, w::WaitEntry, why::UInt8) = nothing

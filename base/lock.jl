@@ -271,7 +271,11 @@ function wait_no_relock(c::GenericCondition, tok::MaybeToken)
     # the lock only for its unlink
     src = cancel_source(tok)
     src === nothing && return park!((c,), false, false)
-    return park!((c, SourceWait(src, 0x00)), false, false)
+    r = park!((c, SourceWait(src, 0x00)), false, false)
+    # a fired source recheck returned `nothing` with the lock already
+    # released (relock=false): deliver the refusal
+    r === nothing && checkcancel(src)
+    return r
 end
 
 

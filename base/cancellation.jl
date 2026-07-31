@@ -630,14 +630,6 @@ function unregister_cancellation!(src::CancellationTokenSource, w::WaitEntry)
     return nothing
 end
 
-# Deliver the cancellation that made a source registration refuse (the
-# caller has already withdrawn its waitee-side registration and released
-# any locks the throw must not hold).
-@noinline function _deliver_refused_cancellation(src::CancellationTokenSource)
-    checkcancel(src)
-    error("cancellation registration refused, but the source is not cancelled")
-end
-
 # Mark the single-use entry `w` as done with its (sticky) source
 # registrations: walks then collect it like an entry of a completed task.
 # For per-call entries (`Experimental.wait_with_timeout`, waitany) whose

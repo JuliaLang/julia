@@ -621,9 +621,14 @@ function _wait_uvreq(src::Union{Nothing, CancellationTokenSource}, @nospecialize
     ct = current_task()
     uvw = UvReqWait(req, witness, owner, trycancel)
     if src === nothing
-        return park!((uvw,), _cached_wait_entry(ct), true, false)
+        return park!((uvw,), _cached_wait_entry(ct), true, false, true)
     else
-        return park!((uvw, SourceWait(src, 0x00)), _cancel_wait_entry(ct, src, 0x00), true, false)
+        r = park!((uvw, SourceWait(src, 0x00)), _cancel_wait_entry(ct, src, 0x00),
+                  true, false, true)
+        # a fired source recheck resolved the request (the dequeue ran)
+        # and returned `nothing`: deliver the refusal
+        r === nothing && checkcancel(src)
+        return r
     end
 end
 
