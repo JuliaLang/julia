@@ -536,3 +536,61 @@ end
     out = JL.core_lowering_hook(lambda, test_mod)
     @test out isa Core.SimpleVector && out[1] isa Core.CodeInfo
 end
+
+@testset "expr compat: #self# becomes `thisfunction`" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self()
+        var"#self#"
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (let
+        ()->(var"#self#")
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    var_self_short() = var"#self#"
+    var_self_short()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro var_self_macro(); var"#self#"; end
+    @var_self_macro
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_kw(; k=1)
+        var"#self#"
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_quoted()
+        :(var"#self#")
+    end)()
+    """; expr_compat_mode=true) === Symbol("#self#")
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @isdefined(var"#self#") ? var"#self#" : nothing
+    """; expr_compat_mode=true) == nothing
+    @test JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_isdefined()
+        @isdefined(var"#self#") ? var"#self#" : nothing
+    end)()
+    """; expr_compat_mode=true) isa Function
+
+    # we don't bother with generators
+    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    collect(var"#self#" for i in 1:1)[1]
+    """; expr_compat_mode=true) isa Function
+
+    # we assume the user doesn't create vars with this name
+    @test_broken JuliaLowering.include_string(test_mod, raw"""
+    (function var_self_assign()
+        var"#self#" = 1
+        var"#self#"
+    end)()
+    """; expr_compat_mode=true) == 1
+end
