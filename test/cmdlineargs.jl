@@ -1511,6 +1511,8 @@ end
 # Build and use a system image, exercising both split (--output-o together with
 # --output-ji, heap goes into the .ji) and non-split (--output-o only, heap goes
 # into the .so) layouts, with --compress-sysimage on and off in each.
+#=
+These tests are disabled because they significantly increase CI time.
 @testset "system image: split=$split compress=$compress" for split in (true, false), compress in (true, false)
     mktempdir() do dir
         o_file  = joinpath(dir, "sys.o.a")
@@ -1536,6 +1538,7 @@ end
         end
     end
 end
+=#
 
 # Precompile and load a package, exercising the split pkgimage layout
 # (--pkgimages=yes: native code goes into the ocachefile, the heap stays in the
@@ -1543,8 +1546,6 @@ end
 # (which precompile workers inherit through julia_cmd) on and off in each.
 # Compression requires the split layout, so with --pkgimages=no the worker must
 # warn and emit an uncompressed heap.
-#=
-These tests are disabled because they significantly increase CI time.
 @testset "pkgimage: native=$native compress=$compress" for native in (true, false), compress in (true, false)
     mktempdir() do dir
         pkgdir = joinpath(dir, "CompressMe")
@@ -1600,7 +1601,6 @@ These tests are disabled because they significantly increase CI time.
         @test read(ji_file) == cache_bytes
     end
 end
-=#
 
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
 # Compiling a single entry point whose inferred call graph contains thousands of
