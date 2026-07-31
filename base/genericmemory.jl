@@ -149,13 +149,16 @@ unsetindex!(A::Memory, i::Int) = (@_propagate_inbounds_meta; unsetindex!(memoryr
 unsetindex!(A::Union{Array, Memory}, i::Integer) = unsetindex!(A, to_index(i))
 
 """
-    unsetindex!(::AtomicMemoryRef, ordering::Symbol)
+    unsetindex!(ref::AtomicMemoryRef, ordering::Symbol) -> ref
 
 Same as `unsetindex!(::MemoryRef)`, but the index is atomically unset with the
 atomic memory ordering set by `ordering`.
 Currently, `ordering` may be `:unordered`, `:monotonic`, `:release`,
 or `:sequentially_consistent`. See the manual on atomics for the meaning of these
 orderings.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
 """
 function unsetindex!(A::AtomicMemoryRef, order::Symbol)
     @_propagate_inbounds_meta
@@ -164,13 +167,16 @@ function unsetindex!(A::AtomicMemoryRef, order::Symbol)
 end
 
 """
-    unsetindex!(A::AtomicMemory, order::Symbol, i::Integer)
+    unsetindex!(A::AtomicMemory, order::Symbol, i::Integer) -> A
 
 Same as `unsetindex!(::Memory, ::Integer)`, but the index is atomically unset with the
 atomic memory ordering set by `ordering`.
 Currently, `ordering` may be `:unordered`, `:monotonic`, `:release`,
 or `:sequentially_consistent`. See the manual on atomics for the meaning of these
 orderings.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
 """
 function unsetindex!(A::AtomicMemory, order::Symbol, i::Int)
     @_propagate_inbounds_meta
