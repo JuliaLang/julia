@@ -499,3 +499,13 @@ end
         @test invoke(oc, Tuple{Int}, 5) == 15
     end
 end
+
+@testset "free typevars in the signature are rejected" begin
+    ci = Base.uncompressed_ir(first(methods(identity)))
+    tv = TypeVar(:T)
+    sig = Tuple{Type{Vector{tv}}}
+    @test_throws ErrorException Base.Experimental.generate_opaque_closure(
+        sig, Union{}, Any, ci, 1, false; isinferred=false, do_compile=true)
+    @test_throws ErrorException Base.Experimental.generate_opaque_closure(
+        Tuple{Int}, Union{}, Vector{tv}, ci, 1, false; isinferred=false, do_compile=true)
+end
