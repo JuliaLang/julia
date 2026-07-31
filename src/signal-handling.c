@@ -177,34 +177,55 @@ static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 #endif
 }
 
-void jl_lock_profile(void)
+static void jl_lock_profile_rd_set(uintptr_t held) JL_NOTSAFEPOINT
 {
-    int got = jl_trylock_profile();
-    assert(got); (void)got;
-}
-
-int jl_trylock_profile(void)
-{
-    uintptr_t held = jl_lock_profile_rd_held();
-    if (held == -1)
-        return 0;
-    if (held == 0) {
-        held = -1;
-#ifndef _OS_WINDOWS_
-        pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
-#else
-        TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
-#endif
-        uv_rwlock_rdlock(&debuginfo_asyncsafe);
-        held = 0;
-    }
-    held++;
 #ifndef _OS_WINDOWS_
     pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 #else
     TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
 #endif
+}
+
+// Acquire the debug-info read lock, recursively for a thread that already holds
+// it. With `blocking`, waits for the lock; otherwise fails rather than waiting.
+//
+// The non-blocking form matters: the Windows unwinder reaches
+// jl_getUnwindInfo_impl from inside a StackWalk64 callback, and by then it
+// already holds jl_in_stackwalk. Waiting for the reader-writer lock there
+// deadlocks against jl_register_jit_object, which takes the write side while
+// another unwinder holds the read side and waits for jl_in_stackwalk. The
+// callers all treat failure as "no information available", which only costs a
+// less precise frame.
+static int jl_lock_profile_rd(int blocking) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1)
+{
+    uintptr_t held = jl_lock_profile_rd_held();
+    if (held == -1)
+        return 0;
+    if (held == 0) {
+        jl_lock_profile_rd_set(-1);
+        if (blocking) {
+            uv_rwlock_rdlock(&debuginfo_asyncsafe);
+        }
+        else if (uv_rwlock_tryrdlock(&debuginfo_asyncsafe) != 0) {
+            jl_lock_profile_rd_set(0);
+            return 0;
+        }
+        held = 0;
+    }
+    held++;
+    jl_lock_profile_rd_set(held);
     return 1;
+}
+
+void jl_lock_profile(void)
+{
+    int got = jl_lock_profile_rd(1);
+    assert(got); (void)got;
+}
+
+int jl_trylock_profile(void)
+{
+    return jl_lock_profile_rd(0);
 }
 
 JL_DLLEXPORT void jl_unlock_profile(void) JL_NO_SAFEPOINT_ANALYSIS
