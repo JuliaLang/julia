@@ -437,7 +437,7 @@ end
 
 @testset "internal keyword body bindings" begin
     bindings = resolve_and_get_bindings(Module(), :(f(; x=1) = x))
-    kw_body_bindings = filter(b -> startswith(b.name, "#kw_body#"), bindings)
+    kw_body_bindings = filter(b -> contains(b.name, "#kw_body#"), bindings)
     @test !isempty(kw_body_bindings)
     @test all(b -> b.is_internal, kw_body_bindings)
 end

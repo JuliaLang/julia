@@ -366,29 +366,7 @@ function _get_module_binding(mod, name; create=false)
     b == C_NULL ? nothing : unsafe_pointer_to_objref(b)
 end
 
-# Return true if a `name` is defined in and *by* the module `mod`.
-# Has no side effects, unlike isdefined()
-#
-# (This should do what fl_defined_julia_global does for flisp lowering)
-function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_counter())
-    return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
-end
-
-# "Reserve" a binding: create the binding if it doesn't exist but do not assign
-# to it.
-function reserve_module_binding(mod, name)
-    # TODO: Fix the race condition here: We should really hold the Module's
-    # binding lock during this test-and-set type operation. But the binding
-    # lock is only accessible from C. See also the C code in
-    # `fl_module_unique_name`.
-    if _get_module_binding(mod, name; create=false) === nothing
-        return _get_module_binding(mod, name; create=true) !== nothing
-    else
-        return false
-    end
-end
-
-# Reserve a global binding named "$basename#$i" in module `mod` for the
+# Reserve a global binding named "$basename##$i" in module `mod` for the
 # smallest `i` starting at `0`.
 #
 # TODO: Remove the use of this where possible. Currently this is used within
@@ -399,12 +377,44 @@ end
 function reserve_module_binding_i(mod, basename)
     i = 0
     while true
-        name = "$basename$i"
-        if reserve_module_binding(mod, Symbol(name))
+        name = "$basename##$i"
+        # TODO: Fix the race condition here: We should really hold the Module's
+        # binding lock during this test-and-set type operation. But the binding
+        # lock is only accessible from C. See also the C code in
+        # `fl_module_unique_name`.
+        symname = Symbol(name)
+        if _get_module_binding(mod, symname; create=false) === nothing
+            _get_module_binding(mod, symname; create=true)
             return name
         end
         i += 1
     end
+end
+
+# Even less likely to be deterministic than the above, but necessary to avoid
+# quadratic behaviour where flisp doesn't already have it.
+function reserve_module_binding_simple(mod, hint::String)
+    # (JETLS) jl_module_next_counter is not exported before Julia 1.14.0-DEV.3063.
+    @static if VERSION < v"1.14.0-DEV.3063"
+        return reserve_module_binding_i(mod, hint)
+    else
+        i = module_next_counter(mod)
+        name = "$hint#$i"
+        b = _get_module_binding(mod, Symbol(name); create=true)
+        # @assert !isdefined(b, :partitions) || b.partitions.kind === Base.PARTITION_KIND_GUARD hint
+        return name
+    end
+end
+@static if VERSION >= v"1.14.0-DEV.3063"
+    module_next_counter(mod::Module) = @ccall(jl_module_next_counter(mod::Module)::UInt32)
+end
+
+# Return true if a `name` is defined in and *by* the module `mod`.
+# Has no side effects, unlike isdefined()
+#
+# (This should do what fl_defined_julia_global does for flisp lowering)
+function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_counter())
+    return _invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
 function lookup_method_instance(func, args, world::Integer)
