@@ -140,14 +140,27 @@ function (mri::_MapReduceInPlace)(g::Generator{<:Iterators.Enumerate{<:AbstractA
     return A
 end
 
-if isdefined(Core, :Compiler)
-    _mapreduce_might_widen(_, _, _, _, ::_MapReduceInPlace) = false
-    function _mapreduce_might_widen(f::F, op::G, A::T, init, _) where {F,G,T}
-        return !isconcretetype(Core.Compiler.return_type(x->op(_mapreduce_start(f, op, first(x), init), f(first(x))), Tuple{T}))
-    end
-else
-    _mapreduce_might_widen(_, _, _, _, ::_MapReduceInPlace) = false
-    _mapreduce_might_widen(_, _, _, _, _) = true
+# N.B.: the compiler must be referenced lazily from inside the function body (as
+# `promote_op` does); a load-time `isdefined(Core, :Compiler)` check here is always
+# false during bootstrap, which would permanently bake the pessimistic fallback into
+# the sysimage and route every out-of-place dimensional reduction to the naive
+# column-major strategy.
+_mapreduce_might_widen(_, _, _, _, ::_MapReduceInPlace) = false
+function _mapreduce_might_widen(f::F, op::G, A::T, init, _) where {F,G,T}
+    # The probes model the start of a *nonempty* chain: seed with the container's first
+    # element (the five-argument `_mapreduce_start`), then fold one more mapped element.
+    # Passing an element where `_mapreduce_start`'s container belongs would instead probe
+    # the empty-reduction path, whose `mapreduce_empty` methods don't exist for most
+    # mapping functions, spuriously flagging them as widening.
+    #
+    # The typed (non-widening) strategies allocate their output from the seeds and then
+    # accumulate in place, so they require the accumulator's type not to change as the
+    # chain grows — the seed type must already be the chain type. `prod` over an array
+    # of block transposes is a live counterexample: its seeds are lazy `Transpose`s
+    # while any longer chain multiplies out to a plain `Matrix`.
+    seedT = promote_op(x->_mapreduce_start(f, op, x, init, first(x)), T)
+    chainT = promote_op(x->op(_mapreduce_start(f, op, x, init, first(x)), f(first(x))), T)
+    return !(isconcretetype(chainT) && seedT === chainT)
 end
 
 # When performing dimensional reductions over arrays with singleton dimensions, we have
