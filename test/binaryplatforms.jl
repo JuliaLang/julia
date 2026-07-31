@@ -365,27 +365,38 @@ end
     @test parse_dl_name_version("libgfortran.so", "linux") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.so.3", "linux") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.so.3.4", "linux") == ("libgfortran", v"3.4")
-    @test_throws ArgumentError parse_dl_name_version("libgfortran.so.3.4a", "linux")
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "linux")
     @test_throws ArgumentError parse_dl_name_version("libgfortranso", "linux")
     @test parse_dl_name_version("libgfortran.so", "freebsd") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.so.3", "freebsd") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.so.3.4", "freebsd") == ("libgfortran", v"3.4")
-    @test_throws ArgumentError parse_dl_name_version("libgfortran.so.3.4a", "freebsd")
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "freebsd")
     @test_throws ArgumentError parse_dl_name_version("libgfortranso", "freebsd")
     @test parse_dl_name_version("libgfortran.dylib", "macos") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.3.dylib", "macos") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.3.4.dylib", "macos") == ("libgfortran", v"3.4")
-    @test parse_dl_name_version("libgfortran.3.4a.dylib", "macos") == ("libgfortran.3.4a", nothing)
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "macos")
     @test_throws ArgumentError parse_dl_name_version("libgfortrandylib", "macos")
     @test parse_dl_name_version("libgfortran.dll", "windows") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran-3.dll", "windows") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran-3.4.dll", "windows") == ("libgfortran", v"3.4")
-    @test parse_dl_name_version("libgfortran-3.4a.dll", "windows") == ("libgfortran-3.4a", nothing)
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "windows")
     @test_throws ArgumentError parse_dl_name_version("libgfortrandll", "windows")
+
+    # a soversion may carry a tag, as Julia's own LLVM does; the tag belongs to the
+    # soversion rather than to the name, and is not reported
+    @test parse_dl_name_version("libgfortran.so.3.4a", "linux") == ("libgfortran", v"3.4")
+    @test parse_dl_name_version("libgfortran.so.3.4a", "freebsd") == ("libgfortran", v"3.4")
+    @test parse_dl_name_version("libgfortran.3.4a.dylib", "macos") == ("libgfortran", v"3.4")
+    @test parse_dl_name_version("libgfortran-3.4a.dll", "windows") == ("libgfortran", v"3.4")
+    @test parse_dl_name_version("libLLVM.so.21.1jl", "linux") == ("libLLVM", v"21.1")
+    @test parse_dl_name_version("libLLVM.21.1jl.dylib", "macos") == ("libLLVM", v"21.1")
+    @test parse_dl_name_version("libLLVM-21jl.dll", "windows") == ("libLLVM", v"21")
+    # a name is never mistaken for a tagged soversion: a tag has to follow a version
+    @test_throws ArgumentError parse_dl_name_version("libfoo.sofia", "linux")
+    @test parse_dl_name_version("libLLVM-21jl.so", "linux") == ("libLLVM-21jl", nothing)
+    @test parse_dl_name_version("libpcre2-8.so", "linux") == ("libpcre2-8", nothing)
+    @test parse_dl_name_version("libpcre2-8-0.dll", "windows") == ("libpcre2-8", v"0")
 end
 
 @testset "Sys.is* overloading" begin
