@@ -304,9 +304,14 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 0);
     arraylist_new(&to_finalize, 0);
 
+    // Finalizers shouldn't affect either rng or errno state
     uint64_t save_rngState[JL_RNG_SIZE];
     memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
     jl_rng_split(ct->rngState, finalizer_rngState);
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
 
     // This releases the finalizers lock.
     int8_t was_in_finalizer = ct->ptls->in_finalizer;
@@ -316,6 +321,10 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     arraylist_free(&copied_list);
 
     memcpy(&ct->rngState[0], &save_rngState[0], sizeof(save_rngState));
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
 }
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
