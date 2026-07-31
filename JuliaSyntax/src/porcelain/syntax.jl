@@ -344,7 +344,8 @@ end
 
 "`provenance(st)[1]`, or `st` if that's empty"
 function prov(st::SyntaxTree)
-    st.source isa SyntaxTree ? st.source : st
+    source = st.source
+    source isa SyntaxTree ? source : st
 end
 
 "textref of st (possibly == st)"
