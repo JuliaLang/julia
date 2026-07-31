@@ -69,7 +69,7 @@ function _expr_to_est(@nospecialize(e), src::SourceAttrType)
         cid, _ = _expr_to_est(e.value, src)
         newnode(src, K"inert", SyntaxList(cid))
     elseif e isa Expr && e.head === :lambda && length(e.args) == 2
-        argnames = e.args[1]::Vector{Any}
+        argnames = e.args[1]::Vector
         arg_cs = SyntaxTree[]
         for name in argnames
             id = newleaf(src, K"Identifier", String(name::Symbol))
@@ -744,6 +744,9 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
         [K"unknown_head" cs...] -> let head = syntax_name(st)
             if head === "latestworld-if-toplevel"
                 newleaf(st, K"latestworld_if_toplevel")
+            elseif head === "scope-block"
+                @ast _ st [K"scope_block" [K"neutral_scope"]
+                           map_est_to_dst(ctx, cs)...]
             else
                 @jl_assert(false, (st, string(
                     "unknown expr head (corresponding to no kind) between",

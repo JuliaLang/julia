@@ -594,3 +594,12 @@ end
     end)()
     """; expr_compat_mode=true) == 1
 end
+
+@testset "scope-block" begin
+    lam = Expr(:lambda, Symbol[Symbol("#self#"), :f],
+               Expr(Symbol("scope-block"),
+                    Expr(:block,
+                         Expr(:return, 1))))
+    @test fl_eval(test_mod, lam) isa Core.CodeInfo
+    @test jl_eval(test_mod, lam) isa Core.CodeInfo
+end
