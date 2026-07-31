@@ -3838,15 +3838,10 @@ function expand_typegroup_def(ctx, ex)
 
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block, then do the expand and replace
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        mapsyntax(x->@ast(ctx, x, [K"global" x]), struct_names)...
+        [K"scope_block" [K"hard_scope"] [K"block" stmts...]]
         fdef_stmts...
     ]
 
@@ -3986,15 +3981,10 @@ function expand_struct_def(ctx, ex, docs)
     end
     push!(fdef_stmts, nothing_(ctx, ex))
 
-    # Build the toplevel assertion + scope block
-    scope_block_stmts = SyntaxList()
-    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
-
     result = @ast ctx ex [K"block"
+        [K"global" struct_name]
         [K"assert" "toplevel_only"::K"Symbol" [K"syntaxinert" ex]]
-        [K"scope_block" [K"hard_scope"]
-            scope_block_stmts...
-        ]
+        [K"scope_block" [K"hard_scope"] stmts...]
         fdef_stmts...
     ]
 
