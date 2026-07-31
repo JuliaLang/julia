@@ -157,6 +157,8 @@ static int speccache_eq(size_t idx, const void *ty, jl_value_t *data, uint_t hv)
     if (idx >= jl_svec_len(data))
         return 0; // We got a OOB access, probably due to a data race
     jl_method_instance_t *ml = (jl_method_instance_t*)jl_svecref(data, idx);
+    if (ml == NULL || (jl_value_t*)ml == jl_nothing)
+        return 0; // slot not yet published, probably due to a data race
     jl_value_t *sig = ml->specTypes;
     if (ty == sig)
         return 1;
