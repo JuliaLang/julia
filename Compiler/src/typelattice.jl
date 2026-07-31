@@ -504,7 +504,7 @@ end
     end
     if isa(a, PartialTask)
         if isa(b, PartialTask)
-            return ⊑(lattice, a.fetch_type, b.fetch_type) && ⊑(lattice, a.fetch_error, b.fetch_error)
+            return ⊑(lattice, a.fetch_type, b.fetch_type)
         end
         return ⊑(widenlattice(lattice), Task, b)
     elseif isa(b, PartialTask)
@@ -579,7 +579,7 @@ end
     isa(b, PartialOpaque) && return false
     if isa(a, PartialTask)
         isa(b, PartialTask) || return false
-        return is_lattice_equal(lattice, a.fetch_type, b.fetch_type) && is_lattice_equal(lattice, a.fetch_error, b.fetch_error)
+        return is_lattice_equal(lattice, a.fetch_type, b.fetch_type)
     end
     isa(b, PartialTask) && return false
     return is_lattice_equal(widenlattice(lattice), a, b)
