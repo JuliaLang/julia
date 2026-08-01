@@ -269,13 +269,30 @@ function wait_no_relock(c::GenericCondition, tok::MaybeToken)
     # throwing (e.g. a token cancelled while we were still spinning and
     # thus not interruptibly waiting), and the interrupted cleanup retakes
     # the lock only for its unlink
+    ct = current_task()
     src = cancel_source(tok)
-    src === nothing && return park!((c,), false, false)
-    r = park!((c, SourceWait(src, 0x00)), false, false)
-    # a fired source recheck returned `nothing` with the lock already
-    # released (relock=false): deliver the refusal
-    r === nothing && checkcancel(src)
-    return r
+    if src === nothing
+        ws = (c,)
+        w = _cached_wait_entry(ct)
+    else
+        ws = (c, SourceWait(src, 0x00))
+        w = _cancel_wait_entry(ct, src, 0x00)
+    end
+    if !park!(ws, w, false)
+        # refused at the registration recheck (e.g. a token cancelled
+        # while we were still spinning and thus not interruptibly
+        # waiting): withdraw under the held lock, release, deliver
+        withdraw!(ws, w, WAKE_FIRED)
+        unlock(c.lock)
+        checkcancel(src)
+        error("park fired without a cancelled source")
+    end
+    unlockall(c.lock)
+    # no relock on any path: a normal wake was handed the lock's baton by
+    # the notifying unlock, and an exceptional unwind - possibly the
+    # delivered cancellation itself - must not sleep on locks it does not
+    # need (the cleanup's unlink takes the lock transiently itself)
+    return wait_safe_interrupt(ws, w)
 end
 
 
@@ -287,6 +304,8 @@ Releases ownership of the `lock`.
 If this is a recursive lock which has been acquired before, decrement an
 internal counter and return immediately.
 """
+_uncancellable_lock(l::ReentrantLock) = lock(l; cancel=nothing)
+
 @inline function unlock(rl::ReentrantLock)
     rl.locked_by === current_task() ||
         error(rl.reentrancy_cnt == 0x0000_0000 ? "unlock count must match lock count" : "unlock from wrong thread")

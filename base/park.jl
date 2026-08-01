@@ -31,9 +31,17 @@
 #                                        declined (one-shot waitables)
 #   wait_recheck(x, w) -> Bool           phase 5, after ALL enqueues;
 #                                        vacuous default
-#   wait_dequeue!(x, w, why) -> Nothing  withdraw x's slot per policy
-#   wait_release!(x) -> token            suspend bracket for protection
-#   wait_reacquire!(x, token)            held across phases 4-5
+#   wait_dequeue!(x, w, why) -> Nothing  withdraw x's slot. Lock
+#                                        discipline is per `why`: on
+#                                        WAKE_VALUE/WAKE_FIRED the caller
+#                                        holds the kind's protection; on
+#                                        WAKE_INTERRUPTED/WAKE_WITHDRAWN
+#                                        the method takes it itself
+#
+# The driver takes and releases no locks: lock choreography is plain
+# caller code (`unlockall`/`relockall` around `wait_safe_interrupt`,
+# `iolock_end`/`iolock_begin` at the uv sites, ...), so there is no
+# release/reacquire protocol and no relock policy.
 #
 # Lock rule: from phase 3 on the entry is the task's armed registration,
 # so a lock acquisition *inside* phase 4 must never park (a nested park
@@ -52,8 +60,12 @@ const WAKE_WITHDRAWN   = 0x04  # withdraw! - the caller is done waiting
 function wait_enqueue! end
 function wait_dequeue! end
 wait_recheck(@nospecialize(x), w::WaitEntry) = false
-wait_release!(@nospecialize(x)) = nothing
-wait_reacquire!(@nospecialize(x), token) = nothing
+
+# Lock acquisition for self-protecting `wait_dequeue!` methods (the
+# cleanup/withdraw paths): must not observe cancellation - the cleanup
+# may be unwinding the very CancellationRequest a cancellable acquire
+# would rethrow. The `ReentrantLock` method (lock.jl) shields itself.
+_uncancellable_lock(l) = lock(l)
 
 ## The cancellation source as a waitable
 #
@@ -85,6 +97,8 @@ acquire_wait_entry!(ct::Task, ws) = WaitEntryN(ct, length(ws))
 # registrations become prunable corpses. Cached entries stay live.
 function release_wait_entry!(ct::Task, w::WaitEntry)
     (w === ct.cached_wait_entry || w === ct.cached_cancel_entry) && return nothing
+    # idempotent: several exits may withdraw the same fresh entry
+    (@atomic :monotonic w.task) === nothing && return nothing
     retire_cancellation_entry!(w)
     return nothing
 end
@@ -95,37 +109,28 @@ disarm!(ct::Task, w::WaitEntry) = (@atomicreplace ct.waiting_on w => nothing).su
 ## The verbs
 
 """
-    park!(ws, [w::WaitEntry,] relock::Bool, first::Bool)
+    park!(ws, w::WaitEntry, first::Bool) -> Bool
 
-Park the current task on the waitables `ws` (any flat iterable - one
-element per slot) through the six-phase protocol. Returns the consumed
-wake's payload, or `nothing` when a waitable fired before the suspend.
-The driver never throws a fired outcome: on a `nothing` return the
-caller re-derives what happened from its own conditions - in particular
-a park governed by a `SourceWait` must re-check cancellation
-(`checkcancel`), which throws the refusal exactly like its entry check.
+Phases 3-5 of the protocol over the flat waitable iterable `ws`: arm
+`w`, enqueue it with every waitable, and run the rechecks. Returns
+`true` when the task is parked - a wake is (or will be) in flight, and
+the caller must suspend through [`wait_safe_interrupt`](@ref) to consume
+it. Returns `false` when a waitable fired and the self-claim won:
+nothing is in flight, and the caller owns the outcome (for a fired
+source, re-checking cancellation - `checkcancel` - throws the refusal
+exactly like the entry check) as well as every remaining registration
+(usually `withdraw!(ws, w, WAKE_FIRED)` under its still-held locks). A
+fired recheck whose self-claim *loses* returns `true`: the concurrent
+claimer's wake delivers the outcome.
 
-`relock` selects whether the phase-4 protection is reacquired after the
-wake (and kept across an exceptional unwind); `first` puts the waiter at
-the front of FIFO waitee queues. Locks the caller holds across `park!`
-follow the per-kind release/reacquire hooks; on the throwing fired path
-(a source refusal) they are released first when `relock` is false.
+The driver takes and releases no locks: protection the caller holds is
+held throughout - which is what makes the enqueue/recheck window sound -
+and lock choreography around the suspend is plain caller code. The one
+dequeue the driver performs itself is the *fired slot* on the `false`
+path (self-protecting; a done-but-still-linked predicate would re-fire
+on every `repark!` until its notify drains).
 """
-# The one-shot form owns the entry lifecycle: the entry never escapes,
-# so a fresh one is retired on normal return (a cached one is left in
-# its cache). The explicit-entry form leaves the lifecycle to the caller
-# (the multi-wait loop retires through `withdraw!`). Exceptional exits
-# retire through the refusal path or the interrupted cleanup.
-@inline function park!(ws, relock::Bool, first::Bool)
-    ct = current_task()
-    w = acquire_wait_entry!(ct, ws)
-    r = park!(ws, w, relock, first, true)
-    release_wait_entry!(ct, w)
-    return r
-end
-
-function park!(ws, w::WaitEntry, relock::Bool, first::Bool,
-               fired_dequeues_all::Bool=false)
+function park!(ws, w::WaitEntry, first::Bool)
     ct = current_task()
     _arm_wait(ct, w)                                     # 3
     fired = false
@@ -145,60 +150,20 @@ function park!(ws, w::WaitEntry, relock::Bool, first::Bool,
         end
     end
     if fired && disarm!(ct, w)
-        # The driver never throws a fired outcome: it returns `nothing`
-        # and the caller re-derives what happened from its own conditions
-        # (for a fired source, the same `checkcancel` its entry made -
-        # level-triggered, the state is still cancelled).
-        if fired_dequeues_all
-            # this park is over and nobody else will withdraw (the
-            # one-shot/owning-caller lifecycle): dequeue everything under
-            # the still-held phase-4 protection (sticky kinds no-op),
-            # then release per policy
-            for x in ws
-                wait_dequeue!(x, w, WAKE_FIRED)
-            end
-            if !relock
-                for x in ws
-                    wait_release!(x)
-                end
-            end
-        else
-            # the multi-wait loop: eagerly dequeue the fired slot only
-            # (so a later repark! recheck cannot re-fire on it); the rest
-            # stay registered for the loop
-            wait_dequeue!(fx, w, WAKE_FIRED)
-        end
-        return nothing
+        wait_dequeue!(fx, w, WAKE_FIRED)
+        return false
     end
-    # not fired, or the self-claim lost (a claimer owns our wake): suspend
-    toks = map(wait_release!, ws)                        # 6
-    local r
-    try
-        r = wait()
-    catch
-        interrupted_park_cleanup!(ct, ws, toks, w, relock)
-        rethrow()
-    end
-    if relock
-        for (x, t) in zip(ws, toks)
-            wait_reacquire!(x, t)
-        end
-        for x in ws
-            wait_dequeue!(x, w, WAKE_VALUE)
-        end
-    end
-    return r
+    return true
 end
 
 """
-    repark!(ws, w::WaitEntry)
+    repark!(ws, w::WaitEntry) -> Bool
 
-Re-park on the still-enqueued registration `w`: arm, run the phase-5
-rechecks, and suspend unless one fired. For the multi-wait loop - the
-caller's bookkeeping between wakes runs unarmed (a completion landing
-there pops-and-drops the unarmed entry; the recheck here catches the
-fired predicate before suspending, so nothing is lost). All of `ws` must
-be transient kinds: nothing may be held across the suspend.
+Re-park on the still-enqueued registration `w`: arm and recheck, with
+the same `Bool` contract as [`park!`](@ref). For the multi-wait loop -
+the caller's bookkeeping between wakes runs unarmed (a completion
+landing there pops-and-drops the unarmed entry; the recheck here catches
+the fired predicate before suspending, so nothing is lost).
 """
 function repark!(ws, w::WaitEntry)
     ct = current_task()
@@ -212,94 +177,99 @@ function repark!(ws, w::WaitEntry)
         end
     end
     if fired && disarm!(ct, w)
-        # fired => `nothing`; the loop's caller re-derives the outcome
-        # (checkcancel for its source) and owns the withdrawal
         wait_dequeue!(fx, w, WAKE_FIRED)
-        return nothing
+        return false
     end
+    return true
+end
+
+"""
+    wait_safe_interrupt(ws, w::WaitEntry)
+
+Phase 6: suspend and consume exactly one wake of the park `park!`
+armed, returning its payload. This is the only legal way to suspend on
+an armed park - a raw `wait()` would miss the interrupted-wait cleanup.
+The caller must have released any parking locks it holds (plain caller
+code, e.g. `unlockall`); on a normal wake it returns with no locks
+touched, and the caller reacquires per its own contract.
+
+On an exceptional resume (an interrupter's claim, a delivered
+cancellation, a raw `throwto`) the cleanup runs here, then the exception
+propagates: disarm; blank the entry's cache slot; withdraw every
+registration through its kind's *self-protecting* dequeue - each takes
+its own lock, and those round-trips serialize any claimer's in-flight
+schedule - and only then drop a claimed-and-enqueued wake this unwind
+will never consume (dropping earlier would race the in-flight claimer
+and leak the wake into the task's next park); finally restore or retire
+the entry. Because the registrations are already withdrawn when the
+exception reaches the caller, its catch owes nothing to the protocol -
+it only restores whatever lock contract its own callers require
+(reacquiring shielded, and only what that contract demands: an unwind
+that is itself a cancellation should not sleep on locks it does not
+need).
+"""
+function wait_safe_interrupt(ws, w::WaitEntry)
+    ct = current_task()
     local r
     try
         r = wait()
     catch
-        interrupted_park_cleanup!(ct, ws, nothing, w, true)
+        interrupted_park_cleanup!(ct, ws, w)
         rethrow()
     end
     return r
 end
 
 """
-    withdraw!(ws, w::WaitEntry)
+    withdraw!(ws, w::WaitEntry, why::UInt8=WAKE_WITHDRAWN)
 
-Leave the wait: dequeue every registration per its policy and retire the
-entry if it was fresh. With `repark!` owning the arm, every caller
-decision point runs unarmed, so no disarm is needed here.
+Withdraw every registration of `w` per its kind's policy and release the
+entry (retiring it when fresh; idempotent). The lock discipline follows
+`why`: `WAKE_VALUE`/`WAKE_FIRED` run under the caller's still-held
+protection (the lazy settle after a wake; the fired branch), while
+`WAKE_WITHDRAWN` dequeues are self-protecting (leaving a multi-wait).
 """
-function withdraw!(ws, w::WaitEntry)
+function withdraw!(ws, w::WaitEntry, why::UInt8=WAKE_WITHDRAWN)
     for x in ws
-        wait_dequeue!(x, w, WAKE_WITHDRAWN)
+        wait_dequeue!(x, w, why)
     end
     release_wait_entry!(current_task(), w)
     return nothing
 end
 
-# Cleanup of a park that was resumed without a wake having been delivered
-# through its registration `w`: an interrupter claimed the wake (leaving
-# the entry linked for us to clean up), the task got a raw `throwto`, or
-# a cancellation was delivered. The caller rethrows afterwards. In order:
-#  1. Disarm the registration - before the reacquire in step 3 can
-#     register a new wait. When the disarm loses, a claimer got the wake:
-#     its schedule is either already enqueued or still in flight under
-#     the waitee's lock.
+# The interrupted-wait cleanup (see wait_safe_interrupt). In order:
+#  1. Disarm the registration - before any reacquire below can register a
+#     new wait. When the disarm loses, a claimer got the wake: its
+#     schedule is either already enqueued or still in flight under the
+#     waitee's protection.
 #  2. Blank the entry's cache slot: a notifier may have popped the stale
 #     entry without scheduling us and may still retain its identity for
 #     the wake-claim CAS, so `w` must not be reused (e.g. by a park
-#     inside the reacquire) before the unlink below.
-#  3. Reacquire per kind and unlink `w` (a no-op where a `notify` already
-#     popped and dropped it).
-#  4. Drop a claimed-and-enqueued wake this unwind will never consume, so
-#     a later wait of this task does not consume it spuriously. This runs
-#     after the reacquire on purpose: a claimer that claimed our wake did
-#     so under the waitee's protection, so once the reacquire returns its
-#     enqueue has landed and the drop is deterministic - dropping before
-#     the reacquire would race the in-flight schedule and leak the wake
-#     into the task's next wait. (If the reacquire itself parked and
-#     consumed the stale wake as a spurious lock wake, its acquire loop
-#     re-tested and re-parked - lock parks tolerate spurious wakes - and
-#     there is nothing left to drop. A claim-less raw wake delivered
-#     outside any lock - the documented-unsafe `schedule(t, exc,
-#     error=true)` of a running task - can still land after this drop;
-#     that hazard is the primitive's, not this path's.)
-#  5. Now `w` is safe to reuse: restore it to its cache unless the
-#     reacquire parked and cached a replacement - then `w` is unreachable
-#     garbage (unarmed, off every waitq), so retire it: its sticky source
-#     registration must be counted dead for pruning, or a long-lived
-#     source would retain the task through the orphaned entry. Fresh
-#     entries are always retired.
-function interrupted_park_cleanup!(ct::Task, ws, toks, w::WaitEntry, relock::Bool)
+#     inside a self-protecting dequeue's lock acquire) before the
+#     unlinks below.
+#  3. Withdraw every registration through its kind's self-protecting
+#     dequeue; the per-kind lock round-trips serialize any claimer's
+#     in-flight schedule ...
+#  4. ... which is what makes the pending-wake drop here deterministic:
+#     a wake claimed-and-enqueued by such a claimer must not leak into
+#     this task's next wait. (A claim-less raw wake delivered outside any
+#     lock - the documented-unsafe `schedule(t, exc, error=true)` of a
+#     running task - can still land after this drop; that hazard is the
+#     primitive's, not this path's.)
+#  5. Restore `w` to its cache slot unless a nested park cached a
+#     replacement - then `w` is unreachable garbage (unarmed, off every
+#     waitq), so retire it; fresh entries are always retired.
+function interrupted_park_cleanup!(ct::Task, ws, w::WaitEntry)
     @atomicreplace ct.waiting_on w => nothing
     was_plain = ct.cached_wait_entry === w
     was_cancel = !was_plain && ct.cached_cancel_entry === w
     was_plain && (ct.cached_wait_entry = nothing)
     was_cancel && (ct.cached_cancel_entry = nothing)
-    if toks === nothing
-        for x in ws
-            wait_reacquire!(x, nothing)
-        end
-    else
-        for (x, t) in zip(ws, toks)
-            wait_reacquire!(x, t)
-        end
-    end
     for x in ws
         wait_dequeue!(x, w, WAKE_INTERRUPTED)
     end
     q = ct.queue
     q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
-    if !relock
-        for x in ws
-            wait_release!(x)
-        end
-    end
     if was_plain
         if ct.cached_wait_entry === nothing
             ct.cached_wait_entry = w
@@ -313,10 +283,13 @@ function interrupted_park_cleanup!(ct::Task, ws, toks, w::WaitEntry, relock::Boo
             retire_cancellation_entry!(w)
         end
     else
-        retire_cancellation_entry!(w)
+        release_wait_entry!(ct, w)
     end
     return nothing
 end
+
+## SourceWait methods (the struct and its doc live above, before the
+## entry-acquisition contract that dispatches on it)
 
 function wait_enqueue!(x::SourceWait, w::WaitEntry, first::Bool)
     src = x.src

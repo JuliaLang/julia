@@ -21,7 +21,7 @@ function unlock end
 function trylock end
 function islocked end
 unlockall(l::AbstractLock) = unlock(l) # internal function for implementing `wait`
-relockall(l::AbstractLock, token::Nothing) = lock(l) # internal function for implementing `wait`
+relockall(l::AbstractLock, state::Nothing) = lock(l) # internal function for implementing `wait`
 assert_havelock(l::AbstractLock, tid::Integer) =
     (islocked(l) && tid == Threads.threadid()) ? nothing : concurrency_violation()
 assert_havelock(l::AbstractLock, tid::Task) =
@@ -138,12 +138,22 @@ function wait_enqueue!(c::GenericCondition, w::WaitEntry, first::Bool)
     end
     return true
 end
-wait_release!(c::GenericCondition) = unlockall(c.lock)
-wait_reacquire!(c::GenericCondition, token) = relockall(c.lock, token)
 function wait_dequeue!(c::GenericCondition, w::WaitEntry, why::UInt8)
-    # under the (re)acquired lock on every path that reaches here; a no-op
-    # when a notify already popped the entry
-    list_deletefirst!(waitqueue(c), w)
+    # a no-op when a notify already popped the entry. WAKE_VALUE/WAKE_FIRED
+    # run under the caller's held lock (the settle after a wake; the fired
+    # branch); the cleanup/withdraw whys take it themselves - shielded, a
+    # cleanup may be unwinding the very request a cancellable acquire would
+    # rethrow
+    if why == WAKE_INTERRUPTED || why == WAKE_WITHDRAWN
+        _uncancellable_lock(c.lock)
+        try
+            list_deletefirst!(waitqueue(c), w)
+        finally
+            unlock(c.lock)
+        end
+    else
+        list_deletefirst!(waitqueue(c), w)
+    end
     return nothing
 end
 
@@ -226,18 +236,40 @@ wait(c::GenericCondition; first::Bool=false,
 # it; see e.g. _uv_write_cancelled_finish.
 function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
               min_severity::UInt8=0x00)
+    ct = current_task()
     assert_havelock(c)
     src = cancel_source(tok)
     # entry check: throw before enqueueing anything (skipped for teardown
     # waits that re-park after acknowledging a severity)
     src === nothing || min_severity != 0x00 || checkcancel(src)
-    src === nothing && return park!((c,), true, first)
-    r = park!((c, SourceWait(src, min_severity)), true, first)
-    # `nothing` may be a fired source recheck (the refusal) or a legit
-    # nothing-valued notify: re-derive with the same check the entry made.
-    # Level-triggered either way - and thrown with the lock held, like a
-    # normal-wake return, so the caller's unlock discipline covers both.
-    r === nothing && checkcancel(src)
+    if src === nothing
+        ws = (c,)
+        w = _cached_wait_entry(ct)
+    else
+        ws = (c, SourceWait(src, min_severity))
+        w = _cancel_wait_entry(ct, src, min_severity)
+    end
+    if !park!(ws, w, first)
+        # the source refused at the registration recheck (the only
+        # fireable waitable here): withdraw under the still-held lock and
+        # deliver, exactly like the entry check
+        withdraw!(ws, w, WAKE_FIRED)
+        checkcancel(src)
+        error("park fired without a cancelled source")
+    end
+    lockstate = unlockall(c.lock)
+    r = try
+        wait_safe_interrupt(ws, w)
+    catch
+        # the cleanup already withdrew every registration; all that is
+        # owed here is this wait's lock contract - the caller's unwind
+        # (`finally unlock`) requires an exceptional exit to hold the
+        # lock, so reacquire (relockall shields itself) and rethrow
+        relockall(c.lock, lockstate)
+        rethrow()
+    end
+    relockall(c.lock, lockstate)
+    withdraw!(ws, w, WAKE_VALUE)   # lazy settle under the reacquired lock
     return r
 end
 

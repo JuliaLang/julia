@@ -552,11 +552,14 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
     end
     src === nothing || push!(ws, SourceWait(src, 0x00))
     w = acquire_wait_entry!(ct, ws)
-    park!(ws, w, true, false)
+    parked = park!(ws, w, false)
     while true
-        # the caller-side cancellation check the driver's nothing-return
-        # contract requires: a fired source recheck (or any cancelled
-        # state - delivery is level-triggered) withdraws and throws here
+        # suspend only when the park armed (a `false` park/re-park means a
+        # waitable fired - a completion, or the source - and the driver
+        # already dequeued the fired slot)
+        parked && wait_safe_interrupt(ws, w)
+        # the fired-source outcome (and, level-triggered, any cancelled
+        # state) delivers here: withdraw and throw
         if src !== nothing && iscancelled(src)
             withdraw!(ws, w)
             checkcancel(src)
@@ -575,7 +578,7 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         if nremaining == 0 || (!all && any(done_mask)) || (exception && failfast)
             break
         end
-        repark!(ws, w)
+        parked = repark!(ws, w)
     end
     withdraw!(ws, w)
 

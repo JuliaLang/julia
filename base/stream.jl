@@ -580,19 +580,19 @@ struct UvReqWait
 end
 
 function wait_enqueue!(x::UvReqWait, w::WaitEntry, first::Bool)
-    ct = current_task()
     _set_wait_witness!(w, x.witness)
-    preserve_handle(ct)
-    sigatomic_begin()
     uv_req_set_data(x.req, pointer_from_objref(w))
     return true
 end
 
-wait_release!(x::UvReqWait) = (iolock_end(); sigatomic_end(); nothing)
-wait_reacquire!(x::UvReqWait, token) = (sigatomic_begin(); iolock_begin(); nothing)
-
+# Resolve the request's ownership and release the witness. On
+# WAKE_VALUE/WAKE_FIRED the caller holds the iolock (the settle and the
+# refusal both run under it); the cleanup why takes it itself. The
+# iolock/sigatomic/handle-preservation choreography around the park is
+# the site's own code (_wait_uvreq, _uv_write_wait).
 function wait_dequeue!(x::UvReqWait, w::WaitEntry, why::UInt8)
-    ct = current_task()
+    selflock = why == WAKE_INTERRUPTED || why == WAKE_WITHDRAWN
+    selflock && iolock_begin()
     req = x.req
     if uv_req_data(req) == C_NULL
         Libc.free(req)
@@ -602,9 +602,7 @@ function wait_dequeue!(x::UvReqWait, w::WaitEntry, why::UInt8)
         _root_detached_uvreq!(req, x.owner)
     end
     _clear_wait_witness!(w, x.witness)
-    iolock_end()
-    sigatomic_end()
-    unpreserve_handle(ct)
+    selflock && iolock_end()
     return nothing
 end
 
@@ -621,15 +619,42 @@ function _wait_uvreq(src::Union{Nothing, CancellationTokenSource}, @nospecialize
     ct = current_task()
     uvw = UvReqWait(req, witness, owner, trycancel)
     if src === nothing
-        return park!((uvw,), _cached_wait_entry(ct), true, false, true)
+        ws = (uvw,)
+        w = _cached_wait_entry(ct)
     else
-        r = park!((uvw, SourceWait(src, 0x00)), _cancel_wait_entry(ct, src, 0x00),
-                  true, false, true)
-        # a fired source recheck resolved the request (the dequeue ran)
-        # and returned `nothing`: deliver the refusal
-        r === nothing && checkcancel(src)
-        return r
+        ws = (uvw, SourceWait(src, 0x00))
+        w = _cancel_wait_entry(ct, src, 0x00)
     end
+    preserve_handle(ct)
+    sigatomic_begin()
+    if !park!(ws, w, false)
+        # refused at the registration recheck: resolve the request under
+        # the still-held iolock, unwind the brackets, deliver
+        withdraw!(ws, w, WAKE_FIRED)
+        iolock_end()
+        sigatomic_end()
+        unpreserve_handle(ct)
+        checkcancel(src)
+        error("park fired without a cancelled source")
+    end
+    iolock_end()
+    sigatomic_end()
+    local r
+    try
+        r = wait_safe_interrupt(ws, w)
+    catch
+        # (the catch restored the sigatomic level from the try entry; the
+        # cleanup's dequeue resolved the request under its own iolock)
+        unpreserve_handle(ct)
+        rethrow()
+    end
+    sigatomic_begin()
+    iolock_begin()
+    withdraw!(ws, w, WAKE_VALUE)   # resolve the request under the iolock
+    iolock_end()
+    sigatomic_end()
+    unpreserve_handle(ct)
+    return r
 end
 
 # Completion-callback side of the wait (runs under the iolock): resolve

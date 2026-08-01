@@ -640,18 +640,31 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
                            cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     tok = Base.check_cancel_arg(cancel)
     src = Base.cancel_source(tok)
+    ct = current_task()
     if timeout > 0.0
         tw = Base.TimeoutWait(timeout)
-        src === nothing && return Base.park!((c, tw), true, first)
-        r = Base.park!((c, Base.SourceWait(src, 0x00), tw), true, first)
-        r === nothing && Base.checkcancel(src)
-        return r
+        ws = src === nothing ? (c, tw) : (c, Base.SourceWait(src, 0x00), tw)
     else
-        src === nothing && return Base.park!((c,), true, first)
-        r = Base.park!((c, Base.SourceWait(src, 0x00)), true, first)
-        r === nothing && Base.checkcancel(src)
-        return r
+        ws = src === nothing ? (c,) : (c, Base.SourceWait(src, 0x00))
     end
+    # non-canonical shapes get a fresh entry - exactly what makes the
+    # deadline claimer's specific-wait CAS sound
+    w = Base.acquire_wait_entry!(ct, ws)
+    if !Base.park!(ws, w, first)
+        Base.withdraw!(ws, w, Base.WAKE_FIRED)
+        src === nothing || Base.checkcancel(src)
+        error("park fired without a cancelled source")
+    end
+    lockstate = Base.unlockall(c.lock)
+    r = try
+        Base.wait_safe_interrupt(ws, w)
+    catch
+        Base.relockall(c.lock, lockstate)
+        rethrow()
+    end
+    Base.relockall(c.lock, lockstate)
+    Base.withdraw!(ws, w, Base.WAKE_VALUE)   # closes the timer, retires
+    return r
 end
 
 """
