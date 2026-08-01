@@ -2563,7 +2563,7 @@ struct _jl_handler_t {
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t nparents) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_cancel_source_parent(jl_cancel_source_t *src, size_t i);
-JL_DLLEXPORT jl_value_t *jl_new_wait_entry(jl_value_t *task, size_t nslots);
+JL_DLLEXPORT jl_value_t *jl_new_wait_entry(jl_value_t *task, size_t nslots) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_owner(jl_value_t *w, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_wait_entry_set_slot_owner(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_next(jl_value_t *w, size_t i) JL_NOTSAFEPOINT;

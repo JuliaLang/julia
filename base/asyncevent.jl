@@ -186,14 +186,19 @@ function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
         if !set
             preserve_handle(t)
             lock(t.cond)
+            locked = true
             try
                 set = t.set
                 while !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
                     iolock_end()
+                    locked = false
                     ret = wait(t.cond, tok)
+                    locked = true
                     unlock(t.cond)
+                    locked = false
                     iolock_begin()
                     lock(t.cond)
+                    locked = true
                     if ret isa Bool
                         set = ret
                         break
@@ -203,7 +208,7 @@ function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
                     set = t.set
                 end
             finally
-                unlock(t.cond)
+                locked && unlock(t.cond)
                 unpreserve_handle(t)
             end
         end
@@ -246,18 +251,23 @@ function close(t::Union{Timer, AsyncCondition})
         # implement _trywait here without the auto-reset function, just waiting for the final close signal
         preserve_handle(t)
         lock(t.cond)
+        locked = true
         try
             while t.handle != C_NULL
                 iolock_end()
                 # close is the cleanup primitive: its (bounded) completion
                 # wait is shielded from cancellation
+                locked = false
                 wait(t.cond, nothing)
+                locked = true
                 unlock(t.cond)
+                locked = false
                 iolock_begin()
                 lock(t.cond)
+                locked = true
             end
         finally
-            unlock(t.cond)
+            locked && unlock(t.cond)
             unpreserve_handle(t)
         end
     elseif t.isopen

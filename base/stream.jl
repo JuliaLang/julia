@@ -403,6 +403,7 @@ function wait_readnb(x::LibuvStream, nb::Int, tok::MaybeToken=default_cancel_tok
     oldthrottle = x.throttle
     preserve_handle(x)
     lock(x.cond)
+    locked = true
     try
         while bytesavailable(x.buffer) < nb
             x.readerror === nothing || throw(x.readerror)
@@ -411,12 +412,20 @@ function wait_readnb(x::LibuvStream, nb::Int, tok::MaybeToken=default_cancel_tok
             x.throttle = max(nb, x.throttle)
             start_reading(x) # ensure we are reading
             iolock_end()
+            locked = false
             wait(x.cond, tok)
+            locked = true
             unlock(x.cond)
+            locked = false
             iolock_begin()
             lock(x.cond)
+            locked = true
         end
     finally
+        # the teardown reads the waiter queue and the throttle under the
+        # cond lock: reacquire when a wait-throw released this frame's
+        # level (a spin lock; stop_reading takes the iolock itself)
+        locked || lock(x.cond)
         if isempty(x.cond)
             stop_reading(x) # stop reading iff there are currently no other read clients of the stream
         end
@@ -717,15 +726,18 @@ end
 function wait_close(x::Union{LibuvStream, LibuvServer})
     preserve_handle(x)
     lock(x.cond)
+    locked = true
     try
         while isopen(x)
             # close is the cleanup primitive: its completion wait is shielded
             # from cancellation (completion depends only on the event loop,
             # not on any peer, so this wait is bounded)
+            locked = false
             wait(x.cond, nothing)
+            locked = true
         end
     finally
-        unlock(x.cond)
+        locked && unlock(x.cond)
         unpreserve_handle(x)
     end
     nothing
@@ -1273,6 +1285,7 @@ function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false, cancel::
         if isopen(x) && x.status != StatusEOF
             preserve_handle(x)
             lock(x.cond)
+            locked = true
             try
                 while !occursin(c, x.buffer)
                     x.readerror === nothing || throw(x.readerror)
@@ -1280,12 +1293,18 @@ function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false, cancel::
                     x.status != StatusEOF || break
                     start_reading(x) # ensure we are reading
                     iolock_end()
+                    locked = false
                     wait(x.cond, tok)
+                    locked = true
                     unlock(x.cond)
+                    locked = false
                     iolock_begin()
                     lock(x.cond)
+                    locked = true
                 end
             finally
+                # see wait_readnb's teardown note
+                locked || lock(x.cond)
                 if isempty(x.cond)
                     stop_reading(x) # stop reading iff there are currently no other read clients of the stream
                 end
@@ -2096,11 +2115,18 @@ isreadable(s::BufferStream) = (isopen(s) || bytesavailable(s) > 0) && s.buffer.r
 iswritable(s::BufferStream) = isopen(s) && s.buffer.writable
 
 function wait_readnb(s::BufferStream, nb::Int, tok::MaybeToken=default_cancel_token())
-    lock(s.cond) do
+    lock(s.cond)
+    locked = true
+    try
         while isopen(s) && bytesavailable(s.buffer) < nb
+            locked = false
             wait(s.cond, tok)
+            locked = true
         end
+    finally
+        locked && unlock(s.cond)
     end
+    nothing
 end
 
 function readavailable(this::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
@@ -2167,23 +2193,36 @@ show(io::IO, s::BufferStream) = print(io, "BufferStream(bytes waiting=", bytesav
 
 function readuntil(s::BufferStream, c::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
     tok = resolve_cancel_token(precheck_cancel_arg(cancel))
-    bytes = lock(s.cond) do
+    lock(s.cond)
+    locked = true
+    bytes = try
         while isopen(s) && !occursin(c, s.buffer)
             # a cancelled wait unwinds with the buffer intact (nothing has
             # been consumed until the delimiter is present)
+            locked = false
             wait(s.cond, tok)
+            locked = true
         end
         readuntil(s.buffer, c, keep=keep)
+    finally
+        locked && unlock(s.cond)
     end
     return bytes
 end
 
 function wait_close(s::BufferStream, tok::MaybeToken=default_cancel_token())
-    lock(s.cond) do
+    lock(s.cond)
+    locked = true
+    try
         while isopen(s)
+            locked = false
             wait(s.cond, tok)
+            locked = true
         end
+    finally
+        locked && unlock(s.cond)
     end
+    nothing
 end
 
 start_reading(s::BufferStream) = Int32(0)

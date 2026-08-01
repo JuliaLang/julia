@@ -296,6 +296,14 @@ function wait_no_relock(c::GenericCondition, tok::MaybeToken)
 end
 
 
+_uncancellable_lock(l::ReentrantLock) = lock(l; cancel=nothing)
+
+function relockall_but_one(rl::ReentrantLock, state::UInt32)
+    state == 0x0000_0001 && return nothing
+    relockall(rl, state - 0x0000_0001)
+    return nothing
+end
+
 """
     unlock(lock)
 
@@ -304,8 +312,6 @@ Releases ownership of the `lock`.
 If this is a recursive lock which has been acquired before, decrement an
 internal counter and return immediately.
 """
-_uncancellable_lock(l::ReentrantLock) = lock(l; cancel=nothing)
-
 @inline function unlock(rl::ReentrantLock)
     rl.locked_by === current_task() ||
         error(rl.reentrancy_cnt == 0x0000_0000 ? "unlock count must match lock count" : "unlock from wrong thread")
@@ -573,17 +579,20 @@ function acquire(s::Semaphore; cancel::CancelTokenArg=DEFAULT_CANCEL)
     # the preliminary lock honors the operation's token (or explicit
     # shield), not the ambient scope
     lock(s.cond_wait; cancel)
+    locked = true
     try
         if s.curr_cnt >= s.sem_size
             tok = resolve_cancel_token(cancel)
             while s.curr_cnt >= s.sem_size
                 # a cancelled wait throws before the permit is taken
+                locked = false
                 wait(s.cond_wait, tok)
+                locked = true
             end
         end
         s.curr_cnt = s.curr_cnt + 1
     finally
-        unlock(s.cond_wait)
+        locked && unlock(s.cond_wait)
     end
     return
 end
@@ -707,15 +716,18 @@ function wait(e::Event; cancel::CancelTokenArg=DEFAULT_CANCEL)
     # the preliminary lock honors the operation's token (or explicit
     # shield), not the ambient scope
     lock(e.notify; cancel) # acquire barrier
+    locked = true
     try
         if e.autoreset
             (@atomicswap :acquire_release e.set = false) && return
         else
             e.set && return
         end
+        locked = false
         wait(e.notify, resolve_cancel_token(cancel))
+        locked = true
     finally
-        unlock(e.notify) # release barrier
+        locked && unlock(e.notify) # release barrier
     end
     nothing
 end

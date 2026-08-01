@@ -360,11 +360,14 @@ function recvfrom(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANC
     end
     sock.status = StatusActive
     lock(sock.recvnotify)
+    locked = true
     iolock_end()
     try
         From = Union{InetAddr{IPv4}, InetAddr{IPv6}}
         Data = Vector{UInt8}
+        locked = false
         from, data = wait(sock.recvnotify, tok)::Tuple{From, Data}
+        locked = true
         return (from, data)
     catch
         # A cancelled (or otherwise interrupted) wait must not leave
@@ -373,10 +376,11 @@ function recvfrom(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANC
         # dropped (`recvnotify` is edge-triggered), starving the next
         # recvfrom. Mirror the callback's stop logic; the iolock must be
         # (re)taken first - iolock before recvnotify is the callback's lock
-        # order (the wait's rethrow path reacquired only recvnotify).
-        unlock(sock.recvnotify)
+        # order (a wait-throw released this frame's level already).
+        locked && (unlock(sock.recvnotify); locked = false)
         iolock_begin()
         lock(sock.recvnotify)
+        locked = true
         if sock.status == StatusActive && isempty(sock.recvnotify)
             sock.status = StatusOpen
             ccall(:uv_udp_recv_stop, Cint, (Ptr{Cvoid},), sock)
@@ -384,7 +388,7 @@ function recvfrom(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANC
         iolock_end()
         rethrow()
     finally
-        unlock(sock.recvnotify)
+        locked && unlock(sock.recvnotify)
     end
 end
 
@@ -544,17 +548,22 @@ function wait_connected(x::LibuvStream, tok::Base.MaybeToken=Base.default_cancel
     isopen(x) || x.readerror === nothing || throw(x.readerror)
     preserve_handle(x)
     lock(x.cond)
+    locked = true
     try
         while x.status == StatusConnecting
             iolock_end()
+            locked = false
             wait(x.cond, tok)
+            locked = true
             unlock(x.cond)
+            locked = false
             iolock_begin()
             lock(x.cond)
+            locked = true
         end
         isopen(x) || x.readerror === nothing || throw(x.readerror)
     finally
-        unlock(x.cond)
+        locked && unlock(x.cond)
         unpreserve_handle(x)
     end
     iolock_end()
@@ -744,10 +753,13 @@ function accept(server::LibuvServer, client::LibuvStream; cancel::Base.CancelTok
         preserve_handle(server)
         lock(server.cond)
         iolock_end()
+        locked = true
         try
+            locked = false
             wait(server.cond, tok)
+            locked = true
         finally
-            unlock(server.cond)
+            locked && unlock(server.cond)
             unpreserve_handle(server)
         end
         iolock_begin()

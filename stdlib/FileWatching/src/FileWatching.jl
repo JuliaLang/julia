@@ -598,6 +598,7 @@ function _wait(fdw::_FDWatcher, mask::FDEvent, tok::Base.MaybeToken)
     iolock_begin()
     preserve_handle(fdw)
     lock(fdw.notify)
+    locked = true
     try
         events = FDEvent(fdw.events & mask.events)
         if !isopen(fdw) # !open
@@ -618,13 +619,16 @@ function _wait(fdw::_FDWatcher, mask::FDEvent, tok::Base.MaybeToken)
                 fdw.active = (readable, writable)
             end
             iolock_end()
-            return FDEvent(wait(fdw.notify, tok)::Int32)
+            locked = false
+            evt = wait(fdw.notify, tok)::Int32
+            locked = true
+            return FDEvent(evt)
         else
             iolock_end()
             return events
         end
     finally
-        unlock(fdw.notify)
+        locked && unlock(fdw.notify)
         unpreserve_handle(fdw)
     end
 end
@@ -690,6 +694,8 @@ function wait(pfw::PollingFileWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_
     tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
     iolock_begin()
     lock(pfw.notify)
+    locked = true
+    iolocked = true
     prevstat = pfw.prev_stat
     havechange = false
     timer = nothing
@@ -710,13 +716,21 @@ function wait(pfw::PollingFileWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_
             pfw.active = true
         end
         iolock_end()
+        iolocked = false
+        locked = false
         havechange = wait(pfw.notify, tok)::Bool
+        locked = true
         unlock(pfw.notify)
+        locked = false
         iolock_begin()
+        iolocked = true
     catch
         # stop_watching: cleanup any timers from before or after starting this wait before it failed, if there are no other watchers
+        # (reacquire what the cleanup reads - the wait-throw released both)
+        iolocked || iolock_begin()
         latetimer = nothing
         try
+            locked || lock(pfw.notify)
             if isempty(pfw.notify)
                 latetimer = pfw.timer
                 pfw.timer = nothing
@@ -730,6 +744,11 @@ function wait(pfw::PollingFileWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_
             latetimer === nothing || close(latetimer)
             iolock_begin()
         end
+        # rethrow WITHOUT the iolock: the normal path's trailing
+        # iolock_end is skipped on the exceptional exit, so the hold
+        # taken for this cleanup must be released here (leaking it
+        # starves the event loop process-wide)
+        iolock_end()
         rethrow()
     end
     iolock_end()
@@ -758,6 +777,7 @@ function wait(m::FileMonitor; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
     preserve_handle(m)
     lock(m.notify)
+    locked = true
     try
         while true
             (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
@@ -766,10 +786,12 @@ function wait(m::FileMonitor; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
             if m.ioerrno != 0
                 uv_error("FileMonitor", m.ioerrno)
             end
+            locked = false
             wait(m.notify, tok)
+            locked = true
         end
     finally
-        unlock(m.notify)
+        locked && unlock(m.notify)
         unpreserve_handle(m)
     end
 end
@@ -779,14 +801,17 @@ function wait(m::FolderMonitor; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
     preserve_handle(m)
     lock(m.notify)
+    locked = true
     evt = try
             (@atomic :monotonic m.handle) == C_NULL && throw(EOFError())
             while isempty(m.channel)
+                locked = false
                 wait(m.notify, tok)
+                locked = true
             end
             popfirst!(m.channel)
         finally
-            unlock(m.notify)
+            locked && unlock(m.notify)
             unpreserve_handle(m)
         end
     return evt::Pair{String, FileEvent}
@@ -946,17 +971,20 @@ function watch_folder(s::String, timeout_s::Real=-1; cancel::Base.CancelTokenArg
     (@atomic :monotonic fm.handle) == C_NULL && throw(EOFError())
     preserve_handle(fm)
     lock(fm.notify)
+    locked = true
     evt = try
             (@atomic :monotonic fm.handle) == C_NULL && throw(EOFError())
             while isempty(fm.channel)
                 if @isdefined(timer)
                     isopen(timer) || return "" => FileEvent() # timeout
                 end
+                locked = false
                 wait(fm.notify, tok)
+                locked = true
             end
             popfirst!(fm.channel)
         finally
-            unlock(fm.notify)
+            locked && unlock(fm.notify)
             unpreserve_handle(fm)
             @isdefined(timer) && close(timer)
         end

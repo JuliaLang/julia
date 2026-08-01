@@ -319,12 +319,15 @@ function _wait(t::Task, tok::MaybeToken; min_severity::UInt8=0x00)
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
+        locked = true
         try
             while !istaskdone(t)
+                locked = false
                 wait(donenotify, tok; min_severity=min_severity)
+                locked = true
             end
         finally
-            unlock(donenotify)
+            locked && unlock(donenotify)
         end
     end
     nothing

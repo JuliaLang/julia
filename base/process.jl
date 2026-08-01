@@ -744,10 +744,13 @@ function wait(x::Process, syncd::Bool=true; cancel::CancelTokenArg=DEFAULT_CANCE
             preserve_handle(x)
             lock(x.exitnotify)
             iolock_end()
+            locked = true
             try
+                locked = false
                 wait(x.exitnotify, tok)
+                locked = true
             finally
-                unlock(x.exitnotify)
+                locked && unlock(x.exitnotify)
                 unpreserve_handle(x)
             end
         else

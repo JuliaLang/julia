@@ -22,6 +22,13 @@ function trylock end
 function islocked end
 unlockall(l::AbstractLock) = unlock(l) # internal function for implementing `wait`
 relockall(l::AbstractLock, state::Nothing) = lock(l) # internal function for implementing `wait`
+# Restore all but one level of a hold captured by `unlockall` - the
+# enclosing frames' levels, consuming the waiting frame's own - for the
+# exceptional unwind out of the internal wait layer. A no-op when that
+# frame's level was the only one (the common case: a depth-1 cancellation
+# unwind performs no lock operation at all). The state stays opaque;
+# shielded like `relockall` - a restore has no correct cancellable use.
+relockall_but_one(l::AbstractLock, state::Nothing) = nothing
 assert_havelock(l::AbstractLock, tid::Integer) =
     (islocked(l) && tid == Threads.threadid()) ? nothing : concurrency_violation()
 assert_havelock(l::AbstractLock, tid::Task) =
@@ -221,9 +228,25 @@ default the scoped token (see `Base.CANCEL_TOKEN`); pass a
 [`CancellationToken`](@ref) to override it, or `nothing` to make the wait
 non-cancellable.
 """
-wait(c::GenericCondition; first::Bool=false,
-     cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    wait(c, check_cancel_arg(cancel); first)
+function wait(c::GenericCondition; first::Bool=false,
+              cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # Check the caller contract here, not just in the internal layer: a
+    # violation (not locked, or locked by another task) must propagate
+    # with the lock state untouched - the restore in the catch below is
+    # only correct for throws that consumed this frame's lock level.
+    assert_havelock(c)
+    tok = check_cancel_arg(cancel)   # an entry refusal throws lock-held
+    try
+        return wait(c, tok; first)
+    catch
+        # the internal layer throws having released this frame's lock
+        # level; the public contract is rethrow-with-lock-held (callers
+        # are written `lock(c); try ... finally unlock(c)`), so restore
+        # one shielded level
+        _uncancellable_lock(c.lock)
+        rethrow()
+    end
+end
 
 # (The interrupted-wait cleanup lives in base/park.jl as
 # interrupted_park_cleanup!, shared by every park site.)
@@ -239,9 +262,16 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
     ct = current_task()
     assert_havelock(c)
     src = cancel_source(tok)
-    # entry check: throw before enqueueing anything (skipped for teardown
-    # waits that re-park after acknowledging a severity)
-    src === nothing || min_severity != 0x00 || checkcancel(src)
+    # Entry check: throw before enqueueing anything (skipped for teardown
+    # waits that re-park after acknowledging a severity). Like every throw
+    # out of this internal layer, the waiting frame's own lock level is
+    # released first - callers use the `locked && unlock` idiom; the
+    # public kwarg method shims the old lock-held contract back on.
+    if src !== nothing && min_severity == 0x00 && iscancelled(src)
+        unlock(c.lock)
+        checkcancel(src)
+        error("cancelled source did not throw")
+    end
     if src === nothing
         ws = (c,)
         w = _cached_wait_entry(ct)
@@ -251,9 +281,10 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
     end
     if !park!(ws, w, first)
         # the source refused at the registration recheck (the only
-        # fireable waitable here): withdraw under the still-held lock and
-        # deliver, exactly like the entry check
+        # fireable waitable here): withdraw under the still-held lock,
+        # release this frame's level, and deliver like the entry check
         withdraw!(ws, w, WAKE_FIRED)
+        unlock(c.lock)
         checkcancel(src)
         error("park fired without a cancelled source")
     end
@@ -261,11 +292,11 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
     r = try
         wait_safe_interrupt(ws, w)
     catch
-        # the cleanup already withdrew every registration; all that is
-        # owed here is this wait's lock contract - the caller's unwind
-        # (`finally unlock`) requires an exceptional exit to hold the
-        # lock, so reacquire (relockall shields itself) and rethrow
-        relockall(c.lock, lockstate)
+        # the cleanup already withdrew every registration; restore the
+        # enclosing frames' hold, consuming this waiting frame's level -
+        # a depth-1 unwind (the common case, e.g. the cancellation being
+        # delivered) touches no lock at all
+        relockall_but_one(c.lock, lockstate)
         rethrow()
     end
     relockall(c.lock, lockstate)
