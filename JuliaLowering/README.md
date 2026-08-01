@@ -232,7 +232,7 @@ happily ever after---what gives?
    syntax breaks the behaviour of current unescaped caller-provided syntax.  For
    example, the following is expected to resolve `foo` in `M`: and not in
    `@__MODULE__`:
-   
+
    ```julia
    module M
    macro m(x); x; end

@@ -506,9 +506,9 @@ end
 # including GC flags - see `jl_eh_restore_state` in the runtime for that.
 # #### Lowering finally code paths
 #
-# When lowering `finally` blocks we want to emit the user's finally code once but
-# multiple code paths may traverse the finally block. For example, consider the
-# code
+# When lowering `finally` blocks we want to emit the user's finally code once
+# but multiple code paths may traverse the finally block. For example, consider
+# the code
 #
 # ```julia
 # function foo(x)
@@ -538,15 +538,11 @@ end
 #    falling back into the while loop.
 #
 # To deal with these we create a `finally_tag` variable to dynamically track
-# which action to take after the finally block exits. Before jumping to the block
-# we set this variable to a unique integer tag identifying the incoming code
-# path. At the exit of the user's code (`h()` in this case) we perform the jump
-# appropriate to the `break`, `continue` or `return` as necessary based on the tag.
-#
-# (TODO - these are the only four cases which can occur, but, for example,
-# multiple `return`s create multiple tags rather than assigning to a single
-# variable. Collapsing these into a single case might be worth considering? But
-# also might be worse for type inference in some cases?)
+# which action to take after the finally block exits. Before jumping to the
+# block we set this variable to a unique integer tag identifying the incoming
+# code path. At the exit of the user's code (`h()` in this case) we perform the
+# jump appropriate to the `break`, `continue` or `return` as necessary based on
+# the tag.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
          [K"trycatchelse" t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
