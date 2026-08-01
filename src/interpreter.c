@@ -623,9 +623,10 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
     size_t ns = jl_array_nrows(stmts);
     jl_task_t *ct = jl_current_task;
     // top-level statements carry no line info here; they are logged from
-    // jl_toplevel_eval_flex instead
+    // jl_toplevel_eval_flex instead. Sysimage and pkgimage generation is not tracked,
+    // so skip the per-statement debuginfo walk entirely there.
     int track_coverage = !toplevel && jl_options.code_coverage != JL_LOG_NONE &&
-                         s->src->debuginfo != NULL;
+                         !jl_generating_output() && s->src->debuginfo != NULL;
     coverage_frames_t prev_coverage;
     prev_coverage.n = 0;
 
