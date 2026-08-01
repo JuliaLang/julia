@@ -30,6 +30,13 @@ extern void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 #ifdef MMTK_PLAN_CONCURRENTIMMIX
 #define MMTK_NEEDS_WRITE_BARRIER (1)
 #endif
+// LXR needs a barrier on every reference store, to maintain reference counts as well as
+// the snapshot. The fast path below is the same object-granularity log-bit check: this
+// interface has no slot to offer, so LXR consults a per-object bit here rather than the
+// per-field bit codegen uses.
+#ifdef MMTK_PLAN_LXR
+#define MMTK_NEEDS_WRITE_BARRIER (1)
+#endif
 
 // Directly call into MMTk for write barrier (debugging only). The pre entry is
 // emitted before the store, which is correct for both StickyImmix and
@@ -74,8 +81,29 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
     mmtk_gc_wb_fast(ptr, (void*)0);
 }
 
+// `parent` is younger than the last safepoint. A generational plan need not remember it,
+// and neither need a snapshot barrier: marking can only have begun at a safepoint, so no
+// field of `parent` can appear in a live snapshot.
+//
+// A reference-counting plan does need it, and this was found by measurement rather than
+// by argument. Both of the above are recovery arguments -- the omitted store is made good
+// later, when the young parent is scanned. Counts are not derived by scanning: they come
+// from barriers and root scans only, so a store that no barrier observed leaves its
+// referent's count one short, and the referent is freed while `parent` still points at it.
+#ifdef GC_BARRIER_FIELD_PRECISE
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
+{
+    mmtk_gc_wb_fast(parent, ptr);
+}
+#else
 STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, void *slot JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+#endif
 
+// Being in a remset means the parent will be *rescanned*, which recovers references
+// inserted into it but not references removed from it: the rescan observes the field
+// after the store. A reference moved out of the current task and into an object the
+// collector has already blackened is then reachable only through a location the snapshot
+// never saw, and is collected while live.
 STATIC_INLINE void jl_gc_wb_current_task(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
 #ifdef GC_BARRIER_SNAPSHOT

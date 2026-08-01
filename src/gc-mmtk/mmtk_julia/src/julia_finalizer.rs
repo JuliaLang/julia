@@ -134,6 +134,59 @@ pub fn gc_ptr_tag(addr: Address, tag: usize) -> bool {
     addr & tag != 0
 }
 
+/// Drop every registered finalizer, so none is ever run.
+///
+/// LXR has no working finalizer path: it never calls `Scanning::process_weak_refs`, so lists
+/// are never swept and, more importantly, `mark_finlist` never runs -- and that trace is what
+/// keeps a registered object alive until its finalizer has been scheduled. Registered objects
+/// are therefore reclaimed with live entries still naming them, and `jl_gc_run_all_finalizers`
+/// at exit runs each one against recycled memory: an invalid `free` on the C path, a segfault
+/// reading the argument's type on the Julia path.
+///
+/// Until that path is built, drop the entries instead. This changes no observable behaviour --
+/// LXR already never ran a finalizer -- it only stops the crash at exit. Weak references are
+/// separately already treated as strong, so nothing here needs to clear them.
+///
+/// Called at the *start* of `release`, on every pause, which is what makes it airtight:
+/// reclamation happens later in the same pause (`STWRCDecsAndSweep`) or in a later one, so an
+/// entry is always dropped before the object it names can be freed.
+///
+/// This leaks whatever the finalizers would have released -- GMP limbs, file descriptors,
+/// malloc'd buffers. Acceptable for bring-up, not for a real GC.
+pub fn drop_all_finalizers() {
+    use crate::mmtk::vm::ActivePlan;
+    use mmtk::vm::VMBinding;
+    for mutator in <JuliaVM as VMBinding>::VMActivePlan::mutators() {
+        ArrayListT::thread_local_finalizer_list(mutator).len = 0;
+    }
+    ArrayListT::marked_finalizers_list().len = 0;
+    ArrayListT::to_finalize_list().len = 0;
+}
+
+/// Whether a finalizer list entry is still live, i.e. must stay on the list.
+///
+/// `memory_manager::is_live_object` dispatches to the owning policy, and `ImmixSpace::is_live`
+/// has a reference-counting branch that no other plan takes. For an object that is *not*
+/// marked -- which is every dead entry, and dead entries are exactly the ones this sweep is
+/// looking for -- it falls through to `object_forwarding::is_forwarded`, a question about
+/// evacuation state. LXR is built with `lxr_no_evac`, so nothing ever moves, that state is
+/// never established, and reading it faults inside `side_metadata_access`. ConcurrentImmix
+/// shares this whole file and never sees the problem because it never enters that branch.
+///
+/// So answer the question in LXR's own terms instead: objects the plan does not reference
+/// count are never reclaimed and are always live; everything else is live if it is retained by
+/// a count or was reached by the trace. No forwarding query, because nothing moves.
+pub fn object_is_live(v: ObjectReference) -> bool {
+    let plan = crate::SINGLETON.get_plan();
+    if let Some(lxr) = plan.downcast_ref::<mmtk::plan::lxr::LXR<JuliaVM>>() {
+        if !lxr.is_rc_object(v) {
+            return true;
+        }
+        return lxr.rc.count(v) > 0 || lxr.is_marked(v);
+    }
+    memory_manager::is_live_object(v)
+}
+
 // sweep_finalizer_list in gc.c
 fn sweep_finalizer_list(
     list: &mut ArrayListT,
@@ -164,7 +217,7 @@ fn sweep_finalizer_list(
         let (isfreed, isold) = if gc_ptr_tag(v0, GC_FIN_COBJ_TAG) {
             (true, false)
         } else {
-            let isfreed = !memory_manager::is_live_object(v);
+            let isfreed = !object_is_live(v);
             let isold = finalizer_list_marked.is_some() && !isfreed;
             (isfreed, isold)
         };

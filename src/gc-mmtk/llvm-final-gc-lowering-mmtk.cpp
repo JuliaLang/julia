@@ -153,7 +153,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
         // fed into it differ.
         const char *base_symbol = "MMTK_SIDE_LOG_BIT_BASE_ADDRESS";
         Value *keyed_on = parent;
-#ifdef MMTK_FIELD_BARRIER
+#ifdef GC_BARRIER_FIELD_PRECISE
         // A null slot means the caller could not attribute the store to one field, so
         // there is no field bit to test and the slow path must run unconditionally.
         const bool have_slot = !isa<ConstantPointerNull>(slot);
@@ -165,7 +165,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
         (void)slot;
 #endif
 
-#ifdef MMTK_FIELD_BARRIER
+#ifdef GC_BARRIER_FIELD_PRECISE
         if (!have_slot) {
             auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
             if (auto *MD = target->getMetadata("julia.reset_region"))
@@ -218,7 +218,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
             auto mayTriggerSlowpath = SplitBlockAndInsertIfThen(is_unlogged, target, false, MDB.createBranchWeights(Weights));
             builder.SetInsertPoint(mayTriggerSlowpath);
             auto *MD = target->getMetadata("julia.reset_region");
-#ifdef MMTK_FIELD_BARRIER
+#ifdef GC_BARRIER_FIELD_PRECISE
             // Only the parent-granularity entry has a reset-safe variant, so a site
             // that may run inside a published reset region takes the coarser path --
             // the same fallback used when the slot is unknown, correct but less

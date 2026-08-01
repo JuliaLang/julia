@@ -41,6 +41,8 @@ else ifeq (${MMTK_PLAN},StickyImmix)
 MMTK_JULIA_CARGO_FEATURES := stickyimmix
 else ifeq (${MMTK_PLAN},ConcurrentImmix)
 MMTK_JULIA_CARGO_FEATURES := concurrentimmix
+else ifeq (${MMTK_PLAN},LXR)
+MMTK_JULIA_CARGO_FEATURES := lxr
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN)")
 endif

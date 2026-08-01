@@ -902,7 +902,7 @@ JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 # Use StickyImmix as the default MMTk plan.
 MMTK_PLAN ?= StickyImmix
 
-# Must specify a supported MMTk plan: Immix, StickyImmix, or ConcurrentImmix
+# Must specify a supported MMTk plan: Immix, StickyImmix, ConcurrentImmix, or LXR
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
 JCFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
@@ -912,8 +912,13 @@ JCFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 else ifeq (${MMTK_PLAN}, ConcurrentImmix)
 JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DGC_BARRIER_SNAPSHOT
 JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DGC_BARRIER_SNAPSHOT
+else ifeq (${MMTK_PLAN}, LXR)
+# GC_BARRIER_FIELD_PRECISE: the barrier records the individual field written rather than
+# just the parent, so codegen keys the fast path on the slot address.
+JCXXFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DGC_BARRIER_SNAPSHOT -DGC_BARRIER_FIELD_PRECISE
+JCFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DGC_BARRIER_SNAPSHOT -DGC_BARRIER_FIELD_PRECISE
 else
-$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, or ConcurrentImmix.")
+$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, ConcurrentImmix, or LXR.")
 endif
 
 # Julia's MMTk support does not support moving just yet
