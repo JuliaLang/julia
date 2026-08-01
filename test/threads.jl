@@ -48,8 +48,8 @@ end
         lock(c1)
         lock(c2)
         try
-            w = Base._wait2(c1, t)
-            @test_throws ConcurrencyViolationError Base._wait2(c2, t)
+            w = Base.schedule_on_notify!(c1, t)
+            @test_throws ConcurrencyViolationError Base.schedule_on_notify!(c2, t)
             @test (@atomic t.waiting_on) === w
             @test length(Base.waitqueue(c1)) == 1
             @test isempty(c2.waitq)
@@ -65,9 +65,9 @@ end
         target1 = @task nothing
         target2 = @task nothing
         waiter = @task nothing
-        Base._wait2(target1, waiter)
+        Base.schedule_on_notify!(target1, waiter)
         w = @atomic waiter.waiting_on
-        @test_throws ConcurrencyViolationError Base._wait2(target2, waiter)
+        @test_throws ConcurrencyViolationError Base.schedule_on_notify!(target2, waiter)
         @test (@atomic waiter.waiting_on) === w
         @test length(Base.waitqueue(target1)) == 1
         donenotify2 = target2.donenotify::Base.ThreadSynchronizer
@@ -89,12 +89,12 @@ end
         live = @task nothing
         lock(cond)
         try
-            w_stale = Base._wait2(cond, stale)
+            w_stale = Base.schedule_on_notify!(cond, stale)
             @test !isempty(cond)
             @test Base.claim_wait(stale, w_stale)
             @test !isempty(cond.waitq)
             @test isempty(cond)
-            w_live = Base._wait2(cond, live)
+            w_live = Base.schedule_on_notify!(cond, live)
             @test !isempty(cond)
             @test Base.claim_wait(live, w_live)
             @test isempty(cond)

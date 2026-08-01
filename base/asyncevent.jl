@@ -63,7 +63,7 @@ function AsyncCondition(cb::Function)
         if async.set
             schedule(t)
         else
-            _wait2(async.cond, t)
+            schedule_on_notify!(async.cond, t)
         end
     end
     return async
@@ -431,7 +431,7 @@ function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs
         if timer.set
             schedule(t)
         else
-            _wait2(timer.cond, t)
+            schedule_on_notify!(timer.cond, t)
         end
     end
     return timer

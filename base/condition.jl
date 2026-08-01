@@ -164,27 +164,83 @@ function wait_dequeue!(c::GenericCondition, w::WaitEntry, why::UInt8)
     return nothing
 end
 
-# have waiter wait for c: register `waiter` on c's wait queue (the queue's
-# identity is the condition itself) and arm the registration for a wake.
-# Returns the registration entry.
-function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
-    ct = current_task()
+@noinline _fresh_waiter_error() =
+    throw(ConcurrencyViolationError("schedule_on_notify! requires a fresh task: never started, scheduled, or armed"))
+
+# Freshness is stricter than `!istaskstarted`: a task `schedule`/`@async`
+# has merely ENQUEUED hasn't run yet, but arming it here would collide
+# with the arm its own first park performs once it starts (that park's
+# `_arm_wait` CAS fails and unwinds a wait's lock choreography from the
+# outside). Reject anything started, queued, or already armed.
+_assert_fresh_waiter(waiter::Task) =
+    if istaskstarted(waiter) || waiter.queue !== nothing ||
+       (@atomic :monotonic waiter.waiting_on) !== nothing
+        _fresh_waiter_error()
+    end
+
+# Start `waiter` with the (level-triggered) cancellation of its birth
+# source: a subscribed task whose governing source is cancelled dies
+# instead of running its body - a never-started task raises the scheduled
+# exception at start.
+function _schedule_subscription_cancelled(waiter::Task, src::CancellationTokenSource)
+    st = @atomic :acquire src.state
+    schedule(waiter, CancellationRequest(st), error=true)
+    return nothing
+end
+
+# Subscribe the not-yet-started task `waiter` to `c`'s next notify: arm
+# its registration and enqueue it, so the notify's claim-and-schedule is
+# the task's first schedule - a start trigger; the current task does not
+# suspend. Waits of the *current* task go through `park!` (base/park.jl).
+#
+# Subscriptions are governed by the *waiter's* birth cancellation source
+# (the CANCEL_TOKEN of the scope captured at its construction): if that
+# source is - or becomes, while still subscribed - cancelled, the task
+# dies with the CancellationRequest instead of starting. Cleanup-class
+# subscribers (Timer/AsyncCondition callback tasks, channel close hooks,
+# errormonitor, REPL teardown) are constructed under
+# `CANCEL_TOKEN => nothing` and so are never killed this way.
+# Returns the registration entry (or `nothing` when the subscription was
+# refused and the waiter scheduled to die).
+function schedule_on_notify!(c::GenericCondition, waiter::Task, first::Bool=false)
     assert_havelock(c)
-    w = _cached_wait_entry(waiter)
+    _assert_fresh_waiter(waiter)
+    src = _birth_cancel_source(waiter)
+    if src !== nothing && iscancelled(src)
+        # born cancelled: never enqueue anything
+        _schedule_subscription_cancelled(waiter, src)
+        return nothing
+    end
+    w = src === nothing ? _cached_wait_entry(waiter) :
+                          _cancel_wait_entry(waiter, src, 0x00)
     _arm_wait(waiter, w)
     if first
         pushfirst!(waitqueue(c), w)
     else
         push!(waitqueue(c), w)
     end
-    # since _wait2 is similar to schedule, we should observe the sticky bit now
+    if src !== nothing
+        # the sticky source registration + the publish-then-recheck dance,
+        # exactly like a park's phases 4-5 - but claiming back the *waiter's*
+        # arm on refusal
+        sw = SourceWait(src, 0x00)
+        wait_enqueue!(sw, w, false)
+        if wait_recheck(sw, w) && disarm!(waiter, w)
+            list_deletefirst!(waitqueue(c), w)   # under the held lock
+            _schedule_subscription_cancelled(waiter, src)
+            return nothing
+        end
+        # a lost disarm means a concurrent walk claimed the fresh arm: its
+        # delivery kills the waiter at start
+    end
+    # since this is similar to schedule, we should observe the sticky bit now
     if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
         # Issue #41324
         # t.sticky && tid == 0 is a task that needs to be co-scheduled with
         # the parent task. If the parent (current_task) is not sticky we must
         # set it to be sticky.
         # XXX: Ideally we would be able to unset this
-        ct.sticky = true
+        current_task().sticky = true
         tid = Threads.threadid()
         ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
     end
@@ -279,7 +335,23 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
         ws = (c, SourceWait(src, min_severity))
         w = _cancel_wait_entry(ct, src, min_severity)
     end
-    if !park!(ws, w, first)
+    local parked::Bool
+    try
+        parked = park!(ws, w, first)
+    catch
+        # an arm-phase throw (contract misuse: this task already carries
+        # a foreign registration) happens before any suspend. Nothing is
+        # enqueued to settle, but this frame's lock level must still be
+        # consumed like every other throw out of this layer - the
+        # caller's `locked && unlock` idiom would otherwise leak a held
+        # lock, and a leaked SpinLock wedges the process on the next
+        # lock of the same object
+        disarm!(ct, w)
+        withdraw!(ws, w, WAKE_FIRED)
+        unlock(c.lock)
+        rethrow()
+    end
+    if !parked
         # the source refused at the registration recheck (the only
         # fireable waitable here): withdraw under the still-held lock,
         # release this frame's level, and deliver like the entry check

@@ -678,7 +678,7 @@ let c1 = Threads.Condition()
     c2 = Threads.Condition(c1.lock)
     lock(c2)
     t = @task nothing
-    Base._wait2(c1, t)
+    Base.schedule_on_notify!(c1, t)
     c3, c4 = deserialize(IOBuffer(sprint(serialize, [c1, c2])))::Vector{Threads.Condition}
     @test c3.lock === c4.lock
     @test islocked(c1)

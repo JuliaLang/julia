@@ -335,10 +335,13 @@ end
 
 waitqueue(t::Task) = waitqueue(t.donenotify::ThreadSynchronizer)
 
-# have `waiter` wait for `t`
-function _wait2(t::Task, waiter::Task)
+# Subscribe the not-yet-started `waiter` to `t`'s completion (see the
+# GenericCondition method's contract in condition.jl: a start trigger
+# governed by the waiter's birth cancellation source, not a park)
+function schedule_on_notify!(t::Task, waiter::Task)
+    _assert_fresh_waiter(waiter)
     if !istaskdone(t)
-        # since _wait2 is similar to schedule, we should observe the sticky
+        # since this is similar to schedule, we should observe the sticky
         # bit, even if we don't call `schedule` with early-return below
         if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
             # Issue #41324
@@ -354,16 +357,22 @@ function _wait2(t::Task, waiter::Task)
         lock(donenotify)
         try
             if !istaskdone(t)
-                w = _cached_wait_entry(waiter)
-                _arm_wait(waiter, w)
-                push!(waitqueue(t), w)
+                schedule_on_notify!(donenotify, waiter)
                 return nothing
             end
         finally
             unlock(donenotify)
         end
     end
-    schedule(waiter)
+    # `t` already done: start (or, under a cancelled birth source, kill)
+    # the waiter now
+    _assert_fresh_waiter(waiter)
+    src = _birth_cancel_source(waiter)
+    if src !== nothing && iscancelled(src)
+        _schedule_subscription_cancelled(waiter, src)
+    else
+        schedule(waiter)
+    end
     nothing
 end
 
@@ -838,7 +847,10 @@ Stacktrace:
 ```
 """
 function errormonitor(t::Task)
-    t2 = Task() do
+    # the monitor is diagnostic cleanup: shield it from the constructing
+    # scope's cancellation so a cancelled scope still gets its report
+    t2 = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        Task() do
         if istaskfailed(t)
             local errs = stderr
             try # try to display the failure atomically
@@ -865,8 +877,9 @@ function errormonitor(t::Task)
         end
         nothing
     end
+    end
     t2.sticky = false
-    _wait2(t, t2)
+    schedule_on_notify!(t, t2)
     return t
 end
 

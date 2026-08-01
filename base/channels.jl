@@ -327,9 +327,14 @@ Stacktrace:
 ```
 """
 function bind(c::Channel, task::Task)
-    T = Task(() -> close_chnl_on_taskdone(task, c))
+    # the close hook is cleanup: shield it from the constructing scope's
+    # cancellation, so a bound channel is closed (and its blocked users
+    # released) even when the scope that bound it is cancelled
+    T = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        Task(() -> close_chnl_on_taskdone(task, c))
+    end
     T.sticky = false
-    _wait2(task, T)
+    schedule_on_notify!(task, T)
     return c
 end
 

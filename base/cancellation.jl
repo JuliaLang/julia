@@ -523,7 +523,7 @@ function _arm_wait(waiter::Task, w::WaitEntry)
 end
 
 # Claim the wake of the wait that `w` was registered for (returns whether the
-# claim succeeded). `w` must be an entry armed for `t` by `_wait2`.
+# claim succeeded). `w` must be an entry armed for `t` (`_arm_wait`).
 function claim_wait(t::Task, w::WaitEntry)
     return (@atomicreplace t.waiting_on w => nothing).success
 end
@@ -975,6 +975,27 @@ complete while the surrounding computation is being cancelled.
 The current value can be read with `Base.CANCEL_TOKEN[]`.
 """
 const CANCEL_TOKEN = CancelTokenKey()
+
+# The cancellation source a task inherited at birth: the CANCEL_TOKEN
+# binding of the scope captured at its construction (`nothing` for tasks
+# constructed outside any governing scope, or shielded with
+# `CANCEL_TOKEN => nothing`). Subscriptions (`schedule_on_notify!`) are
+# governed by this source: a task whose birth source is cancelled dies
+# instead of starting.
+function _birth_cancel_source(t::Task)
+    # Raw field read: the `t.scope` property guard exists because a
+    # *running* task swaps its scope as `with` blocks enter and exit -
+    # racy to read from outside. Subscriptions enforce a never-started
+    # waiter (see schedule_on_notify!), whose construction-time scope is
+    # stable until its first schedule.
+    scope = getfield(t, :scope)
+    scope isa Scope || return nothing
+    v = KeyValue.get(scope.values, CANCEL_TOKEN)
+    v === nothing && return nothing
+    tok = something(v)
+    tok === nothing && return nothing
+    return (tok::CancellationToken).source
+end
 
 @inline function default_cancel_token()
     scope = Core.current_scope()::Union{Scope, Nothing}

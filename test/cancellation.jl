@@ -630,6 +630,62 @@ end
     wait(t)
 end
 
+@testset "subscriptions die with their birth source" begin
+    # schedule_on_notify! subscribes a not-yet-started task; its birth
+    # scope's source governs it: cancelled => the task dies at start
+    src = CancellationTokenSource()
+    c = Threads.Condition()
+    t = with(() -> Task(() -> 42), CANCEL_TOKEN => CancellationToken(src))
+    t.sticky = false
+    @lock c Base.schedule_on_notify!(c, t)
+    cancel!(src)
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test istaskfailed(t)
+    @test t.result isa CancellationRequest
+
+    # born cancelled: refused at subscribe, never enqueued
+    t2 = with(() -> Task(() -> 42), CANCEL_TOKEN => CancellationToken(src))
+    t2.sticky = false
+    @lock c Base.schedule_on_notify!(c, t2)
+    @test timedwait(() -> istaskdone(t2), 10.0) == :ok
+    @test t2.result isa CancellationRequest
+
+    # a shielded subscriber survives the (already cancelled) scope and
+    # starts on notify
+    t3 = with(() -> Task(() -> 7), CANCEL_TOKEN => nothing)
+    t3.sticky = false
+    @lock c Base.schedule_on_notify!(c, t3)
+    @lock c notify(c)
+    @test timedwait(() -> istaskdone(t3), 10.0) == :ok
+    @test fetch(t3) == 7
+
+    # the task-completion variant: subscribe to a done task under a
+    # cancelled source - killed on the fast path too
+    donesrc = CancellationTokenSource()
+    host = @async 1
+    wait(host)
+    t4 = with(() -> Task(() -> 42), CANCEL_TOKEN => CancellationToken(donesrc))
+    t4.sticky = false
+    cancel!(donesrc)
+    Base.schedule_on_notify!(host, t4)
+    @test timedwait(() -> istaskdone(t4), 10.0) == :ok
+    @test t4.result isa CancellationRequest
+
+    # a started task cannot be subscribed
+    started = Base.Event()
+    t5 = @async (notify(started); sleep(0.05); 1)
+    wait(started)
+    @test_throws ConcurrencyViolationError (@lock c Base.schedule_on_notify!(c, t5))
+    wait(t5)
+
+    # neither can a merely-queued one: @async has scheduled it, so its
+    # own first park owns the arm slot (subscribing it used to leak the
+    # sleep timer's cond lock and wedge the process at close)
+    t6 = @async (sleep(0.01); 1)
+    @test_throws ConcurrencyViolationError (@lock c Base.schedule_on_notify!(c, t6))
+    wait(t6)
+end
+
 @testset "waiter registry: refused arm cannot leak into a shield" begin
     # the model-found race (tla/WaitClaim.tla): a cancellation walk observes
     # an armed cancellable park and judges it eligible; the park is then
