@@ -190,7 +190,7 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     if (lastt->ctx.bufsz < nb) {
         asan_free_copy_stack(lastt->ctx.stkbuf, lastt->ctx.bufsz);
         buf = (void*)jl_gc_alloc_buf(ptls, nb);
-        jl_gc_wb(lastt, buf);
+        jl_gc_wb(lastt, (void*)&lastt->ctx.stkbuf, buf);
         lastt->ctx.stkbuf = buf;
         lastt->ctx.bufsz = nb;
     }

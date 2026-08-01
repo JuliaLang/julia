@@ -63,8 +63,27 @@ STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSA
     }
 }
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+// A named slot is what a per-field barrier wants: given only the parent it can say no more
+// than that *something* in it was overwritten, and answers that by walking every field of
+// the parent on every store.
+//
+// Unlike codegen's inlined barrier this does not test the field's unlog bit here. Boxed
+// elements are always in the heap when the memory was allocated by the GC -- they have to
+// be, for the collector to scan them -- but `jl_ptr_to_genericmemory` rejects only unions,
+// so `unsafe_wrap(Memory{Any}, ptr, n)` can still give `jl_genericmemory_ptr_set` a slot in
+// foreign memory. Such an address has no field unlog bit, and deriving one from it reads
+// unmapped memory. The slow path checks before it looks; inlining the test here is worth
+// revisiting once that case is ruled out.
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT
 {
+#ifdef MMTK_FIELD_BARRIER
+    if (slot != NULL) {
+        jl_gc_queue_root_field((const struct _jl_value_t *)parent, slot);
+        return;
+    }
+#else
+    (void)slot;
+#endif
     mmtk_gc_wb_fast(parent, ptr);
 }
 

@@ -307,6 +307,10 @@ JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOIN
 // Dedicated slow-path for `jl_gc_wb`. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
 JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+// Write barrier slow-path for a store whose slot is known, used by collectors that record
+// the field written rather than the object containing it. Also the runtime entry point for
+// the barrier codegen emits for such a store.
+JL_DLLEXPORT void jl_gc_queue_root_field(const struct _jl_value_t *ptr, void *slot) JL_NOTSAFEPOINT;
 // In a generational collector is used, this function walks over the fields of the
 // object specified by the second parameter (as defined by the data type in the third
 // parameter). If a field points to a young object, the first parameter is enqueued into the
@@ -323,7 +327,15 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT;
 // If a generational collector is used, it may check whether the two function arguments are
 // in different GC generations (i.e. if the first argument points to an old object and the
 // second argument points to a young object), and if so, call the write barrier slow-path.
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+//
+// `slot` is the address of the field being written, or NULL where the caller cannot name a
+// single field -- a store that clears several fields at once, or one whose address is not
+// available. A collector that records the object rather than the field ignores it. One that
+// records the field needs it: given NULL it has to treat *every* field of `parent` as
+// written, which costs a walk of the whole object on every store. So pass it whenever it is
+// at hand. Passing the wrong slot is not merely slower, it is wrong -- NULL is the safe
+// answer when the store cannot be attributed to one field.
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot, const void *ptr) JL_NOTSAFEPOINT;
 // The next three are annotations rather than plain barriers: each marks a store where a
 // write barrier would ordinarily be required, and states the property that lets a
 // collector do less than the full `jl_gc_wb` for it. Writing them out is what

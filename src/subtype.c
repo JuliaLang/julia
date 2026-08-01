@@ -1846,14 +1846,12 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
                 if (jl_has_typevar(ivar->lb, old_tvar)) {
                     lb = ivar->lb;
                     lb = jl_substitute_var(lb, old_tvar, (jl_value_t*)new_tvar);
-                    ivar->lb = lb;
-                    jl_gc_wb((jl_value_t*)ivar, lb);
+                    jl_gc_write((jl_value_t*)ivar, ivar->lb, jl_value_t, lb);
                 }
                 if (jl_has_typevar(ivar->ub, old_tvar)) {
                     ub = ivar->ub;
                     ub = jl_substitute_var(ub, old_tvar, (jl_value_t*)new_tvar);
-                    ivar->ub = ub;
-                    jl_gc_wb((jl_value_t*)ivar, ub);
+                    jl_gc_write((jl_value_t*)ivar, ivar->ub, jl_value_t, ub);
                 }
                 JL_GC_POP();
             }

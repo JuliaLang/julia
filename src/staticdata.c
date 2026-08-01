@@ -2662,7 +2662,7 @@ static void strip_specializations_(jl_method_instance_t *mi) JL_CANSAFEPOINT
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
-                jl_gc_wb(codeinst, stripped);
+                jl_gc_wb(codeinst, (void*)&codeinst->inferred, stripped);
                 jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped);
             }
         }
