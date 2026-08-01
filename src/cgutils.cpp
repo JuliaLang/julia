@@ -2320,6 +2320,7 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
 
 static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
+static void emit_write_barrier(jl_codectx_t&, Value*, Value*, ArrayRef<Value*>);
 static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*) JL_CANSAFEPOINT;
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x) JL_CANSAFEPOINT;
 
@@ -2688,7 +2689,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 return;
 #endif
             assert(r != nullptr);
-            emit_write_barrier(ctx, parent, r);
+            // `ptr` is the address of the field being stored to, which is what a
+            // field-granularity barrier needs to log.
+            emit_write_barrier(ctx, parent, ptr, ArrayRef<Value*>(r));
         }
         else if (r) {
             Value *wbval = r;
@@ -4390,21 +4393,37 @@ static Value *emit_new_bits(jl_codectx_t &ctx, Value *jt, Value *pval)
 // if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *ptr)
 {
-    emit_write_barrier(ctx, parent, ArrayRef<Value*>(ptr));
+    emit_write_barrier(ctx, parent, nullptr, ArrayRef<Value*>(ptr));
 }
 
 static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*> ptrs)
+{
+    emit_write_barrier(ctx, parent, nullptr, ptrs);
+}
+
+// `slot`, if non-null, is the address of the single field being written. Pass null
+// when the store cannot be attributed to one field; plans with a field-granularity
+// barrier then fall back to treating the whole parent as modified.
+static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *slot, ArrayRef<Value*> ptrs)
 {
     ++EmittedWriteBarriers;
     // if there are no child objects we can skip emission
     if (ptrs.empty())
         return;
-    SmallVector<Value*, 8> decay_ptrs;
-    decay_ptrs.push_back(maybe_decay_untracked(ctx, parent));
+    SmallVector<Value*, 8> args;
+    args.push_back(maybe_decay_untracked(ctx, parent));
+    // Only pass the slot when it is already a plain pointer. Field addresses are often
+    // derived (addrspace 11), and casting those to addrspace 0 here is an illegal
+    // address space cast; a null slot makes the barrier fall back to treating the whole
+    // parent as written, which is always correct if coarser.
+    Type *T_pptr = PointerType::getUnqual(ctx.builder.getContext());
+    bool slot_is_plain = slot && slot->getType()->isPointerTy() &&
+                         slot->getType()->getPointerAddressSpace() == 0;
+    args.push_back(slot_is_plain ? slot : Constant::getNullValue(T_pptr));
     for (auto ptr : ptrs) {
-        decay_ptrs.push_back(maybe_decay_untracked(ctx, ptr));
+        args.push_back(maybe_decay_untracked(ctx, ptr));
     }
-    ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
+    ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), args);
 }
 
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg,

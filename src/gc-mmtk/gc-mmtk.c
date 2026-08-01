@@ -60,6 +60,9 @@ extern void mmtk_post_alloc(void* mutator, void* refer, size_t bytes, int alloca
 extern void mmtk_store_obj_size_c(void* obj, size_t size);
 JL_DLLEXPORT void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 JL_DLLEXPORT void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
+// Base of the per-field unlogging bit table, used by plans whose barrier records
+// individual fields (LXR) rather than whole objects.
+JL_DLLEXPORT void* MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS;
 
 // ========================================================================= //
 // GC Initialization and Control
@@ -1149,10 +1152,26 @@ STATIC_INLINE void mmtk_set_side_metadata(const void* side_metadata_base, void* 
         }
 }
 
+// Set one bit per 8-byte word across [obj, obj + size), for tables indexed per field
+// rather than per object.
+STATIC_INLINE void mmtk_set_side_metadata_range(const void* side_metadata_base, void* obj, size_t size) {
+    for (size_t off = 0; off < size; off += sizeof(void*)) {
+        mmtk_set_side_metadata(side_metadata_base, (void*)((char*)obj + off));
+    }
+}
+
 STATIC_INLINE void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
     if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
         mmtk_set_side_metadata(MMTK_SIDE_LOG_BIT_BASE_ADDRESS, obj);
     }
+#ifdef MMTK_PLAN_LXR
+    // LXR's barrier decides what to record from the per-field unlog bits, so the object
+    // bit above only gets it as far as the slow path. This allocation path bypasses
+    // mmtk's `post_alloc`, so nothing else arms those bits: without this, every store
+    // into a permanently allocated object is silently dropped and the heap objects it
+    // references lose their increments.
+    mmtk_set_side_metadata_range(MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS, obj, size);
+#endif
 }
 
 JL_DLLEXPORT jl_value_t *jl_mmtk_gc_alloc_default(jl_ptls_t ptls, int osize, size_t align, void *ty)
@@ -1420,6 +1439,16 @@ JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOIN
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
+}
+
+// Slow path for plans whose barrier records the individual field written. `slot` is
+// the address of that field; unlike jl_gc_queue_root, the plan needs it to know which
+// field's old value it is being told about.
+JL_DLLEXPORT void jl_gc_queue_root_field(const struct _jl_value_t *ptr, void *slot) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    mmtk_object_reference_write_field_slow(&ptls->gc_tls.mmtk_mutator, ptr, slot, (const void*) 0);
 }
 
 JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT {

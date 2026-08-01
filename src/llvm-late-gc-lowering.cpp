@@ -1863,8 +1863,9 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
         // Insertion-barrier optimization: elide the barrier when every child is the
         // parent or perm-rooted. Invalid for plans that must observe the parent's old
         // fields regardless of the child (MMTK_SNAPSHOT_BARRIER).
+        // Operand 1 is the slot address, not a child, so the children start at 2.
 #ifndef MMTK_SNAPSHOT_BARRIER
-        if (std::all_of(CI->op_begin() + 1, CI->op_end(),
+        if (std::all_of(CI->op_begin() + 2, CI->op_end(),
                     [parent, &S](Value *child) { return parent == child || IsPermRooted(child, S); })) {
             CI->eraseFromParent();
             continue;

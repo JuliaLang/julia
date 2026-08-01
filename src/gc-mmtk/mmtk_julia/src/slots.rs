@@ -1,5 +1,6 @@
 use atomic::Atomic;
 use mmtk::{
+    scheduler::RootKind,
     util::{Address, ObjectReference},
     vm::{
         slot::{SimpleSlot, Slot},
@@ -28,6 +29,27 @@ impl Slot for JuliaVMSlot {
         match self {
             JuliaVMSlot::Simple(e) => e.store(object),
             JuliaVMSlot::Offset(e) => e.store(object),
+        }
+    }
+
+    /// The address of the slot itself, which LXR's field barrier uses to index the
+    /// per-field unlog bit. For an offset slot this is the address the reference is
+    /// stored at, not the (offset) object it points to.
+    fn to_address(&self) -> Address {
+        match self {
+            JuliaVMSlot::Simple(e) => e.as_address(),
+            JuliaVMSlot::Offset(e) => e.slot_address(),
+        }
+    }
+
+    /// An offset slot's referent is `contents - offset`, where the offset was measured when the
+    /// slot was created. For `jl_array_t` that offset is `ref_.ptr_or_offset - ref_.mem`, which
+    /// changes whenever the array's `ref_` is reassigned, so the pair only agree at the instant
+    /// the slot is made. A zero offset carries no such captured state.
+    fn is_derived(&self) -> bool {
+        match self {
+            JuliaVMSlot::Simple(_) => false,
+            JuliaVMSlot::Offset(e) => e.offset() != 0,
         }
     }
 }
@@ -241,7 +263,7 @@ impl RootsWorkClosure {
                 .map(|addr| JuliaVMSlot::Simple(SimpleSlot::from_address(addr)))
                 .collect();
             let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
-            factory.create_process_roots_work(buf);
+            factory.create_process_roots_work(buf, RootKind::Strong);
         }
 
         if renew {

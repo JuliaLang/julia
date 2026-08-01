@@ -134,7 +134,9 @@ extern "C" {
     pub fn jl_gc_genericmemory_how(m: Address) -> usize;
     pub fn jl_gc_get_max_memory() -> usize;
     pub fn jl_gc_get_hard_heap_limit() -> usize;
+    pub fn jl_typeof_str(v: Address) -> *const libc::c_char;
     pub static mut MMTK_SIDE_LOG_BIT_BASE_ADDRESS: Address;
+    pub static mut MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS: Address;
 }
 
 pub(crate) fn set_panic_hook() {

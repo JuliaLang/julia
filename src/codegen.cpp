@@ -1236,10 +1236,16 @@ static const auto jl_blackbox_func = new JuliaFunction<>{
             {}); },
 };
 
+// julia.write_barrier(parent, slot, children...)
+//
+// `slot` is the address of the field being written, or a null pointer where the
+// caller cannot name a single field (whole-object stores, deletion barriers, and
+// array copies). Only plans with a field-granularity barrier look at it; the rest
+// key off `parent` alone.
 static const auto jl_write_barrier_func = new JuliaFunction<>{
     "julia.write_barrier",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {JuliaType::get_prjlvalue_ty(C)}, true); },
+            {JuliaType::get_prjlvalue_ty(C), PointerType::getUnqual(C)}, true); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
         FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
@@ -1248,7 +1254,7 @@ static const auto jl_write_barrier_func = new JuliaFunction<>{
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             AttributeSet(),
-            {Attributes(C, {Attribute::ReadOnly})});
+            {Attributes(C, {Attribute::ReadOnly}), AttributeSet()});
     },
 };
 

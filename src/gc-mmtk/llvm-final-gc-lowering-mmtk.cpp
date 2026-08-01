@@ -133,41 +133,67 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto parent = target->getArgOperand(0);
+    auto slot = target->getArgOperand(1);
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
 
-    // FIXME: Currently we call write barrier with the src object (parent).
-    // This works fine for object barrier for generational plans (such as stickyimmix), which does not use the target object at all.
-    // But for other MMTk plans, we need to be careful.
     const bool INLINE_WRITE_BARRIER = true;
     if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+        // A field-granularity plan (LXR) consults one bit per field-sized slot, keyed
+        // on the slot's address, in a separate table. Everything else consults one bit
+        // per object, keyed on the parent. Both tables are one bit per 8 bytes, so the
+        // index arithmetic below is the same either way; only the base and the address
+        // fed into it differ.
+        const char *base_symbol = "MMTK_SIDE_LOG_BIT_BASE_ADDRESS";
+        Value *keyed_on = parent;
+#ifdef MMTK_FIELD_BARRIER
+        // A null slot means the caller could not attribute the store to one field, so
+        // there is no field bit to test and the slow path must run unconditionally.
+        const bool have_slot = !isa<ConstantPointerNull>(slot);
+        if (have_slot) {
+            base_symbol = "MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS";
+            keyed_on = slot;
+        }
+#else
+        (void)slot;
+#endif
+
+#ifdef MMTK_FIELD_BARRIER
+        if (!have_slot) {
+            auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
+            if (auto *MD = target->getMetadata("julia.reset_region"))
+                qr->setMetadata("julia.reset_region", MD);
+            return;
+        }
+#endif
+
         if (INLINE_WRITE_BARRIER) {
             auto i8_ty = Type::getInt8Ty(F.getContext());
             auto intptr_ty = T_size;
             auto i8_ptr_ty = PointerType::getUnqual(F.getContext());
 
-            // intptr_t addr = (intptr_t) (void*) src;
+            // intptr_t addr = (intptr_t) (void*) keyed_on;
             // uint8_t* meta_addr = (uint8_t*) (SIDE_METADATA_BASE_ADDRESS + (addr >> 6));
             // The metadata base address is dynamic (chosen by mmap at start-up), so it
             // must always be loaded through the global rather than baked in as an
             // immediate: JIT code may outlive the current process via the object cache,
             // and AOT code is shared across processes by construction.
-            F.getParent()->getOrInsertGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS", i8_ptr_ty);
-            auto metadata_base_global = F.getParent()->getNamedGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS");
+            F.getParent()->getOrInsertGlobal(base_symbol, i8_ptr_ty);
+            auto metadata_base_global = F.getParent()->getNamedGlobal(base_symbol);
             assert(metadata_base_global != nullptr);
             auto metadata_base_load = builder.CreateAlignedLoad(
-                i8_ptr_ty, metadata_base_global, Align(sizeof(void *)), "mmtk_side_log_bit_base");
+                i8_ptr_ty, metadata_base_global, Align(sizeof(void *)), "mmtk_side_bit_base");
             metadata_base_load->setMetadata(llvm::LLVMContext::MD_tbaa, get_tbaa_const(F.getContext()));
             metadata_base_load->setMetadata(llvm::LLVMContext::MD_invariant_load,
                                             llvm::MDNode::get(F.getContext(), {}));
             Value *metadata_base_ptr = metadata_base_load;
 
-            auto parent_val = builder.CreatePtrToInt(parent, intptr_ty);
-            auto shr = builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 6));
+            auto keyed_val = builder.CreatePtrToInt(keyed_on, intptr_ty);
+            auto shr = builder.CreateLShr(keyed_val, ConstantInt::get(intptr_ty, 6));
             auto metadata_ptr = builder.CreateGEP(i8_ty, metadata_base_ptr, shr);
 
             // intptr_t shift = (addr >> 3) & 0b111;
-            auto shift = builder.CreateAnd(builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 3)), ConstantInt::get(intptr_ty, 7));
+            auto shift = builder.CreateAnd(builder.CreateLShr(keyed_val, ConstantInt::get(intptr_ty, 3)), ConstantInt::get(intptr_ty, 7));
             auto shift_i8 = builder.CreateTruncOrBitCast(shift, i8_ty);
 
             // uint8_t byte_val = *meta_addr;
@@ -184,11 +210,25 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
 
             auto mayTriggerSlowpath = SplitBlockAndInsertIfThen(is_unlogged, target, false, MDB.createBranchWeights(Weights));
             builder.SetInsertPoint(mayTriggerSlowpath);
-            auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
-            // Propagate CancellationLowering's reset-region annotation so
-            // lowerQueueGCRoot selects the reset-safe entry.
-            if (auto *MD = target->getMetadata("julia.reset_region"))
-                qr->setMetadata("julia.reset_region", MD);
+            auto *MD = target->getMetadata("julia.reset_region");
+#ifdef MMTK_FIELD_BARRIER
+            // Only the parent-granularity entry has a reset-safe variant, so a site
+            // that may run inside a published reset region takes the coarser path --
+            // the same fallback used when the slot is unknown, correct but less
+            // precise. Reset regions are rare enough that the extra remset traffic
+            // (the field's unlog bit is left set, so later stores to it keep hitting
+            // the slow path) does not matter.
+            if (!MD)
+                builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRootField), { parent, slot });
+            else
+#endif
+            {
+                auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
+                // Propagate CancellationLowering's reset-region annotation so
+                // lowerQueueGCRoot selects the reset-safe entry.
+                if (MD)
+                    qr->setMetadata("julia.reset_region", MD);
+            }
         } else {
             Function *wb_func = getOrDeclare(jl_intrinsics::queueGCRoot);
             auto qr = builder.CreateCall(wb_func, { parent });

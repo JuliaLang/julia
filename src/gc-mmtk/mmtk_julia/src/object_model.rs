@@ -16,7 +16,14 @@ pub struct VMObjectModel {}
 
 /// Global logging bit metadata spec
 /// 1 bit per object
+/// Must stay first: the inlined write barrier fast path in gc-wb-mmtk.h derives the
+/// bit's address from MMTK_SIDE_LOG_BIT_BASE_ADDRESS.
 pub(crate) const LOGGING_SIDE_METADATA_SPEC: VMGlobalLogBitSpec = VMGlobalLogBitSpec::side_first();
+
+/// Global field unlogging bit metadata spec, used by LXR's field-granularity barrier.
+/// 1 bit per field-sized slot, as opposed to 1 bit per object above.
+pub(crate) const FIELD_UNLOGGING_SIDE_METADATA_SPEC: VMGlobalFieldUnlogBitSpec =
+    VMGlobalFieldUnlogBitSpec::side_after(LOGGING_SIDE_METADATA_SPEC.as_spec());
 
 pub(crate) const MARKING_METADATA_SPEC: VMLocalMarkBitSpec =
     VMLocalMarkBitSpec::side_after(LOS_METADATA_SPEC.as_spec());
@@ -38,6 +45,8 @@ pub(crate) const LOS_METADATA_SPEC: VMLocalLOSMarkNurserySpec =
 
 impl ObjectModel<JuliaVM> for VMObjectModel {
     const GLOBAL_LOG_BIT_SPEC: VMGlobalLogBitSpec = LOGGING_SIDE_METADATA_SPEC;
+    const GLOBAL_FIELD_UNLOG_BIT_SPEC: VMGlobalFieldUnlogBitSpec =
+        FIELD_UNLOGGING_SIDE_METADATA_SPEC;
     const LOCAL_FORWARDING_POINTER_SPEC: VMLocalForwardingPointerSpec =
         VMLocalForwardingPointerSpec::in_header(-64);
 
