@@ -23,7 +23,7 @@ lazy_static! {
     static ref GC_THREADS: RwLock<HashSet<ThreadId>> = RwLock::new(HashSet::new());
 }
 
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 pub static CONCURRENT_MARKING_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 pub(crate) fn register_gc_thread() {
@@ -85,7 +85,7 @@ impl Collection<JuliaVM> for VMCollection {
         trace!("Stopped the world!");
 
         // STW -- concurrent marking is not active.
-        #[cfg(feature = "concurrentimmix")]
+        #[cfg(feature = "concurrent_marking")]
         CONCURRENT_MARKING_ACTIVE.store(false, Ordering::SeqCst);
 
         // Tell MMTk the stacks are ready.
@@ -125,7 +125,7 @@ impl Collection<JuliaVM> for VMCollection {
         let (lock, cvar) = &*STW_COND.clone();
         let count = lock.lock().unwrap();
 
-        #[cfg(feature = "concurrentimmix")]
+        #[cfg(feature = "concurrent_marking")]
         {
             // For concurrent Immix, we need to check if SATB is active
             let concurrent_plan = SINGLETON.get_plan().concurrent().unwrap();

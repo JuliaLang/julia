@@ -43,30 +43,43 @@ memoffset = "*"
 [features]
 default = ["mmtk/vm_space", "julia_copy_stack", "object_pinning"]
 
+# VM-side support every plan that marks concurrently with the mutator needs, independent of
+# which plan it is: the `CONCURRENT_MARKING_ACTIVE` flag, gcstack snapshots so a running
+# task's stack is scanned from a stable copy, and treating weak references as strong for the
+# duration of the mark. This used to be spelled `concurrentimmix`, which silently excluded
+# LXR -- so LXR marked entirely inside its `FinalMark` pause. Keep it enabled by every
+# concurrent plan; `concurrentimmix` still selects the ConcurrentImmix *plan*.
+concurrent_marking = []
+
 # Plans
 nogc = []
 immix = []
 stickyimmix = ["mmtk/sticky_immix_non_moving_nursery", "mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space"]
-concurrentimmix = ["mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space"]
+concurrentimmix = ["mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space", "concurrent_marking"]
 # Uses LXR's own per-field barrier: codegen passes the written field's address
 # (MMTK_FIELD_BARRIER), so there is no need for the object-granularity fallback.
 #
 # Concurrent marking is on. It is the reason to want LXR here at all, so it is not
 # something to leave switched off for convenience.
 #
-# `lxr_no_lazy` keeps decrements eager. This is the remaining half of the `lxr_stw`
-# bring-up simplification: with lazy decrements a nursery large object can be freed by
-# `release_rc_nursery_objects` and by a concurrent `rc_free` both, which corrupts the page
-# resource's freelist. Lazy decrements are a throughput optimisation and are independent of
-# concurrent marking, so they stay off until that double-free is fixed.
-lxr = [
-    "mmtk/immix_smaller_block",
-    "mmtk/set_unlog_bits_vm_space",
-    "mmtk/lxr_no_lazy",
-]
+# Everything the plan needs except the choice of decrement timing. Code that asks "is this
+# an LXR build?" -- plan selection, the barrier's slow path -- must test `lxr_base`, not
+# `lxr_lazy` or `lxr`, or the other of the two silently falls through to the default plan
+# and trips the allocator-offset assertion in `mmtk_gc_init`.
+lxr_base = ["mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space", "concurrent_marking"]
+# What `MMTK_PLAN=LXR` builds: decrement processing and the mature sweeps run concurrently
+# rather than inside the pause, which is LXR's own configuration.
+lxr_lazy = ["lxr_base"]
+# `lxr_lazy` with `lxr_no_lazy` added, keeping decrements eager. This was the remaining half
+# of the `lxr_stw` bring-up simplification, kept as a fallback: with lazy decrements a
+# nursery large object could be freed by `release_rc_nursery_objects` and by a concurrent
+# `rc_free` both, corrupting the page resource's freelist. If that resurfaces, build this to
+# confirm the decrement timing is the cause. Cargo features are additive, so it has to be a
+# sibling of `lxr_lazy` rather than `lxr_lazy` minus something.
+lxr = ["lxr_base", "mmtk/lxr_no_lazy"]
 # Bring-up aid: mmtk's internal side-metadata and address sanity checks. Slow; not for
 # normal builds.
-lxr_debug = ["lxr", "mmtk/extreme_assertions"]
+lxr_debug = ["lxr_lazy", "mmtk/extreme_assertions"]
 marksweep = []
 object_pinning = ["mmtk/object_pinning"]
 

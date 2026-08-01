@@ -52,7 +52,7 @@ pub extern "C" fn mmtk_gc_init(
             Some(PlanSelector::StickyImmix)
         } else if cfg!(feature = "concurrentimmix") {
             Some(PlanSelector::ConcurrentImmix)
-        } else if cfg!(feature = "lxr") {
+        } else if cfg!(feature = "lxr_base") {
             Some(PlanSelector::LXR)
         } else {
             None
@@ -207,7 +207,7 @@ pub extern "C" fn mmtk_notify_task_resume(
     mutator: *mut Mutator<JuliaVM>,
     task: *const crate::julia_types::_jl_task_t,
 ) {
-    #[cfg(feature = "concurrentimmix")]
+    #[cfg(feature = "concurrent_marking")]
     {
         if !crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst)
             || task.is_null()
@@ -219,7 +219,7 @@ pub extern "C" fn mmtk_notify_task_resume(
         crate::scanning::GC_STACK_SNAPSHOTS.resume_barrier_scan_task(task);
     }
 
-    #[cfg(not(feature = "concurrentimmix"))]
+    #[cfg(not(feature = "concurrent_marking"))]
     {
         let _ = (mutator, task);
         panic!("mmtk_notify_task_resume should not be called for non-concurrent plans");
@@ -592,13 +592,13 @@ pub extern "C" fn mmtk_object_reference_write_slow(
     // per-field unlog bit at address 0. Callers on this path (the C runtime's jl_gc_wb,
     // and codegen where the field address is not a plain pointer) genuinely have no
     // slot to give, so treat the whole object as written instead.
-    #[cfg(feature = "lxr")]
+    #[cfg(feature = "lxr_base")]
     {
         let _ = target;
         mutator.barrier().object_probable_write(src);
         return;
     }
-    #[cfg(not(feature = "lxr"))]
+    #[cfg(not(feature = "lxr_base"))]
     mutator.barrier().object_reference_write_slow(
         src,
         crate::slots::JuliaVMSlot::Simple(mmtk::vm::slot::SimpleSlot::from_address(Address::ZERO)),

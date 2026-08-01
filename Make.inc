@@ -895,6 +895,11 @@ MMTK_PLAN ?= StickyImmix
 # ConcurrentImmix needs it for the SATB snapshot and LXR for its decrements. It
 # disables the insertion-barrier optimisations in codegen, which assume that only
 # the newly stored value matters.
+# MMTK_CONCURRENT_MARKING marks the plans that mark while the mutator runs, and so
+# need the runtime to notify the binding when a task resumes -- the binding snapshots
+# the task's gcstack so a concurrent mark scans a stable copy rather than a stack the
+# task is actively mutating. It mirrors the binding's `concurrent_marking` cargo
+# feature; the two must be set for the same plans.
 # Must specify a supported MMTk plan: Immix, StickyImmix, ConcurrentImmix, or LXR
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
@@ -903,13 +908,13 @@ else ifeq (${MMTK_PLAN},StickyImmix)
 JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 JCFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 else ifeq (${MMTK_PLAN}, ConcurrentImmix)
-JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER
-JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER
+JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_CONCURRENT_MARKING
+JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_CONCURRENT_MARKING
 else ifeq (${MMTK_PLAN}, LXR)
 # MMTK_FIELD_BARRIER: the barrier records the individual field written rather than
 # just the parent, so codegen keys the fast path on the slot address.
-JCXXFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_FIELD_BARRIER
-JCFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_FIELD_BARRIER
+JCXXFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_FIELD_BARRIER -DMMTK_CONCURRENT_MARKING
+JCFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_FIELD_BARRIER -DMMTK_CONCURRENT_MARKING
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, ConcurrentImmix, or LXR.")
 endif

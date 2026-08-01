@@ -1012,7 +1012,7 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
 
 void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
 {
-#ifdef MMTK_PLAN_CONCURRENTIMMIX
+#ifdef MMTK_CONCURRENT_MARKING
     if (task == NULL)
         return;
     jl_ptls_t ptls = jl_current_task->ptls;

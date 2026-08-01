@@ -169,7 +169,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
 
             let ta = obj.to_ptr::<jl_task_t>();
 
-            #[cfg(feature = "concurrentimmix")]
+            #[cfg(feature = "concurrent_marking")]
             if crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst) {
                 // For concurrent marking, prefer a stable snapshot captured before the task runs.
                 // If no snapshot exists, create one while holding the per-task scan lock so
@@ -184,7 +184,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             } else {
                 mmtk_scan_gcstack(ta, closure);
             }
-            #[cfg(not(feature = "concurrentimmix"))]
+            #[cfg(not(feature = "concurrent_marking"))]
             mmtk_scan_gcstack(ta, closure);
 
             let layout = (*jl_task_type).layout;
@@ -358,7 +358,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
     }
 
     if vt == jl_weakref_type {
-        #[cfg(feature = "concurrentimmix")]
+        #[cfg(feature = "concurrent_marking")]
         if crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst) {
             // Treat weak ref as strong
             let wr = obj.to_ptr::<jl_weakref_t>();
@@ -368,7 +368,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
         } else {
             return;
         }
-        #[cfg(not(feature = "concurrentimmix"))]
+        #[cfg(not(feature = "concurrent_marking"))]
         return;
     }
 
