@@ -116,6 +116,25 @@ impl Scanning<JuliaVM> for VMScanning {
         process_object(object, slot_visitor);
     }
 
+    fn scan_chunk_count(_tls: VMWorkerThread, object: ObjectReference) -> Option<usize> {
+        unsafe { crate::julia_scanning::mmtk_julia_chunk_count(object.to_raw_address()) }
+    }
+
+    fn scan_object_chunks(
+        _tls: VMWorkerThread,
+        object: ObjectReference,
+        chunks: std::ops::Range<usize>,
+        slot_visitor: &mut impl SlotVisitor<JuliaVMSlot>,
+    ) {
+        unsafe {
+            crate::julia_scanning::scan_julia_object_chunks(
+                object.to_raw_address(),
+                chunks,
+                slot_visitor,
+            )
+        }
+    }
+
     fn notify_initial_thread_scan_complete(_partial_scan: bool, _tls: VMWorkerThread) {}
 
     fn supports_return_barrier() -> bool {
