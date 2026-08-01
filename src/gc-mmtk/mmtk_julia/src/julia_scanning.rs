@@ -294,61 +294,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             return;
         }
 
-        let layout = (*vt).layout;
-        if (*layout).flags.arrayelem_isboxed() != 0 {
-            let length = (*m).length;
-            let mut objary_begin = Address::from_ptr((*m).ptr);
-            let objary_end = objary_begin.shift::<Address>(length as isize);
-            while objary_begin < objary_end {
-                process_slot(closure, objary_begin);
-                objary_begin = objary_begin.shift::<Address>(1);
-            }
-        } else if (*layout).first_ptr >= 0 {
-            let npointers = (*layout).npointers;
-            let elsize = (*layout).size as usize / std::mem::size_of::<Address>();
-            let length = (*m).length;
-            let mut objary_begin = Address::from_ptr((*m).ptr);
-            let objary_end = objary_begin.shift::<Address>((length * elsize) as isize);
-            if npointers == 1 {
-                objary_begin = objary_begin.shift::<Address>((*layout).first_ptr as isize);
-                while objary_begin < objary_end {
-                    process_slot(closure, objary_begin);
-                    objary_begin = objary_begin.shift::<Address>(elsize as isize);
-                }
-            } else if (*layout).fielddesc_type_custom() == 0 {
-                let obj8_begin = mmtk_jl_dt_layout_ptrs(layout);
-                let obj8_end = obj8_begin.shift::<u8>(npointers as isize);
-                let mut elem_begin = obj8_begin;
-                let elem_end = obj8_end;
-
-                while objary_begin < objary_end {
-                    while elem_begin < elem_end {
-                        let elem_begin_loaded = elem_begin.load::<u8>();
-                        let slot = objary_begin.shift::<Address>(elem_begin_loaded as isize);
-                        process_slot(closure, slot);
-                        elem_begin = elem_begin.shift::<u8>(1);
-                    }
-                    elem_begin = obj8_begin;
-                    objary_begin = objary_begin.shift::<Address>(elsize as isize);
-                }
-            } else if (*layout).fielddesc_type_custom() == 1 {
-                let mut obj16_begin = mmtk_jl_dt_layout_ptrs(layout);
-                let obj16_end = obj16_begin.shift::<u16>(npointers as isize);
-
-                while objary_begin < objary_end {
-                    while obj16_begin < obj16_end {
-                        let elem_begin_loaded = obj16_begin.load::<u16>();
-                        let slot = objary_begin.shift::<Address>(elem_begin_loaded as isize);
-                        process_slot(closure, slot);
-                        obj16_begin = obj16_begin.shift::<u16>(1);
-                    }
-                    obj16_begin = mmtk_jl_dt_layout_ptrs(layout);
-                    objary_begin = objary_begin.shift::<Address>(elsize as isize);
-                }
-            } else {
-                unimplemented!();
-            }
-        }
+        scan_genericmemory_elements(m, (*vt).layout, 0..(*m).length, closure);
 
         return;
     }
@@ -414,6 +360,116 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             unimplemented!();
         }
     }
+}
+
+/// Visit the reference fields held by elements `range` of the generic memory `m`, whose element
+/// layout is `layout`.
+///
+/// Written per element index rather than as one walk over the data because a large memory is
+/// scanned in pieces: `scan_julia_object` passes `0..m->length`, and
+/// [`scan_julia_object_chunks`] passes a sub-range. Both go through here, so the pieces cannot
+/// come to disagree with the whole about which slots an element holds.
+unsafe fn scan_genericmemory_elements<SV: SlotVisitor<JuliaVMSlot>>(
+    m: *const jl_genericmemory_t,
+    layout: *const jl_datatype_layout_t,
+    range: std::ops::Range<usize>,
+    closure: &mut SV,
+) {
+    let data = Address::from_ptr((*m).ptr);
+    if (*layout).flags.arrayelem_isboxed() != 0 {
+        let mut slot = data.shift::<Address>(range.start as isize);
+        for _ in range {
+            process_slot(closure, slot);
+            slot = slot.shift::<Address>(1);
+        }
+        return;
+    }
+    if (*layout).first_ptr < 0 {
+        // Elements hold no references.
+        return;
+    }
+    let npointers = (*layout).npointers;
+    let elsize = (*layout).size as usize / std::mem::size_of::<Address>();
+    let mut elem = data.shift::<Address>((range.start * elsize) as isize);
+    if npointers == 1 {
+        let first_ptr = (*layout).first_ptr as isize;
+        for _ in range {
+            process_slot(closure, elem.shift::<Address>(first_ptr));
+            elem = elem.shift::<Address>(elsize as isize);
+        }
+    } else if (*layout).fielddesc_type_custom() == 0 {
+        let obj8_begin = mmtk_jl_dt_layout_ptrs(layout);
+        let obj8_end = obj8_begin.shift::<u8>(npointers as isize);
+        for _ in range {
+            let mut fielddesc = obj8_begin;
+            while fielddesc < obj8_end {
+                let offset = fielddesc.load::<u8>();
+                process_slot(closure, elem.shift::<Address>(offset as isize));
+                fielddesc = fielddesc.shift::<u8>(1);
+            }
+            elem = elem.shift::<Address>(elsize as isize);
+        }
+    } else if (*layout).fielddesc_type_custom() == 1 {
+        let obj16_begin = mmtk_jl_dt_layout_ptrs(layout);
+        let obj16_end = obj16_begin.shift::<u16>(npointers as isize);
+        for _ in range {
+            let mut fielddesc = obj16_begin;
+            while fielddesc < obj16_end {
+                let offset = fielddesc.load::<u16>();
+                process_slot(closure, elem.shift::<Address>(offset as isize));
+                fielddesc = fielddesc.shift::<u16>(1);
+            }
+            elem = elem.shift::<Address>(elsize as isize);
+        }
+    } else {
+        unimplemented!();
+    }
+}
+
+/// The number of pieces `obj`'s reference fields can be scanned in, or `None` if it can only be
+/// scanned as a whole. See `Scanning::scan_chunk_count`.
+///
+/// Only a `GenericMemory` qualifies. It is the one Julia object that grows without bound -- a
+/// `Memory{Any}` of 100M references takes hundreds of milliseconds to walk -- and the slots an
+/// element holds are a function of its index alone, so a range of elements can be scanned
+/// without knowing anything about the elements before it. One chunk is one element, whatever its
+/// layout, so the count is the length however many references each element holds.
+pub unsafe fn mmtk_julia_chunk_count(obj: Address) -> Option<usize> {
+    let vtag = mmtk_jl_typetagof(obj);
+    // Below this, the tag is a small type tag rather than a datatype pointer, so it must not be
+    // dereferenced. No memory has a small tag; `Memory{T}` is parametric.
+    if vtag.as_usize() < ((jl_small_typeof_tags_jl_max_tags as usize) << 4) {
+        return None;
+    }
+    let vt = vtag.to_ptr::<jl_datatype_t>();
+    if (*vt).name != jl_genericmemory_typename {
+        return None;
+    }
+    // `how == 3` scans the owner field instead of the elements, so element ranges do not
+    // describe what such an object holds.
+    if jl_gc_genericmemory_how(obj) == 3 {
+        return None;
+    }
+    Some((*obj.to_ptr::<jl_genericmemory_t>()).length)
+}
+
+/// Visit the reference fields held by chunks `chunks` of `obj`, which must be an object
+/// [`mmtk_julia_chunk_count`] answered `Some` for. A chunk is one element, so this visits exactly
+/// the slots `scan_julia_object` visits for those elements.
+pub unsafe fn scan_julia_object_chunks<SV: SlotVisitor<JuliaVMSlot>>(
+    obj: Address,
+    chunks: std::ops::Range<usize>,
+    closure: &mut SV,
+) {
+    let vt = mmtk_jl_typetagof(obj).to_ptr::<jl_datatype_t>();
+    debug_assert!(
+        (*vt).name == jl_genericmemory_typename,
+        "chunked scan of a non-memory object {}",
+        obj
+    );
+    let m = obj.to_ptr::<jl_genericmemory_t>();
+    debug_assert!(chunks.end <= (*m).length);
+    scan_genericmemory_elements(m, (*vt).layout, chunks, closure);
 }
 
 #[inline(always)]
