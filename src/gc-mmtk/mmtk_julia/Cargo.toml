@@ -28,9 +28,9 @@ dashmap = "6.2.1"
 # - change branch
 # - change repo name
 # But other changes including adding/removing whitespaces in commented lines may break the CI
-mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "85ec5ddc06cbe45e401edc7aceab06b69031da81" }
+# mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "85ec5ddc06cbe45e401edc7aceab06b69031da81" }
 # Uncomment the following to build locally
-# mmtk = { path = "../repos/mmtk-core" }
+mmtk = { path = "../mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
 enum-map = ">=2.1"
 atomic = "0.4.6"
@@ -48,9 +48,34 @@ nogc = []
 immix = []
 stickyimmix = ["mmtk/sticky_immix_non_moving_nursery", "mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space"]
 concurrentimmix = ["mmtk/immix_smaller_block", "mmtk/set_unlog_bits_vm_space"]
+# Uses LXR's own per-field barrier: codegen passes the written field's address
+# (MMTK_FIELD_BARRIER), so there is no need for the object-granularity fallback.
+#
+# Concurrent marking is on. It is the reason to want LXR here at all, so it is not
+# something to leave switched off for convenience.
+#
+# `lxr_no_lazy` keeps decrements eager. This is the remaining half of the `lxr_stw`
+# bring-up simplification: with lazy decrements a nursery large object can be freed by
+# `release_rc_nursery_objects` and by a concurrent `rc_free` both, which corrupts the page
+# resource's freelist. Lazy decrements are a throughput optimisation and are independent of
+# concurrent marking, so they stay off until that double-free is fixed.
+lxr = [
+    "mmtk/immix_smaller_block",
+    "mmtk/set_unlog_bits_vm_space",
+    "mmtk/lxr_no_lazy",
+]
+# Bring-up aid: mmtk's internal side-metadata and address sanity checks. Slow; not for
+# normal builds.
+lxr_debug = ["lxr", "mmtk/extreme_assertions"]
 marksweep = []
 object_pinning = ["mmtk/object_pinning"]
 
-# This feature disables moving
-non_moving = ["mmtk/immix_non_moving", "mmtk/immix_smaller_block"]
+# This feature disables moving.
+# For LXR, moving is a property of the plan rather than of the Immix space alone:
+# `lxr_no_evac` turns off both nursery and mature evacuation. This is permanent for Julia
+# rather than a bring-up simplification -- moving objects makes C interop too difficult --
+# so LXR here is a concurrent, non-moving, reference-counting collector. It is also what
+# makes treating LXR's pinning roots as ordinary strong roots sound, which Julia's
+# conservative stack scanning relies on.
+non_moving = ["mmtk/immix_non_moving", "mmtk/immix_smaller_block", "mmtk/lxr_no_evac"]
 julia_copy_stack = []

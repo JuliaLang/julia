@@ -892,9 +892,10 @@ JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 MMTK_PLAN ?= StickyImmix
 # MMTK_SNAPSHOT_BARRIER marks the plans whose write barrier has to observe every
 # overwritten reference, rather than just recording that the parent was modified.
-# ConcurrentImmix needs it for the SATB snapshot. It disables the insertion-barrier
-# optimisations in codegen, which assume that only the newly stored value matters.
-# Must specify a supported MMTk plan: Immix, StickyImmix, or ConcurrentImmix
+# ConcurrentImmix needs it for the SATB snapshot and LXR for its decrements. It
+# disables the insertion-barrier optimisations in codegen, which assume that only
+# the newly stored value matters.
+# Must specify a supported MMTk plan: Immix, StickyImmix, ConcurrentImmix, or LXR
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
 JCFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
@@ -904,8 +905,13 @@ JCFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 else ifeq (${MMTK_PLAN}, ConcurrentImmix)
 JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER
 JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER
+else ifeq (${MMTK_PLAN}, LXR)
+# MMTK_FIELD_BARRIER: the barrier records the individual field written rather than
+# just the parent, so codegen keys the fast path on the slot address.
+JCXXFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_FIELD_BARRIER
+JCFLAGS += -DMMTK_PLAN_LXR -DMMTK_PLAN=\"LXR\" -DMMTK_SNAPSHOT_BARRIER -DMMTK_FIELD_BARRIER
 else
-$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, or ConcurrentImmix.")
+$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, ConcurrentImmix, or LXR.")
 endif
 
 # Julia's MMTk support does not support moving just yet

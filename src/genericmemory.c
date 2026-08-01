@@ -31,7 +31,19 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls
 {
     size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
 
+#ifdef MMTK_FIELD_BARRIER
+    // Keep the elements inside the GC heap at every size. MMTk routes an allocation this
+    // large to its large object space, which is still heap and still carries side metadata.
+    //
+    // The malloc'd alternative below puts the elements outside the heap, where there is no
+    // per-field unlog bit, so a field-logging write barrier cannot record those fields at
+    // all: it ends up deferring a slot whose memory the VM may free before the collector
+    // reads it. Plans with an object-granularity barrier key off the parent, which is
+    // always in the heap, so they keep the malloc'd path.
+    int pooled = 1;
+#else
     int pooled = tot <= GC_MAX_SZCLASS;
+#endif
     char *data;
     jl_genericmemory_t *m;
     if (!pooled) {
