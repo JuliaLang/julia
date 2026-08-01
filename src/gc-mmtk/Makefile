@@ -16,7 +16,23 @@ MMTK_INSTALLED_LIB := $(build_shlibdir)/$(MMTK_LIB_NAME)
 MMTK_JULIA_BUILD_CONFIG := $(MMTK_JULIA_LIB_PATH)/.build_config
 MMTK_JULIA_DEPS_LIBDIR := $(if $(build_libdir),$(build_libdir),$(JULIAHOME)/usr/lib)
 MMTK_JULIA_BINDGEN_INCLUDE_DIRS := $$($(LLVM_CONFIG_HOST) --includedir)$(PATHSEP)$(LIBUV_INC)$(PATHSEP)$(build_includedir)
+# Pin the libclang that bindgen loads.
+#
+# clang-sys searches LD_LIBRARY_PATH (set below so cargo can find the in-tree deps)
+# among other places, and prefers the highest version it finds, which is Julia's own
+# LLVM. bindgen separately derives its system include paths by running the `clang`
+# executable from PATH. Left alone, those resolve to different LLVM installs, and a
+# libclang given another toolchain's resource headers segfaults part-way through
+# parsing Julia's headers. Pinning short-circuits the search, so libclang matches the
+# clang whose headers it is handed.
+MMTK_HOST_LLVM_CONFIG := $(shell command -v llvm-config 2>/dev/null)
+ifneq ($(MMTK_HOST_LLVM_CONFIG),)
+MMTK_LIBCLANG_PATH ?= $(shell $(MMTK_HOST_LLVM_CONFIG) --libdir 2>/dev/null)
+endif
 MMTK_JULIA_CARGO_ENV := LD_LIBRARY_PATH="$(MMTK_JULIA_DEPS_LIBDIR):$$LD_LIBRARY_PATH" MMTK_JULIA_BINDGEN_INCLUDE_DIRS="$(MMTK_JULIA_BINDGEN_INCLUDE_DIRS)"
+ifneq ($(MMTK_LIBCLANG_PATH),)
+MMTK_JULIA_CARGO_ENV += LIBCLANG_PATH="$(MMTK_LIBCLANG_PATH)"
+endif
 MMTK_JULIA_CARGO_BUILD := cd $(MMTK_JULIA_DIR) && $(MMTK_JULIA_CARGO_ENV) cargo build
 
 ifeq (${MMTK_PLAN},Immix)
