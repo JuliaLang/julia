@@ -147,8 +147,13 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
         const char *base_symbol = "MMTK_SIDE_LOG_BIT_BASE_ADDRESS";
         Value *keyed_on = parent;
 #ifdef MMTK_FIELD_BARRIER
-        // A null slot means the caller could not attribute the store to one field, so
-        // there is no field bit to test and the slow path must run unconditionally.
+        // A null slot means the caller could not attribute the store to one field. There
+        // is then no field bit to test, but the *object* bit still applies: the slow path
+        // snapshots every field of the parent and logs the object, so the same gate that
+        // serves an object-granularity plan serves this case too. Testing it matters --
+        // the slow path is a walk of the whole parent, and a store into a large `Memory`
+        // does not get a slot (element addresses are derived, in addrspace 11). Calling it
+        // unconditionally makes filling an N-element memory O(N^2).
         const bool have_slot = !isa<ConstantPointerNull>(slot);
         if (have_slot) {
             base_symbol = "MMTK_SIDE_FIELD_UNLOG_BIT_BASE_ADDRESS";
@@ -156,15 +161,6 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
         }
 #else
         (void)slot;
-#endif
-
-#ifdef MMTK_FIELD_BARRIER
-        if (!have_slot) {
-            auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
-            if (auto *MD = target->getMetadata("julia.reset_region"))
-                qr->setMetadata("julia.reset_region", MD);
-            return;
-        }
 #endif
 
         if (INLINE_WRITE_BARRIER) {
@@ -212,13 +208,12 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
             builder.SetInsertPoint(mayTriggerSlowpath);
             auto *MD = target->getMetadata("julia.reset_region");
 #ifdef MMTK_FIELD_BARRIER
-            // Only the parent-granularity entry has a reset-safe variant, so a site
-            // that may run inside a published reset region takes the coarser path --
-            // the same fallback used when the slot is unknown, correct but less
-            // precise. Reset regions are rare enough that the extra remset traffic
-            // (the field's unlog bit is left set, so later stores to it keep hitting
-            // the slow path) does not matter.
-            if (!MD)
+            // Without a slot there is no field to report, and the field entry would derive
+            // a metadata address from a null one. Report the object instead. A site that may
+            // run inside a published reset region takes the object path for a different
+            // reason: only the parent-granularity entry has a reset-safe variant. Both are
+            // correct, just coarser.
+            if (have_slot && !MD)
                 builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRootField), { parent, slot });
             else
 #endif
