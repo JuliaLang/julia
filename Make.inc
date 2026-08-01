@@ -890,6 +890,10 @@ JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 
 # Use StickyImmix as the default MMTk plan.
 MMTK_PLAN ?= StickyImmix
+# MMTK_SNAPSHOT_BARRIER marks the plans whose write barrier has to observe every
+# overwritten reference, rather than just recording that the parent was modified.
+# ConcurrentImmix needs it for the SATB snapshot. It disables the insertion-barrier
+# optimisations in codegen, which assume that only the newly stored value matters.
 # Must specify a supported MMTk plan: Immix, StickyImmix, or ConcurrentImmix
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
@@ -898,8 +902,8 @@ else ifeq (${MMTK_PLAN},StickyImmix)
 JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 JCFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 else ifeq (${MMTK_PLAN}, ConcurrentImmix)
-JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\"
-JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\"
+JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER
+JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX -DMMTK_PLAN=\"ConcurrentImmix\" -DMMTK_SNAPSHOT_BARRIER
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, or ConcurrentImmix.")
 endif

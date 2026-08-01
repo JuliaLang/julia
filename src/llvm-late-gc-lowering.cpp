@@ -1817,7 +1817,7 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     return {Colors, PreAssignedColors};
 }
 
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
+#ifndef MMTK_SNAPSHOT_BARRIER
 static SmallVector<int, 1> *FindRefinements(Value *V, State *S)
 {
     if (!S)
@@ -1861,9 +1861,9 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
     for (auto CI : WriteBarriers) {
         auto parent = CI->getArgOperand(0);
         // Insertion-barrier optimization: elide the barrier when every child is the
-        // parent or perm-rooted. Invalid under SATB (ConcurrentImmix), which must
-        // snapshot the parent's old fields regardless of the child.
-#ifndef MMTK_PLAN_CONCURRENTIMMIX
+        // parent or perm-rooted. Invalid for plans that must observe the parent's old
+        // fields regardless of the child (MMTK_SNAPSHOT_BARRIER).
+#ifndef MMTK_SNAPSHOT_BARRIER
         if (std::all_of(CI->op_begin() + 1, CI->op_end(),
                     [parent, &S](Value *child) { return parent == child || IsPermRooted(child, S); })) {
             CI->eraseFromParent();
