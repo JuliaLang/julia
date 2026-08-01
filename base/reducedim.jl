@@ -198,8 +198,34 @@ function mapreducedim(f::F, op::OP, A, init, dims, alloc=_MapReduceAllocator(A))
     end
     n == 1 && return alloc(_mapreduce_start(f, op, A, init, A[i]) for i in outer)
     # Now there are multiple loop ordering strategies depending upon the `dims`:
-    if is_inner_dim == keep_first_trues(is_inner_dim) || _mapreduce_might_widen(f, op, A, init, alloc)
-        # Column major contiguous reduction! This is the easy case
+    contiguous = is_inner_dim == keep_first_trues(is_inner_dim)
+    if contiguous && IndexStyle(A) isa IndexLinear
+        # Column major contiguous reduction! This is the easy case: each output is
+        # one pairwise reduction over a linear index range with tuned kernels
+        return mapreducedim_naive(f, op, A, init, is_inner_dim, inner, outer, alloc)
+    elseif _mapreduce_might_widen(f, op, A, init, alloc)
+        # The naive strategy carries its accumulators through `op` without ever
+        # storing them in a typed output, making it the widening-safe path
+        return mapreducedim_naive(f, op, A, init, is_inner_dim, inner, outer, alloc)
+    elseif A isa StridedArray && n <= pairwise_blocksize(f, op) &&
+           (is_inner_dim[1] ||
+            (!(IndexStyle(A) isa IndexLinear) &&
+             all(map((b, sz) -> b | (sz == 1), tail(is_inner_dim), tail(size(A)))) &&
+             count(map((b, sz) -> b & (sz > 1), is_inner_dim, size(A))) > 1))
+        # Each output's fold chain fits within the pairwise blocksize, so a single
+        # storage-order left-fold pass over the whole array stays within the
+        # documented reassociation latitude — and with cheap strided `getindex` it
+        # runs at memory speed where the pairwise-per-output strategies would pay
+        # per-column or per-slab overheads. That covers every reduction along the
+        # first dimension (except contiguous IndexLinear ones, already handled
+        # above), plus Cartesian reductions with several reduced extents that keep
+        # only the first dimension (every trailing dimension reduced or singleton,
+        # so the seeds consume exactly the first column of the trailing space).
+        # IndexLinear reductions that keep the first dimension stay with
+        # the naive/rowmajor strategies: their tuned strided kernels and the
+        # vectorized linear sweep measure faster than this scalar sweep there.
+        return mapreducedim_fold(f, op, A, init, is_inner_dim, inner, outer, alloc)
+    elseif contiguous
         return mapreducedim_naive(f, op, A, init, is_inner_dim, inner, outer, alloc)
     elseif is_inner_dim[1] # `dims` includes the first dimension
         return mapreducedim_colmajor(f, op, A, init, is_inner_dim, inner, outer, alloc)
@@ -225,6 +251,83 @@ function mapreducedim_naive(f::F, op::OP, A, init, is_inner_dim, inner, outer, a
         alloc(mapreduce_pairwise(f, op, A, init, mergeindices(is_inner_dim, inner, i)) for i in outer)
     end
 end
+# A single storage-order pass over `A`, accumulating directly into the output:
+# seed every output with the first element of its chain, then left-fold each further
+# element into its output as it streams by. Each chain is folded in the same
+# column-major order the other strategies use — only the interleaving *across*
+# chains differs, which is unobservable — so this requires no commutativity. It
+# does fold each chain serially, so callers must ensure the chains are no longer
+# than `pairwise_blocksize` to stay within the pairwise reassociation bounds.
+# The per-column accumulator fold: ops we know to be commutative get `@simd`,
+# licensing LLVM to reassociate the chain into vector lanes (worth 5-9x for
+# floating-point sums; a no-op for ops the vectorizer cannot handle anyway).
+# Everything else gets a strict left-to-right fold with deterministic,
+# compiler-independent results — matching `mapreduce_kernel`'s policy of
+# reserving its reassociating lane kernels for `is_commutative_op` ops. The
+# branch is a compile-time constant per `op`, so only one loop is ever emitted.
+@inline function _mapreducedim_fold_column(f::F, op::OP, A, r, is, IA) where {F, OP}
+    if is_commutative_op(op)
+        @inbounds @simd for i in is
+            r = op(r, f(A[i, IA]))
+        end
+    else
+        @inbounds for i in is
+            r = op(r, f(A[i, IA]))
+        end
+    end
+    return r
+end
+
+function mapreducedim_fold(f::F, op::OP, A, init, is_inner_dim, inner, outer, alloc) where {F, OP}
+    R = alloc(_mapreduce_start(f, op, A, init, A[mergeindices(is_inner_dim, first(inner), o)]) for o in outer)
+    ax1 = axes(A, 1)
+    keep, Idefault = Broadcast.shapeindexer(safe_tail(axes(R)))
+    tailax = tail(axes(A))
+    if is_inner_dim[1]
+        # The first axis is reduced: keep each column's accumulator in a local.
+        # Iterate as reduced-tail slices (ascending, so every chain still folds in
+        # its column-major order) crossed with the kept-tail positions. The seeds
+        # above consumed the first element of each output's first column, so the
+        # first reduced-tail slice is peeled off with a shortened column range —
+        # keeping both loop nests free of per-column branches, which LLVM
+        # otherwise pessimizes badly.
+        t_mask = tail(is_inner_dim)
+        tA_first = CartesianIndex(map(first, tailax))
+        di_space = mergeindices(t_mask, CartesianIndices(tailax), tA_first)
+        ok_space = mergeindices(t_mask, tA_first, CartesianIndices(tailax))
+        i1 = first(axes(R, 1))
+        di1 = first(di_space)
+        @inbounds for OK in ok_space
+            IA = di1 + OK - tA_first
+            IR = Broadcast.newindex(OK, keep, Idefault)
+            R[i1, IR] = _mapreducedim_fold_column(f, op, A, R[i1, IR], first(ax1)+1:last(ax1), IA)
+        end
+        @inbounds for DI in Iterators.drop(di_space, 1)
+            for OK in ok_space
+                IA = DI + OK - tA_first
+                IR = Broadcast.newindex(OK, keep, Idefault)
+                R[i1, IR] = _mapreducedim_fold_column(f, op, A, R[i1, IR], ax1, IA)
+            end
+        end
+    else
+        # The first axis is kept and every trailing dimension is reduced or
+        # singleton (the only pattern routed here): the seeds above consumed
+        # exactly the first column of the tail space, so simply drop it and sweep
+        # the rest in storage order. Each iteration of the inner loop touches a
+        # different output, so there is no accumulator chain to reassociate and
+        # no `@simd` annotation: this is a deterministic left fold per output
+        # (measured codegen is identical with or without the annotation).
+        @inbounds for IA in Iterators.drop(CartesianIndices(tailax), 1)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            for i in ax1
+                v = op(R[i, IR], f(A[i, IA]))
+                R[i, IR] = v
+            end
+        end
+    end
+    return R
+end
+
 function mapreducedim_colmajor(f::F, op::OP, A, init, is_inner_dim, inner, outer, alloc, enforce_pairwise=true) where {F, OP}
     is_contiguous_inner = keep_first_trues(is_inner_dim)
     contiguous_inner = mergeindices(is_contiguous_inner, inner, first(inner))
@@ -286,7 +389,9 @@ function mapreducedim_rowmajor(f::F, op::OP, A, init, is_inner_dim, inner, outer
     if is_linear_sweep && IndexStyle(R) isa IndexLinear
         # Fold each contiguous `length(outer)`-long block into the outputs by linear
         # index — the same fold order as the Cartesian loop below, elementwise
-        # bit-identical, but amenable to vectorization across the outputs.
+        # bit-identical, but amenable to vectorization across the outputs. Each
+        # `@simd` iteration touches a different output, so its reassociation
+        # license goes unused; the annotation only aids memory-dependence analysis.
         rr = eachindex(R)
         offset = first(LinearIndices(A)) - first(rr)
         M = length(outer)
