@@ -1028,6 +1028,8 @@ JL_DLLEXPORT void* jl_gc_get_stackbase(int16_t tid) {
 
 JL_DLLEXPORT void jl_gc_update_stats(uint64_t inc, size_t mmtk_live_bytes, bool is_nursery_gc) {
     gc_num.total_time += inc;
+    if (inc > gc_num.max_pause)
+        gc_num.max_pause = inc;
     gc_num.pause += 1;
     gc_num.full_sweep += !(is_nursery_gc);
     gc_num.total_allocd += gc_num.allocd;

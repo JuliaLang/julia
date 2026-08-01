@@ -14,6 +14,8 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
 
 pub static GC_START: AtomicU64 = AtomicU64::new(0);
+/// `jl_hrtime` at which the previous pause released the mutators (stats only).
+pub static LAST_RESUME: AtomicU64 = AtomicU64::new(0);
 
 use std::collections::HashSet;
 use std::sync::RwLock;
@@ -114,6 +116,40 @@ impl Collection<JuliaVM> for VMCollection {
         let end = unsafe { jl_hrtime() };
         trace!("gc_end = {}", end);
         let gc_time = end - GC_START.load(Ordering::Relaxed);
+        if std::env::var_os("MMTK_LXR_STATS").is_some() {
+            // Attribute the STW window to the pause kind that produced it. The aggregate
+            // `gc_num.total_time` mixes RefCount, InitialMark and FinalMark together, which
+            // hides which of the three is actually costing the mutator.
+            // `current_pause` is already cleared by `gc_pause_end` at this point, so read
+            // `previous_pause`, which that same function sets to the pause just finished.
+            let kind = crate::SINGLETON
+                .get_plan()
+                .downcast_ref::<mmtk::plan::lxr::LXR<JuliaVM>>()
+                .and_then(|lxr| lxr.previous_pause())
+                .map(|p| format!("{:?}", p))
+                .unwrap_or_else(|| "?".to_string());
+            // Also report the mutator window since the previous pause ended. If
+            // InitialMark -> FinalMark leaves the mutator almost no wall-clock time,
+            // concurrent marking cannot make progress and the whole transitive closure
+            // lands inside the FinalMark STW pause.
+            let prev_end = LAST_RESUME.swap(end, Ordering::Relaxed);
+            let mutator_us = if prev_end == 0 {
+                0
+            } else {
+                (GC_START.load(Ordering::Relaxed).saturating_sub(prev_end)) / 1000
+            };
+            eprintln!(
+                "[lxr] stw pause={} us={} mutator_us_before={}",
+                kind,
+                gc_time / 1000,
+                mutator_us
+            );
+            // Attribute the pause to the work packet types that ran in it. This is the last
+            // point in the pause, so everything the pause scheduled has already executed.
+            for (name, count, nanos) in mmtk::scheduler::packet_timing::take_top(12) {
+                eprintln!("[lxr]   packet n={:<6} us={:<8} {}", count, nanos / 1000, name);
+            }
+        }
         unsafe {
             jl_gc_update_stats(
                 gc_time,

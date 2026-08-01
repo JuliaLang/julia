@@ -17,6 +17,9 @@ bindgen = "*"
 
 [profile.release]
 lto = true
+# Line tables only. Costs nothing at runtime and is what makes a sampling profile of the
+# binding readable: without it every Rust frame resolves to the nearest exported C symbol.
+debug = 1
 
 [dependencies]
 libc = "0.2"
