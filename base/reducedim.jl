@@ -229,7 +229,13 @@ function mapreducedim_colmajor(f::F, op::OP, A, init, is_inner_dim, inner, outer
     is_contiguous_inner = keep_first_trues(is_inner_dim)
     contiguous_inner = mergeindices(is_contiguous_inner, inner, first(inner))
     discontiguous_inner = mergeindices(is_contiguous_inner, first(inner), inner)
-    if enforce_pairwise && length(discontiguous_inner) > pairwise_blocksize(f, op)
+    # Beyond the pairwise-required blocksize reroute, columns shorter than the
+    # blocksize cannot amortize a full pairwise call (plus an `R` read-modify-write)
+    # per column: the naive strategy amortizes that overhead over each output's whole
+    # slab and measures at worst on par with the column-at-a-time sweep here even for
+    # adversarially tiny columns with large outer extents.
+    if enforce_pairwise && (length(discontiguous_inner) > pairwise_blocksize(f, op) ||
+                            length(contiguous_inner) < pairwise_blocksize(f, op))
         return mapreducedim_naive(f, op, A, init, is_inner_dim, inner, outer, alloc)
     end
     # Initialize our reduction with the result of doing the first contiguous reduction
@@ -243,6 +249,22 @@ function mapreducedim_colmajor(f::F, op::OP, A, init, is_inner_dim, inner, outer
     return R
 end
 
+# True when every dimension at or after the first reduced one is either also reduced
+# or has singleton extent: the kept dimensions then form a contiguous leading block
+# of `length(outer)` elements in linear-index order, and each step along the reduced
+# dimensions advances the linear index by exactly that block length.
+function _rowmajor_is_linear_sweep(is_inner_dim, sz)
+    seen_inner = false
+    for d in eachindex(is_inner_dim)
+        if is_inner_dim[d]
+            seen_inner = true
+        elseif seen_inner && sz[d] != 1
+            return false
+        end
+    end
+    return true
+end
+
 function mapreducedim_rowmajor(f::F, op::OP, A, init, is_inner_dim, inner, outer, alloc, enforce_pairwise=true) where {F, OP}
     # This will only be cache-optimal in the fully "backwards" case — that is, dims are `twoplus:ndims(A)`
     # And even then, it's simply not possible to do this cache-optimally with a pairwise reassociation;
@@ -250,8 +272,34 @@ function mapreducedim_rowmajor(f::F, op::OP, A, init, is_inner_dim, inner, outer
     if enforce_pairwise && length(inner) > pairwise_blocksize(f, op)
         return mapreducedim_naive(f, op, A, init, is_inner_dim, inner, outer, alloc)
     end
+    if enforce_pairwise && length(outer) < 16
+        # With only a handful of outputs, one tuned strided pairwise pass per output
+        # is cheaper than sweeping across the outputs — even the vectorized linear
+        # sweep below cannot fill its vectors; the measured crossover between the
+        # two approaches is at roughly 16 outputs.
+        return mapreducedim_naive(f, op, A, init, is_inner_dim, inner, outer, alloc)
+    end
+    is_linear_sweep = A isa AbstractArray && IndexStyle(A) isa IndexLinear &&
+                      _rowmajor_is_linear_sweep(is_inner_dim, size(A))
     # Take one element from each outer iteration to initialize R
     R = alloc(_mapreduce_start(f, op, A, init, A[mergeindices(is_inner_dim, first(inner), o)]) for o in outer)
+    if is_linear_sweep && IndexStyle(R) isa IndexLinear
+        # Fold each contiguous `length(outer)`-long block into the outputs by linear
+        # index — the same fold order as the Cartesian loop below, elementwise
+        # bit-identical, but amenable to vectorization across the outputs.
+        rr = eachindex(R)
+        offset = first(LinearIndices(A)) - first(rr)
+        M = length(outer)
+        for k in 1:length(inner)-1
+            koffset = offset + k*M
+            @simd for r in rr
+                ai = @inbounds A[r + koffset]
+                v = op(@inbounds(R[r]), f(ai))
+                @inbounds R[r] = v
+            end
+        end
+        return R
+    end
     for i in Iterators.drop(inner, 1)
         @simd for o in outer
             # SIMD still helps here! It doesn't reassociate _within_ each reduction, but it can allow
