@@ -541,10 +541,15 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
 // Codegen has no equivalent bound; overflow drops the innermost frames of a very
 // deeply nested macro expansion, which loses coverage for those rather than
 // misreporting it.
+// Two things codegen records that this does not, so a method that is only ever
+// interpreted reports fewer hits on those lines than a compiled one:
+//   - the function definition line, which codegen covers once from `topinfo`
+//   - `jl_cdi_external_firstline` at pc=1 (codegen's `line0`)
 #define COVERAGE_MAX_FRAMES 12
 typedef struct {
     const char *file[COVERAGE_MAX_FRAMES];
     int32_t line[COVERAGE_MAX_FRAMES];
+    int32_t edgeid[COVERAGE_MAX_FRAMES];
     int tracked[COVERAGE_MAX_FRAMES];
     int n;
 } coverage_frames_t;
@@ -554,7 +559,7 @@ typedef struct {
 // result out of its recursion, and update_lineinfo then throws away the frames it
 // had started to build and keeps the previous statement's.
 static int coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
-                            jl_module_t *enclosing, size_t pc,
+                            jl_module_t *enclosing, int32_t to, size_t pc,
                             coverage_frames_t *out) JL_NOTSAFEPOINT
 {
     while (1) {
@@ -568,7 +573,7 @@ static int coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
             return 0;
         if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
             // indirection node: `i` is a pc in the linetable, not a line
-            if (!coverage_collect((jl_debuginfo_t*)debuginfo->linetable, func, enclosing, i, out))
+            if (!coverage_collect((jl_debuginfo_t*)debuginfo->linetable, func, enclosing, to, i, out))
                 return 0;
         }
         else if (i > 0 && out->n < COVERAGE_MAX_FRAMES) {
@@ -581,12 +586,14 @@ static int coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
             int n = out->n++;
             out->file[n] = file;
             out->line[n] = i;
+            out->edgeid[n] = to;
             out->tracked[n] = jl_coverage_enabled_for(modu, file);
         }
-        if (lineidx.to == 0)
+        to = lineidx.to;
+        if (to == 0)
             return 1;
         pc = lineidx.pc;
-        debuginfo = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, lineidx.to - 1);
+        debuginfo = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, to - 1);
         func = NULL;
     }
 }
@@ -597,11 +604,12 @@ static void coverage_visit_stmt(jl_code_info_t *src, jl_module_t *module,
 {
     coverage_frames_t cur;
     cur.n = 0;
-    if (!coverage_collect(src->debuginfo, mi ? (jl_value_t*)mi : NULL, module, pc, &cur))
+    if (!coverage_collect(src->debuginfo, mi ? (jl_value_t*)mi : NULL, module, 0, pc, &cur))
         return; // no location for this statement: keep the frames we already had
     int d = 0;
+    // the same test as codegen's DebugLineTable::sameframe
     while (d < cur.n && d < prev->n &&
-           cur.line[d] == prev->line[d] && cur.file[d] == prev->file[d])
+           cur.line[d] == prev->line[d] && cur.edgeid[d] == prev->edgeid[d])
         d++;
     for (int k = d; k < cur.n; k++)
         if (cur.tracked[k])
