@@ -3222,11 +3222,16 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
     Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(ctx.types().T_size, (uintptr_t)ptr),
         getPointerTy(ctx.builder.getContext()));
+    // Volatile, not atomic, so concurrent updates to the same counter may be lost. An
+    // atomic RMW in a hot loop costs far more than the exactness is worth (#62424), and
+    // this is what 1.11 and earlier did. Note both callers rely on a lost update never
+    // driving a counter back to zero, which is how the writers tell an uncovered line
+    // ("0") from one that is not code at all ("-"): `jl_coverage_alloc_line` /
+    // `jl_malloc_data_pointer` seed every instrumented line to 1, and `addend` is
+    // non-negative, so every value ever stored here is >= 1.
     Value *v = ctx.builder.CreateLoad(getInt64Ty(ctx.builder.getContext()), pv, true, name);
     v = ctx.builder.CreateAdd(v, addend);
-    ctx.builder.CreateStore(v, pv, true); // volatile, not atomic, so this may undercount across
-                                          // threads, but an atomic RMW in a hot loop is far more
-                                          // expensive than the exactness is worth (#62424)
+    ctx.builder.CreateStore(v, pv, true);
 }
 
 // Code coverage
