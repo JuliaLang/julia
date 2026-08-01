@@ -50,7 +50,10 @@ impl Collection<JuliaVM> for VMCollection {
         if !lxr {
             return;
         }
-        crate::julia_finalizer::drop_all_finalizers();
+        // Deliberately *not* `drop_all_finalizers()`. The lists root the objects they name
+        // (see `collect_finalizer_roots`); zeroing them frees live objects that libuv and
+        // others still point at. The entries are retained and rooted at root-scanning time
+        // instead, which leaks them until LXR grows a real finalizer path.
         // Prune `ptls->live_tasks`, which nothing else does under LXR.
         //
         // `SweepVMSpecific` would normally do this, but it is scheduled from

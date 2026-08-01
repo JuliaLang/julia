@@ -163,6 +163,62 @@ pub fn drop_all_finalizers() {
     ArrayListT::to_finalize_list().len = 0;
 }
 
+/// Every object named by a finalizer list entry, to be reported as a root.
+///
+/// The finalizer lists are a *root set*, not just a to-do list: `jl_uv_closeHandle` reaches a
+/// stream through `handle->data`, a raw pointer libuv holds, and the comment in
+/// `jl_uv_call_close_callback` says outright that the value is "rooted in the finalizer list
+/// only". Dropping the entries (what [`drop_all_finalizers`] does) therefore un-roots live
+/// objects: the stream is reclaimed, its memory is reused, and at exit libuv calls the close
+/// callback on whatever now occupies it -- the `MethodError(f=Base._uv_hook_close,
+/// args=(Base.RefValue{...},))` seen after any `GC.gc()`, which also loses buffered stdio
+/// because the atexit hook dies before flushing.
+///
+/// So retain the entries and root them. LXR still never *runs* a finalizer and never sweeps
+/// these lists, so registered objects are immortal -- a leak. That is the deliberate trade:
+/// leaking a finalizable object is a bounded cost, freeing one that is still referenced is
+/// memory corruption.
+///
+/// Traversal mirrors [`mark_finlist`]: a zero slot is a hole, `GC_FIN_COBJ_TAG` marks a
+/// non-Julia pointer, and `GC_FIN_CFUNC_TAG` means the following slot is a bare C function
+/// pointer rather than a value.
+pub fn collect_finalizer_roots() -> Vec<ObjectReference> {
+    use crate::mmtk::vm::ActivePlan;
+    use mmtk::vm::VMBinding;
+
+    let mut roots = Vec::new();
+    let mut collect = |list: &ArrayListT| {
+        let mut i = 0;
+        while i < list.len {
+            let cur = list.get(i);
+            if cur.is_zero() {
+                i += 1;
+                continue;
+            }
+            if gc_ptr_tag(cur, GC_FIN_COBJ_TAG) {
+                i += 1;
+                continue;
+            }
+            let addr = if gc_ptr_tag(cur, GC_FIN_CFUNC_TAG) {
+                // The paired slot is an unboxed function pointer, so step over it.
+                i += 1;
+                gc_ptr_clear_tag(cur, GC_FIN_CFUNC_TAG)
+            } else {
+                cur
+            };
+            roots.push(unsafe { ObjectReference::from_raw_address_unchecked(addr) });
+            i += 1;
+        }
+    };
+
+    for mutator in <JuliaVM as VMBinding>::VMActivePlan::mutators() {
+        collect(ArrayListT::thread_local_finalizer_list(mutator));
+    }
+    collect(ArrayListT::marked_finalizers_list());
+    collect(ArrayListT::to_finalize_list());
+    roots
+}
+
 /// Whether a finalizer list entry is still live, i.e. must stay on the list.
 ///
 /// `memory_manager::is_live_object` dispatches to the owning policy, and `ImmixSpace::is_live`
