@@ -12,7 +12,7 @@ use mmtk::util::heap::GCTriggerPolicy;
 use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
 
@@ -26,7 +26,7 @@ lazy_static! {
     static ref GC_THREADS: RwLock<HashSet<ThreadId>> = RwLock::new(HashSet::new());
 }
 
-#[cfg(feature = "concurrentimmix")]
+#[cfg(feature = "concurrent_marking")]
 pub static CONCURRENT_MARKING_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 pub(crate) fn register_gc_thread() {
@@ -106,7 +106,7 @@ impl Collection<JuliaVM> for VMCollection {
         trace!("Stopped the world!");
 
         // STW -- concurrent marking is not active.
-        #[cfg(feature = "concurrentimmix")]
+        #[cfg(feature = "concurrent_marking")]
         CONCURRENT_MARKING_ACTIVE.store(false, Ordering::SeqCst);
 
         // Tell MMTk the stacks are ready.
@@ -140,7 +140,7 @@ impl Collection<JuliaVM> for VMCollection {
             )
         }
 
-        #[cfg(feature = "concurrentimmix")]
+        #[cfg(feature = "concurrent_marking")]
         {
             // For concurrent Immix, we need to check if SATB is active
             let concurrent_plan = SINGLETON.get_plan().concurrent().unwrap();
@@ -255,24 +255,6 @@ pub fn is_current_gc_nursery() -> bool {
         Some(gen) => gen.is_current_gc_nursery(),
         None => false,
     }
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_block_thread_for_gc() {
-    AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
-
-    let (lock, cvar) = &*STW_COND.clone();
-    let mut count = lock.lock().unwrap();
-
-    info!("Blocking for GC!");
-
-    AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
-
-    while AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) {
-        count = cvar.wait(count).unwrap();
-    }
-
-    AtomicIsize::store(&USER_TRIGGERED_GC, 0, Ordering::SeqCst);
 }
 
 /// Bring-up verifier for LXR: walk the live closure from the roots recorded in this
