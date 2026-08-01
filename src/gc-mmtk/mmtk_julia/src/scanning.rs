@@ -93,6 +93,19 @@ impl Scanning<JuliaVM> for VMScanning {
         unsafe {
             jl_gc_scan_vm_specific_roots(&mut roots_closure as _);
         }
+
+        // The finalizer lists root the objects they name. Under LXR nothing else traces them
+        // -- `process_weak_refs`, and with it `mark_finlist`, is never called -- so report
+        // them here or they are reclaimed while still referenced. See
+        // `julia_finalizer::collect_finalizer_roots`.
+        #[cfg(feature = "lxr_base")]
+        {
+            const CAPACITY_PER_PACKET: usize = 4096;
+            let fin_roots = crate::julia_finalizer::collect_finalizer_roots();
+            for nodes in fin_roots.chunks(CAPACITY_PER_PACKET).map(|c| c.to_vec()) {
+                factory.create_process_pinning_roots_work(nodes);
+            }
+        }
     }
 
     fn scan_object(
