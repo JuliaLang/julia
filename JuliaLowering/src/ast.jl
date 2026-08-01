@@ -86,7 +86,7 @@ macro mknode(attrs, old)
         end
         aname in seen_attrs && throw(ArgumentError("duplicate attr provided $__source__"))
         push!(seen_attrs, aname)
-        out_args[fieldindex(SyntaxTree, aname)] = aval
+        out_args[Base.fieldindex(SyntaxTree, aname)] = aval
     end
     old === DEFAULT_NODE && !((:kind, :source, :context) ⊆ seen_attrs) &&
         throw(ArgumentError("brand-new node from @mknode requires more attrs $__source__"))
