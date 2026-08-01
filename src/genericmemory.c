@@ -246,9 +246,14 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
         destdata = (char*)dest->ptr + elsz*(size_t)destdata;
     }
     if (layout->first_ptr != -1) {
-        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
+        // The barrier has to run before the move, as the boxed path above does. A plan
+        // that must observe the overwritten references (see MMTK_SNAPSHOT_BARRIER) reads
+        // them here; run it afterwards and it sees the values just written instead, so
+        // the references copied in are never counted and the ones displaced are never
+        // released.
         jl_value_t *owner = jl_genericmemory_owner(dest);
         jl_gc_wb_genericmemory_copy_ptr(owner, src, src_p, n, dt);
+        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
     }
     else {
         memmove(destdata, srcdata, n * elsz);
