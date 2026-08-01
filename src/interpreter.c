@@ -549,9 +549,13 @@ typedef struct {
     int n;
 } coverage_frames_t;
 
-static void coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
-                             jl_module_t *enclosing, size_t pc,
-                             coverage_frames_t *out) JL_NOTSAFEPOINT
+// Returns 0 if this statement reports no location update, in which case `out` is
+// meaningless and must be discarded: codegen's append_lineinfo propagates the same
+// result out of its recursion, and update_lineinfo then throws away the frames it
+// had started to build and keeps the previous statement's.
+static int coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
+                            jl_module_t *enclosing, size_t pc,
+                            coverage_frames_t *out) JL_NOTSAFEPOINT
 {
     while (1) {
         if (!jl_is_symbol(debuginfo->def)) // this is a path
@@ -559,12 +563,13 @@ static void coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
         struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
         int32_t i = lineidx.loc;
         if (i < 0) // pc out of range: broken debuginfo?
-            return;
+            return 0;
         if (i == 0 && lineidx.to == 0) // no update
-            return;
+            return 0;
         if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
             // indirection node: `i` is a pc in the linetable, not a line
-            coverage_collect((jl_debuginfo_t*)debuginfo->linetable, func, enclosing, i, out);
+            if (!coverage_collect((jl_debuginfo_t*)debuginfo->linetable, func, enclosing, i, out))
+                return 0;
         }
         else if (i > 0 && out->n < COVERAGE_MAX_FRAMES) {
             const char *file = jl_cdi_file(debuginfo);
@@ -579,7 +584,7 @@ static void coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
             out->tracked[n] = jl_coverage_enabled_for(modu, file);
         }
         if (lineidx.to == 0)
-            return;
+            return 1;
         pc = lineidx.pc;
         debuginfo = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, lineidx.to - 1);
         func = NULL;
@@ -592,10 +597,8 @@ static void coverage_visit_stmt(jl_code_info_t *src, jl_module_t *module,
 {
     coverage_frames_t cur;
     cur.n = 0;
-    coverage_collect(src->debuginfo, mi ? (jl_value_t*)mi : NULL, module, pc, &cur);
-    if (cur.n == 0)
-        return; // no location for this statement: keep the frames we already had,
-                // as codegen's update_lineinfo does when it reports no update
+    if (!coverage_collect(src->debuginfo, mi ? (jl_value_t*)mi : NULL, module, pc, &cur))
+        return; // no location for this statement: keep the frames we already had
     int d = 0;
     while (d < cur.n && d < prev->n &&
            cur.line[d] == prev->line[d] && cur.file[d] == prev->file[d])
