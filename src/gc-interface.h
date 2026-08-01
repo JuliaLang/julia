@@ -312,6 +312,10 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 // Write barrier slow-path. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
+// Like `jl_gc_queue_root`, but naming the field being overwritten. Only emitted for
+// plans built with GC_BARRIER_SNAPSHOT, which need the field's address to know which
+// old reference is being observed.
+JL_DLLEXPORT void jl_gc_queue_root_field(const struct _jl_value_t *ptr, void *slot) JL_NOTSAFEPOINT;
 // Dedicated slow-path for `jl_gc_wb`. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
 // Takes the same parent, destination slot, and new value as `jl_gc_wb`.

@@ -164,6 +164,10 @@ namespace jl_intrinsics {
     // Object barrier used when a transformation discards field locations.
     extern const IntrinsicDescription objectWriteBarrier;
 
+    // `julia.queue_gc_root_field`: as above, but naming the field that was written,
+    // for GC plans whose barrier records individual fields rather than whole objects.
+    extern const IntrinsicDescription queueGCRootField;
+
     // `julia.safepoint`: an intrinsic that triggers a GC safepoint.
     extern const IntrinsicDescription safepoint;
 }
@@ -186,6 +190,9 @@ namespace jl_well_known {
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
+
+    // `jl_gc_queue_root_field`: as above, but naming the written field.
+    extern const WellKnownFunctionDescription GCQueueRootField;
 
     // `jl_gc_alloc_typed`: allocates bytes.
     extern const WellKnownFunctionDescription GCAllocTyped;

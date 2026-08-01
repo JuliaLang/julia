@@ -383,6 +383,7 @@ struct FinalLowerGC: private JuliaPassContext {
 
 private:
     Function *queueRootFunc;
+    Function *queueRootFieldFunc;
     Function *smallAllocFunc;
     Function *bigAllocFunc;
     Function *allocTypedFunc;
@@ -415,6 +416,9 @@ private:
 
     // Lowers a `julia.queue_gc_root` intrinsic.
     void lowerQueueGCRoot(CallInst *target, Function &F);
+
+    // Lowers a `julia.queue_gc_root_field` intrinsic.
+    void lowerQueueGCRootField(CallInst *target, Function &F);
 
     // Lowers a `julia.safepoint` intrinsic.
     void lowerSafepoint(CallInst *target, Function &F);
