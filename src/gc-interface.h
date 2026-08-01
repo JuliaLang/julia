@@ -324,21 +324,30 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT;
 // in different GC generations (i.e. if the first argument points to an old object and the
 // second argument points to a young object), and if so, call the write barrier slow-path.
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
-// Freshly allocated objects are known to be in the young generation until the next safepoint,
-// so write barriers can be omitted until the next allocation. This function is a no-op that
-// can be used to annotate that a write barrier would be required were it not for this property
-// (as opposed to somebody just having forgotten to think about write barriers).
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
-// As an optimization, the current_task is explicitly added to the remset while it is running.
-// Upon deschedule, we conservatively move the write barrier into the young generation.
-// This allows the omission of write barriers for all GC roots on the current task stack (JL_GC_PUSH_*),
-// as well as the Task's explicit fields (but only for the current task).
-// This function is a no-op that can be used to annotate that a write barrier would be required were
-// it not for this property (as opposed to somebody just having forgotten to think about write barriers).
-STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
-// Used to annotate that a write barrier would be required, but may be omitted because `ptr`
-// is known to be an old object.
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+// The next three are annotations rather than plain barriers: each marks a store where a
+// write barrier would ordinarily be required, and states the property that lets a
+// collector do less than the full `jl_gc_wb` for it. Writing them out is what
+// distinguishes a store that has been thought about from one where somebody forgot.
+//
+// A generational collector can implement all three as no-ops. Each property is only an
+// argument about the value being *stored*, though, so a collector that must also observe
+// the value being *displaced* cannot take every one of these shortcuts, and a collector
+// that does something other than remember the parent may need to act on them for reasons
+// of its own. So the implementation belongs to the collector: see gc-wb-stock.h and
+// gc-wb-mmtk.h.
+//
+// jl_gc_wb_fresh: `parent` was allocated since the last safepoint, so it is still in the
+// young generation and no barrier is needed until the next allocation.
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+// jl_gc_wb_current_task: as an optimization, the current_task is explicitly added to the
+// remset while it is running. Upon deschedule, we conservatively move the write barrier
+// into the young generation. This allows the omission of write barriers for all GC roots
+// on the current task stack (JL_GC_PUSH_*), as well as the Task's explicit fields (but
+// only for the current task).
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+// jl_gc_wb_knownold: `ptr` is known to be an old object, so there is no young referent to
+// remember.
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
 // Write-barrier function that must be used after copying multiple fields of an object into
 // another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.

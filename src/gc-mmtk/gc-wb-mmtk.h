@@ -66,6 +66,41 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
     mmtk_gc_wb_fast(ptr, (void*)0);
 }
 
+// The three annotated-store barriers (see gc-interface.h for what each one asserts).
+//
+// Each assertion is about the value being *stored*, so each is a reason a generational
+// plan has nothing to remember. A plan whose barrier must also observe the value being
+// *displaced* -- MMTK_SNAPSHOT_BARRIER -- gets no such licence from two of the three, and
+// has to take the full barrier instead.
+
+// `parent` is younger than the last safepoint. A generational plan need not remember it.
+// A snapshot barrier need not either: marking can only have begun at a safepoint, so a
+// live snapshot cannot contain any field of `parent`, and the values being displaced are
+// the uninitialised ones the allocator left behind.
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+
+#ifdef MMTK_SNAPSHOT_BARRIER
+// Being in a remset means the parent will be *rescanned*, which recovers references
+// inserted into it but not references removed from it: the rescan observes the field
+// after the store. A reference moved out of the current task and into an object the
+// collector has already blackened is then reachable only through a location the snapshot
+// never saw, and is collected while live.
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+    mmtk_gc_wb_fast(parent, ptr);
+}
+
+// That `ptr` is old says nothing about the reference it displaces, which is the one a
+// snapshot barrier has to record.
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+    mmtk_gc_wb_fast(parent, ptr);
+}
+#else
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+#endif
+
 STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(parent, (void*)0);
