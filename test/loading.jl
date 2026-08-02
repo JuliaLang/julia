@@ -2533,7 +2533,7 @@ end
         write(joinpath(pkgdir, "src", "EnvMutator.jl"), """
             module EnvMutator
             Base.generating_output(true) || error("expected to run in a precompile worker")
-            using Dates # installs the frozen environment stack before the mutations below
+            using Dates # load a dependency before the mutations below
             envdir = ENV["ENV_MUTATOR_ENVDIR"]
             pushfirst!(LOAD_PATH, envdir)
             joinpath(envdir, "Project.toml") in Base.load_path() || error("load_path is stale after LOAD_PATH mutation")
@@ -2551,5 +2551,48 @@ end
             "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
             "ENV_MUTATOR_ENVDIR" => envdir,
             "ENV_MUTATOR_PROJECT2" => joinpath(dir, "Project2.toml")))
+    end
+end
+
+@testset "LOAD_PATH mutations mid-load are not honored (#28756, #62404)" begin
+    # The environment is read when a top-level `using`/`import` begins and held
+    # fixed for that load, so a `push!(LOAD_PATH, ...)` from a module body does
+    # not affect the load it is part of, cached or not.
+    mktempdir() do dir
+        a, b = joinpath(dir, "a"), joinpath(dir, "b")
+        mkpath(a); mkpath(b)
+        write(joinpath(b, "ModB.jl"), "module ModB end\n")
+        write(joinpath(a, "ModC.jl"), "module ModC end\n")
+        depot = joinpath(dir, "depot")
+        for order in (false, true)
+            write(joinpath(a, "ModA.jl"), """
+                module ModA
+                push!(LOAD_PATH, $(repr(b)))
+                $(order ? "using ModC" : "")
+                using ModB
+                end
+                """)
+            for compile in (`--compiled-modules=no`, ``)
+                script = "push!(LOAD_PATH, $(repr(a))); using ModA"
+                cmd = addenv(`$(Base.julia_cmd()) $compile --startup-file=no -e $script`,
+                             "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep())
+                out = PipeBuffer()
+                proc = run(pipeline(ignorestatus(cmd), stdout=out, stderr=out))
+                output = read(out, String)
+                @test !success(proc)
+                @test contains(output, "Package ModB not found")
+            end
+        end
+        # mutating LOAD_PATH before the top-level `using` works
+        for compile in (`--compiled-modules=no`, ``)
+            script = "push!(LOAD_PATH, $(repr(a)), $(repr(b))); using ModA; print(\"MODA_LOADED\")"
+            cmd = addenv(`$(Base.julia_cmd()) $compile --startup-file=no -e $script`,
+                         "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep())
+            out = PipeBuffer()
+            proc = run(pipeline(ignorestatus(cmd), stdout=out, stderr=out))
+            output = read(out, String)
+            @test success(proc)
+            @test contains(output, "MODA_LOADED")
+        end
     end
 end

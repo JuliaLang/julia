@@ -312,7 +312,7 @@ const EXT_DORMITORY_FAILED = ExtensionId[]
 
 function prime_extensions(pkg::PkgId)
     pkg.uuid === nothing && return
-    stack = current_env_stack()
+    stack = loading_env_stack()
     specenv = _locate_package(stack, pkg)
     specenv === nothing && return
     _, root = specenv
@@ -1219,12 +1219,12 @@ function __require(into::Module, mod::Symbol)
         return topmod
     end
     @lock require_lock begin
-    check_frozen_env()
-    if ENV_STACK[] === nothing || !_env_frozen()
-        ENV_STACK[] = EnvironmentStack()
-    end
+    # Pin the environment for the duration of this top-level load; mutations
+    # made while it is in progress do not affect it.
+    env_stack_pinned = ENV_STACK[] !== nothing
+    env_stack_pinned || (ENV_STACK[] = EnvironmentStack())
     try
-        uuidkey_env = identify_package_env(into, String(mod))
+        uuidkey_env = _identify_package_env(loading_env_stack(), PkgId(into), String(mod))
         # Core.println("require($(PkgId(into)), $mod) -> $uuidkey_env")
         if uuidkey_env === nothing
             where = PkgId(into)
@@ -1259,7 +1259,8 @@ function __require(into::Module, mod::Symbol)
         end
         return _require_prelocked(uuidkey, env)
     finally
-        _env_frozen() || (ENV_STACK[] = nothing)
+        # stays pinned for the whole process when precompiling
+        env_stack_pinned || _env_frozen() || (ENV_STACK[] = nothing)
     end
     end
 end
@@ -1316,7 +1317,17 @@ function require(uuidkey::PkgId)
     end
     return invoke_in_world(world, __require, uuidkey)
 end
-__require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
+function __require(uuidkey::PkgId)
+    @lock require_lock begin
+    env_stack_pinned = ENV_STACK[] !== nothing
+    env_stack_pinned || (ENV_STACK[] = EnvironmentStack())
+    try
+        return _require_prelocked(uuidkey)
+    finally
+        env_stack_pinned || _env_frozen() || (ENV_STACK[] = nothing)
+    end
+    end
+end
 # Enabled by `include_package_for_output` so the precompile worker can attribute
 # wall-clock time spent loading dependencies from disk. Only outermost (depth==0)
 # calls accumulate to avoid double-counting transitive `require`s.
@@ -1425,7 +1436,7 @@ end
 # this is similar to `require`, but worse in almost every possible way
 root_module(key::PkgId) = @lock require_lock loaded_modules[key]
 function root_module(where::Module, name::Symbol)
-    key = identify_package(where, String(name))
+    key = @lock require_lock _nothing_or_first(_identify_package_env(loading_env_stack(), PkgId(where), String(name)))
     key isa PkgId || throw(KeyError(name))
     return root_module(key)
 end
@@ -1465,7 +1476,7 @@ function __require_prelocked(pkg::PkgId, env)
     assert_havelock(require_lock)
 
     # perform the search operation to select the module file require intends to load
-    specenv = _locate_package(current_env_stack(), pkg, env;
+    specenv = _locate_package(loading_env_stack(), pkg, env;
                               honor_stopenv=!(loading_extension || precompiling_extension))
     if specenv === nothing
         throw(ArgumentError("""
@@ -1920,6 +1931,9 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     append!(empty!(Base.LOAD_PATH), load_path)
     ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
     set_active_project(nothing)
+    # Pin the environment for the whole process: mutations made by the code
+    # being precompiled cannot be replayed when loading the cache file.
+    ENV_STACK[] = EnvironmentStack()
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
