@@ -516,7 +516,12 @@ kern_return_t catch_mach_exception_raise_state_identity(
     if (jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL)
         return KERN_FAILURE;
     jl_value_t *excpt;
-    if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {
+    if (jl_addr_in_empty_memory_guard((void*)fault_addr)) {
+        // read or write of element 0 of an empty Memory, whose data pointer is
+        // the inaccessible guard page; surface it as a BoundsError.
+        excpt = jl_empty_memory_exception;
+    }
+    else if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {
         stack_overflow_warning();
         excpt = jl_stackovf_exception;
     }
