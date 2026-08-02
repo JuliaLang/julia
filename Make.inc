@@ -263,7 +263,7 @@ JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
 # Whether to use GPL libraries or not.
-USE_GPL_LIBS ?= 1
+USE_GPL_LIBS ?= 0
 
 # Whether to install Julia as a framework on Darwin (Apple) platforms.
 DARWIN_FRAMEWORK ?= 0
