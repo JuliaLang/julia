@@ -127,6 +127,7 @@
     XX(jl_exception_clear) \
     XX(jl_exception_occurred) \
     XX(jl_excstack_state) \
+    XX(jl_exepath) \
     XX(jl_exit) \
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
