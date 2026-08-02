@@ -79,10 +79,13 @@ struct InterpreterIP
     mod::Union{Module,Nothing}
 end
 
+const BacktraceEntry = Union{Ptr{Cvoid}, InterpreterIP}
+const Backtrace = Array{<:BacktraceEntry, 1}
+
 # convert dual arrays (raw bt buffer, array of GC managed values) to a single
 # array of locations
 function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
-    ret = Vector{Union{InterpreterIP,Ptr{Cvoid}}}()
+    ret = Vector{BacktraceEntry}()
     i, j = 1, 1
     while i <= length(bt)
         ip = bt[i]::Ptr{Cvoid}
@@ -140,6 +143,7 @@ end
 struct ExceptionStack <: AbstractArray{NamedTuple{(:exception, :backtrace)},1}
     stack::Array{NamedTuple{(:exception, :backtrace)},1}
 end
+ExceptionStack() = ExceptionStack(NamedTuple{(:exception, :backtrace)}[])
 
 """
     current_exceptions(task::Task=current_task(); [backtrace::Bool=true])

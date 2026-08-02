@@ -706,4 +706,6 @@ function setindex!(x::Threads.Atomic, v)
     return @atomic x[] = v
 end
 
+@deprecate CapturedException(ex, processed_bt::Vector{Any}) CapturedException(ex, processed_bt, ExceptionStack()) false
+
 # END 1.14 deprecations
