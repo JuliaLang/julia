@@ -241,10 +241,12 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 """
     repr(x; context=nothing)
 
-Create a string representation of any value using the 2-argument `show(io, x)` function,
-which aims to produce a string that is parseable Julia code, where possible.
-i.e. `eval(Meta.parse(repr(x))) == x` should hold true.
-You should not add methods to `repr`; define a [`show`](@ref) method instead.
+Create a string representation of any value using the 2-argument `show(io, x)`
+function. You should not add methods to `repr`; define a [`show`](@ref) method
+instead.
+
+The resulting string is often parseable Julia code. See [`show`](@ref) for
+details on this (non-binding) parseability/round-trip contract and its caveats.
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
 tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
