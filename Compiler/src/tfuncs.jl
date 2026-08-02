@@ -806,6 +806,11 @@ add_tfunc(donotdelete, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->No
         return Any
     elseif setting === :blackbox
         return widenconst(val)
+    elseif setting === :escape
+        # `:escape` is a barrier on memory optimization only: it models `val` as
+        # escaping to an unknowable global memory location, without affecting
+        # any information inference derives about it.
+        return val
     else
         return Bottom
     end
@@ -814,7 +819,7 @@ add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 5)
 
 @nospecs function compilerbarrier_nothrow(setting, val)
-    return isa(setting, Const) && contains_is((:type, :const, :conditional, :blackbox), setting.val)
+    return isa(setting, Const) && contains_is((:type, :const, :conditional, :blackbox, :escape), setting.val)
 end
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
@@ -2980,6 +2985,16 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     elseif f === compilerbarrier
         length(argtypes) == 2 || return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
         setting = argtypes[1]
+        if isa(setting, Const) && setting.val === :escape
+            # `compilerbarrier(:escape, x)` models a store of `x` to an unknowable
+            # global memory location: it must not be deleted even if the result is
+            # unused, so that `x` is treated as escaped by memory optimizations.
+            return Effects(EFFECTS_TOTAL;
+                consistent = ALWAYS_FALSE,
+                effect_free = ALWAYS_FALSE,
+                inaccessiblememonly = ALWAYS_FALSE,
+                nothrow = true)
+        end
         return Effects(EFFECTS_TOTAL;
             consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
             nothrow = compilerbarrier_nothrow(setting, nothing))

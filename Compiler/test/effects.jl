@@ -1081,6 +1081,12 @@ f3_compilerbarrier(b) = Base.compilerbarrier(:blackbox, b)
 # :blackbox is not consistent (prevents CSE/constant-folding) but is nothrow
 @test !Compiler.is_consistent(Base.infer_effects(f3_compilerbarrier, (Bool,)))
 @test Compiler.is_nothrow(Base.infer_effects(f3_compilerbarrier, (Bool,)))
+f4_compilerbarrier(b) = Base.compilerbarrier(:escape, b)
+# :escape models a store to unknowable global memory: nothrow, but not
+# effect-free (must never be deleted, even if the result is unused)
+@test Compiler.is_nothrow(Base.infer_effects(f4_compilerbarrier, (Base.RefValue{Int},)))
+@test !Compiler.is_effect_free(Base.infer_effects(f4_compilerbarrier, (Base.RefValue{Int},)))
+@test !Compiler.is_removable_if_unused(Base.infer_effects(f4_compilerbarrier, (Base.RefValue{Int},)))
 
 # Optimizer-refined effects
 function f1_optrefine(b)

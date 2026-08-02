@@ -1236,6 +1236,35 @@ static const auto jl_blackbox_func = new JuliaFunction<>{
             {}); },
 };
 
+// `julia.escape` models its argument escaping to an unknowable global memory
+// location: the object must be assumed reachable (and its memory readable and
+// writable) through unknown pointers from here on, so it cannot be elided,
+// split, or moved to the stack by memory optimizations. It has no runtime
+// effect and is deleted during GC frame lowering. Note that it does not root
+// the object; lifetime must still be ensured separately (e.g. `GC.@preserve`).
+// The `inaccessiblemem: readwrite` memory effects keep LLVM from deleting the
+// otherwise-unused call while still permitting optimizations of accessible
+// memory around it; the (absent) `nocapture`/`memory(argmem: ...)` argument
+// attributes are what force alias analyses to treat the object as escaped.
+static const auto jl_escape_func = new JuliaFunction<>{
+    "julia.escape",
+    [](LLVMContext &C) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C), {T_prjlvalue}, false);
+    },
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet(),
+            {}); },
+};
+
 static const auto jl_write_barrier_func = new JuliaFunction<>{
     "julia.write_barrier",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
@@ -5431,6 +5460,31 @@ isdefined_unknown_idx:
                 // Ghost type (e.g. Nothing) — pass through
                 *ret = obj;
             }
+        } else if (setting.constant && setting.constant == (jl_value_t*)jl_symbol("escape")) {
+            const jl_cgval_t &obj = argv[2];
+            // Model the object as escaping to an unknowable global memory
+            // location, so that memory optimizations cannot elide it or move
+            // it to the stack. The value itself passes through unchanged. The
+            // intrinsic is deleted during GC frame lowering. Compile-time
+            // constants are global objects already and unboxed values without
+            // heap references have no object memory, so neither needs this.
+            // An unboxed value that does contain heap references is boxed
+            // first; the referenced objects then escape transitively through
+            // the (escaped) box.
+            bool needs_escape;
+            if (obj.constant || obj.V == nullptr)
+                needs_escape = false;
+            else if (obj.isboxed || obj.TIndex != nullptr)
+                needs_escape = true;
+            else {
+                needs_escape = !jl_is_datatype(obj.typ) || ((jl_datatype_t*)obj.typ)->layout == NULL ||
+                               ((jl_datatype_t*)obj.typ)->layout->npointers > 0;
+            }
+            if (needs_escape) {
+                Function *esc = prepare_call(jl_escape_func);
+                ctx.builder.CreateCall(esc, {boxed(ctx, obj)});
+            }
+            *ret = obj;
         } else {
             *ret = argv[2];
         }

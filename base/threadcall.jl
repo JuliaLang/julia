@@ -86,6 +86,15 @@ function do_threadcall(wrapper::F, result::Ref{T}) where {F, T}
     # pass as Ptr{Cvoid} to pass that stable address
     ctx = RefValue{Any}(wrapper)
 
+    # The worker thread accesses these buffers through raw pointers while this
+    # task is blocked in `wait` below, so they must stay at stable heap
+    # addresses: model them as escaped so memory optimizations cannot move
+    # them (e.g. to this task's stack). `roots` transitively covers the
+    # `cconvert`ed argument objects whose pointers were stored into `args_arr`.
+    compilerbarrier(:escape, args_arr)
+    compilerbarrier(:escape, ret_arr)
+    compilerbarrier(:escape, roots)
+
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)
     try

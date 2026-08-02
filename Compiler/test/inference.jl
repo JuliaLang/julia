@@ -5622,7 +5622,7 @@ end)[2] == Union{}
 # compilerbarrier builtin
 import Core: compilerbarrier
 # runtime semantics
-for setting = (:type, :const, :conditional, :blackbox)
+for setting = (:type, :const, :conditional, :blackbox, :escape)
     @test compilerbarrier(setting, 42) == 42
     @test compilerbarrier(setting, :sym) == :sym
 end
@@ -5666,6 +5666,15 @@ end |> only === Int
 @test Base.return_types() do
     compilerbarrier(:blackbox, 42)
 end |> only === Int  # must not be Const(42)
+
+# :escape is not an inference barrier at all: type and constant information
+# both flow through (it only affects memory optimization)
+@test Base.return_types((Int,)) do a
+    compilerbarrier(:escape, a)
+end |> only === Int
+@test Base.return_types() do
+    Val(compilerbarrier(:escape, 2))
+end |> only === Val{2}
 
 # https://github.com/JuliaLang/julia/issues/46426
 @noinline typebarrier() = Base.inferencebarrier(0.0)

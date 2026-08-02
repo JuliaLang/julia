@@ -1302,7 +1302,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         // Known functions emitted in codegen that are not safepoints
                         if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                             callee == gc_preserve_end_func || callee == typeof_func ||
-                            callee == blackbox_func ||
+                            callee == blackbox_func || callee == escape_func ||
                             callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                             callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                             callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
@@ -1934,8 +1934,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             }
 
             if (callee && (callee == gcroot_flush_func || callee == gc_preserve_begin_func
-                        || callee == gc_preserve_end_func)) {
-                /* No replacement */
+                        || callee == gc_preserve_end_func || callee == escape_func)) {
+                /* No replacement: `julia.escape` only exists to inform middle-end
+                   memory optimizations and has no runtime effect. */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *obj = CI->getOperand(0);
 #if JL_LLVM_VERSION >= 200000

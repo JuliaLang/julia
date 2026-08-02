@@ -4197,6 +4197,18 @@ Currently either of the following `setting`s is allowed:
   * `:blackbox`: treat the returned value as if it came from an unknowable black-box
     source, preventing common-subexpression elimination (CSE) and loop-invariant code motion on any computation that
     depends on it. See [`blackbox`](@ref) for a convenience wrapper.
+  * `:escape`: model `val` as escaping to an unknowable global memory location.
+    The compiler must then assume the object stays reachable (and its memory
+    readable and writable) through pointers it cannot see, so memory
+    optimizations cannot elide the allocation, split it into registers, or move
+    it to the stack. Unlike the other settings, this does not affect inference
+    at all: the return value keeps the full type (and constant) information of
+    `val`. Use this when the object's memory is exposed to code the compiler
+    cannot track, for example when a raw pointer obtained inside `GC.@preserve`
+    is handed to foreign code that may access it from another thread or after a
+    task switch. Note that this is a barrier on memory placement only; it does
+    not root `val`, so its lifetime must still be ensured separately (e.g. with
+    `GC.@preserve` or a `ccall` argument root).
 
 !!! note
     This function is expected to be used with `setting` known precisely at compile-time.
