@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/ADT/SCCIterator.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
@@ -2402,8 +2403,145 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
     }
 }
 
+// Select a once-executed common dominator of all frame users. Returns within
+// that region need pops, as do edges leaving it; unwind-only paths do not.
+BasicBlock *LateLowerGCFrame::FindGCFramePushBlock(State &S, SmallVectorImpl<BasicBlock *> &PopBlocks,
+        SmallVectorImpl<std::pair<BasicBlock *, BasicBlock *>> &ExitEdges)
+{
+    Function *F = S.F;
+    BasicBlock *Entry = &F->getEntryBlock();
+    auto UseEntry = [&]() {
+        PopBlocks.clear();
+        ExitEdges.clear();
+        for (auto &BB : *F)
+            if (isa<ReturnInst>(BB.getTerminator()))
+                PopBlocks.push_back(&BB);
+        return Entry;
+    };
+    // A returns-twice call hides control flow that can re-enter a popped region.
+    if (!S.ReturnsTwice.empty())
+        return UseEntry();
+    // The push loads from pgcstack, so it cannot be sunk past its definition.
+    if (auto *I = dyn_cast<Instruction>(pgcstack))
+        if (I->getParent() != Entry)
+            return UseEntry();
+    // Include safepoints with live slots and roots without liveness tracking.
+    SmallPtrSet<BasicBlock *, 16> NeedFrame;
+    bool RootsWithoutLiveness = !S.ArrayAllocas.empty() || !S.TrackedStores.empty();
+    for (auto &BB : *F) {
+        for (auto &I : BB) {
+            auto *CI = dyn_cast<CallBase>(&I);
+            Function *Callee = CI ? CI->getCalledFunction() : nullptr;
+            if (Callee && (Callee == enter_handler_func || Callee == pop_handler_func ||
+                    Callee == pop_handler_noexcept_func))
+                return UseEntry();
+        }
+        const BBState &BBS = S.BBStates[&BB];
+        if (!BBS.HasSafepoint)
+            continue;
+        bool Need = RootsWithoutLiveness;
+        for (int Safepoint = BBS.FirstSafepoint; !Need && Safepoint >= BBS.LastSafepoint; --Safepoint)
+            Need = !S.LiveSets[Safepoint].empty();
+        if (!Need) {
+            LargeSparseBitVector LiveIn;
+            AddInPredecessorLiveOuts(&BB, LiveIn, S);
+            Need = !LiveIn.empty();
+        }
+        if (Need)
+            NeedFrame.insert(&BB);
+    }
+    // Follow derived slot addresses. PHIs need incoming blocks for dominance
+    // and their own blocks and users for lifetime coverage.
+    SmallPtrSet<Value *, 16> SeenSlotPointers;
+    SmallVector<Value *, 16> SlotPointers;
+    for (auto &AI : S.ArrayAllocas)
+        SlotPointers.push_back(AI.first);
+    while (!SlotPointers.empty()) {
+        Value *Root = SlotPointers.pop_back_val();
+        if (!SeenSlotPointers.insert(Root).second)
+            continue;
+        for (Use &U : Root->uses()) {
+            auto *I = cast<Instruction>(U.getUser());
+            if (isa<DbgInfoIntrinsic>(I))
+                continue;
+            if (auto *II = dyn_cast<IntrinsicInst>(I)) {
+                if (II->getIntrinsicID() == Intrinsic::lifetime_start ||
+                        II->getIntrinsicID() == Intrinsic::lifetime_end)
+                    continue;
+            }
+            if (auto *Phi = dyn_cast<PHINode>(I)) {
+                NeedFrame.insert(Phi->getIncomingBlock(U));
+                NeedFrame.insert(Phi->getParent());
+            }
+            else {
+                NeedFrame.insert(I->getParent());
+            }
+            if (isa<GetElementPtrInst>(I) || isa<BitCastInst>(I) ||
+                    isa<AddrSpaceCastInst>(I) || isa<PHINode>(I) ||
+                    isa<SelectInst>(I) || isa<FreezeInst>(I))
+                SlotPointers.push_back(I);
+        }
+    }
+    for (auto &Store : S.TrackedStores)
+        NeedFrame.insert(Store.first->getParent());
+    if (NeedFrame.empty())
+        return UseEntry();
+    if (!S.DT)
+        S.DT = &GetDT();
+    DominatorTree &DT = *S.DT;
+    BasicBlock *BB = nullptr;
+    for (BasicBlock *NB : NeedFrame) {
+        if (!DT.isReachableFromEntry(NB))
+            continue; // everything dominates unreachable code
+        BB = BB ? DT.findNearestCommonDominator(BB, NB) : NB;
+    }
+    if (!BB || BB == Entry)
+        return UseEntry();
+    SmallPtrSet<BasicBlock *, 16> CyclicBlocks;
+    for (auto I = scc_begin(F); !I.isAtEnd(); ++I) {
+        if (!I.hasCycle())
+            continue;
+        for (BasicBlock *CycleBB : *I)
+            CyclicBlocks.insert(CycleBB);
+    }
+    // A repeated push would self-link the shadow stack. SCCs include
+    // irreducible cycles that LoopInfo may miss.
+    while (BB != Entry) {
+        bool OK = !CyclicBlocks.contains(BB) && BB->getFirstInsertionPt() != BB->end();
+        if (OK) {
+            // Deduplicate exit edges because switch successors can repeat.
+            PopBlocks.clear();
+            ExitEdges.clear();
+            SmallSet<std::pair<BasicBlock *, BasicBlock *>, 8> SeenEdges;
+            for (auto &Cur : *F) {
+                if (!DT.isReachableFromEntry(&Cur) || !DT.dominates(BB, &Cur))
+                    continue;
+                if (isa<ReturnInst>(Cur.getTerminator()))
+                    PopBlocks.push_back(&Cur);
+                for (BasicBlock *Succ : successors(&Cur)) {
+                    if (DT.dominates(BB, Succ))
+                        continue;
+                    if (!isa<BranchInst>(Cur.getTerminator()) && !isa<SwitchInst>(Cur.getTerminator())) {
+                        // This edge type cannot be split (e.g. indirectbr or callbr).
+                        OK = false;
+                        break;
+                    }
+                    if (SeenEdges.insert({&Cur, Succ}).second)
+                        ExitEdges.push_back({&Cur, Succ});
+                }
+                if (!OK)
+                    break;
+            }
+            if (OK)
+                return BB;
+        }
+        BB = DT.getNode(BB)->getIDom()->getBlock();
+    }
+    return UseEntry();
+}
+
 void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S,
-                                                std::map<Value *, std::pair<int, int>>) {
+                                                std::map<Value *, std::pair<int, int>>, bool *CFGModified) {
     auto F = S.F;
     auto T_int32 = Type::getInt32Ty(F->getContext());
     int MaxColor = -1;
@@ -2413,21 +2551,6 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
 
     // Insert instructions for the actual gc frame
     if (MaxColor != -1 || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
-        // Create and push a GC frame.
-        auto gcframe = CallInst::Create(
-            getOrDeclare(jl_intrinsics::newGCFrame),
-            {ConstantInt::get(T_int32, 0)},
-            "gcframe");
-        gcframe->insertBefore(F->getEntryBlock().begin());
-
-        auto pushGcframe = CallInst::Create(
-            getOrDeclare(jl_intrinsics::pushGCFrame),
-            {gcframe, ConstantInt::get(T_int32, 0)});
-        if (isa<Argument>(pgcstack))
-             pushGcframe->insertAfter(gcframe);
-         else
-             pushGcframe->insertAfter(cast<Instruction>(pgcstack));
-
         // we don't run memsetopt after this, so run a basic approximation of it
         // that removes any redundant memset calls in the prologue since getGCFrameSlot already includes the null store
         Instruction *toerase = nullptr;
@@ -2464,6 +2587,29 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
         if (toerase)
             toerase->eraseFromParent();
         toerase = nullptr;
+
+        // Create and push a GC frame.
+        SmallVector<BasicBlock *, 0> PopBlocks;
+        SmallVector<std::pair<BasicBlock *, BasicBlock *>, 0> ExitEdges;
+        BasicBlock *PushBB = FindGCFramePushBlock(S, PopBlocks, ExitEdges);
+        auto gcframe = CallInst::Create(
+            getOrDeclare(jl_intrinsics::newGCFrame),
+            {ConstantInt::get(T_int32, 0)},
+            "gcframe");
+        auto pushGcframe = CallInst::Create(
+            getOrDeclare(jl_intrinsics::pushGCFrame),
+            {gcframe, ConstantInt::get(T_int32, 0)});
+        if (PushBB != &F->getEntryBlock()) {
+            gcframe->insertBefore(PushBB->getFirstInsertionPt());
+            pushGcframe->insertAfter(gcframe);
+        }
+        else {
+            gcframe->insertBefore(F->getEntryBlock().begin());
+            if (isa<Argument>(pgcstack))
+                pushGcframe->insertAfter(gcframe);
+            else
+                pushGcframe->insertAfter(cast<Instruction>(pgcstack));
+        }
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
@@ -2532,18 +2678,30 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
 
         // Insert GC frame stores
         PlaceGCFrameStores(S, AllocaSlot - 2, Colors, PreAssignedColors, gcframe);
-        // Insert GCFrame pops
-        for (auto &BB : *F) {
-            if (isa<ReturnInst>(BB.getTerminator())) {
-                auto popGcframe = CallInst::Create(
-                    getOrDeclare(jl_intrinsics::popGCFrame),
-                    {gcframe});
+        // Pop returns in the region and each distinct outgoing edge.
+        for (BasicBlock *BB : PopBlocks) {
+            auto popGcframe = CallInst::Create(
+                getOrDeclare(jl_intrinsics::popGCFrame),
+                {gcframe});
 #if JL_LLVM_VERSION >= 200000
-                popGcframe->insertBefore(BB.getTerminator()->getIterator());
+            popGcframe->insertBefore(BB->getTerminator()->getIterator());
 #else
-                popGcframe->insertBefore(BB.getTerminator());
+            popGcframe->insertBefore(BB->getTerminator());
 #endif
-            }
+        }
+        for (auto &Edge : ExitEdges) {
+            assert(S.DT);
+            BasicBlock *Split = SplitEdge(Edge.first, Edge.second, S.DT);
+            auto popGcframe = CallInst::Create(
+                getOrDeclare(jl_intrinsics::popGCFrame),
+                {gcframe});
+#if JL_LLVM_VERSION >= 200000
+            popGcframe->insertBefore(Split->getTerminator()->getIterator());
+#else
+            popGcframe->insertBefore(Split->getTerminator());
+#endif
+            if (CFGModified)
+                *CFGModified = true;
         }
     }
 }
@@ -2600,7 +2758,7 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
         ComputeLiveness(S);
         auto Colors = ColorRoots(S);
         std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
-        PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
+        PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames, CFGModified);
       }
       CleanupIR(F, &S, CFGModified);
     }

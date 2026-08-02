@@ -11,6 +11,11 @@ declare void @jl_safepoint()
 declare {} addrspace(10)* @jl_apply_generic({} addrspace(10)*, {} addrspace(10)**, i32)
 declare noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}**, i64, {} addrspace(10)*)
 declare i32 @rooting_callee({} addrspace(12)*, {} addrspace(12)*)
+declare void @llvm.lifetime.start.p0(i64 immarg, ptr nocapture)
+declare void @llvm.lifetime.end.p0(i64 immarg, ptr nocapture)
+declare void @ijl_enter_handler(ptr, ptr)
+declare void @ijl_pop_handler(ptr, i32)
+declare void @ijl_pop_handler_noexcept(ptr, i32)
 
 define void @gc_frame_lowering(i64 %a, i64 %b) {
 top:
@@ -212,6 +217,171 @@ define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
   ret ptr addrspace(10) null
 }
 
+
+; The gc frame setup should be sunk into the cold block when the fast path
+; needs no rooting, and the fast-path return then needs no pop.
+define i64 @sunk_gcframe(i64 %a) {
+; CHECK-LABEL: @sunk_gcframe
+top:
+; CHECK: top:
+; CHECK-NOT: @julia.new_gc_frame
+; CHECK-NOT: @julia.push_gc_frame
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %cmp = icmp sgt i64 %a, 0
+  br i1 %cmp, label %fast, label %cold
+fast:
+; CHECK: fast:
+; CHECK-NOT: @julia.pop_gc_frame
+  %r = add i64 %a, 1
+  ret i64 %r
+cold:
+; CHECK: cold:
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+; CHECK-NEXT: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+; CHECK: @jl_box_int64
+  %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+  call void @jl_safepoint()
+  call void @boxed_simple({} addrspace(10)* %aboxed, {} addrspace(10)* %aboxed)
+  unreachable
+}
+
+; A cold path that rejoins the fast path: the frame should be pushed only in
+; the cold block and popped once on the split edge back to the join block.
+define i64 @sunk_gcframe_rejoin(i64 %a) {
+; CHECK-LABEL: @sunk_gcframe_rejoin
+top:
+; CHECK: top:
+; CHECK-NOT: @julia.new_gc_frame
+; CHECK-NOT: @julia.push_gc_frame
+; CHECK-NOT: @julia.pop_gc_frame
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %cmp = icmp sgt i64 %a, 0
+  br i1 %cmp, label %join, label %cold
+cold:
+; CHECK: cold:
+; CHECK: call ptr @julia.new_gc_frame(i32 1)
+; CHECK: call void @julia.push_gc_frame(ptr %{{.*}}, i32 1)
+; CHECK: @jl_box_int64
+  %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+  call void @jl_safepoint()
+  call void @boxed_simple({} addrspace(10)* %aboxed, {} addrspace(10)* %aboxed)
+  br label %join
+; CHECK: call void @julia.pop_gc_frame
+; CHECK-NOT: @julia.pop_gc_frame
+join:
+; CHECK: ret i64
+  %r = add i64 %a, 1
+  ret i64 %r
+}
+
+; Ignore disposable lifetime markers when finding alloca-root users.
+define ptr addrspace(10) @sunk_gcframe_alloca_lifetime(ptr addrspace(10) %input, i64 %a) {
+; CHECK-LABEL: @sunk_gcframe_alloca_lifetime
+top:
+; CHECK: top:
+; CHECK-NOT: @julia.new_gc_frame
+; CHECK-NOT: @julia.push_gc_frame
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %root = alloca ptr addrspace(10), align 8
+  call void @llvm.lifetime.start.p0(i64 8, ptr %root)
+  %cmp = icmp sgt i64 %a, 0
+  br i1 %cmp, label %fast, label %cold
+
+fast:
+; CHECK: fast:
+; CHECK-NOT: @julia.pop_gc_frame
+; CHECK-NOT: @llvm.lifetime
+; CHECK: ret ptr addrspace(10)
+  call void @llvm.lifetime.end.p0(i64 8, ptr %root)
+  ret ptr addrspace(10) %input
+
+cold:
+; CHECK: cold:
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  store ptr addrspace(10) %input, ptr %root, align 8
+  call void @jl_safepoint()
+  %value = load ptr addrspace(10), ptr %root, align 8
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+; CHECK-NOT: @llvm.lifetime
+; CHECK: ret ptr addrspace(10)
+  call void @llvm.lifetime.end.p0(i64 8, ptr %root)
+  ret ptr addrspace(10) %value
+}
+
+; Handler state restoration requires the frame to remain in the entry block.
+define void @gcframe_enter_handler(ptr %task, ptr %handler, i64 %a) {
+; CHECK-LABEL: @gcframe_enter_handler
+top:
+; CHECK: top:
+; CHECK-NEXT: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call ptr @julia.get_pgcstack()
+  call void @ijl_enter_handler(ptr %task, ptr %handler)
+  br label %cold
+cold:
+  %boxed = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  call void @jl_safepoint()
+  call void @boxed_simple(ptr addrspace(10) %boxed, ptr addrspace(10) %boxed)
+  unreachable
+}
+
+define void @gcframe_pop_handler(ptr %task, i64 %a) {
+; CHECK-LABEL: @gcframe_pop_handler
+top:
+; CHECK: top:
+; CHECK-NEXT: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call ptr @julia.get_pgcstack()
+  call void @ijl_pop_handler(ptr %task, i32 1)
+  br label %cold
+cold:
+  %boxed = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  call void @jl_safepoint()
+  call void @boxed_simple(ptr addrspace(10) %boxed, ptr addrspace(10) %boxed)
+  unreachable
+}
+
+define void @gcframe_pop_handler_noexcept(ptr %task, i64 %a) {
+; CHECK-LABEL: @gcframe_pop_handler_noexcept
+top:
+; CHECK: top:
+; CHECK-NEXT: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call ptr @julia.get_pgcstack()
+  call void @ijl_pop_handler_noexcept(ptr %task, i32 1)
+  br label %cold
+cold:
+  %boxed = call ptr addrspace(10) @jl_box_int64(i64 %a)
+  call void @jl_safepoint()
+  call void @boxed_simple(ptr addrspace(10) %boxed, ptr addrspace(10) %boxed)
+  unreachable
+}
+
+; Keep a rooting alloca live when its derived pointer crosses a rejoin phi.
+define ptr addrspace(10) @gcframe_slot_phi(ptr addrspace(10) %input, ptr addrspace(11) %fallback, i1 %cond) {
+; CHECK-LABEL: @gcframe_slot_phi
+top:
+; CHECK: top:
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call ptr @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %root = alloca ptr addrspace(10), align 8
+  br i1 %cond, label %cold, label %merge
+
+cold:
+  store ptr addrspace(10) %input, ptr %root, align 8
+  %root.loaded = addrspacecast ptr %root to ptr addrspace(11)
+  call void @jl_safepoint()
+  br label %merge
+
+merge:
+; CHECK: merge:
+  %slot = phi ptr addrspace(11) [ %root.loaded, %cold ], [ %fallback, %top ]
+; CHECK: %value = load ptr addrspace(10), ptr addrspace(11) %slot
+  %value = load ptr addrspace(10), ptr addrspace(11) %slot
+; CHECK-NEXT: call void @julia.pop_gc_frame(ptr %gcframe)
+; CHECK-NEXT: ret ptr addrspace(10) %value
+  ret ptr addrspace(10) %value
+}
 
 !0 = !{i64 0, i64 23}
 !1 = !{!1}

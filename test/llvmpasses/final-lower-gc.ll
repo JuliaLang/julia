@@ -22,6 +22,7 @@ define void @gc_frame_lowering(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @gc_frame_lowering
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 4
+; OPAQUE-NEXT: call void @llvm.lifetime.start{{.*}}%gcframe
   %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
 ; OPAQUE: [[GCFRAME_SLOT:%.*]] = call ptr @julia.get_pgcstack()
   %pgcstack = call {}*** @julia.get_pgcstack()
@@ -47,9 +48,35 @@ top:
 ; OPAQUE-NEXT: [[PREV_GCFRAME_PTR3:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 1
 ; OPAQUE-NEXT: [[PREV_GCFRAME_PTR4:%.*]] = load ptr addrspace(10), ptr [[PREV_GCFRAME_PTR3]], align 8, !tbaa !0
 ; OPAQUE-NEXT: store ptr addrspace(10) [[PREV_GCFRAME_PTR4]], ptr [[GCFRAME_SLOT]], align 8, !tbaa !0
+; OPAQUE-NEXT: call void @llvm.lifetime.end{{.*}}%gcframe
   call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
 ; CHECK-NEXT: ret void
   ret void
+}
+
+; Lowering lifetime.end must not depend on the function's block order.
+define void @gc_frame_block_order() {
+top:
+; CHECK-LABEL: @gc_frame_block_order
+; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  br label %cold
+
+pop:
+; OPAQUE: pop:
+; OPAQUE: call void @llvm.lifetime.end{{.*}}%gcframe
+  call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
+  br label %exit
+
+exit:
+  ret void
+
+cold:
+; OPAQUE: cold:
+; OPAQUE: call void @llvm.lifetime.start{{.*}}%gcframe
+  %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 1)
+  call void @julia.push_gc_frame({} addrspace(10)** %gcframe, i32 1)
+  br label %pop
 }
 
 define {} addrspace(10)* @gc_alloc_lowering() {

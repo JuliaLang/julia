@@ -16,15 +16,17 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     assert(target->arg_size() == 1);
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(0))->getLimitedValue(INT_MAX);
 
-    // Create the GC frame.
+    // Keep the backing allocation static even if the intrinsic was sunk.
     IRBuilder<> builder(target);
-    auto gcframe_alloca = builder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
+    IRBuilder<> entry_builder(&F.getEntryBlock(), F.getEntryBlock().begin());
+    auto gcframe_alloca = entry_builder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
     gcframe_alloca->setAlignment(Align(16));
     // addrspacecast as needed for non-0 alloca addrspace
     auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, PointerType::getUnqual(T_prjlvalue->getContext())));
     gcframe->takeName(target);
 
-    // Zero out the GC frame.
+    // Start its lifetime at setup so unused paths can share the stack storage.
+    builder.CreateLifetimeStart(gcframe_alloca);
     auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
     auto memset_instr = builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16));
     memset_instr->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -77,6 +79,9 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
         pgcstack,
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
+    // End the lifetime after unlinking if this is a lowered frame alloca.
+    if (auto *AI = dyn_cast<AllocaInst>(gcframe->stripPointerCasts()))
+        builder.CreateLifetimeEnd(AI);
     target->eraseFromParent();
 }
 
@@ -143,6 +148,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     pgcstack = getPGCstack(F);
 
     auto gc_alloc_bytes = getOrNull(jl_intrinsics::GCAllocBytes);
+    auto new_gc_frame = getOrNull(jl_intrinsics::newGCFrame);
     SmallVector<CallInst*, 0> write_barriers;
     SmallVector<CallInst*, 0> alloc_bytes;
 
@@ -201,6 +207,18 @@ bool FinalLowerGC::runOnFunction(Function &F)
         }
     }
 
+    // Block layout may place a pop before its sunk allocation. Lower
+    // allocations first so pop lowering can find the backing alloca.
+    if (new_gc_frame) {
+        for (auto &BB : F) {
+            for (auto &I : make_early_inc_range(BB)) {
+                auto *CI = dyn_cast<CallInst>(&I);
+                if (CI && CI->getCalledOperand() == new_gc_frame)
+                    lowerNewGCFrame(CI, F);
+            }
+        }
+    }
+
     // Lower all calls to supported intrinsics.
     for (auto &BB : F) {
         for (auto &I : make_early_inc_range(BB)) {
@@ -219,7 +237,6 @@ bool FinalLowerGC::runOnFunction(Function &F)
                 } \
             } while (0)
 
-            LOWER_INTRINSIC(newGCFrame, lowerNewGCFrame);
             LOWER_INTRINSIC(getGCFrameSlot, lowerGetGCFrameSlot);
             LOWER_INTRINSIC(pushGCFrame, lowerPushGCFrame);
             LOWER_INTRINSIC(popGCFrame, lowerPopGCFrame);
