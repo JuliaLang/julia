@@ -1474,6 +1474,27 @@ for i in 1:100
     @test_spill_n 10 int32args float32args
 end
 
+# cfunction on non-function singleton
+struct CallableSingleton
+end
+(::CallableSingleton)(x, y) = x + y
+@test ccall(@cfunction(CallableSingleton(), Int, (Int, Int)),
+            Int, (Int, Int), 1, 2) === 3
+
+global fn45187() = nothing
+
+@test_throws(TypeError, @eval ccall(nothing, Cvoid, ()))
+@test_throws(TypeError, @eval ccall(49142, Cvoid, ()))
+@test_throws(TypeError, @eval ccall((:fn, fn45187), Cvoid, ()))
+
+# 19805
+mutable struct callinfos_19805{FUNC_FT<:Function}
+    f :: FUNC_FT
+end
+
+evalf_callback_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = ci.f(0.5)::Float64
+
+if !(@isdefined TESTING_JULIALOWERING)
 # issue #20835
 @test_throws(ErrorException("could not evaluate ccall argument type (it might depend on a local variable)"),
              eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
@@ -1516,12 +1537,6 @@ end
 @test_throws(ErrorException("ccall return type struct fields cannot contain a reference"),
              @eval ccall(:fn, typeof(Ref("")), ()))
 
-fn45187() = nothing
-
-@test_throws(TypeError, @eval ccall(nothing, Cvoid, ()))
-@test_throws(TypeError, @eval ccall(49142, Cvoid, ()))
-@test_throws(TypeError, @eval ccall((:fn, fn45187), Cvoid, ()))
-
 # test for malformed syntax errors
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
@@ -1544,20 +1559,6 @@ fn45187() = nothing
 @test_throws TypeError eval(:(f() = ccall((1 + 2,), A, (), )))
 @test_throws TypeError eval(:(f() = ccall((:a, 1 + 2), A, (), )))
 @test_throws TypeError eval(:(ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,), x % UInt8)))
-
-# cfunction on non-function singleton
-struct CallableSingleton
-end
-(::CallableSingleton)(x, y) = x + y
-@test ccall(@cfunction(CallableSingleton(), Int, (Int, Int)),
-            Int, (Int, Int), 1, 2) === 3
-
-# 19805
-mutable struct callinfos_19805{FUNC_FT<:Function}
-    f :: FUNC_FT
-end
-
-evalf_callback_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = ci.f(0.5)::Float64
 
 @test_throws(ErrorException("cfunction method definition: argument 1 type doesn't correspond to a C type"),
              @eval evalf_callback_c_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} =
@@ -1585,6 +1586,8 @@ evalf_callback_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = ci.f(0.5)::
              @eval @cfunction(+, Ptr, (Int, Int)))
 @test_throws(ErrorException("cfunction return type struct fields cannot contain a reference"),
              @eval @cfunction(+, typeof(Ref("")), ()))
+
+end # exclude JuliaLowering
 
 # test Ref{abstract_type} calling parameter passes a heap box
 abstract type Abstract22734 end
