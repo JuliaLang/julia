@@ -2174,7 +2174,7 @@ end
             cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
                         "JULIA_LOAD_PATH" => dir,
                         "JULIA_DEPOT_PATH" => depot_path,
-                        "JULIA_DEBUG" => "require")
+                        "JULIA_DEBUG" => "loading")
 
             out = Base.PipeEndpoint()
             log = @async read(out, String)
@@ -2495,7 +2495,7 @@ end
     tmpdir = mktempdir()
     try
         script = "Base.require_stdlib(Base.PkgId(Base.UUID(\"2a0f44e3-6c83-55bd-87e4-b1978d98bd5f\"), \"Base64\")); println(\"SUCCESS\")"
-        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "require")
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "loading")
         out = PipeBuffer()
         run(pipeline(cmd, stdout=out, stderr=out))
         output = read(out, String)

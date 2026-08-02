@@ -1505,7 +1505,7 @@ with all existing methods.
 function drop_all_caches()
     ccall(:jl_drop_all_caches, Cvoid, ())
 
-    # Reset require.jl world age so that loading code is regenerated
+    # Reset loading.jl world age so that loading code is regenerated
     _require_world_age[] = typemax(UInt)
 
     # Call Base.Compiler.activate!() after dropping caching to activate coverage of the Compiler code itself

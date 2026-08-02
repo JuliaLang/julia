@@ -293,8 +293,8 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml/toml.jl")
 include("linking.jl")
+include("environment_parsing.jl")
 include("loading.jl")
-include("require.jl")
 include("package.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
