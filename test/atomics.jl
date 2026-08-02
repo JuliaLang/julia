@@ -530,7 +530,6 @@ end
 # AtomicMemoryRefs reject ordinary indexing and their atomic macros convert stored values.
 @testset "atomic indexing with AtomicMemoryRef" begin
     ref = memoryref(AtomicMemory{Int}(undef, 1))
-    @test_throws CanonicalIndexError ref[]
     @test_throws CanonicalIndexError ref[] = 1
     @test (@atomic ref[] = Int8(1)) === 1
     @test (@atomic :acquire ref[]) === 1

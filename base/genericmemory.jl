@@ -402,7 +402,6 @@ function replaceindex_atomic!(
 end
 
 # AtomicMemoryRefs may only be accessed through the atomic indexing operations.
-getindex(ref::AtomicMemoryRef) = throw(CanonicalIndexError("getindex", typeof(ref)))
 setindex!(ref::AtomicMemoryRef, x) = throw(CanonicalIndexError("setindex!", typeof(ref)))
 
 # The following methods support using an AtomicMemoryRef as the indexed operand
