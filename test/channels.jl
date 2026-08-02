@@ -636,7 +636,7 @@ end
     @test wait(t) === nothing
     waiter = @task wait(t)
     yield(waiter)
-    @test timedwait(() -> waiter.queue === t.cond.waitq, 10) === :ok
+    @test timedwait(() -> !isempty(t.cond.waitq) && first(t.cond.waitq).task === waiter, 10) === :ok
     close(t)
     @test_throws TaskFailedException wait(waiter)
     @test waiter.result isa EOFError
