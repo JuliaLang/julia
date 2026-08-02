@@ -1079,8 +1079,11 @@ static void ios_ensureroom(ios_t *s, size_t newsize) JL_NOTSAFEPOINT
 {
     size_t prevsize = s->size;
     if (prevsize < newsize) {
-        ios_trunc(s, newsize);
-        assert(s->size == newsize);
+        if (ios_trunc(s, newsize) != 0 || s->size != newsize) {
+            // writing past the un-grown buffer would silently corrupt the image
+            jl_safe_printf("FATAL ERROR: failed to allocate memory for image serialization\n");
+            abort();
+        }
         memset(&s->buf[prevsize], 0, newsize - prevsize);
     }
 }
@@ -4420,8 +4423,22 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     if (verify_fail)
         return verify_fail;
 
-    assert(datastartpos > 0 && datastartpos < dataendpos);
+    if (!(datastartpos > 0 && datastartpos < dataendpos)) {
+        // e.g. a header-only pkgimage stub `.ji`, whose serialized data lives only in the
+        // corresponding shared library
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Cache file for %s contains no serialized data.", pkgname);
+    }
     needs_permalloc = jl_options.permalloc_pkgimg || needs_permalloc;
+
+    // If this exact buffer was already restored in this session (e.g. dlopen of an
+    // already-loaded pkgimage returns the existing mapping), its serialized data has
+    // already been relocated in place; deserializing it again would misread the
+    // relocated pointers as relocation ids and crash.
+    if (!needs_permalloc && eyt_tree_is_in_range(&image_tree, (uintptr_t)(f->buf + datastartpos))) {
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Package image for %s has already been loaded in this session; it cannot be restored again.", pkgname);
+    }
 
     jl_value_t *restored = NULL;
     jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *method_roots_list = NULL;
@@ -4562,6 +4579,25 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 {
     void *pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
+
+    // If this exact mapping was already restored in this session (dlopen of an
+    // already-loaded pkgimage returns the existing mapping, whose serialized data has
+    // already been relocated in place), reject it up front, before jl_load_pkgimg
+    // allocates image metadata that would be leaked and before deserialization would
+    // misread the relocated pointers as relocation ids and crash.
+    {
+        ios_t header_io;
+        ios_static_buffer(&header_io, (char*)buf.data, buf.size);
+        uint8_t pkgimage = 0;
+        int64_t dataendpos = 0, datastartpos = 0;
+        jl_read_verify_header(&header_io, &pkgimage, &dataendpos, &datastartpos);
+        ios_close(&header_io);
+        if (datastartpos > 0 && (size_t)datastartpos < buf.size &&
+            eyt_tree_is_in_range(&image_tree, (uintptr_t)buf.data + (size_t)datastartpos)) {
+            return jl_get_exceptionf(jl_errorexception_type,
+                "Package image for %s has already been loaded in this session; it cannot be restored again.", pkgname);
+        }
+    }
 
     jl_gc_notify_image_load(buf.data, buf.size);
 

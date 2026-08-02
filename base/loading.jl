@@ -1390,20 +1390,20 @@ function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT
     if length(paths) > 1
         function sort_by(path)
             # when using pkgimages, consider those cache files first
-            pkgimage = if JLOptions().use_pkgimages != 0
-                io = open(path, "r")
+            pkgimage = false
+            if JLOptions().use_pkgimages != 0
                 try
-                    if iszero(isvalid_cache_header(io))
-                        false
-                    else
-                        _, _, _, _, _, _, flags = parse_cache_header(io, path)
-                        CacheFlags(flags).use_pkgimages
+                    open(path, "r") do io
+                        if !iszero(isvalid_cache_header(io))
+                            # the flags byte immediately follows the cache header
+                            pkgimage = CacheFlags(read(io, UInt8)).use_pkgimages
+                        end
                     end
-                finally
-                    close(io)
+                catch ex
+                    # an unreadable or truncated candidate must not abort the search over
+                    # the other candidates; stale_cachefile will reject it later
+                    ex isa InterruptException && rethrow()
                 end
-            else
-                false
             end
             (; pkgimage, mtime=mtime(path))
         end
@@ -1958,6 +1958,8 @@ function parse_image_target(io::IO)
 end
 
 function parse_image_targets(targets::Vector{UInt8})
+    # caches built without native code record an empty clone-targets blob
+    isempty(targets) && return ImageTarget[]
     io = IOBuffer(targets)
     ntargets = read(io, Int32)
     targets = Vector{ImageTarget}(undef, ntargets)
@@ -2090,11 +2092,11 @@ function isrelocatable(pkg::PkgId)
     isnothing(path) && return false
     io = open(path, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $path."))
         _, (includes, includes_srcfiles, _), _... = _parse_cache_header(io, path)
         for inc in includes
             !startswith(inc.filename, "@depot") && return false
-            if inc ∉ includes_srcfiles
+            if inc.filename ∉ includes_srcfiles
                 # its an include_dependency
                 track_content = inc.mtime == -1.0
                 track_content || return false
@@ -2110,11 +2112,11 @@ function parse_cache_buildid(cachepath::String)
     f = open(cachepath, "r")
     try
         checksum = isvalid_cache_header(f)
-        iszero(checksum) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        iszero(checksum) && throw(ArgumentError("Incompatible header in cache file $cachepath."))
         flags = read(f, UInt8)
         syntax_version = read(f, UInt8)
         n = read(f, Int32)
-        n == 0 && error("no module defined in $cachefile")
+        n == 0 && error("no module defined in $cachepath")
         skip(f, n) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
         build_id = (UInt128(checksum) << 64) | read(f, UInt64)
@@ -3668,8 +3670,8 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
                     evicted_cachefile = joinpath(cachepath, cachefiles[idx])
                     @debug "Evicting file from cache" evicted_cachefile
-                    rm(evicted_cachefile; force=true)
                     try
+                        rm(evicted_cachefile; force=true)
                         rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
                         @static if Sys.isapple()
                             rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
@@ -4326,6 +4328,7 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :source_path_changed     => :actionable  => "different source file path",
     :dep_identity_changed    => :actionable  => "dependency identifier changed",
     :checksum_invalid        => :actionable  => "cache file checksum is invalid",
+    :malformed_cache         => :actionable  => "cache file contents are malformed or truncated",
     :ocache_checksum_invalid => :actionable  => "native code cache checksum is invalid",
     :preferences_changed     => :actionable  => "package preferences changed",
     :incompatible_header     => :wrong_julia => "incompatible cache header",
@@ -4672,6 +4675,15 @@ end
         end
 
         return depmods, ocachefile, id_build # fresh cachefile
+    catch ex
+        # a cache file with a valid header but truncated or otherwise malformed contents
+        # (e.g. from a process killed mid-write) can throw from anywhere in the validation
+        # above; it must be treated as stale so that recompilation replaces it, rather than
+        # the exception escaping and making the package unloadable
+        ex isa InterruptException && rethrow()
+        @debug "Rejecting cache file $cachefile due to malformed or truncated contents" exception=(ex, catch_backtrace())
+        record_reason(reasons, :malformed_cache)
+        return true
     finally
         close(io)
     end
