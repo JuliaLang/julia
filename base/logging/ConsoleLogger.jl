@@ -124,9 +124,13 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # split into lines.  This is specialised to improve type inference,
     # and reduce the risk of resulting method invalidations.
     message = string(message)
-    msglines = if Base._isannotated(message) && !isempty(Base.annotations(message)::Vector{Base.RegionAnnotation})
-        message = Base.AnnotatedString(String(message)::String, Base.annotations(message)::Vector{Base.RegionAnnotation})
-        @NamedTuple{indent::Int, msg::Union{SubString{Base.AnnotatedString{String}}, SubString{String}}}[
+    msglines = if Base._isannotated(message)
+        # REVIEW: Can we support `AnnotatedString`s value type parameter better?
+        message = Base.AnnotatedString(
+            String(message)::String,
+            Vector{Base.RegionAnnotation{Any}}(Base.annotations(message)
+        )::Vector{Base.RegionAnnotation{Any}})::Base.AnnotatedString{String, Any}
+        @NamedTuple{indent::Int, msg::Union{SubString{Base.AnnotatedString{String, Any}}, SubString{String}}}[
             (indent=0, msg=l) for l in split(chomp(message), '\n')]
     else
         [(indent=0, msg=l) for l in split(
