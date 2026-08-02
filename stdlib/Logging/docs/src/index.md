@@ -186,21 +186,21 @@ pattern match against the log event stream.
 
 Message filtering can be influenced through the [`JULIA_DEBUG`](@ref JULIA_DEBUG) environment
 variable, and serves as an easy way to enable debug logging for a file or
-module. Loading julia with `JULIA_DEBUG=require` will activate
-`@debug` log messages in `require.jl`. For example, in Linux shells:
+module. Loading julia with `JULIA_DEBUG=loading` will activate
+`@debug` log messages in `loading.jl`. For example, in Linux shells:
 
 ```
-$ JULIA_DEBUG=require julia -e 'using OhMyREPL'
+$ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
 ┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji due to it containing an incompatible cache header
-└ @ Base require.jl:1328
+└ @ Base loading.jl:1328
 [ Info: Recompiling stale cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji for module OhMyREPL
 ┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/Tokenize.ji due to it containing an incompatible cache header
-└ @ Base require.jl:1328
+└ @ Base loading.jl:1328
 ...
 ```
 
-On windows, the same can be achieved in `CMD` via first running `set JULIA_DEBUG="require"` and in `Powershell` via
-`$env:JULIA_DEBUG="require"`.
+On windows, the same can be achieved in `CMD` via first running `set JULIA_DEBUG="loading"` and in `Powershell` via
+`$env:JULIA_DEBUG="loading"`.
 
 Similarly, the environment variable can be used to enable debug logging of
 modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To
@@ -225,7 +225,7 @@ julia> foo()
 ```
 
 Use a comma separator to enable debug for multiple
-modules: `JULIA_DEBUG=require,Main`.
+modules: `JULIA_DEBUG=loading,Main`.
 
 ## Examples
 
