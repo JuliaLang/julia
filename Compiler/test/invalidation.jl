@@ -349,12 +349,15 @@ end
     """
 
     io = Pipe()
-    # Run the test in a subprocess because Base.drop_all_caches() is extreme
-    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --trace-compile=stderr -e "$script"`, stderr=io))
+    # Run the test in a subprocess because Base.drop_all_caches() is extreme.
+    # Drain stderr concurrently: the trace-compile output can exceed the pipe
+    # buffer, and the child blocks in its atexit uv loop until it is read.
+    result = run(pipeline(`$(Base.julia_cmd()[1]) --startup-file=no --trace-compile=stderr -e "$script"`, stderr=io), wait=false)
     close(io.in)
-    err = read(io, String)
-    # println(err)
+    reader = @async read(io, String)
     @test success(result)
+    err = fetch(reader)::String
+    # println(err)
     err_before, err_after = split(err, "==DROPPING ALL CACHES==")
     @test occursin("SUCCESS: drop_all_caches test passed", err_after)
     @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int})", err_before)
