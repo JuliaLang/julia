@@ -595,6 +595,46 @@ let a = []
     @test timedwait(() -> a == [1], 10) === :ok
 end
 
+# Timer callback with spawn=false should make the task sticky.
+let tp = Channel{Bool}(0)
+    # Running test in a spawned task to avoid making the current task sticky.
+    fetch(Threads.@spawn begin
+        t = Timer(0.01, interval = 0, spawn = false) do _
+            put!(tp, Threads.current_task().sticky)
+        end
+        @test take!(tp) # Should be last to be propagated to parent task.
+    end)
+end
+
+# Timer callback with threadpool specification
+let tp = Channel{Symbol}(0)
+    Timer(t -> put!(tp, Threads.threadpool()), 0.01, interval = 0, spawn = :default)
+    @test take!(tp) == :default
+end
+
+# Timer callback with spawn=:interactive if available, otherwise :default
+let tp = Channel{Symbol}(0)
+    Timer(t -> put!(tp, Threads.threadpool()), 0.01, interval = 0, spawn = :interactive)
+    if Threads.threadpoolsize(:interactive) > 0
+        @test take!(tp) == :interactive
+    else
+        @test take!(tp) == :default
+    end
+end
+
+# Timer callback with spawn=nothing => threadpool is :interactive if available and non-sticky, otherwise :default
+let tp = Channel{Symbol}(0)
+    Timer(t -> put!(tp, Threads.threadpool()), 0.01, interval = 0, spawn = nothing)
+    expected_threadpool = if Threads.current_task().sticky
+        Threads.threadpool(Threads.current_task())
+    elseif Threads.threadpoolsize(:interactive) > 0
+        :interactive
+    else
+        :default
+    end
+    @test take!(tp) == expected_threadpool
+end
+
 # make sure that we don't accidentally create a one-shot timer
 let
     t = Timer(Returns(nothing), 10, interval=0.00001)
