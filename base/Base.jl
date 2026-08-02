@@ -589,8 +589,7 @@ function __init__()
     # Discard environment state captured while building the sysimage.
     reset_stdlib_env()
     empty!(EXPLICIT_ENV_CACHE)
-    _clear_frozen_env_caches()
-    _frozen_env_snapshot[] = nothing
+    ENV_STACK[] = nothing
     Filesystem.__postinit__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback

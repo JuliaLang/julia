@@ -2171,7 +2171,7 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
 end
 
 function report_precompile_results!(s::PrecompileSession)
-    if !s._from_loading
+    if !s._from_loading && !Base._env_frozen()
         @lock Base.require_lock begin
             Base.ENV_STACK[] = nothing
         end
@@ -2519,9 +2519,10 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     end
 
     try
-        if !_from_loading
+        # Share one stack across the lookups below, except when precompiling
+        # where the installed stack is pinned for `require` and must not be replaced.
+        if !_from_loading && !Base._env_frozen()
             @lock Base.require_lock begin
-                Base.check_frozen_env()
                 Base.ENV_STACK[] = Base.EnvironmentStack()
             end
         end

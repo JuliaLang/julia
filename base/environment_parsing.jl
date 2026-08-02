@@ -264,7 +264,6 @@ const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
 _env_frozen() = generating_output(#=incremental=#true)
 
-# Precompile workloads can still mutate the environment that their caches describe.
 struct EnvSnapshot
     load_path::Vector{String}
     active_project::Union{Nothing, String}
@@ -277,19 +276,6 @@ function is_env_snapshot_current(snap::EnvSnapshot)
            snap.depot_path == DEPOT_PATH
 end
 
-const _frozen_env_snapshot = Ref{Union{Nothing, EnvSnapshot}}(nothing)
-
-function check_frozen_env()
-    assert_havelock(require_lock)
-    _env_frozen() || return nothing
-    snap = _frozen_env_snapshot[]
-    snap !== nothing && is_env_snapshot_current(snap) && return nothing
-    snap === nothing || _clear_frozen_env_caches()
-    _frozen_env_snapshot[] = EnvSnapshot()
-    return nothing
-end
-
-const _frozen_toml_files = Set{String}()
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
     lock(toml_lock) do
@@ -297,10 +283,9 @@ function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_l
         if d === nothing
             d = CachedTOMLDict(toml_cache.p, project_file)
             toml_cache.d[project_file] = d
-        elseif !(_env_frozen() && project_file in _frozen_toml_files)
+        else
             get_updated_dict(toml_cache.p, d)
         end
-        _env_frozen() && push!(_frozen_toml_files, project_file)
         return d.d
     end
 end
@@ -330,23 +315,15 @@ end
 #  - `false`: nonexistent / nothing to see here
 #  - `true`: `env` is an implicit environment
 #  - `path`: the path of an explicit project file
-const _frozen_project_files = Dict{String, Union{Bool, String}}()
 function env_project_file(env::String)::Union{Bool,String}
     @lock require_lock begin
-    if _env_frozen()
-        check_frozen_env()
-        cached = get(_frozen_project_files, env, nothing)
-        cached === nothing || return cached
-    end
     if isdir(env)
-        project_file = locate_project_file(env)
+        return locate_project_file(env)
     elseif basename(env) in project_names && isfile_casesensitive(env)
-        project_file = env
+        return env
     else
-        project_file = false
+        return false
     end
-    _env_frozen() && (_frozen_project_files[env] = project_file)
-    return project_file
     end
 end
 
@@ -428,17 +405,9 @@ function project_get_syntax_version(d::Dict)
     return sv
 end
 
-const _frozen_manifest_files = Dict{String, Union{Nothing, String}}()
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     @lock require_lock begin
-    if _env_frozen()
-        check_frozen_env()
-        cached = get(_frozen_manifest_files, project_file, missing)
-        cached === missing || return cached
-    end
-    manifest_path = _project_file_manifest_path(project_file)
-    _env_frozen() && (_frozen_manifest_files[project_file] = manifest_path)
-    return manifest_path
+    return _project_file_manifest_path(project_file)
     end
 end
 function _project_file_manifest_path(project_file::String)::Union{Nothing,String}
@@ -965,13 +934,22 @@ function EnvironmentStack(load_path::Vector{String} = load_path())
 end
 
 const ENV_STACK = Ref{Union{Nothing, EnvironmentStack}}(nothing)
+
+# Live view: reuse the installed stack only while the environment it was built
+# from is unchanged.
 function current_env_stack()
-    check_frozen_env()
     stack = ENV_STACK[]
     if stack === nothing || !is_env_snapshot_current(stack.snapshot)
         return EnvironmentStack()
     end
     return stack
+end
+
+# The stack `require` resolves against: pinned for the load in progress (the
+# whole process when precompiling), even if the environment has been mutated since.
+function loading_env_stack()
+    stack = ENV_STACK[]
+    return stack === nothing ? current_env_stack() : stack
 end
 
 struct EnvStatSig
@@ -1008,14 +986,6 @@ function cached_explicit_env(project_file::String)
     env = ExplicitEnv(project_file; workspace=false)
     EXPLICIT_ENV_CACHE[project_file] = CachedExplicitEnv(env, project_sig, manifest_file, manifest_sig)
     return env
-end
-
-function _clear_frozen_env_caches()
-    ENV_STACK[] = nothing
-    empty!(_frozen_toml_files)
-    empty!(_frozen_project_files)
-    empty!(_frozen_manifest_files)
-    return nothing
 end
 
 #################
