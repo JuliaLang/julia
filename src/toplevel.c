@@ -78,7 +78,7 @@ void jl_module_run_initializer(jl_module_t *m)
         }
         else {
             jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
-                                           jl_current_exception(ct)));
+                                           jl_current_exception(ct)), 0, 0);
         }
     }
 }
@@ -895,7 +895,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
             jl_rethrow();
         else
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, filename, result,
-                                           jl_current_exception(ct)));
+                                           jl_current_exception(ct)), 0, 0);
     }
     jl_atomic_store_relaxed(&jl_lineno, last_lineno);
     jl_atomic_store_relaxed(&jl_filename, last_filename);
