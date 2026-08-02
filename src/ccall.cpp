@@ -2253,6 +2253,56 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     return mark_or_box_ccall_result(ctx, result, jlretboxed, rt, unionall_env, static_rt);
 }
 
+extern "C" JL_DLLEXPORT_CODEGEN
+Type *jl_get_abi_type_impl(jl_value_t *tti, uint8_t llvmcall, LLVMContextRef LLVMCtx, bool *byRef)
+{
+    LLVMContext &C = *unwrap(LLVMCtx);
+    std::unique_ptr<AbiLayout> abi;
+    if (llvmcall)
+        abi.reset(new ABI_LLVMLayout());
+    else
+        abi.reset(new DefaultAbiState());
+
+    Type *t = NULL;
+    bool isboxed;
+    if (jl_is_abstract_ref_type(tti)) {
+        tti = (jl_value_t*)jl_voidpointer_type;
+        t = getPointerTy(C);
+        isboxed = false;
+    }
+    else if (llvmcall && jl_is_llvmpointer_type(tti)) {
+        t = bitstype_to_llvm(tti, C, true);
+        tti = (jl_value_t*)jl_voidpointer_type;
+        isboxed = false;
+    }
+    else {
+        t = _julia_struct_to_llvm(NULL, C, tti, &isboxed, llvmcall);
+        if (t == Type::getVoidTy(C)) {
+            *byRef = false;
+            return Type::getVoidTy(C);
+        }
+    }
+
+    assert(t && "LLVM type should not be null");
+    AttrBuilder ab(C);
+    *byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, C, t);
+
+    Type *pat;
+    if (jl_is_cpointer_type(tti)) {
+        pat = t;
+    }
+    else if (*byRef) {
+        pat = PointerType::get(t, AddressSpace::Derived);
+    }
+    else {
+        pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, C);
+        if (pat == NULL)
+            pat = t;
+    }
+    return pat;
+}
+
 // Reset us back to codegen debug type
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "julia_irgen_codegen"
+
