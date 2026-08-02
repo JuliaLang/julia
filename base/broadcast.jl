@@ -654,8 +654,6 @@ Base.@propagate_inbounds _broadcast_getindex(A::Tuple{Any}, I) = A[1]
 Base.@propagate_inbounds _broadcast_getindex(A::Tuple, I) = A[I[1]]
 # Everything else falls back to dynamically dropping broadcasted indices based upon its axes
 Base.@propagate_inbounds _broadcast_getindex(A, I) = A[newindex(A, I)]
-# convert so elements and inference match the declared eltype even when `getindex` infers wider
-Base.@propagate_inbounds _broadcast_getindex(A::AbstractArray, I) = convert(eltype(A), A[newindex(A, I)])::eltype(A)
 
 # In some cases, it's more efficient to sort out which dimensions should be dropped
 # ahead of time (often when the size checks aren't able to be lifted out of the loop).
@@ -668,7 +666,7 @@ struct Extruded{T, K, D}
     defaults::D # A tuple of integers, specifying the index to use when keeps[i] is false (as defaults[i])
 end
 @inline axes(b::Extruded) = axes(b.x)
-Base.@propagate_inbounds _broadcast_getindex(b::Extruded, i) = convert(eltype(b.x), b.x[newindex(i, b.keeps, b.defaults)])::eltype(b.x)
+Base.@propagate_inbounds _broadcast_getindex(b::Extruded, i) = b.x[newindex(i, b.keeps, b.defaults)]
 extrude(x::AbstractArray) = Extruded(x, newindexer(x)...)
 extrude(x) = x
 
@@ -742,8 +740,17 @@ broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
+_bc_eltype(bc::Broadcasted, i) = bc.f(_bc_eltypes(bc.args, i)...)
+_bc_eltype(A::AbstractArray, i) = Base.inferencebarrier(A)[i]::eltype(A)
+_bc_eltype(A::AbstractArray{<:Any,0}, i) = _broadcast_getindex(A, i)
+_bc_eltype(x, i) = _broadcast_getindex(x, i)
+
+_bc_eltypes(args::Tuple, i) = (_bc_eltype(args[1], i), _bc_eltypes(tail(args), i)...)
+_bc_eltypes(args::Tuple{Any}, i) = (_bc_eltype(args[1], i),)
+_bc_eltypes(::Tuple{}, i) = ()
+
 function result_eltype(bc::Broadcasted)
-    rettype = Base._return_type(_broadcast_getindex, Tuple{typeof(bc), eltype(eachindex(bc))})
+    rettype = Base._return_type(_bc_eltype, Tuple{typeof(bc), eltype(eachindex(bc))})
     return promote_typejoin_union(rettype)
 end
 

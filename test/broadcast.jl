@@ -1279,3 +1279,26 @@ end
     f31890(i, xs) = in31890.(i, xs)
     @test @inferred(f31890(Interval31890(0.0, 0.5), [0.25, 0.75])) == [true, false]
 end
+
+@testset "handling of invalid eltype" begin
+    struct EltypeOverride62564 <: AbstractVector{Int} end
+    Base.size(::EltypeOverride62564) = (2,)
+    Base.getindex(::EltypeOverride62564, i::Int) = 1.5
+    Base.eltype(::Type{EltypeOverride62564}) = Float64
+
+    struct WiderGetindex62564 <: AbstractVector{Float64} end
+    Base.size(::WiderGetindex62564) = (2,)
+    Base.getindex(::WiderGetindex62564, i::Int) = i == 1 ? 1.0 : 2.0f0
+
+    struct IncompatGetindex62564 <: AbstractVector{Int} end
+    Base.size(::IncompatGetindex62564) = (2,)
+    Base.getindex(::IncompatGetindex62564, i::Int) = "s"
+
+    @test identity.(EltypeOverride62564()) isa Vector{Float64}
+    @test identity.(EltypeOverride62564()) == [1.5, 1.5]
+    wg62564() = identity.(WiderGetindex62564())
+    @test @inferred(wg62564()) isa Vector{Float64}
+    @test identity.(WiderGetindex62564()) == [1.0, 2.0]
+    @test_throws MethodError identity.(IncompatGetindex62564())
+    @test (x -> 0).(IncompatGetindex62564()) == [0, 0]
+end
