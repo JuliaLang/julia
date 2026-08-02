@@ -456,6 +456,7 @@
     XX(jl_task_get_next) \
     XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
+    XX(jl_thread_allow_task_switching) \
     XX(jl_threadid) \
     XX(jl_threadpoolid) \
     XX(jl_get_ptls_rng) \
