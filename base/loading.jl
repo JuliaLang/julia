@@ -3161,11 +3161,6 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
     try
         _parse = invokelatest(Meta.parser_for_module, mod)
         ast = Meta.parseall(code; filename, _parse)
-        if !Meta.isexpr(ast, :toplevel)
-            @assert Core._lower != fl_lower
-            # Only reached when JuliaLowering and alternate parse functions are activated
-            return Core.eval(mod, ast)
-        end
         result = nothing
         line_and_ex = Expr(:toplevel, loc, nothing)
         for ex in ast.args
