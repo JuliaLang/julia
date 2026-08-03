@@ -839,9 +839,28 @@ end
 
 Like `include`, except reads code from the given string rather than from a file.
 """
-function include_string(mod::Module, code::AbstractString, filename::AbstractString="string";
+function include_string(mapexpr::Function, mod::Module, code::AbstractString,
+                        filename::AbstractString;
                         expr_compat_mode=false, version::VersionNumber=VERSION)
-    eval(mod, parseall(SyntaxTree, code; filename, version); expr_compat_mode)
+    st = parseall(SyntaxTree, code; filename, version, ignore_warnings=true)
+    @jl_assert kind(st) === K"toplevel" st
+    try
+        if mapexpr !== identity
+            # TODO: Is there any way to support provenance here?
+            local last = nothing
+            for c in children(st)
+                last = eval(mod, expr_to_est(mapexpr(est_to_expr(c))); expr_compat_mode)
+            end
+            last
+        else
+            eval(mod, st; expr_compat_mode)
+        end
+    catch err
+        # @info "JL err" mod filename code st
+        rethrow(err)
+    end
 end
+include_string(mod, code, filename="string"; kws...) =
+    include_string(identity, mod, code, filename; kws...)
 
 include(path::AbstractString) = include(JuliaLowering, path)
