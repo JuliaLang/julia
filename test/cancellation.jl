@@ -1170,7 +1170,14 @@ end
         @test timedwait(() -> (@atomic :monotonic writer.waiting_on) !== nothing, 20.0) == :ok
         cancel!(srcs)
         accepted = fetch(writer)::Int
-        @test length(head) <= accepted < n
+        if Sys.iswindows()
+            # the OS pipe buffer can absorb the entire write before the
+            # cancellation lands (its quota is advisory and grows); the
+            # sweep then settles an already-completed write in full
+            @test length(head) <= accepted <= n
+        else
+            @test length(head) <= accepted < n
+        end
         # the stream survives the sweep: a follow-up write goes through
         extra = rand(UInt8, 1000)
         drained = @async read(p.out)
