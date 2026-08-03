@@ -225,10 +225,17 @@ static const char opts[]  =
     "                                               interface if supported (Linux and Windows) or to the\n"
     "                                               number of CPU threads if not supported (MacOS) or if\n"
     "                                               process affinity is not configured, and sets M to 1.\n"
+#if defined(WITH_THIRD_PARTY_HEAP) && WITH_THIRD_PARTY_HEAP == 1 // MMTk
+    " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M\n"
+    "                                               (0 <= M < N) threads for concurrent GC work.\n"
+    "                                               N is set to the number of compute threads and\n"
+    "                                               M is set to 0 if unspecified.\n"
+#else
     " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M (0 or 1)\n"
     "                                               threads for the concurrent sweeping phase of GC.\n"
     "                                               N is set to the number of compute threads and\n"
     "                                               M is set to 0 if unspecified.\n"
+#endif
     " -p, --procs {N|auto}                          Integer value N launches N additional local worker\n"
     "                                               processes `auto` launches as many workers as the\n"
     "                                               number of local CPU threads (logical cores).\n"
@@ -1048,8 +1055,16 @@ restart_switch:
                 errno = 0;
                 char *endptri;
                 long nsweepthreads = strtol(&endptr[1], &endptri, 10);
+#if defined(WITH_THIRD_PARTY_HEAP) && WITH_THIRD_PARTY_HEAP == 1 // MMTk
+                // MMTk uses `m` as the number of concurrent GC threads, which may be any
+                // count smaller than the number of mark (GC) threads.
+                if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 ||
+                    nsweepthreads >= nmarkthreads || nsweepthreads > INT8_MAX)
+                    jl_errorf("julia: --gcthreads=<n>,<m>; m must be an integer with 0 <= m < n");
+#else
                 if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
                     jl_errorf("julia: --gcthreads=<n>,<m>; m must be 0 or 1");
+#endif
                 jl_options.nsweepthreads = (int8_t)nsweepthreads;
             }
         }
