@@ -475,9 +475,8 @@ const UV_REQ_DETACHED = Ptr{Cvoid}(UInt(0x1))
 #                 close-induced UV_ECANCELED cascade.
 #   bits 32..63 - the number of pending completion callbacks of a split
 #                 write. 0 means the wait is on a single request (the
-#                 common case, whose protocol is unchanged); a split write
-#                 counts down here and only the callback that reaches 0
-#                 claims and wakes the waiter.
+#                 common case); a split write counts down here and only
+#                 the callback that reaches 0 claims and wakes the waiter.
 #
 # Cleared whenever the slot is released for reuse (_release_slot!/
 # _clear_uv_witness!). The detach paths do not set the flag: there the
@@ -2375,19 +2374,17 @@ start_reading(s::BufferStream) = Int32(0)
 stop_reading(s::BufferStream) = nothing
 
 write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
-# BufferStream writes are in-memory: no uv request can outlive the caller, so
-# the LibuvStream method's detached-owner bookkeeping does not apply here.
+# BufferStream counterparts of the owner-carrying LibuvStream write
+# methods, which must not apply here (they track uv requests and the send
+# buffer; a BufferStream write is in-memory, so no request can outlive the
+# caller). These writes cannot block for long (the advisory lock's park
+# runs under the ambient scope): an explicit token gates at entry only.
 function write(s::BufferStream, a::Vector{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    # the write itself is in-memory and cannot block for long (the advisory
-    # lock's park runs under the ambient scope): the explicit token only
-    # gates at entry
     precheck_cancel_arg(cancel)
     GC.@preserve a begin
         return Int(unsafe_write(s, pointer(a), UInt(sizeof(a))))
     end
 end
-# In-memory counterparts of the owner-carrying LibuvStream methods (which
-# must not apply here: they track uv requests and the send buffer).
 function write(s::BufferStream, str::Union{String, SubString{String}};
                cancel::CancelTokenArg=DEFAULT_CANCEL)
     precheck_cancel_arg(cancel)
@@ -2405,8 +2402,7 @@ function write(s::BufferStream, a::Array; cancel::CancelTokenArg=DEFAULT_CANCEL)
     return invoke(write, Tuple{IO, AbstractArray}, s, a)
 end
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    # in-memory write, cannot block for long: entry gate only (see the
-    # BufferStream `write` above)
+    # entry gate only (see the BufferStream `write` methods above)
     precheck_cancel_arg(cancel)
     nwrite = lock(s.cond) do
         check_open(s)

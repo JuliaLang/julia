@@ -442,7 +442,7 @@ typedef struct _jl_task_t {
     // This task's current registration on a wait queue (a `Base.WaitEntry`),
     // or `nothing`. Doubles as the wake-claim word: whoever atomically clears
     // it (notify via CAS against the specific entry, an interrupter via swap)
-    // owns waking the task. See the wake-claim protocol in base/condition.jl.
+    // owns waking the task. See the wake-claim protocol in base/cancellation.jl.
     _Atomic(jl_value_t*) waiting_on;
     // The wait entries cached for reuse across this task's parks (or
     // `nothing`), so the common park does not allocate. Owned by this task.
@@ -450,7 +450,7 @@ typedef struct _jl_task_t {
     // cancellation walk's expected-entry claim CAS is its only sound
     // eligibility gate, so an entry registered on a source must never be
     // armed for a wait that is not cancellable under it (see the wake-claim
-    // protocol in base/cancellation.jl and tla/WaitClaim.tla).
+    // protocol in base/cancellation.jl).
     // The `Base.WaitEntry1` for plain parks - never registered on a source.
     jl_value_t *cached_wait_entry;
     // The `Base.WaitEntry2` for cancellable parks. Its cancellation-source

@@ -167,11 +167,12 @@ end
 @noinline _fresh_waiter_error() =
     throw(ConcurrencyViolationError("schedule_on_notify! requires a fresh task: never started, scheduled, or armed"))
 
-# Freshness is stricter than `!istaskstarted`: a task `schedule`/`@async`
-# has merely ENQUEUED hasn't run yet, but arming it here would collide
-# with the arm its own first park performs once it starts (that park's
-# `_arm_wait` CAS fails and unwinds a wait's lock choreography from the
-# outside). Reject anything started, queued, or already armed.
+# Freshness is stricter than `!istaskstarted`: a task that
+# `schedule`/`@async` has merely enqueued hasn't run yet, but arming it
+# here would collide with the arm its own first park performs once it
+# starts (that park's `_arm_wait` CAS fails and unwinds a wait's lock
+# choreography from the outside). Reject anything started, queued, or
+# already armed.
 _assert_fresh_waiter(waiter::Task) =
     if istaskstarted(waiter) || waiter.queue !== nothing ||
        (@atomic :monotonic waiter.waiting_on) !== nothing
@@ -322,7 +323,7 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false,
     # waits that re-park after acknowledging a severity). Like every throw
     # out of this internal layer, the waiting frame's own lock level is
     # released first - callers use the `locked && unlock` idiom; the
-    # public kwarg method shims the old lock-held contract back on.
+    # public kwarg method restores the lock-held contract.
     if src !== nothing && min_severity == 0x00 && iscancelled(src)
         unlock(c.lock)
         checkcancel(src)

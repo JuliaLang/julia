@@ -98,8 +98,7 @@ const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
 const STATUS_PREEMPT_BIT = 0x40
 const SEVERITY_MASK = 0x3f
 
-# A request's payload is the plain severity; kept as an accessor for the
-# delivery layer's comparisons.
+# The severity of a request, for the delivery layer's comparisons.
 severity(cr::CancellationRequest) = cr.request
 
 """
@@ -193,19 +192,15 @@ end
 
 ## Wait registrations (used by condition.jl and every parked wait)
 
-# A task's registration on the things it waits for. An entry carries
-# uniform {owner, next, aux} slots (see the accessors below): a waitee
-# slot's fields are protected by the waitee's lock (its `owner` holds the
-# queue's identity - see `waitqueue` - while enqueued, acting as the "am I
-# registered, and on what" witness, and `nothing` otherwise), a
-# cancellation-source slot's by the registration protocol further below;
-# `task` is written by the owning task before enqueueing, so it is ordered
-# by the same lock for lock-holding readers - but it is also read (and
-# scrubbed) by walkers that hold none of the owner's locks (the
-# cancellation walk, `_waitq_isempty`), so like the slot owners it is an
-# atomic field accessed relaxed: the values are identity witnesses whose
-# staleness the protocols tolerate (a claim is validated by the
-# `waiting_on` CAS, never by the `task` read alone).
+# A task's registration on the things it waits for: `task` plus uniform
+# {owner, next, aux} slots, one per waitable, with a waitee slot's `owner`
+# holding the queue's identity (see `waitqueue`) while enqueued - the "am
+# I registered, and on what" witness - and `nothing` otherwise. Field
+# protection and atomicity live with the accessors ("Uniform slot access"
+# below); the key liberty is that `task` and the slot owners are identity
+# witnesses read racily by walkers (the cancellation walk,
+# `_waitq_isempty`), whose staleness the protocols tolerate: a claim is
+# validated by the `waiting_on` CAS, never by those reads alone.
 #
 # The wake-claim protocol: a parked task `t` points to its current
 # registration through the atomic field `t.waiting_on`. Whoever wants to wake
@@ -229,19 +224,15 @@ end
 #     single-use entry: single-use-ness is what guarantees their
 #     expected-value CAS cannot mistakenly claim a later, unrelated wait.
 #
-# Entries are heap objects. A task whose interrupted wait left a stale registration
-# behind can immediately register anew - e.g. park on a lock during its cleanup - with a fresh entry.
-# A wait registration is a small set of {owner, link, aux} slots - one per
-# thing the wait is registered on, with `owner` doubling as the membership
-# witness ("am I registered, and on what") - sharing the task's single
-# wake-claim word. Entries come in kinds by slot count: the 1-slot kind
-# covers plain parks (one waitee slot), the 2-slot kind adds the
-# cancellation-source slot for cancellable parks. (A variable-slot "many"
-# kind for wait-any over arbitrary waitables - waitany, timeouts - is
-# planned to follow; consumers locate their slot by scanning for their own
-# identity, so links always point at whole entries.) The kinds share their
-# leading layout; `WaitEntry` is the union of all kinds, and hot paths
-# union-split on it.
+# Entries are heap objects: a task whose interrupted wait left a stale
+# registration behind can immediately register anew - e.g. park on a lock
+# during its cleanup - with a fresh entry. Entries come in kinds by slot
+# count: the 1-slot kind covers plain parks (one waitee slot), the 2-slot
+# kind adds the cancellation-source slot for cancellable parks, and the
+# variable-slot `WaitEntryN` covers parks on several waitables at once
+# (multi-waitable `park!`, and hence waitany/timeouts). The kinds share
+# their leading layout; `WaitEntry` is the union of all kinds, and hot
+# paths union-split on it.
 typegroup
     mutable struct WaitEntry1
         @atomic task::Union{Task, Nothing}
@@ -284,13 +275,9 @@ _nslots(w::WaitEntry1) = 1
 _nslots(w::WaitEntry2) = 2
 _nslots(w::WaitEntryN) = Int(w.nslots)
 
-# Slot owners are read by threads that do not hold the slot's protecting
-# lock (walks and unlink sweeps scan every slot of an entry for their own
-# identity), so they are atomic fields accessed relaxed: the values are
-# identity witnesses whose staleness the protocols tolerate, and where an
-# owner read carries ordering obligations, the ordering is supplied
-# elsewhere (the waitee's lock, or the seq_cst publish/recheck dance of
-# the source registration - `SourceWait` in base/park.jl).
+# Where an owner read carries ordering obligations, the ordering is
+# supplied elsewhere (the waitee's lock, or the seq_cst publish/recheck
+# dance of the source registration - `SourceWait` in base/park.jl).
 @inline _slot_owner(w::WaitEntry1, i::Int) = @atomic :monotonic w.owner1
 @inline _slot_owner(w::WaitEntry2, i::Int) =
     i == 1 ? (@atomic :monotonic w.owner1) : (@atomic :monotonic w.owner2)
@@ -459,9 +446,9 @@ end
 # be armed for a wait that is not cancellable under it. (Aux data outside
 # the claim word - the severity floors - is read racily by the walk and may
 # be judged against an adjacent arm of the same entry; that misfire is
-# tolerable for a teardown wait's floor, never for a shield. See the model
-# in tla/WaitClaim.tla: sharing one entry lets a walk claim a shielded
-# re-arm using the previous arm's eligibility.)
+# tolerable for a teardown wait's floor, never for a shield: sharing one
+# entry would let a walk claim a shielded re-arm using the previous arm's
+# eligibility.)
 function _cached_wait_entry(waiter::Task)
     w = waiter.cached_wait_entry
     if w isa WaitEntry1 && (@atomic :monotonic w.owner1) === nothing
@@ -726,8 +713,7 @@ function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
     # a push this read misses is later in the total order, so that
     # registrant's state recheck observes the cancellation (see
     # `SourceWait`'s registration, base/park.jl); pairs with the seq_cst
-    # state read the caller
-    # performed under the walk lock.
+    # state read the caller performed under the walk lock.
     x = @atomic :sequentially_consistent node.waiters_head
     w = x isa WaitEntry ? x : nothing
     while w isa WaitEntry
@@ -769,10 +755,10 @@ function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
             # here is sound. The claim CAS itself may still land on a
             # *later* arm of the same entry than the one whose aux was
             # judged - which is why every arm of a source-linked entry must
-            # be a cancellable park under it (shields arm a distinct entry;
-            # see _cached_wait_entry and tla/WaitClaim.tla): the worst
-            # misfire is then a spurious below-floor wake into a teardown
-            # re-park, which handles it like any interruption of its wait
+            # be a cancellable park under it (shields arm a distinct
+            # entry; see _cached_wait_entry): the worst misfire is then a
+            # spurious below-floor wake into a teardown re-park, which
+            # handles it like any interruption of its wait
             # (conservatively, e.g. by detaching the awaited request).
             if sev != 0x00 && (@atomic :sequentially_consistent t.waiting_on) === w &&
                     slot.aux % UInt8 <= sev
@@ -816,11 +802,11 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
     _unlock_walk(node)
     while towake !== nothing
         ((t, w), towake) = towake::Tuple{Tuple{Task, WaitEntry}, Any}
-        # N.B.: an ABANDON_ALL request currently also delivers by
-        # interruption; freezing the task in place instead arrives with the
-        # escalation machinery. The delivery is claim-scoped - the claim
-        # above is the wake ticket, so no re-claiming swap - and dropped
-        # when the task has re-armed meanwhile (see deliver_claimed_wake!).
+        # N.B.: an ABANDON_ALL request also delivers by interruption for
+        # now (freezing the task in place is not yet implemented). The
+        # delivery is claim-scoped - the claim above is the wake ticket, so
+        # no re-claiming swap - and dropped when the task has re-armed
+        # meanwhile (see deliver_claimed_wake!).
         deliver_claimed_wake!(t, w, creq)
     end
     # Walk the node's (weak, intrusive) child list, advancing every child to

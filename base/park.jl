@@ -3,8 +3,7 @@
 ## The parked-wait driver
 #
 # Every parked wait proceeds in six phases, uniformly over the set of
-# things it waits for (see also the formal model of the claim protocol,
-# tla/WaitClaim.tla, whose parker process is this driver):
+# things it waits for:
 #
 #   1. CHECK    the caller's fast-path satisfaction tests - no allocation,
 #               no publication (stays at the call sites).
@@ -72,10 +71,10 @@ _uncancellable_lock(l) = lock(l)
 # `SourceWait(src, floor)` in a park's waitables makes the wait
 # cancellable under `src` at severities >= `floor`: its enqueue is the
 # sticky lock-free registration, its recheck is the seq_cst state read
-# closing the arm-vs-cancel race (the Dekker whose two seq_cst upgrades
-# are shown necessary in tla/WaitDekkerTSO.tla), and its fired outcome
-# throws the refusal. Registrations are sticky: no dequeue on any path -
-# collection is the walk's job (prune/dead accounting).
+# closing the arm-vs-cancel race (a Dekker - both sides need their
+# seq_cst upgrade), and its fired outcome throws the refusal.
+# Registrations are sticky: no dequeue on any path - collection is the
+# walk's job (prune/dead accounting).
 struct SourceWait
     src::CancellationTokenSource
     floor::UInt8

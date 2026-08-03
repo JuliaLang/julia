@@ -679,7 +679,7 @@ end
     wait(t5)
 
     # neither can a merely-queued one: @async has scheduled it, so its
-    # own first park owns the arm slot (subscribing it used to leak the
+    # own first park owns the arm slot (a subscription arm would leak the
     # sleep timer's cond lock and wedge the process at close)
     t6 = @async (sleep(0.01); 1)
     @test_throws ConcurrencyViolationError (@lock c Base.schedule_on_notify!(c, t6))
@@ -687,8 +687,8 @@ end
 end
 
 @testset "waiter registry: refused arm cannot leak into a shield" begin
-    # the model-found race (tla/WaitClaim.tla): a cancellation walk observes
-    # an armed cancellable park and judges it eligible; the park is then
+    # the race: a cancellation walk observes an armed cancellable park
+    # and judges it eligible; the park is then
     # claimed away (here: by the registration's own refusal) and the task
     # immediately re-parks shielded. The walk's claim CAS must fail against
     # the shielded arm. Hammered, since the window is two walk instructions.
@@ -1179,8 +1179,8 @@ end
         received = vcat(head, fetch(drained)::Vector{UInt8})
         # the accepted count is a clean prefix of the data, and the
         # follow-up write arrives intact after it. On Windows the OS may
-        # underreport a cancelled write's count (see the manual), so only
-        # assert exactness elsewhere.
+        # underreport a cancelled write's count, so only assert exactness
+        # elsewhere.
         if !Sys.iswindows()
             @test length(received) == accepted + length(extra)
         end

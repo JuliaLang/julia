@@ -408,7 +408,7 @@ function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs
     # The callback task carries the timer's lifetime (its preserve is
     # balanced in the body): shield it from the constructing scope's
     # cancellation token, so a cancelled scope can neither leak the preserve
-    # nor stop the timer - like before, `close(t)` ends it.
+    # nor stop the timer - `close(timer)` is what ends it.
     t = ScopedValues.with(CANCEL_TOKEN => nothing) do
         @task begin
             unpreserve_handle(timer)

@@ -576,8 +576,6 @@ blocking until one can be acquired.
 """
 function acquire(s::Semaphore; cancel::CancelTokenArg=DEFAULT_CANCEL)
     cancel = precheck_cancel_arg(cancel)
-    # the preliminary lock honors the operation's token (or explicit
-    # shield), not the ambient scope
     lock(s.cond_wait; cancel)
     locked = true
     try
@@ -713,8 +711,6 @@ function wait(e::Event; cancel::CancelTokenArg=DEFAULT_CANCEL)
     else
         (@atomic e.set) && return # full barrier also
     end
-    # the preliminary lock honors the operation's token (or explicit
-    # shield), not the ambient scope
     lock(e.notify; cancel) # acquire barrier
     locked = true
     try
