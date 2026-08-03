@@ -458,18 +458,47 @@ end
 # Sentinel for a uv request's data field: see above.
 const UV_REQ_DETACHED = Ptr{Cvoid}(UInt(0x1))
 
-# Aux flag on a uv write wait's *witness* slot (the slot whose owner is the
-# stream; its aux is otherwise unused): set, under the iolock, immediately
-# before Julia itself issues `uv_cancel` on a write request it keeps
-# awaiting, so the completion callback can tell a Julia-requested
-# cancellation (UV_ECANCELED is then the expected outcome, delivered as a
-# partial-count wake) from a close-induced one (a real write error - libuv
-# also fails queued writes with UV_ECANCELED when the stream closes).
+# Aux word on a uv write wait's *witness* slot (the slot whose owner is the
+# stream; its aux is otherwise unused). Every reader and writer runs under
+# the iolock, so the packing needs no atomics:
+#
+#   bit  0      - CANCEL_REQUESTED: set immediately before Julia itself
+#                 issues `uv_cancel` on write request(s) it keeps awaiting,
+#                 so the completion callback can tell a Julia-requested
+#                 cancellation (UV_ECANCELED is then the expected outcome,
+#                 delivered as a partial-count wake) from a close-induced
+#                 one (a real write error - libuv also fails queued writes
+#                 with UV_ECANCELED when the stream closes).
+#   bits 8..23  - the negated status of the first real error a chunk of a
+#                 split write completed with (0 = none): a real error must
+#                 win the final wake even when later chunks fail with the
+#                 close-induced UV_ECANCELED cascade.
+#   bits 32..63 - the number of pending completion callbacks of a split
+#                 write. 0 means the wait is on a single request (the
+#                 common case, whose protocol is unchanged); a split write
+#                 counts down here and only the callback that reaches 0
+#                 claims and wakes the waiter.
+#
 # Cleared whenever the slot is released for reuse (_release_slot!/
-# _clear_uv_witness!). The detach path (_end_uvreq_wait!) does not set it:
-# there the request is detached in the same iolock critical section, so no
-# callback can observe a waiter - the flag only matters to waited requests.
+# _clear_uv_witness!). The detach paths do not set the flag: there the
+# requests are detached in the same iolock critical section, so no callback
+# can observe a waiter - the flag only matters to waited requests.
 const _UVREQ_AUX_CANCEL_REQUESTED = UInt64(0x1)
+const _UVREQ_AUX_STATUS_SHIFT = 8
+const _UVREQ_AUX_STATUS_MASK = UInt64(0xffff) << _UVREQ_AUX_STATUS_SHIFT
+const _UVREQ_AUX_PENDING_SHIFT = 32
+
+# The witness slot of a uv-request wait entry: the one whose owner is
+# neither empty nor the cancellation source. Callbacks locate it without
+# knowing the witness object.
+function _uvreq_witness_slot(w::WaitEntry)
+    for (i, slot) in enumerate(slots(w))
+        o = slot.owner
+        (o === nothing || o isa CancellationTokenSource) && continue
+        return i
+    end
+    return 0
+end
 
 function _mark_uvreq_cancel_requested!(w::WaitEntry, @nospecialize(witness))
     i = _find_slot(w, witness)
@@ -484,12 +513,8 @@ function _uvreq_cancel_requested(req::Ptr{Cvoid})
     d = uv_req_data(req)
     (d == C_NULL || d == UV_REQ_DETACHED) && return false
     w = unsafe_pointer_to_objref(d)::WaitEntry
-    for slot in slots(w)
-        o = slot.owner
-        (o === nothing || o isa CancellationTokenSource) && continue
-        return slot.aux & _UVREQ_AUX_CANCEL_REQUESTED != 0
-    end
-    return false
+    i = _uvreq_witness_slot(w)
+    return i != 0 && _slot_aux(w, i) & _UVREQ_AUX_CANCEL_REQUESTED != 0
 end
 
 # Buffers of detached write requests. A detached request keeps referencing
@@ -1334,25 +1359,38 @@ uv_write(s::LibuvStream, p::Vector{UInt8}, cancel::CancelTokenArg=DEFAULT_CANCEL
 # point. The caller must have acquired the iolock, which is released before
 # returning.
 function _uv_write_wait(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
-                        tok::MaybeToken, @nospecialize(owner), partial::Bool)
+                        tok::MaybeToken, @nospecialize(owner), partial::Bool,
+                        chunk::UInt=MAX_OS_WRITE)
     src = cancel_source(tok)
     # entry check: throw before handing anything to libuv
     _iolocked_checkcancel(src)
-    local uvw, lastn
+    local uvw, lastn, others
     try
-        uvw, lastn = uv_write_async(s, p, n)
+        uvw, lastn, others = uv_write_async(s, p, n, chunk)
     catch
         # E.g. the stream was (or gets) closed: release the iolock so that
         # errors propagate without it.
         iolock_end()
         rethrow()
     end
-    # Whether the write went out as a single request: only then may a
-    # cancellation `uv_cancel` it - see _uv_write_cancelled_finish. (The
-    # wait is on the *last* request either way: completion callbacks run in
-    # order unless a request is dequeued by uv_cancel.)
-    single = lastn == n
     w = _begin_uvreq_wait!(src, s, uvw)
+    if others !== nothing
+        # A split write: point every chunk request at the wait entry and
+        # store the pending-callback count on the witness slot's aux (all
+        # under the iolock hold that covers submission, so no callback can
+        # have run yet). Completions count down; only the last claims and
+        # wakes. The waiter owns - and, once all callbacks have run, sums
+        # and frees - every chunk request, which is what makes the total
+        # accepted-byte count exact even when a cancellation sweep
+        # completes the requests out of order.
+        wp = pointer_from_objref(w)
+        for r in others
+            uv_req_set_data(r, wp)
+        end
+        i = _find_slot(w, s)
+        _set_slot_aux!(w, i, _slot_aux(w, i) |
+                       (UInt64(length(others) + 1) << _UVREQ_AUX_PENDING_SHIFT))
+    end
     refused = false
     if src !== nothing
         sw = SourceWait(src, 0x00)
@@ -1368,20 +1406,21 @@ function _uv_write_wait(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
         # observes the cancellation at its next cancellation point.
         iolock_end()
         nwritten = _uv_write_cancelled_finish(s, w, uvw,
-            severity(cancel_severity(src)::CancellationRequest), src, owner, single)
+            severity(cancel_severity(src)::CancellationRequest), src, owner, others)
         # level-triggered: the throw below (and any later cancellation
         # point) reads the current severity
         partial || checkcancel(src)
-        return Int(n - lastn + nwritten)
+        return others === nothing ? Int(n - lastn + nwritten) : Int(nwritten)
     end
     iolock_end()
     local nwritten::Csize_t
     creq = nothing
     try
         sigatomic_end()
-        # wait for the last chunk to complete (or error)
-        # assume that any errors would be sticky,
-        # (so we don't need to monitor the error status of the intermediate writes)
+        # wait for the write to complete (or error): the last request's
+        # callback for a single-request write, the pending count reaching
+        # zero for a split one (whose wake also carries the first real
+        # error of any chunk)
         nwritten = wait()::Csize_t
         sigatomic_begin()
     catch err
@@ -1395,68 +1434,77 @@ function _uv_write_wait(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
             creq = err
         else
             # interrupted by something other than a cancellation (an
-            # interrupter or raw throwto); a split write must not be
-            # uv_cancel'ed on detach (see _uv_write_cancelled_finish)
+            # interrupter or raw throwto): cancel whatever is still
+            # cancellable and detach the rest to the callbacks
             iolock_begin()
-            _end_uvreq_wait!(w, s, uvw, single, owner)
+            if others === nothing
+                _end_uvreq_wait!(w, s, uvw, true, owner)
+            else
+                _end_split_uvreq_wait!(w, s, uvw, others, true, owner)
+            end
             rethrow()
         end
     end
     if creq !== nothing
-        nwritten = _uv_write_cancelled_finish(s, w, uvw, severity(creq), src, owner, single)
+        nwritten = _uv_write_cancelled_finish(s, w, uvw, severity(creq), src, owner, others)
         # the in-flight request is resolved (SAFE: the buffer is provably
         # out of OS hands); deliver the cancellation now unless the caller
         # asked for the partial count
         partial || checkcancel(src::CancellationTokenSource)
     else
         # normal completion (or the wake lost the race to a completion that
-        # ran anyway): the callback handed us the request to free
+        # ran anyway): the callback(s) handed us the request(s) to free
         iolock_begin()
-        _end_uvreq_wait!(w, s, uvw, single, owner)
+        if others === nothing
+            _end_uvreq_wait!(w, s, uvw, true, owner)
+        else
+            nwritten = _end_split_uvreq_wait!(w, s, uvw, others, false, owner)
+        end
     end
-    return Int(n - lastn + nwritten)
+    return others === nothing ? Int(n - lastn + nwritten) : Int(nwritten)
 end
 
-# Resolve the ownership of a cancelled write's uv request and return the
-# last chunk's partial write count (0 when the request had to be detached
-# without awaiting its completion). For SAFE cancellations this awaits the
-# completion callback, so the caller's buffer is provably no longer in use
-# by the OS when this returns; only a severity escalation interrupts that
-# bounded wait. `single` says whether the write went out as one request;
-# only then is the request `uv_cancel`ed. Enters with the iolock released
-# at the sigatomic level of the interrupted wait; unwinds both and the
-# handle preservation.
+# Resolve the ownership of a cancelled write's uv request(s) and return the
+# partial write count: the last chunk's for a single-request write, the
+# exact total of accepted bytes for a split one (0 for whatever had to be
+# detached without awaiting completion). Every in-flight request is
+# `uv_cancel`ed, tail-first for a split write: our chunks sit contiguously
+# in the stream's queue, so cancelling from the tail dequeues behind the
+# still-active head and the wire always keeps a clean prefix. For SAFE
+# cancellations this awaits the completion callback(s), so the caller's
+# buffer is provably no longer in use by the OS when this returns; only a
+# severity escalation interrupts that bounded wait. Enters with the iolock
+# released at the sigatomic level of the interrupted wait; unwinds both and
+# the handle preservation.
 function _uv_write_cancelled_finish(s::LibuvStream, w::WaitEntry, uvw::Ptr{Cvoid},
                                     sev::UInt8, src::CancellationTokenSource,
-                                    @nospecialize(owner), single::Bool)
+                                    @nospecialize(owner),
+                                    others::Union{Nothing, Vector{Ptr{Cvoid}}})
     ct = current_task()
     nwritten::Csize_t = 0
     awaited = false
     iolock_begin()
-    d = uv_req_data(uvw)
-    if d == C_NULL
-        # the completion callback already ran (it lost the wake claim): the
-        # request is ours and knows the count
+    if others === nothing ? uv_req_data(uvw) == C_NULL : _split_complete(uvw, others)
+        # the completion callback(s) already ran (the wake lost its claim
+        # race): the requests are ours and know their counts
         awaited = true
-        nwritten = ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), uvw)
+        if others === nothing
+            nwritten = ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), uvw)
+        end
     else
-        # The write is still in flight. Only a write issued as a *single*
-        # request may be asked to cancel: our libuv patch dequeues the
-        # targeted request out of order and completes it with UV_ECANCELED,
-        # so cancelling the last chunk of a split write would say nothing
-        # about the earlier chunks - they could still be queued, still
-        # referencing the buffer, when the "cancelled" callback fires. For
-        # a split write even a SAFE cancellation therefore awaits the last
-        # callback *without* uv_cancel: nothing is dequeued, completion
-        # stays in-order, and the last chunk's callback implies every
-        # earlier chunk is done with the buffer.
-        if single
-            # flag the request as cancelled-by-us first (on the witness
-            # slot's aux, under the iolock), so the completion callback can
-            # tell our UV_ECANCELED from a close-induced one - see
-            # uv_writecb_task
-            _mark_uvreq_cancel_requested!(w, s)
+        # The write is still in flight: flag it as cancelled-by-us first
+        # (on the witness slot's aux, under the iolock), so the completion
+        # callback(s) can tell our UV_ECANCELED from a close-induced one -
+        # see uv_writecb_task - then sweep, tail-first.
+        _mark_uvreq_cancel_requested!(w, s)
+        uv_req_data(uvw) == C_NULL ||
             ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
+        if others !== nothing
+            for j in lastindex(others):-1:firstindex(others)
+                r = others[j]
+                uv_req_data(r) == C_NULL ||
+                    ccall(:uv_cancel, Cint, (Ptr{Cvoid},), r) # ignore any errors
+            end
         end
         if sev < severity(CANCEL_REQUEST_ABANDON_EXTERNAL)
             # SAFE cancellation: await the completion callback, so that the
@@ -1479,23 +1527,78 @@ function _uv_write_cancelled_finish(s::LibuvStream, w::WaitEntry, uvw::Ptr{Cvoid
                     # fall through to detach
                 end
                 iolock_begin()
-                if !awaited && uv_req_data(uvw) == C_NULL
-                    # the callback ran anyway (our wake lost a race)
+                if !awaited &&
+                   (others === nothing ? uv_req_data(uvw) == C_NULL :
+                                         _split_complete(uvw, others))
+                    # the callback(s) ran anyway (our wake lost a race)
                     awaited = true
-                    nwritten = ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), uvw)
+                    if others === nothing
+                        nwritten = ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), uvw)
+                    end
                 end
             end
             # (a refused registration means the state already escalated)
         end
     end
-    # Not awaited (abandoning severity, or an escalation during teardown):
-    # _end_uvreq_wait! detaches the request - the completion callback frees
-    # it - keeping the written buffer rooted until it does; the last chunk's
-    # count is then unknown and reported as 0. (No re-cancel: for a single
-    # request the uv_cancel above was already issued; a split write must
-    # never be uv_cancel'ed - the detached last chunk completing in order is
-    # what keeps the rooted buffer valid for the earlier chunks.)
-    _end_uvreq_wait!(w, s, uvw, false, owner)
+    # Resolve ownership. Awaited or not, completed requests are ours (a
+    # split write sums their exact counts); anything still in flight - an
+    # abandoning severity, or an escalation during the teardown wait - is
+    # detached for its callback to free, with the written buffer kept
+    # rooted until every detached callback has run; those requests' counts
+    # are unknown and contribute 0. (No re-cancel: the sweep above already
+    # cancelled everything that was in flight.)
+    if others === nothing
+        _end_uvreq_wait!(w, s, uvw, false, owner)
+    else
+        nwritten = _end_split_uvreq_wait!(w, s, uvw, others, false, owner)
+    end
+    return nwritten
+end
+
+# Whether every request of a split write has completed (data == C_NULL).
+function _split_complete(uvw::Ptr{Cvoid}, others::Vector{Ptr{Cvoid}})
+    uv_req_data(uvw) == C_NULL || return false
+    for r in others
+        uv_req_data(r) == C_NULL || return false
+    end
+    return true
+end
+
+# Split-write counterpart of _end_uvreq_wait! (caller holds the iolock, at
+# the sigatomic level of the wait): resolve the ownership of every chunk
+# request and return the total of the completed ones' accepted-byte counts.
+# Completed requests (data == C_NULL) are summed and freed; in-flight ones
+# are detached for their callbacks to free - `uv_cancel`ed first, tail-first
+# (last request first, then earlier chunks in reverse submission order, so
+# the queue keeps a clean prefix), when `trycancel` is set - with `owner`
+# kept rooted under each until its callback runs. Then unwinds the witness,
+# the registration, the iolock, the sigatomic section, and the handle
+# preservation, exactly like _end_uvreq_wait!.
+function _end_split_uvreq_wait!(w::WaitEntry, @nospecialize(witness), uvw::Ptr{Cvoid},
+                                others::Vector{Ptr{Cvoid}}, trycancel::Bool,
+                                @nospecialize(owner))
+    ct = current_task()
+    nwritten::Csize_t = 0
+    for j in (lastindex(others) + 1):-1:firstindex(others)
+        req = j > lastindex(others) ? uvw : others[j]
+        if uv_req_data(req) == C_NULL
+            nwritten += ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), req)
+            Libc.free(req)
+        else
+            trycancel && ccall(:uv_cancel, Cint, (Ptr{Cvoid},), req) # ignore any errors
+            uv_req_set_data(req, UV_REQ_DETACHED)
+            _root_detached_uvreq!(req, owner)
+        end
+    end
+    _clear_wait_witness!(w, witness)
+    @atomicreplace ct.waiting_on w => nothing
+    # Drop a claimed-and-enqueued wake an interrupted teardown will never
+    # consume (cf. _end_uvreq_wait!).
+    q = ct.queue
+    q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
+    iolock_end()
+    sigatomic_end()
+    unpreserve_handle(ct)
     return nwritten
 end
 
@@ -1522,16 +1625,24 @@ function _uv_write_owned(s::LibuvStream, p::Ptr{UInt8}, n::UInt, cancel::CancelT
     return nb
 end
 
-# helper function for uv_write that returns the uv_write_t struct of the last
-# chunk's write (and that chunk's size) rather than waiting on it, caller must
-# hold the iolock
-function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+# helper function for uv_write that submits the write as one request per
+# OS-sized chunk rather than waiting, caller must hold the iolock. Returns
+# the last chunk's uv_write_t, that chunk's size, and - for split writes -
+# the vector of the earlier chunks' requests (nothing for the common
+# single-request case). All requests go out with data C_NULL
+# (fire-and-forget); a waiter that wants completion re-points them at its
+# wait entry under the same iolock hold (see _uv_write_wait).
+function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt, chunk::UInt=MAX_OS_WRITE)
     check_open(s)
+    others = nothing
     while true
         uvw = Libc.malloc(_sizeof_uv_write)
         uv_req_set_data(uvw, C_NULL) # in case we get interrupted before arriving at the wait call
-        nwrite = min(n, MAX_OS_WRITE) # split up the write into chunks the OS can handle.
-        # TODO: use writev instead of a loop
+        nwrite = min(n, chunk) # split up the write into chunks the OS can handle.
+        # TODO: use writev instead of a loop (requires libuv to bound the
+        # per-syscall submission: as of now it recombines all bufs of a
+        # request into one writev/WSASend, blowing through the OS limits
+        # this chunking exists to respect)
         err = ccall(:jl_uv_write,
                     Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, UInt, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -1544,8 +1655,10 @@ function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         n -= nwrite
         p += nwrite
         if n == 0
-            return uvw, nwrite
+            return uvw, nwrite, others
         end
+        others === nothing && (others = Ptr{Cvoid}[])
+        push!(others::Vector{Ptr{Cvoid}}, uvw)
     end
 end
 
@@ -1742,6 +1855,38 @@ function write(s::LibuvStream, b::UInt8)
 end
 
 function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
+    # A chunk of a waited *split* write counts down on the witness slot's
+    # aux instead of waking: the waiter owns (and later frees) every chunk
+    # request, so the callback only records completion (data = C_NULL) and
+    # any first real error; the callback that brings the count to 0 falls
+    # through to the ordinary claim-and-wake below.
+    d = uv_req_data(req)
+    if d != C_NULL && d != UV_REQ_DETACHED
+        w = unsafe_pointer_to_objref(d)::WaitEntry
+        i = _uvreq_witness_slot(w)
+        if i != 0
+            aux = _slot_aux(w, i)
+            pending = aux >> _UVREQ_AUX_PENDING_SHIFT
+            if pending > 1
+                uv_req_set_data(req, C_NULL)
+                if status != 0 &&
+                   !(status == UV_ECANCELED && aux & _UVREQ_AUX_CANCEL_REQUESTED != 0) &&
+                   aux & _UVREQ_AUX_STATUS_MASK == 0
+                    aux |= (UInt64(-status) << _UVREQ_AUX_STATUS_SHIFT) & _UVREQ_AUX_STATUS_MASK
+                end
+                _set_slot_aux!(w, i, (aux & ~(typemax(UInt64) << _UVREQ_AUX_PENDING_SHIFT)) |
+                                     ((pending - 1) << _UVREQ_AUX_PENDING_SHIFT))
+                return nothing
+            end
+            # pending == 1: final chunk of a split write - a real error
+            # recorded by an earlier chunk must win the wake even if this
+            # chunk itself completed cleanly (or with the expected
+            # UV_ECANCELED of a cancellation sweep)
+            if pending == 1 && aux & _UVREQ_AUX_STATUS_MASK != 0
+                status = Cint(-((aux & _UVREQ_AUX_STATUS_MASK) >> _UVREQ_AUX_STATUS_SHIFT))
+            end
+        end
+    end
     # An expected-by-the-waiter UV_ECANCELED must be read off the entry
     # before the claim below releases the witness slot.
     cancel_requested = status == UV_ECANCELED && _uvreq_cancel_requested(req)
@@ -1749,7 +1894,8 @@ function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
     if t !== nothing
         if status == 0 || cancel_requested
             # For writes cancelled by the waiter, this is the partial write
-            # count.
+            # count. (For a split write the value is ignored: the waiter
+            # recomputes the total from the chunk requests it owns.)
             schedule(t, ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), req))
         else
             # A real error - including a close-induced UV_ECANCELED (libuv

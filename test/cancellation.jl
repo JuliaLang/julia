@@ -1147,6 +1147,65 @@ end
     @test 0 <= nwritten3[] < length(big)
     close(p3)
 
+    # split writes (multiple outstanding uv requests, forced via a tiny
+    # chunk size): cancellation sweeps the queued chunks tail-first and
+    # the reported count is exactly the bytes on the wire
+    let p = linked_pipe()
+        srcs = CancellationTokenSource()
+        toks = CancellationToken(srcs)
+        n = 1 << 20
+        data = rand(UInt8, n)
+        chunk = UInt(4096)
+        writer = @async GC.@preserve data begin
+            Base.iolock_begin()
+            Base._uv_write_wait(p.in, pointer(data), UInt(n), toks, data, true, chunk)
+        end
+        # observable progress gate: a successful read proves the writer is
+        # past its entry check with the chunks submitted (so the
+        # cancellation below interrupts the wait rather than the entry),
+        # then the kernel buffer refills and the writer parks with most
+        # chunks still queued in libuv
+        head = read(p.out, Int(chunk))
+        @test head == data[1:Int(chunk)]
+        @test timedwait(() -> (@atomic :monotonic writer.waiting_on) !== nothing, 20.0) == :ok
+        cancel!(srcs)
+        accepted = fetch(writer)::Int
+        @test length(head) <= accepted < n
+        # the stream survives the sweep: a follow-up write goes through
+        extra = rand(UInt8, 1000)
+        drained = @async read(p.out)
+        write(p.in, extra)
+        close(p.in)
+        received = vcat(head, fetch(drained)::Vector{UInt8})
+        # the accepted count is a clean prefix of the data, and the
+        # follow-up write arrives intact after it. On Windows the OS may
+        # underreport a cancelled write's count (see the manual), so only
+        # assert exactness elsewhere.
+        if !Sys.iswindows()
+            @test length(received) == accepted + length(extra)
+        end
+        @test length(received) >= accepted + length(extra)
+        @test received[1:accepted] == data[1:accepted]
+        @test received[(end - length(extra) + 1):end] == extra
+        close(p.out)
+    end
+
+    # split write, uncancelled: the countdown wake delivers the exact
+    # total and the requests are settled cleanly
+    let p = linked_pipe()
+        n = 1 << 18
+        data = rand(UInt8, n)
+        drained = @async read(p.out)
+        accepted = GC.@preserve data begin
+            Base.iolock_begin()
+            Base._uv_write_wait(p.in, pointer(data), UInt(n), nothing, data, false, UInt(4096))
+        end
+        @test accepted == n
+        close(p.in)
+        @test fetch(drained) == data
+        close(p.out)
+    end
+
     # live cancellation: Sockets.accept and recv with explicit tokens
     port, server = Sockets.listenany(Sockets.localhost, 0)
     src4 = CancellationTokenSource()
