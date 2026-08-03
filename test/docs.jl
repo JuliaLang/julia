@@ -234,6 +234,18 @@ mutable struct FieldDocs
     three
 end
 
+# Issue #58820 -- const field docstrings in mutable structs.
+"ConstFieldDocs"
+mutable struct ConstFieldDocs
+    "mutable_field"
+    mutable_field
+    "const_field"
+    const const_field
+    "const_typed_field"
+    const const_typed_field::Int
+    undocumented
+end
+
 "h/0-3"
 h(x = 1, y = 2, z = 3) = x + y + z
 
@@ -399,6 +411,14 @@ end
 let fields = meta(DocsTest)[@var(DocsTest.FieldDocs)].docs[Union{}].data[:fields]
     @test haskey(fields, :one) && fields[:one] == "one"
     @test haskey(fields, :two) && fields[:two] == doc"two"
+end
+
+# Issue #58820
+let fields = meta(DocsTest)[@var(DocsTest.ConstFieldDocs)].docs[Union{}].data[:fields]
+    @test haskey(fields, :mutable_field) && fields[:mutable_field] == "mutable_field"
+    @test haskey(fields, :const_field) && fields[:const_field] == "const_field"
+    @test haskey(fields, :const_typed_field) && fields[:const_typed_field] == "const_typed_field"
+    @test !haskey(fields, :undocumented)
 end
 
 let a = @doc(DocsTest.multidoc),
