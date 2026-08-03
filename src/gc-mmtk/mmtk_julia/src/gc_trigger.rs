@@ -89,7 +89,7 @@ impl JuliaGCTrigger {
 }
 
 impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
-    fn on_gc_start(&self, mmtk: &'static MMTK<JuliaVM>) {
+    fn on_pause_start(&self, mmtk: &'static MMTK<JuliaVM>) {
         self.maybe_force_full_heap(mmtk);
 
         let reserved_pages_now =
@@ -119,7 +119,7 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
         );
     }
 
-    fn on_gc_end(&self, mmtk: &'static MMTK<JuliaVM>) {
+    fn on_pause_end(&self, mmtk: &'static MMTK<JuliaVM>) {
         let gc_end_time = unsafe { jl_hrtime() } as usize;
         let pause = gc_end_time - self.gc_start_time.load(Ordering::Relaxed);
         self.gc_end_time.store(gc_end_time, Ordering::Relaxed);
@@ -134,8 +134,7 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
             - self.old_heap_size.load(Ordering::Relaxed);
         let freed_diff = self
             .before_free_heap_size
-            .load(Ordering::Relaxed)
-            .wrapping_sub(heap_size);
+            .load(Ordering::Relaxed) - heap_size;
         self.old_heap_size.store(heap_size, Ordering::Relaxed);
 
         let gc_auto = !mmtk.is_user_triggered_collection();
