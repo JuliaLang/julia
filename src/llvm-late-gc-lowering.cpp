@@ -2523,15 +2523,14 @@ BasicBlock *LateLowerGCFrame::FindGCFramePushBlock(State &S, SmallVectorImpl<Bas
     while (BB != Entry) {
         bool OK = !CyclicBlocks.contains(BB) && BB->getFirstInsertionPt() != BB->end();
         if (OK) {
-            // Deduplicate exit edges because switch successors can repeat.
             PopBlocks.clear();
             ExitEdges.clear();
-            SmallSet<std::pair<BasicBlock *, BasicBlock *>, 8> SeenEdges;
             for (auto &Cur : *F) {
                 if (!DT.isReachableFromEntry(&Cur) || !DT.dominates(BB, &Cur))
                     continue;
                 if (isa<ReturnInst>(Cur.getTerminator()))
                     PopBlocks.push_back(&Cur);
+                // Keep parallel switch edges: SplitEdge handles one occurrence per call.
                 for (BasicBlock *Succ : successors(&Cur)) {
                     if (DT.dominates(BB, Succ))
                         continue;
@@ -2540,8 +2539,7 @@ BasicBlock *LateLowerGCFrame::FindGCFramePushBlock(State &S, SmallVectorImpl<Bas
                         OK = false;
                         break;
                     }
-                    if (SeenEdges.insert({&Cur, Succ}).second)
-                        ExitEdges.push_back({&Cur, Succ});
+                    ExitEdges.push_back({&Cur, Succ});
                 }
                 if (!OK)
                     break;

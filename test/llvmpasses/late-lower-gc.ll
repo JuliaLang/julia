@@ -274,6 +274,30 @@ join:
   ret i64 %r
 }
 
+; Split every parallel switch edge that leaves the rooted region.
+define i64 @sunk_gcframe_duplicate_switch(i64 %a) {
+; CHECK-LABEL: @sunk_gcframe_duplicate_switch
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %cmp = icmp sgt i64 %a, 0
+  br i1 %cmp, label %join, label %cold
+cold:
+; CHECK: cold:
+; CHECK: call ptr @julia.new_gc_frame(i32 1)
+  %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+  call void @jl_safepoint()
+  call void @boxed_simple({} addrspace(10)* %aboxed, {} addrspace(10)* %aboxed)
+  switch i64 %a, label %join [
+    i64 0, label %join
+    i64 1, label %inside
+  ]
+inside:
+  br label %join
+; CHECK-COUNT-3: call void @julia.pop_gc_frame
+join:
+  ret i64 %a
+}
+
 ; Ignore disposable lifetime markers when finding alloca-root users.
 define ptr addrspace(10) @sunk_gcframe_alloca_lifetime(ptr addrspace(10) %input, i64 %a) {
 ; CHECK-LABEL: @sunk_gcframe_alloca_lifetime
