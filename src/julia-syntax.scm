@@ -1318,6 +1318,7 @@
                                           (= ,(cadar binds) ,tmp)
                                           ,blk)))))))
                (else (error "invalid let syntax"))))
+             ((linenum? (car binds)) (loop (cdr binds) blk))
              (else (error "invalid let syntax")))))))))
 
 (define (valid-macro-def-name? e)
