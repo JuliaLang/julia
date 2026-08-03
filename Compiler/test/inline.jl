@@ -151,14 +151,10 @@ end
     end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
-    is_bounds_throw_invoke_target(@nospecialize(callee)) =
-        callee === Base.throw_boundserror ||
-        callee == Core.GlobalRef(Base, :throw_boundserror) ||
-        callee == Core.GlobalRef(Base, :_throw_boundserror_indices) ||
-        (callee isa Core.MethodInstance && (callee.def.def.name === :throw_boundserror ||
-                                            callee.def.def.name === :_throw_boundserror_indices))
+    # `isinvoke` matches on the invoked method's name via the `:invoke` `CodeInstance`
+    # (`args[1]`), so it is unaffected by whether the callee (`args[2]`) is reformulated.
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && !is_bounds_throw_invoke_target(x.args[2])
+        isexpr(x, :invoke) && !(isinvoke(:throw_boundserror, x) || isinvoke(:_throw_boundserror_indices, x))
     end
 end
 
@@ -322,7 +318,7 @@ end
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
-    @test any(x->(isexpr(x, :call) && x.args[1] in (GlobalRef(Base, :memoryrefget), Base.memoryrefget)), ci.code)
+    @test any(iscall((ci, Base.memoryrefget)), ci.code)
 end
 
 # Issue #29114 & #36087 - Inlining of non-tuple splats
@@ -2196,7 +2192,10 @@ for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_esca
     global finalizer_escape::Int = 0
 
     let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
-        @test any(iscall((src, Core.setglobal!)), src.code)
+        # `reformulate_globals_pass!` rewrites the resolved default `setglobal!` store to
+        # an `Expr(:(=), ::Core.BindingPartition, value)` form.
+        @test any(x -> iscall((src, Core.setglobal!))(x) ||
+                       (Meta.isexpr(x, :(=)) && isa(x.args[1], Core.BindingPartition)), src.code)
     end
 
     let
@@ -2463,4 +2462,25 @@ let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
     @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
 end
 
+
+# `statement_cost` prices the reformulated global-access builtin calls via their registered
+# tfunc cost: `getglobal_partition` reads are free (matching plain `getglobal`), and the
+# `setglobal_partition` store matches the store builtins' tfunc cost, as does the `:(=)` form.
+let m = Module()
+    Core.eval(m, :(global gcost::Int = 0))
+    b = convert(Core.Binding, GlobalRef(m, :gcost))
+    part = Base.lookup_binding_partition(Base.get_world_counter(), b)
+    src = code_typed(() -> nothing, ())[1][1]
+    params = Compiler.OptimizationParams()
+    sptypes = Compiler.VarState[]
+    getcall = Expr(:call, GlobalRef(Core, :getglobal_partition), QuoteNode(part), QuoteNode(:acquire))
+    setcall = Expr(:call, GlobalRef(Core, :setglobal_partition), QuoteNode(part),
+                   QuoteNode(Core.setglobal!), QuoteNode(nothing), QuoteNode(nothing), 0, nothing)
+    @test Compiler.statement_cost(getcall, -1, src, sptypes, params) ==
+          Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.getglobal_partition)] == 0
+    store_cost = Compiler.statement_cost(setcall, -1, src, sptypes, params)
+    assign_cost = Compiler.statement_cost(Expr(:(=), part, 0), -1, src, sptypes, params)
+    @test store_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal_partition)]
+    @test assign_cost == Compiler.T_FFUNC_COST[Compiler.find_tfunc(Core.setglobal!)]
+end
 end # module inline_tests

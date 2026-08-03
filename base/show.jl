@@ -1815,7 +1815,8 @@ function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
             (isa(func, Symbol) && !is_valid_identifier(func)) ||
             (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
-            isa(func, GlobalRef)
+            isa(func, GlobalRef) ||
+            isa(func, Core.BindingPartition)
         show_unquoted(io, func, indent, 0, quote_level)
     else
         print(io, '(')
@@ -1871,6 +1872,11 @@ show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allo
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = show_globalref(io, ex)
+# A `Core.BindingPartition` in IR position is a resolved global read (see the compiler's
+# `reformulate_globals_pass!`); print it as the `GlobalRef` it pins, so displayed code
+# reads as the global access it encodes (`show` of the partition itself is verbose).
+show_unquoted(io::IO, bpart::Core.BindingPartition, ::Int, ::Int) =
+    show_globalref(io, partition_owner(bpart).globalref)
 
 function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
     print(io, ex.mod)
@@ -3447,14 +3453,11 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     print(io, " - ")
     kind = binding_kind(partition)
     if kind == PARTITION_KIND_BACKDATED_CONST
-        print(io, "backdated constant binding to ")
-        print(io, partition_restriction(partition))
+        print(io, "backdated constant binding")
     elseif kind == PARTITION_KIND_CONST
-        print(io, "constant binding to ")
-        print(io, partition_restriction(partition))
+        print(io, "constant binding")
     elseif kind == PARTITION_KIND_CONST_IMPORT
-        print(io, "constant binding (declared with `import`) to ")
-        print(io, partition_restriction(partition))
+        print(io, "constant binding (declared with `import`)")
     elseif kind == PARTITION_KIND_UNDEF_CONST
         print(io, "undefined const binding")
     elseif kind == PARTITION_KIND_GUARD
@@ -3467,8 +3470,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "implicit `using` resolved to global ")
         print(io, partition_restriction(partition).globalref)
     elseif kind == PARTITION_KIND_IMPLICIT_CONST
-        print(io, "implicit `using` resolved to constant ")
-        print(io, partition_restriction(partition))
+        print(io, "implicit `using` resolved to constant")
     elseif kind == PARTITION_KIND_EXPLICIT
         print(io, "explicit `using` from ")
         print(io, partition_restriction(partition).globalref)
@@ -3482,17 +3484,15 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     end
 end
 
+function show(io::IO, partition::Core.BindingPartition)
+    print(io, "BindingPartition(for ", partition_owner(partition).globalref, ": ")
+    print_partition(io, partition)
+    print(io, ")")
+end
+
 function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
     print(io, "BindingPartition ")
-    # The chain terminates in a backreference to the owning binding, so follow
-    # `next` until we reach it to report which binding this partition belongs to.
-    owner = @atomic partition.next
-    while owner isa Core.BindingPartition
-        owner = @atomic owner.next
-    end
-    if owner isa Core.Binding
-        print(io, "for ", owner.globalref, "\n   ")
-    end
+    print(io, "for ", partition_owner(partition).globalref, "\n   ")
     print_partition(io, partition)
 end
 

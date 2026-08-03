@@ -2082,12 +2082,9 @@ public:
     jl_tbaacache_t tbaa_cache;
     jl_noaliascache_t aliasscope_cache;
     jl_method_instance_t *linfo = NULL;
-    jl_code_instance_t *codeinst = NULL;
     jl_value_t *rettype = NULL;
     jl_code_info_t *source = NULL;
     jl_array_t *code = NULL;
-    size_t min_world = 0;
-    size_t max_world = -1;
     const char *name = NULL;
     StringRef file{};
     int32_t line = -1;
@@ -2111,18 +2108,11 @@ public:
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
-    jl_codectx_t(jl_codegen_output_t &out, size_t min_world, size_t max_world)
+    jl_codectx_t(jl_codegen_output_t &out)
       : builder(out.get_context()),
         emission_context(out),
-        min_world(min_world),
-        max_world(max_world),
         external_linkage(out.external_linkage),
         params(out.params) {
-    }
-
-    jl_codectx_t(jl_codegen_output_t &out, jl_code_instance_t *ci) :
-        jl_codectx_t(out, jl_atomic_load_relaxed(&ci->min_world), jl_atomic_load_relaxed(&ci->max_world)) {
-        codeinst = ci;
     }
 
     jl_typecache_t &types() {
@@ -2218,7 +2208,7 @@ jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
 
 static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed = NULL) JL_CANSAFEPOINT;
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1) JL_CANSAFEPOINT;
-static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa) JL_CANSAFEPOINT;
+static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa, AtomicOrdering order=AtomicOrdering::Unordered) JL_CANSAFEPOINT;
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i) JL_CANSAFEPOINT;
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const Twine &msg) JL_CANSAFEPOINT;
 static Value *get_current_task(jl_codectx_t &ctx);
@@ -3243,15 +3233,44 @@ static void emit_depwarn_check(jl_codectx_t &ctx, jl_binding_t *b)
     ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
 }
 
+// Inference records an invalidation edge for every global access it resolves, then
+// reformulates the access into a `:getglobal_partition` / `:setglobal_partition` node.
+// Codegen only optimizes an access on its own for the one edge-free-safe case: a binding
+// that is a constant fixed at world 1, which can never be reassigned or deleted
+// (`jl_replace_binding_locked2` rejects that) and so needs no edge to be folded.
+// Returns that constant value, or NULL.
+static jl_value_t *binding_const_world1(jl_binding_t *bnd, int *maybe_depwarn) JL_CANSAFEPOINT
+{
+    if (!bnd)
+        return NULL;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, 1);
+    // A world-1 `PARTITION_KIND_CONST` binding is a primordial, immutable constant, so its
+    // value can be embedded directly regardless of the partition's upper world bound (that
+    // bound only reflects a later flag flip such as an `export`, not a value change).
+    if (jl_binding_kind(bpart) == PARTITION_KIND_CONST) {
+        *maybe_depwarn = (bpart->kind & PARTITION_FLAG_DEPWARN) != 0;
+        return bpart->restriction;
+    }
+    return NULL;
+}
+
 // try to statically evaluate, NULL if not possible. note that this may allocate, and as
 // such the resulting value should not be embedded directly in the generated code.
 static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex) JL_CANSAFEPOINT
 {
+    if (jl_is_binding_partition(ex)) {
+        // A resolved global read frozen by inference. Only a real constant can be
+        // evaluated statically; a mutable/typed binding must be loaded at runtime.
+        jl_binding_partition_t *bpart = (jl_binding_partition_t*)ex;
+        if (jl_bkind_is_real_constant(jl_binding_kind(bpart)))
+            return bpart->restriction;
+        return NULL;
+    }
     if (jl_is_symbol(ex)) {
         jl_sym_t *sym = (jl_sym_t*)ex;
         jl_binding_t *bnd = jl_get_module_binding(ctx.module, sym, 1);
         int possibly_deprecated = 0;
-        jl_value_t *cval = jl_get_binding_leaf_partitions_value_if_const(bnd, &possibly_deprecated, ctx.min_world, ctx.max_world);
+        jl_value_t *cval = binding_const_world1(bnd, &possibly_deprecated);
         if (cval) {
             if (possibly_deprecated)
                 emit_depwarn_check(ctx, bnd);
@@ -3279,7 +3298,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex) JL_CANSAFEPOIN
         s = jl_globalref_name(ex);
         jl_binding_t *bnd = jl_get_module_binding(jl_globalref_mod(ex), s, 1);
         int possibly_deprecated = 0;
-        jl_value_t *v = jl_get_binding_leaf_partitions_value_if_const(bnd, &possibly_deprecated, ctx.min_world, ctx.max_world);
+        jl_value_t *v = binding_const_world1(bnd, &possibly_deprecated);
         if (v) {
             if (possibly_deprecated)
                 emit_depwarn_check(ctx, bnd);
@@ -3303,7 +3322,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex) JL_CANSAFEPOIN
                     if (s && jl_is_symbol(s)) {
                         jl_binding_t *bnd = jl_get_module_binding(m, s, 1);
                         int possibly_deprecated = 0;
-                        jl_value_t *v = jl_get_binding_leaf_partitions_value_if_const(bnd, &possibly_deprecated, ctx.min_world, ctx.max_world);
+                        jl_value_t *v = binding_const_world1(bnd, &possibly_deprecated);
                         if (v) {
                             if (possibly_deprecated)
                                 emit_depwarn_check(ctx, bnd);
@@ -3544,54 +3563,22 @@ static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, j
     return mark_julia_type(ctx, v, true, jl_any_type);
 }
 
-// Resolving a `getglobal(::Module, ::Symbol)`-style call to a constant binding
-// load is only safe if the `CodeInstance` we are emitting has a forward edge to
-// the binding, since otherwise nothing will invalidate this code when the
-// binding partition changes (e.g. on `const` redefinition). Inference records
-// such edges via `GlobalAccessInfo` for accesses it sees directly, but accesses
-// that only appear after inlining (where a `Module`-typed slot was substituted
-// with a literal `Module`) may not have a corresponding edge. In that case fall
-// back to the runtime path so the new value is observed correctly.
-static bool ci_has_binding_edge(jl_code_instance_t *ci, jl_binding_t *bnd)
+// Emit a read of a binding whose leaf partition was resolved by inference (see
+// the `:getglobal_partition` reformulation in the optimizer). Inference has
+// recorded an invalidation edge to the binding, so it is safe to freeze the
+// partition here; codegen performs no partition or world-range scan of its own.
+// This read is side-effect free: any deprecation warning is emitted separately by
+// inference as an explicit `depwarn_partition` statement (see `emit_depwarn_partition`).
+static jl_cgval_t emit_globalref_partition(jl_codectx_t &ctx, jl_binding_partition_t *bpart, AtomicOrdering order=AtomicOrdering::Unordered) JL_CANSAFEPOINT
 {
-    if (!ci)
-        return false;
-    jl_svec_t *edges = jl_atomic_load_relaxed(&ci->edges);
-    if (!edges || !jl_is_svec((jl_value_t*)edges))
-        return false;
-    size_t l = jl_svec_len(edges);
-    for (size_t i = 0; i < l; i++) {
-        jl_value_t *e = jl_svecref(edges, i);
-        if (e == (jl_value_t*)bnd)
-            return true;
-    }
-    return false;
-}
-
-static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order, bool from_literal_globalref = true) JL_CANSAFEPOINT
-{
-    jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
-    if (!jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
-        return emit_globalref_runtime(ctx, bnd, mod, name);
-    }
-    // Literal `GlobalRef` accesses in the method's source are tracked by the
-    // method-level source scan (see `jl_scan_method_source_now`), which
-    // registers the binding as a backedge of the method itself. For *dynamic*
-    // accesses (`getglobal`/`getfield` on a `Const(::Module)`/`Const(::Symbol)`)
-    // there is no equivalent registration: such calls may have been
-    // synthesized by inlining substitution, and the only place an edge could
-    // exist is on the `CodeInstance` itself. Without such an edge, baking the
-    // binding's value into the generated code would be unsafe under
-    // redefinition, so defer to the runtime path.
-    if (!from_literal_globalref && ctx.codeinst != NULL && !ci_has_binding_edge(ctx.codeinst, bnd))
-        return emit_globalref_runtime(ctx, bnd, mod, name);
-    if (jl_bkind_is_real_constant(rkp.kind) || rkp.kind == PARTITION_KIND_UNDEF_CONST) {
-        if (rkp.maybe_depwarn) {
-            Value *bp = julia_binding_gv(ctx, bnd);
-            ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
-        }
-        jl_value_t *constval = rkp.restriction;
+    // The reformulated node carries only the (leaf) partition; recover its owning
+    // binding by walking the circular partition chain.
+    jl_binding_t *bnd = jl_binding_partition_owner(bpart);
+    jl_module_t *mod = bnd->globalref->mod;
+    jl_sym_t *name = bnd->globalref->name;
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (jl_bkind_is_real_constant(kind) || kind == PARTITION_KIND_UNDEF_CONST) {
+        jl_value_t *constval = bpart->restriction;
         if (!constval) {
             undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
             return jl_cgval_t();
@@ -3602,20 +3589,38 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         }
         return mark_julia_const(ctx, constval);
     }
-    if (rkp.kind != PARTITION_KIND_GLOBAL) {
-        return emit_globalref_runtime(ctx, bnd, mod, name);
-    }
     Value *bp = julia_binding_gv(ctx, bnd);
-    if (rkp.maybe_depwarn) {
-        ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
+    if (kind != PARTITION_KIND_GLOBAL) {
+        // A declared-but-untyped/guard partition that inference nonetheless
+        // resolved: read the current value from the binding at runtime.
+        Value *v = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
+        undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
+        return mark_julia_type(ctx, v, true, jl_any_type);
     }
-    if (bnd != rkp.binding_if_global)
-        bp = julia_binding_gv(ctx, rkp.binding_if_global);
-    jl_value_t *ty = rkp.restriction;
+    jl_value_t *ty = bpart->restriction;
     Value *bpval = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
-    return update_julia_type(ctx, emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
+    return update_julia_type(ctx, emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding, order), ty);
+}
+
+static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order) JL_CANSAFEPOINT
+{
+    jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
+    // Codegen only folds a world-1 immortal constant on its own; everything else is
+    // reformulated by inference or read from the binding at runtime.
+    int maybe_depwarn = 0;
+    jl_value_t *constval = binding_const_world1(bnd, &maybe_depwarn);
+    if (constval) {
+        if (maybe_depwarn)
+            emit_depwarn_check(ctx, bnd);
+        if (jl_generating_output()) {
+            // root is required to allow bindings to be pruned, especially by `--trim`
+            jl_temporary_root(ctx, constval);
+        }
+        return mark_julia_const(ctx, constval);
+    }
+    return emit_globalref_runtime(ctx, bnd, mod, name);
 }
 
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
@@ -3624,46 +3629,12 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                                 const jl_cgval_t *modifyop, bool alloc) JL_CANSAFEPOINT
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, sym, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+    // Inference reformulates resolvable stores into `:setglobal_partition` nodes (with
+    // an invalidation edge), handled by `emit_globalop_partition`; those never reach
+    // here. A store has no edge-free-safe fast path (a constant cannot be assigned), so
+    // any store reaching this path uses the runtime checked-assign helpers, which
+    // validate the binding and its declared type at runtime.
     Value *bp = julia_binding_gv(ctx, bnd);
-    if (bpart) {
-        if (jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) {
-            int possibly_deprecated = bpart->kind & PARTITION_FLAG_DEPWARN;
-            jl_value_t *ty = bpart->restriction;
-            if (ty != nullptr) {
-                const char *fname = store_kind_name(op, "global");
-                if (op != StoreKind::Modify) {
-                    emit_typecheck(ctx, rval, ty, fname);
-                    rval = update_julia_type(ctx, rval, ty);
-                    if (rval.typ == jl_bottom_type)
-                        return jl_cgval_t();
-                }
-                bool isboxed = true;
-                bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
-                if (possibly_deprecated) {
-                    ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
-                }
-                return typed_store(ctx,
-                                julia_binding_pvalue(ctx, bp),
-                                rval, cmp, ty,
-                                ctx.tbaa().tbaa_binding,
-                                nullptr,
-                                bp,
-                                isboxed,
-                                Order,
-                                FailOrder,
-                                0,
-                                nullptr,
-                                op,
-                                maybe_null,
-                                modifyop,
-                                fname,
-                                mod,
-                                sym);
-
-            }
-        }
-    }
     Value *m = literal_pointer_val(ctx, (jl_value_t*)mod);
     Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
     ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
@@ -3697,6 +3668,110 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
         abort(); // Unset is not a valid operation for globals
     }
     abort(); // unreachable
+}
+
+// Emit a store to a binding whose leaf partition was resolved by inference (see
+// the `:setglobal_partition` reformulation). For a typed global partition the
+// store is emitted inline: the invalidation edge recorded by inference makes it
+// safe to bake the declared type into the type check. Any other partition kind
+// (e.g. a constant, which cannot be assigned) defers to the runtime helpers.
+static jl_cgval_t emit_globalop_partition(jl_codectx_t &ctx, jl_binding_t *bnd, jl_binding_partition_t *bpart,
+                                          jl_cgval_t rval, const jl_cgval_t &cmp,
+                                          AtomicOrdering Order, AtomicOrdering FailOrder,
+                                          StoreKind op, const jl_cgval_t *modifyop) JL_CANSAFEPOINT
+{
+    jl_module_t *mod = bnd->globalref->mod;
+    jl_sym_t *sym = bnd->globalref->name;
+    if (jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) {
+        jl_value_t *ty = bpart->restriction;
+        if (ty != nullptr) {
+            int possibly_deprecated = bpart->kind & PARTITION_FLAG_DEPWARN;
+            Value *bp = julia_binding_gv(ctx, bnd);
+            const char *fname = store_kind_name(op, "global");
+            if (op != StoreKind::Modify) {
+                emit_typecheck(ctx, rval, ty, fname);
+                rval = update_julia_type(ctx, rval, ty);
+                if (rval.typ == jl_bottom_type)
+                    return jl_cgval_t();
+            }
+            bool isboxed = true;
+            bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
+            if (possibly_deprecated)
+                emit_depwarn_check(ctx, bnd);
+            return typed_store(ctx, julia_binding_pvalue(ctx, bp), rval, cmp, ty,
+                               ctx.tbaa().tbaa_binding, nullptr, bp, isboxed,
+                               Order, FailOrder, 0, nullptr, op, maybe_null,
+                               modifyop, fname, mod, sym);
+        }
+    }
+    return emit_globalop(ctx, mod, sym, rval, cmp, Order, FailOrder, op, modifyop, false);
+}
+
+// Codegen for the `setglobal_partition` builtin produced by inference:
+//   setglobal_partition(partition, op_builtin, order, failorder, value, cmp_or_nothing)
+// `op_builtin` is the resolved store builtin (`setglobal!`/`swapglobal!`/
+// `replaceglobal!`/`setglobalonce!`); `modifyglobal!` is intentionally not
+// reformulated and stays on the runtime path. `opf`/`order_arg`/`failorder_arg`
+// are the (constant) op builtin and order Symbols/`nothing`; `value`/`cmpval` are
+// the already-emitted operands.
+static jl_cgval_t emit_setglobal_partition(jl_codectx_t &ctx, jl_binding_partition_t *bpart, jl_value_t *opf,
+                                           jl_value_t *order_arg, jl_value_t *failorder_arg,
+                                           const jl_cgval_t &value, const jl_cgval_t &cmpval) JL_CANSAFEPOINT
+{
+    // The builtin carries only the (leaf) partition; recover its owning binding by
+    // walking the circular partition chain.
+    jl_binding_t *bnd = jl_binding_partition_owner(bpart);
+    StoreKind op;
+    bool has_cmp = false;
+    if (opf == BUILTIN(setglobal))
+        op = StoreKind::Set;
+    else if (opf == BUILTIN(swapglobal))
+        op = StoreKind::Swap;
+    else if (opf == BUILTIN(replaceglobal)) {
+        op = StoreKind::Replace;
+        has_cmp = true;
+    }
+    else {
+        assert(opf == BUILTIN(setglobalonce));
+        op = StoreKind::SetOnce;
+    }
+    // order_arg/failorder_arg are either an explicit order Symbol or `nothing`
+    // (meaning "use the default"), mirroring `emit_f_opglobal`: the default store
+    // order is release, and the default fail order equals the success order. Only
+    // an explicit order symbol is parsed/validated (as a store or load order resp.).
+    enum jl_memory_order order = order_arg == jl_nothing ? jl_memory_order_release :
+        jl_get_atomic_order((jl_sym_t*)order_arg, op != StoreKind::Set, true);
+    enum jl_memory_order fail_order = failorder_arg == jl_nothing ? order :
+        jl_get_atomic_order((jl_sym_t*)failorder_arg, true, false);
+    const char *fname = store_kind_name(op, "global");
+    if (order == jl_memory_order_invalid || fail_order == jl_memory_order_invalid || fail_order > order) {
+        emit_atomic_error(ctx, "invalid atomic ordering");
+        return jl_cgval_t(); // unreachable
+    }
+    if (order == jl_memory_order_notatomic) {
+        std::string msg(fname);
+        msg += ": module binding cannot be written non-atomically";
+        emit_atomic_error(ctx, msg.c_str());
+        return jl_cgval_t(); // unreachable
+    }
+    if (fail_order == jl_memory_order_notatomic) {
+        std::string msg(fname);
+        msg += ": module binding cannot be accessed non-atomically";
+        emit_atomic_error(ctx, msg.c_str());
+        return jl_cgval_t(); // unreachable
+    }
+    jl_cgval_t rval = value;
+    if (rval.typ == jl_bottom_type)
+        return jl_cgval_t();
+    jl_cgval_t cmp;
+    if (has_cmp) {
+        cmp = cmpval;
+        if (cmp.typ == jl_bottom_type)
+            return jl_cgval_t();
+    }
+    return emit_globalop_partition(ctx, bnd, bpart, rval, cmp,
+                                   get_llvm_atomic_order(order), get_llvm_atomic_order(fail_order),
+                                   op, nullptr);
 }
 
 static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
@@ -4182,22 +4257,18 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
 static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_sym_t *name, int allow_import, enum jl_memory_order order) JL_CANSAFEPOINT
 {
+    // `jl_boundp` performs a seq_cst definedness query (see `jl_f_isdefinedglobal`/`jl_boundp`):
+    // its value load is a seq_cst atomic load, the strongest ordering, so it already satisfies any
+    // order the caller validated. The `:isdefinedglobal` node is only emitted for order >= unordered
+    // (a non-atomic order falls back to the runtime builtin, which rejects it), so no additional
+    // ordering work is needed here.
+    assert(order >= jl_memory_order_unordered); (void)order;
     jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
-    if (allow_import && jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
-        if (jl_bkind_is_real_constant(rkp.kind))
-            return mark_julia_const(ctx, jl_true);
-        if (rkp.kind == PARTITION_KIND_GLOBAL) {
-            Value *bp = julia_binding_gv(ctx, rkp.binding_if_global);
-            bp = julia_binding_pvalue(ctx, bp);
-            LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
-            ai.decorateInst(v);
-            v->setOrdering(get_llvm_atomic_order(order));
-            Value *isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
-            return mark_julia_type(ctx, isnull, false, jl_bool_type);
-        }
-    }
+    // As in `emit_globalref`, codegen shortcuts only the world-1 immortal constant, which
+    // is always defined; everything else uses the runtime definedness query.
+    int maybe_depwarn = 0;
+    if (allow_import && binding_const_world1(bnd, &maybe_depwarn))
+        return mark_julia_const(ctx, jl_true);
     Value *isdef = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
             literal_pointer_val(ctx, (jl_value_t*)modu),
             literal_pointer_val(ctx, (jl_value_t*)name),
@@ -4205,6 +4276,30 @@ static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_
         });
     isdef = ctx.builder.CreateTrunc(isdef, getInt1Ty(ctx.builder.getContext()));
     return mark_julia_type(ctx, isdef, false, jl_bool_type);
+}
+
+// Emit a definedness query on a binding whose leaf partition was resolved by inference
+// (see the `:isdefinedglobal_partition` reformulation). Inference recorded an invalidation
+// edge, so the resolved partition can be frozen: a real constant is always defined, and a
+// typed global is an ordered null-check load of its own value slot. Any other kind defers
+// to the runtime definedness query.
+static jl_cgval_t emit_isdefinedglobal_partition(jl_codectx_t &ctx, jl_binding_partition_t *bpart, enum jl_memory_order order) JL_CANSAFEPOINT
+{
+    jl_binding_t *bnd = jl_binding_partition_owner(bpart);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (jl_bkind_is_real_constant(kind))
+        return mark_julia_const(ctx, jl_true);
+    if (kind == PARTITION_KIND_GLOBAL) {
+        Value *bp = julia_binding_gv(ctx, bnd);
+        bp = julia_binding_pvalue(ctx, bp);
+        LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+        ai.decorateInst(v);
+        v->setOrdering(get_llvm_atomic_order(order));
+        Value *isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
+        return mark_julia_type(ctx, isnull, false, jl_bool_type);
+    }
+    return emit_isdefinedglobal(ctx, bnd->globalref->mod, bnd->globalref->name, 1, order);
 }
 
 static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
@@ -4426,8 +4521,7 @@ static jl_llvm_functions_t
         jl_method_instance_t *lam,
         jl_code_info_t *src,
         jl_value_t *abi,
-        jl_value_t *jlrettype,
-        jl_code_instance_t *codeinst = nullptr) JL_CANSAFEPOINT;
+        jl_value_t *jlrettype) JL_CANSAFEPOINT;
 
 static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_datatype_t *type, jl_cgval_t name) JL_CANSAFEPOINT;
 
@@ -4910,7 +5004,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (fld.constant && jl_is_symbol(fld.constant)) {
             jl_sym_t *name = (jl_sym_t*)fld.constant;
             if (obj.constant && jl_is_module(obj.constant)) {
-                *ret = emit_globalref(ctx, (jl_module_t*)obj.constant, name, order == jl_memory_order_unspecified ? AtomicOrdering::Unordered : get_llvm_atomic_order(order), /*from_literal_globalref*/false);
+                *ret = emit_globalref(ctx, (jl_module_t*)obj.constant, name, order == jl_memory_order_unspecified ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
                 return true;
             }
 
@@ -5055,12 +5149,94 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (sym.constant && jl_is_symbol(sym.constant)) {
             jl_sym_t *name = (jl_sym_t*)sym.constant;
             if (mod.constant && jl_is_module(mod.constant)) {
-                *ret = emit_globalref(ctx, (jl_module_t*)mod.constant, name, get_llvm_atomic_order(order), /*from_literal_globalref*/false);
+                *ret = emit_globalref(ctx, (jl_module_t*)mod.constant, name, get_llvm_atomic_order(order));
                 return true;
             }
         }
 
         return false;
+    }
+
+    else if (f == BUILTIN(getglobal_partition) && nargs == 2) {
+        // getglobal_partition(partition, order): the partition object and order
+        // Symbol are carried as constants by inference. Without them, fall back to
+        // a generic builtin call (the runtime builtin handles it).
+        const jl_cgval_t &part = argv[1];
+        const jl_cgval_t &ord = argv[2];
+        if (!part.constant || !jl_is_binding_partition(part.constant) ||
+            !ord.constant || !jl_is_symbol(ord.constant))
+            return false;
+        jl_binding_partition_t *bpart = (jl_binding_partition_t*)part.constant;
+        enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
+        // Guard the order here rather than in inference: a module binding must be read
+        // atomically, so reject an invalid or non-atomic order (mirroring `getglobal`).
+        if (order == jl_memory_order_invalid) {
+            emit_atomic_error(ctx, "invalid atomic ordering");
+            *ret = jl_cgval_t(); // unreachable
+            return true;
+        }
+        if (order == jl_memory_order_notatomic) {
+            emit_atomic_error(ctx, "getglobal: module binding cannot be read non-atomically");
+            *ret = jl_cgval_t(); // unreachable
+            return true;
+        }
+        *ret = emit_globalref_partition(ctx, bpart, get_llvm_atomic_order(order));
+        return true;
+    }
+
+    else if (f == BUILTIN(setglobal_partition) && nargs == 6) {
+        // setglobal_partition(partition, op, order, failorder, value, cmp): the
+        // partition, op builtin, and order/failorder are carried as constants by
+        // inference. Without them, fall back to a generic builtin call.
+        const jl_cgval_t &part = argv[1];
+        const jl_cgval_t &opf = argv[2];
+        const jl_cgval_t &ord = argv[3];
+        const jl_cgval_t &failord = argv[4];
+        if (!part.constant || !jl_is_binding_partition(part.constant) ||
+            !opf.constant || !ord.constant || !failord.constant)
+            return false;
+        *ret = emit_setglobal_partition(ctx, (jl_binding_partition_t*)part.constant, opf.constant,
+                                        ord.constant, failord.constant, argv[5], argv[6]);
+        return true;
+    }
+
+    else if (f == BUILTIN(isdefinedglobal_partition) && nargs == 2) {
+        // isdefinedglobal_partition(partition, order): the partition object and order
+        // Symbol are carried as constants by inference. Without them, fall back to a
+        // generic builtin call (the runtime builtin handles it).
+        const jl_cgval_t &part = argv[1];
+        const jl_cgval_t &ord = argv[2];
+        if (!part.constant || !jl_is_binding_partition(part.constant) ||
+            !ord.constant || !jl_is_symbol(ord.constant))
+            return false;
+        enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
+        // A module binding must be accessed atomically, so reject an invalid or non-atomic
+        // order (mirroring `getglobal_partition`).
+        if (order == jl_memory_order_invalid) {
+            emit_atomic_error(ctx, "invalid atomic ordering");
+            *ret = jl_cgval_t(); // unreachable
+            return true;
+        }
+        if (order == jl_memory_order_notatomic) {
+            emit_atomic_error(ctx, "isdefinedglobal: module binding cannot be accessed non-atomically");
+            *ret = jl_cgval_t(); // unreachable
+            return true;
+        }
+        *ret = emit_isdefinedglobal_partition(ctx, (jl_binding_partition_t*)part.constant, order);
+        return true;
+    }
+
+    else if (f == BUILTIN(depwarn_partition) && nargs == 1) {
+        // depwarn_partition(partition): the partition object is carried as a constant by
+        // inference. Emit the (runtime-gated) deprecation check inline, mirroring what the
+        // read path used to inline. Without the constant, fall back to a generic builtin call.
+        const jl_cgval_t &part = argv[1];
+        if (!part.constant || !jl_is_binding_partition(part.constant))
+            return false;
+        jl_binding_t *bnd = jl_binding_partition_owner((jl_binding_partition_t*)part.constant);
+        emit_depwarn_check(ctx, bnd);
+        *ret = ghostValue(ctx, jl_nothing_type);
+        return true;
     }
 
     else if ((f == BUILTIN(setglobal) && (nargs == 3 || nargs == 4)) ||
@@ -5936,13 +6112,15 @@ static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_datatyp
     ctx.builder.SetInsertPoint(ifok);
 }
 
-static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa)
+static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa, AtomicOrdering order)
 {
     LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
     setName(ctx.emission_context, v, jl_symbol_name(name) + StringRef(".checked"));
     if (isvol)
         v->setVolatile(true);
-    v->setOrdering(AtomicOrdering::Unordered);
+    // Unordered is the minimum for a possibly-concurrent load of a binding slot; a
+    // stronger order (from an explicit atomic `getglobal`) must be honored.
+    v->setOrdering(order == AtomicOrdering::NotAtomic ? AtomicOrdering::Unordered : order);
     if (tbaa) {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         ai.decorateInst(v);
@@ -6697,7 +6875,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
 
     if (closure_method->source) {
         mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
-        ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.min_world, ctx.max_world);
+        ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.source->min_world, ctx.source->max_world);
     }
     else {
         mi = (jl_method_instance_t*)jl_atomic_load_relaxed(&closure_method->specializations);
@@ -6780,6 +6958,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     }
     if (jl_is_globalref(expr)) {
         return emit_globalref(ctx, jl_globalref_mod(expr), jl_globalref_name(expr), AtomicOrdering::Unordered);
+    }
+    if (jl_is_binding_partition(expr)) {
+        // A resolved global read frozen by inference (see `reformulate_globals_pass!`):
+        // the partition recovers its own binding, so this reads exactly like a
+        // GlobalRef whose partition inference already pinned.
+        return emit_globalref_partition(ctx, (jl_binding_partition_t*)expr);
     }
     if (jl_is_linenode(expr)) {
         jl_error("LineNumberNode in value position");
@@ -6879,6 +7063,19 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     }
     else if (head == jl_assign_sym) {
         assert(nargs == 2);
+        if (jl_is_binding_partition(args[0])) {
+            // A resolved default global store frozen by inference
+            // (`reformulate_globals_pass!`), the write-side analogue of a bare
+            // `Core.BindingPartition` read: recover the binding, store with the default
+            // order, and return the stored value (this assignment's value may be used).
+            jl_binding_partition_t *bpart = (jl_binding_partition_t*)args[0];
+            jl_binding_t *bnd = jl_binding_partition_owner(bpart);
+            jl_cgval_t rval = emit_expr(ctx, args[1]);
+            if (rval.typ == jl_bottom_type)
+                return jl_cgval_t();
+            return emit_globalop_partition(ctx, bnd, bpart, rval, jl_cgval_t(),
+                                           AtomicOrdering::Release, AtomicOrdering::NotAtomic, StoreKind::Set, nullptr);
+        }
         emit_assignment(ctx, args[0], args[1], ssaidx_0based);
         return ghostValue(ctx, jl_nothing_type);
     }
@@ -7231,7 +7428,7 @@ Function *get_or_emit_fptr1(StringRef preal_decl, Module *M)
 static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, const jl_cgval_t &modifyop, jl_value_t *jltype, Type *elty, jl_cgval_t rhs, const Twine &fname, bool gcstack_arg)
 {
     Module *M = ctx2.f->getParent();
-    jl_codectx_t ctx(ctx2.emission_context, ctx2.min_world, ctx2.max_world);
+    jl_codectx_t ctx(ctx2.emission_context);
     SmallVector<Type*> ArgTy;
     ArgTy.push_back(elty);
     if (rhs.V)
@@ -7303,7 +7500,7 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
     ++EmittedToJLInvokes;
-    jl_codectx_t ctx(out, codeinst);
+    jl_codectx_t ctx(out);
     std::string name;
     raw_string_ostream(name) << "tojlinvoke" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     Function *f = Function::Create(ctx.types().T_jlfunc,
@@ -7365,7 +7562,7 @@ static void emit_specsig_to_specsig(
         jl_value_t *rettype_const) JL_CANSAFEPOINT
 {
     ++EmittedCFuncInvalidates;
-    jl_codectx_t ctx(out, 0, 0);
+    jl_codectx_t ctx(out);
     ctx.f = gf_thunk;
 
     BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", gf_thunk);
@@ -7548,7 +7745,7 @@ static void emit_fptr1_wrapper(Module *M, StringRef gf_thunk_name, Value *target
     w->addFnAttr(Attribute::OptimizeNone);
     w->addFnAttr(Attribute::NoInline);
 
-    jl_codectx_t ctx(out, 0, 0);
+    jl_codectx_t ctx(out);
     ctx.f = w;
     ctx.rettype = declrt;
 
@@ -7840,7 +8037,7 @@ static Function *gen_cfun_wrapper(
     jl_init_function(cw, out);
     cw->setAttributes(AttributeList::get(M->getContext(), {attributes, cw->getAttributes()}));
 
-    jl_codectx_t ctx(out, 0, 0);
+    jl_codectx_t ctx(out);
     ctx.f = cw;
     ctx.name = name;
     ctx.funcName = name;
@@ -8346,7 +8543,7 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_va
     //Value *mfunc = &*AI++; (void)mfunc; // unused
     assert(AI == w->arg_end());
 
-    jl_codectx_t ctx(out, 0, 0);
+    jl_codectx_t ctx(out);
     ctx.f = w;
     ctx.linfo = lam;
     ctx.rettype = jlretty;
@@ -8674,16 +8871,12 @@ static jl_llvm_functions_t
         jl_method_instance_t *lam,
         jl_code_info_t *src,
         jl_value_t *abi,
-        jl_value_t *jlrettype,
-        jl_code_instance_t *codeinst)
+        jl_value_t *jlrettype)
 {
     ++EmittedFunctions;
     // step 1. unpack AST and allocate codegen context for this function
-    size_t min_world = src->min_world;
-    size_t max_world = src->max_world;
     jl_llvm_functions_t declarations{};
-    jl_codectx_t ctx(out, min_world, max_world);
-    ctx.codeinst = codeinst;
+    jl_codectx_t ctx(out);
     jl_datatype_t *vatyp = NULL;
     JL_GC_PUSH2(&ctx.code, &vatyp);
     ctx.code = src->code;
@@ -10380,14 +10573,13 @@ std::optional<jl_llvm_functions_t> jl_emit_code(
         jl_method_instance_t *li,
         jl_code_info_t *src,
         jl_value_t *abi_at,
-        jl_value_t *abi_rt,
-        jl_code_instance_t *codeinst)
+        jl_value_t *abi_rt)
 {
     std::optional<jl_llvm_functions_t> ret;
     JL_TIMING(CODEGEN, CODEGEN_LLVM);
     jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_DEFAULT_BLOCK);
     JL_TRY {
-        ret = emit_function(out, li, src, abi_at, abi_rt, codeinst);
+        ret = emit_function(out, li, src, abi_at, abi_rt);
         auto stream = *jl_ExecutionEngine->get_dump_emitted_mi_name_stream();
         if (stream) {
             ios_printf(stream, "%s\t", ret->specptr->getName().str().c_str());
@@ -10418,7 +10610,7 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(jl_codegen_output_t &out, jl_metho
     jl_llvm_functions_t declarations{JL_INVOKE_ARGS};
     if (uses_specsig(mi->specTypes, false, rettype, true)) {
         Module *M = &out.get_module();
-        jl_codectx_t ctx(out, 0, 0);
+        jl_codectx_t ctx(out);
         ctx.name = M->getModuleIdentifier().data();
         std::string funcName = get_function_name(true, false, ctx.name, ctx.emission_context.TargetTriple);
         jl_returninfo_t returninfo = get_specsig_function(out, M, NULL, funcName, mi->specTypes, rettype, true);
@@ -10451,7 +10643,7 @@ std::optional<jl_llvm_functions_t> jl_emit_codeinst(
         decls = jl_emit_oc_wrapper(out, mi, codeinst->rettype);
     } else {
         //assert(jl_egal((jl_value_t*)jl_atomic_load_relaxed(&codeinst->debuginfo), (jl_value_t*)src->debuginfo) && "trying to generate code for a codeinst for an incompatible src");
-        decls = jl_emit_code(out, mi, src, get_ci_abi(codeinst), codeinst->rettype, codeinst);
+        decls = jl_emit_code(out, mi, src, get_ci_abi(codeinst), codeinst->rettype);
     }
     if (!decls)
         return {};

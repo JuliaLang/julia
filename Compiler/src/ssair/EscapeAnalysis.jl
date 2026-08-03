@@ -622,7 +622,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                 escape_edges!(astate, pc, stmt.values)
             elseif isa(stmt, UpsilonNode)
                 escape_val_ifdefined!(astate, pc, stmt)
-            elseif isa(stmt, GlobalRef) # global load
+            elseif isa(stmt, GlobalRef) || isa(stmt, Core.BindingPartition) # global load
                 add_escape_change!(astate, SSAValue(pc), ⊤)
             elseif isa(stmt, SSAValue)
                 escape_val!(astate, pc, stmt)
@@ -780,9 +780,9 @@ function add_liveness_change!(astate::AnalysisState, @nospecialize(x), livepc::I
 end
 
 function add_alias_change!(astate::AnalysisState, @nospecialize(x), @nospecialize(y))
-    if isa(x, GlobalRef)
+    if isa(x, GlobalRef) || isa(x, Core.BindingPartition)
         return add_escape_change!(astate, y, ⊤)
-    elseif isa(y, GlobalRef)
+    elseif isa(y, GlobalRef) || isa(y, Core.BindingPartition)
         return add_escape_change!(astate, x, ⊤)
     end
     estate = astate.estate
@@ -965,7 +965,7 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
             # to consider the possibility of aliasing between them and the return value.
             for argidx = first_idx:last_idx
                 arg = args[argidx]
-                if arg isa GlobalRef
+                if arg isa GlobalRef || arg isa Core.BindingPartition
                     continue # :effect_free guarantees that nothing escapes to the global scope
                 end
                 if !is_identity_free_argtype(argextype(arg, astate.ir))
@@ -1326,8 +1326,11 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     if isa(obj, SSAValue) || isa(obj, Argument)
         objinfo = estate[obj]
     else
-        # unanalyzable object (e.g. obj::GlobalRef): escape field value conservatively
-        add_escape_change!(astate, val, ⊤)
+        # unanalyzable object (e.g. obj::GlobalRef):
+        # escape field value conservatively. Force the change so it applies even to an
+        # identity-free value (e.g. a `String` stored into a global): the value genuinely
+        # escapes to global scope, matching the aliasing path taken when `obj` is an SSA value.
+        add_escape_change!(astate, val, ⊤, #=force=#true)
         @goto add_thrown_escapes
     end
     AliasInfo = objinfo.AliasInfo

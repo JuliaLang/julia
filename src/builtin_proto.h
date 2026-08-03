@@ -30,12 +30,14 @@ extern "C" {
     XX(apply_type,"apply_type") \
     XX(compilerbarrier,"compilerbarrier") \
     XX(current_scope,"current_scope") \
+    XX(depwarn_partition,"depwarn_partition") \
     XX(donotdelete,"donotdelete") \
     XX(fieldtype,"fieldtype") \
     XX(finalizer,"finalizer") \
     XX(get_binding_type,"get_binding_type") \
     XX(getfield,"getfield") \
     XX(getglobal,"getglobal") \
+    XX(getglobal_partition,"getglobal_partition") \
     XX(declare_global,"declare_global") \
     XX(define_method,"define_method") \
     XX(ifelse,"ifelse") \
@@ -47,6 +49,7 @@ extern "C" {
     XX(isa,"isa") \
     XX(isdefined,"isdefined") \
     XX(isdefinedglobal,"isdefinedglobal") \
+    XX(isdefinedglobal_partition,"isdefinedglobal_partition") \
     XX(issubtype,"<:") \
     XX(memorynew,"memorynew") \
     XX(memoryrefnew,"memoryrefnew") \
@@ -69,6 +72,7 @@ extern "C" {
     XX(setfield,"setfield!") \
     XX(setfieldonce,"setfieldonce!") \
     XX(setglobal,"setglobal!") \
+    XX(setglobal_partition,"setglobal_partition") \
     XX(setglobalonce,"setglobalonce!") \
     XX(bitsizeof,"bitsizeof") \
     XX(sizeof,"sizeof") \

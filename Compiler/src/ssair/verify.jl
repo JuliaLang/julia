@@ -66,7 +66,19 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             raise_error()
         end
     elseif isa(op, GlobalRef)
-        if op.mod !== Core && op.mod !== Base
+        # A top-module or intrinsics read (`valid_value_position_globalref`) is accepted
+        # outright: lowering emits these as inline `(top ...)`/`(core ...)` operands (unlike an
+        # ordinary global read, which it hoists to its own statement -- see `valid-ir-argument?`
+        # in julia-syntax.scm), they name frontend primitives codegen embeds directly, and we
+        # assume they stay the constants they resolve to (strictly they could be redefined in a
+        # later world, but the frontend depends on them).
+        #
+        # In optimized IR every other resolvable read is a `Core.BindingPartition` by now
+        # (`reformulate_globals_pass!` runs before this verify). The const check below therefore
+        # only matters for IR that has NOT been reformulated -- unoptimized or hand-built (e.g. a
+        # `@generated` body): accept such a bare `GlobalRef` when it resolves to a defined
+        # constant across `ir.valid_worlds`, matching what codegen will embed.
+        if !valid_value_position_globalref(op)
             (valid_worlds, alldef) = scan_leaf_partitions(nothing, op, WorldWithRange(min_world(ir.valid_worlds), ir.valid_worlds)) do _, _, bpart
                 is_defined_const_binding(binding_kind(bpart))
             end
@@ -75,6 +87,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 raise_error()
             end
         end
+    elseif isa(op, Core.BindingPartition)
+        # The resolved form of a global read (from `reformulate_globals_pass!`), carrying an
+        # invalidation edge. Valid in value position for any binding kind, unlike a bare
+        # `GlobalRef`.
     elseif isa(op, Expr)
         # Only Expr(:boundscheck) is allowed in value position
         if isforeigncall && arg_idx == 1 && op.head === :tuple
@@ -370,8 +386,14 @@ function verify_ir(ir::IRCode, print::Bool=true,
             isforeigncall = false
             if isa(stmt, Expr)
                 if stmt.head === :(=)
-                    @verify_error "Assignment should have been removed during SSA conversion"
-                    raise_error()
+                    # Local (slot/SSA) assignments are removed during SSA conversion,
+                    # but a store to a global -- a `GlobalRef` or a `BindingPartition`
+                    # frozen by `reformulate_globals_pass!` -- is a legitimate `:(=)`.
+                    lhs = stmt.args[1]
+                    if !(isa(lhs, GlobalRef) || isa(lhs, Core.BindingPartition))
+                        @verify_error "Assignment should have been removed during SSA conversion"
+                        raise_error()
+                    end
                 elseif stmt.head === :isdefined
                     if length(stmt.args) > 2
                         @verify_error "malformed isdefined"

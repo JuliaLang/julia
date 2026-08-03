@@ -348,6 +348,66 @@ let test_code =
     @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
 end
 
+# Test the binding-partition machinery across the precompile boundary: cached code
+# whose resolved global reads froze a binding partition must revalidate at load across
+# a flag-only (`export`) partition flip, and must be invalidated when its binding is
+# redirected to a different but identically-typed global slot.
+let test_code =
+    """
+    using Test
+    include("precompile_utils.jl")
+
+    precompile_test_harness("rebinding partition precompile") do load_path
+        write(joinpath(load_path, "RedirectTargets3.jl"),
+              "module RedirectTargets3
+                 module M1
+                   export x
+                   global x::Int = 1
+                 end
+                 module M2
+                   global x::Int = 2
+                 end
+                 global g::Int = 0
+               end")
+        Base.compilecache(Base.PkgId("RedirectTargets3"))
+        write(joinpath(load_path, "RedirectUser3.jl"),
+              "module RedirectUser3
+                 using RedirectTargets3
+                 using RedirectTargets3.M1
+                 getx() = x
+                 getg() = RedirectTargets3.g
+                 precompile(getx, ())
+                 precompile(getg, ())
+               end")
+        Base.compilecache(Base.PkgId("RedirectUser3"))
+        @eval using RedirectTargets3
+        # A flag-only (`export`) partition flip on `g` before the dependent image loads:
+        # revalidation must span it, keeping the cached `getg` valid from before the flip.
+        exported_min = invokelatest() do
+            Core.eval(RedirectTargets3, :(export g))
+            b = convert(Core.Binding, GlobalRef(RedirectTargets3, :g))
+            Base.lookup_binding_partition(Base.get_world_counter(), b).min_world
+        end
+        @eval using RedirectUser3
+        invokelatest() do
+            @test RedirectUser3.getg() === 0
+            ci = Base.method_instance(RedirectUser3.getg, ()).cache
+            @test ci.min_world < exported_min
+            # Redirect the implicit `using` resolution (leaf M1.x) to the identically
+            # typed M2.x: the image-loaded `getx` froze M1.x's slot and must invalidate.
+            @test RedirectUser3.getx() === 1
+            Core.eval(RedirectUser3, :(import RedirectTargets3.M2: x))
+            invokelatest() do
+                @test RedirectUser3.getx() === 2
+            end
+        end
+    end
+
+    finish_precompile_test!()
+    """
+    @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
+end
+
 # Image Globalref smoke test
 module ImageGlobalRefFlag
     using Test
@@ -490,6 +550,17 @@ module Invalidate59272
     @test Bar(1) == Foo.Bar(1)
 end
 
+# A constant binding covering world age 1 (a primordial constant: builtin, intrinsic,
+# core type) is immutable: the compiler embeds its value directly with no invalidation
+# edge, so replacing or deleting it must error (flag-only changes such as `export`
+# remain permitted).
+let w1const = convert(Core.Binding, GlobalRef(Core, :donotdelete))
+    @assert Base.binding_kind(Base.lookup_binding_partition(UInt(1), w1const)) == Base.PARTITION_KIND_CONST
+    @test_throws "world age 1" Core.eval(Core, :(const donotdelete = 42))
+    @test_throws "world age 1" Base.delete_binding(Core, :donotdelete)
+    @test @invokelatest(Core.donotdelete) isa Core.Builtin # binding intact
+end
+
 # Test that two const-prop'd pseudo `CodeInstance`s for the same `MethodInstance`
 # carrying *different* binding edges are both kept on the caller's edge list, so
 # that redefining either binding properly invalidates the caller (#61745).
@@ -508,11 +579,12 @@ module Invalidate61745
     @test caller_both() == "foo_changed!bar_changed!"
 end
 
-# Test that codegen does not bake in a binding's value when there is no forward
-# edge from the `CodeInstance` to the binding. Without const-prop tracking the
-# `Module` argument, inference cannot record a `Binding` edge for `M.foo`, so
-# codegen must fall back to a runtime binding load to remain correct under
-# redefinition (#61745).
+# Test that a global access which only becomes a `getglobal(::Module, ::Symbol)`
+# after inlining (here `M` flows in through a `Module`-typed argument, so
+# inference never sees a manifest `GlobalRef` or a `Const` module) is still
+# invalidated on redefinition. Codegen must not bake in the binding's value on
+# its own; inference reformulates the access to a binding partition and records
+# the invalidation edge (#61745).
 module Invalidate61745_indirect
     using Test
     module M
@@ -523,6 +595,30 @@ module Invalidate61745_indirect
     @test caller() == "unchanged"
     Core.eval(M, :(const foo = "changed!"))
     @test caller() == "changed!"
+end
+
+# Test that redirecting a binding to a *different* typed-global slot with an
+# identical declared type still invalidates code that froze the old slot: the
+# invalidation key must include the leaf binding's identity, not just the
+# information loaded from its partition (which is equal for both slots here).
+module RedirectTypedGlobal
+    using Test
+    module M1
+        export x
+        global x::Int = 1
+    end
+    module M2
+        global x::Int = 2
+    end
+    using .M1
+    getx() = x
+    @test getx() === 1
+    # override the implicit `using` resolution (leaf M1.x) with an explicit
+    # import whose leaf (M2.x) is a different binding of the same type
+    import .M2: x
+    invokelatest() do
+        @test getx() === 2
+    end
 end
 
 # Test @reexport

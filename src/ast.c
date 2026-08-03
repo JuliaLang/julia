@@ -982,6 +982,7 @@ int jl_isa_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
         || jl_is_phinode(e)
         || jl_is_phicnode(e)
         || jl_is_upsilonnode(e)
+        || jl_is_binding_partition(e)
         || jl_is_expr(e);
 }
 
