@@ -2551,3 +2551,17 @@ end
         @test !occursin("Finished testset:", output)
     end
 end
+
+# world age increments implicitly after each statement in the body of both
+# `@testset begin` and `@testset for`, as a special case
+let m = Module()
+    Core.eval(m, :(f() = 0))
+    @testset "implicit world age increment in `@testset begin`" begin
+        Core.eval(m, :(f() = 42))
+        @test m.f() == 42
+    end
+    @testset "implicit world age increment in `@testset for` ($i)" for i in 1:2
+        Core.eval(m, :(f() = $i))
+        @test m.f() == i
+    end
+end

@@ -703,7 +703,9 @@ precompile_test_harness(false) do dir
     FooBar3_file = joinpath(dir, "FooBar3.jl")
     FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
     write(FooBar3_inc, "x=1\n")
-    for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
+    for code in ["Core.eval(Base, :(x=1))",
+                 "Base.include(Base, \"FooBar3_inc.jl\")",
+                 "Core.define_method(Base, :FooBar3_closed_module_gf)"]
         write(FooBar3_file, """
         module FooBar3
         $code
@@ -711,6 +713,16 @@ precompile_test_harness(false) do dir
         """)
         @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
     end
+
+    # Declaring an already-existing generic function of a closed module is a
+    # no-op and must not error during precompilation
+    FooBar3b_file = joinpath(dir, "FooBar3b.jl")
+    write(FooBar3b_file, """
+    module FooBar3b
+    Core.eval(Main, Expr(:function, GlobalRef(Base, :length)))
+    end
+    """)
+    @test Base.require(Main, :FooBar3b) isa Module
 
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")
@@ -3603,6 +3615,75 @@ precompile_test_harness("include mapexpr persistence") do dir
 
     # Exactly the three non-identity includes were recorded (the identity one was not).
     @test length(mapexprs) == 3
+end
+
+precompile_test_harness("cancellation source relinking") do dir
+    write(joinpath(dir, "CancelRelink.jl"),
+          """
+          module CancelRelink
+              using Base: CancellationToken, CancellationTokenSource
+              const ROOT = CancellationTokenSource()
+              const LEFT = CancellationTokenSource(CancellationToken(ROOT))
+              const RIGHT = CancellationTokenSource(CancellationToken(ROOT))
+              const CHILD = CancellationTokenSource(CancellationToken(LEFT), CancellationToken(RIGHT))
+          end
+          """)
+    Base.compilecache(Base.PkgId("CancelRelink"))
+    @eval using CancelRelink
+    invokelatest() do
+        # the sources were serialized into the package image with their weak
+        # child lists dropped; loading must have relinked them under their
+        # parents so that cancellation still propagates through the diamond
+        @test CancelRelink.CHILD.nparents == 2
+        @test Base._cancel_parent(CancelRelink.CHILD, 1) === CancelRelink.LEFT
+        @test !Base.iscancelled(CancelRelink.CHILD)
+        Base.cancel!(CancelRelink.ROOT)
+        @test Base.iscancelled(CancelRelink.LEFT)
+        @test Base.iscancelled(CancelRelink.RIGHT)
+        @test Base.iscancelled(CancelRelink.CHILD)
+    end
+end
+
+precompile_test_harness("cancellation relink under cancelled external parent") do dir
+    write(joinpath(dir, "CancelExtA.jl"),
+          """
+          module CancelExtA
+              using Base: CancellationTokenSource
+              const A_ROOT = CancellationTokenSource()
+          end
+          """)
+    write(joinpath(dir, "CancelExtB.jl"),
+          """
+          module CancelExtB
+              using CancelExtA
+              using Base: CancellationToken, CancellationTokenSource
+              const B_MID = CancellationTokenSource(CancellationToken(CancelExtA.A_ROOT))
+              const B_CHILD = CancellationTokenSource(CancellationToken(B_MID))
+              const B_GRAND = CancellationTokenSource(CancellationToken(B_CHILD))
+              # a cancel! interrupted mid-walk (state raised, children not
+              # visited) captured in the image: load-time propagation must
+              # not treat the already-raised state as having been walked
+              Base._raise_state!(B_CHILD, 0x01)
+          end
+          """)
+    Base.compilecache(Base.PkgId("CancelExtA"))
+    Base.compilecache(Base.PkgId("CancelExtB"))
+    @eval using CancelExtA
+    invokelatest() do
+        Base.cancel!(CancelExtA.A_ROOT)
+    end
+    @eval using CancelExtB
+    invokelatest() do
+        # CancelExtB's sources re-attached at load time under the already-
+        # cancelled A_ROOT: B_MID is born cancelled during its relink, and
+        # that state must reach every descendant regardless of the order in
+        # which the image's fixups relinked them - including through
+        # B_CHILD, whose already-cancelled (but never walked) state must
+        # not prune the propagation
+        @test Base.iscancelled(CancelExtB.B_MID)
+        @test Base.iscancelled(CancelExtB.B_CHILD)
+        @test Base.iscancelled(CancelExtB.B_GRAND)
+    end
 end
 
 finish_precompile_test!()

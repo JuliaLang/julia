@@ -349,6 +349,20 @@ private:
 
 }; // class JuliaTaskDispatcher
 
+// Dispatcher work is not unwind-safe, so deliver pending SIGINTs at a later
+// safepoint instead of raising an InterruptException inside it.
+struct dispatcher_sigdefer_guard {
+  jl_ptls_t ptls;
+  dispatcher_sigdefer_guard() JL_NOTSAFEPOINT : ptls(jl_current_task->ptls) {
+    ptls->defer_signal++;
+    jl_signal_fence();
+  }
+  ~dispatcher_sigdefer_guard() JL_NOTSAFEPOINT {
+    jl_signal_fence();
+    ptls->defer_signal--;
+  }
+};
+
 void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-first-decl-annotations)
   if (!InCooperativeContext) {
     // Not inside work_until/process_tasks — run inline to prevent deadlock
@@ -358,8 +372,9 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-fi
     // continuations that fulfill the caller's std::future can fire before
     // we return.
     InCooperativeContext = true;
-    T->run();
     {
+      dispatcher_sigdefer_guard defer;
+      T->run();
       jl_unique_gcsafe_lock Lock{DispatchMutex};
       process_tasks(Lock);
     }
@@ -380,6 +395,7 @@ void JuliaTaskDispatcher::shutdown() {
 void JuliaTaskDispatcher::work_until(future_base &F) {
   bool WasCooperative = InCooperativeContext;
   InCooperativeContext = true;
+  dispatcher_sigdefer_guard defer;
   jl_unique_gcsafe_lock Lock{DispatchMutex};
   while (!F.ready()) {
     process_tasks(Lock);

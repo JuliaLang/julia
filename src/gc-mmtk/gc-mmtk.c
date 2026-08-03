@@ -64,12 +64,24 @@ JL_DLLEXPORT void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
 // GC Initialization and Control
 // ========================================================================= //
 
+// Registry entries (see jl_gc_set_needs_weak_processing) of threads that
+// have exited: their thread-local list is spliced in here so the entries
+// survive mutator destruction. Guarded by orphaned_weak_processing_lock
+// (thread exits may race each other; the sweep runs while no mutator does).
+// The registry stores raw object pointers (and, transitively, the interior
+// `pprev` pointers of the intrusive lists) that are never updated on object
+// movement - sound only while the binding is non-moving.
+static small_arraylist_t orphaned_weak_processing_list;
+static uv_mutex_t orphaned_weak_processing_lock;
+
 void jl_gc_init(void) {
     // TODO: use jl_options.heap_size_hint to set MMTk's fixed heap size? (see issue: https://github.com/mmtk/mmtk-julia/issues/167)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
 
     arraylist_new(&to_finalize, 0);
     arraylist_new(&finalizer_list_marked, 0);
+    small_arraylist_new(&orphaned_weak_processing_list, 0);
+    uv_mutex_init(&orphaned_weak_processing_lock);
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
@@ -197,6 +209,7 @@ void jl_start_gc_threads(void) {
 void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT {
     jl_thread_heap_common_t *heap = &ptls->gc_tls_common.heap;
     small_arraylist_new(&heap->weak_refs, 0);
+    small_arraylist_new(&heap->weak_processing_list, 0);
     small_arraylist_new(&heap->live_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&heap->free_stacks[i], 0);
@@ -216,6 +229,19 @@ void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT {
 }
 
 void jl_free_thread_gc_state(struct _jl_tls_states_t *ptls) {
+    // The weak-processing registry entries of this thread may outlive it (a
+    // linked cancellation source can escape the thread that allocated it);
+    // the sweep only enumerates active mutators, so move them to the global
+    // orphan list. Runs GC-unsafe, so it cannot race the sweep.
+    small_arraylist_t *lst = &ptls->gc_tls_common.heap.weak_processing_list;
+    if (lst->len > 0) {
+        uv_mutex_lock(&orphaned_weak_processing_lock);
+        for (size_t i = 0; i < lst->len; i++)
+            small_arraylist_push(&orphaned_weak_processing_list, lst->items[i]);
+        uv_mutex_unlock(&orphaned_weak_processing_lock);
+        lst->len = 0;
+    }
+    small_arraylist_free(lst);
     mmtk_destroy_mutator(&ptls->gc_tls.mmtk_mutator);
 }
 
@@ -236,6 +262,92 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 JL_DLLEXPORT uint64_t jl_gc_get_hard_heap_limit(void)
 {
     return jl_options.hard_heap_limit;
+}
+
+JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on)
+{
+    if (on)
+        mmtk_enable_collection();
+    else {
+        while (1) {
+            // Capture the GC epoch *before* attempting to disable, so that if the epoch advances
+            // between this call and mmtk_wait_for_new_gc_epoch() below, we don't miss the
+            // notification and wait forever.
+            uint64_t gc_epoch = mmtk_gc_epoch();
+            int result = mmtk_disable_collection();
+            if (result == MMTK_DISABLE_COLLECTION_OK) {
+                break;
+            } else if (result == MMTK_DISABLE_COLLECTION_RETRY) {
+                // This thread isn't a registered mutator, so there's no safepoint to cooperate with by
+                // stopping itself.
+                // pass NULL as a special token to indicate we are running on an unmanaged task
+                jl_safepoint_wait_gc(NULL);
+                jl_cpu_pause();
+            } else {
+                assert(result == MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH);
+                // Unlike jl_gc_enable(), this thread is not a registered mutator.
+                // We don't need to enter GC safe region. Just block on the cond var.
+                mmtk_wait_for_new_gc_epoch(gc_epoch);
+            }
+        }
+    }
+}
+
+JL_DLLEXPORT int jl_gc_is_globally_enabled(void)
+{
+    return mmtk_is_collection_enabled();
+}
+
+JL_DLLEXPORT int jl_gc_enable(int on)
+{
+    JL_SIGATOMIC_BEGIN();
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        int now_enabled = mmtk_enable_collection();
+        if (now_enabled) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
+        }
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        while (1) {
+            // Capture the GC epoch *before* attempting to disable, so that if the epoch advances
+            // between this call and mmtk_wait_for_new_gc_epoch() below, we don't miss the
+            // notification and wait forever.
+            uint64_t gc_epoch = mmtk_gc_epoch();
+            int result = mmtk_disable_collection();
+            if (result == MMTK_DISABLE_COLLECTION_OK) {
+                break;
+            } else if (result == MMTK_DISABLE_COLLECTION_RETRY) {
+                // A GC pause has been requested in MMTk but mutators have not all stopped yet. This
+                // thread may itself be one of the ones the pause is waiting to stop, so do a
+                // safepoint check (which is exactly how a mutator cooperates with letting the
+                // pause start) and retry.
+                // It is also possible that safepoints are not yet enabled. We will retry as well.
+                jl_gc_safepoint_(ptls);
+                // Avoid busy wait
+                jl_cpu_pause();
+            } else {
+                assert(result == MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH);
+                // A stop-the-world pause is active, or a concurrent GC's background work is
+                // running. Block until the next GC epoch instead.
+                //
+                // This thread must enter a GC-safe state before blocking here: the wait can only
+                // be woken by a future stop-the-world pause completing (see resume_mutators() in
+                // the mmtk_julia binding). This mirrors the same jl_gc_safe_enter/leave pattern used around other
+                // blocking waits elsewhere in the runtime (e.g. _jl_mutex_wait in threading.c).
+                int8_t gc_state = jl_gc_safe_enter(ptls);
+                mmtk_wait_for_new_gc_epoch(gc_epoch);
+                jl_gc_safe_leave(ptls, gc_state);
+            }
+        }
+    }
+    JL_SIGATOMIC_END();
+    return prev;
 }
 
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
@@ -265,7 +377,7 @@ static inline void malloc_maybe_collect(jl_ptls_t ptls, size_t sz)
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (!mmtk_is_collection_enabled()) {
         size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
@@ -286,7 +398,7 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
 
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (!mmtk_is_collection_enabled()) {
         size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
@@ -333,7 +445,7 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     gc_num.time_to_safepoint = duration;
     gc_num.total_time_to_safepoint += duration;
 
-    if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (mmtk_is_collection_enabled()) {
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
 #ifndef __clang_gcanalyzer__
         mmtk_block_thread_for_gc();
@@ -545,6 +657,20 @@ static void add_node_to_tpinned_roots_buffer(RootsWorkClosure* closure, RootsWor
     }
 }
 
+// tpinned: the alloc profile holds raw pointers that `Profile.Allocs.load_type`
+// dereferences later, so the recorded types must not move
+typedef struct {
+    RootsWorkClosure *closure;
+    RootsWorkBuffer *buf;
+    size_t *len;
+} alloc_profile_root_env_t;
+
+static void add_alloc_profile_root(jl_value_t *v, void *env) JL_NOTSAFEPOINT
+{
+    alloc_profile_root_env_t *e = (alloc_profile_root_env_t*)env;
+    add_node_to_tpinned_roots_buffer(e->closure, e->buf, e->len, v);
+}
+
 JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
 {
     // Create a new buf
@@ -584,6 +710,10 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
 
     // FIXME: transitively pinning for now, should be removed after we add moving Immix
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, precompile_field_replace);
+
+    // types recorded by the allocation profiler
+    alloc_profile_root_env_t alloc_profile_env = {closure, &tpinned_buf, &tpinned_len};
+    jl_gc_foreach_alloc_profile_root(add_alloc_profile_root, &alloc_profile_env);
 
     // Push the result of the work.
     (closure->report_nodes_func)(buf.ptr, len, buf.cap, closure->data, false);
@@ -649,6 +779,78 @@ static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPO
         free(d);
     gc_num.freed += freed_bytes;
     gc_num.freecall++;
+}
+
+void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    // MMTk never visits individual dead objects (lines/blocks are
+    // reclaimed wholesale), so dead objects requiring weak processing are
+    // found by scanning this registry instead.
+    small_arraylist_push(&ptls->gc_tls_common.heap.weak_processing_list, v);
+}
+
+void jl_gc_set_weak_processing_target(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    // Nothing to do: MMTk reclaims memory only after the SweepVMSpecific
+    // work packet (which runs jl_gc_sweep_weak_processing) has completed,
+    // so the memory of every object that died this cycle is still intact
+    // when the unlink pass writes into it.
+    (void)ptls;
+    (void)v;
+}
+
+// Filter one weak-processing registry: unlink the dead entries and keep
+// the live ones (see jl_gc_sweep_weak_processing).
+static void sweep_weak_processing_list(small_arraylist_t *reg) JL_NOTSAFEPOINT
+{
+    size_t n = 0;
+    size_t l = reg->len;
+    void **lst = reg->items;
+    for (size_t i = 0; i < l; i++) {
+        // dispatch on the object's type once more kinds of
+        // weakly-processed objects exist
+        jl_cancel_source_t *s = (jl_cancel_source_t*)lst[i];
+        if (mmtk_is_live_object(s)) {
+            lst[n++] = s;
+            continue;
+        }
+        jl_cancel_parent_link_t *links = jl_cancel_source_links(s);
+        for (size_t j = 0; j < s->nparents; j++) {
+            jl_value_t *next = jl_atomic_load_relaxed(&links[j].next);
+            _Atomic(jl_value_t*) *pprev = links[j].pprev;
+            jl_atomic_store_relaxed(pprev, next);
+            if (next != (jl_value_t*)jl_nothing) {
+                jl_cancel_parent_link_t *nl =
+                    jl_cancel_source_link((jl_cancel_source_t*)next, links[j].parent);
+                assert(nl != NULL);
+                nl->pprev = pprev;
+            }
+        }
+    }
+    reg->len = n;
+}
+
+// Process the dead entries of the weak_processing_list registries -
+// currently: unlink collected cancellation sources from their parents'
+// (weak, intrusive, doubly-linked) child lists, with O(1) hlist unlinks
+// whose fix-up writes land only in live or dying-this-cycle memory (see
+// the stock GC's sweep_weak_processing for the invariants). Runs from the
+// SweepVMSpecific work packet, after the mark closure (including finalizer
+// resurrection) and before the memory of dead objects is reused, so dead
+// entries' links are still intact. Covers both the active mutators'
+// registries and the entries orphaned by exited threads.
+JL_DLLEXPORT void jl_gc_sweep_weak_processing(void) JL_NOTSAFEPOINT
+{
+    void *iter = mmtk_new_mutator_iterator();
+    jl_ptls_t ptls2 = (jl_ptls_t)mmtk_get_next_mutator_tls(iter);
+    while (ptls2 != NULL) {
+        sweep_weak_processing_list(&ptls2->gc_tls_common.heap.weak_processing_list);
+        ptls2 = (jl_ptls_t)mmtk_get_next_mutator_tls(iter);
+    }
+    mmtk_close_mutator_iterator(iter);
+    uv_mutex_lock(&orphaned_weak_processing_lock);
+    sweep_weak_processing_list(&orphaned_weak_processing_list);
+    uv_mutex_unlock(&orphaned_weak_processing_lock);
 }
 
 JL_DLLEXPORT void jl_gc_mmtk_sweep_malloced_memory(void) JL_NOTSAFEPOINT

@@ -15,7 +15,8 @@
 11  (call core.svec)
 12  SourceLocation::1:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+14  (call core.define_method TestMod core.nothing %₁₃
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.+
     2   (call %₁ slot₂/x 1)
@@ -43,7 +44,8 @@
 11  (call core.svec)
 12  SourceLocation::1:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+14  (call core.define_method TestMod core.nothing %₁₃
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/#generator# slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(single_assign)]
     1   (call top.indexed_iterate slot₂/#generator# 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -81,7 +83,8 @@
 11  (call core.svec)
 12  SourceLocation::1:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+14  (call core.define_method TestMod core.nothing %₁₃
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/#generator# slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(single_assign)]
     1   (call top.indexed_iterate slot₂/#generator# 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -108,7 +111,8 @@
 27  (call core.svec)
 28  SourceLocation::1:29
 29  (call core.svec %₂₆ %₂₇ %₂₈)
-30  --- method core.nothing %₂₉
+30  (call core.define_method TestMod core.nothing %₂₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/#generator# slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(!read,single_assign)]
     1   (call top.indexed_iterate slot₂/#generator# 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -144,7 +148,8 @@
 11  (call core.svec)
 12  SourceLocation::1:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+14  (call core.define_method TestMod core.nothing %₁₃
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/#unused#(!read)]
     1   (return 1)
 15  latestworld
@@ -178,7 +183,8 @@ LoweringError:
 11  (call core.svec)
 12  SourceLocation::1:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+14  (call core.define_method TestMod core.nothing %₁₃
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/#generator# slot₃/iterstate slot₄/x(!read,single_assign) slot₅/y(!read,single_assign)]
     1   (call top.indexed_iterate slot₂/#generator# 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -215,7 +221,8 @@ LoweringError:
 11  (call core.svec)
 12  SourceLocation::1:4
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+14  (call core.define_method TestMod core.nothing %₁₃
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/#unused#(!read)]
     1   (call JuliaLowering.interpolate_expr (inert (return x)))
     2   (return %₁)
@@ -255,7 +262,8 @@ LoweringError:
 16  (call core.svec)
 17  SourceLocation::1:2
 18  (call core.svec %₁₅ %₁₆ %₁₇)
-19  --- method core.nothing %₁₈
+19  (call core.define_method TestMod core.nothing %₁₈
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/x(single_assign)]
     1   slot₂/x
     2   (= slot₃/x %₁)
@@ -267,7 +275,8 @@ LoweringError:
 23  (call core.svec)
 24  SourceLocation::1:2
 25  (call core.svec %₂₂ %₂₃ %₂₄)
-26  --- method core.nothing %₂₅
+26  (call core.define_method TestMod core.nothing %₂₅
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/#->#(single_assign)]
     1   TestMod.##->###->###0
     2   (new %₁)

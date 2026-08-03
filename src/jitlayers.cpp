@@ -2694,6 +2694,12 @@ size_t jl_jit_total_bytes_impl(void)
     return jl_ExecutionEngine->getTotalBytes();
 }
 
+extern "C" JL_DLLEXPORT_CODEGEN
+const char *jl_objcache_disabled_notice_impl(void) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    return jl_ExecutionEngine->objCacheDisabledNotice();
+}
+
 // API for adding bytes to record being owned by the JIT
 void jl_jit_add_bytes(size_t bytes)
 {

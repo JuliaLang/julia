@@ -157,6 +157,8 @@ static int speccache_eq(size_t idx, const void *ty, jl_value_t *data, uint_t hv)
     if (idx >= jl_svec_len(data))
         return 0; // We got a OOB access, probably due to a data race
     jl_method_instance_t *ml = (jl_method_instance_t*)jl_svecref(data, idx);
+    if (ml == NULL || (jl_value_t*)ml == jl_nothing)
+        return 0; // slot not yet published, probably due to a data race
     jl_value_t *sig = ml->specTypes;
     if (ty == sig)
         return 1;
@@ -1908,6 +1910,11 @@ static void cache_insert(
     JL_GC_POP();
 }
 
+STATIC_INLINE jl_method_instance_t *typemap_entry_linfo(jl_typemap_entry_t *entry JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed((_Atomic(jl_method_instance_t*)*)&entry->func.linfo);
+}
+
 static jl_method_instance_t *cache_result(
         jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_tupletype_t *tt, // the original tupletype of the signature
@@ -1926,7 +1933,7 @@ static jl_method_instance_t *cache_result(
         jl_typemap_entry_t *entry = mt_find_cache_entry(cache, mc ? &mc->leafcache : NULL, tt, world, offs);
         if (entry) {
             if (mc) JL_UNLOCK(&mc->writelock);
-            return entry->func.linfo;
+            return typemap_entry_linfo(entry);
         }
     }
 
@@ -1971,7 +1978,8 @@ static void recache_method(
     if (mc && tt != NULL) {
         jl_typemap_entry_t *entry = lookup_leafcache(jl_atomic_load_relaxed(&mc->leafcache), (jl_value_t*)tt, world);
         if (entry) {
-            jl_gc_write(entry, entry->func.linfo, jl_method_instance_t, newmeth);
+            jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
+                   jl_method_instance_t, newmeth, release);
             orig_in_cache = 1;
             if (jl_egal((jl_value_t*)tt, (jl_value_t*)newmeth->specTypes)) {
                 if (mc) JL_UNLOCK(&mc->writelock);
@@ -1984,7 +1992,8 @@ static void recache_method(
         assert(cache);
         jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
         if (entry && jl_subtype((jl_value_t*)entry->sig, (jl_value_t*)newmeth->specTypes)) {
-            jl_gc_write(entry, entry->func.linfo, jl_method_instance_t, newmeth);
+            jl_gc_write_atomic(entry, *(_Atomic(jl_method_instance_t*)*)&entry->func.linfo,
+                   jl_method_instance_t, newmeth, release);
             if (entry->simplesig == (void*)jl_nothing || jl_egal((jl_value_t*)entry->simplesig, compute_simplett((jl_tupletype_t*)newmeth->specTypes))) {
                 if (mc) JL_UNLOCK(&mc->writelock);
                 return; // cache entry already sufficient
@@ -2230,7 +2239,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
          tt->isdispatchtuple ? &mc->leafcache : NULL,
          tt, world, jl_cachearg_offset());
     if (entry)
-        return entry->func.linfo;
+        return typemap_entry_linfo(entry);
     assert(tt->isdispatchtuple || tt->hasfreetypevars);
     JL_TIMING(METHOD_LOOKUP_SLOW, METHOD_LOOKUP_SLOW);
     jl_method_match_t *matc = NULL;
@@ -2244,7 +2253,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(
          tt->isdispatchtuple ? &mc->leafcache : NULL,
          tt, world, jl_cachearg_offset());
         if (entry)
-            mi = entry->func.linfo;
+            mi = typemap_entry_linfo(entry);
     }
     if (!mi) {
         size_t current_world = jl_atomic_load_acquire(&jl_world_counter);
@@ -3839,7 +3848,7 @@ JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *src
             jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
             if (entry) {
                 while (entry != jl_nothing) {
-                    jl_method_instance_t *cacheli = ((jl_typemap_entry_t*)entry)->func.linfo;
+                    jl_method_instance_t *cacheli = typemap_entry_linfo((jl_typemap_entry_t*)entry);
                     if (cacheli == unspecialized)
                         jl_atomic_store_relaxed(&((jl_typemap_entry_t*)entry)->max_world, 0);
                     entry = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)entry)->next);
@@ -4761,7 +4770,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         }
         if (entry && for_call) {
             // mfunc was found in slow path, so log --trace-dispatch
-            jl_method_instance_t *mfunc = entry->func.linfo;
+            jl_method_instance_t *mfunc = typemap_entry_linfo(entry);
             record_dispatch_statement_on_first_dispatch(mfunc);
         }
     }
@@ -4769,7 +4778,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
     jl_method_instance_t *mfunc;
     if (entry) {
 have_entry:
-        mfunc = entry->func.linfo;
+        mfunc = typemap_entry_linfo(entry);
     }
     else {
         assert(tt);
@@ -4828,7 +4837,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t na
     jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache); // XXX: gc root for this?
     jl_typemap_entry_t *entry = jl_typemap_assoc_exact(cache, args[0], &args[1], nargs, jl_cachearg_offset(), world);
     if (entry)
-        return entry->func.linfo;
+        return typemap_entry_linfo(entry);
     jl_tupletype_t *tt = arg_type_tuple(args[0], &args[1], nargs);
     JL_GC_PUSH1(&tt);
     jl_method_instance_t *mi = jl_mt_assoc_by_type(jl_method_table, mc, tt, world);
@@ -4912,7 +4921,7 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
     if (invokes != jl_nothing)
         tm = jl_typemap_assoc_exact(invokes, gf, args, nargs, 1, 1);
     if (tm) {
-        mfunc = tm->func.linfo;
+        mfunc = typemap_entry_linfo(tm);
     }
     else {
         int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
@@ -4923,7 +4932,7 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
         invokes = jl_atomic_load_relaxed(&method->invokes);
         tm = jl_typemap_assoc_exact(invokes, gf, args, nargs, 1, 1);
         if (tm) {
-            mfunc = tm->func.linfo;
+            mfunc = typemap_entry_linfo(tm);
         }
         else {
             tt = arg_type_tuple(gf, args, nargs);
@@ -5422,7 +5431,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
             if (entry) {
                 // leafcache found a match, construct the MethodMatch by computing the effective
                 // types + sparams and the world bounds
-                jl_method_instance_t *mi = entry->func.linfo;
+                jl_method_instance_t *mi = typemap_entry_linfo(entry);
                 jl_method_t *meth = mi->def.method;
                 if (!jl_is_unionall(meth->sig)) {
                     env.match.env = jl_emptysvec;
@@ -5457,7 +5466,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
             if (entry && (((jl_datatype_t*)unw)->isdispatchtuple || entry->guardsigs == jl_emptysvec)) {
                 // full cache found a match, construct the MethodMatch by computing the effective
                 // types + sparams and the world bounds
-                jl_method_instance_t *mi = entry->func.linfo;
+                jl_method_instance_t *mi = typemap_entry_linfo(entry);
                 jl_method_t *meth = mi->def.method;
                 size_t min_world = jl_atomic_load_relaxed(&entry->min_world);
                 // only return this if it appears min_would is fully computed, otherwise do the full lookup to compute min_world exactly

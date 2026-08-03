@@ -498,6 +498,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_NUM_GC_THREADS" => "2,1") do
             @test read(`$exename -e $code`, String) == "3"
         end
+
+        # invalid JULIA_NUM_GC_THREADS values must be rejected at startup
+        # like `--gcthreads`, not crash the GC later (e.g. `=0` used to
+        # underflow the mark-thread count and segfault at the first collection)
+        for ngc in ("0", "-1", "abc", "32767", "2,2", "2,-1", "2,1x")
+            withenv("JULIA_NUM_GC_THREADS" => ngc) do
+                @test errors_not_signals(`$exename -e $code`)
+            end
+        end
     end
 
     # --machine-file
@@ -1509,7 +1518,18 @@ end
 end
 
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
-@test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
+# Compiling a single entry point whose inferred call graph contains thousands of
+# CodeInstances used to overflow the stack in the JIT linker's recursive task
+# dispatcher (threshold ~4k with an 8MB stack); `--inline=no` keeps every callee as a
+# separately-linked function so they all land in one lookup batch.
+let n = 6000
+    code = """
+    f(x, ::Val{i}) where {i} = x + i
+    @eval g(x) = +(\$((:(f(x, Val(\$i))) for i in 1:$n)...))
+    print(g(1))
+    """
+    @test test_read_success(`$(Base.julia_cmd()) --startup-file=no --inline=no -e $code`) == string(sum(1:n) + n)
+end
 
 # https://github.com/JuliaLang/julia/issues/59103
 @test test_read_success(setenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"

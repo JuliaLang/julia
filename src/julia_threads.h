@@ -230,6 +230,90 @@ typedef struct _jl_excstack_t jl_excstack_t;
 
 typedef struct _jl_handler_t jl_handler_t;
 
+// Cancellation token source: a node in the level-triggered cancellation
+// DAG (`Core.CancellationTokenSource`). Cancelling a node cancels all of
+// its descendants; the state is monotonic and never de-escalates.
+//
+// The object is variable-sized: the fixed fields below are followed by
+// `nparents` parent links (`jl_cancel_parent_link_t`). Together with the
+// per-node `child_head` field these links arrange the sources in a DAG,
+// with each node's children kept on intrusive singly-linked sibling lists:
+// node C is a child of P iff C has a link entry whose `parent` is P, and
+// that entry's `next` points to P's next child (the one attached before C).
+// Iterating P's children therefore starts at `P->child_head` and, at each
+// node, scans that node's link entries for the one belonging to P - a
+// linear scan, but child iteration only happens on the (slow) cancellation
+// path.
+//
+// GC treatment (the layout is special-cased in the collectors): the
+// `parent` half of each link is a strong reference - a child keeps its
+// parents alive, so that cancellation of a still-reachable ancestor always
+// reaches all its descendants - and is const after construction, so lock-free
+// ancestor walks are safe. The child-list links (`child_head` and the
+// `next`/`pprev` fields of each link) are *weak*, with unlink-on-death
+// semantics rather than WeakRef's clear-on-death: a child stays linked for
+// exactly as long as it is reachable, and when it is collected the GC
+// unlinks it from each parent's sibling list before the world restarts.
+//
+// Concurrency: the lists are lock-free. Mutators only ever *prepend* (at
+// construction, via CAS on `child_head`); removal happens only inside the
+// collector with the world stopped. `pprev` is written by the constructor
+// (its own entry, and the fix-up of the previous head's entry immediately
+// after the publishing CAS, with no intervening safepoint - so the
+// collector never observes a half-updated list) and read only by the
+// collector; cancellation walks follow `next` alone. The seq_cst ordering
+// dance between attaching (publish link, then read the parent's state) and
+// cancelling (write the state, then walk the links) is what makes
+// attachment level-triggered; see jl_new_cancel_source and `cancel!`.
+typedef struct _jl_cancel_source_t jl_cancel_source_t;
+
+typedef struct {
+    // Strong, const after construction.
+    jl_cancel_source_t *parent;
+    // Weak (unlinked by the GC): next sibling under `parent`;
+    // `jl_nothing`-terminated. Union{Nothing, CancellationTokenSource}.
+    _Atomic(jl_value_t*) next;
+    // Weak back-pointer: the slot through which this node is reachable on
+    // `parent`'s child list. Collector- and constructor-private.
+    _Atomic(jl_value_t*) *pprev;
+} jl_cancel_parent_link_t;
+
+struct _jl_cancel_source_t {
+    JL_DATA_TYPE
+    // Weak (spliced by the GC): most recently attached live child;
+    // `jl_nothing`-terminated. Union{Nothing, CancellationTokenSource}.
+    _Atomic(jl_value_t*) child_head;
+    // 0x00 = uncancelled; otherwise the (nonzero) severity at which the
+    // source is cancelled (0x1 SAFE, 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL).
+    // Monotonic (CAS-max).
+    _Atomic(uint8_t) state;
+    // Number of parent links following the fixed fields. Const.
+    uint16_t nparents;
+    // jl_cancel_parent_link_t links[nparents];  (see jl_cancel_source_links)
+};
+
+// The fixed-field layout above must be kept in sync with the registration
+// in jltypes.c; the trailing links are invisible to the field system.
+static inline jl_cancel_parent_link_t *jl_cancel_source_links(jl_cancel_source_t *src) JL_NOTSAFEPOINT
+{
+    // The struct size is already pointer-aligned on all supported platforms.
+    return (jl_cancel_parent_link_t*)((char*)src + sizeof(jl_cancel_source_t));
+}
+
+// The link entry connecting `child` to `parent` (which must be one of its
+// parents).
+static inline jl_cancel_parent_link_t *jl_cancel_source_link(jl_cancel_source_t *child,
+                                                             jl_cancel_source_t *parent) JL_NOTSAFEPOINT
+{
+    jl_cancel_parent_link_t *links = jl_cancel_source_links(child);
+    for (size_t i = 0; i < child->nparents; i++) {
+        if (links[i].parent == parent)
+            return &links[i];
+    }
+    return NULL;
+}
+
+
 typedef struct _jl_task_t {
     JL_DATA_TYPE
     jl_value_t *next; // invasive linked list for scheduler
@@ -258,6 +342,16 @@ typedef struct _jl_task_t {
     // === 64 bytes (cache line)
     // timestamp this task finished (i.e. entered state DONE or FAILED).
     _Atomic(uint64_t) finished_at;
+
+    // This task's current registration on a wait queue (a `Base.WaitEntry`),
+    // or `nothing`. Doubles as the wake-claim word: whoever atomically clears
+    // it (notify via CAS against the specific entry, an interrupter via swap)
+    // owns waking the task. See the wake-claim protocol in base/condition.jl.
+    _Atomic(jl_value_t*) waiting_on;
+    // A `Base.WaitEntry` cached for reuse across parks (or `nothing`), so the
+    // common single-registration park does not allocate. Owned by this task.
+    jl_value_t *cached_wait_entry;
+    jl_value_t *invoked; // Method/CodeInstance/tuple Type for optimized task invocation
 
 // hidden state:
 

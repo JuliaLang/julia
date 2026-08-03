@@ -724,7 +724,7 @@ const powers_of_ten = [
 function bit_ndigits0z(x::Base.BitUnsigned64)
     lz = top_set_bit(x)
     nd = (1233*lz)>>12+1
-    nd -= x < powers_of_ten[nd]
+    return nd - (x < powers_of_ten[nd])
 end
 function bit_ndigits0z(x::UInt128)
     n = 0
@@ -946,7 +946,6 @@ function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
     end
     if i == 1
         @inbounds buf[pos] = UInt8('0') + rem(digits, 0xa) % UInt8
-        i -= 1
     end
     return pos + olength
 end

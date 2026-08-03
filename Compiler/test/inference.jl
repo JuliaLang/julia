@@ -5530,6 +5530,15 @@ g_max_methods(x) = f_max_methods(x)
 @test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
 @test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
 
+# Test that `Core.TypeName.concrete_only` makes inference give up at call sites with
+# non-concrete argument types while keeping concrete call sites precise
+function f_concrete_only end
+typeof(f_concrete_only).name.concrete_only = true
+f_concrete_only(x) = 1
+g_concrete_only(x) = f_concrete_only(x)
+@test only(Base.return_types(g_concrete_only, Tuple{Int})) === Int
+@test only(Base.return_types(g_concrete_only, Tuple{Integer})) === Any
+
 # Test that a module-wise `@max_methods` works as expected
 module Test43370
 using Test
@@ -7248,5 +7257,32 @@ end == Type{<:Real}
 @test Base.infer_return_type((Core.OpaqueClosure{Tuple{Int},Real},)) do oc
     Compiler.return_type(oc, Tuple{String})
 end == Type{Union{}}
+
+@test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
+task_returner() = Task(() -> "hello")
+@test Base.infer_return_type((typeof(task_returner),)) do f
+    Core.task_result_type(f())
+end === Core.TypeEgal{String}
+@test Base.infer_return_type((typeof(task_returner),)) do f
+    fetch(f())
+end === String
+@test Base.infer_return_type((Int,)) do i
+    fetch(Threads.@spawn sin(i))
+end === Float64
+
+# Unknown splats must be handled conservatively, while a fixed invoke target remains precise.
+splatted_task_inference(xs::Tuple) = Core._task(xs...)
+@test Base.infer_return_type(splatted_task_inference, (Tuple,)) === Task
+splatted_task_invalid_size(rest::Tuple) = Core._task(identity, "invalid", rest...)
+@test Base.infer_return_type(splatted_task_invalid_size, (Tuple,)) === Union{}
+splatted_task_target() = 42
+splatted_task_target(xs...) = xs
+function splatted_task_invoke(@nospecialize(rest::Tuple))
+    targets = (Tuple{Vararg}, rest...)
+    t = Core._task(splatted_task_target, 0, targets...)
+    t.donenotify = Base.ThreadSynchronizer()
+    return fetch(schedule(t))
+end
+@test Base.infer_return_type(splatted_task_invoke, (Tuple,)) === Tuple{}
 
 end # module inference

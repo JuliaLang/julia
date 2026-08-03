@@ -858,6 +858,10 @@ public:
     void addBytes(size_t bytes) JL_NOTSAFEPOINT;
     void printTimers() JL_NOTSAFEPOINT;
 
+    const char *objCacheDisabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.disabledNotice();
+    }
+
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
     }

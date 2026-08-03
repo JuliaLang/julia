@@ -545,6 +545,7 @@
     YY(jl_teardown_codegen) \
     YY(jl_decorate_llvm_module) \
     YY(jl_jit_total_bytes) \
+    YY(jl_objcache_disabled_notice) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \

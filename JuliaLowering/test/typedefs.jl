@@ -557,6 +557,16 @@ let s = test_mod.S_empty_new()
     @test s.x === 5
 end
 
+# flisp doesn't error with kwargs after `;` in `new`
+@test JuliaLowering.include_string(test_mod, """
+struct S_new_kwargs1
+    x
+    y
+    S_new_kwargs1(args...; kwargs...) = new(args...; kwargs...)
+end
+S_new_kwargs1(1,2).x
+"""; expr_compat_mode=true) == 1
+
 # new() with splats and untyped fields
 @test JuliaLowering.include_string(test_mod, """
 struct S9

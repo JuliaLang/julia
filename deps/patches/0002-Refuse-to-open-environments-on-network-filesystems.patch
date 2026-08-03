@@ -1,0 +1,137 @@
+From f95cc314e8044f30ef370e56d20d4a2c2df21342 Mon Sep 17 00:00:00 2001
+From: Keno Fischer <Keno@users.noreply.github.com>
+Date: Sun, 19 Jul 2026 02:02:09 +0000
+Subject: [PATCH 2/3] Refuse to open environments on network filesystems
+
+LMDB environments rely on coherent shared memory mappings of the
+lockfile and on advisory file locks on the data and lock files.
+Network filesystems provide neither reliably: mmap coherence between
+clients is not guaranteed (or MAP_SHARED may not even be supported),
+and lock implementations are frequently broken or unavailable, which
+can corrupt the database or wedge every client of the environment.
+
+Detect well-known network filesystems in mdb_env_open() and refuse to
+open the environment with a new MDB_REMOTE_FS error code.  Detection
+uses statfs(2) f_type magic numbers on Linux, the MNT_LOCAL mount flag
+on macOS and the BSDs, and GetDriveType() on Windows.  Filesystems
+that cannot be identified are presumed to be local.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+---
+ libraries/liblmdb/lmdb.h |  4 ++-
+ libraries/liblmdb/mdb.c  | 72 ++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 75 insertions(+), 1 deletion(-)
+
+diff --git a/libraries/liblmdb/lmdb.h b/libraries/liblmdb/lmdb.h
+index 641a3d5..1e34fd7 100644
+--- a/libraries/liblmdb/lmdb.h
++++ b/libraries/liblmdb/lmdb.h
+@@ -540,8 +540,10 @@ typedef enum MDB_cursor_op {
+ #define MDB_IS_READONLY	(-30770)
+ 	/** Requested map address is unavailable */
+ #define MDB_ADDR_BUSY	(-30769)
++	/** Environment resides on a network filesystem */
++#define MDB_REMOTE_FS	(-30768)
+ 	/** The last defined error code */
+-#define MDB_LAST_ERRCODE	MDB_ADDR_BUSY
++#define MDB_LAST_ERRCODE	MDB_REMOTE_FS
+ /** @} */
+ 
+ /** @brief Statistics for a database in the environment */
+diff --git a/libraries/liblmdb/mdb.c b/libraries/liblmdb/mdb.c
+index 4da2542..985323a 100644
+--- a/libraries/liblmdb/mdb.c
++++ b/libraries/liblmdb/mdb.c
+@@ -1925,6 +1925,7 @@ static char *const mdb_errstr[] = {
+ 	"MDB_ENV_BUSY: Environment is busy, can't use previous snapshot",
+ 	"MDB_IS_READONLY: Can't write in readonly txn or environment",
+ 	"MDB_ADDR_BUSY: Requested map address is unavailable",
++	"MDB_REMOTE_FS: Environment resides on a network filesystem",
+ };
+ 
+ char *
+@@ -6227,6 +6228,73 @@ mdb_env_envflags(MDB_env *env)
+ # error "Persistent DB flags & env flags overlap, but both go in mm_flags"
+ #endif
+ 
++#if defined(__linux__)
++# include <sys/vfs.h>
++#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
++# include <sys/mount.h>	/* statfs(), MNT_LOCAL */
++#endif
++
++/** Check if the environment resides on a network (remote) filesystem.
++ *	LMDB requires coherent shared memory maps and working file locks,
++ *	neither of which can be relied upon on network filesystems, so
++ *	#mdb_env_open() refuses such paths with #MDB_REMOTE_FS.
++ *	Filesystems that cannot be identified are presumed to be local.
++ * @param[in] path The path passed to #mdb_env_open() (used on POSIX).
++ * @param[in] fname The converted filename (used on Windows).
++ * @return 1 if the filesystem is known to be remote, 0 otherwise.
++ */
++static int ESECT
++mdb_env_fs_is_remote(const char *path, const MDB_name *fname)
++{
++#if defined(_WIN32)
++	WCHAR vol[MAX_PATH+1];
++	(void)path;
++	if (!GetVolumePathNameW(fname->mn_val, vol, MAX_PATH+1))
++		return 0;
++	return GetDriveTypeW(vol) == DRIVE_REMOTE;
++#elif defined(__linux__)
++	/* Linux statfs(2) has no local/remote flag; compare f_type against
++	 * the known network filesystem magic numbers from statfs(2).
++	 */
++	static const unsigned long remote_magics[] = {
++		0x6969,		/* NFS */
++		0x517b,		/* SMB */
++		0xfe534d42,	/* SMB2 */
++		0xff534d42,	/* CIFS */
++		0x73757245,	/* Coda */
++		0x5346414f,	/* AFS */
++		0x6b414653,	/* kAFS */
++		0x564c,		/* NCP */
++		0x01021997,	/* 9P (VM/container shared folders) */
++		0x0bd00bd0,	/* Lustre */
++		0x00c36400,	/* Ceph */
++		0x01161970,	/* GFS2 */
++		0x7461636f,	/* OCFS2 */
++		0x786f4256,	/* VirtualBox shared folders */
++	};
++	struct statfs st;
++	unsigned i;
++	(void)fname;
++	if (statfs(path, &st))
++		return 0;
++	for (i = 0; i < sizeof(remote_magics)/sizeof(remote_magics[0]); i++)
++		if ((unsigned long)st.f_type == remote_magics[i])
++			return 1;
++	return 0;
++#elif defined(MNT_LOCAL)
++	/* macOS and the BSDs flag local mounts */
++	struct statfs st;
++	(void)fname;
++	if (statfs(path, &st))
++		return 0;
++	return !(st.f_flags & MNT_LOCAL);
++#else
++	(void)path;
++	(void)fname;
++	return 0;
++#endif
++}
++
+ int ESECT
+ mdb_env_open(MDB_env *env, const char *path, unsigned int flags, mdb_mode_t mode)
+ {
+@@ -6282,6 +6350,10 @@ mdb_env_open(MDB_env *env, const char *path, unsigned int flags, mdb_mode_t mode
+ 			flags |= MDB_RAWPART | MDB_NOSUBDIR;
+ 	}
+ #endif
++	if (!(flags & MDB_RAWPART) && mdb_env_fs_is_remote(path, &fname)) {
++		rc = MDB_REMOTE_FS;
++		goto leave;
++	}
+ 	flags |= MDB_ENV_ACTIVE; /* tell mdb_env_close_active() to clean up */
+ 
+ 	if (flags & MDB_RDONLY) {
