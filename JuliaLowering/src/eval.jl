@@ -844,20 +844,15 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         expr_compat_mode=false, version::VersionNumber=VERSION)
     st = parseall(SyntaxTree, code; filename, version, ignore_warnings=true)
     @jl_assert kind(st) === K"toplevel" st
-    try
-        if mapexpr !== identity
-            # TODO: Is there any way to support provenance here?
-            local last = nothing
-            for c in children(st)
-                last = eval(mod, expr_to_est(mapexpr(est_to_expr(c))); expr_compat_mode)
-            end
-            last
-        else
-            eval(mod, st; expr_compat_mode)
+    if mapexpr !== identity
+        # TODO: Is there any way to support provenance here?
+        local last = nothing
+        for c in children(st)
+            last = eval(mod, expr_to_est(mapexpr(est_to_expr(c))); expr_compat_mode)
         end
-    catch err
-        # @info "JL err" mod filename code st
-        rethrow(err)
+        last
+    else
+        eval(mod, st; expr_compat_mode)
     end
 end
 include_string(mod, code, filename="string"; kws...) =
