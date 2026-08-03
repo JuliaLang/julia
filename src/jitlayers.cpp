@@ -325,6 +325,11 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
     bool target_specsig = false;
     jl_callptr_t invoke = nullptr;
     if (codeinst != nullptr) {
+        // This path interprets the CI's invoke/specptr with native ABI
+        // conventions, so callers must only pass native-owned CIs
+        // (jl_get_abi_converter falls back to the unspecialized thunk for CIs
+        // owned by external interpreters).
+        assert(jl_ci_owner_is_native(codeinst));
         uint8_t specsigflags;
         jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
         void *specptr = nullptr;
