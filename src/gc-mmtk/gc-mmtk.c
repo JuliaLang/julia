@@ -51,7 +51,7 @@ static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 // ========================================================================= //
 
 extern void mmtk_julia_copy_stack_check(int copy_stack);
-extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t header_size, uintptr_t tag);
+extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t n_concurrent_gcthreads, uintptr_t header_size, uintptr_t tag);
 extern void mmtk_set_concurrent_marking_enabled(bool enabled);
 extern void mmtk_notify_task_resume(void *mutator, const void* task);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
@@ -180,16 +180,15 @@ void jl_gc_init(void) {
 
     // if min and max are the same initialize MMTk with a fixed size heap
     // otherwise use a dynamic heap between min and max
-    // TODO: We just assume mark threads means GC threads, and ignore the number of concurrent sweep threads.
-    // If the two values are the same, we can use either. Otherwise, we need to be careful.
     uintptr_t gcthreads = jl_options.nmarkthreads;
+    uintptr_t concurrent_gcthreads = jl_options.nsweepthreads;
     if (!use_mmtk_heap_sizing) {
-        mmtk_gc_init(0, 0, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+        mmtk_gc_init(0, 0, gcthreads, concurrent_gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     }
     else if (min_heap_size != max_heap_size) {
-        mmtk_gc_init(min_heap_size, max_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+        mmtk_gc_init(min_heap_size, max_heap_size, gcthreads, concurrent_gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     } else {
-        mmtk_gc_init(0, min_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+        mmtk_gc_init(0, min_heap_size, gcthreads, concurrent_gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     }
 
     if ((int)mmtk_is_moving() != MMTK_MOVING) {

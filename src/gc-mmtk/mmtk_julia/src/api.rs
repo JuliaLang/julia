@@ -24,6 +24,7 @@ pub extern "C" fn mmtk_gc_init(
     min_heap_size: usize,
     max_heap_size: usize,
     n_gcthreads: usize,
+    n_concurrent_gcthreads: usize,
     header_size: usize,
     buffer_tag: usize,
 ) {
@@ -102,6 +103,16 @@ pub extern "C" fn mmtk_gc_init(
         if n_gcthreads > 0 {
             let success = builder.options.threads.set(n_gcthreads);
             assert!(success, "Failed to set GC threads to {}", n_gcthreads);
+        }
+
+        // Set concurrent GC threads
+        if n_concurrent_gcthreads > 0 {
+            let success = builder.options.concurrent_threads.set(n_concurrent_gcthreads);
+            assert!(
+                success,
+                "Failed to set concurrent GC threads to {}",
+                n_concurrent_gcthreads
+            );
         }
     }
 

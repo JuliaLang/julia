@@ -65,7 +65,7 @@ extern _Atomic(uintptr_t) JULIA_MALLOC_BYTES;
 /**
  * Misc
  */
-extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t header_size, uintptr_t tag);
+extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t n_concurrent_gcthreads, uintptr_t header_size, uintptr_t tag);
 extern bool mmtk_will_never_move(void* object);
 extern bool mmtk_is_moving(void);
 extern const char* mmtk_get_plan_name(void);
