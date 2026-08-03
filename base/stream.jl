@@ -437,6 +437,14 @@ function closewrite(s::LibuvStream)
         iolock_end()
         return
     end
+    # e.g !isreadable(s) without duplicate checks from iswritable
+    if s.status == StatusEOF || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
+        # optimize shutdown: if it already is not readable, just begin to close the underlying handle.
+        # This also avoids issues with pipes on some OS (really just FreeBSD) being awkwardly duplex
+        # even though they don't support shutdown.
+        close(s)
+        return
+    end
     req = Libc.malloc(_sizeof_uv_shutdown)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     err = ccall(:uv_shutdown, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -472,7 +480,7 @@ function closewrite(s::LibuvStream)
         unpreserve_handle(ct)
     end
     if isopen(s)
-        if status < 0 || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
+        if status < 0 || s.status == StatusEOF || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
             close(s)
         end
     end
@@ -673,16 +681,16 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
             if nread == UV_ENOBUFS && nrequested == 0
                 # remind the client that stream.buffer is full
                 notify(stream.cond)
-            elseif nread == UV_EOF # libuv called uv_stop_reading already
+            elseif nread == UV_EOF
+                # n.b. libuv called uv_stop_reading already
                 if stream.status != StatusClosing
                     stream.status = StatusEOF
                     notify(stream.cond)
                     if stream isa TTY
                         # stream can still be used by reseteof (or possibly write)
-                    elseif !(stream isa PipeEndpoint) && ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
-                        # stream can still be used by write
-                    else
-                        # underlying stream is no longer useful: begin finalization
+                    elseif iszero(ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle))
+                        # stream cannot be used by write, so underlying stream
+                        # is no longer useful: do early finalization now
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                         stream.status = StatusClosing
                     end
