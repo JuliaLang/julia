@@ -714,6 +714,16 @@ precompile_test_harness(false) do dir
         @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
     end
 
+    # Declaring an already-existing generic function of a closed module is a
+    # no-op and must not error during precompilation
+    FooBar3b_file = joinpath(dir, "FooBar3b.jl")
+    write(FooBar3b_file, """
+    module FooBar3b
+    Core.eval(Main, Expr(:function, GlobalRef(Base, :length)))
+    end
+    """)
+    @test Base.require(Main, :FooBar3b) isa Module
+
     # Test transitive dependency for #21266
     FooBarT_file = joinpath(dir, "FooBarT.jl")
     write(FooBarT_file,
