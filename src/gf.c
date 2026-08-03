@@ -662,6 +662,17 @@ JL_DLLEXPORT int jl_is_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_co
     return 0;
 }
 
+// The signature this CodeInstance is actually compiled against. Usually the
+// specTypes of its MethodInstance, but a Core.ABIOverride replaces it. Callers
+// that care about the ABI (rather than about which method was inferred) must
+// use this instead of reaching for `jl_get_ci_mi(ci)->specTypes` directly.
+JL_DLLEXPORT jl_value_t *jl_get_ci_abi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (jl_is_abioverride(ci->def))
+        return ((jl_abi_override_t*)ci->def)->abi;
+    return jl_get_ci_mi(ci)->specTypes;
+}
+
 // look for something with an egal ABI and properties that is already in the JIT for the target_world, or could be added to the JIT instead of ci to satisfy the same invoke edge with the same src.
 JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, size_t target_world) JL_NOTSAFEPOINT
 {

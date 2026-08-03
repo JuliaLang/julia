@@ -365,6 +365,35 @@ struct jl_returninfo_t {
     uint32_t effects = 0;  // ipo_purity_bits, applied to CallInst and Function
 };
 
+// Optional output of get_specsig_function describing where each Julia-level
+// argument ended up in the emitted LLVM parameter list. Recorded as codegen
+// builds the signature, so that it cannot drift from the signature itself.
+// This is what backs the exported jl_get_specsig_layout.
+struct jl_specsig_layout_t {
+    // one entry per jl_tparam(sig, i), in order
+    llvm::SmallVector<int32_t, 8> arg_to_param;  // LLVM param index, or -1 if elided
+    llvm::SmallVector<int32_t, 8> arg_to_roots;  // index of the `.roots.` shadow param, or -1
+    llvm::SmallVector<uint8_t, 8> arg_cc;        // jl_abi_argcc_t
+    llvm::SmallVector<uint8_t, 8> arg_elide;     // jl_abi_elide_t
+    // leading parameters, or -1 if not present
+    int32_t sret_idx = -1;          // sret_return or union_bytes_return
+    int32_t return_roots_idx = -1;
+    int32_t pgcstack_idx = -1;
+
+    void record_elided(uint8_t reason) JL_NOTSAFEPOINT {
+        arg_to_param.push_back(-1);
+        arg_to_roots.push_back(-1);
+        arg_cc.push_back(JL_ABI_ARG_ELIDED);
+        arg_elide.push_back(reason);
+    }
+    void record_param(int32_t param_idx, uint8_t cc) JL_NOTSAFEPOINT {
+        arg_to_param.push_back(param_idx);
+        arg_to_roots.push_back(-1);
+        arg_cc.push_back(cc);
+        arg_elide.push_back(JL_ABI_ELIDE_NONE);
+    }
+};
+
 struct jl_codegen_call_target_t {
     llvm::Function *decl;
     bool external_linkage; // whether codegen would like this edge to be externally-available
@@ -562,7 +591,8 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &ctx, Module *M, Value 
                                      StringRef name, jl_value_t *sig, jl_value_t *jlrettype,
                                      bool is_opaque_closure,
                                      ArrayRef<const char *> ArgNames = {},
-                                     unsigned nreq = 0) JL_CANSAFEPOINT;
+                                     unsigned nreq = 0,
+                                     jl_specsig_layout_t *layout_out = nullptr) JL_CANSAFEPOINT;
 
 void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
 
@@ -585,11 +615,11 @@ static const inline char *name_from_method_instance(jl_method_instance_t *li) JL
     return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
 }
 
+// n.b. the definition lives in src/gf.c as the exported jl_get_ci_abi, so that
+// out-of-tree code generators see the same answer codegen does
 static inline jl_value_t *get_ci_abi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    if (jl_typeof(ci->def) == (jl_value_t*)jl_abioverride_type)
-        return ((jl_abi_override_t*)ci->def)->abi;
-    return jl_get_ci_mi(ci)->specTypes;
+    return jl_get_ci_abi(ci);
 }
 
 template <size_t offset = 0>

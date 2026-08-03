@@ -1644,13 +1644,6 @@ static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) {
     return jl_is_mutable(jt) ? tbaa_cache.tbaa_mutab : tbaa_cache.tbaa_immut;
 }
 
-// tracks whether codegen is currently able to simply stack-allocate this type
-// note that this includes jl_isbits, although codegen should work regardless
-static bool jl_is_concrete_immutable(jl_value_t* t)
-{
-    return jl_may_be_immutable_datatype(t) && ((jl_datatype_t*)t)->isconcretetype && !jl_is_kind(t);
-}
-
 static bool jl_is_pointerfree(jl_value_t* t)
 {
     if (!jl_is_concrete_immutable(t))
@@ -1675,20 +1668,19 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut) JL_CANSAFEPOIN
 // these queries are usually related, but we split them out here
 // for convenience and clarity (and because it changes the calling convention)
 // n.b. this must include jl_is_datatype_singleton (ghostType) and primitive types
+// The definitions live in src/datatype.c so that out-of-tree code generators can
+// call them; these are just the local spellings.
 static bool deserves_stack(jl_value_t* t) JL_CANSAFEPOINT
 {
-    if (!jl_is_concrete_immutable(t))
-        return false;
-    jl_datatype_t *dt = (jl_datatype_t*)t;
-    return jl_is_datatype_singleton(dt) || jl_datatype_isinlinealloc(dt, /* (require) pointerfree */ 0);
+    return jl_deserves_stack(t);
 }
 static bool deserves_argbox(jl_value_t* t) JL_CANSAFEPOINT
 {
-    return !deserves_stack(t);
+    return jl_deserves_argbox(t);
 }
 static bool deserves_retbox(jl_value_t* t) JL_CANSAFEPOINT
 {
-    return deserves_argbox(t);
+    return jl_deserves_retbox(t);
 }
 static bool deserves_unionbox(jl_value_t* t) JL_CANSAFEPOINT
 {
@@ -8406,7 +8398,7 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_va
 }
 
 jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure,
-        ArrayRef<const char*> ArgNames, unsigned nreq)
+        ArrayRef<const char*> ArgNames, unsigned nreq, jl_specsig_layout_t *layout_out)
 {
     bool gcstack_arg = out.params->gcstack_arg;
     jl_returninfo_t props = {};
@@ -8441,6 +8433,8 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
         if (props.union_bytes) {
             props.cc = jl_returninfo_t::Union;
             fsig.push_back(PointerType::getUnqual(M->getContext()));
+            if (layout_out)
+                layout_out->sret_idx = fsig.size() - 1;
             argnames.push_back("union_bytes_return");
             Type *pair[] = { T_prjlvalue, getInt8Ty(M->getContext()) };
             rt = StructType::get(M->getContext(), ArrayRef<Type*>(pair));
@@ -8472,6 +8466,8 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
             // sret is always passed from alloca
             assert(M);
             fsig.push_back(PointerType::get(M->getContext(), M->getDataLayout().getAllocaAddrSpace()));
+            if (layout_out)
+                layout_out->sret_idx = fsig.size() - 1;
             argnames.push_back("sret_return");
             srt = rt;
             rt = getVoidTy(M->getContext());
@@ -8521,6 +8517,8 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
         param.addAttribute("julia.return_roots", std::to_string(props.return_roots));
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         fsig.push_back(getPointerTy(M->getContext()));
+        if (layout_out)
+            layout_out->return_roots_idx = fsig.size() - 1;
         argnames.push_back("return_roots");
     }
 
@@ -8532,6 +8530,8 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
         param.addAttribute(Attribute::NonNull);
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         fsig.push_back(PointerType::get(M->getContext(), 0));
+        if (layout_out)
+            layout_out->pgcstack_idx = fsig.size() - 1;
         argnames.push_back("pgcstack_arg");
     }
 
@@ -8541,19 +8541,27 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
         bool isboxed = false;
         Type *et = nullptr;
         if (i != 0 || !is_opaque_closure) { // special token for OC argument
-            if (is_uniquerep_Type(jt))
+            if (is_uniquerep_Type(jt)) {
+                if (layout_out)
+                    layout_out->record_elided(JL_ABI_ELIDE_UNIQUEREP);
                 continue;
+            }
             isboxed = deserves_argbox(jt);
             et = isboxed ? T_prjlvalue : _julia_type_to_llvm(&out, M->getContext(), jt, nullptr, /*noboxing*/false);
-            if (type_is_ghost(et))
+            if (type_is_ghost(et)) {
+                if (layout_out)
+                    layout_out->record_elided(JL_ABI_ELIDE_GHOST);
                 continue;
+            }
         }
         AttrBuilder param(M->getContext());
         Type *ty = et;
+        uint8_t argcc = isboxed ? JL_ABI_ARG_BOXED : JL_ABI_ARG_VALUE;
         if (et == nullptr || et->isAggregateType()) { // aggregate types are passed by pointer
             addNoCaptureAttr(param);
             param.addAttribute(Attribute::ReadOnly);
             ty = PointerType::get(M->getContext(), AddressSpace::Derived);
+            argcc = JL_ABI_ARG_INDIRECT;
         }
         else if (isboxed && jl_may_be_immutable_datatype(jt) && !jl_is_abstracttype(jt)) {
             param.addAttribute(Attribute::ReadOnly);
@@ -8565,6 +8573,8 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
         }
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         fsig.push_back(ty);
+        if (layout_out)
+            layout_out->record_param(fsig.size() - 1, argcc);
         size_t argno = i < nreq ? i : nreq;
         std::string genname;
         if (!ArgNames.empty()) {
@@ -8581,6 +8591,10 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
             if (tracked.count && !tracked.all) {
                 attrs.push_back(AttributeSet::get(M->getContext(), param));
                 fsig.push_back(PointerType::get(M->getContext(), M->getDataLayout().getAllocaAddrSpace()));
+                // n.b. derived from fsig, not argnames: the name is only pushed
+                // when ArgNames was supplied, but the parameter always is
+                if (layout_out)
+                    layout_out->arg_to_roots.back() = fsig.size() - 1;
                 if (!genname.empty())
                     argnames.push_back((Twine(".roots.") + genname).str());
             }
@@ -8630,6 +8644,117 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
     props.decl = FunctionCallee(ftype, fval);
     props.attrs = attributes;
     return props;
+}
+
+// The public enums must stay numerically identical to the internal ones, since
+// jl_get_specsig_layout copies jl_returninfo_t::cc straight through.
+static_assert((int)JL_ABI_RET_BOXED    == (int)jl_returninfo_t::Boxed,    "");
+static_assert((int)JL_ABI_RET_REGISTER == (int)jl_returninfo_t::Register, "");
+static_assert((int)JL_ABI_RET_SRET     == (int)jl_returninfo_t::SRet,     "");
+static_assert((int)JL_ABI_RET_UNION    == (int)jl_returninfo_t::Union,    "");
+static_assert((int)JL_ABI_RET_GHOSTS   == (int)jl_returninfo_t::Ghosts,   "");
+
+// Report the specsig ABI of a signature (or CodeInstance) without requiring the
+// caller to reimplement any of the rules above. See src/julia.h for the
+// contract; this answers by running get_specsig_function for real, so the two
+// can never disagree.
+extern "C" JL_DLLEXPORT_CODEGEN
+int jl_get_specsig_layout_impl(const jl_abi_query_t *q, jl_abi_layout_t *out,
+                               jl_abi_arginfo_t *args, int32_t args_capacity)
+{
+    if (q == NULL || out == NULL)
+        return -3;
+    if (q->version != JL_ABI_LAYOUT_VERSION) {
+        out->version = JL_ABI_LAYOUT_VERSION;
+        return -1;
+    }
+    memset(out, 0, sizeof(*out));
+    out->version = JL_ABI_LAYOUT_VERSION;
+    out->sret_idx = out->return_roots_idx = out->pgcstack_idx = -1;
+
+    jl_value_t *sigt = q->sigt;
+    jl_value_t *rt = q->rt;
+    bool is_opaque_closure = q->is_opaque_closure != 0;
+    jl_method_instance_t *mi = NULL;
+    if (q->ci != NULL) {
+        mi = jl_get_ci_mi(q->ci);
+        sigt = get_ci_abi(q->ci);
+        rt = q->ci->rettype;
+        is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
+    }
+    if (sigt == NULL || rt == NULL || !jl_is_tuple_type(sigt))
+        return -3;
+    out->sigt = sigt;
+    out->rettype = rt;
+    out->nargs = jl_nparams(sigt);
+
+    const jl_cgparams_t *cgparams = q->cgparams ? q->cgparams : &jl_default_cgparams;
+    bool specsig, needsparams = false;
+    if (mi != NULL)
+        std::tie(specsig, needsparams) = uses_specsig(sigt, mi, rt, cgparams->prefer_specsig);
+    else
+        specsig = uses_specsig(sigt, false, rt, cgparams->prefer_specsig);
+    out->specsig = specsig;
+    out->needsparams = needsparams;
+    if (args != NULL && args_capacity < out->nargs)
+        return -2;
+    if (!specsig)
+        return 0; // the jlcall ABI applies; nothing further to report
+
+    // Declare into the caller's module if it gave us one -- its DataLayout and
+    // Triple decide the alloca address space and the calling convention, which
+    // differ for the GPU targets this interface exists to serve. Otherwise use
+    // a scratch module, which is thrown away before returning.
+    std::unique_ptr<LLVMContext> scratch_ctx;
+    std::unique_ptr<Module> scratch_mod;
+    Module *M;
+    if (q->mod != NULL) {
+        M = unwrap((LLVMModuleRef)q->mod);
+    }
+    else {
+        scratch_ctx = std::make_unique<LLVMContext>();
+        DataLayout DL = q->datalayout ? DataLayout(StringRef(q->datalayout))
+                                      : jl_ExecutionEngine->getDataLayout();
+        Triple TT = q->triple ? Triple(StringRef(q->triple))
+                              : jl_ExecutionEngine->getTargetTriple();
+        scratch_mod = jl_create_llvm_module("jl_abi_query", *scratch_ctx, DL, TT);
+        M = scratch_mod.get();
+    }
+
+    jl_codegen_output_t cgout(*M);
+    cgout.params = cgparams;
+    // n.b. temporary_roots stays null: the type conversions below check for it
+    jl_specsig_layout_t layout;
+    jl_returninfo_t props = get_specsig_function(cgout, M, NULL,
+            q->name ? StringRef(q->name) : StringRef(""), sigt, rt, is_opaque_closure,
+            {}, 0, &layout);
+
+    out->rettype_cc = (int32_t)props.cc;
+    out->return_roots = props.return_roots;
+    out->all_roots = props.all_roots;
+    out->union_bytes = props.union_bytes;
+    out->union_align = props.union_align;
+    out->union_minalign = props.union_minalign;
+    out->sret_idx = layout.sret_idx;
+    out->return_roots_idx = layout.return_roots_idx;
+    out->pgcstack_idx = layout.pgcstack_idx;
+    out->nprefix_params = (layout.sret_idx >= 0) + (layout.return_roots_idx >= 0) +
+                          (layout.pgcstack_idx >= 0);
+    out->nparams = props.decl.getFunctionType()->getNumParams();
+    assert((int32_t)layout.arg_to_param.size() == out->nargs);
+    if (args != NULL) {
+        for (int32_t i = 0; i < out->nargs; i++) {
+            args[i].typ = jl_tparam(sigt, i);
+            args[i].cc = layout.arg_cc[i];
+            args[i].param_idx = layout.arg_to_param[i];
+            args[i].roots_idx = layout.arg_to_roots[i];
+            args[i].elide_reason = layout.arg_elide[i];
+            args[i]._reserved = 0;
+        }
+    }
+    if (q->mod != NULL && q->decl_out != NULL)
+        *q->decl_out = wrap(cast<Function>(props.decl.getCallee()));
+    return 0;
 }
 
 static DISubroutineType *

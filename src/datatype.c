@@ -399,6 +399,36 @@ int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
     return 0;
 }
 
+// tracks whether codegen is currently able to simply stack-allocate this type
+// note that this includes jl_isbits, although codegen should work regardless
+JL_DLLEXPORT int jl_is_concrete_immutable(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    return jl_may_be_immutable_datatype(t) && ((jl_datatype_t*)t)->isconcretetype && !jl_is_kind(t);
+}
+
+// These queries are usually related, but we split them out here for convenience
+// and clarity (and because it changes the calling convention). They describe the
+// specsig ABI, so out-of-tree code generators need to agree with them exactly;
+// codegen forwards to these rather than keeping its own copy.
+// n.b. this must include jl_is_datatype_singleton (ghostType) and primitive types
+JL_DLLEXPORT int jl_deserves_stack(jl_value_t *t) JL_CANSAFEPOINT
+{
+    if (!jl_is_concrete_immutable(t))
+        return 0;
+    jl_datatype_t *dt = (jl_datatype_t*)t;
+    return jl_is_datatype_singleton(dt) || jl_datatype_isinlinealloc(dt, /* (require) pointerfree */ 0);
+}
+
+JL_DLLEXPORT int jl_deserves_argbox(jl_value_t *t) JL_CANSAFEPOINT
+{
+    return !jl_deserves_stack(t);
+}
+
+JL_DLLEXPORT int jl_deserves_retbox(jl_value_t *t) JL_CANSAFEPOINT
+{
+    return jl_deserves_argbox(t);
+}
+
 static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align, int asfield) JL_CANSAFEPOINT
 {
     if (jl_is_uniontype(ty)) {
