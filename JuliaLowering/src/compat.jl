@@ -717,6 +717,11 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
             end
             @mknode(st; children=out_cs)
         end
+        # flisp macro expansion treated const as local, so names got mangled
+        # throughout the thunk.  JL uses locals for this, so strip const.
+        ([K"const" [K"=" l r]], when=ctx.toplevel && is_flisp_compat(l) &&
+            !is_base_layer(l.context::SyntaxContext)) ->
+            @ast _ st [K"=" rec(l) rec(r)]
 
         #-----------------------------------------------------------------------
         # Heads not emitted from parsing

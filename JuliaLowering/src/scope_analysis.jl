@@ -279,11 +279,7 @@ function _find_scope_decls!(ctx, scope, ex)
         k1 = kind(ex[1])
         _record_layer!(ctx, ex[1])
         sc = ex[1].context::SyntaxContext
-        if k === K"constdecl" && is_flisp_compat(ex[1]) &&
-            is_top_scope(scope) && sc.layer !== ctx.layer
-            # hack: flisp declares a mangled global in expansion; we must not error
-            explicit_declare_in_scope!(ctx, scope, ex[1], :global)
-        elseif k1 === K"BindingId"
+        if k1 === K"BindingId"
             b = get_binding(ctx, ex[1])
             get!(scope.binding_assignments, b.id, ex[1])
         elseif k1 === K"Identifier"
