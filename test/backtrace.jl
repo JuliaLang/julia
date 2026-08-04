@@ -386,3 +386,66 @@ end
 @testset "`lookup` return type inference" begin
     @test Vector{StackTraces.StackFrame} === Base.infer_return_type(lookup)
 end
+
+# Unwinding while the JIT registers debug info must not deadlock (seen on 32-bit
+# Windows). Runs in a child process so a hang fails the test, not the suite.
+@testset "unwinding concurrent with JIT debug-info registration" begin
+    script = """
+        using Base.Threads
+        struct Tag{N} end
+        # new specialization per N, so each call registers a JIT object
+        function widen(::Tag{N}) where {N}
+            acc = N
+            for i in 1:8
+                acc = muladd(acc, 3, i) % 1000003
+                acc = xor(acc, acc >> 3) + i
+            end
+            return acc
+        end
+        stop = Threads.Atomic{Bool}(false)
+        function unwind_until_stopped()
+            while !stop[]
+                try
+                    error("boom")
+                catch
+                    catch_backtrace()
+                end
+            end
+        end
+        function compile_range(lo, hi)
+            for n in lo:hi
+                Base.donotdelete(Base.invokelatest(widen, Tag{n}()))
+            end
+        end
+        unwinders = (Threads.@spawn(unwind_until_stopped()),
+                     Threads.@spawn(unwind_until_stopped()))
+        try
+            compilers = (Threads.@spawn(compile_range(1_000, 2_000)),
+                         Threads.@spawn(compile_range(2_001, 3_000)))
+            foreach(wait, compilers)
+        finally
+            stop[] = true
+        end
+        foreach(wait, unwinders)
+        println("DONE")
+        """
+    iob = Base.BufferStream() # unbounded buffer, so we can read after exit
+    p = run(`$(Base.julia_cmd()) --startup-file=no -t 5 -e $script`, devnull, iob, iob; wait=false)
+    reader = @async try # monitor task to set EOF on iob after p exits
+        wait(p)
+    finally
+        closewrite(iob)
+    end
+    try
+        finished = timedwait(() -> process_exited(p), 300) === :ok
+        @test finished
+        if finished
+            wait(reader) # for iob to reach EOF
+            @test occursin("DONE", read(iob, String))
+            @test p.exitcode == 0
+        end
+    finally
+        process_running(p) && kill(p, Base.SIGKILL)
+        wait(p)
+    end
+end
