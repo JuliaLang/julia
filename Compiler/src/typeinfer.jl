@@ -1625,40 +1625,6 @@ function ci_cache_next(code::CodeInstance)
     return @atomic :acquire code.next
 end
 
-struct CodeInstanceCacheIterator
-    head::Union{Nothing,CodeInstance}
-end
-Base.IteratorSize(::Type{CodeInstanceCacheIterator}) = Base.SizeUnknown()
-Base.eltype(::Type{CodeInstanceCacheIterator}) = CodeInstance
-
-function ci_cache_iteration_state(code::CodeInstance,
-                                  fast::Union{Nothing,CodeInstance})
-    next_code = ci_cache_next(code)
-    # If the hare reached the previous end, restart it from the tortoise: a
-    # concurrent insertion may since have created a cycle farther down the list.
-    fast === nothing && (fast = code)
-    fast = ci_cache_next(fast)
-    fast === nothing || (fast = ci_cache_next(fast))
-    # `jl_mi_cache_insert` can briefly make the list circular while moving an
-    # existing CI. Stop at a Floyd tortoise/hare collision; a cache miss is safe,
-    # whereas following the transient cycle would make inference unbounded.
-    next_code !== nothing && next_code === fast && (next_code = nothing)
-    return next_code, fast
-end
-
-function Base.iterate(iter::CodeInstanceCacheIterator)
-    code = iter.head
-    code === nothing && return nothing
-    return code, ci_cache_iteration_state(code, code)
-end
-
-function Base.iterate(::CodeInstanceCacheIterator,
-                      state::Tuple{Union{Nothing,CodeInstance},Union{Nothing,CodeInstance}})
-    code, fast = state
-    code === nothing && return nothing
-    return code, ci_cache_iteration_state(code, fast)
-end
-
 function find_cached_ci(interp::AbstractInterpreter, mi::MethodInstance,
                         valid_worlds::WorldRange, source_mode::UInt8)
     cache = code_cache(interp, valid_worlds)
@@ -1690,14 +1656,19 @@ function find_cached_ci(interp::AbstractInterpreter, cache::InternalCodeCache,
     # that entry would publish a new source-capable CI for every ABI/source request.
     # Walk the native cache chain to find the first entry that satisfies the full
     # request. Cache wrappers dispatch back to this implementation through their
-    # underlying global cache.
-    for code in CodeInstanceCacheIterator(ci_cache_head(mi))
+    # underlying global cache. A concurrent `jl_mi_cache_insert` may briefly make
+    # the chain circular while moving an existing CI; like the C-side walkers
+    # (e.g. `jl_get_ci_equiv`), keep following `next` until the writer's fixup
+    # store lands.
+    code = ci_cache_head(mi)
+    while code !== nothing
         if (ci_worlds_cover(code, valid_worlds) &&
                 code.owner === cache.owner &&
                 isdefined(code, :inferred, :acquire) &&
                 ci_meets_requirement(interp, code, source_mode))
             return code
         end
+        code = ci_cache_next(code)
     end
     return nothing
 end
@@ -1730,9 +1701,10 @@ end
 function find_equivalent_cached_ci(::AbstractInterpreter,
                                    ::InternalCodeCache, ci::CodeInstance,
                                    valid_worlds::WorldRange)
-    mi = get_ci_mi(ci)
-    for candidate in CodeInstanceCacheIterator(ci_cache_head(mi))
+    candidate = ci_cache_head(get_ci_mi(ci))
+    while candidate !== nothing
         ci_is_equivalent_winner(candidate, ci, valid_worlds) && return candidate
+        candidate = ci_cache_next(candidate)
     end
     return nothing
 end

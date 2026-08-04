@@ -59,16 +59,6 @@ inference_proof(result::ConcreteResult) =
     result.proof === nothing ? result.edge::CodeInstance : result.proof
 inference_proof(result::SemiConcreteResult) = something(result.proof, result.edge)
 
-function materialize_inference_proof!(edges::Vector{Any}, proof::CodeInstance,
-                                      @nospecialize(paired_edge=nothing))
-    # This CI certifies the inferred facts of its defining method; it does not
-    # necessarily represent ordinary dispatch on its MethodInstance signature
-    # (for example, it may have been reached through `invoke`). Encode the proof
-    # as an identity edge to that method, just as we do for an inlined CI.
-    proof === paired_edge || add_inlining_edge!(edges, proof)
-    return nothing
-end
-
 function record_invoke_edge!(invokes::IdDict{Any,Vector{Any}},
                              @nospecialize(signature), @nospecialize(target))
     signatures = get!(Vector{Any}, invokes, target)
@@ -77,36 +67,6 @@ function record_invoke_edge!(invokes::IdDict{Any,Vector{Any}},
     end
     push!(signatures, signature)
     return true
-end
-
-function record_materialized_edges!(standalone::IdSet{Any},
-                                    invokes::IdDict{Any,Vector{Any}}, source)
-    i = 1
-    while i <= length(source)
-        edge = source[i]
-        if edge isa Int
-            n = abs(edge)
-            last = i + 1 + n
-            last <= length(source) || break
-            for j = i + 2:last
-                target = source[j]
-                if target isa Union{Method,MethodInstance,CodeInstance,Core.Binding}
-                    push!(standalone, target)
-                end
-            end
-            i = last + 1
-        elseif edge isa Union{Method,MethodInstance,CodeInstance,Core.Binding}
-            push!(standalone, edge)
-            i += 1
-        elseif edge isa LocalInferenceProof
-            i += 1
-        else
-            i == length(source) && break
-            record_invoke_edge!(invokes, edge, source[i + 1])
-            i += 2
-        end
-    end
-    return nothing
 end
 
 function _materialize_inference_edges!(edges::Vector{Any}, source,
@@ -157,19 +117,6 @@ function _materialize_inference_edges!(edges::Vector{Any}, source,
     return nothing
 end
 
-function materialize_inference_proof!(edges::Vector{Any}, proof::LocalInferenceProof,
-                                      @nospecialize(paired_edge=nothing))
-    seen_proofs = IdSet{LocalInferenceProof}()
-    standalone = IdSet{Any}()
-    invokes = IdDict{Any,Vector{Any}}()
-    record_materialized_edges!(standalone, invokes, edges)
-    paired_edge === nothing || push!(standalone, paired_edge)
-    push!(seen_proofs, proof)
-    _materialize_inference_edges!(
-        edges, proof.edges, seen_proofs, standalone, invokes)
-    return nothing
-end
-
 function materialize_inference_edges(source)
     has_local_proof = false
     for edge in source
@@ -190,7 +137,11 @@ end
 
 function add_inference_proof!(edges::Vector{Any}, proof::CodeInstance,
                               @nospecialize(paired_edge=nothing))
-    materialize_inference_proof!(edges, proof, paired_edge)
+    # This CI certifies the inferred facts of its defining method; it does not
+    # necessarily represent ordinary dispatch on its MethodInstance signature
+    # (for example, it may have been reached through `invoke`). Encode the proof
+    # as an identity edge to that method, just as we do for an inlined CI.
+    proof === paired_edge || add_inlining_edge!(edges, proof)
     return nothing
 end
 

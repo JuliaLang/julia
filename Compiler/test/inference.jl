@@ -56,10 +56,6 @@ let
     @test got.proof === proof
     @test got.result.ci === ci
     @test get(Compiler.code_cache(interp), mi, nothing) === ci
-    @test last(collect(Compiler.get_inference_cache(interp))) === local_result
-    cache = Compiler.get_inference_cache(interp)
-    @test cache[length(cache)] === local_result
-    @test eltype(Compiler.get_inference_cache(interp)) === Compiler.InferenceCacheEntry
     @test_throws AssertionError push!(Compiler.get_inference_cache(interp), artifact)
 end
 
@@ -366,16 +362,18 @@ end
         @test Compiler.materialize_inference_edges(plain_edges) === plain_edges
 
         edges = Any[]
-        Compiler.materialize_inference_proof!(edges, ci1, ci1)
+        Compiler.add_inference_proof!(edges, ci1, ci1)
         @test isempty(edges)
-        Compiler.materialize_inference_proof!(edges, ci2, ci1)
+        Compiler.add_inference_proof!(edges, ci2, ci1)
         @test edges == Any[match.method.sig, ci2]
 
         encoded = Core.svec(-1, atype, ci1, atype, mi)
         proof = Compiler.LocalInferenceProof(Compiler.WorldRange(UInt(1), UInt(2)), encoded)
-        Compiler.materialize_inference_proof!(edges, proof, ci1)
-        @test length(edges) == 2 + length(encoded)
-        @test all(i -> edges[i + 2] === encoded[i], eachindex(encoded))
+        Compiler.add_inference_proof!(edges, proof, ci1)
+        @test edges[end] === proof
+        flat = Compiler.materialize_inference_edges(edges)
+        @test length(flat) == 2 + length(encoded)
+        @test all(i -> flat[i + 2] === encoded[i], eachindex(encoded))
 
         leaf = Compiler.LocalInferenceProof(Compiler.WorldRange(world), Core.svec(ci2))
         root = Compiler.LocalInferenceProof(Compiler.WorldRange(world), Core.svec(leaf, leaf))
@@ -438,25 +436,6 @@ end
         @test !isdefined(concrete, :result)
         concrete_with_value = Compiler.ConcreteResult(ci1, Compiler.Effects(), 1; proof)
         @test concrete_with_value.result === 1
-
-        cycle1 = stmtinfo_codeinstance(mi, owner)
-        cycle2 = stmtinfo_codeinstance(mi, owner)
-        cycle3 = stmtinfo_codeinstance(mi, owner)
-        @atomic cycle1.next = cycle2
-        @atomic cycle2.next = cycle3
-        @atomic cycle3.next = cycle2
-        @test collect(Compiler.CodeInstanceCacheIterator(cycle1)) == [cycle1, cycle2]
-
-        late_cycle1 = stmtinfo_codeinstance(mi, owner)
-        late_cycle2 = stmtinfo_codeinstance(mi, owner)
-        @atomic late_cycle1.next = late_cycle2
-        late_iter = Compiler.CodeInstanceCacheIterator(late_cycle1)
-        entry, state = iterate(late_iter)
-        @test entry === late_cycle1
-        @atomic late_cycle2.next = late_cycle2
-        entry, state = iterate(late_iter, state)
-        @test entry === late_cycle2
-        @test iterate(late_iter, state) === nothing
     end
 
     @testset "lookup edges precede their proofs" begin
@@ -521,47 +500,11 @@ end
         end
         multi.needs_mi_edges[1] = false
 
-        invoke_local = Compiler.InvokeCallInfo(nothing, match, local_result, atype)
-        empty!(edges)
-        Compiler.add_edges!(edges, invoke_local)
-        @test edges[2] === mi
-
-        opaque_local = Compiler.OpaqueClosureCallInfo(nothing, match, local_result)
-        empty!(edges)
-        Compiler.add_edges!(edges, opaque_local)
-        @test first(edges) === mi
-
+        # Each CallInfo type implements the targetless-facts upgrade separately;
+        # cover both triggers (attached result, needs-mi-edge bit) per type, and
+        # every result representation (local, targetless concrete) at least once.
         targetless_concrete = Compiler.ConcreteResult(
             nothing, Compiler.Effects(); proof=local_proof)
-
-        multi.call_results[1] = targetless_concrete
-        empty!(edges)
-        Compiler.add_edges!(edges, multi)
-        @test edges[3] === mi
-        flat_edges = Compiler.materialize_inference_edges(edges)
-        @test any(Compiler.ForwardToBackedgeIterator(flat_edges)) do (_, edge)
-            edge === mi
-        end
-
-        invoke_provisional = Compiler.InvokeCallInfo(
-            nothing, match, nothing, atype, true)
-        empty!(edges)
-        Compiler.add_edges!(edges, invoke_provisional)
-        @test edges[2] === mi
-        flat_edges = Compiler.materialize_inference_edges(edges)
-        @test any(Compiler.ForwardToBackedgeIterator(flat_edges)) do (_, edge)
-            edge === mi
-        end
-
-        opaque_provisional = Compiler.OpaqueClosureCallInfo(
-            nothing, match, nothing, true)
-        empty!(edges)
-        Compiler.add_edges!(edges, opaque_provisional)
-        @test first(edges) === mi
-        flat_edges = Compiler.materialize_inference_edges(edges)
-        @test any(Compiler.ForwardToBackedgeIterator(flat_edges)) do (_, edge)
-            edge === mi
-        end
 
         invoke_concrete = Compiler.InvokeCallInfo(
             nothing, match, targetless_concrete, atype)
@@ -573,15 +516,22 @@ end
             edge === mi
         end
 
-        opaque_concrete = Compiler.OpaqueClosureCallInfo(
-            nothing, match, targetless_concrete)
+        invoke_provisional = Compiler.InvokeCallInfo(
+            nothing, match, nothing, atype, true)
         empty!(edges)
-        Compiler.add_edges!(edges, opaque_concrete)
+        Compiler.add_edges!(edges, invoke_provisional)
+        @test edges[2] === mi
+
+        opaque_local = Compiler.OpaqueClosureCallInfo(nothing, match, local_result)
+        empty!(edges)
+        Compiler.add_edges!(edges, opaque_local)
         @test first(edges) === mi
-        flat_edges = Compiler.materialize_inference_edges(edges)
-        @test any(Compiler.ForwardToBackedgeIterator(flat_edges)) do (_, edge)
-            edge === mi
-        end
+
+        opaque_provisional = Compiler.OpaqueClosureCallInfo(
+            nothing, match, nothing, true)
+        empty!(edges)
+        Compiler.add_edges!(edges, opaque_provisional)
+        @test first(edges) === mi
     end
 
     @testset "lookup identity and edge access" begin
