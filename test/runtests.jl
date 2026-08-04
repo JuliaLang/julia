@@ -299,8 +299,23 @@ cd(@__DIR__) do
             # escalation timeout (JL_KILL_TIMEOUT) so that we exit before it
             # escalates.
             deadline = time() + 300
+            # A wedged process can swallow the SIGQUIT above without dumping,
+            # so re-signal anything still alive: a repeat SIGQUIT forces a
+            # kernel core dump, and SIGABRT covers processes that ignore
+            # SIGQUIT entirely.
+            SIGABRT = 6 # !windows
+            resignal = [(30, Base.SIGQUIT), (60, SIGABRT), (90, SIGABRT)]
+            start = time()
             while time() < deadline && any(alive, stuck)
                 Libc.systemsleep(1)
+                if !isempty(resignal) && time() - start >= resignal[1][1]
+                    (after, sig) = popfirst!(resignal)
+                    for pid in stuck
+                        alive(pid) || continue
+                        ccall(:kill, Cint, (Cint, Cint), pid, sig) == 0 || continue
+                        Core.print(Core.stderr, "Process $pid has not dumped core $(after)s after SIGQUIT; re-signalling with signal $sig to force a dump.\n")
+                    end
+                end
             end
         end
 
