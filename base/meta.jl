@@ -548,7 +548,8 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 4
                     @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt16, Bool}})
+                    @assert isa((x.args[5]::QuoteNode).value,
+                                Union{Symbol, Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool}})
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,

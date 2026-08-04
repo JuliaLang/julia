@@ -4,6 +4,7 @@ using Base: cancel!, CancellationRequest, CancellationToken, CancellationTokenSo
     CANCEL_REQUEST_SAFE, CANCEL_REQUEST_ABANDON_EXTERNAL, CANCEL_REQUEST_ABANDON_ALL,
     CANCEL_TOKEN
 using Base.ScopedValues: with, ScopedValue
+using Libdl
 
 # Threads.@spawn-style cancellable task (non-sticky, explicitly on the
 # default pool - a compute-bound victim must not land on the interactive/io
@@ -1617,4 +1618,221 @@ end
     @test fetch(t2)[2] == b"ping"
     close(sender)
     close(udp)
+end
+
+const libccalltest = "libccalltest"
+
+# A Julia foreign-call cancellation handler, C-callable via @cfunction. It
+# runs like a signal handler on the thread executing the annotated call:
+# no allocation, locks, yields or I/O.
+function julia_cancelspin_handler(state::Ptr{Cvoid}, sev::UInt8)
+    p = Ptr{Int64}(state)
+    unsafe_store!(p, Int64(sev) + 1, 2)
+    unsafe_store!(p, Int64(1), 1)
+    nothing
+end
+
+# Handler deliveries are best-effort (skipped e.g. while one is already in
+# flight, or when a suspend handshake holds the per-thread request slot),
+# and a foreign spin never reaches the cancellation point that would
+# recover a miss - so redeliver, mirroring the ^C ladder's level-triggered
+# re-press. `cancel!` on an already-cancelled source re-runs its
+# propagation walk and shootdown.
+function wait_cancelled(t::Task, src::CancellationTokenSource; timeout::Float64 = 60.0)
+    deadline = time() + timeout
+    while timedwait(() -> istaskdone(t), 2.0) !== :ok && time() < deadline
+        cancel!(src)
+    end
+    return istaskdone(t)
+end
+
+@testset "foreign-call cancellation handlers" begin
+    lib = Libdl.dlopen("libccalltest")
+    c_handler = Libdl.dlsym(lib, :cancelspin_handler)
+
+    if Threads.nthreads(:default) >= 2
+        # The handler runs on the thread blocked inside the annotated call:
+        # it stops the foreign spin and the call returns. The annotation
+        # itself implies no cancellation point - the pre-call @cancel_check
+        # binds the governing source (which gates delivery), and the
+        # post-call one is this caller's chosen way to observe the
+        # delivered cancellation (so the partial result never escapes).
+        cell = Ref((Int64(0), Int64(0)))
+        t, src = cancellable_spawn() do
+            Base.@cancel_check
+            r = @ccall cancel_handler=(c_handler, cell) libccalltest.cancelspin_wait(cell::Ref{NTuple{2, Int64}})::Int64
+            Base.@cancel_check
+            r
+        end
+        sleep(0.5) # let the task get into the foreign spin
+        cancel!(src)
+        @test wait_cancelled(t, src)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+        @test cell[][1] == 1 # the handler stopped the spin ...
+        # ... and saw severity SAFE (the handler records sev + 1)
+        @test cell[][2] == Int64(CANCEL_REQUEST_SAFE.request) + 1
+
+        # The same with a handler written in Julia (via @cfunction),
+        # cancelled at an escalated severity, which the handler receives as
+        # its argument.
+        jh = @cfunction(julia_cancelspin_handler, Cvoid, (Ptr{Cvoid}, UInt8))
+        cell2 = Ref((Int64(0), Int64(0)))
+        t2, src2 = cancellable_spawn() do
+            Base.@cancel_check
+            r = @ccall cancel_handler=(jh, cell2) libccalltest.cancelspin_wait(cell2::Ref{NTuple{2, Int64}})::Int64
+            Base.@cancel_check
+            r
+        end
+        sleep(0.5)
+        cancel!(src2, CANCEL_REQUEST_ABANDON_EXTERNAL)
+        @test wait_cancelled(t2, src2)
+        @test istaskfailed(t2)
+        @test t2.result isa CancellationRequest
+        @test cell2[][1] == 1
+        @test cell2[][2] == Int64(CANCEL_REQUEST_ABANDON_EXTERNAL.request) + 1
+
+        # Without a post-call check, an aborted call's (partial) result is
+        # the caller's to interpret: the task completes normally with
+        # whatever the foreign function returned after its handler-driven
+        # early-out.
+        cell4 = Ref((Int64(0), Int64(0)))
+        t4, src4 = cancellable_spawn() do
+            Base.@cancel_check
+            @ccall cancel_handler=(c_handler, cell4) libccalltest.cancelspin_wait(cell4::Ref{NTuple{2, Int64}})::Int64
+        end
+        sleep(0.5)
+        cancel!(src4)
+        @test wait_cancelled(t4, src4)
+        @test !istaskfailed(t4)
+        @test fetch(t4) isa Int64
+        @test cell4[][1] == 1
+    end
+
+    # A cancellation already pending at a caller-placed pre-call check
+    # throws there: the foreign function is never entered and the handler
+    # never runs. (This path is platform-independent.)
+    src3 = CancellationTokenSource()
+    cancel!(src3)
+    cell3 = Ref((Int64(0), Int64(0)))
+    threw = try
+        with(CANCEL_TOKEN => CancellationToken(src3)) do
+            Base.@cancel_check
+            @ccall cancel_handler=(c_handler, cell3) libccalltest.cancelspin_wait(cell3::Ref{NTuple{2, Int64}})::Int64
+        end
+        false
+    catch e
+        e isa CancellationRequest || rethrow()
+        true
+    end
+    @test threw
+    @test cell3[] === (Int64(0), Int64(0))
+end
+
+# BLAS cancellation handler: it executes on the thread blocked in the dgemm,
+# where the library's thread-local cancel token is exactly the one the
+# in-flight operation is bound to. The function pointers are pre-resolved
+# into globals (a handler must not dlsym - that takes locks).
+const BLAS_TOK_F = Ref(C_NULL)
+const BLAS_CANCEL_F = Ref(C_NULL)
+function blas_cancel_handler(::Ptr{Cvoid}, ::UInt8)
+    slot = ccall(BLAS_TOK_F[], Ptr{Csize_t}, ())
+    ccall(BLAS_CANCEL_F[], Cvoid, (Ptr{Csize_t}, Csize_t), slot, unsafe_load(slot))
+    nothing
+end
+
+@testset "BLAS cancellation via the cancel_handler annotation" begin
+    # Requires an OpenBLAS with the cancellation extension. (This exercises
+    # the raw mechanism without depending on any stdlib; LinearAlgebra's
+    # BLAS wrappers will carry the same annotation.)
+    blas = Libdl.dlopen_e("libopenblas64_")
+    tok_f = blas == C_NULL ? C_NULL : Libdl.dlsym_e(blas, :openblas_cancel_token)
+    if Threads.nthreads(:default) < 2
+        @warn "BLAS cancellation tests need a second default-pool thread; skipping"
+    elseif tok_f == C_NULL
+        @warn "patched OpenBLAS (64-bit interface) not available; skipping BLAS cancellation tests"
+    else
+        BLAS_TOK_F[] = tok_f
+        BLAS_CANCEL_F[] = Libdl.dlsym(blas, :openblas_cancel)
+        dgemm_f = Libdl.dlsym(blas, :dgemm_64_)
+        bh = @cfunction(blas_cancel_handler, Cvoid, (Ptr{Cvoid}, UInt8))
+
+        function gemm!(C::Matrix{Float64}, A::Matrix{Float64}, B::Matrix{Float64})
+            m = Int64(size(A, 1)); k = Int64(size(A, 2)); n = Int64(size(B, 2))
+            ccall(dgemm_f, Cvoid,
+                  (Ref{UInt8}, Ref{UInt8}, Ref{Int64}, Ref{Int64}, Ref{Int64},
+                   Ref{Float64}, Ptr{Float64}, Ref{Int64}, Ptr{Float64}, Ref{Int64},
+                   Ref{Float64}, Ptr{Float64}, Ref{Int64}, Clong, Clong),
+                  UInt8('N'), UInt8('N'), m, n, k, 1.0, A, m, B, k, 0.0, C, m, 1, 1)
+            return C
+        end
+        # The cancellable variant: the annotation publishes the handler for
+        # exactly the duration of the call. Since the handler runs on the
+        # thread executing the dgemm, no slot handshake is needed - it
+        # cancels its own thread's current generation. The bracketing
+        # @cancel_checks are the caller's: the first binds the governing
+        # source (gating delivery), the second throws a delivered
+        # cancellation so the garbage output never escapes.
+        function gemm_cancellable!(C::Matrix{Float64}, A::Matrix{Float64}, B::Matrix{Float64})
+            m = Int64(size(A, 1)); k = Int64(size(A, 2)); n = Int64(size(B, 2))
+            Base.@cancel_check
+            @ccall cancel_handler=(bh, C_NULL) $dgemm_f(
+                UInt8('N')::Ref{UInt8}, UInt8('N')::Ref{UInt8},
+                m::Ref{Int64}, n::Ref{Int64}, k::Ref{Int64},
+                1.0::Ref{Float64}, A::Ptr{Float64}, m::Ref{Int64},
+                B::Ptr{Float64}, k::Ref{Int64},
+                0.0::Ref{Float64}, C::Ptr{Float64}, m::Ref{Int64},
+                1::Clong, 1::Clong)::Cvoid
+            Base.@cancel_check
+            return C
+        end
+
+        # correctness sanity + timing baseline; grow the problem until the
+        # baseline is long enough to cancel mid-flight (a large fixed size
+        # burns minutes on an oversubscribed CI box).
+        n = 3000
+        A = rand(n, n); B = rand(n, n); C = zeros(n, n)
+        gemm!(C, A, B) # warm up the thread pool
+        tbase = @elapsed gemm!(C, A, B)
+        while tbase < 1.0 && n < 12000
+            n *= 2
+            A = rand(n, n); B = rand(n, n); C = zeros(n, n)
+            tbase = @elapsed gemm!(C, A, B)
+        end
+
+        # A bystander BLAS operation with no binding must be unaffected.
+        nb = 2000
+        A2 = rand(nb, nb); B2 = rand(nb, nb); C2 = zeros(nb, nb)
+        bystander_started = Base.Event()
+        bystander = Threads.@spawn (notify(bystander_started); gemm!(C2, A2, B2))
+
+        started = Base.Event()
+        t, tsrc = cancellable_spawn() do
+            notify(started)
+            gemm_cancellable!(C, A, B)
+        end
+        wait(bystander_started)
+        wait(started)
+        sleep(0.3) # make sure the dgemm (and its guard) are in flight
+        telapsed = @elapsed begin
+            cancel!(tsrc)
+            @test wait_cancelled(t, tsrc; timeout = 60.0)
+        end
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+        # The gemm was abandoned early (block-granularity latency; give slack
+        # for scheduling noise)
+        @test telapsed < tbase * 0.75
+
+        # The bystander completed unharmed with a correct result.
+        wait(bystander)
+        r, c = rand(1:nb), rand(1:nb)
+        @test isapprox(C2[r, c], @views sum(A2[r, :] .* B2[:, c]); rtol=1e-8)
+
+        # The library stays healthy for subsequent (uncancelled) use - no
+        # reset needed: the next operation advances past the dead generation.
+        a = rand(16, 16); b = rand(16, 16); c2 = zeros(16, 16)
+        gemm!(c2, a, b)
+        @test c2 ≈ [sum(a[i, l] * b[l, j] for l in 1:16) for i in 1:16, j in 1:16]
+    end
 end

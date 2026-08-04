@@ -1771,8 +1771,30 @@ using Base: ccall_macro_parse, ccall_macro_lower
         Any[:Cstring, :Cstring, :Cint],   # argument types
         Any["%s = %d\n", :name, :value],  # argument symbols
         false,                            # is gc_safe
+        nothing,                          # cancellation handler
         1                                 # number of required arguments (for varargs)
     )
+
+    # leading options: gc_safe and cancel_handler, in either order
+    optexpr = ccall_macro_parse((:(gc_safe = true), :(cancel_handler = (h, s)),
+                                 :( foo(x::Cint)::Cvoid )))
+    @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), 0)
+    optexpr = ccall_macro_parse((:(cancel_handler = (h, s)), :(gc_safe = true),
+                                 :( foo(x::Cint)::Cvoid )))
+    @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), 0)
+
+    # the cancel_handler lowering: a plain foreigncall with (fn, state)
+    # prepended - the annotation implies no cancellation point of its own
+    callx = ccall_macro_lower(:ccall, ccall_macro_parse((:(cancel_handler = (h, s)),
+        :( foo(x::Cint)::Cvoid )))...)
+    @test Meta.isexpr(callx, :call)
+    @test callx.args[1] === :ccall
+    cconv = callx.args[3]
+    @test cconv.head === :cconv && cconv.args[1] == (:ccall, UInt16(0), false, true)
+    typetup = callx.args[5]
+    @test typetup.args[1] == :(Ptr{Cvoid}) && typetup.args[2] == :(Ptr{Cvoid}) && typetup.args[3] == Expr(:escape, :Cint)
+    @test callx.args[6] == Expr(:escape, :h) && callx.args[7] == Expr(:escape, :s)
+    @test callx.args[8] == Expr(:escape, :x)
 end
 
 @testset "ensure the base-case of @ccall works, including library name and pointer interpolation" begin
@@ -1801,6 +1823,8 @@ end
     @test_throws ArgumentError("C ABI prohibits vararg without one required argument") ccall_macro_parse(:( foo(; x::Cint)::Cint ))
     # not a function pointer
     @test_throws TypeError @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
+    # malformed cancel_handler option
+    @test_throws ArgumentError("cancel_handler must be a `(handler, state)` tuple") ccall_macro_parse((:(cancel_handler = h), :( foo(x::Cint)::Cvoid )))
 end
 
 @testset "check error path for @cfunction" begin

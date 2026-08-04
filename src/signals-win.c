@@ -258,6 +258,15 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
         goto resume;
     if (jl_atomic_load_relaxed(&ptls2->gc_state) != JL_GC_STATE_UNSAFE)
         goto resume;
+    // A published foreign-call cancellation-handler guard suppresses the
+    // reset: its span (e.g. a protected allocator) is exactly where a
+    // longjmp must not land. The handler defers the cancellation and
+    // chains into the reset on region exit; a miss is recovered
+    // level-triggered.
+    // TODO: asynchronous delivery of the handler itself is not implemented
+    // on this platform yet.
+    if (jl_atomic_load_relaxed(&ct2->cancel_handler_ctx) != NULL)
+        goto resume;
     reset_ctx = jl_atomic_load_acquire(&ct2->reset_ctx);
     if (reset_ctx == NULL || reset_ctx->sp == 0)
         goto resume;

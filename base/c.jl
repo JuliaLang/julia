@@ -262,26 +262,39 @@ The above input outputs this:
 """
 function ccall_macro_parse(exprs)
     gc_safe = false
+    cancel = nothing
+    expr = nothing
     if exprs isa Expr
         expr = exprs
-    elseif length(exprs) == 1
-        expr = exprs[1]
-    elseif length(exprs) == 2
-        gc_expr = exprs[1]
-        expr = exprs[2]
-        if gc_expr.head == :(=) && gc_expr.args[1] == :gc_safe
-            if gc_expr.args[2] == true
-                gc_safe = true
-            elseif gc_expr.args[2] == false
-                gc_safe = false
-            else
-                throw(ArgumentError("gc_safe must be true or false"))
-            end
-        else
-            throw(ArgumentError("@ccall option must be `gc_safe=true` or `gc_safe=false`"))
-        end
     else
-        throw(ArgumentError("@ccall needs a function signature with a return type"))
+        # leading `name = value` options, then the call expression
+        i = 1
+        while i < length(exprs) && isexpr(exprs[i], :(=))
+            opt = exprs[i]::Expr
+            name = opt.args[1]
+            value = opt.args[2]
+            if name === :gc_safe
+                if value === true
+                    gc_safe = true
+                elseif value === false
+                    gc_safe = false
+                else
+                    throw(ArgumentError("gc_safe must be true or false"))
+                end
+            elseif name === :cancel_handler
+                if !(isexpr(value, :tuple) && length(value.args) == 2)
+                    throw(ArgumentError("cancel_handler must be a `(handler, state)` tuple"))
+                end
+                cancel = (value.args[1], value.args[2])
+            else
+                throw(ArgumentError("@ccall options are `gc_safe = <bool>` and `cancel_handler = (handler, state)`"))
+            end
+            i += 1
+        end
+        if i != length(exprs)
+            throw(ArgumentError("@ccall needs a function signature with a return type"))
+        end
+        expr = exprs[i]
     end
 
     # setup and check for errors
@@ -347,18 +360,33 @@ function ccall_macro_parse(exprs)
             pusharg!(a)
         end
     end
-    return func, rettype, types, args, gc_safe, nreq
+    return func, rettype, types, args, gc_safe, cancel, nreq
 end
 
 
-function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, nreq)
-    if convention isa Tuple
-        cconv = Expr(:cconv, (convention..., gc_safe), nreq)
-    else
-        cconv = Expr(:cconv, (convention, UInt16(0), gc_safe), nreq)
+function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, cancel, nreq)
+    have_cancel = cancel !== nothing
+    base_cconv = convention isa Tuple ? (convention..., gc_safe) :
+                                        (convention, UInt16(0), gc_safe)
+    if !have_cancel
+        cconv = Expr(:cconv, base_cconv, nreq)
+        return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
+                     Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
     end
+    # Cancellation-handler annotation: the (handler, state) pair rides as
+    # two extra leading foreigncall arguments - peeled off again by codegen,
+    # which publishes them as the handler context around the call. The
+    # annotation implies no cancellation point: binding the governing source
+    # (which gates delivery) and observing the cancellation itself are the
+    # caller's business - place a `@cancel_check` before the call, and after
+    # it either re-check or have the handler make the foreign call return a
+    # recognizable abort code.
+    fex, sex = cancel
+    nreq > 0 && (nreq += 2)
+    cconv = Expr(:cconv, (base_cconv..., true), nreq)
     return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
-                 Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
+                Expr(:tuple, :(Ptr{Cvoid}), :(Ptr{Cvoid}), map!(esc, types, types)...),
+                esc(fex), esc(sex), map!(esc, args, args)...)
 end
 
 """
@@ -422,6 +450,52 @@ the `ccall` may block outside of julia.
 
 !!! compat "Julia 1.12"
     The `gc_safe` argument requires Julia 1.12 or higher.
+
+A long-running foreign call can be made cancellable with the
+`cancel_handler = (handler, state)` option:
+
+    @ccall cancel_handler=(CANCEL_FPTR, ref) lib.solve(ref::Ptr{Cvoid})::Cvoid
+
+`handler` is a C-callable function pointer `void (*)(void *state, uint8_t
+sev)` (typically from [`@cfunction`](@ref)). If the cancellation token
+source (`Base.CancellationTokenSource`) bound to the calling task is
+cancelled while the call runs, the runtime invokes `handler(state, sev)` *on
+the thread executing the call*, like a signal handler: at an arbitrary point
+of the foreign code, on the same stack, resuming the interrupted call when
+the handler returns (`sev` is the request state of the cancelled source).
+The handler performs the library-specific work to make the foreign call
+return early - typically setting a flag or calling the library's own
+cancellation entry point.
+
+The annotation implies no cancellation point of its own. Delivery is gated
+on the task's *bound* token source, which is what the most recent
+cancellation point bound - so place a `Base.@cancel_check` before the
+call (it also throws a cancellation that is already pending, which the
+handler cannot abort). How the aborted call's result is handled afterwards
+is equally the caller's choice: the handler can make the foreign function
+return a recognizable abort code that the caller inspects, or the caller
+can simply re-check with `Base.@cancel_check` after the call, which
+throws the delivered cancellation before a partial result can escape.
+
+The whole handler interface is a plain C ABI: the runtime does not assume it
+is safe to run Julia code at the interrupted point (a handler that knows
+better can still be written in Julia via [`@cfunction`](@ref)). `state`
+undergoes the standard `ccall` argument conversion to `Ptr{Cvoid}`
+(`unsafe_convert(Ptr{Cvoid}, cconvert(Ptr{Cvoid}, state))`), and, like any
+other argument, the converted value is kept rooted for the duration of the
+call - pass a `Ref` to hand the handler a pointer to Julia-managed data.
+Handler restrictions mirror those of a signal handler: it must not allocate,
+yield, perform I/O, take locks, or throw, and it must tolerate being invoked
+multiple times (once per redelivery), spuriously, and concurrently with the
+call completing. The delivery machinery preserves the complete interrupted
+register state around the handler, so it may otherwise do anything an
+ordinary C function may. The handler is only invoked while the call is
+actually running on a thread (at most one invocation at a time per thread);
+delivery is best-effort and the cancellation itself remains level-triggered.
+
+!!! compat "Julia 1.14"
+    The `cancel_handler` option requires Julia 1.14 or higher.
+
 """
 macro ccall(exprs...)
     return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)

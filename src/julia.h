@@ -2552,6 +2552,13 @@ struct _jl_handler_t {
     // handler chain is not GC-scanned.)
     struct _jl_reset_ctx_t *reset_ctx;
     jl_value_t *bound_cancel_token;
+    // The published foreign-call cancellation-handler context at handler
+    // entry, restored on the same paths: an exception thrown through an
+    // annotated foreign call (e.g. from a callback) must unpublish the
+    // guard whose establishing frame the unwind destroyed - and,
+    // conversely, a try/catch running in a callback under such a guard
+    // re-arms it on exit.
+    struct _jl_cancel_handler_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
 };
