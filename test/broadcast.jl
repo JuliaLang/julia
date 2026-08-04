@@ -1259,3 +1259,13 @@ end
         @test occursin("cannot broadcast-assign", sprint(showerror, err))
     end
 end
+
+@testset "issue #32956: dot-call broadcast marks f as called" begin
+    # gf.c's arg-despecialization heuristic strips a Function/Type slot's
+    # concrete type unless the slot is marked called. The flisp lowerer
+    # must mark `f` as called for both `f.(x)` and `f.(x; kw=v)`.
+    bcast(f, x)   = f.(x)
+    bcastkw(f, x) = f.(x; init=0)
+    @test only(methods(bcast)).called   & 0x1 == 0x1
+    @test only(methods(bcastkw)).called & 0x1 == 0x1
+end
