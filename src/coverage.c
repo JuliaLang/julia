@@ -83,9 +83,6 @@ static int is_skip_filename(const char *filename) JL_NOTSAFEPOINT
     return 0;
 }
 
-// Whether `path` falls within the file or directory named by `--code-coverage=@`
-// or `--track-allocation=@`. A prefix only counts at a path component boundary,
-// so `@/src/Foo` does not also match `/src/Foobar/x.jl`.
 JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
 {
     const char *tracked = jl_options.tracked_path;
@@ -104,8 +101,6 @@ JL_DLLEXPORT int jl_path_is_tracked(const char *path) JL_NOTSAFEPOINT
     return next == '\0' || next == '/' || next == PATHSEPSTRING[0];
 }
 
-// Whether code from `filename` belonging to `m` should be logged under the current
-// --code-coverage setting. `m` may be NULL when the module is unknown.
 JL_DLLEXPORT int jl_coverage_enabled_for(jl_module_t *m, const char *filename) JL_NOTSAFEPOINT
 {
     if (codegen_imaging_mode() || jl_generating_output() || is_skip_filename(filename))

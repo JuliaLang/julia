@@ -1,8 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Top-level statements run in the interpreter rather than through codegen (#37059).
-# Note the `if` below is a single top-level statement: only its first line is
-# tracked, since the thunk it lowers to carries no line info.
+# Coverage for top-level statements, whose lowered thunks carry no line information.
 
 x = 1
 y = x + 1

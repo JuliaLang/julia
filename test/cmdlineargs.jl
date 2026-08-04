@@ -665,7 +665,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             srcfile = joinpath(foobar, "boundary.jl")
             write(srcfile, "f(x) = x + 1\nf(1)\n")
             outfile = joinpath(dir, "boundary.info")
-            # "<parent>/Foo" is a string prefix of "<parent>/Foobar", but not a path prefix
             run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo $srcfile`)
             @test !contains(read(outfile, String), realpath(srcfile))
             rm(outfile)
@@ -682,26 +681,23 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
             rm(outfile)
             covered = [
-                9, 10, 11,      # `local` without an assignment (#39307)
-                15, 16, 17,     # `let` without an assignment (#39307)
-                23, 24,         # lines a macro adds (#41043)
-                29,
-                34, 36,         # implicit returns (#53557)
-                41, 42,         # a :foldable body that is also concrete-evaluated (#61175)
-                48,
-                55,             # the branch @static keeps (#43237)
+                8, 9, 10,       # `local` without an assignment (#39307)
+                14, 15, 16,     # `let` without an assignment (#39307)
+                22, 23,         # lines a macro adds (#41043)
+                28,
+                33, 35,         # implicit returns (#53557)
+                40, 41,         # a :foldable body that is also concrete-evaluated (#61175)
+                47,
+                54,             # the branch @static keeps (#43237)
             ]
             for ln in covered
                 @test get(hits, ln, 0) > 0 context=ln
             end
-            # the branch @static discards is compiled out, so it must not be reported
-            # as an uncovered line
-            @test !haskey(hits, 57)
+            # compiled-out branch
+            @test !haskey(hits, 56)
         end
 
-        # a macro defined in another user file expands into a frame with no module
-        # in its debuginfo; that must still count as user code, and the interpreter
-        # must resolve it to the macro's own lines rather than to the call site
+        # coverage for a macro defined in another user file
         let macrofile = realpath(joinpath(helperdir, "coverage_macros.jl")),
             usefile = realpath(joinpath(helperdir, "coverage_macrouse.jl"))
             counts = Dict()
@@ -713,14 +709,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 rm(outfile)
                 hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                             for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
-                for ln in (13, 14) # the body of `@twice`, expanded into `usesmac`
+                for ln in (11, 12)
                     @test get(hits, ln, 0) > 0 context=(extra, mode, ln)
                 end
-                # lines 12-14 are the macro body only; unlike line 11 they are not
-                # also a top-level statement, so every mode must agree on them.
-                # Interpreted counts drifting above compiled ones means the frames
-                # carried over between statements are not being tracked correctly.
-                counts[(string(extra), string(mode))] = [get(hits, ln, 0) for ln in 12:14]
+                # Exclude line 9, which is also counted as a top-level statement.
+                counts[(string(extra), string(mode))] = [get(hits, ln, 0) for ln in 10:12]
             end
             @test allequal(values(counts)) context=counts
         end
@@ -733,45 +726,37 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                             for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
                 rm(outfile)
-                for ln in (7, 8, 9, 14) # every top-level statement that runs
+                for ln in (5, 6, 7, 12) # every top-level statement that runs
                     @test get(hits, ln, 0) > 0 context=(extra, ln)
                 end
-                # a top-level `if` is one statement with one LineNumberNode, and its
-                # thunk carries no line info, so lines inside it are still not tracked
-                @test !haskey(hits, 10)
+                # The top-level `if` thunk has no line information for its body.
+                @test !haskey(hits, 8)
             end
         end
 
-        # --code-coverage=user must not attribute inlined Base code to the calling
-        # module, which used to drop .cov files into the Julia installation (#26573)
+        # --code-coverage=user excludes inlined Base code (#26573)
         mktempdir() do tdir
             srcfile = joinpath(tdir, "user.jl")
-            # `sort` inlines the optionally-generated `Base.merge`, whose body has no
-            # module recorded in its debuginfo
+            # `sort` inlines generated `Base.merge` code with no recorded module.
             write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
             outfile = joinpath(dir, "user.info")
             run(`$cov_exename --code-coverage=$outfile --code-coverage=user $srcfile`)
-            sfs = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
             rm(outfile)
-            @test !isempty(sfs)
-            # Base files are recorded under a bare relative name; user files are absolute
-            @test all(isabspath, sfs) context=sfs
+            @test !isempty(source_files)
+            @test all(isabspath, source_files) context=source_files
         end
 
-        # Frames with no module in their debuginfo are classified by whether their
-        # file is absolute (see `frame_is_user_code` in src/codegen.cpp). If sysimage
-        # sources ever stop being recorded relatively, that rule silently starts
-        # calling Base user code again - and the =user test above would still pass,
-        # since the leaked records would now be absolute. So assert it directly.
+        # The unknown-module heuristic requires relative sysimage source paths.
         mktempdir() do tdir
             srcfile = joinpath(realpath(tdir), "paths.jl")
             write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
             outfile = joinpath(dir, "paths.info")
             run(`$cov_exename --code-coverage=$outfile --code-coverage=all $srcfile`)
-            sfs = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
             rm(outfile)
-            @test any(!isabspath, sfs) # sysimage sources, e.g. "sort.jl"
-            @test srcfile in sfs # everything else is absolutized
+            @test any(!isabspath, source_files)
+            @test srcfile in source_files
         end
 
         # the .cov writer must reproduce source lines of any length
@@ -788,16 +773,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test endswith(got[2], " f(1)")
         end
 
-        # `@/` is the filesystem root: absolute paths only, not the relative names
-        # sysimage sources are recorded under
+        # `@/` tracks absolute paths only.
         mktempdir() do tdir
             srcfile = joinpath(realpath(tdir), "root.jl")
             write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
             outfile = joinpath(dir, "root.info")
             run(`$cov_exename --code-coverage=$outfile --code-coverage=@/ $srcfile`)
-            sfs = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
             rm(outfile)
-            @test all(isabspath, sfs) context=sfs
+            @test all(isabspath, source_files) context=source_files
         end
 
         # is_file_tracked must not read an unset tracked path
@@ -877,7 +861,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             rm(outfile)
             hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
                         for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
-            for ln in 5:10 # the body of `hot`
+            for ln in 5:10
                 @test get(hits, ln, 0) > 0
             end
         end

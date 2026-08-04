@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Constructs that have been reported as missing coverage; see test/cmdlineargs.jl
-# for the expected line numbers.
+# Coverage for constructs that have regressed; expected lines are in test/cmdlineargs.jl.
 
 module CoverageConstructs
 
