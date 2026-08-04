@@ -44,6 +44,34 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
     end
 end
 
+# Plural duration types: always use plural units regardless of value
+for (plural, singular) in ((:Years, :Year), (:Quarters, :Quarter), (:Months, :Month),
+                            (:Weeks, :Week), (:Days, :Day), (:Hours, :Hour),
+                            (:Minutes, :Minute), (:Seconds, :Second),
+                            (:Milliseconds, :Millisecond), (:Microseconds, :Microsecond),
+                            (:Nanoseconds, :Nanosecond))
+    plural_str = string(plural)
+    singular_str = string(singular)
+    accessor_str = lowercase(singular_str)
+    # Plural types display with plural unit strings
+    @eval _units(x::$plural) = " " * $accessor_str * "s"
+    # AbstractString parsing (mainly for IO code)
+    @eval $plural(x::AbstractString) = $plural(Base.parse(Int64, x))
+    # The period type is printed when output, thus it already implies its own typeinfo
+    @eval Base.typeinfo_implicit(::Type{$plural}) = true
+    @eval begin
+        @doc """
+            $($plural_str)(v)
+
+        Construct a `$($plural_str)` period with the given `v` value. Input must be
+        losslessly convertible to an [`Int64`](@ref).
+
+        `$($plural_str)` is a period type that always displays with plural unit strings
+        (e.g., `$($plural_str)(1)` prints as `1 $($accessor_str)s`).
+        """ $plural(v)
+    end
+end
+
 #Print/show/traits
 Base.print(io::IO, x::Period) = print(io, value(x), _units(x))
 Base.show(io::IO, ::MIME"text/plain", x::Period) = print(io, x)
@@ -114,6 +142,15 @@ coarserperiod(::Type{Minute}) = (Hour, 60)
 coarserperiod(::Type{Hour}) = (Day, 24)
 coarserperiod(::Type{Day}) = (Week, 7)
 coarserperiod(::Type{Month}) = (Year, 12)
+# Plural duration types mirror the singular conversion chains
+coarserperiod(::Type{Nanoseconds})  = (Microseconds, 1000)
+coarserperiod(::Type{Microseconds}) = (Milliseconds, 1000)
+coarserperiod(::Type{Milliseconds}) = (Seconds, 1000)
+coarserperiod(::Type{Seconds}) = (Minutes, 60)
+coarserperiod(::Type{Minutes}) = (Hours, 60)
+coarserperiod(::Type{Hours}) = (Days, 24)
+coarserperiod(::Type{Days}) = (Weeks, 7)
+coarserperiod(::Type{Months}) = (Years, 12)
 
 # Stores multiple periods in greatest to least order by type, not values,
 # canonicalized to eliminate zero periods, merge equal period types,
@@ -377,7 +414,16 @@ Base.zero(::Union{CompoundPeriod,Type{CompoundPeriod}}) = CompoundPeriod()
 
 # Fixed-value Periods (periods corresponding to a well-defined time interval,
 # as opposed to variable calendar intervals like Year).
-const FixedPeriod = Union{Week, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond}
+const FixedPeriod = Union{Week, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond,
+                          Weeks, Days, Hours, Minutes, Seconds, Milliseconds, Microseconds, Nanoseconds}
+
+# For FixedPeriod types (which represent an exact number of nanoseconds), we can
+# compare directly via tons() rather than requiring promote_rule for every
+# cross-chain pair (e.g. Milliseconds vs Second, Days vs Millisecond).
+# This is consistent with Base.hash(::FixedPeriod) which also uses tons().
+# We use direct value comparison for identical types to avoid tons() overflow on large values.
+(==)(x::FixedPeriod, y::FixedPeriod)     = typeof(x) === typeof(y) ? value(x) == value(y) : tons(x) == tons(y)
+Base.isless(x::FixedPeriod, y::FixedPeriod) = typeof(x) === typeof(y) ? value(x) < value(y) : tons(x) < tons(y)
 
 # like div but throw an error if remainder is nonzero
 function divexact(x, y)
@@ -417,9 +463,37 @@ end
 define_conversions([(:Week, 7), (:Day, 24), (:Hour, 60), (:Minute, 60), (:Second, 1000),
                     (:Millisecond, 1000), (:Microsecond, 1000), (:Nanosecond, 1)])
 define_conversions([(:Year, 4), (:Quarter, 3), (:Month, 1)])
+define_conversions([(:Weeks, 7), (:Days, 24), (:Hours, 60), (:Minutes, 60), (:Seconds, 1000),
+                    (:Milliseconds, 1000), (:Microseconds, 1000), (:Nanoseconds, 1)])
+define_conversions([(:Years, 4), (:Quarters, 3), (:Months, 1)])
+
+# Cross-family conversions: plural→singular and singular→plural for each unit pair
+# This allows arithmetic like Date + Quarters (which routes through Month) to work.
+# promote_rule promotes singular→plural so mixed comparisons like Days(1) == Day(1) work.
+for (plural, singular) in ((:Years, :Year), (:Quarters, :Quarter), (:Months, :Month),
+                            (:Weeks, :Week), (:Days, :Day), (:Hours, :Hour),
+                            (:Minutes, :Minute), (:Seconds, :Second),
+                            (:Milliseconds, :Millisecond), (:Microseconds, :Microsecond),
+                            (:Nanoseconds, :Nanosecond))
+    @eval Base.convert(::Type{$singular}, x::$plural) = $singular(value(x))
+    @eval Base.convert(::Type{$plural}, x::$singular) = $plural(value(x))
+    @eval Base.promote_rule(::Type{$plural}, ::Type{$singular}) = $plural
+end
+# Cross-unit plural→singular: Quarters→Month, Years→Month, Years→Quarter
+# (these piggyback on the singular convert chains already defined above)
+Base.convert(::Type{Month}, x::Quarters) = Month(convert(Quarter, x))
+Base.convert(::Type{Month}, x::Years)    = Month(convert(Year,    x))
+Base.convert(::Type{Quarter}, x::Years)  = Quarter(convert(Year,  x))
+Base.convert(::Type{Day}, x::Weeks)      = Day(convert(Week, x))
+Base.convert(::Type{Hour}, x::Days)      = Hour(convert(Day, x))
+Base.convert(::Type{Minute}, x::Hours)   = Minute(convert(Hour, x))
+Base.convert(::Type{Second}, x::Minutes) = Second(convert(Minute, x))
+Base.convert(::Type{Millisecond}, x::Seconds)     = Millisecond(convert(Second, x))
+Base.convert(::Type{Microsecond}, x::Milliseconds) = Microsecond(convert(Millisecond, x))
+Base.convert(::Type{Nanosecond}, x::Microseconds)  = Nanosecond(convert(Microsecond, x))
 
 # fixed is not comparable to other periods, except when both are zero (#37459)
-const OtherPeriod = Union{Month, Quarter, Year}
+const OtherPeriod = Union{Month, Quarter, Year, Months, Quarters, Years}
 (==)(x::FixedPeriod, y::OtherPeriod) = iszero(x) & iszero(y)
 (==)(x::OtherPeriod, y::FixedPeriod) = y == x
 
@@ -433,6 +507,11 @@ Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + zero_or_fixedperiod_seed)
 Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed(x))
 Base.hash(x::Quarter, h::UInt) = hash(3 * value(x), h + otherperiod_seed(x))
 Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed(x))
+# Plural duration types hash identically to their singular equivalents
+# (they represent the same quantity, just expressed differently)
+Base.hash(x::Years, h::UInt) = hash(12 * value(x), h + otherperiod_seed(x))
+Base.hash(x::Quarters, h::UInt) = hash(3 * value(x), h + otherperiod_seed(x))
+Base.hash(x::Months, h::UInt) = hash(value(x), h + otherperiod_seed(x))
 
 function Base.hash(x::CompoundPeriod, h::UInt)
     isempty(x.periods) && return hash(0, h + zero_or_fixedperiod_seed)
@@ -476,3 +555,25 @@ seconds(x::Nanosecond) = value(x) / 1000000000
 seconds(x::Microsecond) = value(x) / 1000000
 seconds(x::Millisecond) = value(x) / 1000
 seconds(x::Period) = value(Second(x))
+# Plural duration type conversions (mirror singular)
+toms(c::Nanoseconds)  = div(value(c), 1000000, RoundNearest)
+toms(c::Microseconds) = div(value(c), 1000, RoundNearest)
+toms(c::Milliseconds) = value(c)
+toms(c::Seconds)      = 1000 * value(c)
+toms(c::Minutes)      = 60000 * value(c)
+toms(c::Hours)        = 3600000 * value(c)
+tons(x::Microseconds) = value(x) * 1000
+tons(x::Nanoseconds)  = value(x)
+days(c::Milliseconds) = div(value(c), 86400000)
+days(c::Seconds)      = div(value(c), 86400)
+days(c::Minutes)      = div(value(c), 1440)
+days(c::Hours)        = div(value(c), 24)
+days(c::Days)         = value(c)
+days(c::Weeks)        = 7 * value(c)
+days(c::Years)        = 365.2425 * value(c)
+days(c::Quarters)     = 91.310625 * value(c)
+days(c::Months)       = 30.436875 * value(c)
+seconds(x::Nanoseconds) = value(x) / 1000000000
+seconds(x::Microseconds) = value(x) / 1000000
+seconds(x::Milliseconds) = value(x) / 1000
+seconds(x::Seconds) = Float64(value(x))

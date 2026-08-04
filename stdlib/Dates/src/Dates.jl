@@ -53,6 +53,8 @@ include("deprecated.jl")
 export Period, DatePeriod, TimePeriod,
        Year, Quarter, Month, Week, Day, Hour, Minute, Second, Millisecond,
        Microsecond, Nanosecond,
+       Years, Quarters, Months, Weeks, Days, Hours, Minutes, Seconds, Milliseconds,
+       Microseconds, Nanoseconds,
        TimeZone, UTC, TimeType, DateTime, Date, Time,
        # periods.jl
        canonicalize,

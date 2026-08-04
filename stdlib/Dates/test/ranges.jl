@@ -132,7 +132,8 @@ let
         end
         if T == Dates.DateTime
             for P in subtypes(Dates.TimePeriod)
-                P in (Dates.Microsecond, Dates.Nanosecond) && continue
+                P in (Dates.Microsecond, Dates.Nanosecond,
+                      Dates.Microseconds, Dates.Nanoseconds) && continue
                 for pos_step in (P(1), P(2), P(50), P(2048), P(10000))
                     # empty range
                     dr = f1:pos_step:l1
