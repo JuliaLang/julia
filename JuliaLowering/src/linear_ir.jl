@@ -729,7 +729,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
         end_label = make_label(ctx, ex)
         need_value = needs_value || in_tail_pos
-        result_var = need_value ? new_local_binding(ctx, ex, "$(name)_result") : nothing
+        result_var = need_value ?
+            new_local_binding(ctx, ex, "$(name)_result";
+                              is_read=true, is_assigned=true, is_used_undef=true) : nothing
         outer_target = get(ctx.break_targets, name, nothing)
         ctx.break_targets[name] = JumpTarget(end_label, ctx, result_var)
         push!(ctx.break_label_stack, name)

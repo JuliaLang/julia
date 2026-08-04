@@ -292,3 +292,27 @@ end
 end
 
 end
+
+@testset "break-block result slot flags" begin
+
+test_mod = Module()
+
+# The result slot of a value-position loop is assigned only on some paths
+# (a `break` jumps past the fall-through assignment), so its slot flags
+# must report it as used and maybe-undef.
+JuliaLowering.include_string(test_mod, """
+function f_loop_result_slot(c)
+    y = while true
+        c && break
+    end
+    y
+end
+""")
+let ci = Base.uncompressed_ir(only(methods(test_mod.f_loop_result_slot)))
+    i = findfirst(==(Symbol("loop-exit_result")), ci.slotnames)
+    @test i !== nothing
+    # 0x08 (SLOT_USED) | 0x20 (SLOT_USEDUNDEF)
+    @test ci.slotflags[i] == 0x28
+end
+
+end
