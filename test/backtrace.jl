@@ -381,21 +381,16 @@ end
     @test Vector{StackTraces.StackFrame} === Base.infer_return_type(lookup)
 end
 
-# Unwinding must not deadlock against JIT debug-info registration. On 32-bit
-# Windows every unwind goes through the DbgHelp `StackWalk64` callbacks, which
-# consult the debug-info registry for each frame while the stackwalk mutex is
-# held; an unwinder that waits there for the debug-info read lock can deadlock
-# against `jl_register_jit_object`, which takes the write side while a second
-# unwinder holds the read side and waits for the stackwalk mutex. Run both
-# sides concurrently in a child process and require it to finish, so a
-# regression fails the test instead of hanging the test suite.
+# Unwinding must not deadlock against JIT debug-info registration: on 32-bit
+# Windows the `StackWalk64` callbacks consult the debug-info registry per frame
+# while the stackwalk mutex is held, which can deadlock against
+# `jl_register_jit_object` taking the write side. Run both in a child process
+# with a timeout, so a regression fails instead of hanging the suite.
 @testset "unwinding concurrent with JIT debug-info registration" begin
     script = """
         using Base.Threads
         struct Tag{N} end
-        # a fresh specialization per N, so each call registers a new JIT object,
-        # with enough body to make emission (and its debug-info registration)
-        # take a while
+        # a fresh specialization per N, each registering a new JIT object
         function widen(::Tag{N}) where {N}
             acc = N
             for i in 1:8
@@ -442,7 +437,7 @@ end
         finished = timedwait(() -> process_exited(p), 300) === :ok
         @test finished
         if finished
-            wait(reader) # wait for iob to reach EOF
+            wait(reader) # for iob to reach EOF
             @test occursin("DONE", read(iob, String))
             @test p.exitcode == 0
         end

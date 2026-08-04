@@ -127,34 +127,57 @@ static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 #endif
 }
 
-void jl_lock_profile(void)
+static void jl_lock_profile_rd_set(uintptr_t held) JL_NOTSAFEPOINT
 {
-    int got = jl_trylock_profile();
-    assert(got); (void)got;
-}
-
-int jl_trylock_profile(void)
-{
-    uintptr_t held = jl_lock_profile_rd_held();
-    if (held == -1)
-        return 0;
-    if (held == 0) {
-        held = -1;
-#ifndef _OS_WINDOWS_
-        pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
-#else
-        TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
-#endif
-        uv_rwlock_rdlock(&debuginfo_asyncsafe);
-        held = 0;
-    }
-    held++;
 #ifndef _OS_WINDOWS_
     pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 #else
     TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
 #endif
+}
+
+// Acquire the debug-info read lock, recursively if this thread already holds it.
+// Without `blocking`, fail rather than wait: waiting while holding
+// jl_in_stackwalk deadlocks against jl_register_jit_object taking the write
+// side. Callers treat failure as "no debug info available".
+static int jl_lock_profile_rd(int blocking) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1)
+{
+    uintptr_t held = jl_lock_profile_rd_held();
+    if (held == -1)
+        return 0;
+    if (held == 0) {
+        jl_lock_profile_rd_set(-1);
+        if (blocking) {
+            uv_rwlock_rdlock(&debuginfo_asyncsafe);
+        }
+        else if (uv_rwlock_tryrdlock(&debuginfo_asyncsafe) != 0) {
+            jl_lock_profile_rd_set(0);
+            return 0;
+        }
+        held = 0;
+    }
+    held++;
+    jl_lock_profile_rd_set(held);
     return 1;
+}
+
+void jl_lock_profile(void)
+{
+    int got = jl_lock_profile_rd(1);
+    assert(got); (void)got;
+}
+
+// Blocking despite the name: rec_backtrace treats failure as "no backtrace at
+// all", so it must not give up just because the lock is contended.
+int jl_trylock_profile(void)
+{
+    return jl_lock_profile_rd(1);
+}
+
+// Never waits; for callers that already hold jl_in_stackwalk.
+int jl_trylock_profile_nowait(void)
+{
+    return jl_lock_profile_rd(0);
 }
 
 JL_DLLEXPORT void jl_unlock_profile(void) JL_NO_SAFEPOINT_ANALYSIS
