@@ -300,7 +300,7 @@ function _expand_literal_pow(st::SyntaxTree)
     (k in KSet"call dotcall" &&
         numchildren(st) === 3 &&
         kind(st[1]) === K"Identifier" && syntax_name(st[1]) === "^" &&
-        st[3].value isa Integer) || return st
+        kind(st[3]) in KSet"Integer Value" && st[3].value isa Int) || return st
     @ast _ st [k
         "literal_pow"::K"top"
         st[1] st[2]

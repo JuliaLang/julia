@@ -603,3 +603,58 @@ end
     @test fl_eval(test_mod, lam) isa Core.CodeInfo
     @test jl_eval(test_mod, lam) isa Core.CodeInfo
 end
+
+# `x^n` is rewritten to `literal_pow(^, x, Val(n))` if n is an Int
+@testset "(AI) literal_pow" begin
+    pow_mod = @newmod(:LiteralPowTest)
+    Core.eval(pow_mod, quote
+        struct P end
+        Base.:^(::P, n) = (:call, n)
+        Base.literal_pow(::typeof(^), ::P, ::Val{n}) where {n} = (:literal, n)
+        Base.Broadcast.broadcastable(x::P) = Ref(x)
+        const p = P()
+    end)
+
+    cases = [
+        "p^2"                                  => (:literal, 2)
+        "p^0"                                  => (:literal, 0)
+        "p^1"                                  => (:literal, 1)
+        "p^-2"                                 => (:literal, -2)
+        "p^(2)"                                => (:literal, 2)
+        "^(p, 2)"                              => (:literal, 2)
+        "p^$(typemax(Int))"                    => (:literal, typemax(Int))
+        "p^$(BigInt(typemax(Int)) + 1)"        => (:call, BigInt(typemax(Int)) + 1)
+        "p^true"                               => (:call, true)
+        "p^0x02"                               => (:call, 0x02)
+        "p^0x0002"                             => (:call, 0x0002)
+        "p^0x00000002"                         => (:call, 0x00000002)
+        "p^0x0000000000000002"                 => (:call, 0x0000000000000002)
+        "p^0x00000000000000000000000000000002" => (:call, UInt128(2))
+        "p^big\"2\""                           => (:call, big(2))
+        "p^(1 + 1)"                            => (:call, 2)
+        "Base.:^(p, 2)"                        => (:call, 2)
+        "p .^ 2"                               => (:literal, 2)
+        "p .^ -1"                              => (:literal, -1)
+        "(.^)(p, 2)"                           => (:literal, 2)
+        "[p] .^ 2"                             => [(:literal, 2)]
+        "identity.([p] .^ 2)"                  => [(:literal, 2)]
+        "p .^ 0x02"                            => (:call, 0x02)
+        "p .^ true"                            => (:call, true)
+        "p .^ 2.0"                             => (:call, 2.0)
+        "(.^)(p, 0x02)"                        => (:call, 0x02)
+        "[p] .^ 0x02"                          => [(:call, 0x02)]
+    ]
+
+    for (str, expected) in cases
+        ex = parsestmt(SyntaxTree, str)
+        fl = fl_eval(pow_mod, ex)
+        jl = jl_eval(pow_mod, ex; expr_compat_mode=true)
+        @test (str, fl) == (str, expected) context=str
+        @test (str, jl) == (str, fl) context=str
+    end
+
+    let ex = parsestmt(SyntaxTree, "let q = p; q ^= 2; q end")
+        @test fl_eval(pow_mod, ex) == (:literal, 2)
+        @test_broken jl_eval(pow_mod, ex; expr_compat_mode=true) == (:literal, 2)
+    end
+end
