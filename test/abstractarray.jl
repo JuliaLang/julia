@@ -2357,3 +2357,16 @@ end
         end
     end
 end
+
+@testset "map on ReshapedArray" begin
+    R = reshape(1:4, 2, 2)
+    for T in [Float64, BigInt]
+        S = @inferred map(T, R)
+        @test S == R
+        @test eltype(S) == T
+        @test parent(S) isa AbstractRange
+    end
+    P = PermutedDimsArray(collect(reshape(1:6, 2, 3)), (2, 1))
+    @test map(identity, reshape(P, 2, 3)) isa Matrix{Int}
+    @test map(identity, reshape(P, 6)) isa Vector{Int}
+end
