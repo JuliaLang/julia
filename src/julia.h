@@ -2540,6 +2540,16 @@ struct _jl_handler_t {
     size_t locks_len;
     jl_timing_block_t *timing_stack;
     size_t world_age;
+    // The published reset context and its governing token binding at handler
+    // entry. Restored together when the handler is left or entered
+    // exceptionally, so that an exception thrown out of a reset region does
+    // not leave a context dangling whose establishing frame the unwind
+    // destroyed, and a republished region is never paired with a token that
+    // nested cancellation points rebound in the meantime. (The token is kept
+    // alive by the reachability contract on `Core.cancellation_point!`; the
+    // handler chain is not GC-scanned.)
+    struct _jl_reset_ctx_t *reset_ctx;
+    jl_value_t *bound_cancel_token;
     sig_atomic_t defer_signal;
     int8_t gc_state;
 };

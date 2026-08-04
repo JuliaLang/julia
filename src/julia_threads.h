@@ -105,6 +105,36 @@ typedef struct {
 #endif
 } jl_ucontext_t;
 
+// The context published while a task is inside an asynchronously
+// interruptible region (`jl_task_t.reset_ctx`): established by a compiled
+// cancellation point (see llvm-cancellation-lowering.cpp), `mctx` holds a
+// setjmp context and `sp` identifies the establishing frame (nonzero for
+// this reset flavor; the discriminator leaves room for other context
+// flavors to be published through the same mechanism). The runtime may
+// deliver a pending cancellation to a running task by abandoning the
+// interrupted register state and longjmping to the reset point, whose
+// re-executed check observes the cancellation and throws (see the SIGUSR2
+// request-5 delivery in signals-unix.c and the suspend-based delivery in
+// signals-win.c).
+//
+// `gcstack` and `eh` record the task's GC-frame chain head and innermost
+// exception handler at establishment. The interrupt may land inside a
+// reset-safe *callee* that has pushed frames of its own onto either chain;
+// those frames die with the abandoned stack region, so delivery restores
+// both saved values before the longjmp (the same pair an exceptional unwind
+// restores through `jl_eh_restore_state`).
+//
+// Delivery is gated on the cancellation of the task's bound token source
+// (`jl_task_t.bound_cancel_token`), which is coherent with the published
+// region by construction: everything that temporarily takes over the task
+// and may rebind it - exception handlers, the finalizer bracket in
+// gc-common.c - saves and restores the (region, token) pair together.
+typedef struct _jl_reset_ctx_t {
+    uintptr_t sp;
+    struct _jl_gcframe_t *gcstack;
+    struct _jl_handler_t *eh;
+    jl_jmp_buf mctx;
+} jl_reset_ctx_t;
 
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
@@ -327,7 +357,11 @@ typedef struct _jl_task_t {
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     uint16_t priority;
     _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
-    uint8_t pad0[3];
+    // Level-triggered cooperative-yield request, honored (and cleared) at
+    // the task's next cancellation point; a preempt shootdown sets it and
+    // kicks the task out of any published reset region.
+    _Atomic(uint8_t) preempt_request;
+    uint8_t pad0[2];
     // === 64 bytes (cache line)
     uint64_t rngState[JL_RNG_SIZE];
     // flag indicating whether or not to record timing metrics for this task
@@ -352,6 +386,13 @@ typedef struct _jl_task_t {
     // common single-registration park does not allocate. Owned by this task.
     jl_value_t *cached_wait_entry;
     jl_value_t *invoked; // Method/CodeInstance/tuple Type for optimized task invocation
+    // The cancellation token source last published by a cancellation point on
+    // this task ("the token governing the compute currently running here").
+    // `nothing`, or a `Core.CancellationTokenSource`. Read by cancellers
+    // scanning for running computations governed by a cancelled subtree; may
+    // be stale between cancellation points (benign: level-triggered recovery
+    // at the next check).
+    _Atomic(jl_value_t *) bound_cancel_token;
 
 // hidden state:
 
@@ -381,6 +422,10 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved thread state
     jl_ucontext_t ctx; // pointer into stkbuf, if suspended
+    // The published reset (sp != 0) context of the current compiled
+    // cancellation region, NULL outside such regions. Only ever consumed
+    // for the thread's *current* task.
+    _Atomic(jl_reset_ctx_t *) reset_ctx;
 } jl_task_t;
 
 JL_DLLEXPORT void *jl_get_ptls_states(void);

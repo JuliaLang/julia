@@ -90,6 +90,14 @@ frozen in place and never scheduled again.
 """
 const CANCEL_REQUEST_ABANDON_ALL = CancellationRequest(0x4)
 
+# The status byte reported by a cancellation point (`Core.cancellation_point!`)
+# is the governing source's state byte (0 while uncancelled, the severity once
+# cancelled) with the 0x40 bit merged in when the task has a pending
+# cooperative-yield request. The mask recovers the severity half of such a
+# status byte; source state reads themselves need no masking.
+const STATUS_PREEMPT_BIT = 0x40
+const SEVERITY_MASK = 0x3f
+
 """
     cancel_severity(src::CancellationTokenSource) -> Union{Nothing, CancellationRequest}
     cancel_severity(tok::CancellationToken)
@@ -245,14 +253,46 @@ end
 
 ## Cancellation points
 
-# The slow path of `@cancel_check`: `st` is the (non-zero) state byte of the
-# governing source.
-@noinline function handle_cancellation!(src::CancellationTokenSource, st::UInt8)
+# The slow path of `@cancel_check`: `st` is the (non-zero) status byte
+# reported by the cancellation point.
+@noinline function handle_cancellation!(src::Union{Nothing, CancellationTokenSource}, st::UInt8)
+    ct = current_task()
+    if st & STATUS_PREEMPT_BIT != 0x00
+        # consume the cooperative-yield request
+        @atomic :monotonic ct.preempt_request = 0x00
+    end
+    if st & SEVERITY_MASK == 0x00
+        # preempt-only (a pending yield request, or a preempt shootdown that
+        # reset this point): let another task run, then resume
+        yield()
+        return nothing
+    end
+    src = src::CancellationTokenSource
     # re-read: deliver the severity current at throw time, not the one the
     # fast path happened to observe
     st = @atomic :acquire src.state
     throw(CancellationRequest(st))
 end
+
+"""
+    Core.cancellation_point!(src::Union{Nothing, Core.CancellationTokenSource})::UInt8
+
+Check the cancellation state of `src` (see [`@cancel_check`](@ref)),
+additionally giving the optimizer license to establish this point as a
+cancellation reset point: when compiled, the source is published as the token
+binding governing the current computation, and the runtime may asynchronously
+unwind execution to the nearest preceding cancellation point when the source
+is cancelled. Returns a status byte: `0x00` if nothing is pending, the
+(nonzero) severity if `src` is cancelled, with the `0x40` bit set if a
+cooperative yield (preemption) was requested.
+
+!!! warning
+    `src` must remain otherwise reachable (e.g. through the scope binding
+    that supplied it, as [`@cancel_check`](@ref) guarantees) for the dynamic
+    extent of the region this point establishes: copies of the binding saved
+    by exception handlers are not GC-scanned.
+"""
+Core.cancellation_point!
 
 """
     @cancel_check
@@ -269,10 +309,18 @@ token; use it to hoist the token lookup out of a tight loop.
 """
 macro cancel_check()
     quote
-        # also a GC safepoint, so that a tight polling loop cannot starve a
-        # concurrent stop-the-world
-        ccall(:jl_gc_safepoint, Cvoid, ())
-        checkcancel(default_cancel_source())
+        # compiled cancellation points are also GC safepoints, so that a tight
+        # polling loop cannot starve a concurrent stop-the-world.
+        # The loop re-executes the point whenever the slow path returns (a
+        # preempt-only status yields and resumes): the slow-path call tears
+        # down the point's reset region, so passing the point again is what
+        # re-establishes it before the code the region is meant to cover.
+        local s = default_cancel_source()
+        while true
+            local st = Core.cancellation_point!(s)::UInt8
+            st == 0x00 && break
+            handle_cancellation!(s, st)
+        end
         nothing
     end
 end
@@ -280,14 +328,19 @@ end
 macro cancel_check(tok)
     quote
         local t = $(esc(tok))
-        ccall(:jl_gc_safepoint, Cvoid, ())
-        checkcancel(t === nothing ? nothing : (t::CancellationToken).source)
+        local s = t === nothing ? nothing : (t::CancellationToken).source
+        while true
+            local st = Core.cancellation_point!(s)::UInt8
+            st == 0x00 && break
+            handle_cancellation!(s, st)
+        end
         nothing
     end
 end
 
 # Throw the `CancellationRequest` if `src` is cancelled (level-triggered:
-# no per-task state is consulted).
+# no per-task state is consulted). Unlike `@cancel_check` this is not a
+# compiled cancellation point (it opens no async-interruptible region).
 @inline function checkcancel(src::CancellationTokenSource)
     st = @atomic :monotonic src.state
     st == 0x00 && return nothing
