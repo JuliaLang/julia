@@ -1639,18 +1639,19 @@ end
 """
     Base.CACHE_FETCH_HOOK
 
-An optional callable consulted when `require` or precompilation has determined
-that no valid compile cache exists for a package and it is about to compile
-one. Called as
+An optional callable that is consulted when `require` or precompilation has
+determined that no valid compile cache exists for a package and it is about
+to compile one. The hook is called as
 
     hook(pkg::PkgId, sourcepath::String)::Bool
 
-Returning `true` indicates the hook may have placed a cachefile in one of the
-`DEPOT_PATH` compile cache directories (e.g. by fetching it from a cache
-server); the caller then rescans the cache candidates and revalidates them
-through the normal staleness machinery, falling back to compiling if nothing
-valid appeared. Any other return value — or a thrown error, which is caught
-and logged at debug level — proceeds directly to compilation.
+A return value of `true` indicates that the hook may have placed a cachefile
+in one of the `DEPOT_PATH` compile cache directories (e.g. by fetching it
+from a cache server); the caller then rescans the cache candidates,
+revalidates them through the normal staleness machinery, and falls back to
+compiling if nothing valid appeared. Any other return value — or a thrown
+error, which is caught and logged at debug level — proceeds directly to
+compilation.
 
 The hook is advisory and its output is untrusted: fetched files undergo the
 same validation as any other cache candidate. Implementations must not load
@@ -1664,8 +1665,8 @@ const CACHE_FETCH_HOOK = Ref{Any}(nothing)
     Base.maybe_fetch_cache(pkg::PkgId, sourcepath::String) -> Bool
 
 Invoke `CACHE_FETCH_HOOK` under its safety guards (never while generating
-output, never reentrantly, errors demoted to `false`). Returns whether the
-caller should rescan the compile cache candidates.
+output, never reentrantly, errors demoted to `false`) and return whether
+the caller should rescan the compile cache candidates.
 """
 function maybe_fetch_cache(pkg::PkgId, sourcepath::String)
     h = CACHE_FETCH_HOOK[]
