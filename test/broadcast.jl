@@ -286,6 +286,18 @@ let x = [1,2,3]
     @test (x .=== 1:3 .=== [1,2,3]) == @.(x === 1:3 === [1,2,3]) == [true, true, true]
 end
 
+@testset "interaction of @. with generators" begin
+    @test [(x,y,a,b) for x in 1:2, y in 3:4 for a in 5:6, b in 7:8 if true] ==
+        @. [(x,y,a,b) for x in 1:2, y in 3:4 for a in 5:6, b in 7:8 if true]
+    # + in iterspec gets dotted
+    @test [[11, 22]] == @. [x for x in [[1, 2] + [10, 20]] if true]
+    # + in body gets dotted
+    let m = @. [(x+y) for x in [[1,2],[10,20]], y in [100]]
+        @test m[1] == [101,102]
+        @test m[2] == [110,120]
+    end
+end
+
 # PR #17510: Fused in-place assignment
 let x = [1:4;], y = x
     y .= 2:5
