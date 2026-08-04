@@ -514,7 +514,28 @@ function _atexit(exitcode::Cint)
     # this exit came from a signal for example), then try to clear that state
     # to minimize scheduler issues later
     ct = current_task()
-    q = ct.queue; q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
+    # Only best-effort: if the exit was injected while this very task was
+    # inside a workqueue operation, its ownerless SpinLock is held by the
+    # abandoned frame and can never be released; taking it unconditionally
+    # would deadlock before any hook runs. Leaving the stale link is safer.
+    q = ct.queue
+    if q !== nothing
+        q = q::StickyWorkqueue
+        if trylock(q.lock)
+            try
+                list_deletefirst!(waitqueue(q), ct)
+            finally
+                unlock(q.lock)
+            end
+        end
+    end
+    # Likewise, if this task was parked in a wait queue when the exit was
+    # injected, its wait registration is still armed: the first wait/yield in
+    # an atexit hook would throw a ConcurrencyViolationError, and a concurrent
+    # notify could re-enqueue this running task. Clear it, as the interrupt
+    # path in `schedule(t, arg; error=true)` does.
+    w = @atomicswap ct.waiting_on = nothing
+    w isa WaitEntry && try_unlink_claimed!(w)
     # Don't hold the lock around the iteration, just in case any other thread executing in
     # parallel tries to register a new atexit hook while this is running. We don't want to
     # block that thread from proceeding, and we can allow it to register its hook which we
