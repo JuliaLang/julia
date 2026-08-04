@@ -166,6 +166,10 @@ void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 1);
 }
 
+// see their definitions in the reset-safe allocation section below
+STATIC_INLINE jl_reset_ctx_t *reset_region_unpublish(jl_task_t *ct) JL_NOTSAFEPOINT;
+STATIC_INLINE void reset_region_republish(jl_task_t *ct, jl_reset_ctx_t *reset_ctx);
+
 void run_finalizer(jl_task_t *ct, void *o, void *ff)
 {
     int ptr_finalizer = gc_ptr_tag(o, GC_FIN_CFUNC_TAG);
@@ -258,6 +262,15 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
     // of `finalizer`) in a finalizer:
     uint8_t sticky = ct->sticky;
+    // Finalizers hijack the current task, so like `sticky` and the RNG its
+    // cancellation state is bracketed: unpublish the reset region (finalizer
+    // frames must not be abandoned into it) and stash the token binding,
+    // which the finalizers' own cancellation points may rebind. Both are
+    // restored below; the republish performs any delivery that was missed
+    // while the region was unpublished.
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    jl_value_t *bound_token = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    JL_GC_PUSH1(&bound_token);
     // empty out the first two entries for the GC frame
     arraylist_push(list, list->items[0]);
     arraylist_push(list, list->items[1]);
@@ -273,6 +286,10 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     // matches the jl_gc_push_arraylist above
     JL_GC_POP();
     ct->sticky = sticky;
+    jl_atomic_store_relaxed(&ct->bound_cancel_token, bound_token);
+    jl_gc_wb_current_task(ct, bound_token);
+    JL_GC_POP(); // matches the JL_GC_PUSH1 above
+    reset_region_republish(ct, reset_ctx);
 }
 
 static uint64_t finalizer_rngState[JL_RNG_SIZE];
@@ -539,6 +556,95 @@ JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz) JL_CANSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return jl_gc_alloc(ptls, sz, NULL);
+}
+
+// Reset-safe variants of the allocation and write-barrier entry points,
+// selected by FinalLowerGC for sites that may execute inside a published
+// cancellation reset region (see llvm-cancellation-lowering.cpp): the
+// region is unpublished around the operation - its internal frames must not
+// be abandoned by a delivered reset - and republished on the way out, so a
+// region survives allocation. The allocating variants write the object tag
+// before republishing, since the compiler's own tag store only happens
+// after the call returns and (stock) sweep reads every cell's header. No
+// safepoint lies between allocation and either tag store, so marking can
+// never observe an untagged live cell; a reset-abandoned cell is fully
+// tagged and merely unreachable.
+STATIC_INLINE jl_reset_ctx_t *reset_region_unpublish(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    jl_reset_ctx_t *reset_ctx = jl_atomic_load_relaxed(&ct->reset_ctx);
+    jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
+    // synchronizes with the read of reset_ctx in the signal handler
+    jl_signal_fence();
+    return reset_ctx;
+}
+
+STATIC_INLINE void reset_region_republish(jl_task_t *ct, jl_reset_ctx_t *reset_ctx)
+{
+    jl_signal_fence();
+    jl_atomic_store_release(&ct->reset_ctx, reset_ctx);
+    if (reset_ctx == NULL)
+        return;
+    // A cancellation that arrived while the region was unpublished found no
+    // reset context and was dropped, and the code we return into may never
+    // poll. Re-check the region's governing source (republish first, so an
+    // arrival in between is the sender's to handle) and perform the missed
+    // delivery ourselves: the synchronous analog of the request-5 reset in
+    // signals-unix.c, with the exchange arbitrating against concurrent
+    // senders. bound_cancel_token is the region's governor here: everything
+    // that could have rebound it while the region was unpublished (nested
+    // cancellation points in finalizers, exception handlers) restores it
+    // together with the region.
+    jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    if (bound == NULL || bound == jl_nothing ||
+        jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+        return;
+    reset_ctx = jl_atomic_exchange(&ct->reset_ctx, NULL);
+    if (reset_ctx == NULL || reset_ctx->sp == 0)
+        return;
+    ct->gcstack = reset_ctx->gcstack;
+    ct->eh = reset_ctx->eh;
+    asan_unpoison_task_stack(ct, &reset_ctx->mctx);
+    jl_longjmp(reset_ctx->mctx, JL_RESET_CODE_CANCEL);
+}
+
+JL_DLLEXPORT jl_value_t *jl_gc_small_alloc_reset_safe(jl_ptls_t ptls, int offset, int osize,
+                                                      jl_value_t *type) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    jl_value_t *val = jl_gc_small_alloc(ptls, offset, osize, type);
+    jl_set_typeof(val, type);
+    reset_region_republish(ct, reset_ctx);
+    return val;
+}
+
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc_reset_safe(jl_ptls_t ptls, size_t sz,
+                                                    jl_value_t *type) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    jl_value_t *val = jl_gc_big_alloc(ptls, sz, type);
+    jl_set_typeof(val, type);
+    reset_region_republish(ct, reset_ctx);
+    return val;
+}
+
+JL_DLLEXPORT void *jl_gc_alloc_typed_reset_safe(jl_ptls_t ptls, size_t sz, void *ty) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    // jl_gc_alloc_typed writes the tag itself
+    void *val = jl_gc_alloc_typed(ptls, sz, ty);
+    reset_region_republish(ct, reset_ctx);
+    return val;
+}
+
+JL_DLLEXPORT void jl_gc_queue_root_reset_safe(const jl_value_t *ptr)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
+    jl_gc_queue_root(ptr);
+    reset_region_republish(ct, reset_ctx);
 }
 
 // allocator entry points

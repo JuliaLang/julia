@@ -138,7 +138,9 @@
     XX(jl_gc_add_quiescent) \
     XX(jl_gc_allocobj) \
     XX(jl_gc_alloc_typed) \
+    XX(jl_gc_alloc_typed_reset_safe) \
     XX(jl_gc_big_alloc) \
+    XX(jl_gc_big_alloc_reset_safe) \
     XX(jl_gc_collect) \
     XX(jl_gc_conservative_gc_support_enabled) \
     XX(jl_gc_counted_calloc) \
@@ -165,8 +167,10 @@
     XX(jl_gc_new_weakref_th) \
     XX(jl_gc_num) \
     XX(jl_gc_small_alloc) \
+    XX(jl_gc_small_alloc_reset_safe) \
     XX(jl_gc_queue_multiroot) \
     XX(jl_gc_queue_root) \
+    XX(jl_gc_queue_root_reset_safe) \
     XX(jl_gc_safepoint) \
     XX(jl_gc_schedule_foreign_sweepfunc) \
     XX(jl_gc_set_cb_notify_external_alloc) \
