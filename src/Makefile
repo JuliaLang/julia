@@ -94,6 +94,7 @@ CODEGEN_SRCS_HASH := codegen.cpp jitlayers.cpp aotcompile.cpp debuginfo.cpp disa
 	llvm-pass-helpers.cpp llvm-ptls.cpp llvm-propagate-addrspaces.cpp \
 	llvm-multiversioning.cpp llvm-alloc-opt.cpp llvm-alloc-helpers.cpp cgmemmgr.cpp llvm-remove-addrspaces.cpp \
 	llvm-remove-ni.cpp llvm-julia-licm.cpp llvm-demote-float16.cpp llvm-cpufeatures.cpp llvm-expand-atomic-modify.cpp \
+	llvm-cancellation-lowering.cpp \
 	pipeline.cpp llvm_api.cpp \
 	cgutils.cpp intrinsics.cpp ccall.cpp \
 	abi_llvm.cpp abi_arm.cpp abi_aarch64.cpp abi_riscv.cpp abi_ppc64le.cpp abi_win32.cpp abi_win64.cpp abi_x86_64.cpp abi_x86.cpp \
@@ -107,6 +108,7 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
+	llvm-cancellation-lowering \
 	pipeline llvm_api objcache \
 	$(GC_CODEGEN_SRCS)
 FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --includedir)

@@ -739,6 +739,41 @@ JL_CALLABLE(jl_f__new_cancel_source)
     return jl_new_cancel_source(args, nargs);
 }
 
+// cancellation_point!(src::Union{Nothing, Core.CancellationTokenSource})::UInt8
+// Returns a status byte: 0x00 nothing pending; the (nonzero) severity if
+// `src` is cancelled; the 0x40 bit is set if a preempt (cooperative yield)
+// request is pending.
+// N.B.: this runtime version only *checks* the source. Publishing the source
+// into `ct->bound_cancel_token` is done exclusively by the codegen'ed
+// lowering: the binding describes the async-interruptible region that the
+// CancellationLowering pass produces around the compiled cancellation point
+// (reset_ctx), which has no interpreter equivalent.
+JL_CALLABLE(jl_f_cancellation_point)
+{
+    JL_NARGS(cancellation_point!, 1, 1);
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *src = args[0];
+    // A cancellation point is also a GC safepoint (the compiled lowering
+    // emits one): keep that for the interpreted/fallback path too, so a
+    // polling loop that never reaches the specialized lowering cannot
+    // starve a stop-the-world request.
+    jl_gc_safepoint();
+    uint8_t st = 0;
+    if (src != jl_nothing) {
+        JL_TYPECHK(cancellation_point!, cancel_source, src);
+        st = jl_atomic_load_relaxed(&((jl_cancel_source_t*)src)->state);
+    }
+    // The 0x40 bit reports a pending cooperative-yield request. The
+    // compiled lowering additionally reports a delivered preempt shootdown
+    // (the reset point's setjmp returning JL_RESET_CODE_PREEMPT), which has
+    // no interpreter equivalent - just as there is no interpreted reset
+    // region - but the shootdown also sets preempt_request, so the request
+    // is never lost here.
+    if (jl_atomic_load_relaxed(&ct->preempt_request))
+        st |= 0x40;
+    return jl_box_uint8(st);
+}
+
 // apply ----------------------------------------------------------------------
 
 static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_t oldalloc) JL_CANSAFEPOINT

@@ -28,6 +28,7 @@ extern "C" {
     XX(_using, "_using") \
     XX(applicable,"applicable") \
     XX(apply_type,"apply_type") \
+    XX(cancellation_point,"cancellation_point!") \
     XX(compilerbarrier,"compilerbarrier") \
     XX(current_scope,"current_scope") \
     XX(donotdelete,"donotdelete") \

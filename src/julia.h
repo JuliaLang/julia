@@ -2540,6 +2540,16 @@ struct _jl_handler_t {
     size_t locks_len;
     jl_timing_block_t *timing_stack;
     size_t world_age;
+    // The published reset context and its governing token binding at handler
+    // entry. Restored together when the handler is left or entered
+    // exceptionally, so that an exception thrown out of a reset region does
+    // not leave a context dangling whose establishing frame the unwind
+    // destroyed, and a republished region is never paired with a token that
+    // nested cancellation points rebound in the meantime. (The token is kept
+    // alive by the reachability contract on `Core.cancellation_point!`; the
+    // handler chain is not GC-scanned.)
+    struct _jl_reset_ctx_t *reset_ctx;
+    jl_value_t *bound_cancel_token;
     sig_atomic_t defer_signal;
     int8_t gc_state;
 };
@@ -2556,6 +2566,9 @@ JL_DLLEXPORT void jl_cancel_source_relink(jl_cancel_source_t *src) JL_NOTSAFEPOI
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_CANSAFEPOINT_ENTER_LEAVE;
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_send_preempt_signal(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_shootdown_cancelled_tasks(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);

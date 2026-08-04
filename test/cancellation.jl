@@ -358,3 +358,164 @@ end
     @test t3.result isa CancellationRequest
     @test t3.result == CANCEL_REQUEST_ABANDON_EXTERNAL
 end
+
+# An effect-free (hence reset-safe) non-inlined spin: the enclosing compiled
+# cancellation region stays published across the call, so an asynchronous
+# reset can interrupt it even though it performs no checks of its own.
+@noinline function _pure_spin(x::Int)
+    a = x
+    while a >= 0
+        a = (a + 1) & typemax(Int)
+    end
+    return a
+end
+
+function _reset_victim(started::Threads.Atomic{Bool})
+    Threads.atomic_xchg!(started, true)
+    # The compiled cancellation point establishes the reset region and binds
+    # the scoped source; nothing between it and the reset-safe call below
+    # tears the region down.
+    Base.@cancel_check
+    return _pure_spin(0)
+end
+
+@testset "asynchronous reset delivery" begin
+    # `cancel!` delivers the shootdown itself: the reset (a signal on Unix,
+    # suspend + context redirect on Windows/Darwin) longjmps back to the
+    # reset point, whose re-executed check observes the cancellation and
+    # throws. The victim never polls, and a signal racing the point's own
+    # execution is covered by the point's level-triggered check.
+    # Needs a second default-pool thread to keep the driver running while
+    # the victim spins.
+    if Threads.nthreads(:default) >= 2
+        started = Threads.Atomic{Bool}(false)
+        t, src = cancellable_spawn(() -> _reset_victim(started))
+        @test timedwait(() -> started[], 30.0) == :ok
+        cancel!(src)
+        # rely on the test harness watchdog for hangs, like other testsets
+        wait(t; throw=false)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+    end
+end
+
+# An effect-free (hence reset-safe) non-inlined spin that allocates every
+# iteration. Each allocation unpublishes the enclosing region around the
+# allocator (a reset-safe GC entry point) and republishes it afterwards; the
+# republish re-checks the task's bound source, so a cancellation is picked up
+# even though the spin never polls and no signal is ever sent.
+Base.@assume_effects :effect_free @noinline _obs(r::Base.RefValue{Int}) = r[]
+Base.@assume_effects :effect_free @noinline function _alloc_spin(x::Int)
+    a = x
+    while a >= 0
+        a = (_obs(Base.RefValue(a)) + 1) & typemax(Int)
+    end
+    return a
+end
+
+function _alloc_victim(started::Threads.Atomic{Bool})
+    Threads.atomic_xchg!(started, true)
+    Base.@cancel_check
+    return _alloc_spin(0)
+end
+
+# A compiled cancellation point that rebinds the task's bound_cancel_token
+# to an unrelated source, as a finalizer might do while running inside an
+# allocation that has the region temporarily unpublished.
+@noinline _rebind_point(src::CancellationTokenSource) = (Core.cancellation_point!(src); nothing)
+
+@testset "finalizer rebinding does not detach the region's source" begin
+    # Finalizers run synchronously by a collection triggered inside an
+    # allocation may execute nested cancellation points and rebind the
+    # task's bound_cancel_token field. The finalizer machinery brackets that
+    # state (finalizers hijack the task, so it is on them to save/restore
+    # it), so delivery - including the allocator's republish self-check -
+    # never observes the rebinding: cancelling the original source must
+    # still kill the victim, with no signal sent.
+    if Threads.nthreads(:default) >= 2
+        srcB = CancellationTokenSource()  # never cancelled
+        started = Threads.Atomic{Bool}(false)
+        stop = Threads.Atomic{Bool}(false)
+        t, src = cancellable_spawn(() -> _alloc_victim(started))
+        churner = Threads.@spawn begin
+            while !stop[]
+                obj = Ref(0)
+                finalizer(x -> _rebind_point(srcB), obj)
+                obj = nothing
+                GC.gc(false)
+                yield()
+            end
+        end
+        @test timedwait(() -> started[], 30.0) == :ok
+        # raise the state without cancel!'s shootdown walk: the republish
+        # self-check must deliver on its own despite the finalizers'
+        # (bracketed) rebinding
+        Base._raise_state!(src, 0x1)
+        # rely on the test harness watchdog for hangs, like other testsets
+        wait(t; throw=false)
+        stop[] = true
+        wait(churner)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+    end
+end
+
+@testset "preempt shootdown" begin
+    # A preempt shootdown resets the task to its cancellation point without
+    # any source being cancelled: the re-executed point observes the
+    # JL_RESET_CODE_PREEMPT setjmp return (the 0x40 status bit), yields
+    # cooperatively, and resumes - it must never kill the task. A subsequent
+    # cancellation then must.
+    if Threads.nthreads(:default) >= 2
+        started = Threads.Atomic{Bool}(false)
+        t, src = cancellable_spawn(() -> _reset_victim(started))
+        @test timedwait(() -> started[], 30.0) == :ok
+        for _ in 1:50
+            tid = ccall(:jl_get_task_tid, Int16, (Any,), t)
+            tid >= 0 && ccall(:jl_send_preempt_signal, Cvoid, (Int16,), tid)
+            sleep(0.005)
+        end
+        @test !istaskdone(t)
+        cancel!(src) # shoots down the (re-established) region itself
+        # rely on the test harness watchdog for hangs, like other testsets
+        wait(t; throw=false)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+    end
+end
+
+@testset "cancel! delivers to allocating regions" begin
+    # An allocating reset region additionally self-recovers: were the
+    # shootdown ever lost, the next allocation's republish re-check would
+    # perform the delivery.
+    if Threads.nthreads(:default) >= 2
+        started = Threads.Atomic{Bool}(false)
+        t, src = cancellable_spawn(() -> _alloc_victim(started))
+        @test timedwait(() -> started[], 30.0) == :ok
+        cancel!(src)
+        # rely on the test harness watchdog for hangs, like other testsets
+        wait(t; throw=false)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+    end
+end
+
+@testset "reset region republish self-delivery" begin
+    # A cancellation that arrives while an allocation holds the region
+    # unpublished finds no reset context and is dropped by its sender; the
+    # allocator's republish must re-check the bound source and perform the
+    # missed delivery itself, or the wakeup would be lost. This makes an
+    # allocating reset region cancellable without any signal at all - to
+    # isolate that path from cancel!'s automatic shootdown, raise the
+    # source's state directly.
+    if Threads.nthreads(:default) >= 2
+        started = Threads.Atomic{Bool}(false)
+        t, src = cancellable_spawn(() -> _alloc_victim(started))
+        @test timedwait(() -> started[], 30.0) == :ok
+        Base._raise_state!(src, 0x1)
+        # rely on the test harness watchdog for hangs, like other testsets
+        wait(t; throw=false)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+    end
+end
