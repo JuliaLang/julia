@@ -1059,7 +1059,9 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
         (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type);
     jl_atomic_store_relaxed(&m->specializations, (jl_value_t*)jl_emptysvec);
     jl_atomic_store_relaxed(&m->speckeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
-    m->sig = NULL;
+    // `sig` and `name` are inside the min-initialized prefix (ninitialized == 10),
+    // so codegen omits null checks for them; they must never be observable as NULL.
+    m->sig = jl_bottom_type;
     m->slot_syms = NULL;
     m->roots = NULL;
     m->root_blocks = NULL;
@@ -1071,7 +1073,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->debuginfo = NULL;
     jl_atomic_store_relaxed(&m->unspecialized, NULL);
     m->generator = NULL;
-    m->name = NULL;
+    m->name = jl_empty_sym;
     m->file = jl_empty_sym;
     m->line = 0;
     m->called = 0xff;

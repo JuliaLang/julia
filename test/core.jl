@@ -9282,3 +9282,11 @@ end
     return freed[]
 end
 @test issue52533_beside(Ref(false))
+
+# `jl_new_method_uninit` must satisfy Method's min-initialized invariant:
+# fields in the initialized prefix (e.g. `sig`, `name`) are assumed non-null
+# by codegen, which omits undef checks when loading them.
+let m = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), @__MODULE__)
+    @test m.sig === Union{}
+    @test m.name === Symbol("")
+end
