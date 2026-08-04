@@ -5542,6 +5542,14 @@ isdefined_unknown_idx:
         ctx.builder.CreateCondBr(same, point_bb, rebind_bb);
 
         ctx.builder.SetInsertPoint(rebind_bb);
+        // N.B.: the binding stores here and in clear_bb must NEVER carry
+        // julia.reset_safe metadata: the cancellation-lowering pass treats
+        // them as unsafe points and clears any live reset region before
+        // them. That clear is what makes "region still published" imply
+        // "binding unchanged since the establishing point" - the invariant
+        // the pass's skip-if-established fast path (and delivery gating in
+        // general) relies on to never resume through a setjmp taken under a
+        // different token.
         StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
         bind_store->setOrdering(AtomicOrdering::Release);
         ai.decorateInst(bind_store);
