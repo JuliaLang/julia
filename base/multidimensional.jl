@@ -1097,7 +1097,7 @@ halves(inds::CartesianIndices) = map(CartesianIndices∘tuple, _halves(inds.indi
         if length(outer) == 1 && length(is) >= 16
             # A short single column is a single kernel leaf; only longer columns
             # need the range-halving recursion (and its type-stabilizing re-index)
-            length(is) <= max(16, pairwise_blocksize(f, op)) &&
+            length(is) <= pairwise_leafsize(f, op) &&
                 return mapreduce_kernel(f, op, A, init, inds)
             return mapreduce_pairwise_column(f, op, A, init, _sliceall(is), only(outer).I)
         end
@@ -1105,7 +1105,7 @@ halves(inds::CartesianIndices) = map(CartesianIndices∘tuple, _halves(inds.indi
     return mapreduce_pairwise_split(f, op, A, init, inds)
 end
 function mapreduce_pairwise_column(f::F, op::G, A, init, is::AbstractUnitRange, trailing) where {F,G}
-    if length(is) <= max(16, pairwise_blocksize(f, op))
+    if length(is) <= pairwise_leafsize(f, op)
         return mapreduce_kernel(f, op, A, init, CartesianIndices((is, map(i -> i:i, trailing)...)))
     else
         h1, h2 = halves(is)

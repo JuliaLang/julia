@@ -267,12 +267,13 @@ function show(io::IO, s::SkipMissing)
 end
 
 # Simple optimization: catch skipmissings that wrap iterators that don't include Missing
-function mapreduce(f::F, op::G, itr::SkipMissing; init=Base._InitialValue()) where {F,G}
-    (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce(f, op, itr.x; init)
-    return mapreduce_pairwise(f, op, itr, init)
+function mapreduce_pairwise(f::F, op::G, itr::SkipMissing, init) where {F,G}
+    (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce_pairwise(f, op, itr.x, init)
+    return mapreduce_pairwise(f, op, itr, init, IteratorSize(itr))
 end
 
 function mapreduce_pairwise(f::F, op::G, itr::SkipMissing{<:AbstractArray}, init) where {F,G}
+    eltype(itr.x) >: Missing || return mapreduce_pairwise(f, op, itr.x, init)
     v = mapreduce_skipmissing_pairwise(f, op, itr.x, init, eachindex(itr.x))
     return ismissing(v) ? _mapreduce_start(f, op, itr, init) : v
 end
@@ -280,7 +281,7 @@ end
 # This is based on mapreduce_pairwise, but with special sauce that allows one or both of the pairwise splits
 # to not process any elements; returning `missing` as the sentinel in such a situation
 function mapreduce_skipmissing_pairwise(f::F, op::G, A, init, inds) where {F,G}
-    if length(inds) <= max(10, pairwise_blocksize(f, op))
+    if length(inds) <= pairwise_leafsize(f, op)
         return mapreduce_skipmissing_kernel(f, op, A, init, inds)
     else
         p1, p2 = halves(inds)

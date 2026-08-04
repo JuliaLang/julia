@@ -87,11 +87,6 @@ function check_reducedims(R, A)
 end
 
 reducedim1(R, A) = length(axes1(R)) == 1
-_realtype(::Type{<:Complex}) = Real
-_realtype(::Type{Complex{T}}) where T<:Real = T
-_realtype(T::Type) = T
-_realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
-_realtype(::Any, T) = T
 
 mapreduce_similar(A, ::Type{T}, dims) where {T} = similar(A, T, dims)
 
@@ -108,11 +103,16 @@ _similar_for(c::_MapReduceAllocator, ::Type{T}, itr, ::HasShape, axs) where {T} 
     mapreduce_similar(c.itr, T, axs)
 (mra::_MapReduceAllocator)(itr) = collect_similar(mra, itr)
 
+# The in-place callable is only defined for the generator shapes the mapreducedim
+# strategies produce: the generator's iterator must be the output array's own index
+# space (or an enumeration of it), since it doubles as the store index.
 struct _MapReduceInPlace{T,F}
     A::T
     op::F
     update::Bool
 end
+(mri::_MapReduceInPlace)(itr) =
+    error("_MapReduceInPlace must be called with a generator over the output's indices (or an enumeration thereof)")
 function (mri::_MapReduceInPlace)(g::Generator{<:AbstractArray})
     A = mri.A
     if mri.update
@@ -424,29 +424,32 @@ _mapreduce_dim(f, op, i::_InitialValue, R::ReshapedArray, ::Colon) =
     _mapreduce_dim(f, op, i, parent(R), :)
 
 """
-    mapreduce!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted; [init])
+    mapreduce!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted; [init], [update])
 
 Compute `mapreduce(f, op, A; init, dims)` where `dims` are the singleton dimensions of `R`, storing the result into `R`.
 
 !!! note
-    The previous values in `R` are _not_ used as initial values; they are completely ignored
+    By default the previous values in `R` are _not_ used as initial values; they are
+    completely ignored. Pass `update=true` to instead combine each reduction result
+    with the corresponding existing value in `R` using `op`; this is the mechanism
+    behind, e.g., `sum!(R, A; init=false)`.
 """
-function mapreduce!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted; init=_InitialValue(), update=false)
-    if ndims(R) > ndims(A) || !all(d->size(R, d) == 1 || axes(R, d) == axes(A, d), 1:max(ndims(R), ndims(A)))
-        throw(DimensionMismatch())
-    end
+function mapreduce!(f::F, op::OP, R::AbstractArray, A::AbstractArrayOrBroadcasted; init=_InitialValue(), update=false) where {F, OP}
+    check_reducedims(R, A)
     return mapreducedim(f, op, A, init, nothing, _MapReduceInPlace(R, op, update))
 end
 
 """
-    reduce!(op, R::AbstractArray, A::AbstractArrayOrBroadcasted; [init])
+    reduce!(op, R::AbstractArray, A::AbstractArrayOrBroadcasted; [init], [update])
 
 Compute `reduce(op, A; init, dims)` where `dims` are the singleton dimensions of `R`, storing the result into `R`.
 
 !!! note
-    The previous values in `R` are _not_ used as initial values; they are completely ignored
+    By default the previous values in `R` are _not_ used as initial values; they are
+    completely ignored. Pass `update=true` to instead combine each reduction result
+    with the corresponding existing value in `R` using `op`.
 """
-reduce!(op, R::AbstractArray, A::AbstractArrayOrBroadcasted; init=_InitialValue(), update=false) = mapreduce!(identity, op, R, A; init, update)
+reduce!(op::OP, R::AbstractArray, A::AbstractArrayOrBroadcasted; init=_InitialValue(), update=false) where {OP} = mapreduce!(identity, op, R, A; init, update)
 
 ##### Specific reduction functions #####
 
@@ -1084,57 +1087,6 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
 end
 
 ##### findmin & findmax #####
-# The initial values of Rval are not used if the corresponding indices in Rind are 0.
-#
-function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
-    (isempty(Rval) || isempty(A)) && return Rval, Rind
-    check_reducedims(Rval, A)
-    for i = 1:N
-        axes(Rval, i) == axes(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
-    end
-    # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
-    # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
-    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(Rval))
-    keep, Idefault = Broadcast.shapeindexer(indsRt)
-    ks = keys(A)
-    y = iterate(ks)
-    zi = zero(eltype(ks))
-    if reducedim1(Rval)
-        i1 = first(axes1(Rval))
-        for IA in CartesianIndices(indsAt)
-            IR = Broadcast.newindex(IA, keep, Idefault)
-            @inbounds tmpRv = Rval[i1,IR]
-            @inbounds tmpRi = Rind[i1,IR]
-            for i in axes(A,1)
-                k, kss = y::Tuple
-                tmpAv = f(@inbounds(A[i,IA]))
-                if tmpRi == zi || op(tmpRv, tmpAv)
-                    tmpRv = tmpAv
-                    tmpRi = k
-                end
-                y = iterate(ks, kss)
-            end
-            @inbounds Rval[i1,IR] = tmpRv
-            @inbounds Rind[i1,IR] = tmpRi
-        end
-    else
-        for IA in CartesianIndices(indsAt)
-            IR = Broadcast.newindex(IA, keep, Idefault)
-            for i in axes(A, 1)
-                k, kss = y::Tuple
-                tmpAv = f(@inbounds(A[i,IA]))
-                @inbounds tmpRv = Rval[i,IR]
-                @inbounds tmpRi = Rind[i,IR]
-                if tmpRi == zi || op(tmpRv, tmpAv)
-                    @inbounds Rval[i,IR] = tmpAv
-                    @inbounds Rind[i,IR] = k
-                end
-                y = iterate(ks, kss)
-            end
-        end
-    end
-    Rval, Rind
-end
 
 struct PairsArray{T,N,A} <: AbstractArray{T,N}
     array::A
@@ -1188,6 +1140,12 @@ _transform_pair(f) = x-> (x[1], f(x[2]))
 _transform_pair(::Type{F}) where {F} = x-> (x[1], F(x[2]))
 _transform_pair(f::typeof(identity)) = f
 
+# The reducing ops for dimensional findmin/findmax over the `(index, value)` pairs of a
+# `PairsArray` (n.b. `_rf_findmin`/`_rf_findmax` in reduce.jl use `(value, index)` order).
+# The `ifelse(..., y, x)` orientation keeps the incumbent on ties so the first index wins.
+_rf_pairfindmin(x, y) = ifelse(isgreater(x[2], y[2]), y, x)
+_rf_pairfindmax(x, y) = ifelse(isless(x[2], y[2]), y, x)
+
 """
     findmin!(rval, rind, A) -> (minval, index)
 
@@ -1198,9 +1156,9 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 $(_DOCS_ALIASING_WARNING)
 """
 findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray; init::Bool=true) = findmin!(identity, rval, rind, A; init)
-function findmin!(f, rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
-                  init::Bool=true)
-    mapreduce!(_transform_pair(f), (x,y)->ifelse(isgreater(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A); update=!init)
+function findmin!(f::F, rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+                  init::Bool=true) where {F}
+    mapreduce!(_transform_pair(f), _rf_pairfindmin, ZippedArray(rind, rval), PairsArray(A); update=!init)
     return (rval, rind)
 end
 
@@ -1255,7 +1213,7 @@ function _findmin(f, A, region::D) where {D}
         axs = reduced_indices(A, region)
         return findmin!(identity, mapreduce_similar(A, eltype(A), axs), mapreduce_similar(A, keytype(A), axs), A)
     else
-        P = mapreduce(_transform_pair(f), (x,y)->ifelse(isgreater(x[2], y[2]), y, x), PairsArray(A); dims=region)
+        P = mapreduce(_transform_pair(f), _rf_pairfindmin, PairsArray(A); dims=region)
         (inds, vals) = _unzip(P)
         return (vals, inds)
     end
@@ -1270,9 +1228,9 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 $(_DOCS_ALIASING_WARNING)
 """
 findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray; init::Bool=true) = findmax!(identity, rval, rind, A; init)
-function findmax!(f, rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
-                  init::Bool=true)
-    mapreduce!(_transform_pair(f), (x,y)->ifelse(isless(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A); update=!init)
+function findmax!(f::F, rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+                  init::Bool=true) where {F}
+    mapreduce!(_transform_pair(f), _rf_pairfindmax, ZippedArray(rind, rval), PairsArray(A); update=!init)
     return (rval, rind)
 end
 
@@ -1325,7 +1283,7 @@ function _findmax(f, A, region::D) where {D}
         axs = reduced_indices(A, region)
         return findmax!(identity, mapreduce_similar(A, eltype(A), axs), mapreduce_similar(A, keytype(A), axs), A)
     else
-        P = mapreduce(_transform_pair(f), (x,y)->ifelse(isless(x[2], y[2]), y, x), PairsArray(A); dims=region)
+        P = mapreduce(_transform_pair(f), _rf_pairfindmax, PairsArray(A); dims=region)
         (inds, vals) = _unzip(P)
         return (vals, inds)
     end

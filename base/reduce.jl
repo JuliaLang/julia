@@ -312,6 +312,12 @@ pairwise_blocksize(f, op) = 1024
 # This combination appears to show a benefit from a larger block size
 pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
+# The maximum chain length of a leaf in the pairwise recursions. The floor guards
+# against degenerate user overrides of `pairwise_blocksize`: halving must not recurse
+# into leaves too small to amortize the kernels' multi-lane startup (the widest
+# kernels use 16 lanes).
+pairwise_leafsize(f, op) = max(16, pairwise_blocksize(f, op))
+
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed; consider supplying `init` to the reducer"))
@@ -496,7 +502,7 @@ function mapreduce_pairwise(f::F, op::G, A::AbstractArrayOrBroadcasted, init) wh
     return mapreduce_pairwise(f, op, A, init, eachindex(A))
 end
 mapreduce_pairwise(f::F, op::G, itr, init) where {F, G} = mapreduce_pairwise(f, op, itr, init, IteratorSize(itr))
-function mapreduce_pairwise(f, op, itr, init, S::Union{HasLength, HasShape})
+function mapreduce_pairwise(f::F, op::G, itr, init, S::Union{HasLength, HasShape}) where {F, G}
     n = length(itr)
     n == 0 && return _mapreduce_start(f, op, itr, init)
     # Note that there can be a significant advantage to the for-loop lowering of mapfoldl
@@ -531,7 +537,7 @@ mapreduce_pairwise(f::F, op::G, A, init, inds) where {F,G} =
 # Inlined so that below-blocksize callers reach `mapreduce_kernel` without an
 # intermediate call: dimensional reductions make one such call per output
 @inline function mapreduce_pairwise_split(f::F, op::G, A, init, inds) where {F,G}
-    if length(inds) <= max(10, pairwise_blocksize(f, op))
+    if length(inds) <= pairwise_leafsize(f, op)
         return mapreduce_kernel(f, op, A, init, inds)
     else
         p1, p2 = halves(inds)
@@ -553,7 +559,7 @@ _halves(::Tuple{}) = ()
 _wholes(r) = r[begin:end], r[begin:end]
 
 function mapreduce_pairwise(f::F, op::G, itr, init, S::Union{HasLength,HasShape}, n, state...) where {F,G}
-    if n <= max(10, pairwise_blocksize(f, op))
+    if n <= pairwise_leafsize(f, op)
         return mapreduce_kernel(f, op, itr, init, S, n, state...)
     else
         ndiv2 = n >> 1
@@ -563,7 +569,7 @@ function mapreduce_pairwise(f::F, op::G, itr, init, S::Union{HasLength,HasShape}
     end
 end
 function mapreduce_pairwise(f::F, op::G, itr, init, S::IteratorSize, n, state...) where {F,G}
-    if n <= max(10, pairwise_blocksize(f, op))
+    if n <= pairwise_leafsize(f, op)
         return mapreduce_kernel(f, op, itr, init, S, n, state...)
     else
         ndiv2 = n >> 1
@@ -1325,7 +1331,12 @@ for (fred, f) in ((maximum, max), (minimum, min), (sum, add_sum))
     end
 end
 
-# Reduction kernels that explicitly encode simplistic SIMD-ish reorderings
-const CommutativeOps = Union{typeof(+),typeof(Base.add_sum),typeof(min),typeof(max),typeof(Base._extrema_rf),typeof(|),typeof(&)}
+# `is_commutative_op` is the extension point for granting the reduction kernels
+# license to reorder an op's applications arbitrarily (beyond the documented pairwise
+# reassociation latitude, which every reduced op must already tolerate).
+# `CommutativeOps` is merely the trait's default definition; dispatching on the union
+# (as permuteddimsarray.jl and some stdlibs do) predates the trait and misses ops
+# that opt in via the trait — new code should branch on `is_commutative_op` instead.
+const CommutativeOps = Union{typeof(+),typeof(Base.add_sum),typeof(min),typeof(max),typeof(Base._extrema_rf),typeof(|),typeof(&),typeof(and_all),typeof(or_any)}
 is_commutative_op(::CommutativeOps) = true
 is_commutative_op(::Any) = false
