@@ -177,7 +177,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([K"continue"], when=vcx.in_loop) -> pass()
     ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
-    ([K"break"], when=vcx.in_loop) -> pass()
+    # An unlabeled break is also allowed inside anonymous `@label` blocks;
+    # breaking through a named block is rejected with a precise error during
+    # linearization.
+    ([K"break"], when=vcx.in_loop||vcx.in_symblock) -> pass()
     ([K"break" lab], when=vcx.in_loop||vcx.in_symblock) ->
         vst1_ident(vcx, lab; lhs=true)
     ([K"break" lab x], when=vcx.in_loop||vcx.in_symblock) ->

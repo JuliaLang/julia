@@ -354,7 +354,7 @@ name_hint(name) = JuliaSyntax.CompileHints(:name_hint, name)
 # Predicates and accessors working on expression trees
 
 function is_quoted(ex)
-    kind(ex) in KSet"Symbol quote top core globalref break inert
+    kind(ex) in KSet"Symbol quote top core globalref inert
                      syntaxinert meta inbounds inline noinline loopinfo"
 end
 
