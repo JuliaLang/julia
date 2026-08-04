@@ -2496,11 +2496,6 @@ STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
     return (vi&16)!=0;
 }
 
-STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
-{
-    return (vi&32)!=0;
-}
-
 // calling into julia ---------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT;

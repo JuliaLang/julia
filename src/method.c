@@ -639,7 +639,7 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     jl_gc_write(li, li->ssavaluetypes, jl_value_t, jl_box_long(nssavalue));
 
     // Flags that need to be copied to slotflags
-    const uint8_t vinfo_mask = 8 | 16 | 32 | 64;
+    const uint8_t vinfo_mask = 8 | 16 | 64;
     int i;
     for (i = 0; i < nslots; i++) {
         jl_value_t *vi = jl_array_ptr_ref(vis, i);
