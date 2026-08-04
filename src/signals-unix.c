@@ -877,8 +877,10 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
             // its span, e.g. a protected allocator, is exactly where a
             // longjmp must not land (the handler defers a cancellation and
             // chains into the reset on region exit; a preemption stays
-            // pending in the polled request byte).
-            if (request == 5 && bound_cancelled) {
+            // pending in the polled request byte). The handler fires only
+            // for an actual cancellation of the bound token, level-
+            // triggered - whichever request delivered the signal.
+            if (bound_cancelled) {
                 uint8_t sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state);
                 hctx->fn(hctx->state, sev);
             }

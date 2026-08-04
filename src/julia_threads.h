@@ -150,6 +150,20 @@ typedef struct _jl_cancel_handler_ctx_t {
     void *state;
 } jl_cancel_handler_ctx_t;
 
+// The handler and its arguments, stashed across a cancellation-handler
+// delivery on the suspend-based platforms (Windows and mach): the sender
+// records them here for the trampoline the hijacked thread is redirected
+// to. The redirection machinery itself saves and restores the complete
+// interrupted register state (including FP) on the interrupted stack, so
+// nothing else lives here. (On the other Unixes no save area is needed at
+// all: the handler runs directly inside the delivering signal handler,
+// under the kernel signal frame's full state save.)
+typedef struct {
+    void (*fn)(void *state, uint8_t sev);
+    void *state;
+    uint8_t sev;
+} jl_cancel_handler_save_t;
+
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
 typedef HANDLE jl_thread_t;
@@ -238,6 +252,15 @@ typedef struct _jl_tls_states_t {
     void (*signal_ctx_fptr)(void);
     uintptr_t signal_ctx_arg;
 #endif
+    // Cancellation-handler delivery on the suspend-based platforms
+    // (Windows and mach): the handler and its arguments for the trampoline
+    // the hijacked thread runs, and whether a delivery is currently in
+    // flight on this thread (at most one at a time; further deliveries are
+    // skipped and recovered level-triggered). Unused on the other Unixes,
+    // where the handler runs directly inside the delivering signal handler
+    // (which cannot nest with itself).
+    jl_cancel_handler_save_t cancel_handler_save;
+    sig_atomic_t cancel_handler_armed;
     jl_thread_t system_id;
     _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;

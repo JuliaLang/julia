@@ -293,8 +293,11 @@ static void jl_throw_in_state(jl_ptls_t ptls2, host_thread_state_t *state, jl_va
         // This redirect abandons every frame between the interrupted context
         // and the handler; clear a published reset context so no
         // cancellation sender consumes a buffer in the abandoned region
-        // (jl_eh_restore_state republishes the outer one at the catch).
+        // (jl_eh_restore_state republishes the outer one at the catch). The
+        // same applies to a foreign-call cancellation-handler guard
+        // published in an abandoned frame.
         jl_atomic_store_release(&ct->reset_ctx, NULL);
+        jl_atomic_store_release(&ct->cancel_handler_ctx, NULL);
         jl_handler_t *eh = ct->eh;
         if (eh != NULL) {
             asan_unpoison_task_stack(ct, &eh->eh_ctx);
@@ -516,6 +519,10 @@ kern_return_t catch_mach_exception_raise_state_identity(
         kern_return_t ret = thread_set_state(thread, jl_mach_float_state_info.flavor,
                                              old_fp, jl_mach_float_state_info.count);
         HANDLE_MACH_ERROR("thread_set_state", ret);
+        // A completed cancellation-handler delivery is consumed here (no-op
+        // for other jl_call_in_state users); further deliveries may fire
+        // again once the thread resumes.
+        ptls2->cancel_handler_armed = 0;
         return KERN_SUCCESS;
     }
     if (jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL)
@@ -626,14 +633,32 @@ void jl_thread_resume(int tid)
 // so a suspended thread can never hold it.
 static pthread_mutex_t ctx_rewrite_lock = PTHREAD_MUTEX_INITIALIZER;
 
+// Runs on the interrupted thread, hijacked by jl_send_reset_signal via
+// jl_call_in_state with the interrupted state saved on the stack below:
+// invoke the registered cancellation handler with its arguments from the
+// per-thread save area. Returning runs into jl_mach_restore_trigger, whose
+// exception-handler branch restores the interrupted state (and disarms).
+static void jl_mach_cancel_handler_trampoline(jl_ptls_t ptls)
+{
+    jl_cancel_handler_save_t *save = &ptls->cancel_handler_save;
+    save->fn(save->state, save->sev);
+}
+
 // Suspend-based shootdown delivery (see jl_send_reset_signal in
 // signals-win.c for the shared shape and locking rationale). Rather than
 // simulating the longjmp into a GP-only thread state - which cannot carry
 // the callee-saved SIMD registers the setjmp ABI requires - the frozen
-// thread is redirected to call the real longjmp on its own stack.
-// Best-effort: any failed check simply drops the request.
+// thread is redirected to call the real longjmp on its own stack. A
+// foreign-call cancellation handler is delivered by hijacking the frozen
+// thread to run fn(state, sev) via the resumable jl_call_in_state
+// machinery, whose restore-trigger return path restores the complete
+// interrupted state through the kernel. Best-effort: any failed check
+// simply drops the request.
 static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
 {
+    jl_value_t *bound;
+    int bound_cancelled;
+    jl_cancel_handler_ctx_t *hctx;
     if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
         return;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -642,11 +667,17 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     if (ct2 == NULL)
         return;
-    // Only proceed if the task has a reset context published - a purely
-    // polling victim between cancellation points never has one. (A thread's
-    // own reset_ctx is always NULL here: the ccall reaching this function is
-    // itself an unsafe point, so a self-send returns without suspending.)
-    if (jl_atomic_load_relaxed(&ct2->reset_ctx) == NULL)
+    // Only proceed if the task has an interruptible-region context
+    // published - a purely polling victim between cancellation points never
+    // has one. Never self-suspend: a thread's own reset region is always
+    // cleared here (the ccall reaching this function is itself an unsafe
+    // point), but a protected runtime span (e.g. the GMP allocation hooks)
+    // can reach this sender - through a finalizer running cancel! - with
+    // its own handler context still published.
+    if (pthread_equal(ptls2->system_id, pthread_self()))
+        return;
+    if (jl_atomic_load_relaxed(&ct2->reset_ctx) == NULL &&
+        jl_atomic_load_relaxed(&ct2->cancel_handler_ctx) == NULL)
         return;
     pthread_mutex_lock(&ctx_rewrite_lock);
     // Thread teardown clears current_task while holding the profile write
@@ -675,27 +706,50 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
         goto resume;
     // Re-check now that the thread cannot run: the current task may have
     // switched before the freeze. Delivery is gated on an actual
-    // cancellation of the task's bound token source (kept coherent with the
-    // published region by the exception-handler and finalizer save/restore
-    // discipline) and on the thread running Julia code (gc_state == 0): a
-    // thread inside a GC-safe region may be raced by a concurrent
-    // stop-the-world, and a redirect back into Julia code would break that
-    // protocol.
+    // cancellation of the task's bound token source, kept coherent with the
+    // published regions by the exception-handler and finalizer save/restore
+    // discipline.
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct2 != NULL &&
-        // A published foreign-call cancellation-handler guard suppresses
-        // the reset: its span (e.g. a protected allocator) is exactly where
-        // a longjmp must not land. The handler defers the cancellation and
-        // chains into the reset on region exit; a miss is recovered
-        // level-triggered.
-        // TODO: asynchronous delivery of the handler itself is not
-        // implemented on this platform yet.
-        jl_atomic_load_relaxed(&ct2->cancel_handler_ctx) == NULL &&
+    bound = ct2 == NULL ? NULL :
+        jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+    bound_cancelled = bound != NULL && bound != jl_nothing &&
+        jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) != 0;
+    hctx = ct2 == NULL ? NULL :
+        jl_atomic_load_acquire(&ct2->cancel_handler_ctx);
+    if (hctx != NULL) {
+        // Handler flavor: a published foreign-call cancellation-handler
+        // guard takes priority over (and suppresses) the reset - its span
+        // (e.g. a protected allocator) is exactly where a longjmp must not
+        // land, and the handler can defer the cancellation and chain into
+        // the reset on region exit. Hijack the frozen thread to run
+        // fn(state, sev) on its own stack via the resumable
+        // jl_call_in_state machinery - at most one delivery at a time per
+        // thread (the save area holds one; skips recover level-triggered).
+        if (!ptls2->cancel_handler_armed && bound_cancelled) {
+            mach_msg_type_number_t float_count = jl_mach_float_state_info.count;
+            natural_t float_state[JL_MACH_FLOAT_STATE_MAX_COUNT];
+            if (thread_get_state(thread, jl_mach_float_state_info.flavor,
+                                 (thread_state_t)float_state, &float_count) != KERN_SUCCESS)
+                goto resume;
+            jl_cancel_handler_save_t *save = &ptls2->cancel_handler_save;
+            save->fn = hctx->fn;
+            save->state = hctx->state;
+            save->sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state);
+            ptls2->cancel_handler_armed = 1;
+            jl_call_in_state(&state, (void (*)(void))&jl_mach_cancel_handler_trampoline,
+                             (uintptr_t)ptls2, float_state);
+            if (thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state,
+                                 MACH_THREAD_STATE_COUNT) != KERN_SUCCESS)
+                ptls2->cancel_handler_armed = 0;
+        }
+    }
+    else if (ct2 != NULL &&
+        // Reset flavor, additionally gated on the thread running Julia code
+        // (gc_state == 0): a thread inside a GC-safe region may be raced by
+        // a concurrent stop-the-world, and a redirect back into Julia code
+        // would break that protocol.
         jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_UNSAFE) {
         jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct2->reset_ctx);
-        jl_value_t *bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
-        int bound_cancelled = bound != NULL && bound != jl_nothing &&
-            jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) != 0;
         if (reset_ctx != NULL && reset_ctx->sp != 0 &&
             (reset_code == JL_RESET_CODE_PREEMPT || bound_cancelled)) {
             // Consume the reset point with an exchange (off-thread senders
