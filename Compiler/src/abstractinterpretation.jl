@@ -3905,7 +3905,8 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
     end
     cconv = e.args[5]
     if isa(cconv, QuoteNode) && (v = cconv.value;
-        isa(v, Union{Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool}}))
+        isa(v, Union{Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool},
+                     Tuple{Symbol, UInt16, Bool, Bool, Bool}}))
         override = decode_effects_override(v[2])
         effects = override_effects(effects, override)
     end

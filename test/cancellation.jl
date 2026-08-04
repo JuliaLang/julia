@@ -1729,6 +1729,87 @@ end
     @test cell3[] === (Int64(0), Int64(0))
 end
 
+@testset "BigInt/GMP cancellation via reset regions" begin
+    # No explicit cancellation points in the loop body: cancellation reaches
+    # it through the annotated MPZ entry points - either their own
+    # cancellation point, an asynchronous reset landing inside audited
+    # libgmp compute (the reset region stays published across the annotated
+    # call), or the deferring allocation hooks chaining into the reset on
+    # exit.
+    function bigmul_loop(nbits)
+        b = big(3)^(nbits ÷ 2)
+        m = big(10)^(nbits ÷ 8)
+        while true
+            b = (b * b) % m
+        end
+    end
+    if Threads.nthreads(:default) >= 2
+        t, src = cancellable_spawn(() -> bigmul_loop(1_000_000))
+        sleep(1.0) # let it get into the multiply/mod cycle
+        cancel!(src)
+        @test wait_cancelled(t, src)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+        # the library stays healthy: correct arithmetic after the cancellation
+        @test factorial(big(30)) == prod(big(1):big(30))
+        @test string(big(2)^128) == "340282366920938463463374607431768211456"
+
+        # Allocation-churn storm: small, allocation-dominated BigInt work
+        # hammered by cancellation. Deliveries frequently land inside the
+        # deferring jl_gmp_counted_* hooks (the handler region), exercising
+        # the defer-and-chain path; correctness is "no crash, no corruption,
+        # clean arithmetic afterwards".
+        deadline = time() + 8
+        rounds = 0
+        while time() < deadline
+            gsrc = CancellationTokenSource()
+            gt = with(CANCEL_TOKEN => CancellationToken(gsrc)) do
+                Threads.@spawn begin
+                    b = big(1)
+                    m = big(10)^60
+                    while true
+                        b = (b + big(12345))^2 % m
+                    end
+                end
+            end
+            rounds % 3 == 0 || sleep(0.02)
+            cancel!(gsrc)
+            @test wait_cancelled(gt, gsrc)
+            @test istaskfailed(gt)
+            rounds += 1
+        end
+        @test rounds > 0
+        @test factorial(big(20)) == 2432902008176640000
+    end
+end
+
+@testset "cancellation lands inside audited libgmp compute" begin
+    # A single long computation-carrying GMP call: the reset region
+    # published by the annotated call's own cancellation point must survive
+    # into the call (the point's binding bookkeeping - a task's first point
+    # under a new source takes the write-barrier path - must come before the
+    # region publication), and an asynchronous cancellation unwinds out of
+    # the foreign computation promptly instead of waiting for it to finish.
+    if Threads.nthreads(:default) >= 2
+        started = Base.Event()
+        t, src = cancellable_spawn() do
+            notify(started)
+            # ~tens of seconds of uninterrupted libgmp compute if not cancelled
+            Base.GMP.MPZ.fac_ui(UInt(40_000_000))
+        end
+        wait(started)
+        sleep(1.0) # let it get deep into the fac_ui call
+        t0 = time()
+        cancel!(src)
+        @test wait_cancelled(t, src)
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+        @test time() - t0 < 15.0 # cancelled promptly, not at call completion
+        # the library stays healthy afterwards
+        @test factorial(big(25)) == prod(big(1):big(25))
+    end
+end
+
 # BLAS cancellation handler: it executes on the thread blocked in the dgemm,
 # where the library's thread-local cancel token is exactly the one the
 # in-flight operation is bound to. The function pointers are pre-resolved

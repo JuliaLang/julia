@@ -274,9 +274,9 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
         if (!jl_is_symbol(cc)) {
             JL_TYPECHK(ccall method definition, tuple, cc);
-            if (jl_nfields(cc) != 3 && jl_nfields(cc) != 4) {
+            if (jl_nfields(cc) < 3 || jl_nfields(cc) > 5) {
                 jl_error("In ccall calling convention, expected a symbol or a "
-                         "(cconv, effects, gc_safe[, cancel_handler]) tuple.");
+                         "(cconv, effects, gc_safe[, cancel_handler[, reset_safe]]) tuple.");
             }
             JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
             JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));

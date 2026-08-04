@@ -263,6 +263,7 @@ The above input outputs this:
 function ccall_macro_parse(exprs)
     gc_safe = false
     cancel = nothing
+    reset_safe = false
     expr = nothing
     if exprs isa Expr
         expr = exprs
@@ -286,8 +287,16 @@ function ccall_macro_parse(exprs)
                     throw(ArgumentError("cancel_handler must be a `(handler, state)` tuple"))
                 end
                 cancel = (value.args[1], value.args[2])
+            elseif name === :reset_safe
+                if value === true
+                    reset_safe = true
+                elseif value === false
+                    reset_safe = false
+                else
+                    throw(ArgumentError("reset_safe must be true or false"))
+                end
             else
-                throw(ArgumentError("@ccall options are `gc_safe = <bool>` and `cancel_handler = (handler, state)`"))
+                throw(ArgumentError("@ccall options are `gc_safe = <bool>`, `reset_safe = <bool>` and `cancel_handler = (handler, state)`"))
             end
             i += 1
         end
@@ -360,16 +369,22 @@ function ccall_macro_parse(exprs)
             pusharg!(a)
         end
     end
-    return func, rettype, types, args, gc_safe, cancel, nreq
+    return func, rettype, types, args, gc_safe, cancel, reset_safe, nreq
 end
 
 
-function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, cancel, nreq)
+function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, cancel, reset_safe, nreq)
     have_cancel = cancel !== nothing
     base_cconv = convention isa Tuple ? (convention..., gc_safe) :
                                         (convention, UInt16(0), gc_safe)
     if !have_cancel
-        cconv = Expr(:cconv, base_cconv, nreq)
+        # `reset_safe = true` only affects how codegen treats the call (the
+        # enclosing reset region survives it); establishing that region -
+        # a cancellation point placed before the call - is the caller's
+        # business, and neither annotation implies any cancellation point of
+        # its own.
+        cconv = reset_safe ? Expr(:cconv, (base_cconv..., false, true), nreq) :
+                             Expr(:cconv, base_cconv, nreq)
         return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
                      Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
     end
@@ -383,7 +398,7 @@ function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, canc
     # recognizable abort code.
     fex, sex = cancel
     nreq > 0 && (nreq += 2)
-    cconv = Expr(:cconv, (base_cconv..., true), nreq)
+    cconv = Expr(:cconv, reset_safe ? (base_cconv..., true, true) : (base_cconv..., true), nreq)
     return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
                 Expr(:tuple, :(Ptr{Cvoid}), :(Ptr{Cvoid}), map!(esc, types, types)...),
                 esc(fex), esc(sex), map!(esc, args, args)...)
@@ -496,6 +511,29 @@ delivery is best-effort and the cancellation itself remains level-triggered.
 !!! compat "Julia 1.14"
     The `cancel_handler` option requires Julia 1.14 or higher.
 
+A foreign call into a library that has been *audited* for asynchronous
+unwinding can instead be annotated `reset_safe = true`:
+
+    @ccall reset_safe=true libgmp.__gmpz_mul(x::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
+
+The annotation lets the reset region of an enclosing cancellation point stay
+published across the call (for any other call it ends at the call boundary),
+so a cancellation of the governing token can unwind the foreign computation
+at an *arbitrary* instruction, longjmping back to that cancellation point,
+which throws. The point itself is the caller's to place: the region of the
+nearest preceding cancellation point is used, if it reaches the call - and
+if it does not (any interposed operation the compiler cannot prove safe
+ends it), the call simply degrades to level-triggered cancellation at the
+next point. Unwinding is only sound if interruption at every point of the
+callee leaves the process consistent - no locks held, no torn global state;
+at worst bounded leaks of in-flight temporaries and garbage *values* (with
+valid structure) in the call's discarded outputs. Base's GMP (`BigInt`)
+wrappers use this, in concert with allocation hooks that defer a
+cancellation delivered while inside the allocator itself. This is how a
+checkless `BigInt` loop cancels cleanly on task cancellation.
+
+!!! compat "Julia 1.14"
+    The `reset_safe` option requires Julia 1.14 or higher.
 """
 macro ccall(exprs...)
     return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)
