@@ -220,6 +220,12 @@ function cancel!(src::CancellationTokenSource,
     raised = _raise_state!(src, sev)
     _cancel_walk!(src, sev)
     Threads.atomic_fence_heavy()
+    # Shoot down any task now bound to a cancelled source: threads inside a
+    # compiled cancellation region are asynchronously reset to their
+    # cancellation point, which observes the cancellation and throws.
+    # Best-effort: a task the walk misses recovers level-triggered at its
+    # next cancellation point (or reset-safe allocation).
+    ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
     return raised
 end
 

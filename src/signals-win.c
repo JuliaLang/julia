@@ -139,17 +139,24 @@ void restore_signals(void)
     SetConsoleCtrlHandler(NULL, 0);
 }
 
-int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT;
 
 static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread) JL_NOTSAFEPOINT
 {
     jl_jmp_buf *saferestore = jl_get_safe_restore();
     if (saferestore) { // restarting jl_ or profile
-        if (!jl_simulate_longjmp(*saferestore, ctxThread))
+        if (!jl_simulate_longjmp(*saferestore, ctxThread, 1))
             abort();
         return;
     }
     assert(ct && excpt);
+    // This redirect abandons every frame between the interrupted context and
+    // the handler. A reset context published in one of those frames would
+    // dangle - and may be consumed by an off-thread cancellation sender - so
+    // clear it before rewriting the context. The matching
+    // jl_eh_restore_state republishes the outer context saved at handler
+    // entry.
+    jl_atomic_store_release(&ct->reset_ctx, NULL);
     jl_ptls_t ptls = ct->ptls;
     ptls->bt_size = 0;
     if (excpt != jl_stackovf_exception) {
@@ -168,7 +175,7 @@ static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread
     jl_handler_t *eh = ct->eh;
     if (eh != NULL) {
         asan_unpoison_task_stack(ct, &eh->eh_ctx);
-        if (!jl_simulate_longjmp(eh->eh_ctx, ctxThread))
+        if (!jl_simulate_longjmp(eh->eh_ctx, ctxThread, 1))
             abort();
     }
     else {
@@ -178,10 +185,133 @@ static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread
 
 HANDLE hMainThread = INVALID_HANDLE_VALUE;
 
+// Serializes every path that suspends a thread and rewrites its context
+// (jl_send_cancellation_signal on any thread, and jl_try_deliver_sigint) for
+// its complete suspend/get/set/resume sequence: two rewriters working from
+// the same suspended snapshot would install conflicting continuations and
+// task chains. (The profiler does not need it: it only reads contexts, and
+// suspend counts nest.) It also prevents two threads delivering
+// cancellations at each other from freezing both (the suspend-count analog
+// of a deadlock): a rewriter always takes this lock before suspending and
+// never blocks while holding a suspension, so a suspended thread can never
+// hold it.
+static SRWLOCK ctx_rewrite_lock = SRWLOCK_INIT;
+
+// Deliver a cancellation or preempt shootdown to the target thread's current
+// task's published reset context, if available: the suspend-based analog of
+// the Unix SIGUSR2 request-5/6 delivery (see signals-unix.c). Rewrites the
+// suspended thread's context as if the reset point's setjmp had returned
+// again (with `reset_code` as the setjmp return), restoring the gcstack and
+// eh saved at establishment. Best-effort: any check failing simply drops the
+// request (recovery is level-triggered at the task's next cancellation
+// point), and the caller retries.
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx);
+void jl_thread_resume(int tid);
+
+static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
+{
+    jl_value_t *bound;
+    jl_reset_ctx_t *reset_ctx;
+    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL)
+        return;
+    // Only proceed if the task has a reset context published - a purely
+    // polling victim between cancellation points never has one. (A thread's
+    // own reset_ctx is always NULL here: the ccall reaching this function is
+    // itself an unsafe point, so a self-send returns without suspending.)
+    if (jl_atomic_load_relaxed(&ct2->reset_ctx) == NULL)
+        return;
+    AcquireSRWLockExclusive(&ctx_rewrite_lock);
+    // The freeze must complete before any state is examined: validating (or
+    // consuming) the published context while the victim still runs races
+    // with it re-executing the establishing cancellation point (rewriting
+    // the buffer) or leaving the frame entirely, and a SetThreadContext
+    // computed from such a buffer redirects the thread into garbage.
+    // (jl_thread_suspend_and_get_state's GetThreadContext is what completes
+    // the asynchronous SuspendThread.) The profile (read) lock guarantees
+    // the thread is not frozen while holding the debuginfo write lock; it
+    // is only needed around the suspend itself.
+    CONTEXT ctxThread;
+    jl_lock_profile();
+    int suspended = jl_thread_suspend_and_get_state(tid, 0, &ctxThread);
+    jl_unlock_profile();
+    if (!suspended) {
+        ReleaseSRWLockExclusive(&ctx_rewrite_lock);
+        return;
+    }
+    // Re-check now that the thread cannot run (the current task may have
+    // switched before the freeze). Delivery is gated on an actual
+    // cancellation of the task's bound token source - coherent with the
+    // published region, since everything that may rebind it while a region
+    // is live (exception handlers, the finalizer bracket) restores the pair
+    // together - and on the thread running Julia code (gc_state == 0): a
+    // thread inside a GC-safe region may be raced by a concurrent
+    // stop-the-world, and a redirect back into Julia code would break that
+    // protocol.
+    ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL)
+        goto resume;
+    if (jl_atomic_load_relaxed(&ptls2->gc_state) != JL_GC_STATE_UNSAFE)
+        goto resume;
+    reset_ctx = jl_atomic_load_acquire(&ct2->reset_ctx);
+    if (reset_ctx == NULL || reset_ctx->sp == 0)
+        goto resume;
+    if (reset_code == JL_RESET_CODE_CANCEL) {
+        // A preempt shootdown checks no source; the re-executed point
+        // observes the setjmp return code and yields.
+        bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+        if (bound == NULL || bound == jl_nothing ||
+            jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+            goto resume;
+    }
+    // Consume the reset point (prevents a double reset; unlike on Unix the
+    // consumer here is not the victim thread itself, so use an exchange to
+    // arbitrate against concurrent senders) and redirect the thread there,
+    // restoring the gcstack and eh recorded at establishment: the interrupt
+    // may have landed inside a reset-safe callee whose pushes onto either
+    // chain die with the abandoned stack region.
+    reset_ctx = jl_atomic_exchange(&ct2->reset_ctx, NULL);
+    if (reset_ctx == NULL || reset_ctx->sp == 0)
+        goto resume;
+    // Compute and install the redirected thread context first, and rewind
+    // the task's gcstack/eh chains only once the redirect is committed: if
+    // either step fails (e.g. jl_simulate_longjmp is unavailable under
+    // sanitizers), the thread must resume exactly as it was, with its
+    // deeper chains intact and the (unconsumed) region republished.
+    if (!jl_simulate_longjmp(reset_ctx->mctx, &ctxThread, reset_code))
+        goto republish;
+    ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT;
+    if (!SetThreadContext(ptls2->system_id, &ctxThread))
+        goto republish;
+    // Committed: restore the GC-frame chain head and innermost exception
+    // handler recorded at establishment - the interrupt may have landed
+    // inside a callee whose pushes onto either chain die with the abandoned
+    // stack region.
+    ct2->gcstack = reset_ctx->gcstack;
+    ct2->eh = reset_ctx->eh;
+    goto resume;
+republish:
+    jl_atomic_store_release(&ct2->reset_ctx, reset_ctx);
+resume:
+    jl_thread_resume(tid);
+    ReleaseSRWLockExclusive(&ctx_rewrite_lock);
+}
+
+
 // Try to throw the exception in the master thread.
 static void jl_try_deliver_sigint(void)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    // Hold the rewrite lock until the thread is resumed: it serializes the
+    // complete suspend/get/set/resume sequence against other context
+    // rewriters (jl_send_cancellation_signal), which would otherwise install
+    // a conflicting continuation computed from the same suspended snapshot.
+    AcquireSRWLockExclusive(&ctx_rewrite_lock);
     jl_lock_profile();
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
@@ -189,6 +319,7 @@ static void jl_try_deliver_sigint(void)
         // error
         jl_safe_printf("error: SuspendThread failed\n");
         jl_unlock_profile();
+        ReleaseSRWLockExclusive(&ctx_rewrite_lock);
         return;
     }
     jl_unlock_profile();
@@ -201,26 +332,30 @@ static void jl_try_deliver_sigint(void)
         jl_clear_force_sigint();
         CONTEXT ctxThread;
         memset(&ctxThread, 0, sizeof(CONTEXT));
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT;
         if (!GetThreadContext(hMainThread, &ctxThread)) {
             // error
             jl_safe_printf("error: GetThreadContext failed\n");
+            ReleaseSRWLockExclusive(&ctx_rewrite_lock);
             return;
         }
         jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
         jl_throw_in_ctx(ct, jl_interrupt_exception, &ctxThread);
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT;
         if (!SetThreadContext(hMainThread, &ctxThread)) {
             jl_safe_printf("error: SetThreadContext failed\n");
             // error
+            ReleaseSRWLockExclusive(&ctx_rewrite_lock);
             return;
         }
     }
     if ((DWORD)-1 == ResumeThread(hMainThread)) {
         jl_safe_printf("error: ResumeThread failed\n");
         // error
+        ReleaseSRWLockExclusive(&ctx_rewrite_lock);
         return;
     }
+    ReleaseSRWLockExclusive(&ctx_rewrite_lock);
 }
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
@@ -445,7 +580,7 @@ static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *c
     }
     assert(sizeof(*ctx) == sizeof(CONTEXT));
     memset(ctx, 0, sizeof(CONTEXT));
-    ctx->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+    ctx->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT;
     if (!GetThreadContext(hThread, ctx)) {
         if ((DWORD)-1 == ResumeThread(hThread))
             abort();
