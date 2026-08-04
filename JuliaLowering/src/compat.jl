@@ -29,7 +29,21 @@ function est_syntax_name(st, default)
     kind(st) in KSet"Identifier unknown_head" ? st.value::String : default
 end
 
-function expr_to_est(@nospecialize(e), src::SourceAttrType=LineNumberNode(0, :none))
+function _scavenge_lnn(e::Expr)
+    e.head in (:macrocall, :quote, :inert) || for a in e.args
+        a isa LineNumberNode && return a
+        if a isa Expr
+            a_out = _scavenge_lnn(a)
+            a_out isa LineNumberNode && return a_out
+        end
+    end
+    return nothing
+end
+scavenge_lnn(@nospecialize(e)) =
+    something(e isa Expr ? _scavenge_lnn(e) : nothing,
+              LineNumberNode(0, :none))
+
+function expr_to_est(@nospecialize(e), src::SourceAttrType=scavenge_lnn(e))
     _expr_to_est(e, src)[1]
 end
 
