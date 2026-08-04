@@ -87,6 +87,11 @@ Multi-threading changes
   and `@atomiconce` macros (e.g. `@atomic a[]`, `@atomic a[] = v`, `@atomic a[] += 1`), which allows
   the memory ordering to be specified explicitly and makes atomic read-modify-write operations
   syntactically clear ([#62382]).
+* The `value` field of `WeakRef` is now declared `@atomic`, since the garbage collector may replace it
+  by `nothing` at any safepoint. Reading `w.value` or writing `w.value = v` uses `:monotonic` ordering,
+  which prevents the compiler from caching a weak reference across a safepoint. Writing the field with
+  `setfield!` now requires an ordering to be given, e.g. `setfield!(w, :value, v, :monotonic)`
+  ([#62613]).
 
 Build system changes
 --------------------

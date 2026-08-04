@@ -628,12 +628,14 @@ end
 
 # constructors for built-in types
 
+eval(Core, quote
 mutable struct WeakRef
-    value
-    WeakRef() = WeakRef(nothing)
-    WeakRef(@nospecialize(v)) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
-                                      (Ptr{Cvoid}, Any), getptls(), v)
-end
+        $(Expr(:atomic, :value))
+        WeakRef() = WeakRef(nothing)
+        WeakRef(@nospecialize(v)) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
+                                        (Ptr{Cvoid}, Any), getptls(), v)
+    end
+end)
 
 Tuple{}() = ()
 

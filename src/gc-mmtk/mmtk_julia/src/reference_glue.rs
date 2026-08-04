@@ -5,6 +5,7 @@ use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::Finalizable;
 use mmtk::vm::ObjectTracer;
 use mmtk::vm::ReferenceGlue;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 extern "C" {
     pub static jl_nothing: *mut jl_value_t;
@@ -36,15 +37,20 @@ impl Finalizable for JuliaFinalizableObject {
 pub struct VMReferenceGlue {}
 
 impl VMReferenceGlue {
-    fn load_referent_raw(reference: ObjectReference) -> *mut jl_value_t {
+    // `jl_weakref_t::value` is `_Atomic`, so bindgen gives the field an opaque
+    // type: reach it through an `AtomicPtr` rather than reading it by value.
+    fn referent_slot(reference: ObjectReference) -> *const AtomicPtr<jl_value_t> {
         let reff = reference.to_raw_address().to_ptr::<jl_weakref_t>();
-        unsafe { (*reff).value }
+        unsafe { ::std::ptr::addr_of!((*reff).value) as *const AtomicPtr<jl_value_t> }
+    }
+
+    fn load_referent_raw(reference: ObjectReference) -> *mut jl_value_t {
+        unsafe { (*Self::referent_slot(reference)).load(Ordering::Relaxed) }
     }
 
     fn set_referent_raw(reference: ObjectReference, referent_raw: *mut jl_value_t) {
-        let reff = reference.to_raw_address().to_mut_ptr::<jl_weakref_t>();
         unsafe {
-            (*reff).value = referent_raw;
+            (*Self::referent_slot(reference)).store(referent_raw, Ordering::Relaxed);
         }
     }
 }

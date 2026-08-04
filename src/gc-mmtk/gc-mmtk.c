@@ -1043,7 +1043,7 @@ JL_DLLEXPORT size_t jl_gc_genericmemory_how(void *arg) JL_NOTSAFEPOINT
 JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls, jl_value_t *value)
 {
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*), jl_weakref_type);
-    wr->value = value;  // NOTE: wb not needed here
+    jl_atomic_store_relaxed(&wr->value, value);  // NOTE: wb not needed here
     mmtk_add_weak_candidate(wr);
     return wr;
 }

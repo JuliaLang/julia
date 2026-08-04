@@ -62,6 +62,12 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
+# The GC may clear `WeakRef.value` at any safepoint. `unordered`, the default
+# for an atomic field, would still let LLVM hoist the load out of a loop, so
+# read and write it with `monotonic`.
+getproperty(x::WeakRef, f::Symbol) = (@inline; getfield(x, f, :monotonic))
+setproperty!(x::WeakRef, f::Symbol, v) = (@inline; setfield!(x, f, v, :monotonic))
+
 typeof(function getproperty end).name.constprop_heuristic = or_int(Core.FORCE_CONST_PROP, Core.DISABLE_SEMI_CONCRETE_EVAL)
 typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
 

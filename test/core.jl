@@ -3231,6 +3231,17 @@ mutable struct Obj; x; end
         @test wref[1].value === nothing
     end
     test_wr()
+
+    # `value` is `@atomic` and property access uses `:monotonic` (#62613)
+    @test Base.isfieldatomic(WeakRef, :value)
+    let x = Ref(1), w = WeakRef(x)
+        @test (@atomic w.value) === x
+        @atomic :monotonic w.value = nothing
+        @test w.value === nothing
+        w.value = x
+        @test w.value === x
+        @test_throws ConcurrencyViolationError setfield!(w, :value, nothing)
+    end
 end
 
 # issue #9947

@@ -99,7 +99,7 @@ function setindex!(wkh::WeakKeyDict{K}, v, key) where K
             finalizer(wkh.finalizer, key)
             k = WeakRef(key)
         else
-            k.value = key
+            @atomic :monotonic k.value = key
         end
         wkh.ht[k] = v
     end

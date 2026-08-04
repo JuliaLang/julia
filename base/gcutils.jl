@@ -9,6 +9,12 @@ to the Julia value `x`: although `w` contains a reference to `x`, it does not pr
 garbage collected. `w.value` is either `x` (if `x` has not been garbage-collected yet) or `nothing`
 (if `x` has been garbage-collected).
 
+The `value` field is declared `@atomic`, since the garbage collector may replace it by `nothing` at
+any safepoint. Reading `w.value` or writing `w.value = v` uses `:monotonic` ordering; a different
+ordering can be requested with the [`@atomic`](@ref) macro. Code that inspects the referenced value
+should read the field once into a local variable and use that, since a second read may observe
+`nothing`.
+
 ```jldoctest
 julia> x = "a string"
 "a string"
