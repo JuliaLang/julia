@@ -629,8 +629,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             // Not thread safe. For debugging and last resort error messages (jl_fprint_critical_error) only.
             jl_atomic_store_relaxed(&jl_filename, *toplevel_filename);
             jl_atomic_store_relaxed(&jl_lineno, *toplevel_lineno);
-            // top-level statements are run by the interpreter, and their thunks carry
-            // no line info, so this is the only place their coverage can be recorded
+            // Top-level thunks carry no line information.
             if (jl_options.code_coverage != JL_LOG_NONE && *toplevel_lineno > 0 &&
                     jl_coverage_enabled_for(m, *toplevel_filename))
                 jl_coverage_visit_line(*toplevel_filename, strlen(*toplevel_filename),

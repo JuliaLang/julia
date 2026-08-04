@@ -3181,13 +3181,8 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
     Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(ctx.types().T_size, (uintptr_t)ptr),
         getPointerTy(ctx.builder.getContext()));
-    // Volatile, not atomic, so concurrent updates to the same counter may be lost. An
-    // atomic RMW in a hot loop costs far more than the exactness is worth (#62424), and
-    // this is what 1.11 and earlier did. Note both callers rely on a lost update never
-    // driving a counter back to zero, which is how the writers tell an uncovered line
-    // ("0") from one that is not code at all ("-"): `jl_coverage_alloc_line` /
-    // `jl_malloc_data_pointer` seed every instrumented line to 1, and `addend` is
-    // non-negative, so every value ever stored here is >= 1.
+    // These approximate counters are seeded to 1 and only incremented, so racy
+    // updates stay nonzero. Avoiding an atomic RMW prevents #62424.
     Value *v = ctx.builder.CreateLoad(getInt64Ty(ctx.builder.getContext()), pv, true, name);
     v = ctx.builder.CreateAdd(v, addend);
     ctx.builder.CreateStore(v, pv, true);
@@ -9504,18 +9499,14 @@ static jl_llvm_functions_t
         return (!jl_is_submodule(mod, jl_base_module) &&
                 !jl_is_submodule(mod, jl_core_module));
     };
-    auto in_tracked_path = [] (StringRef file) { // falls within an explicitly set file or directory
-        // file comes from a Symbol name or a literal, so it is NUL-terminated
+    auto in_tracked_path = [] (StringRef file) {
+        // Symbol names and literals are NUL-terminated.
         return jl_path_is_tracked(file.data());
     };
     bool mod_is_user_mod = in_user_mod(ctx.module);
     bool mod_is_tracked = in_tracked_path(ctx.file);
-    // `modu` is NULL for a frame whose provenance we cannot recover: a macro
-    // expansion, or a body produced by a generator. Falling back to `ctx.module` for
-    // all of those attributes Base code to whatever module inlined it (#26573).
-    // Sources compiled into the sysimage are recorded with relative paths while
-    // everything else is absolutized, so use that to tell them apart - a macro
-    // defined in another user file still counts as user code.
+    // A missing module occurs for macro expansions and generated bodies. Sysimage
+    // source paths are relative; other source paths are absolute.
     auto frame_is_user_code = [&] (jl_module_t *modu, StringRef file) {
         if (modu == NULL)
             return mod_is_user_mod && jl_isabspath(file.data());

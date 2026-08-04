@@ -533,18 +533,8 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
     return ip;
 }
 
-// Code that the interpreter runs is never seen by codegen, so record its coverage
-// here instead. A statement's debuginfo can stand for several frames - macro
-// expansions and indirections through a linetable - so resolve it the same way
-// codegen's append_lineinfo does, then log the frames that differ from the previous
-// statement, as codegen's coverageVisitStmt does.
-// Codegen has no equivalent bound; overflow drops the innermost frames of a very
-// deeply nested macro expansion, which loses coverage for those rather than
-// misreporting it.
-// Two things codegen records that this does not, so a method that is only ever
-// interpreted reports fewer hits on those lines than a compiled one:
-//   - the function definition line, which codegen covers once from `topinfo`
-//   - `jl_cdi_external_firstline` at pc=1 (codegen's `line0`)
+// Resolve interpreter coverage frames like codegen's append_lineinfo and
+// coverageVisitStmt. Deeply nested expansions may lose innermost frames.
 #define COVERAGE_MAX_FRAMES 12
 typedef struct {
     const char *file[COVERAGE_MAX_FRAMES];
@@ -554,33 +544,28 @@ typedef struct {
     int n;
 } coverage_frames_t;
 
-// Returns 0 if this statement reports no location update, in which case `out` is
-// meaningless and must be discarded: codegen's append_lineinfo propagates the same
-// result out of its recursion, and update_lineinfo then throws away the frames it
-// had started to build and keeps the previous statement's.
+// On failure, `out` may contain a partial frame list and must be discarded.
 static int coverage_collect(jl_debuginfo_t *debuginfo, jl_value_t *func,
                             jl_module_t *enclosing, int32_t to, size_t pc,
                             coverage_frames_t *out) JL_NOTSAFEPOINT
 {
     while (1) {
-        if (!jl_is_symbol(debuginfo->def)) // this is a path
-            func = debuginfo->def; // this is inlined
+        if (!jl_is_symbol(debuginfo->def))
+            func = debuginfo->def;
         struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
         int32_t i = lineidx.loc;
-        if (i < 0) // pc out of range: broken debuginfo?
+        if (i < 0)
             return 0;
-        if (i == 0 && lineidx.to == 0) // no update
+        if (i == 0 && lineidx.to == 0)
             return 0;
         if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
-            // indirection node: `i` is a pc in the linetable, not a line
             if (!coverage_collect((jl_debuginfo_t*)debuginfo->linetable, func, enclosing, to, i, out))
                 return 0;
         }
         else if (i > 0 && out->n < COVERAGE_MAX_FRAMES) {
             const char *file = jl_cdi_file(debuginfo);
             jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
-            // provenance is unrecoverable for a macro expansion; attribute it to the
-            // enclosing module only if it came from a source outside the sysimage
+            // Sysimage source paths are relative; other source paths are absolute.
             if (modu == NULL && jl_isabspath(file))
                 modu = enclosing;
             int n = out->n++;
@@ -605,9 +590,9 @@ static void coverage_visit_stmt(jl_code_info_t *src, jl_module_t *module,
     coverage_frames_t cur;
     cur.n = 0;
     if (!coverage_collect(src->debuginfo, mi ? (jl_value_t*)mi : NULL, module, 0, pc, &cur))
-        return; // no location for this statement: keep the frames we already had
+        return;
     int d = 0;
-    // the same test as codegen's DebugLineTable::sameframe
+    // Keep this in sync with codegen's DebugLineTable::sameframe.
     while (d < cur.n && d < prev->n &&
            cur.line[d] == prev->line[d] && cur.edgeid[d] == prev->edgeid[d])
         d++;
@@ -622,9 +607,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
     jl_handler_t __eh;
     size_t ns = jl_array_nrows(stmts);
     jl_task_t *ct = jl_current_task;
-    // top-level statements carry no line info here; they are logged from
-    // jl_toplevel_eval_flex instead. Sysimage and pkgimage generation is not tracked,
-    // so skip the per-statement debuginfo walk entirely there.
+    // Top-level coverage is recorded in jl_toplevel_eval_flex.
     int track_coverage = !toplevel && jl_options.code_coverage != JL_LOG_NONE &&
                          !jl_generating_output() && s->src->debuginfo != NULL;
     coverage_frames_t prev_coverage;
