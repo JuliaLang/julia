@@ -112,6 +112,22 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s) JL_CANSAF
 
 // expression evaluator
 
+// Debugging aid (JULIA_TIER_GC_STRESS=1): force a full collection before every
+// interpreted call and statement, so a value the interpreter failed to root is
+// freed at the first opportunity and a rooting hole reproduces deterministically
+// instead of depending on allocation pressure and platform timing.
+static int tier_gc_stress = -1;
+STATIC_INLINE void tier_gc_stress_hook(void) JL_CANSAFEPOINT
+{
+    int v = tier_gc_stress;
+    if (__builtin_expect(v < 0, 0)) {
+        const char *e = getenv("JULIA_TIER_GC_STRESS");
+        v = tier_gc_stress = (e && e[0] == '1');
+    }
+    if (__builtin_expect(v != 0, 0))
+        jl_gc_collect(JL_GC_FULL);
+}
+
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **argv;
@@ -120,6 +136,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     size_t i;
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
+    tier_gc_stress_hook();
     jl_value_t *result = jl_apply(argv, nargs);
     JL_GC_POP();
     return result;
@@ -191,6 +208,7 @@ static int jl_source_nssavalues(jl_code_info_t *src) JL_NOTSAFEPOINT
 
 static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s) JL_CANSAFEPOINT
 {
+    tier_gc_stress_hook();
     jl_value_t *res = eval_value(stmt, s);
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
@@ -533,11 +551,93 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
     return ip;
 }
 
+// On-stack replacement (Truffle-style; see jl_tier_set_osr_hook in tiered.c).
+// Snapshot the frame's slots + ssavalues, hand them with the back-edge
+// target to the Base hook, which compiles (and caches) a continuation
+// specialized on the live values and runs the rest of the call. Returns the
+// call's result, or NULL to decline (frame keeps interpreting).
+// Remaining C-stack headroom below the current frame, measured against the
+// CURRENT task's stack. Interpreted frames commonly run on task stacks;
+// ptls->stackbase/stacksize describe the thread's root stack, so using them
+// here would measure the wrong buffer entirely (making every task-borne
+// frame look out of stack, permanently rescue-compiling instead of
+// interpreting). The rescue threshold scales down for small task stacks so
+// they can still interpret near the top of their range.
+static int interp_stack_low(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    char *active_start, *active_end, *total_start, *total_end;
+    jl_active_task_stack(ct, &active_start, &active_end, &total_start, &total_end);
+    if (total_start == NULL || total_end == NULL)
+        return 0; // unknown bounds: assume fine (matches prior stackbase==NULL case)
+    ptrdiff_t limit = (ptrdiff_t)(4 << 20);
+    ptrdiff_t half = (total_end - total_start) / 2;
+    if (half < limit)
+        limit = half;
+    char here;
+    return (&here - total_start) < limit;
+}
+
+static jl_value_t *eval_try_osr(interpreter_state *s, size_t target0) JL_CANSAFEPOINT
+{
+    if (!jl_tier_enabled() || s->src == NULL || s->mi == NULL)
+        return NULL;
+    if (!jl_is_method(s->mi->def.method))
+        return NULL;
+    // Resolve the Base OSR helper dynamically rather than holding a Julia
+    // @cfunction reference to it. _tier_osr builds continuation IR at
+    // runtime (dynamic dispatch, Expr construction) and is fundamentally
+    // un-trimmable; a static reference from start_tier_worker would pull it
+    // into every juliac --trim build's reachable graph and fail verify.
+    // A trimmed binary never interprets, so this path is dead there.
+    static _Atomic(jl_value_t*) osr_fn_cache;
+    jl_value_t *osr_fn = jl_atomic_load_acquire(&osr_fn_cache);
+    if (osr_fn == NULL) {
+        if (jl_base_module == NULL)
+            return NULL;
+        osr_fn = jl_get_global(jl_base_module, jl_symbol("_tier_osr"));
+        if (osr_fn == NULL)
+            return NULL;
+        jl_atomic_store_release(&osr_fn_cache, osr_fn);
+    }
+    // The hook runs inference + codegen; deep interpreted recursion may
+    // have nearly exhausted the C stack by the time the budget fires.
+    if (interp_stack_low(jl_current_task))
+        return NULL;
+    jl_code_info_t *src = s->src;
+    size_t n = jl_source_nslots(src) + jl_source_nssavalues(src);
+    jl_array_t *state = NULL;
+    jl_value_t *ipbox = NULL, *res = NULL, *val = NULL;
+    JL_GC_PUSH4(&state, &ipbox, &res, &val);
+    state = jl_alloc_vec_any(n);
+    for (size_t i = 0; i < n; i++) {
+        jl_value_t *v = s->locals[i];
+        if (v != NULL)
+            jl_array_ptr_set(state, i, v);
+    }
+    ipbox = jl_box_long((ssize_t)target0 + 1); // 1-based statement index
+    jl_value_t *fargs[5] = { osr_fn, (jl_value_t*)src, (jl_value_t*)s->mi, ipbox, (jl_value_t*)state };
+    res = jl_apply(fargs, 5);
+    if (res != NULL && res != jl_nothing)
+        val = jl_fieldref(res, 0); // Some{Any}.value
+    JL_GC_POP();
+    return val;
+}
+
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
     jl_handler_t __eh;
     size_t ns = jl_array_nrows(stmts);
     jl_task_t *ct = jl_current_task;
+    // OSR accounting, local to this dispatch loop. The budget counts
+    // STATEMENTS EXECUTED, not back-edges, so the trigger is weighted by
+    // loop body size and approximates interpreted work: a 300-statement
+    // body escapes ~100x sooner (in iterations) than a 3-statement one,
+    // wasting a comparable amount of wall clock either way. The budget is
+    // only checked at back-edges (the continuation needs a loop-head
+    // entry); it parks at -1 after a declined attempt. The threshold is
+    // loaded once per frame (env-derived and stable).
+    int64_t osr_work = 0;
+    int64_t osr_threshold = (!toplevel && s->mi != NULL) ? (int64_t)jl_tier_get_osr_threshold() : 0;
 
     while (1) {
         s->ip = ip;
@@ -545,6 +645,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
+        osr_work++; // OSR work budget; negligible next to statement dispatch
         size_t next_ip = ip + 1;
         assert(!jl_is_phinode(stmt) && !jl_is_phicnode(stmt) && "malformed IR");
         if (jl_is_gotonode(stmt)) {
@@ -759,6 +860,16 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         else {
             eval_stmt_value(stmt, s);
         }
+        // Back-edge: consider on-stack replacement for method frames once
+        // this frame has burned through its interpreted-statement budget.
+        if (next_ip < ip && osr_threshold && osr_work >= 0) {
+            if (osr_work >= osr_threshold) {
+                jl_value_t *osr_ret = eval_try_osr(s, next_ip);
+                if (osr_ret != NULL)
+                    return osr_ret;
+                osr_work = INT64_MIN; // declined; stop asking in this frame
+            }
+        }
         ip = eval_phi(stmts, s, ns, next_ip);
     }
     abort();
@@ -773,7 +884,9 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES
     if (jl_is_method(mi->def.value)) {
         if (mi->def.method->source) {
             jl_method_t *m = mi->def.method;
-            src = (jl_code_info_t*)m->source;
+            // Acquire pairs with the release publish below: a reader that sees
+            // the uncompressed CodeInfo pointer must also see its contents.
+            src = (jl_code_info_t*)jl_atomic_load_acquire((_Atomic(jl_value_t*)*)&m->source);
             if (!jl_is_code_info(src)) {
                 // Root the compressed blob across the (allocating) decode:
                 // another thread interpreting the same method concurrently can
@@ -789,7 +902,8 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES
                 // access it frequently. TODO: Have some sort of usage-based
                 // cache here. (Concurrent publishes store equivalent copies;
                 // last one wins.)
-                jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)src);
+                jl_gc_write_atomic(m, *(_Atomic(jl_value_t*)*)&m->source, jl_value_t,
+                                   (jl_value_t*)src, release);
             }
             ret = (jl_value_t*)src;
         }
@@ -827,12 +941,28 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 
 // interpreter entry points
 
-jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+jl_value_t *NOINLINE jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
+                                     jl_method_instance_t *mi, size_t world, int allow_rescue) JL_CANSAFEPOINT
 {
     interpreter_state *s;
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+    // Tiered compilation probe (counts toward promotion). Gated on
+    // jl_tier_enabled so the --compile=min/off cached interp stub, whose
+    // dispatch also lands here, never feeds the queue when tiering is off.
+    if (jl_tier_enabled())
+        jl_tier_enqueue_mi(mi);
     jl_task_t *ct = jl_current_task;
-    size_t world = ct->world_age;
+    // Interpreted frames are an order of magnitude larger on the C stack
+    // than compiled ones, so deep recursion overflows under T0 where
+    // compiled code survives. When headroom runs low, rescue the frame:
+    // compile real code and enter it instead of interpreting.
+    if (allow_rescue && jl_tier_enabled() && jl_is_method(mi->def.method)) {
+        if (interp_stack_low(ct)) {
+            jl_code_instance_t *native = jl_compile_method_internal(mi, world);
+            jl_callptr_t inv = native == NULL ? NULL : jl_atomic_load_acquire(&native->invoke);
+            if (native != NULL && inv != NULL && inv != jl_fptr_interpret_call_addr)
+                return inv(f, args, nargs, native);
+        }
+    }
     jl_code_info_t *src = NULL;
     // NOTE: from here until `code`/`src` are stored into the GC frame below,
     // they may be reachable only through these locals (a concurrent thread
@@ -880,6 +1010,13 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
     return r;
+}
+
+jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    return jl_interpret_mi(f, args, nargs, jl_get_ci_mi(codeinst),
+                           jl_current_task->world_age,
+                           /*allow_rescue*/codeinst->owner == jl_nothing);
 }
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;

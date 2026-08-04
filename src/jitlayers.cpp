@@ -268,6 +268,14 @@ StringRef jl_codegen_output_t::get_call_target(jl_code_instance_t *ci, bool spec
     }
     std::string protoname = make_name(JL_SYMBOL_SPECPTR_PROTO, api,
                                       name_from_method_instance(jl_get_ci_mi(ci)));
+    // The linking metadata holds this CodeInstance until the module is
+    // materialized, and linkCallTarget dereferences it on the dispatcher
+    // thread at that point. CIs in their MI's cache are rooted through the
+    // method table, but inference-local edge CIs have no other root once
+    // inference drops its results, and the pending window is arbitrarily
+    // long. Pin those. TODO: scope this root to the pending materialization.
+    if (!jl_mi_cache_has_ci(jl_get_ci_mi(ci), ci) && !jl_is_globally_rooted((jl_value_t*)ci))
+        jl_as_global_root((jl_value_t*)ci, 1);
     jl_codegen_call_target_t &target = call_targets[{ci, api}];
     target.external_linkage = !always_inline;
     target.private_linkage = always_inline;
@@ -450,13 +458,8 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time) JL_N
                             julia_double_to_half(orig_time + time * 1e-9));
 }
 
-extern "C" JL_DLLEXPORT_CODEGEN void
-jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
+static void jl_emit_codeinsts_chunk(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len) JL_CANSAFEPOINT
 {
-    if (len == 0)
-        return;
-
-    JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
     const char *name = name_from_method_instance(jl_get_ci_mi(codeinsts[len - 1]));
     auto ctx = std::make_unique<LLVMContext>();
     auto &dl = jl_ExecutionEngine->getDataLayout();
@@ -508,11 +511,35 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
     jl_ExecutionEngine->addOutput(std::move(emitted));
 }
 
+// The workqueue holds the transitive closure of not-yet-emitted callees, which
+// with a tiered (or otherwise deferred) compilation schedule can be the whole
+// call graph of an entry point, and a module is both the unit of optimization
+// (one giant module means one unboundedly long, uninterruptible LLVM run on
+// whichever thread first looks a symbol up) and the unit of materialization
+// (the lookup would force-optimize the entire graph to run one entry). Emit in
+// bounded chunks instead; cross-chunk calls resolve through the call-target
+// linking machinery exactly like calls across separate emission batches, and
+// unmaterialized chunks stay pending until a symbol of theirs is demanded.
+#define JIT_EMIT_CHUNK 64
+
+extern "C" JL_DLLEXPORT_CODEGEN void
+jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
+{
+    if (len == 0)
+        return;
+    JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
+    for (int base = 0; base < len; base += JIT_EMIT_CHUNK) {
+        int n = len - base < JIT_EMIT_CHUNK ? len - base : JIT_EMIT_CHUNK;
+        jl_emit_codeinsts_chunk(codeinsts + base, srcs + base, n);
+    }
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN
 int jl_compile_codeinst_impl(jl_code_instance_t *ci)
 {
     int newly_compiled = 0;
-    if (!jl_is_compiled_codeinst(ci)) {
+    int already_compiled = jl_is_compiled_codeinst(ci);
+    if (!already_compiled) {
         ++SpecFPtrCount;
         uint64_t start = jl_typeinf_timing_begin();
         jl_ExecutionEngine->publishCIs(ci, true);
@@ -521,6 +548,7 @@ int jl_compile_codeinst_impl(jl_code_instance_t *ci)
     }
     return newly_compiled;
 }
+
 
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
@@ -833,6 +861,20 @@ public:
 };
 } // namespace anonymous
 
+// Wedge diagnosis: which phase of a materialization each thread entered last
+// (see jl_jit_dump_state). Per thread on purpose: with one global slot, a
+// thread that finishes its own materialization overwrites the phase of the
+// thread that is actually stuck, which is exactly the case being diagnosed.
+#define JL_MATERIALIZE_PHASE_SLOTS 128
+static std::atomic<const char *> MaterializePhase[JL_MATERIALIZE_PHASE_SLOTS];
+
+static void note_materialize_phase(const char *Phase) JL_NOTSAFEPOINT
+{
+    int tid = jl_atomic_load_relaxed(&jl_current_task->tid);
+    if (tid >= 0 && tid < JL_MATERIALIZE_PHASE_SLOTS)
+        MaterializePhase[tid].store(Phase, std::memory_order_relaxed);
+}
+
 class JLMaterializationUnit : public orc::MaterializationUnit {
 public:
     // Must hold LinkerMutex when calling Create and until the
@@ -858,6 +900,8 @@ public:
             if (jl_atomic_cmpswap_relaxed(&CI->invoke, &Expected,
                                           jl_fptr_wait_for_compiled_addr))
                 Unique = JIT.makeUniqueCIName(CI, Funcs);
+            if (Unique.invoke || Unique.specptr)
+                Out.linker_info->ci_renames[CI] = {Unique.invoke, Unique.specptr};
             if (Unique.invoke)
                 Syms[Unique.invoke] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
             if (Unique.specptr)
@@ -886,6 +930,7 @@ public:
     // During materialization: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_CANSAFEPOINT_ENTER_LEAVE override // NOLINT[julia-first-decl-annotations]
     {
+        note_materialize_phase("chunk/enter");
         auto &ES = R->getExecutionSession();
 
         std::unique_ptr<MemoryBuffer> Obj;
@@ -900,13 +945,18 @@ public:
             Out.module->addModuleFlag(Module::Warning, "julia.cpu.features",
                                       MDString::get(*Out.ctx,
                                                     JIT.getTargetFeatureString()));
+            note_materialize_phase("objcache-get");
             Obj = JIT.OCache.get(*Out.module,
                                  [this]() JL_CANSAFEPOINT_ENTER_LEAVE {
+                                     note_materialize_phase("optimize");
                                      JIT.optimizeModule(*Out.module);
+                                     note_materialize_phase("compile");
                                      return JIT.compileModule(*Out.module);
                                  });
+            note_materialize_phase("objcache-done");
             if (!Obj) {
                 R->failMaterialization();
+                note_materialize_phase(NULL);
                 return;
             }
             // Save some memory
@@ -940,9 +990,14 @@ public:
         JIT.publishCIs(CIs);
         jl_gc_unsafe_leave(ct->ptls, gc_state);
 
-        if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info)))
+        note_materialize_phase("linkOutput");
+        if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info))) {
+            note_materialize_phase(NULL);
             return;
+        }
+        note_materialize_phase("jitlink-emit");
         OL.emit(std::move(R), std::move(*G), std::move(Obj));
+        note_materialize_phase(NULL); // finished: leave no phase for this thread
     }
 
     StringRef getName() const override JL_NOTSAFEPOINT
@@ -987,6 +1042,7 @@ public:
     // During materialization: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_CANSAFEPOINT_ENTER_LEAVE override // NOLINT[julia-first-decl-annotations]
     {
+        note_materialize_phase("trampoline/enter");
         auto Ctx = std::make_unique<LLVMContext>();
         auto Mod =
             jl_create_llvm_module(*Sym, *Ctx, JIT.getDataLayout(), JIT.getTargetTriple());
@@ -994,14 +1050,19 @@ public:
 
         jl_task_t *ct = jl_current_task;
         uint8_t state = jl_gc_unsafe_enter(ct->ptls);
+        note_materialize_phase("trampoline/emit-tojlinvoke");
         Function *F = emit_tojlinvoke(CI, "", Out);
-        if (API == JL_INVOKE_SPECSIG)
+        if (API == JL_INVOKE_SPECSIG) {
+            note_materialize_phase("trampoline/emit-specsig");
             F = emit_specsig_to_fptr1(Out, CI, F); // may safepoint
+        }
         jl_gc_unsafe_leave(ct->ptls, state);
         F->setLinkage(GlobalValue::ExternalLinkage);
         F->setName(*Sym);
 
+        note_materialize_phase("trampoline/replace");
         std::unique_lock Lock{JIT.LinkerMutex};
+        struct phase_clear { ~phase_clear() JL_NOTSAFEPOINT { note_materialize_phase(NULL); } } clear_phase;
         if (auto Err = R->replace(
                 std::make_unique<JLMaterializationUnit>(JLMaterializationUnit::Create(
                     JIT, OL,
@@ -1732,6 +1793,10 @@ JuliaOJIT::JuliaOJIT()
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
+    // Wire up the work_until stall diagnostic (src/julia-task-dispatcher.h):
+    // without this the 30s "future not completed" path can never dump the
+    // ORC session state, which names the wedged symbol/query.
+    SessionForStallDump = &ES;
 #if JL_LLVM_VERSION < 210000
 # if defined(LLVM_SHLIB)
     // When dynamically linking against LLVM, use our custom EH frame registration code
@@ -1830,16 +1895,20 @@ JuliaOJIT::JuliaOJIT()
 #if defined(_CPU_X86_64_) && defined(_OS_DARWIN_)
         // LLVM 16 reverted to soft-float ABI for passing half on x86_64 Darwin
         // https://github.com/llvm/llvm-project/commit/2bcf51c7f82ca7752d1bba390a2e0cb5fdd05ca9
-        { mangle("__gnu_h2f_ieee"), { mangle("julia_half_to_float"),  JITSymbolFlags::Exported } },
-        { mangle("__extendhfsf2"),  { mangle("julia_half_to_float"),  JITSymbolFlags::Exported } },
-        { mangle("__gnu_f2h_ieee"), { mangle("julia_float_to_half"),  JITSymbolFlags::Exported } },
-        { mangle("__truncsfhf2"),   { mangle("julia_float_to_half"),  JITSymbolFlags::Exported } },
-        { mangle("__truncdfhf2"),   { mangle("julia_double_to_half"), JITSymbolFlags::Exported } },
+        // Every alias must have a DISTINCT target: two aliases in one reexport
+        // unit sharing a target register a lookup query's dependence twice,
+        // which asserts in LLVM (Core.cpp addQueryDependence) and permanently
+        // wedges the query in release builds.
+        { mangle("__gnu_h2f_ieee"), { mangle("julia_half_to_float"),      JITSymbolFlags::Exported } },
+        { mangle("__extendhfsf2"),  { mangle("julia_half_to_float_abi"),  JITSymbolFlags::Exported } },
+        { mangle("__gnu_f2h_ieee"), { mangle("julia_float_to_half"),      JITSymbolFlags::Exported } },
+        { mangle("__truncsfhf2"),   { mangle("julia_float_to_half_abi"),  JITSymbolFlags::Exported } },
+        { mangle("__truncdfhf2"),   { mangle("julia_double_to_half"),     JITSymbolFlags::Exported } },
 #else
         { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"),  JITSymbolFlags::Exported } },
-        { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"),  JITSymbolFlags::Exported } },
+        { mangle("__extendhfsf2"),  { mangle("julia__extendhfsf2"),   JITSymbolFlags::Exported } },
         { mangle("__gnu_f2h_ieee"), { mangle("julia__gnu_f2h_ieee"),  JITSymbolFlags::Exported } },
-        { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"),  JITSymbolFlags::Exported } },
+        { mangle("__truncsfhf2"),   { mangle("julia__truncsfhf2"),    JITSymbolFlags::Exported } },
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),    JITSymbolFlags::Exported } },
 #endif
         // BFloat16 conversion routines
@@ -1847,6 +1916,8 @@ JuliaOJIT::JuliaOJIT()
         { mangle("__truncdfbf2"),   { mangle("julia__truncdfbf2"),    JITSymbolFlags::Exported } },
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
+    for (auto &KV : jl_crt)
+        CRTAliasNames.add(KV.first);
 
 #ifdef _OS_OPENBSD_
     orc::SymbolMap i128_crt;
@@ -2054,7 +2125,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         for (auto CI : CIs) {
             auto It = CISymbols.find(CI);
             if (It == CISymbols.end())
-                return;
+                continue;
             auto CISym = It->second;
             if (CISym.invoke)
                 Exports.add(CISym.invoke);
@@ -2062,6 +2133,14 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
                 Exports.add(CISym.specptr);
         }
     }
+
+    if (Exports.empty())
+        // Nothing of ours is still registered (a tier promotion can supersede
+        // every symbol while this call is being set up), so there is nothing
+        // to publish. Returning here also avoids handing ORC an empty query
+        // whose completion callback is dispatched as a task that then has to
+        // be waited for.
+        return;
 
     JuliaTaskDispatcher::future<void> F;
     auto Callback = [this, CIs = SmallVector<jl_code_instance_t *, 1>(CIs),
@@ -2077,7 +2156,13 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         auto Syms = std::move(*SymsE);
         for (auto [i, CI] : llvm::enumerate(CIs)) {
             jl_codeinst_funcs_t<void *> Addrs{};
-            const auto &S = CISymbols.at(CIs[i]);
+            // The CI may have been unregistered (e.g. a tier promotion
+            // superseded its symbols) while this lookup was in flight; its
+            // installed entry points are newer than ours, so skip it.
+            auto It = CISymbols.find(CIs[i]);
+            if (It == CISymbols.end())
+                continue;
+            const auto &S = It->second;
             Addrs.invoke_api = S.invoke_api;
             if (S.invoke)
                 Addrs.invoke = (void *)Syms.at(S.invoke).getAddress().getValue();
@@ -2095,6 +2180,68 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
     if (Wait)
         F.get(static_cast<JuliaTaskDispatcher &>(
             ES.getExecutorProcessControl().getDispatcher()));
+}
+
+// Materialize the compiler-rt aliases while the caller is still
+// single-threaded: the reexport unit resolves all of them through one nested
+// lookup on first touch, and on win32 that lookup has been observed to wedge
+// permanently when the first touch happens under concurrent queries (every
+// waiter then queues behind Float16/BFloat16 conversions forever; see the
+// "why does Windows CI hang" TODO at the alias definitions for an earlier
+// encounter with this area). Too early to run from the JuliaOJIT constructor.
+// Async-safe wedge probe: LinkerMutex is a non-recursive std::mutex taken by
+// both JLMaterializationUnit's linkOutput and the tojlinvoke trampoline unit's
+// materialize, so a wedge holding it explains a queued trampoline task that
+// never runs.
+void JuliaOJIT::dumpLinkerMutexState() JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
+{
+    bool Free = LinkerMutex.try_lock();
+    if (Free)
+        LinkerMutex.unlock();
+    jl_safe_printf("jit linker: linker_mutex=%s\n", Free ? "free" : "HELD");
+}
+
+void JuliaOJIT::primeCRTAliases() JL_CANSAFEPOINT
+{
+    auto Result = ES.lookup({{&GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}},
+                            CRTAliasNames);
+    if (!Result)
+        jl_safe_printf("WARNING: failed to pre-resolve JIT float16 runtime aliases: %s\n",
+                       toString(Result.takeError()).c_str());
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN void jl_jit_prime_crt_aliases_impl(void) JL_CANSAFEPOINT
+{
+    if (jl_ExecutionEngine)
+        jl_ExecutionEngine->primeCRTAliases();
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN void jl_jit_dump_state_impl(void) JL_NOTSAFEPOINT
+{
+    if (!jl_ExecutionEngine)
+        return;
+    auto &ES = jl_ExecutionEngine->getExecutionSession();
+    static_cast<JuliaTaskDispatcher &>(
+        ES.getExecutorProcessControl().getDispatcher()).dump_wedge_state();
+    jl_ExecutionEngine->dumpLinkerMutexState();
+    jl_safe_printf("jit materialize phases:");
+    int any_phase = 0;
+    for (int tid = 0; tid < JL_MATERIALIZE_PHASE_SLOTS; tid++) {
+        const char *Phase = MaterializePhase[tid].load(std::memory_order_relaxed);
+        if (Phase == NULL)
+            continue;
+        jl_safe_printf(" tid%d=%s", tid, Phase);
+        any_phase = 1;
+    }
+    if (!any_phase)
+        jl_safe_printf(" none");
+    jl_safe_printf("\n");
+    // Full session dump (symbol states and pending queries): takes the
+    // session lock, so it can hang if a wedged materializer holds it — keep
+    // it last; the caller is a watchdog on an already-dying process.
+    errs() << "==== ORC session state\n";
+    ES.dump(errs());
+    errs() << "==== end ORC session state\n";
 }
 
 void JuliaOJIT::registerCI(jl_code_instance_t *CI)
@@ -2301,6 +2448,7 @@ renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
 
 bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
+    JL_NO_SAFEPOINT_ANALYSIS
 {
     std::unique_lock Lock{LinkerMutex};
 
@@ -2317,11 +2465,28 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     for (auto &KV : MR.getSymbols())
         OwnedSyms.insert(KV.first);
     for (auto &[CI, Funcs] : Info->ci_funcs) {
-        auto &S = CISymbols.at(CI);
-        if (Funcs.invoke)
-            RenameDef(Funcs.invoke, S.invoke);
-        if (Funcs.specptr)
-            RenameDef(Funcs.specptr, S.specptr);
+        // No stash entry: this module lost the CI's ownership CAS (to
+        // another module, or to a non-MU owner such as the tier worker),
+        // so its definitions were never registered, are not in the MU
+        // interface, and nothing references them — demote to local scope
+        // or JITLink rejects them as unexpected definitions.
+        auto It = Info->ci_renames.find(CI);
+        if (It == Info->ci_renames.end()) {
+            auto Demote = [&](const SymbolStringPtr &Orig) JL_NOTSAFEPOINT {
+                auto SIt = Syms.find(Orig);
+                if (SIt != Syms.end())
+                    SIt->second->setScope(jitlink::Scope::Local);
+            };
+            if (Funcs.invoke)
+                Demote(Funcs.invoke);
+            if (Funcs.specptr)
+                Demote(Funcs.specptr);
+            continue;
+        }
+        if (Funcs.invoke && It->second.first)
+            RenameDef(Funcs.invoke, It->second.first);
+        if (Funcs.specptr && It->second.second)
+            RenameDef(Funcs.specptr, It->second.second);
     }
 
     // Pre-pass: find CI equivalents, and build EquivMap for use in the main
@@ -2356,9 +2521,19 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             continue;
         }
         JL_GC_PROMISE_ROOTED(CI);
+        note_materialize_phase("linkOutput/call-targets");
         auto Dest = linkCallTarget(MR, CI, API, EquivMap);
-        if (!Dest)
+        if (!Dest) {
+            // Every MaterializationResponsibility must be resolved, emitted or
+            // failed: dropping one leaves its symbols claimed forever and any
+            // query on them never completes. linkCallTarget used to fail the
+            // materialization itself on its error path; it no longer has one,
+            // so do it here.
+            Lock.unlock();
+            PendingTrampolines.clear();
+            MR.failMaterialization();
             return false;
+        }
         if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);
             DestSym && !DestSym->isExternal() && !OwnedSyms.contains(Dest))
             makeAnonymousLinkGraphSymbol(G, *DestSym);
@@ -2409,7 +2584,27 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     }
     cantFail(JD.define(orc::absoluteSymbols(std::move(GlobalSyms))));
 
+    note_materialize_phase("linkOutput/debuginfo");
     DebuginfoPlugin->notifyMaterializingWithInfo(MR, G, ObjBuf, std::move(Info));
+
+    // Define the tojlinvoke trampolines collected by linkCallTarget only after
+    // dropping LinkerMutex: defining a unit whose symbols a query already
+    // awaits can dispatch its materialization, which needs this same
+    // non-recursive mutex.
+    auto Trampolines = std::move(PendingTrampolines);
+    PendingTrampolines.clear();
+    Lock.unlock();
+    if (!Trampolines.empty())
+        note_materialize_phase("linkOutput/define-trampolines");
+    for (auto &MU : Trampolines) {
+        if (auto Err = JD.define(MU)) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
+            MR.getExecutionSession().reportError(std::move(Err));
+#endif
+            MR.failMaterialization();
+            return false;
+        }
+    }
     return true;
 }
 
@@ -2443,15 +2638,12 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
         Trampoline.specptr = mangle(*TSym);
         Trampoline.invoke_api = API;
         Sym = &Trampoline;
-        auto Err = JD.define(std::make_unique<JLTrampolineMaterializationUnit>(
-            *this, ObjectLayer, TSym, CI, API));
-        if (Err) {
-#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
-            MR.getExecutionSession().reportError(std::move(Err));
-#endif
-            MR.failMaterialization();
-            return {};
-        }
+        // Defer the define: we hold LinkerMutex here, and defining a unit
+        // whose symbols another query already awaits can dispatch that unit's
+        // materialization — which takes LinkerMutex itself. The caller defines
+        // the collected units after releasing the lock.
+        PendingTrampolines.push_back(
+            std::make_unique<JLTrampolineMaterializationUnit>(*this, ObjectLayer, TSym, CI, API));
     }
 
     assert(Sym->invoke_api == API);

@@ -2,6 +2,11 @@
 
 using Test
 
+# these tests inspect inference/compilation artifacts (`.specializations.cache`
+# CodeInstances, world ranges, effects), so run the whole file with tier
+# parking suspended
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+
 module Rebinding
     using Test
     make_foo() = Foo(1)
@@ -583,3 +588,5 @@ module ReexportTests
     end
     @test User3.same_name == 42
 end
+
+ccall(:jl_tier_resume_parking, Cvoid, ())

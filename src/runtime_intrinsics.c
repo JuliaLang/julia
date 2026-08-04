@@ -312,6 +312,31 @@ JL_DLLEXPORT FLOAT16_RET_TYPE julia__truncdfhf2(double param)
     return FLOAT16_RET_FROM_UINT16(res);
 }
 
+// Distinct exported symbols for each JIT compiler-rt alias: ORC registers a
+// lookup query's dependence per (dylib, symbol) pair, and two aliases in one
+// reexport unit resolving to the same target make that registration fire
+// twice for one query (an assertion in LLVM Core.cpp, silent query-state
+// corruption in release builds observed as a permanent JIT wedge on win32).
+JL_DLLEXPORT float julia__extendhfsf2(FLOAT16_ARG_TYPE param)
+{
+    return julia__gnu_h2f_ieee(param);
+}
+
+JL_DLLEXPORT FLOAT16_RET_TYPE julia__truncsfhf2(float param)
+{
+    return julia__gnu_f2h_ieee(param);
+}
+
+JL_DLLEXPORT float julia_half_to_float_abi(uint16_t param)
+{
+    return julia_half_to_float(param);
+}
+
+JL_DLLEXPORT uint16_t julia_float_to_half_abi(float param)
+{
+    return julia_float_to_half(param);
+}
+
 
 // bfloat16 conversion helpers
 

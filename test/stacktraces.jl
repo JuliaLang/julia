@@ -86,7 +86,7 @@ module inlined_test
 using Test
 @inline g(x) = (x == 3 && throw("a"); x)
 @inline h(x) = (x == 3 && g(x); x)
-f(x) = (y = h(x); y)
+f(x) = (Base.Experimental.@force_compile; y = h(x); y)
 trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
@@ -291,8 +291,8 @@ end
     # This test ensures that SnoopCompile will continue working
     # See in particular SnoopCompile/SnoopCompileCore/src/snoop_inference.jl
     # and the "diagnostics" devdoc.
-    @noinline callee(x::Int) = sin(x)
-    caller(x) = invokelatest(callee, x)
+    @noinline callee(x::Int) = (Base.Experimental.@force_compile; sin(x))
+    caller(x) = (Base.Experimental.@force_compile; invokelatest(callee, x))
 
     @test sin(0) == 0  # force compilation of sin(::Int)
     dispatch_backtraces = []
@@ -323,6 +323,7 @@ end
 
 global f_parent1_line::Int, f_inner1_line::Int, f_innermost1_line::Int
 function f_parent1(a)
+    Base.Experimental.@force_compile
     x = a
     return begin
         @inline f_inner1(x)
@@ -352,6 +353,7 @@ end
 
 global f_parent2_line::Int, f_inner2_line::Int, f_innermost2_line::Int
 function f_parent2(a)
+    Base.Experimental.@force_compile
     x = identity(a)
     return begin
         @inline f_inner2(x)
@@ -387,6 +389,7 @@ function f_parent3(a, b, c, d)
     end
     return f_inner3(s)
 end
+precompile(f_parent3, (Int, Int, Int, Int))  # inlined-frame debuginfo needs compiled code
 let st = try f_parent3(1, 2, 3, -10) catch; stacktrace(catch_backtrace()) end
     sf = only(filter(sf -> sf.func === :f_inner3 && sf.inlined, st))
     @test sf.linfo isa Core.MethodInstance

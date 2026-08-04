@@ -648,6 +648,65 @@ void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
     jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
 }
 
+extern jl_mutex_t global_roots_lock;
+extern jl_mutex_t finalizers_lock;
+
+// Async-safe debugging dump of the sleep/wake protocol state, for watchdogs
+// diagnosing a wedged scheduler (every field is read with relaxed atomics and
+// printed with jl_safe_printf; no locks are taken, so this cannot itself hang).
+JL_DLLEXPORT void jl_dump_scheduler_state(void) JL_NOTSAFEPOINT JL_NO_SAFEPOINT_ANALYSIS
+{
+    jl_safe_printf("==== scheduler state\n");
+    jl_safe_printf("n_threads_running=%d _threadedregion=%u io_loop_tid=%u wait_empty=%d\n",
+                   jl_atomic_load_relaxed(&n_threads_running),
+                   jl_atomic_load_relaxed(&_threadedregion),
+                   (unsigned)jl_atomic_load_relaxed(&io_loop_tid),
+                   wait_empty != NULL);
+    jl_task_t *uvlock_owner = jl_atomic_load_relaxed(&jl_uv_mutex.owner);
+    jl_safe_printf("uv_mutex.owner_tid=%d gc_running=%u\n",
+                   uvlock_owner == NULL ? -1 : (int)jl_atomic_load_relaxed(&uvlock_owner->tid),
+                   jl_atomic_load_acquire(&jl_gc_running));
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = allstates[tid];
+        if (ptls2 == NULL)
+            continue;
+        int sleep_lock_free = uv_mutex_trylock(&ptls2->sleep_lock) == 0;
+        if (sleep_lock_free)
+            uv_mutex_unlock(&ptls2->sleep_lock);
+        jl_safe_printf("thread %d: sleep_check_state=%d gc_state=%d in_finalizer=%d sleep_lock=%s\n",
+                       tid, (int)jl_atomic_load_relaxed(&ptls2->sleep_check_state),
+                       (int)jl_atomic_load_relaxed(&ptls2->gc_state),
+                       (int)ptls2->in_finalizer,
+                       sleep_lock_free ? "free" : "HELD");
+    }
+    jl_tier_dump_state();
+    jl_engine_dump_state();
+    // Remaining global julia locks a wedged compile could be blocked on.
+    // jl_mutex_t records its owner task, so report the owning thread rather
+    // than just held/free.
+    {
+        struct { const char *name; jl_mutex_t *lock; } probes[] = {
+            {"typecache", &typecache_lock},
+            {"world_counter", &world_counter_lock},
+            {"global_roots", &global_roots_lock},
+            {"finalizers", &finalizers_lock},
+        };
+        jl_safe_printf("julia locks:");
+        for (size_t i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
+            jl_task_t *owner = jl_atomic_load_relaxed(&probes[i].lock->owner);
+            if (owner == NULL)
+                jl_safe_printf(" %s=free", probes[i].name);
+            else
+                jl_safe_printf(" %s=tid%d", probes[i].name,
+                               (int)jl_atomic_load_relaxed(&owner->tid));
+        }
+        jl_safe_printf("\n");
+    }
+    jl_safe_printf("==== end scheduler state\n");
+}
+
 #ifdef __cplusplus
 }
 #endif

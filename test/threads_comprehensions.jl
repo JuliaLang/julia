@@ -1,6 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests for @threads with array comprehensions
+
+# Several testsets compare allocation counts of warmed-up calls, which
+# assumes the warmups compile the spawned closures; tier-0 parking would
+# defer that compilation into the measured windows (resumed at the end).
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+
 using Test
 using Base.Threads
 
@@ -343,3 +349,5 @@ using .Main.OffsetArrays
         @test axes(result_multi) == axes(expected_multi)
     end
 end
+
+ccall(:jl_tier_resume_parking, Cvoid, ())

@@ -348,7 +348,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
 
 JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
                                        char **active_start, char **active_end,
-                                       char **total_start, char **total_end)
+                                       char **total_start, char **total_end) JL_NOTSAFEPOINT
 {
     if (!task->ctx.started) {
         *total_start = *active_start = 0;

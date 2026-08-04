@@ -431,7 +431,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         read(`$exename -tauto -e $code`, String) ==
         read(`$exename -t auto -e $code`, String)
     for nt in (nothing, "1")
-        withenv("JULIA_NUM_THREADS" => nt) do
+        # maxthreadid counts adopted threads, so pin tiering off (its
+        # worker thread would shift the expected counts when the suite
+        # runs with JULIA_TIER_ENABLE=1).
+        withenv("JULIA_NUM_THREADS" => nt, "JULIA_TIER_ENABLE" => "0") do
             @test read(`$exename --threads=2 -e $code`, String) ==
                 read(`$exename -t 2 -e $code`, String) == "2"
             if nt === nothing
@@ -775,7 +778,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
     # --print-before/--print-after with pass names is broken on Windows due to no-gnu-unique issues
     if !Sys.iswindows()
-        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization", "JULIA_OBJCACHE" => "0") do
+        # Pin tiering off: these check the LLVM module dump from --print-before,
+        # which requires codegen to run; under default-on tiering the `@eval` runs
+        # interpreted (T0) and emits no LLVM, so `code` would be empty.
+        withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization", "JULIA_OBJCACHE" => "0", "JULIA_TIER_ENABLE" => "0") do
             let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
                 code = code[3]
@@ -928,7 +934,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # Base.@trace_compile (local version of the 2 above args)
     let
         io = IOBuffer()
-        v = writereadpipeline(
+        # Pin tiering off: the expected counts assume everything outside the
+        # traced windows was already compiled, but tier-0 parking defers those
+        # compiles into the windows (extra statements, no recompile marker).
+        v = withenv("JULIA_TIER_ENABLE" => "0") do
+            writereadpipeline(
             """
             f(x::Int) = 1
             applyf(container) = f(container[1])
@@ -940,6 +950,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             """,
             `$exename -i`,
             stderr=io)
+        end
         _stderr = String(take!(io))
         @test length(findall(r"precompile\(", _stderr)) == 5
         @test length(findall(r" # recompile", _stderr)) == 1

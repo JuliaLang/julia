@@ -2,6 +2,11 @@
 
 module inline_tests
 
+# Inlining is a compiled-code transformation; several tests execute functions
+# and assert on runtime effects (eager inlined finalizers, escape counters)
+# that only exist in compiled code, so don't tier-park for this file.
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+
 using Test
 using Base.Meta
 using Core: ReturnNode
@@ -2462,5 +2467,7 @@ let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
     interp = Compiler.NativeInterpreter()
     @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
 end
+
+ccall(:jl_tier_resume_parking, Cvoid, ())
 
 end # module inline_tests

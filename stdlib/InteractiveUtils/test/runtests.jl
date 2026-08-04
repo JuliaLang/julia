@@ -234,7 +234,11 @@ module Tmp14173
     export A
     A = randn(2000, 2000)
 end
+# warm up with tier parking suspended so the measurement below sees
+# fully-compiled code, matching the compiled-warmup assumption
+ccall(:jl_tier_suspend_parking, Cvoid, ())
 varinfo(Tmp14173) # warm up
+ccall(:jl_tier_resume_parking, Cvoid, ())
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
 @test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 125000)
 
@@ -557,7 +561,7 @@ let m = which(f_broken_code, ())
 end
 _true = true
 # and show that we can still work around it
-@noinline g_broken_code() = _true ? 0 : h_broken_code()
+@noinline g_broken_code() = (Base.Experimental.@force_compile; _true ? 0 : h_broken_code())
 @noinline h_broken_code() = (g_broken_code(); f_broken_code())
 let errf = tempname(),
     old_stderr = stderr,

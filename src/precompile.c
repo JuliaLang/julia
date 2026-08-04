@@ -114,6 +114,11 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         return;
     }
 
+    // Park the tier worker for output generation: the serializer and native
+    // emission walk CodeInstances that a concurrent promotion would mutate.
+    // jl_create_system_image drains pending promotions and resumes the worker.
+    jl_tier_quiesce();
+
     jl_array_t *udeps = NULL;
     JL_GC_PUSH2(&worklist, &udeps);
     jl_module_init_order = jl_alloc_vec_any(0);

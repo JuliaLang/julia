@@ -85,6 +85,7 @@
     XX(jl_close_uv) \
     XX(jl_code_for_staged) \
     XX(jl_compile_hint) \
+    XX(jl_method_compiled_hint) \
     XX(jl_compile_method_instance) \
     XX(jl_compress_argnames) \
     XX(jl_compress_ir) \
@@ -377,6 +378,8 @@
     XX(jl_profile_init) \
     XX(jl_profile_is_running) \
     XX(jl_profile_len_data) \
+    XX(jl_profile_suspend_failures) \
+    XX(jl_dump_thread_pcs) \
     XX(jl_profile_maxlen_data) \
     XX(jl_profile_start_timer) \
     XX(jl_profile_stop_timer) \
@@ -462,6 +465,22 @@
     XX(jl_set_ptls_rng) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
+    XX(jl_tier_enqueue_mi) \
+    XX(jl_tier_get_stats) \
+    XX(jl_tier_get_queue_stats) \
+    XX(jl_tier_get_swaps) \
+    XX(jl_tier_reset_stats) \
+    XX(jl_tier_set_debug) \
+    XX(jl_tier_enabled) \
+    XX(jl_tier_get_threshold) \
+    XX(jl_tier_set_threshold) \
+    XX(jl_tier_init) \
+    XX(jl_tier_start_worker) \
+    XX(jl_tier_stop_worker) \
+    XX(jl_tier_worker_pop) \
+    XX(jl_tier_suspend_parking) \
+    XX(jl_tier_resume_parking) \
+    XX(jl_tier_drain) \
     XX(jl_too_few_args) \
     XX(jl_too_many_args) \
     XX(jl_toplevel_eval) \
@@ -524,6 +543,7 @@
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_emit_codeinsts_to_jit) \
+    YY(jl_jit_prime_crt_aliases) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \

@@ -867,8 +867,8 @@ backtrace()
 
 # issue #28442
 @testset "Long stacktrace printing" begin
-    f28442(c) = g28442(c + 1)
-    g28442(c) = c > 10000 ? (return backtrace()) : f28442(c+1)
+    f28442(c) = (Base.Experimental.@force_compile; g28442(c + 1))
+    g28442(c) = (Base.Experimental.@force_compile; c > 10000 ? (return backtrace()) : f28442(c+1))
     bt = f28442(1)
     io = IOBuffer()
     Base.show_backtrace(io, bt)
@@ -899,9 +899,9 @@ backtrace()
 end
 
 @testset "Long stacktrace printing - nested repeated single frame" begin
-    f28442a(n) = n ≤ 0 ? (return backtrace()) : g28442a(n - 1)
-    g28442a(n) = 80 > n > 20 ? h28442a(n - 1) : f28442a(n - 1)
-    h28442a(n) = n % 10 == 0 ? g28442a(n - 1) : h28442a(n - 1)
+    f28442a(n) = (Base.Experimental.@force_compile; n ≤ 0 ? (return backtrace()) : g28442a(n - 1))
+    g28442a(n) = (Base.Experimental.@force_compile; 80 > n > 20 ? h28442a(n - 1) : f28442a(n - 1))
+    h28442a(n) = (Base.Experimental.@force_compile; n % 10 == 0 ? g28442a(n - 1) : h28442a(n - 1))
     bt = f28442a(100)
     io = IOBuffer()
     Base.show_backtrace(io, bt)
@@ -943,9 +943,9 @@ end
 end
 
 @testset "Long stacktrace printing - nested cycles" begin
-    f28442b(n) = n ≤ 0 ? (return backtrace()) : g28442b(n - 1)
-    g28442b(n) = 80 > n > 60 || 40 > n > 20 ? h28442b(n - 1) : f28442b(n - 1)
-    h28442b(n) = g28442b(n - 1)
+    f28442b(n) = (Base.Experimental.@force_compile; n ≤ 0 ? (return backtrace()) : g28442b(n - 1))
+    g28442b(n) = (Base.Experimental.@force_compile; 80 > n > 60 || 40 > n > 20 ? h28442b(n - 1) : f28442b(n - 1))
+    h28442b(n) = (Base.Experimental.@force_compile; g28442b(n - 1))
     bt = f28442b(100)
     io = IOBuffer()
     Base.show_backtrace(io, bt)
@@ -1341,9 +1341,9 @@ end
 # issue #37587
 # TODO: enable on more platforms
 if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
-    single_repeater() = single_repeater()
-    pair_repeater_a() = pair_repeater_b()
-    pair_repeater_b() = pair_repeater_a()
+    single_repeater() = (Base.Experimental.@force_compile; single_repeater())
+    pair_repeater_a() = (Base.Experimental.@force_compile; pair_repeater_b())
+    pair_repeater_b() = (Base.Experimental.@force_compile; pair_repeater_a())
 
     @testset "repeated stack frames" begin
         let bt = try

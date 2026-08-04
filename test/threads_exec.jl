@@ -4,9 +4,58 @@ using Test
 using Base.Threads
 using Base.Threads: SpinLock, threadpoolsize
 using LinearAlgebra: peakflops
+import Libdl
 
 # for cfunction_closure
 include("testenv.jl")
+
+# In-process watchdog for platforms where the harness cannot request a task
+# dump from outside (win32 CI hangs silently for the whole job timeout):
+# print every task's backtrace and kill the job once the deadline passes.
+# The julia-side watchdog task dies with a wedged scheduler (build 615:
+# armed, then 112 minutes of silence with a 25-minute timer), so run the
+# watchdog on a raw OS thread that never touches the scheduler: it sleeps
+# in a gc-safe ccall, then dumps every task and kills the process.
+const WATCHDOG_DEADLINE_MS =
+    round(UInt32, parse(Float64, get(ENV, "JULIA_THREADS_EXEC_WATCHDOG", "0")) * 1000)
+
+function _watchdog_native(::Ptr{Cvoid})
+    @ccall gc_safe=true uv_sleep(WATCHDOG_DEADLINE_MS::Cuint)::Cvoid
+    ccall(:jl_safe_printf, Cvoid, (Cstring,), "threads_exec native watchdog expired, dumping tasks\n")
+    # each dump step guarded: a failure (or a hang already claimed one — the
+    # win32 task dump wedges unwinding a running task) must not cost the rest
+    try
+        # scheduler state first: it cannot hang
+        ccall(:jl_dump_scheduler_state, Cvoid, ())
+    catch
+    end
+    try
+        # bare ccall cannot see libjulia-codegen symbols on Windows (no global
+        # symbol namespace); resolve through an explicit handle
+        h = Libdl.dlopen("libjulia-codegen"; throw_error = false)
+        h === nothing || ccall(Libdl.dlsym(h, :jl_jit_dump_state_impl), Cvoid, ())
+    catch
+    end
+    try
+        # raw registers first: this cannot hang, unlike the task dump below
+        ccall(:jl_dump_thread_pcs, Cvoid, ())
+    catch
+    end
+    try
+        ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0)
+    catch
+    end
+    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), 15) # SIGTERM
+    return nothing
+end
+
+if WATCHDOG_DEADLINE_MS > 0
+    let entry = @cfunction(_watchdog_native, Cvoid, (Ptr{Cvoid},)),
+        tid = Vector{UInt8}(undef, 32) # uv_thread_t is opaque; 32 bytes covers all platforms
+        err = ccall(:uv_thread_create, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}), tid, entry, C_NULL)
+        Core.print(Core.stderr, err == 0 ? "threads_exec watchdog armed\n" : "threads_exec watchdog failed to arm\n")
+    end
+end
 
 function killjob(d)
     Core.print(Core.stderr, d)

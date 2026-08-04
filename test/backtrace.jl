@@ -26,6 +26,7 @@ eval(Expr(:function, Expr(:call, :test_inline_1),
                                     Expr(:line, 99)))))
 
 @test functionloc(test_inline_1) == ("backtrace.jl", 99)
+precompile(test_inline_1, ())
 try
     test_inline_1()
     error("unexpected")
@@ -51,6 +52,7 @@ eval(Expr(:function, Expr(:call, :test_inline_2),
                                     Expr(:line, 99)))))
 
 @test functionloc(test_inline_2) == ("backtrace.jl", 81)
+precompile(test_inline_2, ())
 try
     test_inline_2()
     error("unexpected")
@@ -269,7 +271,7 @@ let code = """
     exit()
     """
 
-    @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`; stderr))
+    @test success(pipeline(addenv(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, "JULIA_TIER_ENABLE" => "0"); stderr))
 end
 
 # Test that modules make it into InterpreterIP for top-level code

@@ -420,6 +420,11 @@ function timev_macro_scope()
 end
 @test timev_macro_scope() == 1
 
+# tier suspension: cumulative_compile_time_ns includes the background tier
+# worker, which can log seconds of backlog compilation inside this window
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+ccall(:jl_tier_quiesce, Cvoid, ())
+ccall(:jl_tier_drain, Cvoid, ())
 before_comp, before_recomp = Base.cumulative_compile_time_ns() # no need to turn timing on, @time will do that
 
 # exercise concurrent calls to `@time` for reentrant compilation time measurement.
@@ -443,14 +448,21 @@ after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn t
 # should be approximately 60,000,000 ns, we definitely shouldn't exceed 100x that value
 # failing this probably means an uninitialized variable somewhere
 @test after_comp - before_comp < 6_000_000_000;
+ccall(:jl_tier_resume, Cvoid, ())
+ccall(:jl_tier_resume_parking, Cvoid, ())
 
 end # redirect_stdout
 
 # issue #48024, avoid overcounting timers
+# (tier suspension keeps compilation synchronous on this thread; background
+# tier-worker compile time would otherwise exceed wall time in the window)
 begin
+    ccall(:jl_tier_suspend_parking, Cvoid, ())
+    ccall(:jl_tier_quiesce, Cvoid, ())
+    ccall(:jl_tier_drain, Cvoid, ())
     double(x::Real) = 2x;
-    calldouble(container) = double(container[1]);
-    calldouble2(container) = calldouble(container);
+    calldouble(container) = (Base.Experimental.@force_compile; double(container[1]));
+    calldouble2(container) = (Base.Experimental.@force_compile; calldouble(container));
 
     Base.Experimental.@force_compile;
     local elapsed = Base.time_ns();
@@ -478,6 +490,8 @@ begin
     @test compiles[1] <= elapsed
     # recompile time should be at most compile time
     @test compiles[2] <= compiles[1]
+    ccall(:jl_tier_resume, Cvoid, ())
+    ccall(:jl_tier_resume_parking, Cvoid, ())
 end
 
 macro capture_stdout(ex)
@@ -493,10 +507,15 @@ macro capture_stdout(ex)
 end
 
 # issue #48024, but with the time macro itself
+# (tier suspension as above: the timed windows assert exact presence/absence
+# of reported compilation)
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+ccall(:jl_tier_quiesce, Cvoid, ())
+ccall(:jl_tier_drain, Cvoid, ())
 begin
     double(x::Real) = 2x;
-    calldouble(container) = double(container[1]);
-    calldouble2(container) = calldouble(container);
+    calldouble(container) = (Base.Experimental.@force_compile; double(container[1]));
+    calldouble2(container) = (Base.Experimental.@force_compile; calldouble(container));
 
     local first = @capture_stdout @time @eval calldouble([1.0])
     local second = @capture_stdout @time @eval calldouble2(1.0)
@@ -518,7 +537,7 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
     @eval begin
         $f(::Real) = 1
         $callf(container) = $f(container[1])
-        $call2f(container) = $callf(container)
+        $call2f(container) = (Base.Experimental.@force_compile; $callf(container))
         c64 = [1.0]
         c32 = [1.0f0]
         cabs = AbstractFloat[1.0]
@@ -548,7 +567,7 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
     @eval begin
         $f(::Real) = 1
         $callf(container) = $f(container[1])
-        $call2f(container) = $callf(container)
+        $call2f(container) = (Base.Experimental.@force_compile; $callf(container))
         c64 = [1.0]
         c32 = [1.0f0]
         cabs = AbstractFloat[1.0]
@@ -574,6 +593,8 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
         @test occursin("% of which was recompilation", out)
     end
 end
+ccall(:jl_tier_resume, Cvoid, ())
+ccall(:jl_tier_resume_parking, Cvoid, ())
 
 # interactive utilities
 
@@ -868,6 +889,12 @@ end
 else
     SetLastError(_) = nothing
 end
+# tier suspension: the window between SetLastError and the GetLastError reads
+# must contain only compiled-code execution, as upstream; interpreted dispatch
+# and tier bookkeeping make Win32 calls that can reset the thread's last error
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+ccall(:jl_tier_quiesce, Cvoid, ())
+ccall(:jl_tier_drain, Cvoid, ())
 @test Libc.errno(0xc0ffee) === nothing
 @test SetLastError(0xc0def00d) === nothing
 let finalized = false
@@ -885,6 +912,8 @@ end
     @test Libc.GetLastError() == 0xc0def00d
 end
 @test Libc.errno() == 0xc0ffee
+ccall(:jl_tier_resume, Cvoid, ())
+ccall(:jl_tier_resume_parking, Cvoid, ())
 
 # Test that we can VirtualProtect jitted code to writable
 @noinline function WeVirtualProtectThisToRWX(x, y)

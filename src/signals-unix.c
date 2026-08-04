@@ -1011,8 +1011,13 @@ static void do_profile(void) JL_NOTSAFEPOINT
             return;
         }
         // notify thread to stop
-        if (!jl_thread_suspend(tid, &signal_context))
+        if (!jl_thread_suspend(tid, &signal_context)) {
+            // A thread that cannot be suspended costs the whole round, so
+            // count it: an empty profile buffer is otherwise indistinguishable
+            // from a workload that never ran.
+            jl_atomic_fetch_add_relaxed(&profile_suspend_failures, 1);
             return;
+        }
         // unwinding can fail, so keep track of the current state
         // and restore from the SEGV handler if anything happens.
         jl_jmp_buf *old_buf = jl_get_safe_restore();

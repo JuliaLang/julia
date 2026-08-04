@@ -364,8 +364,45 @@ let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no th
             (4, 0)) # try a couple times to trigger bad races
         new_env = copy(ENV)
         new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
-        run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr))
         threads_config = "$test_nthreads,$test_nthreadsi"
+        if Sys.iswindows() && Sys.WORD_SIZE == 32
+            # win32 CI has hung silently in this child; let it dump itself
+            new_env["JULIA_THREADS_EXEC_WATCHDOG"] = "1500"
+            # wedge experiment: the build-742 session dump shows the blocked
+            # materializer stuck with its definition unemitted, and the first
+            # captured stack (build 634) was inside objcache::get — LMDB's
+            # cross-process writer lock is not robust to SIGKILLed owners on
+            # Windows; if disabling the cache stops the hang, that's the cause
+            new_env["JULIA_OBJCACHE"] = "0"
+        end
+        println("threads_exec.jl with JULIA_NUM_THREADS == $threads_config starting")
+        p = run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr), wait = false)
+        if Sys.iswindows() && Sys.WORD_SIZE == 32
+            # Backstop above the child's own watchdog (1500s). Observe the
+            # child from here rather than from inside it: on 32-bit Windows the
+            # in-process unwinder only ever walks the main thread (jl_unw_step
+            # passes hMainThread to StackWalk64) and it needs DbgHelp, which a
+            # watchdog inside a wedged process must not touch. Nothing this
+            # does takes a lock in the target.
+            if timedwait(() -> process_exited(p), 1800.0) !== :ok
+                pid = getpid(p)
+                for _ in 1:2
+                    run(ignorestatus(`wmic process where processid=$pid get kernelmodetime,usermodetime`))
+                    sleep(15)
+                end
+                try
+                    # include returns the dump function itself: this file is
+                    # evaluated inside whatever module the harness made for it
+                    dumpfn = include(joinpath(@__DIR__, "windows_thread_dump.jl"))
+                    invokelatest(dumpfn, pid)
+                catch e
+                    @error "external thread dump failed" exception=(e, catch_backtrace())
+                end
+                kill(p, Base.SIGKILL)
+            end
+        end
+        wait(p)
+        success(p) || throw(ProcessFailedException(p))
         # threads set via env var
         @test chomp(read(setenv(cmd2, new_env), String)) == threads_config
         # threads set via -t

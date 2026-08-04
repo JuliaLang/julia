@@ -2439,6 +2439,13 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     if (replacedmaxworld == ~(size_t)0) {
         assert(jl_atomic_load_relaxed(&replaced->min_world) - 1 <= max_world && "attempting to set illogical world constraints (probable race condition)");
         jl_atomic_store_release(&replaced->max_world, max_world);
+        // The tier promotion bit is one-shot per MethodInstance; the promoted
+        // code is now gone, so clear it (and the hotness count) to let future
+        // parked dispatches count toward a fresh promotion in the new world.
+        if (jl_atomic_load_relaxed(&replaced_mi->flags) & JL_MI_FLAGS_TIER_QUEUED) {
+            jl_atomic_store_relaxed(&replaced_mi->tier_count, 0);
+            jl_atomic_fetch_and_relaxed(&replaced_mi->flags, (uint8_t)~JL_MI_FLAGS_TIER_QUEUED);
+        }
         // recurse to all backedges to update their valid range also
         _invalidate_backedges(replaced_mi, replaced, max_world, depth + 1);
         // TODO: should we visit all forward edges now and delete ourself from all of those lists too?
@@ -3951,14 +3958,27 @@ static jl_value_t *normalize_to_cacheable_sig(jl_method_instance_t *mi JL_PROPAG
 
 static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world,
     jl_value_t *F, jl_value_t **args, uint32_t nargs,
-    enum internal_compilation_triggers cause) JL_CANSAFEPOINT
+    enum internal_compilation_triggers cause, int allow_interp, jl_method_instance_t **interp_mi) JL_CANSAFEPOINT
 {
     // Quick check if we already have a compiled result
     // (which also catches any builtin functions).
     jl_code_instance_t *codeinst = jl_method_compiled(mi, world);
     if (codeinst) {
-        promote_cache_method(F, args, nargs, world, mi, normalize_to_cacheable_sig(mi), cause);
-        return codeinst;
+        // Under --compile=min/off an interp stub (invoke==jl_fptr_interpret_call,
+        // owner==nothing) is cached in mi->cache (see the block at ~3906). A
+        // latching consumer (allow_interp==0: cfunction, opaque closures, ABI
+        // converters, explicit compiles) must not accept that stub as real code,
+        // so fall through to re-derive native code. The tiered-compilation T0
+        // stub is ephemeral and never cached, so this guard never fires on the
+        // tiering path — there promotion is keyed on the MethodInstance and the
+        // worker re-derives via jl_compile_method_internal.
+        if (!(!allow_interp &&
+              jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_interpret_call_addr &&
+              codeinst->owner == jl_nothing)) {
+            promote_cache_method(F, args, nargs, world, mi, normalize_to_cacheable_sig(mi), cause);
+            return codeinst;
+        }
+        codeinst = NULL;
     }
 
     // And additionally we want to catch OpaqueClosure explicitly, since it is not a Builtin subtype,
@@ -4026,6 +4046,20 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     // if that didn't work and compilation is off, try running in the interpreter
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
         compile_option == JL_OPTIONS_COMPILE_MIN) {
+        // A latching consumer rejects the cached interpreter stub in the quick
+        // check at the top, but with compilation disabled no native code can be
+        // produced either way: reuse an existing stub rather than inserting an
+        // identical duplicate on every request.
+        jl_code_instance_t *existing = jl_atomic_load_relaxed(&mi->cache);
+        for (; existing; existing = jl_atomic_load_relaxed(&existing->next)) {
+            if (jl_atomic_load_relaxed(&existing->invoke) == jl_fptr_interpret_call_addr &&
+                existing->owner == jl_nothing &&
+                jl_atomic_load_relaxed(&existing->min_world) <= world &&
+                world <= jl_atomic_load_relaxed(&existing->max_world)) {
+                promote_cache_method(F, args, nargs, world, mi, mi == mi2 ? mi->specTypes : normalize_to_cacheable_sig(mi), cause);
+                return existing;
+            }
+        }
         jl_code_info_t *src = jl_code_for_interpreter(mi, world);
         // Root src explicitly: it is reachable as m->source only until a
         // concurrent thread publishes its own uncompressed copy there.
@@ -4042,6 +4076,40 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
             jl_mi_cache_insert(mi, codeinst);
             promote_cache_method(F, args, nargs, world, mi, mi == mi2 ? mi->specTypes : normalize_to_cacheable_sig(mi), cause);
             return codeinst;
+        }
+    }
+
+    // Tiered compilation interpreter-T0: signal the caller to run interp-eligible
+    // methods in the interpreter WITHOUT running inference (no stub CodeInstance is
+    // manufactured; _jl_invoke calls jl_interpret_mi on the MethodInstance directly).
+    // Eager inference of the full call graph dominates what remains of cold-start
+    // time once codegen is deferred. Only callers that can interpret pass interp_mi
+    // (dynamic dispatch); latching consumers pass NULL and fall through to compile.
+    if (interp_mi != NULL && compile_option == JL_OPTIONS_COMPILE_DEFAULT &&
+        jl_tier_enabled() && allow_interp && !jl_tier_parking_suspended() &&
+        jl_is_method(def) && def->source != NULL && def->source != jl_nothing) {
+        // Loop-bearing bodies may also be interpreted when JULIA_TIER_INTERP_LOOPS
+        // is on; they are enqueued for promotion immediately so the worker runs
+        // their inference + codegen off this thread while the first invocation
+        // interprets (on-stack replacement escapes a very long first loop).
+        int reasons = jl_tier_method_interp_reasons(def);
+        int loops_ok = jl_tier_interp_loops_enabled();
+        if (reasons == 0 || (loops_ok && (reasons & ~JL_TIER_REJECT_LOOPS) == 0)) {
+            // Park the compileable specialization, not the raw dispatch MI:
+            // promoting a concrete specialization of a @nospecialize method
+            // compiles the widened form and copy_to_mi_cache's copy is not
+            // yet reachable by invalidation (see its TODOs), so it would
+            // keep dispatching stale code across method redefinition.
+            // Interpretation only reads source and sparams, which the
+            // compileable MI shares (guarded by need_copy_to_mi_cache).
+            jl_method_instance_t *pmi = jl_normalize_to_compilable_mi(mi);
+            if (pmi != mi && need_copy_to_mi_cache(mi, pmi, cause))
+                pmi = mi;
+            if (reasons & JL_TIER_REJECT_LOOPS)
+                jl_tier_enqueue_mi(pmi);
+            promote_cache_method(F, args, nargs, world, pmi, mi == pmi ? mi->specTypes : normalize_to_cacheable_sig(mi), cause);
+            *interp_mi = pmi;
+            return NULL;
         }
     }
 
@@ -4069,8 +4137,18 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     // Don't bother inferring toplevel thunks or macros - the performance cost of inference is likely
     // to significantly exceed the actual runtime.
     int should_skip_inference = !jl_is_method(mi->def.method) || jl_method_is_macro(mi->def.method);
-    if (!should_skip_inference)
-        codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim);
+    if (!should_skip_inference) {
+        if (jl_tier_enabled() && allow_interp) {
+            // Profiling (interp-T0 only): attribute root inference time to the
+            // reason the interp gate above declined to park this method.
+            uint64_t rt0 = jl_hrtime();
+            codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim);
+            jl_tier_note_root_infer(jl_is_method(def) ? def : NULL, jl_hrtime() - rt0);
+        }
+        else {
+            codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim);
+        }
+    }
 
     if (codeinst) {
         mi2 = jl_get_ci_mi(codeinst);
@@ -4110,7 +4188,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         // and try to populate some caches
         mi2 = jl_normalize_to_compilable_mi(mi);
         if (mi != mi2) {
-            codeinst = jl_compile_method_very_internal(mi2, world, F, args, nargs, cause);
+            codeinst = jl_compile_method_very_internal(mi2, world, F, args, nargs, cause, allow_interp, NULL);
             if (need_copy_to_mi_cache(mi, mi2, cause)) {
                 codeinst = copy_to_mi_cache(mi, codeinst);
                 mi2 = mi;
@@ -4160,7 +4238,9 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
 
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
 {
-    return jl_compile_method_very_internal(mi, world, NULL, NULL, 0, TRIGGER_FOREIGN);
+    // Latching entry point (cfunction, opaque closures, explicit precompile):
+    // must produce real code, never an interp-parked CI.
+    return jl_compile_method_very_internal(mi, world, NULL, NULL, 0, TRIGGER_FOREIGN, /*allow_interp*/0, NULL);
 }
 
 jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
@@ -4197,6 +4277,31 @@ static jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, u
 {
     jl_callptr_t invoke = jl_atomic_load_acquire(&m->invoke);
     if (invoke == &jl_fptr_wait_for_compiled) {
+        // Under tiering, the batch owner (typically the tier worker) may spend
+        // many seconds compiling the large module this CI was emitted into;
+        // interpret this call at T0 instead of blocking on the whole batch.
+        // allow_rescue=0: the rescue path re-enters compilation and would
+        // recurse right back here while the batch is still in flight.
+        if (jl_tier_enabled() && nargs < JL_TIER_MAX_INTERP_NARGS &&
+            m->owner == jl_nothing) {
+            jl_method_instance_t *mi = jl_get_ci_mi(m);
+            jl_method_t *def = mi->def.method;
+            if (jl_is_method(def) && def->source != NULL && def->source != jl_nothing) {
+                // Same eligibility as T0 parking, except loops always qualify:
+                // interpreting a loop for the wait's duration beats blocking.
+                // ccall/cfunction/llvmcall bodies must block — the interpreter
+                // cannot execute :foreigncall (interpreter.c "requires the
+                // compiler") — as must generated (body unscanned), no-source,
+                // opaque-closure, and @force_compile methods.
+                int reasons = jl_tier_method_interp_reasons(def);
+                if ((reasons & ~JL_TIER_REJECT_LOOPS) == 0)
+                    return jl_interpret_mi(f, args, nargs, mi, jl_current_task->world_age, /*allow_rescue*/0);
+            }
+        }
+        // The tail call below retries until the owner publishes; without a
+        // safepoint the retry spin blocks stop-the-world, deadlocking against
+        // threads that must run for the owner to finish.
+        jl_gc_safepoint();
         int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
         int last_errno = errno;
 #ifdef _OS_WINDOWS_
@@ -4494,6 +4599,21 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     return 1;
 }
 
+// cheap, allocation-free check whether a call of exactly `types` is already
+// backed by compiled code in the current world; false negatives are fine
+// (the caller falls back to jl_compile_hint)
+JL_DLLEXPORT int jl_method_compiled_hint(jl_value_t *types) JL_NOTSAFEPOINT
+{
+    size_t world = jl_current_task->world_age;
+    jl_methcache_t *mc = jl_method_table->cache;
+    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
+    jl_typemap_entry_t *entry = lookup_leafcache(leafcache, types, world);
+    if (entry == NULL)
+        return 0;
+    jl_method_instance_t *mi = entry->func.linfo;
+    return jl_method_compiled(mi, world) != NULL;
+}
+
 
 // add type of `f` to front of argument tuple type
 jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0)
@@ -4561,7 +4681,12 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
 {
     jl_code_instance_t *codeinst = NULL;
     jl_callptr_t invoke = jl_method_compiled_callptr(mfunc, world, &codeinst);
-    if (invoke) {
+    // Huge-arity calls must run compiled: every dynamic dispatch inside an
+    // interpreted frame redoes the typemap search in O(nargs), so an
+    // interpreted vararg callee turns one splat call into quadratic work.
+    int allow_interp = nargs < JL_TIER_MAX_INTERP_NARGS;
+    if (invoke && (allow_interp || invoke != jl_fptr_interpret_call_addr ||
+                   codeinst->owner != jl_nothing)) {
         jl_value_t *res = invoke(F, args, nargs, codeinst);
         return verify_type(res);
     }
@@ -4570,13 +4695,16 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, cause);
+    jl_method_instance_t *interp_mi = NULL;
+    codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, cause, allow_interp, &interp_mi);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
     errno = last_errno;
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
+    if (interp_mi)
+        return verify_type(jl_interpret_mi(F, args, nargs, interp_mi, world, /*allow_rescue*/1));
     invoke = jl_atomic_load_acquire(&codeinst->invoke);
     jl_value_t *res = invoke(F, args, nargs, codeinst);
     return verify_type(res);
@@ -4606,7 +4734,7 @@ jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, 
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    jl_code_instance_t *codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, TRIGGER_NONE);
+    jl_code_instance_t *codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, TRIGGER_NONE, /*allow_interp*/1, NULL);
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     uint8_t specsigflags;

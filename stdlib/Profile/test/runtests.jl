@@ -1,5 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# These tests assert on the shape and attribution of profiled stacks and on
+# sampled allocation counts, which assume the workloads run compiled; suspend
+# tier-0 parking for the file (resumed at the end). Also quiesce the tier
+# worker: an active worker thread is sampled too, so thread-filtered prints
+# and sleep-state assertions would see its samples.
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+ccall(:jl_tier_quiesce, Cvoid, ())
+ccall(:jl_tier_drain, Cvoid, ())
+
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
@@ -116,6 +125,20 @@ for options in ((format=:tree, C=true),
     iobuf = IOBuffer()
     Profile.print(iobuf; options...)
     str = String(take!(iobuf))
+    if isempty(str)
+        # Samples may have been collected and then all filtered out while
+        # printing, so summarize what is actually in the buffer: how many
+        # blocks, which threads they came from, and how many instruction
+        # pointers they carry.
+        local data = Profile.fetch()
+        local nblocks = count(Base.Fix1(Profile.is_block_end, data), eachindex(data))
+        local tids = Set{UInt}()
+        for i in eachindex(data)
+            Profile.is_block_end(data, i) || continue
+            push!(tids, data[i - Profile.META_OFFSET_THREADID])
+        end
+        @error "empty profile" options len_data=Profile.len_data() nthreads=Threads.maxthreadid() suspend_failures=ccall(:jl_profile_suspend_failures, UInt64, ()) nblocks nips=length(data) - nblocks * (Profile.nmeta + 1) threadids=sort!(collect(tids))
+    end
     @test !isempty(str)
     file, _ = mktemp()
     Profile.print(file; options...)
@@ -257,20 +280,28 @@ end
 end
 
 @testset "Line number correction" begin
-    @profile busywait(1, 20)
-    _, fdict0 = Profile.flatten(Profile.retrieve()...)
-    Base.update_stackframes_callback[] = function(list)
-        modify((sf, n)) = sf.func === :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
-        map!(modify, list, list)
-    end
-    _, fdictc = Profile.flatten(Profile.retrieve()...)
-    Base.update_stackframes_callback[] = identity
     function getline(sfs)
         for sf in sfs
             sf.func === :busywait && return sf.line
         end
         nothing
     end
+    # busywait stops once any sample lands, and in a multi-threaded process
+    # (e.g. the tier worker thread) that sample can be of another thread, so
+    # retry until the buffer actually contains a busywait frame
+    local fdict0
+    for _ in 1:20
+        Profile.clear()
+        @profile busywait(1, 20)
+        _, fdict0 = Profile.flatten(Profile.retrieve()...)
+        getline(values(fdict0)) !== nothing && break
+    end
+    Base.update_stackframes_callback[] = function(list)
+        modify((sf, n)) = sf.func === :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        map!(modify, list, list)
+    end
+    _, fdictc = Profile.flatten(Profile.retrieve()...)
+    Base.update_stackframes_callback[] = identity
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
 end
 
@@ -335,8 +366,10 @@ let cmd = Base.julia_cmd()
         println("done")
         print(Profile.len_data())
         """
-    # use multiple threads here to ensure that profiling works with threading
-    s = run_with_watchdog(`$cmd -t2 -e $script`)
+    # use multiple threads here to ensure that profiling works with threading.
+    # Tiering is pinned off: the sample-count bound assumes the profiled
+    # expression compiles inside the window.
+    s = run_with_watchdog(addenv(`$cmd -t2 -e $script`, "JULIA_TIER_ENABLE" => "0"))
     @test !isempty(s)
     @test occursin("done", s)
     @test parse(Int, split(s, '\n')[end]) > 100
@@ -577,3 +610,6 @@ include("allocs.jl")
     @test undoc == [:Allocs]
 end
 include("heapsnapshot_reassemble.jl")
+
+ccall(:jl_tier_resume, Cvoid, ())
+ccall(:jl_tier_resume_parking, Cvoid, ())

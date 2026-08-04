@@ -35,6 +35,10 @@ function issue_54275_alloc_string()
 end
 
 function issue_54275_test()
+    # Force-compile the driver so its dead per-statement results are not pinned
+    # in the AST interpreter's ssavalue slots under tiered compilation, which
+    # would keep the last 10MB string alive across the measured GCs.
+    Base.Experimental.@force_compile
     GC.gc(true)
     baseline = Base.gc_live_bytes()
     live_bytes_has_grown_too_much = false

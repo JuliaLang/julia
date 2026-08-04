@@ -410,6 +410,13 @@ private:
 
 struct jl_linker_info_t {
     DenseMap<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>> ci_funcs;
+    // Rename targets captured at MU creation for the CIs whose ownership
+    // CAS this module won (the names registered in CISymbols then).
+    // linkOutput must not consult CISymbols: the entry may have been
+    // created by a different owner (linkCISymbol absoluteSymbols for a
+    // tier-promoted CI) or not exist at all.
+    DenseMap<jl_code_instance_t *, std::pair<orc::SymbolStringPtr, orc::SymbolStringPtr>>
+        ci_renames;
     DenseMap<std::pair<jl_code_instance_t *, jl_invoke_api_t>, orc::SymbolStringPtr>
         call_targets;
     DenseMap<void *, orc::SymbolStringPtr> global_targets;
@@ -827,6 +834,8 @@ public:
     Error addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
     orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return CompileLayer; };
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
+    void primeCRTAliases() JL_CANSAFEPOINT;
+    void dumpLinkerMutexState() JL_NOTSAFEPOINT;
     orc::JITDylib &createJITDylib(StringRef NamePrefix) JL_NOTSAFEPOINT;
 
     Expected<llvm::orc::ExecutorSymbolDef> findJDSymbol(orc::JITDylib &JD, StringRef Name, bool ExportedSymbolsOnly) JL_CANSAFEPOINT;
@@ -891,9 +900,12 @@ protected:
     // Rename LinkGraph symbols to match the previously chosen names and
     // register debug info for defined symbols.  Returns true on success, and
     // false after calling MR.failMaterialization().
+    // Drops LinkerMutex manually before defining the deferred trampoline
+    // units, which the capability analysis cannot follow (same reason
+    // work_until and process_tasks opt out).
     bool linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                     jitlink::LinkGraph &G,
-                    std::unique_ptr<jl_linker_info_t> Info) JL_CANSAFEPOINT_ENTER_LEAVE;
+                    std::unique_ptr<jl_linker_info_t> Info) JL_CANSAFEPOINT_ENTER_LEAVE JL_NO_SAFEPOINT_ANALYSIS;
 
     // Return a symbol that should be linked to the call target.  The origin of
     // this symbol depends on the code instance:
@@ -930,12 +942,16 @@ private:
     orc::ExecutionSession ES;
     orc::JITDylib &SessionJD;
     orc::JITDylib &GlobalJD;
+    orc::SymbolLookupSet CRTAliasNames;
     orc::JITDylib &JD;
     std::mutex SharedBytesMutex{};
     SharedBytesT SharedBytes;
 
-    // LinkerMutex protects CISymbols, Names
+    // LinkerMutex protects CISymbols, Names, PendingTrampolines
     std::mutex LinkerMutex;
+    // tojlinvoke units collected by linkCallTarget, defined by linkOutput
+    // after it drops LinkerMutex (see the note there).
+    SmallVector<std::unique_ptr<orc::MaterializationUnit>> PendingTrampolines;
     // CISymbols maps CodeInstance pointers to their ORC symbols.  If a
     // CodeInstance is eligible for garbage collection, it must be removed from
     // this map first, with unregisterCI.

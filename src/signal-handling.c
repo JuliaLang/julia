@@ -27,6 +27,60 @@ uv_mutex_t bt_data_prof_lock;
 volatile jl_bt_element_t *profile_bt_data_prof = NULL;
 volatile size_t profile_bt_size_max = 0;
 volatile size_t profile_bt_size_cur = 0;
+// Sampling rounds abandoned because a thread could not be suspended (see
+// do_profile): an empty profile buffer is otherwise indistinguishable from a
+// workload that never ran.
+_Atomic(uint64_t) profile_suspend_failures = 0;
+
+// Wedge diagnosis of last resort: the program counter and stack pointer of
+// every thread, with no symbolization and no unwinding. Printing a real
+// backtrace is not safe here — unwinding on Windows goes through DbgHelp
+// behind jl_in_stackwalk, and a watchdog that suspends a thread which may
+// hold that lock (or the loader lock) and then calls DbgHelp itself
+// deadlocks, which is why jl_print_task_backtraces hangs on a wedged win32
+// process. Raw registers are enough to symbolize offline against the binary.
+JL_DLLEXPORT void jl_dump_thread_pcs(void) JL_NOTSAFEPOINT
+{
+#ifdef _OS_WINDOWS_
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    jl_safe_printf("==== thread program counters\n");
+    for (int tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = allstates[tid];
+        if (ptls2 == NULL)
+            continue;
+        HANDLE h = ptls2->system_id;
+        if (SuspendThread(h) == (DWORD)-1) {
+            jl_safe_printf("thread %d: suspend failed\n", tid);
+            continue;
+        }
+        CONTEXT ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.ContextFlags = CONTEXT_CONTROL;
+        if (GetThreadContext(h, &ctx)) {
+#if defined(_CPU_X86_64_)
+            jl_safe_printf("thread %d: pc=0x%llx sp=0x%llx\n", tid,
+                           (unsigned long long)ctx.Rip, (unsigned long long)ctx.Rsp);
+#else
+            jl_safe_printf("thread %d: pc=0x%lx sp=0x%lx\n", tid,
+                           (unsigned long)ctx.Eip, (unsigned long)ctx.Esp);
+#endif
+        }
+        else {
+            jl_safe_printf("thread %d: GetThreadContext failed\n", tid);
+        }
+        ResumeThread(h);
+    }
+    jl_safe_printf("==== end thread program counters\n");
+#else
+    // Elsewhere the ordinary task dump works, so there is nothing to add.
+#endif
+}
+
+JL_DLLEXPORT uint64_t jl_profile_suspend_failures(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&profile_suspend_failures);
+}
 static volatile uint64_t nsecprof = 0;
 volatile int profile_running = 0;
 volatile int profile_all_tasks = 0;
@@ -127,34 +181,65 @@ static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 #endif
 }
 
-void jl_lock_profile(void)
+static void jl_lock_profile_rd_set(uintptr_t held) JL_NOTSAFEPOINT
 {
-    int got = jl_trylock_profile();
-    assert(got); (void)got;
-}
-
-int jl_trylock_profile(void)
-{
-    uintptr_t held = jl_lock_profile_rd_held();
-    if (held == -1)
-        return 0;
-    if (held == 0) {
-        held = -1;
-#ifndef _OS_WINDOWS_
-        pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
-#else
-        TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
-#endif
-        uv_rwlock_rdlock(&debuginfo_asyncsafe);
-        held = 0;
-    }
-    held++;
 #ifndef _OS_WINDOWS_
     pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 #else
     TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
 #endif
+}
+
+// Acquire the debug-info read lock, recursively for a thread that already holds
+// it. With `blocking`, waits for the lock; otherwise fails rather than waiting.
+//
+// The non-blocking form matters: the Windows unwinder reaches
+// jl_getUnwindInfo_impl from inside a StackWalk64 callback, and by then it
+// already holds jl_in_stackwalk. Waiting for the reader-writer lock there
+// deadlocks against jl_register_jit_object, which takes the write side while
+// another unwinder holds the read side and waits for jl_in_stackwalk. The
+// callers all treat failure as "no information available", which only costs a
+// less precise frame.
+static int jl_lock_profile_rd(int blocking) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1)
+{
+    uintptr_t held = jl_lock_profile_rd_held();
+    if (held == -1)
+        return 0;
+    if (held == 0) {
+        jl_lock_profile_rd_set(-1);
+        if (blocking) {
+            uv_rwlock_rdlock(&debuginfo_asyncsafe);
+        }
+        else if (uv_rwlock_tryrdlock(&debuginfo_asyncsafe) != 0) {
+            jl_lock_profile_rd_set(0);
+            return 0;
+        }
+        held = 0;
+    }
+    held++;
+    jl_lock_profile_rd_set(held);
     return 1;
+}
+
+void jl_lock_profile(void)
+{
+    int got = jl_lock_profile_rd(1);
+    assert(got); (void)got;
+}
+
+// Blocking, apart from the recursion guard: callers such as rec_backtrace use
+// this before touching jl_in_stackwalk, and treat failure as "no backtrace at
+// all", so they must not lose the lock merely because it is contended.
+int jl_trylock_profile(void)
+{
+    return jl_lock_profile_rd(1);
+}
+
+// Never waits. For callers that already hold jl_in_stackwalk and therefore
+// cannot afford to wait for the debug-info lock (see jl_lock_profile_rd).
+int jl_trylock_profile_nowait(void)
+{
+    return jl_lock_profile_rd(0);
 }
 
 JL_DLLEXPORT void jl_unlock_profile(void) JL_NO_SAFEPOINT_ANALYSIS
