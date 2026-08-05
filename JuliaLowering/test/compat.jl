@@ -658,3 +658,23 @@ end
         @test_broken jl_eval(pow_mod, ex; expr_compat_mode=true) == (:literal, 2)
     end
 end
+
+@testset "quoted import path components" begin
+    local run(s) = JuliaLowering.include_string(test_mod, s)
+
+    @test run("baremodule M; end; isdefined(M, :+)") == false
+    @test run("baremodule M; import Base: Base.:(+); end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base.:+; end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base: (+); end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base.var\"+\"; end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base: var\"+\"; end; getglobal(M,:+) === Base.:+")
+    @test run("baremodule M; import Base.:sin; end; getglobal(M,:sin) === Base.sin")
+    @test run("baremodule M; import Base.:(sin); end; getglobal(M,:sin) === Base.sin")
+    @test run("baremodule M; import Base.:Iterators; end; getglobal(M,:Iterators) === Base.Iterators")
+    @test run("baremodule M; import Base.:Iterators.:take; end; getglobal(M,:take) === Base.Iterators.take")
+    @test run("baremodule M; import Base.:Iterators: take; end; getglobal(M,:take) === Base.Iterators.take")
+    @test run("baremodule M; import Base.:+ as plus; end; getglobal(M,:plus) === Base.:+")
+    @test run("baremodule M; using Base.:Iterators; end; isdefined(M, :take)")
+    @test run("module Outer; f() = 1; baremodule In; import ..Outer.:f; end; end; getglobal(Outer.In,:f) === Outer.f")
+    @test run("module Outer; f() = 1; baremodule In; import ..Outer: f; end; end; getglobal(Outer.In,:f) === Outer.f")
+end
