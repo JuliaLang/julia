@@ -324,6 +324,7 @@ export
     fld1,
     fldmod,
     fldmod1,
+    cldmod1,
     flipsign,
     float,
     tryparse,
@@ -943,6 +944,7 @@ export
     unsafe_read,
     unsafe_write,
     write,
+    writepartial,
 
 # multimedia I/O
     AbstractDisplay,

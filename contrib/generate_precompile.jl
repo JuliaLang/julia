@@ -37,6 +37,12 @@ precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
 precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
 precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}})
+# The owner-carrying write paths (String/Array) call _unsafe_write_owned
+# directly, so the workload session does not compile the raw-pointer
+# unsafe_write entry points on its own; interactive startup still reaches
+# them through generic IO plumbing
+precompile(Tuple{typeof(Base.unsafe_write), Base.TTY, Ptr{UInt8}, UInt})
+precompile(Tuple{typeof(Base.unsafe_write), Base.GenericIOBuffer{Memory{UInt8}}, Ptr{UInt8}, UInt})
 
 # loading.jl - without these each precompile worker would precompile these because they're hit before pkgimages are loaded
 precompile(Base.__require, (Module, Symbol))

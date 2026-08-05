@@ -213,12 +213,19 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::InferenceCache)
+function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance,
+                                given_argtypes::Vector{Any}, cache::InferenceCache,
+                                world::UInt)
     nargtypes = length(given_argtypes)
     indices = get_indices(cache, mi)
     found_tombstone = false
     for idx in indices
-        cached_result = cache.results[idx]
+        cached = cache.results[idx]
+        cached_result = cached isa LocalInferenceResult ? cached.result : cached
+        cached_result.cache_world == world || continue
+        valid_worlds = cached isa LocalInferenceResult ?
+            proof_worlds(cached.proof) : cached_result.valid_worlds
+        world in valid_worlds || continue
         cache_argtypes = cached_result.argtypes
         if length(cache_argtypes) != nargtypes
             # A `MethodInstance` whose `specTypes` ends in an unbounded `Vararg` (i.e. its
@@ -246,7 +253,7 @@ function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given
             found_tombstone = true
             @goto next_cache
         end
-        return cached_result
+        return cached
         @label next_cache
     end
     return found_tombstone ? missing : nothing

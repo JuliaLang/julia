@@ -330,6 +330,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_bool_tag:
         case jl_nothing_tag:
         case jl_cancel_source_tag: // mutable: identity (a == b checked above)
+        case jl_wait_entry_tag:    // mutable: identity (a == b checked above)
             return 0;
         case jl_simplevector_tag:
             return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
@@ -631,7 +632,8 @@ JL_CALLABLE(jl_f_sizeof)
                 jl_errorf("Argument is an incomplete %s type and does not have a definite size.", jl_symbol_name(dx->name->name));
         }
         if (jl_is_layout_opaque(dx->layout) || // includes all GenericMemory{kind,T}
-            dx == jl_cancel_source_type)       // variable-sized (layout covers only the fixed fields)
+            dx == jl_cancel_source_type ||     // variable-sized (layout covers only the fixed fields)
+            dx == jl_wait_entry_type)          // variable-sized likewise
             jl_errorf("Type %s does not have a definite size.", jl_symbol_name(dx->name->name));
         return jl_box_long(jl_datatype_size(x));
     }
@@ -648,6 +650,12 @@ JL_CALLABLE(jl_f_sizeof)
         jl_cancel_source_t *cs = (jl_cancel_source_t*)x;
         return jl_box_long(sizeof(jl_cancel_source_t) +
                            cs->nparents * sizeof(jl_cancel_parent_link_t));
+    }
+    if (jl_is_wait_entry(x)) {
+        // variable-sized: one wait slot per `nslots` follows the fixed fields
+        jl_wait_entry_t *w = (jl_wait_entry_t*)x;
+        return jl_box_long(sizeof(jl_wait_entry_t) +
+                           w->nslots * sizeof(jl_wait_slot_t));
     }
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
@@ -2828,6 +2836,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
     add_builtin("CancellationTokenSource", (jl_value_t*)jl_cancel_source_type);
+    add_builtin("WaitEntryN", (jl_value_t*)jl_wait_entry_type);
 
     add_builtin("AddrSpace", (jl_value_t*)jl_addrspace_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);

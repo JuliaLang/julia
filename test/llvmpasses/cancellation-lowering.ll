@@ -24,11 +24,19 @@ entry:
 ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
 ; CHECK: %current_task = getelementptr i8, ptr %pgcstack
 ; CHECK: %reset_ctx_ptr = getelementptr i8, ptr %current_task
+; If this frame's region is still published (an earlier point of this frame
+; established it and nothing tore it), the whole establishment - safepoint
+; included - is skipped: every delivery throws, so landing at the earlier
+; setjmp is equivalent.
+; CHECK: %reset_ctx_prev = load atomic volatile ptr, ptr %reset_ctx_ptr monotonic
+; CHECK-NEXT: %region_live = icmp eq ptr %reset_ctx_prev, %cancel_ucontext
+; CHECK-NEXT: br i1 %region_live, label %cancel_pt_cont, label %cancel_establish
 ; The buffer may only be published while its contents are valid: unpublish,
 ; write it (setjmp), then publish it. All the bookkeeping stores are volatile
 ; (delivery observes them asynchronously), and the signal fence keeps the
 ; buffer writes from being reordered above the unpublish. A GC safepoint is
 ; emitted while the buffer is unpublished.
+; CHECK: cancel_establish:
 ; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
 ; CHECK-NEXT: fence syncscope("singlethread") seq_cst
 ; CHECK: call void @julia.safepoint(ptr %safepoint)
@@ -44,6 +52,9 @@ entry:
 ; CHECK-NEXT: %cancel_mctx = getelementptr i8, ptr %cancel_ucontext, i64 24
 ; CHECK-NEXT: %{{.*}} = call i32 @{{.*}}setjmp{{.*}}(ptr %cancel_mctx, i32 0)
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
+; The point's value merges 0 (region already live) with the setjmp return
+; CHECK: cancel_pt_cont:
+; CHECK-NEXT: %{{.*}} = phi i32 [ 0, %entry ], [ %{{.*}}, %cancel_establish ]
 ; CHECK-NOT: call i32 @julia.cancellation_point()
 ; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
 ; CHECK-NEXT: ret i32
@@ -158,7 +169,8 @@ entry:
 ; CHECK-LABEL: @test_alloc_in_region
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK-NEXT: %obj = call ptr @julia.gc_alloc_obj({{.*}}), !julia.reset_region
+; CHECK: cancel_pt_cont:
+; CHECK: %obj = call ptr @julia.gc_alloc_obj({{.*}}), !julia.reset_region
 ; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
 ; CHECK-NEXT: ret ptr %obj
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -273,7 +285,8 @@ entry:
 ; CHECK-LABEL: @test_musttail_safe
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: cancel_pt_cont:
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
 ; CHECK-NEXT: %r = musttail call i32 @tail_target(ptr %arg), !julia.reset_safe
 ; CHECK-NEXT: ret i32 %r
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -314,7 +327,8 @@ entry:
 ; CHECK-LABEL: @test_musttail_exempt
 ; CHECK: call i32 @{{.*}}setjmp
 ; CHECK-NEXT: store atomic volatile ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK-NEXT: store atomic volatile ptr null, ptr %reset_ctx_ptr release
+; CHECK: cancel_pt_cont:
+; CHECK: store atomic volatile ptr null, ptr %reset_ctx_ptr release
 ; CHECK-NEXT: %r = musttail call ptr @julia.pointer_from_objref(ptr addrspace(11) %obj)
 ; CHECK-NEXT: ret ptr %r
   %pgcstack = call ptr @julia.get_pgcstack()

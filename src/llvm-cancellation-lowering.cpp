@@ -244,8 +244,13 @@ bool CancellationLowering::runOnFunction(Function &F) {
         computeResetCtxPtr(F, pgcstack_inst);
 
     // Lower each cancellation point, remembering each region's publication
-    // for the reachability computation below
+    // for the reachability computation below. All points of a function share
+    // one region buffer: regions never nest within a frame - each point's
+    // publication supersedes the previous one, and "the region" is always
+    // "since the most recently crossed point" - so the buffer identifies the
+    // frame, not the point.
     SmallVector<Instruction*, 4> PointPublishes;
+    AllocaInst *UContextBuf = nullptr;
     for (CallInst *CI : CancellationPoints) {
         ++CancellationPointsLowered;
         Changed = true;
@@ -274,15 +279,61 @@ bool CancellationLowering::runOnFunction(Function &F) {
             continue;
         }
 
-        // Allocate a jl_reset_ctx_t on the stack
-        const size_t UContextSize = sizeof(jl_reset_ctx_t);
-        const size_t UContextAlign = alignof(jl_reset_ctx_t);
+        // Allocate one jl_reset_ctx_t on the stack, shared by every point
+        // of this function (see above).
+        if (!UContextBuf) {
+            const size_t UContextSize = sizeof(jl_reset_ctx_t);
+            const size_t UContextAlign = alignof(jl_reset_ctx_t);
+            // Create the alloca at the start of the function
+            IRBuilder<> AllocaBuilder(&F.getEntryBlock().front());
+            Type *UContextTy = ArrayType::get(I8Ty, UContextSize);
+            UContextBuf = AllocaBuilder.CreateAlloca(UContextTy, nullptr, "cancel_ucontext");
+            UContextBuf->setAlignment(Align(UContextAlign));
+        }
 
-        // Create the alloca at the start of the function
-        IRBuilder<> AllocaBuilder(&F.getEntryBlock().front());
-        Type *UContextTy = ArrayType::get(I8Ty, UContextSize);
-        AllocaInst *UContextBuf = AllocaBuilder.CreateAlloca(UContextTy, nullptr, "cancel_ucontext");
-        UContextBuf->setAlignment(Align(UContextAlign));
+        // If this frame's region is still published, the whole establishment
+        // (and its safepoint) is skipped: the buffer already holds a valid
+        // setjmp of an earlier point of this frame, and landing there is
+        // equivalent to landing here. For a cancellation delivery the
+        // landing throws either way; for a preempt delivery the landing
+        // resumes at the earlier point and re-executes forward - sound
+        // because everything a surviving region spans is re-executable by
+        // construction (that is what keeps a region open), the same
+        // re-execution any preempt reset performs, just from further back.
+        // The equivalence also covers the governing token: codegen emits
+        // the point's binding bookkeeping before the marker, and its rebind
+        // stores are untagged - unsafe points whose pass-inserted clear
+        // tears the region - so a region that is still live here was
+        // established under the very token this point just verified as
+        // bound (the non-local rebinders, exception-handler restore and the
+        // finalizer bracket, restore the (region, token) pair together).
+        // The load is
+        // exact ground truth - the region survived if and only if no unsafe
+        // point (whose pass-inserted clear nulls reset_ctx) ran since the
+        // establishment - so this is robust against any CFG shape the
+        // optimizer produced, and re-establishes precisely when needed
+        // (function entry, after a region-tearing operation, after the
+        // slow path's handle_cancellation! call). No consumption race: the
+        // published context is only ever consumed by same-thread signal
+        // delivery (control never returns here) or with this thread frozen.
+        // Skipping the safepoint means a pure-compute polling loop only
+        // polls at its establishing crossing - the historical behavior of
+        // uninstrumented pure loops (which never poll); any loop doing real
+        // work still polls through its allocations, or re-establishes (with
+        // the safepoint) after the calls that tore its region - and unlike
+        // an uninstrumented spin, this one stays cancellable, which is also
+        // the escape hatch for a stop-the-world it delays.
+        BasicBlock *ContBB = CI->getParent()->splitBasicBlock(CI, "cancel_pt_cont");
+        BasicBlock *CheckBB = ContBB->getSinglePredecessor();
+        BasicBlock *EstablishBB = BasicBlock::Create(LLVMCtx, "cancel_establish", &F, ContBB);
+        CheckBB->getTerminator()->eraseFromParent();
+        Builder.SetInsertPoint(CheckBB);
+        LoadInst *prev = Builder.CreateAlignedLoad(PtrTy, reset_ctx_ptr, Align(sizeof(void*)), /*isVolatile*/true, "reset_ctx_prev");
+        prev->setOrdering(AtomicOrdering::Monotonic);
+        setResetSafeMetadata(prev);
+        Value *already = Builder.CreateICmpEQ(prev, UContextBuf, "region_live");
+        Builder.CreateCondBr(already, ContBB, EstablishBB);
+        Builder.SetInsertPoint(EstablishBB);
 
         // N.B.: The buffer may only be published in `reset_ctx` while its
         // contents are valid; a cancellation signal arriving in between would
@@ -300,11 +351,13 @@ bool CancellationLowering::runOnFunction(Function &F) {
         setResetSafeMetadata(unpub);
         Builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
 
-        // A cancellation point is also a GC safepoint: code that polls for
-        // cancellation in a hot loop must not starve a stop-the-world request.
-        // This must be emitted while reset_ctx is unpublished, so that a
-        // concurrently delivered cancellation signal cannot longjmp us out of
-        // the safepoint wait.
+        // An establishing cancellation point is also a GC safepoint: it sits
+        // on every entry into region-covered code (and on the re-arm path
+        // after anything tore the region), so cancellation-instrumented code
+        // cannot starve a stop-the-world request any worse than the same
+        // code without instrumentation. This must be emitted while reset_ctx
+        // is unpublished, so that a concurrently delivered cancellation
+        // signal cannot longjmp us out of the safepoint wait.
         Value *ptls = Builder.CreateAlignedLoad(PtrTy, ptls_field_ptr, Align(sizeof(void*)), "ptls");
         Type *T_size = F.getParent()->getDataLayout().getIntPtrType(LLVMCtx);
         emit_gc_safepoint(Builder, T_size, ptls, nullptr, false);
@@ -369,9 +422,17 @@ bool CancellationLowering::runOnFunction(Function &F) {
         store->setOrdering(AtomicOrdering::Release);
         setResetSafeMetadata(store);
         PointPublishes.push_back(store);
+        Builder.CreateBr(ContBB);
 
-        // Replace uses and remove the intrinsic
-        CI->replaceAllUsesWith(SetjmpCall);
+        // Replace uses and remove the intrinsic. (The marker's value is
+        // unused by codegen; keep a PHI for IR sanity should that change.)
+        if (!CI->use_empty()) {
+            IRBuilder<> PhiBuilder(&ContBB->front());
+            PHINode *phi = PhiBuilder.CreatePHI(I32Ty, 2);
+            phi->addIncoming(ConstantInt::get(I32Ty, 0), CheckBB);
+            phi->addIncoming(SetjmpCall, EstablishBB);
+            CI->replaceAllUsesWith(phi);
+        }
         CI->eraseFromParent();
     }
 

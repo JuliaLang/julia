@@ -53,6 +53,7 @@ end
 struct MethodMatchTarget
     match::MethodMatch
     edges::Vector{Union{Nothing,CodeInstance}}
+    needs_mi_edges::BitVector
     call_results::Vector{Union{Nothing,InferredCallResult}}
     edge_idx::Int
 end
@@ -172,7 +173,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         local napplicable = length(applicable)
         local multiple_matches = multiple_methods(matches)
         while state.inferidx <= napplicable
-            (; match, edges, call_results, edge_idx) = applicable[state.inferidx]
+            (; match, edges, needs_mi_edges, call_results, edge_idx) = applicable[state.inferidx]
             local method = match.method
             local sig = match.spec_types
             if bail_out_call(interp, InferenceLoopState(state.rettype, state.all_effects), sv)
@@ -192,7 +193,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             #end
             mresult = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)::Future
             function handle1(interp, sv)
-                local (; rt, exct, effects, edge, call_result) = mresult[]
+                local (; rt, exct, effects, edge, needs_mi_edge, call_result) = mresult[]
                 this_conditional = ignorelimited(rt)
                 this_rt = widenwrappedconditional(rt)
                 this_exct = exct
@@ -206,7 +207,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 if const_call_result !== nothing
                     this_const_conditional = ignorelimited(const_call_result.rt)
                     this_const_rt = widenwrappedconditional(const_call_result.rt)
-                    const_result = const_edge = nothing
+                    const_result = nothing
                     if this_const_rt ⊑ₚ this_rt
                         # As long as the const-prop result we have is not *worse* than
                         # what we found out on types, we'd like to use it. Even if the
@@ -217,9 +218,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                         # e.g. in cases when there are cycles but cached result is still accurate
                         this_conditional = this_const_conditional
                         this_rt = this_const_rt
-                        (; effects, const_result, const_edge) = const_call_result
+                        (; effects, const_result) = const_call_result
                     elseif is_better_effects(const_call_result.effects, effects)
-                        (; effects, const_result, const_edge) = const_call_result
+                        (; effects, const_result) = const_call_result
                     else
                         add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
@@ -227,15 +228,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                     # because consistent-cy does not apply to exceptions.
                     if const_call_result.exct ⋤ this_exct
                         this_exct = const_call_result.exct
-                        (; const_result, const_edge) = const_call_result
+                        (; const_result) = const_call_result
                     else
                         add_remark!(interp, sv, "[constprop] Discarded exception type because result was wider than inference")
                     end
-                    if const_edge !== nothing
-                        edge = const_edge
-                        update_valid_age!(sv, get_inference_world(interp), world_range(const_edge))
-                    end
                     if const_result !== nothing
+                        update_valid_age!(sv, get_inference_world(interp),
+                            proof_worlds(inference_proof(const_result)))
                         call_result = const_result
                     end
                 end
@@ -266,6 +265,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                     end
                 end
                 edges[edge_idx] = edge
+                needs_mi_edges[edge_idx] = needs_mi_edge
                 call_results[edge_idx] = call_result
 
                 state.inferidx += 1
@@ -330,7 +330,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                     local sig = match.spec_types
                     local mi = specialize_method(match; preexisting=true)
                     local call_result = call_results[edge_idx]
-                    if mi === nothing || !(call_result isa InferenceResult) || !const_prop_methodinstance_heuristic(interp, call_result, mi, arginfo, sv)
+                    if (mi === nothing || !(call_result isa LocalInferenceResult) ||
+                        !const_prop_methodinstance_heuristic(interp, call_result.result, mi, arginfo, sv))
                         csig = get_compileable_sig(method, sig, match.sparams)
                         if csig !== nothing && (!seenall || csig !== sig) # corresponds to whether the first look already looked at this, so repeating abstract_call_method is not useful
                             #println(sig, " changed to ", csig, " for ", method)
@@ -406,7 +407,8 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         thisinfo = MethodMatchInfo(thismatches, mt, sig_n, thisfullmatch)
         push!(infos, thisinfo)
         for idx = 1:length(thismatches)
-            push!(applicable, MethodMatchTarget(thismatches[idx], thisinfo.edges, thisinfo.call_results, idx))
+            push!(applicable, MethodMatchTarget(thismatches[idx], thisinfo.edges,
+                thisinfo.needs_mi_edges, thisinfo.call_results, idx))
             push!(applicable_argtypes, arg_n)
         end
     end
@@ -425,7 +427,8 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
     mt = Core.methodtable
     info = MethodMatchInfo(matches, mt, atype, fullmatch)
-    applicable = MethodMatchTarget[MethodMatchTarget(matches[idx], info.edges, info.call_results, idx) for idx = 1:length(matches)]
+    applicable = MethodMatchTarget[MethodMatchTarget(matches[idx], info.edges,
+        info.needs_mi_edges, info.call_results, idx) for idx = 1:length(matches)]
     return MethodMatches(applicable, info, matches.valid_worlds)
 end
 
@@ -865,11 +868,13 @@ function matches_sv(parent::AbsIntState, sv::AbsIntState)
             method_for_inference_limit_heuristics(sv) === method_for_inference_limit_heuristics(parent))
 end
 
-function is_edge_recursed(edge::CodeInstance, caller::AbsIntState)
+function is_edge_recursed(edge::MethodInstance, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
-        return edge.def === frame_instance(sv)
+        return edge === frame_instance(sv)
     end
 end
+is_edge_recursed(edge::CodeInstance, caller::AbsIntState) =
+    is_edge_recursed(edge.def, caller)
 
 function is_method_recursed(method::Method, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
@@ -899,10 +904,14 @@ struct MethodCallResult
     edgecycle::Bool
     edgelimited::Bool
     call_result::Union{Nothing,InferredCallResult}
+    needs_mi_edge::Bool # targetless body-derived facts require an invalidation target
     function MethodCallResult(@nospecialize(rt), @nospecialize(exct), effects::Effects,
                               edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
-                              call_result::Union{Nothing,InferredCallResult} = nothing)
-        return new(rt, exct, effects, edge, edgecycle, edgelimited, call_result)
+                              call_result::Union{Nothing,InferredCallResult} = nothing;
+                              needs_mi_edge::Bool = false)
+        @assert !needs_mi_edge || (edge === nothing && call_result === nothing)
+        return new(rt, exct, effects, edge, edgecycle, edgelimited, call_result,
+            needs_mi_edge)
     end
 end
 
@@ -916,19 +925,16 @@ struct ConstCallResult
     exct::Any
     const_result::InferredCallResult
     effects::Effects
-    const_edge::Union{Nothing,CodeInstance}
     function ConstCallResult(
         @nospecialize(rt), @nospecialize(exct),
-        const_result::InferredCallResult, effects::Effects,
-        const_edge::Union{Nothing,CodeInstance})
-        return new(rt, exct, const_result, effects, const_edge)
+        const_result::InferredCallResult, effects::Effects)
+        return new(rt, exct, const_result, effects)
     end
     function ConstCallResult(
             result::ConstCallResult;
-            effects::Effects = result.effects,
-            const_edge::Union{Nothing,CodeInstance} = result.const_edge
+            effects::Effects = result.effects
         )
-        return new(result.rt, result.exct, result.const_result, effects, const_edge)
+        return new(result.rt, result.exct, result.const_result, effects)
     end
 end
 
@@ -982,14 +988,15 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     if eligibility === :none
         # const-prop' may have refined effects to be foldable when the original
         # call was not; in that case, prefer concrete eval over the const-prop' result
+        proof = inference_proof(new_result.const_result)
         new_eligibility = _concrete_eval_eligible(
-            interp, f, new_result.effects, new_result.const_edge, arginfo, sv)
+            interp, f, new_result.effects, proof, arginfo, sv)
         if new_eligibility === :concrete_eval
             new_concrete_eval_result = _concrete_eval_call(
-                interp, f, new_result.const_edge::CodeInstance, new_result.effects, arginfo, sv, invokecall)
+                interp, f, result.edge, new_result.effects, arginfo, sv, invokecall; proof)
             if new_concrete_eval_result !== nothing
                 if use_concrete_eval_result(interp, new_concrete_eval_result)
-                    return ConstCallResult(new_concrete_eval_result; const_edge = new_result.const_edge)
+                    return new_concrete_eval_result
                 elseif new_concrete_eval_result.rt !== Bottom
                     always_nothrow = true
                 end
@@ -1041,12 +1048,13 @@ function concrete_eval_eligible(
         interp::AbstractInterpreter, @nospecialize(f), result::MethodCallResult,
         arginfo::ArgInfo, sv::AbsIntState
     )
-    return _concrete_eval_eligible(interp, f, result.effects, result.edge, arginfo, sv)
+    proof = result.call_result === nothing ? result.edge : inference_proof(result.call_result)
+    return _concrete_eval_eligible(interp, f, result.effects, proof, arginfo, sv)
 end
 
 function _concrete_eval_eligible(
         interp::AbstractInterpreter, @nospecialize(f), effects::Effects,
-        edge::Union{Nothing,CodeInstance}, arginfo::ArgInfo, sv::AbsIntState
+        proof::Union{Nothing,InferenceProof}, arginfo::ArgInfo, sv::AbsIntState
     )
     if inbounds_option() === :off
         if !is_nothrow(effects)
@@ -1055,7 +1063,7 @@ function _concrete_eval_eligible(
             return :none
         end
     end
-    if edge !== nothing && is_foldable(effects, #=check_rtcall=#true)
+    if proof !== nothing && is_foldable(effects, #=check_rtcall=#true)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             if (is_nonoverlayed(interp) || is_nonoverlayed(effects) ||
                 # Even if overlay methods are involved, when `:consistent_overlay` is
@@ -1117,13 +1125,15 @@ function concrete_eval_call(
         interp::AbstractInterpreter, @nospecialize(f), result::MethodCallResult,
         arginfo::ArgInfo, sv::AbsIntState, invokecall::Union{InvokeCall,Nothing} = nothing
     )
+    proof = result.call_result === nothing ? result.edge : inference_proof(result.call_result)
     return _concrete_eval_call(
-        interp, f, result.edge::CodeInstance, result.effects, arginfo, sv, invokecall)
+        interp, f, result.edge, result.effects, arginfo, sv, invokecall; proof)
 end
 
 function _concrete_eval_call(
-        interp::AbstractInterpreter, @nospecialize(f), edge::CodeInstance, effects::Effects,
-        arginfo::ArgInfo, ::AbsIntState, invokecall::Union{InvokeCall,Nothing} = nothing
+        interp::AbstractInterpreter, @nospecialize(f), edge::Union{Nothing,CodeInstance}, effects::Effects,
+        arginfo::ArgInfo, ::AbsIntState, invokecall::Union{InvokeCall,Nothing} = nothing;
+        proof::Union{Nothing,InferenceProof} = nothing
     )
     args = collect_const_args(arginfo, #=start=#2)
     if invokecall !== nothing
@@ -1137,11 +1147,11 @@ function _concrete_eval_call(
     catch
         # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime.
         # However, at present, :consistency does not mandate the type of the exception
-        concrete_result = ConcreteResult(edge, effects)
-        return ConstCallResult(Bottom, Any, concrete_result, effects, #=const_edge=#nothing)
+        concrete_result = ConcreteResult(edge, effects; proof)
+        return ConstCallResult(Bottom, Any, concrete_result, effects)
     end
-    concrete_result = ConcreteResult(edge, EFFECTS_TOTAL, value)
-    return ConstCallResult(Const(value), Bottom, concrete_result, EFFECTS_TOTAL, #=const_edge=#nothing)
+    concrete_result = ConcreteResult(edge, EFFECTS_TOTAL, value; proof)
+    return ConstCallResult(Const(value), Bottom, concrete_result, EFFECTS_TOTAL)
 end
 
 # check if there is a cycle and duplicated inference of `mi`
@@ -1185,8 +1195,8 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
         return nothing
     end
     mi = mi::MethodInstance
-    inf_result = result.call_result
-    inf_result = inf_result isa InferenceResult ? inf_result : nothing
+    call_result = result.call_result
+    inf_result = call_result isa LocalInferenceResult ? call_result.result : nothing
     if !force && !const_prop_methodinstance_heuristic(interp, inf_result, mi, arginfo, sv)
         add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
@@ -1386,12 +1396,15 @@ end
 function semi_concrete_eval_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
     call_result = result.call_result
-    call_result isa InferenceResult || return nothing
-    codeinst = call_result.ci
-    codeinst isa CodeInstance || return nothing
-    inferred = call_result.src
+    call_result isa LocalInferenceResult || return nothing
+    inf_result = call_result.result
+    edge = result.edge
+    edge isa CodeInstance || return nothing
+    proof = inference_proof(call_result)
+    inferred = inf_result.src
     src_inlining_policy(interp, mi, inferred, NoCallInfo(), IR_FLAG_NULL) || return nothing # hack to work-around test failures caused by #58183 until both it and #48913 are fixed
-    irsv = IRInterpretationState(interp, codeinst, mi, arginfo.argtypes, inferred)
+    irsv = IRInterpretationState(interp, edge, mi, arginfo.argtypes, inferred,
+                                 proof_worlds(proof))
     irsv === nothing && return nothing
     assign_parentchild!(irsv, sv)
     rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv)
@@ -1410,23 +1423,51 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
             effects = Effects(effects; noub=ALWAYS_TRUE)
         end
         exct = refine_exception_type(result.exct, effects)
-        # TODO: SemiConcreteResult fails to preserve the ci_as_edge value
-        semi_concrete_result = SemiConcreteResult(codeinst, ir, effects, spec_info(irsv))
-        const_edge = nothing # TODO use the edges from irsv?
-        return ConstCallResult(rt, exct, semi_concrete_result, effects, const_edge)
+        proof_edges = Any[]
+        add_inference_proof!(proof_edges, proof, edge)
+        for info in ir.stmts.info
+            add_edges!(proof_edges, info)
+        end
+        append!(proof_edges, irsv.edges)
+        semi_concrete_proof = LocalInferenceProof(irsv.valid_worlds,
+            Core.svec(proof_edges...))
+        semi_concrete_result = SemiConcreteResult(edge, ir, effects, spec_info(irsv);
+                                                  proof = semi_concrete_proof)
+        return ConstCallResult(rt, exct, semi_concrete_result, effects)
     end
     nothing
 end
 
-function const_prop_result(inf_result::InferenceResult)
-    @assert isdefined(inf_result, :ci_as_edge) "InferenceResult without ci_as_edge"
-    return ConstCallResult(inf_result.result, inf_result.exc_result, inf_result,
-                           inf_result.ipo_effects, inf_result.ci_as_edge)
+function const_prop_result(local_result::LocalInferenceResult)
+    inf_result = local_result.result
+    return ConstCallResult(inf_result.result, inf_result.exc_result, local_result,
+                           inf_result.ipo_effects)
 end
 
 # return cached result of constant analysis
-return_localcache_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
-    const_prop_result(inf_result)
+return_localcache_result(::AbstractInterpreter, local_result::LocalInferenceResult, ::AbsIntState) =
+    const_prop_result(local_result)
+
+function const_prop_inference_proof(frame::InferenceState, result::MethodCallResult,
+                                    concrete_eval_result::Union{Nothing,ConstCallResult})
+    proof_edges = Any[]
+    valid_worlds = frame.valid_worlds
+    # This proof is cached independently of the executable target chosen at a
+    # particular call site, so it must remain self-contained. Pairing/elision is
+    # only valid later, when the cached result is attached to a concrete CallInfo.
+    add_result_proof!(proof_edges, result.call_result)
+    if result.call_result !== nothing
+        valid_worlds = intersect(valid_worlds,
+            proof_worlds(inference_proof(result.call_result)))
+    end
+    if concrete_eval_result !== nothing
+        add_result_proof!(proof_edges, concrete_eval_result.const_result)
+        valid_worlds = intersect(valid_worlds,
+            proof_worlds(inference_proof(concrete_eval_result.const_result)))
+    end
+    append!(proof_edges, frame.edges)
+    return LocalInferenceProof(valid_worlds, Core.svec(proof_edges...))
+end
 
 function compute_forwarded_argtypes(interp::AbstractInterpreter, arginfo::ArgInfo, sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
@@ -1443,27 +1484,29 @@ function const_prop_call(interp::AbstractInterpreter,
     forwarded_argtypes = compute_forwarded_argtypes(interp, arginfo, sv)
     # use `cache_argtypes` that has been constructed for fresh regular inference if available
     call_result = result.call_result
-    if call_result isa InferenceResult
-        cache_argtypes = call_result.argtypes
+    if call_result isa LocalInferenceResult
+        cache_argtypes = call_result.result.argtypes
     else
         cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
     end
     argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
     argtypes = get_nospecializeinfer_argtypes(argtypes, cache_argtypes, mi.def::Method)
-    inf_result = constprop_cache_lookup(𝕃ᵢ, mi, argtypes, get_inference_cache(interp))
+    inf_result = constprop_cache_lookup(𝕃ᵢ, mi, argtypes, get_inference_cache(interp),
+        get_inference_world(interp))
     if inf_result === missing
         # a previous const-prop attempt hit a cycle and produced a limited result;
         # don't re-attempt the same work that would lead to the same limited outcome
         add_remark!(interp, sv, "[constprop] Found cached but limited constant inference result")
         return nothing
-    elseif inf_result isa InferenceResult
+    elseif inf_result isa LocalInferenceResult
         # found the cache for this constant prop'
-        if inf_result.result === nothing
-            add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
-            return nothing
-        end
-        @assert inf_result.linfo === mi "MethodInstance for cached inference result does not match"
+        @assert inf_result.result.linfo === mi "MethodInstance for cached inference result does not match"
         return return_localcache_result(interp, inf_result, sv)
+    elseif inf_result isa InferenceResult
+        # Raw entries are internal sentinels for an unresolved constant-inference cycle.
+        @assert inf_result.result === nothing
+        add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
+        return nothing
     end
     overridden_by_const = falses(length(argtypes))
     for i = 1:length(argtypes)
@@ -1492,6 +1535,7 @@ function const_prop_call(interp::AbstractInterpreter,
         @assert callstack[end] === frame && length(callstack) == frame.frameid
         pop!(callstack)
         # add to the cache to record that this will always fail
+        inf_result.cache_world = get_inference_world(interp)
         push!(get_inference_cache(interp), inf_result)
         return nothing
     end
@@ -1502,8 +1546,6 @@ function const_prop_call(interp::AbstractInterpreter,
         add_remark!(interp, sv, "[constprop] Constant inference produced a limited result")
         return nothing
     end
-    existing_edge = result.edge
-    inf_result.ci_as_edge = codeinst_as_edge(interp, frame, existing_edge)
     @assert frame.frameid != 0 && frame.cycleid == frame.frameid
     @assert frame.parentid == sv.frameid
     @assert inf_result.result !== nothing
@@ -1515,7 +1557,14 @@ function const_prop_call(interp::AbstractInterpreter,
         inf_result.result = concrete_eval_result.rt
         inf_result.ipo_effects = concrete_eval_result.effects
     end
-    return const_prop_result(inf_result)
+    # The caller may retain regular-inference return/exception facts while taking
+    # only an effect (or another component) from constant propagation. Make the
+    # const result's proof certify every input to that component-wise merge, not
+    # merely the const-prop frame itself.
+    proof = const_prop_inference_proof(frame, result, concrete_eval_result)
+    local_result = LocalInferenceResult(inf_result, proof, get_inference_world(interp))
+    push!(get_inference_cache(interp), local_result)
+    return const_prop_result(local_result)
 end
 
 struct ForwardableArgtypes
@@ -2569,23 +2618,22 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         const_call_result = abstract_call_method_with_const_args(interp,
             result, f, arginfo′, si, match, sv, invokecall)
         if const_call_result !== nothing
-            const_result = const_edge = nothing
+            const_result = nothing
             if const_call_result.rt ⊑ rt
-                (; rt, effects, const_result, const_edge) = const_call_result
+                (; rt, effects, const_result) = const_call_result
             end
             if const_call_result.exct ⋤ exct
-                (; exct, const_result, const_edge) = const_call_result
-            end
-            if const_edge !== nothing
-                edge = const_edge
-                update_valid_age!(sv, get_inference_world(interp), world_range(const_edge))
+                (; exct, const_result) = const_call_result
             end
             if const_result !== nothing
+                update_valid_age!(sv, get_inference_world(interp),
+                    proof_worlds(inference_proof(const_result)))
                 call_result = const_result
             end
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo′, sig, vtypes)
-        info = InvokeCallInfo(edge, match, call_result, lookupsig_box.contents)
+        info = InvokeCallInfo(edge, match, call_result, lookupsig_box.contents,
+            result.needs_mi_edge)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError
@@ -3108,18 +3156,16 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
             const_call_result = abstract_call_method_with_const_args(interp, result,
                 #=f=#nothing, arginfo, si, match, sv)
             if const_call_result !== nothing
-                const_result = const_edge = nothing
+                const_result = nothing
                 if const_call_result.rt ⊑ rt
-                    (; rt, effects, const_result, const_edge) = const_call_result
+                    (; rt, effects, const_result) = const_call_result
                 end
                 if const_call_result.exct ⋤ exct
-                    (; exct, const_result, const_edge) = const_call_result
-                end
-                if const_edge !== nothing
-                    edge = const_edge
-                    update_valid_age!(sv, get_inference_world(interp), world_range(const_edge))
+                    (; exct, const_result) = const_call_result
                 end
                 if const_result !== nothing
+                    update_valid_age!(sv, get_inference_world(interp),
+                        proof_worlds(inference_proof(const_result)))
                     call_result = const_result
                 end
             end
@@ -3134,7 +3180,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
             end
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types, vtypes)
-        info = OpaqueClosureCallInfo(edge, match, call_result)
+        info = OpaqueClosureCallInfo(edge, match, call_result, result.needs_mi_edge)
         return CallMeta(rt, exct, effects, info)
     end
 end
@@ -3858,7 +3904,9 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
         abstract_eval_value(interp, x, sstate, sv)
     end
     cconv = e.args[5]
-    if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt16, Bool}))
+    if isa(cconv, QuoteNode) && (v = cconv.value;
+        isa(v, Union{Tuple{Symbol, UInt16, Bool}, Tuple{Symbol, UInt16, Bool, Bool},
+                     Tuple{Symbol, UInt16, Bool, Bool, Bool}}))
         override = decode_effects_override(v[2])
         effects = override_effects(effects, override)
     end

@@ -312,28 +312,36 @@ function task_local_storage(body::Function, key, val)
 end
 
 # just wait for a task to be done, no error propagation
-function _wait(t::Task)
+_wait(t::Task; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _wait(t, resolve_cancel_token(cancel))
+function _wait(t::Task, tok::MaybeToken; min_severity::UInt8=0x00)
     t === current_task() && throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
+        locked = true
         try
             while !istaskdone(t)
-                wait(donenotify; waitee=t)
+                locked = false
+                wait(donenotify, tok; min_severity=min_severity)
+                locked = true
             end
         finally
-            unlock(donenotify)
+            locked && unlock(donenotify)
         end
     end
     nothing
 end
 
-waitqueue(t::Task) = ILLRef((t.donenotify::ThreadSynchronizer).waitq, t)
+waitqueue(t::Task) = waitqueue(t.donenotify::ThreadSynchronizer)
 
-# have `waiter` wait for `t`
-function _wait2(t::Task, waiter::Task)
+# Subscribe the not-yet-started `waiter` to `t`'s completion (see the
+# GenericCondition method's contract in condition.jl: a start trigger
+# governed by the waiter's birth cancellation source, not a park)
+function schedule_on_notify!(t::Task, waiter::Task)
+    _assert_fresh_waiter(waiter)
     if !istaskdone(t)
-        # since _wait2 is similar to schedule, we should observe the sticky
+        # since this is similar to schedule, we should observe the sticky
         # bit, even if we don't call `schedule` with early-return below
         if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
             # Issue #41324
@@ -349,32 +357,46 @@ function _wait2(t::Task, waiter::Task)
         lock(donenotify)
         try
             if !istaskdone(t)
-                w = _cached_wait_entry(waiter)
-                _arm_wait(waiter, w)
-                push!(waitqueue(t), w)
+                schedule_on_notify!(donenotify, waiter)
                 return nothing
             end
         finally
             unlock(donenotify)
         end
     end
-    schedule(waiter)
+    # `t` already done: start (or, under a cancelled birth source, kill)
+    # the waiter now
+    _assert_fresh_waiter(waiter)
+    src = _birth_cancel_source(waiter)
+    if src !== nothing && iscancelled(src)
+        _schedule_subscription_cancelled(waiter, src)
+    else
+        schedule(waiter)
+    end
     nothing
 end
 
 """
-    wait(t::Task; throw=true)
+    wait(t::Task; throw=true, cancel=Base.DEFAULT_CANCEL)
 
 Wait for a `Task` to finish.
 
 The keyword `throw` (defaults to `true`) controls whether a failed task results
 in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed task.
 
+The `cancel` keyword argument controls which cancellation token may interrupt
+the wait (see [`CancellationToken`](@ref)); by default the scoped token. A
+cancelled wait throws the [`CancellationRequest`](@ref) and leaves `t`
+unaffected: cancellation reaches `t` only through its own governing token
+(e.g. when both waiter and waitee run under the same cancelled scope).
+
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
-@noinline function wait(t::Task; throw=true)
+wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    wait(t, check_cancel_arg(cancel); throw)
+@noinline function wait(t::Task, tok::MaybeToken; throw=true)
     # Inlining a blocking call buys nothing; this also keeps the inlineable `fetch(::Task)` small.
-    _wait(t)
+    _wait(t, tok)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
     end
@@ -403,7 +425,8 @@ completed tasks, and the other consists of uncompleted tasks.
 !!! compat "Julia 1.12"
     This function requires at least Julia 1.12.
 """
-waitany(tasks; throw=true) = _wait_multiple(collect_tasks(tasks), throw)
+waitany(tasks; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _wait_multiple(collect_tasks(tasks), throw, false, false, check_cancel_arg(cancel))
 
 """
     waitall(tasks; failfast=true, throw=true) -> (done_tasks, remaining_tasks)
@@ -423,7 +446,8 @@ completed tasks, and the other consists of uncompleted tasks.
 !!! compat "Julia 1.12"
     This function requires at least Julia 1.12.
 """
-waitall(tasks; failfast=true, throw=true) = _wait_multiple(collect_tasks(tasks), throw, true, failfast)
+waitall(tasks; failfast=true, throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _wait_multiple(collect_tasks(tasks), throw, true, failfast, check_cancel_arg(cancel))
 
 function collect_tasks(waiting_tasks)
     tasks = Task[]
@@ -434,13 +458,59 @@ function collect_tasks(waiting_tasks)
     return tasks
 end
 
-function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false)
+## Task completion as a waitable (see base/park.jl): a one-shot predicate
+## kind - enqueue declines when the task is already done (its only notify
+## has fired), and the recheck is membership-qualified: the slot witness,
+## cleared when the completion notify pops the entry, is the
+## already-delivered bit (without it a repark! would re-fire forever on
+## consumed completions).
+struct DoneWait
+    t::Task
+end
+
+function wait_enqueue!(x::DoneWait, w::WaitEntry, first::Bool)
+    t = x.t
+    donenotify = t.donenotify::ThreadSynchronizer
+    lock(donenotify)
+    if istaskdone(t)
+        unlock(donenotify)
+        return false
+    end
+    # a duplicate of an already-registered task shares its slot
+    if _find_slot(w, donenotify) == 0
+        push!(waitqueue(t), w)
+    end
+    unlock(donenotify)
+    return true
+end
+
+function wait_recheck(x::DoneWait, w::WaitEntry)
+    t = x.t
+    istaskdone(t) || return false
+    return _find_slot(w, t.donenotify::ThreadSynchronizer) != 0
+end
+
+function wait_dequeue!(x::DoneWait, w::WaitEntry, why::UInt8)
+    # lazy on a normal wake: the claiming completion notify popped its own
+    # registration; eager everywhere else (fired slots must not re-fire,
+    # withdrawal and cleanup must not leave the entry reachable)
+    why == WAKE_VALUE && return nothing
+    t = x.t
+    donenotify = t.donenotify::ThreadSynchronizer
+    lock(donenotify)
+    list_deletefirst!(waitqueue(t), w)
+    unlock(donenotify)
+    return nothing
+end
+
+function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false,
+                        tok::MaybeToken=default_cancel_token())
     if (all && !failfast) || length(tasks) <= 1
         exception = false
         # Force everything to finish synchronously for the case of waitall
         # with failfast=false
         for t in tasks
-            _wait(t)
+            _wait(t, tok)
             exception |= istaskfailed(t)
         end
         if exception && throwexc
@@ -477,45 +547,37 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    chan = Channel{Int}(Inf)
-    sentinel = current_task()
-    waiter_tasks = fill(sentinel, length(tasks))
-
+    # Park on all remaining tasks at once through a single multi-slot wait
+    # entry - one flat waitable per pending task (duplicates share a slot)
+    # plus the governing cancellation source. Each completion notify claims
+    # the entry through the standard wake-claim protocol; the registrations
+    # stay in place across re-parks, so the loop re-arms (`repark!`)
+    # instead of re-registering after every completion, and the driver's
+    # membership-qualified rechecks make the arm-then-suspend sound while
+    # this bookkeeping runs unarmed.
+    ct = current_task()
+    src = cancel_source(tok)
+    src === nothing || checkcancel(src)
+    ws = Vector{Union{DoneWait, SourceWait}}()
     for (i, done) in enumerate(done_mask)
-        done && continue
-        t = tasks[i]
-        if istaskdone(t)
-            done_mask[i] = true
-            exception |= istaskfailed(t)
-            nremaining -= 1
-            exception && failfast && break
-        else
-            waiter = @task put!(chan, i)
-            waiter.sticky = false
-            _wait2(t, waiter)
-            waiter_tasks[i] = waiter
+        done || push!(ws, DoneWait(tasks[i]))
+    end
+    src === nothing || push!(ws, SourceWait(src, 0x00))
+    w = acquire_wait_entry!(ct, ws)
+    parked = park!(ws, w, false)
+    while true
+        # suspend only when the park armed (a `false` park/re-park means a
+        # waitable fired - a completion, or the source - and the driver
+        # already dequeued the fired slot)
+        parked && wait_safe_interrupt(ws, w)
+        # the fired-source outcome (and, level-triggered, any cancelled
+        # state) delivers here: withdraw and throw
+        if src !== nothing && iscancelled(src)
+            withdraw!(ws, w)
+            checkcancel(src)
         end
-    end
-
-    while nremaining > 0
-        exception && failfast && break
-        i = take!(chan)
-        t = tasks[i]
-        waiter_tasks[i] = sentinel
-        done_mask[i] = true
-        exception |= istaskfailed(t)
-        nremaining -= 1
-        # stop early if requested
-        all || break
-    end
-
-    close(chan)
-
-    # now just read which tasks finished directly: the channel is not needed anymore for that
-    # repeat until we get (acquire) the list of all dependent-exited tasks
-    changed = true
-    while changed
-        changed = false
+        # collect completions (a wake happens-after its completing notify,
+        # so the istaskdone reads below observe it)
         for (i, done) in enumerate(done_mask)
             done && continue
             t = tasks[i]
@@ -523,10 +585,14 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
                 done_mask[i] = true
                 exception |= istaskfailed(t)
                 nremaining -= 1
-                changed = true
             end
         end
+        if nremaining == 0 || (!all && any(done_mask)) || (exception && failfast)
+            break
+        end
+        parked = repark!(ws, w)
     end
+    withdraw!(ws, w)
 
     if nremaining == 0
         if throwexc && exception
@@ -535,25 +601,12 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
         return tasks, Task[]
     else
-        remaining_mask = .~done_mask
-        for i in findall(remaining_mask)
-            waiter = waiter_tasks[i]
-            waiter === sentinel && continue
-            donenotify = tasks[i].donenotify::ThreadSynchronizer
-            lock(donenotify)
-            # Claim the never-started waiter's wake so that a concurrent
-            # completion notify skips it, then unlink its registration (a
-            # no-op if a notify already popped it).
-            w = @atomicswap waiter.waiting_on = nothing
-            w isa WaitEntry && list_deletefirst!(waitqueue(tasks[i]), w)
-            unlock(donenotify)
-        end
         done_tasks = tasks[done_mask]
         if throwexc && exception
             exceptions = [TaskFailedException(t) for t in done_tasks if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else
-            return done_tasks, tasks[remaining_mask]
+            return done_tasks, tasks[.~done_mask]
         end
     end
 end
@@ -572,8 +625,10 @@ Wait for a [`Task`](@ref) to finish, then return its result value.
 If the task fails with an exception, a [`TaskFailedException`](@ref) (which wraps the failed task)
 is thrown.
 """
-@inline function fetch(t::Task)
-    wait(t)
+@inline function fetch(t::Task; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # `cancel` governs the *wait* for the task: a cancellation unwinds this
+    # fetch, the fetched task keeps running.
+    wait(t; cancel)
     # This typeassert looks redundant, but is required for soundness and must not be
     # removed: `Task.code`/`Task.result` are mutable, so the precise type inference
     # may derive here (via `PartialTask`) is a claim that must be re-checked at
@@ -585,6 +640,19 @@ end
 
 struct ScheduledAfterSyncException <: Exception
     values::Vector{Any}
+end
+
+function showerror(io::IO, cr::CancellationRequest)
+    print(io, "CancellationRequest: ")
+    if cr === CANCEL_REQUEST_SAFE
+        print(io, "Safe Cancellation (CANCEL_REQUEST_SAFE)")
+    elseif cr === CANCEL_REQUEST_ABANDON_EXTERNAL
+        print(io, "Abandonment of External Resources (CANCEL_REQUEST_ABANDON_EXTERNAL)")
+    elseif cr === CANCEL_REQUEST_ABANDON_ALL
+        print(io, "Task Abandonment (CANCEL_REQUEST_ABANDON_ALL)")
+    else
+        print(io, "Unknown ($(cr.request))")
+    end
 end
 
 function showerror(io::IO, ex::ScheduledAfterSyncException)
@@ -779,7 +847,10 @@ Stacktrace:
 ```
 """
 function errormonitor(t::Task)
-    t2 = Task() do
+    # the monitor is diagnostic cleanup: shield it from the constructing
+    # scope's cancellation so a cancelled scope still gets its report
+    t2 = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        Task() do
         if istaskfailed(t)
             local errs = stderr
             try # try to display the failure atomically
@@ -806,8 +877,9 @@ function errormonitor(t::Task)
         end
         nothing
     end
+    end
     t2.sticky = false
-    _wait2(t, t2)
+    schedule_on_notify!(t, t2)
     return t
 end
 
@@ -871,6 +943,12 @@ end
 
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
+    # a sticky cancellation-source registration of this task is garbage now
+    w = t.cached_cancel_entry
+    if w isa WaitEntry2
+        o = @atomic :monotonic w.owner2
+        o isa CancellationTokenSource && _note_dead_registration!(o)
+    end
     # `finish_task` sets `sigatomic` before entering this function
     err = istaskfailed(t)
     result = task_result(t)
@@ -1117,6 +1195,32 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     maybe_record_enqueued!(t)
     enq_work(t)
     return t
+end
+
+# Deliver `exc` into the parked wait whose wake the caller already claimed
+# by CASing `t.waiting_on` from `w` to nothing (the cancellation walk).
+# Unlike `schedule(t, exc, error=true)` - whose unconditional swap *takes*
+# a claim - this must not re-claim: the claim was the wake ticket. If a
+# claim-less wake (a raw interrupter, `throwto`) resumed the task first and
+# it has since registered a new wait, the claimed park no longer exists and
+# the delivery is dropped - a task still eligibly parked under the
+# cancelled source is impossible (its registration recheck refuses), and
+# anything else must not observe this request.
+function deliver_claimed_wake!(t::Task, w::WaitEntry, @nospecialize(exc))
+    (@atomic :monotonic t.waiting_on) === nothing || return nothing
+    # the claimed waitee-queue entry stays linked (the walk does not take
+    # waitee locks); collect it opportunistically like an interrupter would
+    try_unlink_claimed!(w)
+    # a pending wake somebody enqueued claim-lessly is superseded by the
+    # cancellation delivery, like an interrupt overriding a claimed value
+    q = t.queue
+    q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
+    t._state === task_state_runnable || return nothing
+    setfield!(t, :result, exc)
+    setfield!(t, :_isexception, true)
+    maybe_record_enqueued!(t)
+    enq_work(t)
+    return nothing
 end
 
 """

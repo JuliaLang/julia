@@ -214,6 +214,7 @@
 #    @atomic finished_at::UInt64
 #    @atomic waiting_on::Any
 #    cached_wait_entry::Any
+#    cached_cancel_entry::Any
 #    invoked::Any
 #    @atomic bound_cancel_token::Any
 #end

@@ -3209,7 +3209,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
             notify(s.prompt_ready_event)
         end
         old_state = mode(s)
-        # spawn this because the main repl task is sticky (due to use of @async and _wait2)
+        # spawn this because the main repl task is sticky (due to use of @async and schedule_on_notify!)
         # and we want to not block typing when the repl task thread is busy
         t2 = Threads.@spawn :interactive while true
             eof(term) || peek(term) # wait before locking but don't consume

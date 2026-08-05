@@ -24,14 +24,24 @@ end
 struct NoCallInfo <: CallInfo end
 add_edges_impl(::Vector{Any}, ::NoCallInfo) = nothing
 
-# InferredCallResult is defined in types.jl so that InferenceResult can inherit from it
+# InferredCallResult is defined in types.jl with LocalInferenceResult
 
 struct ConcreteResult <: InferredCallResult
-    edge::CodeInstance
+    edge::Union{Nothing,CodeInstance}
     effects::Effects
+    proof::Union{Nothing,InferenceProof}
     result
-    ConcreteResult(edge::CodeInstance, effects::Effects) = new(edge, effects)
-    ConcreteResult(edge::CodeInstance, effects::Effects, @nospecialize val) = new(edge, effects, val)
+    function ConcreteResult(edge::Union{Nothing,CodeInstance}, effects::Effects;
+                            proof::Union{Nothing,InferenceProof}=nothing)
+        @assert edge !== nothing || proof !== nothing
+        return new(edge, effects, proof)
+    end
+    function ConcreteResult(edge::Union{Nothing,CodeInstance}, effects::Effects,
+                            @nospecialize(val);
+                            proof::Union{Nothing,InferenceProof}=nothing)
+        @assert edge !== nothing || proof !== nothing
+        return new(edge, effects, proof, val)
+    end
 end
 
 struct SemiConcreteResult <: InferredCallResult
@@ -39,6 +49,113 @@ struct SemiConcreteResult <: InferredCallResult
     ir::IRCode
     effects::Effects
     spec_info::SpecInfo
+    proof::Union{Nothing,InferenceProof}
+    SemiConcreteResult(edge::CodeInstance, ir::IRCode, effects::Effects, spec_info::SpecInfo;
+                       proof::Union{Nothing,InferenceProof}=nothing) =
+        new(edge, ir, effects, spec_info, proof)
+end
+
+inference_proof(result::ConcreteResult) =
+    result.proof === nothing ? result.edge::CodeInstance : result.proof
+inference_proof(result::SemiConcreteResult) = something(result.proof, result.edge)
+
+function record_invoke_edge!(invokes::IdDict{Any,Vector{Any}},
+                             @nospecialize(signature), @nospecialize(target))
+    signatures = get!(Vector{Any}, invokes, target)
+    for previous in signatures
+        previous == signature && return false
+    end
+    push!(signatures, signature)
+    return true
+end
+
+function _materialize_inference_edges!(edges::Vector{Any}, source,
+                                       seen_proofs::IdSet{LocalInferenceProof},
+                                       standalone::IdSet{Any},
+                                       invokes::IdDict{Any,Vector{Any}})
+    i = 1
+    while i <= length(source)
+        edge = source[i]
+        if edge isa LocalInferenceProof
+            i += 1
+            edge in seen_proofs && continue
+            push!(seen_proofs, edge)
+            _materialize_inference_edges!(
+                edges, edge.edges, seen_proofs, standalone, invokes)
+        elseif edge isa Int
+            # Encoded lookup groups are positional: `nmatches, atype, matches...`.
+            # Preserve each complete group, while recording its targets so an
+            # identical standalone proof edge later in the stream can be omitted.
+            n = abs(edge)
+            last = i + 1 + n
+            @assert last <= length(source)
+            for j = i:last
+                push!(edges, source[j])
+            end
+            for j = i + 2:last
+                target = source[j]
+                if target isa Union{Method,MethodInstance,CodeInstance,Core.Binding}
+                    push!(standalone, target)
+                end
+            end
+            i = last + 1
+        elseif edge isa Union{Method,MethodInstance,CodeInstance,Core.Binding}
+            i += 1
+            edge in standalone && continue
+            push!(standalone, edge)
+            push!(edges, edge)
+        else
+            # Everything else is an invoke signature paired with its target. Keep
+            # distinct signatures, and deduplicate only the identical pair.
+            @assert i < length(source)
+            target = source[i + 1]
+            i += 2
+            record_invoke_edge!(invokes, edge, target) || continue
+            push!(edges, edge, target)
+        end
+    end
+    return nothing
+end
+
+function materialize_inference_edges(source)
+    has_local_proof = false
+    for edge in source
+        if edge isa LocalInferenceProof
+            has_local_proof = true
+            break
+        end
+    end
+    if !has_local_proof
+        return source isa SimpleVector ? source : Core.svec(source...)
+    end
+    edges = Any[]
+    sizehint!(edges, length(source))
+    _materialize_inference_edges!(edges, source,
+        IdSet{LocalInferenceProof}(), IdSet{Any}(), IdDict{Any,Vector{Any}}())
+    return Core.svec(edges...)
+end
+
+function add_inference_proof!(edges::Vector{Any}, proof::CodeInstance,
+                              @nospecialize(paired_edge=nothing))
+    # This CI certifies the inferred facts of its defining method; it does not
+    # necessarily represent ordinary dispatch on its MethodInstance signature
+    # (for example, it may have been reached through `invoke`). Encode the proof
+    # as an identity edge to that method, just as we do for an inlined CI.
+    proof === paired_edge || add_inlining_edge!(edges, proof)
+    return nothing
+end
+
+function add_inference_proof!(edges::Vector{Any}, proof::LocalInferenceProof,
+                              @nospecialize(paired_edge=nothing))
+    any(edge -> edge === proof, edges) || push!(edges, proof)
+    return nothing
+end
+
+function add_result_proof!(edges::Vector{Any}, result::Union{Nothing,InferredCallResult},
+                           @nospecialize(paired_edge=nothing))
+    result === nothing && return nothing
+    add_inference_proof!(edges, inference_proof(result), paired_edge)
+    return nothing
 end
 
 """
@@ -55,15 +172,68 @@ struct MethodMatchInfo <: CallInfo
     atype
     fullmatch::Bool
     edges::Vector{Union{Nothing,CodeInstance}}
+    needs_mi_edges::BitVector
     call_results::Vector{Union{Nothing,InferredCallResult}}
     function MethodMatchInfo(
         results::MethodLookupResult, mt::MethodTable, @nospecialize(atype), fullmatch::Bool)
         edges = fill!(Vector{Union{Nothing,CodeInstance}}(undef, length(results)), nothing)
+        needs_mi_edges = falses(length(results))
         call_results = fill!(Vector{Union{Nothing,InferredCallResult}}(undef, length(results)), nothing)
-        return new(results, mt, atype, fullmatch, edges, call_results)
+        return new(results, mt, atype, fullmatch, edges, needs_mi_edges, call_results)
     end
 end
 add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo) = _add_edges_impl(edges, info)
+
+function method_match_edge(info::MethodMatchInfo, i::Int, mi_edge::Bool)
+    edge = info.edges[i]
+    edge !== nothing && return edge
+    match = info.results[i]
+    # A proof-carrying result may carry facts about this specialization without an
+    # executable CI of its own. The same is true when a scheduled call consumed
+    # provisional SCC facts before a CI or local result was available. A completed
+    # tombstone similarly carries its proof separately from the dispatch target. Keep
+    # the MethodInstance as an invalidation target in these cases; a bare Method in an
+    # encoded lookup is intentionally ignored by the backedge iterator and therefore
+    # cannot certify those facts.
+    return (mi_edge || info.needs_mi_edges[i] || info.call_results[i] !== nothing) ?
+        specialize_method(match) : match.method
+end
+
+function has_encoded_lookup(edges::Vector{Any}, info::MethodMatchInfo,
+                            encoded_nmatches::Int, mi_edge::Bool)
+    i = 1
+    while i <= length(edges)
+        entry = edges[i]
+        if entry isa Int
+            n = abs(entry)
+            next_i = i + 2 + n
+            if next_i - 1 <= length(edges) && entry === encoded_nmatches &&
+                    edges[i + 1] == info.atype
+                matches = true
+                for j = 1:n
+                    if edges[i + 1 + j] !== method_match_edge(info, j, mi_edge)
+                        matches = false
+                        break
+                    end
+                end
+                matches && return true
+            end
+            i = next_i
+        else
+            i += 1
+        end
+    end
+    return false
+end
+
+function add_method_match_proofs!(edges::Vector{Any}, info::MethodMatchInfo,
+                                  mi_edge::Bool)
+    for i = 1:length(info.call_results)
+        add_result_proof!(edges, info.call_results[i], method_match_edge(info, i, mi_edge))
+    end
+    return nothing
+end
+
 function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
     if !fully_covering(info)
         exists = false
@@ -93,29 +263,24 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
         end
         if mi.specTypes === m.spec_types
             add_one_edge!(edges, edge)
+            add_result_proof!(edges, info.call_results[1], edge)
             return nothing
         end
     end
     # add check for whether this lookup already existed in the edges list
     # encode nmatches as negative if fully_covers is false
     encoded_nmatches = fully_covering(info) ? nmatches : -nmatches
-    for i in 1:length(edges)
-        if edges[i] === encoded_nmatches && edges[i+1] == info.atype
-            # TODO: must also verify the CodeInstance match too
-            return nothing
+    if !has_encoded_lookup(edges, info, encoded_nmatches, mi_edge)
+        push!(edges, encoded_nmatches, info.atype)
+        for i = 1:nmatches
+            edge = method_match_edge(info, i, mi_edge)
+            if edge isa CodeInstance
+                @assert edge.def.def === info.results[i].method
+            end
+            push!(edges, edge)
         end
     end
-    push!(edges, encoded_nmatches, info.atype)
-    for i = 1:nmatches
-        edge = info.edges[i]
-        m = info.results[i]
-        if edge === nothing
-            edge = mi_edge ? specialize_method(m) : m.method
-        else
-            @assert edge.def.def === m.method
-        end
-        push!(edges, edge)
-    end
+    add_method_match_proofs!(edges, info, mi_edge)
     nothing
 end
 function add_one_edge!(edges::Vector{Any}, edge::MethodInstance)
@@ -145,14 +310,13 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
                 # found edge we can upgrade
                 edges[i] = edge
                 return
-            elseif edgeᵢ_orig === edge || (isdefined(edge, :inferred) && codeinst_edges_sub(edgeᵢ_orig, edge.min_world, edge.max_world, edge.edges))
-                # existing CodeInstance is identical
+            elseif edgeᵢ_orig === edge
+                # Only the identical CodeInstance certifies the same inference proof.
                 return
             end
-            # Different CodeInstance for the same MethodInstance with distinct
-            # edge information (e.g. two const-prop'd pseudo CIs of the same
-            # method recording different `Binding` edges). Keep both so that
-            # backedges are registered for each.
+            # Different CodeInstances for the same MethodInstance may certify
+            # different inference facts. Keep both, irrespective of whether their
+            # current forward-edge streams happen to compare equal.
         end
         i += 1
     end
@@ -162,6 +326,7 @@ end
 nsplit_impl(::MethodMatchInfo) = 1
 getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
 getresult_impl(info::MethodMatchInfo, idx::Int) = info.call_results[idx]
+getedge_impl(info::MethodMatchInfo, idx::Int) = info.edges[idx]
 
 """
     info::UnionSplitInfo <: CallInfo
@@ -190,6 +355,17 @@ function getresult_impl(info::UnionSplitInfo, idx::Int)
             idx -= n
         end
     end
+end
+function getedge_impl(info::UnionSplitInfo, idx::Int)
+    for split in info.split
+        n = length(split.edges)
+        if idx ≤ n
+            return split.edges[idx]
+        else
+            idx -= n
+        end
+    end
+    return nothing
 end
 
 """
@@ -274,57 +450,82 @@ nsplit_impl(::InvokeCICallInfo) = 0
 
 Represents a resolved call to `Core.invoke`, carrying the `info.match::MethodMatch` of
 the method that has been processed.
-Optionally keeps `info.result::InferenceResult` that keeps constant information.
+Optionally keeps a proof-carrying `info.result` with constant information.
 """
 struct InvokeCallInfo <: CallInfo
     edge::Union{Nothing,CodeInstance}
     match::MethodMatch
     result::Union{Nothing,InferredCallResult}
     atype # ::Type
+    needs_mi_edge::Bool # targetless body-derived facts require an invalidation target
 end
+InvokeCallInfo(edge::Union{Nothing,CodeInstance}, match::MethodMatch,
+               result::Union{Nothing,InferredCallResult}, @nospecialize(atype)) =
+    InvokeCallInfo(edge, match, result, atype, false)
 add_edges_impl(edges::Vector{Any}, info::InvokeCallInfo) =
     _add_edges_impl(edges, info)
 function _add_edges_impl(edges::Vector{Any}, info::InvokeCallInfo, mi_edge::Bool=false)
     edge = info.edge
     if edge === nothing
-        edge = mi_edge ? specialize_method(info.match) : info.match.method
+        edge = (mi_edge || info.needs_mi_edge || info.result !== nothing) ?
+            specialize_method(info.match) : info.match.method
     end
     add_invoke_edge!(edges, info.atype, edge)
+    add_result_proof!(edges, info.result, edge)
     nothing
 end
 function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), edge::Union{MethodInstance,Method})
-    for i in 2:length(edges)
+    i = 1
+    while i <= length(edges)
         edgeᵢ = edges[i]
+        if edgeᵢ isa Int
+            i += 2 + abs(edgeᵢ)
+            continue
+        end
         edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
-        edgeᵢ isa MethodInstance || edgeᵢ isa Method || continue
+        if !(edgeᵢ isa MethodInstance || edgeᵢ isa Method)
+            i += 1
+            continue
+        end
         if edgeᵢ === edge
-            edge_minus_1 = edges[i-1]
+            i == 1 && (i += 1; continue)
+            edge_minus_1 = edges[i - 1]
             if edge_minus_1 isa Type && edge_minus_1 == atype
                 return # found existing covered edge
             end
         end
+        i += 1
     end
     push!(edges, atype)
     push!(edges, edge)
     nothing
 end
 function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), edge::CodeInstance)
-    for i in 2:length(edges)
+    i = 1
+    while i <= length(edges)
         edgeᵢ_orig = edgeᵢ = edges[i]
+        if edgeᵢ isa Int
+            i += 2 + abs(edgeᵢ)
+            continue
+        end
         edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
         if ((edgeᵢ isa MethodInstance && edgeᵢ === edge.def) ||
             (edgeᵢ isa Method && edgeᵢ === edge.def.def))
-            edge_minus_1 = edges[i-1]
+            i == 1 && (i += 1; continue)
+            edge_minus_1 = edges[i - 1]
             if edge_minus_1 isa Type && edge_minus_1 == atype
                 if edgeᵢ_orig isa MethodInstance || edgeᵢ_orig isa Method
                     # found edge we can upgrade
                     edges[i] = edge
                     return
-                elseif true # XXX compare `CodeInstance` identify?
+                elseif edgeᵢ_orig === edge
                     return
                 end
+                # A distinct CodeInstance for the same MethodInstance may carry a
+                # distinct proof, so retain it as a separate invoke edge.
             end
         end
+        i += 1
     end
     push!(edges, atype)
     push!(edges, edge)
@@ -336,6 +537,10 @@ function add_inlining_edge!(edges::Vector{Any}, edge::MethodInstance)
     i = 1
     while i <= length(edges)
         edgeᵢ = edges[i]
+        if edgeᵢ isa Int
+            i += 2 + abs(edgeᵢ)
+            continue
+        end
         if edgeᵢ isa Method && edgeᵢ === edge.def
             # found edge we can upgrade
             edges[i] = edge
@@ -357,6 +562,10 @@ function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
     i = 1
     while i <= length(edges)
         edgeᵢ = edges[i]
+        if edgeᵢ isa Int
+            i += 2 + abs(edgeᵢ)
+            continue
+        end
         if edgeᵢ isa Method && edgeᵢ === edge.def.def
             # found edge we can upgrade
             edges[i] = edge
@@ -367,11 +576,12 @@ function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
             edges[i] = edge
             return
         end
-        if edgeᵢ isa CodeInstance && edgeᵢ.def === edge.def
-            # found existing edge
-            # XXX compare `CodeInstance` identify?
+        if edgeᵢ === edge
+            # found the identical existing edge
             return
         end
+        # A distinct CodeInstance for the same MethodInstance may carry a
+        # distinct proof, so do not deduplicate it by `def` alone.
         i += 1
     end
     # add_invoke_edge alone
@@ -384,26 +594,36 @@ nsplit_impl(::InvokeCallInfo) = 1
 getsplit_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; MethodLookupResult(Core.MethodMatch[info.match],
     WorldRange(typemin(UInt), typemax(UInt)), false))
 getresult_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; info.result)
+getedge_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; info.edge)
 
 """
     info::OpaqueClosureCallInfo
 
 Represents a resolved call of opaque closure, carrying the `info.match::MethodMatch` of
 the method that has been processed.
-Optionally keeps `info.result::InferenceResult` that keeps constant information.
+Optionally keeps a proof-carrying `info.result` with constant information.
 """
 struct OpaqueClosureCallInfo <: CallInfo
     edge::Union{Nothing,CodeInstance}
     match::MethodMatch
     result::Union{Nothing,InferredCallResult}
+    needs_mi_edge::Bool # targetless body-derived facts require an invalidation target
 end
+OpaqueClosureCallInfo(edge::Union{Nothing,CodeInstance}, match::MethodMatch,
+                      result::Union{Nothing,InferredCallResult}) =
+    OpaqueClosureCallInfo(edge, match, result, false)
 function add_edges_impl(edges::Vector{Any}, info::OpaqueClosureCallInfo)
     edge = info.edge
+    if edge === nothing && (info.needs_mi_edge || info.result !== nothing)
+        edge = specialize_method(info.match)
+    end
     if edge !== nothing
         add_one_edge!(edges, edge)
     end
+    add_result_proof!(edges, info.result, edge)
     nothing
 end
+getedge_impl(info::OpaqueClosureCallInfo, idx::Int) = (@assert idx == 1; info.edge)
 
 """
     info::OpaqueClosureCreateInfo <: CallInfo
@@ -485,6 +705,10 @@ struct VirtualMethodMatchInfo <: CallInfo
 end
 add_edges_impl(edges::Vector{Any}, info::VirtualMethodMatchInfo) =
     _add_edges_impl(edges, info.info, #=mi_edge=#true)
+nsplit_impl(info::VirtualMethodMatchInfo) = nsplit(info.info)
+getsplit_impl(info::VirtualMethodMatchInfo, idx::Int) = getsplit(info.info, idx)
+getresult_impl(info::VirtualMethodMatchInfo, idx::Int) = getresult(info.info, idx)
+getedge_impl(info::VirtualMethodMatchInfo, idx::Int) = getedge(info.info, idx)
 
 """
     info::GlobalAccessInfo <: CallInfo

@@ -578,6 +578,21 @@ STATIC_INLINE jl_reset_ctx_t *reset_region_unpublish(jl_task_t *ct) JL_NOTSAFEPO
     return reset_ctx;
 }
 
+STATIC_INLINE void reset_region_deliver_pending(jl_task_t *ct)
+{
+    jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    if (bound == NULL || bound == jl_nothing ||
+        jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+        return;
+    jl_reset_ctx_t *reset_ctx = jl_atomic_exchange(&ct->reset_ctx, NULL);
+    if (reset_ctx == NULL || reset_ctx->sp == 0)
+        return;
+    ct->gcstack = reset_ctx->gcstack;
+    ct->eh = reset_ctx->eh;
+    asan_unpoison_task_stack(ct, &reset_ctx->mctx);
+    jl_longjmp(reset_ctx->mctx, JL_RESET_CODE_CANCEL);
+}
+
 STATIC_INLINE void reset_region_republish(jl_task_t *ct, jl_reset_ctx_t *reset_ctx)
 {
     jl_signal_fence();
@@ -588,23 +603,8 @@ STATIC_INLINE void reset_region_republish(jl_task_t *ct, jl_reset_ctx_t *reset_c
     // reset context and was dropped, and the code we return into may never
     // poll. Re-check the region's governing source (republish first, so an
     // arrival in between is the sender's to handle) and perform the missed
-    // delivery ourselves: the synchronous analog of the request-5 reset in
-    // signals-unix.c, with the exchange arbitrating against concurrent
-    // senders. bound_cancel_token is the region's governor here: everything
-    // that could have rebound it while the region was unpublished (nested
-    // cancellation points in finalizers, exception handlers) restores it
-    // together with the region.
-    jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
-    if (bound == NULL || bound == jl_nothing ||
-        jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
-        return;
-    reset_ctx = jl_atomic_exchange(&ct->reset_ctx, NULL);
-    if (reset_ctx == NULL || reset_ctx->sp == 0)
-        return;
-    ct->gcstack = reset_ctx->gcstack;
-    ct->eh = reset_ctx->eh;
-    asan_unpoison_task_stack(ct, &reset_ctx->mctx);
-    jl_longjmp(reset_ctx->mctx, JL_RESET_CODE_CANCEL);
+    // delivery ourselves.
+    reset_region_deliver_pending(ct);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_small_alloc_reset_safe(jl_ptls_t ptls, int offset, int osize,
@@ -657,6 +657,91 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
 JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 {
     return jl_gc_counted_malloc(sz);
+}
+
+// === GMP allocation hooks ===================================================
+// These are special reset-safe versions of GMP's allocations functions. GMP is
+// generally reset-safe, but our allocators are not, so we must protect ourselves
+// from a stray reset inside the allocator.
+
+static void jl_gmp_defer_note(void *state, uint8_t sev)
+{
+    (void)sev;
+    *(volatile sig_atomic_t*)state = 1;
+}
+
+// These guards NEST: an allocation hook may trigger a collection whose
+// finalizers run __gmpz_clear, re-entering the free hook inside the outer
+// guard. Enter therefore saves the previously published context and leave
+// restores it (never bare NULL - clearing would strip the outer hook's
+// protection for the remainder of its libc call, letting a reset longjmp
+// land mid-malloc with the arena lock held).
+STATIC_INLINE jl_cancel_handler_ctx_t *jl_gmp_guard_enter(jl_task_t *ct,
+                                                          jl_cancel_handler_ctx_t *hctx,
+                                                          volatile sig_atomic_t *deferred) JL_NOTSAFEPOINT
+{
+    jl_cancel_handler_ctx_t *prev = jl_atomic_load_relaxed(&ct->cancel_handler_ctx);
+    hctx->fn = &jl_gmp_defer_note;
+    hctx->state = (void*)deferred;
+    jl_signal_fence(); // contents before publication (same-thread signal)
+    jl_atomic_store_release(&ct->cancel_handler_ctx, hctx);
+    jl_signal_fence();
+    return prev;
+}
+
+STATIC_INLINE void jl_gmp_guard_leave(jl_task_t *ct, volatile sig_atomic_t *deferred,
+                                      jl_cancel_handler_ctx_t *prev)
+{
+    jl_signal_fence();
+    jl_atomic_store_release(&ct->cancel_handler_ctx, prev);
+    jl_signal_fence();
+    if (*deferred && prev == NULL && !ct->ptls->in_finalizer) {
+        // A reset was requested while we were inside the critical region,
+        // deliver it now.
+        reset_region_deliver_pending(ct);
+    }
+}
+
+JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL)
+        return jl_gc_counted_malloc(sz);
+    volatile sig_atomic_t deferred = 0;
+    jl_cancel_handler_ctx_t hctx;
+    jl_cancel_handler_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    void *data = jl_gc_counted_malloc(sz);
+    // may longjmp; `data` then leaks, like the aborted operation's other
+    // in-flight temporaries (its output is discarded by the unwind anyway)
+    jl_gmp_guard_leave(ct, &deferred, prev);
+    return data;
+}
+
+JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL)
+        return jl_gc_counted_realloc_with_old_size(p, old, sz);
+    volatile sig_atomic_t deferred = 0;
+    jl_cancel_handler_ctx_t hctx;
+    jl_cancel_handler_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    void *data = jl_gc_counted_realloc_with_old_size(p, old, sz);
+    jl_gmp_guard_leave(ct, &deferred, prev);
+    return data;
+}
+
+JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL) {
+        jl_gc_counted_free_with_size(p, sz);
+        return;
+    }
+    volatile sig_atomic_t deferred = 0;
+    jl_cancel_handler_ctx_t hctx;
+    jl_cancel_handler_ctx_t *prev = jl_gmp_guard_enter(ct, &hctx, &deferred);
+    jl_gc_counted_free_with_size(p, sz);
+    jl_gmp_guard_leave(ct, &deferred, prev);
 }
 
 //_unchecked_calloc does not check for potential overflow of nm*sz
@@ -751,6 +836,14 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
         start = (char*)jl_cancel_source_links(s);
         len = s->nparents;
         elsize = sizeof(jl_cancel_parent_link_t);
+    }
+    else if (vt == jl_wait_entry_type) {
+        // the `owner`/`next` slots of the trailing wait slots are marked as
+        // strided arrays (see gc-stock.c)
+        jl_wait_entry_t *w = (jl_wait_entry_t*)obj;
+        start = (char*)jl_wait_entry_slots(w);
+        len = w->nslots;
+        elsize = sizeof(jl_wait_slot_t);
     }
     if (slot < start || slot >= start + elsize * len)
         return -1;

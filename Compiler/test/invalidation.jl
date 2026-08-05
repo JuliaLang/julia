@@ -30,6 +30,61 @@ Compiler.get_inference_world(interp::InvalidationTester) = interp.world
 Compiler.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
 Compiler.cache_owner(::InvalidationTester) = InvalidationTesterToken()
 
+# Local constprop proofs expose same-module binding dependencies on the published caller.
+module LocalProofBindingInvalidation61752
+    _getproperty(M::Module, s::Symbol) = getglobal(M, s)
+
+    const VALUE = "v1"
+    probe() = _getproperty(LocalProofBindingInvalidation61752, :VALUE)::String
+end
+
+let interp = InvalidationTester()
+    @test Base.infer_return_type(LocalProofBindingInvalidation61752.probe, (); interp) === String
+
+    mi = Base.method_instance(LocalProofBindingInvalidation61752.probe, ())
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world === typemax(UInt)
+
+    binding = convert(Core.Binding,
+        GlobalRef(LocalProofBindingInvalidation61752, :VALUE))
+    @test any(edge -> edge === binding, ci.edges)
+    callee_mi = Base.method_instance(
+        LocalProofBindingInvalidation61752._getproperty, (Module, Symbol))
+    @test any(edge -> edge isa Core.CodeInstance && edge.def === callee_mi, ci.edges)
+
+    world_before = Base.get_world_counter()
+    @eval LocalProofBindingInvalidation61752 const VALUE = "v2"
+    @test ci.max_world != typemax(UInt)
+    @test ci.max_world <= world_before
+end
+
+# Eliding a finalizer registration based on inferred effects must keep the proof
+# for those effects on the caller's CodeInstance.
+module FinalizerEffectInvalidation62338
+    mutable struct Target end
+    callback(::Target) = nothing
+    register(x::Target) = finalizer(callback, x)
+end
+
+let
+    inf_params = Compiler.InferenceParams(
+        ; cache_owner=FinalizerEffectInvalidation62338)
+    interp = Compiler.NativeInterpreter(Base.get_world_counter(); inf_params)
+    mi = Base.method_instance(FinalizerEffectInvalidation62338.register,
+        (FinalizerEffectInvalidation62338.Target,))
+    ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_GET_SOURCE)
+    src = Compiler.ci_get_source(interp, ci)
+    @test !any(iscall((src, Core.finalizer)), src.code)
+    @test ci.max_world == typemax(UInt)
+
+    world_before = Base.get_world_counter()
+    @eval FinalizerEffectInvalidation62338 callback(::Target) =
+        (global callback_ran = true; nothing)
+    @test world_before < Base.get_world_counter()
+    @test ci.max_world < Base.get_world_counter()
+end
+
 # basic functionality test
 # ------------------------
 

@@ -917,25 +917,35 @@ precompile_test_harness("code caching") do dir
         MA = getfield(@__MODULE__, RootA)
         MB = getfield(@__MODULE__, RootB)
         M = getfield(MA, RootModule)
+        function backedge_callers(mi::Core.MethodInstance)
+            callers = Any[]
+            i = 1
+            while i <= length(mi.backedges)
+                mi.backedges[i] isa Type && (i += 1)
+                caller = mi.backedges[i]
+                @assert caller isa Union{Core.MethodInstance,Core.CodeInstance}
+                push!(callers, caller)
+                i += 1
+            end
+            return callers
+        end
+        caller_method(caller::Core.MethodInstance) = caller.def::Method
+        caller_method(caller::Core.CodeInstance) = caller_method(caller.def)
         m = which(M.f, (Any,))
         for mi in Base.specializations(m)
             mi === nothing && continue
             mi = mi::Core.MethodInstance
             if mi.specTypes.parameters[2] === Int8
                 # external callers
-                mods = Module[]
-                for be in mi.backedges
-                    push!(mods, ((be.def::Core.MethodInstance).def::Method).module) # XXX
-                end
+                mods = Set(caller_method(caller).module
+                    for caller in backedge_callers(mi))
                 @test MA ∈ mods
                 @test MB ∈ mods
                 @test length(mods) == 2
             elseif mi.specTypes.parameters[2] === Int16
                 # internal callers
-                meths = Method[]
-                for be in mi.backedges
-                    push!(meths, (be.def::Method).def) # XXX
-                end
+                meths = Set(caller_method(caller)
+                    for caller in backedge_callers(mi))
                 @test which(M.g1, ()) ∈ meths
                 @test which(M.g2, ()) ∈ meths
                 @test length(meths) == 2
@@ -1127,13 +1137,19 @@ precompile_test_harness("code caching") do dir
 
         idxb = findfirst(x -> x isa Core.Binding, invalidations)
         @test invalidations[idxb+1] == "insert_backedges_callee"
-        idxv = findnext(==("verify_methods"), invalidations, idxb)
-        if invalidations[idxv-1].def.def.name === :getproperty
-            idxv = findnext(==("verify_methods"), invalidations, idxv+1)
+        # Proof flattening may change the path from the binding to `flbi`, but the
+        # downstream `useflbi` invalidation must still identify `flbi` as its cause.
+        useflbi_method = only(methods(MB.useflbi))
+        flbi_method = only(methods(MA.flbi))
+        idxv = findfirst(eachindex(invalidations)) do i
+            1 < i < length(invalidations) || return false
+            invalidations[i] == "verify_methods" || return false
+            caller = invalidations[i-1]
+            cause = invalidations[i+1]
+            return caller isa Core.CodeInstance && cause isa Core.CodeInstance &&
+                caller.def.def === useflbi_method && cause.def.def === flbi_method
         end
-        idxv = findnext(==(invalidations[idxv-1]), invalidations, idxv+1)
-        @test invalidations[idxv-1] == "verify_methods"
-        @test invalidations[idxv-2].def.def.name === :useflbi
+        @test idxv !== nothing
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges

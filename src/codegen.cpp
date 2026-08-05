@@ -5542,6 +5542,8 @@ isdefined_unknown_idx:
         ctx.builder.CreateCondBr(same, point_bb, rebind_bb);
 
         ctx.builder.SetInsertPoint(rebind_bb);
+        // N.B.: Do NOT annotate julia.reset_safe here. We want the LLVM pass
+        // to reset any live region before this.
         StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
         bind_store->setOrdering(AtomicOrdering::Release);
         ai.decorateInst(bind_store);
