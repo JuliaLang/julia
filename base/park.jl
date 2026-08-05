@@ -352,8 +352,8 @@ wait_dequeue!(x::SourceWait, w::WaitEntry, why::UInt8) = nothing
 
 # `WatcherWait(src)` in a park's waitables makes the wait *complete* when
 # `src` is cancelled: its slot stages the watcher aux bit, which the
-# cancellation walk delivers value-mode - the request is the payload, at
-# any severity (see `_cancel_walk_node!`).
+# cancellation walk delivers value-mode - the request is the payload, and
+# the watcher is never frozen at ABANDON_ALL (see `_cancel_walk_node!`).
 # The registration and recheck follow `SourceWait`'s Dekker exactly; only
 # the staged aux and the meaning of firing (the awaited event, not a
 # refusal) differ. Watcher parks always use a fresh single-use entry:
@@ -402,7 +402,10 @@ function wait(tok::CancellationToken; cancel::CancelTokenArg=DEFAULT_CANCEL)
     end
     govsrc === nothing || checkcancel(govsrc)
     st = @atomic :acquire src.state
-    st != 0x00 && return CancellationRequest(st)
+    if st != 0x00
+        _mark_delivered!(src, st)
+        return CancellationRequest(st)
+    end
     ct = current_task()
     ws = govsrc === nothing ? (WatcherWait(src),) :
                               (WatcherWait(src), SourceWait(govsrc, CANCEL_REQUEST_SAFE.request))
@@ -413,7 +416,10 @@ function wait(tok::CancellationToken; cancel::CancelTokenArg=DEFAULT_CANCEL)
         # or the governing token's (the refusal) - re-inspect to tell.
         withdraw!(ws, w, WAKE_FIRED)
         st = @atomic :acquire src.state
-        st != 0x00 && return CancellationRequest(st)
+        if st != 0x00
+            _mark_delivered!(src, st)
+            return CancellationRequest(st)
+        end
         checkcancel(govsrc::CancellationTokenSource) # throws the refusal
         error("cancellation wait fired with no cancellation")
     end

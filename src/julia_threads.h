@@ -392,6 +392,9 @@ struct _jl_cancel_source_t {
     // source is cancelled (0x1 SAFE, 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL).
     // Monotonic (CAS-max).
     _Atomic(uint8_t) state;
+    // Bitmask (1 << sev) of severities whose delivery some task observed;
+    // feeds the ^C episode state machine (async-signal-safe C reads).
+    _Atomic(uint8_t) delivered;
     // Number of parent links following the fixed fields. Const.
     uint16_t nparents;
     // Dead registrations on the waiter list (retired entries and entries of

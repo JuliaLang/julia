@@ -1199,6 +1199,19 @@ void jl_init_tasks(void)
 static void NOINLINE JL_NORETURN _start_task(void) JL_CANSAFEPOINT;
 #endif
 
+// Give a task starting under a dynamic scope a chance to observe a cancelled
+// scope token before its body runs (e.g. a task spawned into an
+// ABANDON_ALL-frozen scope must not start). Resolves the scoped default token
+// and throws the corresponding CancellationRequest if it is cancelled.
+static void NOINLINE _start_task_cancel_check(void) JL_CANSAFEPOINT
+{
+    jl_value_t *checkf = jl_get_global(jl_base_module, jl_symbol("start_task_cancel_check"));
+    if (!checkf)
+        return; // early bootstrap: no cancellation machinery yet
+    jl_value_t *fargs[1] = { checkf };
+    jl_apply(fargs, 1);
+}
+
 static void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void) JL_CANSAFEPOINT
 {
 CFI_NORETURN
@@ -1260,6 +1273,10 @@ CFI_NORETURN
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT, ROOT);
+            // Fast path: a task with no dynamic scope cannot be governed by a
+            // cancellation token.
+            if (ct->scope != jl_nothing && ct->scope != NULL)
+                _start_task_cancel_check();
             // Check if we can use optimized invocation
             if (ct->invoked != NULL) {
                 // The `code`/`invoked` fields are mutable from Julia (`setfield!`), so the
@@ -1713,6 +1730,39 @@ int jl_cancel_source_subtree_member(jl_value_t *node, jl_value_t *src) JL_NOTSAF
     return 0;
 }
 
+// Collect the tasks currently running on some thread whose published bound
+// cancellation token lies in the subtree rooted at `src` (i.e. `src` is an
+// ancestor of, or equal to, the task's bound token source). The result is a
+// snapshot: tasks may migrate or rebind concurrently; callers must tolerate
+// both misses (recovered level-triggered at the task's next cancellation
+// point) and stale hits (the interrupt re-checks and is harmless).
+JL_DLLEXPORT jl_value_t *jl_cancel_collect_bound(jl_value_t *src)
+{
+    jl_array_t *out = jl_alloc_vec_any(0);
+    // `t` must stay rooted across the allocating push below: the snapshotted
+    // thread can switch tasks in the meantime, dropping what may be the last
+    // other reference.
+    jl_task_t *t = NULL;
+    JL_GC_PUSH2(&out, &t);
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = allstates[tid];
+        if (ptls2 == NULL)
+            continue;
+        t = jl_atomic_load_relaxed(&ptls2->current_task);
+        if (t == NULL)
+            continue;
+        jl_value_t *bound = jl_atomic_load_acquire(&t->bound_cancel_token);
+        if (bound != NULL && bound != jl_nothing &&
+            jl_cancel_source_subtree_member(bound, src)) {
+            jl_array_ptr_1d_push(out, (jl_value_t*)t);
+        }
+    }
+    JL_GC_POP();
+    return (jl_value_t*)out;
+}
+
 // Ping the requester's staged wakeup handle (if any) after settling its
 // request. The delivery paths run in signal context (or with the victim
 // suspended), where uv_async_send is the one legal wakeup; the handle is
@@ -2070,6 +2120,7 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
     jl_atomic_store_relaxed(&src->waiters_head, jl_nothing);
     jl_atomic_store_relaxed(&src->walk_lock, jl_nothing);
     jl_atomic_store_relaxed(&src->state, 0);
+    jl_atomic_store_relaxed(&src->delivered, 0);
     src->nparents = (uint16_t)np;
     jl_atomic_store_relaxed(&src->dead_count, 0);
     jl_atomic_store_relaxed(&src->reg_count, 0);
