@@ -51,7 +51,7 @@ Options(;
         auto_indent_time_threshold = 0.005,
         auto_refresh_time_delay = 0.0, # this no longer seems beneficial
         hint_tab_completes = true,
-        auto_insert_closing_bracket = true,
+        auto_insert_closing_bracket = false,
         style_input = true,
         iocontext = Dict{Symbol,Any}()) =
             Options(hascolor, extra_keymap, tabwidth,
