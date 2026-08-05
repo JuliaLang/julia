@@ -46,9 +46,9 @@ New language features
   can be annotated `@ccall reset_safe=true ...` instead, letting a cancellation unwind
   the foreign computation at an arbitrary instruction; `BigInt` (GMP) arithmetic uses
   this, so checkless bignum loops now cancel cleanly at the first ^C.
-  In interactive sessions, ^C now cancels the current evaluation's cancellation scope
-  (instead of throwing an `InterruptException` into whatever code happened to be running),
-  and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
+  In interactive sessions, ^C cancels the current evaluation's cancellation scope, with
+  graded escalation (safe unwind -> abandoning external waits -> abandoning tasks) on repeated
+  presses, and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
   cancellation continues under the cancelled scope unless it re-arms one itself
   (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`) ([#60281]).
 
