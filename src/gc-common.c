@@ -913,3 +913,14 @@ void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT
 #ifdef __cplusplus
 }
 #endif
+
+#define JL_GC_ABI_STR_(x) #x
+#define JL_GC_ABI_STR(x) JL_GC_ABI_STR_(x)
+JL_DLLEXPORT const char *jl_gc_image_abi(void)
+{
+#ifdef WITH_THIRD_PARTY_HEAP
+    return "mmtk-" MMTK_PLAN "-moving-" JL_GC_ABI_STR(MMTK_MOVING);
+#else
+    return "stock";
+#endif
+}

@@ -1415,6 +1415,8 @@ void jl_set_gc_and_wait(jl_task_t *ct) JL_CANSAFEPOINT;
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+// GC configuration baked into generated code; must match between an image and the runtime that loads it.
+JL_DLLEXPORT const char *jl_gc_image_abi(void) JL_NOTSAFEPOINT;
 
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
