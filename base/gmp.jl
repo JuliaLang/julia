@@ -159,7 +159,7 @@ const bitcnt_t = Culong
 
 gmpz(op::Symbol) = Expr(:tuple, QuoteNode(Symbol(:__gmpz_, op)), GlobalRef(MPZ, :libgmp))
 
-# Computation-carrying GMP entry points are annotated `reset_safe = true`,
+# Computation-carrying GMP entry points are asserted `:reset_safe`,
 # with a cancellation point (`Base.@cancel_check`) placed directly before
 # each annotated call: the point's reset region stays published across the
 # reset-safe foreign call, so an asynchronous task cancellation can unwind
@@ -191,14 +191,14 @@ for (op, nbits) in (:add => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size))))
     fname = Symbol(:__gmpz_, op)
     @eval begin
         $op!(x::BigInt, a::BigInt, b::BigInt) =
-            (Base.@cancel_check; @ccall(reset_safe=true, libgmp.$fname(x::mpz_t, a::mpz_t, b::mpz_t)::Cvoid); x)
+            (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.$fname(x::mpz_t, a::mpz_t, b::mpz_t)::Cvoid); x)
         $op(a::BigInt, b::BigInt) = $op!(BigInt(nbits=$nbits), a, b)
         $op!(x::BigInt, b::BigInt) = $op!(x, x, b)
     end
 end
 
 invert!(x::BigInt, a::BigInt, b::BigInt) =
-    (Base.@cancel_check; @ccall reset_safe=true libgmp.__gmpz_invert(x::mpz_t, a::mpz_t, b::mpz_t)::Cint)
+    (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_invert(x::mpz_t, a::mpz_t, b::mpz_t)::Cint)
 invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
 invert(a::BigInt, b::BigInt) = (ret=BigInt(); invert!(ret, a, b); ret)
 
@@ -207,13 +207,13 @@ for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     fname = Symbol(:__gmpz_, op)
     @eval begin
         $op!(x::BigInt, a::BigInt, b) =
-            (Base.@cancel_check; @ccall(reset_safe=true, libgmp.$fname(x::mpz_t, a::mpz_t, b::Culong)::Cvoid); x)
+            (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.$fname(x::mpz_t, a::mpz_t, b::Culong)::Cvoid); x)
         $op(a::BigInt, b) = $op!(BigInt(), a, b)
         $op!(x::BigInt, b) = $op!(x, x, b)
     end
 end
 
-ui_sub!(x::BigInt, a, b::BigInt) = (Base.@cancel_check; @ccall(reset_safe=true, libgmp.__gmpz_ui_sub(x::mpz_t, a::Culong, b::mpz_t)::Cvoid); x)
+ui_sub!(x::BigInt, a, b::BigInt) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_ui_sub(x::mpz_t, a::Culong, b::mpz_t)::Cvoid); x)
 ui_sub(a, b::BigInt) = ui_sub!(BigInt(), a, b)
 
 for op in (:scan1, :scan0)
@@ -222,7 +222,7 @@ for op in (:scan1, :scan0)
     @eval $op(a::BigInt, b) = Int(signed(ccall($(gmpz(op)), Culong, (mpz_t, Culong), a, b)))
 end
 
-mul_si!(x::BigInt, a::BigInt, b) = (Base.@cancel_check; @ccall(reset_safe=true, libgmp.__gmpz_mul_si(x::mpz_t, a::mpz_t, b::Clong)::Cvoid); x)
+mul_si!(x::BigInt, a::BigInt, b) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_mul_si(x::mpz_t, a::mpz_t, b::Clong)::Cvoid); x)
 mul_si(a::BigInt, b) = mul_si!(BigInt(), a, b)
 mul_si!(x::BigInt, b) = mul_si!(x, x, b)
 
@@ -231,14 +231,14 @@ for op in (:neg, :com, :sqrt, :set)
     fname = Symbol(:__gmpz_, op)
     @eval begin
         $op!(x::BigInt, a::BigInt) =
-            (Base.@cancel_check; @ccall(reset_safe=true, libgmp.$fname(x::mpz_t, a::mpz_t)::Cvoid); x)
+            (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.$fname(x::mpz_t, a::mpz_t)::Cvoid); x)
         $op(a::BigInt) = $op!(BigInt(), a)
     end
     op === :set && continue # MPZ.set!(x) would make no sense
     @eval $op!(x::BigInt) = $op!(x, x)
 end
 
-fac_ui!(x::BigInt, a) = (Base.@cancel_check; @ccall(reset_safe=true, libgmp.__gmpz_fac_ui(x::mpz_t, a::Culong)::Cvoid); x)
+fac_ui!(x::BigInt, a) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_fac_ui(x::mpz_t, a::Culong)::Cvoid); x)
 fac_ui(a) = fac_ui!(BigInt(), a)
 
 for (op, T) in ((:set_ui, Culong), (:set_si, Clong), (:set_d, Cdouble))
@@ -256,19 +256,19 @@ mpn_popcount(a::BigInt) = mpn_popcount(a.d, abs(a.size))
 
 function tdiv_qr!(x::BigInt, y::BigInt, a::BigInt, b::BigInt)
     Base.@cancel_check
-    @ccall reset_safe=true libgmp.__gmpz_tdiv_qr(x::mpz_t, y::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
+    Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_tdiv_qr(x::mpz_t, y::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
     x, y
 end
 tdiv_qr(a::BigInt, b::BigInt) = tdiv_qr!(BigInt(), BigInt(), a, b)
 
 powm!(x::BigInt, a::BigInt, b::BigInt, c::BigInt) =
-    (Base.@cancel_check; @ccall(reset_safe=true, libgmp.__gmpz_powm(x::mpz_t, a::mpz_t, b::mpz_t, c::mpz_t)::Cvoid); x)
+    (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_powm(x::mpz_t, a::mpz_t, b::mpz_t, c::mpz_t)::Cvoid); x)
 powm(a::BigInt, b::BigInt, c::BigInt) = powm!(BigInt(), a, b, c)
 powm!(x::BigInt, b::BigInt, c::BigInt) = powm!(x, x, b, c)
 
 function gcdext!(x::BigInt, y::BigInt, z::BigInt, a::BigInt, b::BigInt)
     Base.@cancel_check
-    @ccall reset_safe=true libgmp.__gmpz_gcdext(x::mpz_t, y::mpz_t, z::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
+    Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_gcdext(x::mpz_t, y::mpz_t, z::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
     x, y, z
 end
 gcdext(a::BigInt, b::BigInt) = gcdext!(BigInt(), BigInt(), BigInt(), a, b)
@@ -281,8 +281,8 @@ cmp_d(a::BigInt, b) = Int(ccall((:__gmpz_cmp_d, libgmp), Cint, (mpz_t, Cdouble),
 mpn_cmp(a::Ptr{Limb}, b::Ptr{Limb}, c) = ccall((:__gmpn_cmp, libgmp), Cint, (Ptr{Limb}, Ptr{Limb}, Clong), a, b, c)
 mpn_cmp(a::BigInt, b::BigInt, c) = mpn_cmp(a.d, b.d, c)
 
-get_str!(x, a, b::BigInt) = (Base.@cancel_check; @ccall(reset_safe=true, libgmp.__gmpz_get_str(x::Ptr{Cchar}, a::Cint, b::mpz_t)::Ptr{Cchar}); x)
-set_str!(x::BigInt, a, b) = Int(begin Base.@cancel_check; @ccall(reset_safe=true, libgmp.__gmpz_set_str(x::mpz_t, a::Ptr{UInt8}, b::Cint)::Cint) end)
+get_str!(x, a, b::BigInt) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_get_str(x::Ptr{Cchar}, a::Cint, b::mpz_t)::Ptr{Cchar}); x)
+set_str!(x::BigInt, a, b) = Int(begin Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_set_str(x::mpz_t, a::Ptr{UInt8}, b::Cint)::Cint) end)
 get_d(a::BigInt) = ccall((:__gmpz_get_d, libgmp), Cdouble, (mpz_t,), a)
 
 function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}

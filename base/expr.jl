@@ -625,6 +625,7 @@ The following `setting`s are supported.
 - `:noub`
 - `:noub_if_noinbounds`
 - `:nortcall`
+- `:reset_safe` (only applicable to `@ccall`)
 - `:foldable`
 - `:removable`
 - `:total`
@@ -867,6 +868,21 @@ the following other `setting`s:
     recommended over the use of `:total`.
 
 ---
+## `:reset_safe`
+
+The `:reset_safe` setting applies only when the annotated expression is a
+[`@ccall`](@ref); it asserts that the foreign call has been *audited* for
+asynchronous unwinding: interrupting the callee at any instruction leaves the
+process consistent - no locks held, no torn global state; at worst bounded
+leaks of in-flight temporaries and garbage *values* (with valid structure) in
+the call's discarded outputs. The reset region of a preceding cancellation
+point then stays published across the call (for any other call it ends at
+the call boundary), letting an asynchronous task cancellation unwind the
+foreign computation at an arbitrary instruction. See the `cancel_handler`
+option of [`@ccall`](@ref) for the alternative integration that does not
+require such an audit.
+
+---
 ## Negated effects
 
 Effect names may be prefixed by `!` to indicate that the effect should be removed
@@ -875,13 +891,31 @@ the call is generally total, it may however throw.
 """
 macro assume_effects(args...)
     lastex = args[end]
-    override = compute_assumed_settings(args[begin:end-1])
+    settings = args[begin:end-1]
+    if isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
+        # `:reset_safe` is a foreigncall-only setting (it marks the call for
+        # the cancellation lowering, not the enclosing method): peel it off
+        # and carry it in a dedicated bit above the standard effects
+        # overrides in the `@ccall_effects` word.
+        reset_safe = false
+        rest = ()
+        for st in settings
+            if st === QuoteNode(:reset_safe)
+                reset_safe = true
+            else
+                rest = (rest..., st)
+            end
+        end
+        override = compute_assumed_settings(rest)
+        word = encode_effects_override(override)
+        reset_safe && (word |= CCALL_EFFECT_RESET_SAFE)
+        lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
+        insert!(lastex.args, 3, word)
+        return esc(lastex)
+    end
+    override = compute_assumed_settings(settings)
     if is_function_def(unwrap_macrocalls(lastex))
         return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
-    elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
-        lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(lastex.args, 3, encode_effects_override(override))
-        return esc(lastex)
     end
     override′ = compute_assumed_setting(override, lastex)
     if override′ !== nothing
@@ -950,6 +984,15 @@ function EffectsOverride(
 end
 
 const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
+
+# The `:reset_safe` setting of `@assume_effects` applied to a `@ccall`: not
+# one of the method-level effects overrides above, but a per-call attestation
+# consumed by codegen (the foreign call tolerates an asynchronous unwind at
+# any point, so a published cancellation reset region survives it). Carried
+# in the `@ccall_effects` word one bit above the standard overrides and split
+# back out by `ccall_macro_lower`. (A literal, since `<<` is not defined yet
+# this early in bootstrap: keep equal to `UInt16(1) << NUM_EFFECTS_OVERRIDES`.)
+const CCALL_EFFECT_RESET_SAFE = 0x0800
 
 function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)
     if isexpr(setting, :call) && setting.args[1] === :(!)

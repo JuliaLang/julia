@@ -263,7 +263,6 @@ The above input outputs this:
 function ccall_macro_parse(exprs)
     gc_safe = false
     cancel = nothing
-    reset_safe = false
     expr = nothing
     if exprs isa Expr
         expr = exprs
@@ -287,16 +286,8 @@ function ccall_macro_parse(exprs)
                     throw(ArgumentError("cancel_handler must be a `(handler, state)` tuple"))
                 end
                 cancel = (value.args[1], value.args[2])
-            elseif name === :reset_safe
-                if value === true
-                    reset_safe = true
-                elseif value === false
-                    reset_safe = false
-                else
-                    throw(ArgumentError("reset_safe must be true or false"))
-                end
             else
-                throw(ArgumentError("@ccall options are `gc_safe = <bool>`, `reset_safe = <bool>` and `cancel_handler = (handler, state)`"))
+                throw(ArgumentError("@ccall options are `gc_safe = <bool>` and `cancel_handler = (handler, state)`"))
             end
             i += 1
         end
@@ -369,33 +360,33 @@ function ccall_macro_parse(exprs)
             pusharg!(a)
         end
     end
-    return func, rettype, types, args, gc_safe, cancel, reset_safe, nreq
+    return func, rettype, types, args, gc_safe, cancel, nreq
 end
 
 
-function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, cancel, reset_safe, nreq)
+function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, cancel, nreq)
     have_cancel = cancel !== nothing
-    base_cconv = convention isa Tuple ? (convention..., gc_safe) :
-                                        (convention, UInt16(0), gc_safe)
+    # `Base.@assume_effects :reset_safe @ccall ...` arrives as the
+    # CCALL_EFFECT_RESET_SAFE bit above the standard effects overrides in
+    # the `@ccall_effects` word (see `@assume_effects` in expr.jl): split it
+    # back out into its dedicated calling-convention slot here.
+    reset_safe = false
+    if convention isa Tuple
+        cc_sym, effects = convention
+        reset_safe = (effects & CCALL_EFFECT_RESET_SAFE) != 0x0000
+        base_cconv = (cc_sym, effects & ~CCALL_EFFECT_RESET_SAFE, gc_safe)
+    else
+        base_cconv = (convention, UInt16(0), gc_safe)
+    end
     if !have_cancel
-        # `reset_safe = true` only affects how codegen treats the call (the
-        # enclosing reset region survives it); establishing that region -
-        # a cancellation point placed before the call - is the caller's
-        # business, and neither annotation implies any cancellation point of
-        # its own.
         cconv = reset_safe ? Expr(:cconv, (base_cconv..., false, true), nreq) :
                              Expr(:cconv, base_cconv, nreq)
         return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
                      Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
     end
-    # Cancellation-handler annotation: the (handler, state) pair rides as
-    # two extra leading foreigncall arguments - peeled off again by codegen,
-    # which publishes them as the handler context around the call. The
-    # annotation implies no cancellation point: binding the governing source
-    # (which gates delivery) and observing the cancellation itself are the
-    # caller's business - place a `@cancel_check` before the call, and after
-    # it either re-check or have the handler make the foreign call return a
-    # recognizable abort code.
+    # Our internal ABI for cancellation handlers is f(func, state, args...). Codegen
+    # inlines the establishment of the handler and the ultimate call to `f` has the
+    # ordinary ABI without the extra arguments.
     fex, sex = cancel
     nreq > 0 && (nreq += 2)
     cconv = Expr(:cconv, reset_safe ? (base_cconv..., true, true) : (base_cconv..., true), nreq)
@@ -466,7 +457,42 @@ the `ccall` may block outside of julia.
 !!! compat "Julia 1.12"
     The `gc_safe` argument requires Julia 1.12 or higher.
 
-A long-running foreign call can be made cancellable with the
+# Extended help
+
+## Cancellation
+
+### Semantics of reset_safe annotation
+
+When annotated `@assume_effects :reset_safe`, e.g.:
+
+    Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_mul(x::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
+
+The compiler has license to extend an earlier reset region through the entire
+execution of the called C function. In particular, as a result, the function
+may be abandoned at any point (and reset to the appropriate cancellation
+point).
+
+This imposes strict requirements on the foreign code. In particular, it is
+generally unsafe to call into most C standard library functions (the Julia
+runtime will handle properly protecting the symbol lookup itself), modify
+memory other than allocated since the most recent cancellation point (or
+which the cancellation will explicitly clean up). Additionally, any memory
+access to memory that may be read after a reset must be annotated
+`volatile`. This list of conditions is meant to be illustrative, not
+exhaustive and may be extended with additional warnings in the future.
+
+Co-operating foreign code may use the Julia C API to temporarily protect
+regions from reset, although this API is not yet stable and requires source
+modifications.
+
+!!! compat "Julia 1.14"
+    The `:reset_safe` effect requires Julia 1.14 or higher.
+
+## Cancellation handlers
+
+Because the `:reset_safe` effect imposes such strict requirements, another
+option is provided to allow for cancellation of cooperating foreign code.
+In particular, a long-running foreign call can be made cancellable with the
 `cancel_handler = (handler, state)` option:
 
     @ccall cancel_handler=(CANCEL_FPTR, ref) lib.solve(ref::Ptr{Cvoid})::Cvoid
@@ -482,58 +508,26 @@ The handler performs the library-specific work to make the foreign call
 return early - typically setting a flag or calling the library's own
 cancellation entry point.
 
-The annotation implies no cancellation point of its own. Delivery is gated
-on the task's *bound* token source, which is what the most recent
-cancellation point bound - so place a `Base.@cancel_check` before the
-call (it also throws a cancellation that is already pending, which the
-handler cannot abort). How the aborted call's result is handled afterwards
-is equally the caller's choice: the handler can make the foreign function
-return a recognizable abort code that the caller inspects, or the caller
-can simply re-check with `Base.@cancel_check` after the call, which
-throws the delivered cancellation before a partial result can escape.
+Both `CANCEL_FPTR` and `ref` are handled as ordinary ccall arguments (both
+of C type `Ptr{Cvoid}`), including for purposes of rooting. Note that since
+`CANCEL_FPTR` runs as a signal handler, it must be async-signal-safe in the
+ordinary sense, although unlike `:reset_safe`, no requirements are imposed
+on the called function itself.
 
-The whole handler interface is a plain C ABI: the runtime does not assume it
-is safe to run Julia code at the interrupted point (a handler that knows
-better can still be written in Julia via [`@cfunction`](@ref)). `state`
-undergoes the standard `ccall` argument conversion to `Ptr{Cvoid}`
-(`unsafe_convert(Ptr{Cvoid}, cconvert(Ptr{Cvoid}, state))`), and, like any
-other argument, the converted value is kept rooted for the duration of the
-call - pass a `Ref` to hand the handler a pointer to Julia-managed data.
-Handler restrictions mirror those of a signal handler: it must not allocate,
-yield, perform I/O, take locks, or throw, and it must tolerate being invoked
-multiple times (once per redelivery), spuriously, and concurrently with the
-call completing. The delivery machinery preserves the complete interrupted
-register state around the handler, so it may otherwise do anything an
-ordinary C function may. The handler is only invoked while the call is
-actually running on a thread (at most one invocation at a time per thread);
-delivery is best-effort and the cancellation itself remains level-triggered.
+A function may be annotated with both `:reset_safe` and `cancel_handler`,
+in which case the cancel_handler takes precedence. However, in such a
+situation, the compiler will attempt to preserve the reset region into the
+ccall and it may be read by the cancel_handler (which can then perform some
+library specific cleanup before performing the reset as usual). However,
+this is not required nor assumed. A cancel handler could instead cause the
+function to return early with an error code. Note however, that there is no
+automatic cancellation point implied by the `cancel_handler` attribute. It
+is the responsibility of the user to set an appropriate cancellation point
+either before or after (possibly conditional on an appropriate error return
+code) the ccall.
 
 !!! compat "Julia 1.14"
     The `cancel_handler` option requires Julia 1.14 or higher.
-
-A foreign call into a library that has been *audited* for asynchronous
-unwinding can instead be annotated `reset_safe = true`:
-
-    @ccall reset_safe=true libgmp.__gmpz_mul(x::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
-
-The annotation lets the reset region of an enclosing cancellation point stay
-published across the call (for any other call it ends at the call boundary),
-so a cancellation of the governing token can unwind the foreign computation
-at an *arbitrary* instruction, longjmping back to that cancellation point,
-which throws. The point itself is the caller's to place: the region of the
-nearest preceding cancellation point is used, if it reaches the call - and
-if it does not (any interposed operation the compiler cannot prove safe
-ends it), the call simply degrades to level-triggered cancellation at the
-next point. Unwinding is only sound if interruption at every point of the
-callee leaves the process consistent - no locks held, no torn global state;
-at worst bounded leaks of in-flight temporaries and garbage *values* (with
-valid structure) in the call's discarded outputs. Base's GMP (`BigInt`)
-wrappers use this, in concert with allocation hooks that defer a
-cancellation delivered while inside the allocator itself. This is how a
-checkless `BigInt` loop cancels cleanly on task cancellation.
-
-!!! compat "Julia 1.14"
-    The `reset_safe` option requires Julia 1.14 or higher.
 """
 macro ccall(exprs...)
     return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)
