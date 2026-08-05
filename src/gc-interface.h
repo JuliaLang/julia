@@ -121,6 +121,8 @@ void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT;
 // Deallocates any memory previously used for thread-local GC data structures.
 // Mostly used to ensure that we perform this memory cleanup for foreign threads that are
 // about to leave Julia.
+// After this call the GC may no longer scan this thread's roots; the caller
+// must be GC-unsafe and must not poll a safepoint afterwards.
 void jl_free_thread_gc_state(struct _jl_tls_states_t *ptls);
 
 // ========================================================================= //

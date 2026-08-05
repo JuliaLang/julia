@@ -550,7 +550,7 @@ static void jl_delete_thread(void *value)
     ptls->root_task = NULL;
     jl_free_thread_gc_state(ptls);
     // park in safe-region from here on (this may run GC again)
-    (void)jl_gc_safe_enter(ptls);
+    jl_gc_safe_enter_from_nonmutator(ptls);
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;
