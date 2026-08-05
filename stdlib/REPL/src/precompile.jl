@@ -205,6 +205,10 @@ let
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Char})
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
             precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
+            # The sigint listener invokes this while handling a ^C episode;
+            # compiling it then can deadlock the compile's GC against a
+            # cancelled victim spinning without safepoints.
+            precompile(Tuple{typeof(REPL.maybe_rescue_REPL_after_sigint)})
         finally
             ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
         end
