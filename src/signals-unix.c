@@ -41,6 +41,16 @@
 #include <sys/event.h>
 #endif
 
+// sigwaitinfo (and the siginfo_t it fills) lets the signal listener
+// distinguish timer-raised signals from user-sent ones (SI_TIMER + sigev
+// value). glibc advertises it via _POSIX_C_SOURCE (defined through
+// _GNU_SOURCE); FreeBSD supports it without defining that macro, and
+// without the discrimination a rescue-timer SIGINT is indistinguishable
+// from a user press (breaking the whole ^C escalation ladder there).
+#if (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L) || defined(__FreeBSD__)
+#define HAVE_SIGWAITINFO
+#endif
+
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
 
@@ -1263,12 +1273,17 @@ static void do_profile(void) JL_NOTSAFEPOINT
 }
 #endif
 
+// Direct-abandonment request in flight from this listener (the victim's
+// thread id), or -1. Single-threaded state: only this listener publishes
+// direct abandonments.
+static int16_t direct_abandon_tid = -1;
+
 static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 {
     sigset_t sset;
-    int sig, critical, profile;
+    int sig, critical, profile, doexit = 0, rescue_bt = 0;
     jl_sigsetset(&sset);
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
     siginfo_t info;
 #endif
 #ifdef HAVE_KEVENT
@@ -1286,10 +1301,14 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 signal(*sig, SIG_DFL);
         }
     }
+    // The ^C escalation timer is delivered through this kqueue
+    sigint_rescue_kq = sigqueue;
 #endif
+    int rescue_timer_fired;
     while (1) {
         sig = 0;
         errno = 0;
+        rescue_timer_fired = 0;
 #ifdef HAVE_KEVENT
         if (sigqueue != -1) {
             int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
@@ -1301,15 +1320,25 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             if (nevents != 1) {
                 close(sigqueue);
                 sigqueue = -1;
+                sigint_rescue_kq = -1;
                 for (const int *sig = sigwait_sigs; *sig; sig++)
                     signal(*sig, SIG_DFL);
                 continue;
             }
-            sig = ev.ident;
+            if (ev.filter == EVFILT_TIMER) {
+                // the ^C escalation (rescue) timer expired
+                if (ev.ident != JL_SIGINT_RESCUE_TIMER_IDENT)
+                    continue;
+                sig = SIGINT;
+                rescue_timer_fired = 1;
+            }
+            else {
+                sig = ev.ident;
+            }
         }
         else
 #endif
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
         sig = sigwaitinfo(&sset, &info);
 #else
         if (sigwait(&sset, &sig))
@@ -1324,7 +1353,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
         profile = (sig == SIGUSR1);
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#ifdef HAVE_SIGWAITINFO
         if (profile && !(info.si_code == SI_TIMER &&
                 info.si_value.sival_ptr == &timerprof))
             profile = 0;
@@ -1333,6 +1362,77 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 
         if (sig == SIGINT) {
+            // Advance an in-flight direct abandonment (published on a
+            // previous press) to its verdict: the delivery bit cannot be
+            // lost, so the request settles with the victim's next signal
+            // handling - polled here on every wake (press or rescue-timer
+            // tick) rather than waited for, keeping this listener free.
+            if (direct_abandon_tid >= 0) {
+                int verdict = jl_abandon_task_poll(direct_abandon_tid);
+                if (verdict == 1) {
+                    direct_abandon_tid = -1;
+                    // Let the sigint listener task perform the Julia-side
+                    // cleanup (waking the abandoned task's waiters and
+                    // re-initializing or shutting down the session).
+                    deliver_sigint_notification();
+                }
+                else if (verdict == -1) {
+                    direct_abandon_tid = -1;
+                    jl_safe_printf("\nWARNING: Could not abandon the current task (it holds runtime resources); still trying.\n");
+                }
+                else {
+                    // Still pending (e.g. the victim thread has the delivery
+                    // signal masked): keep the wake heartbeat alive so the
+                    // verdict is eventually polled. The press itself may
+                    // still escalate or redeliver below.
+                    jl_arm_sigint_rescue_timer();
+                }
+            }
+#if defined(HAVE_SIGWAITINFO) && !defined(HAVE_KEVENT)
+            // Check if this SIGINT came from our rescue timer (si_code == SI_TIMER
+            // and sival_int == 1). This means the process failed to respond to
+            // the cancellation request in time.
+            if (info.si_code == SI_TIMER && info.si_value.sival_int == 1)
+                rescue_timer_fired = 1;
+#endif
+            if (rescue_timer_fired) {
+                int est = jl_sigint_episode_state();
+                if (est == 0)
+                    continue; // the episode already completed - stand down
+                // Mark that the timer has expired - the next SIGINT escalates
+                // (via the listener, or the direct abandonment below).
+                jl_sigint_rescue_timer_expired();
+                if (est == 2) {
+                    jl_safe_printf("\nWARNING: Cancellation is in progress, but has not completed within 1s.\n"
+                                     "         You (or a package author) may need to add more @cancel_check's.\n"
+                                     "         Press ^C again to also stop waiting for external resources (e.g. in-flight I/O).\n"
+#ifdef SIGINFO
+                                     "         Press ^T to print thread backtraces.\n");
+#else
+                                     "         Send SIGUSR1 to print thread backtraces.\n");
+#endif
+                    continue;
+                }
+                if (est == 3) {
+                    jl_safe_printf("\nWARNING: Cancellation has still not completed.\n"
+                                     "         Press ^C again to forcibly abandon the current task (unsafe; may leak resources).\n"
+#ifdef SIGINFO
+                                     "         Press ^T to print thread backtraces.\n");
+#else
+                                     "         Send SIGUSR1 to print thread backtraces.\n");
+#endif
+                    continue;
+                }
+                jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
+                                 "         You (or a package author) may need to add more @cancel_check's.\n"
+#ifdef SIGINFO
+                                 "         Press ^T to print thread backtraces.\n"
+#else
+                                 "         Send SIGUSR1 to print thread backtraces.\n"
+#endif
+                                 "         Press ^C again to (unsafely) abandon the current task.\n");
+                continue;
+            }
             if (jl_ignore_sigint()) {
                 continue;
             }
@@ -1340,11 +1440,82 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 critical = 1;
             }
             else {
-                // Deliver the press through the cancellation system: mark the
-                // ^C episode source cancelled directly (async-signal-safely)
-                // and notify the sigint listener task, which performs the
-                // remaining Julia-side delivery (see
-                // jl_sigint_request_cancellation).
+                // Check if the rescue timer has already expired (from a previous SIGINT
+                // cycle). If so, the user is pressing Ctrl-C again after the warning -
+                // time to abandon the stuck task, unless the julia-side
+                // escalation (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can
+                // still make progress on it.
+                jl_task_t *rescue_task = NULL;
+                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+                // Direct abandonment rips away whatever thread 0 is currently
+                // running, which is only legitimate when that is the stuck
+                // victim monopolizing the thread in managed compute; the
+                // delivery-point validation (jl_abandon_try_commit) is what
+                // verifies that against the victim's actual frozen state -
+                // including transient conditions like an in-flight GC or
+                // allocator lock, which simply refuse and re-offer.
+                if (direct_abandon_tid < 0 &&
+                    jl_sigint_rescue_timer_expired_peek() &&
+                    jl_sigint_direct_abandon_allowed()) {
+                    // consumes the expiry; returns NULL if the episode
+                    // completed (or was reset) in the meantime
+                    rescue_task = jl_check_sigint_rescue_abandon();
+                }
+                if (rescue_task != NULL) {
+                    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+                    jl_value_t *bound = ct == NULL ? NULL :
+                        jl_atomic_load_acquire(&ct->bound_cancel_token);
+                    jl_value_t *sigsrc = (jl_value_t*)jl_atomic_load_acquire(&jl_sigint_source);
+                // Only a task actually governed by the ^C source may be
+                // ripped away: thread 0 can be running unrelated work while
+                // the real victim is stalled elsewhere - including runtime
+                // infrastructure like the sigint listener itself, whose
+                // token binding is empty - and a no-op rung beats
+                // destroying a bystander. The episode's registered
+                // foreground task qualifies even without a binding:
+                // bindings are published only by compiled cancellation
+                // points, and a foreground victim that entered checkless
+                // compute without ever blocking never passed one.
+                    int governed = bound != NULL && bound != jl_nothing &&
+                        sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc);
+                    if (!governed && ct != NULL && sigsrc != NULL &&
+                        ct == jl_get_sigint_foreground_task())
+                        governed = 1;
+                    if (ct != NULL && ct != rescue_task && governed) {
+                        // Announce BEFORE publishing: the moment the victim
+                        // thread switches to the rescue task, session cleanup
+                        // can conclude (in a script it exits the process) -
+                        // on a busy or single-CPU machine that exit wins the
+                        // race against a message printed afterwards.
+                        jl_safe_printf("\nWARNING: Abandoning the current task and switching to a rescue task.\n"
+                                         "         This may leave the process in an inconsistent state.\n");
+                        // Publish the request and return to the wait: the
+                        // verdict is polled on the next wake (see above) -
+                        // no waiting on this listener. The staged result is
+                        // the interned ABANDON_ALL severity byte, so the
+                        // settle's write barrier can never fire from this
+                        // non-Julia thread.
+                        int reqtid = jl_abandon_task_request(ct, rescue_task, NULL, NULL);
+                        if (reqtid >= 0) {
+                            direct_abandon_tid = (int16_t)reqtid;
+                            // The verdict is polled on this listener's next
+                            // wake; guarantee one - the accepting press does
+                            // not go through jl_sigint_request_cancellation's
+                            // arm, and the test/user may press nothing more.
+                            jl_arm_sigint_rescue_timer();
+                        }
+                        else
+                            jl_safe_printf("\nWARNING: Could not abandon the current task; still trying.\n");
+                        continue;
+                    }
+                }
+
+                // Request cancellation of the root task and notify the sigint
+                // listener - if the task is not currently running, the sigint
+                // listener will take care of safely moving us through the
+                // cancellation state machine.
+                // TODO: If there is only one thread, we may need to ask the currently
+                // running task to yield, so that the sigint listener can run.
                 jl_sigint_request_cancellation();
                 continue;
             }
@@ -1362,15 +1533,31 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         critical |= (sig == SIGUSR1 && !profile);
 #endif
 
-        int doexit = critical;
+        doexit = critical;
 #ifdef SIGINFO
         if (sig == SIGINFO) {
+            if (jl_sigint_episode_state() != 0) {
+                // On-demand thread backtraces during a ^C episode.
+                critical = 1;
+                doexit = 0;
+                rescue_bt = 1;
+                goto noexit_critical;
+            }
             if (profile_running != 1)
                 trigger_profile_peek();
             doexit = 0;
         }
 #else
         if (sig == SIGUSR1) {
+#ifdef HAVE_SIGWAITINFO
+            if (jl_sigint_episode_state() != 0) {
+                // On-demand thread backtraces during a ^C episode.
+                critical = 1;
+                doexit = 0;
+                rescue_bt = 1;
+                goto noexit_critical;
+            }
+#endif
             if (profile_running != 1 && timer_graceperiod_elapsed())
                 trigger_profile_peek();
             doexit = 0;
@@ -1401,6 +1588,9 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
         }
 
+#if defined(SIGINFO) || defined(HAVE_SIGWAITINFO) || defined(HAVE_KEVENT)
+noexit_critical:
+#endif
         signal_bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
         if (critical) {
@@ -1457,7 +1647,10 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
             jl_safe_printf("\n");
             // Enable trace compilation to stderr with timing during profile collection
-            jl_force_trace_compile_timing_enable();
+            // (not wanted for the automated ^C-escalation backtrace collection)
+            if (!rescue_bt)
+                jl_force_trace_compile_timing_enable();
+            rescue_bt = 0;
         }
     }
     return NULL;

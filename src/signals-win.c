@@ -571,6 +571,10 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     ReleaseSRWLockExclusive(&ctx_rewrite_lock);
 }
 
+// Direct-abandonment request in flight from this console handler (the
+// victim's thread id), or -1 (see the unix listener's state machine).
+static int16_t direct_abandon_tid = -1;
+
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     int sig;
@@ -581,14 +585,81 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         // etc.
         default: sig = SIGTERM; break;
     }
+    if (direct_abandon_tid >= 0) {
+        int verdict = jl_abandon_task_poll(direct_abandon_tid);
+        if (verdict == 1) {
+            direct_abandon_tid = -1;
+            // Let the sigint listener task perform the Julia-side cleanup.
+            deliver_sigint_notification();
+        }
+        else if (verdict == -1) {
+            direct_abandon_tid = -1;
+            jl_safe_printf("\nWARNING: Could not abandon the current task (it holds runtime resources); still trying.\n");
+        }
+    }
     if (!jl_ignore_sigint()) {
         if (exit_on_sigint)
             jl_exit(128 + sig); // 128 + SIGINT
         if (sig == SIGINT) {
-            // Deliver the press through the cancellation system: mark the
-            // ^C episode source cancelled directly and notify the sigint
-            // listener task, which performs the remaining Julia-side
-            // delivery (see jl_sigint_request_cancellation).
+            // If the escalation timer has expired, this repeated ^C abandons
+            // the stuck task, unless the julia-side escalation
+            // (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can still make
+            // progress on it.
+            jl_task_t *rescue_task = NULL;
+            jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+            // See signals-unix.c: only abandon a thread busy in managed
+            // compute - a GC-safe thread is parked, not the stuck victim -
+            // but give a thread transiently inside the allocator or GC a
+            // brief window rather than consuming the press.
+            if (jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed()) {
+                for (int tries = 0; tries < 100; tries++) {
+                    if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
+                        ptls2->locks.len == 0) {
+                        // consumes the expiry; NULL if the episode completed
+                        // (or was reset) while we waited
+                        rescue_task = jl_check_sigint_rescue_abandon();
+                        break;
+                    }
+                    uv_sleep(1);
+                }
+            }
+            if (rescue_task != NULL) {
+                jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+                jl_value_t *bound = ct == NULL ? NULL :
+                    jl_atomic_load_acquire(&ct->bound_cancel_token);
+                jl_value_t *sigsrc = (jl_value_t*)jl_get_sigint_source();
+                // See signals-unix.c: only abandon work governed by the ^C
+                // source - an unbound task may be runtime infrastructure -
+                // but the episode's registered foreground task qualifies
+                // even without a binding (a never-blocked victim passed no
+                // publishing cancellation point).
+                int governed = bound != NULL && bound != jl_nothing &&
+                    sigsrc != NULL && sigsrc != jl_nothing &&
+                    jl_cancel_source_subtree_member(bound, sigsrc);
+                if (!governed && ct != NULL && sigsrc != NULL && sigsrc != jl_nothing &&
+                    ct == jl_get_sigint_foreground_task())
+                    governed = 1;
+                if (ct != NULL && ct != rescue_task && governed) {
+                    // Announce BEFORE publishing (see signals-unix.c): the
+                    // session cleanup that follows the switch can exit the
+                    // process before a message printed afterwards makes it
+                    // out.
+                    jl_safe_printf("\nWARNING: Abandoning the current task and switching to a rescue task.\n"
+                                     "         This may leave the process in an inconsistent state.\n");
+                    // Publish the request and return: the verdict is polled
+                    // at the next handler invocation (press or timer tick) -
+                    // no waiting here (see the unix listener's state
+                    // machine).
+                    int reqtid = jl_abandon_task_request(ct, rescue_task, NULL, NULL);
+                    if (reqtid >= 0)
+                        direct_abandon_tid = (int16_t)reqtid;
+                    else
+                        jl_safe_printf("\nWARNING: Could not abandon the current task; still trying.\n");
+                    return 1;
+                }
+            }
+            // Request cancellation of the root task and notify the sigint
+            // listener, which drives the cancellation state machine.
             jl_sigint_request_cancellation();
         }
         else {

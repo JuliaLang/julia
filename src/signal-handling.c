@@ -14,6 +14,22 @@
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #endif
+#ifndef _OS_WINDOWS_
+#include <signal.h>
+#include <time.h>
+#include <string.h>
+#endif
+
+// Platform selection for the SIGINT rescue timer mechanism (keep in sync
+// with the HAVE_MACH/HAVE_KEVENT/HAVE_TIMER selection in signals-unix.c).
+#if defined(__APPLE__) || defined(__OpenBSD__)
+#define JL_HAVE_KEVENT_TIMER
+#include <sys/event.h>
+#elif defined(_OS_WINDOWS_)
+#define JL_HAVE_WIN32_TIMER
+#else
+#define JL_HAVE_POSIX_TIMER
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,8 +38,8 @@ extern "C" {
 #include <threading.h>
 
 // Native mutex (not jl_mutex_t): the paths below run on non-Julia threads
-// (the signal listener, Win32 console-ctrl handler threads), which have no
-// Julia task to derive lock ownership from.
+// (the signal listener, Win32 console-ctrl handler threads, timer callback
+// threads), which have no Julia task to derive lock ownership from.
 static uv_mutex_t sigint_state_lock;
 
 // Profiler control variables
@@ -478,6 +494,262 @@ JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
     uv_mutex_unlock(&sigint_state_lock);
 }
 
+// The rescue timer implements the escalation state machine for ^C: if the
+// process does not acknowledge a cancellation request within the timeout,
+// the user gets a warning, and the next user-sent ^C abandons the stuck task
+// (switching the thread to the rescue task).
+// N.B.: The rescue task is rooted on the Julia side (Base keeps a global
+// reference).
+static jl_task_t *sigint_rescue_task = NULL;
+// Rescue-timer expiry, tagged with an episode generation. The flag is
+// written by timer threads (a POSIX timer signal, a Win32 timer-queue
+// callback) and read/consumed by the signal listener and the Julia-side
+// listener; `volatile` is not inter-thread synchronization, and a queued
+// timer firing that lands after the episode was reset must not leak its
+// expiry into the fresh episode. The generation is bumped on escalation
+// delivery and on episode reset (NOT on a mere re-arm - a standing offer
+// must survive the repeat press that accepts it); an expiry is only
+// visible while its recorded generation is current. Starts at 1 so a
+// recorded expiry can never collide with expired_gen's 0 sentinel.
+static _Atomic(uint32_t) sigint_rescue_gen = 1;
+static _Atomic(uint32_t) sigint_rescue_armed_gen = 0;   // generation of the last arm
+static _Atomic(uint32_t) sigint_rescue_expired_gen = 0; // 0 = no expiry
+
+// Classifies the ^C episode state recorded on the root task's cancellation
+// request (see base/Base.jl's sigint listener), for escalation decisions and
+// the rescue-timer warning text. Defined below, after the shared state.
+static int jl_sigint_episode_state(void) JL_NOTSAFEPOINT;
+
+#if defined(JL_HAVE_POSIX_TIMER)
+// The timer raises SIGINT, distinguished from a user ^C by
+// SI_TIMER/sival_int == 1, which the signal listener thread handles.
+static timer_t sigint_rescue_timer;
+static int sigint_rescue_timer_created = 0;
+
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&sigint_state_lock);
+    if (!sigint_rescue_timer_created) {
+        struct sigevent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.sigev_notify = SIGEV_SIGNAL;
+        ev.sigev_signo = SIGINT;
+        ev.sigev_value.sival_int = 1;
+        if (timer_create(CLOCK_MONOTONIC, &ev, &sigint_rescue_timer) == 0) {
+            sigint_rescue_timer_created = 1;
+        }
+    }
+    sigint_rescue_task = t;
+    uv_mutex_unlock(&sigint_state_lock);
+}
+
+static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    // Record the current generation for this arming. Re-arming (a repeat
+    // press within the same rung) must NOT invalidate a standing expiry -
+    // a press after the offer printed is exactly what escalates. Only a
+    // rung change (jl_sigint_escalation_delivered) or episode close
+    // (jl_reset_sigint_rescue_timer) opens a fresh generation.
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_gen));
+    if (!sigint_rescue_timer_created)
+        return;
+    struct itimerspec its;
+    its.it_interval.tv_sec = 0;
+    its.it_interval.tv_nsec = 0;
+    its.it_value.tv_sec = 1; // 1s
+    its.it_value.tv_nsec = 0;
+    timer_settime(sigint_rescue_timer, 0, &its, NULL);
+}
+
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    if (!sigint_rescue_timer_created)
+        return;
+    struct itimerspec its;
+    its.it_interval.tv_sec = 0;
+    its.it_interval.tv_nsec = 0;
+    its.it_value.tv_sec = 0;
+    its.it_value.tv_nsec = 0;
+    timer_settime(sigint_rescue_timer, 0, &its, NULL);
+}
+
+#elif defined(JL_HAVE_KEVENT_TIMER)
+// The timer is an EVFILT_TIMER event on the signal listener's kqueue
+// (created in signals-unix.c, which stores the fd here).
+static int sigint_rescue_kq = -1;
+#define JL_SIGINT_RESCUE_TIMER_IDENT ((uintptr_t)0x51C4)
+
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&sigint_state_lock);
+    sigint_rescue_task = t;
+    uv_mutex_unlock(&sigint_state_lock);
+}
+
+static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    // Record the current generation for this arming. Re-arming (a repeat
+    // press within the same rung) must NOT invalidate a standing expiry -
+    // a press after the offer printed is exactly what escalates. Only a
+    // rung change (jl_sigint_escalation_delivered) or episode close
+    // (jl_reset_sigint_rescue_timer) opens a fresh generation.
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_gen));
+    if (sigint_rescue_kq == -1)
+        return;
+    struct kevent ev;
+    EV_SET(&ev, JL_SIGINT_RESCUE_TIMER_IDENT, EVFILT_TIMER,
+           EV_ADD | EV_ONESHOT, 0, 1000 /* ms */, 0);
+    kevent(sigint_rescue_kq, &ev, 1, NULL, 0, NULL);
+}
+
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    if (sigint_rescue_kq == -1)
+        return;
+    struct kevent ev;
+    EV_SET(&ev, JL_SIGINT_RESCUE_TIMER_IDENT, EVFILT_TIMER, EV_DELETE, 0, 0, 0);
+    kevent(sigint_rescue_kq, &ev, 1, NULL, 0, NULL); // ignore ENOENT
+}
+
+#elif defined(JL_HAVE_WIN32_TIMER)
+// The timer is a timer-queue timer; its callback (on a system pool thread)
+// warns the user and marks the escalation state.
+static HANDLE sigint_rescue_timer_handle = NULL;
+
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&sigint_state_lock);
+    sigint_rescue_task = t;
+    uv_mutex_unlock(&sigint_state_lock);
+}
+
+static VOID CALLBACK sigint_rescue_timer_cb(PVOID param, BOOLEAN fired)
+{
+    (void)param; (void)fired;
+    int est = jl_sigint_episode_state();
+    if (est == 0)
+        return; // the episode already completed - stand down
+    jl_atomic_store_release(&sigint_rescue_expired_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_armed_gen));
+    if (est == 2) {
+        jl_safe_printf("\nWARNING: Cancellation is in progress, but has not completed within 1s.\n"
+                         "         Press ^C again to also stop waiting for external resources (e.g. in-flight I/O).\n");
+    }
+    else if (est == 3) {
+        jl_safe_printf("\nWARNING: Cancellation has still not completed.\n"
+                         "         Press ^C again to forcibly abandon the current task (unsafe; may leak resources).\n");
+    }
+    else {
+        jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
+                         "         You (or a package author) may need to add more @cancel_check's.\n"
+                         "         Press ^C again to (unsafely) abandon the current task.\n");
+    }
+}
+
+static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    // Record the current generation for this arming. Re-arming (a repeat
+    // press within the same rung) must NOT invalidate a standing expiry -
+    // a press after the offer printed is exactly what escalates. Only a
+    // rung change (jl_sigint_escalation_delivered) or episode close
+    // (jl_reset_sigint_rescue_timer) opens a fresh generation.
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_gen));
+    uv_mutex_lock(&sigint_state_lock);
+    if (sigint_rescue_timer_handle == NULL) {
+        if (!CreateTimerQueueTimer(&sigint_rescue_timer_handle, NULL,
+                                   sigint_rescue_timer_cb, NULL, 1000, 0,
+                                   WT_EXECUTEONLYONCE))
+            sigint_rescue_timer_handle = NULL;
+    }
+    uv_mutex_unlock(&sigint_state_lock);
+}
+
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&sigint_state_lock);
+    if (sigint_rescue_timer_handle != NULL) {
+        DeleteTimerQueueTimer(NULL, sigint_rescue_timer_handle, NULL);
+        sigint_rescue_timer_handle = NULL;
+    }
+    uv_mutex_unlock(&sigint_state_lock);
+}
+
+#else
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    (void)t;
+}
+
+static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    // Record the current generation for this arming. Re-arming (a repeat
+    // press within the same rung) must NOT invalidate a standing expiry -
+    // a press after the offer printed is exactly what escalates. Only a
+    // rung change (jl_sigint_escalation_delivered) or episode close
+    // (jl_reset_sigint_rescue_timer) opens a fresh generation.
+    jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_gen));
+}
+
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+}
+#endif
+
+#if !defined(JL_HAVE_WIN32_TIMER)
+// Called when the rescue timer expires - marks that we should use aggressive
+// cancellation on the next user-sent SIGINT. (On Windows the timer callback
+// records this itself.)
+static void jl_sigint_rescue_timer_expired(void) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_release(&sigint_rescue_expired_gen,
+                            jl_atomic_load_relaxed(&sigint_rescue_armed_gen));
+}
+#endif
+
+// Check if the rescue timer has expired and we should abandon the current task.
+// Returns the rescue task if abandonment should proceed, NULL otherwise.
+// Clears the expired flag if it was set.
+static int sigint_rescue_expiry_current(void) JL_NOTSAFEPOINT
+{
+    uint32_t egen = jl_atomic_load_acquire(&sigint_rescue_expired_gen);
+    return egen != 0 && egen == jl_atomic_load_relaxed(&sigint_rescue_gen);
+}
+
+static jl_task_t *jl_check_sigint_rescue_abandon(void) JL_NOTSAFEPOINT
+{
+    if (!sigint_rescue_expiry_current())
+        return NULL;
+    jl_atomic_store_relaxed(&sigint_rescue_expired_gen, 0);
+    return sigint_rescue_task;
+}
+
+// Non-consuming query of the rescue timer expiry: the julia-side listener
+// only escalates the severity of an active cancellation once its grace
+// period has passed.
+JL_DLLEXPORT int jl_sigint_rescue_timer_expired_peek(void) JL_NOTSAFEPOINT
+{
+    return sigint_rescue_expiry_current();
+}
+
+// An escalated severity was just delivered: consume the expiry and start a
+// fresh grace period for the next rung.
+JL_DLLEXPORT void jl_sigint_escalation_delivered(void) JL_NOTSAFEPOINT
+{
+    jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1); // invalidate the expiry
+    jl_arm_sigint_rescue_timer();
+}
+
+// Reset the rescue timer state (e.g. when cancellation succeeds)
+JL_DLLEXPORT void jl_reset_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    jl_disarm_sigint_rescue_timer();
+    jl_atomic_fetch_add_relaxed(&sigint_rescue_gen, 1); // invalidate the expiry
+}
+
 // Set while a ^C notification has been posted to the event loop but not yet
 // picked up by the julia-side sigint listener. While set, idle threads take
 // over running the event loop if its owning thread cannot (e.g. it is blocked
@@ -539,8 +811,9 @@ JL_DLLEXPORT void jl_set_sigint_source(jl_value_t *src) JL_NOTSAFEPOINT
     jl_cancel_source_t *newsrc = (src == NULL || src == jl_nothing) ?
         NULL : (jl_cancel_source_t*)src;
     jl_atomic_store_release(&jl_sigint_source, newsrc);
-    // A fresh episode source clears a stale pending marker.
+    // A fresh episode source stands the escalation machinery down.
     jl_atomic_store_relaxed(&sigint_pending, 0);
+    jl_reset_sigint_rescue_timer();
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_sigint_source(void) JL_NOTSAFEPOINT
@@ -550,11 +823,13 @@ JL_DLLEXPORT jl_value_t *jl_get_sigint_source(void) JL_NOTSAFEPOINT
 }
 
 // The task driving the current foreground evaluation (the caller of
-// Base.sigint_new_episode!; rooted by Base like the episode source). A
-// `bound_cancel_token` binding is only published by *compiled* cancellation
-// points, so a foreground victim that entered compute without ever blocking
-// may carry no binding at all; the sigint listener uses this registration to
-// target the foreground task directly.
+// Base.sigint_new_episode!; rooted by Base like the episode source). The
+// direct-abandonment rung consults it: a `bound_cancel_token` binding is
+// only published by *compiled* cancellation points, so a foreground victim
+// that entered checkless compute without ever blocking (e.g. a spin typed
+// straight at the REPL on an unloaded machine) carries no binding at all -
+// but abandoning the episode's own foreground task is legitimate whether or
+// not it happened to pass a publishing point on the way in.
 static _Atomic(jl_task_t *) jl_sigint_fg_task = NULL;
 
 JL_DLLEXPORT void jl_set_sigint_foreground_task(jl_value_t *t) JL_NOTSAFEPOINT
@@ -575,11 +850,20 @@ JL_DLLEXPORT int jl_consume_sigint_pending(void) JL_NOTSAFEPOINT
     return jl_atomic_exchange_relaxed(&sigint_pending, 0);
 }
 
+// Whether this platform delivers foreign-call cancellation handlers
+// asynchronously; every currently supported platform does (the in-handler
+// invocation on unix, the suspend-based deliveries on Windows and mach), so
+// this is a hook for future platforms whose delivery is level-triggered only.
+JL_DLLEXPORT int jl_have_cancel_handler_delivery(void) JL_NOTSAFEPOINT
+{
+    return 1;
+}
+
 // Shared entry point for a user-initiated interrupt (^C): mark the episode
-// source cancelled, mark the interrupt as pending, and notify the sigint
-// listener task, which performs the remaining (Julia-side) delivery work.
-// Callable from non-Julia threads; must not allocate or take Julia-side
-// locks.
+// source cancelled, mark the interrupt as pending, arm the escalation timer,
+// and notify the sigint listener task, which drives the rest of the
+// cancellation state machine. Callable from non-Julia threads; must not
+// allocate or take Julia-side locks.
 static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
 {
     // Set the episode source's cancellation state to SAFE severity directly:
@@ -622,7 +906,59 @@ static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
             jl_send_cancellation_signal(tid);
     }
     jl_atomic_store_release(&sigint_pending, 1);
+    // Set a timer for the event loop to run and process the cancellation. If
+    // this does not happen in time, we will advance to more aggressive
+    // cancellation.
+    jl_arm_sigint_rescue_timer();
     deliver_sigint_notification();
+}
+
+// Episode states:
+//  0 - no active ^C episode
+//  1 - a request that its target never observed: the pending marker, or a
+//      listener-delivered SAFE cancellation that was never acknowledged
+//      (e.g. the target is compute-bound with no cancellation points)
+//  2 - SAFE severity acknowledged (the target is unwinding, but stuck)
+//  3 - ABANDON_EXTERNAL severity active
+//  4 - ABANDON_ALL severity active
+static int jl_sigint_episode_state(void) JL_NOTSAFEPOINT
+{
+    jl_cancel_source_t *src = jl_atomic_load_relaxed(&jl_sigint_source);
+    uint8_t pending = jl_atomic_load_relaxed(&sigint_pending);
+    if (src == NULL)
+        return pending ? 1 : 0;
+    uint8_t sev = jl_atomic_load_relaxed(&src->state);
+    if (sev == 0x00)
+        return pending ? 1 : 0;
+    uint8_t delivered = jl_atomic_load_relaxed(&src->delivered);
+    if (sev == 0x01)
+        return (delivered & (1 << 0x01)) ? 2 : 1; // undelivered SAFE was never observed
+    return sev == 0x03 ? 3 : 4;
+}
+
+// Whether the C side may abandon the interrupted task directly (bypassing the
+// julia-side escalation): either the initial SAFE request was never even
+// delivered (no thread was available to run the sigint listener, e.g. a
+// single-threaded session with the thread stuck in compute), or the listener
+// already escalated to an abandoning severity and the task still did not
+// yield.
+static int jl_sigint_direct_abandon_allowed(void) JL_NOTSAFEPOINT
+{
+    int est = jl_sigint_episode_state();
+    if (est == 1)
+        return 1; // the initial request was never even delivered
+    // For delivered episodes the julia-side listener drives the graded
+    // escalation - unless it CANNOT run because the session's only worker
+    // thread is monopolized by the stuck victim (its notification still
+    // undispatched). With more worker threads an unclaimed dispatch only
+    // means the listener has not run *yet* - a delayed but graded
+    // escalation beats ripping away whatever thread 0 happens to be
+    // running at that moment.
+    if (est >= 2 && est <= 4 && jl_atomic_load_relaxed(&jl_sigint_dispatch_pending) &&
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] +
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] == 1)
+        return 1;
+    return 0;
 }
 
 // Propagate a pending ^C episode to the interrupted task's own bound

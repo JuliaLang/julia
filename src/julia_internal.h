@@ -1406,6 +1406,10 @@ void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_abandon_task_request(jl_task_t *t, jl_task_t *next_task,
+                                         jl_value_t *result, uv_async_t *notify);
+JL_DLLEXPORT int jl_abandon_task_poll(int16_t tid);
+JL_DLLEXPORT int jl_abandon_task_withdraw(int16_t tid);
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)
