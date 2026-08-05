@@ -149,4 +149,20 @@ function test_gc_codeinst()
     true
 end
 @test test_gc_codeinst()
+
+# If we call jl_jit_unregister_ci when there are pending ORC queries for the
+# symbol, they will attempt to find the symbol in CISymbols after it has been
+# removed.  This shouldn't crash.
+function test_oneshot_publish_race()
+    @sync for i in 1:1000
+        # This will go through jl_invoke_oneshot
+        Threads.@spawn @eval begin
+            ccall(:jl_cpu_pause, Cvoid, ())
+            $i
+        end
+    end
+    true
+end
+@test test_oneshot_publish_race()
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough
