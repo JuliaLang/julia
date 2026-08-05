@@ -136,6 +136,25 @@ typedef struct _jl_reset_ctx_t {
     jl_jmp_buf mctx;
 } jl_reset_ctx_t;
 
+// A foreign-call cancellation handler and state argument, published in
+// `jl_task_t.cancel_handler_ctx` for exactly the duration of a foreign call
+// annotated `@ccall cancel_handler=(fn, state) ...`. Delivery is signal-handler
+// like.
+typedef struct _jl_cancel_handler_ctx_t {
+    void (*fn)(void *state, uint8_t sev);
+    void *state;
+} jl_cancel_handler_ctx_t;
+
+// The handler and its arguments, stashed across a cancellation-handler
+// delivery on the suspend-based platforms (Windows and mach): the sender
+// records them here for the trampoline the hijacked thread is redirected
+// to.
+typedef struct {
+    void (*fn)(void *state, uint8_t sev);
+    void *state;
+    uint8_t sev;
+} jl_cancel_handler_save_t;
+
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
 typedef HANDLE jl_thread_t;
@@ -224,6 +243,8 @@ typedef struct _jl_tls_states_t {
     void (*signal_ctx_fptr)(void);
     uintptr_t signal_ctx_arg;
 #endif
+    jl_cancel_handler_save_t cancel_handler_save;
+    sig_atomic_t cancel_handler_armed;
     jl_thread_t system_id;
     _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;
@@ -499,6 +520,15 @@ typedef struct _jl_task_t {
     // cancellation region, NULL outside such regions. Only ever consumed
     // for the thread's *current* task.
     _Atomic(jl_reset_ctx_t *) reset_ctx;
+    // The published handler context of the current foreign call carrying a
+    // cancellation handler (`@ccall cancel_handler=(fn, state)`), NULL
+    // outside such calls. May be active *at the same time* as a reset
+    // region, and takes delivery priority while published: the handler's
+    // span (e.g. a protected allocator) is exactly where a longjmp must not
+    // land, and the handler can defer the cancellation and chain into the
+    // reset on region exit. Like reset_ctx, only ever consumed for the
+    // thread's *current* task.
+    _Atomic(jl_cancel_handler_ctx_t *) cancel_handler_ctx;
 } jl_task_t;
 
 JL_DLLEXPORT void *jl_get_ptls_states(void);

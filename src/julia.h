@@ -2552,6 +2552,9 @@ struct _jl_handler_t {
     // handler chain is not GC-scanned.)
     struct _jl_reset_ctx_t *reset_ctx;
     jl_value_t *bound_cancel_token;
+    // Published ccall handler (if any). Used if we must unwind across a C function
+    // that calls back into julia.
+    struct _jl_cancel_handler_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
 };

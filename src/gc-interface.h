@@ -246,6 +246,10 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz);
 // Wrapper around Libc realloc that updates Julia allocation counters.
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
+// Special reset-safe variants of the above functions for use by GMP.
+JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz) JL_CANSAFEPOINT;
 // Wrapper around Libc malloc that's used to dynamically allocate memory for Arrays and
 // Strings. It increments Julia allocation counters and should check whether we're close to
 // the Julia heap target, and therefore, whether we should run a collection. Note that this
