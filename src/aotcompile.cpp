@@ -501,9 +501,14 @@ static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots)
         auto get_global_root = [val, &method_roots]() JL_CANSAFEPOINT {
             if (jl_is_globally_rooted(val))
                 return val;
-            jl_value_t *mval = method_roots.get(val);
-            if (mval)
-                return mval;
+            // `--trim` / `--strip-ir` drop all method roots in the serializer
+            // under the assumption that they root only objects for compressed
+            // IR so any roots for codegen must be stored separately
+            if (!(jl_options.trim || jl_options.strip_ir)) {
+                jl_value_t *mval = method_roots.get(val);
+                if (mval)
+                    return mval;
+            }
             return jl_as_global_root(val, 1);
         };
         jl_value_t *mval = get_global_root();

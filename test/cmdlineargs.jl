@@ -498,6 +498,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_NUM_GC_THREADS" => "2,1") do
             @test read(`$exename -e $code`, String) == "3"
         end
+
+        # invalid JULIA_NUM_GC_THREADS values must be rejected at startup
+        # like `--gcthreads`, not crash the GC later (e.g. `=0` used to
+        # underflow the mark-thread count and segfault at the first collection)
+        for ngc in ("0", "-1", "abc", "32767", "2,2", "2,-1", "2,1x")
+            withenv("JULIA_NUM_GC_THREADS" => ngc) do
+                @test errors_not_signals(`$exename -e $code`)
+            end
+        end
     end
 
     # --machine-file

@@ -80,6 +80,24 @@ top:
   ret {} addrspace(10)* %v
 }
 
+; Allocation sites annotated by CancellationLowering (they may execute with
+; a cancellation reset region published) lower to the reset-safe entry
+; points, which unpublish/republish the region themselves.
+define {} addrspace(10)* @gc_alloc_lowering_reset_region() {
+top:
+; CHECK-LABEL: @gc_alloc_lowering_reset_region
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %ptls = call {}*** @julia.ptls_states()
+  %ptls_i8 = bitcast {}*** %ptls to i8*
+; OPAQUE: %v = call noalias nonnull align {{[0-9]+}} dereferenceable({{[0-9]+}}) ptr addrspace(10) @ijl_gc_small_alloc_reset_safe
+  %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 8, i64 12341234), !julia.reset_region !3
+  %0 = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
+  %1 = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %0, i64 -1
+  store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* %1, align 8, !tbaa !0
+  ret {} addrspace(10)* %v
+}
+
 !0 = !{!1, !1, i64 0}
 !1 = !{!"jtbaa_gcframe", !2, i64 0}
 !2 = !{!"jtbaa"}
+!3 = !{}

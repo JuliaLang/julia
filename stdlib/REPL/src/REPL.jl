@@ -694,24 +694,27 @@ end
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true, backend = REPLBackend())
     backend_ref = REPLBackendRef(backend)
     get_module = () -> Base.active_module(repl)
-    cleanup_task(backend_ref, t) = @task try
+    # REPL teardown is cleanup: shield it from any scope cancellation
+    cleanup_task(backend_ref, t) = Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+        @task try
             destroy(backend_ref, t)
         catch e
             Core.print(Core.stderr, "\nINTERNAL ERROR: ")
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
+    end
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
         cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
-        Base._wait2(t, cleanup)
+        Base.schedule_on_notify!(t, cleanup)
         start_repl_backend(backend, consumer; get_module)
     else
         t = @async start_repl_backend(backend, consumer; get_module)
         cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
-        Base._wait2(t, cleanup)
+        Base.schedule_on_notify!(t, cleanup)
         run_frontend(repl, backend_ref)
     end
     return backend

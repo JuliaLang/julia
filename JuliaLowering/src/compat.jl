@@ -429,6 +429,31 @@ function _mangle_writeonly(st, seen)
     end
 end
 
+function _note_32026_hack!(st, expansion_sc::SyntaxContext)
+    k = kind(st)
+    if st.context.layer === expansion_sc.layer &&
+        (k === K"function" || k === K"=" && is_eventually_call(st[1]))
+        setmeta!(st, :resolved_global_function_name, true)
+    end
+    st
+end
+_apply_32026_hack(st, sc::SyntaxContext) = @stm st begin
+    ([K"Identifier"], when=st.mod===nothing && st.context.layer===sc.layer) ->
+        @mknode(st; mod=sc.layer.mod)
+    [K"call" x args...] -> kind(x) === K"::" ? st :
+        @ast _ st [K"call" _apply_32026_hack(x, sc) args...]
+    [K"where" x args...] -> @ast _ st [K"where" _apply_32026_hack(x, sc) args...]
+    [K"::" x t] -> @ast _ st [K"::" _apply_32026_hack(x, sc) t]
+    [K"curly" x args...] -> @ast _ st [K"curly" _apply_32026_hack(x, sc) args...]
+    x -> x
+end
+function apply_32026_hack(st, orig)
+    is_flisp_compat(st) || return st
+    getmeta(orig, :resolved_global_function_name, false) || return st
+    @jl_assert is_flisp_compat(orig) orig
+    _apply_32026_hack(st, orig.context::SyntaxContext)
+end
+
 # nothing if not found, or symbol if 0-arg [no]specialize, or dict arg->meta
 function collect_body_arg_meta(st)
     out = nothing
@@ -587,6 +612,7 @@ function est_to_dst(st::SyntaxTree)
             # no fix_arglist needed, since this func can't be anonymous
             l = apply_arglist_meta(l, collect_body_arg_meta(r))
             l = force_readable_sparams(l)
+            l = apply_32026_hack(l, st)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast _ st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
@@ -595,9 +621,12 @@ function est_to_dst(st::SyntaxTree)
             end
             @ast _ st [K"function" rec(l) r2]
         end
+        [K"function" [K"Identifier"]] ->
+            @ast _ st [K"function" apply_32026_hack(st[1], st)]
         [K"function" l r] -> let
             l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
             l = force_readable_sparams(l)
+            l = apply_32026_hack(l, st)
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast _ st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]

@@ -664,16 +664,21 @@ JL_DLLEXPORT void jl_switch(void) JL_CANSAFEPOINT_ENTER_LEAVE
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     jl_task_t *t = ptls->next_task;
-    if (t == ct) {
+    if (t == ct && !ptls->in_finalizer && !ptls->in_pure_callback) {
+        // switching to self is a no-op, but only when a task switch would
+        // have been permitted at all: the forbidden-context errors below must
+        // not depend on whether the scheduler happened to have another
+        // runnable task (e.g. `yield()` on an otherwise idle thread pops the
+        // current task itself)
         return;
     }
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
-    if (t->ctx.started && t->ctx.stkbuf == NULL)
-        jl_error("attempt to switch to exited task");
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
     if (ptls->in_pure_callback)
         jl_error("task switch not allowed from inside staged nor pure functions");
+    if (t->ctx.started && t->ctx.stkbuf == NULL)
+        jl_error("attempt to switch to exited task");
     if (!jl_set_task_tid(t, jl_atomic_load_relaxed(&ct->tid))) // manually yielding to a task
         jl_error("cannot switch to task running on another thread");
 
@@ -1095,6 +1100,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->queue = jl_nothing;
     jl_atomic_store_relaxed(&t->waiting_on, jl_nothing);
     t->cached_wait_entry = jl_nothing;
+    t->cached_cancel_entry = jl_nothing;
     t->tls = jl_nothing;
     jl_atomic_store_relaxed(&t->_state, JL_TASK_STATE_RUNNABLE);
     t->start = start;
@@ -1125,6 +1131,10 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->running_time_ns, 0);
     jl_atomic_store_relaxed(&t->finished_at, 0);
     jl_timing_task_init(t);
+    jl_atomic_store_relaxed(&t->preempt_request, 0);
+    jl_atomic_store_relaxed(&t->bound_cancel_token, jl_nothing);
+    jl_atomic_store_relaxed(&t->reset_ctx, NULL);
+    jl_atomic_store_relaxed(&t->cancel_handler_ctx, NULL);
 
     if (t->ctx.copy_stack)
         t->ctx.copy_ctx = NULL;
@@ -1564,6 +1574,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->queue = jl_nothing;
     jl_atomic_store_relaxed(&ct->waiting_on, jl_nothing);
     ct->cached_wait_entry = jl_nothing;
+    ct->cached_cancel_entry = jl_nothing;
     ct->tls = jl_nothing;
     jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     ct->start = NULL;
@@ -1595,6 +1606,10 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
         jl_atomic_store_relaxed(&ct->first_enqueued_at, 0);
         jl_atomic_store_relaxed(&ct->last_started_running_at, 0);
     }
+    jl_atomic_store_relaxed(&ct->preempt_request, 0);
+    jl_atomic_store_relaxed(&ct->bound_cancel_token, jl_nothing);
+    jl_atomic_store_relaxed(&ct->reset_ctx, NULL);
+    jl_atomic_store_relaxed(&ct->cancel_handler_ctx, NULL);
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);
@@ -1743,8 +1758,11 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
             jl_gc_set_weak_processing_target(ct->ptls, parents[i]);
     }
     jl_atomic_store_relaxed(&src->child_head, jl_nothing);
+    jl_atomic_store_relaxed(&src->waiters_head, jl_nothing);
+    jl_atomic_store_relaxed(&src->walk_lock, jl_nothing);
     jl_atomic_store_relaxed(&src->state, 0);
     src->nparents = (uint16_t)np;
+    jl_atomic_store_relaxed(&src->dead_count, 0);
     // Initialize every link entry before publishing the node under *any*
     // parent: a concurrent cancellation walk that reaches the node through
     // one parent scans all of its entries.
@@ -1758,6 +1776,72 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
     }
     cancel_source_attach(src);
     return (jl_value_t*)src;
+}
+
+// The variable-sized wait-entry kind (Core.WaitEntryN): storage only - the
+// registration protocols live in base/cancellation.jl. Slots are initialized
+// free (owner = nothing).
+JL_DLLEXPORT jl_value_t *jl_new_wait_entry(jl_value_t *task, size_t nslots)
+{
+    jl_task_t *ct = jl_current_task;
+    // `nslots` must fit the uint32_t field *and* keep the allocation-size
+    // arithmetic below from wrapping (on 32-bit, SIZE_MAX overflows long
+    // before UINT32_MAX slots do).
+    if (nslots > UINT32_MAX ||
+        nslots > (SIZE_MAX - sizeof(jl_wait_entry_t)) / sizeof(jl_wait_slot_t))
+        jl_error("WaitEntryN: too many slots");
+    jl_wait_entry_t *w = (jl_wait_entry_t*)jl_gc_alloc(
+        ct->ptls, sizeof(jl_wait_entry_t) + nslots * sizeof(jl_wait_slot_t),
+        jl_wait_entry_type);
+    jl_set_typetagof(w, jl_wait_entry_tag, 0);
+    jl_atomic_store_relaxed(&w->task, task);
+    w->nslots = (uint32_t)nslots;
+    jl_wait_slot_t *slots = jl_wait_entry_slots(w);
+    for (size_t i = 0; i < nslots; i++) {
+        jl_atomic_store_relaxed(&slots[i].owner, jl_nothing);
+        slots[i].next = jl_nothing;
+        slots[i].aux = 0;
+    }
+    return (jl_value_t*)w;
+}
+
+STATIC_INLINE jl_wait_slot_t *wait_entry_slot(jl_value_t *w, size_t i) JL_NOTSAFEPOINT
+{
+    assert(jl_is_wait_entry(w));
+    assert(i < ((jl_wait_entry_t*)w)->nslots);
+    return &jl_wait_entry_slots((jl_wait_entry_t*)w)[i];
+}
+
+JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_owner(jl_value_t *w, size_t i) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&wait_entry_slot(w, i)->owner);
+}
+
+JL_DLLEXPORT void jl_wait_entry_set_slot_owner(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&wait_entry_slot(w, i)->owner, v);
+    jl_gc_wb(w, v);
+}
+
+JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_next(jl_value_t *w, size_t i) JL_NOTSAFEPOINT
+{
+    return wait_entry_slot(w, i)->next;
+}
+
+JL_DLLEXPORT void jl_wait_entry_set_slot_next(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    wait_entry_slot(w, i)->next = v;
+    jl_gc_wb(w, v);
+}
+
+JL_DLLEXPORT uint64_t jl_wait_entry_slot_aux(jl_value_t *w, size_t i) JL_NOTSAFEPOINT
+{
+    return wait_entry_slot(w, i)->aux;
+}
+
+JL_DLLEXPORT void jl_wait_entry_set_slot_aux(jl_value_t *w, size_t i, uint64_t v) JL_NOTSAFEPOINT
+{
+    wait_entry_slot(w, i)->aux = v;
 }
 
 // Push a (re)inherited cancelled state down `src`'s already-attached

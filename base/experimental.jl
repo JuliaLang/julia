@@ -616,36 +616,13 @@ end
 # specification of a timeout. This is experimental as it will likely
 # be dropped when a cancellation framework is added.
 #
-# The parallel behavior of wait_with_timeout is specified here. There
-# are three concurrent entities that can interact:
-# 1. Task W: the task that calls wait_with_timeout.
-# 2. Task T: the task created to handle a timeout.
-# 3. Task N: the task that notifies the Condition being waited on.
-#
-# Typical flow:
-# - W registers on the Condition's wait queue with a fresh, single-use
-#   WaitEntry `w` (see the wake-claim protocol in condition.jl).
-# - W creates T and stops running (calls wait()).
-# - T, when scheduled, waits on a Timer.
-# - Two common outcomes:
-#   - N notifies the Condition: N claims W's wake (clearing W's
-#     `waiting_on`) and pops `w`. W starts running, closes the Timer and
-#     returns the notify'ed value. The closed Timer throws an EOFError
-#     to T which simply ends.
-#   - The Timer expires.
-#     - T starts running, locks the Condition, and tries to claim W's
-#       wake via CAS(W.waiting_on, w => nothing). Because `w` is
-#       single-use, the claim can only succeed while W is still parked
-#       in *this* wait - never in a later wait of W, even one on the
-#       same Condition.
-#     - If the claim succeeds, T removes `w` from the wait queue,
-#       unlocks the Condition and schedules W with the special
-#       :timed_out value.
-#     - W runs and returns :timed_out.
-#
-# The single CAS on W's `waiting_on` arbitrates every race between N, T
-# and any interrupter: whoever wins the claim (and only that entity)
-# schedules W.
+# Implemented as a `park!` over the condition, the governing cancellation
+# source, and a `Base.TimeoutWait` deadline (see base/park.jl and
+# base/asyncevent.jl): the deadline's claimer arbitrates against notifies
+# and interrupters through the single wake-claim CAS on the waiting
+# task's `waiting_on`, and the non-canonical waitable shape makes the
+# entry cache hand out a fresh, single-use entry - which is exactly what
+# makes the deadline's specific-wait claim sound.
 
 """
     wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
@@ -659,67 +636,35 @@ If `timeout` is specified, cancel the `wait` when it expires and return
 `:timed_out`. The minimum value for `timeout` is 0.001 seconds, i.e. 1
 millisecond.
 """
-function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0,
+                           cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
+    src = Base.cancel_source(tok)
     ct = current_task()
-    # This wait has a wake source directed at it specifically (the timeout
-    # task below), so it must register with a fresh, single-use entry: only
-    # single-use-ness guarantees that the timeout task's expected-entry CAS
-    # cannot claim a later, unrelated wait of `ct`.
-    w = Base._wait2(c, ct, first; entry=Base.WaitEntry(ct))
-    token = Base.unlockall(c.lock)
-
-    timer::Union{Timer, Nothing} = nothing
     if timeout > 0.0
-        timer = Timer(timeout)
-        # start a task to wait on the timer
-        t = _wait_with_timeout_task(c, ct, w, timer)
-        t.sticky = false
-        Threads._spawn_set_thrpool(t, :interactive)
-        schedule(t)
+        tw = Base.TimeoutWait(timeout)
+        ws = src === nothing ? (c, tw) : (c, Base.SourceWait(src, 0x00), tw)
+    else
+        ws = src === nothing ? (c,) : (c, Base.SourceWait(src, 0x00))
     end
-
-    local res
-    try
-        res = wait()
+    # non-canonical shapes get a fresh entry - exactly what makes the
+    # deadline claimer's specific-wait CAS sound
+    w = Base.acquire_wait_entry!(ct, ws)
+    if !Base.park!(ws, w, first)
+        Base.withdraw!(ws, w, Base.WAKE_FIRED)
+        src === nothing || Base.checkcancel(src)
+        error("park fired without a cancelled source")
+    end
+    lockstate = Base.unlockall(c.lock)
+    r = try
+        Base.wait_safe_interrupt(ws, w)
     catch
-        # resumed without a wake through our registration (interrupter or raw
-        # throwto): disarm it, then unlink our entry under the lock
-        @atomicreplace ct.waiting_on w => nothing
-        q = ct.queue
-        q === nothing || Base.list_deletefirst!(q::Base.StickyWorkqueue, ct)
-        Base.relockall(c.lock, token)
-        timer !== nothing && close(timer)
-        Base.list_deletefirst!(Base.waitqueue(c), w)
+        Base.relockall(c.lock, lockstate)
         rethrow()
     end
-    # a normal wake (notify or timeout) claimed and unlinked our registration
-    Base.relockall(c.lock, token)
-    timer !== nothing && close(timer)
-    return res
-end
-
-function _wait_with_timeout_task(c::GenericCondition, ct::Task, w::Base.WaitEntry, timer::Timer)
-    return Task() do
-        try
-            wait(timer)
-        catch e
-            # if the timer was closed, the waiting task has been scheduled; do nothing
-            e isa EOFError && return
-        end
-        dosched = false
-        lock(c.lock)
-        # Claim the wake of the specific wait `w` was registered for; `w` is
-        # single-use, so a successful claim means `ct` is still parked in
-        # that wait. If the claim fails (already notified or interrupted),
-        # do nothing.
-        if Base.claim_wait(ct, w)
-            dosched = true
-            Base.list_deletefirst!(Base.waitqueue(c), w)
-        end
-        unlock(c.lock)
-        # send the waiting task a timeout
-        dosched && schedule(ct, :timed_out)
-    end
+    Base.relockall(c.lock, lockstate)
+    Base.withdraw!(ws, w, Base.WAKE_VALUE)   # closes the timer, retires
+    return r
 end
 
 """
