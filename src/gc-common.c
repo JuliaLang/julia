@@ -578,13 +578,6 @@ STATIC_INLINE jl_reset_ctx_t *reset_region_unpublish(jl_task_t *ct) JL_NOTSAFEPO
     return reset_ctx;
 }
 
-// Deliver a pending cancellation of the task's bound token source to its
-// published reset region, if both exist: the synchronous analog of the
-// request-5 reset in signals-unix.c, with the exchange arbitrating against
-// concurrent senders. bound_cancel_token is the region's governor here:
-// everything that could have rebound it while control was away from the
-// region's own code (nested cancellation points in finalizers, exception
-// handlers) restores it together with the region.
 STATIC_INLINE void reset_region_deliver_pending(jl_task_t *ct)
 {
     jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
@@ -667,21 +660,9 @@ JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
 }
 
 // === GMP allocation hooks ===================================================
-// Installed by Base.GMP.__init__ in place of the plain jl_gc_counted_*
-// functions. GMP computations run under a reset region published across the
-// GMP ccall (see the `reset_safe` option of `@ccall`), so an asynchronous
-// cancellation can unwind them at any point - except while inside the
-// allocation hook, where a longjmp could orphan the libc allocator's arena
-// lock, or land mid-GC (jl_gc_counted_* may collect, and collection may run
-// finalizers). These wrappers therefore publish a cancellation-handler
-// region across the whole underlying call: a delivery while inside merely
-// notes the cancellation (and suppresses the reset), and the exit path
-// chains the deferred note into the still-published reset synchronously.
-// If no reset region is published (an unannotated caller), the cancellation
-// stays pending and is recovered level-triggered at the next cancellation
-// point. N.B.: a collection that runs finalizers may execute cancellation
-// points that clear the enclosing reset region; the remaining GMP call then
-// simply degrades to level-triggered cancellation.
+// These are special reset-safe versions of GMP's allocations functions. GMP is
+// generally reset-safe, but our allocators are not, so we must protect ourselves
+// from a stray reset inside the allocator.
 
 static void jl_gmp_defer_note(void *state, uint8_t sev)
 {
@@ -715,21 +696,8 @@ STATIC_INLINE void jl_gmp_guard_leave(jl_task_t *ct, volatile sig_atomic_t *defe
     jl_atomic_store_release(&ct->cancel_handler_ctx, prev);
     jl_signal_fence();
     if (*deferred && prev == NULL && !ct->ptls->in_finalizer) {
-        // A cancellation was delivered while inside the allocator: chain
-        // into the reset region published across the enclosing GMP call
-        // (synchronously - this is a safe point by construction). The
-        // re-executed cancellation point at the reset throws the request.
-        // Chaining is only safe at the OUTERMOST guard and outside
-        // finalizer execution: a nested leave is still inside the outer
-        // hook's collection, and a finalizer-context leave would longjmp
-        // out of run_finalizers mid-list - both tear GC state that the
-        // unwind cannot repair. Dropping the note there is fine: the
-        // request is level-triggered and the next cancellation point (or
-        // the outermost hook's own leave) picks it up. The delivery helper
-        // re-checks the bound source, which also drops a note recorded for
-        // a foreign binding (a finalizer's own scope, since restored by the
-        // finalizer bracket) - unwinding this task's region for someone
-        // else's cancellation would silently restart the GMP call.
+        // A reset was requested while we were inside the critical region,
+        // deliver it now.
         reset_region_deliver_pending(ct);
     }
 }

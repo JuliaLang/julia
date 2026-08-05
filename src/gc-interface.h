@@ -246,11 +246,7 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz);
 // Wrapper around Libc realloc that updates Julia allocation counters.
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
-// The jl_gc_counted_* allocators with a foreign-call cancellation-handler
-// region published across the whole call, installed by Base.GMP as GMP's
-// allocation functions: an asynchronous cancellation delivered while inside
-// (where a longjmp could orphan the libc allocator's arena lock or land
-// mid-GC) is deferred and chained into the enclosing reset region on exit.
+// Special reset-safe variants of the above functions for use by GMP.
 JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz) JL_CANSAFEPOINT;
 JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz) JL_CANSAFEPOINT;

@@ -880,7 +880,7 @@ may not, because it could be abandoned inside the critical section.
 
 The same also applies to many implicitly inserted intrinsics and thus codegen for
 a `:reset_safe` function requires cooperation by the code generator to uphold the
-invariant thoughout the entire body of the generated code.
+invariant throughout the entire body of the generated code.
 
 As such, annotating a function as `:reset_safe` is currently ignored as an effect
 override and will only apply to [`@ccall`](@ref) sites. See the ccall documentation
