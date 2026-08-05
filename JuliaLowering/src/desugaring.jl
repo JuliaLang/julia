@@ -4053,7 +4053,7 @@ end
 
 function _unplaceholder(st)
     k = kind(st)
-    k === K"Placeholder" ? @mknode(st; kind=K"Identifier") :
+    k === K"Placeholder" || k === K"Symbol" ? @mknode(st; kind=K"Identifier") :
         k === K"Identifier" ? st : @jl_assert false st
 end
 

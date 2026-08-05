@@ -436,6 +436,9 @@ function vst1_importpath(vcx, st; dots_ok)
             end
             continue
         end
+        if kind(c) === K"inert" && numchildren(c) == 1
+            c = c[1]
+        end
         # syntax todo: lhs should probably not be true here
         ok = ok & (vst1_ident(vcx, c).ok ? pass() : vst1_ident(vcx, c; lhs=true))
         seen_first = true
