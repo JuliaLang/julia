@@ -732,6 +732,15 @@ JL_DLLEXPORT int jl_claim_sigint_dispatch(void) JL_NOTSAFEPOINT
     return jl_atomic_exchange_relaxed(&jl_sigint_dispatch_pending, 0);
 }
 
+// Return a claim the winner could not process (the scheduler-inline pass
+// defers episode states whose handling can block; see
+// `Base.maybe_dispatch_sigint`): re-arm the flag so a listener - or the
+// blocking-capable task the deferring pass spawned - picks it up.
+JL_DLLEXPORT void jl_repost_sigint_dispatch(void) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
+}
+
 static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
 {
     // Runs on a dedicated (non-Julia) thread - the signal listener thread or
@@ -807,6 +816,13 @@ JL_DLLEXPORT int jl_consume_sigint_pending(uint64_t gen) JL_NOTSAFEPOINT
     if (p == 0 || p != gen)
         return 0;
     return jl_atomic_cmpswap(&sigint_pending_gen, &p, (uint64_t)0);
+}
+
+// Non-consuming variant, for the dispatch pass's pre-mutation defer check
+// (see `Base._sigint_dispatch_would_block`).
+JL_DLLEXPORT int jl_peek_sigint_pending(uint64_t gen) JL_NOTSAFEPOINT
+{
+    return gen != 0 && jl_atomic_load_acquire(&sigint_pending_gen) == gen;
 }
 
 // The task driving the current foreground evaluation (the caller of
