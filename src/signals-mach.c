@@ -725,6 +725,8 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
         // fn(state, sev) on its own stack via the resumable
         // jl_call_in_state machinery - at most one delivery at a time per
         // thread (the save area holds one; skips recover level-triggered).
+        // No GC gate: the interrupted computation is resumed afterwards, so
+        // a thread counted by a stop still reaches its park.
         if (!ptls2->cancel_handler_armed && bound_cancelled) {
             mach_msg_type_number_t float_count = jl_mach_float_state_info.count;
             natural_t float_state[JL_MACH_FLOAT_STATE_MAX_COUNT];
@@ -745,10 +747,14 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     }
     else if (ct2 != NULL &&
         // Reset flavor, additionally gated on the thread running Julia code
-        // (gc_state == 0): a thread inside a GC-safe region may be raced by
-        // a concurrent stop-the-world, and a redirect back into Julia code
-        // would break that protocol.
-        jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_UNSAFE) {
+        // (gc_state == 0) with no stop-the-world in progress: a thread
+        // inside a GC-safe region may be raced by a concurrent
+        // stop-the-world, and a thread observed as UNSAFE may already have
+        // been counted by a stop and be about to take its resume back and
+        // park (see jl_set_gc_and_wait); a redirect back into Julia code
+        // would break that protocol in either case.
+        jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_UNSAFE &&
+        !jl_atomic_load_acquire(&jl_gc_running)) {
         jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct2->reset_ctx);
         if (reset_ctx != NULL && reset_ctx->sp != 0 &&
             (reset_code == JL_RESET_CODE_PREEMPT || bound_cancelled)) {

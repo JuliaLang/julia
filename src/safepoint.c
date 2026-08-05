@@ -241,7 +241,27 @@ void jl_set_gc_and_wait(jl_task_t *ct)
     uv_cond_broadcast(&safepoint_cond_begin);
     uv_mutex_unlock(&safepoint_lock);
     jl_safepoint_wait_gc(ct);
-    jl_atomic_store_release(&ct->ptls->gc_state, state);
+    if (state != JL_GC_STATE_UNSAFE) {
+        // restoring a stopped state: we remain available to STW, nothing to re-check
+        jl_atomic_store_release(&ct->ptls->gc_state, state);
+    }
+    else {
+        // a new stop may have checked our transient WAITING while we were parked
+        // re-check after publishing and hold off on resuming if so
+        for (;;) {
+            jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_UNSAFE);
+            jl_fence();
+            if (!jl_atomic_load_acquire(&jl_gc_running))
+                break;
+            jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
+            // wake a stopper that may have observed the transient UNSAFE and
+            // gone to sleep waiting for us
+            uv_mutex_lock(&safepoint_lock);
+            uv_cond_broadcast(&safepoint_cond_begin);
+            uv_mutex_unlock(&safepoint_lock);
+            jl_safepoint_wait_gc(ct);
+        }
+    }
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
 }
 
@@ -276,22 +296,39 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
     // if (!jl_atomic_load_relaxed(&ct->ptls->suspend_count)) return;
     int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
-    uv_mutex_lock(&ct->ptls->sleep_lock);
-    if (jl_atomic_load_relaxed(&ct->ptls->suspend_count)) {
-        // defer this broadcast until we determine whether uv_cond_wait is really going to be needed
+    for (;;) {
+        uv_mutex_lock(&ct->ptls->sleep_lock);
+        if (jl_atomic_load_relaxed(&ct->ptls->suspend_count)) {
+            // defer this broadcast until we determine whether uv_cond_wait is really going to be needed
+            uv_mutex_unlock(&ct->ptls->sleep_lock);
+            uv_mutex_lock(&safepoint_lock);
+            uv_cond_broadcast(&safepoint_cond_begin);
+            uv_mutex_unlock(&safepoint_lock);
+            uv_mutex_lock(&ct->ptls->sleep_lock);
+            while (jl_atomic_load_relaxed(&ct->ptls->suspend_count))
+                uv_cond_wait(&ct->ptls->wake_signal, &ct->ptls->sleep_lock);
+        }
+        // must exit gc while still holding the mutex_unlock, so we know other
+        // threads in jl_safepoint_suspend_thread will observe this thread in
+        // the correct GC state, and not still stuck in JL_GC_STATE_WAITING
+        jl_atomic_store_release(&ct->ptls->gc_state, state);
         uv_mutex_unlock(&ct->ptls->sleep_lock);
+        if (state != JL_GC_STATE_UNSAFE)
+            break; // still countable; nothing to re-check
+        // a stop may have counted our transient WAITING: re-check and take the
+        // resume back if so. The wait happens outside sleep_lock (lock order
+        // is safepoint_lock -> sleep_lock); each iteration re-checks the
+        // suspend count too.
+        jl_fence();
+        if (!jl_atomic_load_acquire(&jl_gc_running))
+            break;
+        jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
+        // wake a stopper that may have observed the transient UNSAFE
         uv_mutex_lock(&safepoint_lock);
         uv_cond_broadcast(&safepoint_cond_begin);
         uv_mutex_unlock(&safepoint_lock);
-        uv_mutex_lock(&ct->ptls->sleep_lock);
-        while (jl_atomic_load_relaxed(&ct->ptls->suspend_count))
-            uv_cond_wait(&ct->ptls->wake_signal, &ct->ptls->sleep_lock);
+        jl_safepoint_wait_gc(ct);
     }
-    // must exit gc while still holding the mutex_unlock, so we know other
-    // threads in jl_safepoint_suspend_thread will observe this thread in the
-    // correct GC state, and not still stuck in JL_GC_STATE_WAITING
-    jl_atomic_store_release(&ct->ptls->gc_state, state);
-    uv_mutex_unlock(&ct->ptls->sleep_lock);
 }
 // This takes the sleep lock and puts the thread in GC_SAFE
 void jl_safepoint_take_sleep_lock(jl_ptls_t ptls)

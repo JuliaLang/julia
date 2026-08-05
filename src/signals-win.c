@@ -412,6 +412,11 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // break that protocol.
     if (jl_atomic_load_relaxed(&ptls2->gc_state) != JL_GC_STATE_UNSAFE)
         goto resume;
+    // guard against in-progress STW - even if a thread is observed as UNSAFE
+    // it may already be claimed for a STW in which case we must not reset it
+    // (see jl_set_gc_and_wait)
+    if (jl_atomic_load_acquire(&jl_gc_running))
+        goto resume;
     reset_ctx = jl_atomic_load_acquire(&ct2->reset_ctx);
     if (reset_ctx == NULL || reset_ctx->sp == 0)
         goto resume;
