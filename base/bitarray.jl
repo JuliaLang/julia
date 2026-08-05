@@ -1916,19 +1916,8 @@ end
 # hvcat -> use fallbacks in abstractarray.jl
 
 
-# BitArray I/O
-
-write(s::IO, B::BitArray) = write(s, B.chunks)
-function read!(s::IO, B::BitArray)
-    n = length(B)
-    Bc = B.chunks
-    read!(s, Bc)
-    if length(Bc) > 0 && Bc[end] & _msk_end(n) ≠ Bc[end]
-        Bc[end] &= _msk_end(n) # ensure that the BitArray is not broken
-        throw(DimensionMismatch("read mismatch, found non-zero bits after BitArray length"))
-    end
-    return B
-end
+# BitArray I/O lives in io.jl (it takes a `cancel` keyword, whose plumbing
+# is not yet loaded at this point of bootstrap)
 
 sizeof(B::BitArray) = sizeof(B.chunks)
 

@@ -152,6 +152,7 @@
     XX(vararg_type, jl_datatype_t*) \
     XX(vecelement_typename, jl_typename_t*) \
     XX(voidpointer_type, jl_datatype_t*) \
+    XX(wait_entry_type, jl_datatype_t*) \
     XX(weakref_type, jl_datatype_t*) \
     XX(typeapp_type, jl_datatype_t*)
 

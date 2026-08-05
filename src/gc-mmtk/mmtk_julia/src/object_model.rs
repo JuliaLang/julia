@@ -235,6 +235,15 @@ pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
             );
 
             return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_wait_entry_tag as usize) << 4) {
+            // Variable-sized: `nslots` {owner, next, aux} wait slots follow
+            // the fixed fields.
+            let we = obj_address.to_ptr::<jl_wait_entry_t>();
+            let ns = (*we).nslots as usize;
+            let dtsz =
+                std::mem::size_of::<jl_wait_entry_t>() + ns * std::mem::size_of::<jl_wait_slot_t>();
+
+            return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
         } else if vtag_usize == ((jl_small_typeof_tags_jl_string_tag as usize) << 4) {
             let length = object.to_raw_address().load::<usize>();
             let dtsz = length + std::mem::size_of::<usize>() + 1;

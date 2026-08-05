@@ -190,13 +190,29 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             // (strong) `parent` slot of each entry is traced; `child_head`
             // and the `next`/`pprev` slots are weak references with
             // unlink-on-death semantics (see jl_gc_sweep_weak_processing)
-            // and must not be traced.
+            // and must not be traced. The waiter-list head is a strong
+            // fixed slot.
             let cs = obj.to_ptr::<jl_cancel_source_t>();
+            process_slot(closure, obj + offset_of!(jl_cancel_source_t, waiters_head));
+            process_slot(closure, obj + offset_of!(jl_cancel_source_t, walk_lock));
             let np = (*cs).nparents as usize;
             let mut slot = obj + std::mem::size_of::<jl_cancel_source_t>();
             for _ in 0..np {
                 process_slot(closure, slot);
                 slot = slot + std::mem::size_of::<jl_cancel_parent_link_t>();
+            }
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_wait_entry_tag as usize) << 4) {
+            // Variable-sized wait entry: `nslots` {owner, next, aux} wait
+            // slots follow the fixed fields. `task` and the per-slot
+            // `owner` and `next` are strong references; `aux` is data.
+            let we = obj.to_ptr::<jl_wait_entry_t>();
+            process_slot(closure, obj + offset_of!(jl_wait_entry_t, task));
+            let ns = (*we).nslots as usize;
+            let mut slot = obj + std::mem::size_of::<jl_wait_entry_t>();
+            for _ in 0..ns {
+                process_slot(closure, slot + offset_of!(jl_wait_slot_t, owner));
+                process_slot(closure, slot + offset_of!(jl_wait_slot_t, next));
+                slot = slot + std::mem::size_of::<jl_wait_slot_t>();
             }
         } else if vtag_usize == ((jl_small_typeof_tags_jl_string_tag as usize) << 4)
             && PRINT_OBJ_TYPE

@@ -46,11 +46,15 @@ the async condition object itself.
 """
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
-    t = @task begin
-        unpreserve_handle(async)
-        while _trywait(async)
-            cb(async)
-            isopen(async) || return
+    # Shielded like the `Timer` callback task below: this task owns the
+    # handle's lifetime and must survive a cancelled constructing scope.
+    t = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        @task begin
+            unpreserve_handle(async)
+            while _trywait(async)
+                cb(async)
+                isopen(async) || return
+            end
         end
     end
     # here we are mimicking parts of _trywait, in coordination with task `t`
@@ -59,7 +63,7 @@ function AsyncCondition(cb::Function)
         if async.set
             schedule(t)
         else
-            _wait2(async.cond, t)
+            schedule_on_notify!(async.cond, t)
         end
     end
     return async
@@ -161,7 +165,10 @@ unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
 # if this returns true, the object has been signaled
 # if this returns false, the object is closed
-function _trywait(t::Union{Timer, AsyncCondition})
+# a cancellation of the governing token is thrown as a CancellationRequest
+_trywait(t::Union{Timer, AsyncCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _trywait(t, resolve_cancel_token(cancel))
+function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
     set = t.set
     if set
         # full barrier now for AsyncCondition
@@ -179,17 +186,29 @@ function _trywait(t::Union{Timer, AsyncCondition})
         if !set
             preserve_handle(t)
             lock(t.cond)
+            locked = true
             try
                 set = t.set
-                if !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
+                while !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
                     iolock_end()
-                    set = wait(t.cond)
+                    locked = false
+                    ret = wait(t.cond, tok)
+                    locked = true
                     unlock(t.cond)
+                    locked = false
                     iolock_begin()
                     lock(t.cond)
+                    locked = true
+                    if ret isa Bool
+                        set = ret
+                        break
+                    end
+                    # A wakeup that did not come from this object's notify:
+                    # re-check the state and re-park.
+                    set = t.set
                 end
             finally
-                unlock(t.cond)
+                locked && unlock(t.cond)
                 unpreserve_handle(t)
             end
         end
@@ -199,8 +218,14 @@ function _trywait(t::Union{Timer, AsyncCondition})
     return set
 end
 
-function wait(t::Union{Timer, AsyncCondition})
-    _trywait(t) || throw(EOFError())
+waitqueue(t::Union{Timer, AsyncCondition}) = waitqueue(t.cond)
+
+wait(t::Union{Timer, AsyncCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    wait(t, check_cancel_arg(cancel))
+function wait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
+    ok = _trywait(t, tok)
+    @cancel_check(tok)
+    ok || throw(EOFError())
     nothing
 end
 
@@ -226,16 +251,23 @@ function close(t::Union{Timer, AsyncCondition})
         # implement _trywait here without the auto-reset function, just waiting for the final close signal
         preserve_handle(t)
         lock(t.cond)
+        locked = true
         try
             while t.handle != C_NULL
                 iolock_end()
-                wait(t.cond)
+                # close is the cleanup primitive: its (bounded) completion
+                # wait is shielded from cancellation
+                locked = false
+                wait(t.cond, nothing)
+                locked = true
                 unlock(t.cond)
+                locked = false
                 iolock_begin()
                 lock(t.cond)
+                locked = true
             end
         finally
-            unlock(t.cond)
+            locked && unlock(t.cond)
             unpreserve_handle(t)
         end
     elseif t.isopen
@@ -311,14 +343,24 @@ function uv_timercb(handle::Ptr{Cvoid})
 end
 
 """
-    sleep(seconds)
+    sleep(seconds; cancel=Base.DEFAULT_CANCEL)
 
 Block the current task for a specified number of seconds. The minimum sleep time is 1
 millisecond or input of `0.001`.
+
+A cancellation of the governing token (by default the scoped token, see
+[`CancellationToken`](@ref)) interrupts the sleep by throwing the
+[`CancellationRequest`](@ref).
 """
-function sleep(sec::Real)
+function sleep(sec::Real; cancel::CancelTokenArg=DEFAULT_CANCEL)
     sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
-    wait(Timer(sec))
+    tok = check_cancel_arg(cancel)
+    t = Timer(sec)
+    try
+        wait(t, tok)
+    finally
+        close(t)
+    end
     nothing
 end
 
@@ -363,17 +405,23 @@ julia> begin
 function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs...)
     sticky = spawn === nothing ? current_task().sticky : !spawn
     timer = Timer(timeout; kwargs...)
-    t = @task begin
-        unpreserve_handle(timer)
-        while _trywait(timer)
-            try
-                cb(timer)
-            catch err
-                write(stderr, "Error in Timer:\n")
-                showerror(stderr, err, catch_backtrace())
-                return
+    # The callback task carries the timer's lifetime (its preserve is
+    # balanced in the body): shield it from the constructing scope's
+    # cancellation token, so a cancelled scope can neither leak the preserve
+    # nor stop the timer - `close(timer)` is what ends it.
+    t = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        @task begin
+            unpreserve_handle(timer)
+            while _trywait(timer)
+                try
+                    cb(timer)
+                catch err
+                    write(stderr, "Error in Timer:\n")
+                    showerror(stderr, err, catch_backtrace())
+                    return
+                end
+                isopen(timer) || return
             end
-            isopen(timer) || return
         end
     end
     t.sticky = sticky
@@ -383,7 +431,7 @@ function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs
         if timer.set
             schedule(t)
         else
-            _wait2(timer.cond, t)
+            schedule_on_notify!(timer.cond, t)
         end
     end
     return timer
@@ -429,4 +477,52 @@ function timedwait(testcb, timeout::Real; pollint::Real=0.1)
         end
     end
     return :timed_out
+end
+
+## A deadline as a waitable (see base/park.jl): `TimeoutWait(dt)` in a
+## park's waitables wakes the wait with `:timed_out` after `dt` seconds.
+## Its enqueue - running inside `park!`, after the arm - starts the timer
+## and spawns the claimer task, which wakes the parked task through the
+## standard expected-entry claim CAS. That CAS is a *specific-wait* waker:
+## it is only sound against a fresh, single-use entry (which the entry
+## cache contract supplies automatically - any non-canonical waitable
+## shape gets a fresh entry), since entry identity is what scopes the
+## claim to this wait and not a later one of the same task. The claimed
+## waitq registration is left for the driver's lazy settle; the dequeue
+## closes the timer on every exit path.
+mutable struct TimeoutWait
+    const timeout::Float64
+    timer::Union{Timer, Nothing}
+    TimeoutWait(timeout::Real) = new(Float64(timeout), nothing)
+end
+
+function wait_enqueue!(x::TimeoutWait, w::WaitEntry, first::Bool)
+    ct = current_task()
+    timer = Timer(x.timeout)
+    x.timer = timer
+    t = Task() do
+        try
+            # not cancellable: internal mechanism; closing the timer wakes
+            # this task on every exit path of the governed wait
+            wait(timer; cancel=nothing)
+        catch e
+            # a closed timer means the wait ended first; do nothing
+            e isa EOFError && return
+            rethrow()
+        end
+        if (@atomicreplace ct.waiting_on w => nothing).success
+            schedule(ct, :timed_out)
+        end
+    end
+    t.sticky = false
+    Threads._spawn_set_thrpool(t, :interactive)
+    schedule(t)
+    return true
+end
+
+function wait_dequeue!(x::TimeoutWait, w::WaitEntry, why::UInt8)
+    timer = x.timer
+    timer === nothing || close(timer)
+    x.timer = nothing
+    return nothing
 end
