@@ -132,27 +132,51 @@ on every `repark!` until its notify drains).
 function park!(ws, w::WaitEntry, first::Bool)
     ct = current_task()
     _arm_wait(ct, w)                                     # 3
-    fired = false
-    local fx
-    for x in ws                                          # 4
-        if !wait_enqueue!(x, w, first)
-            fired = true; fx = x
-            break
-        end
-    end
-    if !fired
-        for x in ws                                      # 5
-            if wait_recheck(x, w)
-                fired = true; fx = x
-                break
-            end
-        end
-    end
-    if fired && disarm!(ct, w)
+    fx = _enqueue_until_fired(ws, w, first)              # 4
+    fx === nothing && (fx = _recheck_until_fired(ws, w)) # 5
+    if fx !== nothing && disarm!(ct, w)
         wait_dequeue!(fx, w, WAKE_FIRED)
         return false
     end
     return true
+end
+
+# Per-waitable phases. Unrolled by tuple recursion: a generic `for x in ws`
+# loop would re-box every element through its dynamic tuple index.
+@inline _enqueue_until_fired(ws::Tuple{}, w::WaitEntry, first::Bool) = nothing
+@inline function _enqueue_until_fired(ws::Tuple, w::WaitEntry, first::Bool)
+    x = ws[1]
+    wait_enqueue!(x, w, first) || return x
+    return _enqueue_until_fired(tail(ws), w, first)
+end
+@inline function _enqueue_until_fired(ws, w::WaitEntry, first::Bool)
+    for x in ws
+        wait_enqueue!(x, w, first) || return x
+    end
+    return nothing
+end
+@inline _recheck_until_fired(ws::Tuple{}, w::WaitEntry) = nothing
+@inline function _recheck_until_fired(ws::Tuple, w::WaitEntry)
+    x = ws[1]
+    wait_recheck(x, w) && return x
+    return _recheck_until_fired(tail(ws), w)
+end
+@inline function _recheck_until_fired(ws, w::WaitEntry)
+    for x in ws
+        wait_recheck(x, w) && return x
+    end
+    return nothing
+end
+@inline _dequeue_each!(ws::Tuple{}, w::WaitEntry, why::UInt8) = nothing
+@inline function _dequeue_each!(ws::Tuple, w::WaitEntry, why::UInt8)
+    wait_dequeue!(ws[1], w, why)
+    return _dequeue_each!(tail(ws), w, why)
+end
+@inline function _dequeue_each!(ws, w::WaitEntry, why::UInt8)
+    for x in ws
+        wait_dequeue!(x, w, why)
+    end
+    return nothing
 end
 
 """
@@ -167,15 +191,8 @@ the fired predicate before suspending, so nothing is lost).
 function repark!(ws, w::WaitEntry)
     ct = current_task()
     _arm_wait(ct, w)
-    fired = false
-    local fx
-    for x in ws
-        if wait_recheck(x, w)
-            fired = true; fx = x
-            break
-        end
-    end
-    if fired && disarm!(ct, w)
+    fx = _recheck_until_fired(ws, w)
+    if fx !== nothing && disarm!(ct, w)
         wait_dequeue!(fx, w, WAKE_FIRED)
         return false
     end
@@ -229,9 +246,7 @@ protection (the lazy settle after a wake; the fired branch), while
 `WAKE_WITHDRAWN` dequeues are self-protecting (leaving a multi-wait).
 """
 function withdraw!(ws, w::WaitEntry, why::UInt8=WAKE_WITHDRAWN)
-    for x in ws
-        wait_dequeue!(x, w, why)
-    end
+    _dequeue_each!(ws, w, why)
     release_wait_entry!(current_task(), w)
     return nothing
 end
@@ -264,9 +279,7 @@ function interrupted_park_cleanup!(ct::Task, ws, w::WaitEntry)
     was_cancel = !was_plain && ct.cached_cancel_entry === w
     was_plain && (ct.cached_wait_entry = nothing)
     was_cancel && (ct.cached_cancel_entry = nothing)
-    for x in ws
-        wait_dequeue!(x, w, WAKE_INTERRUPTED)
-    end
+    _dequeue_each!(ws, w, WAKE_INTERRUPTED)
     q = ct.queue
     q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
     if was_plain
