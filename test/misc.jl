@@ -1816,4 +1816,42 @@ if !Sys.iswindows() && !running_under_rr()
             wait(p)
         end
     end
+
+    if Base.identify_package("Distributed") !== nothing
+        @testset "Distributed.interrupt reaches a busy worker" begin
+            # delivery on the worker is timing-sensitive: the InterruptException
+            # lands in whichever task last parked in the scheduler, which may be
+            # the message loop (killing the worker) instead of the executor, so
+            # retry with a fresh worker; a swallowed interrupt ("completed") is
+            # an outright failure
+            script = """
+                using Distributed
+                function attempt()
+                    w = addprocs(1)[1]
+                    ready = RemoteChannel(() -> Channel{Bool}(1))
+                    r = @spawnat w (put!(ready, true); sleep(30); "completed")
+                    take!(ready)
+                    interrupt(w)
+                    try
+                        fetch(r)
+                    catch e
+                        e
+                    end
+                end
+                for i in 1:3
+                    v = attempt()
+                    v == "completed" && exit(1)
+                    (v isa RemoteException || v isa InterruptException) && exit(0)
+                end
+                exit(1)
+                """
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                         Dict("JULIA_LOAD_PATH" => "@stdlib"))
+            p = run(pipeline(cmd; stdout=devnull, stderr=devnull); wait=false)
+            exited = timedwait(() -> process_exited(p), 120) === :ok
+            @test exited && p.exitcode == 0
+            process_running(p) && kill(p, Base.SIGKILL)
+            wait(p)
+        end
+    end
 end

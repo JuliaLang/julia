@@ -2022,11 +2022,12 @@ end
     end
 end
 
-## ^C handling
+## ^C handling and the escalation ladder
 
 spin(n=4) = for _ in 1:n; yield(); end
 
-# A deep compute kernel for the ^C subprocess scenarios.
+# A deep compute kernel for the ^C subprocess scenarios: an inner checkless
+# loop under an outer `@cancel_check`, and a fully-checked variant.
 const collatz_code = quote
     collatz(n) = (n & 1) == 1 ? (3n + 1) : (n ÷ 2)
     function find_collatz_counterexample()
@@ -2041,6 +2042,24 @@ const collatz_code = quote
             end
             i += 1
         end
+    end
+    @noinline function find_collatz_counterexample_inner()
+        i = 1
+        while true
+            j = i
+            while true
+                j = collatz(j)
+                j == 1 && break
+                j == i && return j
+            end
+            i += 1
+        end
+    end
+    function find_collatz_counterexample2()
+        # A single cancellation point at function entry; interrupting the inner
+        # (checkless) loop requires the reset_ctx mechanism.
+        Base.@cancel_check
+        return find_collatz_counterexample_inner()
     end
 end
 eval(collatz_code)
@@ -2122,6 +2141,31 @@ end
     @test timedwait(() -> istaskdone(t2), 10.0) == :ok
     @test seen2[] === CANCEL_REQUEST_SAFE
 
+    # ABANDON_ALL freezes a parked task immediately: no unwind, no cleanup.
+    cleanup_ran = Ref(false)
+    t3, src3 = cancellable() do
+        try
+            sleep(1000)
+        finally
+            cleanup_ran[] = true
+        end
+    end
+    spin()
+    @test cancel!(src3, CANCEL_REQUEST_ABANDON_ALL)
+    @test istaskdone(t3)
+    @test t3.state === :abandoned
+    @test istaskfailed(t3)
+    @test !cleanup_ran[]
+    @test_throws TaskFailedException wait(t3)
+
+    # A task spawned into an ABANDON_ALL-cancelled scope never runs its body.
+    src4 = CancellationTokenSource()
+    body_ran = Ref(false)
+    t4 = with(() -> @task(body_ran[] = true), CANCEL_TOKEN => CancellationToken(src4))
+    @test cancel!(src4, CANCEL_REQUEST_ABANDON_ALL)
+    schedule(t4)
+    @test timedwait(() -> istaskdone(t4), 10.0) == :ok
+    @test !body_ran[]
 
     # ABANDON_EXTERNAL interrupts a blocked stream write without waiting for
     # the write's cancellation to complete.
@@ -2140,7 +2184,8 @@ end
     end
 end
 
-@testset "^C episode severity classification" begin
+@testset "^C escalation severity ladder" begin
+    # Episode classification for the ^C escalation ladder.
     src = CancellationTokenSource()
     @test Base.sigint_active_severity(src) === nothing
     @test cancel!(src)
@@ -2168,6 +2213,20 @@ end
     @test_throws TaskFailedException wait(t)
     @test timedwait(() -> istaskdone(t1[]) && istaskdone(t2[]), 10.0) == :ok
     @test istaskfailed(t1[]) && istaskfailed(t2[])
+
+    # ABANDON_ALL freezes the parent and the children alike (they are all
+    # parked under the cancelled subtree).
+    t3 = Ref{Task}()
+    tp, srcp = cancellable() do
+        Base.Experimental.@sync begin
+            t3[] = @async sleep(1000)
+        end
+    end
+    spin()
+    @test cancel!(srcp, CANCEL_REQUEST_ABANDON_ALL)
+    @test tp.state === :abandoned
+    @test timedwait(() -> istaskdone(t3[]), 10.0) == :ok
+    @test t3[].state === :abandoned
 end
 
 @testset "structured cancellation of Experimental.@sync" begin
@@ -2187,6 +2246,24 @@ end
     @test istaskfailed(t1[]) && istaskfailed(t2[])
 end
 
+@testset "threaded cancellation (subprocess with -t2)" begin
+    cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no --threads=2 $(joinpath(@__DIR__, "cancellation_exec.jl"))`
+    p = run(pipeline(cmd, stdout=stdout, stderr=stderr), wait=false)
+    # A cancellation-delivery regression can wedge the child completely (a
+    # surviving spin loop blocks GC's stop-the-world, which also blocks all
+    # signal processing), in which case not even SIGTERM gets through.
+    # SIGKILL it rather than hanging the test suite. The budget is generous:
+    # on an oversubscribed CI box the child's compute-heavy testsets alone
+    # can take several minutes.
+    if timedwait(() -> process_exited(p), 600.0) !== :ok
+        kill(p, Base.SIGKILL)
+    end
+    wait(p)
+    @test success(p)
+end
+
+# On Windows uv_kill(SIGINT) terminates the child outright instead of
+# delivering a console ^C, so none of these scenarios can run there.
 
 Sys.isunix() && @testset "^C" begin
     function run_with_sigint(code::String, delays; forcekill::Bool=false,
@@ -2194,7 +2271,10 @@ Sys.isunix() && @testset "^C" begin
         # A readiness marker printed from user code proves the runtime is up
         # (signal handling armed, the script started) before any SIGINT is
         # sent - on a loaded machine startup alone can outlast the first delay
-        # and an early SIGINT kills the child with no output at all.
+        # and an early SIGINT kills the child with no output at all. (The
+        # marker's write is also the root task's first blocking operation:
+        # its cancellation point binds the task under the ^C episode scope,
+        # which the direct-abandonment rung now requires.)
         code = "println(\"CHILD-READY\")\n" * code
         out = Pipe()
         cmd = threads > 0 ?
@@ -2263,6 +2343,19 @@ Sys.isunix() && @testset "^C" begin
     @test occursin("CompositeException", output)
     @test p.exitcode == 0
 
+    # Escalation: an unresponsive process warns after 1s, and a second ^C
+    # abandons the stuck task; with the interactive evaluator gone, the
+    # process exits like an uncaught ^C
+    output, p = run_with_sigint("""
+        x = Ref(1.0)
+        while true
+            x[] = x[] * 1.0000001 + 0.1
+        end
+        """, [1.0, 2.5]; forcekill=true)
+    @test occursin("failed to acknowledge SIGINT", output)
+    @test occursin("Abandoning the current task", output)
+    @test p.exitcode == 128 + 2
+
     # ^C with a stray @async task pending is catchable and the script exits
     # cleanly - historically a "fatal: error thrown and no exception handler
     # available" (issues #29369, #45055)
@@ -2300,6 +2393,28 @@ Sys.isunix() && @testset "^C" begin
         occursin("displaying the error report failed", output)
     @test !occursin("fatal", output)
     @test p.exitcode == 1
+
+    # A catch-all loop that swallows every CancellationRequest cannot hide
+    # from ^C (issue #4037): while the scope stays cancelled the request is
+    # re-thrown at every blocking operation (the warning shows the
+    # delivered-but-not-completed flavor), and the escalation ladder still
+    # progresses to the point of abandoning the task. The abandonment rung
+    # itself is a hail mary that may leave the process inconsistent, so this
+    # asserts only that it is reached and announced - not any process
+    # behavior after the freeze (the watchdog reaps the process).
+    output, p = run_with_sigint("""
+        while true
+            try
+                sleep(10)
+            catch
+            end
+        end
+    """, [1.0, 2.5, 2.5]; forcekill=true)
+    @test occursin("Cancellation is in progress, but has not completed", output)
+    # single-threaded sessions reach the abandonment through the C-side
+    # direct path; threaded ones through the listener's rung - both announce
+    # with "Abandoning the current task"
+    @test occursin("Abandoning the current task", output)
 
     # ^C stops a swarm of print-flooding tasks and the script continues
     # (issue #47839)
@@ -2364,130 +2479,293 @@ Sys.isunix() && @testset "^C" begin
     @test p.exitcode == 0
 end
 
+if Sys.isunix()
+    @testset "^C escalation ladder in the REPL (pty), $(isempty(tflags) ? "default threads" : join(tflags, " "))" for tflags in ([], ["-t2"])
+        isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+        env = copy(ENV)
+        env["TERM"] = "dumb"
+        env["JULIA_HISTORY"] = tempname()
+        # Cover both thread topologies: the default session (a single default
+        # thread, which the rescued backend monopolizes in episode 2 - only
+        # the interactive-pool listener can escalate) and -t2 (the victim and
+        # the listener compete inside a wider default pool).
+        p = run(detach(setenv(`$(Base.julia_cmd()) -i -q --startup-file=no --color=no $tflags`, env)),
+                pts, pts, pts; wait=false)
+        ccall(:close, Cint, (Cint,), pts) # only the child owns the pts now
 
-Sys.isunix() && @testset "^C in the REPL (pty)" begin
-    isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
-    pts, ptm = Main.FakePTYs.open_fake_pty()
-
-    # Interactive julia on the pty; drive it like a user pressing ^C.
-    env = copy(ENV)
-    env["TERM"] = "dumb"
-    env["JULIA_HISTORY"] = tempname()
-    p = run(detach(setenv(`$(Base.julia_cmd()) -i -q --startup-file=no --color=no`, env)),
-            pts, pts, pts; wait=false)
-    ccall(:close, Cint, (Cint,), pts) # only the child owns the pts now
-
-    transcript_lock = ReentrantLock()
-    transcript = UInt8[]
-    reader = @async try
-        while true
-            chunk = readavailable(ptm)
-            isempty(chunk) && break
-            @lock transcript_lock append!(transcript, chunk)
+        transcript_lock = ReentrantLock()
+        transcript = UInt8[]
+        reader = @async try
+            while true
+                chunk = readavailable(ptm)
+                isempty(chunk) && break
+                @lock transcript_lock append!(transcript, chunk)
+            end
+        catch # pty closes when the child exits
         end
-    catch # pty closes when the child exits
-    end
-    cursor = Ref(1)
-    snapshot() = @lock transcript_lock String(copy(transcript))
-    function expect(needle::String; timeout::Real=30.0)
-        status = timedwait(timeout; pollint=0.05) do
-            idx = findnext(needle, snapshot(), cursor[])
-            idx === nothing && return false
-            cursor[] = last(idx) + 1
+        cursor = Ref(1)
+        snapshot() = @lock transcript_lock String(copy(transcript))
+        function expect(needle::String; timeout::Real=30.0)
+            status = timedwait(timeout; pollint=0.05) do
+                idx = findnext(needle, snapshot(), cursor[])
+                idx === nothing && return false
+                cursor[] = last(idx) + 1
+                return true
+            end
+            if status !== :ok
+                @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+            end
+            @test status == :ok
+        end
+        sendline(s) = write(ptm, s * "\n")
+        # Wait until every needle appears at-or-after the cursor, in any
+        # order, then advance the cursor past all of them: the single-thread
+        # endgame's messages (rescue warning, error display, fresh prompt)
+        # interleave nondeterministically.
+        function expect_all(needles::String...; timeout::Real=30.0)
+            last_end = Ref(cursor[])
+            status = timedwait(timeout; pollint=0.05) do
+                s = snapshot()
+                stop = cursor[]
+                for needle in needles
+                    idx = findnext(needle, s, cursor[])
+                    idx === nothing && return false
+                    stop = max(stop, last(idx) + 1)
+                end
+                last_end[] = stop
+                return true
+            end
+            if status !== :ok
+                @error "expect_all timed out" needles tail=snapshot()[max(1, cursor[]):end]
+            else
+                cursor[] = last_end[]
+            end
+            @test status == :ok
+        end
+
+        expect("julia> ")
+        # In a child with a single thread IN TOTAL, the julia-side listener -
+        # the engine of the graded SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL
+        # ladder - is starved while the victim monopolizes it: a repeat press
+        # re-offers the first rung, and the third press reaches the C-side
+        # direct abandonment instead of the listener's rungs. An unadorned
+        # `julia -i` session has an interactive-pool thread besides the
+        # default one, and its interactive-pool listener runs the full
+        # ladder; only an explicit JULIA_NUM_THREADS=1 (CI's test workers)
+        # leaves no spare thread. Probe the child's total count directly.
+        sendline("print(\"NTQ\", Threads.nthreads(:default) + Threads.nthreads(:interactive), \"QTN\")")
+        @test timedwait(30.0; pollint=0.05) do
+            m = match(r"NTQ(\d+)QTN", snapshot(), cursor[])
+            m === nothing && return false
+            cursor[] = m.offset + lastindex(m.match)
             return true
+        end === :ok
+        m = match(r"NTQ(\d+)QTN", snapshot())
+        single_threaded = m !== nothing && m[1] == "1"
+        expect("julia> ")
+        # A task that acknowledges SAFE cancellation but hangs in its cleanup:
+        # walks the full escalation ladder with a guided message per rung.
+        # Two episodes: the second exercises the ladder on a *rescued*
+        # session (fresh backend task, abandoned root task).
+        for episode in 1:2
+            sendline("println(\"EVAL-START\"); try; sleep(1000); finally; x = Ref(1.0); while x[] > 0; x[] = x[] * 1.0000001 + 0.1; end; end")
+            expect("EVAL-START") # the evaluation is running (robust under load)
+            sleep(0.5)           # ... and parked in sleep(1000)
+            kill(p, Base.SIGINT) # press 1: SAFE, delivered silently
+            expect("Press ^C again to also stop waiting for external resources"; timeout=6.0)
+            if episode == 1
+                # On-demand thread backtraces during the episode (^T sends
+                # SIGINFO where the tty supports it - BSD/mac; SIGUSR1 elsewhere)
+                kill(p, Sys.isbsd() ? Base.SIGINFO : Base.SIGUSR1)
+                expect("signal ("; timeout=10.0) # the backtrace dump header
+            end
+            if single_threaded
+                kill(p, Base.SIGINT) # press 2: retried, re-offering rung 1
+                expect("Press ^C again to also stop waiting for external resources"; timeout=6.0)
+                kill(p, Base.SIGINT) # press 3: C-side direct abandonment
+                expect_all("Abandoning the current task", "CancellationRequest", "julia> ")
+            else
+                kill(p, Base.SIGINT) # press 2: ABANDON_EXTERNAL
+                expect("No longer waiting for external resources")
+                expect("Press ^C again to forcibly abandon"; timeout=6.0)
+                kill(p, Base.SIGINT) # press 3: ABANDON_ALL freezes the task
+                expect("Abandoning the current task")
+                expect("CancellationRequest")
+                expect("julia> ")
+            end
+            # the rescued session works
+            sendline("$episode + $episode")
+            expect(string(2episode))
+            expect("julia> ")
+            # The rescued backend closes the completed episode, standing the
+            # escalation timer down: no stray warnings after the prompt
+            # (regression test for an errant "failed to acknowledge" print
+            # from the still-armed rescue timer of the final ^C press).
+            sleep(1.5)
+            @test !occursin("WARNING", snapshot()[cursor[]:end])
         end
-        if status !== :ok
-            @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+        # ... and the session exits cleanly on ^D
+        write(ptm, "\x04") # ^D (EOF)
+        @test timedwait(() -> process_exited(p), 15.0) == :ok
+        # A wedged session (e.g. an uninterrupted spin victim after ladder
+        # failures) never exits: kill it rather than letting success(p) below
+        # hang the whole suite.
+        process_exited(p) || kill(p, Base.SIGKILL)
+        @test success(p)
+        close(ptm)
+        wait(reader)
+    end
+
+@testset "^C in the REPL (pty)" begin
+        isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+
+        # Interactive julia on the pty; drive it like a user pressing ^C.
+        env = copy(ENV)
+        env["TERM"] = "dumb"
+        env["JULIA_HISTORY"] = tempname()
+        p = run(detach(setenv(`$(Base.julia_cmd()) -i -q --startup-file=no --color=no`, env)),
+                pts, pts, pts; wait=false)
+        ccall(:close, Cint, (Cint,), pts) # only the child owns the pts now
+
+        transcript_lock = ReentrantLock()
+        transcript = UInt8[]
+        reader = @async try
+            while true
+                chunk = readavailable(ptm)
+                isempty(chunk) && break
+                @lock transcript_lock append!(transcript, chunk)
+            end
+        catch # pty closes when the child exits
         end
-        @test status == :ok
+        cursor = Ref(1)
+        snapshot() = @lock transcript_lock String(copy(transcript))
+        function expect(needle::String; timeout::Real=30.0)
+            status = timedwait(timeout; pollint=0.05) do
+                idx = findnext(needle, snapshot(), cursor[])
+                idx === nothing && return false
+                cursor[] = last(idx) + 1
+                return true
+            end
+            if status !== :ok
+                @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+            end
+            @test status == :ok
+        end
+        sendline(s) = write(ptm, s * "\n")
+
+        expect("julia> ")
+
+        # a SIGINT at an idle prompt (^C or an external `kill -INT`) must
+        # not disturb the session (issue #42072)
+        kill(p, Base.SIGINT)
+        sleep(0.5)
+        sendline("20 + 21")
+        expect("41")
+        expect("julia> ")
+
+        # ^C interrupts a sleeping REPL evaluation and reports it
+        sendline("println(\"EVAL-1\"); sleep(1000)")
+        expect("EVAL-1") # the evaluation is running (robust under load)
+        sleep(0.5)       # ... and parked in sleep(1000)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+
+        # the REPL evaluates normally afterwards
+        sendline("6 * 7")
+        expect("42")
+        expect("julia> ")
+
+        # a spinning evaluation triggers the escalation warning; the second
+        # ^C abandons it and the REPL is rescued with a fresh backend
+        sendline("println(\"EVAL-2\"); xr = Ref(1.0); while true; xr[] = xr[] * 1.0000001 + 0.1; end")
+        expect("EVAL-2") # the evaluation is running (robust under load)
+        sleep(0.5)       # ... and spinning
+        kill(p, Base.SIGINT)
+        expect("failed to acknowledge SIGINT"; timeout=15.0)
+        kill(p, Base.SIGINT)
+        expect("Abandoning the current task")
+        expect("julia> ")
+
+        # the rescued REPL still evaluates
+        sendline("3 + 4")
+        expect("7")
+        expect("julia> ")
+
+        # and ^C still works after the rescue
+        sendline("println(\"EVAL-3\"); sleep(1000)")
+        expect("EVAL-3")
+        sleep(0.5)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+
+        # a background task from an earlier evaluation belongs to an earlier
+        # ^C epoch: interrupting the current evaluation leaves it running
+        # (issue #25790)
+        sendline("global bgc = Ref(0); global bg = @async while true; sleep(0.01); bgc[] += 1; end; println(\"BG-UP\")")
+        expect("BG-UP")
+        expect("julia> ")
+        sendline("println(\"EVAL-4\"); sleep(1000)")
+        expect("EVAL-4")
+        sleep(0.5)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+        sendline("print(\"bg-done=\", istaskdone(bg)); c0 = bgc[]; sleep(0.3); println(\"; bg-alive=\", bgc[] > c0)")
+        expect("bg-done=false; bg-alive=true")
+        expect("julia> ")
+
+        # ^C during an in-evaluation terminal read recovers the prompt
+        # (the class of issue #58105's "Install package?" prompt)
+        sendline("println(\"EVAL-5\"); readline()")
+        expect("EVAL-5")
+        sleep(0.5)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+
+        # ^C while parked in a server accept recovers, leaving the server
+        # usable (the class of issue #58689)
+        sendline("using Sockets; global srv = listen(Sockets.localhost, 0); println(\"LISTENING\"); accept(srv)")
+        expect("LISTENING")
+        sleep(0.5)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+        sendline("println(\"srv-open=\", isopen(srv)); close(srv)")
+        expect("srv-open=true")
+        expect("julia> ")
+
+        # cancelling a BigInt computation never yanks control out of libgmp
+        # in an unsafe spot the way the old asynchronous InterruptException
+        # delivery could (corrupting the heap - issue #56545): the loop is
+        # deliberately checkless - delivery lands either on an MPZ entry
+        # point's own cancellation point, asynchronously inside audited
+        # libgmp compute (unwound via the reset region published across the
+        # annotated call), or inside the allocation hooks (deferred and
+        # chained into the reset on exit) - and BigInt arithmetic in the
+        # session works correctly afterwards
+        sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
+        expect("EVAL-6")
+        sleep(0.5)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+        sendline("println(string(factorial(big(30))))")
+        expect("265252859812191058636308480000000")
+        expect("julia> ")
+
+        sendline("exit()")
+        # Never let success(p) hang the suite on a wedged session (see the
+        # ladder testset's cleanup).
+        if timedwait(() -> process_exited(p), 60.0) !== :ok
+            kill(p, Base.SIGKILL)
+        end
+        @test success(p)
+        close(ptm)
+        wait(reader)
     end
-    sendline(s) = write(ptm, s * "\n")
-
-    expect("julia> ")
-
-    # a SIGINT at an idle prompt (^C or an external `kill -INT`) must
-    # not disturb the session (issue #42072)
-    kill(p, Base.SIGINT)
-    sleep(0.5)
-    sendline("20 + 21")
-    expect("41")
-    expect("julia> ")
-
-    # ^C interrupts a sleeping REPL evaluation and reports it
-    sendline("println(\"EVAL-1\"); sleep(1000)")
-    expect("EVAL-1") # the evaluation is running (robust under load)
-    sleep(0.5)       # ... and parked in sleep(1000)
-    kill(p, Base.SIGINT)
-    expect("CancellationRequest")
-    expect("julia> ")
-
-    # the REPL evaluates normally afterwards
-    sendline("6 * 7")
-    expect("42")
-    expect("julia> ")
-
-    # a background task from an earlier evaluation belongs to an earlier
-    # ^C epoch: interrupting the current evaluation leaves it running
-    # (issue #25790)
-    sendline("global bgc = Ref(0); global bg = @async while true; sleep(0.01); bgc[] += 1; end; println(\"BG-UP\")")
-    expect("BG-UP")
-    expect("julia> ")
-    sendline("println(\"EVAL-4\"); sleep(1000)")
-    expect("EVAL-4")
-    sleep(0.5)
-    kill(p, Base.SIGINT)
-    expect("CancellationRequest")
-    expect("julia> ")
-    sendline("print(\"bg-done=\", istaskdone(bg)); c0 = bgc[]; sleep(0.3); println(\"; bg-alive=\", bgc[] > c0)")
-    expect("bg-done=false; bg-alive=true")
-    expect("julia> ")
-
-    # ^C during an in-evaluation terminal read recovers the prompt
-    # (the class of issue #58105's "Install package?" prompt)
-    sendline("println(\"EVAL-5\"); readline()")
-    expect("EVAL-5")
-    sleep(0.5)
-    kill(p, Base.SIGINT)
-    expect("CancellationRequest")
-    expect("julia> ")
-
-    # ^C while parked in a server accept recovers, leaving the server
-    # usable (the class of issue #58689)
-    sendline("using Sockets; global srv = listen(Sockets.localhost, 0); println(\"LISTENING\"); accept(srv)")
-    expect("LISTENING")
-    sleep(0.5)
-    kill(p, Base.SIGINT)
-    expect("CancellationRequest")
-    expect("julia> ")
-    sendline("println(\"srv-open=\", isopen(srv)); close(srv)")
-    expect("srv-open=true")
-    expect("julia> ")
-
-    # cancelling a BigInt computation never yanks control out of libgmp
-    # in an unsafe spot the way the old asynchronous InterruptException
-    # delivery could (corrupting the heap - issue #56545): the loop is
-    # deliberately checkless - delivery lands either on an MPZ entry
-    # point's own cancellation point, asynchronously inside audited
-    # libgmp compute (unwound via the reset region published across the
-    # annotated call), or inside the allocation hooks (deferred and
-    # chained into the reset on exit) - and BigInt arithmetic in the
-    # session works correctly afterwards
-    sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
-    expect("EVAL-6")
-    sleep(0.5)
-    kill(p, Base.SIGINT)
-    expect("CancellationRequest")
-    expect("julia> ")
-    sendline("println(string(factorial(big(30))))")
-    expect("265252859812191058636308480000000")
-    expect("julia> ")
-
-    sendline("exit()")
-    # Never let success(p) hang the suite on a wedged session.
-    if timedwait(() -> process_exited(p), 60.0) !== :ok
-        kill(p, Base.SIGKILL)
-    end
-    @test success(p)
-    close(ptm)
-    wait(reader)
 end
