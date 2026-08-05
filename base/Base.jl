@@ -411,10 +411,11 @@ end
 # never cancel a newly installed one.
 const _sigint_episode = Ref{Tuple{Union{Nothing, CancellationTokenSource}, UInt64}}((nothing, 0))
 # The task driving the current foreground evaluation (the caller of
-# sigint_new_episode!). Nothing in Base reads it yet: the ^C escalation
-# machinery (follow-up PR) targets it directly when the running computation
-# has no published token binding, and Distributed points it at the handler
-# of the most recent remotely-submitted request.
+# sigint_new_episode!). The escalation ladder falls back to targeting it
+# directly when the running computation has no published token binding (e.g.
+# an interpreted top-level loop, which executes no compiled cancellation
+# points), and Distributed points it at the handler of the most recent
+# remotely-submitted request.
 const _sigint_foreground_task = Ref{Union{Nothing, Task}}(nothing)
 
 """
@@ -425,7 +426,8 @@ source and return its token. The owner of an interactive session (e.g. the
 REPL backend, or the script driver) calls this before each foreground
 evaluation and runs the evaluation in a dynamic scope carrying the returned
 token (`@with Base.CANCEL_TOKEN => tok ...`), so that ^C cancels exactly
-that evaluation.
+that evaluation. Also stands down the ^C escalation machinery of the
+previous episode.
 
 The caller chooses the source's place in the cancellation graph. The REPL
 passes a fresh *evaluation* source - a child of the session source (see the
@@ -437,21 +439,28 @@ machinery) runs under it, and a session sweep must never cancel that.
 """
 function sigint_new_episode!(src::CancellationTokenSource=CancellationTokenSource())
     _sigint_foreground_task[] = current_task()
-    # Publish the C-side mirror. The episode Ref roots the new source; the
-    # signal thread's use of the mirror is GC-excluded rather than rooted,
-    # so nothing needs to keep the outgoing source alive (see
-    # jl_sigint_request_cancellation).
+    # Publish the C-side mirrors (rooted by the Refs above; the signal
+    # thread's use of the source mirror is GC-excluded rather than rooted,
+    # see jl_sigint_request_cancellation). The foreground task must be
+    # published before the source: the source mirror is what arms the ^C
+    # machinery on this episode. The source swap also disarms the previous
+    # episode's rescue timer.
+    ccall(:jl_set_sigint_foreground_task, Cvoid, (Any,), current_task())
     gen = ccall(:jl_set_sigint_source, UInt64, (Any,), src)
     _sigint_episode[] = (src, gen)
     return CancellationToken(src)
 end
 
-# Close the ^C episode without installing a new source (e.g. when the work
-# item completes; the session installs a fresh source before its next
-# evaluation).
+# Close the ^C episode without installing a new source (e.g. after an
+# abandoned target was cleaned up; the resumed session installs a fresh
+# source before its next evaluation).
 function sigint_close_episode!()
+    # Clear the source mirror first: it is the arming word - the fg-task
+    # mirror must never outlive it into a window where it could be consulted
+    # for a closed episode.
     gen = ccall(:jl_set_sigint_source, UInt64, (Any,), nothing)
     _sigint_episode[] = (nothing, gen)
+    ccall(:jl_set_sigint_foreground_task, Cvoid, (Any,), nothing)
     _sigint_foreground_task[] = nothing
     nothing
 end
@@ -461,22 +470,83 @@ end
 sigint_active_severity(src::CancellationTokenSource) = cancel_severity(src)
 
 # One listener task runs per nonempty threadpool (a pool's threads cannot run
-# another pool's tasks, and any pool may be monopolized by a busy victim).
-# The listeners race to claim each notification; the pass itself is
-# level-based (it re-reads the episode state), so serializing claims through
-# the lock is enough.
+# another pool's tasks, and any pool may be monopolized by the stuck victim -
+# e.g. a rescued backend on the only default thread). The listeners race to
+# claim each notification; the pass itself is level-based (it re-reads the
+# episode state), so serializing claims through the lock is enough.
 const sigint_pass_lock = ReentrantLock()
+
+# Whether the next dispatch pass would perform work that can block (the
+# abandonment protocol's verdict wait, session cleanup/rescue, `exit`).
+# Peek-only - it must not consume anything: the scheduler-inline pass
+# (`maybe_dispatch_sigint(false)`) uses it to defer such episodes to a
+# blocking-capable task context BEFORE any state is mutated.
+function _sigint_dispatch_would_block()
+    backend = active_repl_backend
+    if backend !== nothing && (backend.backend_task::Task).state === :abandoned
+        return true # abandoned-target cleanup rescues the REPL
+    end
+    if roottask.state === :abandoned && (backend === nothing || istaskdone(backend.backend_task::Task))
+        return true
+    end
+    src, gen = _sigint_episode[]
+    pending = ccall(:jl_peek_sigint_pending, Cint, (UInt64,), gen) != 0
+    if src === nothing
+        # only the no-evaluator-left path acts (and it exits, running
+        # atexit hooks)
+        pending || return false
+        if backend !== nothing && !istaskdone(backend.backend_task::Task)
+            return false
+        end
+        return istaskdone(roottask)
+    end
+    src = src::CancellationTokenSource
+    active = sigint_active_severity(src)
+    active === nothing && return false # a first SAFE delivery never blocks
+    if ccall(:jl_sigint_rescue_timer_expired_peek, Cint, ()) != 0
+        # climbing a rung: only the climb to ABANDON_ALL (abandonment
+        # protocol + cleanup) can block
+        return active !== CANCEL_REQUEST_SAFE
+    end
+    # a redelivery at ABANDON_ALL re-attempts the foreground abandonment
+    return active === CANCEL_REQUEST_ABANDON_ALL
+end
 
 # One dispatch pass for a claimed ^C notification. Runs with
 # `sigint_pass_lock` held; level-based (it re-reads the episode state), so
-# serializing passes through the lock is enough.
-function _sigint_dispatch_pass()
+# serializing passes through the lock is enough. With `can_block=false`
+# (the scheduler-inline caller, whose current task may hold an armed wait
+# registration and must never park), an episode whose handling can block is
+# not touched: the pass returns `:defer` before consuming anything.
+function _sigint_dispatch_pass(can_block::Bool)
+    if !can_block && _sigint_dispatch_would_block()
+        return :defer
+    end
     src, gen = _sigint_episode[]
     # A press is consumed only if it targeted this episode's generation; a
     # press for a previous episode self-invalidates (its source was already
     # marked by the C fast path), so a late pass can never cancel a newly
     # installed episode (issues #58689, #42072).
     pending = ccall(:jl_consume_sigint_pending, Cint, (UInt64,), gen) != 0
+    # If the current episode's stuck task was already forcibly abandoned (by
+    # the ABANDON_ALL escalation below, or by the C-side fallback when no
+    # thread was available to run a dispatch pass), finish its cleanup
+    # instead of delivering anything new.
+    backend = active_repl_backend
+    abandoned = nothing
+    if backend !== nothing && (backend.backend_task::Task).state === :abandoned
+        abandoned = backend.backend_task::Task
+    elseif roottask.state === :abandoned && (backend === nothing || istaskdone(backend.backend_task::Task))
+        # N.B.: an abandoned root task is the *permanent* state of a
+        # rescued session (with the default REPL, evaluation initially
+        # runs on the root task); it only needs cleanup while there is no
+        # live backend to hand the session to.
+        abandoned = roottask
+    end
+    if abandoned !== nothing
+        cleanup_abandoned_sigint_target(abandoned)
+        return
+    end
     if src === nothing
         # No episode source is installed. In an interactive session this
         # is a between-evaluations window (a fresh source arrives with the
@@ -484,46 +554,126 @@ function _sigint_dispatch_pass()
         # evaluator nothing can be cancelled or resumed - exit as an
         # unhandled ^C would.
         pending || return
-        backend = active_repl_backend
         if backend !== nothing && !istaskdone(backend.backend_task::Task)
             return
         end
-        istaskdone(roottask) || return
+        roottask.state === :abandoned || istaskdone(roottask) || return
         exit(128 + 2) # 128 + SIGINT
     end
     src = src::CancellationTokenSource
-    if sigint_active_severity(src) === nothing
+    active = sigint_active_severity(src)
+    # has any task acknowledged (started handling) the active severity?
+    delivered_bits = @atomic :monotonic src.delivered
+    acked = active !== nothing && (delivered_bits & (0x01 << active.request)) != 0x00
+    if active === nothing
         # The source is unmarked: only a press that targeted exactly this
         # episode warrants delivering to it.
         pending || return
-        cancel!(src, CANCEL_REQUEST_SAFE)
-    elseif pending
-        # The press was delivered entirely by the C-side fast path with
-        # no wake-up walk ever run - or this is a repeat press. Parked
-        # waiters under the episode source still need their wake;
-        # redeliver! is level-triggered and idempotent (a no-op for
-        # tasks already unwinding).
-        redeliver!(src)
+        sev = CANCEL_REQUEST_SAFE
+    elseif ccall(:jl_sigint_rescue_timer_expired_peek, Cint, ()) != 0
+        # The grace period for the active severity has passed (the rescue
+        # timer announced the escalation option to the user) - climb one
+        # rung, and start a fresh grace period for the next one.
+        sev = active === CANCEL_REQUEST_SAFE ? CANCEL_REQUEST_ABANDON_EXTERNAL :
+              CANCEL_REQUEST_ABANDON_ALL
+        ccall(:jl_sigint_escalation_delivered, Cvoid, ())
+    elseif !acked
+        # The active severity was never observed by any task - a repeat
+        # ^C within the grace period retries its delivery.
+        sev = active
+    elseif !pending
+        # The cancellation was acknowledged and is being handled; a
+        # spurious wakeup without a fresh press does nothing (once the
+        # grace period lapses, the rescue timer offers escalation).
+        return
+    else
+        # Acknowledged, but this wakeup carries a real press. The press
+        # may also have been the FIRST one, delivered entirely by the
+        # C-side fast path (the episode source marked and the signal
+        # dispatch acknowledged by a polling task) with no walk ever
+        # run - parked waiters under the episode source still need
+        # their wake. Redeliver: level-triggered and idempotent, it
+        # wakes whoever is still parked and is a no-op for tasks
+        # already unwinding.
+        sev = active
     end
-    # else: a wakeup without a press for this episode does nothing
+    # N.B.: these warnings must not park this task (the victim may be
+    # hogging our only thread) - Core.print writes directly.
+    if sev === CANCEL_REQUEST_ABANDON_ALL && active !== CANCEL_REQUEST_ABANDON_ALL
+        Core.print(Core.stderr, "\nWARNING: Abandoning the current task.\n",
+                        "         This may leave the process in an inconsistent state.\n")
+    elseif sev === CANCEL_REQUEST_ABANDON_EXTERNAL && active === CANCEL_REQUEST_SAFE
+        Core.print(Core.stderr, "\nWARNING: No longer waiting for external resources to complete cancellation.\n")
+    end
+    if sev === active
+        redeliver!(src)
+    else
+        cancel!(src, sev)
+    end
+    # Fallback for a foreground task running code without a published
+    # token binding (e.g. an interpreted top-level loop): target it
+    # directly.
+    fg = _sigint_foreground_task[]
+    if fg isa Task && !istaskdone(fg)
+        if sev === CANCEL_REQUEST_ABANDON_ALL
+            freeze_task!(fg, sev, src)
+        else
+            # best-effort acceleration of asynchronous delivery
+            tid = ccall(:jl_get_task_tid, Int16, (Any,), fg)
+            tid >= 0 && ccall(:jl_send_cancellation_signal, Cvoid, (Int16,), tid)
+        end
+    end
+    # The escalation timer keeps running until the episode closes (the
+    # session resumes normal operation and installs a fresh episode
+    # source, or an abandoned target is cleaned up): if the cancellation
+    # stalls at any stage - including cleanup after a successful
+    # delivery - the timer offers the next rung.
+    #
+    # Our own ABANDON_ALL rung may just have frozen the foreground task;
+    # clean it up (which also rescues an abandoned REPL backend). The
+    # pass reaches into the REPL *only* on this path, once the target is
+    # actually frozen: invoking (and possibly compiling) REPL code while
+    # a cancelled-but-unresponsive victim is still running would let the
+    # compile's GC deadlock against a victim spinning without
+    # safepoints - the very situation the remaining rungs must cut
+    # through.
+    backend = active_repl_backend
+    if backend !== nothing && (backend.backend_task::Task).state === :abandoned
+        cleanup_abandoned_sigint_target(backend.backend_task::Task)
+    elseif roottask.state === :abandoned && (backend === nothing || istaskdone(backend.backend_task::Task))
+        cleanup_abandoned_sigint_target(roottask)
+    end
     nothing
 end
 
 # Arbitrate and run pending ^C dispatch. Called from the sigint listener
-# tasks on their async notification, and inline from any idle thread's
-# scheduler loop (see jl_dispatch_sigint_inline in src/scheduler.c) - the
-# pass only needs an ordinary task context, which keeps the event loop out
-# of the delivery path even when its owning thread is stuck in a foreign
-# call. `trylock` (never a parking `lock`): if another pass is running, it
-# drains any claim posted meanwhile, and an unclaimed flag is retried by
-# the next idle iteration or listener wakeup.
-function maybe_dispatch_sigint()
+# tasks on their async notification (blocking-capable), and inline from any
+# idle thread's scheduler loop via `maybe_dispatch_sigint_inline` (see
+# jl_dispatch_sigint_inline in src/scheduler.c) - the pass only needs an
+# ordinary task context, which keeps the event loop out of the delivery
+# path even when its owning thread is stuck in a foreign call. `trylock`
+# (never a parking `lock`): if another pass is running, it drains any claim
+# posted meanwhile, and an unclaimed flag is retried by the next idle
+# iteration or listener wakeup.
+#
+# The inline caller runs on whatever task entered the scheduler - possibly
+# one parked mid-wait with its wait registration still armed - so it must
+# never block. An episode whose handling can block (`:defer` from the
+# pass) is handed back: the claim is re-posted and a fresh task (spawned
+# outside any cancellation scope, so a cancelled caller's scope cannot
+# cancel the rescue work) re-runs the dispatch blocking-capable.
+function maybe_dispatch_sigint(can_block::Bool=true)
     ccall(:jl_peek_sigint_dispatch, Cint, ()) != 0 || return
     trylock(sigint_pass_lock) || return
+    deferred = false
     try
         while ccall(:jl_claim_sigint_dispatch, Cint, ()) != 0
             try # an error in one pass must not disable the ^C machinery
-                _sigint_dispatch_pass()
+                if _sigint_dispatch_pass(can_block) === :defer
+                    ccall(:jl_repost_sigint_dispatch, Cvoid, ())
+                    deferred = true
+                    break
+                end
             catch ex
                 try
                     @invokelatest showerror(stderr, ex, catch_backtrace())
@@ -535,8 +685,19 @@ function maybe_dispatch_sigint()
     finally
         unlock(sigint_pass_lock)
     end
+    if deferred
+        t = Task(_sigint_dispatch_blocking_task)
+        t.sticky = false
+        schedule(t)
+    end
     nothing
 end
+
+# The C scheduler-inline entry point (never blocks; see above).
+maybe_dispatch_sigint_inline() = maybe_dispatch_sigint(false)
+
+_sigint_dispatch_blocking_task() =
+    ScopedValues.with(maybe_dispatch_sigint, CANCEL_TOKEN => nothing)
 
 function sigint_listener(cond::AsyncCondition)
     while _trywait(cond)
@@ -545,13 +706,57 @@ function sigint_listener(cond::AsyncCondition)
     nothing
 end
 
+# Post-abandonment cleanup for a ^C target that was forcibly frozen (by the
+# ABANDON_ALL escalation rung, or by the C-side fallback).
+function cleanup_abandoned_sigint_target(t::Task)
+    # A forcibly abandoned task never goes through the regular task completion
+    # path, so wake up anyone waiting on it explicitly. (The root task's
+    # donenotify may be `nothing`.)
+    donenotify = t.donenotify
+    if donenotify isa ThreadSynchronizer
+        lock(donenotify)
+        notify(donenotify)
+        unlock(donenotify)
+    end
+    if (REPL = REPL_MODULE_REF[]) !== Base
+        invokelatest(REPL.maybe_rescue_REPL_after_sigint)
+    end
+    # The episode is resolved: stand down the escalation timer and close the
+    # episode so that the next ^C starts fresh (the resumed session installs
+    # a new episode source before its next evaluation).
+    sigint_close_episode!()
+    # If the abandonment left the process without an interactive evaluator
+    # (script mode, or the REPL could not be rescued), nothing can resume
+    # normal operation - exit as ^C would.
+    backend = active_repl_backend
+    if t === roottask && (backend === nothing || istaskdone(backend.backend_task::Task))
+        exit(128 + 2) # 128 + SIGINT
+    end
+    nothing
+end
+
 # The dispatch path must not hit the JIT on the first ^C: it runs from the
 # scheduler's idle loop, and a press on a cold or loaded session would
 # stall interactive response behind the compile - bake it into the image.
 precompile(Tuple{typeof(maybe_dispatch_sigint)})
-precompile(Tuple{typeof(_sigint_dispatch_pass)})
+precompile(Tuple{typeof(maybe_dispatch_sigint), Bool})
+precompile(Tuple{typeof(maybe_dispatch_sigint_inline)})
+precompile(Tuple{typeof(_sigint_dispatch_would_block)})
+precompile(Tuple{typeof(_sigint_dispatch_pass), Bool})
 precompile(Tuple{typeof(cancel!), CancellationTokenSource, CancellationRequest})
 precompile(Tuple{typeof(redeliver!), CancellationTokenSource})
+
+# The rescue task exists to give a thread whose current task got forcibly
+# abandoned (because it failed to acknowledge ^C) something runnable to switch
+# to; it simply enters the scheduler.
+function sigint_rescue_loop()
+    while true
+        wait()
+    end
+end
+
+# Keeps the rescue task rooted while the C runtime holds a reference to it
+const _sigint_rescue_task = Ref{Union{Task, Nothing}}(nothing)
 
 function start_sigint_listener()
     cond = AsyncCondition()
@@ -579,6 +784,10 @@ function start_sigint_listener()
         ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
     end
     ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+    rescue = Task(sigint_rescue_loop)
+    rescue.sticky = false
+    _sigint_rescue_task[] = rescue
+    ccall(:jl_set_sigint_rescue_task, Cvoid, (Any,), rescue)
 end
 
 function __init__()

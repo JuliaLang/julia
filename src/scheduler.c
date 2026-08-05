@@ -469,7 +469,7 @@ static void jl_dispatch_sigint_inline(void) JL_CANSAFEPOINT
     if (f == NULL) {
         if (jl_base_module == NULL)
             return;
-        f = jl_get_global(jl_base_module, jl_symbol("maybe_dispatch_sigint"));
+        f = jl_get_global(jl_base_module, jl_symbol("maybe_dispatch_sigint_inline"));
         if (f == NULL)
             return;
         jl_atomic_store_relaxed(&dispatch_f, f);
