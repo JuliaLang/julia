@@ -840,8 +840,17 @@ end
 Like `include`, except reads code from the given string rather than from a file.
 """
 function include_string(mapexpr::Function, mod::Module, code::AbstractString,
-                        filename::AbstractString;
-                        expr_compat_mode=false, version::VersionNumber=VERSION)
+                        filename::AbstractString; expr_compat_mode=false,
+                        version::Union{VersionNumber, Nothing}=nothing)
+    # TODO: fix this hack.  The normal way of getting the parser for this module
+    # only gives us Expr.  We probably want the parser to always create
+    # SyntaxTree, then convert it to Expr if the version is too low.
+    version = if isnothing(version) && isdefined(mod, Symbol("#_internal_julia_parse"))
+        vp = getglobal(mod, Symbol("#_internal_julia_parse"))
+        vp isa Base.VersionedParse ? vp.ver : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+    else
+        version isa VersionNumber ? version : JuliaSyntax.JL_OLD_SYNTAX_VERSION
+    end
     st = parseall(SyntaxTree, code; filename, version, ignore_warnings=true)
     @jl_assert kind(st) === K"toplevel" st
     if mapexpr !== identity

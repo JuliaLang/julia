@@ -1011,7 +1011,7 @@ end
         end
         Core.isdefinedglobal(@__MODULE__, :N)
     end
-    """; expr_compat_mode) == true
+    """; expr_compat_mode, version=v"1.14") == true
 
     # A later method whose body refers to the type name.
     @test JuliaLowering.include_string(@newmod(), """
@@ -1023,7 +1023,7 @@ end
         N(y::UInt) = N(-1)
         N(UInt(1)).x
     end
-    """; expr_compat_mode) == -1
+    """; expr_compat_mode, version=v"1.14") == -1
 
     # A later method whose signature refers to the type name.
     @test JuliaLowering.include_string(@newmod(), """
@@ -1036,7 +1036,7 @@ end
         f(arg::N) = arg.x
         f(N(UInt(1)))
     end
-    """; expr_compat_mode) == -1
+    """; expr_compat_mode, version=v"1.14") == -1
 end
 
 @testset "(AI) type def in local scope: name conflicts" for expr_compat_mode in (true, false)
@@ -1059,7 +1059,7 @@ end
                     end
                 end""")
         @test_throws JuliaLowering.LoweringError JuliaLowering.include_string(
-            test_mod, src; expr_compat_mode)
+            test_mod, src; expr_compat_mode, version=v"1.14")
     end
 
     # shadowing is OK

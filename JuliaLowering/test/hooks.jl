@@ -99,10 +99,10 @@
                      "macro mmm(); end")
             @test mapexpr_sees(code) == Meta.parse(code)
         end
-        # FIXME: our `:module` expressions have the syntax version as an extra
-        # leading argument - `Expr(:module, v"1.14.0", true, :MMM, body)` - so
-        # they don't have the shape `mapexpr` expects
-        @test_broken mapexpr_sees("module MMM; end") == Meta.parse("module MMM; end")
+
+        # Three vs four arg module form (may later be deprecated, but macros
+        # shouldn't get confused by this while it's here)
+        @test mapexpr_sees("module MMM; end") == Meta.parse("module MMM; end")
 
         out = JL.include_string(ex -> Expr(:module, true, :Renamed, ex.args[end]),
                                 Module(:MapexprModule), "module Orig; yy = 1; end", "none")
