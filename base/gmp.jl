@@ -159,21 +159,6 @@ const bitcnt_t = Culong
 
 gmpz(op::Symbol) = Expr(:tuple, QuoteNode(Symbol(:__gmpz_, op)), GlobalRef(MPZ, :libgmp))
 
-# Computation-carrying GMP entry points are asserted `:reset_safe`,
-# with a cancellation point (`Base.@cancel_check`) placed directly before
-# each annotated call: the point's reset region stays published across the
-# reset-safe foreign call, so an asynchronous task cancellation can unwind
-# out of a long-running GMP computation at `CANCEL_REQUEST_SAFE`. (As
-# always for reset regions, whether the region actually reaches the call
-# depends on the compiler keeping the path from the publication clean; a
-# shape that does not simply degrades that call to level-triggered
-# cancellation.) GMP 6.3.0 is audited for this: its core has no
-# locks and no global state that an unwind can tear (allocation runs under
-# the deferring jl_gmp_counted_* hooks, `_mpz_realloc` is patched to keep
-# the mpz consistent at every step, and in-flight temporaries at worst
-# leak). Bookkeeping entry points (init, cmp, sizeinbase, ...) stay
-# unannotated.
-
 init!(x::BigInt) = (ccall((:__gmpz_init, libgmp), Cvoid, (mpz_t,), x); x)
 init2!(x::BigInt, a) = (ccall((:__gmpz_init2, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
 

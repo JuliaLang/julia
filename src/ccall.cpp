@@ -2282,21 +2282,14 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     ((CallInst*)ret)->setAttributes(attributes);
 
     if (reset_safe_call) {
-        // `@ccall reset_safe=true`: the callee is audited for an
-        // asynchronous unwind landing anywhere inside it - keep the
-        // enclosing reset region published across this call (the
-        // cancellation-lowering pass otherwise clears it before any call).
+        // A reset_safe annotation is just propagated to the LLVM pass
         ret->setMetadata("julia.reset_safe", MDNode::get(ctx.builder.getContext(), {}));
     }
 
     if (cancel_guard) {
-        // Unpublish: the guard buffer's validity ends with the call. (The
-        // handler slot is not touched by the cancellation-lowering pass, so
-        // it needs no reset_safe marking to survive the call - and the call
-        // itself is only marked reset_safe when the reset_safe annotation
-        // was given too: a cancel_handler annotation alone does not attest
-        // that a longjmp may land inside the callee, so an enclosing reset
-        // region is still cleared before it as usual.)
+        // Unpublish the handler slot. N.B.: The cancellation LLVM pass does not know or care about the
+        // handler at all (although it must know that this store doesn't invalidate the
+        // reset region).
         StoreInst *unpub = ctx.builder.CreateAlignedStore(guard_null, guard_ctx_ptr, ctx.types().alignof_ptr);
         unpub->setOrdering(AtomicOrdering::Release);
         unpub->setMetadata("julia.reset_safe", reset_safe_md);

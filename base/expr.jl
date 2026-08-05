@@ -625,7 +625,7 @@ The following `setting`s are supported.
 - `:noub`
 - `:noub_if_noinbounds`
 - `:nortcall`
-- `:reset_safe` (only applicable to `@ccall`)
+- `:reset_safe`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -870,17 +870,21 @@ the following other `setting`s:
 ---
 ## `:reset_safe`
 
-The `:reset_safe` setting applies only when the annotated expression is a
-[`@ccall`](@ref); it asserts that the foreign call has been *audited* for
-asynchronous unwinding: interrupting the callee at any instruction leaves the
-process consistent - no locks held, no torn global state; at worst bounded
-leaks of in-flight temporaries and garbage *values* (with valid structure) in
-the call's discarded outputs. The reset region of a preceding cancellation
-point then stays published across the call (for any other call it ends at
-the call boundary), letting an asynchronous task cancellation unwind the
-foreign computation at an arbitrary instruction. See the `cancel_handler`
-option of [`@ccall`](@ref) for the alternative integration that does not
-require such an audit.
+The `:reset_safe` asserts that it is safe to abandon execution of the annotated
+function at any point. For functions so inferred, the compiler may extend the
+reset region of a cancellation point through the `:reset_safe` regions. It thus
+in particular implies `:effect_free`, but is a stronger assertion. For example,
+an `:effect_free` function could in principle take a read-only lock (under appropriate
+assumptions on how this is implemented and annotated), but a `:reset_safe` function
+may not, because it could be abandoned inside the critical section.
+
+The same also applies to many implicitly inserted intrinsics and thus codegen for
+a `:reset_safe` function requires cooperation by the code generator to uphold the
+invariant thoughout the entire body of the generated code.
+
+As such, annotating a function as `:reset_safe` is currently ignored as an effect
+override and will only apply to [`@ccall`](@ref) sites. See the ccall documentation
+for further details on this interaction.
 
 ---
 ## Negated effects
@@ -985,13 +989,7 @@ end
 
 const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
 
-# The `:reset_safe` setting of `@assume_effects` applied to a `@ccall`: not
-# one of the method-level effects overrides above, but a per-call attestation
-# consumed by codegen (the foreign call tolerates an asynchronous unwind at
-# any point, so a published cancellation reset region survives it). Carried
-# in the `@ccall_effects` word one bit above the standard overrides and split
-# back out by `ccall_macro_lower`. (A literal, since `<<` is not defined yet
-# this early in bootstrap: keep equal to `UInt16(1) << NUM_EFFECTS_OVERRIDES`.)
+# `:reset_safe` is ccall_only at the moment.
 const CCALL_EFFECT_RESET_SAFE = 0x0800
 
 function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)

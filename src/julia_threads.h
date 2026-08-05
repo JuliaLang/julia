@@ -136,15 +136,10 @@ typedef struct _jl_reset_ctx_t {
     jl_jmp_buf mctx;
 } jl_reset_ctx_t;
 
-// A foreign-call cancellation handler and its state argument, published in
+// A foreign-call cancellation handler and state argument, published in
 // `jl_task_t.cancel_handler_ctx` for exactly the duration of a foreign call
-// annotated `@ccall cancel_handler=(fn, state) ...` (see emit_ccall in
-// ccall.cpp), or of a protected runtime span such as the GMP allocation
-// hooks (gc-common.c). Delivering a cancellation while it is published runs
-// `fn(state, sev)` on the interrupted thread like a signal handler - the
-// handler performs the library-specific work to make the foreign call
-// return early - and then resumes the interrupted computation (`sev` is the
-// state byte of the task's cancelled bound token source).
+// annotated `@ccall cancel_handler=(fn, state) ...`. Delivery is signal-handler
+// like.
 typedef struct _jl_cancel_handler_ctx_t {
     void (*fn)(void *state, uint8_t sev);
     void *state;
@@ -153,11 +148,7 @@ typedef struct _jl_cancel_handler_ctx_t {
 // The handler and its arguments, stashed across a cancellation-handler
 // delivery on the suspend-based platforms (Windows and mach): the sender
 // records them here for the trampoline the hijacked thread is redirected
-// to. The redirection machinery itself saves and restores the complete
-// interrupted register state (including FP) on the interrupted stack, so
-// nothing else lives here. (On the other Unixes no save area is needed at
-// all: the handler runs directly inside the delivering signal handler,
-// under the kernel signal frame's full state save.)
+// to.
 typedef struct {
     void (*fn)(void *state, uint8_t sev);
     void *state;
@@ -252,13 +243,6 @@ typedef struct _jl_tls_states_t {
     void (*signal_ctx_fptr)(void);
     uintptr_t signal_ctx_arg;
 #endif
-    // Cancellation-handler delivery on the suspend-based platforms
-    // (Windows and mach): the handler and its arguments for the trampoline
-    // the hijacked thread runs, and whether a delivery is currently in
-    // flight on this thread (at most one at a time; further deliveries are
-    // skipped and recovered level-triggered). Unused on the other Unixes,
-    // where the handler runs directly inside the delivering signal handler
-    // (which cannot nest with itself).
     jl_cancel_handler_save_t cancel_handler_save;
     sig_atomic_t cancel_handler_armed;
     jl_thread_t system_id;
