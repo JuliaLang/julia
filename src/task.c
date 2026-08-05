@@ -1936,7 +1936,7 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
 // the single send suffices), optionally withdrawing via
 // jl_abandon_task_withdraw.
 JL_DLLEXPORT int jl_abandon_task_request(jl_task_t *t, jl_task_t *next_task,
-                                         jl_value_t *result, uv_async_t *notify)
+                                         jl_value_t *result, uv_async_t *notify) JL_NOTSAFEPOINT
 {
     if (t == next_task)
         return -1;
