@@ -175,7 +175,7 @@ void jl_gc_init(void) {
 
     // Offset by 1. Julia counts the mutator thread as a GC thread, but MMTk does not.
     // So we add 1 to the number of mark threads to get the total number of GC threads.
-    uintptr_t gcthreads = jl_n_markthreads + 1;
+    uintptr_t gcthreads = (jl_n_markthreads != -1) ? (uintptr_t)jl_n_markthreads + 1 : 0;
     uintptr_t concurrent_gcthreads = jl_n_sweepthreads;
 
     // if min and max are the same initialize MMTk with a fixed size heap
