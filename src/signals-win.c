@@ -585,12 +585,49 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     return 1;
 }
 
+// First-chance vectored exception handler dedicated to the GC safepoint (a
+// PAGE_NOACCESS fault on the safepoint page, used for both GC rendezvous and
+// sigint delivery). This must run on the *first chance*, before any frame-based
+// __except and before the debugger's second-chance notification: the top-level
+// SetUnhandledExceptionFilter handler below is bypassed whenever a debugger is
+// attached (UnhandledExceptionFilter hands the fault to the debugger as a
+// second-chance exception instead), which would turn every safepoint poll into
+// a fatal second-chance access violation under a debugger. A vectored handler
+// avoids that, and -- because the safepoint page is precisely identified by
+// jl_addr_is_safepoint -- it is safe to claim the fault here while passing every
+// other exception through to the normal SEH/frame-handler machinery.
+static LONG WINAPI jl_safepoint_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
+    if (ExceptionInfo->ExceptionRecord->ExceptionFlags != 0)
+        return EXCEPTION_CONTINUE_SEARCH;
+    if (ExceptionInfo->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION)
+        return EXCEPTION_CONTINUE_SEARCH;
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL || jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING)
+        return EXCEPTION_CONTINUE_SEARCH;
+    if (!jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1]))
+        return EXCEPTION_CONTINUE_SEARCH;
+    jl_ptls_t ptls = ct->ptls;
+    jl_set_gc_and_wait(ct);
+    // Do not raise sigint on worker thread
+    if (ptls->tid != 0)
+        return EXCEPTION_CONTINUE_EXECUTION;
+    if (ptls->defer_signal) {
+        jl_safepoint_defer_sigint();
+    }
+    else if (jl_safepoint_consume_sigint()) {
+        jl_clear_force_sigint();
+        jl_throw_in_ctx(ct, jl_interrupt_exception, ExceptionInfo->ContextRecord);
+    }
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
 LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags != 0)
         return EXCEPTION_CONTINUE_SEARCH;
     jl_task_t *ct = jl_get_current_task();
-    if (ct != NULL && ct->ptls != NULL && ct->ptls->gc_state != JL_GC_STATE_WAITING) {
+    if (ct != NULL && ct->ptls != NULL && jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_WAITING) {
         jl_ptls_t ptls = ct->ptls;
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_INT_DIVIDE_BY_ZERO:
@@ -608,20 +645,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             }
             break;
         case EXCEPTION_ACCESS_VIOLATION:
-            if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
-                jl_set_gc_and_wait(ct);
-                // Do not raise sigint on worker thread
-                if (ptls->tid != 0)
-                    return EXCEPTION_CONTINUE_EXECUTION;
-                if (ptls->defer_signal) {
-                    jl_safepoint_defer_sigint();
-                }
-                else if (jl_safepoint_consume_sigint()) {
-                    jl_clear_force_sigint();
-                    jl_throw_in_ctx(ct, jl_interrupt_exception, ExceptionInfo->ContextRecord);
-                }
-                return EXCEPTION_CONTINUE_EXECUTION;
-            }
+            // Safepoint page faults are serviced first-chance by
+            // jl_safepoint_exception_handler (a vectored handler), so they must
+            // never reach this top-level filter.
+            assert(!jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1]));
             if (jl_get_safe_restore()) {
                 jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
@@ -992,6 +1019,17 @@ void jl_install_default_signal_handlers(void)
     }
     if (signal(SIGABRT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGABRT");
+    }
+    // Register the safepoint handler as a first-chance vectored handler (the
+    // leading `1`/`FIRST` argument runs it ahead of any other vectored handler)
+    // so GC safepoint faults are handled before the debugger's second chance;
+    // the top-level filter below remains the last-resort crash reporter. The
+    // other first-chance-recoverable faults (DivideError, StackOverflowError,
+    // safe-restore, ReadOnlyMemoryError) are still serviced only by that filter
+    // and remain debugger-fragile; moving them into the vectored list is the
+    // broader follow-up tracked in JuliaLang/julia#61313.
+    if (AddVectoredExceptionHandler(1, jl_safepoint_exception_handler) == NULL) {
+        jl_error("fatal error: Couldn't register vectored exception handler");
     }
     SetUnhandledExceptionFilter(jl_exception_handler);
     jl_win_init_cancel_handler_delivery();
