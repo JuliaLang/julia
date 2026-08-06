@@ -1115,6 +1115,7 @@ export
     @gensym,
     @eval,
     @deprecate,
+    @deprecate_binding,
 
     # performance annotations
     @boundscheck,
