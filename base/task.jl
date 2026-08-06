@@ -1529,8 +1529,13 @@ function wait_forever()
             end
         catch e
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
-                # A Ctrl-C/SIGINT was delivered to this internal scheduler task while
+                # An InterruptException landed on this internal scheduler task while
                 # the thread was idle (it parked here after running a completed task).
+                # N.B.: SIGINT no longer force-throws InterruptException on any
+                # platform (it cancels the ^C episode source instead), so this
+                # branch is reachable only via an explicit user/library throw
+                # (`throwto`, `schedule(..., error=...)`) into a scheduler
+                # task; kept as defense in depth.
                 # Forward it to a task that can observe it: the REPL backend if it is
                 # evaluating user code; nothing at an idle REPL prompt (drop it); the
                 # root task otherwise, e.g. a non-interactive script blocked in wait
@@ -1636,9 +1641,9 @@ function wait()
         # No tasks to run. If the current task is done, switch to the scheduler task
         # to run the thread sleep logic, so that this task's stack can be freed
         # promptly (#57544). Otherwise run the thread sleep logic in the context of
-        # the current task, so that an asynchronous InterruptException (Ctrl-C) is
-        # delivered to a task that can observe it, rather than swallowed by the
-        # internal scheduler task (#58689).
+        # the current task, so that an asynchronously thrown InterruptException
+        # is delivered to a task that can observe it, rather than swallowed by
+        # the internal scheduler task (#58689).
         sched_task = get_sched_task()
         if ct !== sched_task && istaskdone(ct)
             istaskdone(sched_task) && (sched_task = @task wait())
