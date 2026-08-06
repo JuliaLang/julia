@@ -155,7 +155,7 @@ as the current `level`.
 If a copy function is provided `copyf` use the return `top` for the
 new persistent tree.
 """
-@inline @Base.assume_effects :noub :terminates_locally function path(trie::HAMT{K,V}, key, h::HashState, copy=false) where {K, V}
+@inline Base.@assume_effects :noub :terminates_locally function path(trie::HAMT{K,V}, h::HashState, copy=false) where {K, V}
     if copy
         trie = top = HAMT{K,V}(Base.copy(trie.data), trie.bitmap)
     else

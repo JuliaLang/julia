@@ -223,7 +223,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
         return NULL;
 
     size_t size = jl_datatype_size(dt);
-    size_t nbits = jl_datatype_nbits(dt);
+    size_t nbits = size * 8;
     if (size > 16 || size == 0)
         return NULL;
 

@@ -2041,6 +2041,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     });
                 newI->setAttributes(allocBytesIntrinsic->getAttributes());
                 newI->addDereferenceableRetAttr(CI->getRetDereferenceableBytes());
+                // Preserve CancellationLowering's reset-region annotation:
+                // FinalLowerGC uses it to select the reset-safe allocation
+                // entry points.
+                if (auto *MD = CI->getMetadata("julia.reset_region"))
+                    newI->setMetadata("julia.reset_region", MD);
                 newI->takeName(CI);
                 // Now, finally, set the tag. We do this in IR instead of in the C alloc
                 // function, to provide possible optimization opportunities. (I think? TBH

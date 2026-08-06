@@ -16,10 +16,12 @@ function test_byte_precise(di::Core.DebugInfo, nstmts::Int)
 end
 
 @testset "SourceByteTable roundtrip" begin
-    st = jl_lower(test_mod, JuliaSyntax.parsestmt(SyntaxTree, "1 + 2 - \n 3"))
-    JuliaSyntax.ensure_attributes!(st._graph; debuginfo=Any)
+    st_thunk = jl_lower(test_mod, JuliaSyntax.parsestmt(SyntaxTree, "1 + 2 - \n 3"))
+    st = st_thunk[1]
+    JuliaLowering.@jl_assert kind(st_thunk) === K"thunk" &&
+        kind(st) === K"code_info" (st_thunk, "fix this brittle test")
     add_debuginfo!(st)
-    csbt = st.debuginfo
+    csbt = st.meta[:debuginfo]
     usbt = uncompress_sbt(csbt)
     cusbt = compress_sbt(usbt)
     @test csbt isa Core.DebugInfo
@@ -27,8 +29,8 @@ end
     @test cusbt isa String
     @test cusbt === csbt.linetable
 
-    @test length(usbt.spans) <= numchildren(st[1]) # lhs is unique locs
-    test_byte_precise(csbt, numchildren(st[1]))
+    @test length(usbt.spans) <= numchildren(st[2]) # lhs is unique locs
+    test_byte_precise(csbt, numchildren(st[2]))
 end
 
 @testset "Attaching DebugInfo to methods" begin

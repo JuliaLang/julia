@@ -391,8 +391,8 @@ end
 function test_atomic_write(commbuf::CommBuf, n::Int)
     for i in 1:n
         # The atomic stores guarantee that var1 >= var2
-        commbuf.var1[] = i
-        commbuf.var2[] = i
+        @atomic commbuf.var1[] = i
+        @atomic commbuf.var2[] = i
     end
     commbuf.correct_write = true
 end
@@ -444,8 +444,8 @@ function test_fence(p::Peterson, id::Int, n::Int)
     correct = true
     otherid = mod1(id+1,2)
     for i in 1:n
-        p.flag[id][] = 1
-        p.turn[] = otherid
+        @atomic p.flag[id][] = 1
+        @atomic p.turn[] = otherid
         atomic_fence()
         while p.flag[otherid][] != 0 && p.turn[] == otherid
             # busy wait
@@ -453,11 +453,11 @@ function test_fence(p::Peterson, id::Int, n::Int)
             ccall(:jl_gc_safepoint, Cvoid, ())
         end
         # critical section
-        p.critical[id][] = 1
+        @atomic p.critical[id][] = 1
         correct &= p.critical[otherid][] == 0
-        p.critical[id][] = 0
+        @atomic p.critical[id][] = 0
         # end of critical section
-        p.flag[id][] = 0
+        @atomic p.flag[id][] = 0
     end
     p.correct[id] = correct
 end
@@ -528,7 +528,7 @@ let atomictypes = (Int8, Int16, Int32, Int64, Int128,
                    Float16, Float32, Float64)
     for T in atomictypes
         var = Atomic{T}()
-        var[] = 42
+        @atomic var[] = 42
         @test var[] === T(42)
         old = atomic_xchg!(var, T(13))
         @test old === T(42)
@@ -1224,7 +1224,7 @@ function check_sync_end_race()
             # Useful for tuning the test:
             @debug "`check_sync_end_race` done" threadpoolsize(:default) ncompleted nnotscheduled nerror
         finally
-            done[] = true
+            @atomic done[] = true
         end
     end
     return nothing

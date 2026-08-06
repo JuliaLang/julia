@@ -13,6 +13,10 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     IRBuilder<> builder(target);
     auto ptls = target->getArgOperand(0);
     auto type = target->getArgOperand(2);
+    // Sites that may execute with a cancellation reset region published
+    // (annotated by CancellationLowering) allocate through the reset-safe
+    // entry points, which unpublish/republish the region themselves.
+    bool resetSafe = target->hasMetadata("julia.reset_region");
     uint64_t derefBytes = 0;
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
         size_t sz = (size_t)CI->getZExtValue();
@@ -21,7 +25,7 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         int offset = jl_gc_classify_pools(sz, &osize);
         if (offset < 0) {
             newI = builder.CreateCall(
-                bigAllocFunc,
+                resetSafe ? bigAllocResetSafeFunc : bigAllocFunc,
                 { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
             if (sz > 0)
                 derefBytes = sz;
@@ -29,14 +33,16 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         else {
             auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
             auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-            newI = builder.CreateCall(smallAllocFunc, { ptls, pool_offs, pool_osize, type });
+            newI = builder.CreateCall(resetSafe ? smallAllocResetSafeFunc : smallAllocFunc,
+                                      { ptls, pool_offs, pool_osize, type });
             if (sz > 0)
                 derefBytes = sz;
         }
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
         // allocTypedFunc does not include the type tag in the allocation size!
-        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
+        newI = builder.CreateCall(resetSafe ? allocTypedResetSafeFunc : allocTypedFunc,
+                                  { ptls, size, type });
         derefBytes = sizeof(void*);
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
@@ -79,7 +85,11 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     trigTerm->getParent()->setName("trigger_wb");
     builder.SetInsertPoint(trigTerm);
     if (target->getCalledOperand() == write_barrier_func) {
-        builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        // Propagate CancellationLowering's reset-region annotation to the
+        // slow-path call, so lowerQueueGCRoot selects the reset-safe entry.
+        if (auto *MD = target->getMetadata("julia.reset_region"))
+            qr->setMetadata("julia.reset_region", MD);
     }
     else {
         assert(false);

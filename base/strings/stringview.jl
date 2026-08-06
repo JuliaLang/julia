@@ -23,6 +23,8 @@ pointer(x::SubString{<:DenseStringView}, i::Integer) = pointer(x.string) + x.off
 unsafe_convert(::Type{Ptr{UInt8}}, s::DenseStringViewAndSub) = pointer(s)
 unsafe_convert(::Type{Ptr{Int8}}, s::DenseStringViewAndSub) = convert(Ptr{Int8}, pointer(s))
 
+String(s::DenseStringViewAndSub) = GC.@preserve s unsafe_string(pointer(s), ncodeunits(s))
+
 cconvert(::Type{Ptr{UInt8}}, s::DenseStringViewAndSub) = s
 cconvert(::Type{Ptr{Int8}}, s::DenseStringViewAndSub) = s
 

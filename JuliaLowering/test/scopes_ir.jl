@@ -80,7 +80,8 @@ end
 11  (call core.svec)
 12  SourceLocation::1:4
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+14  (call core.define_method TestMod core.nothing %₁₃
+    --- code_info
     slots: [slot₁/#self#(!read)]
     1   TestMod.body
     2   (return %₁)
@@ -139,7 +140,7 @@ begin
 end
 #---------------------
 1   (= slot₁/y 2)
-2   (method TestMod.f)
+2   (call core.define_method TestMod :f)
 3   latestworld
 4   TestMod.f
 5   (call core.TypeEqOf %₄)
@@ -147,7 +148,8 @@ end
 7   (call core.svec)
 8   SourceLocation::3:5
 9   (call core.svec %₆ %₇ %₈)
-10  --- method TestMod.f %₉
+10  (call core.define_method TestMod TestMod.f %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (call core.tuple false true true)
     2   (return %₁)
@@ -186,29 +188,35 @@ end
 10  (return %₅)
 
 ########################################
-# @locals with function args (TODO: static parameters)
-function f(z)
+# @locals with function args, sparams
+function f(z::T) where T
     @locals
 end
 #---------------------
-1   (method TestMod.f)
+1   (call core.define_method TestMod :f)
 2   latestworld
-3   TestMod.f
-4   (call core.TypeEqOf %₃)
-5   (call core.svec %₄ core.Any)
-6   (call core.svec)
-7   SourceLocation::1:1
-8   (call core.svec %₅ %₆ %₇)
-9   --- method TestMod.f %₈
+3   (call core.TypeVar :T)
+4   TestMod.f
+5   (call core.TypeEqOf %₄)
+6   (call core.svec %₅ %₃)
+7   (call core.svec %₃)
+8   SourceLocation::1:1
+9   (call core.svec %₆ %₇ %₈)
+10  (call core.define_method TestMod TestMod.f %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (gotoifnot true label₅)
     4   (call top.setindex! %₂ slot₂/z :z)
-    5   (return %₂)
-10  latestworld
-11  TestMod.f
-12  (return %₁₁)
+    5   (isdefined static_parameter₁)
+    6   (gotoifnot %₅ label₉)
+    7   static_parameter₁
+    8   (call top.setindex! %₂ %₇ :T)
+    9   (return %₂)
+11  latestworld
+12  TestMod.f
+13  (return %₁₂)
 
 ########################################
 # Error: Duplicate function argument names
@@ -405,7 +413,7 @@ end
 3   (call core.setfield! slot₁/x :contents %₁)
 4   (call core.declare_global TestMod :f false)
 5   latestworld
-6   (method TestMod.f)
+6   (call core.define_method TestMod :f)
 7   latestworld
 8   TestMod.f
 9   (call core.TypeEqOf %₈)
@@ -421,11 +429,11 @@ end
     4   (return %₁)
 15  (call core.svec slot₁/x)
 16  (call JuliaLowering.replace_captured_locals %₁₄ %₁₅)
-17  --- method TestMod.f %₁₃ %₁₆
+17  (call core.define_method TestMod TestMod.f %₁₃ %₁₆)
 18  latestworld
 19  (call core.declare_global TestMod :g false)
 20  latestworld
-21  (method TestMod.g)
+21  (call core.define_method TestMod :g)
 22  latestworld
 23  TestMod.g
 24  (call core.TypeEqOf %₂₃)
@@ -445,7 +453,7 @@ end
     8   (return %₇)
 30  (call core.svec slot₁/x)
 31  (call JuliaLowering.replace_captured_locals %₂₉ %₃₀)
-32  --- method TestMod.g %₂₈ %₃₁
+32  (call core.define_method TestMod TestMod.g %₂₈ %₃₁)
 33  latestworld
 34  TestMod.g
 35  (return %₃₄)
@@ -461,7 +469,7 @@ end
 3   (call core.setfield! slot₁/x :contents %₁)
 4   (call core.declare_global TestMod :f false)
 5   latestworld
-6   (method TestMod.f)
+6   (call core.define_method TestMod :f)
 7   latestworld
 8   TestMod.f
 9   (call core.TypeEqOf %₈)
@@ -485,7 +493,7 @@ end
     12  (return %₉)
 15  (call core.svec slot₁/x)
 16  (call JuliaLowering.replace_captured_locals %₁₄ %₁₅)
-17  --- method TestMod.f %₁₃ %₁₆
+17  (call core.define_method TestMod TestMod.f %₁₃ %₁₆)
 18  latestworld
 19  TestMod.f
 20  (return %₁₉)

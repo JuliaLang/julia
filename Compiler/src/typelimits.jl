@@ -403,6 +403,9 @@ end
             return false
         end
         return false
+    elseif typea isa PartialTask
+        typeb isa PartialTask || return false
+        return issimplertype(𝕃, typea.fetch_type, typeb.fetch_type)
     end
     return true
 end
@@ -723,6 +726,21 @@ end
         typea = widenlattice(wl, typea)
     elseif bpo
         typeb = widenlattice(wl, typeb)
+    end
+
+    # type-lattice for PartialTask wrapper
+    apt = isa(typea, PartialTask)
+    bpt = isa(typeb, PartialTask)
+    if apt && bpt
+        # Both are PartialTask - merge their fetch types
+        merged_fetch_type = tmerge(lattice, typea.fetch_type, typeb.fetch_type)
+        # Any carries no additional type information - return Task
+        merged_fetch_type === Any && return Task
+        return PartialTask(merged_fetch_type)
+    elseif apt
+        typea = Task
+    elseif bpt
+        typeb = Task
     end
 
     return tmerge(wl, typea, typeb)

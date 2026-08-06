@@ -33,6 +33,11 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     if (!jl_is_tuple_type((jl_value_t*)argt)) {
         jl_error("OpaqueClosure argument tuple must be a tuple type");
     }
+    // the closure must not have free typevars otherwise it's not possible to instantiate it
+    if (jl_has_free_typevars((jl_value_t*)argt))
+        jl_error("OpaqueClosure argument tuple may not contain free typevars");
+    if (jl_has_free_typevars(rt_ub) || jl_has_free_typevars(rt_lb))
+        jl_error("OpaqueClosure return type may not contain free typevars");
     JL_TYPECHK(new_opaque_closure, type, rt_lb);
     JL_TYPECHK(new_opaque_closure, type, rt_ub);
     JL_TYPECHK(new_opaque_closure, method, source_);

@@ -32,6 +32,20 @@ depending on your changes.
 After modifying any C/C++ file under `src/`, also run the Clang static analysis
 checks — see the `c-static-analysis` skill ([`doc/src/devdocs/agents/skills/c-static-analysis/`](doc/src/devdocs/agents/skills/c-static-analysis/SKILL.md)).
 
+### Testing LLVM-related changes
+
+When making changes to LLVM passes or codegen, add `LLVM_ASSERTIONS=1` to `Make.user` to enable
+LLVM assertions. This helps catch IR verification errors early:
+
+```bash
+echo "LLVM_ASSERTIONS=1" >> Make.user
+```
+
+To run LLVM pass tests:
+```bash
+make -C test/llvmpasses <testname>.ll
+```
+
 ## Using Revise
 
 If you have made changes to files included in the system image (base/ or stdlib/),
@@ -68,6 +82,7 @@ canonical `SKILL.md` directly.
 - [`doc/src/devdocs/agents/skills/c-static-analysis/`](doc/src/devdocs/agents/skills/c-static-analysis/SKILL.md) — Clang static analysis and GC-rooting for C/C++ changes under `src/`.
 - [`doc/src/devdocs/agents/skills/external-deps/`](doc/src/devdocs/agents/skills/external-deps/SKILL.md) — modifying external dependencies (`deps/`, patches) and JLLs.
 - [`doc/src/devdocs/agents/skills/buildkite-logs/`](doc/src/devdocs/agents/skills/buildkite-logs/SKILL.md) — fetching and inspecting Buildkite CI logs without web sign-in.
+- [`doc/src/devdocs/agents/skills/ci-timing/`](doc/src/devdocs/agents/skills/ci-timing/SKILL.md) — comparing a PR's Buildkite job durations against recent CI history.
 - [`doc/src/devdocs/agents/skills/compiler-jl/`](doc/src/devdocs/agents/skills/compiler-jl/SKILL.md) — developing and testing Compiler.jl.
 - [`doc/src/devdocs/agents/skills/julia-syntax-lowering/`](doc/src/devdocs/agents/skills/julia-syntax-lowering/SKILL.md) — developing and testing JuliaSyntax and JuliaLowering.
 

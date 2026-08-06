@@ -274,12 +274,14 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
         if (!jl_is_symbol(cc)) {
             JL_TYPECHK(ccall method definition, tuple, cc);
-            if (jl_nfields(cc) != 3) {
-                jl_error("In ccall calling convention, expected two argument tuple or symbol.");
+            if (jl_nfields(cc) < 3 || jl_nfields(cc) > 5) {
+                jl_error("In ccall calling convention, expected a symbol or a "
+                         "(cconv, effects, gc_safe[, cancel_handler[, reset_safe]]) tuple.");
             }
             JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
             JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
-            JL_TYPECHK(ccall method definition, bool, jl_get_nth_field(cc, 2));
+            for (size_t i = 2; i < (size_t)jl_nfields(cc); i++)
+                JL_TYPECHK(ccall method definition, bool, jl_get_nth_field(cc, i));
         }
     }
     if (e->head == jl_foreignglobal_sym) {
@@ -1060,7 +1062,9 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
         (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type);
     jl_atomic_store_relaxed(&m->specializations, (jl_value_t*)jl_emptysvec);
     jl_atomic_store_relaxed(&m->speckeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
-    m->sig = NULL;
+    // `sig` and `name` are inside the min-initialized prefix (ninitialized == 10),
+    // so codegen omits null checks for them; they must never be observable as NULL.
+    m->sig = jl_bottom_type;
     m->slot_syms = NULL;
     m->roots = NULL;
     m->root_blocks = NULL;
@@ -1072,7 +1076,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->debuginfo = NULL;
     jl_atomic_store_relaxed(&m->unspecialized, NULL);
     m->generator = NULL;
-    m->name = NULL;
+    m->name = jl_empty_sym;
     m->file = jl_empty_sym;
     m->line = 0;
     m->called = 0xff;

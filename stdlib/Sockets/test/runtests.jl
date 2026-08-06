@@ -476,7 +476,7 @@ end
             yield()
             for i = 1:30
                 send(b, ip"127.0.0.1", randport, "Hello World $i")
-                burst_sent[] = i
+                @atomic burst_sent[] = i
             end
         end
         let msg = Vector{UInt8}("fedcba9876543210"^36) # The minimum reassembly buffer size for IPv4 is 576 bytes
@@ -484,7 +484,7 @@ end
             received = Threads.Atomic{Int}(0)
             tsk = @async begin
                 data = recv(a)
-                received[] = 1
+                @atomic received[] = 1
                 @test data == msg
             end
             set_sockets_watchdog_state("UDP IPv4 576-byte datagram";
@@ -492,7 +492,7 @@ end
                 counters=(sent=sent, received=received), sockets=(receiver=a, sender=b),
                 tasks=(receiver=tsk,))
             @test send(b, ip"127.0.0.1", randport, msg) === nothing
-            sent[] = 1
+            @atomic sent[] = 1
             wait(tsk)
         end
         let msg = Vector{UInt8}("1234"^16377) # The maximum size of an IPv4 datagram is 65535 bytes, including the header
@@ -506,7 +506,7 @@ end
             received = Threads.Atomic{Int}(0)
             tsk = @async begin
                 data = recv(a)
-                received[] = 1
+                @atomic received[] = 1
                 data
             end
             set_sockets_watchdog_state("UDP IPv4 maximum datagram";
@@ -515,7 +515,7 @@ end
                 sockets=(receiver=a, sender=b), tasks=(receiver=tsk,))
             try
                 send(b, ip"127.0.0.1", randport, msg)
-                sent[] = 1
+                @atomic sent[] = 1
             catch ex
                 if !(ex isa Base.IOError && ex.code == Base.UV_EMSGSIZE) || Sys.islinux() || Sys.iswindows()
                     # this is allowed failure on some platforms which might further restrict
@@ -528,21 +528,21 @@ end
                     counters=(sent=sent, received=received),
                     sockets=(receiver=a, sender=b), tasks=(receiver=tsk,))
                 send(b, ip"127.0.0.1", randport, msg) # check that the socket is still alive
-                sent[] = 1
+                @atomic sent[] = 1
             end
             @test fetch(tsk) == msg
         end
         let sent = Threads.Atomic{Int}(0), received = Threads.Atomic{Int}(0)
             tsk = @async begin
                 send(b, ip"127.0.0.1", randport, "WORLD HELLO")
-                sent[] = 1
+                @atomic sent[] = 1
             end
             set_sockets_watchdog_state("UDP IPv4 recvfrom";
                 details=(host=ip"127.0.0.1", port=randport),
                 counters=(sent=sent, received=received), sockets=(receiver=a, sender=b),
                 tasks=(sender=tsk,))
             (inetaddr, data) = recvfrom(a)
-            received[] = 1
+            @atomic received[] = 1
             @test inetaddr.host == ip"127.0.0.1" && String(data) == "WORLD HELLO"
             wait(tsk)
         end
@@ -566,7 +566,7 @@ end
         iteration = Threads.Atomic{Int}(0)
         recv_tasks = Task[]
         for i = 1:3
-            iteration[] = i
+            @atomic iteration[] = i
             tsk = @async begin
                 let (inetaddr, data) = recvfrom(a)
                     Threads.atomic_add!(received, 1)

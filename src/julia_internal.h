@@ -434,7 +434,6 @@ static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, 
 typedef struct _jl_abi_t {
     jl_value_t *sigt;
     jl_value_t *rt;
-    size_t nargs;
     int specsig; // bool
     // OpaqueClosure Methods override the first argument of their signature
     int is_opaque_closure;
@@ -686,6 +685,16 @@ static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
  * safepoints will be caught by the GC analyzer.
  */
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty) JL_CANSAFEPOINT;
+// Informs the collector that `v` (freshly allocated) requires weak
+// processing when it dies - collector-side bookkeeping beyond freeing the
+// memory, dispatched on the object's type (currently: unlinking a
+// cancellation token source from its parents' child lists).
+void jl_gc_set_needs_weak_processing(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT;
+// Declare that `v` may be *written* by the GC's weak-processing pass in the
+// cycle in which it dies (e.g. a parent whose intrusive child list dead
+// children splice themselves out of), so its memory must not be reclaimed
+// before that pass has run.
+void jl_gc_set_weak_processing_target(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT;
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__
 #  define jl_gc_alloc(ptls, sz, ty)  \
@@ -826,7 +835,8 @@ JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi, jl_code_instance_t
 JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs) JL_CANSAFEPOINT;
 
-JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
+jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
+jl_value_t *jl_invoke_fromdispatch(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
@@ -837,7 +847,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         uint32_t effects, jl_value_t *analysis_results,
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, size_t target_world) JL_NOTSAFEPOINT;
-
+JL_DLLEXPORT int jl_is_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst, size_t target_world) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     jl_value_t *def = ci->def;
@@ -1001,10 +1011,26 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
 JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t) JL_CANSAFEPOINT;  // x -> Type{x}
 JL_DLLEXPORT jl_value_t *jl_wrap_TypeEgal(jl_value_t *t) JL_CANSAFEPOINT;  // x -> TypeEgal{x} (egality, no free typevars)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow) JL_CANSAFEPOINT;
-void jl_reinstantiate_inner_types(jl_datatype_t *t) JL_CANSAFEPOINT;
+// Deferred type-cache for typegroup resolution: newly instantiated types that
+// reference the (not yet published) group types are recorded here instead of
+// being inserted into the global type caches. Lookups consult `list` so that
+// repeated instantiations stay canonical within the resolution; once the
+// group is validated, the recorded types are published to the global caches
+// (jl_cache_type_if_absent), or simply dropped if the group is discarded.
+// The `list` array must be rooted by the owner of this struct.
+typedef struct {
+    jl_array_t *list; // datatypes created during resolution, in creation order
+    htable_t set;     // pointer set of the entries in `list`
+    htable_t group;   // the in-flight group's datatypes
+} jl_deferred_typecache_t;
+void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
+jl_value_t *jl_apply_type_deferred(jl_value_t *tc, jl_value_t **params, size_t n, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
+int equiv_type(jl_gcframe_t **pgcstack, jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT;
+int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT;
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
 jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v) JL_CANSAFEPOINT;
 void jl_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
+void jl_cache_type_if_absent(jl_datatype_t *type) JL_CANSAFEPOINT;
 jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz) JL_CANSAFEPOINT;
 void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT;
 jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_CANSAFEPOINT;
@@ -1031,6 +1057,7 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
 void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_CANSAFEPOINT JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, const char *fname) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t *thk, int fast) JL_CANSAFEPOINT;
 int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world) JL_CANSAFEPOINT;
@@ -1304,8 +1331,7 @@ typedef struct {
     jl_value_t *param;
 } jl_typeapp_t;
 
-extern jl_datatype_t *jl_typeapp_type;
-JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos, jl_svec_t *old_types) JL_CANSAFEPOINT;
 // Type predicate for TypeApp (inline: called per type node on hot type-query paths)
 STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
 {
@@ -1871,6 +1897,7 @@ typedef uint_t (*smallintset_hash)(size_t val, jl_value_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uint_t hv);
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
 void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data) JL_CANSAFEPOINT;
+size_t jl_ordereddict_reserve(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, size_t stride) JL_CANSAFEPOINT;
 jl_genericmemory_t* smallintset_rehash(jl_genericmemory_t* a, smallintset_hash hash, jl_value_t *data, size_t newsz, size_t np) JL_CANSAFEPOINT;
 void smallintset_empty(const jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 
@@ -2130,7 +2157,13 @@ JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) 
 JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
-int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOINT;
+
+// Values a compiled cancellation reset point's setjmp returns when a
+// shootdown is delivered to it (the longjmp value; see
+// llvm-cancellation-lowering.cpp and the deliveries in signals-*.c):
+#define JL_RESET_CODE_CANCEL  1 // the region's governing source was cancelled
+#define JL_RESET_CODE_PREEMPT 2 // cooperative yield requested; no source checked
 void export_jl_small_typeof(void);
 void export_jl_sysimg_globals(void);
 
@@ -2189,6 +2222,8 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 // -- exports from codegen -- //
 
 #define IR_FLAG_INBOUNDS 0x01
+// This statement is proven :reset_safe (sync with Compiler/src/optimize.jl)
+#define IR_FLAG_RESET_SAFE (1 << 14)
 
 JL_DLLIMPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec) JL_CANSAFEPOINT;
 JL_DLLIMPORT int jl_compile_codeinst(jl_code_instance_t *unspec) JL_CANSAFEPOINT;

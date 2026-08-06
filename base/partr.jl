@@ -2,7 +2,7 @@
 
 module Partr
 
-using ..Threads: SpinLock, maxthreadid, threadid
+using ..Threads: SpinLock
 
 # a task minheap
 mutable struct taskheap
@@ -109,6 +109,12 @@ end
 
 function multiq_size(tpid::Int8)
     nt = UInt32(Threads._nthreads_in_pool(tpid))
+    if nt == 0
+        # A pool with no threads can still receive tasks (e.g. during
+        # sysimage bootstrap); size the heaps so insertion can park them
+        # instead of indexing an empty heap vector.
+        nt = UInt32(1)
+    end
     tp = tpid + 1
     tpheaps = heaps[tp]
     heap_c = UInt32(2)
@@ -124,6 +130,9 @@ function multiq_size(tpid::Int8)
         tpheaps = heaps[tp]
         heap_p = UInt32(length(tpheaps))
         nt = UInt32(Threads._nthreads_in_pool(tpid))
+        if nt == 0
+            nt = UInt32(1)
+        end
         if heap_c * nt <= heap_p
             return heap_p
         end
