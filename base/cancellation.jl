@@ -699,6 +699,27 @@ function cancel!(src::CancellationTokenSource,
     return raised
 end
 
+"""
+    Base.redeliver!(src::CancellationTokenSource) -> Bool
+
+Re-run the delivery pass for an already-cancelled source at its current
+severity: wakes waiters that registered without observing the cancellation
+and re-sends the interruption signal to bound running computations (the
+signal-based delivery is best-effort and can be missed while a reset point
+is unpublished). Used by the ^C machinery when a press finds the episode
+source already marked cancelled (e.g. by the async-signal-safe fast path in
+the C signal listener, which cannot wake parked waiters itself). Returns
+whether the source was cancelled at all.
+"""
+function redeliver!(src::CancellationTokenSource)
+    st = @atomic :acquire src.state
+    st == 0x00 && return false
+    _cancel_walk!(src, st)
+    Threads.atomic_fence_heavy()
+    ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
+    return true
+end
+
 function _cancel_walk!(src::CancellationTokenSource, sev::UInt8)
     # Iterative worklist (no recursion): a deep source chain must not
     # overflow the canceller's stack, and a reconverging ("linked") graph

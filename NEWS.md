@@ -24,6 +24,34 @@ New language features
   operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
   in the default operators ([#50790]).
 
+* Task cancellation is now supported, organized around cancellation tokens:
+  `Base.CancellationTokenSource` is a level-triggered, tree-structured cancellation scope
+  (cancelling a source cancels its whole subtree, at monotonically escalating severities), and
+  `Base.CancellationToken` is its observe/wait view. The token governing a computation is carried
+  as a scoped value (`Base.CANCEL_TOKEN`, established with the standard `ScopedValues` API) that
+  propagates to child tasks; blocking operations
+  (`wait`, `lock`, Channel operations, `sleep`, stream and command I/O, Sockets, FileWatching,
+  ...) accept a `cancel` keyword argument defaulting to the scoped token and throw a
+  `Base.CancellationRequest` while it is cancelled. Cancellation is uniformly level-triggered:
+  cleanup code that must block under a cancelled scope shields itself with `cancel = nothing`
+  (or by scoping `Base.CANCEL_TOKEN => nothing` over a whole block). `@sync` and
+  `Threads.@threads` blocks form cancellation scopes, so cancelling an enclosing scope reaches
+  everything spawned within. Compute-bound code can opt into cancellation with the
+  `Base.@cancel_check` cancellation point.
+  A long-running foreign call can be made cancellable with
+  `@ccall cancel_handler=(fn, state) ...`: cancelling the governing token runs the
+  C-callable `fn(state, severity)` on the thread executing the call, signal-handler-style,
+  so it can tell the library to return early (the pending cancellation is then thrown at
+  the next cancellation point). Calls into libraries audited for asynchronous unwinding
+  can be annotated `@ccall reset_safe=true ...` instead, letting a cancellation unwind
+  the foreign computation at an arbitrary instruction; `BigInt` (GMP) arithmetic uses
+  this, so checkless bignum loops now cancel cleanly at the first ^C.
+  In interactive sessions, ^C now cancels the current evaluation's cancellation scope
+  (instead of throwing an `InterruptException` into whatever code happened to be running),
+  and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
+  cancellation continues under the cancelled scope unless it re-arms one itself
+  (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`) ([#60281]).
+
 Language changes
 ----------------
 

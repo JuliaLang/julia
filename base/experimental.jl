@@ -51,31 +51,49 @@ macro aliasscope(body)
 end
 
 
-function sync_end(c::Channel{Any})
+function sync_end(c::Channel{Any}, src::Union{Nothing, Base.CancellationTokenSource}=nothing)
     if !isready(c)
         # there must be at least one item to begin with
         close(c)
         return
     end
     nremaining::Int = 0
-    while true
-        event = take!(c)
-        if event === :__completion__
-            nremaining -= 1
-            if nremaining == 0
-                break
-            end
-        else
-            nremaining += 1
-            schedule(Task(()->begin
-                try
-                    wait(event)
-                    put!(c, :__completion__)
-                catch e
-                    close(c, e)
+    try
+        while true
+            event = take!(c)
+            if event === :__completion__
+                nremaining -= 1
+                if nremaining == 0
+                    break
                 end
-            end))
+            else
+                nremaining += 1
+                # Shield via the scope rather than a keyword: `event` can
+                # be any waitable (e.g. a Distributed.Future), whose `wait`
+                # method need not accept `cancel`.
+                schedule(Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+                    Task(()->begin
+                        try
+                            wait(event)
+                            put!(c, :__completion__)
+                        catch e
+                            close(c, e)
+                        end
+                    end)
+                end)
+            end
         end
+    catch e
+        # Per this macro's contract the exception (a child failure delivered
+        # via `close(c, e)`, or a cancellation of this block's scope) is
+        # rethrown immediately - we do not wait for the children to finish
+        # dying, but we cancel the block's own source so that all children
+        # observe the cancellation through the token tree.
+        if src !== nothing
+            Base.cancel!(src)
+        end
+        close(c, e isa Exception ? e : ErrorException("sync_end interrupted"))
+        rethrow()
     end
     close(c)
     nothing
@@ -99,10 +117,18 @@ during error handling.
 """
 macro sync(block)
     var = esc(sync_varname)
+    # like Base.@sync, the block runs in a new dynamic scope carrying the
+    # token of a fresh cancellation source; on the fail-fast path (and on
+    # cancellation from outside) the source is cancelled, reaching all
+    # children through the token tree without awaiting them
+    scoped_block = Expr(:tryfinally, esc(block), nothing,
+        :(Base.Scope(Core.current_scope()::Union{Nothing, Base.Scope},
+                     Base.CANCEL_TOKEN => Base.CancellationToken(var"#sync_src#"))))
     quote
-        let $var = Channel(Inf)
-            v = $(esc(block))
-            sync_end($var)
+        let var"#sync_src#" = Base.CancellationTokenSource(Base.default_cancel_token()),
+            $var = Channel(Inf)
+            v = $scoped_block
+            sync_end($var, var"#sync_src#")
             v
         end
     end

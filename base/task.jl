@@ -765,12 +765,26 @@ function showerror(io::IO, ex::ScheduledAfterSyncException)
     print(io, " registered after the end of a `@sync` block")
 end
 
-function sync_end(c::Channel{Any})
+function sync_end(c::Channel{Any}, src::Union{Nothing, CancellationTokenSource}=nothing)
     local c_ex
+    tok = src === nothing ? nothing : CancellationToken(src)
     while isready(c)
         r = take!(c)
         if isa(r, Task)
-            _wait(r)
+            cancelled = nothing
+            try
+                _wait(r, tok)
+            catch e
+                (tok !== nothing && e isa CancellationRequest) || rethrow()
+                cancelled = e
+            end
+            if cancelled !== nothing
+                # Our own scope (or an ancestor) was cancelled. The children
+                # run under the same scope's token, so the tree walk already
+                # cancelled them all; await their teardown per severity.
+                return sync_cancel!(c, r, cancelled, tok,
+                                    @isdefined(c_ex) ? c_ex : CompositeException())
+            end
             if istaskfailed(r)
                 if !@isdefined(c_ex)
                     c_ex = CompositeException()
@@ -818,6 +832,62 @@ end
 
 const sync_varname = gensym(:sync)
 
+# Teardown of a `@sync` block whose own scope was cancelled: the scope's
+# token subtree (covering every child) is already cancelled; await the
+# children's unwind per the severity policy. Our own acknowledgement of the
+# request lets these teardown waits park; they are only re-woken by a
+# severity escalation (`min_severity`).
+@noinline function sync_cancel!(c::Channel{Any}, t::Task, cr::CancellationRequest,
+                                tok::CancellationToken, c_ex::CompositeException)
+    waitees = Any[t]
+    while isready(c)
+        push!(waitees, take!(c))
+    end
+    close(c)
+    sev = severity(cr)
+    for r in waitees
+        if isa(r, Task)
+            while sev < CANCEL_REQUEST_ABANDON_ALL.request
+                # Tasks are internal: their cancellation is awaited (for
+                # ABANDON_ALL they were frozen; there is nothing to wait for).
+                try
+                    _wait(r, tok; min_severity=sev + 0x01)
+                    break
+                catch e
+                    # A severity escalation interrupts the teardown wait;
+                    # adopt the stronger request and keep awaiting internal
+                    # tasks per its policy rather than unwinding out of the
+                    # `@sync` while children are still running.
+                    if e isa CancellationRequest && severity(e) > sev
+                        cr = e
+                        sev = severity(e)
+                        continue
+                    end
+                    rethrow()
+                end
+            end
+            if istaskfailed(r)
+                push!(c_ex, TaskFailedException(r))
+            end
+        else
+            # Non-task waitees are external - the ABANDON_* severities cease
+            # waiting for external resources.
+            sev == CANCEL_REQUEST_SAFE.request || continue
+            try
+                wait(r)
+            catch e
+                push!(c_ex, e)
+            end
+        end
+    end
+    # Reporting the composite outcome constitutes delivery of the request;
+    # include the request itself if no child failure already records it.
+    if isempty(c_ex)
+        throw(cr)
+    end
+    throw(c_ex)
+end
+
 """
     @sync
 
@@ -841,10 +911,21 @@ Thread-id 1, task 2
 """
 macro sync(block)
     var = esc(sync_varname)
+    # The block runs in a new dynamic scope carrying the token of a fresh
+    # cancellation source linked under the enclosing scope's token, so that
+    # cancellation of the enclosing scope reaches every (transitively
+    # spawned) child through the token tree. This expands the equivalent of
+    # `@with CANCEL_TOKEN => token ...` manually: the ScopedValues macro API
+    # is not loaded yet when Base code containing `@sync` is compiled during
+    # bootstrap.
+    scoped_block = Expr(:tryfinally, esc(block), nothing,
+        :(Scope(Core.current_scope()::Union{Nothing, Scope},
+                CANCEL_TOKEN => CancellationToken(var"#sync_src#"))))
     quote
-        let $var = Channel(Inf)
-            v = $(esc(block))
-            sync_end($var)
+        let var"#sync_src#" = CancellationTokenSource(default_cancel_token()),
+            $var = Channel(Inf)
+            v = $scoped_block
+            sync_end($var, var"#sync_src#")
             v
         end
     end

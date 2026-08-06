@@ -333,7 +333,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
         try
             Base.sigatomic_end()
             if lasterr !== nothing
-                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
+                # REPL machinery: reporting the result must work even when
+                # the evaluation's epoch was cancelled
+                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true); cancel=nothing)
             else
                 backend.in_eval = true
                 for xf in backend.ast_transforms
@@ -342,7 +344,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
                 setglobal!(Base.MainInclude, :ans, value)
-                put!(backend.response_channel, Pair{Any, Bool}(value, false))
+                put!(backend.response_channel, Pair{Any, Bool}(value, false); cancel=nothing)
             end
             break
         catch err
@@ -451,47 +453,48 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        # Fetch without consuming, then retry removal so an interrupt cannot lose
-        # or duplicate a request.
-        request = try
-            fetch(backend.repl_channel)
+        # Control is back with the REPL: close the previous work item's ^C
+        # episode, making a ^C at the idle prompt (or one that raced the end
+        # of the previous evaluation, issue #58689) a no-op. The idle wait
+        # itself is not cancellable.
+        Base.sigint_close_episode!()
+        ast_or_func, show_value = try
+            take!(backend.repl_channel; cancel=nothing)
         catch e
+            # ^C never lands here as an exception (the idle wait is not
+            # cancellable), but a stray InterruptException injected into the
+            # backend task by a package or user code must not tear down the
+            # REPL session.
             e isa InterruptException && continue
             rethrow()
         end
-        while isready(backend.repl_channel)
-            try
-                take!(backend.repl_channel)
-            catch e
-                e isa InterruptException || rethrow()
-            end
-        end
-        ast_or_func, show_value = request
         if show_value == -1
             # exit flag
             break
         end
-        # Run the evaluation in the scope of a fresh cancellation source
-        # linked under the session source (see the session tree in
-        # base/client.jl): the double-^C prompt gesture sweeps every
-        # still-running task any evaluation has spawned by cancelling the
-        # session source, without a way to name each one individually.
-        evaltok = Base.CancellationToken(Base.new_evaluation_cancel_source!())
+        # Re-arm ^C: install a fresh episode source (detaching any work
+        # still unwinding from the previous epoch) and run this evaluation or
+        # display request in its scope, so that ^C cancels exactly this epoch
+        # and everything it spawns. The episode source is linked under the
+        # session source (see the session tree in base/client.jl), so the
+        # double-^C prompt gesture can sweep every still-running task any
+        # evaluation has spawned by cancelling the session source.
+        tok = Base.sigint_new_episode!()
         # Mark this task as the foreground task while running user work, so that
         # components like the precompile keyboard menu know who owns interactive stdin.
-        Base.ScopedValues.@with Base.CANCEL_TOKEN => evaltok begin
-        Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
-            f = ast_or_func
-            try
-                ret = f()
-                put!(backend.response_channel, Pair{Any, Bool}(ret, false))
-            catch
-                put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true))
+        Base.ScopedValues.@with Base.CANCEL_TOKEN => tok begin
+            Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
+                f = ast_or_func
+                try
+                    ret = f()
+                    put!(backend.response_channel, Pair{Any, Bool}(ret, false))
+                catch
+                    put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true))
+                end
+            else
+                ast = ast_or_func
+                eval_user_input(ast, backend, get_module())
             end
-        else
-            ast = ast_or_func
-            eval_user_input(ast, backend, get_module())
-        end
         end
     end
     return nothing
