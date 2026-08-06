@@ -2802,6 +2802,69 @@ end
     end
 end
 
+# A `Vector{PkgId}` request must precompile the package with the requested UUID, even
+# when a different package with the same name exists in the manifest (as happens for
+# distinct workspace members that share a package name). Name-based resolution would
+# resolve the name against the active project's direct deps and pick the wrong UUID.
+@testset "precompilepkgs Vector{PkgId} disambiguates same-name packages" begin
+    mkdepottempdir() do depot
+        function devpkg(dirname, name, uuid, body; deps="")
+            dir = joinpath(depot, "dev", dirname)
+            mkpath(joinpath(dir, "src"))
+            write(joinpath(dir, "Project.toml"),
+                  "name = \"$name\"\nuuid = \"$uuid\"\nversion = \"0.1.0\"\n$deps")
+            write(joinpath(dir, "src", "$name.jl"), body)
+        end
+
+        a = "aaaaaaaa-0000-0000-0000-000000000001" # "Shared", precompiles cleanly
+        b = "bbbbbbbb-0000-0000-0000-000000000002" # "Shared", errors if precompiled
+        w = "cccccccc-0000-0000-0000-000000000003" # "Wrapper", depends on Shared (UUID a)
+
+        # Both "Shared" packages live under distinct directories to avoid a path clash.
+        devpkg("SharedA", "Shared", a, "module Shared\nend\n")
+        devpkg("SharedB", "Shared", b, "module Shared\nerror(\"UUID B must not be precompiled\")\nend\n")
+        devpkg("Wrapper", "Wrapper", w, "module Wrapper\nend\n"; deps="\n[deps]\nShared = \"$a\"\n")
+
+        project = joinpath(depot, "testenv")
+        mkpath(project)
+        # The active project's direct `Shared` is UUID B, so name resolution picks it.
+        write(joinpath(project, "Project.toml"), "[deps]\nWrapper = \"$w\"\nShared = \"$b\"\n")
+        write(joinpath(project, "Manifest.toml"),
+              """
+              manifest_format = "2.0"
+
+              [[deps.Shared]]
+              uuid = "$a"
+              path = "../dev/SharedA/"
+
+              [[deps.Shared]]
+              uuid = "$b"
+              path = "../dev/SharedB/"
+
+              [[deps.Wrapper]]
+              deps = {Shared = "$a"}
+              uuid = "$w"
+              path = "../dev/Wrapper/"
+              """)
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project)
+            shared_a = Base.PkgId(Base.UUID(a), "Shared")
+            r = Base.Precompilation.precompilepkgs([shared_a]; io=IOContext{IO}(IOBuffer()),
+                                                   fancyprint=false, manifest=true)
+            # Only Shared (UUID A) is precompiled; Shared (UUID B) would have errored.
+            @test r isa Vector{String}
+            @test length(r) == 1
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
 precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_path
     # Test that compile-time preferences invalidate, even when queried from a
     # "foreign" UUID / package namespace
