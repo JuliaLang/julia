@@ -158,6 +158,11 @@ Standard library changes
 
 #### REPL
 
+* Pressing `^C` twice at an empty `julia>` prompt now cancels all still-running
+  work started by earlier evaluations (e.g. a runaway `@async` task spewing
+  output): each REPL evaluation runs under its own cancellation source, linked
+  under one session-level source that the repeated press cancels ([#47839]).
+
 #### Test
 
 * `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument that provides
