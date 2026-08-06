@@ -1063,7 +1063,8 @@ IRInterpretationState(interp::I, spec_info::SpecInfo, ir::IRCode,
 
 function IRInterpretationState(
         interp::AbstractInterpreter, codeinst::CodeInstance, mi::MethodInstance,
-        argtypes::Vector{Any}, @nospecialize(src)
+        argtypes::Vector{Any}, @nospecialize(src),
+        valid_worlds::WorldRange = WorldRange(codeinst.min_world, codeinst.max_world)
     )
     @assert get_ci_mi(codeinst) === mi "method instance is not synced with code instance"
     if isa(src, String)
@@ -1075,7 +1076,7 @@ function IRInterpretationState(
     ir = inflate_ir(src, mi)
     argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva, mi)
     return IRInterpretationState(interp, spec_info, ir, mi, argtypes,
-                                 codeinst.min_world, codeinst.max_world)
+                                 first(valid_worlds), last(valid_worlds))
 end
 
 # AbsIntState
@@ -1318,6 +1319,15 @@ function get_max_methods_for_func(@nospecialize(f))
     end
     return nothing
 end
+
+# Whether `f` is marked to only allow inference of call sites with fully concrete
+# argument types. `f === nothing` means the callee value is unknown.
+function is_concrete_only(@nospecialize(f))
+    f === nothing && return false
+    isa(f, DataType) && return f.name.concrete_only
+    return typeof(f).name.concrete_only
+end
+
 get_max_methods_for_module(sv::AbsIntState) = get_max_methods_for_module(frame_module(sv))
 function get_max_methods_for_module(mod::Module)
     max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), mod) % Int

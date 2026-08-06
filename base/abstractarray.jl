@@ -750,7 +750,7 @@ false
 checkindex(::Type{Bool}, inds, i) = throw(ArgumentError(LazyString("unable to check bounds for indices of type ", typeof(i))))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::IdentityUnitRange, i::Real) = checkindex(Bool, inds.indices, i)
-checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i - one(i)) < unsigned(last(inds))
+checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i -% one(i)) < unsigned(last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::AbstractRange) =
@@ -3122,6 +3122,8 @@ Return `true` when `A` is less than `B`. Vectors are first compared by
 their starting indices, and then lexicographically by their elements.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
+
+OrderStyle(::Type{<:AbstractVector{T}}) where {T} = OrderStyle(T)
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)

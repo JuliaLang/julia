@@ -1,4 +1,8 @@
 ## A rule for making a git-external dependency ##
+# For a user-facing overview of building a dependency from a Git checkout (DEPS_GIT,
+# USE_BINARYBUILDER_<NAME>, the .version file, and editing the worktree in place), see
+# "Building a dependency from a Git checkout" in doc/src/devdocs/build/build.md
+#
 # call syntax:
 #   $(eval $(call git-external,dirname,VARNAME,file_from_download,file_from_compile,SRCDIR)
 # dirname is the folder name to create
@@ -30,11 +34,14 @@ $2_SRC_DIR := $1
 $2_SRC_FILE := $$(SRCCACHE)/$1.git
 $$($2_SRC_FILE)/HEAD: | $$(SRCCACHE)
 	git clone -q --mirror --branch $$($2_BRANCH) $$($2_GIT_URL) $$(dir $$@)
-$5/$1/.git/HEAD: | $$($2_SRC_FILE)/HEAD
+$5/$1/.git: | $$($2_SRC_FILE)/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
 	-cd $$($2_SRC_FILE) && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	git clone -q --depth=10 --branch $$($2_BRANCH) $$($2_SRC_FILE) $5/$1
-	cd $5/$1 && git remote set-url origin $$($2_GIT_URL)
+	# if a checkout is already present (e.g. an old-style local clone from a previous
+	# build), keep it and proceed as before; otherwise add a worktree sharing the bare
+	# cache's object store instead of making a full local clone
+	-git -C $$($2_SRC_FILE) worktree prune
+	[ -e $5/$1/.git ] || git -C $$($2_SRC_FILE) worktree add --detach $5/$1 $$($2_BRANCH)
 #ifneq ($3,)
 	touch -c $5/$1/$3 # old target
 #endif
@@ -44,14 +51,15 @@ $$(BUILDDIR)/$1:
 	mkdir -p $$@
 $5/$1/source-extracted: | $$(BUILDDIR)/$1
 endif
-$5/$1/source-extracted: $$(SRCDIR)/$1.version | $5/$1/.git/HEAD
+$5/$1/source-extracted: $$(SRCDIR)/$1.version | $5/$1/.git
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
 	-cd $$(SRCCACHE)/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
-	cd $5/$1 && git fetch -q $$(SRCCACHE)/$1.git remotes/origin/$$($2_BRANCH):remotes/origin/$$($2_BRANCH)
+	# pull the branch into the checkout: harmless for a worktree (it already shares the
+	# cache's object store), and required to update an old-style local clone
+	-cd $5/$1 && git fetch -q $$(SRCCACHE)/$1.git remotes/origin/$$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	cd $5/$1 && git checkout -q --detach $$($2_SHA1)
 	@[ '$$($2_SHA1)' = "$$$$(cd $5/$1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
 	echo 1 > $$@
-$5/$1/source-compiled: $5/$1/.git/HEAD
 $$($2_SRC_FILE): | $$($2_SRC_FILE)/HEAD
 	touch -c $$@
 

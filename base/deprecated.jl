@@ -193,6 +193,7 @@ macro deprecate(old, new, export_old=true)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
         callexpr = old.head === :call ? old : old.args[1]
+        maybe_export = nothing
         if callexpr.head === :call
             fnexpr = callexpr.args[1]
             if fnexpr isa Expr && fnexpr.head === :curly
@@ -204,8 +205,6 @@ macro deprecate(old, new, export_old=true)
                 else
                     cannot_export_nonsymbol()
                 end
-            else
-                maybe_export = nothing
             end
         else
             error("invalid usage of @deprecate")
@@ -577,6 +576,13 @@ to_power_type(x) = oftype(x*x, x)
 
 # BEGIN 1.14 deprecations
 
+# These operators are new in 1.14, but these fallback methods are added for
+# compatibility while packages adjust to defining both operators, to allow
+# Base and other packages to start using these.
+*%(a::T, b::T) where {T} = *(a, b)
++%(a::T, b::T) where {T} = +(a, b)
+-%(a::T, b::T) where {T} = -(a, b)
+
 # Revise calls this
 function explicit_manifest_entry_path(args...)
     spec = explicit_manifest_entry_load_spec(args...)
@@ -687,6 +693,17 @@ end
     end
     ss = @inbounds raw_substring(s, i + 1, j)
     SubString{T}(ss)
+end
+
+# `a[] = v` on a `Threads.Atomic` (the `setindex!` form) is a footgun: read-modify-write
+# expressions such as `a[] += 1` look atomic but expand to a separate non-atomic load and
+# store. Steer users to the explicit `@atomic` form. This is written by hand rather than
+# with `@deprecate` so the message can name the hazard and avoid the macro-expansion
+# artifact `@deprecate` would embed in the suggested replacement.
+# ## This is not yet enabled (deprecated) due to the need to transition a couple stdlibs to this form (or another equivalent form).
+function setindex!(x::Threads.Atomic, v)
+    # depwarn(lazy"`a[] = v` on a `Threads.Atomic` is deprecated because read-modify-write uses like `a[] += 1` are not atomic; use `@atomic a[] = v` (or `@atomic a[] += 1`, `Threads.atomic_add!`, ...) instead.", :setindex!)
+    return @atomic x[] = v
 end
 
 # END 1.14 deprecations

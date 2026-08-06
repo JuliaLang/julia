@@ -967,7 +967,7 @@ detected.
 """
 function detect_libgfortran_version()
     libgfortran_path = _get_libgfortran_path()
-    name, version = parse_dl_name_version(libgfortran_path, os())
+    _, version = parse_dl_name_version(libgfortran_path, os())
     if version === nothing
         # Even though we complain about this, we allow it to continue in the hopes that
         # we shall march on to a BRIGHTER TOMORROW.  One in which we are not shackled

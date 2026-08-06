@@ -13,6 +13,17 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     IRBuilder<> builder(target);
     auto ptls = target->getArgOperand(0);
     auto type = target->getArgOperand(2);
+    // Sites that may execute with a cancellation reset region published
+    // (annotated by CancellationLowering) take their slow paths through the
+    // reset-safe entry points, which unpublish/republish the region
+    // themselves. The inline fastpath below is safe to span as-is: it only
+    // loads, bumps the cursor, and updates the allocation counter - a
+    // delivered reset can at worst abandon an unreferenced, still-untagged
+    // hole in the bump region and skew the allocation counter. Marking is
+    // not confused by the late tag store: it never reads headers of
+    // unreachable memory (sweep is line-liveness based), and on the normal
+    // path no safepoint lies between allocation and the tag store.
+    bool resetSafe = target->hasMetadata("julia.reset_region");
     uint64_t derefBytes = 0;
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
         size_t sz = (size_t)CI->getZExtValue();
@@ -21,7 +32,7 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         int offset = jl_gc_classify_pools(sz, &osize);
         if (offset < 0) {
             newI = builder.CreateCall(
-                bigAllocFunc,
+                resetSafe ? bigAllocResetSafeFunc : bigAllocFunc,
                 { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
             if (sz > 0)
                 derefBytes = sz;
@@ -78,7 +89,8 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
                 // slowpath
                 builder.SetInsertPoint(slowpath);
                 auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), 1);
-                auto new_call = builder.CreateCall(smallAllocFunc, { ptls, pool_offs, pool_osize_i32, type });
+                auto new_call = builder.CreateCall(resetSafe ? smallAllocResetSafeFunc : smallAllocFunc,
+                                                   { ptls, pool_offs, pool_osize_i32, type });
                 new_call->setAttributes(new_call->getCalledFunction()->getAttributes());
                 builder.CreateBr(next_instr->getParent());
 
@@ -106,7 +118,7 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
         // allocTypedFunc does not include the type tag in the allocation size!
-        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
+        newI = builder.CreateCall(resetSafe ? allocTypedResetSafeFunc : allocTypedFunc, { ptls, size, type });
         derefBytes = sizeof(void*);
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
@@ -136,26 +148,19 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
 
             // intptr_t addr = (intptr_t) (void*) src;
             // uint8_t* meta_addr = (uint8_t*) (SIDE_METADATA_BASE_ADDRESS + (addr >> 6));
-            Value *metadata_base_ptr;
-            if (jl_generating_output()) {
-                F.getParent()->getOrInsertGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS", i8_ptr_ty);
-                auto metadata_base_global = F.getParent()->getNamedGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS");
-                assert(metadata_base_global != nullptr);
-                auto metadata_base_load = builder.CreateAlignedLoad(
-                    i8_ptr_ty, metadata_base_global, Align(sizeof(void *)), "mmtk_side_log_bit_base");
-                metadata_base_load->setMetadata(llvm::LLVMContext::MD_tbaa, get_tbaa_const(F.getContext()));
-                metadata_base_load->setMetadata(llvm::LLVMContext::MD_invariant_load,
-                                                llvm::MDNode::get(F.getContext(), {}));
-                metadata_base_ptr = builder.CreateAlignedLoad(
-                    i8_ptr_ty,
-                    metadata_base_global,
-                    Align(sizeof(void *)),
-                    "mmtk_side_log_bit_base");
-            } else {
-                intptr_t metadata_base_address = reinterpret_cast<intptr_t>(MMTK_SIDE_LOG_BIT_BASE_ADDRESS);
-                auto metadata_base_val = ConstantInt::get(intptr_ty, metadata_base_address);
-                metadata_base_ptr = ConstantExpr::getIntToPtr(metadata_base_val, PointerType::getUnqual(F.getContext()));
-            }
+            // The metadata base address is dynamic (chosen by mmap at start-up), so it
+            // must always be loaded through the global rather than baked in as an
+            // immediate: JIT code may outlive the current process via the object cache,
+            // and AOT code is shared across processes by construction.
+            F.getParent()->getOrInsertGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS", i8_ptr_ty);
+            auto metadata_base_global = F.getParent()->getNamedGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS");
+            assert(metadata_base_global != nullptr);
+            auto metadata_base_load = builder.CreateAlignedLoad(
+                i8_ptr_ty, metadata_base_global, Align(sizeof(void *)), "mmtk_side_log_bit_base");
+            metadata_base_load->setMetadata(llvm::LLVMContext::MD_tbaa, get_tbaa_const(F.getContext()));
+            metadata_base_load->setMetadata(llvm::LLVMContext::MD_invariant_load,
+                                            llvm::MDNode::get(F.getContext(), {}));
+            Value *metadata_base_ptr = metadata_base_load;
 
             auto parent_val = builder.CreatePtrToInt(parent, intptr_ty);
             auto shr = builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 6));
@@ -179,10 +184,16 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
 
             auto mayTriggerSlowpath = SplitBlockAndInsertIfThen(is_unlogged, target, false, MDB.createBranchWeights(Weights));
             builder.SetInsertPoint(mayTriggerSlowpath);
-            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
+            auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
+            // Propagate CancellationLowering's reset-region annotation so
+            // lowerQueueGCRoot selects the reset-safe entry.
+            if (auto *MD = target->getMetadata("julia.reset_region"))
+                qr->setMetadata("julia.reset_region", MD);
         } else {
             Function *wb_func = getOrDeclare(jl_intrinsics::queueGCRoot);
-            builder.CreateCall(wb_func, { parent });
+            auto qr = builder.CreateCall(wb_func, { parent });
+            if (auto *MD = target->getMetadata("julia.reset_region"))
+                qr->setMetadata("julia.reset_region", MD);
         }
     } else {
         // Using a plan that does not need write barriers

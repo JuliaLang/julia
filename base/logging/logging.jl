@@ -3,7 +3,7 @@
 module CoreLogging
 
 import Base: isless, +, -, convert, show
-import Base.ScopedValues: ScopedValue, with, @with
+import Base.ScopedValues: ScopedValue, @with
 
 export
     AbstractLogger,
@@ -307,7 +307,7 @@ function log_record_id(_module, level, message, log_kws)
             push!(_log_record_ids, id)
             return id
         end
-        h += 1
+        h +%= 1
     end
 end
 
@@ -558,7 +558,7 @@ Logging.disable_logging(Logging.Info) # Disable debug and info
 ```
 """
 function disable_logging(level::LogLevel)
-    _min_enabled_level[] = level + 1
+    @atomic _min_enabled_level[] = level + 1
 end
 
 let _debug_groups_include::Vector{Symbol} = Symbol[],

@@ -167,7 +167,7 @@ void jl_dump_llvm_opt_impl(void *s)
 static void decorate_module(Module &M) JL_NOTSAFEPOINT;
 
 // convert local roots into global roots, if they are needed
-static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi)
+static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi) JL_CANSAFEPOINT
 {
     JL_GC_PROMISE_ROOTED(out.temporary_roots); // rooted by caller
     if (jl_array_dim0(out.temporary_roots) == 0)
@@ -181,7 +181,7 @@ static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance
         auto ref = out.global_targets.find((void*)val);
         if (ref == out.global_targets.end())
             continue;
-        auto get_global_root = [val, m]() {
+        auto get_global_root = [val, m]() JL_CANSAFEPOINT {
             if (jl_is_globally_rooted(val))
                 return val;
             if (jl_is_method(m) && m->roots) {
@@ -690,7 +690,9 @@ void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     }
 }
 
-Error JLDebuginfoPlugin::notifyEmitted(MaterializationResponsibility &MR)
+// TODO: analysis disabled since we aren't able to annotate that it was safe to lock
+// std::mutex here because we asserted !jl_gcunsaferegion, so we don't need to assert jl_notsafepoint
+Error JLDebuginfoPlugin::notifyEmitted(MaterializationResponsibility &MR) JL_NO_SAFEPOINT_ANALYSIS // NOLINT[julia-first-decl-annotations]
 {
     {
         std::lock_guard<std::mutex> lock(PluginMutex);
@@ -882,16 +884,34 @@ public:
     }
 
     // During materialization: finalizers disabled, GC safe
-    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER override
+    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_CANSAFEPOINT_ENTER_LEAVE override // NOLINT[julia-first-decl-annotations]
     {
         auto &ES = R->getExecutionSession();
-        JIT.optimizeDLSyms(*Out.module);
+
         std::unique_ptr<MemoryBuffer> Obj;
         uint64_t start_time = jl_hrtime();
         {
             TimeTraceScope CompileScope("JIT Compile", Out.module->getModuleIdentifier());
-            JIT.optimizeModule(*Out.module);
-            Obj = JIT.compileModule(*Out.module);
+            // Embeds the optlevel, CPU, and features into the module, so they form part of
+            // the cache key.
+            selectOptLevel(*Out.module);
+            Out.module->addModuleFlag(Module::Warning, "julia.cpu",
+                                      MDString::get(*Out.ctx, JIT.getTargetCPU()));
+            Out.module->addModuleFlag(Module::Warning, "julia.cpu.features",
+                                      MDString::get(*Out.ctx,
+                                                    JIT.getTargetFeatureString()));
+            auto Compile = [this]() JL_CANSAFEPOINT_ENTER_LEAVE {
+                JIT.optimizeModule(*Out.module);
+                return JIT.compileModule(*Out.module);
+            };
+            // The jl_dump_llvm_opt hook records timing and before/after IR
+            // statistics from inside the optimizer, so a warm cache hit would
+            // keep it from ever firing. Bypass the object cache while the
+            // hook is installed.
+            if (*JIT.get_dump_llvm_opt_stream())
+                Obj = Compile();
+            else
+                Obj = JIT.OCache.get(*Out.module, Compile);
             if (!Obj) {
                 R->failMaterialization();
                 return;
@@ -972,7 +992,7 @@ public:
     };
 
     // During materialization: finalizers disabled, GC safe
-    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE override
+    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_CANSAFEPOINT_ENTER_LEAVE override // NOLINT[julia-first-decl-annotations]
     {
         auto Ctx = std::make_unique<LLVMContext>();
         auto Mod =
@@ -1217,14 +1237,19 @@ namespace {
         OptimizationLevel O;
         SmallVector<std::function<void()>, 0> &printers;
         std::mutex &llvm_printing_mutex;
-        PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex) JL_NOTSAFEPOINT
-            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers), llvm_printing_mutex(llvm_printing_mutex) {}
+        bool cache_enabled;
+        PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled) JL_NOTSAFEPOINT
+            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers), llvm_printing_mutex(llvm_printing_mutex), cache_enabled(cache_enabled) {}
         ~PMCreator() JL_NOTSAFEPOINT = default;
 
         auto operator()() JL_NOTSAFEPOINT {
             auto TM = cantFail(JTMB.createTargetMachine());
             fixupTM(*TM);
-            auto NPM = std::make_unique<NewPM>(std::move(TM), O, OptimizationOptions::defaults());
+            auto options = OptimizationOptions::defaults();
+            // It is unsafe to embed the specific TLS offset into the output
+            // when the cache is enabled.
+            options.tls_getters = cache_enabled;
+            auto NPM = std::make_unique<NewPM>(std::move(TM), O, options);
             // TODO this needs to be locked, as different resource pools may add to the printer vector at the same time
             {
                 std::lock_guard<std::mutex> lock(llvm_printing_mutex);
@@ -1238,9 +1263,9 @@ namespace {
 
     template<size_t N>
     struct sizedOptimizerT {
-        sizedOptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex) JL_NOTSAFEPOINT {
+        sizedOptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled) JL_NOTSAFEPOINT {
             for (size_t i = 0; i < N; i++) {
-                PMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i, printers, llvm_printing_mutex));
+                PMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i, printers, llvm_printing_mutex, cache_enabled));
             }
         }
 
@@ -1419,8 +1444,8 @@ namespace {
 }
 
 struct JuliaOJIT::OptimizerT {
-    OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex)
-        : opt(TM, printers, llvm_printing_mutex) {}
+    OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled)
+        : opt(TM, printers, llvm_printing_mutex, cache_enabled) {}
     void operator()(Module &M) JL_NOTSAFEPOINT {
         opt(M);
     }
@@ -1444,11 +1469,6 @@ struct JuliaOJIT::JITPointersT {
                 GV.eraseFromParent();
             }
         }
-
-        // Windows needs some inline asm to help
-        // build unwind tables, if they have any functions to decorate
-        if (!M.functions().empty())
-            decorate_module(M);
     }
     void operator()(Module &M, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
         return operator()(M);
@@ -1525,7 +1545,9 @@ struct JuliaOJIT::DLSymOptimizer {
         return addr;
     }
 
-    void *lookup(const char *libname, const char *fname) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+    // TODO: analysis disabled since we aren't able to annotate that it was safe to lock
+    // std::mutex here because we asserted !jl_gcunsaferegion, so we don't need to assert jl_notsafepoint
+    void *lookup(const char *libname, const char *fname) JL_CANSAFEPOINT_ENTER_LEAVE JL_NO_SAFEPOINT_ANALYSIS {
         StringRef lib(libname);
         StringRef f(fname);
         std::lock_guard<std::mutex> lock(symbols_mutex);
@@ -1561,7 +1583,7 @@ struct JuliaOJIT::DLSymOptimizer {
         return handle;
     }
 
-    void operator()(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+    void operator()(Module &M) JL_CANSAFEPOINT_ENTER_LEAVE {
         for (auto &GV : M.globals()) {
             auto Name = GV.getName();
             if (Name.starts_with("jlplt") && Name.ends_with("got")) {
@@ -1707,12 +1729,13 @@ JuliaOJIT::JuliaOJIT()
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
+    OCache(),
     MemMgr(createJITLinkMemoryManager()),
     ObjectLayer(ES, *MemMgr),
     CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT<N_optlevels>>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM)),
     JITPointers(std::make_unique<JITPointersT>(SharedBytes, SharedBytesMutex)),
     JITPointersLayer(ES, CompileLayer, IRTransformRef(*JITPointers)),
-    Optimizers(std::make_unique<OptimizerT>(*TM, PrintLLVMTimers, llvm_printing_mutex)),
+    Optimizers(std::make_unique<OptimizerT>(*TM, PrintLLVMTimers, llvm_printing_mutex, OCache.isEnabled())),
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
@@ -2308,6 +2331,23 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             RenameDef(Funcs.specptr, S.specptr);
     }
 
+    // Pre-pass: find CI equivalents, and build EquivMap for use in the main
+    // pass to memoize findCompatibleCI.
+    DenseMap<jl_code_instance_t *, jl_code_instance_t *> EquivMap;
+    for (auto &[Call, T] : Info->call_targets) {
+        auto [CI, API] = Call;
+        JL_GC_PROMISE_ROOTED(CI);
+        if (!Syms.contains(T))
+            continue;
+        if (EquivMap.contains(CI))
+            continue;
+        if (!jl_mi_cache_has_ci(jl_get_ci_mi(CI), CI)) {
+            jl_code_instance_t *Equiv = findCompatibleCI(CI);
+            if (Equiv != CI)
+                EquivMap[CI] = Equiv;
+        }
+    }
+
     // Rename referenced CIs in the workqueue.
     for (auto &[Call, T] : Info->call_targets) {
         auto [CI, API] = Call;
@@ -2323,7 +2363,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             continue;
         }
         JL_GC_PROMISE_ROOTED(CI);
-        auto Dest = linkCallTarget(MR, CI, API);
+        auto Dest = linkCallTarget(MR, CI, API, EquivMap);
         if (!Dest)
             return false;
         if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);
@@ -2382,16 +2422,19 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
 // Must hold LinkerMutex.
 orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibility &MR,
-                                               jl_code_instance_t *CI, jl_invoke_api_t API)
+                                               jl_code_instance_t *CI, jl_invoke_api_t API,
+                                               const DenseMap<jl_code_instance_t *, jl_code_instance_t *> &EquivMap)
 {
-    // This condition should match that in jl_add_codeinst_to_jit!, which will
-    // add a different, compatible CodeInstance to the JIT but not update the
-    // invoke statement.
-    if (!jl_mi_cache_has_ci(jl_get_ci_mi(CI), CI))
-        CI = findCompatibleCI(CI);
-    auto It = CISymbols.find(CI);
-    if (It != CISymbols.end() && It->second.invoke_api == API)
-        return It->second.specptr;
+    {
+        auto It = EquivMap.find(CI);
+        if (It != EquivMap.end())
+            CI = It->second;
+    }
+    {
+        auto It = CISymbols.find(CI);
+        if (It != CISymbols.end() && It->second.invoke_api == API)
+            return It->second.specptr;
+    }
 
     CISymbolPtr *Sym = linkCISymbol(CI);
 
@@ -2422,30 +2465,19 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
     return Sym->specptr;
 }
 
-jl_code_instance_t *JuliaOJIT::findCompatibleCI(jl_code_instance_t *CI)
+jl_code_instance_t *JuliaOJIT::findCompatibleCI(jl_code_instance_t *ci)
 {
-    // add_codeinsts_to_jit! may have added an equivalent CI to the JIT, but
+    // add_codeinsts_to_jit! may have added an equivalent ci to the JIT, but
     // the invoke itself won't be updated.
-    auto MI = jl_get_ci_mi(CI);
-    jl_value_t *Def = CI->def;
-    jl_value_t *Owner = CI->owner;
-    jl_value_t *RetType = CI->rettype;
-    size_t MinWorld = jl_atomic_load_relaxed(&CI->min_world);
-    size_t MaxWorld = jl_atomic_load_relaxed(&CI->max_world);
-    auto IsCompatible = [=](jl_code_instance_t *CI2) JL_NOTSAFEPOINT {
-        return jl_atomic_load_relaxed(&CI2->min_world) <= MinWorld &&
-               jl_atomic_load_relaxed(&CI2->max_world) >= MaxWorld &&
-               jl_egal(CI2->def, Def) && jl_egal(CI2->owner, Owner) &&
-               jl_egal(CI2->rettype, RetType);
-    };
-    for (auto CI2 = jl_atomic_load_relaxed(&MI->cache); CI2;
-         CI2 = jl_atomic_load_relaxed(&CI2->next)) {
-        if (CI2 != CI && IsCompatible(CI2) &&
-            (CISymbols.contains(CI2) || jl_atomic_load_relaxed(&CI2->invoke))) {
-            return CI2;
+    auto mi = jl_get_ci_mi(ci);
+    for (auto ci2 = jl_atomic_load_relaxed(&mi->cache); ci2;
+         ci2 = jl_atomic_load_relaxed(&ci2->next)) {
+        if (ci2 != ci && jl_is_ci_equiv(ci, ci2, 0) &&
+            (CISymbols.contains(ci2) || jl_atomic_load_relaxed(&ci2->invoke))) {
+            return ci2;
         }
     }
-    return CI;
+    return ci;
 }
 
 CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
@@ -2455,8 +2487,14 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     void *SpecPtr;
 
     // Tell the analyzer no safepoint is possible with waitcompile = 0
+#ifdef __clang_safetyanalysis__
+    #define jl_read_codeinst_invoke jl_read_codeinst_invoke_nosafepoint
+#endif
     void jl_read_codeinst_invoke(jl_code_instance_t *, uint8_t *, jl_callptr_t *, void **, int) JL_NOTSAFEPOINT;
     jl_read_codeinst_invoke(CI, &Flags, &Invoke, &SpecPtr, 0);
+#ifdef __clang_safetyanalysis__
+    #undef jl_read_codeinst_invoke
+#endif
 
     if (!(Flags & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR))
         return nullptr;
@@ -2483,9 +2521,15 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
 
 void JuliaOJIT::optimizeModule(Module &M)
 {
-    selectOptLevel(M);
+    if (!OCache.isEnabled())
+        optimizeDLSyms(M);
     (*Optimizers)(M);
-    (*JITPointers)(M);
+    if (!OCache.isEnabled())
+        (*JITPointers)(M);
+    // Windows needs some inline asm to help
+    // build unwind tables, if they have any functions to decorate
+    if (!M.functions().empty())
+        decorate_module(M);
 }
 
 std::unique_ptr<MemoryBuffer> JuliaOJIT::compileModule(Module &M)
@@ -2525,6 +2569,11 @@ void JuliaOJIT::printTimers()
 
 void JuliaOJIT::optimizeDLSyms(Module &M) {
     (*DLSymOpt)(M);
+}
+
+void JuliaOJIT::shutdown()
+{
+    OCache.shutdown();
 }
 
 JuliaOJIT *jl_ExecutionEngine;
@@ -2650,6 +2699,12 @@ extern "C" JL_DLLEXPORT_CODEGEN
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+const char *jl_objcache_disabled_notice_impl(void) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    return jl_ExecutionEngine->objCacheDisabledNotice();
 }
 
 // API for adding bytes to record being owned by the JIT

@@ -65,6 +65,7 @@ struct JuliaPassContext {
     llvm::Function *call_func;
     llvm::Function *call2_func;
     llvm::Function *call3_func;
+    llvm::Function *cancel_point_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -157,6 +158,15 @@ namespace jl_well_known {
 
     // `jl_gc_alloc_typed`: allocates bytes.
     extern const WellKnownFunctionDescription GCAllocTyped;
+
+    // Reset-safe variants of the above (minus the narrowed memory effects):
+    // used in functions that may carry a published cancellation reset
+    // region, these unpublish/republish the current task's reset context
+    // around the operation (see llvm-cancellation-lowering.cpp).
+    extern const WellKnownFunctionDescription GCBigAllocResetSafe;
+    extern const WellKnownFunctionDescription GCSmallAllocResetSafe;
+    extern const WellKnownFunctionDescription GCQueueRootResetSafe;
+    extern const WellKnownFunctionDescription GCAllocTypedResetSafe;
 }
 
 void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info);

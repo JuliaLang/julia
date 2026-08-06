@@ -71,7 +71,7 @@ function arg_decl_parts(m::Method, html=false)
         decls[1] = ("", sprint(show_signature_function, unwrapva(sig.parameters[1]), false, decls[1][1], html,
                                context = show_env))
     else
-        decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]
+        decls = Tuple{String,String}[("", "") for _ = 1:length(sig.parameters::SimpleVector)]
     end
     return tv, decls, file, line
 end
@@ -345,7 +345,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
     n = rest = 0
-    local last
+    last = nothing
 
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
@@ -372,7 +372,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     end
     if rest > 0
         println(io)
-        if rest == 1
+        if rest == 1 && last isa Method
             show_method(io, last)
         else
             print(io, "... $rest methods not shown")
@@ -441,7 +441,7 @@ function url(m::Method)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)
-    tv, decls, file, line = arg_decl_parts(m, true)
+    tv, decls, _file, line = arg_decl_parts(m, true)
     sig = unwrap_unionall(m.sig)
     if sig <: Tuple{Core.Builtin, Vararg}
         print(io, m.name, "(...) in ", parentmodule(m))

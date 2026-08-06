@@ -13,6 +13,16 @@ use crate::jl_gc_get_marked_finalizers_list;
 use crate::jl_gc_get_thread_finalizer_list;
 use crate::jl_gc_get_to_finalize_list;
 
+// Entries in the thread-local and marked finalizer lists may have tagged object
+// pointers. These must match the `GC_FIN_*` defines in gc-common.h.
+/// The paired finalizer is an unboxed c function pointer.
+pub const GC_FIN_CFUNC_TAG: usize = 0x1;
+/// The object pointer is a c object pointer, not a `jl_value_t *`.  It must
+/// have alignment >= 4 and will be finalized at the next quiescent period.
+pub const GC_FIN_COBJ_TAG: usize = 0x2;
+/// All bits used to tag finalizer list entries.
+pub const GC_FIN_TAG_MASK: usize = GC_FIN_CFUNC_TAG | GC_FIN_COBJ_TAG;
+
 /// This is a Rust implementation of finalizer scanning in _jl_gc_collect() in gc.c
 pub fn scan_finalizers_in_rust<T: ObjectTracer>(tracer: &mut T) {
     use crate::mmtk::vm::ActivePlan;
@@ -141,7 +151,9 @@ fn sweep_finalizer_list(
     let mut j = 0;
     while i < list.len {
         let v0: Address = list.get(i);
-        let v = unsafe { ObjectReference::from_raw_address_unchecked(gc_ptr_clear_tag(v0, 3)) };
+        let v = unsafe {
+            ObjectReference::from_raw_address_unchecked(gc_ptr_clear_tag(v0, GC_FIN_TAG_MASK))
+        };
         if v0.is_zero() {
             i += 2;
             // remove from this list
@@ -149,7 +161,7 @@ fn sweep_finalizer_list(
         }
 
         let fin = list.get(i + 1);
-        let (isfreed, isold) = if gc_ptr_tag(v0, 2) {
+        let (isfreed, isold) = if gc_ptr_tag(v0, GC_FIN_COBJ_TAG) {
             (true, false)
         } else {
             let isfreed = !memory_manager::is_live_object(v);
@@ -200,17 +212,17 @@ fn mark_finlist<T: ObjectTracer>(list: &mut ArrayListT, start: usize, tracer: &m
             continue;
         }
 
-        let new_obj_addr = if gc_ptr_tag(cur, 1) {
+        let new_obj_addr = if gc_ptr_tag(cur, GC_FIN_CFUNC_TAG) {
             // Skip next
             i += 1;
             debug_assert!(i < list.len);
-            cur_tag = 1;
-            gc_ptr_clear_tag(cur, 1)
+            cur_tag = GC_FIN_CFUNC_TAG;
+            gc_ptr_clear_tag(cur, GC_FIN_CFUNC_TAG)
         } else {
             // unsafe: We checked `cur.is_zero()` before.
             cur
         };
-        if gc_ptr_tag(cur, 2) {
+        if gc_ptr_tag(cur, GC_FIN_COBJ_TAG) {
             i += 1;
             continue;
         }

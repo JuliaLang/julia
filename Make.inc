@@ -60,6 +60,7 @@ USE_SYSTEM_PATCHELF:=0
 USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_ZSTD:=0
+USE_SYSTEM_LMDB:=0
 USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_LLD:=0
 
@@ -1296,12 +1297,19 @@ LIBUNWIND:=
 else
 LIBUNWIND:=-lunwind
 ifneq ($(findstring $(OS),Darwin OpenBSD),)
-JCPPFLAGS+=-DLLVMLIBUNWIND
+JCPPFLAGS_COMMON+=-DLLVMLIBUNWIND
 else ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 # Only for linux and freebsd since we want to use not yet released gnu libunwind features
 JCFLAGS+=-DSYSTEM_LIBUNWIND
-JCPPFLAGS+=-DSYSTEM_LIBUNWIND
+JCPPFLAGS_COMMON+=-DSYSTEM_LIBUNWIND
 endif
+endif
+
+ifeq ($(USE_SYSTEM_LMDB), 1)
+LIBLMDB := -llmdb
+else
+# statically link the archive we build in deps/lmdb.mk into libjulia-codegen
+LIBLMDB := $(build_libdir)/liblmdb.a
 endif
 
 ifeq ($(origin LLVM_CONFIG), undefined)
@@ -1313,7 +1321,7 @@ endif
 endif # LLVM_CONFIG undefined
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-JCPPFLAGS+=-DSYSTEM_LLVM
+JCPPFLAGS_COMMON+=-DSYSTEM_LLVM
 endif # SYSTEM_LLVM
 
 # Windows builds need a little help finding the LLVM libraries for llvm-config
@@ -1593,7 +1601,7 @@ OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -latomic -Wl,--export-dynamic,-
 # Detect if ifunc is supported
 IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
-JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
+JCPPFLAGS_COMMON += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
 JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -Wl,--version-script=$(BUILDROOT)/src/julia.expmap
@@ -1675,7 +1683,7 @@ WIN_LD_CRT_END_OBJ := $(build_private_libdir)/crtend.o
 WIN_LD_CRT_END := $(WIN_MINGW_CRT_LIBS) $(WIN_LD_CRT_END_OBJ)
 WIN_LD_STDCXX := $(build_shlibdir)/$(call versioned_libname,libstdc++,6)
 WIN_LD_ATOMIC := $(build_shlibdir)/$(call versioned_libname,libatomic,1)
-WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 $(WIN_LD_ATOMIC) -lole32
+WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -lsynchronization $(WIN_LD_ATOMIC) -lole32
 WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32
 OSLIBS += --export-all-symbols --version-script=$(BUILDROOT)/src/julia.expmap \
 	--no-whole-archive $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS)
@@ -1685,7 +1693,7 @@ JLDFLAGS += --stack 8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += --large-address-aware
 endif
-JCPPFLAGS += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
+JCPPFLAGS_COMMON += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
 UNTRUSTED_SYSTEM_LIBM := 1
 # Use hard links for files on windows, rather than soft links
 #   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
@@ -1711,30 +1719,30 @@ endif
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
-JCPPFLAGS += -DJULIA_NUM_THREADS=$(JULIA_THREADS)
+JCPPFLAGS_COMMON += -DJULIA_NUM_THREADS=$(JULIA_THREADS)
 endif
 
 # Intel VTune Amplifier
 ifeq ($(USE_INTEL_JITEVENTS), 1)
-JCPPFLAGS += -DJL_USE_INTEL_JITEVENTS
+JCPPFLAGS_COMMON += -DJL_USE_INTEL_JITEVENTS
 endif
 
 # OProfile
 ifeq ($(USE_OPROFILE_JITEVENTS), 1)
-JCPPFLAGS += -DJL_USE_OPROFILE_JITEVENTS
+JCPPFLAGS_COMMON += -DJL_USE_OPROFILE_JITEVENTS
 endif
 
 ifeq ($(DISABLE_LIBUNWIND), 1)
-JCPPFLAGS += -DJL_DISABLE_LIBUNWIND
+JCPPFLAGS_COMMON += -DJL_DISABLE_LIBUNWIND
 endif
 
 # perf
 ifeq ($(USE_PERF_JITEVENTS), 1)
-JCPPFLAGS += -DJL_USE_PERF_JITEVENTS
+JCPPFLAGS_COMMON += -DJL_USE_PERF_JITEVENTS
 endif
 
 ifeq ($(HAVE_SSP),1)
-JCPPFLAGS += -DHAVE_SSP=1
+JCPPFLAGS_COMMON += -DHAVE_SSP=1
 ifeq ($(USEGCC),1)
 OSLIBS += -lssp
 endif

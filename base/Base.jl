@@ -32,6 +32,8 @@ end
 
 # metaprogramming
 include("meta.jl")
+using .Meta
+using .Meta: is_id_char
 
 # Strings
 include("multimedia.jl")
@@ -96,12 +98,19 @@ include("some.jl")
 include("dict.jl")
 include("set.jl")
 
+# Dynamic scopes (types only; the ScopedValues API is included much later)
+include("scope.jl")
+# Cancellation tokens (the `cancel` keyword-argument machinery is used from
+# the I/O layer onwards)
+include("cancellation.jl")
+
 # Core I/O
 include("io.jl")
 include("iobuffer.jl")
 
 # Concurrency (part 1)
 include("linked_list.jl")
+include("park.jl")
 include("condition.jl")
 include("threads.jl")
 include("lock.jl")

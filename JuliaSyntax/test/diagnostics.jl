@@ -155,6 +155,10 @@ end
         diagnostic("public() = 6", version=v"1.11") ==
         Diagnostic(1, 6, :warning, "using public as an identifier is deprecated")
 
+    @test diagnostic("a +% b", version=v"1.13") ==
+        Diagnostic(2, 1, :error, "wrapping arithmetic operators `+%`, `-%`, and `*%` not supported in Julia version 1.13 < 1.14")
+    @test diagnostic("a +% b", only_first=true, version=v"1.14") === nothing
+
     @test diagnostic("break +", only_first=true, version=v"1.13") ==
         Diagnostic(6, 7, :error, "unexpected token after break")
     @test diagnostic("break ()", only_first=true, version=v"1.13") ==

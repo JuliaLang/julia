@@ -80,6 +80,26 @@ test_profile()
 close(ch)
 test_has_task_profiler_sample_in_buffer()
 
+@testset "Profile.print() groupby options on a task profile" begin
+    data, lidict = Profile.retrieve()
+    # the task profiler records -1 as the thread id of a task that isn't running on one,
+    # which the grouped report has to tolerate. Such a sample isn't guaranteed to occur
+    # naturally (#62575), so mark one that way.
+    data = copy(data)
+    block_end = findfirst(i -> Profile.is_block_end(data, i), eachindex(data))
+    @test block_end !== nothing
+    data[block_end - Profile.META_OFFSET_THREADID] = reinterpret(UInt, -1)
+    iobuf = IOBuffer()
+    with_logger(NullLogger()) do
+        @testset for format in [:flat, :tree]
+            @testset for groupby in Any[:none, :thread, :task, [:thread, :task], [:task, :thread]]
+                Profile.print(iobuf, data, lidict; groupby, format)
+                @test !isempty(String(take!(iobuf)))
+            end
+        end
+    end
+end
+
 Profile.clear()
 
 @profile busywait(1, 20)
@@ -113,6 +133,40 @@ end
                 end
             end
         end
+    end
+end
+
+@testset "printing and callers regressions" begin
+    iobuf = IOBuffer()
+    # synthetic single-sample profile on thread 1, so group contents are deterministic
+    fake_data = Profile.add_fake_meta(UInt64[1, 0])
+    fake_lidict = Dict{UInt64,Vector{StackFrame}}(UInt64(1) => [StackFrame(:f1, :file1, 1, nothing, false, false, 0)])
+    if !Sys.iswindows() # avoid the multi-thread-profiling-unsupported warning
+        # no "no samples" warning when every group has samples
+        @test_logs min_level=Logging.Warn Profile.print(iobuf, fake_data, fake_lidict, groupby = :thread)
+    end
+    # a threads filter that matches no samples must be honored under groupby=:task
+    @test_logs (:warn, r"There were no samples collected in one or more groups") match_mode=:any begin
+        Profile.print(iobuf, fake_data, fake_lidict, groupby = :task, threads = 999:1000)
+    end
+    @test_throws ArgumentError Profile.print(iobuf, groupby = :bogus)
+    # callers must accept default (metadata-bearing) profile data
+    @test Profile.callers("busywait") isa Vector
+    let (data, lidict) = Profile.retrieve()
+        @test Profile.callers("busywait", data, lidict) isa Vector
+    end
+    # data saved on a host with a different word size is accepted (`UInt` there may
+    # not be `UInt` here), rather than hitting a MethodError
+    @test Profile.getdict(UInt32[1, 0]) isa Profile.LineInfoDict
+    @test Profile.getdict(UInt64[1, 0]) isa Profile.LineInfoDict
+end
+
+@testset "init while profiling errors" begin
+    Profile.start_timer()
+    try
+        @test_throws "profiling is running" Profile.init(n = 10^6, delay = 0.01)
+    finally
+        Profile.stop_timer()
     end
 end
 
@@ -393,37 +447,115 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+# the elements of the flat `"<key>":[...]` array of a .heapsnapshot. Every field is
+# emitted as an unsigned decimal, and e.g. an edge's `name_or_index` can be typemax(UInt).
+# Also used by heapsnapshot_reassemble.jl, which runs under MMTk too.
+function snapshot_array(sshot::AbstractString, key::AbstractString)
+    start = last(findfirst("\"$key\":[", sshot)) + 1
+    section = strip(sshot[start:findnext(==(']'), sshot, start)-1])
+    return isempty(section) ? UInt[] : parse.(UInt, split(section, ','))
+end
+
 # FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
 @static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
-    tmpdir = mktempdir()
+    mktempdir() do tmpdir
+        # ensure that we can prevent redacting data
+        fname = cd(tmpdir) do
+            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot(; redact_data=false))"`, String)
+        end
 
-    # ensure that we can prevent redacting data
-    fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot(; redact_data=false))"`, String)
+        @test isfile(fname)
+
+        sshot = read(fname, String)
+        @test sshot != ""
+        @test contains(sshot, "redact_this")
+
+        rm(fname)
+
+        # ensure that string data is redacted by default
+        fname = cd(tmpdir) do
+            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
+        end
+
+        @test isfile(fname)
+
+        sshot = read(fname, String)
+        @test sshot != ""
+        @test !contains(sshot, "redact_this")
+
+        rm(fname)
     end
 
-    @test isfile(fname)
-
-    sshot = read(fname, String)
-    @test sshot != ""
-    @test contains(sshot, "redact_this")
-
-    rm(fname)
-
-    # ensure that string data is redacted by default
-    fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
+    # a readonly current directory should fall back to saving in tempdir
+    # (the readonly bit on a directory doesn't prevent file creation on windows, and root bypasses it)
+    @static if !Sys.iswindows()
+        if ccall(:geteuid, Cuint, ()) != 0
+            @testset "default save when current directory is readonly" begin
+                mktempdir() do tmpdir
+                    fname = cd(tmpdir) do
+                        chmod(tmpdir, 0o555)
+                        try
+                            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+                        finally
+                            chmod(tmpdir, 0o777)
+                        end
+                    end
+                    @test !occursin(tmpdir, fname) # should not be in the readonly dir
+                    @test isfile(fname)
+                    open(fname) do fs
+                        @test readline(fs) != ""
+                    end
+                    rm(fname)
+                end
+            end
+        end
     end
 
-    @test isfile(fname)
+    @testset "save with custom dir" begin
+        mktempdir() do tmpdir
+            fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot(dir=ARGS[1]))" $tmpdir`, String)
+            @test occursin(tmpdir, fname)
+            @test isfile(fname)
+            open(fname) do fs
+                @test readline(fs) != ""
+            end
+        end
+    end
+end
 
-    sshot = read(fname, String)
-    @test sshot != ""
-    @test !contains(sshot, "redact_this")
+# the documented streaming workflow: stream the parts, assemble offline, clean up
+@testset "HeapSnapshot streaming workflow" begin
+    mktempdir() do tmpdir
+        prefix = joinpath(tmpdir, "streamed")
+        run(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; Profile.take_heap_snapshot(ARGS[1]; streaming=true)" $prefix`)
+        part_files = [string(prefix, ext) for ext in (".metadata.json", ".nodes", ".edges", ".strings")]
+        @test all(isfile, part_files)
 
-    rm(fname)
-    rm(tmpdir, force = true, recursive = true)
+        out_file = string(prefix, ".heapsnapshot")
+        Profile.HeapSnapshot.assemble_snapshot(prefix, out_file)
+        sshot = read(out_file, String)
+        @test sshot != ""
+
+        # structural check: the node/edge arrays must have the expected number of fields
+        node_count = parse(Int, match(r"\"node_count\":(\d+)", sshot).captures[1])
+        edge_count = parse(Int, match(r"\"edge_count\":(\d+)", sshot).captures[1])
+        @test node_count > 0
+        @test edge_count > 0
+        @test length(snapshot_array(sshot, "nodes")) == 7 * node_count
+        @test length(snapshot_array(sshot, "edges")) == 3 * edge_count
+
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
+        @test !any(isfile, part_files)
+    end
+end
+
+@testset "take_heap_snapshot to an IO stream" begin
+    mktempdir() do tmpdir
+        out_file = joinpath(tmpdir, "io_method.heapsnapshot")
+        run(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; open(io -> Profile.take_heap_snapshot(io, true), ARGS[1], \"w\")" $out_file`)
+        @test filesize(out_file) > 0
+    end
 end
 end
 

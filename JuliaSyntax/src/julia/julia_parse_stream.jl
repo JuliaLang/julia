@@ -275,8 +275,9 @@ function peek_dotted_op_token(ps)
 end
 
 function bump_dotted(ps, isdot, t, flags=EMPTY_FLAGS; emit_dot_node=false, remap_kind=K"None")
+    mark = position(ps)
     if isdot
-        dotmark = position(ps)
+        dotmark = mark
         bump(ps, TRIVIA_FLAG)
         if kind(t) == K"."
             # .. => DotsIdentifier-2
@@ -296,6 +297,7 @@ function bump_dotted(ps, isdot, t, flags=EMPTY_FLAGS; emit_dot_node=false, remap
             return pos
         end
     end
+    min_supported_wrapping_arithmetic_op(ps, mark, t)
     pos = bump(ps, flags, remap_kind=remap_kind)
     isdot && emit_dot_node && (pos = emit(ps, dotmark, K"."))
     return pos

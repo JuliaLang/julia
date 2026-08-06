@@ -80,7 +80,16 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    @test all(==(Bool), Base.return_types(isequal, Tuple{Any,Any}))
+    # Only assert the methods shipped with Base and the stdlibs: test files
+    # that ran earlier in the same process may have added their own isequal
+    # methods (e.g. arrayops' totally_not_five26034), and what those infer
+    # depends on the session's accumulated method tables, not on `missing`.
+    let ms = collect(methods(isequal, Tuple{Any,Any})),
+        rts = Base.return_types(isequal, Tuple{Any,Any})
+        @test all(zip(ms, rts)) do (m, rt)
+            Base.moduleroot(parentmodule(m)) === Main || rt === Bool
+        end
+    end
 end
 
 @testset "arithmetic operators" begin
@@ -100,12 +109,12 @@ end
         @test ismissing(f(missing, 1))
     end
 
-    @test ismissing(min(missing, missing))
-    @test ismissing(max(missing, missing))
-    for f in [min, max]
+    for (f, result) in ((min, missing), (max, missing), (minmax, (missing, missing)))
+        @test f(missing, missing) === result
+        @test f(missing) === result
         for arg in ["", "a", 1, -1.0, [2]]
-            @test ismissing(f(missing, arg))
-            @test ismissing(f(arg, missing))
+            @test f(missing, arg) === result
+            @test f(arg, missing) === result
         end
     end
 end

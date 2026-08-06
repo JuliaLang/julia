@@ -45,7 +45,12 @@ $(SRCCACHE)/gmp-$(GMP_VER)/gmp-alloc_overflow.patch-applied: $(SRCCACHE)/gmp-$(G
 		patch -p1 -f < $(SRCDIR)/patches/gmp-alloc_overflow.patch
 	echo 1 > $@
 
-$(SRCCACHE)/gmp-$(GMP_VER)/source-patched: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-alloc_overflow.patch-applied
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-mpz_realloc.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-alloc_overflow.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/gmp-mpz_realloc.patch
+	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/source-patched: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-mpz_realloc.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-patched
