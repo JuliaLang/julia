@@ -158,7 +158,7 @@ let
     Compiler.assign_parentchild!(child, outer)
 
     mresult = Compiler._schedule_edge_infer_task!(
-        outer, child, child.result, child_mi.def, nothing, false, false)
+        outer, child, child.result, child_mi.def, nothing, false, false, false)
     @test Compiler.doworkloop(interp, outer)
     @test isready(mresult)
     scheduled = mresult[]
@@ -223,7 +223,7 @@ let
 
     resize!(outer.callstack, 1)
     mresult = Compiler._schedule_edge_infer_task!(
-        outer, child, child.result, child_mi.def, nothing, false, false)
+        outer, child, child.result, child_mi.def, nothing, false, false, false)
 
     @test Compiler.typeinf(interp, outer)
     @test isready(mresult)
@@ -7722,8 +7722,7 @@ throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
     throwconditional(c, x)
 end == Bool
 
-# issue #61177: effects of a recursive `@inline` function must not degrade when
-# inference runs again over its cached, source-discarded CodeInstance
+# issue #61177: effects of a recursive `@inline` function must not degrade on re-inference
 f61177(@nospecialize x) = x isa Int ? @inline(f61177(x + 1)) + x : 0
 let eff = Base.infer_effects(f61177)
     @test Compiler.is_consistent(eff)

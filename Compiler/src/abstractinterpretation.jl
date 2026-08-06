@@ -686,10 +686,8 @@ function abstract_call_method(interp::AbstractInterpreter,
         infmi = frame_instance(sv′)
         if method === infmi.def
             if infmi.specTypes::Type == sig::Type
-                # this exact specialization is already being inferred on the stack:
-                # if regular inference of it has completed before, return the cached
-                # result right away; re-entering typeinf_edge would re-infer it with
-                # CACHE_MODE_LOCAL, recreating the cycle and poisoning its effects (#61177)
+                # if regular inference of this cycle has already finished, return the
+                # cached result before typeinf_edge can locally re-infer it
                 code = get(code_cache(interp), infmi, nothing)
                 if code isa CodeInstance
                     return return_cached_result(interp, method, code, nothing, sv,

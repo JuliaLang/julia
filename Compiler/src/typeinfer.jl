@@ -1191,8 +1191,6 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
         effects = Effects(effects; terminates=true)
     elseif edgecycle
         # Some sort of recursion was detected.
-        # n.b. `edgerecursed` is the result of the callstack walk done by
-        # `abstract_call_method`, which is where `edgecycle` was computed too
         if (edge !== nothing || call_result isa LocalInferenceResult) && !edgelimited && !edgerecursed
             # no `MethodInstance` cycles -- don't taint :terminate
         else
@@ -1306,10 +1304,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited, edgerecursed))
     end
     if !edgerecursed && !edgelimited
-        # the callstack walk in `abstract_call_method` already determined that this exact
-        # specialization is not currently being inferred anywhere on the callstack
-        # (`edgerecursed`), so there is no call cycle to resolve; this conclusion holds
-        # only if `atype` was not coarsened after that walk (`edgelimited`)
+        # the callstack walk proved there is no cycle to resolve, as long as
+        # `atype` was not coarsened to an on-stack specialization after that walk
         frame = false
     elseif !is_cached(caller) && frame_parent(caller) === nothing
         # this caller exists to return to the user
