@@ -2848,7 +2848,7 @@ AnyDict(
         catch
         end
         cancel_beep(s)
-        if buffer(s).size == 0
+        if buffer(s).size == 0 && !Base.generating_output()
             # ^C at an empty prompt: nothing to clear, so the press reaches
             # for still-running work from earlier evaluations. Two presses
             # in a row sweep it (with an announce in between) - which also
