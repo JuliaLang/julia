@@ -26,8 +26,8 @@ end
 
 function run_pg_size_test()
     page_size = @ccall jl_get_pg_size()::UInt64
-    # supported page sizes: 4KB and 16KB
-    @test page_size == (1 << 12) || page_size == (1 << 14)
+    # supported page sizes: 4KB, 16KB and 64KB
+    @test page_size == (1 << 12) || page_size == (1 << 14) || page_size == (1 << 16)
 end
 
 function issue_54275_alloc_string()

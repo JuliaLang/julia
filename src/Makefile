@@ -500,6 +500,10 @@ $(BUILDDIR)/llvm-alloc-opt.o $(BUILDDIR)/llvm-alloc-opt.dbg.obj: $(SRCDIR)/llvm-
 $(BUILDDIR)/llvm-cpufeatures.o $(BUILDDIR)/llvm-cpufeatures.dbg.obj: $(SRCDIR)/jitlayers.h
 $(BUILDDIR)/llvm-demote-float16.o $(BUILDDIR)/llvm-demote-float16.dbg.obj: $(SRCDIR)/jitlayers.h
 $(BUILDDIR)/llvm-final-gc-lowering.o $(BUILDDIR)/llvm-final-gc-lowering.dbg.obj: $(SRCDIR)/llvm-gc-interface-passes.h
+# The per-GC lowering implementations bake pool offsets and size classes into the
+# code they emit, so they must be rebuilt whenever those definitions change.
+$(BUILDDIR)/llvm-final-gc-lowering-stock.o $(BUILDDIR)/llvm-final-gc-lowering-stock.dbg.obj: $(SRCDIR)/llvm-gc-interface-passes.h
+$(BUILDDIR)/llvm-final-gc-lowering-mmtk.o $(BUILDDIR)/llvm-final-gc-lowering-mmtk.dbg.obj: $(SRCDIR)/llvm-gc-interface-passes.h
 $(BUILDDIR)/llvm-gc-invariant-verifier.o $(BUILDDIR)/llvm-gc-invariant-verifier.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-julia-licm.o $(BUILDDIR)/llvm-julia-licm.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-alloc-helpers.h $(SRCDIR)/llvm-pass-helpers.h
 $(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-gc-interface-passes.h

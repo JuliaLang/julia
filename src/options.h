@@ -19,8 +19,10 @@
 #define ARRAY_INLINE_NBYTES (2048*sizeof(void*))
 
 // Arrays at least this size will get larger alignment (JL_CACHE_BYTE_ALIGNMENT).
-// Must be bigger than GC_MAX_SZCLASS.
-#define ARRAY_CACHE_ALIGN_THRESHOLD 2048
+// Must be bigger than GC_MAX_SZCLASS: a pooled buffer is stored inline in its
+// Memory object and so only gets JL_SMALL_BYTE_ALIGNMENT, hence only buffers
+// too large to pool can promise cache alignment.
+#define ARRAY_CACHE_ALIGN_THRESHOLD 10240
 
 // codegen options ------------------------------------------------------------
 
@@ -76,8 +78,6 @@
 
 // pool allocator configuration options
 
-// GC_SMALL_PAGE allocates objects in 4k pages
-// #define GC_SMALL_PAGE
 
 
 // method dispatch profiling --------------------------------------------------
