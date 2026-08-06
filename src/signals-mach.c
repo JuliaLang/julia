@@ -847,17 +847,25 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
         pthread_mutex_unlock(&ctx_rewrite_lock);
         return;
     }
-    // The victim thread is suspended: validate the pending request against
-    // its frozen state and, on commit, redirect it into the abandon
-    // callback (which never returns). On refusal the requester observes the
-    // verdict and withdraws; the current task continues untouched.
-    if (jl_abandon_try_commit(ptls2)) {
-        host_thread_state_t state;
-        unsigned int count = MACH_THREAD_STATE_COUNT;
-        memset(&state, 0, sizeof(state));
-        if (thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count) == KERN_SUCCESS) {
-            jl_noreturn_call_in_state(&state, (void (*)(void))&jl_abandon_task_cb, 0, 0);
-            thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
+    // The victim thread is suspended: fetch its context *before* deciding
+    // anything, validate the pending request against its frozen state, and
+    // only then redirect it into the abandon callback (which never
+    // returns). A commit is rolled back to a refusal if the redirect
+    // cannot be completed - the callback is what publishes the abandoned
+    // task state, so an unredirected victim resumes untouched. On refusal
+    // the requester observes the verdict and withdraws.
+    host_thread_state_t state;
+    unsigned int count = MACH_THREAD_STATE_COUNT;
+    memset(&state, 0, sizeof(state));
+    if (thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count) != KERN_SUCCESS) {
+        // cannot redirect; leave the request pending for a retry/withdraw
+    }
+    else if (jl_abandon_try_commit(ptls2)) {
+        jl_noreturn_call_in_state(&state, (void (*)(void))&jl_abandon_task_cb, 0, 0);
+        if (thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count) != KERN_SUCCESS) {
+            // Roll the commit back: nothing observable was published yet
+            // (the task state is written by the callback).
+            jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_REFUSED);
         }
     }
     if (thread_resume(thread) != KERN_SUCCESS)

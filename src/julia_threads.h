@@ -230,6 +230,14 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *abandon_victim;
     // Target task for task abandonment
     struct _jl_task_t *abandon_to;
+    // Result value staged for the abandoned task (GC root while the slot is
+    // active): written into the victim's `result` by the delivery callback
+    // (raw - this slot carries the reference until the requester's
+    // write-barrier settle) - never into a still-running task.
+    struct _jl_value_t *abandon_result;
+    // Set while this thread is inside ctx_switch with the outgoing context
+    // only partially saved; abandonment delivery refuses such a thread.
+    volatile sig_atomic_t in_task_switch;
     struct _jl_timing_block_t *timing_stack;
     // This is the location of our copy_stack
     void *stackbase;

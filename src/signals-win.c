@@ -533,9 +533,11 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
         return;
     }
     // The victim thread is frozen: validate the pending request against its
-    // state and, on commit, redirect it into the abandon callback. On
-    // refusal the requester observes the verdict and withdraws; the current
-    // task continues untouched.
+    // state and, on commit, redirect it into the abandon callback. A commit
+    // is rolled back to a refusal if the redirect cannot be completed - the
+    // callback is what publishes the abandoned task state, so an
+    // unredirected victim resumes untouched. On refusal the requester
+    // observes the verdict and withdraws.
     if (jl_abandon_try_commit(ptls2)) {
         // Redirect the thread to call jl_abandon_task_cb (which never
         // returns) on a minimal fake frame.
@@ -555,7 +557,11 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
         ctxThread.Eip = (DWORD)&jl_abandon_task_cb;
 #endif
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-        SetThreadContext(ptls2->system_id, &ctxThread);
+        if (!SetThreadContext(ptls2->system_id, &ctxThread)) {
+            // Roll the commit back: nothing observable was published yet
+            // (the task state is written by the callback).
+            jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_REFUSED);
+        }
     }
     jl_thread_resume(tid);
     ReleaseSRWLockExclusive(&ctx_rewrite_lock);

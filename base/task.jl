@@ -277,36 +277,95 @@ Forcibly abandon task `t` and switch its thread to `next_task`, discarding
 `:abandoned` and it will never run another instruction.
 
 Returns `false` - with `t` untouched and still running - when the abandonment
-could not be performed safely: `t` was not (or no longer) current on its
-thread, the delivery found it holding *runtime* state that must not be
-discarded (runtime locks, a running finalizer or inhibited finalizers - which
-includes holding a `ReentrantLock` - or a signal-deferral region), another
-abandonment was already in flight for that thread, or delivery timed out.
-The validation happens on the target thread at the point it is actually
-stopped, so a `false` return is authoritative, not a racy guess; callers
-retry or fall back to freezing the task in place.
+could not be performed safely: `t` was not (or no longer) running on a
+thread, was found holding runtime state that must not be discarded (runtime
+locks, an in-flight finalizer or GC transition, a signal-deferral region),
+another abandonment was already in flight for that thread, or the delivery
+could not be completed in time (e.g. the victim blocks the delivery signal).
 
-This is used to implement `CANCEL_REQUEST_ABANDON_ALL` where a task needs to
-be stopped without waiting for it to reach a safe cancellation point.
+`next_task` must be a fresh, never-scheduled task; it takes over the
+victim's thread.
 
 !!! warning
-    This is a dangerous operation. The abandoned task may have acquired *user*
-    locks or other resources that will be leaked, potentially causing
-    deadlocks in future code. It should only be used as a last-resort method
-    to recover a system when tasks are unable to process cancellation.
+    Abandonment discards the victim's execution wherever it stands. Any
+    non-runtime resource it holds (locks, buffers, connections) is leaked.
+    This is a last-resort recovery primitive.
 
 !!! note
     The task must be currently running on a thread for this to have effect;
     use [`cancel!`](@ref) with `CANCEL_REQUEST_ABANDON_ALL` to also stop
     parked or queued tasks.
 """
-function unsafe_abandon!(t::Task, next_task::Task)
-    ok = ccall(:jl_abandon_task, Cint, (Any, Any), t, next_task) != 0
+unsafe_abandon!(t::Task, next_task::Task) =
+    unsafe_abandon!(t, next_task, CancellationRequest(0x4)) # CANCEL_REQUEST_ABANDON_ALL
+
+# The delivery paths settle the request slot from signal context, where
+# `uv_async_send` is the one legal wakeup: a process-global AsyncCondition
+# (created lazily, registered with the runtime, kept open for the process
+# lifetime) makes the requester-side waits event-driven. Spurious wakeups
+# (another thread's abandonment settling) re-check and re-park.
+const _abandon_notify_cond = Ref{Any}(nothing) # Union{Nothing, AsyncCondition}; untyped for bootstrap order
+const _abandon_notify_lock = ReentrantLock()
+function _abandon_notify!()
+    c = _abandon_notify_cond[]
+    c === nothing || return c
+    lock(_abandon_notify_lock; cancel=nothing)
+    try
+        c = _abandon_notify_cond[]
+        if c === nothing
+            c = AsyncCondition()
+            ccall(:jl_set_abandon_notify_handle, Cvoid, (Ptr{Cvoid},), c.handle)
+            _abandon_notify_cond[] = c
+        end
+        return c
+    finally
+        unlock(_abandon_notify_lock)
+    end
+end
+
+function unsafe_abandon!(t::Task, next_task::Task, @nospecialize(result))
+    tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any), t, next_task, result)
+    tid < 0 && return false
+    tid = tid % Int16
+    # Acquired (and, first time, created) only after the request is
+    # published with its first signal in flight: the victim may be a
+    # checkless spin blocking GC's stop-the-world, which any allocation
+    # here could otherwise join before the delivery frees it. A settle that
+    # races the condition's registration is repaired by the ticker's ping.
+    cond = _abandon_notify!()
+    # Deliveries coalesce with best-effort cancellation/preemption signals
+    # on the shared per-thread request slot, so a single send can be lost:
+    # periodically re-send - which also re-pings the wakeup condition, so
+    # the wait below never sleeps through a lost settle notification.
+    ticker = Timer(0.01; interval=0.01) do _
+        ccall(:jl_abandon_task_resend, Cvoid, (Int16,), tid)
+        ccall(:jl_abandon_notify_ping, Cvoid, ())
+    end
+    deadline = time_ns() + 2_000_000_000 # 2s: then withdraw rather than hang
+    ok = false
+    try
+        while true
+            verdict = ccall(:jl_abandon_task_poll, Cint, (Int16,), tid)
+            if verdict != 0
+                ok = verdict == 1
+                break
+            end
+            if time_ns() >= deadline &&
+               ccall(:jl_abandon_task_withdraw, Cint, (Int16,), tid) == 1
+                break # fully withdrawn; no abandonment happened
+            end
+            # (a lost withdraw race means a delivery took the request - the
+            # next poll returns its verdict)
+            wait(cond; cancel=nothing)
+        end
+    finally
+        close(ticker)
+    end
     if ok
-        # An abandoned task never goes through the regular task completion
-        # path, so wake up anyone waiting on it. (The waiters observe the
-        # already-stored abandoned state; they do not touch the task's stack.
-        # The root task's donenotify may be `nothing`.)
+        # A forcibly abandoned task never goes through the regular task
+        # completion path, so wake up anyone waiting on it. (The waiters
+        # observe the already-stored abandoned state; they do not touch the
+        # task's stack. The root task's donenotify may be `nothing`.)
         donenotify = t.donenotify
         if donenotify isa ThreadSynchronizer
             lock(donenotify)

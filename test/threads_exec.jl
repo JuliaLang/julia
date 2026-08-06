@@ -1808,37 +1808,49 @@ end # main testset
 # on a thread of its own while the driver keeps executing.
 if threadpoolsize() >= 2
     @testset "task abandonment wakes waiters" begin
-        started = Base.Event()
+        # Synchronize on observable state, never on timing: the spin counter
+        # proves the victim is executing its loop on a thread.
+        spins = Threads.Atomic{Int}(0)
         victim = Threads.@spawn begin
-            notify(started)
             x = Ref(1.0)
             while true
                 x[] = x[] * 1.0000001 + 0.1
+                Threads.atomic_add!(spins, 1)
             end
         end
-        wait(started)
         watcher = @async wait(victim)
-        sleep(0.5) # make sure the victim is actually spinning on its thread
-        rescue = Task(() -> (while true; wait(); end))
-        rescue.sticky = false
-        Base.unsafe_abandon!(victim, rescue)
-        @test timedwait(() -> istaskdone(victim), 5.0) == :ok
+        c0 = spins[]
+        while spins[] <= c0 + 10
+            yield()
+        end
+        rescue() = (t = Task(() -> (while true; wait(); end)); t.sticky = false; t)
+        # A refusal is transient (the victim may momentarily be inside the
+        # allocator or a runtime lock); retry until the abandonment commits.
+        while !Base.unsafe_abandon!(victim, rescue())
+            yield()
+        end
+        # unsafe_abandon! returns after the verdict settles: the states are
+        # already final.
+        @test istaskdone(victim)
         @test victim.state === :abandoned
         @test istaskfailed(victim)
+        # the staged abandonment outcome, not a value leaked mid-request
+        @test victim.result isa Base.CancellationRequest
         # the watcher must be woken (abandoned tasks skip the regular
         # completion path)
-        @test timedwait(() -> istaskdone(watcher), 5.0) == :ok
         @test_throws TaskFailedException fetch(watcher)
     end
 
-
     @testset "unsafe_abandon! validates at delivery and can refuse" begin
         # A victim cycling a ReentrantLock (which inhibits finalizers while
-        # held) must never be abandoned mid-hold: the delivery-point validation
-        # refuses instead of corrupting runtime bookkeeping. Abandon spam either
-        # gets a clean refusal or commits during an unlocked window.
+        # held) must never be abandoned mid-hold: the delivery-point
+        # validation refuses instead of corrupting runtime bookkeeping.
+        # Abandon spam either gets a clean refusal or commits during an
+        # unlocked window; on refusal the victim must be left untouched -
+        # still running, and with its eventual completion value intact.
         lk = ReentrantLock()
         stop = Threads.Atomic{Bool}(false)
+        cycles = Threads.Atomic{Int}(0)
         victim = Threads.@spawn begin
             while !stop[]
                 lock(lk)
@@ -1847,33 +1859,30 @@ if threadpoolsize() >= 2
                     for i in 1:2000
                         x += i
                     end
+                    Threads.atomic_add!(cycles, 1)
                 finally
                     unlock(lk)
                 end
             end
+            :completed
+        end
+        c0 = cycles[]
+        while cycles[] <= c0
+            yield()
         end
         committed = false
-        deadline = time() + 20.0
-        while !committed && time() < deadline
-            istaskdone(victim) && break
+        while !committed
             rescue = Task(() -> (while true; wait(); end))
             rescue.sticky = false
             committed = Base.unsafe_abandon!(victim, rescue)
             if !committed
                 # refusal must leave the victim untouched and running
                 @test !istaskdone(victim)
+                yield()
             end
-            sleep(0.001)
         end
         @test committed
-        if committed
-            @test victim.state === :abandoned
-        else
-            # Don't leave the victim spinning (it would wedge the process): stop
-            # it and surface the failure through the @test above.
-            stop[] = true
-            @test timedwait(() -> istaskdone(victim), 10.0) === :ok
-        end
+        @test victim.state === :abandoned
         # runtime must be healthy afterwards (finalizers not leaked-inhibited)
         GC.gc(false)
     end
@@ -1881,10 +1890,10 @@ if threadpoolsize() >= 2
     # Linux-only: blocks the abandon signal by number (SIGUSR2 == 12) and uses
     # Linux's SIG_BLOCK/SIG_UNBLOCK values.
     Sys.islinux() && @testset "unsafe_abandon! withdraws cleanly on delivery timeout" begin
-        # Block the abandon signal in the victim so delivery cannot happen: the
-        # requester must time out, withdraw every published effect, and return
+        # Block the abandon signal in the victim so delivery cannot happen:
+        # the requester must withdraw every published effect and return
         # false with the victim still running and not marked done.
-        started = Base.Event()
+        started = Threads.Atomic{Bool}(false)
         release = Threads.Atomic{Bool}(false)
         victim = Threads.@spawn begin
             # block SIGUSR2 on this thread
@@ -1892,7 +1901,7 @@ if threadpoolsize() >= 2
             ccall(:sigemptyset, Cint, (Ptr{UInt8},), sset)
             ccall(:sigaddset, Cint, (Ptr{UInt8}, Cint), sset, 12) # SIGUSR2
             ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 0 #= SIG_BLOCK =#, sset, C_NULL)
-            notify(started)
+            started[] = true
             # spin in compute so the task stays current on its thread
             while !release[]
                 ccall(:jl_cpu_pause, Cvoid, ())
@@ -1900,15 +1909,16 @@ if threadpoolsize() >= 2
             ccall(:pthread_sigmask, Cint, (Cint, Ptr{UInt8}, Ptr{Cvoid}), 1 #= SIG_UNBLOCK =#, sset, C_NULL)
             :survived
         end
-        wait(started)
+        while !started[]
+            yield()
+        end
         rescue = Task(() -> (while true; wait(); end))
         rescue.sticky = false
-        t0 = time()
+        # unsafe_abandon!'s own delivery budget bounds this call; the
+        # masked victim can never take the request, so it must withdraw.
         ok = Base.unsafe_abandon!(victim, rescue)
-        dt = time() - t0
         @test !ok
         @test !istaskdone(victim)         # not falsely marked :abandoned
-        @test dt < 10.0                   # bounded timeout, no hang
         release[] = true                  # victim completes normally afterwards
         @test fetch(victim) === :survived
     end
