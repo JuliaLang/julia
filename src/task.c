@@ -1691,7 +1691,10 @@ static void abandon_notify(jl_ptls_t ptls2) JL_NOTSAFEPOINT
 
 // Callback for task abandonment - the delivery redirects the victim thread
 // here (via jl_call_in_ctx / a rewritten thread context). Must not return.
-JL_NORETURN void jl_abandon_task_cb(void)
+// JL_CANSAFEPOINT: like the other context-entry callbacks, the victim
+// thread enters here in managed compute (gc_state == 0 is in the commit's
+// refusal set), holding the gc-unsafe region.
+JL_NORETURN void jl_abandon_task_cb(void) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
