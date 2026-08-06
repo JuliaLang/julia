@@ -460,6 +460,13 @@ function _cached_wait_entry(waiter::Task)
     return w
 end
 
+# A source slot's aux: the low byte is the minimum delivery severity (the
+# "floor"); the watcher bit marks a `wait(::CancellationToken)` slot, whose
+# claimed wake the walk *completes* with the request as a value instead of
+# interrupting the task - the cancellation is the event that wait is for.
+# Staged pre-arm like the floor (see below).
+const WAIT_AUX_WATCHER_BIT = UInt64(0x100)
+
 # Return the entry for a cancellable park of `waiter` governed by `src`,
 # with the minimum delivery severity staged on the source slot. Must run
 # before the arm: the cancellation walk reads the slot's aux only through
@@ -557,9 +564,16 @@ const _PRUNE_DEAD_THRESHOLD = UInt32(16)
 # threshold loses `_try_prune!`'s trylock to a concurrent walk, corpses that
 # walk had already passed remain counted here, and the next death must retry
 # the prune rather than let the count sail past the threshold forever.
+# The threshold scales with the (approximate) list length: a prune walk is
+# O(list), so tripping it every fixed number of deaths makes a mass fan-out
+# parking under one source - e.g. any large task tree governed by a shared
+# ambient token - quadratic in its waiter count. Requiring the dead to be a
+# constant fraction of the list amortizes each walk against the corpses it
+# collects.
 function _note_dead_registration!(src::CancellationTokenSource)
     dc = @atomic :monotonic src.dead_count += UInt32(1)
-    dc >= _PRUNE_DEAD_THRESHOLD && _try_prune!(src)
+    threshold = max(_PRUNE_DEAD_THRESHOLD, (@atomic :monotonic src.reg_count) >> 2)
+    dc >= threshold && _try_prune!(src)
     return nothing
 end
 
@@ -703,10 +717,14 @@ end
 # registrations of completed tasks and retired entries (the only removal in
 # the registry - a live task's registration is sticky and stays linked
 # between parks) and, when `sev` is nonzero, claim armed waiters eligible
-# at that severity. Returns the claimed tasks as a `(t, rest)` cons list;
-# the caller wakes them after releasing the walk lock.
+# at that severity. Returns the claimed tasks as a cons list of
+# `Pair{Tuple{Task, WaitEntry, UInt64}, Any}` cells (a Pair's declared
+# parameters make every cell one type - a tuple cons would mint a fresh
+# concrete tuple type per list depth); the caller wakes them after
+# releasing the walk lock.
 function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
     @atomic :monotonic node.dead_count = UInt32(0)
+    nlive = UInt32(0)
     towake = nothing
     prev = nothing # the predecessor's slot for `node`, once past the head
     # seq_cst: the S-ordered counterpart of a registrant's seq_cst push -
@@ -760,18 +778,25 @@ function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
             # spurious below-floor wake into a teardown re-park, which
             # handles it like any interruption of its wait
             # (conservatively, e.g. by detaching the awaited request).
+            aux = slot.aux
             if sev != 0x00 && (@atomic :sequentially_consistent t.waiting_on) === w &&
-                    slot.aux % UInt8 <= sev
+                    aux % UInt8 <= sev
                 if (@atomicreplace t.waiting_on w => nothing).success
-                    towake = ((t, w), towake)
+                    towake = Pair{Tuple{Task, WaitEntry, UInt64}, Any}((t, w, aux), towake)
                 end
                 # a lost claim: a completion or interrupter won the race;
                 # the waiter resumes through that wake
             end
+            nlive += UInt32(1)
             prev = slot
         end
         w = wnext
     end
+    # Resync the approximate list length (see _note_dead_registration!'s
+    # scaled prune threshold) to what this walk left linked. Entries kept
+    # only because their head-unlink CAS lost count as live: conservative,
+    # and the next walk resyncs.
+    @atomic :monotonic node.reg_count = nlive
     return towake
 end
 
@@ -801,7 +826,17 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
     # cleanup (or a later notify) lazily unlinks it.
     _unlock_walk(node)
     while towake !== nothing
-        ((t, w), towake) = towake::Tuple{Tuple{Task, WaitEntry}, Any}
+        towake = towake::Pair{Tuple{Task, WaitEntry, UInt64}, Any}
+        (t, w, aux) = towake.first
+        towake = towake.second
+        if aux & WAIT_AUX_WATCHER_BIT != 0x00
+            # A watcher (`wait(::CancellationToken)`): this cancellation is
+            # the event its wait completes on, so it is woken with the
+            # request as a *value* - a watcher observes this source but
+            # does not run under it.
+            deliver_claimed_value_wake!(t, w, creq)
+            continue
+        end
         # N.B.: an ABANDON_ALL request also delivers by interruption for
         # now (freezing the task in place is not yet implemented). The
         # delivery is claim-scoped - the claim above is the wake ticket, so

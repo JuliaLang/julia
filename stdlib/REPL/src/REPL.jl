@@ -471,8 +471,15 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
             # exit flag
             break
         end
+        # Run the evaluation in the scope of a fresh cancellation source
+        # linked under the session source (see the session tree in
+        # base/client.jl): the double-^C prompt gesture sweeps every
+        # still-running task any evaluation has spawned by cancelling the
+        # session source, without a way to name each one individually.
+        evaltok = Base.CancellationToken(Base.new_evaluation_cancel_source!())
         # Mark this task as the foreground task while running user work, so that
         # components like the precompile keyboard menu know who owns interactive stdin.
+        Base.ScopedValues.@with Base.CANCEL_TOKEN => evaltok begin
         Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
             f = ast_or_func
             try
@@ -484,6 +491,7 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
         else
             ast = ast_or_func
             eval_user_input(ast, backend, get_module())
+        end
         end
     end
     return nothing

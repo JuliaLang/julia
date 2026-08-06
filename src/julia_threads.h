@@ -213,6 +213,38 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
+    // Task-abandonment handshake (see jl_abandon_task in task.c). One
+    // requester at a time owns the slot; delivery validates the victim's
+    // state at the point the thread is actually stopped and commits or
+    // refuses; a timed-out requester withdraws by CAS, arbitrating against
+    // a late delivery. `abandon_victim` and `abandon_to` are GC roots
+    // (thread scan) while the slot is active.
+#define JL_ABANDON_IDLE     0 // slot free
+#define JL_ABANDON_SETUP    1 // requester is writing the request
+#define JL_ABANDON_PENDING  2 // request published, delivery may take it
+#define JL_ABANDON_TAKEN    3 // delivery is validating
+#define JL_ABANDON_DONE     4 // committed; the callback is consuming the slot
+#define JL_ABANDON_REFUSED  5 // victim not abandonable; requester settles
+#define JL_ABANDON_FINISHED 6 // callback consumed the slot; requester settles
+    _Atomic(uint8_t) abandon_state;
+    struct _jl_task_t *abandon_victim;
+    // Target task for task abandonment
+    struct _jl_task_t *abandon_to;
+    // Result value staged for the abandoned task (GC root while the slot is
+    // active): written into the victim's `result` by the delivery callback
+    // (raw - this slot carries the reference until the requester's
+    // write-barrier settle) - never into a still-running task.
+    struct _jl_value_t *abandon_result;
+    // Requester's wakeup handle (may be NULL for polling requesters), staged
+    // with the request and pinged by the delivery paths when the request
+    // settles. uv_async_send is async-signal-safe, and its latched
+    // trigger is consumed by exactly one waiter - the slot's single
+    // requester. The handle's lifetime is the requester's problem: it
+    // outlives the request (the slot state machine brackets every ping).
+    uv_async_t *abandon_notify;
+    // Set while this thread is inside ctx_switch with the outgoing context
+    // only partially saved; abandonment delivery refuses such a thread.
+    volatile sig_atomic_t in_task_switch;
     struct _jl_timing_block_t *timing_stack;
     // This is the location of our copy_stack
     void *stackbase;
@@ -226,6 +258,14 @@ typedef struct _jl_tls_states_t {
     struct _jl_bt_element_t *profiling_bt_buffer;
     // Atomically set by the sender, reset by the handler.
     volatile _Atomic(sig_atomic_t) signal_request; // TODO: no actual reason for this to be _Atomic
+    // Fire-and-forget delivery requests, as a bitmask so that concurrent
+    // senders (and the suspend handshake occupying `signal_request`) can
+    // never coalesce a request away: the handler consumes and services
+    // every set bit on each delivery, so a single signal suffices.
+#define JL_SIGNAL_REQ_CANCEL  0x01
+#define JL_SIGNAL_REQ_PREEMPT 0x02
+#define JL_SIGNAL_REQ_ABANDON 0x04
+    _Atomic(uint8_t) signal_request_flags;
     // Allow the sigint to be raised asynchronously
     // this is limited to the few places we do synchronous IO
     // we can make this more general (similar to defer_signal) if necessary
@@ -359,6 +399,11 @@ struct _jl_cancel_source_t {
     // threshold triggers a pruning walk. Approximate (relaxed); walks reset
     // it.
     _Atomic(uint32_t) dead_count;
+    // Approximate length of the waiter list: incremented per registration
+    // push, resynced to the surviving count by each walk. The pruning
+    // threshold scales with it (a fixed threshold makes a mass fan-out's
+    // prune walks quadratic in the number of parked waiters).
+    _Atomic(uint32_t) reg_count;
     // jl_cancel_parent_link_t links[nparents];  (see jl_cancel_source_links)
 };
 

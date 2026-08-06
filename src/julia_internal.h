@@ -1398,6 +1398,9 @@ void jl_safepoint_defer_sigint(void) JL_NOTSAFEPOINT;
 // to be delivered.
 int jl_safepoint_consume_sigint(void) JL_CANSAFEPOINT;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
+int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)
@@ -2247,7 +2250,7 @@ JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim
 JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) JL_CANSAFEPOINT;
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        ios_t *z, ios_t *s, jl_emission_params_t *params);
+        ios_t *z, uint32_t checksum, const char *unpack_func, jl_emission_params_t *params);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, size_t *num_els, void **gvs);
 JL_DLLIMPORT void jl_get_llvm_gv_inits(void *native_code, size_t *num_els, void **inits);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,

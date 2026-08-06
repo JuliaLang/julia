@@ -620,13 +620,11 @@ static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *c
     }
     signals_inflight++;
     sig_atomic_t request = jl_atomic_exchange(&ptls2->signal_request, 1);
-    // A parked best-effort cancellation request (5) may occupy the slot
-    // indefinitely - its victim may never consume it (e.g. a thread with
-    // SIGUSR2 blocked) - and its sender tolerates a lost delivery (recovery
-    // is level-triggered at the task's next cancellation point), so the
-    // suspend handshake may displace it. The handshake states 1-4/-1 cannot
-    // appear here: those settle under in_signal_lock, which we hold.
-    assert(request == 0 || request == -1 || request == 5 || request == 6);
+    // The slot carries only suspend-handshake states: fire-and-forget
+    // requests (cancel/preempt/abandon) travel in the signal_request_flags
+    // bitmask and cannot occupy it. The handshake states 1-4 settle under
+    // in_signal_lock, which we hold, so only idle/processing can appear.
+    assert(request == 0 || request == -1);
     request = 1;
     err = pthread_kill(ptls2->system_id, SIGUSR2);
     if (err == 0) {
@@ -677,7 +675,8 @@ void jl_thread_resume(int tid)
 // available: longjmp to a compiled reset point (see usr2_handler request 5).
 static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
 {
-    sig_atomic_t request = reset_code == JL_RESET_CODE_PREEMPT ? 6 : 5;
+    uint8_t bit = reset_code == JL_RESET_CODE_PREEMPT ? JL_SIGNAL_REQ_PREEMPT
+                                                      : JL_SIGNAL_REQ_CANCEL;
     if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
         return;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -703,17 +702,33 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
         return;
     }
     // This request is best-effort and produces no acknowledgment token (see
-    // the handler): do not count it in signals_inflight, and never clobber a
-    // request that is already pending or being processed - blindly storing
-    // over an in-flight suspend handshake would lose it; our caller retries
-    // delivery anyway.
-    sig_atomic_t expected = 0;
-    if (jl_atomic_cmpswap(&ptls2->signal_request, &expected, request))
-        pthread_kill(ptls2->system_id, SIGUSR2);
+    // the handler): do not count it in signals_inflight. The request bit
+    // cannot be coalesced away - the handler consumes the whole mask on
+    // every delivery, whichever request the signal was sent for.
+    jl_atomic_fetch_or(&ptls2->signal_request_flags, bit);
+    pthread_kill(ptls2->system_id, SIGUSR2);
     pthread_mutex_unlock(&in_signal_lock);
 }
 
 
+
+// Send a signal to the specified thread to abandon the current task.
+// The target task to switch to must already be published in
+// ptls2->abandon_to (state JL_ABANDON_PENDING; see jl_abandon_task_request).
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    pthread_mutex_lock(&in_signal_lock);
+    // Like the cancellation sender, this produces no acknowledgment token;
+    // the request bit cannot be coalesced away (see jl_send_reset_signal).
+    // The requester's verdict is the abandon slot's own settle - a single
+    // delivery either commits or refuses there.
+    jl_atomic_fetch_or(&ptls2->signal_request_flags, JL_SIGNAL_REQ_ABANDON);
+    pthread_kill(ptls2->system_id, SIGUSR2);
+    pthread_mutex_unlock(&in_signal_lock);
+}
 
 // Throw jl_interrupt_exception if the master thread is in a signal async region
 // or if SIGINT happens too often.
@@ -776,71 +791,12 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 //     JL_RESET_CODE_PREEMPT setjmp return and yields cooperatively. Never
 //     delivered while a handler context is published: its span (e.g. a
 //     protected allocator) must not be unwound for a mere yield request.
-void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
+// Deliver pending cancel/preempt requests (the fire-and-forget bits of
+// signal_request_flags) to the current task's published asynchronously
+// interruptible regions, if any.
+static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
+                               int sig, void *ctx)
 {
-    jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL)
-        return;
-    jl_ptls_t ptls = ct->ptls;
-    if (ptls == NULL)
-        return;
-    int errno_save = errno;
-    sig_atomic_t request = jl_atomic_load(&ptls->signal_request);
-    if (request == 0)
-        return;
-    if (!jl_atomic_cmpswap(&ptls->signal_request, &request, -1))
-        return;
-    if (request == 1) {
-        usr2_signal_context = jl_to_bt_context(ctx);
-        // acknowledge that we saw the signal_request and set usr2_signal_context
-        int err;
-        eventfd_t got = 1;
-        err = write(signal_caught_cond, &got, sizeof(eventfd_t));
-        if (err != sizeof(eventfd_t)) abort();
-        sig_atomic_t processing = -1;
-        jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
-        // wait for exit signal
-        do {
-            err = read(exit_signal_cond, &got, sizeof(eventfd_t));
-        } while (err == -1 && errno == EINTR);
-        if (err != sizeof(eventfd_t)) abort();
-        assert(got == 1);
-        request = jl_atomic_exchange(&ptls->signal_request, -1);
-        usr2_signal_context = NULL;
-        assert(request == 2 || request == 3 || request == 4);
-    }
-    if (request != 5 && request != 6) {
-        // Acknowledge the request to its synchronously waiting sender. The
-        // cancellation sender (request 5) is fire-and-forget and never
-        // consumes the token; writing it would poison the next suspend
-        // handshake with a stale acknowledgment.
-        int err;
-        eventfd_t got = 1;
-        err = write(signal_caught_cond, &got, sizeof(eventfd_t));
-        if (err != sizeof(eventfd_t)) abort();
-    }
-    sig_atomic_t processing = -1;
-    jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
-    if (request == 2) {
-        int force = jl_check_force_sigint();
-        jl_jmp_buf *saferestore = jl_get_safe_restore();
-        int can_throw = saferestore != NULL || ct->eh != NULL;
-        if (can_throw && (force || (!ptls->defer_signal && ptls->io_wait))) {
-            jl_safepoint_consume_sigint();
-            if (force)
-                jl_safe_printf("WARNING: Force throwing a SIGINT\n");
-            // Force a throw
-            jl_clear_force_sigint();
-            if (saferestore) // restarting jl_ or profile
-                jl_longjmp_in_ctx(sig, ctx, *saferestore, 1);
-            else
-                jl_throw_in_ctx(ct, jl_interrupt_exception, sig, ctx);
-        }
-    }
-    else if (request == 3) {
-        jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
-    }
-    else if (request == 5 || request == 6) {
         // Deliver a pending cancellation (5) or preempt (6) shootdown to
         // the published context(s) of the current task's asynchronously
         // interruptible regions, if any. N.B.: these are only ever consumed
@@ -891,10 +847,14 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
             // a foreign call reached through a reset-safe callee) may be
             // raced by a concurrent stop-the-world, and a longjmp back into
             // Julia code would break that protocol.
-            int reset_code = request == 6 ? JL_RESET_CODE_PREEMPT : JL_RESET_CODE_CANCEL;
+            // A deliverable cancellation takes precedence over a
+            // coincident preemption (the preempt request byte stays set and
+            // is consumed at the reset point's own check).
+            int reset_code = (reqflags & JL_SIGNAL_REQ_CANCEL) && bound_cancelled ?
+                JL_RESET_CODE_CANCEL : JL_RESET_CODE_PREEMPT;
             jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct->reset_ctx);
             if (reset_ctx != NULL && reset_ctx->sp != 0 &&
-                (request == 6 || bound_cancelled) &&
+                ((reqflags & JL_SIGNAL_REQ_PREEMPT) || bound_cancelled) &&
                 jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE) {
                 // Abandon the interrupted register state and longjmp to the
                 // reset point, whose re-executed check observes the
@@ -914,6 +874,96 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
                 jl_longjmp_in_ctx(sig, ctx, reset_ctx->mctx, reset_code);
             }
         }
+    }
+
+void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL)
+        return;
+    jl_ptls_t ptls = ct->ptls;
+    if (ptls == NULL)
+        return;
+    int errno_save = errno;
+    // Fire-and-forget requests (cancel/preempt/abandon) travel as bits and
+    // are consumed wholesale, first: any of the value-slot paths below may
+    // never return (a forced throw, an exit callback), and with the bits
+    // consumed here no request can be stranded without a signal to carry
+    // it. An abandonment commit does not return; the cancel/preempt bits
+    // die with the abandoned task, which is their level-triggered
+    // delivery semantics anyway.
+    uint8_t reqflags = jl_atomic_exchange(&ptls->signal_request_flags, 0);
+    if (reqflags & JL_SIGNAL_REQ_ABANDON) {
+        // Task abandonment: validate the pending request against this
+        // thread's actual state (we ARE the victim thread, stopped in this
+        // handler, so nothing can change under the check) and, on commit,
+        // redirect into the abandon callback (which must not return) to
+        // switch to ptls->abandon_to. On refusal the requester observes the
+        // verdict and withdraws; the current task continues untouched.
+        if (jl_abandon_try_commit(ptls)) {
+            jl_call_in_ctx(ptls, jl_abandon_task_cb, sig, ctx);
+        }
+    }
+    if (reqflags & (JL_SIGNAL_REQ_CANCEL | JL_SIGNAL_REQ_PREEMPT)) {
+        usr2_deliver_reset(ct, ptls, reqflags, sig, ctx);
+    }
+    sig_atomic_t request = jl_atomic_load(&ptls->signal_request);
+    if (request == 0) {
+        errno = errno_save;
+        return;
+    }
+    if (!jl_atomic_cmpswap(&ptls->signal_request, &request, -1)) {
+        errno = errno_save;
+        return;
+    }
+    if (request == 1) {
+        usr2_signal_context = jl_to_bt_context(ctx);
+        // acknowledge that we saw the signal_request and set usr2_signal_context
+        int err;
+        eventfd_t got = 1;
+        err = write(signal_caught_cond, &got, sizeof(eventfd_t));
+        if (err != sizeof(eventfd_t)) abort();
+        sig_atomic_t processing = -1;
+        jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
+        // wait for exit signal
+        do {
+            err = read(exit_signal_cond, &got, sizeof(eventfd_t));
+        } while (err == -1 && errno == EINTR);
+        if (err != sizeof(eventfd_t)) abort();
+        assert(got == 1);
+        request = jl_atomic_exchange(&ptls->signal_request, -1);
+        usr2_signal_context = NULL;
+        assert(request == 2 || request == 3 || request == 4);
+    }
+    {
+        // Acknowledge the request to its synchronously waiting sender (the
+        // slot carries only the suspend handshake now; fire-and-forget
+        // requests travel in the flags bitmask consumed above).
+        int err;
+        eventfd_t got = 1;
+        err = write(signal_caught_cond, &got, sizeof(eventfd_t));
+        if (err != sizeof(eventfd_t)) abort();
+    }
+    sig_atomic_t processing = -1;
+    jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
+    if (request == 2) {
+        int force = jl_check_force_sigint();
+        jl_jmp_buf *saferestore = jl_get_safe_restore();
+        int can_throw = saferestore != NULL || ct->eh != NULL;
+        if (can_throw && (force || (!ptls->defer_signal && ptls->io_wait))) {
+            jl_safepoint_consume_sigint();
+            if (force)
+                jl_safe_printf("WARNING: Force throwing a SIGINT\n");
+            // Force a throw
+            jl_clear_force_sigint();
+            if (saferestore) // restarting jl_ or profile
+                jl_longjmp_in_ctx(sig, ctx, *saferestore, 1);
+            else
+                jl_throw_in_ctx(ct, jl_interrupt_exception, sig, ctx);
+        }
+    }
+    else if (request == 3) {
+        jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
     }
     errno = errno_save;
 }

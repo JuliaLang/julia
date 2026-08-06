@@ -128,6 +128,8 @@ New library features
   along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
   etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
   returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
+* Calls to `wait` on one-shot `Timer`s that have already triggered no longer throw `EOFError`. Previously
+  only the first `wait` returned and subsequent `wait` calls would throw ([#62539])
 * When the display height is too small to show any array entries, the `text/plain` array display
   (used e.g. by the REPL and when logging values with `@info` etc.) now shows as many entries as
   fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
@@ -155,6 +157,11 @@ Standard library changes
 #### Random
 
 #### REPL
+
+* Pressing `^C` twice at an empty `julia>` prompt now cancels all still-running
+  work started by earlier evaluations (e.g. a runaway `@async` task spewing
+  output): each REPL evaluation runs under its own cancellation source, linked
+  under one session-level source that the repeated press cancels ([#47839]).
 
 #### Test
 

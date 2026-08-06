@@ -3024,6 +3024,21 @@ static void gc_queue_thread_local(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOT
         gc_try_claim_and_push(mq, task, NULL);
         gc_heap_snapshot_record_root((jl_value_t*)task, "next task");
     }
+    task = ptls2->abandon_victim;
+    if (task != NULL) {
+        gc_try_claim_and_push(mq, task, NULL);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "abandon victim");
+    }
+    task = ptls2->abandon_to;
+    if (task != NULL) {
+        gc_try_claim_and_push(mq, task, NULL);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "abandon target");
+    }
+    jl_value_t *abandon_result = ptls2->abandon_result;
+    if (abandon_result != NULL) {
+        gc_try_claim_and_push(mq, abandon_result, NULL);
+        gc_heap_snapshot_record_root(abandon_result, "abandon result");
+    }
     task = ptls2->previous_task;
     if (task != NULL) {
         gc_try_claim_and_push(mq, task, NULL);
