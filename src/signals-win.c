@@ -27,22 +27,6 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 
-static void jl_try_throw_sigint(void)
-{
-    jl_task_t *ct = jl_current_task;
-    jl_safepoint_enable_sigint();
-    jl_wake_libuv();
-    int force = jl_check_force_sigint();
-    if (force || (!ct->ptls->defer_signal && ct->ptls->io_wait)) {
-        jl_safepoint_consume_sigint();
-        if (force)
-            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
-        // Force a throw
-        jl_clear_force_sigint();
-        jl_throw(jl_interrupt_exception);
-    }
-}
-
 void __cdecl crt_sig_handler(int sig, int num)
 {
     CONTEXT Context;
@@ -67,7 +51,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         if (!jl_ignore_sigint()) {
             if (exit_on_sigint)
                 jl_exit(130); // 128 + SIGINT
-            jl_try_throw_sigint();
+            jl_sigint_request_cancellation();
         }
         break;
     default: // SIGSEGV, SIGTERM, SIGILL, SIGABRT
@@ -188,7 +172,8 @@ static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread
 HANDLE hMainThread = INVALID_HANDLE_VALUE;
 
 // Serializes every path that suspends a thread and rewrites its context
-// (jl_send_cancellation_signal on any thread, and jl_try_deliver_sigint) for
+// (jl_send_cancellation_signal and jl_send_abandon_signal on any thread,
+// and jl_try_deliver_sigint) for
 // its complete suspend/get/set/resume sequence: two rewriters working from
 // the same suspended snapshot would install conflicting continuations and
 // task chains. (The profiler does not need it: it only reads contexts, and
@@ -347,9 +332,18 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // its own handler context still published.
     if (GetThreadId(ptls2->system_id) == GetCurrentThreadId())
         return;
+    // Exception to the published-region requirement: while a ^C dispatch is
+    // pending, a cancellation send also reaches a region-less task carrying
+    // a token binding - the episode-propagation step below needs no
+    // published region.
     if (jl_atomic_load_relaxed(&ct2->reset_ctx) == NULL &&
-        jl_atomic_load_relaxed(&ct2->cancel_handler_ctx) == NULL)
-        return;
+        jl_atomic_load_relaxed(&ct2->cancel_handler_ctx) == NULL) {
+        bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+        if (reset_code != JL_RESET_CODE_CANCEL ||
+            bound == NULL || bound == jl_nothing ||
+            !jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+            return;
+    }
     AcquireSRWLockExclusive(&ctx_rewrite_lock);
     // The freeze must complete before any state is examined: validating (or
     // consuming) the published context while the victim still runs races
@@ -377,6 +371,16 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     if (ct2 == NULL)
         goto resume;
+    // A pending ^C episode reaches scoped descendant sources through the
+    // julia-side listener's walk; when the listener is starved, carry it
+    // into the frozen task's own bound source here so its next cancellation
+    // point sees it (the flavor gates below re-read the source state).
+    if (reset_code == JL_RESET_CODE_CANCEL) {
+        bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+        if (bound != NULL && bound != jl_nothing &&
+            jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+            jl_sigint_propagate_to_bound(bound);
+    }
     hctx = jl_atomic_load_acquire(&ct2->cancel_handler_ctx);
     if (hctx != NULL) {
         // Handler flavor: a published foreign-call cancellation-handler
@@ -580,7 +584,16 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     if (!jl_ignore_sigint()) {
         if (exit_on_sigint)
             jl_exit(128 + sig); // 128 + SIGINT
-        jl_try_deliver_sigint();
+        if (sig == SIGINT) {
+            // Deliver the press through the cancellation system: mark the
+            // ^C episode source cancelled directly and notify the sigint
+            // listener task, which performs the remaining Julia-side
+            // delivery (see jl_sigint_request_cancellation).
+            jl_sigint_request_cancellation();
+        }
+        else {
+            jl_try_deliver_sigint();
+        }
     }
     return 1;
 }

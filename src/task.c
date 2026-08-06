@@ -1678,6 +1678,41 @@ JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
 }
 
 
+// Whether `src` is an ancestor of (or equal to) `node` in the cancellation
+// DAG. `parent` link entries are const after construction, so the walk needs
+// no locks. Multi-parent ("linked") sources make this a DAG search; the work
+// is bounded so that a pathological diamond lattice cannot stall the
+// canceller. On exhaustion (deep chains, wide fan-in) the node is
+// conservatively treated as a MEMBER: the consumer sends a best-effort
+// interruption signal whose delivery re-checks the task's own bound source,
+// so over-approximating is harmless, while a miss would strand a running
+// computation whose code has no later cancellation point.
+int jl_cancel_source_subtree_member(jl_value_t *node, jl_value_t *src) JL_NOTSAFEPOINT
+{
+    jl_value_t *stack[32];
+    size_t top = 0;
+    int steps = 0;
+    while (node != NULL && node != jl_nothing) {
+        if (node == src)
+            return 1;
+        if (++steps >= 256)
+            return 1; // budget exhausted: conservatively a member
+        jl_cancel_source_t *cs = (jl_cancel_source_t*)node;
+        size_t np = cs->nparents;
+        jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
+        for (size_t i = 1; i < np; i++) {
+            if (top < sizeof(stack) / sizeof(stack[0]))
+                stack[top++] = (jl_value_t*)links[i].parent;
+            else
+                return 1; // dropped a parent edge: conservatively a member
+        }
+        node = np == 0 ? NULL : (jl_value_t*)links[0].parent;
+        if ((node == NULL || node == jl_nothing) && top > 0)
+            node = stack[--top];
+    }
+    return 0;
+}
+
 // Ping the requester's staged wakeup handle (if any) after settling its
 // request. The delivery paths run in signal context (or with the victim
 // suspended), where uv_async_send is the one legal wakeup; the handle is

@@ -550,8 +550,11 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
             jl_safepoint_defer_sigint();
         }
         else if (jl_safepoint_consume_sigint()) {
+            // The old ^C mechanism threw an InterruptException here; SIGINT
+            // now cancels the ^C episode source instead (see
+            // jl_sigint_request_cancellation), and the safepoint page only
+            // needs to be disarmed.
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, context);
         }
         return;
     }
@@ -670,6 +673,20 @@ void jl_thread_resume(int tid)
     pthread_mutex_unlock(&in_signal_lock);
 }
 
+// Whether a request-5/6 signal could accomplish anything for `ct` (see the
+// gate rationale at the caller).
+static int jl_reset_signal_would_deliver(jl_task_t *ct, int reset_code) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&ct->reset_ctx) != NULL ||
+        jl_atomic_load_relaxed(&ct->cancel_handler_ctx) != NULL)
+        return 1;
+    if (reset_code != JL_RESET_CODE_CANCEL)
+        return 0;
+    jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    return bound != NULL && bound != jl_nothing &&
+        jl_atomic_load_relaxed(&jl_sigint_dispatch_pending);
+}
+
 // Send a signal to the specified thread to deliver a pending cancellation of
 // its current task's bound token source to the task's published reset_ctx, if
 // available: longjmp to a compiled reset point (see usr2_handler request 5).
@@ -685,10 +702,13 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // Only send if the task has an interruptible-region context published
     // (a compiled reset point, or a foreign call with a cancellation
     // handler) - a purely polling victim between cancellation points never
-    // has one, and recovers level-triggered at its next check.
+    // has one, and recovers level-triggered at its next check. Exception:
+    // while a ^C dispatch is pending, a cancellation send also reaches a
+    // region-less task that carries a token binding - the handler's
+    // episode-propagation step (see jl_sigint_propagate_to_bound) needs no
+    // published region.
     jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct == NULL || (jl_atomic_load_relaxed(&ct->reset_ctx) == NULL &&
-                       jl_atomic_load_relaxed(&ct->cancel_handler_ctx) == NULL))
+    if (ct == NULL || !jl_reset_signal_would_deliver(ct, reset_code))
         return;
     pthread_mutex_lock(&in_signal_lock);
     // Re-check liveness under the lock: thread teardown clears current_task
@@ -696,8 +716,7 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     // non-NULL read here guarantees the thread has not exited and its
     // pthread id is still valid to signal.
     ct = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct == NULL || (jl_atomic_load_relaxed(&ct->reset_ctx) == NULL &&
-                       jl_atomic_load_relaxed(&ct->cancel_handler_ctx) == NULL)) {
+    if (ct == NULL || !jl_reset_signal_would_deliver(ct, reset_code)) {
         pthread_mutex_unlock(&in_signal_lock);
         return;
     }
@@ -726,21 +745,6 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     // The requester's verdict is the abandon slot's own settle - a single
     // delivery either commits or refuses there.
     jl_atomic_fetch_or(&ptls2->signal_request_flags, JL_SIGNAL_REQ_ABANDON);
-    pthread_kill(ptls2->system_id, SIGUSR2);
-    pthread_mutex_unlock(&in_signal_lock);
-}
-
-// Throw jl_interrupt_exception if the master thread is in a signal async region
-// or if SIGINT happens too often.
-static void jl_try_deliver_sigint(void) JL_NOTSAFEPOINT
-{
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    jl_safepoint_enable_sigint();
-    jl_wake_libuv();
-    pthread_mutex_lock(&in_signal_lock);
-    signals_inflight++;
-    jl_atomic_store_release(&ptls2->signal_request, 2);
-    // This also makes sure `sleep` is aborted.
     pthread_kill(ptls2->system_id, SIGUSR2);
     pthread_mutex_unlock(&in_signal_lock);
 }
@@ -815,6 +819,12 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
         jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
         int bound_cancelled = bound != NULL && bound != jl_nothing &&
             jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) != 0;
+        // A pending ^C episode reaches scoped descendant sources through the
+        // julia-side listener's walk; when the listener is starved (e.g. a
+        // single-threaded process spinning in this task), carry it into the
+        // task's own bound source here so the next cancellation point sees it.
+        if (!bound_cancelled && (reqflags & JL_SIGNAL_REQ_CANCEL))
+            bound_cancelled = jl_sigint_propagate_to_bound(bound);
         jl_cancel_handler_ctx_t *hctx = jl_atomic_load_acquire(&ct->cancel_handler_ctx);
         if (hctx != NULL) {
             // Handler flavor: run the registered cancellation handler right
@@ -1330,7 +1340,12 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 critical = 1;
             }
             else {
-                jl_try_deliver_sigint();
+                // Deliver the press through the cancellation system: mark the
+                // ^C episode source cancelled directly (async-signal-safely)
+                // and notify the sigint listener task, which performs the
+                // remaining Julia-side delivery (see
+                // jl_sigint_request_cancellation).
+                jl_sigint_request_cancellation();
                 continue;
             }
         }

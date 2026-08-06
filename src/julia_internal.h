@@ -949,6 +949,11 @@ JL_CALLABLE(jl_f_tuple) JL_CANSAFEPOINT;
 void jl_install_default_signal_handlers(void) JL_NOTSAFEPOINT;
 void restore_signals(void) JL_NOTSAFEPOINT;
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+int jl_cancel_source_subtree_member(jl_value_t *node, jl_value_t *src) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
+extern _Atomic(int) jl_sigint_dispatch_pending;
+JL_DLLEXPORT void jl_set_sigint_foreground_task(jl_value_t *t) JL_NOTSAFEPOINT;
+jl_task_t *jl_get_sigint_foreground_task(void) JL_NOTSAFEPOINT;
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;

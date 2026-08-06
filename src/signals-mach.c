@@ -309,17 +309,6 @@ static void jl_throw_in_state(jl_ptls_t ptls2, host_thread_state_t *state, jl_va
     }
 }
 
-static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *exception)
-{
-    host_thread_state_t state;
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
-    HANDLE_MACH_ERROR("thread_get_state", ret);
-    jl_throw_in_state(ptls2, &state, exception);
-    ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state", ret);
-}
-
 // Trampoline that runs on the faulting thread after being hijacked by the
 // Mach exception handler for a safepoint hit. This uses the same codepath
 // as the Unix signal handler (jl_set_gc_and_wait), so the faulting thread
@@ -623,7 +612,7 @@ void jl_thread_resume(int tid)
 }
 
 // Serializes every path that suspends a thread and rewrites its context
-// (jl_send_cancellation_signal on any thread, and jl_try_deliver_sigint) for
+// (jl_send_cancellation_signal on any thread, and jl_send_abandon_signal) for
 // its complete suspend/rewrite/resume sequence: two rewriters working from
 // the same suspended snapshot would install conflicting continuations and
 // task chains. (The profiler does not need it: it only reads contexts, and
@@ -783,43 +772,6 @@ resume:
 }
 
 
-// Throw jl_interrupt_exception if the master thread is in a signal async region
-// or if SIGINT happens too often.
-static void jl_try_deliver_sigint(void)
-{
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
-
-    // Hold the rewrite lock across the complete suspend/rewrite/resume
-    // sequence (see its definition above).
-    pthread_mutex_lock(&ctx_rewrite_lock);
-    kern_return_t ret = thread_suspend(thread);
-    HANDLE_MACH_ERROR("thread_suspend", ret);
-
-    // This aborts `sleep` and other syscalls.
-    ret = thread_abort(thread);
-    HANDLE_MACH_ERROR("thread_abort", ret);
-
-    jl_safepoint_enable_sigint();
-    int force = jl_check_force_sigint();
-    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    int can_throw = ct2 != NULL && ct2->eh != NULL;
-    if (can_throw && (force || (!ptls2->defer_signal && ptls2->io_wait))) {
-        jl_safepoint_consume_sigint();
-        if (force)
-            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
-        jl_clear_force_sigint();
-        jl_throw_in_thread(ptls2, thread, jl_interrupt_exception);
-    }
-    else {
-        jl_wake_libuv();
-    }
-
-    ret = thread_resume(thread);
-    HANDLE_MACH_ERROR("thread_resume", ret);
-    pthread_mutex_unlock(&ctx_rewrite_lock);
-}
-
 // Switch the target thread's current (already committed) task to
 // ptls->abandon_to (see jl_abandon_task_request): suspend the thread, validate the
 // pending request against its frozen state, and on commit redirect it into
@@ -872,7 +824,6 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
         jl_safe_printf("error: thread_resume failed in task abandonment\n");
     pthread_mutex_unlock(&ctx_rewrite_lock);
 }
-
 static void jl_exit_thread0_cb(int signo)
 {
     jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);
