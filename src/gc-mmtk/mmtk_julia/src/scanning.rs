@@ -73,6 +73,14 @@ impl Scanning<JuliaVM> for VMScanning {
                 unsafe {
                     crate::julia_scanning::mmtk_scan_gcstack(task, &mut slot_buffer);
                 }
+                // Mark tasks scanned directly in this STW pause. Without this, a later concurrent
+                // scan would find no record for it and trip the "not bound to a mutator" assert
+                // in `gc_thread_scan_stack`, even though the task was already scanned here. The
+                // roots themselves don't need to be recorded in GC_STACK_SNAPSHOTS: they were just fed into
+                // `slot_buffer` above, as part of this pause's root-scan work.
+                #[cfg(feature = "concurrentimmix")]
+                GC_STACK_SNAPSHOTS.mark_pause_scanned(task);
+
                 if task_is_root {
                     // captures wrong root nodes before creating the work
                     debug_assert!(
@@ -297,12 +305,39 @@ impl GCStackSnapshots {
             .map(|snapshot| snapshot.clone())
     }
 
+    /// Record that a task's stack was already scanned directly during the STW root scan, for
+    /// tasks that won't otherwise get a record through `resume_barrier_scan_task` (see the call
+    /// site in `scan_roots_in_mutator_thread`). The roots don't need to be stored here: they
+    /// were already fed into that pause's root-scan work at the call site, so this is purely a
+    /// marker telling `gc_thread_scan_stack` not to (unsafely) re-scan this task on demand.
+    pub fn mark_pause_scanned(&self, task: *const _jl_task_t) {
+        assert!(!task.is_null());
+
+        self.snapshots
+            .insert(task as usize, Arc::from(Vec::new().into_boxed_slice()));
+    }
+
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn gc_thread_scan_stack(&self, task: *const _jl_task_t) -> Option<Arc<[ObjectReference]>> {
         assert!(!task.is_null());
 
         if let Some(snapshot) = self.get_snapshot(task) {
             return Some(snapshot);
         }
+
+        // `task.ptls` alone is not a reliable "is this task currently running" signal: when a
+        // task's owning thread exits, `jl_delete_thread` clears that ptls's `current_task` but
+        // never clears the task's own `ptls` field back, so a long-dead task can have a
+        // permanently non-null, stale `ptls`. Checking the round trip -- does that ptls still
+        // consider this task its current one -- is what actually distinguishes "genuinely
+        // running on a live mutator" from "used to run here, but that thread is long gone".
+        let ptls = unsafe { (*task).ptls };
+        let bound_to_running_mutator =
+            !ptls.is_null() && unsafe { (*ptls).current_task as *const _jl_task_t } == task;
+        assert!(
+            !bound_to_running_mutator,
+            "Capturing the stack of a task bound to a mutator thread. This means the task might be running, and we try to snapshot its stack."
+        );
 
         let task_key = task as usize;
         let task_lock = self.get_task_scan_lock(task_key);
