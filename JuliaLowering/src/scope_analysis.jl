@@ -816,11 +816,6 @@ function analyze_variables!(ctx, ex)
         end
     elseif k == K"Identifier"
         @jl_assert false ex
-    elseif k == K"break" && numchildren(ex) >= 2
-        # For break with value, only analyze the value expression (second child), not the label
-        # This must come BEFORE !needs_resolution check since K"break" is in is_quoted
-        analyze_variables!(ctx, ex[2])
-        return
     elseif !needs_resolution(ex)
         return
     elseif k == K"static_eval" || k == K"foreignsymbol"

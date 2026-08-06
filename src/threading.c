@@ -788,17 +788,18 @@ void jl_init_threading(void)
     if (jl_n_markthreads == -1) { // --gcthreads not specified
         if ((cp = getenv(NUM_GC_THREADS_NAME))) { // ENV[NUM_GC_THREADS_NAME] specified
             errno = 0;
-            jl_n_markthreads = (uint64_t)strtol(cp, &endptr, 10) - 1;
-            if (errno != 0 || endptr == cp || nthreads <= 0)
-                jl_n_markthreads = 0;
+            long nmarkthreads = strtol(cp, &endptr, 10);
+            if (errno != 0 || endptr == cp || nmarkthreads < 1 || nmarkthreads >= INT16_MAX)
+                jl_errorf("julia: %s=<n>[,<m>]; n must be an integer >= 1", NUM_GC_THREADS_NAME);
+            jl_n_markthreads = nmarkthreads - 1;
             cp = endptr;
             if (*cp == ',') {
                 cp++;
                 errno = 0;
-                jl_n_sweepthreads = strtol(cp, &endptri, 10);
-                if (errno != 0 || endptri == cp || jl_n_sweepthreads < 0) {
-                    jl_n_sweepthreads = 0;
-                }
+                long nsweepthreads = strtol(cp, &endptri, 10);
+                if (errno != 0 || endptri == cp || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
+                    jl_errorf("julia: %s=<n>,<m>; m must be 0 or 1", NUM_GC_THREADS_NAME);
+                jl_n_sweepthreads = (int)nsweepthreads;
             }
         }
         else if (strstr(jl_gc_active_impl(), "stock")) {

@@ -196,7 +196,7 @@
 #    sticky::UInt8
 #    priority::UInt16
 #    @atomic _isexception::UInt8
-#    pad00::UInt8
+#    @atomic preempt_request::UInt8
 #    pad01::UInt8
 #    pad02::UInt8
 #    rngState0::UInt64
@@ -214,6 +214,9 @@
 #    @atomic finished_at::UInt64
 #    @atomic waiting_on::Any
 #    cached_wait_entry::Any
+#    cached_cancel_entry::Any
+#    invoked::Any
+#    @atomic bound_cancel_token::Any
 #end
 
 export
@@ -684,8 +687,7 @@ end
 
 struct PartialTask
     fetch_type
-    fetch_error
-    PartialTask(@nospecialize(fetch_type), @nospecialize(fetch_error)) = new(fetch_type, fetch_error)
+    PartialTask(@nospecialize(fetch_type)) = new(fetch_type)
 end
 
 eval(Core, quote

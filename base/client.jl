@@ -603,6 +603,63 @@ function should_use_main_entrypoint()
     return true
 end
 
+
+## The interactive session's two-level cancellation-source tree
+#
+# An interactive driver (the REPL backend) runs every evaluation under its
+# own cancellation source, each a child of one long-lived *session* source:
+# cancelling an evaluation's source stops exactly that evaluation (and
+# everything it spawned), while cancelling the session source sweeps every
+# still-running piece of work any evaluation has started - the runaway
+# `@async` from three prompts ago included. Cancellation is monotonic, so a
+# swept session source is retired and the next evaluation starts a fresh
+# session epoch: "everything so far" always means "since the last sweep".
+
+const _session_cancel_source = Ref{Union{Nothing, CancellationTokenSource}}(nothing)
+const _session_cancel_lock = ReentrantLock()
+
+# The current session source, created on first use (and after each sweep).
+function session_cancel_source!()
+    lock(_session_cancel_lock; cancel=nothing)
+    try
+        ses = _session_cancel_source[]
+        if ses === nothing
+            ses = CancellationTokenSource()
+            _session_cancel_source[] = ses
+        end
+        return ses
+    finally
+        unlock(_session_cancel_lock)
+    end
+end
+
+# A fresh source governing one interactive evaluation, linked under the
+# session source.
+new_evaluation_cancel_source!() =
+    CancellationTokenSource(CancellationToken(session_cancel_source!()))
+
+"""
+    Base.cancel_session_work!() -> Bool
+
+Cancel every still-running piece of work started under the current
+interactive session's evaluations (see the session-source tree above) and
+start a fresh session epoch. Returns whether there was a session to sweep.
+The REPL binds this to a repeated `^C` at an empty prompt.
+"""
+function cancel_session_work!()
+    lock(_session_cancel_lock; cancel=nothing)
+    ses = try
+        s = _session_cancel_source[]
+        _session_cancel_source[] = nothing
+        s
+    finally
+        unlock(_session_cancel_lock)
+    end
+    ses === nothing && return false
+    cancel!(ses)
+    return true
+end
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)

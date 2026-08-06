@@ -507,6 +507,7 @@ function sizeof_nothrow(@nospecialize(x))
     x = unwrap_unionall(t)
     # instances are variable-sized, so the type itself has no definite size
     x === Core.CancellationTokenSource && return false
+    x === Core.WaitEntryN && return false
     if isconcrete
         if isa(x, DataType) && x.layout != C_NULL
             # there's just a few concrete types with an opaque layout
@@ -1509,7 +1510,7 @@ end
             elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
                 RT = PartialStruct(fallback_lattice, RT, Union{Nothing,Bool}[false,false], Any[TF, TF2])
             end
-            info = IndirectCallInfo(callinfo.info, callinfo.effects, true)
+            info = ModifyOpInfo(callinfo.info)
             return CallMeta(RT, Any, Effects(), info)
         end
     end
@@ -3392,7 +3393,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         # llvmcall can do arbitrary things
         return Effects()
     elseif f === atomic_pointermodify
-        # atomic_pointermodify has memory effects, plus any effects from the IndirectCallInfo
+        # atomic_pointermodify has memory effects, plus any effects from the ModifyOpInfo
         return Effects()
     end
     is_effect_free = _is_effect_free_infer(f)

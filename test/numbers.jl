@@ -2448,10 +2448,10 @@ let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
 end
 
-@testset "mod1 and fld1" begin
+@testset "mod1 and cld" begin
     @test all(x -> (m=mod1(x,3); 0<m<=3), -5:+5)
-    @test all(x -> x == (fld1(x,3)-1)*3 + mod1(x,3), -5:+5)
-    @test all(x -> fldmod1(x,3) == (fld1(x,3), mod1(x,3)), -5:+5)
+    @test all(x -> x == (cld(x,3)-1)*3 + mod1(x,3), -5:+5)
+    @test all(x -> cldmod1(x,3) == (cld(x,3), mod1(x,3)), -5:+5)
 end
 #Issue #5570
 @test map(x -> Int(mod1(UInt(x),UInt(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]

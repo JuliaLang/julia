@@ -471,8 +471,15 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
             # exit flag
             break
         end
+        # Run the evaluation in the scope of a fresh cancellation source
+        # linked under the session source (see the session tree in
+        # base/client.jl): the double-^C prompt gesture sweeps every
+        # still-running task any evaluation has spawned by cancelling the
+        # session source, without a way to name each one individually.
+        evaltok = Base.CancellationToken(Base.new_evaluation_cancel_source!())
         # Mark this task as the foreground task while running user work, so that
         # components like the precompile keyboard menu know who owns interactive stdin.
+        Base.ScopedValues.@with Base.CANCEL_TOKEN => evaltok begin
         Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
             f = ast_or_func
             try
@@ -484,6 +491,7 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
         else
             ast = ast_or_func
             eval_user_input(ast, backend, get_module())
+        end
         end
     end
     return nothing
@@ -694,24 +702,27 @@ end
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true, backend = REPLBackend())
     backend_ref = REPLBackendRef(backend)
     get_module = () -> Base.active_module(repl)
-    cleanup_task(backend_ref, t) = @task try
+    # REPL teardown is cleanup: shield it from any scope cancellation
+    cleanup_task(backend_ref, t) = Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+        @task try
             destroy(backend_ref, t)
         catch e
             Core.print(Core.stderr, "\nINTERNAL ERROR: ")
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
+    end
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
         cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
-        Base._wait2(t, cleanup)
+        Base.schedule_on_notify!(t, cleanup)
         start_repl_backend(backend, consumer; get_module)
     else
         t = @async start_repl_backend(backend, consumer; get_module)
         cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
-        Base._wait2(t, cleanup)
+        Base.schedule_on_notify!(t, cleanup)
         run_frontend(repl, backend_ref)
     end
     return backend

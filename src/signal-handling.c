@@ -578,6 +578,54 @@ static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
 #include "signals-unix.c"
 #endif
 
+// jl_send_reset_signal is the static per-platform delivery defined by the
+// file included above; `reset_code` becomes the reset point's setjmp return.
+
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_send_reset_signal(tid, JL_RESET_CODE_CANCEL);
+}
+
+// Request a cooperative yield from the target thread's current task: mark
+// the task (honored at its next cancellation point) before kicking it out
+// of any published reset region.
+JL_DLLEXPORT void jl_send_preempt_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL)
+        return;
+    jl_atomic_store_release(&ct2->preempt_request, 1);
+    jl_send_reset_signal(tid, JL_RESET_CODE_PREEMPT);
+}
+
+// Deliver cancellation shootdowns to every thread whose current task is
+// bound to a now-cancelled token source; called by `cancel!` after
+// propagation and a heavy fence. The check is only a hint (the sender
+// re-validates; a missed task recovers level-triggered), and the unrooted
+// token read is safe because this thread runs GC-unsafe.
+JL_DLLEXPORT void jl_shootdown_cancelled_tasks(void) JL_NOTSAFEPOINT
+{
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    for (int16_t tid = 0; tid < nthreads; tid++) {
+        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        if (ptls2 == NULL)
+            continue;
+        jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+        if (ct2 == NULL)
+            continue;
+        jl_value_t *bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+        if (bound == NULL || bound == jl_nothing ||
+            jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+            continue;
+        jl_send_cancellation_signal(tid);
+    }
+}
+
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
 {
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)

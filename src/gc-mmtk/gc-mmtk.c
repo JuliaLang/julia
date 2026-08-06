@@ -926,7 +926,7 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
     //            if (stkbuf)
     //                push(free_stacks[sz], stkbuf)
     assert(gc_n_threads);
-    for (int i = 0; i < jl_n_threads; i++) {
+    for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 == NULL)
             continue;

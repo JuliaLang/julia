@@ -595,6 +595,53 @@ let a = []
     @test timedwait(() -> a == [1], 10) === :ok
 end
 
+@testset "wait after closing a one-shot Timer (#34366)" begin
+    t = Timer(600)
+    close(t) # test assumes that thread won't get preempted for 10 minutes...
+    @test_throws EOFError wait(t)
+
+    t = Timer(0)
+    @test wait(t) === nothing
+    @test wait(t) === nothing
+    close(t)
+    @test wait(t) === nothing
+
+    waiters = [Threads.@spawn wait(t) for _ in 1:8]
+    @test all(w -> fetch(w) === nothing, waiters)
+
+    for i in 1:100
+        t = Timer(isodd(i) ? 0 : 0.001)
+        racers = [Threads.@spawn begin
+                for _ in 1:rand(0:8)
+                    yield()
+                end
+                try
+                    wait(t)
+                    wait(t)
+                    true
+                catch e
+                    e isa EOFError || rethrow()
+                    false
+                end
+            end for _ in 1:4]
+        for _ in 1:rand(0:8)
+            yield()
+        end
+        close(t)
+        outcomes = map(fetch, racers)
+        @test all(outcomes) || !any(outcomes)
+    end
+
+    t = Timer(0, interval=600)
+    @test wait(t) === nothing
+    waiter = @task wait(t)
+    yield(waiter)
+    @test timedwait(() -> !isempty(t.cond.waitq) && first(t.cond.waitq).task === waiter, 10) === :ok
+    close(t)
+    @test_throws TaskFailedException wait(waiter)
+    @test waiter.result isa EOFError
+end
+
 # make sure that we don't accidentally create a one-shot timer
 let
     t = Timer(Returns(nothing), 10, interval=0.00001)

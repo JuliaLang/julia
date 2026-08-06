@@ -1063,7 +1063,8 @@ IRInterpretationState(interp::I, spec_info::SpecInfo, ir::IRCode,
 
 function IRInterpretationState(
         interp::AbstractInterpreter, codeinst::CodeInstance, mi::MethodInstance,
-        argtypes::Vector{Any}, @nospecialize(src)
+        argtypes::Vector{Any}, @nospecialize(src),
+        valid_worlds::WorldRange = WorldRange(codeinst.min_world, codeinst.max_world)
     )
     @assert get_ci_mi(codeinst) === mi "method instance is not synced with code instance"
     if isa(src, String)
@@ -1075,7 +1076,7 @@ function IRInterpretationState(
     ir = inflate_ir(src, mi)
     argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva, mi)
     return IRInterpretationState(interp, spec_info, ir, mi, argtypes,
-                                 codeinst.min_world, codeinst.max_world)
+                                 first(valid_worlds), last(valid_worlds))
 end
 
 # AbsIntState
