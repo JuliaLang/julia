@@ -303,19 +303,19 @@ end
 ## SourceWait methods (the struct and its doc live above, before the
 ## entry-acquisition contract that dispatches on it)
 
-function wait_enqueue!(x::SourceWait, w::WaitEntry, first::Bool)
-    src = x.src
+function _source_wait_enqueue!(src::CancellationTokenSource, w::WaitEntry, aux::UInt64)
     i = _find_slot(w, src)
     if i == 0
         # First registration under `src`: claim a slot (the slot's `owner`
-        # is the push ticket) and stage the floor - pre-publication, so
-        # any walk that can see the slot sees its aux - then publish with
-        # a lock-free push. seq_cst, pairing with the cancellation walk's
+        # is the push ticket) and stage the aux (the floor, plus the
+        # watcher bit for a `WatcherWait`) - pre-publication, so any walk
+        # that can see the slot sees its aux - then publish with a
+        # lock-free push. seq_cst, pairing with the cancellation walk's
         # state-write-then-head-read: if the walk's head read misses this
         # push, this push is later in the total order, so the recheck
         # below observes the raised state.
         i = _acquire_slot!(w, src)
-        _set_slot_aux!(w, i, UInt64(x.floor))
+        _set_slot_aux!(w, i, aux)
         slot = slots(w)[i]
         while true
             h = _waiters_head(src)
@@ -336,6 +336,9 @@ function wait_enqueue!(x::SourceWait, w::WaitEntry, first::Bool)
     return true
 end
 
+wait_enqueue!(x::SourceWait, w::WaitEntry, first::Bool) =
+    _source_wait_enqueue!(x.src, w, UInt64(x.floor))
+
 function wait_recheck(x::SourceWait, w::WaitEntry)
     # Post-publication recheck: either the concurrent cancellation walk
     # observes our push/arm, or we observe its state write here.
@@ -344,3 +347,77 @@ function wait_recheck(x::SourceWait, w::WaitEntry)
 end
 
 wait_dequeue!(x::SourceWait, w::WaitEntry, why::UInt8) = nothing
+
+## Watching a cancellation source (`wait(::CancellationToken)`)
+
+# `WatcherWait(src)` in a park's waitables makes the wait *complete* when
+# `src` is cancelled: its slot stages the watcher aux bit, which the
+# cancellation walk delivers value-mode - the request is the payload, at
+# any severity (see `_cancel_walk_node!`).
+# The registration and recheck follow `SourceWait`'s Dekker exactly; only
+# the staged aux and the meaning of firing (the awaited event, not a
+# refusal) differ. Watcher parks always use a fresh single-use entry:
+# neither cache slot may ever carry a registration on a source the arm is
+# not an ordinary cancellable park under (the shield/claim soundness
+# argument in the cache contract above).
+struct WatcherWait
+    src::CancellationTokenSource
+end
+
+acquire_wait_entry!(ct::Task, ws::Tuple{WatcherWait}) = WaitEntry1(ct)
+acquire_wait_entry!(ct::Task, ws::Tuple{WatcherWait, SourceWait}) = WaitEntry2(ct)
+
+wait_enqueue!(x::WatcherWait, w::WaitEntry, first::Bool) =
+    _source_wait_enqueue!(x.src, w, WAIT_AUX_WATCHER_BIT | UInt64(CANCEL_REQUEST_SAFE.request))
+
+wait_recheck(x::WatcherWait, w::WaitEntry) =
+    (@atomic :sequentially_consistent x.src.state) != 0x00
+
+wait_dequeue!(x::WatcherWait, w::WaitEntry, why::UInt8) = nothing
+
+"""
+    wait(tok::CancellationToken; cancel=...)
+
+Block until `tok`'s source is cancelled, and return the corresponding
+[`CancellationRequest`](@ref) as an ordinary value; return immediately if it
+already is. This inverts the usual delivery - cancellation of `tok` is the
+event this operation waits *for*, not an interruption of it - and is the
+building block of the watcher-task ("cancellation callback") pattern.
+
+The wait itself accepts the standard `cancel` keyword argument (defaulting
+to the scoped token) and is interrupted by that token like any other
+blocking operation. Waiting on the token that also governs the wait is
+refused with an `ArgumentError`, since completing and interrupting the wait
+would be the same event; pass `cancel = nothing` to wait for `tok`
+unconditionally.
+"""
+function wait(tok::CancellationToken; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    src = tok.source
+    gov = resolve_cancel_token(cancel)
+    govsrc = gov === nothing ? nothing : gov.source
+    if govsrc === src
+        throw(ArgumentError(
+            "cannot wait for a token's cancellation under the same governing token; " *
+            "pass `cancel = nothing` to wait for it unconditionally"))
+    end
+    govsrc === nothing || checkcancel(govsrc)
+    st = @atomic :acquire src.state
+    st != 0x00 && return CancellationRequest(st)
+    ct = current_task()
+    ws = govsrc === nothing ? (WatcherWait(src),) :
+                              (WatcherWait(src), SourceWait(govsrc, CANCEL_REQUEST_SAFE.request))
+    w = acquire_wait_entry!(ct, ws)
+    if !park!(ws, w, true)
+        # Fired, and the self-claim won: either the watched source's
+        # cancellation (the awaited event, delivered as the return value)
+        # or the governing token's (the refusal) - re-inspect to tell.
+        withdraw!(ws, w, WAKE_FIRED)
+        st = @atomic :acquire src.state
+        st != 0x00 && return CancellationRequest(st)
+        checkcancel(govsrc::CancellationTokenSource) # throws the refusal
+        error("cancellation wait fired with no cancellation")
+    end
+    r = wait_safe_interrupt(ws, w)
+    withdraw!(ws, w, WAKE_VALUE)
+    return r::CancellationRequest
+end
