@@ -251,6 +251,14 @@ typedef struct _jl_tls_states_t {
     struct _jl_bt_element_t *profiling_bt_buffer;
     // Atomically set by the sender, reset by the handler.
     volatile _Atomic(sig_atomic_t) signal_request; // TODO: no actual reason for this to be _Atomic
+    // Fire-and-forget delivery requests, as a bitmask so that concurrent
+    // senders (and the suspend handshake occupying `signal_request`) can
+    // never coalesce a request away: the handler consumes and services
+    // every set bit on each delivery, so a single signal suffices.
+#define JL_SIGNAL_REQ_CANCEL  0x01
+#define JL_SIGNAL_REQ_PREEMPT 0x02
+#define JL_SIGNAL_REQ_ABANDON 0x04
+    _Atomic(uint8_t) signal_request_flags;
     // Allow the sigint to be raised asynchronously
     // this is limited to the few places we do synchronous IO
     // we can make this more general (similar to defer_signal) if necessary

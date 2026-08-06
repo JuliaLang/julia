@@ -821,7 +821,7 @@ static void jl_try_deliver_sigint(void)
 }
 
 // Switch the target thread's current (already committed) task to
-// ptls->abandon_to (see jl_abandon_task): suspend the thread, validate the
+// ptls->abandon_to (see jl_abandon_task_request): suspend the thread, validate the
 // pending request against its frozen state, and on commit redirect it into
 // the abandon callback. Holds the rewrite lock like every other
 // suspend-and-rewrite path (see its definition above), and the profile read

@@ -1889,10 +1889,11 @@ if threadpoolsize() >= 2
 
     # Linux-only: blocks the abandon signal by number (SIGUSR2 == 12) and uses
     # Linux's SIG_BLOCK/SIG_UNBLOCK values.
-    Sys.islinux() && @testset "unsafe_abandon! withdraws cleanly on delivery timeout" begin
-        # Block the abandon signal in the victim so delivery cannot happen:
-        # the requester must withdraw every published effect and return
-        # false with the victim still running and not marked done.
+    Sys.islinux() && @testset "an undelivered abandonment withdraws cleanly" begin
+        # Block the abandon signal in the victim so delivery cannot happen,
+        # and exercise the request/poll/withdraw primitives directly: the
+        # withdrawal must return every published effect, leaving the victim
+        # untouched - including its eventual completion value.
         started = Threads.Atomic{Bool}(false)
         release = Threads.Atomic{Bool}(false)
         victim = Threads.@spawn begin
@@ -1914,12 +1915,16 @@ if threadpoolsize() >= 2
         end
         rescue = Task(() -> (while true; wait(); end))
         rescue.sticky = false
-        # unsafe_abandon!'s own delivery budget bounds this call; the
-        # masked victim can never take the request, so it must withdraw.
-        ok = Base.unsafe_abandon!(victim, rescue)
-        @test !ok
+        tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any),
+                    victim, rescue, Base.CancellationRequest(0x4))
+        @test tid >= 0
+        # undeliverable: the request stays pending
+        @test ccall(:jl_abandon_task_poll, Cint, (Int16,), tid % Int16) == 0
+        @test ccall(:jl_abandon_task_withdraw, Cint, (Int16,), tid % Int16) == 1
         @test !istaskdone(victim)         # not falsely marked :abandoned
         release[] = true                  # victim completes normally afterwards
         @test fetch(victim) === :survived
+        # the withdrawal returned the rescue task's affinity claim
+        @test Threads.threadid(rescue) == 0
     end
 end

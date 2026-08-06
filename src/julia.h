@@ -2581,7 +2581,6 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_send_preempt_signal(int16_t tid) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_abandon_task(jl_task_t *t, jl_task_t *next_task);
 JL_DLLEXPORT void jl_shootdown_cancelled_tasks(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);

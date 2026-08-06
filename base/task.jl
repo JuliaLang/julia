@@ -280,8 +280,10 @@ Returns `false` - with `t` untouched and still running - when the abandonment
 could not be performed safely: `t` was not (or no longer) running on a
 thread, was found holding runtime state that must not be discarded (runtime
 locks, an in-flight finalizer or GC transition, a signal-deferral region),
-another abandonment was already in flight for that thread, or the delivery
-could not be completed in time (e.g. the victim blocks the delivery signal).
+or another abandonment was already in flight for that thread. Blocks (in a
+scheduler-friendly wait) until the delivery settles the request one way or
+the other; a victim thread that never services signals blocks the call
+indefinitely.
 
 `next_task` must be a fresh, never-scheduled task; it takes over the
 victim's thread.
@@ -328,38 +330,21 @@ function unsafe_abandon!(t::Task, next_task::Task, @nospecialize(result))
     tid < 0 && return false
     tid = tid % Int16
     # Acquired (and, first time, created) only after the request is
-    # published with its first signal in flight: the victim may be a
-    # checkless spin blocking GC's stop-the-world, which any allocation
-    # here could otherwise join before the delivery frees it. A settle that
-    # races the condition's registration is repaired by the ticker's ping.
+    # published with its signal in flight: the victim may be a checkless
+    # spin blocking GC's stop-the-world, which any allocation here could
+    # otherwise join before the delivery frees it. The delivery bit cannot
+    # be coalesced away, so the single send suffices; a settle that races
+    # the condition's registration is caught by the poll below (poll first,
+    # then wait - the settle's ping latches on the registered handle).
     cond = _abandon_notify!()
-    # Deliveries coalesce with best-effort cancellation/preemption signals
-    # on the shared per-thread request slot, so a single send can be lost:
-    # periodically re-send - which also re-pings the wakeup condition, so
-    # the wait below never sleeps through a lost settle notification.
-    ticker = Timer(0.01; interval=0.01) do _
-        ccall(:jl_abandon_task_resend, Cvoid, (Int16,), tid)
-        ccall(:jl_abandon_notify_ping, Cvoid, ())
-    end
-    deadline = time_ns() + 2_000_000_000 # 2s: then withdraw rather than hang
     ok = false
-    try
-        while true
-            verdict = ccall(:jl_abandon_task_poll, Cint, (Int16,), tid)
-            if verdict != 0
-                ok = verdict == 1
-                break
-            end
-            if time_ns() >= deadline &&
-               ccall(:jl_abandon_task_withdraw, Cint, (Int16,), tid) == 1
-                break # fully withdrawn; no abandonment happened
-            end
-            # (a lost withdraw race means a delivery took the request - the
-            # next poll returns its verdict)
-            wait(cond; cancel=nothing)
+    while true
+        verdict = ccall(:jl_abandon_task_poll, Cint, (Int16,), tid)
+        if verdict != 0
+            ok = verdict == 1
+            break
         end
-    finally
-        close(ticker)
+        wait(cond; cancel=nothing)
     end
     if ok
         # A forcibly abandoned task never goes through the regular task

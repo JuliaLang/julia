@@ -1695,11 +1695,6 @@ static void abandon_notify(void) JL_NOTSAFEPOINT
         uv_async_send(h);
 }
 
-JL_DLLEXPORT void jl_abandon_notify_ping(void) JL_NOTSAFEPOINT
-{
-    abandon_notify();
-}
-
 // Callback for task abandonment - the delivery redirects the victim thread
 // here (via jl_call_in_ctx / a rewritten thread context). Must not return.
 JL_NORETURN void jl_abandon_task_cb(void)
@@ -1841,10 +1836,9 @@ int jl_abandon_try_commit(jl_ptls_t ptls2) JL_NOTSAFEPOINT
 // current on a thread, the target is the victim itself or already bound to
 // a thread, or another abandonment is in flight for the victim's thread.
 // The caller owns the published request and must drive it to a verdict
-// with jl_abandon_task_poll, re-sending via jl_abandon_task_resend while
-// pending (deliveries coalesce with best-effort cancellation/preemption
-// signals on the shared per-thread slot, so a single send can be lost) and
-// optionally withdrawing via jl_abandon_task_withdraw.
+// with jl_abandon_task_poll (the delivery bit cannot be coalesced away, so
+// the single send suffices), optionally withdrawing via
+// jl_abandon_task_withdraw.
 JL_DLLEXPORT int jl_abandon_task_request(jl_task_t *t, jl_task_t *next_task,
                                          jl_value_t *result)
 {
@@ -1878,16 +1872,6 @@ JL_DLLEXPORT int jl_abandon_task_request(jl_task_t *t, jl_task_t *next_task,
     jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_PENDING);
     jl_send_abandon_signal(tid);
     return tid;
-}
-
-// Re-send the delivery signal for a still-pending request on `tid`; a
-// no-op once the request settled.
-JL_DLLEXPORT void jl_abandon_task_resend(int16_t tid)
-{
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-    if (ptls2 != NULL &&
-        jl_atomic_load_acquire(&ptls2->abandon_state) == JL_ABANDON_PENDING)
-        jl_send_abandon_signal(tid);
 }
 
 // Verdict poll for the request published on thread `tid`: 0 while the
@@ -1943,28 +1927,6 @@ JL_DLLEXPORT int jl_abandon_task_withdraw(int16_t tid)
     ptls2->abandon_result = NULL;
     jl_atomic_store_release(&ptls2->abandon_state, JL_ABANDON_IDLE);
     return 1;
-}
-
-// Blocking convenience driver for callers on non-Julia threads (the signal
-// listener's direct-abandon rung), with a bounded wall-clock wait;
-// Julia-side callers compose the primitives above with scheduler-friendly
-// waits instead (see Base.unsafe_abandon!). Returns 1 if the abandonment
-// committed.
-JL_DLLEXPORT int jl_abandon_task(jl_task_t *t, jl_task_t *next_task)
-{
-    int tid = jl_abandon_task_request(t, next_task, NULL);
-    if (tid < 0)
-        return 0;
-    uint64_t deadline = uv_hrtime() + 2000000000ull; // 2s
-    for (;;) {
-        int verdict = jl_abandon_task_poll((int16_t)tid);
-        if (verdict != 0)
-            return verdict == 1;
-        if (uv_hrtime() >= deadline && jl_abandon_task_withdraw((int16_t)tid))
-            return 0;
-        jl_abandon_task_resend((int16_t)tid);
-        uv_sleep(1);
-    }
 }
 
 // cancellation token sources -----------------------------------------------
