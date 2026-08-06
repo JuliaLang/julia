@@ -2848,9 +2848,31 @@ AnyDict(
         catch
         end
         cancel_beep(s)
-        move_input_end(s)
-        refresh_line(s)
-        print(terminal(s), "^C\n\n")
+        if buffer(s).size == 0
+            # ^C at an empty prompt: nothing to clear, so the press reaches
+            # for still-running work from earlier evaluations. Two presses
+            # in a row sweep it (with an announce in between) - which also
+            # makes hammering ^C at spewing background output do what the
+            # user means, even though the prompt already returned. The arm
+            # survives exactly one keystroke (`last_action`), so any other
+            # key stands it down.
+            if s.last_action === :cancel_session_arm
+                set_action!(s, :cancel_session)
+                print(terminal(s), "^C\n")
+                if Base.cancel_session_work!()
+                    print(terminal(s), "Cancelled all in-flight work.\n\n")
+                else
+                    print(terminal(s), "\n")
+                end
+            else
+                set_action!(s, :cancel_session_arm)
+                print(terminal(s), "^C  (press ^C again to cancel all in-flight work)\n\n")
+            end
+        else
+            move_input_end(s)
+            refresh_line(s)
+            print(terminal(s), "^C\n\n")
+        end
         transition(s, :reset)
         refresh_line(s)
     end,
