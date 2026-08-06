@@ -24,6 +24,11 @@ New language features
   operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
   in the default operators ([#50790]).
 
+* `@sync`, `Threads.@threads` and `Experimental.@sync` blocks now scope a cancellation source
+  (see `Base.CancellationTokenSource`) over their children, so cancelling an enclosing scope
+  reaches everything spawned within, and the blocks' teardown awaits internal tasks per the
+  requested cancellation severity ([#60281]).
+
 Language changes
 ----------------
 
