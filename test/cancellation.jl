@@ -914,6 +914,110 @@ end
     expect_cancelled(tm)
 end
 
+# a parked watcher keeps the watched source reachable through its live
+# token reference alone (no local rooting in the caller's frame)
+@noinline function _spawn_watcher_on_child(parent)
+    child = CancellationTokenSource(CancellationToken(parent))
+    t = @async wait(CancellationToken(child); cancel=nothing)
+    @assert timedwait(() -> parked_on(t, child), 10.0) == :ok
+    return t
+end
+
+@testset "waiting for a token as an event" begin
+    # an already-cancelled token: immediate value return, no throw
+    src = CancellationTokenSource()
+    cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    req = wait(CancellationToken(src); cancel=nothing)
+    @test req isa CancellationRequest
+    @test req.request == CANCEL_REQUEST_ABANDON_EXTERNAL.request
+
+    # a parked watcher is completed (not interrupted) by the cancellation
+    src = CancellationTokenSource()
+    t = @async wait(CancellationToken(src); cancel=nothing)
+    @test timedwait(() -> parked_on(t, src), 10.0) == :ok
+    @test !istaskdone(t)
+    cancel!(src)
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test !istaskfailed(t)
+    @test fetch(t) isa CancellationRequest
+
+    # ... including at ABANDON_ALL: a watcher observes the source but does
+    # not run under it, so the freeze never applies to it
+    src = CancellationTokenSource()
+    t = @async wait(CancellationToken(src); cancel=nothing)
+    @test timedwait(() -> parked_on(t, src), 10.0) == :ok
+    cancel!(src, CANCEL_REQUEST_ABANDON_ALL)
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test !istaskfailed(t)
+    @test fetch(t).request == CANCEL_REQUEST_ABANDON_ALL.request
+
+    # ancestor cancellation reaches a watcher on a descendant source
+    parent = CancellationTokenSource()
+    child = CancellationTokenSource(CancellationToken(parent))
+    t = @async wait(CancellationToken(child); cancel=nothing)
+    @test timedwait(() -> parked_on(t, child), 10.0) == :ok
+    cancel!(parent)
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test fetch(t) isa CancellationRequest
+
+    # ordinary cancel semantics: the governing token (inherited from the
+    # scope) interrupts the wait, leaving the watched token untouched
+    watched = CancellationTokenSource()
+    gov = CancellationTokenSource()
+    t = with(CANCEL_TOKEN => CancellationToken(gov)) do
+        @async wait(CancellationToken(watched))
+    end
+    @test timedwait(() -> parked_on(t, watched), 10.0) == :ok
+    cancel!(gov)
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test istaskfailed(t)
+    @test t.result isa CancellationRequest
+    @test !Base.iscancelled(CancellationToken(watched))
+
+    # a watcher governed by an *ancestor* of the watched source is
+    # interrupted, not completed: the ancestor's own walk claims it before
+    # descending to the watched child (this is why callback watchers shield)
+    outer = CancellationTokenSource()
+    inner = CancellationTokenSource(CancellationToken(outer))
+    t = with(CANCEL_TOKEN => CancellationToken(outer)) do
+        @async wait(CancellationToken(inner))
+    end
+    @test timedwait(() -> parked_on(t, inner), 10.0) == :ok
+    cancel!(outer)
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test istaskfailed(t)
+
+    # waiting under the same token is refused, explicitly and inherited
+    srcs = CancellationTokenSource()
+    toks = CancellationToken(srcs)
+    @test_throws ArgumentError wait(toks; cancel=toks)
+    @test_throws ArgumentError with(() -> wait(toks), CANCEL_TOKEN => toks)
+
+    # the callback pattern: a shielded watcher performs its action during
+    # the cancellation
+    src = CancellationTokenSource()
+    fired = Base.Event()
+    watcher = @async begin
+        wait(CancellationToken(src); cancel=nothing)
+        notify(fired)
+    end
+    @test timedwait(() -> parked_on(watcher, src), 10.0) == :ok
+    cancel!(src)
+    wait(fired; cancel=nothing)
+    wait(watcher)
+    @test !istaskfailed(watcher)
+
+    # a parked watcher keeps the watched source attached to the tree
+    # (observability == reachability), so an ancestor cancellation still
+    # reaches it after a GC
+    parent2 = CancellationTokenSource()
+    t2 = _spawn_watcher_on_child(parent2)
+    GC.gc()
+    cancel!(parent2)
+    @test timedwait(() -> istaskdone(t2), 10.0) == :ok
+    @test fetch(t2) isa CancellationRequest
+end
+
 @testset "cancellation of waiting tasks" begin
     # Cancellation of `sleep`
     t, src = cancellable(() -> sleep(1000))

@@ -1223,6 +1223,22 @@ function deliver_claimed_wake!(t::Task, w::WaitEntry, @nospecialize(exc))
     return nothing
 end
 
+# The value-mode variant of `deliver_claimed_wake!`, with the same claim
+# contract: the parked wait *completes*, returning `val` (the cancellation
+# walk's delivery to a watcher - `wait(::CancellationToken)` - whose wait
+# the cancellation is the event for).
+function deliver_claimed_value_wake!(t::Task, w::WaitEntry, @nospecialize(val))
+    (@atomic :monotonic t.waiting_on) === nothing || return nothing
+    try_unlink_claimed!(w)
+    q = t.queue
+    q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
+    t._state === task_state_runnable || return nothing
+    setfield!(t, :result, val)
+    maybe_record_enqueued!(t)
+    enq_work(t)
+    return nothing
+end
+
 """
     yield()
 
