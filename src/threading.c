@@ -598,7 +598,7 @@ static void jl_delete_thread(void *value)
 #elif defined(JL_DISABLE_LIBUNWIND)
     // nothing
 #elif defined(__APPLE__)
-    jl_unlock_profile_wr();
+    if (havelock) jl_unlock_profile_wr();
 #else
     pthread_mutex_unlock(&in_signal_lock);
 #endif

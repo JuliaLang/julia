@@ -1684,7 +1684,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARAR
     return jv;
 }
 
-STATIC_INLINE jl_value_t *new_structv(jl_task_t *ct, jl_datatype_t *type, jl_value_t **args, uint32_t na)
+STATIC_INLINE jl_value_t *new_structv(jl_task_t *ct, jl_datatype_t *type, jl_value_t **args, uint32_t na) JL_CANSAFEPOINT
 {
     if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
