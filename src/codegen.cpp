@@ -6668,7 +6668,9 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             // must snapshot the current task's old scope. Keyed on the parent
             // (current task); a generational collector elides this since the
             // current task is always a root.
+#ifdef MMTK_PLAN_CONCURRENTIMMIX
             emit_write_barrier(ctx, get_current_task(ctx), scope_to_restore);
+#endif
             jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
             // NOTE: post-wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
