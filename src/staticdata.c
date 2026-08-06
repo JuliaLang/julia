@@ -1633,7 +1633,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
             write_uint8(f, jl_atomic_load_relaxed(&cs->state));
             write_padding(f, offsetof(jl_cancel_source_t, nparents) - 3 * sizeof(void*) - sizeof(uint8_t));
             ios_write(f, (char*)&cs->nparents, sizeof(uint16_t));
-            write_padding(f, sizeof(jl_cancel_source_t) - offsetof(jl_cancel_source_t, nparents) - sizeof(uint16_t)); // incl. dead_count (transient; reset)
+            write_padding(f, sizeof(jl_cancel_source_t) - offsetof(jl_cancel_source_t, nparents) - sizeof(uint16_t)); // incl. dead_count + reg_count (transient; reset)
             jl_cancel_parent_link_t *links = jl_cancel_source_links(cs);
             for (size_t i = 0; i < cs->nparents; i++) {
                 write_pointerfield(s, (jl_value_t*)links[i].parent);

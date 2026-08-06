@@ -311,6 +311,9 @@ function wait_enqueue!(x::SourceWait, w::WaitEntry, first::Bool)
                 break
             end
         end
+        # approximate list length, feeding the scaled prune threshold
+        # (resynced by every walk; see _note_dead_registration!)
+        @atomic :monotonic src.reg_count += UInt32(1)
     else
         # Sticky re-arm (already registered): upgrade this thread's
         # arm-then-recheck to the store-load ordering the race argument
