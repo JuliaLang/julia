@@ -359,6 +359,11 @@ struct _jl_cancel_source_t {
     // threshold triggers a pruning walk. Approximate (relaxed); walks reset
     // it.
     _Atomic(uint32_t) dead_count;
+    // Approximate length of the waiter list: incremented per registration
+    // push, resynced to the surviving count by each walk. The pruning
+    // threshold scales with it (a fixed threshold makes a mass fan-out's
+    // prune walks quadratic in the number of parked waiters).
+    _Atomic(uint32_t) reg_count;
     // jl_cancel_parent_link_t links[nparents];  (see jl_cancel_source_links)
 };
 

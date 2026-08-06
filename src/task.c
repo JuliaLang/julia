@@ -1763,6 +1763,7 @@ JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t np)
     jl_atomic_store_relaxed(&src->state, 0);
     src->nparents = (uint16_t)np;
     jl_atomic_store_relaxed(&src->dead_count, 0);
+    jl_atomic_store_relaxed(&src->reg_count, 0);
     // Initialize every link entry before publishing the node under *any*
     // parent: a concurrent cancellation walk that reaches the node through
     // one parent scans all of its entries.

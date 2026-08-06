@@ -629,7 +629,7 @@ for period in (0.06, Dates.Millisecond(60))
         close(async)
         @test_throws EOFError wait(async)
         @test !isopen(async)
-        @test_throws EOFError wait(t)
+        @test wait(t) === nothing
         @test_throws EOFError wait(async)
     end
 end
