@@ -557,9 +557,16 @@ const _PRUNE_DEAD_THRESHOLD = UInt32(16)
 # threshold loses `_try_prune!`'s trylock to a concurrent walk, corpses that
 # walk had already passed remain counted here, and the next death must retry
 # the prune rather than let the count sail past the threshold forever.
+# The threshold scales with the (approximate) list length: a prune walk is
+# O(list), so tripping it every fixed number of deaths makes a mass fan-out
+# parking under one source - e.g. any large task tree governed by a shared
+# ambient token - quadratic in its waiter count. Requiring the dead to be a
+# constant fraction of the list amortizes each walk against the corpses it
+# collects.
 function _note_dead_registration!(src::CancellationTokenSource)
     dc = @atomic :monotonic src.dead_count += UInt32(1)
-    dc >= _PRUNE_DEAD_THRESHOLD && _try_prune!(src)
+    threshold = max(_PRUNE_DEAD_THRESHOLD, (@atomic :monotonic src.reg_count) >> 2)
+    dc >= threshold && _try_prune!(src)
     return nothing
 end
 
@@ -707,6 +714,7 @@ end
 # the caller wakes them after releasing the walk lock.
 function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
     @atomic :monotonic node.dead_count = UInt32(0)
+    nlive = UInt32(0)
     towake = nothing
     prev = nothing # the predecessor's slot for `node`, once past the head
     # seq_cst: the S-ordered counterpart of a registrant's seq_cst push -
@@ -768,10 +776,16 @@ function _walk_waiters!(node::CancellationTokenSource, sev::UInt8)
                 # a lost claim: a completion or interrupter won the race;
                 # the waiter resumes through that wake
             end
+            nlive += UInt32(1)
             prev = slot
         end
         w = wnext
     end
+    # Resync the approximate list length (see _note_dead_registration!'s
+    # scaled prune threshold) to what this walk left linked. Entries kept
+    # only because their head-unlink CAS lost count as live: conservative,
+    # and the next walk resyncs.
+    @atomic :monotonic node.reg_count = nlive
     return towake
 end
 
