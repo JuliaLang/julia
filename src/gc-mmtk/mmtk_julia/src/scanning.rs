@@ -95,6 +95,8 @@ impl Scanning<JuliaVM> for VMScanning {
         root_scan_task(ptls.current_task as *mut _jl_task_t, true);
         root_scan_task(ptls.next_task, true);
         root_scan_task(ptls.previous_task, true);
+        root_scan_task(ptls.abandon_victim, true);
+        root_scan_task(ptls.abandon_to, true);
         if !ptls.previous_exception.is_null() {
             node_buffer.push(unsafe {
                 // unsafe: We have just checked `ptls.previous_exception` is not null.

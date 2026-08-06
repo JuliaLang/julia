@@ -512,6 +512,55 @@ static void jl_try_deliver_sigint(void)
     ReleaseSRWLockExclusive(&ctx_rewrite_lock);
 }
 
+// Switch the target thread's current (already committed) task to
+// ptls->abandon_to (see jl_abandon_task): freeze the thread, validate the
+// pending request against its frozen state, and on commit redirect it into
+// the abandon callback (which never returns). Holds the rewrite lock like
+// every other suspend-and-rewrite path; the profile read lock covers the
+// suspension itself (see jl_send_reset_signal above).
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    AcquireSRWLockExclusive(&ctx_rewrite_lock);
+    CONTEXT ctxThread;
+    jl_lock_profile();
+    int suspended = jl_thread_suspend_and_get_state(tid, 0, &ctxThread);
+    jl_unlock_profile();
+    if (!suspended) {
+        ReleaseSRWLockExclusive(&ctx_rewrite_lock);
+        return;
+    }
+    // The victim thread is frozen: validate the pending request against its
+    // state and, on commit, redirect it into the abandon callback. On
+    // refusal the requester observes the verdict and withdraws; the current
+    // task continues untouched.
+    if (jl_abandon_try_commit(ptls2)) {
+        // Redirect the thread to call jl_abandon_task_cb (which never
+        // returns) on a minimal fake frame.
+#if defined(_CPU_X86_64_)
+        uintptr_t sp = (uintptr_t)ctxThread.Rsp;
+        sp = (sp - 256) & ~(uintptr_t)15; // skip resume data, realign
+        sp -= sizeof(uintptr_t); // fake return address slot
+        *(uintptr_t*)sp = 0;
+        ctxThread.Rsp = (DWORD64)sp;
+        ctxThread.Rip = (DWORD64)&jl_abandon_task_cb;
+#elif defined(_CPU_X86_)
+        uintptr_t sp = (uintptr_t)ctxThread.Esp;
+        sp = (sp - 64) & ~(uintptr_t)15;
+        sp -= sizeof(uintptr_t); // fake return address slot
+        *(uintptr_t*)sp = 0;
+        ctxThread.Esp = (DWORD)sp;
+        ctxThread.Eip = (DWORD)&jl_abandon_task_cb;
+#endif
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        SetThreadContext(ptls2->system_id, &ctxThread);
+    }
+    jl_thread_resume(tid);
+    ReleaseSRWLockExclusive(&ctx_rewrite_lock);
+}
+
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     int sig;

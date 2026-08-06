@@ -213,6 +213,23 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
+    // Task-abandonment handshake (see jl_abandon_task in task.c). One
+    // requester at a time owns the slot; delivery validates the victim's
+    // state at the point the thread is actually stopped and commits or
+    // refuses; a timed-out requester withdraws by CAS, arbitrating against
+    // a late delivery. `abandon_victim` and `abandon_to` are GC roots
+    // (thread scan) while the slot is active.
+#define JL_ABANDON_IDLE     0 // slot free
+#define JL_ABANDON_SETUP    1 // requester is writing the request
+#define JL_ABANDON_PENDING  2 // request published, delivery may take it
+#define JL_ABANDON_TAKEN    3 // delivery is validating
+#define JL_ABANDON_DONE     4 // committed; the callback is consuming the slot
+#define JL_ABANDON_REFUSED  5 // victim not abandonable; requester settles
+#define JL_ABANDON_FINISHED 6 // callback consumed the slot; requester settles
+    _Atomic(uint8_t) abandon_state;
+    struct _jl_task_t *abandon_victim;
+    // Target task for task abandonment
+    struct _jl_task_t *abandon_to;
     struct _jl_timing_block_t *timing_stack;
     // This is the location of our copy_stack
     void *stackbase;

@@ -820,6 +820,51 @@ static void jl_try_deliver_sigint(void)
     pthread_mutex_unlock(&ctx_rewrite_lock);
 }
 
+// Switch the target thread's current (already committed) task to
+// ptls->abandon_to (see jl_abandon_task): suspend the thread, validate the
+// pending request against its frozen state, and on commit redirect it into
+// the abandon callback. Holds the rewrite lock like every other
+// suspend-and-rewrite path (see its definition above), and the profile read
+// lock across the liveness re-check and suspension so the thread cannot
+// exit in between.
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    pthread_mutex_lock(&ctx_rewrite_lock);
+    jl_lock_profile();
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL) {
+        jl_unlock_profile();
+        pthread_mutex_unlock(&ctx_rewrite_lock);
+        return;
+    }
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    kern_return_t ret = thread_suspend(thread);
+    jl_unlock_profile();
+    if (ret != KERN_SUCCESS) {
+        pthread_mutex_unlock(&ctx_rewrite_lock);
+        return;
+    }
+    // The victim thread is suspended: validate the pending request against
+    // its frozen state and, on commit, redirect it into the abandon
+    // callback (which never returns). On refusal the requester observes the
+    // verdict and withdraws; the current task continues untouched.
+    if (jl_abandon_try_commit(ptls2)) {
+        host_thread_state_t state;
+        unsigned int count = MACH_THREAD_STATE_COUNT;
+        memset(&state, 0, sizeof(state));
+        if (thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count) == KERN_SUCCESS) {
+            jl_noreturn_call_in_state(&state, (void (*)(void))&jl_abandon_task_cb, 0, 0);
+            thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
+        }
+    }
+    if (thread_resume(thread) != KERN_SUCCESS)
+        jl_safe_printf("error: thread_resume failed in task abandonment\n");
+    pthread_mutex_unlock(&ctx_rewrite_lock);
+}
+
 static void jl_exit_thread0_cb(int signo)
 {
     jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);

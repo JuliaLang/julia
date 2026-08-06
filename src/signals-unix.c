@@ -620,13 +620,15 @@ static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *c
     }
     signals_inflight++;
     sig_atomic_t request = jl_atomic_exchange(&ptls2->signal_request, 1);
-    // A parked best-effort cancellation request (5) may occupy the slot
-    // indefinitely - its victim may never consume it (e.g. a thread with
-    // SIGUSR2 blocked) - and its sender tolerates a lost delivery (recovery
-    // is level-triggered at the task's next cancellation point), so the
-    // suspend handshake may displace it. The handshake states 1-4/-1 cannot
-    // appear here: those settle under in_signal_lock, which we hold.
-    assert(request == 0 || request == -1 || request == 5 || request == 6);
+    // A parked best-effort cancellation (5), preempt (6) or abandon (7)
+    // request may occupy the slot indefinitely - its victim may never
+    // consume it (e.g. a thread with SIGUSR2 blocked) - and all three
+    // senders tolerate a lost delivery (level-triggered recovery, a polled
+    // request byte, and a resend-until-settled loop respectively), so the
+    // suspend handshake may displace them. The handshake states 1-4/-1
+    // cannot appear here: those settle under in_signal_lock, which we hold.
+    assert(request == 0 || request == -1 || request == 5 || request == 6 ||
+           request == 7);
     request = 1;
     err = pthread_kill(ptls2->system_id, SIGUSR2);
     if (err == 0) {
@@ -714,6 +716,28 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
 }
 
 
+
+// Send a signal to the specified thread to abandon the current task.
+// The target task to switch to must already be published in
+// ptls2->abandon_to (state JL_ABANDON_PENDING; see jl_abandon_task).
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    pthread_mutex_lock(&in_signal_lock);
+    // Like the cancellation sender, this produces no acknowledgment token.
+    // Abandonment overrides a pending best-effort cancellation (5) or
+    // preempt (6) signal, but must not disturb a suspend handshake in
+    // progress (requests 1-4 / processing) - jl_abandon_task re-sends until
+    // the request settles.
+    sig_atomic_t expected = 0;
+    if (jl_atomic_cmpswap(&ptls2->signal_request, &expected, 7) ||
+        ((expected == 5 || expected == 6) &&
+         jl_atomic_cmpswap(&ptls2->signal_request, &expected, 7)))
+        pthread_kill(ptls2->system_id, SIGUSR2);
+    pthread_mutex_unlock(&in_signal_lock);
+}
 
 // Throw jl_interrupt_exception if the master thread is in a signal async region
 // or if SIGINT happens too often.
@@ -809,11 +833,11 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         usr2_signal_context = NULL;
         assert(request == 2 || request == 3 || request == 4);
     }
-    if (request != 5 && request != 6) {
+    if (request != 5 && request != 6 && request != 7) {
         // Acknowledge the request to its synchronously waiting sender. The
-        // cancellation sender (request 5) is fire-and-forget and never
-        // consumes the token; writing it would poison the next suspend
-        // handshake with a stale acknowledgment.
+        // cancellation, preempt and abandon senders (requests 5-7) are
+        // fire-and-forget and never consume the token; writing it would
+        // poison the next suspend handshake with a stale acknowledgment.
         int err;
         eventfd_t got = 1;
         err = write(signal_caught_cond, &got, sizeof(eventfd_t));
@@ -913,6 +937,17 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
                 asan_unpoison_task_stack(ct, &reset_ctx->mctx);
                 jl_longjmp_in_ctx(sig, ctx, reset_ctx->mctx, reset_code);
             }
+        }
+    }
+    else if (request == 7) {
+        // Task abandonment: validate the pending request against this
+        // thread's actual state (we ARE the victim thread, stopped in this
+        // handler, so nothing can change under the check) and, on commit,
+        // redirect into the abandon callback (which must not return) to
+        // switch to ptls->abandon_to. On refusal the requester observes the
+        // verdict and withdraws; the current task continues untouched.
+        if (jl_abandon_try_commit(ct->ptls)) {
+            jl_call_in_ctx(ct->ptls, jl_abandon_task_cb, sig, ctx);
         }
     }
     errno = errno_save;

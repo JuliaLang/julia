@@ -1398,6 +1398,9 @@ void jl_safepoint_defer_sigint(void) JL_NOTSAFEPOINT;
 // to be delivered.
 int jl_safepoint_consume_sigint(void) JL_CANSAFEPOINT;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
+int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+void JL_NORETURN jl_abandon_task_cb(void);
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)

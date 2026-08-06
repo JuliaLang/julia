@@ -149,9 +149,11 @@ end
 
 # task states
 
-const task_state_runnable = UInt8(0)
-const task_state_done     = UInt8(1)
-const task_state_failed   = UInt8(2)
+const task_state_runnable  = UInt8(0)
+const task_state_done      = UInt8(1)
+const task_state_failed    = UInt8(2)
+# like _failed, but the task was forcibly abandoned and may have leaked resources
+const task_state_abandoned = UInt8(3)
 
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
@@ -163,6 +165,8 @@ const task_state_failed   = UInt8(2)
             return :done
         elseif st === task_state_failed
             return :failed
+        elseif st === task_state_abandoned
+            return :abandoned
         else
             @assert false "unexpected state"
         end
@@ -260,7 +264,58 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = ((@atomic :acquire t._state) === task_state_failed)
+function istaskfailed(t::Task)
+    st = @atomic :acquire t._state
+    return st === task_state_failed || st === task_state_abandoned
+end
+
+"""
+    unsafe_abandon!(t::Task, next_task::Task) -> Bool
+
+Forcibly abandon task `t` and switch its thread to `next_task`, discarding
+`t`'s execution. Returns `true` if the abandonment committed: `t`'s state is
+`:abandoned` and it will never run another instruction.
+
+Returns `false` - with `t` untouched and still running - when the abandonment
+could not be performed safely: `t` was not (or no longer) current on its
+thread, the delivery found it holding *runtime* state that must not be
+discarded (runtime locks, a running finalizer or inhibited finalizers - which
+includes holding a `ReentrantLock` - or a signal-deferral region), another
+abandonment was already in flight for that thread, or delivery timed out.
+The validation happens on the target thread at the point it is actually
+stopped, so a `false` return is authoritative, not a racy guess; callers
+retry or fall back to freezing the task in place.
+
+This is used to implement `CANCEL_REQUEST_ABANDON_ALL` where a task needs to
+be stopped without waiting for it to reach a safe cancellation point.
+
+!!! warning
+    This is a dangerous operation. The abandoned task may have acquired *user*
+    locks or other resources that will be leaked, potentially causing
+    deadlocks in future code. It should only be used as a last-resort method
+    to recover a system when tasks are unable to process cancellation.
+
+!!! note
+    The task must be currently running on a thread for this to have effect;
+    use [`cancel!`](@ref) with `CANCEL_REQUEST_ABANDON_ALL` to also stop
+    parked or queued tasks.
+"""
+function unsafe_abandon!(t::Task, next_task::Task)
+    ok = ccall(:jl_abandon_task, Cint, (Any, Any), t, next_task) != 0
+    if ok
+        # An abandoned task never goes through the regular task completion
+        # path, so wake up anyone waiting on it. (The waiters observe the
+        # already-stored abandoned state; they do not touch the task's stack.
+        # The root task's donenotify may be `nothing`.)
+        donenotify = t.donenotify
+        if donenotify isa ThreadSynchronizer
+            lock(donenotify)
+            notify(donenotify)
+            unlock(donenotify)
+        end
+    end
+    return ok
+end
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)
@@ -1057,7 +1112,15 @@ const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprec
 workqueue_for(tid::Int) = Workqueues[tid]
 
 function enq_work(t::Task)
-    (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    state = t._state
+    if state === task_state_abandoned
+        # A task frozen by forcible abandonment leaves its waitqueue
+        # registrations behind by design; a later notify of such a stale
+        # entry lands here. The wakeup is consumed by the abandoned task -
+        # drop it silently.
+        return t
+    end
+    (state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
     (@atomic :monotonic t.waiting_on) === nothing ||
         throw(ConcurrencyViolationError("schedule: Task is registered on a wait queue"))
 
@@ -1280,7 +1343,7 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     # state error instead.
     if t._state === task_state_done
         return x
-    elseif t._state === task_state_failed
+    elseif t._state === task_state_failed || t._state === task_state_abandoned
         throw(t.result)
     end
     # [task] user_time -yield-> wait_time
@@ -1389,21 +1452,40 @@ function ensure_rescheduled(othertask::Task)
     nothing
 end
 
+function discard_stale_workqueue_task(t::Task)
+    # A task frozen in place by forcible abandonment is completed without
+    # ever leaving the queues it was registered with (a workqueue, or a
+    # waitqueue whose later notify re-enqueues it here); discard it. Any
+    # other non-runnable state means the task somehow got queued twice -
+    # probably broken now, but try discarding this switch and keep going.
+    # We can't throw here, because it's probably not the fault of the caller
+    # to wait, and don't want to use print() here, because that may try to
+    # incur a task switch.
+    if t._state !== task_state_abandoned
+        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
+    end
+    nothing
+end
+
 function trypoptask(W::StickyWorkqueue)
     while !isempty(W)
         t = popfirst!(W)
         if t._state !== task_state_runnable
-            # assume this somehow got queued twice,
-            # probably broken now, but try discarding this switch and keep going
-            # can't throw here, because it's probably not the fault of the caller to wait
-            # and don't want to use print() here, because that may try to incur a task switch
-            ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
+            discard_stale_workqueue_task(t)
             continue
         end
         return t
     end
-    return Partr.multiq_deletemin()
+    while true
+        t = Partr.multiq_deletemin()
+        t === nothing && return nothing
+        if t._state !== task_state_runnable
+            discard_stale_workqueue_task(t)
+            continue
+        end
+        return t
+    end
 end
 
 checktaskempty = Partr.multiq_check_empty
