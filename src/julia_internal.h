@@ -949,6 +949,9 @@ JL_CALLABLE(jl_f_tuple) JL_CANSAFEPOINT;
 void jl_install_default_signal_handlers(void) JL_NOTSAFEPOINT;
 void restore_signals(void) JL_NOTSAFEPOINT;
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT;
+extern _Atomic(int) jl_sigint_dispatch_pending;
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;
@@ -1376,8 +1379,7 @@ void jl_safepoint_init(void) JL_NOTSAFEPOINT;
 // this function returns
 int jl_safepoint_start_gc(jl_task_t *ct) JL_CANSAFEPOINT;
 // Can only be called by the thread that have got a `1` return value from
-// `jl_safepoint_start_gc()`. This disables the safepoint (for GC,
-// the `mprotect` may not be removed if there's pending SIGINT) and wake
+// `jl_safepoint_start_gc()`. This disables the safepoint (for GC) and wakes
 // up waiting threads if there's any.
 // The caller should restore `gc_state` **AFTER** calling this function.
 void jl_safepoint_end_gc(void) JL_CANSAFEPOINT;
@@ -1387,16 +1389,8 @@ void jl_safepoint_end_gc(void) JL_CANSAFEPOINT;
 void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT;
 void jl_safepoint_wait_thread_resume(jl_task_t *ct) JL_NOTSAFEPOINT;
 void jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-// Set pending sigint and enable the mechanisms to deliver the sigint.
-void jl_safepoint_enable_sigint(void) JL_NOTSAFEPOINT;
-// If the safepoint is enabled to deliver sigint, disable it
-// so that the thread won't repeatedly trigger it in a sigatomic region
-// while not being able to actually throw the exception.
-void jl_safepoint_defer_sigint(void) JL_NOTSAFEPOINT;
-// Clear the sigint pending flag and disable the mechanism to deliver sigint.
-// Return `1` if the sigint should be delivered and `0` if there's no sigint
-// to be delivered.
-int jl_safepoint_consume_sigint(void) JL_CANSAFEPOINT;
+void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;

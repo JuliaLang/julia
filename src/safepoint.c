@@ -15,14 +15,13 @@
 extern "C" {
 #endif
 
-// 0: no sigint is pending
-// 1: at least one sigint is pending, only the sigint page is enabled.
-// 2: at least one sigint is pending, both safepoint pages are enabled.
-JL_DLLEXPORT sig_atomic_t jl_signal_pending = 0;
 _Atomic(uint32_t) jl_gc_running = 0;
 char *jl_safepoint_pages = NULL;
 // The number of safepoints enabled on the three pages.
-// The first page, is the SIGINT page, only used by the master thread.
+// The first page was the legacy SIGINT force-throw page; nothing arms it
+// anymore (SIGINT is delivered through the cancellation system), but it is
+// kept in the layout so the GC pages' addresses and the tls safepoint
+// pointer arithmetic stay unchanged.
 // The second page, is the GC page for the master thread, this is where
 // the `safepoint` tls pointer points to for the master thread.
 // The third page is the GC page for the other threads. The thread's
@@ -37,7 +36,6 @@ uint16_t jl_safepoint_enable_cnt[4] = {0, 0, 0, 0};
 // or accessing one of the following variables:
 //
 // * jl_gc_running
-// * jl_signal_pending
 // * jl_safepoint_enable_cnt
 //
 // Additionally accessing `jl_gc_running` should use acquire/release
@@ -122,7 +120,7 @@ void jl_safepoint_init(void)
 //    (void)r; //if (r) perror("mprotect");
 //#endif
     // The signal page is for the gc safepoint.
-    // The page before it is the sigint pending flag.
+    // The page before it is the legacy (never armed) SIGINT page.
     jl_safepoint_pages = addr;
 }
 
@@ -244,6 +242,27 @@ void jl_set_gc_and_wait(jl_task_t *ct)
     jl_gc_notify_task_resume(ct);
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+}
+
+// Exclude garbage collection for a brief critical section on a thread that
+// does not participate in stop-the-world (the SIGINT listener thread, a
+// Windows console-ctrl handler thread). Holding `safepoint_lock` blocks
+// `jl_safepoint_start_gc`; a collection already in flight is waited out on
+// `safepoint_cond_end` (broadcast by `jl_safepoint_end_gc`), which releases
+// the lock while waiting so the collection can finish. Between `begin` and
+// `end` no collection can run - the regime the weak cancellation-source
+// child lists are designed for (the collector splices them only with the
+// world stopped). Keep such sections short and free of other locks.
+void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER
+{
+    uv_mutex_lock(&safepoint_lock);
+    while (jl_atomic_load_acquire(&jl_gc_running))
+        uv_cond_wait(&safepoint_cond_end, &safepoint_lock);
+}
+
+void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE
+{
+    uv_mutex_unlock(&safepoint_lock);
 }
 
 // this is the core of jl_set_gc_and_wait
@@ -401,61 +420,6 @@ int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
     return suspend_count;
 }
 
-void jl_safepoint_enable_sigint(void)
-{
-    uv_mutex_lock(&safepoint_lock);
-    // Make sure both safepoints are enabled exactly once for SIGINT.
-    switch (jl_signal_pending) {
-    default:
-        assert(0 && "Shouldn't happen.");
-    case 0:
-        // Enable SIGINT page
-        jl_safepoint_enable(0);
-        // fall through
-    case 1:
-        // SIGINT page is enabled, enable GC page
-        jl_safepoint_enable(1);
-        // fall through
-    case 2:
-        jl_signal_pending = 2;
-    }
-    uv_mutex_unlock(&safepoint_lock);
-}
-
-void jl_safepoint_defer_sigint(void)
-{
-    uv_mutex_lock(&safepoint_lock);
-    // Make sure the GC safepoint is disabled for SIGINT.
-    if (jl_signal_pending == 2) {
-        jl_safepoint_disable(1);
-        jl_signal_pending = 1;
-    }
-    uv_mutex_unlock(&safepoint_lock);
-}
-
-int jl_safepoint_consume_sigint(void)
-{
-    int has_signal = 0;
-    uv_mutex_lock(&safepoint_lock);
-    // Make sure both safepoints are disabled for SIGINT.
-    switch (jl_signal_pending) {
-    default:
-        assert(0 && "Shouldn't happen.");
-    case 2:
-        // Disable gc page
-        jl_safepoint_disable(1);
-        // fall through
-    case 1:
-        // GC page is disabled, disable SIGINT page
-        jl_safepoint_disable(0);
-        has_signal = 1;
-        // fall through
-    case 0:
-        jl_signal_pending = 0;
-    }
-    uv_mutex_unlock(&safepoint_lock);
-    return has_signal;
-}
 
 #ifdef __cplusplus
 }
