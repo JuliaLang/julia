@@ -128,7 +128,8 @@ void jl_gc_init(void) {
     int has_mmtk_max_heap_sizing = max_size_def != NULL || max_size_gb != NULL;
     int use_mmtk_heap_sizing = has_mmtk_min_heap_sizing || has_mmtk_max_heap_sizing;
 
-    // Assert that the number of stock GC threads is 0; MMTK uses the number of threads in jl_options.ngcthreads
+    // Assert that the number of stock GC threads is 0; MMTk's GC threads are not part of
+    // Julia's own thread array and are sized separately from jl_n_markthreads/jl_n_sweepthreads below
     assert(jl_n_gcthreads == 0);
 
     // Check that the julia_copy_stack rust feature has been defined when the COPY_STACK has been defined
@@ -178,10 +179,13 @@ void jl_gc_init(void) {
     // if (jl_generating_output())
     //     mmtk_set_concurrent_marking_enabled(0);
 
+    // Offset by 1. Julia counts the mutator thread as a GC thread, but MMTk does not.
+    // So we add 1 to the number of mark threads to get the total number of GC threads.
+    uintptr_t gcthreads = jl_n_markthreads + 1;
+    uintptr_t concurrent_gcthreads = jl_n_sweepthreads;
+
     // if min and max are the same initialize MMTk with a fixed size heap
     // otherwise use a dynamic heap between min and max
-    uintptr_t gcthreads = jl_options.nmarkthreads;
-    uintptr_t concurrent_gcthreads = jl_options.nsweepthreads;
     if (!use_mmtk_heap_sizing) {
         mmtk_gc_init(0, 0, gcthreads, concurrent_gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     }
@@ -1404,7 +1408,6 @@ JL_DLLEXPORT uint64_t jl_get_pg_size(void)
     return MMTK_GC_PAGE_SZ;
 }
 
-// Not used by mmtk
 // Number of GC threads that may run parallel marking
 int jl_n_markthreads;
 // Number of GC threads that may run concurrent sweeping (0 or 1)
