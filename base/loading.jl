@@ -2254,7 +2254,12 @@ end
 # returns the set of modules restored if the cache load succeeded
 @constprop :none function _require_search_from_serialized(pkg::PkgId, sourcespec::PkgLoadSpec, build_id::UInt128, stalecheck::Bool; reasons=nothing, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
     assert_havelock(require_lock)
-    paths = lazy_cachefile_candidates(pkg, sourcespec.path, DEPOT_PATH)
+    # a cache file the precompilation driver already validated for this exact
+    # operation is tried first and trusted; anything else gets the full
+    # staleness treatment
+    pre = get(preresolved_cachefiles, pkg, nothing)
+    candidates = lazy_cachefile_candidates(pkg, sourcespec.path, DEPOT_PATH)
+    paths = pre === nothing ? candidates : Iterators.flatten(((pre,), candidates))
     newdeps = PkgId[]
     try_build_ids = UInt128[build_id]
     if build_id == UInt128(0)
@@ -2268,7 +2273,9 @@ end
     end
     for build_id in try_build_ids
         @label next_path for path_to_try in paths
-            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons, stalecheck)
+            trusted = path_to_try === pre
+            staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons,
+                                        stalecheck = stalecheck && !trusted, verify_checksums = !trusted)
             if staledeps === true
                 continue
             end
@@ -2312,9 +2319,13 @@ end
                     @assert canstart_loading(modkey, modbuild_id, stalecheck) === nothing
                     package_locks[modkey] = (current_task(), Threads.Condition(require_lock), modbuild_id)
                     startedloading = i
-                    modpaths = lazy_cachefile_candidates(modkey, modspec.path, DEPOT_PATH)
+                    mpre = get(preresolved_cachefiles, modkey, nothing)
+                    modcandidates = lazy_cachefile_candidates(modkey, modspec.path, DEPOT_PATH)
+                    modpaths = mpre === nothing ? modcandidates : Iterators.flatten(((mpre,), modcandidates))
                     for modpath_to_try in modpaths
-                        modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try; stalecheck)
+                        modtrusted = modpath_to_try === mpre
+                        modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try;
+                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted)
                         if modstaledeps === true
                             continue
                         end
@@ -2493,6 +2504,11 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", because they are explicitly loaded, and the process should try to avoid invalidating them
+
+# cache files for dependencies that the parent precompilation driver has already
+# validated or just created; they are tried first and trusted when loading
+# (like stdlib caches), with the regular candidate search as fallback
+const preresolved_cachefiles = Dict{PkgId,String}() # protected by require_lock
 const _require_dependencies = Any[] # a list of (mod::Module, abspath::String, fsize::UInt64, hash::UInt32, mtime::Float64) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 
@@ -3405,7 +3421,8 @@ const newly_inferred = []
 
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, syntax_version::VersionNumber, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
-                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
+                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String},
+                                    preresolved::Vector{Pair{PkgId,String}}=Pair{PkgId,String}[])
 
     @lock require_lock begin
     m = start_loading(pkg, UInt128(0), false)
@@ -3418,6 +3435,9 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
+    for (k, v) in preresolved
+        preresolved_cachefiles[k] = v
+    end
     end
 
     uuid_tuple = pkg.uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, pkg.uuid)
@@ -3498,7 +3518,8 @@ const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
 function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                            internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
-                           report_timing::Bool=false)
+                           report_timing::Bool=false,
+                           preresolved::Vector{Pair{PkgId,String}} = @lock(require_lock, collect(preresolved_cachefiles)))
     @nospecialize internal_stderr internal_stdout
     depot_path = String[abspath(x) for x in DEPOT_PATH]
     dl_load_path = String[abspath(x) for x in DL_LOAD_PATH]
@@ -3563,7 +3584,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_syntax_version)), $(repr(depot_path)), $(repr(dl_load_path)),
-            $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))))
+            $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))), $(_pkg_str(preresolved)))
         """)
     close(io.in)
     return io
@@ -3629,7 +3650,8 @@ const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
-                      pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
+                      pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false,
+                      preresolved::Vector{Pair{PkgId,String}} = @lock(require_lock, collect(preresolved_cachefiles)))
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3667,7 +3689,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing)
+        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing, preresolved)
 
         # Report the PID of the compilation subprocess
         if pid_channel !== nothing

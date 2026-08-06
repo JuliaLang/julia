@@ -1162,6 +1162,12 @@ precompilation:
   is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to CPU_THREADS + 1).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
+# cache files this driver has already validated or created, to be trusted by
+# the workers it spawns (empty vectors belong to packages still in flight)
+function preresolved_snapshot(s::PrecompileSession)
+    @lock s.cache_lock Pair{Base.PkgId,String}[k => first(v) for (k, v) in s.cachepath_cache if !isempty(v)]
+end
+
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -2236,7 +2242,8 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             t = @elapsed ret = begin
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch, report_timing=true)
+                                                  pid_channel=pid_ch, report_timing=true,
+                                                  preresolved=preresolved_snapshot(s))
                             end
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
@@ -2261,7 +2268,8 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 end
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch, report_timing=true)
+                                                  pid_channel=pid_ch, report_timing=true,
+                                                  preresolved=preresolved_snapshot(s))
                             end
                         end
                         if ret isa Exception
