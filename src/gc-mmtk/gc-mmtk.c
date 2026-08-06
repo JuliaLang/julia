@@ -173,12 +173,6 @@ void jl_gc_init(void) {
         exit(1);
     }
 
-    // Disable concurrent marking when generating output to verify the task
-    // init fix; remove this once all concurrent-marking issues are confirmed
-    // fixed.
-    // if (jl_generating_output())
-    //     mmtk_set_concurrent_marking_enabled(0);
-
     // Offset by 1. Julia counts the mutator thread as a GC thread, but MMTk does not.
     // So we add 1 to the number of mark threads to get the total number of GC threads.
     uintptr_t gcthreads = jl_n_markthreads + 1;
