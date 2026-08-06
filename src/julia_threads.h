@@ -235,6 +235,13 @@ typedef struct _jl_tls_states_t {
     // (raw - this slot carries the reference until the requester's
     // write-barrier settle) - never into a still-running task.
     struct _jl_value_t *abandon_result;
+    // Requester's wakeup handle (may be NULL for polling requesters), staged
+    // with the request and pinged by the delivery paths when the request
+    // settles. uv_async_send is async-signal-safe, and its latched
+    // trigger is consumed by exactly one waiter - the slot's single
+    // requester. The handle's lifetime is the requester's problem: it
+    // outlives the request (the slot state machine brackets every ping).
+    uv_async_t *abandon_notify;
     // Set while this thread is inside ctx_switch with the outgoing context
     // only partially saved; abandonment delivery refuses such a thread.
     volatile sig_atomic_t in_task_switch;

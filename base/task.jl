@@ -301,50 +301,42 @@ victim's thread.
 unsafe_abandon!(t::Task, next_task::Task) =
     unsafe_abandon!(t, next_task, CancellationRequest(0x4)) # CANCEL_REQUEST_ABANDON_ALL
 
-# The delivery paths settle the request slot from signal context, where
-# `uv_async_send` is the one legal wakeup: a process-global AsyncCondition
-# (created lazily, registered with the runtime, kept open for the process
-# lifetime) makes the requester-side waits event-driven. Spurious wakeups
-# (another thread's abandonment settling) re-check and re-park.
-const _abandon_notify_cond = Ref{Any}(nothing) # Union{Nothing, AsyncCondition}; untyped for bootstrap order
-const _abandon_notify_lock = ReentrantLock()
-function _abandon_notify!()
-    c = _abandon_notify_cond[]
-    c === nothing || return c
-    lock(_abandon_notify_lock; cancel=nothing)
-    try
-        c = _abandon_notify_cond[]
-        if c === nothing
-            c = AsyncCondition()
-            ccall(:jl_set_abandon_notify_handle, Cvoid, (Ptr{Cvoid},), c.handle)
-            _abandon_notify_cond[] = c
-        end
-        return c
-    finally
-        unlock(_abandon_notify_lock)
-    end
-end
-
 function unsafe_abandon!(t::Task, next_task::Task, @nospecialize(result))
-    tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any), t, next_task, result)
-    tid < 0 && return false
+    # The requester's own wakeup handle, staged with the request in the
+    # victim thread's abandon slot: the delivery paths ping it (from signal
+    # context, where uv_async_send is the one legal wakeup) when the
+    # request settles. One requester per slot means one consumer per
+    # handle, which is exactly the AsyncCondition trigger's latched,
+    # consume-once semantics - a settle that lands inside the check/park
+    # window below is caught by the latch.
+    async = AsyncCondition()
+    tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any, Ptr{Cvoid}),
+                t, next_task, result, async.handle)
+    if tid < 0
+        close(async)
+        return false
+    end
     tid = tid % Int16
-    # Acquired (and, first time, created) only after the request is
-    # published with its signal in flight: the victim may be a checkless
-    # spin blocking GC's stop-the-world, which any allocation here could
-    # otherwise join before the delivery frees it. The delivery bit cannot
-    # be coalesced away, so the single send suffices; a settle that races
-    # the condition's registration is caught by the poll below (poll first,
-    # then wait - the settle's ping latches on the registered handle).
-    cond = _abandon_notify!()
     ok = false
-    while true
-        verdict = ccall(:jl_abandon_task_poll, Cint, (Int16,), tid)
-        if verdict != 0
-            ok = verdict == 1
-            break
+    try
+        while true
+            verdict = ccall(:jl_abandon_task_poll, Cint, (Int16,), tid)
+            if verdict == 1 || verdict == -1
+                ok = verdict == 1
+                break
+            elseif verdict == 2
+                # mid-settle: the ping was already sent (pre-terminal, so it
+                # can never race this handle's close below); the verdict is
+                # microseconds away
+                ccall(:jl_cpu_pause, Cvoid, ())
+            else
+                wait(async; cancel=nothing)
+            end
         end
-        wait(cond; cancel=nothing)
+    finally
+        # Safe only after the terminal consume: pings happen strictly
+        # before the terminal state becomes visible.
+        close(async)
     end
     if ok
         # A forcibly abandoned task never goes through the regular task

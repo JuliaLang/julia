@@ -1915,8 +1915,8 @@ if threadpoolsize() >= 2
         end
         rescue = Task(() -> (while true; wait(); end))
         rescue.sticky = false
-        tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any),
-                    victim, rescue, Base.CancellationRequest(0x4))
+        tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any, Ptr{Cvoid}),
+                    victim, rescue, Base.CancellationRequest(0x4), C_NULL)
         @test tid >= 0
         # undeliverable: the request stays pending
         @test ccall(:jl_abandon_task_poll, Cint, (Int16,), tid % Int16) == 0
