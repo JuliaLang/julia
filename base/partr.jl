@@ -176,6 +176,10 @@ function multiq_insert(task::Task, priority::UInt16)
     if task.priority < priority
         @atomic :monotonic heap.priority = task.priority
     end
+    # count the task before it becomes visible at unlock: a consumer's
+    # decrement must not precede this increment, or the wake gate would
+    # transiently undercount the pending work
+    ccall(:jl_sched_nready_inc, Cvoid, (Int8,), tpid)
     unlock(heap.lock)
 
     return true
@@ -244,6 +248,7 @@ function multiq_deletemin()
         prio1 = heap.tasks[1].priority
     end
     @atomic :monotonic heap.priority = prio1
+    ccall(:jl_sched_nready_dec, Cvoid, (Int8,), tp - 1)
     unlock(heap.lock)
 
     return task
