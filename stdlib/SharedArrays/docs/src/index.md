@@ -14,4 +14,6 @@ SharedArrays.procs(::SharedArray)
 SharedArrays.sdata
 SharedArrays.indexpids
 SharedArrays.localindices
+SharedArrays.unshare!
+Base.close(::SharedArray)
 ```
