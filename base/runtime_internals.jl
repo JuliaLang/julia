@@ -1800,6 +1800,22 @@ function get_ci_mi(codeinst::CodeInstance)
 end
 
 """
+    Base.get_ci_abi(codeinst::CodeInstance)
+
+The signature `codeinst` is compiled against, i.e. the tuple type its generated
+code takes as arguments. This is the `specTypes` of its `MethodInstance` unless a
+`Core.ABIOverride` replaces it. Mirrors the C `jl_get_ci_abi`.
+"""
+function get_ci_abi(codeinst::CodeInstance)
+    def = codeinst.def
+    if def isa Core.ABIOverride
+        return def.abi
+    else
+        return (def::MethodInstance).specTypes
+    end
+end
+
+"""
     Base.generating_output([incremental::Bool])::Bool
 
 Return `true` if the current process is being used to pre-generate a
