@@ -89,7 +89,14 @@ impl JuliaGCTrigger {
 }
 
 impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
-    fn on_pause_start(&self, mmtk: &'static MMTK<JuliaVM>) {
+    // The following two hooks are called for every pause
+    // fn on_pause_start(&self, _mmtk: &'static MMTK<JuliaVM>)
+    // fn on_pause_end(&self, _mmtk: &'static MMTK<JuliaVM>)
+
+    // on_gc_start/on_gc_end are called for every GC cycle
+    // For concurrent GCs, on_gc_start is called at the beginning of the pause that starts a GC cycle, and on_gc_end is called at the end of the pause that ends a GC cycle.
+    /// Note that this trigger is designed for stop-the-world GCs, and has not been adapted to concurrent GCs.
+    fn on_gc_start(&self, mmtk: &'static MMTK<JuliaVM>) {
         self.maybe_force_full_heap(mmtk);
 
         let reserved_pages_now =
@@ -119,7 +126,7 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
         );
     }
 
-    fn on_pause_end(&self, mmtk: &'static MMTK<JuliaVM>) {
+    fn on_gc_end(&self, mmtk: &'static MMTK<JuliaVM>) {
         let gc_end_time = unsafe { jl_hrtime() } as usize;
         let pause = gc_end_time - self.gc_start_time.load(Ordering::Relaxed);
         self.gc_end_time.store(gc_end_time, Ordering::Relaxed);
