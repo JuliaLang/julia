@@ -863,7 +863,8 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         if (hctx != NULL) {
             // Handler flavor: run the registered cancellation handler right
             // here, inside the delivering signal handler, and resume the
-            // interrupted computation by returning. The kernel's signal
+            // interrupted computation by returning (hence no GC gate: a
+            // thread counted by a stop still reaches its park). The kernel's signal
             // frame preserves the complete interrupted register state
             // (including FP), so the handler may clobber anything an
             // ordinary C function may; it just runs under the usual
@@ -887,15 +888,19 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         }
         else {
             // Reset flavor, additionally gated on the thread running Julia
-            // code (gc_state == 0): a thread inside a GC-safe region (e.g.
-            // a foreign call reached through a reset-safe callee) may be
-            // raced by a concurrent stop-the-world, and a longjmp back into
-            // Julia code would break that protocol.
+            // code (gc_state == 0) with no stop-the-world in progress: a
+            // thread inside a GC-safe region (e.g. a foreign call reached
+            // through a reset-safe callee) may be raced by a concurrent
+            // stop-the-world, and a thread observed as UNSAFE may already
+            // have been counted by a stop and be about to take its resume
+            // back and park (see jl_set_gc_and_wait); a longjmp back into
+            // Julia code would break that protocol in either case.
             int reset_code = request == 6 ? JL_RESET_CODE_PREEMPT : JL_RESET_CODE_CANCEL;
             jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct->reset_ctx);
             if (reset_ctx != NULL && reset_ctx->sp != 0 &&
                 (request == 6 || bound_cancelled) &&
-                jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE) {
+                jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE &&
+                !jl_atomic_load_acquire(&jl_gc_running)) {
                 // Abandon the interrupted register state and longjmp to the
                 // reset point, whose re-executed check observes the
                 // cancellation and throws. Clear reset_ctx before the
