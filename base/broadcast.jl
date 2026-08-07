@@ -740,20 +740,18 @@ broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
-_broadcast_getindex_eltype(bc::Broadcasted) = combine_eltypes(bc.f, bc.args)
-_broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
+_bc_eltype(bc::Broadcasted, i) = bc.f(_bc_eltypes(bc.args, i)...)
+_bc_eltype(A::AbstractArray, i) = Base.inferencebarrier(A)[i]::eltype(A)
+_bc_eltype(A::AbstractArray{<:Any,0}, i) = _broadcast_getindex(A, i)
+_bc_eltype(x, i) = _broadcast_getindex(x, i)
 
-eltypes(::Tuple{}) = Tuple{}
-eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
-eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
-eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
-# eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
+_bc_eltypes(args::Tuple, i) = (_bc_eltype(args[1], i), _bc_eltypes(tail(args), i)...)
+_bc_eltypes(args::Tuple{Any}, i) = (_bc_eltype(args[1], i),)
+_bc_eltypes(::Tuple{}, i) = ()
 
-# Inferred eltype of result of broadcast(f, args...)
-function combine_eltypes(f, args::Tuple)
-    argT = eltypes(args)
-    argT === Union{} && return Union{}
-    return promote_typejoin_union(Base._return_type(f, argT))
+function result_eltype(bc::Broadcasted)
+    rettype = Base._return_type(_bc_eltype, Tuple{typeof(bc), eltype(eachindex(bc))})
+    return promote_typejoin_union(rettype)
 end
 
 ## Broadcasting core
@@ -925,7 +923,7 @@ copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
 @inline function copy(bc::Broadcasted)
-    ElType = combine_eltypes(bc.f, bc.args)
+    ElType = result_eltype(bc)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
         return copyto!(similar(bc, ElType), bc)
