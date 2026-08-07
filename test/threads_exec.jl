@@ -1752,6 +1752,37 @@ end
     end
 end
 
+@testset "multiq: pinned task at a heap head does not block the queue" begin
+    # A runnable task whose tid is pinned to another thread (sticky there, on
+    # a thread-local copied stack, or still switching away) can reach the head
+    # of a multiqueue heap. It must be handed off to the pinned thread's own
+    # workqueue rather than left blocking every task queued behind it, which
+    # livelocks the pool when the pinned thread never drains the multiqueue.
+    tids = Threads.threadpooltids(Threads.threadpool())
+    if length(tids) >= 2
+        othertid = tids[something(findfirst(!=(Threads.threadid()), tids))]
+        pinned = Task(() -> nothing)
+        pinned.sticky = false
+        @test ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), pinned,
+                    Threads._sym_to_tpid(Threads.threadpool())) == 1
+        @test ccall(:jl_set_task_tid, Cint, (Any, Cint), pinned, othertid - 1) == 1
+        @test Base.Partr.multiq_insert(pinned, UInt16(0))
+        # deletemin must never return the pinned task to this thread; it hands
+        # it to `othertid`'s workqueue (or that thread pops and runs it first).
+        # Requeue any unrelated task it happens to give us.
+        for _ in 1:1000
+            (pinned.queue !== nothing || istaskdone(pinned)) && break
+            t = Base.Partr.multiq_deletemin()
+            @test t !== pinned
+            t === nothing || Base.enq_work(t)
+        end
+        @test pinned.queue !== nothing || istaskdone(pinned)
+        # the relocated task is still runnable by the thread it is pinned to
+        wait(pinned)
+        @test istaskdone(pinned)
+    end
+end
+
 include("threads_comprehensions.jl")
 
 # This test is designed to trigger the performance regression from #60241:
