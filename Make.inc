@@ -2032,6 +2032,61 @@ LOADER_DEBUG_INSTALL_DEP_LIBS = $(call build_deplibs, \
     @$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB) \
 )
 
+# The shared libraries, other than Julia's own, that the runtime depends on at run time.
+# These are a subset of the private libraries that the top level Makefile installs, which
+# also cover the libraries of standard libraries (LibGit2, OpenBLAS, ...) and libraries that
+# we ship without depending on them. They live here rather than in the top level Makefile so
+# that `base/Makefile` can see them too: it generates `Base.RUNTIME_LIBRARY_NAMES` from
+# them, which `Base.Linking.runtime_libraries` reports to tools that ship a program
+# embedding the runtime, such as `juliac`.
+#
+# The `-0`/`-1` suffix is the value of the corresponding `USE_SYSTEM_*` flag, because the
+# top level Makefile installs the two from different directories. Only `+=` is used, so that
+# `$(LLVM_SHARED_LIB_NAME)` is expanded by the consumer, which has `deps/llvm-ver.make`.
+JL_RUNTIME_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
+JL_RUNTIME_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
+JL_RUNTIME_LIBS-$(USE_SYSTEM_GMP) += libgmp
+JL_RUNTIME_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
+JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUV) += libuv
+ifeq ($(OS),WINNT)
+JL_RUNTIME_LIBS-$(USE_SYSTEM_ZLIB) += zlib
+else
+JL_RUNTIME_LIBS-$(USE_SYSTEM_ZLIB) += libz
+endif
+JL_RUNTIME_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
+JL_RUNTIME_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
+ifeq ($(USE_SYSTEM_LIBM),0)
+JL_RUNTIME_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
+endif
+# compiler support libraries: anything we ship may depend on these. Note that `libc++` is
+# not here, because on macOS the runtime uses the one from the system, and neither is
+# `libpthread`, which the compiler support libraries do not ship on a current glibc.
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libgfortran libquadmath libstdc++ libgcc_s libgomp libssp libatomic
+ifeq ($(OS),WINNT)
+JL_RUNTIME_LIBS-$(USE_SYSTEM_CSL) += libwinpthread
+endif
+ifeq ($(SANITIZE),1)
+ifeq ($(USECLANG),1)
+JL_RUNTIME_LIBS-0 += libclang_rt.asan-*
+else
+JL_RUNTIME_LIBS-0 += libasan
+endif
+endif
+ifeq ($(WITH_TRACY),1)
+JL_RUNTIME_LIBS-0 += libTracyClient
+endif
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+JL_RUNTIME_LIBS-0 += libmmtk_julia
+endif
+JL_RUNTIME_LIBS = $(JL_RUNTIME_LIBS-0) $(JL_RUNTIME_LIBS-1)
+
+# Libraries that are only needed to generate native code at run time, reported separately so
+# that a program which never does can leave them out.
+ifeq ($(USE_LLVM_SHLIB),1)
+JL_RUNTIME_CODEGEN_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
+endif
+JL_RUNTIME_CODEGEN_LIBS = $(JL_RUNTIME_CODEGEN_LIBS-0) $(JL_RUNTIME_CODEGEN_LIBS-1)
+
 # Colors for make
 ifndef VERBOSE
 VERBOSE := 0
