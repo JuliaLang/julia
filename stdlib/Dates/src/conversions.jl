@@ -36,6 +36,11 @@ Base.convert(::Type{Millisecond},dt::DateTime) = Millisecond(value(dt))        #
 Base.convert(::Type{Date},x::Day)  = Date(Dates.UTInstant(x))  # Converts Rata Die days to a Date
 Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date to Rata Die days
 
+Base.convert(::Type{DateTime},x::Milliseconds)  = DateTime(Dates.UTInstant(Millisecond(value(x))))  # Converts Rata Die milliseconds to a DateTime
+Base.convert(::Type{Milliseconds},dt::DateTime) = Milliseconds(value(dt))        # Converts DateTime to Rata Die milliseconds
+Base.convert(::Type{Date},x::Days)  = Date(Dates.UTInstant(Day(value(x))))  # Converts Rata Die days to a Date
+Base.convert(::Type{Days},dt::Date) = Days(value(dt))            # Converts Date to Rata Die days
+
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
 

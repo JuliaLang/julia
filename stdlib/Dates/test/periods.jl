@@ -557,4 +557,69 @@ end
     @test_throws MethodError convert(Dates.FixedPeriod, Minute(1) + Second(30))
 end
 
+# Tests for plural Period duration types
+@testset "plural period duration types" begin
+    # Test constructors, value, string parsing and units
+    @test Dates.value(Years(3)) == 3
+    @test Years("5") == Years(5)
+    @test string(Years(3)) == "3 years"
+    @test string(Days(1)) == "1 days"
+    @test string(Days(0)) == "0 days"
+    @test string(Seconds(10)) == "10 seconds"
+
+    # Test singular/plural conversion and promotion
+    @test convert(Year, Years(2)) === Year(2)
+    @test convert(Years, Year(2)) === Years(2)
+    @test promote(Years(1), Year(2)) === (Years(1), Years(2))
+    @test Years(1) == Year(1)
+    @test Days(7) == Week(1)
+    @test Hours(24) == Day(1)
+
+    # Test arithmetic with Date, DateTime, Time
+    d = Date(2020, 1, 1)
+    dt = DateTime(2020, 1, 1, 12, 0, 0)
+    t = Time(12, 0, 0)
+
+    @test d + Years(1) == Date(2021, 1, 1)
+    @test d + Months(2) == Date(2020, 3, 1)
+    @test d + Weeks(1) == Date(2020, 1, 8)
+    @test d + Days(10) == Date(2020, 1, 11)
+
+    @test dt + Hours(2) == DateTime(2020, 1, 1, 14, 0, 0)
+    @test dt + Minutes(30) == DateTime(2020, 1, 1, 12, 30, 0)
+    @test dt + Seconds(45) == DateTime(2020, 1, 1, 12, 0, 45)
+    @test dt + Milliseconds(500) == DateTime(2020, 1, 1, 12, 0, 0, 500)
+
+    @test t + Hours(1) == Time(13, 0, 0)
+    @test t + Minutes(15) == Time(12, 15, 0)
+    @test t + Seconds(30) == Time(12, 0, 30)
+    @test t + Milliseconds(100) == Time(12, 0, 0, 100)
+    @test t + Microseconds(200) == Time(12, 0, 0, 0, 200)
+    @test t + Nanoseconds(300) == Time(12, 0, 0, 0, 0, 300)
+
+    # Test eps and zero return singular types and equal plural types
+    @test eps(DateTime) === Millisecond(1)
+    @test eps(Date) === Day(1)
+    @test eps(Time) === Nanosecond(1)
+    @test eps(DateTime) == Milliseconds(1)
+    @test eps(Date) == Days(1)
+    @test eps(Time) == Nanoseconds(1)
+
+    @test zero(DateTime) === Millisecond(0)
+    @test zero(Date) === Day(0)
+    @test zero(Time) === Nanosecond(0)
+    @test zero(DateTime) == Milliseconds(0)
+    @test zero(Date) == Days(0)
+    @test zero(Time) == Nanoseconds(0)
+
+    # Subtraction returns singular Millisecond period
+    @test dt - DateTime(2020, 1, 1, 11, 0, 0) === Millisecond(3600000)
+    @test dt - DateTime(2020, 1, 1, 11, 0, 0) == Hours(1)
+
+    # Test FixedPeriod cross-type comparisons
+    @test Days(1) == Milliseconds(86400000)
+    @test Hours(1) < Days(1)
+    @test Seconds(60) == Minutes(1)
+end
+
 end

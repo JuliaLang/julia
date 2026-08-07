@@ -49,13 +49,13 @@ Conversions between all `TimePeriod`s are permissible.
 """
 abstract type TimePeriod <: Period end
 
-for T in (:Year, :Quarter, :Month, :Week, :Day)
+for T in (:Year, :Quarter, :Month, :Week, :Day, :Years, :Quarters, :Months, :Weeks, :Days)
     @eval struct $T <: DatePeriod
         value::Int64
         $T(v::Number) = new(v)
     end
 end
-for T in (:Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
+for T in (:Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond, :Hours, :Minutes, :Seconds, :Milliseconds, :Microseconds, :Nanoseconds)
     @eval struct $T <: TimePeriod
         value::Int64
         $T(v::Number) = new(v)
@@ -169,6 +169,7 @@ struct DateTime <: AbstractDateTime
     instant::UTInstant{Millisecond}
     DateTime(instant::UTInstant{Millisecond}) = new(instant)
 end
+DateTime(instant::UTInstant{Milliseconds}) = DateTime(UTInstant(Millisecond(value(instant.periods))))
 
 """
     Date
@@ -179,6 +180,7 @@ struct Date <: TimeType
     instant::UTInstant{Day}
     Date(instant::UTInstant{Day}) = new(instant)
 end
+Date(instant::UTInstant{Days}) = Date(UTInstant(Day(value(instant.periods))))
 
 """
     Time
@@ -189,6 +191,7 @@ struct Time <: TimeType
     instant::Nanosecond
     Time(instant::Nanosecond) = new(mod(instant, 86400000000000))
 end
+Time(instant::Nanoseconds) = Time(Nanosecond(value(instant)))
 
 # Convert y,m,d to # of Rata Die days
 # Works by shifting the beginning of the year to March 1,
@@ -314,19 +317,29 @@ end
 
 Time(dt::Base.Libc.TmStruct) = Time(dt.hour, dt.min, dt.sec)
 
+const AnyYear = Union{Year, Years}
+const AnyMonth = Union{Month, Months}
+const AnyDay = Union{Day, Days}
+const AnyHour = Union{Hour, Hours}
+const AnyMinute = Union{Minute, Minutes}
+const AnySecond = Union{Second, Seconds}
+const AnyMillisecond = Union{Millisecond, Milliseconds}
+const AnyMicrosecond = Union{Microsecond, Microseconds}
+const AnyNanosecond = Union{Nanosecond, Nanoseconds}
+
 # Convenience constructors from Periods
-function DateTime(y::Year, m::Month=Month(1), d::Day=Day(1),
-                  h::Hour=Hour(0), mi::Minute=Minute(0),
-                  s::Second=Second(0), ms::Millisecond=Millisecond(0))
+function DateTime(y::AnyYear, m::AnyMonth=Month(1), d::AnyDay=Day(1),
+                  h::AnyHour=Hour(0), mi::AnyMinute=Minute(0),
+                  s::AnySecond=Second(0), ms::AnyMillisecond=Millisecond(0))
     return DateTime(value(y), value(m), value(d),
                     value(h), value(mi), value(s), value(ms))
 end
 
-Date(y::Year, m::Month=Month(1), d::Day=Day(1)) = Date(value(y), value(m), value(d))
+Date(y::AnyYear, m::AnyMonth=Month(1), d::AnyDay=Day(1)) = Date(value(y), value(m), value(d))
 
-function Time(h::Hour, mi::Minute=Minute(0), s::Second=Second(0),
-              ms::Millisecond=Millisecond(0),
-              us::Microsecond=Microsecond(0), ns::Nanosecond=Nanosecond(0))
+function Time(h::AnyHour, mi::AnyMinute=Minute(0), s::AnySecond=Second(0),
+              ms::AnyMillisecond=Millisecond(0),
+              us::AnyMicrosecond=Microsecond(0), ns::AnyNanosecond=Nanosecond(0))
     return Time(value(h), value(mi), value(s), value(ms), value(us), value(ns))
 end
 
@@ -342,13 +355,13 @@ function DateTime(period::Period, periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
     h = Hour(0); mi = Minute(0); s = Second(0); ms = Millisecond(0)
     for p in (period, periods...)
-        isa(p, Year) && (y = p::Year)
-        isa(p, Month) && (m = p::Month)
-        isa(p, Day) && (d = p::Day)
-        isa(p, Hour) && (h = p::Hour)
-        isa(p, Minute) && (mi = p::Minute)
-        isa(p, Second) && (s = p::Second)
-        isa(p, Millisecond) && (ms = p::Millisecond)
+        isa(p, AnyYear) && (y = p)
+        isa(p, AnyMonth) && (m = p)
+        isa(p, AnyDay) && (d = p)
+        isa(p, AnyHour) && (h = p)
+        isa(p, AnyMinute) && (mi = p)
+        isa(p, AnySecond) && (s = p)
+        isa(p, AnyMillisecond) && (ms = p)
     end
     return DateTime(y, m, d, h, mi, s, ms)
 end
@@ -362,9 +375,9 @@ not provided will default to the value of `Dates.default(period)`.
 function Date(period::Period, periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
     for p in (period, periods...)
-        isa(p, Year) && (y = p::Year)
-        isa(p, Month) && (m = p::Month)
-        isa(p, Day) && (d = p::Day)
+        isa(p, AnyYear) && (y = p)
+        isa(p, AnyMonth) && (m = p)
+        isa(p, AnyDay) && (d = p)
     end
     return Date(y, m, d)
 end
@@ -379,12 +392,12 @@ function Time(period::TimePeriod, periods::TimePeriod...)
     h = Hour(0); mi = Minute(0); s = Second(0)
     ms = Millisecond(0); us = Microsecond(0); ns = Nanosecond(0)
     for p in (period, periods...)
-        isa(p, Hour) && (h = p::Hour)
-        isa(p, Minute) && (mi = p::Minute)
-        isa(p, Second) && (s = p::Second)
-        isa(p, Millisecond) && (ms = p::Millisecond)
-        isa(p, Microsecond) && (us = p::Microsecond)
-        isa(p, Nanosecond) && (ns = p::Nanosecond)
+        isa(p, AnyHour) && (h = p)
+        isa(p, AnyMinute) && (mi = p)
+        isa(p, AnySecond) && (s = p)
+        isa(p, AnyMillisecond) && (ms = p)
+        isa(p, AnyMicrosecond) && (us = p)
+        isa(p, AnyNanosecond) && (ns = p)
     end
     return Time(h, mi, s, ms, us, ns)
 end
