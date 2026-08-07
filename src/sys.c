@@ -783,8 +783,8 @@ static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
 // into Julia, and may be used from a JL_NOTSAFEPOINT function.
 static void *jl_dlopen_noload(const char *filename) JL_NOTSAFEPOINT
 {
-#ifdef __clang_gcanalyzer__
-    // hidden from the checker, which only knows the general contract of jl_dlopen
+#if defined(__clang_gcanalyzer__) || defined(__clang_safetyanalysis__)
+    // hidden from the analyzers, which only know the general contract of jl_dlopen
     return NULL;
 #else
     return jl_dlopen(filename, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);

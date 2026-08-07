@@ -1684,9 +1684,8 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARAR
     return jv;
 }
 
-JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
+STATIC_INLINE jl_value_t *new_structv(jl_task_t *ct, jl_datatype_t *type, jl_value_t **args, uint32_t na) JL_CANSAFEPOINT
 {
-    jl_task_t *ct = jl_current_task;
     if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     }
@@ -1707,7 +1706,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
         if (jl_field_offset(type, 0) != 0) {
             memset(jl_data_ptr(jv), 0, jl_field_offset(type, 0));
         }
-        JL_GC_PUSH1(&jv);
+        JL_GC_PUSH1_(&ct->gcstack, &jv);
         for (size_t i = 0; i < na; i++) {
             set_nth_field(type, jv, i, args[i], 0);
         }
@@ -1716,9 +1715,20 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
             size_t offs = jl_field_offset(type, na);
             memset(data + offs, 0, jl_datatype_size(type) - offs);
         }
-        JL_GC_POP();
+        JL_GC_POP_(&ct->gcstack);
     }
     return jv;
+}
+
+JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
+{
+    return new_structv(jl_current_task, type, args, na);
+}
+
+// Wrapper around jl_new_structv for use with @julia.call in codegen
+JL_DLLEXPORT jl_value_t *jl_f_new_structv(jl_gcframe_t **pgcstack, jl_value_t *type, jl_value_t **args, uint32_t na)
+{
+    return new_structv(container_of(pgcstack, jl_task_t, gcstack), (jl_datatype_t *)type, args, na);
 }
 
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
@@ -2058,12 +2068,13 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
             jl_undefined_var_error(name, (jl_value_t*)mod);
         jl_throw(jl_undefref_exception);
     }
+    jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_value_t **args;
-    JL_GC_PUSHARGS(args, 2);
+    JL_GC_PUSHARGS_(pgcstack, args, 2);
     args[0] = r;
     while (1) {
         args[1] = rhs;
-        jl_value_t *y = jl_apply_generic(op, args, 2);
+        jl_value_t *y = jl_apply_generic(pgcstack, op, args, 2);
         args[1] = y;
         if (b)
             jl_check_binding_assign_value(b, mod, name, y, "modifyglobal!");
@@ -2081,7 +2092,7 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
     jl_datatype_t *rettyp = jl_apply_modify_type(ty);
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
     args[0] = jl_new_struct(rettyp, args[0], args[1]);
-    JL_GC_POP();
+    JL_GC_POP_(pgcstack);
     return args[0];
 }
 
@@ -2097,8 +2108,9 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
     else {
         hasptr = ((jl_datatype_t*)layout_ty)->layout->first_ptr >= 0;
     }
+    jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_value_t **args;
-    JL_GC_PUSHARGS(args, 2);
+    JL_GC_PUSHARGS_(pgcstack, args, 2);
     while (1) {
         jl_value_t *r;
         jl_value_t *rty = isunion ? normalize_typeofbottom_layout_alias(jl_nth_union_component(ty, *psel)) : layout_ty;
@@ -2108,7 +2120,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
             r = jl_atomic_new_bits(rty, p);
         }
         else if (needlock) {
-            jl_task_t *ct = jl_current_task;
+            jl_task_t *ct = container_of(pgcstack, jl_task_t, gcstack);
             r = jl_gc_alloc(ct->ptls, fsz, rty);
             char *px = lock(p, parent, needlock, isatomic);
             memcpy((char*)r, px, fsz);
@@ -2122,7 +2134,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
             jl_throw(jl_undefref_exception);
         args[0] = r;
         args[1] = rhs;
-        jl_value_t *y = jl_apply_generic(op, args, 2);
+        jl_value_t *y = jl_apply_generic(pgcstack, op, args, 2);
         args[1] = y;
         if (!jl_isa(y, ty)) {
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
@@ -2175,7 +2187,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
     jl_datatype_t *rettyp = jl_apply_modify_type(ty);
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
     args[0] = jl_new_struct(rettyp, args[0], args[1]);
-    JL_GC_POP();
+    JL_GC_POP_(pgcstack);
     return args[0];
 }
 
@@ -2804,7 +2816,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
 {
     size_t n = jl_svec_len(typevars);
     if (n == 0)
-        return jl_f_tuple(NULL, NULL, 0);
+        return jl_f_tuple(jl_get_pgcstack(), NULL, NULL, 0);
 
     // Allocate arrays for tracking. results has one extra (rooted) slot that
     // holds the deferred-typecache list array.
@@ -3094,7 +3106,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_value_t *old = jl_svecref(old_types, i);
             if (old == jl_nothing)
                 continue;
-            if (!equiv_type(old, results[i]))
+            if (!equiv_type(jl_get_pgcstack(), old, results[i]))
                 continue;
             // Structural match; now verify field types match too
             jl_datatype_t *old_dt = (jl_datatype_t*)jl_unwrap_unionall(old);
@@ -3170,7 +3182,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
     htable_free(&dcache.group);
 
     // Build result tuple
-    jl_value_t *result = jl_f_tuple(NULL, results, n);
+    jl_value_t *result = jl_f_tuple(jl_get_pgcstack(), NULL, results, n);
     JL_GC_POP();
     return result;
 }

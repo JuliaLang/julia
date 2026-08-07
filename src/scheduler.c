@@ -383,9 +383,10 @@ JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid)
 static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q) JL_CANSAFEPOINT
 {
     jl_gc_safepoint();
-    jl_task_t *task = (jl_task_t*)jl_apply_generic(trypoptask, &q, 1);
+    jl_task_t *ct = jl_current_task;
+    jl_task_t *task = (jl_task_t*)jl_apply_generic(&ct->gcstack, trypoptask, &q, 1);
     if (jl_is_task(task)) {
-        int self = jl_atomic_load_relaxed(&jl_current_task->tid);
+        int self = jl_atomic_load_relaxed(&ct->tid);
         jl_set_task_tid(task, self);
         return task;
     }
@@ -394,7 +395,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q) JL_CANSAF
 
 static int check_empty(jl_value_t *checkempty) JL_CANSAFEPOINT
 {
-    return jl_apply_generic(checkempty, NULL, 0) == jl_true;
+    return jl_apply_generic(jl_get_pgcstack(), checkempty, NULL, 0) == jl_true;
 }
 
 jl_task_t *wait_empty JL_GLOBALLY_ROOTED;
@@ -409,9 +410,9 @@ void jl_task_wait_empty(void)
         jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("wait"), ct->world_age);
         wait_empty = ct;
         if (f) {
-            JL_GC_PUSH1(&f);
-            jl_apply_generic(f, NULL, 0);
-            JL_GC_POP();
+            JL_GC_PUSH1_(&ct->gcstack, &f);
+            jl_apply_generic(&ct->gcstack, f, NULL, 0);
+            JL_GC_POP_(&ct->gcstack);
         }
         // we are back from jl_task_get_next now
         ct->world_age = lastage;

@@ -1271,7 +1271,7 @@ CFI_NORETURN
                 // without those checks would turn a field mutation into an ABI mismatch
                 // (undefined behavior), not a Julia-level error.
                 jl_value_t *invoke_args[2] = {ct->start, ct->invoked};
-                res = jl_f_invoke(NULL, invoke_args, 2);
+                res = jl_f_invoke(&ct->gcstack, NULL, invoke_args, 2);
             }
             else {
                 res = jl_apply(&ct->start, 1);

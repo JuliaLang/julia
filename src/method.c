@@ -719,10 +719,11 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
 static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
         size_t world, jl_svec_t *sparam_vals, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT
 {
+    jl_gcframe_t **pgcstack = jl_get_pgcstack();
     size_t n_sparams = jl_svec_len(sparam_vals);
     jl_value_t **gargs;
     size_t totargs = 2 + n_sparams + def->nargs;
-    JL_GC_PUSHARGS(gargs, totargs);
+    JL_GC_PUSHARGS_(pgcstack, gargs, totargs);
     gargs[0] = jl_box_ulong(world);
     gargs[1] = (jl_value_t*)def;
     memcpy(&gargs[2], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
@@ -736,9 +737,9 @@ static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
     }
     memcpy(&gargs[2 + n_sparams], args, (def->nargs - def->isva) * sizeof(void*));
     if (def->isva)
-        gargs[totargs - 1] = jl_f_tuple(NULL, &args[def->nargs - 1], nargs - def->nargs + 1);
-    jl_value_t *code = jl_apply_generic(generator, gargs, totargs);
-    JL_GC_POP();
+        gargs[totargs - 1] = jl_f_tuple(pgcstack, NULL, &args[def->nargs - 1], nargs - def->nargs + 1);
+    jl_value_t *code = jl_apply_generic(pgcstack, generator, gargs, totargs);
+    JL_GC_POP_(pgcstack);
     return code;
 }
 

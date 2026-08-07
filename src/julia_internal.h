@@ -836,7 +836,7 @@ JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specs
 JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs) JL_CANSAFEPOINT;
 
 jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
-jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc) JL_CANSAFEPOINT;
+jl_value_t *jl_invoke_fromdispatch(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
@@ -943,7 +943,7 @@ JL_DLLEXPORT jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t) JL_CANSAFEPOINT;
 
 #define JL_CALLABLE(name)                                               \
-    JL_DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
+    JL_DLLEXPORT jl_value_t *name(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 JL_CALLABLE(jl_f_tuple) JL_CANSAFEPOINT;
 void jl_install_default_signal_handlers(void) JL_NOTSAFEPOINT;
@@ -1025,7 +1025,7 @@ typedef struct {
 } jl_deferred_typecache_t;
 void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
 jl_value_t *jl_apply_type_deferred(jl_value_t *tc, jl_value_t **params, size_t n, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
-int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT;
+int equiv_type(jl_gcframe_t **pgcstack, jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT;
 int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT;
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
 jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v) JL_CANSAFEPOINT;
@@ -1096,7 +1096,7 @@ jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e, s
 JL_DLLEXPORT jl_value_t *jl_eval_globalref(jl_globalref_t *g, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_get_globalref_value(jl_globalref_t *gr, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var, size_t world) JL_CANSAFEPOINT;
-jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
+jl_value_t *jl_interpret_opaque_closure(jl_gcframe_t **, jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,
@@ -1110,8 +1110,8 @@ jl_method_instance_t *jl_builtin_method_lookup(jl_value_t *builtin) JL_CANSAFEPO
 JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world) JL_CANSAFEPOINT;
 jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t world) JL_CANSAFEPOINT;
 
-jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
-jl_value_t *jl_gf_invoke(jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
+jl_value_t *jl_gf_invoke_by_method(jl_gcframe_t **pgcstack, jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
+jl_value_t *jl_gf_invoke(jl_gcframe_t **pgcstack, jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_t *mt, size_t world, size_t *min_world, size_t *max_world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig) JL_CANSAFEPOINT;

@@ -324,7 +324,7 @@ static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *
 // Mach exception handler for a safepoint hit. This uses the same codepath
 // as the Unix signal handler (jl_set_gc_and_wait), so the faulting thread
 // participates in GC synchronization directly.
-static void mach_safepoint_trampoline(jl_ptls_t ptls)
+static void mach_safepoint_trampoline(jl_ptls_t ptls) JL_CANSAFEPOINT
 {
     // note: jl_current_task cannot be used here, since __thread variables
     //       may already be destroyed during thread teardown
@@ -402,7 +402,7 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void),
 #endif
 }
 
-static void segv_handler(int sig, siginfo_t *info, void *context)
+static void segv_handler(int sig, siginfo_t *info, void *context) JL_CANSAFEPOINT
 {
     assert(sig == SIGSEGV || sig == SIGBUS);
     jl_jmp_buf *saferestore = jl_get_safe_restore();
@@ -578,7 +578,7 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
-static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT
+static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1)
 {
     if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
         return 0;
@@ -603,7 +603,7 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) J
     return 1;
 }
 
-static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx) JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1)
 {
     (void)timeout;
     host_thread_state_t state;
@@ -614,7 +614,9 @@ static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *c
     return 1;
 }
 
-void jl_thread_resume(int tid)
+// The declared release of jl_notsafepoint is performed by the kernel's
+// thread_resume, which the analysis cannot see.
+void jl_thread_resume(int tid) JL_NO_SAFEPOINT_ANALYSIS
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
@@ -785,7 +787,10 @@ resume:
 
 // Throw jl_interrupt_exception if the master thread is in a signal async region
 // or if SIGINT happens too often.
-static void jl_try_deliver_sigint(void)
+// Analysis is disabled because this runs on the signal listener thread (not a
+// mutator, so never gc-unsafe) and consumes the sigint on behalf of thread 0,
+// which it holds suspended, a hand-off the capability model cannot express.
+static void jl_try_deliver_sigint(void) JL_NO_SAFEPOINT_ANALYSIS
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
@@ -873,8 +878,9 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     pthread_mutex_unlock(&ctx_rewrite_lock);
 }
 
-static void jl_exit_thread0_cb(int signo)
+static void jl_exit_thread0_cb(int signo) JL_CANSAFEPOINT
 {
+    jl_gc_enable_from_nonmutator(1);
     jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(signo);
@@ -903,8 +909,7 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);
 
-    ret = thread_resume(thread);
-    HANDLE_MACH_ERROR("thread_resume", ret);
+    jl_thread_resume(0);
 }
 
 static int profile_started = 0;
@@ -967,7 +972,7 @@ static kern_return_t profiler_segv_handler(
 #endif
 
 // WARNING: we are unable to handle sigsegv while the dlsymlock is held
-static int jl_lock_profile_mach(int dlsymlock)
+static int jl_lock_profile_mach(int dlsymlock) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER
 {
     jl_lock_profile();
     // workaround for old keymgr bugs
@@ -984,7 +989,7 @@ static int jl_lock_profile_mach(int dlsymlock)
     return keymgr_locked;
 }
 
-static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
+static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE
 {
     if (dlsymlock && _dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
         _dyld_atfork_parent();

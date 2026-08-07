@@ -312,15 +312,15 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_value_t *f, jl_value_t **args, uint32_t narg
     nargs++; // add f to args
     JL_TRY {
         jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, nargs);
+        JL_GC_PUSHARGS_(&ct->gcstack, argv, nargs);
         argv[0] = (jl_value_t*)f;
         for (int i = 1; i < nargs; i++)
             argv[i] = args[i - 1];
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        v = jl_apply(argv, nargs);
+        v = jl_apply_generic(&ct->gcstack, argv[0], &argv[1], nargs - 1);
         ct->world_age = last_age;
-        JL_GC_POP();
+        JL_GC_POP_(&ct->gcstack);
         _jl_exception_clear(ct);
     }
     JL_CATCH {
@@ -343,12 +343,12 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_value_t *f)
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
     JL_TRY {
-        JL_GC_PUSH1(&f);
+        JL_GC_PUSH1_(&ct->gcstack, &f);
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        v = jl_apply_generic(f, NULL, 0);
+        v = jl_apply_generic(&ct->gcstack, f, NULL, 0);
         ct->world_age = last_age;
-        JL_GC_POP();
+        JL_GC_POP_(&ct->gcstack);
         _jl_exception_clear(ct);
     }
     JL_CATCH {
@@ -373,14 +373,14 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_value_t *f, jl_value_t *a)
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 2);
+        JL_GC_PUSHARGS_(&ct->gcstack, argv, 2);
         argv[0] = f;
         argv[1] = a;
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        v = jl_apply(argv, 2);
+        v = jl_apply_generic(&ct->gcstack, argv[0], &argv[1], 1);
         ct->world_age = last_age;
-        JL_GC_POP();
+        JL_GC_POP_(&ct->gcstack);
         _jl_exception_clear(ct);
     }
     JL_CATCH {
@@ -406,15 +406,15 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_value_t *f, jl_value_t *a, jl_value_t *b)
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 3);
+        JL_GC_PUSHARGS_(&ct->gcstack, argv, 3);
         argv[0] = f;
         argv[1] = a;
         argv[2] = b;
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        v = jl_apply(argv, 3);
+        v = jl_apply_generic(&ct->gcstack, argv[0], &argv[1], 2);
         ct->world_age = last_age;
-        JL_GC_POP();
+        JL_GC_POP_(&ct->gcstack);
         _jl_exception_clear(ct);
     }
     JL_CATCH {
@@ -442,16 +442,16 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_value_t *f, jl_value_t *a,
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 4);
+        JL_GC_PUSHARGS_(&ct->gcstack, argv, 4);
         argv[0] = f;
         argv[1] = a;
         argv[2] = b;
         argv[3] = c;
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        v = jl_apply(argv, 4);
+        v = jl_apply_generic(&ct->gcstack, argv[0], &argv[1], 3);
         ct->world_age = last_age;
-        JL_GC_POP();
+        JL_GC_POP_(&ct->gcstack);
         _jl_exception_clear(ct);
     }
     JL_CATCH {
@@ -481,7 +481,7 @@ JL_DLLEXPORT jl_value_t *jl_call4(jl_value_t *f, jl_value_t *a,
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 5);
+        JL_GC_PUSHARGS_(&ct->gcstack, argv, 5);
         argv[0] = f;
         argv[1] = a;
         argv[2] = b;
@@ -489,9 +489,9 @@ JL_DLLEXPORT jl_value_t *jl_call4(jl_value_t *f, jl_value_t *a,
         argv[4] = d;
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        v = jl_apply(argv, 5);
+        v = jl_apply_generic(&ct->gcstack, argv[0], &argv[1], 4);
         ct->world_age = last_age;
-        JL_GC_POP();
+        JL_GC_POP_(&ct->gcstack);
         _jl_exception_clear(ct);
     }
     JL_CATCH {

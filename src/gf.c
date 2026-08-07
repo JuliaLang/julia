@@ -478,7 +478,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     // corrupts the compiler's state; defer it until inference has finished.
     JL_SIGATOMIC_BEGIN();
     JL_TRY {
-        ci = (jl_code_instance_t*)jl_apply(fargs, 5);
+        ci = (jl_code_instance_t*)jl_apply_generic(&ct->gcstack, fargs[0], &fargs[1], 4);
     }
     JL_CATCH {
         jl_value_t *e = jl_current_exception(ct);
@@ -549,11 +549,11 @@ JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t w
         JL_GC_PROMISE_ROOTED(CC);
         fargs[0] = jl_get_global_value(CC, jl_symbol("NativeInterpreter"), ct->world_age);
         fargs[1] = jl_box_ulong(world);
-        fargs[1] = jl_apply(fargs, 2);
+        fargs[1] = jl_apply_generic(&ct->gcstack, fargs[0], &fargs[1], 1);
         fargs[0] = jl_get_global_value(CC, jl_symbol("typeinf_code"), ct->world_age);
         fargs[2] = (jl_value_t*)mi;
         fargs[3] = jl_true;
-        ci = (jl_code_info_t*)jl_apply(fargs, 4);
+        ci = (jl_code_info_t*)jl_apply_generic(&ct->gcstack, fargs[0], &fargs[1], 3);
     }
     ct->world_age = last_age;
     ct->ptls->in_pure_callback = last_pure;
@@ -575,7 +575,7 @@ JL_DLLEXPORT jl_value_t *jl_call_in_typeinf_world(jl_value_t **args, int nargs) 
     ct->world_age = jl_typeinf_world;
     int last_pure = ct->ptls->in_pure_callback;
     ct->ptls->in_pure_callback = 0;
-    jl_value_t *ret = jl_apply(args, nargs);
+    jl_value_t *ret = jl_apply_generic(&ct->gcstack, args[0], &args[1], nargs - 1);
     ct->ptls->in_pure_callback = last_pure;
     ct->world_age = last_age;
     return ret;
@@ -3487,7 +3487,7 @@ static void JL_NORETURN jl_method_error_bare(jl_value_t *f, jl_value_t *args, si
 
 void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_method_error(jl_value_t *f, jl_value_t **args, size_t na, size_t world)
 {
-    jl_value_t *argtup = jl_f_tuple(NULL, args, na - 1);
+    jl_value_t *argtup = jl_f_tuple(jl_get_pgcstack(), NULL, args, na - 1);
     JL_GC_PUSH1(&argtup);
     jl_method_error_bare(f, argtup, world);
     // not reached
@@ -4165,16 +4165,16 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     return jl_compile_method_very_internal(mi, world, NULL, NULL, 0, TRIGGER_FOREIGN);
 }
 
-jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+jl_value_t *jl_fptr_const_return(jl_gcframe_t **pgcstack, jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     return m->rettype_const;
 }
 
-jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+jl_value_t *jl_fptr_args(jl_gcframe_t **pgcstack, jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     jl_fptr_args_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr1);
     assert(invoke && "Forgot to set specptr for jl_fptr_args!");
-    return invoke(f, args, nargs);
+    return invoke(pgcstack, f, args, nargs);
 }
 
 // Out-of-line entry point for `jl_sparam_defined_value`, for reads of runtime
@@ -4186,16 +4186,16 @@ JL_DLLEXPORT jl_value_t *jl_sparam_slot_value(jl_value_t *sp JL_PROPAGATES_ROOT)
     return jl_sparam_defined_value(sp);
 }
 
-jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+jl_value_t *jl_fptr_sparam(jl_gcframe_t **pgcstack, jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     jl_svec_t *sparams = jl_get_ci_mi(m)->sparam_vals;
     assert(sparams != jl_emptysvec);
     jl_fptr_sparam_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr3);
     assert(invoke && "Forgot to set specptr for jl_fptr_sparam!");
-    return invoke(f, args, nargs, sparams);
+    return invoke(pgcstack, f, args, nargs, sparams);
 }
 
-static jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m) JL_CANSAFEPOINT
+static jl_value_t *jl_fptr_wait_for_compiled(jl_gcframe_t **pgcstack, jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m) JL_CANSAFEPOINT
 {
     jl_callptr_t invoke = jl_atomic_load_acquire(&m->invoke);
     if (invoke == &jl_fptr_wait_for_compiled) {
@@ -4213,7 +4213,7 @@ static jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, u
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
         invoke = jl_atomic_load_acquire(&m->invoke);
     }
-    return invoke(f, args, nargs, m);
+    return invoke(pgcstack, f, args, nargs, m);
 }
 
 // test whether codeinst->invoke is usable already without further compilation needed
@@ -4558,13 +4558,13 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
     return v;
 }
 
-STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
+STATIC_INLINE jl_value_t *_jl_invoke(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
    enum internal_compilation_triggers cause) JL_CANSAFEPOINT
 {
     jl_code_instance_t *codeinst = NULL;
     jl_callptr_t invoke = jl_method_compiled_callptr(mfunc, world, &codeinst);
     if (invoke) {
-        jl_value_t *res = invoke(F, args, nargs, codeinst);
+        jl_value_t *res = invoke(pgcstack, F, args, nargs, codeinst);
         return verify_type(res);
     }
     int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
@@ -4580,20 +4580,20 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     invoke = jl_atomic_load_acquire(&codeinst->invoke);
-    jl_value_t *res = invoke(F, args, nargs, codeinst);
+    jl_value_t *res = invoke(pgcstack, F, args, nargs, codeinst);
     return verify_type(res);
 }
 
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
-    size_t world = jl_current_task->world_age;
-    return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
+    size_t world = container_of(pgcstack, jl_task_t, gcstack)->world_age;
+    return _jl_invoke(pgcstack, F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
 }
 
-jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+jl_value_t *jl_invoke_fromdispatch(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
-    size_t world = jl_current_task->world_age;
-    return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+    size_t world = container_of(pgcstack, jl_task_t, gcstack)->world_age;
+    return _jl_invoke(pgcstack, F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
 
 // Used by jl_eval_thunk to invoke top-level thunks.  They will be
@@ -4601,7 +4601,8 @@ jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t na
 // unregistered before we enter invoke, which may never return.
 jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
-    size_t world = jl_current_task->world_age;
+    jl_task_t *ct = jl_current_task;
+    size_t world = ct->world_age;
 
     int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
     int last_errno = errno;
@@ -4621,18 +4622,18 @@ jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, 
 #endif
     errno = last_errno;
 
-    jl_value_t *res = invoke(F, args,  nargs, codeinst);
+    jl_value_t *res = invoke(&ct->gcstack, F, args,  nargs, codeinst);
     return verify_type(res);
 }
 
-JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)F;
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = container_of(pgcstack, jl_task_t, gcstack);
     size_t last_age = ct->world_age;
     size_t world = oc->world;
     ct->world_age = world;
-    jl_value_t *ret = _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_NONE);
+    jl_value_t *ret = _jl_invoke(pgcstack, F, args, nargs, mfunc, world, TRIGGER_NONE);
     ct->world_age = last_age;
     return ret;
 }
@@ -4821,14 +4822,14 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
             jl_int32hash_fast(jl_return_address()), world, 0);
 }
 
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
-    size_t world = jl_current_task->world_age;
+    size_t world = container_of(pgcstack, jl_task_t, gcstack)->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
                                                      world, 1);
     JL_GC_PROMISE_ROOTED(mfunc);
-    return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+    return _jl_invoke(pgcstack, F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
 }
 
 // buggy way to lookup a method given a list of arguments
@@ -4895,11 +4896,11 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_
 // every definition has its own private method table for this purpose.
 //
 // NOTE: assumes argument type is a subtype of the lookup type.
-jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t *gf, jl_value_t **args, size_t nargs)
+jl_value_t *jl_gf_invoke(jl_gcframe_t **pgcstack, jl_value_t *types0, jl_value_t *gf, jl_value_t **args, size_t nargs)
 {
-    size_t world = jl_current_task->world_age;
+    size_t world = container_of(pgcstack, jl_task_t, gcstack)->world_age;
     jl_value_t *types = NULL;
-    JL_GC_PUSH1(&types);
+    JL_GC_PUSH1_(pgcstack, &types);
     types = jl_argtype_with_function((jl_value_t*)gf, types0);
     jl_method_t *method = (jl_method_t*)jl_gf_invoke_lookup(types, jl_nothing, world);
     JL_GC_PROMISE_ROOTED(method);
@@ -4911,11 +4912,11 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t *gf, jl_value_t **args, 
 
     // now we have found the matching definition.
     // next look for or create a specialization of this definition.
-    JL_GC_POP();
-    return jl_gf_invoke_by_method(method, gf, args, nargs);
+    JL_GC_POP_(pgcstack);
+    return jl_gf_invoke_by_method(pgcstack, method, gf, args, nargs);
 }
 
-jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs)
+jl_value_t *jl_gf_invoke_by_method(jl_gcframe_t **pgcstack, jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs)
 {
     jl_method_instance_t *mfunc = NULL;
     jl_typemap_entry_t *tm = NULL;
@@ -4929,7 +4930,7 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
         int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
         jl_svec_t *tpenv = jl_emptysvec;
         jl_tupletype_t *tt = NULL;
-        JL_GC_PUSH2(&tpenv, &tt);
+        JL_GC_PUSH2_(pgcstack, &tpenv, &tt);
         JL_LOCK(&method->writelock);
         invokes = jl_atomic_load_relaxed(&method->invokes);
         tm = jl_typemap_assoc_exact(invokes, gf, args, nargs, 1, 1);
@@ -4946,7 +4947,7 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
             mfunc = cache_result(NULL, NULL, &method->invokes, (jl_value_t*)method, tt, method, 1, 1, 1, 1, tpenv, /*tt_known_absent*/0);
         }
         JL_UNLOCK(&method->writelock);
-        JL_GC_POP();
+        JL_GC_POP_(pgcstack);
         if (jl_options.malloc_log)
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     }
@@ -4961,8 +4962,8 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
             record_dispatch_statement(mfunc);
         }
     }
-    size_t world = jl_current_task->world_age;
-    return _jl_invoke(gf, args, nargs - 1, mfunc, world, TRIGGER_INVOKE);
+    size_t world = container_of(pgcstack, jl_task_t, gcstack)->world_age;
+    return _jl_invoke(pgcstack, gf, args, nargs - 1, mfunc, world, TRIGGER_INVOKE);
 }
 
 static jl_sym_t *jl_gf_supertype_name(jl_sym_t *name)

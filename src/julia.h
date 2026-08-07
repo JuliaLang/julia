@@ -272,21 +272,21 @@ typedef struct _jl_typemap_entry_t jl_typemap_entry_t;
 // otherwise the leaf entries are stored sorted, linearly
 typedef jl_value_t jl_typemap_t;
 
-typedef jl_value_t *(jl_call_t)(jl_value_t*, jl_value_t**, uint32_t, struct _jl_code_instance_t*);
+typedef jl_value_t *(jl_call_t)(jl_gcframe_t **, jl_value_t*, jl_value_t**, uint32_t, struct _jl_code_instance_t*);
 typedef jl_call_t *jl_callptr_t JL_CANSAFEPOINT;
 
 // "speccall" calling convention signatures.
 // This describes some of the special ABI used by compiled julia functions.
 extern jl_call_t jl_fptr_args JL_CANSAFEPOINT;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_args_addr;
-typedef jl_value_t *(*jl_fptr_args_t)(jl_value_t*, jl_value_t**, uint32_t) JL_CANSAFEPOINT;
+typedef jl_value_t *(*jl_fptr_args_t)(jl_gcframe_t **, jl_value_t*, jl_value_t**, uint32_t) JL_CANSAFEPOINT;
 
 extern jl_call_t jl_fptr_const_return JL_CANSAFEPOINT;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_const_return_addr;
 
 extern jl_call_t jl_fptr_sparam JL_CANSAFEPOINT;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_sparam_addr;
-typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*) JL_CANSAFEPOINT;
+typedef jl_value_t *(*jl_fptr_sparam_t)(jl_gcframe_t **, jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*) JL_CANSAFEPOINT;
 
 extern jl_call_t jl_fptr_interpret_call JL_CANSAFEPOINT;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_interpret_call_addr;
@@ -1234,6 +1234,15 @@ extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
 
 extern void JL_GC_POP(void) JL_NOTSAFEPOINT;
 
+// Variants that take an explicit pgcstack pointer (e.g. the callee argument
+// of the jl_call_t calling convention) instead of loading it from TLS.
+// For the analyzer these are equivalent to the plain versions (but still
+// evaluate pgcstack, to avoid unused-variable warnings).
+#define JL_GC_PUSH1_(pgcstack, arg1) (void)(pgcstack); JL_GC_PUSH1(arg1)
+#define JL_GC_PUSH2_(pgcstack, arg1, arg2) (void)(pgcstack); JL_GC_PUSH2(arg1, arg2)
+#define JL_GC_PUSHARGS_(pgcstack, rts_var, n) (void)(pgcstack); JL_GC_PUSHARGS(rts_var, n)
+#define JL_GC_POP_(pgcstack) ((void)(pgcstack), JL_GC_POP())
+
 #else
 
 #define JL_GC_PUSH1(arg1)                                                                               \
@@ -1281,6 +1290,26 @@ extern void JL_GC_POP(void) JL_NOTSAFEPOINT;
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
 
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
+
+// Variants of the above that take an explicit pgcstack pointer (e.g. the
+// callee argument of the jl_call_t calling convention) instead of loading
+// it from thread-local state.
+#define JL_GC_PUSH1_(pgcstack, arg1)                                                                    \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(1), *(pgcstack), arg1};                                 \
+  *(pgcstack) = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH2_(pgcstack, arg1, arg2)                                                              \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(2), *(pgcstack), arg1, arg2};                           \
+  *(pgcstack) = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSHARGS_(pgcstack, rts_var, n)                                                           \
+  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;                                      \
+  ((void**)rts_var)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(n);                                              \
+  ((void**)rts_var)[-1] = *(pgcstack);                                                                  \
+  memset((void*)rts_var, 0, (n)*sizeof(jl_value_t*));                                                   \
+  *(pgcstack) = (jl_gcframe_t*)&(((void**)rts_var)[-2])
+
+#define JL_GC_POP_(pgcstack) (*(pgcstack) = (*(pgcstack))->prev)
 
 #endif
 
@@ -2067,6 +2096,7 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y, char *
 JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl_value_t *src, int nb) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_CANSAFEPOINT JL_ROOTED_VARARGS;
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_f_new_structv(jl_gcframe_t **, jl_value_t *, jl_value_t **, uint32_t) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void) JL_CANSAFEPOINT;
@@ -2506,14 +2536,14 @@ STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
 
 // calling into julia ---------------------------------------------------------
 
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_gcframe_t **, jl_value_t *F, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_gcframe_t **, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_gcframe_t **, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth) JL_CANSAFEPOINT;
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *linfo);
 
 STATIC_INLINE jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT
 {
-    return jl_apply_generic(args[0], &args[1], nargs - 1);
+    return jl_apply_generic(jl_get_pgcstack(), args[0], &args[1], nargs - 1);
 }
 
 JL_DLLEXPORT jl_value_t *jl_call(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t **args, uint32_t nargs) JL_CANSAFEPOINT;

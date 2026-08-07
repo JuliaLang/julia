@@ -549,12 +549,13 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
             jl_error("atomic_pointermodify: invalid pointer for atomic operation");
         expected = jl_atomic_new_bits(ety, pp);
     }
+    jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_value_t **args;
-    JL_GC_PUSHARGS(args, 2);
+    JL_GC_PUSHARGS_(pgcstack, args, 2);
     args[0] = expected;
     while (1) {
         args[1] = x;
-        jl_value_t *y = jl_apply_generic(f, args, 2);
+        jl_value_t *y = jl_apply_generic(pgcstack, f, args, 2);
         args[1] = y;
         if (ety == (jl_value_t*)jl_any_type) {
             if (jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &expected, y))
@@ -578,7 +579,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
     jl_datatype_t *rettyp = jl_apply_modify_type(ety);
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
     args[0] = jl_new_struct(rettyp, args[0], args[1]);
-    JL_GC_POP();
+    JL_GC_POP_(pgcstack);
     return args[0];
 }
 

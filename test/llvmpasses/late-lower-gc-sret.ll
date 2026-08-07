@@ -11,8 +11,8 @@ define hidden swiftcc nonnull ptr addrspace(10) @sret_select(ptr nonnull swiftse
   ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 6)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 3)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   ; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 6)
+  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   %pgcstack = call ptr @julia.get_pgcstack()
   %3 = alloca [3 x i64], align 8
   %4 = alloca [3 x i64], align 8
@@ -28,8 +28,8 @@ top:
   ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 6)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 3)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   ; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 6)
+  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   %pgcstack = call ptr @julia.get_pgcstack()
   %2 = alloca [3 x i64], align 8
   %3 = alloca [3 x i64], align 8
@@ -56,8 +56,8 @@ top:
   ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 2)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 1)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   ; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 2)
+  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   ; CHECK: alloca [3 x i64], align 8
   %pgcstack = call ptr @julia.get_pgcstack()
   %1 = alloca [3 x i64], align 8
@@ -88,8 +88,8 @@ top:
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 2)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 1)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   ; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 3)
+  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   ; CHECK: alloca [3 x i64], align 8
   %pgcstack = call ptr @julia.get_pgcstack()
   %1 = alloca [3 x i64], align 8
@@ -122,8 +122,8 @@ top:
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 2)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 1)
   ; CHECK: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
-  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   ; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 3)
+  ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
   ; CHECK: alloca [3 x i64], align 8
   %pgcstack = call ptr @julia.get_pgcstack()
   %1 = alloca [3 x i64], align 8

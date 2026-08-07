@@ -127,7 +127,9 @@ static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 #endif
 }
 
-void jl_lock_profile(void)
+// Analysis is disabled because it cannot see through the assert that the
+// conditional acquire always succeeds here.
+void jl_lock_profile(void) JL_NO_SAFEPOINT_ANALYSIS
 {
     int got = jl_trylock_profile();
     assert(got); (void)got;
