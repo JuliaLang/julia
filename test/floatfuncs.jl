@@ -133,6 +133,18 @@ end
     @test round(9.87654321e-308, sigdigits = 10) ≈ 9.87654321e-308
     @test round(9.87654321e-308, sigdigits = 11) ≈ 9.87654321e-308
 
+    # issue 46596: rounding to N significant digits should return the
+    # correctly-rounded float, not a value off by one ulp.
+    @test round(1.408841795657153e-40, sigdigits=3) === 1.41e-40
+    @test round(prevfloat(1.415e-40), sigdigits=3) === 1.41e-40
+    @test round(1e-30, sigdigits=1) === 1e-30
+    @test round(-2.3008132575662526e-24, sigdigits=3) === -2.3e-24
+    @test round(1.408841795657153e-40, RoundDown, sigdigits=3) === 1.4e-40
+    @test round(1.408841795657153e-40, RoundUp, sigdigits=3) === 1.41e-40
+    @test round(Float32(1.408841795657153e-30), sigdigits=3) === 1.41f-30
+    @test round(1e-30, digits=30) === 1e-30
+    @test round(1.408841795657153e-40, digits=42) === 1.41e-40
+
     @inferred round(Float16(1.), sigdigits=2)
     @inferred round(Float32(1.), sigdigits=2)
     @inferred round(Float64(1.), sigdigits=2)
