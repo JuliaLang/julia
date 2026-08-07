@@ -110,6 +110,17 @@ using Test, Random
         seekend(sb)
         @test read(sb, String) == ""
         shred!(sb)
+
+        # seekend(sb, n) seeks `n` bytes relative to the end; positive n is clamped to sb.size.
+        sb = SecretBuffer("hello")
+        @test seekend(sb, 0) === sb
+        @test position(sb) == sb.size
+        @test seekend(sb, -2) === sb
+        @test position(sb) == sb.size - 2
+        @test read(sb, String) == "lo"
+        @test seekend(sb, 2) === sb
+        @test position(sb) == sb.size
+        shred!(sb)
     end
     @testset "position" begin
         sb = SecretBuffer("Julia")
