@@ -804,6 +804,7 @@ static void jl_try_deliver_sigint(void)
     int force = jl_check_force_sigint();
     jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     int can_throw = ct2 != NULL && ct2->eh != NULL;
+    int wake_scheduler = 0;
     if (can_throw && (force || (!ptls2->defer_signal && ptls2->io_wait))) {
         jl_safepoint_consume_sigint();
         if (force)
@@ -813,11 +814,27 @@ static void jl_try_deliver_sigint(void)
     }
     else {
         jl_wake_libuv();
+        wake_scheduler = 1;
     }
 
     ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
     pthread_mutex_unlock(&ctx_rewrite_lock);
+
+    if (wake_scheduler) {
+        // Unlike the POSIX path, mach delivery does not run a signal handler
+        // on the target thread: the armed sigint safepoint is only consumed
+        // when thread 0 executes code again. jl_wake_libuv only reaches it
+        // inside uv_run; if it is parked in the scheduler's deep sleep
+        // (uv_cond_wait on wake_signal), nothing would ever wake it and the
+        // interrupt would be swallowed, so wake that path too. This must
+        // happen after thread_resume: the thread may have been suspended
+        // while holding its own sleep_lock.
+        surprise_wakeup(ptls2);
+        uv_mutex_lock(&ptls2->sleep_lock);
+        uv_cond_signal(&ptls2->wake_signal);
+        uv_mutex_unlock(&ptls2->sleep_lock);
+    }
 }
 
 // Switch the target thread's current (already committed) task to
