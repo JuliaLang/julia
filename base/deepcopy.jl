@@ -185,7 +185,7 @@ end
 # WeakRef must be constructed through its own constructor to register
 # the new object on the GC's per-thread weak reference list, which in turn is what
 # lets the collector null out 'value' once the referent dies, otherwise the deepcopied
-# pointer is left dangling. 
+# pointer is left dangling.
 function deepcopy_internal(x::WeakRef, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
