@@ -73,6 +73,10 @@ static inline int jl_addr_is_restore_trigger(uintptr_t addr)
 void *mach_segv_listener(void *arg)
 {
     (void)arg;
+#ifdef JL_USE_FRAMEHOP
+    // Pre-fault framehop's TLS now; the first access from a thread can allocate.
+    fh_thread_register();
+#endif
     int ret = mach_msg_server(mach_exc_server, 2048, segv_port, MACH_MSG_TIMEOUT_NONE);
     mach_error("mach_msg_server" XSTR(: __FILE__:__LINE__:), ret);
     abort();
@@ -172,8 +176,12 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
 #endif
 
-#ifdef LLVMLIBUNWIND
+// Profiler-thread faults are special-cased: LLVMLIBUNWIND retries with DWARF via
+// profiler_segv_handler; framehop declines so the fault is redelivered as a BSD signal.
+#if defined(LLVMLIBUNWIND) || defined(JL_USE_FRAMEHOP)
 volatile mach_port_t mach_profiler_thread = 0;
+#endif
+#if defined(LLVMLIBUNWIND) && !defined(JL_USE_FRAMEHOP)
 static kern_return_t profiler_segv_handler(
     mach_port_t exception_port,
     mach_port_t thread,
@@ -284,9 +292,10 @@ static void jl_throw_in_state(jl_ptls_t ptls2, host_thread_state_t *state, jl_va
     }
     else {
         assert(exception);
+        // Cross-thread unwind (runs on the exception-server thread); pass the target.
         ptls2->bt_size =
-            rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)state,
-                            NULL /*current_task?*/);
+            rec_backtrace_ctx_target(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)state,
+                            NULL /*current_task?*/, ptls2, NULL);
         ptls2->sig_exception = exception;
         ptls2->io_wait = 0;
         jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
@@ -450,10 +459,16 @@ kern_return_t catch_mach_exception_raise_state_identity(
     // Copy old state to new state — we'll modify new_state in place
     memcpy(new_state, old_state, old_stateCnt * sizeof(natural_t));
     *new_stateCnt = old_stateCnt;
-#ifdef LLVMLIBUNWIND
+#if defined(LLVMLIBUNWIND) || defined(JL_USE_FRAMEHOP)
     if (thread == mach_profiler_thread) {
+#ifdef JL_USE_FRAMEHOP
+        // No retry path: decline so the fault reaches segv_handler as a BSD signal and
+        // recovers via jl_unw_stepn's safe_restore (which preserves fh_cursor_fini).
+        return KERN_FAILURE;
+#else
         return profiler_segv_handler(exception_port, thread, task, exception, code, codeCnt,
                                      state, new_stateCnt);
+#endif
     }
 #endif
     jl_ptls_t ptls2 = NULL;
@@ -913,7 +928,9 @@ static pthread_t profiler_thread;
 clock_serv_t clk;
 static mach_port_t profile_port = 0;
 
-#ifdef LLVMLIBUNWIND
+// libunwind-only: framehop has a single CFI path (nothing to retry), and the
+// profiler_uc warp would skip fh_cursor_fini and leak cursor slots.
+#if defined(LLVMLIBUNWIND) && !defined(JL_USE_FRAMEHOP)
 volatile static int forceDwarf = -2;
 static unw_context_t profiler_uc;
 
@@ -1032,7 +1049,7 @@ void jl_profile_thread_mach(int tid)
     if (!valid_thread)
         return;
     if (profile_running) {
-#ifdef LLVMLIBUNWIND
+#if defined(LLVMLIBUNWIND) && !defined(JL_USE_FRAMEHOP)
         /*
             *  Unfortunately compact unwind info is incorrectly generated for quite a number of
             *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
@@ -1063,7 +1080,10 @@ void jl_profile_thread_mach(int tid)
 
         forceDwarf = -2;
 #else
-        profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL);
+        // Pass the suspended target's exact stack bounds: out-of-stack reads become
+        // clean truncation; residual faults recover via jl_unw_stepn's safe_restore.
+        profile_bt_size_cur += rec_backtrace_ctx_target((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL,
+                                                        jl_atomic_load_relaxed(&jl_all_tls_states)[tid], NULL);
 #endif
         jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
 
@@ -1093,8 +1113,12 @@ void *mach_profile_listener(void *arg)
     (void)arg;
     const int max_size = 512;
     attach_exception_port(mach_thread_self(), 1);
-#ifdef LLVMLIBUNWIND
+#if defined(LLVMLIBUNWIND) || defined(JL_USE_FRAMEHOP)
     mach_profiler_thread = mach_thread_self();
+#endif
+#ifdef JL_USE_FRAMEHOP
+    // Pre-fault framehop's TLS off the suspend window; the first access can allocate.
+    fh_thread_register();
 #endif
     mig_reply_error_t *bufRequest = (mig_reply_error_t*)malloc_s(max_size);
     while (1) {
