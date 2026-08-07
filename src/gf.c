@@ -843,8 +843,8 @@ JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,
 
 enum top_typename_facts {
     EXACTLY_ANY = 1 << 0,
-    HAVE_TYPE = 1 << 1,
-    EXACTLY_TYPE = 1 << 2,
+    HAVE_ANYTYPE = 1 << 1,
+    EXACTLY_ANYTYPE = 1 << 2,
     HAVE_FUNCTION = 1 << 3,
     EXACTLY_FUNCTION = 1 << 4,
     HAVE_KWCALL = 1 << 5,
@@ -868,7 +868,7 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CA
         JL_GC_PROMISE_ROOTED(current_a);
 
         if (jl_is_some_Type(current_a)) {
-            *facts |= HAVE_TYPE;
+            *facts |= HAVE_ANYTYPE;
             arraylist_push(&workqueue, jl_some_Type_T(current_a));
             arraylist_push(&workqueue, (void*)(uintptr_t)-1);
         }
@@ -876,14 +876,14 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CA
             if (current_n <= 0) {
                 jl_datatype_t *dt = ((jl_datatype_t*)current_a);
                 if (dt == jl_function_type) {
-                    if (current_n == -1) // key Type{>:Function} as Type instead of Function
-                        *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
+                    if (current_n == -1) // key Type{>:Function} as the AnyType umbrella instead of Function
+                        *facts |= EXACTLY_ANYTYPE; // HAVE_ANYTYPE is already set
                     else
                         *facts |= HAVE_FUNCTION | EXACTLY_FUNCTION;
                 }
                 else if (dt == jl_any_type) {
-                    if (current_n == -1) // key Type{>:Any} and kinds as Type instead of Any
-                        *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
+                    if (current_n == -1) // key Type{>:Any} and kinds as the AnyType umbrella instead of Any
+                        *facts |= EXACTLY_ANYTYPE; // HAVE_ANYTYPE is already set
                     else
                         *facts |= EXACTLY_ANY;
                 }
@@ -892,6 +892,17 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*) JL_CA
                         *facts |= EXACTLY_KWCALL;
                     else
                         *facts |= HAVE_KWCALL;
+                }
+                else if (jl_is_kind((jl_value_t*)dt)) {
+                    // instances of a kind are type objects, whose backedge
+                    // keys are their payload-class typenames, which the kind
+                    // itself cannot enumerate: the type object `Int` is keyed
+                    // as `Number` when reached through a `Type{Int}` call
+                    // site and must be found from a `(::DataType)(...)`
+                    // insertion too, so cover kinds through the `AnyType`
+                    // umbrella and its whole-table fallback instead of
+                    // keying by the kind's own supertype chain
+                    *facts |= HAVE_ANYTYPE | EXACTLY_ANYTYPE;
                 }
                 else {
                     while (1) {
@@ -960,14 +971,14 @@ static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*) JL_
             kwfacts |= (all_subtypes ? EXACTLY_ANY : EXACTLY_KWCALL);
         facts |= kwfacts;
     }
-    if (all_subtypes && (facts & (EXACTLY_FUNCTION | EXACTLY_TYPE | EXACTLY_ANY)))
+    if (all_subtypes && (facts & (EXACTLY_FUNCTION | EXACTLY_ANYTYPE | EXACTLY_ANY)))
         // flag that we have an explicit match that is necessitating a full table scan
         return 0;
     // or inform caller of only which supertypes are applicable
     if (facts & HAVE_FUNCTION)
         f(jl_function_type->name, facts & EXACTLY_FUNCTION ? 1 : 0, env);
-    if (facts & HAVE_TYPE)
-        f(jl_type_typename, facts & EXACTLY_TYPE ? 1 : 0, env);
+    if (facts & HAVE_ANYTYPE)
+        f(jl_anytype_type->name, facts & EXACTLY_ANYTYPE ? 1 : 0, env);
     if (facts & (HAVE_KWCALL | EXACTLY_KWCALL))
         f(jl_kwcall_type->name, facts & EXACTLY_KWCALL ? 1 : 0, env);
     f(jl_any_type->name, facts & EXACTLY_ANY ? 1 : 0, env);
