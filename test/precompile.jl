@@ -2076,7 +2076,7 @@ precompile_test_harness("custom MethodTable dispatch status") do load_path
         method = only(ms).method
         @test method.module === M
         @test !iszero(method.dispatch_status & Base.ReinferUtils.METHOD_SIG_LATEST_WHICH)
-        @test !iszero(method.dispatch_status & Base.ReinferUtils.METHOD_SIG_LATEST_ONLY)
+        @test isempty(method.interferences)
     end
     Base.compilecache(Base.PkgId("OverlayDispatchStatusUser"))
     @eval using OverlayDispatchStatusUser

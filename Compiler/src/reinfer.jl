@@ -418,52 +418,10 @@ function method_in_interferences(method2::Method, method1::Method)
 end
 
 # Check if method1 is more specific than method2 via the interference graph
-function method_morespecific_via_interferences(method1::Method, method2::Method)
-    if method1 === method2
-        return false
-    end
-
-    # Check direct interferences first
-    if method_in_interferences(method2, method1)
-        return false
-    end
-    if method_in_interferences(method1, method2)
-        return true
-    end
-
-    visited = Method[]
-    push!(visited, method2)
-
-    workqueue = Method[method2]
-    while !isempty(workqueue)
-        current = pop!(workqueue)
-        interferences = current.interferences
-        for k = 1:length(interferences)
-            isassigned(interferences, k) || break
-            method3 = interferences[k]::Method
-
-            # Check if we're already visiting this interference method (cycle prevention and memoization)
-            method3 in visited && continue
-            push!(visited, method3)
-
-            if method_in_interferences(current, method3)
-                continue # only follow edges to morespecific methods in search of the morespecific target (skip ambiguities)
-            end
-
-            # Check direct interferences for this interference method
-            if method_in_interferences(method3, method1)
-                continue # return false for this path
-            end
-            if method_in_interferences(method1, method3)
-                return true # found method1 in the interference graph
-            end
-
-            push!(workqueue, method3)
-        end
-    end
-
-    # slow check: @assert ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{} || typeintersect(method2.sig, method1.sig) === Union{}
-    return false
+# equivalent to: ms === morespecific(method1, method2) || typeintersect(method1.sig, method2.sig) === Union{}
+function method_morespecific_recorded(method1::Method, method2::Method)
+    method1 === method2 && return false
+    return method_in_interferences(method1, method2) && !method_in_interferences(method2, method1)
 end
 
 # Max interference-set size for which n==1 uses the interference fast path instead of
@@ -560,7 +518,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                             # try looking for a different expected method that fully covers this interference_method anyways over their intersection
                             for j = 1:n
                                 meth2 = get_method_from_edge(expecteds[i+j-1])
-                                if method_morespecific_via_interferences(meth2, interference_method) && ti <: meth2.sig
+                                if method_morespecific_recorded(meth2, interference_method) && ti <: meth2.sig
                                     found_in_expecteds = true
                                     break
                                 end
@@ -636,8 +594,12 @@ end
 # fast-path dispatch_status bit definitions (false indicates unknown)
 # true indicates this method would be returned as the result from `which` when invoking `method.sig` in the current latest world
 const METHOD_SIG_LATEST_WHICH = 0x1
-# true indicates this method would be returned as the only result from `methods` when calling `method.sig` in the current latest world
+# true indicates this method would be returned as the only result from `methods` when calling `method_instance.specTypes` in the current latest world
+# it is equivalently tracked as `isempty(interferences)` on a `method`
 const METHOD_SIG_LATEST_ONLY = 0x2
+# true indicates this method is not strictly morespecific than any method it intersects
+# (equivalently, that this method is not in the interference set of any other method without also being in this methods interference set too).
+const METHOD_SIG_NO_LOSERS = 0x4
 
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any})
     @assert invokesig isa Type "corrupt edges list"

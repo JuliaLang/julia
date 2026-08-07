@@ -1224,20 +1224,20 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector)
+        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector{Any}
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
-            filter!(ms) do m::Core.MethodMatch
-                return !has_bottom_parameter(m.spec_types)
+            filter!(ms) do m
+                return !has_bottom_parameter((m::Core.MethodMatch).spec_types)
             end
         end
         # if ml-matches reported the existence of an ambiguity over their
         # intersection, see if both m1 and m2 seem to be involved in it
-        # (if one was fully dominated by a different method, we want to will
+        # (if one was fully dominated by a different method, we want to
         # report the other ambiguous pair)
         have_m1 = have_m2 = false
         for match in ms
-            m = match.method
+            m = (match::Core.MethodMatch).method
             m === m1 && (have_m1 = true)
             m === m2 && (have_m2 = true)
         end
@@ -1246,31 +1246,22 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             return false
         end
         if !ambiguous_bottom
-            # since we're intentionally ignoring certain ambiguities (via the
-            # filter call above), see if we can now declare the intersection fully
-            # covered even though it is partially ambiguous over Union{} as a type
-            # parameter somewhere
-            minmax = nothing
+            # Since we're intentionally ignoring certain ambiguities (via the
+            # filter call above), re-run the runtime's match sort on the
+            # remaining matches and see if the solution is still holding an ambiguity
+            # and m1 and m2 are both still reported in the solution
+            if ccall(:jl_sort_method_matches, Cint, (Any, Cint), ms, true) == 0
+                return false
+            end
+            have_m1 = have_m2 = false
             for match in ms
-                m = match.method
-                match.fully_covers || continue
-                if minmax === nothing || morespecific(m, minmax)
-                    minmax = m
-                end
+                m = (match::Core.MethodMatch).method
+                m === m1 && (have_m1 = true)
+                m === m2 && (have_m2 = true)
             end
-            if minmax === nothing || minmax == m1 || minmax == m2
-                return true
+            if !have_m1 || !have_m2
+                return false
             end
-            for match in ms
-                m = match.method
-                m === minmax && continue
-                if !morespecific(minmax, m)
-                    if match.fully_covers || !morespecific(m, minmax)
-                        return true
-                    end
-                end
-            end
-            return false
         end
         return true
     end
