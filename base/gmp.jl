@@ -138,7 +138,7 @@ function __init__()
         ALLOC_OVERFLOW_FUNCTION[] = true
     catch ex
         # ErrorException("ccall: could not find function...")
-        if typeof(ex) != ErrorException
+        if !(ex isa ErrorException)
             rethrow()
         end
     end

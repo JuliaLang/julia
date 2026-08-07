@@ -318,7 +318,7 @@ false
 ```
 """
 !=(x, y) = !(x == y)
-typeof(!=).name.max_methods = UInt8(1)
+typeof(!=).name.concrete_only = true
 const ≠ = !=
 
 """
@@ -423,7 +423,7 @@ true
 ```
 """
 >(x, y) = y < x
-typeof(>).name.max_methods = UInt8(1)
+typeof(>).name.concrete_only = true
 
 """
     <=(x, y)
@@ -479,7 +479,7 @@ true
 ```
 """
 >=(x, y) = (y <= x)
-typeof(>=).name.max_methods = UInt8(1)
+typeof(>=).name.concrete_only = true
 const ≥ = >=
 
 # this definition allows Number types to implement < instead of isless,
@@ -656,6 +656,8 @@ for op in (:+, :(+%), :*, :(*%), :&, :|, :xor, :min, :max, :kron)
         # definitions down to avoid losing type information.
     end
 end
+typeof(|).name.concrete_only = true
+typeof(&).name.concrete_only = true
 
 function kron! end
 
