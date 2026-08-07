@@ -274,6 +274,7 @@ end
     @inferred Base.deepcopy_internal('a', IdDict())
     @inferred Base.deepcopy_internal("abc", IdDict())
     @inferred Base.deepcopy_internal([1,2,3], IdDict())
+    @inferred Base.deepcopy_internal(WeakRef(), IdDict())
 
     # structs without custom deepcopy_internal method
     struct Immutable2; x::Int; end
@@ -307,4 +308,43 @@ end
     @test !islocked(b.lock)
     @inferred deepcopy(a)
     @inferred deepcopy(a.lock)
+end
+
+@testset "`deepcopy` a `WeakRef` (#62597)" begin
+    r  = Base.RefValue(1)
+    w  = WeakRef(r)
+    w2 = deepcopy(w)
+    @test typeof(w2) === WeakRef
+    @test w2 !== w
+    @test w2.value === r
+    a, b = deepcopy((w, w))
+    @test a === b
+    @test deepcopy(WeakRef(nothing)).value === nothing
+    @test deepcopy(WeakRef()).value === nothing
+end
+
+@testset "`deepcopy` of a `WeakRef` is GC-registered (#62597)" begin
+    @noinline function mk_wr(strong, weak)
+        x = Base.RefValue(1)
+        push!(strong, x)
+        w = WeakRef(x)
+        push!(weak, w)
+        push!(weak, deepcopy(w))
+        nothing
+    end
+    @noinline both_live(weak) = weak[1].value !== nothing && weak[2].value !== nothing
+    @noinline same_referent(weak) = weak[1].value === weak[2].value
+    function test_wr()
+        strong = []
+        weak = []
+        mk_wr(strong, weak)
+        GC.gc()
+        @test both_live(weak)
+        @test same_referent(weak)
+        empty!(strong)
+        GC.gc()
+        @test weak[1].value === nothing
+        @test weak[2].value === nothing
+    end
+    test_wr()
 end

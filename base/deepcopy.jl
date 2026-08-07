@@ -182,6 +182,20 @@ function deepcopy_internal(x::GenericCondition, stackdict::IdDict)
     return y
 end
 
+# WeakRef must be constructed through its own constructor: that is what registers
+# the new object on the GC's per-thread weak reference list, which in turn is what
+# lets the collector null out `value` once the referent dies, otherwise the deepcopied
+# pointer is left dangling. The referent is deliberately not deep-copied: a weak
+# reference to a fresh object with no strong referents would be collectible at once.
+function deepcopy_internal(x::WeakRef, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    y = WeakRef(x.value)
+    stackdict[x] = y
+    return y
+end
+
 # Core.WaitEntryN has a hidden variable-length slot tail that the generic
 # path above - which allocates only the fixed datatype size - cannot
 # reproduce (the GC would then scan a nonexistent tail). Allocate through
