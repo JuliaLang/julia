@@ -2,7 +2,10 @@
 
 module Libdl
 @doc """
-Interface to libdl. Provides dynamic linking support.
+    Libdl
+
+Module providing low-level dynamic-linking facilities, such as the [`libdl`](@ref)
+function, equivalent to the Unix libdl library.
 """ Libdl
 
 import Base: DL_LOAD_PATH, isdebugbuild
