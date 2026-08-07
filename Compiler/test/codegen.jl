@@ -1219,3 +1219,64 @@ _blackbox_licmloop_simple(1.0)
     @test count(re_licmcall, ir_bb_simple) == 5  # unrolled, not hoisted
     @test !occursin(re_raw_arg, ir_bb_simple)
 end
+
+module OptLevelNoLeakHeavy
+    @noinline function ksum1(a)
+        s = 0.0
+        @inbounds @simd for i in eachindex(a)
+            s += a[i] * a[i]
+        end
+        return s
+    end
+    @noinline function ksum2(a)
+        s = 0.0
+        @inbounds @simd for i in eachindex(a)
+            s += a[i] * a[i]
+        end
+        return s
+    end
+end
+module OptLevelNoLeakSlow
+    Base.Experimental.@optlevel 0
+    using ..OptLevelNoLeakHeavy: ksum2
+    call2(a) = ksum2(a)
+end
+@testset "per-module optlevel does not leak across co-compiled modules" begin
+    Random.seed!(1)
+    a = rand(100_000)
+    expected = OptLevelNoLeakHeavy.ksum1(a)   # compiled directly at the default level
+    OptLevelNoLeakSlow.call2(a)               # ksum2 first reached (co-compiled) via an -O0 module
+    @test OptLevelNoLeakHeavy.ksum2(a) === expected
+end
+
+module OptLevelInlineOnlyOp
+    Base.Experimental.@optlevel 0
+    add0(x::Float64, y::Float64) = x + y
+end
+mutable struct OptLevelInlineOnlyBox
+    @atomic v::Float64
+end
+@noinline function optlevel_inline_ref(a)
+    s = 0.0
+    @inbounds @simd for i in eachindex(a)
+        s += a[i] * a[i]
+    end
+    return s
+end
+# The atomic modify emits `add0` always-inline into this (default-optlevel)
+# function's module; that body must not drag the module down to -O0.
+@noinline function optlevel_inline_poison(b, a)
+    @atomic b.v OptLevelInlineOnlyOp.add0 1.0
+    s = 0.0
+    @inbounds @simd for i in eachindex(a)
+        s += a[i] * a[i]
+    end
+    return s
+end
+@testset "always-inline bodies do not leak optlevel into their host module" begin
+    Random.seed!(1)
+    a = rand(100_000)
+    b = OptLevelInlineOnlyBox(0.0)
+    expected = optlevel_inline_ref(a)
+    @test optlevel_inline_poison(b, a) === expected
+end
