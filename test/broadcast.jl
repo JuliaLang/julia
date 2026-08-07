@@ -1259,3 +1259,11 @@ end
         @test occursin("cannot broadcast-assign", sprint(showerror, err))
     end
 end
+
+@testset "issue #50794: in-place broadcast returns the lhs" begin
+    f1(Y) = Y .+= Any[zeros(size(Y))][1]
+    @test only(Base.return_types(f1, (Vector{Float64},))) === Vector{Float64}
+    f2(A, x) = A[1, :] .+= x
+    rt = only(Base.return_types(f2, (Matrix{Float64}, Any)))
+    @test rt <: SubArray{Float64, 1, Matrix{Float64}}
+end
