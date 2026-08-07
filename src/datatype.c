@@ -93,6 +93,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     jl_atomic_store_relaxed(&tn->max_args, 0);
     jl_atomic_store_relaxed(&tn->cache_entry_count, 0);
     tn->constprop_heustic = 0;
+    tn->concrete_only = 0;
     return tn;
 }
 
