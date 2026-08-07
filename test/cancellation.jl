@@ -2021,3 +2021,85 @@ end
         @test c2 ≈ [sum(a[i, l] * b[l, j] for l in 1:16) for i in 1:16, j in 1:16]
     end
 end
+
+## Structured cancellation of @sync / Threads.@threads scopes
+
+
+@testset "structured cancellation of @sync" begin
+    t, src = cancellable() do
+        @sync begin
+            @async sleep(1000)
+            @async sleep(1000)
+        end
+    end
+    spin()
+    cancel!(src)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CompositeException
+    @test length(t.result.exceptions) == 2
+end
+
+@testset "escalation during @sync teardown keeps awaiting internal tasks" begin
+    # A SAFE cancellation parks the @sync teardown on a child that has no
+    # cancellation points; an ABANDON_EXTERNAL escalation must re-arm that
+    # wait - internal tasks are still awaited at ABANDON_EXTERNAL - rather
+    # than unwind the @sync while the child is still running.
+    stop = Ref(false)
+    started = Base.Event()
+    t, src = cancellable() do
+        @sync begin
+            @async begin
+                notify(started)
+                while !stop[]
+                    yield() # no cancellation points: ignores SAFE/ABANDON_EXTERNAL
+                end
+            end
+        end
+    end
+    wait(started)
+    cancel!(src)
+    spin(20)
+    @test !istaskdone(t)
+    cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    spin(20)
+    @test !istaskdone(t)
+    stop[] = true
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test istaskfailed(t)
+    req = t.result
+    @test req isa CancellationRequest
+    @test req.request == CANCEL_REQUEST_ABANDON_EXTERNAL.request
+end
+
+@testset "unfriendly cancellation of Experimental.@sync" begin
+    # ABANDON_EXTERNAL propagates through the token tree to the children.
+    t1 = Ref{Task}(); t2 = Ref{Task}()
+    t, src = cancellable() do
+        Base.Experimental.@sync begin
+            t1[] = @async sleep(1000)
+            t2[] = @async sleep(1000)
+        end
+    end
+    spin()
+    cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test_throws TaskFailedException wait(t)
+    @test timedwait(() -> istaskdone(t1[]) && istaskdone(t2[]), 10.0) == :ok
+    @test istaskfailed(t1[]) && istaskfailed(t2[])
+end
+
+@testset "structured cancellation of Experimental.@sync" begin
+    t1 = Ref{Task}(); t2 = Ref{Task}()
+    t, src = cancellable() do
+        Base.Experimental.@sync begin
+            t1[] = @async sleep(1000)
+            t2[] = @async sleep(1000)
+        end
+    end
+    spin()
+    cancel!(src)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CancellationRequest
+    # cancellation propagated to the children
+    @test timedwait(() -> istaskdone(t1[]) && istaskdone(t2[]), 10.0) == :ok
+    @test istaskfailed(t1[]) && istaskfailed(t2[])
+end
