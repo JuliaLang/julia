@@ -65,6 +65,26 @@ function exhausted_abort()
     return Cint(Error.EAUTH)
 end
 
+function exhausted_abort_noninteractive()
+    ensure_initialized()
+    msg = """Authentication failed. The remote server requires authentication, but no valid """ *
+          """credentials were provided and the environment is non-interactive """ *
+          """(prompting is disabled).
+
+To provide SSH credentials, you can:
+  • Set the SSH_KEY_PATH environment variable to the path of your private key
+  • Set the SSH_PUB_KEY_PATH environment variable to the path of your public key
+  • Set the SSH_KEY_PASS environment variable if your key requires a passphrase
+  • Ensure ssh-agent is running and has the appropriate key loaded
+  • Place your SSH keys at the default locations: ~/.ssh/id_rsa or ~/.ssh/id_ecdsa
+
+For HTTPS URLs, you can use git credential helpers or provide credentials
+via the GIT_ASKPASS environment variable."""
+    ccall((:git_error_set_str, libgit2), Cvoid,
+          (Cint, Cstring), Cint(Error.Callback), msg)
+    return Cint(Error.EAUTH)
+end
+
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload, username_ptr)
     ensure_initialized()
     cred = p.credential::SSHCredential
@@ -173,7 +193,11 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     end
 
     if !revised
-        return exhausted_abort()
+        if !p.allow_prompt
+            return exhausted_abort_noninteractive()
+        else
+            return exhausted_abort()
+        end
     end
     return ccall((:git_cred_ssh_key_new, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
@@ -232,7 +256,11 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     end
 
     if !revised
-        return exhausted_abort()
+        if !p.allow_prompt
+            return exhausted_abort_noninteractive()
+        else
+            return exhausted_abort()
+        end
     end
 
     return ccall((:git_cred_userpass_plaintext_new, libgit2), Cint,
