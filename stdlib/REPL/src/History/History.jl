@@ -11,7 +11,7 @@ using Dates
 using Base64: base64encode
 import InteractiveUtils
 
-export HistoryFile, HistEntry, update!, runsearch
+export HistoryFile, HistEntry, HistUpdate, update!, runsearch
 
 const FACES = (
     :REPL_History_search_separator   => Face(foreground=:blue),
