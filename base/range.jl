@@ -1546,7 +1546,38 @@ julia> mod(3, 0:2)  # mod(3, 3)
      This method requires at least Julia 1.3.
 """
 mod(i::Integer, r::OneTo) = mod1(i, last(r))
-mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)
+function mod(i::Integer, r::AbstractUnitRange{<:Integer})
+    # The naive `mod(i - first(r), length(r)) + first(r)` overflows in
+    # `i - first(r)` (yielding a wrong residue whenever the length does not
+    # divide 2^nbits) and, for ranges of more than `typemax` values, uses a
+    # wrapped `length` (yielding results outside the range).
+    fst, lst = first(r), last(r)
+    R = promote_type(typeof(i), eltype(r), typeof(length(r)))
+    # no division at all when `i` is already a member
+    fst <= i <= lst && return convert(R, i)
+    if i isa BitInteger && eltype(r) <: BitInteger
+        # Reduce the DISTANCE from `i` to the range instead of `i - first(r)`:
+        # unsigned differences of promoted values are exact, so a single
+        # unsigned `rem` is overflow-free for EVERY span (`i ∉ r` rules out the
+        # full range; the empty range gives `nu == 0` and throws DivideError,
+        # as before).  The results below are members of `r`, so the wrapping
+        # `% P` arithmetic reproduces them exactly.
+        P = promote_type(typeof(i), eltype(r))
+        U = unsigned(P)
+        ip, fstp, lstp = P(i), P(fst), P(lst)
+        nu = ((lstp % U) - (fstp % U)) + one(U)         # == length(r), exactly
+        if ip > lstp
+            m = ((ip % U) - (fstp % U)) % nu            # (i - first(r)) mod length
+            return convert(R, fstp + (m % P))
+        else
+            m = ((fstp % U) - (ip % U)) % nu            # (first(r) - i) mod length
+            return convert(R, m == zero(U) ? fstp : lstp - ((m - one(U)) % P))
+        end
+    end
+    # generic path (e.g. BigInt), where the arithmetic cannot silently wrap;
+    # `checked_length` guards the (BitInteger-range) spans longer than typemax
+    return convert(R, mod(i - fst, checked_length(r)) + fst)
+end
 
 
 """
