@@ -879,9 +879,36 @@ ifelse(condition::Bool, x, y) = Core.ifelse(condition, x, y)
 """
     esc(e)
 
-Only valid in the context of an [`Expr`](@ref) returned from a macro. Prevents the macro hygiene
-pass from turning embedded variables into gensym variables. See the [Macros](@ref man-macros)
-section of the Metaprogramming chapter of the manual for more details and examples.
+Wrap `e` in `Expr(:escape, e)`. The `:escape` expression head signals to the
+macro hygiene pass that the wrapped subexpression should be left untouched — its
+symbols will resolve in the *macro call site's* scope rather than the macro
+definition's scope.
+
+`esc` does not validate or error at call time; it merely constructs an [`Expr`](@ref).
+The `:escape` head is only meaningful during [macro expansion](@ref man-macros):
+when the macro expander walks the expression tree returned by a macro, any node
+wrapped in `:escape` is pasted into the output verbatim, bypassing hygienic renaming.
+Calling `esc` on an expression that is never returned from a macro has no effect —
+the `:escape` node is inert data, and attempting to [`eval`](@ref) it directly will
+produce a syntax error.
+
+See [Hygiene](@ref man-hygiene) in the Metaprogramming chapter of the manual for a
+full explanation, common pitfalls, and worked examples.
+
+See also [`macroexpand`](@ref), [`@__MODULE__`](@ref).
+
+# Examples
+```jldoctest
+julia> esc(:x)
+:($(Expr(:escape, :x)))
+
+julia> macro set_x(val)
+           :(x = $(esc(val)))
+       end;
+
+julia> macroexpand(@__MODULE__, :(@set_x 42))
+:(x = 42)
+```
 """
 esc(@nospecialize(e)) = Expr(:escape, e)
 
