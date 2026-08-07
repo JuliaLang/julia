@@ -194,3 +194,40 @@ end
 @testset "fd" begin
     @test open(fd, tempname(), "w") isa RawFD
 end
+
+# Regression for #50410: when the underlying lseek fails (sockets, pipes,
+# serial devices), the R->W transition must reset the buffer so previously
+# prefetched read bytes don't leak into the next write+flush.
+@testset "issue #50410 (ios_seek must reset buffer on lseek failure)" begin
+    if Sys.isunix()
+        fds = Vector{Cint}(undef, 2)
+        @test ccall(:socketpair, Cint, (Cint, Cint, Cint, Ptr{Cint}),
+                    Cint(1) #= AF_UNIX =#, Cint(1) #= SOCK_STREAM =#, 0, fds) == 0
+        try
+            prefill = b"PREFILL!"
+            @test ccall(:write, Cssize_t, (Cint, Ptr{UInt8}, Csize_t),
+                        fds[1], prefill, length(prefill)) == length(prefill)
+            io = fdio(fds[2], false)
+            try
+                # Prefetch the queued bytes into the IOStream's internal
+                # buffer; consume only the first, leaving the rest
+                # logically read but still physically in buf[1..size].
+                @test read(io, UInt8) == prefill[1]
+                # Write+flush one byte. With the bug, the prefetched
+                # bytes are appended in front of 'Z' on the wire.
+                write(io, UInt8('Z'))
+                flush(io)
+                got = Vector{UInt8}(undef, 32)
+                n = ccall(:read, Cssize_t, (Cint, Ptr{UInt8}, Csize_t),
+                         fds[1], got, length(got))
+                @test n == 1
+                @test got[1] == UInt8('Z')
+            finally
+                close(io)
+            end
+        finally
+            ccall(:close, Cint, (Cint,), fds[1])
+            ccall(:close, Cint, (Cint,), fds[2])
+        end
+    end
+end
