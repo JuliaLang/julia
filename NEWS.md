@@ -162,7 +162,9 @@ New library features
   only the first `wait` returned and subsequent `wait` calls would throw ([#62539])
 * When the display height is too small to show any array entries, the `text/plain` array display
   (used e.g. by the REPL and when logging values with `@info` etc.) now shows as many entries as
-  fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
+  fit on a single line instead of showing no data at all. For vectors, the entries are packed
+  across the display width, over as many lines as the vertical layout would have used, and elide
+  from the middle so that both ends are kept ([#62543]).
 
 Standard library changes
 ------------------------

@@ -1833,10 +1833,74 @@ end
     @test arrstr(A, 5) == "2-element Vector{Int64}: [1, 2]"
     @test arrstr(A, 6) == "2-element Vector{Int64}:\n 1\n 2"
     push!(A, 3)
-    @test arrstr(A, 6) == "3-element Vector{Int64}:\n 1\n ⋮"
-    # the summary already names the type, so the single-line form should
+    @test arrstr(A, 6) == "3-element Vector{Int64}:\n [1, 2, 3]"
+
+    # `Int64` explicitly, so the summary is the same on 32-bit
+    v = collect(Int64, 1:100)
+    sized(A, rows, cols) =
+        sprint((io,A)->show(IOContext(io, :displaysize => (rows, cols), :limit => true), "text/plain", A), A)
+
+    # the entries elide from the middle to fit the width, keeping both ends
+    # rather than truncating the line (#58323)
+    @test arrstr(v, 4) ==
+        "100-element Vector{Int64}: [1, 2, 3, 4, 5, 6, 7, …, 94, 95, 96, 97, 98, 99, 100]"
+    @test sized(v, 4, 40) == "100-element Vector{Int64}: [1, …, 100]"
+
+    # with room for a couple of lines the entries are packed across the width,
+    # aligned, in the lines the vertical layout would have used
+    @test arrstr(v, 6) == "100-element Vector{Int64}:\n" *
+        " [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,\n" *
+        "    …,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]"
+    @test sized(v, 6, 40) == "100-element Vector{Int64}:\n" *
+        " [  1,   2,   3,   4,   5,   6,   7,\n" *
+        "    …,  95,  96,  97,  98,  99, 100]"
+
+    # once the vertical layout has room for a few entries it is kept, at any width
+    @test arrstr(v, 8) == "100-element Vector{Int64}:\n   1\n   2\n   ⋮\n 100"
+    @test sized(v, 8, 200) == "100-element Vector{Int64}:\n   1\n   2\n   ⋮\n 100"
+
+    # entries too wide to pack more than one to a line keep the vertical layout,
+    # which the packed form would only add brackets to
+    @test arrstr(fill("abcdefghijklmnopqrstuvwxyz0123456789", 30), 6) ==
+        "30-element Vector{String}:\n \"abcdefghijklmnopqrstuvwxyz0123456789\"\n ⋮"
+    # ...as does a display too narrow for even one entry
+    @test sized(v, 6, 6) == "100-element Vector{Int64}:\n 1\n ⋮"
+
+    # the summary already names the type, so the packed form should
     # not repeat it as an array literal prefix (on any platform)
     @test arrstr(Int8[1, 2], 4) == "2-element Vector{Int8}: [1, 2]"
+
+    # nested inside another array's display the packed form would repeat the
+    # element type on every row, so it is only used for a display of its own
+    @test arrstr([collect(Int64, 1:5) .+ i for i in 1:100], 7) ==
+        "100-element Vector{Vector{Int64}}:\n" *
+        " [          [2, 3, 4, 5, 6],           [3, 4, 5, 6, 7],\n" *
+        "            [4, 5, 6, 7, 8],                         …,\n" *
+        "  [100, 101, 102, 103, 104], [101, 102, 103, 104, 105]]"
+    @test arrstr([[i, i] for i in 1:100], 12) ==
+        "100-element Vector{Vector{$Int}}:\n [1, 1]\n [2, 2]\n [3, 3]\n [4, 4]\n ⋮\n [98, 98]\n [99, 99]\n [100, 100]"
+
+    @testset "elements with multi-line `show`" begin
+        struct MultiLine; n::Int; end
+        Base.show(io::IO, m::MultiLine) = print(io, "MultiLine(\n  n = ", m.n, "\n)")
+        struct CompactOneLine; n::Int; end
+        Base.show(io::IO, m::CompactOneLine) = get(io, :compact, false) ?
+            print(io, "CompactOneLine(", m.n, ")") : print(io, "CompactOneLine(\n  ", m.n, "\n)")
+
+        # an element whose `show` spans several lines cannot be laid out, so
+        # the vertical layout is left in place
+        @test arrstr(fill(MultiLine(1), 30), 6) ==
+            "30-element Vector{$MultiLine}:\n MultiLine(\n  n = 1\n)\n ⋮"
+        # entries before it are still shown, with the rest elided
+        @test arrstr(Any[1, 2, 3, MultiLine(4)], 4) == "4-element Vector{Any}: [1, 2, 3, …]"
+        # an element that is only multi-line when not `:compact` is laid out
+        # compactly like any other (the width has to allow for the summary,
+        # whose length depends on the current module)
+        C = fill(CompactOneLine(1), 30)
+        Csummary = sprint(summary, C)
+        @test sized(C, 4, textwidth(Csummary) + 44) ==
+              "$Csummary: [CompactOneLine(1), …, CompactOneLine(1)]"
+    end
 
     @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"
     @test arrstr(zeros(4, 30), 4) == "4×30 Matrix{Float64}: [0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0; 0.0 0.0 … 0.0 0.0;…"
