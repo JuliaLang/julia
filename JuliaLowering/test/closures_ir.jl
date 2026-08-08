@@ -129,7 +129,7 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod TestMod.f %₂₀
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/g(single_assign,called) slot₄/x(!read,maybe_undef) slot₅/x(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/g(single_assign,called) slot₄/x(!read) slot₅/x(!read)]
     1   (= slot₅/x slot₂/x)
     2   slot₅/x
     3   (= slot₅/x (call core.Box %₂))
@@ -419,7 +419,7 @@ end
 11  SourceLocation::3:5
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/x(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   TestMod.+
     2   (captured_local 1)
     3   (call core.isdefined %₂ :contents)
@@ -622,7 +622,7 @@ end
 15  (call core.svec %₁₂ %₁₃ %₁₄)
 16  (call core.define_method TestMod core.nothing %₁₅
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/recursive_b(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/recursive_b(!read)]
     1   (call core.getfield slot₁/#self# :recursive_b)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
@@ -1041,7 +1041,7 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  (call core.define_method TestMod core.nothing %₂₀
     --- code_info
-    slots: [slot₁/#self#(!read) slot₂/y(!read,maybe_undef)]
+    slots: [slot₁/#self#(!read) slot₂/y(!read)]
     1   (call core.getfield slot₁/#self# :y)
     2   (call core.isdefined %₁ :contents)
     3   (gotoifnot %₂ label₅)
