@@ -112,6 +112,54 @@ end
     x17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(0xffff_ffff))
     @test Core.Intrinsics.zext_int(UInt32, x17) === 0x0001_ffff
 
+    # Memory operations use the byte-rounded storage width.
+    load17(p::Ptr{TestUInt17}) = unsafe_load(p)
+    store17(p::Ptr{TestUInt17}, x::TestUInt17) = unsafe_store!(p, x)
+    load_boxed17(x::Any) = Core.Intrinsics.zext_int(UInt32, x::TestUInt17)
+    if !isdefined(Main, :Revise)
+        load_ir = sprint(io -> code_llvm(io, load17, Tuple{Ptr{TestUInt17}};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i24\b", load_ir)
+        @test occursin(r"\btrunc i24\b", load_ir)
+        boxed_ir = sprint(io -> code_llvm(io, load_boxed17, Tuple{Any};
+            debuginfo=:none, optimize=false))
+        @test occursin(r"\bload i24\b", boxed_ir)
+        @test occursin(r"\btrunc i24\b", boxed_ir)
+        store_ir = sprint(io -> code_llvm(io, store17,
+            Tuple{Ptr{TestUInt17}, TestUInt17}; debuginfo=:none, optimize=false))
+        @test occursin(r"\bzext i17\b.*\bto i24\b", store_ir)
+        @test occursin(r"\bstore i24\b", store_ir)
+    end
+
+    # Round-trips through mutable fields, Memory, and field-modification
+    # builtins (the non-atomic typed_store paths in codegen).
+    mutable struct Mut17
+        x::TestUInt17
+    end
+    u17(x) = Core.Intrinsics.trunc_int(TestUInt17, UInt32(x))
+    let m = Mut17(u17(5))
+        setfield!(m, :x, u17(6))
+        @test getfield(m, :x) === u17(6)
+        @test swapfield!(m, :x, u17(7)) === u17(6)
+        @test getfield(m, :x) === u17(7)
+        let r = replacefield!(m, :x, u17(7), u17(8))
+            @test r.success && r.old === u17(7)
+        end
+        @test getfield(m, :x) === u17(8)
+        @test modifyfield!(m, :x, (a, b) -> b, u17(9)).second === u17(9)
+        @test getfield(m, :x) === u17(9)
+    end
+    let mem = Memory{TestUInt17}(undef, 3)
+        for i = 1:3
+            mem[i] = u17(0x1fff0 + i)
+        end
+        @test mem[1] === u17(0x1fff1) && mem[3] === u17(0x1fff3)
+    end
+    let t = (u17(1), u17(0x1ffff))
+        @test t[1] === u17(1) && t[2] === u17(0x1ffff)
+        @test Ref{Any}(t)[] === t
+    end
+
     x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
     @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
 

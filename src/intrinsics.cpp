@@ -334,11 +334,13 @@ static Constant *undef_value_for_type(Type *T) {
     return undef;
 }
 
-// rebuild a struct type with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
+// Rebuild a type, widening any integer whose bit width is not a multiple of 8
+// (e.g. i1 Bool in llvmcall types, or odd-bit primitives) to its byte-rounded
+// storage width.
 static Type *zext_struct_type(Type *T)
 {
     if (auto *AT = dyn_cast<ArrayType>(T)) {
-        return ArrayType::get(AT->getElementType(), AT->getNumElements());
+        return ArrayType::get(zext_struct_type(AT->getElementType()), AT->getNumElements());
     }
     else if (auto *ST = dyn_cast<StructType>(T)) {
         SmallVector<Type*> Elements(ST->element_begin(), ST->element_end());
@@ -358,7 +360,8 @@ static Type *zext_struct_type(Type *T)
     return T;
 }
 
-// rebuild a struct with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
+// Rebuild a value to match the type produced by zext_struct_type,
+// zero-extending each widened integer element.
 static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2)
 {
     Type *T = V->getType();
@@ -495,9 +498,11 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
         ai = combined_ai;
     }
     assert(p); // clang-sa doesn't know that x.ispointer() implied this is true
-    Instruction *load = ctx.builder.CreateAlignedLoad(to, p, alignment);
+    Type *load_type = julia_primitive_storage_type(to, x.typ);
+    Instruction *load = ctx.builder.CreateAlignedLoad(load_type, p, alignment);
     setName(ctx.emission_context, load, p->getName() + ".unbox");
-    return ai.decorateInst(load);
+    ai.decorateInst(load);
+    return emit_unboxed_coercion(ctx, to, load);
 }
 
 // emit code to store a raw value into a destination
@@ -657,7 +662,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
         unsigned align = sizeof(void*); // Allocations are at least pointer aligned
         Value *box = emit_allocobj(ctx, nb, bt_value_rt, true, align);
         setName(ctx.emission_context, box, "bitcast_box");
-        init_bits_value(ctx, box, vx, ctx.tbaa().tbaa_immut);
+        init_bits_value(ctx, box, vx, ctx.tbaa().tbaa_immut, (jl_value_t*)bt);
         return mark_julia_type(ctx, box, true, bt->name->wrapper);
     }
 }
@@ -731,7 +736,7 @@ static jl_cgval_t generic_cast(
         unsigned align = sizeof(void*); // Allocations are at least pointer aligned
         Value *box = emit_allocobj(ctx, nb, targ_rt, true, align);
         setName(ctx.emission_context, box, "cast_box");
-        init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
+        init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut, (jl_value_t*)jlto);
         return mark_julia_type(ctx, box, true, jlto->name->wrapper);
     }
 }
@@ -909,7 +914,7 @@ static jl_cgval_t emit_pointerarith(jl_codectx_t &ctx, intrinsic f,
     else {
         Value *box = emit_allocobj(ctx, (jl_datatype_t *)ptrtyp, true);
         setName(ctx.emission_context, box, "ptr_box");
-        init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
+        init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut, ptrtyp);
         return mark_julia_type(ctx, box, true, (jl_datatype_t *)ptrtyp);
     }
 }

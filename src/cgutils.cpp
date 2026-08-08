@@ -698,6 +698,25 @@ static unsigned julia_alignment(jl_value_t *jt)
     return alignment;
 }
 
+// Return the byte-rounded type used to access a primitive integer in Julia
+// memory: an odd-bit integer lives in memory zero-extended to its storage
+// bytes (jl_datatype_size), so stores widen the register value and loads
+// truncate it back. Keep ABI-coerced and other non-canonical register types
+// unchanged, since their memory representation is not ours to define.
+static Type *julia_primitive_storage_type(Type *register_type, jl_value_t *jt)
+{
+    if (!jl_is_primitivetype(jt) || !register_type->isIntegerTy())
+        return register_type;
+    unsigned register_bits = cast<IntegerType>(register_type)->getBitWidth();
+    unsigned logical_bits = jl_datatype_nbits((jl_datatype_t*)jt);
+    if (register_bits != logical_bits)
+        return register_type;
+    unsigned storage_bits = 8 * jl_datatype_size(jt);
+    if (register_bits == storage_bits)
+        return register_type;
+    return Type::getIntNTy(register_type->getContext(), storage_bits);
+}
+
 static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_t *jt) JL_CANSAFEPOINT
 {
     B.addAttribute(Attribute::NonNull);
@@ -2467,6 +2486,10 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         return mark_julia_slot(val, jltype, NULL, result_tbaa, std::move(roots));
     }
     Type *realelty = elty;
+    // The GEP above indexes by the allocation size, but the memory access
+    // itself uses the byte-rounded storage width.
+    if (Order == AtomicOrdering::NotAtomic)
+        elty = julia_primitive_storage_type(elty, jltype);
     if (Order != AtomicOrdering::NotAtomic) {
         if (!isboxed && !elty->isIntOrPtrTy()) {
             intcast = emit_static_alloca(ctx, elty, Align(alignment));
@@ -2653,6 +2676,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             }
         }
         realelty = elty;
+        // Memory accesses use the byte-rounded storage width, while realelty
+        // remains the register width of the values being exchanged.
+        if (Order == AtomicOrdering::NotAtomic)
+            elty = julia_primitive_storage_type(elty, jltype);
         if (Order != AtomicOrdering::NotAtomic && isa<IntegerType>(elty)) {
             unsigned nb2 = PowerOf2Ceil(nb);
             unsigned bitwidth = cast<IntegerType>(elty)->getBitWidth();
@@ -2671,7 +2698,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             else if (aliasscope || Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
                 r = emit_unbox(ctx, realelty, rhs);
             }
-            if (realelty != elty)
+            // If r is unset, the value is stored by emit_unbox_store instead,
+            // which performs the storage widening itself.
+            if (r && realelty != elty)
                 r = ctx.builder.CreateZExt(r, elty);
         }
     }
@@ -2935,7 +2964,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 else if (Order != AtomicOrdering::NotAtomic || (tracked_pointers && rhs.inline_roots.empty())) {
                     r = emit_unbox(ctx, realelty, rhs);
                 }
-                if (realelty != elty)
+                // If r is unset, the value is stored by emit_unbox_store instead,
+                // which performs the storage widening itself.
+                if (r && realelty != elty)
                     r = ctx.builder.CreateZExt(r, elty);
             }
             // As an optimization, we could hoist this pre-write barrier after the cmpxchg
@@ -2954,11 +2985,14 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 oldval = load_union();
             }
             else {
-                assert(elty == realelty && !intcast);
+                assert(!intcast);
                 AtomicOrdering loadOrder = isboxed ? AtomicOrdering::Monotonic : AtomicOrdering::NotAtomic;
                 auto *load = emit_aliased_load(ctx, elty, ptr, Align(alignment), tbaa, aliasscope, loadOrder);
                 instr = load;
-                oldval = mark_julia_type(ctx, load, isboxed, jltype);
+                Value *realinstr = load;
+                if (realelty != elty)
+                    realinstr = ctx.builder.CreateTrunc(realinstr, realelty);
+                oldval = mark_julia_type(ctx, realinstr, isboxed, jltype);
             }
             // Compare
             Value *first_ptr = nullptr;
@@ -3729,10 +3763,13 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t) JL_CANSAFEPOI
 static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt, bool fully_initialized) JL_CANSAFEPOINT;
 
 static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, MDNode *tbaa,
-                            Align alignment = Align(sizeof(void*))) // min alignment in julia's gc is pointer-aligned
+                            jl_value_t *jt, Align alignment = Align(sizeof(void*))) // min alignment in julia's gc is pointer-aligned
 {
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
     // newv should already be tagged
+    Type *storage_type = julia_primitive_storage_type(v->getType(), jt);
+    if (storage_type != v->getType())
+        v = ctx.builder.CreateZExt(v, storage_type);
     ai.decorateInst(ctx.builder.CreateAlignedStore(v, newv, alignment));
 }
 

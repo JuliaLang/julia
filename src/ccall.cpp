@@ -1137,7 +1137,7 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
     MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
     Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);
     setName(ctx.emission_context, strct, "ccall_result_box");
-    init_bits_value(ctx, strct, result, tbaa);
+    init_bits_value(ctx, strct, result, tbaa, rt);
     return strct;
 }
 
@@ -2358,7 +2358,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     emit_memcpy(ctx, strct, ai, slot, ai, rtsz, boxalign, boxalign);
                 }
                 else {
-                    init_bits_value(ctx, strct, result, tbaa, boxalign);
+                    init_bits_value(ctx, strct, result, tbaa, rt, boxalign);
                 }
                 return mark_julia_type(ctx, strct, true, rt);
             }
