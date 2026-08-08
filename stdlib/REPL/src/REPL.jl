@@ -470,7 +470,10 @@ function maybe_rescue_REPL_after_sigint()
         # Complete the shutdown here in that case.
         @async begin
             Base._wait(newbackend.backend_task)
-            Base.istaskfailed(newbackend.backend_task) || exit()
+            if !Base.istaskfailed(newbackend.backend_task)
+                Core.print(Core.stderr, "\n[DEBUG sigint] rescued-backend shutdown exit\n")
+                exit()
+            end
         end
     end
     return nothing
