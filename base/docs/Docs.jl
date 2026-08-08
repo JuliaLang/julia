@@ -789,7 +789,7 @@ function docerror(@nospecialize ex)
     txt = """
     cannot document the following expression:
 
-    $(isa(ex, AbstractString) ? repr(ex) : ex)"""
+    $(isa(ex, AbstractString) ? (@invokelatest repr(ex)) : ex)"""  # use `invokelatest` to avoid invalidation
     if isexpr(ex, :macrocall)
         txt *= "\n\n'$(ex.args[1])' not documentable. See 'Base.@__doc__' docs for details."
     end
