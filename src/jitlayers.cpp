@@ -14,7 +14,11 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
+#if JL_LLVM_VERSION < 220000
 #include <llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h>
+#else
+#include <llvm/ExecutionEngine/Orc/Debugging/ELFDebugObjectPlugin.h>
+#endif
 #if JL_LLVM_VERSION >= 210000
 #  include <llvm/ExecutionEngine/Orc/SelfExecutorProcessControl.h>
 #endif
@@ -2125,9 +2129,11 @@ void JuliaOJIT::enableJITDebuggingSupport()
 {
     orc::SymbolMap GDBFunctions;
     addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBAllocAction);
+#if JL_LLVM_VERSION < 220000
     auto registerJITLoaderGDBWrapper = addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBWrapper);
-    cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     (void)registerJITLoaderGDBWrapper;
+#endif
+    cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     if (TM->getTargetTriple().isOSBinFormatMachO()) {
         auto RegisterSym = cantFail(
             safelookup(ES, {&JD}, ES.intern("_llvm_orc_registerJITLoaderGDBAllocAction")));
@@ -2136,8 +2142,22 @@ void JuliaOJIT::enableJITDebuggingSupport()
     }
 #ifndef _COMPILER_ASAN_ENABLED_ // TODO: Fix duplicated sections spam #51794
     else if (TM->getTargetTriple().isOSBinFormatELF()) {
+#if JL_LLVM_VERSION < 220000
+        // LLVM 22 replaces DebugObjectManagerPlugin/EPCDebugObjectRegistrar with
+        // ELFDebugObjectPlugin, which resolves the GDB registration action itself
+        // from the ExecutorProcessControl bootstrap symbols.
         //EPCDebugObjectRegistrar doesn't take a JITDylib, so we have to directly provide the call address
         ObjectLayer.addPlugin(std::make_unique<orc::DebugObjectManagerPlugin>(ES, std::make_unique<orc::EPCDebugObjectRegistrar>(ES, registerJITLoaderGDBWrapper)));
+#else
+        // TODO: Use AutoRegisterCode = false may give more performance.
+        Error Err = Error::success();
+        auto DebugPlugin = std::make_unique<orc::ELFDebugObjectPlugin>(
+            ES, /*RequireDebugSections*/false, /*AutoRegisterCode*/true, Err);
+        if (Err)
+            ES.reportError(std::move(Err));
+        else
+            ObjectLayer.addPlugin(std::move(DebugPlugin));
+#endif
     }
 #endif
 }
@@ -2363,7 +2383,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             continue;
         }
         JL_GC_PROMISE_ROOTED(CI);
-        auto Dest = linkCallTarget(MR, CI, API, EquivMap);
+        auto Dest = linkCallTarget(MR, CI, static_cast<jl_invoke_api_t>(API), EquivMap);
         if (!Dest)
             return false;
         if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);

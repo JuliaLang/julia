@@ -182,8 +182,15 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
                 if (auto VTy = dyn_cast<VectorType>(II->getType())) {
                     if (hasLoadedTy(VTy->getElementType())) {
+#if JL_LLVM_VERSION >= 220000
+                        // LLVM 22 dropped the alignment operand from masked.load/gather,
+                        // shifting mask and passthrough down by one.
+                        Value *Mask = II->getArgOperand(1);
+                        Value *Passthrough = II->getArgOperand(2);
+#else
                         Value *Mask = II->getOperand(2);
                         Value *Passthrough = II->getOperand(3);
+#endif
                         if (!isa<Constant>(Mask) || !cast<Constant>(Mask)->isAllOnesValue()) {
                             assert(isa<UndefValue>(Passthrough) && "unimplemented");
                             (void)Passthrough;
@@ -1218,9 +1225,16 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             if (CountTrackedPointers(VTy->getElementType()).count) {
                                 // LLVM sometimes tries to materialize these operations with undefined pointers in our non-integral address space.
                                 // Hopefully LLVM didn't already propagate that information and poison our users. Set those to NULL now.
-                                Value *passthru = II->getArgOperand(3);
+                                // LLVM 22 dropped the alignment operand from masked.load/gather,
+                                // shifting the passthrough operand from index 3 down to 2.
+#if JL_LLVM_VERSION >= 220000
+                                unsigned passthruIdx = 2;
+#else
+                                unsigned passthruIdx = 3;
+#endif
+                                Value *passthru = II->getArgOperand(passthruIdx);
                                 if (isa<UndefValue>(passthru)) {
-                                    II->setArgOperand(3, Constant::getNullValue(passthru->getType()));
+                                    II->setArgOperand(passthruIdx, Constant::getNullValue(passthru->getType()));
                                 }
                             }
                             if (hasLoadedTy(VTy->getElementType())) {
