@@ -1087,6 +1087,128 @@ tss = @testset CustomTestSet foo=foo "custom testset - escaping" begin
 end
 @test tss.foo == 3
 
+# test @test_hygienic
+macro _test_unhygienic(ex)
+    esc(:(leaked_var = $ex))
+end
+macro _test_unhygienic2(ex)
+    esc(quote
+        a_leaked = $ex
+        b_leaked = a_leaked + 1
+    end)
+end
+macro _test_user_assign(ex)
+    esc(ex)
+end
+# Bindings inside let/function/-> don't leak to caller scope
+macro _test_let_scoped(ex)
+    :(let; y = $(esc(ex)); y; end)
+end
+macro _test_func_scoped(ex)
+    :(() -> begin z = $(esc(ex)); z end)
+end
+# Leaked function definitions should be detected
+macro _test_leaked_func(ex)
+    esc(:(leaked_func() = $ex))
+end
+# Global declarations inside scoped blocks should be detected
+macro _test_global_in_let(ex)
+    esc(:(let; global leaked_global = $ex; end))
+end
+# Captured variables (reads of caller-scope names) should be detected
+macro _test_captured_ref(ex)
+    esc(:(println($ex + z)))
+end
+@testset "@test_hygienic" begin
+    # Hygienic stdlib macros should pass
+    @test_hygienic @time 1+1
+    @test_hygienic @elapsed 1+1
+    @test_hygienic @assert true
+    @test_hygienic @lock ReentrantLock() nothing
+
+    # Unhygienic macros should fail
+    let results = @testset NoThrowTestSet begin
+            @test_hygienic @_test_unhygienic 1+1
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Fail
+        @test results[1].test_type === :test_hygienic
+        @test occursin("leaked_var", results[1].value)
+    end
+
+    # Macros that introduce multiple leaked bindings
+    let results = @testset NoThrowTestSet begin
+            @test_hygienic @_test_unhygienic2 1+1
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Fail
+        @test occursin("a_leaked", results[1].value)
+        @test occursin("b_leaked", results[1].value)
+    end
+
+    # broken keyword: known-unhygienic macro marked broken should pass
+    let results = @testset NoThrowTestSet begin
+            @test_hygienic @_test_unhygienic(1+1) broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # broken keyword: hygienic macro marked broken should error (unexpected pass)
+    let results = @testset NoThrowTestSet begin
+            @test_hygienic @time(1+1) broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Error
+        @test results[1].test_type === :test_unbroken
+    end
+
+    # skip keyword
+    let results = @testset NoThrowTestSet begin
+            @test_hygienic @_test_unhygienic(1+1) skip=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :skipped
+    end
+
+    # User expression symbols are not flagged
+    @test_hygienic @_test_user_assign x = 1
+
+    # Bindings inside scope-introducing forms are not flagged
+    @test_hygienic @_test_let_scoped 1+1
+    @test_hygienic @_test_func_scoped 1+1
+    @test_hygienic @enum(_TH_Color, _th_red, _th_green, _th_blue)
+
+    # Leaked function definitions should be detected
+    let results = @testset NoThrowTestSet begin
+            @test_hygienic @_test_leaked_func 42
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Fail
+        @test occursin("leaked_func", results[1].value)
+    end
+
+    # Global declarations inside scoped blocks should be detected
+    let results = @testset NoThrowTestSet begin
+            @test_hygienic @_test_global_in_let 42
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Fail
+        @test occursin("leaked_global", results[1].value)
+    end
+
+    # Captured variables (references to caller-scope names) should be detected
+    let results = @testset NoThrowTestSet begin
+            @test_hygienic @_test_captured_ref x
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Fail
+        @test occursin("z", results[1].value)
+        @test occursin("println", results[1].value)
+    end
+end
+
 # test @inferred
 uninferable_function(i) = (1, "1")[i]
 uninferable_small_union(i) = (1, nothing)[i]
