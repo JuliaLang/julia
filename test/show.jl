@@ -1861,8 +1861,18 @@ end
     @test sized(v, 6, 40; compact = true) == "100-element Vector{Int64}:\n" *
         " [  1,   2,   3,   4,   5,   6,   7,\n" *
         "    …,  95,  96,  97,  98,  99, 100]"
-    # ...but not once the vertical layout has room for a few entries
-    @test sized(v, 8, 200; compact = true) == "100-element Vector{Int64}:\n   1\n   2\n   ⋮\n 100"
+    # ...at every display size, so that the layout never changes with the shape
+    # of the display
+    @test sized(v, 12, 40; compact = true) == "100-element Vector{Int64}:\n" *
+        " [  1,   2,   3,   4,   5,   6,   7,\n" *
+        "    8,   9,  10,  11,  12,  13,  14,\n" *
+        "   15,  16,  17,  18,  19,  20,  21,\n" *
+        "   22,  23,  24,  25,  26,  27,  28,\n" *
+        "    …,  74,  75,  76,  77,  78,  79,\n" *
+        "   80,  81,  82,  83,  84,  85,  86,\n" *
+        "   87,  88,  89,  90,  91,  92,  93,\n" *
+        "   94,  95,  96,  97,  98,  99, 100]"
+    @test sized([1, 2, 3], 24, 80; compact = true) == "3-element Vector{$Int}:\n [1, 2, 3]"
 
     # entries too wide to pack more than one to a line keep the vertical layout,
     # which the packed form would only add brackets to

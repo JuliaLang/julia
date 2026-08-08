@@ -61,7 +61,9 @@ showvalue(io, msg) = show(io, "text/plain", msg)
 # `:compact` is not set any more widely than that, since it also costs
 # precision in the numbers the entries are rendered with
 function showvalue(io, msg::AbstractArray)
-    if displaysize(io)[1] - 4 <= Base.WRAPPED_MAX_ROWS
+    # the vertical layout has `displaysize[1] - 4` lines for entries, the last
+    # of which is a ⋮ when they don't all fit
+    if displaysize(io)[1] - 4 <= 3
         io = IOContext(io, :compact => true)
     end
     show(io, "text/plain", msg)

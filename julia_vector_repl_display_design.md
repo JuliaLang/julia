@@ -950,16 +950,22 @@ vertical one. Writing `screenheight` for the rows the vertical layout has for en
 | `screenheight` | Layout |
 |---|---|
 | `<= 1` | entries packed onto the summary line, unpadded, eliding from the middle |
-| `2 … WRAPPED_MAX_ROWS` (3), the vector does not fit vertically, **and `:compact => true` is set** | entries packed across the width over exactly the rows the vertical layout would have used, right-aligned so columns line up |
+| any, **and `:compact => true` is set** | entries packed across the width over as many of the vertical layout's rows as they need, right-aligned so columns line up |
 | otherwise | vertical, unchanged |
 
 The `:compact` gate is the substantive change from the first attempt at this. Making the packed
 form the default at short display heights drew a strong objection from a reviewer, whose position
-was that the vertical layout reads better and that Julia should not trade that away on the
-terminal's behalf. Both halves of the design survive the gate: the centre elision applies
-unconditionally, because it is a straight correction to discarding the tail; the packed multi-line
-form applies only when the caller has already asked for a compact display, which is the case the
-survey's opt-in precedents (implication in *Left on the table*, below) point at.
+was that the vertical layout reads better and, more precisely, that *the layout changing with the
+shape of the display* is the thing to avoid. Both halves of the design survive the gate: the centre
+elision applies unconditionally, because it is a straight correction to discarding the tail; the
+packed form applies only when the caller has asked for a compact display, which is the case the
+survey's opt-in precedents (see *Left on the table*, below) point at.
+
+Note what the gate buys beyond consent. Because `:compact` selects the layout outright, there is no
+height at which the display flips between the two: width decides how many entries go on a line,
+height decides how many lines there are, and neither decides what the display *is*. The threshold
+an earlier revision used — pack below three rows of entries, vertical above — was a discontinuity
+with no support anywhere in the survey, and it is gone.
 
 Entries are taken from both ends alternately until they stop fitting, with `…` marking the omitted
 middle. Matrices and higher dimensions keep the previous height-only rule untouched. Two bail-outs
@@ -1018,7 +1024,9 @@ short enough for the packed layout to apply:
 └   name = "run-7"
 ```
 
-The narrowness is deliberate, and is the one place where reusing `:compact` rather than a dedicated
+This is the one remaining place where a row-count threshold decides a layout, and it lives in the
+logger rather than in the array display: the logger is choosing whether to ask for a compact
+display, not choosing between two layouts on the caller's behalf. The narrowness is deliberate, and is the one place where reusing `:compact` rather than a dedicated
 key has a real cost. `:compact` also reduces the precision numbers are printed with —
 `3.14159265358979` renders as `3.14159` — so setting it across the logger's whole `IOContext` would
 quietly drop digits from every logged scalar, which is the opposite of what denser log output is
@@ -1038,12 +1046,6 @@ restriction.
   small stretch of an established key rather than a new control in the Common Lisp / NumPy /
   Wolfram mould. The alternative — a dedicated `:array_layout`-style selector — is cleaner by the
   prior art and remains available if `:compact` proves too blunt.
-- **A threshold still switches layouts.** `WRAPPED_MAX_ROWS` is a cliff — under `:compact`, at 7
-  terminal rows the packed form shows ~70 entries of `1:100`, at 8 rows the vertical form shows 3.
-  The survey offers no precedent for choosing such a threshold, because most systems have no second
-  layout to switch to. It is smaller and more predictable than the entry-count comparison it
-  replaced, and it now only fires for callers that opted in, but it is the same kind of
-  discontinuity.
 - **Very narrow displays now show fewer entries than before.** Centre elision spends width on the
   tail, so at 4×40 the old truncating form showed `[1, 2, 3, 4…` and the new one shows
   `[1, …, 100]`. This is finding C applied deliberately: both ends beat more of one end.

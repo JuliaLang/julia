@@ -134,14 +134,13 @@ New library features
   elides from the middle, keeping both ends of the array, rather than being truncated at the
   display width ([#62592]).
 * The `text/plain` display of a vector packs its entries across the display width, comma-separated
-  inside brackets and aligned, when `:compact => true` is set on the `IOContext` and the display
-  is too short for the vertical layout to show more than a couple of entries. This shows much more
-  of the array in the same number of lines; the vertical layout is unchanged without `:compact`,
-  and at any display tall enough for it ([#62592]).
-* `ConsoleLogger` sets `:compact` when it has few enough lines for an array value to be shown that
-  way, so that logging an array with `@info` etc. shows much more of it. Values other than arrays,
-  and arrays given enough lines for the vertical layout, are unaffected, keeping the precision
-  `:compact` would cost their numbers ([#62592]).
+  inside brackets and aligned, when `:compact => true` is set on the `IOContext`. This shows much
+  more of the array in the lines available. The vertical layout is unchanged without `:compact`
+  ([#62592]).
+* `ConsoleLogger` sets `:compact` for an array value it has few enough lines for, so that logging
+  an array with `@info` etc. shows much more of it. Values other than arrays, and arrays given
+  enough lines for the vertical layout, are unaffected, keeping the precision `:compact` would cost
+  their numbers ([#62592]).
 
 Standard library changes
 ------------------------
