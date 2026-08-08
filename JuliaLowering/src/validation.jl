@@ -311,9 +311,15 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "can only be used inside a function") :
         !vcx.return_ok ?
         @fail(st, "current function not defined in comprehension or generator") : pass()
-    [K"unknown_head"] -> let head = syntax_name(st)
-        head === "latestworld-if-toplevel" ? pass() :
+    [K"unknown_head" xs...] -> let head = syntax_name(st)
+        if head === "latestworld-if-toplevel"
+            maxlen(st, xs, 0)
+        elseif head === "scope-block"
+            minlen(st, xs, 1) & maxlen(st, xs, 1) &
+                all(vst1, with(vcx; in_gscope=false), xs)
+        else
             @fail(st, string("unknown expr head: ", head))
+        end
     end
     [K"aliasscope"] -> pass()
     [K"popaliasscope"] -> pass()
@@ -337,8 +343,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "`Symbol` kind not valid until desugaring")
     [K"Placeholder"] ->
         @fail(st, "`Placeholder` kind not valid until desugaring")
-    [K"unknown_head" _...] ->
-        @fail(st, string("unknown expr head: ", syntax_name(st)))
     [K"$" x] -> @fail(st, raw"`$` expression outside string or quote")
     [K"continue" _...] ->
         @fail(st, "`continue` outside of a `while` or `for` loop")
@@ -431,6 +435,9 @@ function vst1_importpath(vcx, st; dots_ok)
                 ok &= @fail(c, "unexpected `.` in import path")
             end
             continue
+        end
+        if kind(c) === K"inert" && numchildren(c) == 1
+            c = c[1]
         end
         # syntax todo: lhs should probably not be true here
         ok = ok & (vst1_ident(vcx, c).ok ? pass() : vst1_ident(vcx, c; lhs=true))
@@ -1360,6 +1367,7 @@ vst2_ident_val(vcx, st) = @stm st begin
     [K"BindingId"] -> pass()
     [K"core"] -> pass()
     [K"top"] -> pass()
+    [K"thisfunction"] -> pass()
     _ -> @fail(st, "expected identifier (val)")
 end
 
