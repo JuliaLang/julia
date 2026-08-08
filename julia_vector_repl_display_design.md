@@ -1001,6 +1001,31 @@ brackets added).
   orientation is its only rank cue; Julia's header is a stronger cue than NumPy's bracket nesting,
   and NumPy only needed `shape=(n,)` in 2.2 because it has no header at all.
 
+## The console logger opts in
+
+`ConsoleLogger` gives each logged value `displaysize[1] ÷ (nvalues + 1)` rows, so a message with a
+few values leaves the array display room for barely an entry — the case this whole line of work
+started from. It therefore sets `:compact` for array values, but only when that row budget is
+short enough for the packed layout to apply:
+
+```
+┌ Info: processing                        # 24-row terminal, three values
+│   data =
+│    100-element Vector{Int64}:
+│     [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,
+│        …,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]
+│   scale = 3.14159265358979
+└   name = "run-7"
+```
+
+The narrowness is deliberate, and is the one place where reusing `:compact` rather than a dedicated
+key has a real cost. `:compact` also reduces the precision numbers are printed with —
+`3.14159265358979` renders as `3.14159` — so setting it across the logger's whole `IOContext` would
+quietly drop digits from every logged scalar, which is the opposite of what denser log output is
+for. Restricting it to arrays, and to the row budgets where it changes the layout, keeps that cost
+off everything it would not buy anything for. A dedicated layout key would not need the
+restriction.
+
 ## Where this departs from the prior art
 
 - **Terminal height is used live.** Only pandas does this, and only when the user sets
@@ -1036,9 +1061,8 @@ brackets added).
   control in this space. Gating on `:compact` is the cheap version of this. A dedicated selector is
   the natural home for anyone who wants the packed form at full terminal height, and the cleanest
   answer if the threshold above proves contentious.
-- **Opting the console logger in.** `ConsoleLogger` does not set `:compact`, so `@info` output is
-  unchanged. Making log values dense is a separate one-line change that can be argued on its own
-  merits — which is where this line of work started.
+- **Wider opt-in than the console logger.** `ConsoleLogger` opts in (see below); nothing else
+  does. A REPL setting, or a display policy for non-interactive output, remains unexplored.
 - **A scrollable viewport for rich frontends** (finding G, Maple 2024+) — out of scope for a
   terminal, but the precedent for IDE and notebook displays diverging from terminal defaults is
   strong.

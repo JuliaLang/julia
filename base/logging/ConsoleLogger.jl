@@ -55,6 +55,17 @@ min_enabled_level(logger::ConsoleLogger) = logger.min_level
 
 # Formatting of values in key value pairs
 showvalue(io, msg) = show(io, "text/plain", msg)
+# a log message gives each value only a few lines. Where that leaves the array
+# display's vertical layout room for barely an entry, ask it to pack them
+# across the width instead, which shows much more of the array in those lines.
+# `:compact` is not set any more widely than that, since it also costs
+# precision in the numbers the entries are rendered with
+function showvalue(io, msg::AbstractArray)
+    if displaysize(io)[1] - 4 <= Base.WRAPPED_MAX_ROWS
+        io = IOContext(io, :compact => true)
+    end
+    show(io, "text/plain", msg)
+end
 function showvalue(io, e::Tuple{Exception,Any})
     ex,bt = e
     showerror(io, ex, bt; backtrace = bt!==nothing)

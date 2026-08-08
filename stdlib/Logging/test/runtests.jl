@@ -100,9 +100,9 @@ end
     function genmsg(message; level=Logging.Info, _module=Main,
                     file="some/path.jl", line=101, color=false, width=75,
                     meta_formatter=dummy_metafmt, show_limited=true,
-                    right_justify=0, kws...)
+                    right_justify=0, height=30, kws...)
         buf = IOBuffer()
-        io = IOContext(buf, :displaysize=>(30,width), :color=>color)
+        io = IOContext(buf, :displaysize=>(height,width), :color=>color)
         logger = ConsoleLogger(io, Logging.Debug,
                                meta_formatter=meta_formatter,
                                show_limited=show_limited,
@@ -205,6 +205,28 @@ end
     ┌ PREFIX msg
     │   a = 1
     │   b = "asdf"
+    └ SUFFIX
+    """
+    # An array given only a few lines has its entries packed across the width,
+    # rather than showing one or two of them vertically
+    @test genmsg("msg", height=12, v=collect(Int64, 1:100)) ==
+    """
+    ┌ PREFIX msg
+    │   v =
+    │    100-element Vector{Int64}:
+    │     [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,
+    │        …,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]
+    └ SUFFIX
+    """
+    # ...but with room for the vertical layout it is used as before, and the
+    # entries keep the precision that packing them would cost
+    @test genmsg("msg", v=[1.23456789012, 2.3456789012]) ==
+    """
+    ┌ PREFIX msg
+    │   v =
+    │    2-element Vector{Float64}:
+    │     1.23456789012
+    │     2.3456789012
     └ SUFFIX
     """
     # Exceptions shown with showerror

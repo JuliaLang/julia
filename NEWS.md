@@ -138,6 +138,10 @@ New library features
   is too short for the vertical layout to show more than a couple of entries. This shows much more
   of the array in the same number of lines; the vertical layout is unchanged without `:compact`,
   and at any display tall enough for it ([#62592]).
+* `ConsoleLogger` sets `:compact` when it has few enough lines for an array value to be shown that
+  way, so that logging an array with `@info` etc. shows much more of it. Values other than arrays,
+  and arrays given enough lines for the vertical layout, are unaffected, keeping the precision
+  `:compact` would cost their numbers ([#62592]).
 
 Standard library changes
 ------------------------
