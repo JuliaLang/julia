@@ -1476,6 +1476,55 @@ function run_package_callbacks(modkey::PkgId)
     nothing
 end
 
+"""
+    Base.CACHE_FETCH_HOOK
+
+An optional callable that is consulted when `require` or precompilation has
+determined that no valid compile cache exists for a package and it is about
+to compile one. The hook is called as
+
+    hook(pkg::PkgId, sourcepath::String)::Bool
+
+A return value of `true` indicates that the hook may have placed a cachefile
+in one of the `DEPOT_PATH` compile cache directories (e.g. by fetching it
+from a cache server); the caller then rescans the cache candidates,
+revalidates them through the normal staleness machinery, and falls back to
+compiling if nothing valid appeared. Any other return value — or a thrown
+error, which is caught and logged at debug level — proceeds directly to
+compilation.
+
+The hook is advisory and its output is untrusted: fetched files undergo the
+same validation as any other cache candidate. Implementations must not load
+non-sysimage code, and must be safe to call from concurrent tasks. The hook
+is never invoked from output-generating (precompile worker) processes, nor
+reentrantly.
+"""
+const CACHE_FETCH_HOOK = Ref{Any}(nothing)
+
+"""
+    Base.maybe_fetch_cache(pkg::PkgId, sourcepath::String) -> Bool
+
+Invoke `CACHE_FETCH_HOOK` under its safety guards (never while generating
+output, never reentrantly, errors demoted to `false`) and return whether
+the caller should rescan the compile cache candidates.
+"""
+function maybe_fetch_cache(pkg::PkgId, sourcepath::String)
+    h = CACHE_FETCH_HOOK[]
+    h === nothing && return false
+    generating_output() && return false
+    tls = task_local_storage()
+    haskey(tls, :in_cache_fetch_hook) && return false
+    tls[:in_cache_fetch_hook] = true
+    try
+        return @invokelatest(h(pkg, sourcepath)) === true
+    catch err
+        @debug "CACHE_FETCH_HOOK failed" pkg exception=(err, catch_backtrace())
+        return false
+    finally
+        delete!(tls, :in_cache_fetch_hook)
+    end
+end
+
 
 ##############
 # Extensions #
@@ -1938,6 +1987,23 @@ function isrelocatable(pkg::PkgId)
         close(io)
     end
     return true
+end
+
+function parse_cache_buildid(cachepath::String)
+    f = open(cachepath, "r")
+    try
+        checksum = isvalid_cache_header(f)
+        iszero(checksum) && throw(ArgumentError("Incompatible header in cache file $cachepath."))
+        flags = read(f, UInt8)
+        n = read(f, Int32)
+        n == 0 && error("no module defined in $cachepath")
+        skip(f, n) # module name
+        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        build_id = (UInt128(checksum) << 64) | read(f, UInt64)
+        return build_id, uuid
+    finally
+        close(f)
+    end
 end
 
 # search for a precompile cache file to load, after some various checks
@@ -2621,6 +2687,7 @@ function __require_prelocked(pkg::PkgId, env)
     set_pkgorigin_version_path(pkg, path)
 
     parallel_precompile_attempted = false # being safe to avoid getting stuck in a precompilepkgs loop
+    cache_fetch_attempted = Ref(false)    # the cache-fetch hook gets one shot, then we compile
     reasons = Dict{String,Int}()
     # attempt to load the module file via the precompile cache locations
     if JLOptions().use_compiled_modules != 0
@@ -2664,11 +2731,23 @@ function __require_prelocked(pkg::PkgId, env)
                 @goto load_from_cache
             end
             # spawn off a new incremental pre-compile task for recursive `require` calls
-            loaded = let path = path, reasons = reasons
+            loaded = let path = path, reasons = reasons, cache_fetch_attempted = cache_fetch_attempted
                 maybe_cachefile_lock(pkg, path) do
                     # double-check the search now that we have lock
                     m = _require_search_from_serialized(pkg, path, UInt128(0), true)
                     m isa Module && return m
+                    # a cache-fetch hook gets one chance to materialize a
+                    # cachefile before we spend time compiling; returning
+                    # `nothing` retries the cache search from the top
+                    if !cache_fetch_attempted[] && CACHE_FETCH_HOOK[] !== nothing
+                        cache_fetch_attempted[] = true
+                        unlock(require_lock)
+                        try
+                            maybe_fetch_cache(pkg, path) && return nothing
+                        finally
+                            lock(require_lock)
+                        end
+                    end
                     triggers = get(EXT_PRIMED, pkg, nothing)
                     loadable_exts = nothing
                     if triggers !== nothing # extension
