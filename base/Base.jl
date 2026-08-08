@@ -617,6 +617,8 @@ function __init__()
         JuliaLowering.activate!()
     end
 
+    global jloptions_scoped = ScopedValues.ScopedValue((; JLOptions().depwarn))
+
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end
