@@ -1165,6 +1165,14 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     // c->FloatSave.ControlWord = _ctx->FpCsr;
     c->Eax = val;
     c->Esp += sizeof(void*);
+    // Scrub the interrupted x87 state to all-registers-empty (see the
+    // linux i686 branch): the resumed code expects the function-boundary
+    // FPU state. Both the legacy FNSAVE area and the FXSAVE area (used by
+    // the kernel when SSE is present) are cleared.
+    c->FloatSave.StatusWord = 0;
+    c->FloatSave.TagWord = 0xffff;        // FNSAVE convention: all empty
+    c->ExtendedRegisters[2] = c->ExtendedRegisters[3] = 0; // FSW
+    c->ExtendedRegisters[4] = 0;          // abridged FTW: all empty
     assert(c->Esp % 16 == 0);
     return 1;
     #else
@@ -1193,6 +1201,16 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c, int val) JL_NOTSAFEPOI
     mc->gregs[REG_ESP] = ptr_demangle(mc->gregs[REG_ESP]);
     mc->gregs[REG_EIP] = ptr_demangle(mc->gregs[REG_EIP]);
     mc->gregs[REG_EAX] = val;
+    // The simulated longjmp resumes code that expects the i386 ABI's
+    // function-boundary FPU state (an empty x87 register stack), but the
+    // kernel will restore the *interrupted* state - possibly mid-computation
+    // with live stack entries, which would overflow the target's x87 stack
+    // and poison every later float result with NaNs. Scrub the saved x87
+    // state to all-registers-empty (the control word is preserved).
+    if (mc->fpregs != NULL) {
+        mc->fpregs->sw = 0;               // clear TOP and exception flags
+        mc->fpregs->tag = 0xffffffffu;    // all registers empty
+    }
     assert(mc->gregs[REG_ESP] % 16 == 0);
     return 1;
     #elif defined(_CPU_X86_64_)
