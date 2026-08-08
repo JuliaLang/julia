@@ -6,7 +6,12 @@
 **Status:** the survey below was gathered to settle a design disagreement on
 [JuliaLang/julia#62592](https://github.com/JuliaLang/julia/pull/62592). It has since been acted
 on: that PR's "whichever layout shows more entries" rule was dropped and replaced by a wrapped,
-bracketed layout, gated behind `:compact => true` after review. [The design this led to](#the-design-this-led-to) records what was built and
+bracketed layout, gated behind `:compact => true` after review. The reviewer who objected to the
+original approach has since endorsed the gated form ("if we're restricting the change to be behind
+a `:compact=>true` IOContext argument instead of dynamically changing based on terminal size I'm
+quite for it"), with the agreed division of labour that this PR carries the `:compact` variants
+while JuliaLang/julia#62362 reworks the default (`:compact => false`) display, keeping vector,
+matrix and N-d printing consistent with each other. [The design this led to](#the-design-this-led-to) records what was built and
 which evidence drove each choice; the tool-by-tool sections are unchanged evidence.
 
 ## Executive summary
@@ -1065,6 +1070,16 @@ restriction.
   answer if the threshold above proves contentious.
 - **Wider opt-in than the console logger.** `ConsoleLogger` opts in (see below); nothing else
   does. A REPL setting, or a display policy for non-interactive output, remains unexplored.
+- **Matrices and higher dimensions under `:compact`.** The packed layout is vector-only; a matrix
+  under `:compact` keeps the previous behaviour, including the tail-truncated single line at
+  heights with no room for a row (its 2-arg form already centre-elides rows and columns
+  structurally, so the loss is bounded, but the width fit is not exact). Bringing matrices and N-d
+  arrays to the same standard is agreed follow-up work, entangled with replacing `show_nd`
+  (JuliaLang/julia#62362).
+- **`:displaysize` budgets for nested displays.** The reviewer's suggestion that arrayshow set
+  `:displaysize` when showing elements from inside a container (e.g. `(4, width ÷ 4)` within a
+  matrix) would replace the packed layout's `:SHOWN_SET` bail-out with something principled, and
+  affects all nested array display — a follow-up, not part of this change.
 - **A scrollable viewport for rich frontends** (finding G, Maple 2024+) — out of scope for a
   terminal, but the precedent for IDE and notebook displays diverging from terminal defaults is
   strong.
