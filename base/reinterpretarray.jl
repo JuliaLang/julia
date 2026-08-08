@@ -398,7 +398,7 @@ axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
 elsize(::Type{<:ReinterpretArray{T,<:Any,S,A}}) where {T,S,A} =
-    sizeof(T) == sizeof(S) ? elsize(A) : sizeof(T)
+    sizeof(S) == sizeof(T) ? elsize(A) : sizeof(T)
 cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
