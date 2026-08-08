@@ -154,6 +154,8 @@ const task_state_done      = UInt8(1)
 const task_state_failed    = UInt8(2)
 # like _failed, but the task was forcibly abandoned and may have leaked resources
 const task_state_abandoned = UInt8(3)
+# like _failed, but allows schedule to succeed (transitioning to _failed)
+const task_state_cancelled = UInt8(4)
 
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
@@ -167,6 +169,8 @@ const task_state_abandoned = UInt8(3)
             return :failed
         elseif st === task_state_abandoned
             return :abandoned
+        elseif st === task_state_cancelled
+            return :cancelled
         else
             @assert false "unexpected state"
         end
@@ -266,7 +270,73 @@ true
 """
 function istaskfailed(t::Task)
     st = @atomic :acquire t._state
-    return st === task_state_failed || st === task_state_abandoned
+    return st === task_state_failed || st === task_state_abandoned ||
+        st === task_state_cancelled
+end
+
+# CANCEL_REQUEST_ABANDON_ALL: freeze `t` without letting it unwind. A task
+# running on a thread is ripped away with unsafe_abandon!; a parked or queued
+# task is marked abandoned in place. In the latter case its waitqueue
+# registrations are left stale: they are silently discarded when notified
+# (schedule of a non-runnable task enqueues it and the scheduler drops it),
+# and a directed notify consumed by a frozen task is lost. That, like leaked
+# locks, is part of ABANDON_ALL's documented collateral. `src` is the
+# cancelled token source on whose behalf the task is being frozen.
+function freeze_task!(t::Task, creq::CancellationRequest,
+                      src::Union{Nothing, CancellationTokenSource}=nothing)
+    if t === current_task()
+        # Self-cancellation with ABANDON_ALL: no need to freeze - the task can
+        # simply unwind with the request.
+        src === nothing || _mark_delivered!(src, severity(creq))
+        throw(creq)
+    end
+    attempts = 0
+    while true
+        istaskdone(t) && return true
+        # Parked tasks register through `waiting_on` (the WaitEntry wake-claim
+        # protocol); sentinel protocols (in-flight uv writes) and workqueues
+        # use `t.queue`. Only a task registered through neither is presumed
+        # running on its thread.
+        w = @atomic :acquire t.waiting_on
+        parked = w isa WaitEntry || t.queue !== nothing
+        if w isa WaitEntry && !(@atomicreplace t.waiting_on w => nothing).success
+            # A waker is concurrently scheduling the task - re-examine.
+            yield()
+            continue
+        end
+        tid = Threads.threadid(t)
+        if !parked && tid != 0 && (attempts += 1) <= 100
+            # Likely running on a thread - rip it away. unsafe_abandon! is a
+            # no-op if the task is not current on that thread anymore (it may
+            # have parked or migrated in the meantime).
+            rescue = Task(() -> (while true; wait(); end))
+            rescue.sticky = false
+            if unsafe_abandon!(t, rescue, creq)
+                src === nothing || _mark_delivered!(src, severity(creq))
+                return true
+            end
+            # Refused (the victim holds runtime state, migrated, or parked)
+            # or timed out: re-examine and retry, eventually falling through
+            # to freezing it in place.
+            Libc.systemsleep(5e-5)
+            continue
+        end
+        # Parked (wait registration claimed above) or queued but not running:
+        # freeze in place.
+        if (@atomicreplace :sequentially_consistent :monotonic t._state task_state_runnable => task_state_abandoned).success
+            setfield!(t, :result, creq)
+            setfield!(t, :_isexception, true)
+            src === nothing || _mark_delivered!(src, severity(creq))
+            donenotify = t.donenotify
+            if donenotify isa ThreadSynchronizer
+                lock(donenotify)
+                notify(donenotify)
+                unlock(donenotify)
+            end
+            return true
+        end
+        # Lost a race with completion or another state transition - re-examine.
+    end
 end
 
 """
@@ -1227,6 +1297,14 @@ workqueue_for(tid::Int) = Workqueues[tid]
 
 function enq_work(t::Task)
     state = t._state
+    if state === task_state_cancelled
+        # A task cancelled before it first ran was completed by `cancel!`;
+        # scheduling it is allowed and simply transitions it to failed (all
+        # other task cleanup is already done).
+        state = (@atomicreplace t._state task_state_cancelled => task_state_failed).old
+        # Catch double `schedule` calls on cancelled tasks.
+        state === task_state_cancelled && return t
+    end
     if state === task_state_abandoned
         # A task frozen by forcible abandonment leaves its waitqueue
         # registrations behind by design; a later notify of such a stale
@@ -1354,20 +1432,24 @@ true
 """
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
-    t._state === task_state_runnable || Base.error("schedule: Task not runnable")
-    if error
-        # Interrupt path: Unconditionally remove the wait (if any)
-        # TODO: This should use the proper cancellation system instead
-        w = @atomicswap t.waiting_on = nothing
-        w isa WaitEntry && try_unlink_claimed!(w)
-        q = t.queue
-        q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
-        setfield!(t, :result, arg)
-        setfield!(t, :_isexception, true)
-    else
-        t.queue === nothing || Base.error("schedule: Task not runnable")
-        setfield!(t, :result, arg)
+    state = t._state
+    if state === task_state_runnable
+        if error
+            # Interrupt path: Unconditionally remove the wait (if any)
+            # TODO: This should use the proper cancellation system instead
+            w = @atomicswap t.waiting_on = nothing
+            w isa WaitEntry && try_unlink_claimed!(w)
+            q = t.queue
+            q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
+            setfield!(t, :result, arg)
+            setfield!(t, :_isexception, true)
+        else
+            t.queue === nothing || Base.error("schedule: Task not runnable")
+            setfield!(t, :result, arg)
+        end
     end
+    # `enq_work` handles the cancelled-state transition (and rejects the
+    # remaining non-runnable states).
     # [task] created -scheduled-> wait_time
     maybe_record_enqueued!(t)
     enq_work(t)
@@ -1474,6 +1556,10 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     if t._state === task_state_done
         return x
     elseif t._state === task_state_failed || t._state === task_state_abandoned
+        throw(t.result)
+    elseif t._state === task_state_cancelled
+        # Cancelled tasks are allowed to be scheduled (transitioning to
+        # failed) but not directly yielded to
         throw(t.result)
     end
     # [task] user_time -yield-> wait_time
@@ -1588,15 +1674,16 @@ function ensure_rescheduled(othertask::Task)
 end
 
 function discard_stale_workqueue_task(t::Task)
-    # A task frozen in place by forcible abandonment is completed without
-    # ever leaving the queues it was registered with (a workqueue, or a
-    # waitqueue whose later notify re-enqueues it here); discard it. Any
-    # other non-runnable state means the task somehow got queued twice -
-    # probably broken now, but try discarding this switch and keep going.
-    # We can't throw here, because it's probably not the fault of the caller
-    # to wait, and don't want to use print() here, because that may try to
-    # incur a task switch.
-    if t._state !== task_state_abandoned
+    # A task that was cancelled before it first ran, or frozen in place by an
+    # ABANDON_ALL request, is completed by `cancel!` but remains in whatever
+    # queue it was registered with (a workqueue, or a waitqueue whose later
+    # notify re-enqueues it here); discard it. Any other non-runnable state
+    # means the task somehow got queued twice - probably broken now, but try
+    # discarding this switch and keep going. We can't throw here, because it's
+    # probably not the fault of the caller to wait, and don't want to use
+    # print() here, because that may try to incur a task switch.
+    state = t._state
+    if state !== task_state_cancelled && state !== task_state_abandoned
         ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
             "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
     end

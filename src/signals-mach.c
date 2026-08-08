@@ -697,6 +697,13 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
         jl_atomic_load_relaxed(&ct2->bound_cancel_token);
     bound_cancelled = bound != NULL && bound != jl_nothing &&
         jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) != 0;
+    // A pending ^C episode reaches scoped descendant sources through the
+    // julia-side listener's walk; when the listener is starved, carry it
+    // into the frozen task's own bound source here so its next cancellation
+    // point sees it. (No allocation: the victim is suspended and may hold
+    // the allocator lock.)
+    if (!bound_cancelled && reset_code == JL_RESET_CODE_CANCEL)
+        bound_cancelled = jl_sigint_propagate_to_bound(bound);
     hctx = ct2 == NULL ? NULL :
         jl_atomic_load_acquire(&ct2->cancel_handler_ctx);
     if (hctx != NULL) {
