@@ -130,9 +130,14 @@ New library features
   returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
 * When the display height is too small to show any array entries, the `text/plain` array display
   (used e.g. by the REPL and when logging values with `@info` etc.) now shows as many entries as
-  fit on a single line instead of showing no data at all. For vectors, the entries are packed
-  across the display width, over as many lines as the vertical layout would have used, and elide
-  from the middle so that both ends are kept ([#62543]).
+  fit on a single line instead of showing no data at all ([#62543]). For vectors, that line now
+  elides from the middle, keeping both ends of the array, rather than being truncated at the
+  display width ([#62592]).
+* The `text/plain` display of a vector packs its entries across the display width, comma-separated
+  inside brackets and aligned, when `:compact => true` is set on the `IOContext` and the display
+  is too short for the vertical layout to show more than a couple of entries. This shows much more
+  of the array in the same number of lines; the vertical layout is unchanged without `:compact`,
+  and at any display tall enough for it ([#62592]).
 
 Standard library changes
 ------------------------

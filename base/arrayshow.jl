@@ -409,10 +409,14 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
                 end
             end
             return _show_oneline_truncated(io, X)
-        elseif X isa AbstractVector && screenheight <= WRAPPED_MAX_ROWS && length(X) > screenheight
+        elseif X isa AbstractVector && get(io, :compact, false)::Bool &&
+               screenheight <= WRAPPED_MAX_ROWS && length(X) > screenheight
             # the vertical layout has room for at most `WRAPPED_MAX_ROWS - 1`
-            # entries; packing them across the width shows far more of the
-            # array in the same number of lines
+            # entries, and the caller has asked for a compact display: packing
+            # the entries across the width shows far more of the array in the
+            # same number of lines. This is opt-in because the vertical layout
+            # aligns the entries one to a line, which reads better when there
+            # is room for it
             lines = _wrapped_entry_lines(io, X, screenheight, displaysize(io)[2], true)
             if lines !== nothing
                 for line in lines
