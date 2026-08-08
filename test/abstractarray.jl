@@ -1728,6 +1728,35 @@ using Base: typed_hvncat
     @test [zeros(1, 0) zeros(1,0);;; zeros(0,0) zeros(0, 0)] == Array{Float64, 3}(undef, 1, 0, 0)
 end
 
+@testset "flatten" begin
+    examples = Any[
+        [[1,2], [3,4]],
+        [rand(rand(1:100)) for _ in 1:100],
+        [1:10, (3,2,1), [6,5]],
+        [1:10, (3,2,1), (eval(x) for x in ["1", "2"])],
+        (1:10, (3,2,1), (eval(x) for x in ["1", "2"])),
+        ((1,2), (3,4)),
+        (rand(10), rand(20)),
+        Any[1:3, 5:6],
+        Any[1:3, 5:0.5:6],
+        Vector[[1, 2], [3.0, 4.0]],
+        [rand(rand([Int, Float64]), rand(1:100)) for _ in 1:100],
+        [rand(rand(1:10)) for _ in 1:10000],
+        (1:i for i in 1:10),
+    ]
+
+    for e in examples
+        eager = flatten(e)
+        lazy = collect(Iterators.flatten(e))
+        @test eager == lazy
+        @test eager isa Vector
+        @test eltype(eager) <: eltype(lazy) # In some cases, eager gets a more precise eltype (see below for specific example)
+    end
+
+    @test flatten(Vector[[1, 2], [3.0, 4.0]]) isa Vector{Real}
+    @test collect(Iterators.flatten(Vector[[1, 2], [3.0, 4.0]])) isa Vector{Any}
+end
+
 @testset "stack" begin
     # Basics
     for args in ([[1, 2]], [1:2, 3:4], [[1 2; 3 4], [5 6; 7 8]],
