@@ -6,7 +6,7 @@
 **Status:** the survey below was gathered to settle a design disagreement on
 [JuliaLang/julia#62592](https://github.com/JuliaLang/julia/pull/62592). It has since been acted
 on: that PR's "whichever layout shows more entries" rule was dropped and replaced by a wrapped,
-bracketed layout. [The design this led to](#the-design-this-led-to) records what was built and
+bracketed layout, gated behind `:compact => true` after review. [The design this led to](#the-design-this-led-to) records what was built and
 which evidence drove each choice; the tool-by-tool sections are unchanged evidence.
 
 ## Executive summary
@@ -943,15 +943,23 @@ What the comparative evidence does show is narrower: the cost of the vertical fo
 
 ## What was built
 
-A single wrapped layout replaces both the vertical fallback and the truncated single line, used
-only when the vertical layout is starved of rows. Writing `screenheight` for the rows the vertical
-layout has for entries (`displaysize(io)[1] - 4`):
+A single wrapped layout replaces both the truncated single line and, on request, the starved
+vertical one. Writing `screenheight` for the rows the vertical layout has for entries
+(`displaysize(io)[1] - 4`):
 
 | `screenheight` | Layout |
 |---|---|
 | `<= 1` | entries packed onto the summary line, unpadded, eliding from the middle |
-| `2 … WRAPPED_MAX_ROWS` (3), and the vector does not fit vertically | entries packed across the width over exactly the rows the vertical layout would have used, right-aligned so columns line up |
-| `> WRAPPED_MAX_ROWS` | vertical, unchanged |
+| `2 … WRAPPED_MAX_ROWS` (3), the vector does not fit vertically, **and `:compact => true` is set** | entries packed across the width over exactly the rows the vertical layout would have used, right-aligned so columns line up |
+| otherwise | vertical, unchanged |
+
+The `:compact` gate is the substantive change from the first attempt at this. Making the packed
+form the default at short display heights drew a strong objection from a reviewer, whose position
+was that the vertical layout reads better and that Julia should not trade that away on the
+terminal's behalf. Both halves of the design survive the gate: the centre elision applies
+unconditionally, because it is a straight correction to discarding the tail; the packed multi-line
+form applies only when the caller has already asked for a compact display, which is the case the
+survey's opt-in precedents (implication in *Left on the table*, below) point at.
 
 Entries are taken from both ends alternately until they stop fitting, with `…` marking the omitted
 middle. Matrices and higher dimensions keep the previous height-only rule untouched. Two bail-outs
@@ -960,7 +968,7 @@ and widths where fewer than two entries fit per line (packing would be the verti
 brackets added).
 
 ```
-                          # 6×80
+                          # 6×80, :compact => true
 100-element Vector{Int64}:
  [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
     …,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]
@@ -995,15 +1003,22 @@ brackets added).
 
 ## Where this departs from the prior art
 
-- **Terminal height is used live, and not as an opt-in.** Only pandas does this, and only when the
-  user sets `max_rows=0` (finding B). The justification is local rather than borrowed: Julia's
-  array display is already height-driven, so the packed form inherits the existing budget instead
-  of introducing a new one. It changes how the rows are *used*, not how many there are.
-- **A threshold still switches layouts.** `WRAPPED_MAX_ROWS` is a cliff — at 7 terminal rows the
-  packed form shows ~70 entries of `1:100`, at 8 rows the vertical form shows 3. The survey offers
-  no precedent for choosing such a threshold, because most systems have no second layout to switch
-  to. It is smaller and more predictable than #62592's entry-count comparison, but it is the same
-  kind of discontinuity, and it is the part most open to challenge.
+- **Terminal height is used live.** Only pandas does this, and only when the user sets
+  `max_rows=0` (finding B). The justification is local rather than borrowed: Julia's array display
+  is already height-driven, so the packed form inherits the existing budget instead of introducing
+  a new one. It changes how the rows are *used*, not how many there are. As in pandas, the
+  behaviour it enables is opt-in — here through `:compact`.
+- **An existing flag carries the opt-in, rather than a new one.** `:compact => true` already means
+  "print this compactly", so extending it to select the layout as well as the entry rendering is a
+  small stretch of an established key rather than a new control in the Common Lisp / NumPy /
+  Wolfram mould. The alternative — a dedicated `:array_layout`-style selector — is cleaner by the
+  prior art and remains available if `:compact` proves too blunt.
+- **A threshold still switches layouts.** `WRAPPED_MAX_ROWS` is a cliff — under `:compact`, at 7
+  terminal rows the packed form shows ~70 entries of `1:100`, at 8 rows the vertical form shows 3.
+  The survey offers no precedent for choosing such a threshold, because most systems have no second
+  layout to switch to. It is smaller and more predictable than the entry-count comparison it
+  replaced, and it now only fires for callers that opted in, but it is the same kind of
+  discontinuity.
 - **Very narrow displays now show fewer entries than before.** Centre elision spends width on the
   tail, so at 4×40 the old truncating form showed `[1, 2, 3, 4…` and the new one shows
   `[1, …, 100]`. This is finding C applied deliberately: both ends beat more of one end.
@@ -1015,11 +1030,15 @@ brackets added).
 - **Live width synchronization** (R `setWidthOnResize`, Dyalog `Auto_PW`) — Julia already queries
   `displaysize` per display, so this is had for free; noted only because most of the survey does
   not.
-- **An explicit layout selector** — a stable, user-chosen mode (`IOContext(:array_layout => …)` or
-  a REPL setting) rather than a heuristic, which is how Rust resolved the identical
+- **A first-class layout selector** — a stable, user-chosen mode (`IOContext(:array_layout => …)`
+  or a REPL setting) rather than a reused flag, which is how Rust resolved the identical
   verbose-versus-default argument in RFC 640, and how NumPy, Common Lisp and Wolfram expose every
-  control in this space. This is the natural home for anyone who wants the packed form at full
-  terminal height, and remains the cleanest answer if the threshold above proves contentious.
+  control in this space. Gating on `:compact` is the cheap version of this. A dedicated selector is
+  the natural home for anyone who wants the packed form at full terminal height, and the cleanest
+  answer if the threshold above proves contentious.
+- **Opting the console logger in.** `ConsoleLogger` does not set `:compact`, so `@info` output is
+  unchanged. Making log values dense is a separate one-line change that can be argued on its own
+  merits — which is where this line of work started.
 - **A scrollable viewport for rich frontends** (finding G, Maple 2024+) — out of scope for a
   terminal, but the precedent for IDE and notebook displays diverging from terminal defaults is
   strong.
@@ -1040,7 +1059,7 @@ brackets added).
 | Split into “Columns i through j” blocks | MATLAB/Octave | **Low–medium**; tied to matrix/row-vector semantics and verbose headers | No |
 | Bare horizontal values with no structural cue | J | **Low / avoid**; documented shape ambiguity | Avoided |
 | Truncate a line at max width and append `...` | J | **Low / avoid**; layout constraint destroys tail data | Removed |
-| One-element-per-line pretty mode | Rust `{:#?}`; Polars | **Legitimate alternative**, especially if stable/readable output is prioritized | Kept as the default |
+| One-element-per-line pretty mode | Rust `{:#?}`; Polars | **Legitimate alternative**, especially if stable/readable output is prioritized | Kept as the default; packing is the opt-in, as in RFC 640 |
 | Rich scrollable viewport | Maple 2024+, spreadsheet viewers | **High for IDE/notebook frontend**, **low for plain terminal** | Not attempted |
 
 ---
@@ -1057,7 +1076,7 @@ On the specific index-label question, prior art says labels are useful when they
 
 That leaves Julia's existing vertical form as a defensible design, not an obviously obsolete one. The evidence simply shows that a wrapped, vector-syntactic form can also be defensible without inheriting MATLAB's row-matrix semantics or J's ambiguity.
 
-The design that came out of this keeps both: the vertical form stays the default at any ordinary terminal size, and the wrapped form takes over only where the vertical form has been starved of rows and would otherwise show a single entry. The one thing the survey rules out unambiguously — truncating the line at the width and discarding the tail — is gone in both cases.
+The design that came out of this keeps both, and lets the caller choose: the vertical form stays the default everywhere, and the wrapped form takes over only for callers that ask for a compact display and only where the vertical form has been starved of rows. The one thing the survey rules out unambiguously — truncating the line at the width and discarding the tail — is gone either way.
 
 ---
 
