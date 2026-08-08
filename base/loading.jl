@@ -2159,11 +2159,11 @@ function parse_cache_buildid(cachepath::String)
     f = open(cachepath, "r")
     try
         checksum = isvalid_cache_header(f)
-        checksum === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        checksum === nothing && throw(ArgumentError("Incompatible header in cache file $cachepath."))
         flags = read(f, UInt8)
         syntax_version = read(f, UInt8)
         n = read(f, Int32)
-        n == 0 && error("no module defined in $cachefile")
+        n == 0 && error("no module defined in $cachepath")
         skip(f, n) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
         build_id = (UInt128(checksum) << 64) | read(f, UInt64)
