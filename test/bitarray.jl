@@ -1303,6 +1303,11 @@ timesofar("datamove")
 
     @test count(trues(2, 2), init=0x03) === 0x07
     @test count(trues(2, 2, 2), dims=2) == fill(2, 2, 1, 2)
+
+    m = bitrand(25, 25)
+    for idx in Any[0x03, 5, 21:42, 7:6, :, 10:407, 64:70, 65:127, 315:384, Base.OneTo(111)]
+        @test count(m[idx]) == count(view(m, idx))
+    end
 end
 
 timesofar("find")
