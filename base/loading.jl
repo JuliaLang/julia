@@ -1989,6 +1989,23 @@ function isrelocatable(pkg::PkgId)
     return true
 end
 
+function parse_cache_buildid(cachepath::String)
+    f = open(cachepath, "r")
+    try
+        checksum = isvalid_cache_header(f)
+        iszero(checksum) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        flags = read(f, UInt8)
+        n = read(f, Int32)
+        n == 0 && error("no module defined in $cachefile")
+        skip(f, n) # module name
+        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
+        build_id = (UInt128(checksum) << 64) | read(f, UInt64)
+        return build_id, uuid
+    finally
+        close(f)
+    end
+end
+
 # search for a precompile cache file to load, after some various checks
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
