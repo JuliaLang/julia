@@ -265,8 +265,12 @@ end
 # the cached WaitEntry makes the steady-state park/wake cycle allocation-free:
 # the same entry object is recycled across parks, and nothing on the park or
 # notify path allocates (in particular, the queue-identity witness must be a
-# mutable object - storing an immutable waitee would re-box it every park)
+# mutable object - storing an immutable waitee would re-box it every park).
+# Shielded: a script session runs under the ambient ^C episode token, which
+# would route every park through the cancellable arm - the cancellable
+# steady state is measured separately below.
 @testset "wait registration recycling is allocation-free" begin
+ Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
     ping = Event(true)
     pong = Event(true)
     n = 500
@@ -294,6 +298,41 @@ end
     if Base.JLOptions().code_coverage == 0
         @test allocated == 0
     end
+ end
+end
+
+# ... and the same holds for the cancellable park of a task governed by a
+# token (the default inside a ^C episode, i.e. every interactive or script
+# session): the cached cancel entry recycles with its sticky source
+# registration, and the per-waitable phases stay unboxed (the park driver's
+# tuple recursion; a dynamic tuple iteration would re-box the SourceWait
+# every park)
+@testset "cancellable park recycling is allocation-free" begin
+ src = Base.CancellationTokenSource()
+ Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.CancellationToken(src)) do
+    ping = Event(true)
+    pong = Event(true)
+    n = 500
+    t = Threads.@spawn for i in 1:(n + 20)
+        wait(ping)
+        notify(pong)
+    end
+    driver() = (notify(ping); wait(pong))
+    for i in 1:20 # warmup: compile and populate both tasks' cached entries
+        driver()
+    end
+    w_driver = current_task().cached_cancel_entry
+    @test w_driver isa Base.WaitEntry
+    measure() = @allocated for i in 1:n
+        driver()
+    end
+    allocated = measure()
+    wait(t)
+    @test current_task().cached_cancel_entry === w_driver
+    if Base.JLOptions().code_coverage == 0
+        @test allocated == 0
+    end
+ end
 end
 
 @testset "unbuffered channel: interrupted taker is skipped" begin

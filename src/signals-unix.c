@@ -537,7 +537,10 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
     }
     if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
         jl_set_gc_and_wait(ct);
-        // Do not raise sigint on worker thread
+        // (vestigial thread-0 gate from the old sigint force-throw, which
+        // is now delivered through the cancellation system instead - see
+        // jl_sigint_request_cancellation; nothing arms the sigint page
+        // anymore)
         if (jl_atomic_load_relaxed(&ct->tid) != 0)
             return;
         // n.b. if the user might have seen that we were in a state where it
@@ -546,13 +549,6 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context) JL_
         // thread. That will quickly be rectified when we rerun the faulting
         // instruction and end up right back here, or we start to run the
         // exception handler and immediately hit the safepoint there.
-        if (ct->ptls->defer_signal || ct->eh == NULL) {
-            jl_safepoint_defer_sigint();
-        }
-        else if (jl_safepoint_consume_sigint()) {
-            jl_clear_force_sigint();
-            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, context);
-        }
         return;
     }
     if (ct->eh == NULL)
@@ -730,21 +726,6 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     pthread_mutex_unlock(&in_signal_lock);
 }
 
-// Throw jl_interrupt_exception if the master thread is in a signal async region
-// or if SIGINT happens too often.
-static void jl_try_deliver_sigint(void) JL_NOTSAFEPOINT
-{
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    jl_safepoint_enable_sigint();
-    jl_wake_libuv();
-    pthread_mutex_lock(&in_signal_lock);
-    signals_inflight++;
-    jl_atomic_store_release(&ptls2->signal_request, 2);
-    // This also makes sure `sleep` is aborted.
-    pthread_kill(ptls2->system_id, SIGUSR2);
-    pthread_mutex_unlock(&in_signal_lock);
-}
-
 // Write only by signal handling thread, read only by main thread
 // no sync necessary.
 static int thread0_exit_signo = 0;
@@ -778,8 +759,8 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 // -1: processing
 //  0: nothing [not from here]
 //  1: get state & wait for request
-//  2: throw sigint if `!defer_signal && io_wait` or if force throw threshold
-//     is reached
+//  2: unused (was the sigint force-throw request, removed with the old ^C
+//     mechanism)
 //  3: raise `thread0_exit_signo` and try to exit
 //  4: no-op
 //  5: deliver a pending cancellation to the current task's published
@@ -887,7 +868,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
     int errno_save = errno;
     // Fire-and-forget requests (cancel/preempt/abandon) travel as bits and
     // are consumed wholesale, first: any of the value-slot paths below may
-    // never return (a forced throw, an exit callback), and with the bits
+    // never return (an exit callback), and with the bits
     // consumed here no request can be stranded without a signal to carry
     // it. An abandonment commit does not return; the cancel/preempt bits
     // die with the abandoned task, which is their level-triggered
@@ -933,7 +914,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         assert(got == 1);
         request = jl_atomic_exchange(&ptls->signal_request, -1);
         usr2_signal_context = NULL;
-        assert(request == 2 || request == 3 || request == 4);
+        assert(request == 3 || request == 4);
     }
     {
         // Acknowledge the request to its synchronously waiting sender (the
@@ -946,23 +927,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
     }
     sig_atomic_t processing = -1;
     jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
-    if (request == 2) {
-        int force = jl_check_force_sigint();
-        jl_jmp_buf *saferestore = jl_get_safe_restore();
-        int can_throw = saferestore != NULL || ct->eh != NULL;
-        if (can_throw && (force || (!ptls->defer_signal && ptls->io_wait))) {
-            jl_safepoint_consume_sigint();
-            if (force)
-                jl_safe_printf("WARNING: Force throwing a SIGINT\n");
-            // Force a throw
-            jl_clear_force_sigint();
-            if (saferestore) // restarting jl_ or profile
-                jl_longjmp_in_ctx(sig, ctx, *saferestore, 1);
-            else
-                jl_throw_in_ctx(ct, jl_interrupt_exception, sig, ctx);
-        }
-    }
-    else if (request == 3) {
+    if (request == 3) {
         jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
     }
     errno = errno_save;
@@ -1330,7 +1295,9 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 critical = 1;
             }
             else {
-                jl_try_deliver_sigint();
+                // Deliver the press through the cancellation system (see
+                // jl_sigint_request_cancellation).
+                jl_sigint_request_cancellation();
                 continue;
             }
         }
@@ -1614,7 +1581,7 @@ JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 // to force them to execute memory barriers via the signal handling mechanism.
 // This is used as a fallback when neither the membarrier syscall nor the mprotect
 // hack are available or working.
-static void jl_thread_suspend_membarrier(void)
+static void jl_thread_suspend_membarrier(void) JL_NOTSAFEPOINT
 {
     bt_context_t ctx;
     // Suspend each thread and immediately resume it.
@@ -1649,7 +1616,7 @@ next_thread:;
 static pthread_mutex_t mprotect_barrier_lock = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic(uint64_t) *mprotect_barrier_page = NULL;
 // Returns 1 on success, 0 on failure (e.g. mlock fails)
-static int jl_init_mprotect_membarrier(void)
+static int jl_init_mprotect_membarrier(void) JL_NOTSAFEPOINT
 {
     int result = pthread_mutex_lock(&mprotect_barrier_lock);
     assert(result == 0);
@@ -1681,7 +1648,7 @@ static int jl_init_mprotect_membarrier(void)
     return 1;
 }
 
-static void jl_mprotect_membarrier(void)
+static void jl_mprotect_membarrier(void) JL_NOTSAFEPOINT
 {
     int result = pthread_mutex_lock(&mprotect_barrier_lock);
     assert(result == 0);
@@ -1729,7 +1696,7 @@ enum membarrier_cmd {
 #  endif
 #endif
 
-static enum membarrier_implementation jl_init_membarrier(void) {
+static enum membarrier_implementation jl_init_membarrier(void) JL_NOTSAFEPOINT {
 #ifdef HAVE_MEMBARRIER_SYSCALL
     int ret = membarrier(MEMBARRIER_CMD_QUERY, 0, 0);
     int needed = MEMBARRIER_CMD_PRIVATE_EXPEDITED | MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED;
@@ -1754,7 +1721,7 @@ static enum membarrier_implementation jl_init_membarrier(void) {
     return MEMBARRIER_IMPLEMENTATION_THREAD_SUSPEND;
 }
 
-JL_DLLEXPORT void jl_membarrier(void) {
+JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT {
     enum membarrier_implementation impl = jl_atomic_load_relaxed(&membarrier_impl);
     if (impl == MEMBARRIER_IMPLEMENTATION_UNKNOWN) {
         impl = jl_init_membarrier();
