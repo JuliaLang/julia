@@ -445,11 +445,13 @@ void ObjCache::writerThread()
 {
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> LocalQueue;
     while (1) {
+        bool IsExiting;
         LocalQueue.clear();
         {
             std::unique_lock Lock{Mutex};
             QueueCond.wait(Lock, [this]() { return Exiting || !ObjQueue.empty(); });
             std::swap(LocalQueue, ObjQueue);
+            IsExiting = Exiting;
         }
         if (LocalQueue.empty())
             return;
@@ -466,9 +468,15 @@ void ObjCache::writerThread()
             auto ObjKey = toObjKey(H);
             MDB_val Key = mdbVal(ObjKey);
             if (Obj) {
-                // Cache miss - write object
-                if (!maybeEvictLRU(Txn, Obj->getBufferSize()))
+                // Cache miss - write object. Once shutdown has been
+                // requested, don't start eviction work just to make room for
+                // new entries — a full cache would make exit arbitrarily
+                // slow. Drop the write instead; it only costs a future miss.
+                if (!maybeEvictLRU(Txn, Obj->getBufferSize(), /*AllowEvict*/ !IsExiting)) {
+                    if (IsExiting)
+                        continue;
                     goto abort;
+                }
                 MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
                 if (int Err = mdb_put(Txn.Txn, ObjCacheDbi, &Key, &Data, 0)) {
                     // If this fails because of MDB_MAP_FULL, we can't find
@@ -549,7 +557,7 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
     return true;
 }
 
-bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor)
+bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor, bool AllowEvict)
 {
     RoomFor = LLT_ALIGN(RoomFor, PageSize);
     auto Used = [&]() {
@@ -562,39 +570,170 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor)
 
     if (Used() <= OBJCACHE_CAPACITY)
         return true;
-
-    MDB_cursor *MetaCur;
-    if (checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur)))
+    if (!AllowEvict)
         return false;
 
-    auto LowMeta = toMetaKey(0, {});
-    MDB_val MetaKey = mdbVal(LowMeta);
-    int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
-    while (!Ret && ShouldEvict() && ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
-        auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
-        NEvicted.fetch_add(1, memory_order_relaxed);
-        if (LogFile) {
-            std::unique_lock<std::mutex> Lock{LogMutex};
-            fprintf(LogFile, "evict,%s,,,,,\n", llvm::toHex(Hash, true).c_str());
+    // Evict in bounded batches, committing between them. Freeing an
+    // unbounded number of pages in one transaction makes the commit's
+    // freelist bookkeeping (mdb_freelist_save) pathologically slow on a
+    // full map: it needs a large contiguous overflow run for the free-page
+    // record, and searching a huge fragmented freelist for it is
+    // effectively quadratic.
+    static const size_t EVICT_BATCH = 64;
+    bool More = true;
+    while (More) {
+        More = false;
+        MDB_cursor *MetaCur;
+        if (checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur)))
+            return false;
+
+        auto LowMeta = toMetaKey(0, {});
+        MDB_val MetaKey = mdbVal(LowMeta);
+        int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
+        size_t Batch = 0;
+        while (!Ret && ShouldEvict() && ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
+            if (++Batch > EVICT_BATCH) {
+                More = true;
+                break;
+            }
+            auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
+            NEvicted.fetch_add(1, memory_order_relaxed);
+            if (LogFile) {
+                std::unique_lock<std::mutex> Lock{LogMutex};
+                fprintf(LogFile, "evict,%s,,,,,\n", llvm::toHex(Hash, true).c_str());
+            }
+
+            auto ObjKey = toObjKey(Hash);
+            MDB_val Key = mdbVal(ObjKey);
+            checkMDB(mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr));
+            Key = mdbVal(ObjKey);
+            checkMDB(mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr));
+            checkMDB(mdb_cursor_del(MetaCur, 0));
+            Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
+            if (Ret != MDB_NOTFOUND)
+                checkMDB(Ret);
         }
 
-        auto ObjKey = toObjKey(Hash);
-        MDB_val Key = mdbVal(ObjKey);
-        checkMDB(mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr));
-        Key = mdbVal(ObjKey);
-        checkMDB(mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr));
-        checkMDB(mdb_cursor_del(MetaCur, 0));
-        Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
-        if (Ret != MDB_NOTFOUND)
-            checkMDB(Ret);
+        // Start a new transaction to release our lock on all the pages
+        // that are now free.
+        if (Txn.commit())
+            return false;
+        Txn = MDBTxn{Env};
+        if (!Txn.Txn)
+            return false;
     }
 
-    // Start a new transaction to release our lock on all the pages that
-    // are now free.
-    Txn.commit();
-    Txn = MDBTxn{Env};
-
     return true;
+}
+
+// Test support: synthesize cache entries directly so tests can construct
+// specific cache shapes (e.g. a full map with a large fragmented freelist)
+// without compiling the corresponding volume of real code. Writes up to
+// NEntries entries of EntrySize bytes each, stopping early once the map
+// fills, then, if PunchPeriod is nonzero, deletes every PunchPeriod-th
+// written entry to scatter free pages into the freelist. Both phases commit
+// in bounded batches (the punch phase shrinks its batch when a commit does
+// not fit into the remaining space). Returns the number of entries left in
+// the cache, or -1 if the cache is disabled or an unexpected error occurred.
+int64_t ObjCache::testPopulate(uint64_t NEntries, uint64_t EntrySize, uint64_t PunchPeriod)
+{
+    disabledNotice(); // force initialization
+    if (!isEnabled())
+        return -1;
+
+    std::vector<uint8_t> Data(EntrySize, 0xab);
+    auto NthHash = [](uint64_t I) JL_NOTSAFEPOINT {
+        Hash H{};
+        memcpy(H.data(), &I, sizeof I);
+        return H;
+    };
+
+    const uint64_t BATCH = 256;
+    uint64_t Written = 0;
+    bool Full = false;
+    while (Written < NEntries && !Full) {
+        MDBTxn Txn{Env};
+        if (!Txn.Txn)
+            return -1;
+        uint64_t Base = Written;
+        for (uint64_t J = 0; J < BATCH && Base + J < NEntries; J++) {
+            uint64_t I = Base + J;
+            auto H = NthHash(I);
+            auto ObjKey = toObjKey(H);
+            MDB_val Key = mdbVal(ObjKey);
+            MDB_val Val{Data.size(), Data.data()};
+            int Err = mdb_put(Txn.Txn, ObjCacheDbi, &Key, &Val, 0);
+            int64_t Time = (int64_t)I;
+            if (!Err) {
+                MDB_val TimeVal{sizeof Time, &Time};
+                Key = mdbVal(ObjKey);
+                Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &TimeVal, 0);
+            }
+            if (!Err) {
+                auto MetaKey = toMetaKey(Time, H);
+                MDB_val Key2 = mdbVal(MetaKey);
+                MDB_val Empty{0, nullptr};
+                Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key2, &Empty, 0);
+            }
+            if (Err) {
+                if (Err != MDB_MAP_FULL)
+                    checkMDB(Err);
+                Full = true;
+                break;
+            }
+        }
+        uint64_t InBatch = std::min(BATCH, NEntries - Base);
+        if (Full)
+            InBatch = 0; // partially applied batch aborts with the txn below
+        if (InBatch == 0) {
+            // Nothing (fully) written; drop the transaction.
+            break;
+        }
+        if (Txn.commit()) {
+            Full = true;
+            break;
+        }
+        Written += InBatch;
+    }
+
+    uint64_t Deleted = 0;
+    if (PunchPeriod) {
+        uint64_t I = 0;
+        uint64_t PunchBatch = BATCH;
+        while (I < Written && PunchBatch) {
+            MDBTxn Txn{Env};
+            if (!Txn.Txn)
+                return -1;
+            uint64_t Start = I, InBatch = 0;
+            for (uint64_t J = 0; J < PunchBatch && I < Written; I += PunchPeriod, J++) {
+                auto H = NthHash(I);
+                auto ObjKey = toObjKey(H);
+                MDB_val Key = mdbVal(ObjKey);
+                int Err = mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr);
+                if (!Err) {
+                    Key = mdbVal(ObjKey);
+                    mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr);
+                    auto MetaKey = toMetaKey((int64_t)I, H);
+                    MDB_val Key2 = mdbVal(MetaKey);
+                    mdb_del(Txn.Txn, ObjMetaDbi, &Key2, nullptr);
+                    InBatch++;
+                }
+                else if (Err != MDB_NOTFOUND && Err != MDB_MAP_FULL) {
+                    checkMDB(Err);
+                    return -1;
+                }
+            }
+            if (Txn.commit()) {
+                // The commit itself did not fit (copy-on-write pages); retry
+                // this stretch with a smaller batch.
+                I = Start;
+                PunchBatch /= 2;
+                continue;
+            }
+            Deleted += InBatch;
+        }
+    }
+    return (int64_t)(Written - Deleted);
 }
 
 size_t ObjCache::dbiSize(MDBTxn &Txn, MDB_dbi Dbi)

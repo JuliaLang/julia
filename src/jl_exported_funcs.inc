@@ -557,6 +557,7 @@
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \
     YY(jl_dump_llvm_opt) \
+    YY(jl_objcache_test_populate) \
     YY(jl_dump_fptr_asm) \
     YY(jl_emit_native) \
     YY(jl_get_function_id) \

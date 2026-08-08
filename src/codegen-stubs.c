@@ -124,6 +124,11 @@ JL_DLLEXPORT void jl_dump_llvm_opt_fallback(void *s)
 {
 }
 
+JL_DLLEXPORT int64_t jl_objcache_test_populate_fallback(uint64_t nentries, uint64_t entrysize, uint64_t punchperiod)
+{
+    return -1;
+}
+
 JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm_fallback(uint64_t fptr, char emit_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 
 JL_DLLEXPORT jl_value_t *jl_dump_function_asm_fallback(jl_llvmf_dump_t* dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw) UNAVAILABLE

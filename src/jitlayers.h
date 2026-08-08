@@ -870,6 +870,10 @@ public:
     const char *objCacheDisabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE {
         return OCache.disabledNotice();
     }
+    int64_t objCacheTestPopulate(uint64_t NEntries, uint64_t EntrySize,
+                                 uint64_t PunchPeriod) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.testPopulate(NEntries, EntrySize, PunchPeriod);
+    }
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;

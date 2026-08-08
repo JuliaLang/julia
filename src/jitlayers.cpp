@@ -163,6 +163,13 @@ void jl_dump_llvm_opt_impl(void *s)
 {
     **jl_ExecutionEngine->get_dump_llvm_opt_stream() = (ios_t*)s;
 }
+// Test support for constructing specific object-cache shapes; see
+// ObjCache::testPopulate.
+extern "C" JL_DLLEXPORT_CODEGEN
+int64_t jl_objcache_test_populate_impl(uint64_t nentries, uint64_t entrysize, uint64_t punchperiod)
+{
+    return jl_ExecutionEngine->objCacheTestPopulate(nentries, entrysize, punchperiod);
+}
 
 static void decorate_module(Module &M) JL_NOTSAFEPOINT;
 

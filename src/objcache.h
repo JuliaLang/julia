@@ -42,6 +42,9 @@ public:
     // REPL banner); otherwise returns null.  Forces initialization.
     const char *disabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE;
     void shutdown() JL_NOTSAFEPOINT;
+    // Test support; see the implementation for details.
+    int64_t testPopulate(uint64_t NEntries, uint64_t EntrySize,
+                         uint64_t PunchPeriod) JL_CANSAFEPOINT_ENTER_LEAVE;
 
     using Hash = std::array<uint8_t, 20>;
 
@@ -49,7 +52,7 @@ protected:
     void writerThread();
     void initDB() JL_CANSAFEPOINT_ENTER_LEAVE;
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
-    bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
+    bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor, bool AllowEvict = true);
     size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
 
 private:
