@@ -1119,7 +1119,7 @@ static void ios_ensureroom(ios_t *s, size_t newsize) JL_NOTSAFEPOINT
     size_t prevsize = s->size;
     if (prevsize < newsize) {
         if (ios_trunc(s, newsize) != 0 || s->size != newsize) {
-            // writing past the un-grown buffer would silently corrupt the image
+            // Avoid writing past the buffer.
             jl_safe_printf("FATAL ERROR: failed to allocate memory for image serialization\n");
             abort();
         }
@@ -4594,10 +4594,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_
     return NULL;
 }
 
-// If the pkgimage serialized data beginning at `datastart` was already restored in this
-// session (e.g. dlopen of an already-loaded pkgimage returns the existing mapping), it has
-// already been relocated in place; deserializing it again would misread the relocated
-// pointers as relocation ids and crash. Returns a catchable error in that case.
+// Reject an already-relocated pkgimage mapping.
 static jl_value_t *jl_check_pkgimage_already_restored(const char *datastart, const char *pkgname) JL_CANSAFEPOINT
 {
     if (eyt_tree_is_in_range(&image_tree, (uintptr_t)datastart)) {
@@ -4623,18 +4620,14 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         return verify_fail;
 
     if (!(datastartpos > 0 && datastartpos < dataendpos)) {
-        // e.g. a header-only pkgimage stub `.ji`, whose serialized data lives only in the
-        // corresponding shared library
+        // Header-only pkgimage stub.
         return jl_get_exceptionf(jl_errorexception_type,
             "Cache file for %s contains no serialized data.", pkgname);
     }
     needs_permalloc = jl_options.permalloc_pkgimg || needs_permalloc;
 
     if (!needs_permalloc) {
-        // f is a static buffer over the entire image here and the serialized data is
-        // viewed in place below; a malformed header whose dataendpos extends past the
-        // buffer would cause out-of-bounds reads during deserialization (the permalloc
-        // path instead detects truncation via its ios_readall success check)
+        // The in-place payload must fit in the buffer.
         if ((uint64_t)dataendpos > f->size) {
             return jl_get_exceptionf(jl_errorexception_type,
                 "Cache file for %s is truncated: serialized data extends past the end of the file.", pkgname);
@@ -4794,8 +4787,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     void *pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
 
-    // Reject an already-restored mapping up front, before jl_load_pkgimg allocates image
-    // metadata that would be leaked for the rejected load.
+    // Reject an already-restored mapping before loading metadata.
     if (!jl_options.permalloc_pkgimg) {
         ios_t header_io;
         ios_static_buffer(&header_io, (char*)buf.data, buf.size);

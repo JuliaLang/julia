@@ -1402,8 +1402,7 @@ function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT
                 end
                 path_mtime = mtime(path)
             catch ex
-                # an unreadable or truncated candidate must not abort the search over
-                # the other candidates; stale_cachefile will reject it later
+                # stale_cachefile will reject this candidate later
                 ex isa InterruptException && rethrow()
             end
             (; pkgimage, mtime=path_mtime)
@@ -2008,7 +2007,7 @@ function parse_image_target(io::IO)
 end
 
 function parse_image_targets(targets::Vector{UInt8})
-    # caches built without native code record an empty clone-targets blob
+    # no native code
     isempty(targets) && return ImageTarget[]
     io = IOBuffer(targets)
     ntargets = read(io, Int32)
@@ -3739,9 +3738,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                         try
                             rm(evicted; force=true, recursive=true)
                         catch e
-                            # a failed eviction must not abort an otherwise-successful
-                            # compile, but should not be silent either, since the cache
-                            # directory will now exceed its intended size
+                            # Keep the successful compile.
                             e isa IOError || rethrow()
                             @warn "Failed to evict file from cache" evicted exception=e
                         end
@@ -3897,9 +3894,7 @@ function read_module_list(f::IO, has_buildid_hi::Bool)
     return modules
 end
 
-# The header contents parsed by `_parse_cache_header` begin with the flags byte, which
-# therefore immediately follows the version header verified by `isvalid_cache_header`.
-# Use this helper anywhere the flags byte is read directly, so the layout stays in one place.
+# Read flags after the version header.
 read_cache_header_flags(f::IO) = read(f, UInt8)
 
 function _parse_cache_header(f::IO, cachefile::AbstractString)
@@ -3972,10 +3967,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs_blob, clone_targets, flags, syntax_version
 end
 
-# Resolve the `@depot` tags in the include paths recorded in a cache header against the
-# current `DEPOT_PATH`, rewriting `inc.filename` in place. This queries the filesystem and
-# the load environment, unlike `_parse_cache_header`, which only reads the cache file's own
-# contents. Returns the includes split into include() files and include_dependency() files.
+# Resolve `@depot` include paths in place.
 function resolve_depot_includes!(includes::Vector{CacheHeaderIncludes}, srcfiles::Set{String}, cachefile::AbstractString)
     includes_srcfiles = CacheHeaderIncludes[]
     includes_depfiles = CacheHeaderIncludes[]
@@ -4583,12 +4575,7 @@ end
         @debug "Rejecting cache file $cachefile for $modkey because it could not be opened" isfile(cachefile)
         return true
     end
-    # an exception from an operation that reads or parses the cache file's own contents
-    # indicates a file with a valid header but truncated or otherwise malformed contents
-    # (e.g. from a process killed mid-write); such a file must be treated as stale so that
-    # recompilation replaces it, rather than the exception escaping and making the package
-    # unloadable. Exceptions from environment lookups and source-file checks are left to
-    # propagate, since they do not implicate the cache file.
+    # Treat malformed cache contents as stale.
     @noinline function reject_malformed_cachefile(ex)
         @debug "Rejecting cache file $cachefile due to malformed or truncated contents" exception=(ex, catch_backtrace())
         record_reason(reasons, :malformed_cache)
@@ -4608,8 +4595,7 @@ end
             ex isa InterruptException && rethrow()
             return reject_malformed_cachefile(ex)
         end
-        # resolving `@depot` tags queries the current depots, not the cache file's contents,
-        # so it stays outside the malformed-cache guard
+        # Keep filesystem queries outside the malformed-cache guard.
         resolve_depot_includes!(includes, srcfiles, cachefile)
         if isempty(modules)
             return true # ignore empty file
@@ -4737,7 +4723,7 @@ end
         # now check if this file's content hash has changed relative to its source files
         if stalecheck
             if isempty(includes)
-                # the cache file for a package always records at least its entry source file
+                # Packages record at least their entry source file.
                 @debug "Rejecting cache file $cachefile because it records no source files"
                 record_reason(reasons, :malformed_cache)
                 return true
