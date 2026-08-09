@@ -1370,6 +1370,13 @@ static void *signal_listener(void *arg) JL_CANSAFEPOINT_ENTER_LEAVE
                 rescue_timer_fired = 1;
 #endif
             if (rescue_timer_fired) {
+                // A one-shot expiry that fired before the current arm's
+                // interval could have elapsed is a straggler from a previous
+                // arm (its kevent/queued signal survives the disarm): drop
+                // it - a stale expiry must never offer or record against
+                // the current episode.
+                if (!jl_sigint_rescue_expiry_fresh())
+                    continue;
                 int est = jl_sigint_episode_state();
                 if (est == 0)
                     continue; // the episode already completed - stand down

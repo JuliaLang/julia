@@ -528,10 +528,13 @@ function _sigint_dispatch_pass()
         # episode warrants delivering to it.
         pending || return
         sev = CANCEL_REQUEST_SAFE
-    elseif ccall(:jl_sigint_rescue_timer_expired_peek, Cint, ()) != 0
-        # The grace period for the active severity has passed (the rescue
-        # timer announced the escalation option to the user) - climb one
-        # rung, and start a fresh grace period for the next one.
+    elseif pending && ccall(:jl_sigint_rescue_timer_expired_peek, Cint, ()) != 0
+        # A press arrived after the active severity's grace period passed
+        # (the rescue timer announced the escalation option to the user):
+        # climb one rung, and start a fresh grace period for the next one.
+        # The press requirement is load-bearing - a bare expiry (or a stale
+        # one straggling in from the previous episode's timer) must offer,
+        # never climb.
         sev = active === CANCEL_REQUEST_SAFE ? CANCEL_REQUEST_ABANDON_EXTERNAL :
               CANCEL_REQUEST_ABANDON_ALL
         ccall(:jl_sigint_escalation_delivered, Cvoid, ())

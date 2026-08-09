@@ -544,6 +544,19 @@ static jl_task_t *sigint_rescue_task = NULL;
 static _Atomic(uint32_t) sigint_rescue_gen = 1;
 static _Atomic(uint32_t) sigint_rescue_armed_gen = 0;   // generation of the last arm
 static _Atomic(uint32_t) sigint_rescue_expired_gen = 0; // 0 = no expiry
+// Monotonic time of the last arm: an expiry notification that arrives
+// sooner after the current arm than the timer interval allows is a
+// straggler from a previous arm (a fired one-shot kevent survives the
+// episode-close disarm; a queued POSIX timer signal likewise) and must be
+// dropped, not stamped against the current generation.
+static _Atomic(uint64_t) sigint_rescue_armed_time = 0;
+#define JL_SIGINT_RESCUE_TIMEOUT_NS (1000000000ull) // 1s, matches every arm site
+static int jl_sigint_rescue_expiry_fresh(void) JL_NOTSAFEPOINT
+{
+    uint64_t armed = jl_atomic_load_relaxed(&sigint_rescue_armed_time);
+    return armed != 0 &&
+        uv_hrtime() - armed >= JL_SIGINT_RESCUE_TIMEOUT_NS - 20000000ull; // 20ms slack
+}
 
 // Classifies the ^C episode state recorded on the root task's cancellation
 // request (see base/Base.jl's sigint listener), for escalation decisions and
@@ -582,6 +595,7 @@ static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
     // (jl_reset_sigint_rescue_timer) opens a fresh generation.
     jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
                             jl_atomic_load_relaxed(&sigint_rescue_gen));
+    jl_atomic_store_relaxed(&sigint_rescue_armed_time, uv_hrtime());
     if (!sigint_rescue_timer_created)
         return;
     struct itimerspec its;
@@ -626,6 +640,7 @@ static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
     // (jl_reset_sigint_rescue_timer) opens a fresh generation.
     jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
                             jl_atomic_load_relaxed(&sigint_rescue_gen));
+    jl_atomic_store_relaxed(&sigint_rescue_armed_time, uv_hrtime());
     if (sigint_rescue_kq == -1)
         return;
     struct kevent ev;
@@ -658,6 +673,8 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 static VOID CALLBACK sigint_rescue_timer_cb(PVOID param, BOOLEAN fired)
 {
     (void)param; (void)fired;
+    if (!jl_sigint_rescue_expiry_fresh())
+        return; // straggler from a previous arm (see signals-unix.c)
     int est = jl_sigint_episode_state();
     if (est == 0)
         return; // the episode already completed - stand down
@@ -687,6 +704,7 @@ static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
     // (jl_reset_sigint_rescue_timer) opens a fresh generation.
     jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
                             jl_atomic_load_relaxed(&sigint_rescue_gen));
+    jl_atomic_store_relaxed(&sigint_rescue_armed_time, uv_hrtime());
     uv_mutex_lock(&sigint_state_lock);
     if (sigint_rescue_timer_handle == NULL) {
         if (!CreateTimerQueueTimer(&sigint_rescue_timer_handle, NULL,
@@ -722,6 +740,7 @@ static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
     // (jl_reset_sigint_rescue_timer) opens a fresh generation.
     jl_atomic_store_relaxed(&sigint_rescue_armed_gen,
                             jl_atomic_load_relaxed(&sigint_rescue_gen));
+    jl_atomic_store_relaxed(&sigint_rescue_armed_time, uv_hrtime());
 }
 
 JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
