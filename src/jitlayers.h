@@ -657,7 +657,7 @@ class JLMaterializationUnit;
 class JLTrampolineMaterializationUnit;
 
 struct JITObjectInfo {
-    std::unique_ptr<MemoryBuffer> BackingBuffer;
+    std::unique_ptr<WritableMemoryBuffer> BackingBuffer;
     std::unique_ptr<object::ObjectFile> Object;
     StringMap<uint64_t> SectionLoadAddresses;
     std::unique_ptr<jl_linker_info_t> LinkerInfo;
@@ -666,11 +666,24 @@ struct JITObjectInfo {
 class JLDebuginfoPlugin : public orc::ObjectLinkingLayer::Plugin {
     std::mutex PluginMutex;
     std::map<orc::MaterializationResponsibility *, std::unique_ptr<JITObjectInfo>> PendingObjs;
+    // Address of llvm_orc_registerJITLoaderGDBAllocAction while the GDB JIT
+    // interface is enabled, and the debug objects handed to it (the GDB JIT
+    // interface does not copy them, so they have to be kept alive).
+    orc::ExecutorAddr GDBRegistrar;
+    SmallVector<std::unique_ptr<WritableMemoryBuffer>> GDBObjects;
+    void registerWithGDB(orc::ExecutionSession &ES, JITObjectInfo &Info) JL_NOTSAFEPOINT;
 public:
+    // Register every emitted object with the GDB JIT interface, using the given
+    // address of llvm_orc_registerJITLoaderGDBAllocAction. Must be called before
+    // anything is compiled.
+    void enableGDBRegistration(orc::ExecutorAddr Registrar) JL_NOTSAFEPOINT;
     void notifyMaterializingWithInfo(orc::MaterializationResponsibility &MR,
                                      jitlink::LinkGraph &G, MemoryBufferRef InputObject,
                                      std::unique_ptr<jl_linker_info_t> LinkerInfo)
         JL_NOTSAFEPOINT;
+    void notifyMaterializing(orc::MaterializationResponsibility &MR,
+                             jitlink::LinkGraph &G, jitlink::JITLinkContext &Ctx,
+                             MemoryBufferRef InputObject) override;
     Error notifyEmitted(orc::MaterializationResponsibility &MR) override JL_CANSAFEPOINT_ENTER_LEAVE; // NOLINT[julia-first-decl-annotations]
     Error notifyFailed(orc::MaterializationResponsibility &MR) override;
     Error notifyRemovingResources(orc::JITDylib &JD, orc::ResourceKey K) override;
