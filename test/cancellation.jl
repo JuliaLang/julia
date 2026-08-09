@@ -307,6 +307,103 @@ end
                                           CANCEL_TOKEN => CancellationToken(qchild))
 end
 
+@testset "scoped-default token cache" begin
+    # The per-task cache (Task.bound_cancel_default over bound_cancel_token)
+    # must be invisible: default_cancel_token() always resolves to what the
+    # CANCEL_TOKEN scoped lookup would return under the current scope.
+    src = CancellationTokenSource()
+    tok = CancellationToken(src)
+
+    # the ambient default outside our scopes (the test harness may itself
+    # run under a governing token, e.g. the ^C episode source)
+    ambient = Base.default_cancel_token()
+
+    # warm lookups agree with the scope, and the cache invariant holds
+    with(CANCEL_TOKEN => tok) do
+        t1 = Base.default_cancel_token()
+        t2 = Base.default_cancel_token()
+        @test t1 === tok && t2 === tok
+        ct = current_task()
+        @test getfield(ct, :bound_cancel_default) === 0x01
+        @test (@atomic :monotonic ct.bound_cancel_token) === src
+    end
+    # after the scope exits, the ambient default is back
+    @test Base.default_cancel_token() === ambient
+
+    # a cancellation point that publishes a *different* explicit source must
+    # not leave the cache claiming it as the scoped default
+    other = CancellationTokenSource()
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok      # warm the cache
+        Base.@cancel_check CancellationToken(other)    # rebind to `other`
+        @test Base.default_cancel_token() === tok      # still the scoped one
+        Base.@cancel_check nothing                     # explicit clear
+        @test Base.default_cancel_token() === tok
+    end
+
+    # the same-source cancellation point keeps a warm cache intact
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        Base.@cancel_check
+        @test getfield(current_task(), :bound_cancel_default) === 0x01
+        @test Base.default_cancel_token() === tok
+    end
+
+    # scope changes that do not touch CANCEL_TOKEN still resolve correctly
+    sv = ScopedValue(0)
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        with(sv => 1) do
+            @test Base.default_cancel_token() === tok
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # nesting and shielding, with warm caches at every level
+    inner = CancellationTokenSource()
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        with(CANCEL_TOKEN => CancellationToken(inner)) do
+            @test Base.default_cancel_token() === CancellationToken(inner)
+        end
+        @test Base.default_cancel_token() === tok
+        with(CANCEL_TOKEN => nothing) do
+            @test Base.default_cancel_token() === nothing
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # an exceptional unwind out of an inner scope restores the outer default
+    with(CANCEL_TOKEN => tok) do
+        @test Base.default_cancel_token() === tok
+        try
+            with(CANCEL_TOKEN => CancellationToken(inner)) do
+                @test Base.default_cancel_token() === CancellationToken(inner)
+                error("unwind")
+            end
+        catch err
+            @test err == ErrorException("unwind")
+        end
+        @test Base.default_cancel_token() === tok
+    end
+
+    # a task spawned under the scope resolves its inherited default
+    with(CANCEL_TOKEN => tok) do
+        t = Threads.@spawn Base.default_cancel_token()
+        @test fetch(t) === tok
+    end
+
+    # a warm cache still observes cancellation promptly (the cache holds the
+    # source; its state is what the check reads)
+    psrc = CancellationTokenSource()
+    with(CANCEL_TOKEN => CancellationToken(psrc)) do
+        @test Base.default_cancel_token() === CancellationToken(psrc)
+        Base.@cancel_check
+        cancel!(psrc)
+        @test_throws CancellationRequest Base.@cancel_check
+    end
+end
+
 @testset "cooperative cancellation of running tasks" begin
     # a @cancel_check polling loop is stopped cross-thread by cancel!
     started = Threads.Atomic{Bool}(false)
