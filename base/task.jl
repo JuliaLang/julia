@@ -372,41 +372,30 @@ unsafe_abandon!(t::Task, next_task::Task) =
     unsafe_abandon!(t, next_task, CancellationRequest(0x4)) # CANCEL_REQUEST_ABANDON_ALL
 
 function unsafe_abandon!(t::Task, next_task::Task, @nospecialize(result))
-    # The requester's own wakeup handle, staged with the request in the
-    # victim thread's abandon slot: the delivery paths ping it (from signal
-    # context, where uv_async_send is the one legal wakeup) when the
-    # request settles. One requester per slot means one consumer per
-    # handle, which is exactly the AsyncCondition trigger's latched,
-    # consume-once semantics - a settle that lands inside the check/park
-    # window below is caught by the latch.
-    async = AsyncCondition()
     tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any, Ptr{Cvoid}),
-                t, next_task, result, async.handle)
+                t, next_task, result, C_NULL)
     if tid < 0
-        close(async)
         return false
     end
     tid = tid % Int16
     ok = false
-    try
-        while true
-            verdict = ccall(:jl_abandon_task_poll, Cint, (Int16,), tid)
-            if verdict == 1 || verdict == -1
-                ok = verdict == 1
-                break
-            elseif verdict == 2
-                # mid-settle: the ping was already sent (pre-terminal, so it
-                # can never race this handle's close below); the verdict is
-                # microseconds away
-                ccall(:jl_cpu_pause, Cvoid, ())
-            else
-                wait(async; cancel=nothing)
-            end
+    # Bounded thread-level poll for the verdict, with no event-loop (or any
+    # other wakeup) dependence: this may run on the adopted signal thread,
+    # whose parking must not rely on machinery the stuck process can wedge.
+    # The verdict settles at the victim's next delivery point - the request
+    # signal stays pending even if the victim currently has it masked - so
+    # the poll is short in every non-pathological case.
+    while true
+        verdict = ccall(:jl_abandon_task_poll, Cint, (Int16,), tid)
+        if verdict == 1 || verdict == -1
+            ok = verdict == 1
+            break
+        elseif verdict == 2
+            # mid-settle: the verdict is microseconds away
+            ccall(:jl_cpu_pause, Cvoid, ())
+        else
+            ccall(:uv_sleep, Cvoid, (Cuint,), UInt32(1))
         end
-    finally
-        # Safe only after the terminal consume: pings happen strictly
-        # before the terminal state becomes visible.
-        close(async)
     end
     if ok
         # A forcibly abandoned task never goes through the regular task

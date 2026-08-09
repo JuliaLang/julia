@@ -456,19 +456,21 @@ function maybe_rescue_REPL_after_sigint()
         # Inform the frontend what happened to its backend
         exc = Base.ExceptionStack(Any[(exception = Base.CANCEL_REQUEST_ABANDON_ALL, backtrace = Any[])])
         put!(backend.response_channel, Pair{Any, Bool}(exc, true))
-        # Re-initialize the REPL backend. N.B.: the fresh backend task must
-        # not be sticky to this task's thread (the default for @async-created
-        # tasks): a later stuck evaluation on it would then monopolize the
-        # very thread the sigint listener needs to escalate again.
-        newbackend = start_repl_backend(backend.repl_channel, backend.response_channel)
-        newbackend.backend_task.sticky = false
+        # Re-initialize the REPL backend. N.B.: this runs on the adopted
+        # signal thread, whose (foreign) threadpool no scheduler thread
+        # serves - the fresh backend task must be spawned into a real pool
+        # explicitly, or it would never run. `Threads.@spawn` also leaves it
+        # non-sticky, so a later stuck evaluation cannot monopolize any one
+        # particular thread.
+        newbackend = REPLBackend(backend.repl_channel, backend.response_channel, false)
+        newbackend.backend_task = Threads.@spawn :default start_repl_backend(newbackend)
         setglobal!(Base, :active_repl_backend, newbackend)
         # The session's shutdown continuation lived on the abandoned task
         # (with the default REPL the backend loop runs on the task that
         # started the session), so nothing runs after the rescued backend's
         # loop finishes (e.g. when the frontend sends the exit flag for ^D).
         # Complete the shutdown here in that case.
-        @async begin
+        Threads.@spawn :default begin
             Base._wait(newbackend.backend_task)
             Base.istaskfailed(newbackend.backend_task) || exit()
         end

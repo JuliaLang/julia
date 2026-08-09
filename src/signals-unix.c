@@ -1160,6 +1160,9 @@ static void do_critical_profile(void)
     // (so that thread zero gets notified last)
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     for (int i = nthreads; i-- > 0; ) {
+        // never try to suspend this (the adopted signal) thread itself
+        if (jl_tid_is_self((int16_t)i))
+            continue;
         // notify thread to stop
         if (!jl_thread_suspend(i, &signal_context))
             continue;
@@ -1190,6 +1193,9 @@ static void do_profile(void) JL_NOTSAFEPOINT
             jl_profile_stop_timer();
             return;
         }
+        // never try to suspend this (the adopted signal) thread itself
+        if (jl_tid_is_self((int16_t)tid))
+            continue;
         // notify thread to stop
         if (!jl_thread_suspend(tid, &signal_context))
             return;
@@ -1239,7 +1245,7 @@ static void do_profile(void) JL_NOTSAFEPOINT
 // direct abandonments.
 static int16_t direct_abandon_tid = -1;
 
-static void *signal_listener(void *arg) JL_NOTSAFEPOINT
+static void *signal_listener(void *arg) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     sigset_t sset;
     int sig, critical, profile, doexit = 0, rescue_bt = 0;
@@ -1335,7 +1341,8 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                     // Let the sigint listener task perform the Julia-side
                     // cleanup (waking the abandoned task's waiters and
                     // re-initializing or shutting down the session).
-                    deliver_sigint_notification();
+                    jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
+                    jl_run_sigint_dispatch();
                 }
                 else if (verdict == -1) {
                     // Transient refusal (the victim held a runtime resource
@@ -1407,76 +1414,34 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 critical = 1;
             }
             else {
-                // Check if the rescue timer has already expired (from a previous SIGINT
-                // cycle). If so, the user is pressing Ctrl-C again after the warning -
-                // time to abandon the stuck task, unless the julia-side
-                // escalation (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can
-                // still make progress on it.
-                jl_task_t *rescue_task = NULL;
-                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-                // Direct abandonment rips away whatever thread 0 is currently
-                // running, which is only legitimate when that is the stuck
-                // victim monopolizing the thread in managed compute; the
-                // delivery-point validation (jl_abandon_try_commit) is what
-                // verifies that against the victim's actual frozen state -
+                // Check if the rescue timer has already expired (from a
+                // previous SIGINT cycle). If so, the user is pressing Ctrl-C
+                // again after the warning - time to abandon the stuck task,
+                // unless the julia-side escalation (SAFE -> ABANDON_EXTERNAL
+                // -> ABANDON_ALL) can still make progress on it. The
+                // delivery-point validation (jl_abandon_try_commit) verifies
+                // the target against the victim's actual frozen state -
                 // including transient conditions like an in-flight GC or
                 // allocator lock, which simply refuse and re-offer.
                 if (direct_abandon_tid < 0 &&
                     jl_sigint_rescue_timer_expired_peek() &&
-                    jl_sigint_direct_abandon_allowed()) {
-                    // consumes the expiry; returns NULL if the episode
-                    // completed (or was reset) in the meantime
-                    rescue_task = jl_check_sigint_rescue_abandon();
-                }
-                if (rescue_task != NULL) {
-                    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
-                    jl_value_t *bound = ct == NULL ? NULL :
-                        jl_atomic_load_acquire(&ct->bound_cancel_token);
-                    jl_value_t *sigsrc = (jl_value_t*)jl_atomic_load_acquire(&jl_sigint_source);
-                // Only a task actually governed by the ^C source may be
-                // ripped away: thread 0 can be running unrelated work while
-                // the real victim is stalled elsewhere - including runtime
-                // infrastructure like the sigint listener itself, whose
-                // token binding is empty - and a no-op rung beats
-                // destroying a bystander. The episode's registered
-                // foreground task qualifies even without a binding:
-                // bindings are published only by compiled cancellation
-                // points, and a foreground victim that entered checkless
-                // compute without ever blocking never passed one.
-                    int governed = bound != NULL && bound != jl_nothing &&
-                        sigsrc != NULL && jl_cancel_source_subtree_member(bound, sigsrc);
-                    if (!governed && ct != NULL && sigsrc != NULL &&
-                        ct == jl_get_sigint_foreground_task())
-                        governed = 1;
-                    if (ct != NULL && ct != rescue_task && governed) {
-                        // Announce BEFORE publishing: the moment the victim
-                        // thread switches to the rescue task, session cleanup
-                        // can conclude (in a script it exits the process) -
-                        // on a busy or single-CPU machine that exit wins the
-                        // race against a message printed afterwards.
-                        jl_safe_printf("\nWARNING: Abandoning the current task and switching to a rescue task.\n"
-                                         "         This may leave the process in an inconsistent state.\n");
-                        // Publish the request and return to the wait: the
-                        // verdict is polled on the next wake (see above) -
-                        // no waiting on this listener. The staged result is
-                        // the interned ABANDON_ALL severity byte, so the
-                        // settle's write barrier can never fire from this
-                        // non-Julia thread.
-                        int reqtid = jl_abandon_task_request(ct, rescue_task, NULL, NULL);
-                        if (reqtid >= 0) {
-                            direct_abandon_tid = (int16_t)reqtid;
-                            // The verdict is polled on this listener's next
-                            // wake; guarantee one - the accepting press does
-                            // not go through jl_sigint_request_cancellation's
-                            // arm, and the test/user may press nothing more.
-                            jl_arm_sigint_rescue_timer();
-                        }
-                        else
-                            jl_safe_printf("\nWARNING: Could not abandon the current task; still trying.\n");
+                    jl_sigint_direct_abandon_allowed() &&
+                    // consumes the expiry; NULL if the episode completed
+                    // (or was reset) in the meantime
+                    jl_check_sigint_rescue_abandon() != NULL) {
+                    int16_t reqtid = jl_publish_direct_abandon(1);
+                    if (reqtid >= 0) {
+                        direct_abandon_tid = reqtid;
+                        // The verdict is polled on this listener's next
+                        // wake; guarantee one - the accepting press does
+                        // not go through jl_sigint_request_cancellation's
+                        // arm, and the test/user may press nothing more.
+                        jl_arm_sigint_rescue_timer();
                         continue;
                     }
+                    // No governed victim on thread 0 (or the request slot
+                    // was busy): fall through to an ordinary redelivery.
                 }
-
                 // Deliver the press through the cancellation system (see
                 // jl_sigint_request_cancellation).
                 jl_sigint_request_cancellation();

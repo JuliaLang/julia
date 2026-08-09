@@ -448,19 +448,80 @@ static void jl_check_profile_autostop(void) JL_NOTSAFEPOINT
     }
 }
 
-// State for delegating SIGINT handling to a dedicated listener task (similar
-// to the profile listener above): the signal listener marks the ^C episode
-// source cancelled and pings this async condition; the Base-side listener
-// task performs the remaining delivery work.
-static _Atomic(uv_async_t *) sigint_cond_loc = NULL;
-JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
+// ^C dispatch runs as ordinary Julia code (`Base.maybe_dispatch_sigint`)
+// directly on the signal thread, which adopts itself as a Julia mutator
+// thread on first use (see jl_run_sigint_dispatch below): no libuv handle
+// and no listener task are involved, so delivery depends neither on the
+// event loop being run nor on any threadpool having a schedulable thread.
+// Base arms this flag once the dispatcher (and the runtime state it needs)
+// is initialized, and stands it down at exit; it stays clear in trimmed
+// images whose Base omits the ^C machinery.
+static _Atomic(int) sigint_dispatch_ready = 0;
+JL_DLLEXPORT void jl_set_sigint_dispatch_ready(int ready) JL_NOTSAFEPOINT
 {
-    // The lock pairs with deliver_sigint_notification: a notification in
-    // flight completes its async send before exit can clear + close the
-    // handle. (Lock-free readers only probe for NULL.)
-    uv_mutex_lock(&sigint_state_lock);
-    jl_atomic_store_relaxed(&sigint_cond_loc, cond);
-    uv_mutex_unlock(&sigint_state_lock);
+    jl_atomic_store_release(&sigint_dispatch_ready, ready);
+}
+
+// Adopt the calling (signal/console-event) thread as a Julia thread on
+// first use. The steady state after adoption is GC-safe: the thread spends
+// its life blocked in sigwait/kevent (or the Win32 wait), and transitions
+// to GC-unsafe only around delivery work.
+// The transitions here (foreign -> adopted mutator -> parked GC-safe) do
+// not fit the analyzers' capability model for any single function: the
+// steady state deliberately ends with the thread in the GC-safe region
+// (a blocked signal wait must never delay a collection), which reads as
+// an unbalanced region entry. Model it for the analyzers as an opaque
+// boundary; the runtime semantics are exactly jl_adopt_thread (mutator,
+// GC-unsafe) followed by jl_gc_safe_enter (parked safe), with every
+// delivery bracketing its Julia work in jl_gc_unsafe_enter/leave.
+#ifdef __clang_gcanalyzer__
+static int jl_ensure_signal_thread_adopted(void) JL_NOTSAFEPOINT;
+#else
+static int jl_ensure_signal_thread_adopted(void) JL_NO_SAFEPOINT_ANALYSIS
+{
+    if (jl_get_current_task() != NULL)
+        return 1;
+    if (!jl_atomic_load_acquire(&sigint_dispatch_ready))
+        return 0; // too early in startup for adoption to be safe
+    jl_adopt_thread();
+    // jl_adopt_thread leaves the thread GC-unsafe; park it in the safe
+    // state so a blocked signal wait never delays a collection.
+    jl_gc_safe_enter(jl_current_task->ptls);
+    return 1;
+}
+#endif
+
+// Run one ^C dispatch pass, as ordinary Julia code on this (adopted)
+// thread. Blocking is allowed - a pass that parks simply defers subsequent
+// signal handling, and pending signals queue rather than being lost.
+static void jl_run_sigint_dispatch(void) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    if (!jl_atomic_load_acquire(&sigint_dispatch_ready))
+        return;
+    if (!jl_ensure_signal_thread_adopted())
+        return;
+    jl_task_t *ct = jl_current_task;
+    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+    static _Atomic(jl_value_t *) dispatch_f = NULL;
+    jl_value_t *f = jl_atomic_load_relaxed(&dispatch_f);
+    if (f == NULL && jl_base_module != NULL) {
+        f = jl_get_global(jl_base_module, jl_symbol("maybe_dispatch_sigint"));
+        if (f != NULL)
+            jl_atomic_store_relaxed(&dispatch_f, f);
+    }
+    if (f != NULL) {
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
+        JL_TRY {
+            jl_apply(&f, 1);
+        }
+        JL_CATCH {
+            // an error in the dispatcher must not take down the signal thread
+            jl_safe_printf("WARNING: error thrown by the ^C dispatch pass\n");
+        }
+        ct->world_age = last_age;
+    }
+    jl_gc_unsafe_leave(ct->ptls, gc_state);
 }
 
 // The rescue timer implements the escalation state machine for ^C: if the
@@ -487,7 +548,7 @@ static _Atomic(uint32_t) sigint_rescue_expired_gen = 0; // 0 = no expiry
 // Classifies the ^C episode state recorded on the root task's cancellation
 // request (see base/Base.jl's sigint listener), for escalation decisions and
 // the rescue-timer warning text. Defined below, after the shared state.
-static int jl_sigint_episode_state(void) JL_NOTSAFEPOINT;
+static int jl_sigint_episode_state(void) JL_CANSAFEPOINT_ENTER_LEAVE;
 
 #if defined(JL_HAVE_POSIX_TIMER)
 // The timer raises SIGINT, distinguished from a user ^C by
@@ -732,38 +793,7 @@ JL_DLLEXPORT int jl_claim_sigint_dispatch(void) JL_NOTSAFEPOINT
     return jl_atomic_exchange_relaxed(&jl_sigint_dispatch_pending, 0);
 }
 
-// Return a claim the winner could not process (the scheduler-inline pass
-// defers episode states whose handling can block; see
-// `Base.maybe_dispatch_sigint`): re-arm the flag so a listener - or the
-// blocking-capable task the deferring pass spawned - picks it up.
-JL_DLLEXPORT void jl_repost_sigint_dispatch(void) JL_NOTSAFEPOINT
-{
-    jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
-}
 
-static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
-{
-    // Runs on a dedicated (non-Julia) thread - the signal listener thread or
-    // a Win32 console ctrl handler thread - so blocking on the lock is fine.
-    uv_mutex_lock(&sigint_state_lock);
-    uv_async_t *cond = jl_atomic_load_relaxed(&sigint_cond_loc);
-    if (cond != NULL) {
-        jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
-        uv_async_send(cond);
-        // Wake every thread: a parked thread's scheduler loop performs the
-        // dispatch pass inline on waking (see jl_dispatch_sigint_inline),
-        // so delivery does not depend on any particular thread - in
-        // particular not on the loop-owning thread, which may be stuck in
-        // a long-running foreign call. (No preemption of running tasks:
-        // the pass needs only one schedulable thread, and preempting e.g.
-        // the REPL frontend would inject a yield into innocent code on
-        // every press.)
-        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-        for (int16_t tid = 0; tid < nthreads; tid++)
-            jl_wakeup_thread_from_foreign(tid);
-    }
-    uv_mutex_unlock(&sigint_state_lock);
-}
 
 // The cancellation token source governing the current interactive foreground
 // evaluation (the "^C episode source"). The REPL backend / script driver
@@ -818,12 +848,6 @@ JL_DLLEXPORT int jl_consume_sigint_pending(uint64_t gen) JL_NOTSAFEPOINT
     return jl_atomic_cmpswap(&sigint_pending_gen, &p, (uint64_t)0);
 }
 
-// Non-consuming variant, for the dispatch pass's pre-mutation defer check
-// (see `Base._sigint_dispatch_would_block`).
-JL_DLLEXPORT int jl_peek_sigint_pending(uint64_t gen) JL_NOTSAFEPOINT
-{
-    return gen != 0 && jl_atomic_load_acquire(&sigint_pending_gen) == gen;
-}
 
 // The task driving the current foreground evaluation (the caller of
 // Base.sigint_new_episode!; rooted by Base like the episode source). The
@@ -926,23 +950,26 @@ JL_DLLEXPORT int jl_have_cancel_handler_delivery(void) JL_NOTSAFEPOINT
 // and notify the sigint listener task, which performs the remaining
 // (Julia-side) delivery work. Callable from non-Julia threads; must not
 // allocate GC memory or take Julia-side locks.
-static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
+static void jl_sigint_request_cancellation(void) JL_CANSAFEPOINT_ENTER_LEAVE
 {
-    // Mark the episode source cancelled (SAFE severity) here rather than
-    // leaving it to the julia-side listener: the state byte is what every
+    // Mark the episode source cancelled (SAFE severity) in C rather than
+    // leaving it to the Julia-side pass: the state byte is what every
     // cancellation point and signal-delivery gate reads, so the signal-based
-    // delivery below is sufficient on its own even if the listener never
-    // gets to run (a single-threaded session, or every thread stuck in a
-    // long foreign call) - exactly the situation ^C must cut through. When
-    // the listener does run, it finds the already-cancelled source and does
-    // the remaining bookkeeping (waking parked waiters; see
-    // `Base.redeliver!`).
-    int have_listener = jl_atomic_load_relaxed(&sigint_cond_loc) != NULL;
-    // The subtree walk dereferences sources reachable only through weak
-    // child links, and this thread does not participate in stop-the-world -
-    // exclude the collector for the walk instead. The mirror load happens
-    // inside the exclusion so the loaded object cannot have been swept.
-    jl_safepoint_exclude_gc_begin();
+    // delivery below is sufficient on its own for a governed running task
+    // even before the pass runs. The pass (called at the tail) then does
+    // the remaining bookkeeping - waking parked waiters, driving the
+    // escalation ladder - as ordinary Julia code on this thread.
+    //
+    // Adoption makes this thread a GC-unsafe mutator for the duration: the
+    // subtree walk dereferences sources reachable only through weak child
+    // links, which is exactly what mutator status licenses (no sweep can
+    // run concurrently). Pre-adoption (early startup, trimmed images)
+    // there is no Base machinery and can be no episode source: drop the
+    // press.
+    if (!jl_ensure_signal_thread_adopted())
+        return;
+    jl_task_t *ct = jl_current_task;
+    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
     // Snapshot a consistent (source, generation) pair: seqlock read
     // against jl_set_sigint_source's bracketed swap.
     uint64_t gen;
@@ -969,19 +996,7 @@ static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
         // either the sends below observe a running task's binding, or the
         // task's next cancellation point observes the state writes above.
         jl_membarrier();
-    }
-    jl_safepoint_exclude_gc_end();
-    // Everything below reads only per-thread state and tasks' strongly-held
-    // fields - no weakly-reachable source pointers.
-    if (src != NULL) {
-        // Mark the dispatch pending BEFORE the per-thread sends (idle
-        // threads keep the event loop moving until the listener claims it).
-        // Skipped when no listener is registered (e.g. a trimmed binary that
-        // stubs it out): nothing would ever claim the flag, and the
-        // scheduler's stay-awake gate would keep idle threads polling
-        // forever.
-        if (have_listener)
-            jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
+        jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
         // Interrupt asynchronously-interruptible regions right away, on
         // every thread: the request-5 dispatch delivers to tasks whose own
         // bound token source is (now) cancelled, and is a no-op for threads
@@ -991,11 +1006,13 @@ static void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
             jl_send_cancellation_signal(tid);
     }
     jl_atomic_store_release(&sigint_pending_gen, gen);
-    // Set a timer for the event loop to run and process the cancellation. If
-    // this does not happen in time, we will advance to more aggressive
-    // cancellation.
+    // The grace-period timer for the escalation ladder: if the cancellation
+    // has not completed by its expiry, the user gets a warning and repeat
+    // presses climb the severity rungs.
     jl_arm_sigint_rescue_timer();
-    deliver_sigint_notification();
+    jl_gc_unsafe_leave(ct->ptls, gc_state);
+    // Perform the Julia-side delivery work synchronously, on this thread.
+    jl_run_sigint_dispatch();
 }
 
 // Whether a press recorded for the *current* episode generation is still
@@ -1015,19 +1032,35 @@ static int jl_sigint_press_pending(void) JL_NOTSAFEPOINT
 //  2 - SAFE severity acknowledged (the target is unwinding, but stuck)
 //  3 - ABANDON_EXTERNAL severity active
 //  4 - ABANDON_ALL severity active
-static int jl_sigint_episode_state(void) JL_NOTSAFEPOINT
+static int jl_sigint_episode_state(void) JL_CANSAFEPOINT_ENTER_LEAVE
 {
+    // Reading through the episode-source mirror requires mutator (GC-unsafe)
+    // status: the source is reachable only weakly. Callers run on the
+    // adopted signal thread or a (transient, adopted-on-use) timer thread,
+    // whose steady state is GC-safe.
+    if (!jl_ensure_signal_thread_adopted())
+        return 0;
+    jl_task_t *ct = jl_current_task;
+    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+    int est;
     jl_cancel_source_t *src = (jl_cancel_source_t*)jl_atomic_load_relaxed(&jl_sigint_source);
     int pending = jl_sigint_press_pending();
-    if (src == NULL)
-        return pending ? 1 : 0;
-    uint8_t sev = jl_atomic_load_relaxed(&src->state);
-    if (sev == 0x00)
-        return pending ? 1 : 0;
-    uint8_t delivered = jl_atomic_load_relaxed(&src->delivered);
-    if (sev == 0x01)
-        return (delivered & (1 << 0x01)) ? 2 : 1; // undelivered SAFE was never observed
-    return sev == 0x03 ? 3 : 4;
+    if (src == NULL) {
+        est = pending ? 1 : 0;
+    }
+    else {
+        uint8_t sev = jl_atomic_load_relaxed(&src->state);
+        if (sev == 0x00)
+            est = pending ? 1 : 0;
+        else if (sev == 0x01) {
+            uint8_t delivered = jl_atomic_load_relaxed(&src->delivered);
+            est = (delivered & (1 << 0x01)) ? 2 : 1; // undelivered SAFE was never observed
+        }
+        else
+            est = sev == 0x03 ? 3 : 4;
+    }
+    jl_gc_unsafe_leave(ct->ptls, gc_state);
+    return est;
 }
 
 // Whether the C side may abandon the interrupted task directly (bypassing the
@@ -1036,7 +1069,7 @@ static int jl_sigint_episode_state(void) JL_NOTSAFEPOINT
 // single-threaded session with the thread stuck in compute), or the listener
 // already escalated to an abandoning severity and the task still did not
 // yield.
-static int jl_sigint_direct_abandon_allowed(void) JL_NOTSAFEPOINT
+static int jl_sigint_direct_abandon_allowed(void) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     int est = jl_sigint_episode_state();
     if (est == 1)
@@ -1055,35 +1088,58 @@ static int jl_sigint_direct_abandon_allowed(void) JL_NOTSAFEPOINT
     return 0;
 }
 
-// Re-publish a refused direct abandonment. A refusal is transient (the
-// victim held a runtime resource - e.g. an allocator lock or a claimed
-// scheduler sleep slot - at the delivery instant), so "still trying" must
-// be real: re-validate the same gates as the press path (a live episode
-// whose listener cannot make progress, a governed victim monopolizing
-// thread 0) and re-publish against the thread's current task. Returns the
-// new request tid, or -1 when the episode completed or the victim is no
-// longer a legitimate target.
-static int16_t jl_retry_direct_abandon(void) JL_NOTSAFEPOINT
+// Validate the direct-abandonment target and publish the request, in a
+// mutator bracket (the governed check dereferences the victim's bound
+// token and walks the weakly-linked source graph). Only a task actually
+// governed by the ^C source may be ripped away: thread 0 can be running
+// unrelated work while the real victim is stalled elsewhere - including
+// runtime infrastructure, whose token binding is empty - and a no-op rung
+// beats destroying a bystander. The episode's registered foreground task
+// qualifies even without a binding: bindings are published only by
+// compiled cancellation points, and a foreground victim that entered
+// checkless compute without ever blocking never passed one.
+// With `announce`, the warning prints BEFORE publishing: the moment the
+// victim thread switches to the rescue task, session cleanup can conclude
+// (in a script it exits the process) - on a busy or single-CPU machine
+// that exit wins the race against a message printed afterwards.
+static int16_t jl_publish_direct_abandon(int announce) JL_CANSAFEPOINT_ENTER_LEAVE
+{
+    if (!jl_ensure_signal_thread_adopted())
+        return -1;
+    jl_task_t *sct = jl_current_task;
+    int8_t gc_state = jl_gc_unsafe_enter(sct->ptls);
+    int16_t result = -1;
+    jl_task_t *rescue = sigint_rescue_task;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    if (rescue != NULL && ptls2 != NULL) {
+        jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+        jl_value_t *sigsrc = jl_atomic_load_acquire(&jl_sigint_source);
+        if (ct != NULL && ct != rescue && sigsrc != NULL) {
+            jl_value_t *bound = jl_atomic_load_acquire(&ct->bound_cancel_token);
+            int governed = bound != NULL && bound != jl_nothing &&
+                jl_cancel_source_subtree_member(bound, sigsrc);
+            if (!governed && ct == jl_get_sigint_foreground_task())
+                governed = 1;
+            if (governed) {
+                if (announce)
+                    jl_safe_printf("\nWARNING: Abandoning the current task and switching to a rescue task.\n"
+                                     "         This may leave the process in an inconsistent state.\n");
+                int reqtid = jl_abandon_task_request(ct, rescue, NULL, NULL);
+                result = reqtid < 0 ? (int16_t)-1 : (int16_t)reqtid;
+            }
+        }
+    }
+    jl_gc_unsafe_leave(sct->ptls, gc_state);
+    return result;
+}
+
+// Re-publish a refused direct abandonment (no re-announce: the original
+// press already warned).
+static int16_t jl_retry_direct_abandon(void) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     if (!jl_sigint_direct_abandon_allowed())
         return -1;
-    jl_task_t *rescue = sigint_rescue_task;
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    if (rescue == NULL || ptls2 == NULL)
-        return -1;
-    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
-    jl_value_t *sigsrc = jl_atomic_load_acquire(&jl_sigint_source);
-    if (ct == NULL || ct == rescue || sigsrc == NULL)
-        return -1;
-    jl_value_t *bound = jl_atomic_load_acquire(&ct->bound_cancel_token);
-    int governed = bound != NULL && bound != jl_nothing &&
-        jl_cancel_source_subtree_member(bound, sigsrc);
-    if (!governed && ct == jl_get_sigint_foreground_task())
-        governed = 1;
-    if (!governed)
-        return -1;
-    int reqtid = jl_abandon_task_request(ct, rescue, NULL, NULL);
-    return reqtid < 0 ? (int16_t)-1 : (int16_t)reqtid;
+    return jl_publish_direct_abandon(0);
 }
 
 // Propagate a pending ^C episode to the interrupted task's own bound
@@ -1235,6 +1291,21 @@ static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
     }
 }
 
+// Whether tid names the calling thread itself. The adopted signal thread
+// appears in jl_all_tls_states like any mutator, but must never be the
+// target of its own delivery signals: a self-directed (blocked) signal
+// stays pending and pollutes the sigwait set, and a suspend-based sender
+// would deadlock outright.
+static int jl_tid_is_self(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL)
+        return 0;
+    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return 0;
+    return jl_atomic_load_relaxed(&jl_all_tls_states)[tid] == ct->ptls;
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
@@ -1244,8 +1315,11 @@ static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
 // jl_send_reset_signal is the static per-platform delivery defined by the
 // file included above; `reset_code` becomes the reset point's setjmp return.
 
+
 JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
 {
+    if (jl_tid_is_self(tid))
+        return;
     jl_send_reset_signal(tid, JL_RESET_CODE_CANCEL);
 }
 
@@ -1280,6 +1354,8 @@ JL_DLLEXPORT void jl_shootdown_cancelled_tasks(void) JL_NOTSAFEPOINT
             continue;
         jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
         if (ct2 == NULL)
+            continue;
+        if (jl_tid_is_self(tid))
             continue;
         jl_value_t *bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
         if (bound == NULL || bound == jl_nothing ||

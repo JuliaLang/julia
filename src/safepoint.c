@@ -244,26 +244,6 @@ void jl_set_gc_and_wait(jl_task_t *ct)
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
 }
 
-// Exclude garbage collection for a brief critical section on a thread that
-// does not participate in stop-the-world (the SIGINT listener thread, a
-// Windows console-ctrl handler thread). Holding `safepoint_lock` blocks
-// `jl_safepoint_start_gc`; a collection already in flight is waited out on
-// `safepoint_cond_end` (broadcast by `jl_safepoint_end_gc`), which releases
-// the lock while waiting so the collection can finish. Between `begin` and
-// `end` no collection can run - the regime the weak cancellation-source
-// child lists are designed for (the collector splices them only with the
-// world stopped). Keep such sections short and free of other locks.
-void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER
-{
-    uv_mutex_lock(&safepoint_lock);
-    while (jl_atomic_load_acquire(&jl_gc_running))
-        uv_cond_wait(&safepoint_cond_end, &safepoint_lock);
-}
-
-void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE
-{
-    uv_mutex_unlock(&safepoint_lock);
-}
 
 // this is the core of jl_set_gc_and_wait
 void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT

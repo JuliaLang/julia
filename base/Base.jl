@@ -469,59 +469,17 @@ end
 # been cancelled (an alias kept for the ^C machinery's consumers).
 sigint_active_severity(src::CancellationTokenSource) = cancel_severity(src)
 
-# One listener task runs per nonempty threadpool (a pool's threads cannot run
-# another pool's tasks, and any pool may be monopolized by the stuck victim -
-# e.g. a rescued backend on the only default thread). The listeners race to
-# claim each notification; the pass itself is level-based (it re-reads the
-# episode state), so serializing claims through the lock is enough.
+# Serializes ^C dispatch passes (all run on the adopted signal thread; the
+# lock is an invariant guard, not an arbitration point).
 const sigint_pass_lock = ReentrantLock()
 
-# Whether the next dispatch pass would perform work that can block (the
-# abandonment protocol's verdict wait, session cleanup/rescue, `exit`).
-# Peek-only - it must not consume anything: the scheduler-inline pass
-# (`maybe_dispatch_sigint(false)`) uses it to defer such episodes to a
-# blocking-capable task context BEFORE any state is mutated.
-function _sigint_dispatch_would_block()
-    backend = active_repl_backend
-    if backend !== nothing && (backend.backend_task::Task).state === :abandoned
-        return true # abandoned-target cleanup rescues the REPL
-    end
-    if roottask.state === :abandoned && (backend === nothing || istaskdone(backend.backend_task::Task))
-        return true
-    end
-    src, gen = _sigint_episode[]
-    pending = ccall(:jl_peek_sigint_pending, Cint, (UInt64,), gen) != 0
-    if src === nothing
-        # only the no-evaluator-left path acts (and it exits, running
-        # atexit hooks)
-        pending || return false
-        if backend !== nothing && !istaskdone(backend.backend_task::Task)
-            return false
-        end
-        return istaskdone(roottask)
-    end
-    src = src::CancellationTokenSource
-    active = sigint_active_severity(src)
-    active === nothing && return false # a first SAFE delivery never blocks
-    if ccall(:jl_sigint_rescue_timer_expired_peek, Cint, ()) != 0
-        # climbing a rung: only the climb to ABANDON_ALL (abandonment
-        # protocol + cleanup) can block
-        return active !== CANCEL_REQUEST_SAFE
-    end
-    # a redelivery at ABANDON_ALL re-attempts the foreground abandonment
-    return active === CANCEL_REQUEST_ABANDON_ALL
-end
-
-# One dispatch pass for a claimed ^C notification. Runs with
-# `sigint_pass_lock` held; level-based (it re-reads the episode state), so
-# serializing passes through the lock is enough. With `can_block=false`
-# (the scheduler-inline caller, whose current task may hold an armed wait
-# registration and must never park), an episode whose handling can block is
-# not touched: the pass returns `:defer` before consuming anything.
-function _sigint_dispatch_pass(can_block::Bool)
-    if !can_block && _sigint_dispatch_would_block()
-        return :defer
-    end
+# One dispatch pass for a claimed ^C notification, run as ordinary Julia
+# code directly on the adopted signal thread (see jl_run_sigint_dispatch in
+# src/signal-handling.c). Runs with `sigint_pass_lock` held, in a full task
+# context - the abandonment protocol and session cleanup may block; signals
+# arriving meanwhile stay pending and coalesce. Level-based (it re-reads
+# the episode state), so serializing passes through the lock is enough.
+function _sigint_dispatch_pass()
     src, gen = _sigint_episode[]
     # A press is consumed only if it targeted this episode's generation; a
     # press for a previous episode self-invalidates (its source was already
@@ -646,34 +604,17 @@ function _sigint_dispatch_pass(can_block::Bool)
     nothing
 end
 
-# Arbitrate and run pending ^C dispatch. Called from the sigint listener
-# tasks on their async notification (blocking-capable), and inline from any
-# idle thread's scheduler loop via `maybe_dispatch_sigint_inline` (see
-# jl_dispatch_sigint_inline in src/scheduler.c) - the pass only needs an
-# ordinary task context, which keeps the event loop out of the delivery
-# path even when its owning thread is stuck in a foreign call. `trylock`
-# (never a parking `lock`): if another pass is running, it drains any claim
-# posted meanwhile, and an unclaimed flag is retried by the next idle
-# iteration or listener wakeup.
-#
-# The inline caller runs on whatever task entered the scheduler - possibly
-# one parked mid-wait with its wait registration still armed - so it must
-# never block. An episode whose handling can block (`:defer` from the
-# pass) is handed back: the claim is re-posted and a fresh task (spawned
-# outside any cancellation scope, so a cancelled caller's scope cannot
-# cancel the rescue work) re-runs the dispatch blocking-capable.
-function maybe_dispatch_sigint(can_block::Bool=true)
+# Arbitrate and run pending ^C dispatch, called on the adopted signal
+# thread (press, rescue-timer tick, or abandonment-verdict settle).
+# `trylock` for reentrancy safety; the claim loop drains anything posted
+# while a pass was running.
+function maybe_dispatch_sigint()
     ccall(:jl_peek_sigint_dispatch, Cint, ()) != 0 || return
     trylock(sigint_pass_lock) || return
-    deferred = false
     try
         while ccall(:jl_claim_sigint_dispatch, Cint, ()) != 0
             try # an error in one pass must not disable the ^C machinery
-                if _sigint_dispatch_pass(can_block) === :defer
-                    ccall(:jl_repost_sigint_dispatch, Cvoid, ())
-                    deferred = true
-                    break
-                end
+                _sigint_dispatch_pass()
             catch ex
                 try
                     @invokelatest showerror(stderr, ex, catch_backtrace())
@@ -684,24 +625,6 @@ function maybe_dispatch_sigint(can_block::Bool=true)
         end
     finally
         unlock(sigint_pass_lock)
-    end
-    if deferred
-        t = Task(_sigint_dispatch_blocking_task)
-        t.sticky = false
-        schedule(t)
-    end
-    nothing
-end
-
-# The C scheduler-inline entry point (never blocks; see above).
-maybe_dispatch_sigint_inline() = maybe_dispatch_sigint(false)
-
-_sigint_dispatch_blocking_task() =
-    ScopedValues.with(maybe_dispatch_sigint, CANCEL_TOKEN => nothing)
-
-function sigint_listener(cond::AsyncCondition)
-    while _trywait(cond)
-        maybe_dispatch_sigint()
     end
     nothing
 end
@@ -739,10 +662,7 @@ end
 # scheduler's idle loop, and a press on a cold or loaded session would
 # stall interactive response behind the compile - bake it into the image.
 precompile(Tuple{typeof(maybe_dispatch_sigint)})
-precompile(Tuple{typeof(maybe_dispatch_sigint), Bool})
-precompile(Tuple{typeof(maybe_dispatch_sigint_inline)})
-precompile(Tuple{typeof(_sigint_dispatch_would_block)})
-precompile(Tuple{typeof(_sigint_dispatch_pass), Bool})
+precompile(Tuple{typeof(_sigint_dispatch_pass)})
 precompile(Tuple{typeof(cancel!), CancellationTokenSource, CancellationRequest})
 precompile(Tuple{typeof(redeliver!), CancellationTokenSource})
 
@@ -758,36 +678,20 @@ end
 # Keeps the rescue task rooted while the C runtime holds a reference to it
 const _sigint_rescue_task = Ref{Union{Task, Nothing}}(nothing)
 
+# Arm the C side's ^C dispatch (the signal thread adopts itself as a Julia
+# thread and runs `maybe_dispatch_sigint` directly; see
+# jl_run_sigint_dispatch in src/signal-handling.c). Trimmed images stub
+# this out, leaving the dispatch disarmed.
 function start_sigint_listener()
-    cond = AsyncCondition()
-    # N.B.: The condition is deliberately kept ref'd: pending async events on
-    # unreferenced handles are not dispatched once the loop has no live
-    # handles left (as in a headless script), which would make the ^C
-    # notification undeliverable exactly when it matters. The atexit hook
-    # below closes the handle before the event loop is drained for exit.
-    listeners = Task[]
-    Threads.threadpoolsize(:interactive) > 0 &&
-        push!(listeners, errormonitor(Threads.@spawn :interactive sigint_listener(cond)))
-    push!(listeners, errormonitor(Threads.@spawn :default sigint_listener(cond)))
     atexit() do
-        # destroy this callback when exiting
-        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-        # this will prompt any ongoing or pending event to flush also
-        close(cond)
-        # error-propagation is not needed, since the errormonitor will handle printing that better
-        for t in listeners
-            t === current_task() || _wait(t)
-        end
+        ccall(:jl_set_sigint_dispatch_ready, Cvoid, (Cint,), 0)
     end
-    finalizer(cond) do c
-        # if something goes south, still make sure we aren't keeping a reference in C to this
-        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-    end
-    ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
     rescue = Task(sigint_rescue_loop)
     rescue.sticky = false
     _sigint_rescue_task[] = rescue
     ccall(:jl_set_sigint_rescue_task, Cvoid, (Any,), rescue)
+    ccall(:jl_set_sigint_dispatch_ready, Cvoid, (Cint,), 1)
+    nothing
 end
 
 function __init__()

@@ -966,6 +966,9 @@ void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
 // assumes holding `jl_lock_profile_mach`
 void jl_profile_thread_mach(int tid)
 {
+    // never try to suspend this (possibly the adopted signal) thread itself
+    if (jl_tid_is_self((int16_t)tid))
+        return;
     // if there is no space left, return early
     if (jl_profile_is_buffer_full()) {
         jl_profile_stop_timer();
