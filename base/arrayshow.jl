@@ -26,31 +26,30 @@
 # by default into category 2.
 #
 # The basic organization of this file is
-# 1) printing with `display` (docs: "best visualization")
-# 2) printing with 3-argument `show` ("verbose pretty-print")
-# 3) printing with 2-argument `show` ("repr string")
-# 4) Logic for displaying type information
+# 1) printing with 3-argument `show` ("verbose pretty-print")
+# 2) printing with 2-argument `show` ("repr string")
+# 3) Logic for displaying type information
 
 
 ## printing with `display`
 
 function show(io::IO, ::MIME"text/plain", @nospecialize(X::AbstractArray))
     get(io, :limit, false)::Bool || return show_array(io, MIME"text/plain"(), X)
-    sz = get(io, :displaysize, displaysize(io))::Tuple{Int,Int}
+    sz = displaysize(io)::Tuple{Int,Int}
     sh, sw = sz[1] - 4, sz[2]
     dims = ndims(X)
 
-    print(io, type_abbreviation(summary(X), sw))
+    sum = summary(X)
     io = IOContext(io, :typeinfo => eltype(X))
-    isempty(X) && return
+    isempty(X) && return print(io, type_abbreviation(sum, sw))
     if all(x->length(x) == 1, axes(X))
-        print(io, ":\n ")
+        print(io, type_abbreviation(sum, sw), ":\n ")
         _display_capped(io, X, firstindex.(axes(X)))
         return
     end
 
-    X = view(X, ntuple(i->axes(X, i), Val(6))..., firstindex.(axes(X, i) for i in 7:dims)...)
-    h0, v0, h1, v1, h2, v2 = ax = axes(X)
+    X = view(X, ntuple(i->axes(X, i), min(6,dims))..., firstindex.(axes(X, i) for i in 7:dims)...)
+    h0, v0, h1, v1, h2, v2 = ax = (axes(X)..., ntuple(_->OneTo(1),6)...)
 
     if !haskey(io, :compact) && any(length(i) > 1 for i=(v0, v1, v2))
         io = IOContext(io, :compact => true)
@@ -62,32 +61,34 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(X::AbstractArray))
 
     h0, v0, h1, v1, h2, v2 = _trim_cols(align, sw, h0, v0, h1, v1, h2, v2)
 
-    if (h0, v0, h1, v1, h2, v2) == ax && dims <= 6
-        println(io, ':')
+    if (h0, v0, h1, v1, h2, v2) == ax[1:6] && dims <= 6
+        sum *= ':'
     elseif all(!isnothing, [h0; v0])
-        print(io, " (showing [:, :")
+        sum *= ", showing [:, :"
         dims > 2 && begin
-            print(io, ax[3] == h1 ? ", :" : ", $(length(h1) > 1 ? h1[1:end] : h1[])")
+            sum *= ax[3] == h1 ? ", :" : ", $(length(h1) > 1 ? h1[1:end] : h1[])"
         dims > 3 end && begin
-            print(io, ax[4] == v1 ? ", :" : ", $(length(v1) > 1 ? v1[1:end] : v1[])")
+            sum *= ax[4] == v1 ? ", :" : ", $(length(v1) > 1 ? v1[1:end] : v1[])"
         dims > 4 end && begin
-            print(io, ax[5] == h2 ? ", :" : ", $(length(h2) > 1 ? h2[1:end] : h2[])")
+            sum *= ax[5] == h2 ? ", :" : ", $(length(h2) > 1 ? h2[1:end] : h2[])"
         dims > 5 end && begin
-            print(io, ax[6] == v2 ? ", :" : ", $(length(v2) > 1 ? v2[1:end] : v2[])")
+            sum *= ax[6] == v2 ? ", :" : ", $(length(v2) > 1 ? v2[1:end] : v2[])"
         dims > 6 end && begin
-            print(io, ", 1"^(dims-6))
+            sum *= ", 1"^(dims-6)
         end
-        println(io, "]):")
+        sum *= "]:"
     elseif (length(h0) > 2 || all(!isnothing, h0)) && (length(v0) > 2 || all(!isnothing, v0))
-        print(io, " (eliding ")
-        h0 != ax[1] && print(io, "$(length(ax[1])-length(h0)+1) rows")
-        h0 != ax[1] && v0 != ax[2] && print(io, " and ")
-        v0 != ax[2] && print(io, "$(length(ax[2])-length(v0)+1) cols")
-        println(io, "):")
+        sum *= ", eliding "
+        h0 != ax[1] && (sum *= "$(length(ax[1])-length(h0)+1) rows")
+        h0 != ax[1] && v0 != ax[2] && (sum *= " and ")
+        v0 != ax[2] && (sum *= "$(length(ax[2])-length(v0)+1) cols")
+        sum *= ":"
     else
         _show_oneline_truncated(io, X)
         return
     end
+
+    println(io, type_abbreviation(sum, sw))
 
     if all(x->length(x) == 1, ax)
         print(io, ' ')
@@ -100,13 +101,13 @@ end
 "limit axis values to things that could possibly fit on the screen"
 function _trim_axes(sh, sw, h0, v0, h1, v1, h2, v2)
     if (res = (sw+2) ÷ (3length(v0) * length(v1) + length(v1) + 2)) > 0
-        res < length(v2) && (v2 = v2[1:res])
+        res < length(v2) && (v2 = v2[begin:begin-1+res])
     elseif (res = sw ÷ (3length(v0) + 1)) > 0
-        v2 = v2[1:1]
-        res < length(v1) && (v1 = v1[1:res])
+        v2 = v2[[begin]]
+        res < length(v1) && (v1 = v1[begin:begin-1+res])
     else
-        v2 = v2[1:1]
-        v1 = v1[1:1]
+        v2 = v2[[begin]]
+        v1 = v1[[begin]]
         if sw < length(v0)
             v0 = [v0[1:~-sw÷3÷2 - (~-sw÷3-1)%2]; nothing; v0[end - ~-sw÷3÷2 + 1:end]]
             h1, h2 = h1[1:1], h2[1:1]
@@ -114,27 +115,27 @@ function _trim_axes(sh, sw, h0, v0, h1, v1, h2, v2)
     end
 
     if (res = (sh+2) ÷ (length(h0) * length(h1) + length(h1) + 1)) > 0
-        res < length(h2) && (h2 = h2[1:res])
+        res < length(h2) && (h2 = h2[begin:begin-1+res])
     elseif (res = (sh+1) ÷ (length(h0) + 1)) > 0
-        h2 = h2[1:1]
-        res < length(h1) && (h1 = h1[1:res])
+        h2 = h2[[begin]]
+        res < length(h1) && (h1 = h1[begin:begin-1+res])
     else
-        h2 = h2[1:1]
-        h1 = h1[1:1]
+        h2 = h2[[begin]]
+        h1 = h1[[begin]]
         if sh < length(h0)
-            h0 = [h0[1:sh÷2 - ~-sh%2]; nothing; h0[end-sh÷2+1:end]]
-            v1, v2 = v1[1:1], v2[1:1]
+            h0 = [h0[begin:begin-2 + sh÷2 + sh%2]; nothing; h0[end-sh÷2+1:end]]
+            v1, v2 = v1[[begin]], v2[[begin]]
         end
     end
     h0, v0, h1, v1, h2, v2
 end
 
 _alignment(io::IO, X, h0, v0, h1, v1, h2, v2) = Dict(
-    col => max.((0, 0, 0), (
+    col => maximum.((first, first ∘ tail, last), Ref(
         _display_alignment(io, X, row, col)
         for row in Iterators.product(h0, h1, h2)
         if !isnothing(row[1])
-    )...)
+    ); init=0)
     for col in Iterators.product(v0, v1, v2)
     if !isnothing(col[1])
 )
@@ -146,12 +147,12 @@ function _trim_cols(align, sw, h0, v0, h1, v1, h2, v2)
 
     while width > sw
         if length(v2) > 1
-            v2 = v2[1:end-1]
+            v2 = v2[begin:end-1]
         elseif length(v1) > 1
-            v1 = v1[1:end-1]
+            v1 = v1[begin:end-1]
         else
-            v0 = [v0[1:-~end÷2-end%2-1]; nothing; v0[-~end÷2-~end%2+1:end]]
-            elided || ((h1, h2, elided) = (h1[1:1], h2[1:1], true))
+            v0 = [v0[begin:-~end÷2-end%2-1]; nothing; v0[-~end÷2-~end%2+1:end]]
+            elided || ((h1, h2, elided) = (h1[[begin]], h2[[begin]], true))
         end
         width = sum(align[ind][3]+2 for ind in Iterators.product(v0, v1, v2) if !isnothing(ind[1]); init=0) +
             length(v1)*length(v2) + 2length(v2) - 2 + 3elided
@@ -215,7 +216,7 @@ function _print_matrix_floor(io::IO, align, v0, v1, v2, line, inter1, inter2)
             for vi in v0
                 printstyled(io, line^align[vi, vj, vk][3], color=:yellow)
             end
-            printstyled(io, line^(2v0[end] - 2), color=:yellow)
+            printstyled(io, line^(2length(v0) - 2), color=:yellow)
             if vj != v1[end]
                 printstyled(io, inter1, color=:yellow)
             end
@@ -244,9 +245,9 @@ function _offsets(io::IO, X, row, col, align)
     ali = _display_alignment(io, X, row, col)
     offset = (align .- ali) .+ (1, 1, 2+ali[3])
     if ali[1] == 0
-        offset = 1, offset[3] - ali[2] - 1
+        1, offset[3] - ali[2] - 1
     else
-        offset = offset[1], offset[3] - offset[1] - sum(ali[1:2])
+        offset[1], offset[3] - offset[1] - sum(ali[1:2])
     end
 end
 
@@ -254,15 +255,15 @@ end
 function _display_capped(io::IO, X, inds, limit=0)
     if limit == 0  # set default limit based on screen size and :compact
         width = get(io, :displaysize, displaysize(io))[2]
-        limit = get(io, :compact, false)::Bool ? min(40, width÷2) : width
+        limit = get(io, :compact, false)::Bool ? min(40, width÷4) : width
+        io = IOContext(io, :displaysize=>(4, limit))
     end
     if isassigned(X, inds...)
         elm = X[inds...]
         if elm isa String && limit > 25
             x = sprint((io,elm)->show(io, MIME"text/plain"(), elm; limit), elm; context=io)
         else
-            x = dash(show, MIME"text/plain"(), elm; context=io, limit)
-            (isnothing(x) || occursin('\n', x)     ) && (x = dash(show, elm; context=io, limit))
+            x = dash(show, elm; context=io, limit)
             (isnothing(x) || occursin('\n', x)     ) && (x = '<' * summary(elm) * '>')
             (occursin('\n', x)                     ) && (x = split(x, '\n')[1] * '>')
             (textwidth(x |> ANSIIterator) > limit-2) && (x = type_abbreviation(x, limit-2))
@@ -271,7 +272,7 @@ function _display_capped(io::IO, X, inds, limit=0)
     else
         x = undef_ref_str
     end
-    x = try replace_in_print_matrix(parent(parent(X)), inds[1], inds[2], x) catch e x end
+    x = try replace_in_print_matrix(parent(parent(X)), inds[1], inds[2], x) catch _ x end
     print(io, x)
 end
 
@@ -287,39 +288,21 @@ function type_abbreviation(s::AbstractString, limit)
 end
 
 function collapse_braces(io::IO, nest)
-    let s="", depth
+    let s="", depth=Array{Ref{Int}, 0}(undef)
         while !eof(io)
             c = read(io, Char)
-            if c == '{'
+            if c in ('{', '(')
                 d, inner = collapse_braces(io, nest-1)
-                depth = try max(d, depth) catch e d end
-                s *= '{' * inner * '}'
-            elseif c == '}'
-                depth = try depth catch e 0 end
+                depth .= isassigned(depth, 1) ? max(d, depth[][]) : d
+                s *= c * inner * (c=='{' ? '}' : ')')
+            elseif c in ('}', ')')
+                depth .= isassigned(depth, 1) ? depth[][] : 0
                 break
             else
                 s *= c
             end
         end
-        try depth+1 catch e 0 end, nest <= 0 ? '…' : s
-    end
-end
-
-"a limited sprint which feeds an exception to its printing function if it gets too long"
-function dash(f::Function, args...; limit::Int=0, context=nothing, sizehint=0)
-    s = LimitIO(IOBuffer(;sizehint), limit)
-    try
-        if context isa Tuple
-            f(IOContext(s, context...), args...)
-        elseif context !== nothing
-            f(IOContext(s, context), args...)
-        else
-            f(s, args...)
-        end
-        takestring!(s.buffer)
-    catch e
-        e isa LimitIOException || rethrow(e)
-        nothing
+        isassigned(depth, 1) ? depth[][]+1 : 0, nest <= 0 ? '…' : s
     end
 end
 
