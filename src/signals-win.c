@@ -238,6 +238,23 @@ __asm__(
 );
 #endif
 
+#if defined(_CPU_X86_64_)
+// A syscall return restores the user Rip through Rcx and the user flags
+// through R11. If the suspended thread was in a syscall, those registers may
+// therefore overwrite values installed by SetThreadContext before the
+// redirected Rip runs. Reload the call target and its first argument from the
+// synthetic frame instead; the syscall return preserves Rsp.
+extern void jl_win_call_in_context_trampoline(void);
+__asm__(
+    "  .globl jl_win_call_in_context_trampoline\n"
+    "jl_win_call_in_context_trampoline:\n"
+    "  cld\n"
+    "  movq 8(%rsp), %rax\n"  // call target in the first register-home slot
+    "  movq 16(%rsp), %rcx\n" // arg0 in the second register-home slot
+    "  jmp *%rax\n"
+);
+#endif
+
 // Runs on the interrupted thread with the interrupted CONTEXT saved on the
 // stack below: invoke the registered cancellation handler with its
 // arguments from the per-thread save area. Returning runs into the restore
@@ -259,11 +276,12 @@ static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t a
     CONTEXT *saved = (CONTEXT*)sp;
     memcpy(saved, ctx, sizeof(CONTEXT));
     sp -= 32;            // the callee's register-home space, above the return address
+    ((uintptr_t*)sp)[0] = (uintptr_t)fptr;
+    ((uintptr_t*)sp)[1] = arg0;
     sp -= sizeof(void*); // return-address slot: entry Rsp == 8 (mod 16), per the ABI
     *(uintptr_t*)sp = (uintptr_t)&jl_win_restore_trigger;
     ctx->Rsp = sp;
-    ctx->Rip = (uintptr_t)fptr;
-    ctx->Rcx = arg0;
+    ctx->Rip = (uintptr_t)&jl_win_call_in_context_trampoline;
 #elif defined(_CPU_X86_)
     uintptr_t sp = (uintptr_t)ctx->Esp;
     sp = (sp - sizeof(CONTEXT)) & ~(uintptr_t)15;
