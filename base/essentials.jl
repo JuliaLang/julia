@@ -1287,6 +1287,46 @@ length(a::Array{T,1}) where {T} = getfield(getfield(a, :size), 1)
 const C_NULL = bitcast(Ptr{Cvoid}, 0)
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
 
+# Check whether all type parameters are constrained by fields or other constrained tvars.
+function _fieldtypes_constrain_typevars(tvars::Array{Any,1}, fts::Core.SimpleVector)
+    nparams = length(tvars)
+    n = length(fts)
+    i = nparams
+    while i !== 0
+        @inbounds tv = tvars[i]::TypeVar
+        constrained = false
+        j = 1
+        while j !== n + 1
+            ft = fts[j]
+            if has_typevar(ft, tv)
+                constrained = true
+                break
+            end
+            j += 1
+        end
+        if !constrained
+            j = i + 1
+            remaining = nparams - i
+            while remaining !== 0
+                @inbounds tv2 = tvars[j]::TypeVar
+                if has_typevar(tv2.ub, tv)
+                    constrained = true
+                    break
+                end
+                if tv2 === tv
+                    constrained = false
+                    break
+                end
+                j += 1
+                remaining = remaining - 1
+            end
+        end
+        constrained || return false
+        i -= 1
+    end
+    return true
+end
+
 # Default constructor generation for structs without explicit inner constructors.
 # Called by lowered code from struct definitions (both flisp and JuliaLowering).
 # Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
@@ -1334,46 +1374,7 @@ function _defaultctors(@nospecialize(ty), functionloc)
         i = i + 1
     end
 
-    # Check if all type params are constrained by fields or other constrained tvars
-    constrains_all = true
-    i = nparams
-    while i !== 0
-        @inbounds tv = tvars[i]::TypeVar
-        constrained = false
-        j = 1
-        while j !== n + 1
-            ft = fts[j]
-            if has_typevar(ft, tv)
-                constrained = true
-                break
-            end
-            j = j + 1
-        end
-        if !constrained
-            j = i + 1
-            remaining = nparams - i
-            while remaining !== 0
-                @inbounds tv2 = tvars[j]::TypeVar
-                if has_typevar(tv2.ub, tv)
-                    constrained = true
-                    break
-                end
-                if tv2 === tv
-                    constrained = false
-                    break
-                end
-                j = j + 1
-                remaining = remaining - 1
-            end
-        end
-        if !constrained
-            constrains_all = false
-            break
-        end
-        i = i - 1
-    end
-
-    if constrains_all
+    if _fieldtypes_constrain_typevars(tvars, fts)
         # Outer constructor: T(x::FT1, y::FT2, ...) = new{A,B,...}(x, y, ...)
         # Build lambda body with direct `new`, no convert calls
         if is_parametric
