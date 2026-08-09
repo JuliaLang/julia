@@ -1881,6 +1881,13 @@ end
     # ...as does a display too narrow for even one entry
     @test sized(v, 6, 6; compact = true) == "100-element Vector{Int64}:\n 1\n ⋮"
 
+    # a vector with offset axes indexes the same as a 1-based one (the layout
+    # must not index positions into the axis range, whose own axes are offset)
+    vo = view(collect(Int64, 1:200), Base.IdentityUnitRange(101:200))
+    @test endswith(sized(vo, 4, 160), ": [101, 102, 103, 104, 105  …  196, 197, 198, 199, 200]")
+    @test endswith(sized(vo, 6, 44; compact = true),
+                   ":\n [101, 102, 103, 104, 105, 106, 107    …\n  193, 194, 195, 196, 197, 198, 199, 200]")
+
     # the summary already names the type, so the packed form should
     # not repeat it as an array literal prefix (on any platform)
     @test arrstr(Int8[1, 2], 4) == "2-element Vector{Int8}: [1, 2]"

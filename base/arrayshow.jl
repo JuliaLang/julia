@@ -477,9 +477,10 @@ function _wrapped_entry_lines(io::IO, X::AbstractVector, nlines::Int, linewidth:
     headstuck = tailstuck = false
     while length(head) + length(tail) < n
         # take from whichever end has fewer, so that equal numbers of leading
-        # and trailing entries are shown
+        # and trailing entries are shown. Index arithmetic from the ends, not
+        # positions into `axs`, whose own axes are offset for offset vectors
         fromhead = !headstuck && (tailstuck || length(head) <= length(tail))
-        i = fromhead ? axs[length(head)+1] : axs[n-length(tail)]
+        i = fromhead ? first(axs) + length(head) : last(axs) - length(tail)
         s = _wrapped_entry_string(X, i, ctx)
         stuck = true
         if s !== nothing
@@ -520,13 +521,13 @@ function _wrapped_entry_lines(io::IO, X::AbstractVector, nlines::Int, linewidth:
             per = _wrapped_per_line(w, linewidth)
             h = min(cld(cld(shown + 1, per), 2) * per - 1, shown)
             rehead, retail = String[], String[]
-            for k in 1:h
-                s = _wrapped_entry_string(X, axs[k], ctx)
+            for i in range(first(axs), length=h)
+                s = _wrapped_entry_string(X, i, ctx)
                 s === nothing && @goto resplit_done # keep the balanced split
                 push!(rehead, s)
             end
-            for k in (n - (shown - h) + 1):n
-                s = _wrapped_entry_string(X, axs[k], ctx)
+            for i in range(stop=last(axs), length=shown-h)
+                s = _wrapped_entry_string(X, i, ctx)
                 s === nothing && @goto resplit_done
                 push!(retail, s)
             end
