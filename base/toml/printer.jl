@@ -2,6 +2,7 @@
 
 import Base: @invokelatest
 import ..isvalid_barekey_char # from Parser
+import ..Comments, ..CommentBlock, ..CommentPath # from Parser
 
 function print_toml_escaped(io::IO, s::AbstractString)
     for c::AbstractChar in s
@@ -168,6 +169,68 @@ function print_inline_table(f::Function, io::IO, value::AbstractDict, sorted::Bo
 end
 
 
+############
+# Comments #
+############
+
+# Comments are printed with every character that is not valid inside a TOML
+# comment dropped or replaced, so that emitted comment text can never alter
+# the structure of the document (e.g. a comment containing a newline followed
+# by TOML syntax).
+
+function print_comment_line(io::IO, indentstr::String, text::AbstractString)
+    Base.print(io, indentstr, '#')
+    # Captured comments keep their original leading whitespace ("# foo" is
+    # stored as " foo"); add a space for comment text that does not have one
+    if !(isempty(text) || first(text) == ' ' || first(text) == '\t')
+        Base.print(io, ' ')
+    end
+    for c::AbstractChar in text
+        if c == '\n'
+            Base.print(io, '\n', indentstr, "# ")
+        elseif c == '\t' || !Base.iscntrl(c)
+            Base.print(io, c)
+        end
+    end
+    Base.print(io, '\n')
+end
+
+function print_comments_above(io::IO, comments::Comments, path::CommentPath, indentstr::String)
+    block = get(comments.items, path, nothing)
+    block === nothing && return
+    for line in block.above
+        print_comment_line(io, indentstr, line)
+    end
+end
+
+function print_comment_inline(io::IO, comments::Comments, path::CommentPath)
+    block = get(comments.items, path, nothing)
+    block === nothing && return
+    text = block.inline
+    isempty(text) && return
+    Base.print(io, " #")
+    if !(first(text) == ' ' || first(text) == '\t')
+        Base.print(io, ' ')
+    end
+    for c::AbstractChar in text
+        if c == '\t' || (c != '\n' && !Base.iscntrl(c))
+            Base.print(io, c)
+        else
+            Base.print(io, ' ')
+        end
+    end
+end
+
+# Returns whether any floating comment lines were printed
+function print_comments_floating(io::IO, comments::Comments, path::CommentPath, indentstr::String)
+    lines = get(comments.floating, path, nothing)
+    lines === nothing && return false
+    for line in lines
+        print_comment_line(io, indentstr, line)
+    end
+    return !isempty(lines)
+end
+
 ##########
 # Tables #
 ##########
@@ -186,11 +249,20 @@ function print_table(f::Function, io::IO, a::AbstractDict,
     sorted::Bool = false,
     inline_tables::IdSet,
     by::Function = identity,
+    comments::Union{Comments, Nothing} = nothing,
 )
 
     if a in inline_tables
         @invokelatest print_inline_table(f, io, a, sorted)
         return
+    end
+
+    entry_indentstr = ' '^4max(0, indent-1)
+    if comments !== nothing
+        # Floating comments are printed at the top of the table they belong to
+        if print_comments_floating(io, comments, Tuple(ks), entry_indentstr)
+            println(io)
+        end
     end
 
     akeys = keys(a)
@@ -208,10 +280,16 @@ function print_table(f::Function, io::IO, a::AbstractDict,
             continue
         end
 
-        Base.print(io, ' '^4max(0,indent-1))
+        if comments !== nothing
+            print_comments_above(io, comments, (ks..., String(key)), entry_indentstr)
+        end
+        Base.print(io, entry_indentstr)
         printkey(io, [String(key)])
         Base.print(io, " = ") # print separator
         printvalue(f, io, value, sorted)
+        if comments !== nothing
+            print_comment_inline(io, comments, (ks..., String(key)))
+        end
         Base.print(io, "\n")  # new line?
         first_block = false
     end
@@ -229,19 +307,31 @@ function print_table(f::Function, io::IO, a::AbstractDict,
                 # print table
                 first_block || println(io)
                 first_block = false
+                if comments !== nothing
+                    print_comments_above(io, comments, Tuple(ks), ' '^4indent)
+                end
                 Base.print(io, ' '^4indent)
                 Base.print(io,"[")
                 printkey(io, ks)
-                Base.print(io,"]\n")
+                Base.print(io,"]")
+                if comments !== nothing
+                    print_comment_inline(io, comments, Tuple(ks))
+                end
+                Base.print(io,"\n")
             end
             # Use runtime dispatch here since the type of value seems not to be enforced other than as AbstractDict
-            @invokelatest print_table(f, io, value, ks; indent = indent + header, first_block = header, sorted, by, inline_tables)
+            @invokelatest print_table(f, io, value, ks; indent = indent + header, first_block = header, sorted, by, inline_tables, comments)
             pop!(ks)
         elseif @invokelatest(is_array_of_tables(value))
             # print array of tables
             first_block || println(io)
             first_block = false
             push!(ks, String(key))
+            if comments !== nothing
+                # The comment block attached to an array of tables is printed
+                # above the first `[[...]]` header
+                print_comments_above(io, comments, Tuple(ks), ' '^4indent)
+            end
             for v in value
                 Base.print(io, ' '^4indent)
                 Base.print(io,"[[")
@@ -249,7 +339,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
                 Base.print(io,"]]\n")
                 # TODO, nicer error here
                 !isa(v, AbstractDict) && error("array should contain only tables")
-                @invokelatest print_table(f, io, v, ks; indent = indent + 1, sorted, by, inline_tables)
+                @invokelatest print_table(f, io, v, ks; indent = indent + 1, sorted, by, inline_tables, comments)
             end
             pop!(ks)
         end
@@ -261,11 +351,11 @@ end
 # API #
 #######
 
-print(f::Function, io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) =
-    print_table(f, io, a; sorted, by, inline_tables)
-print(f::Function, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) =
-    print(f, stdout, a; sorted, by, inline_tables)
-print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) =
-    print_table(identity, io, a; sorted, by, inline_tables)
-print(a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) =
-    print(identity, stdout, a; sorted, by, inline_tables)
+print(f::Function, io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}(), comments::Union{Comments, Nothing}=nothing) =
+    print_table(f, io, a; sorted, by, inline_tables, comments)
+print(f::Function, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}(), comments::Union{Comments, Nothing}=nothing) =
+    print(f, stdout, a; sorted, by, inline_tables, comments)
+print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}(), comments::Union{Comments, Nothing}=nothing) =
+    print_table(identity, io, a; sorted, by, inline_tables, comments)
+print(a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}(), comments::Union{Comments, Nothing}=nothing) =
+    print(identity, stdout, a; sorted, by, inline_tables, comments)

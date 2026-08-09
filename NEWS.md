@@ -247,6 +247,13 @@ Standard library changes
 
 #### Dates
 
+#### TOML
+
+* The parsing functions (`TOML.parsefile`, `TOML.parse`, and their `try` variants) can now capture
+  the comments of a document into a `TOML.Comments` object via the new `comments` keyword argument,
+  and `TOML.print` can write them back out via its new `comments` keyword argument. This allows
+  modifying a TOML file without losing its comments ([#42697]).
+
 External dependencies
 ---------------------
 

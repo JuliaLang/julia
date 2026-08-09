@@ -27,6 +27,52 @@ const EOF_CHAR = typemax(Char)
 
 const TOMLDict  = Dict{String, Any}
 
+############
+# Comments #
+############
+
+# A path of keys identifying an item in a TOML document, e.g. `("compat", "Dep")`
+# for an entry and `("deps",)` for the table header `[deps]`. The empty tuple
+# identifies the root table.
+const CommentPath = Tuple{Vararg{String}}
+
+# The comments associated with a single item (a `key = value` entry or a table
+# header): the whole-line comments directly above the item and the comment on
+# the same line as the item ("" if none). Comment text is stored without the
+# leading '#'.
+mutable struct CommentBlock
+    above::Vector{String}
+    inline::String
+end
+CommentBlock() = CommentBlock(String[], "")
+
+"""
+    Comments()
+
+A container for comments captured while parsing a TOML document. Pass it via
+the `comments` keyword argument to the parsing functions to populate it, and
+via the `comments` keyword argument to the printing functions to write the
+comments back out. See the TOML stdlib documentation for the rules of how
+comments are associated with items of the document.
+"""
+struct Comments
+    # Comments attached to a specific item, keyed by the item's key path
+    items::Dict{CommentPath, CommentBlock}
+    # Comments not attached to any item, keyed by the path of the table they
+    # appeared in; printed at the top of that table
+    floating::Dict{CommentPath, Vector{String}}
+end
+Comments() = Comments(Dict{CommentPath, CommentBlock}(), Dict{CommentPath, Vector{String}}())
+
+Base.isempty(c::Comments) = isempty(c.items) && isempty(c.floating)
+function Base.empty!(c::Comments)
+    empty!(c.items)
+    empty!(c.floating)
+    return c
+end
+Base.:(==)(a::CommentBlock, b::CommentBlock) = a.above == b.above && a.inline == b.inline
+Base.:(==)(a::Comments, b::Comments) = a.items == b.items && a.floating == b.floating
+
 ##########
 # Parser #
 ##########
@@ -82,10 +128,28 @@ mutable struct Parser{Dates}
 
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
+
+    # If not `nothing`, comments are captured into this structure while parsing
+    comments::Union{Comments, Nothing}
+    # Scratch state for comment capture; only maintained when `comments !== nothing`:
+    # The current block of contiguous whole-line comments that has not yet been
+    # attached to an item
+    pending_comments::Vector{String}
+    # The text of the most recently skipped comment (set by `skip_comment`)
+    captured_comment::String
+    # The key path of `active_table`
+    active_table_path::Vector{String}
+    # The key path of the most recently defined item, used to attach same-line
+    # comments; `nothing` if the last item cannot take comments
+    last_item_path::Union{CommentPath, Nothing}
+    # True while the active table is (inside) an array-of-tables element, where
+    # key paths do not distinguish between elements and comments are dropped
+    in_array_table::Bool
 end
 
-function Parser{Dates}(str::String; filepath=nothing) where {Dates}
+function Parser{Dates}(str::String; filepath=nothing, comments::Union{Comments, Nothing}=nothing) where {Dates}
     root = TOMLDict()
+    comments === nothing || empty!(comments)
     l = Parser{Dates}(
             str,                  # str
             EOF_CHAR,             # current_char
@@ -102,7 +166,13 @@ function Parser{Dates}(str::String; filepath=nothing) where {Dates}
             IdSet{TOMLDict}(),    # defined_tables
             IdSet{TOMLDict}(),    # implicit_tables
             root,
-            filepath
+            filepath,
+            comments,             # comments
+            String[],             # pending_comments
+            "",                   # captured_comment
+            String[],             # active_table_path
+            nothing,              # last_item_path
+            false,                # in_array_table
         )
     startup(l)
     return l
@@ -123,7 +193,8 @@ Parser{Dates}(io::IO) where {Dates} = Parser{Dates}(read(io, String))
 
 # Parser(...) will be defined by TOML stdlib
 
-function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
+function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing,
+                 comments::Union{Comments, Nothing}=nothing)
     p.str = str
     p.current_char = EOF_CHAR
     p.pos = firstindex(str)
@@ -140,6 +211,13 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     empty!(p.defined_tables)
     empty!(p.implicit_tables)
     p.filepath = filepath
+    comments === nothing || empty!(comments)
+    p.comments = comments
+    empty!(p.pending_comments)
+    p.captured_comment = ""
+    empty!(p.active_table_path)
+    p.last_item_path = nothing
+    p.in_array_table = false
     startup(p)
     return p
 end
@@ -414,6 +492,9 @@ function skip_ws_nl(l::Parser)::Bool
     while true
         skipped_ws = accept_batch(l, x -> iswhitespace(x) || isnewline(x))
         skipped_comment = skip_comment(l)
+        if skipped_comment && l.comments !== nothing
+            push!(l.pending_comments, l.captured_comment)
+        end
         if !skipped_ws && !skipped_comment
             break
         end
@@ -422,16 +503,106 @@ function skip_ws_nl(l::Parser)::Bool
     return skipped
 end
 
-# Returns true if a comment was skipped
+# Like `skip_ws_nl` but used between top-level items when capturing comments:
+# a blank line separating a comment block from the following item makes the
+# block "floating" (associated with the enclosing table) instead of attached
+# to the item that follows it.
+function skip_ws_nl_toplevel(l::Parser)::Bool
+    l.comments === nothing && return skip_ws_nl(l)
+    skipped = false
+    nlines = 0 # newlines seen since the last comment (or the previous item)
+    while true
+        progress = false
+        while true
+            c = peek(l)
+            if iswhitespace(c)
+                eat_char(l)
+                progress = true
+            elseif isnewline(c)
+                if c == '\n'
+                    nlines += 1
+                    nlines == 2 && flush_pending_comments!(l)
+                end
+                eat_char(l)
+                progress = true
+            else
+                break
+            end
+        end
+        if skip_comment(l)
+            push!(l.pending_comments, l.captured_comment)
+            nlines = 0
+            progress = true
+        end
+        progress || break
+        skipped = true
+    end
+    return skipped
+end
+
+# Returns true if a comment was skipped. When comment capture is enabled the
+# comment text (without the leading '#') is stored in `l.captured_comment`.
 function skip_comment(l::Parser)::Bool
     found_comment = accept(l, '#')
     if found_comment
-        accept_batch(l, !isnewline)
+        if l.comments === nothing
+            accept_batch(l, !isnewline)
+        else
+            start = l.prevpos
+            accept_batch(l, !isnewline)
+            l.captured_comment = String(SubString(l.str, start:(l.prevpos-1)))
+        end
     end
     return found_comment
 end
 
-skip_ws_comment(l::Parser) = skip_ws(l) && skip_comment(l)
+function skip_ws_comment(l::Parser)::Bool
+    skip_ws(l)
+    return skip_comment(l)
+end
+
+# Move the pending comment block to the floating comments of the active table
+function flush_pending_comments!(l::Parser)
+    isempty(l.pending_comments) && return
+    comments = l.comments
+    if comments !== nothing && !l.in_array_table
+        floating = get!(() -> String[], comments.floating, Tuple(l.active_table_path))
+        append!(floating, l.pending_comments)
+    end
+    empty!(l.pending_comments)
+    return
+end
+
+# Attach the pending comment block to the item at `path`
+function attach_pending_comments!(l::Parser, path::CommentPath)
+    isempty(l.pending_comments) && return
+    block = get!(CommentBlock, (l.comments::Comments).items, path)
+    append!(block.above, l.pending_comments)
+    empty!(l.pending_comments)
+    return
+end
+
+# Attach a comment on the same line as an item to the most recently defined item
+function attach_inline_comment!(l::Parser)
+    path = l.last_item_path
+    path === nothing && return
+    block = get!(CommentBlock, (l.comments::Comments).items, path)
+    block.inline = l.captured_comment
+    return
+end
+
+# Whether an intermediate along `keys` (starting from the root table) is an
+# array of tables, which makes the key path ambiguous between array elements
+function path_traverses_array(l::Parser, keys::AbstractVector{String})
+    d = l.root
+    for k in keys
+        v = get(d, k, nothing)
+        v isa Vector && return true
+        v isa TOMLDict || return false
+        d = v
+    end
+    return false
+end
 
 @inline set_marker!(l::Parser) = l.marker = l.prevpos
 take_substring(l::Parser) = SubString(l.str, l.marker:(l.prevpos-1))
@@ -450,7 +621,7 @@ end
 
 function tryparse(l::Parser)::Err{TOMLDict}
     while true
-        skip_ws_nl(l)
+        skip_ws_nl_toplevel(l)
         peek(l) == EOF_CHAR && break
         v = parse_toplevel(l)
         if v isa ParserError
@@ -463,6 +634,7 @@ function tryparse(l::Parser)::Err{TOMLDict}
             return v
         end
     end
+    l.comments === nothing || flush_pending_comments!(l)
     return l.root
 end
 
@@ -472,14 +644,18 @@ function parse_toplevel(l::Parser)::Err{Nothing}
     if accept(l, '[')
         l.active_table = l.root
         @try parse_table(l)
-        skip_ws_comment(l)
+        if skip_ws_comment(l) && l.comments !== nothing
+            attach_inline_comment!(l)
+        end
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
     else
         @try parse_entry(l, l.active_table)
-        skip_ws_comment(l)
+        if skip_ws_comment(l) && l.comments !== nothing
+            attach_inline_comment!(l)
+        end
         # SPEC: "There must be a newline (or EOF) after a key/value pair."
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             eat_char(l)
@@ -539,6 +715,19 @@ function parse_table(l)
         return ParserError(ErrDuplicatedKey)
     end
     push!(l.defined_tables, l.active_table)
+    if l.comments !== nothing
+        l.in_array_table = path_traverses_array(l, table_key)
+        empty!(l.active_table_path)
+        append!(l.active_table_path, table_key)
+        if l.in_array_table
+            empty!(l.pending_comments)
+            l.last_item_path = nothing
+        else
+            path = Tuple(table_key)
+            attach_pending_comments!(l, path)
+            l.last_item_path = path
+        end
+    end
     return
 end
 
@@ -559,15 +748,38 @@ function parse_array_table(l)::Union{Nothing, ParserError}
         return ParserError(ErrArrayTreatedAsDictionary)
     end
     d_new = TOMLDict()
+    first_element = isempty(old::Vector{Any})
     push!(old::Vector{Any}, d_new)
     push!(l.defined_tables, d_new)
     l.active_table = d_new
 
+    if l.comments !== nothing
+        # Comments cannot be attached to items inside array-of-tables elements
+        # since the key path does not distinguish between the elements. Only
+        # the comment block above the first `[[...]]` header is kept, attached
+        # to the array itself; all other comments in the array are dropped.
+        if first_element && !path_traverses_array(l, @view(table_key[1:end-1]))
+            attach_pending_comments!(l, Tuple(table_key))
+        else
+            empty!(l.pending_comments)
+        end
+        empty!(l.active_table_path)
+        append!(l.active_table_path, table_key)
+        l.last_item_path = nothing
+        l.in_array_table = true
+    end
     return
 end
 
 function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     key = @try parse_key(l)
+    # Comments attach to entries of regular tables; comments captured while
+    # parsing entries of inline tables belong to the entry that owns the
+    # outermost inline table. The path must be computed here since `key`
+    # aliases `l.dotted_keys` which keys in inline table values overwrite.
+    capture_comments = l.comments !== nothing && !(d in l.inline_tables)
+    entry_path = (capture_comments && !l.in_array_table) ?
+        (l.active_table_path..., key...) : nothing
     skip_ws(l)
     if !accept(l, '=')
         return ParserError(ErrExpectedEqualAfterKey)
@@ -593,6 +805,16 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     end
     # TODO: Performance, hashing `last_key_part` again here
     d[last_key_part] = value
+    if capture_comments
+        if entry_path === nothing
+            # Inside an array-of-tables element: drop any captured comments
+            empty!(l.pending_comments)
+            l.last_item_path = nothing
+        else
+            attach_pending_comments!(l, entry_path)
+            l.last_item_path = entry_path
+        end
+    end
     return
 end
 
