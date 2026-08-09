@@ -1844,8 +1844,8 @@ end
     # the entries elide from the middle to fit the width, keeping both ends
     # rather than truncating the line (#58323)
     @test arrstr(v, 4) ==
-        "100-element Vector{Int64}: [1, 2, 3, 4, 5, 6, 7, …, 94, 95, 96, 97, 98, 99, 100]"
-    @test sized(v, 4, 40) == "100-element Vector{Int64}: [1, …, 100]"
+        "100-element Vector{Int64}: [1, 2, 3, 4, 5, 6, 7  …  94, 95, 96, 97, 98, 99, 100]"
+    @test sized(v, 4, 40) == "100-element Vector{Int64}: [1  …  100]"
 
     # the vertical layout is kept whenever it has room for an entry, however
     # little of the array that shows and however wide the display
@@ -1856,19 +1856,19 @@ end
     # `:compact` opts in to packing the entries across the width instead,
     # aligned, over the lines the vertical layout would have used
     @test sized(v, 6, 80; compact = true) == "100-element Vector{Int64}:\n" *
-        " [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,\n" *
-        "    …,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]"
+        " [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14    …\n" *
+        "   86,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]"
     @test sized(v, 6, 40; compact = true) == "100-element Vector{Int64}:\n" *
-        " [  1,   2,   3,   4,   5,   6,   7,\n" *
-        "    …,  95,  96,  97,  98,  99, 100]"
+        " [  1,   2,   3,   4,   5,   6    …\n" *
+        "   94,  95,  96,  97,  98,  99, 100]"
     # ...at every display size, so that the layout never changes with the shape
     # of the display
     @test sized(v, 12, 40; compact = true) == "100-element Vector{Int64}:\n" *
         " [  1,   2,   3,   4,   5,   6,   7,\n" *
         "    8,   9,  10,  11,  12,  13,  14,\n" *
         "   15,  16,  17,  18,  19,  20,  21,\n" *
-        "   22,  23,  24,  25,  26,  27,  28,\n" *
-        "    …,  74,  75,  76,  77,  78,  79,\n" *
+        "   22,  23,  24,  25,  26,  27    …\n" *
+        "   73,  74,  75,  76,  77,  78,  79,\n" *
         "   80,  81,  82,  83,  84,  85,  86,\n" *
         "   87,  88,  89,  90,  91,  92,  93,\n" *
         "   94,  95,  96,  97,  98,  99, 100]"
@@ -1890,7 +1890,7 @@ end
     @test sized([collect(Int64, 1:5) .+ i for i in 1:100], 7, 80; compact = true) ==
         "100-element Vector{Vector{Int64}}:\n" *
         " [          [2, 3, 4, 5, 6],           [3, 4, 5, 6, 7],\n" *
-        "            [4, 5, 6, 7, 8],                         …,\n" *
+        "            [4, 5, 6, 7, 8]                          …\n" *
         "  [100, 101, 102, 103, 104], [101, 102, 103, 104, 105]]"
     @test arrstr([[i, i] for i in 1:100], 12) ==
         "100-element Vector{Vector{$Int}}:\n [1, 1]\n [2, 2]\n [3, 3]\n [4, 4]\n ⋮\n [98, 98]\n [99, 99]\n [100, 100]"
@@ -1907,14 +1907,14 @@ end
         @test sized(fill(MultiLine(1), 30), 6, 80; compact = true) ==
             "30-element Vector{$MultiLine}:\n MultiLine(\n  n = 1\n)\n ⋮"
         # entries before it are still shown, with the rest elided
-        @test arrstr(Any[1, 2, 3, MultiLine(4)], 4) == "4-element Vector{Any}: [1, 2, 3, …]"
+        @test arrstr(Any[1, 2, 3, MultiLine(4)], 4) == "4-element Vector{Any}: [1, 2, 3  …]"
         # an element that is only multi-line when not `:compact` is laid out
         # compactly like any other (the width has to allow for the summary,
         # whose length depends on the current module)
         C = fill(CompactOneLine(1), 30)
         Csummary = sprint(summary, C)
         @test sized(C, 4, textwidth(Csummary) + 44) ==
-              "$Csummary: [CompactOneLine(1), …, CompactOneLine(1)]"
+              "$Csummary: [CompactOneLine(1)  …  CompactOneLine(1)]"
     end
 
     @test arrstr(zeros(4, 3), 4)  == "4×3 Matrix{Float64}: [0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0; 0.0 0.0 0.0]"

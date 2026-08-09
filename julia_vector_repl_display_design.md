@@ -981,12 +981,16 @@ brackets added).
 ```
                           # 6×80, :compact => true
 100-element Vector{Int64}:
- [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,
-    …,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]
+ [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14    …
+   86,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]
 
                           # 5×80 — the one-line case, both ends kept
-100-element Vector{Int64}: [1, 2, 3, 4, 5, 6, 7, …, 94, 95, 96, 97, 98, 99, 100]
+100-element Vector{Int64}: [1, 2, 3, 4, 5, 6, 7  …  94, 95, 96, 97, 98, 99, 100]
 ```
+
+The `…` sits at the end of the middle line (ties breaking upwards — line 2 of 4), where it is
+easiest to find, and keeps the bare `  …  ` styling of `show_vector`'s single-line elision rather
+than being punctuated as an entry. Both details are from review.
 
 ## Which evidence drove which choice
 
@@ -1023,8 +1027,8 @@ short enough for the packed layout to apply:
 ┌ Info: processing                        # 24-row terminal, three values
 │   data =
 │    100-element Vector{Int64}:
-│     [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,
-│        …,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]
+│     [  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12    …
+│       88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100]
 │   scale = 3.14159265358979
 └   name = "run-7"
 ```

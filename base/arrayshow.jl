@@ -507,8 +507,45 @@ function _wrapped_entry_lines(io::IO, X::AbstractVector, nlines::Int, linewidth:
             headstuck && tailstuck && break
         end
     end
-    isempty(head) && isempty(tail) && return nothing
-    cells = length(head) + length(tail) < n ? [head; "…"; tail] : [head; tail]
+    shown = length(head) + length(tail)
+    shown == 0 && return nothing
+    epos = shown < n ? length(head) + 1 : 0 # cell index of the …, 0 when whole
+
+    if pad && epos > 0
+        # place the … at the end of the middle line (ties upwards), where it
+        # is easiest to find, by resplitting the shown entries between the two
+        # ends; the balanced split above lands it anywhere in the middle line
+        w = maxwidth
+        for _ in 1:4
+            per = _wrapped_per_line(w, linewidth)
+            h = min(cld(cld(shown + 1, per), 2) * per - 1, shown)
+            rehead, retail = String[], String[]
+            for k in 1:h
+                s = _wrapped_entry_string(X, axs[k], ctx)
+                s === nothing && @goto resplit_done # keep the balanced split
+                push!(rehead, s)
+            end
+            for k in (n - (shown - h) + 1):n
+                s = _wrapped_entry_string(X, axs[k], ctx)
+                s === nothing && @goto resplit_done
+                push!(retail, s)
+            end
+            neww = max(maximum(textwidth, rehead; init=0),
+                       maximum(textwidth, retail; init=0))
+            if _wrapped_per_line(neww, linewidth) == per && cld(shown + 1, per) <= nlines
+                head, tail, maxwidth = rehead, retail, neww
+                epos = length(head) + 1
+                break
+            end
+            # the resplit pulled in entries wider than any measured; resize
+            # the layout around them and try again
+            neww == w && break
+            w = neww
+        end
+        @label resplit_done
+    end
+
+    cells = epos > 0 ? [head; "…"; tail] : [head; tail]
     # right-align, as the vertical layout does, so that the padding of one line
     # never trails into the next
     pad && map!(s -> lpad(s, maxwidth), cells, cells)
@@ -516,9 +553,21 @@ function _wrapped_entry_lines(io::IO, X::AbstractVector, nlines::Int, linewidth:
     lines = String[]
     for k in 1:per:length(cells)
         stop = min(k + per - 1, length(cells))
-        line = (k == 1 ? "[" : " ") * join(@view(cells[k:stop]), ", ") *
-               (stop == length(cells) ? "]" : ",")
-        push!(lines, pad ? " " * line : line)
+        buf = IOBuffer()
+        print(buf, k == 1 ? "[" : " ")
+        for j in k:stop
+            print(buf, cells[j])
+            if j == length(cells)
+                print(buf, "]")
+            elseif j == epos - 1 || j == epos
+                # the … keeps the bare "  …  " of `show_vector`'s elision,
+                # with spaces in place of the commas around it
+                j < stop && print(buf, "  ")
+            else
+                print(buf, j < stop ? ", " : ",")
+            end
+        end
+        push!(lines, (pad ? " " : "") * takestring!(buf))
     end
     return lines
 end
