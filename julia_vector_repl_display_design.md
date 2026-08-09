@@ -1,6 +1,6 @@
 # Displaying long 1-D arrays in a terminal: prior art, and the design it led to
 
-**Research date:** 2026-08-07  
+**Research date:** 2026-08-07
 **Question:** How do other languages and tools display a long one-dimensional array/vector when it does not fit on screen, and what mechanisms are transferable to Julia?
 
 **Status:** the survey below was gathered to settle a design disagreement on
@@ -811,42 +811,42 @@ NumPy 1.14 warned that its printing overhaul would affect doctests, then issued 
 
 ## GHCi: explicit admission that the default is poor for long output
 
-The current GHC manual states that converting every result through `show` “is not ideal” when output is long. The chosen remedy was a custom `-interactive-print` hook, not a new adaptive built-in list layout. This is a rare official “the default has a known weakness” statement.  
+The current GHC manual states that converting every result through `show` “is not ideal” when output is long. The chosen remedy was a custom `-interactive-print` hook, not a new adaptive built-in list layout. This is a rare official “the default has a known weakness” statement.
 Source: <https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/ghci.html>
 
 ## Rust: readable multiline output considered too verbose for the default
 
-RFC 640's motivation says compact Debug can be difficult to read for complex values, then explicitly rejects making pretty output default because it is “significantly more verbose.” The final design makes pretty formatting opt-in with `{:#?}`.  
+RFC 640's motivation says compact Debug can be difficult to read for complex values, then explicitly rejects making pretty output default because it is “significantly more verbose.” The final design makes pretty formatting opt-in with `{:#?}`.
 Source: <https://rust-lang.github.io/rfcs/0640-debug-improvements.html>
 
 ## NumPy 1.14: major style overhaul, followed by printing fixes
 
-The 1.14 release called the new printing style a major user-visible change and warned about doctest impact; 1.14.1 fixed problems with the new array printing. This is evidence that even improvements with broad rationale can expose edge cases and compatibility assumptions.  
+The 1.14 release called the new printing style a major user-visible change and warned about doctest impact; 1.14.1 fixed problems with the new array printing. This is evidence that even improvements with broad rationale can expose edge cases and compatibility assumptions.
 Source: <https://numpy.org/doc/1.14/release.html>
 
 ## NumPy 2.2: adding shape because truncation erased structure
 
-NumPy added `shape=...` to summarized array reprs specifically so shape is always given when it cannot be inferred from displayed values. This is the clearest directly relevant historical change in the survey.  
+NumPy added `shape=...` to summarized array reprs specifically so shape is always given when it cannot be inferred from displayed values. This is the clearest directly relevant historical change in the survey.
 Source: <https://numpy.org/doc/2.2/release/2.2.0-notes.html>
 
 ## Common Lisp: 1989 standardization after years of deployed pretty-printer experience
 
-The X3J13 write-up records five proposal versions, committee votes, a 13-year lineage of predecessor printers, and extensive deployment. It standardized separate margin, line, length, nesting, and dispatch controls. This is unusually strong historical evidence for modular pretty-printing policy.  
+The X3J13 write-up records five proposal versions, committee votes, a 13-year lineage of predecessor printers, and extensive deployment. It standardized separate margin, line, length, nesting, and dispatch controls. This is unusually strong historical evidence for modular pretty-printing policy.
 Source: <https://www.lispworks.com/documentation/HyperSpec/Issues/iss270_w.htm>
 
 ## Maple: moving large arrays from placeholders toward inline scrolling
 
-Maple's longstanding `rtablesize` behavior summarized oversized array-like objects with a placeholder. Maple 2024 added scrollable inline rtable output, explicitly among enhancements influenced by customer requests; 2025 added interactive row/column resizing. This is a frontend-driven reversal from static truncation toward a viewport.  
+Maple's longstanding `rtablesize` behavior summarized oversized array-like objects with a placeholder. Maple 2024 added scrollable inline rtable output, explicitly among enhancements influenced by customer requests; 2025 added interactive row/column resizing. This is a frontend-driven reversal from static truncation toward a viewport.
 Sources: <https://www.maplesoft.com/support/help/maple/view.aspx?path=updates%2FMaple2024%2FInterface>, <https://www.maplesoft.com/support/help/maple/view.aspx?path=updates%2FMaple2025%2FInterface>
 
 ## MATLAB: long row-vector block labels are a known user friction point, but remain the default
 
-A 2026 MathWorks Support question calls the `Columns 1 through 10` style “a little clunky”; the accepted support answer does not offer a switch for a different default vector layout and instead recommends `num2str` for custom presentation. This is **user-reported friction, not an official MathWorks admission of a design mistake**.  
+A 2026 MathWorks Support question calls the `Columns 1 through 10` style “a little clunky”; the accepted support answer does not offer a switch for a different default vector layout and instead recommends `num2str` for custom presentation. This is **user-reported friction, not an official MathWorks admission of a design mistake**.
 Source: <https://www.mathworks.com/matlabcentral/answers/2182689-how-to-display-row-vectors-without-extra-spaces-or-line-breaks-in-matlab-r2025b>
 
 ## J: documented ambiguity, but no located design rationale or regret
 
-J's own tutorial explicitly teaches that values of different shape can have identical default displays and tells the user to query shape. I found documentation of the behavior but not a historical issue or statement regretting it.  
+J's own tutorial explicitly teaches that values of different shape can have identical default displays and tells the user to query shape. I found documentation of the behavior but not a historical issue or statement regretting it.
 Sources: <https://www.jsoftware.com/help/jforc/declarations.htm>, <https://www.jsoftware.com/help/dictionary/dx009.htm>
 
 ---
