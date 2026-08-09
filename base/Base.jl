@@ -516,6 +516,7 @@ function _sigint_dispatch_pass()
             return
         end
         roottask.state === :abandoned || istaskdone(roottask) || return
+        Core.print(Core.stderr, "\n[DEBUG sigint] dispatch-pass exit: no evaluator left\n")
         exit(128 + 2) # 128 + SIGINT
     end
     src = src::CancellationTokenSource
@@ -656,6 +657,7 @@ function cleanup_abandoned_sigint_target(t::Task)
     # normal operation - exit as ^C would.
     backend = active_repl_backend
     if t === roottask && (backend === nothing || istaskdone(backend.backend_task::Task))
+        Core.print(Core.stderr, "\n[DEBUG sigint] abandoned-cleanup exit: no evaluator left\n")
         exit(128 + 2) # 128 + SIGINT
     end
     nothing
