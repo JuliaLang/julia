@@ -22,7 +22,7 @@ const worker_colors = map(c -> Face(foreground=SimpleColor(c)),
                            0xff007a, 0x948500, 0xb0bbff, 0xb7743f, 0x0097a0))
 worker_color(id::Integer) = worker_colors[mod1(id, length(worker_colors))]
 
-const prefix_name_width = 10
+const prefix_name_width = 15
 
 # Label for a line of test output, e.g. `" LinearAlg… (3): "`. Names are truncated so that
 # the output of the different workers lines up.
