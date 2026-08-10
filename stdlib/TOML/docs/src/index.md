@@ -139,7 +139,6 @@ julia> comments = TOML.Comments();
 julia> data = TOML.parse("""
        # A comment attached to the entry below it
        name = "MyPkg"
-
        [compat]
        Dep = "~1.1" # an inline comment
        """; comments);
