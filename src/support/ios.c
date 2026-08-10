@@ -577,7 +577,7 @@ int ios_trunc(ios_t *s, size_t size)
         }
         else {
             if (_buf_realloc(s, size)==NULL)
-                return 0;
+                return 1;
         }
         s->size = size;
         return 0;
