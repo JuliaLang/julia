@@ -2139,7 +2139,7 @@ function isrelocatable(pkg::PkgId)
     isnothing(path) && return false
     io = open(path, "r")
     try
-        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
+        isvalid_cache_header(io) === nothing && throw(ArgumentError("Incompatible header in cache file $path."))
         _, (includes, includes_srcfiles, _), _... = _parse_cache_header(io, path)
         for inc in includes
             !startswith(inc.filename, "@depot") && return false
@@ -2159,11 +2159,11 @@ function parse_cache_buildid(cachepath::String)
     f = open(cachepath, "r")
     try
         checksum = isvalid_cache_header(f)
-        checksum === nothing && throw(ArgumentError("Incompatible header in cache file $cachefile."))
-        flags = read(f, UInt8)
-        syntax_version = read(f, UInt8)
+        checksum === nothing && throw(ArgumentError("Incompatible header in cache file $cachepath."))
+        read(f, UInt8) # flags
+        read(f, UInt8) # syntax_version
         n = read(f, Int32)
-        n == 0 && error("no module defined in $cachefile")
+        n == 0 && error("no module defined in $cachepath")
         skip(f, n) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
         build_id = (UInt128(checksum) << 64) | read(f, UInt64)
