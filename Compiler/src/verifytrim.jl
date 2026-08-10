@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call
+import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type,
+    compileable_specialization_for_call, foreign_library_type, _libdl_dlopen
 
 using ..Compiler:
      # operators
@@ -401,10 +402,10 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             end
 
             error = "unresolved cfunction"
-        elseif isexpr(stmt, :foreigncall)
-            foreigncall = stmt.args[1]
-            if isexpr(foreigncall, :tuple, 1)
-                foreigncall = foreigncall.args[1]
+        elseif isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal)
+            spec = stmt.args[1]
+            if isexpr(stmt, :foreigncall) && isexpr(spec, :tuple, 1)
+                foreigncall = spec.args[1]
                 if foreigncall isa String
                     foreigncall = QuoteNode(Symbol(foreigncall))
                 end
@@ -414,6 +415,21 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                     end
                 else
                     error = "disallowed ccall with non-constant name and no library"
+                end
+            end
+            if isempty(error)
+                library_type = foreign_library_type(spec, codeinfo, sptypes)
+                if library_type !== nothing && !(library_type <: Union{Symbol,String})
+                    covered = false
+                    atype = Tuple{typeof(_libdl_dlopen()), library_type}
+                    mi = compileable_specialization_for_call(interp, atype)
+                    if mi !== nothing
+                        ci = get(caches, mi, nothing)
+                        covered = ci isa CodeInstance
+                    end
+                    if !covered
+                        error = "unresolved dlopen for ccall / cglobal"
+                    end
                 end
             end
         elseif isexpr(stmt, :new_opaque_closure)
