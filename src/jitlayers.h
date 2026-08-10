@@ -871,6 +871,18 @@ public:
         return OCache.disabledNotice();
     }
 
+    jl_value_t *objCacheKVGet(const char *Ns, const uint8_t *Key,
+                              size_t KeyLen) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.kvGet(Ns, Key, KeyLen);
+    }
+    int objCacheKVPut(const char *Ns, const uint8_t *Key, size_t KeyLen,
+                      const uint8_t *Val, size_t ValLen) JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.kvPut(Ns, Key, KeyLen, Val, ValLen);
+    }
+    int objCacheKVEnabled() JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.kvEnabled();
+    }
+
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
     }
