@@ -18,5 +18,8 @@ outdir = ARGS[1]
     @test lines[8] == "# preferences: 0"
     @test lines[9] == "finalizers: 27 32"
     @test lines[10] == "collected: 0 kept, 10 dropped"
-    @test lines[11] == "static_lib_ccall: $(VERSION.major)"
+    # Verification cannot see whether a raw-pointer on-load callback actually fires; this
+    # asserts it did, which is what catches a callback registered into the wrong vector.
+    @test lines[11] == "c_callback: 1"
+    @test lines[12] == "static_lib_ccall: $(VERSION.major)"
 end
