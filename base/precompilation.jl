@@ -1038,6 +1038,18 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     end
                     circular = pkg in circular_deps
                     is_stale = !Base.isprecompiled(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcepath, flags=cacheflags)
+                    if is_stale && !circular && Base.CACHE_FETCH_HOOK[] !== nothing
+                        # a cache-fetch hook gets one chance to materialize a
+                        # cachefile before we schedule a local compile; this runs
+                        # after the dep waits above, so dependency cachefiles are
+                        # in place for the hook to key against
+                        if Base.maybe_fetch_cache(pkg, sourcepath)
+                            local fetched_cachepaths = Base.find_all_in_cache_path(pkg)
+                            cachepath_cache[pkg] = fetched_cachepaths
+                            is_stale = !Base.isprecompiled(pkg; ignore_loaded, stale_cache, cachepath_cache,
+                                cachepaths=fetched_cachepaths, sourcepath, flags=cacheflags)
+                        end
+                    end
                     if !circular && is_stale
                         Base.acquire(parallel_limiter)
                         is_project_dep = pkg in project_deps

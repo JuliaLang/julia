@@ -111,7 +111,9 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
     assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array(_newly_inferred));
     if (_newly_inferred == jl_nothing)
         _newly_inferred = NULL;
+    JL_LOCK(&newly_inferred_mutex);
     newly_inferred = (jl_array_t*) _newly_inferred;
+    JL_UNLOCK(&newly_inferred_mutex);
 }
 
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
@@ -125,9 +127,14 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
         jl_atomic_store_relaxed(&mi->flags, miflags | JL_MI_FLAGS_MASK_PRECOMPILED);
     }
     JL_LOCK(&newly_inferred_mutex);
-    size_t end = jl_array_nrows(newly_inferred);
-    jl_array_grow_end(newly_inferred, 1);
-    jl_array_ptr_set(newly_inferred, end, ci);
+    // re-check under the lock: a concurrent jl_set_newly_inferred may have
+    // cleared or replaced the array since the unlocked fast-path check above
+    jl_array_t *arr = newly_inferred;
+    if (arr != NULL) {
+        size_t end = jl_array_nrows(arr);
+        jl_array_grow_end(arr, 1);
+        jl_array_ptr_set(arr, end, ci);
+    }
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
@@ -353,11 +360,27 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     return 1;
 }
 
+// Collect every currently-valid method of a worklist-owned method table, whose
+// contents are dropped from the image (see jl_prune_internal_mtable)
+static int jl_collect_methcache_internal(jl_typemap_entry_t *ml, void *closure)
+{
+    jl_array_t *s = (jl_array_t*)closure;
+    if (jl_atomic_load_relaxed(&ml->max_world) == ~(size_t)0) {
+        jl_array_ptr_1d_push(internal_methods, (jl_value_t*)ml->func.method);
+        jl_array_ptr_1d_push(s, (jl_value_t*)ml->func.method); // extext
+    }
+    return 1;
+}
+
 static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
 {
-    if (!jl_object_in_image((jl_value_t*)mt))
-        env = NULL; // mark internal, not extext
-    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), jl_collect_methcache_from_mod, env);
+    // Custom method tables owned by the worklist are serialized without their
+    // contents (jl_prune_internal_mtable), so all of their methods are treated
+    // as extending an "external" table, to be re-added and re-activated on load.
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs),
+                       jl_object_in_image((jl_value_t*)mt) ? jl_collect_methcache_from_mod
+                                                           : jl_collect_methcache_internal,
+                       env);
     return 1;
 }
 
