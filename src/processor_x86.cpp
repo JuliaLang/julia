@@ -1252,7 +1252,22 @@ std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(cons
 {
     ensure_jit_target(cpu_target, imaging);
     flags = jit_targets[0].en.flags;
-    return get_llvm_target_vec(jit_targets[0]);
+    auto res = get_llvm_target_vec(jit_targets[0]);
+    // With avx512bf16 our LLVM marks bf16 vector types legal but cannot select
+    // them, so vectorized bf16 code aborts in ISel (#62666); fixed in LLVM 19.
+    // Adjust only the target string, not the feature bits in `jit_targets`:
+    // those also gate sysimage/pkgimage matching, so clearing the bit there
+    // makes cached images built for e.g. znver4 fail to load. `-avx512bf16`
+    // must be appended, not just `+avx512bf16` dropped, as the CPU name alone
+    // re-enables it.
+    for (auto it = res.second.begin(); it != res.second.end();) {
+        if (*it == "+avx512bf16")
+            it = res.second.erase(it);
+        else
+            ++it;
+    }
+    res.second.push_back("-avx512bf16");
+    return res;
 }
 
 const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
