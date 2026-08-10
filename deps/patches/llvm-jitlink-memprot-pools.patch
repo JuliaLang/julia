@@ -1,0 +1,462 @@
+--- include/llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h
++++ include/llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h
+@@ -6,7 +6,11 @@
+ //
+ //===----------------------------------------------------------------------===//
+ //
+-// Implements JITLinkMemoryManager using MemoryMapper
++// Implements JITLinkMemoryManager using MemoryMapper.
++//
++// Uses per-MemProt memory pools to keep pages with the same protection
++// flags contiguous, reducing the number of VMAs created by the kernel.
++// See https://github.com/llvm/llvm-project/issues/63236
+ //
+ //===----------------------------------------------------------------------===//
+ 
+@@ -14,9 +18,12 @@
+ #define LLVM_EXECUTIONENGINE_ORC_MAPPERJITLINKMEMORYMANAGER_H
+ 
+ #include "llvm/ADT/IntervalMap.h"
++#include "llvm/ADT/SmallVector.h"
+ #include "llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h"
+ #include "llvm/ExecutionEngine/Orc/MemoryMapper.h"
+ 
++#include <array>
++
+ namespace llvm {
+ namespace orc {
+ 
+@@ -54,13 +61,24 @@
+   // We reserve multiples of this from the executor address space
+   size_t ReservationUnits;
+ 
+-  // Ranges that have been reserved in executor but not yet allocated
++  // Per-MemProt available memory pools. Keeping same-protection pages in
++  // dedicated pools ensures they are physically contiguous, allowing the
++  // kernel to coalesce VMAs instead of creating one per segment.
+   using AvailableMemoryMap = IntervalMap<ExecutorAddr, bool>;
+   AvailableMemoryMap::Allocator AMAllocator;
+-  IntervalMap<ExecutorAddr, bool> AvailableMemory;
+-
+-  // Ranges that have been reserved in executor and already allocated
+-  DenseMap<ExecutorAddr, ExecutorAddrDiff> UsedMemory;
++  static constexpr unsigned NumMemProtValues = 8;
++  std::array<std::unique_ptr<AvailableMemoryMap>, NumMemProtValues>
++      AvailableMemory;
++
++  AvailableMemoryMap &getPool(MemProt MP);
++
++  // Track used ranges per allocation for returning to correct pools.
++  struct UsedRange {
++    ExecutorAddr Addr;
++    ExecutorAddrDiff Size;
++    MemProt Prot;
++  };
++  DenseMap<ExecutorAddr, SmallVector<UsedRange, 4>> UsedMemory;
+ 
+   std::unique_ptr<MemoryMapper> Mapper;
+ };
+--- lib/ExecutionEngine/Orc/MapperJITLinkMemoryManager.cpp
++++ lib/ExecutionEngine/Orc/MapperJITLinkMemoryManager.cpp
+@@ -1,4 +1,4 @@
+-//=== MapperJITLinkMemoryManager.cpp - Memory management with MemoryMapper ===//
++//===- MapperJITLinkMemoryManager.cpp - Memory management with mapper -----===//
+ //
+ // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+ // See https://llvm.org/LICENSE.txt for license information.
+@@ -28,7 +28,6 @@
+   void finalize(OnFinalizedFunction OnFinalize) override {
+     MemoryMapper::AllocInfo AI;
+     AI.MappingBase = AllocAddr;
+-
+     std::swap(AI.Segments, Segs);
+     std::swap(AI.Actions, G.allocActions());
+ 
+@@ -38,7 +37,6 @@
+         OnFinalize(Result.takeError());
+         return;
+       }
+-
+       OnFinalize(FinalizedAlloc(*Result));
+     });
+   }
+@@ -56,91 +54,185 @@
+ 
+ MapperJITLinkMemoryManager::MapperJITLinkMemoryManager(
+     size_t ReservationGranularity, std::unique_ptr<MemoryMapper> Mapper)
+-    : ReservationUnits(ReservationGranularity), AvailableMemory(AMAllocator),
++    : ReservationUnits(ReservationGranularity),
+       Mapper(std::move(Mapper)) {}
+ 
++MapperJITLinkMemoryManager::AvailableMemoryMap &
++MapperJITLinkMemoryManager::getPool(MemProt MP) {
++  auto Idx = static_cast<unsigned>(MP);
++  assert(Idx < NumMemProtValues && "MemProt value out of range");
++  if (!AvailableMemory[Idx])
++    AvailableMemory[Idx] = std::make_unique<AvailableMemoryMap>(AMAllocator);
++  return *AvailableMemory[Idx];
++}
++
+ void MapperJITLinkMemoryManager::allocate(const JITLinkDylib *JD, LinkGraph &G,
+                                           OnAllocatedFunction OnAllocated) {
+   BasicLayout BL(G);
++  auto PageSize = Mapper->getPageSize();
+ 
+-  // find required address space
+-  auto SegsSizes = BL.getContiguousPageBasedLayoutSizes(Mapper->getPageSize());
+-  if (!SegsSizes) {
+-    OnAllocated(SegsSizes.takeError());
+-    return;
+-  }
+-
+-  auto TotalSize = SegsSizes->total();
+-
+-  auto CompleteAllocation = [this, &G, BL = std::move(BL),
+-                             OnAllocated = std::move(OnAllocated)](
+-                                Expected<ExecutorAddrRange> Result) mutable {
+-    if (!Result) {
+-      Mutex.unlock();
+-      return OnAllocated(Result.takeError());
+-    }
+-
+-    auto NextSegAddr = Result->Start;
+-
+-    std::vector<MemoryMapper::AllocInfo::SegInfo> SegInfos;
+-
+-    for (auto &KV : BL.segments()) {
+-      auto &AG = KV.first;
+-      auto &Seg = KV.second;
+-
+-      auto TotalSize = Seg.ContentSize + Seg.ZeroFillSize;
+-
+-      Seg.Addr = NextSegAddr;
+-      Seg.WorkingMem = Mapper->prepare(NextSegAddr, TotalSize);
+-
+-      NextSegAddr += alignTo(TotalSize, Mapper->getPageSize());
+-
+-      MemoryMapper::AllocInfo::SegInfo SI;
+-      SI.Offset = Seg.Addr - Result->Start;
+-      SI.ContentSize = Seg.ContentSize;
+-      SI.ZeroFillSize = Seg.ZeroFillSize;
+-      SI.AG = AG;
+-      SI.WorkingMem = Seg.WorkingMem;
+-
+-      SegInfos.push_back(SI);
+-    }
+-
+-    UsedMemory.insert({Result->Start, NextSegAddr - Result->Start});
+-
+-    if (NextSegAddr < Result->End) {
+-      // Save the remaining memory for reuse in next allocation(s)
+-      AvailableMemory.insert(NextSegAddr, Result->End - 1, true);
+-    }
+-    Mutex.unlock();
+-
+-    if (auto Err = BL.apply()) {
+-      OnAllocated(std::move(Err));
++  // Validate segment alignment (same check as getContiguousPageBasedLayoutSizes).
++  for (auto &KV : BL.segments()) {
++    if (KV.second.Alignment > PageSize) {
++      OnAllocated(
++          make_error<StringError>("Segment alignment greater than page size",
++                                  inconvertibleErrorCode()));
+       return;
+     }
++  }
+ 
+-    OnAllocated(std::make_unique<InFlightAlloc>(*this, G, Result->Start,
+-                                                std::move(SegInfos)));
+-  };
++  // Compute required size per MemProt type. We group by MemProt (not full
++  // AllocGroup) because VMA count depends on page protection flags, not
++  // memory lifetime policy.
++  DenseMap<MemProt, size_t> PerProtSizes;
++  for (auto &KV : BL.segments()) {
++    auto MP = KV.first.getMemProt();
++    auto TotalSize = KV.second.ContentSize + KV.second.ZeroFillSize;
++    PerProtSizes[MP] += alignTo(TotalSize, PageSize);
++  }
+ 
+-  Mutex.lock();
++  // This lambda completes the allocation once per-MemProt address ranges are
++  // available. It places each segment into its MemProt-specific pool range,
++  // ensuring same-permission pages are contiguous across allocations.
++  auto CompleteAllocation =
++      [this, &G, BL = std::move(BL), OnAllocated = std::move(OnAllocated),
++       PageSize](
++          Expected<DenseMap<MemProt, ExecutorAddrRange>> RangesOrErr) mutable {
++        if (!RangesOrErr) {
++          Mutex.unlock();
++          return OnAllocated(RangesOrErr.takeError());
++        }
++        auto ProtRanges = std::move(*RangesOrErr);
++
++        // Track per-MemProt cursors for segment placement and find MinAddr.
++        DenseMap<MemProt, ExecutorAddr> NextAddr;
++        ExecutorAddr MinAddr(~0ULL);
++        for (auto &KV : ProtRanges) {
++          NextAddr[KV.first] = KV.second.Start;
++          if (KV.second.Start < MinAddr)
++            MinAddr = KV.second.Start;
++        }
++
++        std::vector<MemoryMapper::AllocInfo::SegInfo> SegInfos;
++
++        for (auto &KV : BL.segments()) {
++          auto &AG = KV.first;
++          auto &Seg = KV.second;
++          auto MP = AG.getMemProt();
++
++          auto TotalSize = Seg.ContentSize + Seg.ZeroFillSize;
++          auto &SegAddr = NextAddr[MP];
++
++          Seg.Addr = SegAddr;
++          Seg.WorkingMem = Mapper->prepare(SegAddr, TotalSize);
++
++          SegAddr += alignTo(TotalSize, PageSize);
++
++          MemoryMapper::AllocInfo::SegInfo SI;
++          SI.Offset = Seg.Addr - MinAddr;
++          SI.ContentSize = Seg.ContentSize;
++          SI.ZeroFillSize = Seg.ZeroFillSize;
++          SI.AG = AG;
++          SI.WorkingMem = Seg.WorkingMem;
++
++          SegInfos.push_back(SI);
++        }
++
++        // Record used ranges and return unused portions to pools.
++        SmallVector<UsedRange, 4> Ranges;
++        for (auto &KV : ProtRanges) {
++          auto MP = KV.first;
++          auto &Range = KV.second;
++          auto UsedEnd = NextAddr[MP];
++          if (UsedEnd > Range.Start)
++            Ranges.push_back({Range.Start, UsedEnd - Range.Start, MP});
++
++          if (UsedEnd < Range.End)
++            getPool(MP).insert(UsedEnd, Range.End - 1, true);
++        }
++        UsedMemory[MinAddr] = std::move(Ranges);
++
++        Mutex.unlock();
++
++        if (auto Err = BL.apply()) {
++          OnAllocated(std::move(Err));
++          return;
++        }
++
++        OnAllocated(std::make_unique<InFlightAlloc>(*this, G, MinAddr,
++                                                    std::move(SegInfos)));
++      };
+ 
+-  // find an already reserved range that is large enough
+-  ExecutorAddrRange SelectedRange{};
++  Mutex.lock();
+ 
+-  for (AvailableMemoryMap::iterator It = AvailableMemory.begin();
+-       It != AvailableMemory.end(); It++) {
+-    if (It.stop() - It.start() + 1 >= TotalSize) {
+-      SelectedRange = ExecutorAddrRange(It.start(), It.stop() + 1);
+-      It.erase();
+-      break;
++  // Try to satisfy each MemProt from its dedicated pool.
++  DenseMap<MemProt, ExecutorAddrRange> Ranges;
++  SmallVector<std::pair<MemProt, size_t>> NeedReservation;
++
++  for (auto &KV : PerProtSizes) {
++    auto MP = KV.first;
++    auto Size = KV.second;
++    auto &Pool = getPool(MP);
++    bool Found = false;
++    for (auto It = Pool.begin(); It != Pool.end(); ++It) {
++      if (static_cast<uint64_t>(It.stop() - It.start() + 1) >= Size) {
++        Ranges[MP] = ExecutorAddrRange(It.start(), It.stop() + 1);
++        It.erase();
++        Found = true;
++        break;
++      }
+     }
++    if (!Found)
++      NeedReservation.push_back({MP, Size});
+   }
+ 
+-  if (SelectedRange.empty()) { // no already reserved range was found
+-    auto TotalAllocation = alignTo(TotalSize, ReservationUnits);
+-    Mapper->reserve(TotalAllocation, std::move(CompleteAllocation));
++  if (NeedReservation.empty()) {
++    CompleteAllocation(std::move(Ranges));
+   } else {
+-    CompleteAllocation(SelectedRange);
++    // Return already-claimed ranges before reserving new memory.
++    for (auto &KV : Ranges)
++      getPool(KV.first).insert(KV.second.Start, KV.second.End - 1, true);
++
++    // Compute total reservation needed across all MemProt pools.
++    size_t TotalReserve = 0;
++    for (auto &KV : NeedReservation)
++      TotalReserve += alignTo(KV.second, ReservationUnits);
++
++    Mapper->reserve(
++        TotalReserve,
++        [this, PerProtSizes = std::move(PerProtSizes),
++         NeedReservation = std::move(NeedReservation),
++         CompleteAllocation = std::move(CompleteAllocation)](
++            Expected<ExecutorAddrRange> Result) mutable {
++          if (!Result) {
++            return CompleteAllocation(Result.takeError());
++          }
++
++          // Split the new reservation among pools that needed space.
++          auto Cursor = Result->Start;
++          for (auto &KV : NeedReservation) {
++            auto AlignedSize = alignTo(KV.second, ReservationUnits);
++            getPool(KV.first).insert(Cursor, Cursor + AlignedSize - 1, true);
++            Cursor += AlignedSize;
++          }
++
++          // Re-search all pools (mutex is still held).
++          DenseMap<MemProt, ExecutorAddrRange> Ranges;
++          for (auto &KV : PerProtSizes) {
++            auto MP = KV.first;
++            auto Size = KV.second;
++            auto &Pool = getPool(MP);
++            for (auto It = Pool.begin(); It != Pool.end(); ++It) {
++              if (static_cast<uint64_t>(It.stop() - It.start() + 1) >= Size) {
++                Ranges[MP] = ExecutorAddrRange(It.start(), It.stop() + 1);
++                It.erase();
++                break;
++              }
++            }
++          }
++
++          CompleteAllocation(std::move(Ranges));
++        });
+   }
+ }
+ 
+@@ -156,10 +248,6 @@
+   Mapper->deinitialize(Bases, [this, Allocs = std::move(Allocs),
+                                OnDeallocated = std::move(OnDeallocated)](
+                                   llvm::Error Err) mutable {
+-    // TODO: How should we treat memory that we fail to deinitialize?
+-    // We're currently bailing out and treating it as "burned" -- should we
+-    // require that a failure to deinitialize still reset the memory so that
+-    // we can reclaim it?
+     if (Err) {
+       for (auto &FA : Allocs)
+         FA.release();
+@@ -172,10 +260,14 @@
+ 
+       for (auto &FA : Allocs) {
+         ExecutorAddr Addr = FA.getAddress();
+-        ExecutorAddrDiff Size = UsedMemory[Addr];
+ 
+-        UsedMemory.erase(Addr);
+-        AvailableMemory.insert(Addr, Addr + Size - 1, true);
++        auto It = UsedMemory.find(Addr);
++        if (It != UsedMemory.end()) {
++          for (auto &Range : It->second)
++            getPool(Range.Prot).insert(Range.Addr,
++                                       Range.Addr + Range.Size - 1, true);
++          UsedMemory.erase(It);
++        }
+ 
+         FA.release();
+       }
+@@ -185,5 +277,5 @@
+   });
+ }
+ 
+-} // end namespace orc
+-} // end namespace llvm
++} // namespace orc
++} // namespace llvm
+--- include/llvm/ExecutionEngine/Orc/MemoryMapper.h
++++ include/llvm/ExecutionEngine/Orc/MemoryMapper.h
+@@ -13,6 +13,7 @@
+ #ifndef LLVM_EXECUTIONENGINE_ORC_MEMORYMAPPER_H
+ #define LLVM_EXECUTIONENGINE_ORC_MEMORYMAPPER_H
+ 
++#include "llvm/ADT/SmallVector.h"
+ #include "llvm/ExecutionEngine/Orc/Core.h"
+ #include "llvm/ExecutionEngine/Orc/Shared/MemoryFlags.h"
+ #include "llvm/Support/Process.h"
+@@ -102,8 +103,15 @@
+   ~InProcessMemoryMapper() override;
+ 
+ private:
++  // Track individual segment ranges for precise permission reset during
++  // deinitialization, rather than a single min-max span that could
++  // cover unrelated allocations' memory.
+   struct Allocation {
+-    size_t Size;
++    struct SegRange {
++      ExecutorAddr Addr;
++      size_t Size;
++    };
++    SmallVector<SegRange, 4> SegRanges;
+     std::vector<shared::WrapperFunctionCall> DeinitializationActions;
+   };
+   using AllocationMap = DenseMap<ExecutorAddr, Allocation>;
+--- lib/ExecutionEngine/Orc/MemoryMapper.cpp
++++ lib/ExecutionEngine/Orc/MemoryMapper.cpp
+@@ -62,7 +62,10 @@
+ void InProcessMemoryMapper::initialize(MemoryMapper::AllocInfo &AI,
+                                        OnInitializedFunction OnInitialized) {
+   ExecutorAddr MinAddr(~0ULL);
+-  ExecutorAddr MaxAddr(0);
++
++  // Track individual segment ranges for precise deinitialization, built
++  // alongside the mprotect loop to avoid iterating segments twice.
++  SmallVector<Allocation::SegRange, 4> SegRanges;
+ 
+   // FIXME: Release finalize lifetime segments.
+   for (auto &Segment : AI.Segments) {
+@@ -72,8 +75,7 @@
+     if (Base < MinAddr)
+       MinAddr = Base;
+ 
+-    if (Base + Size > MaxAddr)
+-      MaxAddr = Base + Size;
++    SegRanges.push_back({Base, Size});
+ 
+     std::memset((Base + Segment.ContentSize).toPtr<void *>(), 0,
+                 Segment.ZeroFillSize);
+@@ -94,10 +96,9 @@
+   {
+     std::lock_guard<std::mutex> Lock(Mutex);
+ 
+-    // This is the maximum range whose permission have been possibly modified
+-    Allocations[MinAddr].Size = MaxAddr - MinAddr;
+-    Allocations[MinAddr].DeinitializationActions =
+-        std::move(*DeinitializeActions);
++    auto &Alloc = Allocations[MinAddr];
++    Alloc.SegRanges = std::move(SegRanges);
++    Alloc.DeinitializationActions = std::move(*DeinitializeActions);
+     Reservations[AI.MappingBase.toPtr<void *>()].Allocations.push_back(MinAddr);
+   }
+ 
+@@ -119,12 +120,16 @@
+         AllErr = joinErrors(std::move(AllErr), std::move(Err));
+       }
+ 
+-      // Reset protections to read/write so the area can be reused
+-      if (auto EC = sys::Memory::protectMappedMemory(
+-              {Base.toPtr<void *>(), Allocations[Base].Size},
+-              sys::Memory::ProtectionFlags::MF_READ |
+-                  sys::Memory::ProtectionFlags::MF_WRITE)) {
+-        AllErr = joinErrors(std::move(AllErr), errorCodeToError(EC));
++      // Reset protections to read/write on each individual segment range
++      // so the area can be reused. This avoids resetting a single large
++      // span that could cover memory belonging to other allocations.
++      for (auto &SR : Allocations[Base].SegRanges) {
++        if (auto EC = sys::Memory::protectMappedMemory(
++                {SR.Addr.toPtr<void *>(), SR.Size},
++                sys::Memory::ProtectionFlags::MF_READ |
++                    sys::Memory::ProtectionFlags::MF_WRITE)) {
++          AllErr = joinErrors(std::move(AllErr), errorCodeToError(EC));
++        }
+       }
+ 
+       Allocations.erase(Base);
