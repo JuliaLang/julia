@@ -42,7 +42,7 @@ const libblastrampoline = LazyLibrary(
         BundledLazyLibraryPath("libblastrampoline.so.5")
     end,
     dependencies = LazyLibrary[],
-    on_load_callback = libblastrampoline_on_load_callback
+    _on_load_c_callback = @cfunction(libblastrampoline_on_load_callback, Cvoid, ())
 )
 
 function eager_mode()
@@ -54,6 +54,12 @@ end
 is_available() = true
 
 function __init__()
+    # _on_load_c_callback does not survive precompilation so it needs
+    # to be manually restored in `__init__`
+    # FIXME: Delete this once `on_load_callback` is trim-compatible.
+    fptr = @cfunction(libblastrampoline_on_load_callback, Cvoid, ())
+    @atomic :release libblastrampoline._on_load_c_callback = fptr
+
     global libblastrampoline_path = string(libblastrampoline.path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libblastrampoline_path)
