@@ -207,9 +207,9 @@ function print_comment_inline(io::IO, comments::Comments, path::CommentPath)
     block = get(comments.items, path, nothing)
     block === nothing && return
     text = block.inline
-    isempty(text) && return
+    text === nothing && return
     Base.print(io, " #")
-    if !(first(text) == ' ' || first(text) == '\t')
+    if !(isempty(text) || first(text) == ' ' || first(text) == '\t')
         Base.print(io, ' ')
     end
     for c::AbstractChar in text
@@ -220,6 +220,13 @@ function print_comment_inline(io::IO, comments::Comments, path::CommentPath)
         end
     end
 end
+
+# Whether any comments are associated with the item or table at `path`.
+# A table header that would normally be elided (because the table only
+# contains other tables) must still be printed if it has comments, so that
+# the comments keep their anchor and round-trip to the same association.
+has_comments(comments::Comments, path::CommentPath) =
+    haskey(comments.items, path) || haskey(comments.floating, path)
 
 # Returns whether any floating comment lines were printed
 function print_comments_floating(io::IO, comments::Comments, path::CommentPath, indentstr::String)
@@ -303,6 +310,9 @@ function print_table(f::Function, io::IO, a::AbstractDict,
             push!(ks, String(key))
             _values = @invokelatest values(value)
             header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool || any(v in inline_tables for v in _values)::Bool
+            if !header && comments !== nothing
+                header = has_comments(comments, Tuple(ks))
+            end
             if header
                 # print table
                 first_block || println(io)

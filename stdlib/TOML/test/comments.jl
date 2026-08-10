@@ -35,7 +35,7 @@ end
     @test comments.floating[()] == [" floating root comment"]
     @test comments.items[("deps",)].above == [" attached to deps"]
     @test comments.items[("deps", "Dep")].above == [" `Dep` is used for fooing bars"]
-    @test comments.items[("deps", "Dep")].inline == ""
+    @test comments.items[("deps", "Dep")].inline === nothing
     @test comments.items[("compat", "Dep")].inline == " see issue 123 before bumping"
     @test !haskey(comments.items, ("compat", "julia"))
 end
@@ -221,6 +221,59 @@ end
     data2, comments2 = parse_with_comments(out)
     @test data2 == data
     @test comments2 == comments
+end
+
+@testset "comments force elided table headers" begin
+    # `[a]` would normally be elided since `a` only contains the table `b`;
+    # a comment associated with `a` must keep its anchor
+    str = """
+    # keep me
+    [a]
+    [a.b]
+    x = 1
+    """
+    data, comments = parse_with_comments(str)
+    @test comments.items[("a",)].above == [" keep me"]
+    out = sprint_with_comments(data, comments)
+    @test occursin("[a]", out)
+    data2, comments2 = parse_with_comments(out)
+    @test data2 == data
+    @test comments2 == comments
+    @test sprint_with_comments(data2, comments2) == out
+
+    # same for a floating comment inside the elided table
+    str = """
+    [a]
+
+    # floating in a
+
+    [a.b]
+    x = 1
+    """
+    data, comments = parse_with_comments(str)
+    @test comments.floating[("a",)] == [" floating in a"]
+    out = sprint_with_comments(data, comments)
+    data2, comments2 = parse_with_comments(out)
+    @test data2 == data
+    @test comments2 == comments
+    @test sprint_with_comments(data2, comments2) == out
+
+    # without comments the header is still elided
+    data, comments = parse_with_comments("[a.b]\nx = 1\n")
+    @test !occursin(r"^\[a\]"m, sprint_with_comments(data, comments))
+end
+
+@testset "empty inline comments are preserved" begin
+    data, comments = parse_with_comments("x = 1 #\ny = 2\n")
+    @test comments.items[("x",)].inline == ""
+    @test !haskey(comments.items, ("y",))
+    out = sprint_with_comments(data, comments)
+    @test occursin("x = 1 #\n", out)
+    @test occursin("y = 2\n", out)
+    data2, comments2 = parse_with_comments(out)
+    @test data2 == data
+    @test comments2 == comments
+    @test sprint_with_comments(data2, comments2) == out
 end
 
 @testset "Comments is emptied on reuse" begin

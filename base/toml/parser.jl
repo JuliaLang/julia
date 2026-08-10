@@ -38,13 +38,13 @@ const CommentPath = Tuple{Vararg{String}}
 
 # The comments associated with a single item (a `key = value` entry or a table
 # header): the whole-line comments directly above the item and the comment on
-# the same line as the item ("" if none). Comment text is stored without the
-# leading '#'.
+# the same line as the item (`nothing` if none; `""` is a bare trailing `#`).
+# Comment text is stored without the leading '#'.
 mutable struct CommentBlock
     above::Vector{String}
-    inline::String
+    inline::Union{String, Nothing}
 end
-CommentBlock() = CommentBlock(String[], "")
+CommentBlock() = CommentBlock(String[], nothing)
 
 """
     Comments()
