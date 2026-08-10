@@ -672,6 +672,21 @@ static bool isJITLinkEHFrameSection(StringRef Name) JL_NOTSAFEPOINT
     return Name == ".eh_frame" || Name == "__eh_frame" || Name.ends_with(",__eh_frame");
 }
 
+// BumpPtrAllocator's ASAN bookkeeping is inlined into each caller: allocations
+// we make in the LinkGraph poison the fresh slab and unpoison the returned
+// bytes, while allocations made inside the uninstrumented libLLVM touch no
+// shadow state. A block libLLVM carves out of a slab our calls created is
+// therefore live but still shadow-poisoned; repair that before reading it.
+static void unpoisonLinkGraphBlocks(const jitlink::Section &Sec) JL_NOTSAFEPOINT
+{
+#ifdef _COMPILER_ASAN_ENABLED_
+    for (const jitlink::Block *B : Sec.blocks())
+        __asan_unpoison_memory_region(B, sizeof(*B));
+#else
+    (void)Sec;
+#endif
+}
+
 void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     orc::MaterializationResponsibility &MR, jitlink::LinkGraph &G,
     MemoryBufferRef InputObject, std::unique_ptr<jl_linker_info_t> LinkerInfo)
@@ -771,6 +786,7 @@ void JLDebuginfoPlugin::modifyPassConfig(MaterializationResponsibility &MR, jitl
                 continue;
             if (Sec.blocks().empty())
                 continue;
+            unpoisonLinkGraphBlocks(Sec);
             // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
             Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
         }
@@ -806,14 +822,13 @@ public:
                           jitlink::PassConfiguration &Config) override {
         Config.PostAllocationPasses.push_back([this](jitlink::LinkGraph &G) {
             // `G.blocks()` is exactly the union of the sections' blocks, so a
-            // single pass over the (non-EH-frame) sections counts every block
-            // once; `graph_size == code_size + data_size`
+            // single pass over the sections counts every block once;
+            // `graph_size == code_size + data_size`
             size_t graph_size = 0;
             size_t code_size = 0;
             size_t data_size = 0;
             for (auto &section : G.sections()) {
-                if (isJITLinkEHFrameSection(section.getName()))
-                    continue;
+                unpoisonLinkGraphBlocks(section);
                 size_t secsize = 0;
                 for (auto block : section.blocks()) {
                     secsize += block->getSize();
