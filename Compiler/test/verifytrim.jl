@@ -150,3 +150,41 @@ let infos = typeinf_ext_toplevel(Any[mi], [Base.get_world_counter()], TRIM_UNSAF
     errors, parents = get_verify_typeinf_trim(infos)
     @test !isempty(errors)
 end
+
+# TrimVerifier (and also `collectinvokes!`) should check the implicit `Libdl.dlopen`
+# call for foreign library types on first use of a `ccall` / `cglobal`
+struct StaticTrimLib end
+const static_trim_lib = StaticTrimLib()
+const static_trim_libname = "libjulia-internal"
+Base.Libc.Libdl.dlopen(::StaticTrimLib) =
+    ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Ptr{UInt8}, UInt32, Cint),
+          static_trim_libname, Base.Libc.Libdl.RTLD_LAZY, Cint(0))
+trim_ccall_static_lib() = ccall((:jl_getpid, static_trim_lib), Int32, ())
+
+let infos = typeinf_ext_toplevel(Any[Core.svec(Int32, Tuple{typeof(trim_ccall_static_lib)})],
+                                 [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    @test isempty(errors)
+    # the `dlopen(::StaticTrimLib)` call the runtime makes was enqueued and compiled
+    @test any(infos) do item
+        item isa Core.CodeInstance || return false
+        mi = item.def
+        mi isa Core.MethodInstance &&
+            mi.specTypes === Tuple{typeof(Base.Libc.Libdl.dlopen), StaticTrimLib}
+    end
+end
+
+# verification should fail if an imprecise library type blocks dispatch resolution
+global loose_trim_lib = static_trim_lib
+trim_ccall_loose_lib() = ccall((:jl_getpid, loose_trim_lib), Int32, ())
+
+let infos = typeinf_ext_toplevel(Any[Core.svec(Int32, Tuple{typeof(trim_ccall_loose_lib)})],
+                                 [Base.get_world_counter()], TRIM_UNSAFE, false)[1]
+    errors, parents = get_verify_typeinf_trim(infos)
+    (warn, desc) = only(errors)
+    @test !warn
+    @test desc isa CallMissing
+    @test desc.desc == "unresolved dlopen for ccall / cglobal"
+    repr = sprint(verify_print_error, desc, parents, warn)
+    @test occursin("unresolved dlopen for ccall / cglobal", repr)
+end

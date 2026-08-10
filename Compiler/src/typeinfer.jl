@@ -1893,7 +1893,25 @@ function has_valid_abi_sparams(mi::MethodInstance)
     return true
 end
 
-# collect a list of all code that is needed along with CodeInstance to codegen it fully
+function _libdl_dlopen()
+    dlopen_ptr = unsafe_load(cglobal(:jl_libdl_dlopen_func, Ptr{Cvoid}))
+    dlopen_ptr == C_NULL && return nothing # Libdl was never loaded
+    dlopen_fn = unsafe_load(cglobal(:jl_libdl_dlopen_func, Any))
+    return dlopen_fn
+end
+
+# Returns the type of library for a foreigncall / foreignglobal spec (aka foreignsymbol)
+function foreign_library_type(@nospecialize(spec), ci::CodeInfo, sptypes::Vector{VarState})
+    if isexpr(spec, :tuple) && length(spec.args) >= 2
+        lib = spec.args[2]
+    elseif spec isa Tuple && length(spec) >= 2
+        lib = spec[2]
+    else # either using a function pointer or an invalid foreigncall - no dlopen applies
+        return nothing
+    end
+    return argextype_widened(lib, ci, sptypes)
+end
+
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
                          enqueue_unprepared_invokes::Bool = false,
@@ -1963,6 +1981,15 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
             t, _, _, _ = instanceof_tfunc(argextype(stmt.args[1], ci, sptypes))
             t <: Function || continue
             atype = Tuple{t, Vararg}
+        elseif isexpr(stmt, :foreigncall) || isexpr(stmt, :foreignglobal)
+            # the runtime `dlopen(lib)` a site with a runtime library value performs on
+            # first use runs in the latest world (see `jl_lazy_load_and_lookup`)
+            library_type = foreign_library_type(stmt.args[1], ci, sptypes)
+            library_type === nothing && continue
+            library_type <: Union{Symbol,String} && continue # resolved natively by the runtime
+            dlopen_fn = _libdl_dlopen()
+            dlopen_fn === nothing && continue
+            atype = Tuple{typeof(dlopen_fn), library_type}
         else
             # TODO: handle other StmtInfo like OpaqueClosure?
             continue
