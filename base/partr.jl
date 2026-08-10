@@ -181,6 +181,23 @@ function multiq_insert(task::Task, priority::UInt16)
     return true
 end
 
+# Pop the root task off `heap`, whose lock must be held and which must be
+# non-empty, restoring the heap invariant and its advertised priority.
+function multiq_heappop!(heap::taskheap)
+    task = heap.tasks[1]
+    ntasks = heap.ntasks
+    @atomic :monotonic heap.ntasks = ntasks - Int32(1)
+    heap.tasks[1] = heap.tasks[ntasks]
+    Base._unsetindex!(heap.tasks, Int(ntasks))
+    prio1 = typemax(UInt16)
+    if ntasks > 1
+        multiq_sift_down(heap, Int32(1))
+        prio1 = heap.tasks[1].priority
+    end
+    @atomic :monotonic heap.priority = prio1
+    return task
+end
+
 function multiq_deletemin()
     local rn1::UInt32
     local heap, task
@@ -222,28 +239,32 @@ function multiq_deletemin()
         heap = tpheaps[rn1]
         task = heap.tasks[1]
         if ccall(:jl_set_task_tid, Cint, (Any, Cint), task, tid-1) == 0
-            # This task is sticky to a different thread, so we can't run it.
-            # Wake that thread so it can come pick up its own work, then keep
-            # looking for something we are allowed to run.
+            # The task is pinned to another thread (sticky there, on a
+            # thread-local copied stack, or still switching away from it), so
+            # only that thread can run it. It must not stay at the head of the
+            # heap: no other task in this heap can be popped past it, so if the
+            # pinned thread never drains this multiqueue (e.g. an adopted
+            # foreign thread), it would block every task queued behind it
+            # forever, while `multiq_check_empty` keeps every pool thread
+            # spinning on the unpoppable entry. Hand it to the pinned thread's
+            # own workqueue - where `enq_work` routes pinned tasks, and which
+            # that thread checks before the multiqueue - then wake that thread
+            # and keep looking for something we are allowed to run.
             task_tid = ccall(:jl_get_task_tid, Int16, (Any,), task)
-            unlock(heap.lock)
-            if task_tid != Int16(-1)
-                ccall(:jl_wakeup_thread, Cint, (Int16,), task_tid)
+            if task_tid == Int16(-1)
+                # the pin was released concurrently; retry the pop
+                unlock(heap.lock)
+                continue
             end
+            multiq_heappop!(heap)
+            unlock(heap.lock)
+            push!(Base.workqueue_for(Int(task_tid) + 1), task)
+            ccall(:jl_wakeup_thread, Cint, (Int16,), task_tid)
             continue
         end
         break
     end
-    ntasks = heap.ntasks
-    @atomic :monotonic heap.ntasks = ntasks - Int32(1)
-    heap.tasks[1] = heap.tasks[ntasks]
-    Base._unsetindex!(heap.tasks, Int(ntasks))
-    prio1 = typemax(UInt16)
-    if ntasks > 1
-        multiq_sift_down(heap, Int32(1))
-        prio1 = heap.tasks[1].priority
-    end
-    @atomic :monotonic heap.priority = prio1
+    task = multiq_heappop!(heap)
     unlock(heap.lock)
 
     return task
