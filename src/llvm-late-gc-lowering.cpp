@@ -1864,7 +1864,7 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
         // parent or perm-rooted. Invalid for plans that must observe the parent's old
         // fields regardless of the child (MMTK_SNAPSHOT_BARRIER).
 #ifndef MMTK_SNAPSHOT_BARRIER
-        if (std::all_of(CI->op_begin() + 1, CI->op_end(),
+        if (std::all_of(CI->op_begin() + write_barrier_first_child_arg, CI->op_end(),
                     [parent, &S](Value *child) { return parent == child || IsPermRooted(child, S); })) {
             CI->eraseFromParent();
             continue;

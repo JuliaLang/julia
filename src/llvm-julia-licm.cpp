@@ -263,6 +263,10 @@ struct JuliaLICM : public JuliaPassContext {
 #ifndef MMTK_SNAPSHOT_BARRIER
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
+                        // Every lowering reachable here discards the slot, so a loop-varying
+                        // one is no reason to leave the barrier in the loop.
+                        if (i == write_barrier_slot_arg)
+                            continue;
                         if (!makeLoopInvariant(L, call->getArgOperand(i),
                             changed, preheader->getTerminator(),
                             MSSAU, SE)) {

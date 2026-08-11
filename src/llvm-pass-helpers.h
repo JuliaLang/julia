@@ -67,6 +67,11 @@ struct JuliaPassContext {
     llvm::Function *call3_func;
     llvm::Function *cancel_point_func;
 
+    // `julia.write_barrier(parent, slot, children...)`: the address of the written field is
+    // operand 1 (null where the store names no single field), and the children follow it.
+    static constexpr unsigned write_barrier_slot_arg = 1;
+    static constexpr unsigned write_barrier_first_child_arg = 2;
+
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
     JuliaPassContext();
