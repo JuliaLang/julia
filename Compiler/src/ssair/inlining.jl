@@ -28,8 +28,7 @@ end
 
 struct ConstantCase
     val::Any
-    edge::CodeInstance
-    ConstantCase(@nospecialize(val), edge::CodeInstance) = new(val, edge)
+    ConstantCase(@nospecialize(val)) = new(val)
 end
 
 struct SomeCase
@@ -806,7 +805,6 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     keep_direct_edge = code isa CodeInstance && mi !== mi_invoke && has_typeegal_slot(atype)
     if !keep_direct_edge
         cached = get(code_cache(state), mi_invoke, nothing)
-        cached isa InferenceResult && (cached = cached.ci)
         if cached isa CodeInstance
             code = cached
         elseif !(code isa CodeInstance && code.def === mi_invoke)
@@ -821,49 +819,72 @@ end
 struct InferredCode
     src::Any # CodeInfo or IRCode
     effects::Effects
-    edge::CodeInstance
-    InferredCode(@nospecialize(src), effects::Effects, edge::CodeInstance) = new(src, effects, edge)
+    InferredCode(@nospecialize(src), effects::Effects) = new(src, effects)
 end
-@inline function get_local_code(inf_result::InferenceResult)
-    @assert isdefined(inf_result, :ci_as_edge) "InferenceResult without ci_as_edge"
+@inline function get_local_code(local_result::LocalInferenceResult)
+    inf_result = local_result.result
     effects = inf_result.ipo_effects
     if is_foldable_nothrow(effects)
         res = inf_result.result
         if isa(res, Const) && is_inlineable_constant(res.val)
             # use constant calling convention
-            return ConstantCase(quoted(res.val), inf_result.ci_as_edge)
+            return SomeCase(quoted(res.val))
         end
     end
-    return InferredCode(inf_result.src, effects, inf_result.ci_as_edge)
+    return InferredCode(inf_result.src, effects)
+end
+
+function add_inlining_dispatch_edge!(edges::Vector{Any}, mi::MethodInstance,
+                                     @nospecialize(info::CallInfo))
+    if info isa InvokeCallInfo
+        add_invoke_edge!(edges, info.atype, mi)
+    elseif info isa VirtualMethodMatchInfo
+        add_inlining_dispatch_edge!(edges, mi, info.info)
+    else
+        add_one_edge!(edges, mi)
+    end
+    return nothing
 end
 
 # the general resolver for usual and const-prop'ed calls
-function resolve_todo(mi::MethodInstance, call_result::Union{Nothing,InferenceResult},
+function resolve_todo(mi::MethodInstance, call_result::Union{Nothing,LocalInferenceResult},
+    call_edge::Union{Nothing,MethodInstance,CodeInstance},
     @nospecialize(info::CallInfo), flag::UInt32, state::InliningState)
     et = InliningEdgeTracker(state)
+    target = call_edge === nothing ? mi : call_edge
 
     if call_result === nothing
         # there is no cached source available for this, but there might be code for the compilation sig
-        return compileable_specialization(mi, Effects(), et, info, state)
+        item = compileable_specialization(target, Effects(), et, info, state)
+        if item !== nothing && call_edge === nothing
+            # The inlining edge added above certifies the selected method body, but
+            # a target synthesized by the optimizer must separately certify how the
+            # runtime call selected that method. Add this after the identity edge so
+            # edge deduplication cannot upgrade the dispatch edge into an invoke edge.
+            add_inlining_dispatch_edge!(et.edges, mi, info)
+        end
+        return item
     end
 
+    # The local result's proof justifies its inferred facts and retained source. The
+    # ordinary call edge remains a separate executable target.
+    add_inlining_edge!(et, target)
+    add_inference_proof!(et.edges, inference_proof(call_result), target)
     inferred_result = get_local_code(call_result)
-    if inferred_result isa ConstantCase
-        add_inlining_edge!(et, inferred_result.edge)
-        return inferred_result
+    if inferred_result isa SomeCase
+        return ConstantCase(inferred_result.val)
     end
-    (; src, effects, edge) = inferred_result
+    (; src, effects) = inferred_result
 
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
     if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
-        return compileable_specialization(edge, effects, et, info, state)
+        return compileable_specialization(target, effects, et, info, state)
     end
 
     src_inlining_policy(state.interp, mi, src, info, flag) ||
-        return compileable_specialization(edge, effects, et, info, state)
+        return compileable_specialization(target, effects, et, info, state)
 
-    add_inlining_edge!(et, edge)
     ir, spec_info, debuginfo = retrieve_ir_for_inlining(mi, src, true)
     return InliningTodo(mi, ir, spec_info, debuginfo, effects)
 end
@@ -884,7 +905,9 @@ function may_have_fcalls(m::Method)
 end
 
 function analyze_method!(
-        call_result::Union{Nothing,InferenceResult}, match::MethodMatch, argtypes::Vector{Any},
+        call_result::Union{Nothing,LocalInferenceResult},
+        call_edge::Union{Nothing,MethodInstance,CodeInstance},
+        match::MethodMatch, argtypes::Vector{Any},
         @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
         allow_typevars::Bool
     )
@@ -917,7 +940,7 @@ function analyze_method!(
     # Get the specialization for this method signature
     # (later we will decide what to do with it)
     mi = specialize_method(match)
-    return resolve_todo(mi, call_result, info, flag, state)
+    return resolve_todo(mi, call_result, call_edge, info, flag, state)
 end
 
 function retrieve_ir_for_inlining(cached_result::CodeInstance, src::String)
@@ -1152,21 +1175,22 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     end
     result = getresult(info, 1)
     if isa(result, ConcreteResult)
-        item = concrete_result_item(result, info, state)
+        item = concrete_result_item(result, info.edge, match, info, state)
     elseif isa(result, SemiConcreteResult)
         item = semiconcrete_result_item(result, info, flag, state)
     else
         argtypes = invoke_rewrite(sig.argtypes)
-        if isa(result, InferenceResult)
-            mi = result.linfo
+        if isa(result, LocalInferenceResult)
+            mi = result.result.linfo
             validate_sparams(mi.sparam_vals) || return nothing
             if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
-                item = resolve_todo(mi, result, info, flag, state)
+                item = resolve_todo(mi, result, info.edge, info, flag, state)
                 handle_single_case!(todo, ir, idx, stmt, item, true)
                 return nothing
             end
         end
-        item = analyze_method!(result, match, argtypes, info, flag, state; allow_typevars=false)
+        item = analyze_method!(result, info.edge, match, argtypes, info, flag, state;
+            allow_typevars=false)
     end
     handle_single_case!(todo, ir, idx, stmt, item, true)
     return nothing
@@ -1198,10 +1222,10 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info::Call
     return nothing
 end
 
-function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo, state::InliningState)
-    length(stmt.args) == 3 || return
+function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::TaskCallInfo, state::InliningState)
+    length(stmt.args) == 3 || return nothing
     # Extract the CodeInstance from the inference result if available
-    info_edge = extract_indirect_invoke(info)
+    info_edge = extract_indirect_invoke(info.info)
     info_edge === nothing && return nothing
     info, edge = info_edge
     case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
@@ -1216,8 +1240,7 @@ function handle_task_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallI
     return nothing
 end
 
-function extract_indirect_invoke(info::IndirectCallInfo)
-    info = info.info
+function extract_indirect_invoke(@nospecialize info::CallInfo)
     info isa MethodResultPure && (info = info.info)
     info isa MethodMatchInfo || return nothing
     length(info.edges) == length(info.results) == 1 || return nothing
@@ -1316,24 +1339,26 @@ end
 
 function handle_any_call_result!(
         cases::Vector{InliningCase}, @nospecialize(call_result::Union{Nothing,InferredCallResult}),
-        match::MethodMatch, argtypes::Vector{Any}, @nospecialize(info::CallInfo),
+        call_edge::Union{Nothing,CodeInstance}, match::MethodMatch, argtypes::Vector{Any},
+        @nospecialize(info::CallInfo),
         flag::UInt32, state::InliningState;
         allow_typevars::Bool
     )
     if isa(call_result, ConcreteResult)
-        return handle_concrete_result!(cases, call_result, match, info, state)
+        return handle_concrete_result!(cases, call_result, call_edge, match, info, state)
     elseif isa(call_result, SemiConcreteResult)
         return handle_semi_concrete_result!(cases, call_result, match, info, flag, state)
     else
-        return handle_call_result!(cases, call_result, match, argtypes, info, flag, state; allow_typevars)
+        return handle_call_result!(cases, call_result, call_edge, match, argtypes, info, flag,
+            state; allow_typevars)
     end
 end
 
 function info_effects(@nospecialize(call_result::Union{Nothing,InferredCallResult}), match::MethodMatch, state::InliningState)
     if call_result === nothing
         return Effects()
-    elseif isa(call_result, InferenceResult)
-        return call_result.ipo_effects
+    elseif isa(call_result, LocalInferenceResult)
+        return call_result.result.ipo_effects
     elseif isa(call_result, ConcreteResult)
         return call_result.effects
     elseif isa(call_result, SemiConcreteResult)
@@ -1362,6 +1387,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
         for (j, match) in enumerate(meth)
             all_result_count += 1
             call_result = getresult(info, all_result_count)
+            call_edge = getedge(info, all_result_count)
             joint_effects = merge_effects(joint_effects, info_effects(call_result, match, state))
             split_fully_covered |= match.fully_covers
             if !validate_sparams(match.sparams)
@@ -1379,7 +1405,8 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
                 handled_all_cases = false
             else
                 handled_all_cases &= handle_any_call_result!(cases,
-                    call_result, match, argtypes, info, flag, state; allow_typevars=false)
+                    call_result, call_edge, match, argtypes, info, flag, state;
+                    allow_typevars=false)
             end
         end
         fully_covered &= split_fully_covered
@@ -1394,8 +1421,10 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             (i, j, k) = revisit_idx
             match = getsplit(info, i)[j]
             call_result = getresult(info, k)
+            call_edge = getedge(info, k)
             handled_all_cases &= handle_any_call_result!(cases,
-                call_result, match, argtypes, info, flag, state; allow_typevars=true)
+                call_result, call_edge, match, argtypes, info, flag, state;
+                allow_typevars=true)
         end
         if !fully_covered
             # We will emit an inline MethodError in this case, but that info already came inference, so we must already have the uncovered edge for it
@@ -1419,8 +1448,9 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
 end
 
 function handle_call_result!(
-        cases::Vector{InliningCase}, call_result::Union{Nothing,InferenceResult},
-        match::MethodMatch, argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt32,
+        cases::Vector{InliningCase}, call_result::Union{Nothing,LocalInferenceResult},
+        call_edge::Union{Nothing,CodeInstance}, match::MethodMatch, argtypes::Vector{Any},
+        @nospecialize(info::CallInfo), flag::UInt32,
         state::InliningState;
         allow_typevars::Bool
     )
@@ -1429,7 +1459,8 @@ function handle_call_result!(
     # processing this dispatch candidate (unless unmatched type parameters are present)
     !allow_typevars && any(case::InliningCase->case.sig === match.spec_types, cases) && return true
 
-    item = analyze_method!(call_result, match, argtypes, info, flag, state; allow_typevars)
+    item = analyze_method!(call_result, call_edge, match, argtypes, info, flag, state;
+        allow_typevars)
     item === nothing && return false
     push!(cases, InliningCase(match.spec_types, item))
     return true
@@ -1440,6 +1471,8 @@ function semiconcrete_result_item(result::SemiConcreteResult,
     code = result.edge
     mi = get_ci_mi(code)
     et = InliningEdgeTracker(state)
+    add_inlining_edge!(et, code)
+    add_inference_proof!(et.edges, inference_proof(result), code)
 
     if (!OptimizationParams(state.interp).inlining || is_stmt_noinline(flag) ||
         # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
@@ -1451,7 +1484,6 @@ function semiconcrete_result_item(result::SemiConcreteResult,
     src_inlining_policy(state.interp, mi, result.ir, info, flag) ||
         return compileable_specialization(code, result.effects, et, info, state)
 
-    add_inlining_edge!(et, result.edge)
     preserve_local_sources = OptimizationParams(state.interp).preserve_local_sources
     ir, _, debuginfo = retrieve_ir_for_inlining(mi, result.ir, preserve_local_sources)
     return InliningTodo(mi, ir, result.spec_info, debuginfo, result.effects)
@@ -1468,8 +1500,9 @@ function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiC
 end
 
 function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteResult,
-    match::MethodMatch, @nospecialize(info::CallInfo), state::InliningState)
-    case = concrete_result_item(result, info, state)
+    call_edge::Union{Nothing,CodeInstance}, match::MethodMatch,
+    @nospecialize(info::CallInfo), state::InliningState)
+    case = concrete_result_item(result, call_edge, match, info, state)
     case === nothing && return false
     push!(cases, InliningCase(match.spec_types, case))
     return true
@@ -1478,13 +1511,20 @@ end
 may_inline_concrete_result(result::ConcreteResult) =
     isdefined(result, :result) && is_inlineable_constant(result.result)
 
-function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState)
+function concrete_result_item(result::ConcreteResult,
+        call_edge::Union{Nothing,CodeInstance}, match::MethodMatch,
+        @nospecialize(info::CallInfo), state::InliningState)
+    target = result.edge === nothing ? call_edge : result.edge
+    target === nothing && (target = specialize_method(match))
+    target === nothing && return nothing
+    et = InliningEdgeTracker(state)
+    add_inlining_edge!(et, target)
+    add_inference_proof!(et.edges, inference_proof(result), target)
     if !may_inline_concrete_result(result)
-        et = InliningEdgeTracker(state)
-        return compileable_specialization(result.edge, result.effects, et, info, state)
+        return compileable_specialization(target, result.effects, et, info, state)
     end
     @assert result.effects === EFFECTS_TOTAL
-    return ConstantCase(quoted(result.result), result.edge)
+    return ConstantCase(quoted(result.result))
 end
 
 function handle_cases!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stmt::Expr,
@@ -1512,18 +1552,19 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
     flag::UInt32, sig::Signature, state::InliningState)
     result = info.result
     if isa(result, ConcreteResult)
-        item = concrete_result_item(result, info, state)
+        item = concrete_result_item(result, info.edge, info.match, info, state)
     elseif isa(result, SemiConcreteResult)
         item = semiconcrete_result_item(result, info, flag, state)
     else
-        item = analyze_method!(result, info.match, sig.argtypes, info, flag, state; allow_typevars=false)
+        item = analyze_method!(result, info.edge, info.match, sig.argtypes, info, flag, state;
+            allow_typevars=false)
     end
     handle_single_case!(todo, ir, idx, stmt, item)
     return nothing
 end
 
-function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo, state::InliningState)
-    info_edge = extract_indirect_invoke(info)
+function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOpInfo, state::InliningState)
+    info_edge = extract_indirect_invoke(info.info)
     info_edge === nothing && return nothing
     info, edge = info_edge
     case = compileable_specialization(edge, Effects(), InliningEdgeTracker(state), info, state)
@@ -1534,11 +1575,15 @@ function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::Indirect
     return nothing
 end
 
-function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::IndirectCallInfo,
+function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::FinalizerInfo,
                                 state::InliningState)
     # Finalizers don't return values, so if their execution is not observable,
     # we can just not register them
     if is_removable_if_unused(info.effects)
+        # The inferred effects are what make deleting this registration legal.
+        # Preserve their dispatch and inference proof so redefining the finalizer
+        # invalidates code in which the registration was removed.
+        add_edges!(state.edges, info.info)
         ir[SSAValue(idx)] = nothing
         return nothing
     end
@@ -1564,7 +1609,6 @@ function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::Indirect
         item1 = cases[1].item
         if isa(item1, InliningTodo)
             code = get(code_cache(state), item1.mi, nothing) # COMBAK: this seems like a bad design, can we use stmt_info instead to store the correct info?
-            code isa InferenceResult && (code = code.ci)
             if code isa CodeInstance
                 push!(stmt.args, true)
                 push!(stmt.args, code)
@@ -1599,7 +1643,7 @@ function handle_invoke_expr!(todo::Vector{Pair{Int,Any}}, ir::IRCode,
             end
         end
     end
-    item = resolve_todo(mi, call_result, info, flag, state)
+    item = resolve_todo(mi, call_result, edge, info, flag, state)
     handle_single_case!(todo, ir, idx, stmt, item)
     return nothing
 end
@@ -1644,22 +1688,16 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         # handle special cased builtins
-        f = sig.f
         if isa(info, OpaqueClosureCallInfo)
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
-        elseif isa(info, IndirectCallInfo)
-            if f === Core.finalizer
-                handle_finalizer_call!(ir, idx, stmt, info, state)
-            elseif f === modifyfield! ||
-                   f === Core.modifyglobal! ||
-                   f === Core.memoryrefmodify! ||
-                   f === atomic_pointermodify
-                handle_modifyop!_call!(ir, idx, stmt, info, state)
-            elseif f === Core._task
-                handle_task_call!(ir, idx, stmt, info, state)
-            end
-        elseif f === Core.invoke
+        elseif isa(info, ModifyOpInfo)
+            handle_modifyop!_call!(ir, idx, stmt, info, state)
+        elseif isa(info, TaskCallInfo)
+            handle_task_call!(ir, idx, stmt, info, state)
+        elseif sig.f === Core.invoke
             handle_invoke_call!(todo, ir, idx, stmt, info, flag, sig, state)
+        elseif isa(info, FinalizerInfo)
+            handle_finalizer_call!(ir, idx, stmt, info, state)
         else
             # cascade to the generic (and extendable) handler
             handle_call!(todo, ir, idx, stmt, info, flag, sig, state)

@@ -900,11 +900,18 @@ public:
             Out.module->addModuleFlag(Module::Warning, "julia.cpu.features",
                                       MDString::get(*Out.ctx,
                                                     JIT.getTargetFeatureString()));
-            Obj = JIT.OCache.get(*Out.module,
-                                 [this]() JL_CANSAFEPOINT_ENTER_LEAVE {
-                                     JIT.optimizeModule(*Out.module);
-                                     return JIT.compileModule(*Out.module);
-                                 });
+            auto Compile = [this]() JL_CANSAFEPOINT_ENTER_LEAVE {
+                JIT.optimizeModule(*Out.module);
+                return JIT.compileModule(*Out.module);
+            };
+            // The jl_dump_llvm_opt hook records timing and before/after IR
+            // statistics from inside the optimizer, so a warm cache hit would
+            // keep it from ever firing. Bypass the object cache while the
+            // hook is installed.
+            if (*JIT.get_dump_llvm_opt_stream())
+                Obj = Compile();
+            else
+                Obj = JIT.OCache.get(*Out.module, Compile);
             if (!Obj) {
                 R->failMaterialization();
                 return;

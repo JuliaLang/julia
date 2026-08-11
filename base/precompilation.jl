@@ -2180,6 +2180,19 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                 freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                     stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                 is_stale = freshpath === nothing
+                if is_stale && !circular && Base.CACHE_FETCH_HOOK[] !== nothing
+                    # a cache-fetch hook gets one chance to materialize a
+                    # cachefile before we schedule a local compile; this runs
+                    # after the dep waits above, so dependency cachefiles are
+                    # in place for the hook to key against
+                    if Base.maybe_fetch_cache(pkg, sourcespec.path)
+                        local fetched_cachepaths = Base.find_all_in_cache_path(pkg)
+                        freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
+                            stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache,
+                            cachepaths=fetched_cachepaths, sourcespec, flags=cacheflags)
+                        is_stale = freshpath === nothing
+                    end
+                end
                 if !is_stale
                     push!(freshpaths, freshpath)
                 end
