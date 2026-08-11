@@ -85,6 +85,20 @@ MMTK_JULIA_RUST_DEPS := \
 	$(MMTK_JULIA_DIR)/rust-toolchain \
 	$(filter-out $(MMTK_JULIA_DIR)/src/julia_types.rs,$(wildcard $(MMTK_JULIA_DIR)/src/*.rs))
 
+# When `mmtk_julia/Cargo.toml` points at a local mmtk-core checkout rather than the pinned git
+# revision, mmtk-core's sources are part of this build and editing them must force a rebuild.
+#
+# Without this they were invisible to make: cargo was never invoked, and the recipe for
+# $(MMTK_INSTALLED_LIB) still re-copied the stale library, giving it a fresh timestamp. So a
+# rebuild appeared to succeed, the installed library looked newer than the edited source, and
+# every measurement taken afterwards silently described the old code.
+MMTK_CORE_DIR := $(MMTK_DIR)/mmtk-core
+ifneq ($(wildcard $(MMTK_CORE_DIR)/Cargo.toml),)
+MMTK_JULIA_RUST_DEPS += \
+	$(MMTK_CORE_DIR)/Cargo.toml \
+	$(shell find $(MMTK_CORE_DIR)/src -name '*.rs' 2>/dev/null)
+endif
+
 MMTK_JULIA_DEPS :=
 ifneq ($(USE_SYSTEM_LLVM), 1)
 MMTK_JULIA_DEPS += install-llvm
