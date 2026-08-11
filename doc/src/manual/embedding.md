@@ -449,6 +449,26 @@ jl_gc_wb(jl_array_owner(some_array), some_value);
 
 There are some functions to control the GC. In normal use cases, these should not be necessary.
 
+The `jl_gc_collect` function accepts a `jl_gc_collection_t` enum value defined in `julia.h`:
+
+```c
+typedef enum {
+    JL_GC_AUTO = 0,        // use heuristics to determine the collection type
+    JL_GC_FULL = 1,        // force a full collection
+    JL_GC_INCREMENTAL = 2, // force an incremental collection
+} jl_gc_collection_t;
+```
+
+!!! warning
+    `jl_gc_collect` should only be called while the GC is disabled.
+    Re-enable it after the collection is complete:
+    ```c
+    jl_gc_enable(0);
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_enable(1);
+    ```
+
+
 | Function                           | Description                                                         |
 | :--------------------------------- | :------------------------------------------------------------------ |
 | `jl_gc_collect(JL_GC_FULL)`        | Force a GC run on all objects                                       |
