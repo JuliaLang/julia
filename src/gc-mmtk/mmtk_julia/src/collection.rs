@@ -106,9 +106,20 @@ impl Collection<JuliaVM> for VMCollection {
         let now = unsafe { jl_hrtime() };
         trace!("gc_start = {}", now);
         GC_START.store(now, Ordering::Relaxed);
+        // Same instant the reported pause duration is measured from, so the timeline lines up with
+        // the `us=` figure on the `[lxr] stw pause=` line.
+        mmtk::scheduler::stage_timeline::start();
+        mmtk::scheduler::packet_timing::reset();
     }
 
     fn resume_mutators(_tls: VMWorkerThread) {
+        /// Whether to report one `stw pause=` line per pause and nothing else. Set
+        /// `MMTK_LXR_PAUSES=1`.
+        fn pauses() -> bool {
+            static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+            *ON.get_or_init(|| std::env::var_os("MMTK_LXR_PAUSES").is_some())
+        }
+
         if std::env::var_os("MMTK_LXR_VERIFY").is_some() {
             recheck_live_closure_after_sweep();
         }
@@ -116,7 +127,17 @@ impl Collection<JuliaVM> for VMCollection {
         let end = unsafe { jl_hrtime() };
         trace!("gc_end = {}", end);
         let gc_time = end - GC_START.load(Ordering::Relaxed);
-        if std::env::var_os("MMTK_LXR_STATS").is_some() {
+        // `MMTK_LXR_TIMELINE` alone reports the pause and its critical path without enabling
+        // `MMTK_LXR_STATS`. That matters for measuring the pause honestly: the stats path makes
+        // `LXR::release` write three lines to stderr *inside* the pause, so leaving it on while
+        // attributing time to the `Release` packet measures the instrumentation too.
+        let stats = std::env::var_os("MMTK_LXR_STATS").is_some();
+        let timeline = mmtk::scheduler::stage_timeline::enabled();
+        // `MMTK_LXR_PAUSES` reports just the one `stw pause=` line per pause, so a pause
+        // distribution can be measured without any of the instrumentation that runs *inside* the
+        // pause: the stats path writes three lines from `LXR::release`, and the timeline path takes
+        // a mutex at every stage boundary.
+        if stats || timeline || pauses() {
             // Attribute the STW window to the pause kind that produced it. The aggregate
             // `gc_num.total_time` mixes RefCount, InitialMark and FinalMark together, which
             // hides which of the three is actually costing the mutator.
@@ -144,10 +165,32 @@ impl Collection<JuliaVM> for VMCollection {
                 gc_time / 1000,
                 mutator_us
             );
+            // Wall-clock critical path of this pause. Unlike the packet table below, the deltas
+            // are real elapsed time and include the inter-stage handshake.
+            let timeline = mmtk::scheduler::stage_timeline::take();
+            let mut prev = 0u128;
+            for (label, nanos) in &timeline {
+                eprintln!(
+                    "[lxr]   at={:>8}us +{:>8}us {}",
+                    nanos / 1000,
+                    (nanos - prev) / 1000,
+                    label
+                );
+                prev = *nanos;
+            }
+            if !timeline.is_empty() {
+                eprintln!(
+                    "[lxr]   at={:>8}us +{:>8}us <resume_mutators>",
+                    gc_time / 1000,
+                    (gc_time as u128).saturating_sub(prev) / 1000
+                );
+            }
             // Attribute the pause to the work packet types that ran in it. This is the last
             // point in the pause, so everything the pause scheduled has already executed.
-            for (name, count, nanos) in mmtk::scheduler::packet_timing::take_top(12) {
-                eprintln!("[lxr]   packet n={:<6} us={:<8} {}", count, nanos / 1000, name);
+            if stats {
+                for (name, count, nanos) in mmtk::scheduler::packet_timing::take_top(12) {
+                    eprintln!("[lxr]   packet n={:<6} us={:<8} {}", count, nanos / 1000, name);
+                }
             }
         }
         unsafe {
@@ -255,6 +298,18 @@ impl Collection<JuliaVM> for VMCollection {
         if std::env::var_os("MMTK_LXR_VERIFY").is_some() {
             verify_rc_covers_live_closure();
         }
+    }
+
+    /// Under LXR the concurrent phase (decrements, mature sweeping) ends by simply running out
+    /// of work rather than with a `FinalMark` pause, so `resume_mutators` -- the other place
+    /// that advances the epoch -- never runs for it. A thread parked in
+    /// `mmtk_wait_for_new_gc_epoch()` after a failed `mmtk_disable_collection()` would wait
+    /// forever; the sysimage writer's `jl_gc_enable(0)` is one such thread.
+    fn concurrent_work_finished() {
+        let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
+        let mut epoch = lock.lock().unwrap();
+        *epoch = epoch.wrapping_add(1);
+        cvar.notify_all();
     }
 
     fn create_gc_trigger() -> Box<dyn GCTriggerPolicy<JuliaVM>> {
