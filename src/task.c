@@ -2095,8 +2095,7 @@ JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_owner(jl_value_t *w, size_t i) JL_NO
 
 JL_DLLEXPORT void jl_wait_entry_set_slot_owner(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    jl_atomic_store_relaxed(&wait_entry_slot(w, i)->owner, v);
-    jl_gc_wb(w, v);
+    jl_gc_write_atomic(w, wait_entry_slot(w, i)->owner, jl_value_t, v, relaxed);
 }
 
 JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_next(jl_value_t *w, size_t i) JL_NOTSAFEPOINT
@@ -2106,8 +2105,7 @@ JL_DLLEXPORT jl_value_t *jl_wait_entry_slot_next(jl_value_t *w, size_t i) JL_NOT
 
 JL_DLLEXPORT void jl_wait_entry_set_slot_next(jl_value_t *w, size_t i, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    wait_entry_slot(w, i)->next = v;
-    jl_gc_wb(w, v);
+    jl_gc_write(w, wait_entry_slot(w, i)->next, jl_value_t, v);
 }
 
 JL_DLLEXPORT uint64_t jl_wait_entry_slot_aux(jl_value_t *w, size_t i) JL_NOTSAFEPOINT
