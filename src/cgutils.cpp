@@ -2078,6 +2078,26 @@ static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
 #endif
 }
 
+// Bounds checking for the explicit `boundscheck` argument of the memoryref
+// intrinsics. Unlike `Expr(:boundscheck)` (which is how `@inbounds` reaches
+// codegen, and which `--check-bounds=yes` must override), a literal `false`
+// here is an assertion by the caller that the index was already validated --
+// e.g. `Base.getindex(::Array, ::Int)` does `@boundscheck checkbounds(A, i)`
+// and then passes `false` to `memoryrefnew`. Forcing that check back on under
+// `--check-bounds=yes` adds no safety, it just emits a second, redundant
+// bounds check per access.
+static bool memoryref_bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
+#if CHECK_BOUNDS==1
+    if (inbounds == jl_false)
+        return 0;
+    if (jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_OFF)
+        return 0;
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_value_t *boundscheck)
 {
     Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
@@ -4730,7 +4750,7 @@ static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem
     Value *boxmem = boxed(ctx, mem);
     Value *i = emit_unbox(ctx, ctx.types().T_size, idx, (jl_value_t*)jl_long_type);
     Value *idx0 = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
-    bool bc = bounds_check_enabled(ctx, inbounds);
+    bool bc = memoryref_bounds_check_enabled(ctx, inbounds);
     if (bc) {
         BasicBlock *failBB, *endBB;
         failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
@@ -4808,7 +4828,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
     Value *offset = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
     setName(ctx.emission_context, offset, "memoryref_offset");
     Value *elsz = emit_genericmemoryelsize(ctx, mem, ref.typ, false);
-    bool bc = bounds_check_enabled(ctx, inbounds);
+    bool bc = memoryref_bounds_check_enabled(ctx, inbounds);
 #if 1
     Value *ovflw = nullptr;
 #endif
