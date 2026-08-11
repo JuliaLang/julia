@@ -3045,7 +3045,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if !isconcretetype(ty)
             return Future(CallMeta(Tuple, Any, EFFECTS_UNKNOWN, NoCallInfo()))
         end
-    elseif is_return_type(f)
+    elseif is_return_type(f) && is_call_to_modeled_return_type(interp, argtypes, sv)
         return return_type_tfunc(interp, argtypes, si, sv)
     elseif la == 3 && f === Core.:(!==)
         # mark !== as exactly a negated call to ===

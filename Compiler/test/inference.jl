@@ -7852,4 +7852,29 @@ function splatted_task_invoke(@nospecialize(rest::Tuple))
 end
 @test Base.infer_return_type(splatted_task_invoke, (Tuple,)) === Tuple{}
 
+# return_type_tfunc must only model calls that dispatch to the generic
+# `return_type(f, tt)`/`return_type(tt)` definitions: a more specific method
+# with different behavior must not be folded using their semantics.
+# On Julia <= 1.11 the internal `_return_type(interp, sig)` entry point was
+# accidentally attached as a method of `return_type`, making inference fold
+# such calls to `Union{}` (xref JuliaGPU/Metal.jl#908).
+struct ReturnTypeUnmodeledMethod end
+Compiler.return_type(::ReturnTypeUnmodeledMethod, t::DataType) = Float64
+let h = () -> Compiler.return_type(ReturnTypeUnmodeledMethod(), Tuple{typeof(+), Int, Int})
+    @test h() === Float64
+    @test only(Base.return_types(h)) == Core.TypeEgal{Float64}
+end
+# the call must not be deleted when the unmodeled method has side effects
+const return_type_unmodeled_log = Ref(0)
+struct ReturnTypeUnmodeledEffects end
+Compiler.return_type(::ReturnTypeUnmodeledEffects, t::DataType) =
+    (return_type_unmodeled_log[] += 1; Float32)
+let e = () -> Compiler.return_type(ReturnTypeUnmodeledEffects(), Tuple{typeof(+), Int, Int})
+    @test e() === Float32
+    @test return_type_unmodeled_log[] == 1
+end
+# while ordinary queries keep being folded
+@test only(Base.return_types(() -> Compiler.return_type(+, Tuple{Int, Int}))) == Core.TypeEgal{Int}
+@test only(Base.return_types(() -> Compiler.return_type(Tuple{typeof(+), Int, Int}))) == Core.TypeEgal{Int}
+
 end # module inference

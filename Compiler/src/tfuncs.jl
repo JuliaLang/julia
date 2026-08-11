@@ -3412,6 +3412,26 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
+# `return_type_tfunc` only models the public definitions of `return_type`; if a call may
+# dispatch to a more specific method, its behavior would be misrepresented by the tfunc,
+# so such calls must be inferred as ordinary generic calls instead (xref JuliaGPU/Metal.jl#908)
+function is_call_to_modeled_return_type(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::AbsIntState)
+    2 <= length(argtypes) <= 3 || return true # the tfunc conservatively bails on those itself
+    ft = widenconst(argtypes[1])
+    if length(argtypes) == 3
+        modeled_sigs = (Tuple{ft, Any, DataType}, Tuple{ft, DataType, UInt})
+    else
+        modeled_sigs = (Tuple{ft, DataType},)
+    end
+    matches = findall(argtypes_to_type(argtypes), method_table(interp))
+    matches === nothing && return false
+    update_valid_age!(sv, get_inference_world(interp), matches.valid_worlds)
+    for match in matches
+        contains_is(modeled_sigs, (match::MethodMatch).method.sig) || return false
+    end
+    return true
+end
+
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
     UNKNOWN = CallMeta(Type, Any, Effects(EFFECTS_THROWS; nortcall=false), NoCallInfo())
     if !(2 <= length(argtypes) <= 3)

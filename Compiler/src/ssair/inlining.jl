@@ -1805,7 +1805,10 @@ function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, flag::UInt3
         unionall_call = Expr(:foreigncall, Expr(:tuple, QuoteNode(:jl_type_unionall)), Any, svec(Any, Any),
             0, QuoteNode(:ccall), stmt.args[2], stmt.args[3])
         return SomeCase(unionall_call)
-    elseif is_return_type(f)
+    elseif is_return_type(f) && has_flag(flag, IR_FLAGS_REMOVABLE)
+        # only replace the call with its constant result if it may be deleted, since a
+        # constant result may also come from ordinary inference of a `return_type` method
+        # that `return_type_tfunc` does not model (and that may have side effects)
         if isconstType(type)
             return SomeCase(quoted(type_parameter(type)))
         elseif isa(type, Const)
