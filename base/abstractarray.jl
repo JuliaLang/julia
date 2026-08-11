@@ -3123,6 +3123,8 @@ their starting indices, and then lexicographically by their elements.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
+OrderStyle(::Type{<:AbstractVector{T}}) where {T} = OrderStyle(T)
+
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
         return false

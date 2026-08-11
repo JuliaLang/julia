@@ -498,6 +498,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_NUM_GC_THREADS" => "2,1") do
             @test read(`$exename -e $code`, String) == "3"
         end
+
+        # invalid JULIA_NUM_GC_THREADS values must be rejected at startup
+        # like `--gcthreads`, not crash the GC later (e.g. `=0` used to
+        # underflow the mark-thread count and segfault at the first collection)
+        for ngc in ("0", "-1", "abc", "32767", "2,2", "2,-1", "2,1x")
+            withenv("JULIA_NUM_GC_THREADS" => ngc) do
+                @test errors_not_signals(`$exename -e $code`)
+            end
+        end
     end
 
     # --machine-file
@@ -1508,8 +1517,113 @@ end
     end
 end
 
+# Build and use a system image, exercising both split (--output-o together with
+# --output-ji, heap goes into the .ji) and non-split (--output-o only, heap goes
+# into the .so) layouts, with --compress-sysimage on and off in each.
+#=
+These tests are disabled because they significantly increase CI time.
+@testset "system image: split=$split compress=$compress" for split in (true, false), compress in (true, false)
+    mktempdir() do dir
+        o_file  = joinpath(dir, "sys.o.a")
+        ji_file = joinpath(dir, "sys.ji")
+        so_file = joinpath(dir, "sys.so")
+        cmd = `$(Base.julia_cmd()) --strip-metadata -t1,0
+               --compress-sysimage=$(compress ? "yes" : "no")
+               --output-o=$o_file`
+        if split
+            cmd = `$cmd --output-ji=$ji_file`
+        end
+        cmd = `$cmd -e 0`
+        success, out, err = readchomperrors(cmd)
+        @test success
+        @test out == ""
+        # Compression on/off must not trigger the non-split .ji warning here:
+        # a native output is being produced (and, when split, paired with --output-ji).
+        @test !occursin("--compress-sysimage=yes is unsupported", err)
+        if isfile(o_file)
+            @test isfile(ji_file) == split
+            Base.Linking.link_image(o_file, so_file)
+            @test readchomp(`$(Base.julia_cmd()) -t1,0 -J $so_file -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
+        end
+    end
+end
+=#
+
+# Precompile and load a package, exercising the split pkgimage layout
+# (--pkgimages=yes: native code goes into the ocachefile, the heap stays in the
+# .ji) and the plain serialized .ji (--pkgimages=no), with --compress-sysimage
+# (which precompile workers inherit through julia_cmd) on and off in each.
+# Compression requires the split layout, so with --pkgimages=no the worker must
+# warn and emit an uncompressed heap.
+@testset "pkgimage: native=$native compress=$compress" for native in (true, false), compress in (true, false)
+    mktempdir() do dir
+        pkgdir = joinpath(dir, "CompressMe")
+        mkpath(joinpath(pkgdir, "src"))
+        write(joinpath(pkgdir, "Project.toml"),
+            """
+            name = "CompressMe"
+            uuid = "d1cd1848-32b7-4b19-a4d5-11c4de8b4381"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkgdir, "src", "CompressMe.jl"),
+            """
+            module CompressMe
+            f() = 42
+            end
+            """)
+        cmd = addenv(`$(Base.julia_cmd()) --pkgimages=$(native ? "yes" : "no")
+                      --compress-sysimage=$(compress ? "yes" : "no")
+                      --startup-file=no -E 'using CompressMe; CompressMe.f()'`,
+                     "JULIA_DEPOT_PATH" => joinpath(dir, "depot"),
+                     "JULIA_LOAD_PATH" => join((dir, "@stdlib"), Sys.iswindows() ? ";" : ":"))
+        success, out, err = readchomperrors(cmd)
+        @test success
+        @test out == "42"
+        @test occursin("--compress-sysimage=yes is unsupported", err) == (compress && !native)
+
+        compiled = joinpath(dir, "depot", "compiled", "v$(VERSION.major).$(VERSION.minor)", "CompressMe")
+        ji_file = only(filter(endswith(".ji"), readdir(compiled; join=true)))
+        @test isfile(Base.ocachefile_from_cachefile(ji_file)) == native
+
+        # The heap payload in the .ji must be zstd-compressed exactly when a
+        # compressed split pkgimage was requested.
+        open(ji_file) do io
+            flags = Ref{UInt32}()
+            checksum = Ref{UInt32}()
+            dataendpos = Ref{Int64}()
+            datastartpos = Ref{Int64}()
+            err = ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid}, Ptr{UInt32}, Ptr{UInt32}, Ptr{Int64}, Ptr{Int64}), io.ios, flags, checksum, dataendpos, datastartpos)
+            @test err == 0
+            @test flags[] & Base.JI_FLAG_PKGIMAGE != 0
+            @test (flags[] & Base.JI_FLAG_SPLIT != 0) == native
+            seek(io, datastartpos[])
+            zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
+            @test (read(io, 4) == zstd_magic) == (native && compress)
+        end
+
+        # Load again in a fresh process from the existing cache, without
+        # recompiling (which would rewrite the .ji, e.g. with a new build_id).
+        cache_bytes = read(ji_file)
+        success, out, err = readchomperrors(cmd)
+        @test success
+        @test out == "42"
+        @test read(ji_file) == cache_bytes
+    end
+end
+
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
-@test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
+# Compiling a single entry point whose inferred call graph contains thousands of
+# CodeInstances used to overflow the stack in the JIT linker's recursive task
+# dispatcher (threshold ~4k with an 8MB stack); `--inline=no` keeps every callee as a
+# separately-linked function so they all land in one lookup batch.
+let n = 6000
+    code = """
+    f(x, ::Val{i}) where {i} = x + i
+    @eval g(x) = +(\$((:(f(x, Val(\$i))) for i in 1:$n)...))
+    print(g(1))
+    """
+    @test test_read_success(`$(Base.julia_cmd()) --startup-file=no --inline=no -e $code`) == string(sum(1:n) + n)
+end
 
 # https://github.com/JuliaLang/julia/issues/59103
 @test test_read_success(setenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"

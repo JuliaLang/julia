@@ -15,30 +15,20 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, new_id!, sourcetext
+using .JuliaSyntax: SourceAttrType, sourcetext, SyntaxList
 
-using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
-    ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,
-    is_leaf, mapchildren, numchildren, setattr!, showprov, syntax_graph
+using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError,
+    ScopeLayer, SourceRef, SyntaxTree, children, flattened_provenance,
+    is_leaf, mapchildren, numchildren, showprov, syntax_name, syntax_id
 
-function _ast_test_graph()
-    JuliaLowering.ensure_desugaring_attributes!(
-        JuliaLowering.ensure_macro_attributes!(SyntaxGraph()))
-end
-
-function _source_node(graph, src)
-    id = new_id!(graph)
-    setattr!(graph, id, :kind, K"TOMBSTONE")
-    setattr!(graph, id, :source, src)
-    SyntaxTree(graph, id)
+function _source_node(src)
+    SyntaxTree(K"TOMBSTONE", nothing, nothing, src, nothing)
 end
 
 macro ast_(tree)
-    # TODO: Implement this in terms of new-style macros.
     quote
-        graph = _ast_test_graph()
-        srcref = _source_node(graph, $(QuoteNode(__source__)))
-        @ast graph srcref $tree
+        srcref = _source_node($(QuoteNode(__source__)))
+        @ast _ srcref $tree
     end
 end
 
@@ -55,9 +45,9 @@ function _format_as_ast_macro(io, ex, indent)
         println(io, indent, "]")
     else
         val_str = if k == K"Identifier" || k == K"core" || k == K"top"
-            repr(ex.name_val)
+            repr(syntax_name(ex))
         elseif k == K"BindingId"
-            repr(ex.var_id)
+            repr(syntax_id(ex))
         else
             repr(get(ex, :value, nothing))
         end
@@ -142,7 +132,7 @@ function format_ir_for_test(mod, case)
     ex = parsestmt(SyntaxTree, case.input)
     try
         if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
-            ex[1].name_val == "@ast_")
+            syntax_name(ex[1]) == "@ast_")
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
             ex = Base.eval(mod, JuliaLowering.est_to_expr(ex))

@@ -84,6 +84,15 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
 
+// N.B.: kept in sync with Compiler/src/effects.jl (encode_effects); 0 means
+// "no recorded effects" and is treated conservatively.
+inline bool effects_ipo_reset_safe(uint32_t effects) JL_NOTSAFEPOINT
+{
+    return effects != 0 &&
+           ((effects >> 3) & 0x03u) == 0u && // is_effect_free
+           ((effects >> 15) & 0x03u) == 0u;  // is_reset_safe
+}
+
 // Translate Julia's inferred ipo_purity_bits into LLVM function attributes.
 // Optimistic attrs (memory(argmem: read), readnone on gcstack) are added for
 // pre-GC passes; LateLowerGCFrame widens them before safepoint analysis.
@@ -857,6 +866,10 @@ public:
     size_t getTotalBytes() const JL_NOTSAFEPOINT;
     void addBytes(size_t bytes) JL_NOTSAFEPOINT;
     void printTimers() JL_NOTSAFEPOINT;
+
+    const char *objCacheDisabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE {
+        return OCache.disabledNotice();
+    }
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;

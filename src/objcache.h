@@ -37,6 +37,10 @@ public:
     std::unique_ptr<llvm::MemoryBuffer>
     get(llvm::Module &M, CompileFn Compile) JL_CANSAFEPOINT_ENTER_LEAVE;
     bool isEnabled() const JL_NOTSAFEPOINT;
+    // If the cache had to be disabled for a reason the user may want to know
+    // about, returns a short description of that reason (for display in the
+    // REPL banner); otherwise returns null.  Forces initialization.
+    const char *disabledNotice() JL_CANSAFEPOINT_ENTER_LEAVE;
     void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;
@@ -50,6 +54,7 @@ protected:
 
 private:
     std::atomic<bool> Initialized = false;
+    const char *DisabledNotice = nullptr;
     MDB_env *Env = nullptr;
     MDB_dbi ObjCacheDbi;
     MDB_dbi ObjMetaDbi;

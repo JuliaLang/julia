@@ -1,9 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import .Base: setindex!, getindex, unsafe_convert
+import .Base: getindex
 import .Base: getindex_atomic, setindex_atomic!, swapindex_atomic!, modifyindex_atomic!,
     replaceindex_atomic!, setindexonce_atomic!
-import .Base.Sys: ARCH, WORD_SIZE
 
 export
     Atomic,

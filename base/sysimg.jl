@@ -101,7 +101,6 @@ let
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
-    tot_time_stdlib = 0.0
     # use a temp module to avoid leaving the type of this closure in Main
     push!(empty!(LOAD_PATH), "@stdlib")
     m = Module()

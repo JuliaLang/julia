@@ -177,6 +177,7 @@ function ieee754_representation(
     ret |= exponent_field
     ret <<= significand_bits(F)
     ret |= significand_field
+    return ret
 end
 
 # ±floatmax(T)
@@ -508,7 +509,6 @@ function _to_float(number::U, ep) where {U<:Unsigned}
     lz::signed(U) = unsafe_trunc(S, Core.Intrinsics.ctlz_int(number) - U(exponent_bits(F)))
     number <<= lz
     epint -= lz
-    bits = U(0)
     if epint >= 0
         bits = number & significand_mask(F)
         bits |= ((epint + S(1)) << significand_bits(F)) & exponent_mask(F)

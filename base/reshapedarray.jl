@@ -458,3 +458,13 @@ function merge_adjacent_dim(apsz::Dims{N}, apst::Dims{N}, n::Int = 1) where {N}
     end
     return sz, st, n
 end
+
+map(f, R::ReshapedArray) = reshape(map(f, parent(R)), size(R))
+
+iterate(R::ReshapedArray) = iterate(parent(R))
+iterate(R::ReshapedArray, state) = iterate(parent(R), state)
+
+mapfoldl_impl(f, op, nt, R::ReshapedArray) = mapfoldl_impl(f, op, nt, parent(R))
+mapfoldr_impl(f, op, nt, R::ReshapedArray) = mapfoldr_impl(f, op, nt, parent(R))
+
+in(x, R::ReshapedArray) = in(x, parent(R))

@@ -1265,6 +1265,46 @@ let bt = try
     @test !occursin(" _include(", bt_str)
 end
 
+# Test that the code loading machinery is collapsed to the frame that entered it
+@testset "loading frames" begin
+    frame(func, file, line=1) = Base.StackTraces.StackFrame(Symbol(func), Symbol(file), line)
+    process(funcfiles) = Base.process_backtrace(Base.StackFrame[frame(f, fi) for (f, fi) in funcfiles])
+    funcs(trace) = [String(f.func) for (f, n) in trace]
+
+    # `using Foo` where the package cannot be found
+    @test funcs(process([("macro expansion", "loading.jl"), ("macro expansion", "lock.jl"),
+                         ("__require", "loading.jl"), ("require", "loading.jl"),
+                         ("eval_import_path", "module.jl"), ("_eval_using", "module.jl"),
+                         ("top-level scope", "none")])) == ["require", "top-level scope"]
+
+    # user code that errors while the package is being loaded must be kept
+    @test funcs(process([("inner", "BadPkg.jl"), ("top-level scope", "BadPkg.jl"),
+                         ("include", "Base.jl"), ("__require_prelocked", "loading.jl"),
+                         ("_require_prelocked", "loading.jl"), ("require", "loading.jl"),
+                         ("_eval_using", "module.jl"), ("top-level scope", "none")])) ==
+          ["inner", "top-level scope", "require", "top-level scope"]
+
+    # precompilation worker processes have no `require` frame, and the long
+    # `include_package_for_output` signature is not what we want to show
+    @test funcs(process([("inner", "BadPkg.jl"), ("top-level scope", "BadPkg.jl"),
+                         ("include", "Base.jl"), ("include_package_for_output", "loading.jl"),
+                         ("top-level scope", "stdin")])) ==
+          ["inner", "top-level scope", "include", "top-level scope"]
+
+    # runs without a loading entry point are left alone
+    @test funcs(process([("f", "user.jl"), ("invoke_in_world", "essentials.jl"),
+                         ("g", "user.jl")])) == ["f", "invoke_in_world", "g"]
+    @test funcs(process([("f", "user.jl"), ("include", "Base.jl"),
+                         ("top-level scope", "script.jl")])) ==
+          ["f", "include", "top-level scope"]
+
+    # opt out
+    withenv("JULIA_STACKTRACE_FULL_LOADING" => "true") do
+        @test length(process([("macro expansion", "loading.jl"), ("__require", "loading.jl"),
+                              ("require", "loading.jl"), ("top-level scope", "none")])) == 4
+    end
+end
+
 # Test backtrace printing
 module B
     module C

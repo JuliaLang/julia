@@ -175,6 +175,17 @@ function _register_kinds()
             # should not be lowered (and should mostly be treated as :inert), but
             # requires scope resolution and special conversion to Expr.
             "foreignsymbol"
+            "thunk"
+            # Options specific to K"lambda"
+            "generated_lambda"
+            "toplevel_lambda"
+
+            # Options specific to K"scope_block"
+            "hard_scope"
+            "neutral_scope"
+
+            "LambdaBindings"
+            "Slots"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

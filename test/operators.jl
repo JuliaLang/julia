@@ -251,7 +251,7 @@ Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
 end
 
 # issue #20355
-@testset "mod1, fld1" begin
+@testset "mod1, cld" begin
     for T in [Int8, Int16, Int32, Int64],
         x in T[typemin(T); typemin(T) + 1; -10:10; typemax(T)-1; typemax(T)],
         y in T[typemin(T); typemin(T) + 1; -10:-1; 1:10; typemax(T)-1; typemax(T)]
@@ -264,9 +264,9 @@ end
             @test y <= m < 0
         end
         if x == typemin(T) && y == -1
-            @test_throws DivideError fld1(x, y)
+            @test_throws DivideError cld(x, y)
         else
-            f = fld1(x, y)
+            f = cld(x, y)
             @test (f - 1) * y + m == x
         end
     end
@@ -278,7 +278,7 @@ end
         m = mod1(x, y)
         @test mod(x, y) == mod(m, y)
         @test 0 < m <= y
-        f = fld1(x, y)
+        f = cld(x, y)
         @test (f - 1) * y + m == x
     end
 
@@ -293,14 +293,14 @@ end
         else
             @test y <= m < 0
         end
-        f = fld1(x, y)
+        f = cld(x, y)
         @test (f - 1) * y + m == x
     end
 
-    @test fldmod1(4.0, 3) == fldmod1(4, 3)
+    @test cldmod1(4.0, 3) == cldmod1(4, 3)
 
     # issue 28973
-    @test fld1(0.4, 0.9) == fld1(nextfloat(0.4), 0.9) == 1.0
+    @test cld(0.4, 0.9) == cld(nextfloat(0.4), 0.9) == 1.0
 end
 
 @testset "Fix12" begin

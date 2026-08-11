@@ -32,7 +32,6 @@ function kill_timer(delay)
         # **DON'T COPY ME.**
         # The correct way to handle timeouts is to close the handle:
         # e.g. `close(stdout_read); close(stdin_write)`
-        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue::Base.IntrusiveLinkedList{Task}, test_task)
         schedule(test_task, "hard kill repl test"; error=true)
         print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
     end
@@ -112,6 +111,39 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface(Any[panel]))
     close(stdin_write)
+    Base.wait(repltask)
+end
+
+
+# Two ^C at an empty prompt sweep the session's in-flight work (the
+# session -> evaluation cancellation-source tree; issue #47839). N.B.: in
+# fake_repl only *displayed results* (and LineEdit's own output) reach
+# `stdout_read` - a `println` from an evaluation goes to the process
+# stdout - so every step communicates through its result value.
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async REPL.run_repl(repl)
+    # start a runaway background task from an evaluation
+    write(stdin_write, "global bg = @async while true; sleep(0.01); end; \"BG\" * \"UP\"\n")
+    readuntil(stdout_read, "BGUP")
+    readuntil(stdout_read, "julia> ")
+    # first ^C at the empty prompt arms the sweep
+    write(stdin_write, "\x03")
+    readuntil(stdout_read, "press ^C again to cancel all in-flight work")
+    # any other key stands the arm down: this ^C press only re-arms
+    write(stdin_write, "1\n")
+    readuntil(stdout_read, "julia> ")
+    write(stdin_write, "\x03")
+    readuntil(stdout_read, "press ^C again to cancel all in-flight work")
+    # the second press in a row sweeps
+    write(stdin_write, "\x03")
+    readuntil(stdout_read, "Cancelled all in-flight work.")
+    # the runaway task was cancelled ...
+    write(stdin_write, "\"done=\" * string(timedwait(() -> istaskdone(bg), 30.0) === :ok)\n")
+    readuntil(stdout_read, "done=true")
+    # ... and the session still evaluates (a fresh session epoch)
+    write(stdin_write, "\"still\" * \"-alive\"\n")
+    readuntil(stdout_read, "still-alive")
+    write(stdin_write, '\x04') # ^D: exit the REPL loop (not the process)
     Base.wait(repltask)
 end
 
