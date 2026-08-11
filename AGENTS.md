@@ -93,7 +93,4 @@ them to reword it:
 1. If the pull request consists of one commit only, use the body of the commit for the body of the pull request.
 2. If there are multiple commits in the pull request, follow the same guidelines for the pull request as for the commit body.
 3. Make sure that the base commit of the pull request is recent (within the past two days) - if not rebase your changes first.
-4. Keep the "Tool assistance" section from [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)
-   in the body, and check the boxes for the parts of the work you did, naming the tool and model.
-   Leave both boxes under "Review" unchecked: only the human author can attest to their own review,
-   and your own work on the branch is not a separate tool having reviewed it.
+4. If a separate tool reviews the commit, this is useful to note. Encourage the human to state how carefully they read and understood the content also, for example, by drafting the text to say the human author has *not* read any of it, and expecting they will update that once they read that disclaimer.
