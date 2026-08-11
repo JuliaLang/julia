@@ -4335,7 +4335,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
     Value *mem = emit_memoryref_mem(ctx, ref, layout);
     Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
-    if (bounds_check_enabled(ctx, boundscheck)) {
+    if (memoryref_bounds_check_enabled(ctx, boundscheck)) {
         BasicBlock *failBB, *endBB;
         failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
         endBB = BasicBlock::Create(ctx.builder.getContext(), "load");
@@ -4734,7 +4734,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
             Value *mem = emit_memoryref_mem(ctx, ref, layout);
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
-            if (bounds_check_enabled(ctx, boundscheck)) {
+            if (memoryref_bounds_check_enabled(ctx, boundscheck)) {
                 BasicBlock *failBB, *endBB;
                 failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
                 endBB = BasicBlock::Create(ctx.builder.getContext(), "load");
@@ -4855,7 +4855,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, fname);
             Value *mem = emit_memoryref_mem(ctx, ref, layout);
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
-            Value *oob = bounds_check_enabled(ctx, boundscheck) ? ctx.builder.CreateIsNull(mlen) : nullptr;
+            Value *oob = memoryref_bounds_check_enabled(ctx, boundscheck) ? ctx.builder.CreateIsNull(mlen) : nullptr;
             bool isboxed = layout->flags.arrayelem_isboxed;
             if (isboxed || layout->first_ptr >= 0) {
                 bool needlock = layout->flags.arrayelem_islocked;
