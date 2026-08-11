@@ -56,7 +56,9 @@ STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSA
     }
 }
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+// Every plan built here records the object containing the overwritten field, so none has a
+// use for the field's address yet.
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(parent, ptr);
 }

@@ -1336,7 +1336,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
     // while svec is supposedly immutable, in practice we sometimes publish it
     // first and set the values lazily. Those users occasionally might need to
     // instead use jl_atomic_store_release here.
-    jl_gc_wb(t, x);
+    jl_gc_wb(t, (void*)((_Atomic(jl_value_t*)*)jl_svec_data(t) + i), x);
     jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
     return (jl_value_t*)x;
 }
@@ -1382,7 +1382,7 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 // `jl_value_t *` field), and `val` is the new value to store.
 #define jl_gc_write(parent, field, type, val) do { \
     type *_jl_write_val = (val); \
-    jl_gc_wb((parent), _jl_write_val); \
+    jl_gc_wb((parent), (void*)&(field), _jl_write_val); \
     (field) = _jl_write_val; \
 } while (0)
 
@@ -1390,7 +1390,7 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 // `order` is relaxed or release.
 #define jl_gc_write_atomic(parent, field, type, val, order) do { \
     type *_jl_write_val = (val); \
-    jl_gc_wb((parent), _jl_write_val); \
+    jl_gc_wb((parent), (void*)&(field), _jl_write_val); \
     jl_atomic_store_##order(&(field), _jl_write_val); \
 } while (0)
 

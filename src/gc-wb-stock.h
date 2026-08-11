@@ -11,7 +11,9 @@
 extern "C" {
 #endif
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+// This collector remembers the object containing the overwritten field, so it has no use
+// for the field's address.
+STATIC_INLINE void jl_gc_wb(const void *parent, void *slot JL_UNUSED, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent isa jl_value_t* and ptr isa jl_value_t* or NULL
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */)) // parent is old and not in remset

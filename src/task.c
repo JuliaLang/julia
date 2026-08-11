@@ -190,7 +190,7 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     if (lastt->ctx.bufsz < nb) {
         asan_free_copy_stack(lastt->ctx.stkbuf, lastt->ctx.bufsz);
         buf = (void*)jl_gc_alloc_buf(ptls, nb);
-        jl_gc_wb(lastt, buf);
+        jl_gc_wb(lastt, (void*)&lastt->ctx.stkbuf, buf);
         lastt->ctx.stkbuf = buf;
         lastt->ctx.bufsz = nb;
     }
@@ -1903,7 +1903,7 @@ JL_DLLEXPORT int jl_abandon_task_poll(int16_t tid)
         // release the staging roots and retire the slot.
         jl_task_t *t = ptls2->abandon_victim;
         assert(t != NULL);
-        jl_gc_wb(t, ptls2->abandon_result);
+        jl_gc_wb(t, (void*)&t->result, ptls2->abandon_result);
         ptls2->abandon_victim = NULL;
         ptls2->abandon_result = NULL;
         ptls2->abandon_notify = NULL;

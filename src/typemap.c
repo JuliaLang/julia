@@ -1428,7 +1428,7 @@ static void jl_typemap_list_insert_(
     }
 
     jl_gc_write_atomic(newrec, newrec->next, jl_typemap_entry_t, l, relaxed);
-    jl_gc_wb(parent, newrec);
+    jl_gc_wb(parent, (void*)pml, newrec);
     jl_atomic_store_release(pml, newrec);
 }
 
@@ -1454,7 +1454,7 @@ static void jl_typemap_insert_generic(
     if (count > MAX_METHLIST_COUNT) {
         ml = jl_method_convert_list_to_cache(
             map, (jl_typemap_entry_t*)ml, tparam, offs, doublesplit != NULL);
-        jl_gc_wb(parent, ml);
+        jl_gc_wb(parent, (void*)pml, ml);
         jl_atomic_store_release(pml, ml);
         if (doublesplit)
             jl_typemap_memory_insert_(map, (_Atomic(jl_genericmemory_t*)*)pml, doublesplit, newrec, parent, 0, offs, NULL);
