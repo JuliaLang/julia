@@ -251,7 +251,10 @@ namespace jl_intrinsics {
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     Type::getVoidTy(ctx),
-                    { T_prjlvalue, PointerType::getUnqual(ctx) },
+                    // The slot is a field address, which is derived from a tracked object and so
+                    // lives in the derived address space. Matches `julia.write_barrier`, whose
+                    // slot operand this one is forwarded from.
+                    { T_prjlvalue, PointerType::get(ctx, AddressSpace::Derived) },
                     false),
                 Function::ExternalLinkage,
                 QUEUE_GC_ROOT_FIELD_NAME);
@@ -345,7 +348,8 @@ namespace jl_well_known {
             auto func = Function::Create(
                 FunctionType::get(
                     Type::getVoidTy(ctx),
-                    { T_prjlvalue, PointerType::getUnqual(ctx) },
+                    // See `queueGCRootField`: the slot arrives in the derived address space.
+                    { T_prjlvalue, PointerType::get(ctx, AddressSpace::Derived) },
                     false),
                 Function::ExternalLinkage,
                 GC_QUEUE_ROOT_FIELD_NAME);
