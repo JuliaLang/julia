@@ -782,6 +782,129 @@ let ambig = Ref{Int32}(0)
 end
 @test !isempty(detect_ambiguities(AmbigCycle3Reorder))
 
+# A method is selected only when it is more specific than *every* other
+# applicable method, so a match that is itself dominated can still make a call
+# ambiguous by blocking the would-be winner. Here 3 ≻ 2, 2 ≻ 1 and 3 is unordered
+# with 1: nothing beats both others, so the call is ambiguous, and method 1 has to
+# be reported for the error to name the blocking pair (reporting method 3 alone
+# would come out as `no method matching`).
+module AmbigNoBeatAll
+abstract type Top end
+abstract type MidA <: Top end
+abstract type MidB <: Top end
+struct A1 <: MidA end
+struct B1 <: MidB end
+g(::MidA, ::Union{A1,MidB}) = 1
+g(::MidA, ::Vararg{B1}) = 2
+g(::Union{A1,B1}, ::Vararg{Union{B1,MidA}}) = 3
+end
+let A1 = AmbigNoBeatAll.A1, B1 = AmbigNoBeatAll.B1,
+    ms = sort(collect(methods(AmbigNoBeatAll.g)), by = m -> m.line),
+    (m1, m2, m3) = (ms[1], ms[2], ms[3])
+    @test Base.morespecific(m3, m2) && Base.morespecific(m2, m1)
+    @test !Base.morespecific(m3, m1) && !Base.morespecific(m1, m3) # unordered
+    @test_throws MethodError AmbigNoBeatAll.g(A1(), B1())
+    let ambig = Ref{Int32}(0)
+        matches = Base._methods_by_ftype(
+            Tuple{typeof(AmbigNoBeatAll.g), A1, B1}, nothing, -1,
+            Base.get_world_counter(), true,
+            Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ambig[] == 1
+        # method 2 is dominated by 3 and blocks nothing, so it need not be listed
+        @test Set(m.method for m in matches) == Set([m1, m3])
+    end
+    let err = try AmbigNoBeatAll.g(A1(), B1()) catch e; e end
+        errstr = sprint(showerror, err)
+        @test occursin("is ambiguous", errstr)
+        @test occursin("::Union{$A1, $(AmbigNoBeatAll.MidB)}", errstr) # method 1
+    end
+end
+
+# Adding a method that some existing method is more specific than cannot turn an
+# ambiguous call into a resolved one: selection requires beating every applicable
+# method, and the new method is one more thing to beat. That is what lets the
+# method table backedges skip invalidation here, so a caller compiled while the
+# call was ambiguous (and therefore inferred to always throw) stays valid. n.b.
+# the converse direction is not covered: a new method can turn a *resolved* call
+# ambiguous without `is_replacing` noticing, which is a pre-existing hole.
+module AmbigResolveByExclusion
+abstract type Top end
+abstract type MidA <: Top end
+abstract type MidB <: Top end
+struct A1 <: MidA end
+struct B1 <: MidB end
+g(::MidA, ::Union{A1,MidB}) = 1                  # unordered with method 2 below
+g(::Union{A1,B1}, ::Vararg{Union{B1,MidA}}) = 2  # more specific than method 3 below
+end
+ambig_exclusion_caller() = AmbigResolveByExclusion.g(AmbigResolveByExclusion.A1(),
+                                                    AmbigResolveByExclusion.B1())
+@test_throws MethodError ambig_exclusion_caller() # also compiles the caller
+@eval AmbigResolveByExclusion g(::MidA, ::Vararg{B1}) = 3 # loses to 2, beats 1
+@test_throws MethodError ambig_exclusion_caller() # still blocked by method 1
+@test_throws MethodError AmbigResolveByExclusion.g(AmbigResolveByExclusion.A1(),
+                                                  AmbigResolveByExclusion.B1())
+
+# A match that is dominated over its whole region can be dropped from the report,
+# since it can never be selected -- but only as long as the ambiguities it takes
+# part in stay witnessed by the matches that remain. Here method 1 is covered over
+# the query region by the union of methods 5 (the `(A1, A1)` part) and 3 (the
+# `(A1, B1)` part), which each strictly beat it. Method 3 reaches that cover role
+# only by being dropped itself (method 4 covers it) while sitting in a specificity
+# cycle with methods 1 and 2 (1 ≻ 2 ≻ 3 ≻ 1), which is where a region-blind
+# transfer check would lose the cycle.
+module AmbigTransferRegion
+abstract type Top end
+abstract type MidA <: Top end
+abstract type MidB <: Top end
+struct A1 <: MidA end
+struct A2 <: MidA end
+struct B1 <: MidB end
+struct B2 <: MidB end
+f(::MidA, ::Union{A1,MidB}) = 1                  # covered by the union of 5 and 3
+f(::T, ::Vararg{T}) where {T<:MidA} = 2          # beaten by 1, beats 3
+f(::MidA, ::Vararg{B1}) = 3                      # beats 1, beaten by 2 (the cycle)
+f(::Union{A1,B1}, ::Vararg{Union{B1,MidA}}) = 4  # covers 3, unordered with 1 and 5
+f(::MidA, ::A1) = 5                              # beats 1 and 2
+end
+let A1 = AmbigTransferRegion.A1, B1 = AmbigTransferRegion.B1,
+    ms = sort(collect(methods(AmbigTransferRegion.f)), by = m -> m.line),
+    (m1, m2, m3, m4, m5) = (ms[1], ms[2], ms[3], ms[4], ms[5])
+    # the specificity cycle that makes the dominance-transfer check necessary
+    @test Base.morespecific(m1, m2) && Base.morespecific(m2, m3) && Base.morespecific(m3, m1)
+    # method 1 is dominated at every point of its region (by method 5 at
+    # `(A1, A1)`, by method 3 at `(A1, B1)`) yet unordered with method 4, which
+    # neither of those covers beats
+    @test !Base.morespecific(m1, m4) && !Base.morespecific(m4, m1)
+    @test Base.morespecific(m5, m1) && Base.morespecific(m3, m1)
+    @test !Base.morespecific(m5, m4) && !Base.morespecific(m3, m4)
+    let ambig = Ref{Int32}(0)
+        matches = Base._methods_by_ftype(
+            Tuple{typeof(AmbigTransferRegion.f), Union{A1,B1}, Vararg{Union{A1,B1}}},
+            nothing, -1, Base.get_world_counter(), true,
+            Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ambig[] == 1
+        # methods 4 and 5 witness the ambiguity at `(A1, A1)`. Method 1 blocks
+        # method 4 at `(A1, B1)`, but over this whole region it is covered by the
+        # union of 5 and 3, so it is dropped: the region-wide report guarantees a
+        # witness pair for the query, not one for every point in it. The `1`/`4`
+        # pair is still reported over its own intersection (below).
+        @test Set(m.method for m in matches) == Set([m4, m5])
+    end
+    @test Base.isambiguous(m1, m4) # visible over the pair's own intersection
+    # `(A1, B1)` applies methods 1, 3 and 4, and nothing beats all of them, so it
+    # is ambiguous and method 1 must be reported as one of the blocking pair
+    @test_throws MethodError AmbigTransferRegion.f(A1(), B1())
+    let ambig = Ref{Int32}(0)
+        matches = Base._methods_by_ftype(
+            Tuple{typeof(AmbigTransferRegion.f), A1, B1}, nothing, -1,
+            Base.get_world_counter(), true,
+            Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ambig[] == 1
+        @test m1 in [m.method for m in matches]
+    end
+    @test_throws MethodError AmbigTransferRegion.f(A1(), A1())
+end
+
 module NoLosersBit
 f(::Any) = 1
 end
