@@ -424,7 +424,8 @@ static ObjCache::Hash hashKVKey(const char *Ns, const uint8_t *Key,
     return Hasher.final();
 }
 
-jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key, size_t KeyLen)
+jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key,
+                            size_t KeyLen) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
@@ -434,7 +435,7 @@ jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key, size_t KeyLen)
     auto Hash = hashKVKey(Ns, Key, KeyLen);
     auto ObjKey = toObjKey(Hash);
 
-    jl_array_t *Ret;
+    jl_array_t *Ret = nullptr;
     {
         MDBTxn Txn{Env, MDB_RDONLY};
         if (!Txn.Txn)
@@ -451,8 +452,13 @@ jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key, size_t KeyLen)
         // Copy out of the memory map while the read transaction is alive.
         // The allocation can run GC, which is fine: LMDB read txns only
         // pin a snapshot, they hold no lock that Julia code can contend on.
+        JL_GC_PUSH1(&Ret);
+        jl_task_t *ct = jl_current_task;
+        int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
         Ret = jl_alloc_array_1d(jl_array_uint8_type, Data.mv_size);
         memcpy(jl_array_data(Ret, uint8_t), Data.mv_data, Data.mv_size);
+        jl_gc_unsafe_leave(ct->ptls, gc_state);
+        JL_GC_POP();
     }
     NHit.fetch_add(1, memory_order_relaxed);
     NRead.fetch_add(jl_array_len(Ret), memory_order_relaxed);
@@ -468,7 +474,7 @@ jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key, size_t KeyLen)
 }
 
 int ObjCache::kvPut(const char *Ns, const uint8_t *Key, size_t KeyLen,
-                    const uint8_t *Val, size_t ValLen)
+                    const uint8_t *Val, size_t ValLen) JL_CANSAFEPOINT_ENTER_LEAVE
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
@@ -486,7 +492,7 @@ int ObjCache::kvPut(const char *Ns, const uint8_t *Key, size_t KeyLen,
     return 1;
 }
 
-int ObjCache::kvEnabled()
+int ObjCache::kvEnabled() JL_CANSAFEPOINT_ENTER_LEAVE
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
