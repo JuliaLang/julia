@@ -24,8 +24,7 @@ will not be reflected, unless you use `Revise`.
    not just the harness - it is what tells a later reader what actually produced the work. Do not
    use `Co-authored-by:` for tools, and do not list a tool as an author; this trailer replaces any
    co-author trailer your harness adds by default.
-2. Commit your work to a branch and stop there. The human author reviews it, rewords whatever you
-   drafted, and opens the pull request; posting comments and reviews on GitHub is theirs as well.
+2. Agents aren't permitted to open PRs or post comments autonomously.
 
 ## Building Julia
 
