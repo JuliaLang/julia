@@ -632,3 +632,14 @@ let ci = method_instance(iter61667, ()).cache
     Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
     @test ci.max_world == typemax(UInt)
 end
+
+# issue #61667 - rebinding a name in Main must not invalidate the show machinery, which
+# concrete-evals binding queries against Main (via `isvisible`)
+struct ShowInval61667; x::Int; end
+fshow61667(v) = string(v)
+@test fshow61667([ShowInval61667(1)]) isa String
+let ci = method_instance(fshow61667, (Vector{ShowInval61667},)).cache
+    @test ci.max_world == typemax(UInt)
+    Core.eval(Main, :(struct ShowInval61667 end))
+    @test ci.max_world == typemax(UInt)
+end
