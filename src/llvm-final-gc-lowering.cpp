@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/Support/CommandLine.h"
 
 #define DEBUG_TYPE "final_gc_lowering"
 STATISTIC(NewGCFrameCount, "Number of lowered newGCFrameFunc intrinsics");
@@ -9,6 +10,28 @@ STATISTIC(PopGCFrameCount, "Number of lowered popGCFrameFunc intrinsics");
 STATISTIC(GetGCFrameSlotCount, "Number of lowered getGCFrameSlotFunc intrinsics");
 STATISTIC(QueueGCRootCount, "Number of lowered queueGCRootFunc intrinsics");
 STATISTIC(SafepointCount, "Number of lowered safepoint intrinsics");
+
+// Debugging aid for shadow-stack corruption (enable e.g. via
+// JULIA_LLVM_ARGS="--julia-check-gc-frame-balance"): every push checks that it
+// does not self-link the frame and every pop checks that the frame it unlinks
+// is the current top of the shadow stack, so an unbalanced or misplaced
+// push/pop faults deterministically at the offending site instead of leaving a
+// dangling frame for a later collection to crash on.
+static cl::opt<bool> ClCheckGCFrameBalance(
+    "julia-check-gc-frame-balance", cl::init(false), cl::Hidden,
+    cl::desc("Instrument GC frame pushes/pops with shadow-stack balance checks"));
+
+// Fault at the current insertion point when Bad is true, without needing CFG
+// surgery: volatile-store through a pointer that is null exactly when the
+// check fails. On success this clobbers the frame's nroots word, which every
+// caller either overwrites (push) or has retired (pop).
+static void emitFrameBalanceCheck(IRBuilder<> &builder, Value *Bad, Value *gcframe, Type *T_size)
+{
+    Value *Null = ConstantPointerNull::get(cast<PointerType>(gcframe->getType()));
+    Value *Addr = builder.CreateSelect(Bad, Null, gcframe, "gcframe.check");
+    builder.CreateAlignedStore(ConstantInt::get(T_size, 0), Addr, Align(sizeof(void*)))
+        ->setVolatile(true);
+}
 
 void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
 {
@@ -25,8 +48,11 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, PointerType::getUnqual(T_prjlvalue->getContext())));
     gcframe->takeName(target);
 
-    // Start its lifetime at setup so unused paths can share the stack storage.
-    builder.CreateLifetimeStart(gcframe_alloca);
+    // For a sunk frame, start its lifetime at setup so unused paths can share
+    // the stack storage. Entry-block frames span the whole function, where the
+    // markers buy nothing; omitting them keeps that codegen unchanged.
+    if (target->getParent() != &F.getEntryBlock())
+        builder.CreateLifetimeStart(gcframe_alloca);
     auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
     auto memset_instr = builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16));
     memset_instr->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -43,6 +69,14 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(1))->getLimitedValue(INT_MAX);
 
     IRBuilder<> builder(target);
+    if (ClCheckGCFrameBalance) {
+        // A re-executed push would self-link the shadow stack.
+        auto *PtrTy = PointerType::getUnqual(F.getContext());
+        auto *top = builder.CreateAlignedLoad(PtrTy, pgcstack, Align(sizeof(void*)), "gcstack.top");
+        Value *SelfLinked = builder.CreateICmpEQ(
+                top, builder.CreatePointerCast(gcframe, PtrTy), "gcframe.selflinked");
+        emitFrameBalanceCheck(builder, SelfLinked, gcframe, T_size);
+    }
     StoreInst *inst = builder.CreateAlignedStore(
                 ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
                 builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0, "frame.nroots"),// GEP of 0 becomes a noop and eats the name
@@ -70,6 +104,15 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     auto gcframe = target->getArgOperand(0);
 
     IRBuilder<> builder(target);
+    if (ClCheckGCFrameBalance) {
+        // Popping anything but the current shadow-stack top would leave a
+        // dangling frame behind.
+        auto *PtrTy = PointerType::getUnqual(F.getContext());
+        auto *top = builder.CreateAlignedLoad(PtrTy, pgcstack, Align(sizeof(void*)), "gcstack.top");
+        Value *Mismatch = builder.CreateICmpNE(
+                top, builder.CreatePointerCast(gcframe, PtrTy), "gcframe.mismatch");
+        emitFrameBalanceCheck(builder, Mismatch, gcframe, T_size);
+    }
     Instruction *gcpop =
         cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
     Instruction *inst = builder.CreateAlignedLoad(T_prjlvalue, gcpop, Align(sizeof(void*)), "frame.prev");
@@ -79,9 +122,16 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
         pgcstack,
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    // End the lifetime after unlinking if this is a lowered frame alloca.
-    if (auto *AI = dyn_cast<AllocaInst>(gcframe->stripPointerCasts()))
-        builder.CreateLifetimeEnd(AI);
+    // End the lifetime after unlinking if this is a lowered frame alloca whose
+    // lifetime was started at a sunk setup point.
+    if (auto *AI = dyn_cast<AllocaInst>(gcframe->stripPointerCasts())) {
+        bool HasLifetimeStart = llvm::any_of(AI->users(), [](User *U) {
+            auto *II = dyn_cast<IntrinsicInst>(U);
+            return II && II->getIntrinsicID() == Intrinsic::lifetime_start;
+        });
+        if (HasLifetimeStart)
+            builder.CreateLifetimeEnd(AI);
+    }
     target->eraseFromParent();
 }
 

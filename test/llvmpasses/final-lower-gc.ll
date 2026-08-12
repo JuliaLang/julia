@@ -1,6 +1,7 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='FinalLowerGC' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='FinalLowerGC' --julia-check-gc-frame-balance -S %s | FileCheck %s --check-prefixes=BALANCE
 
 
 @tag = external addrspace(10) global {}
@@ -21,8 +22,9 @@ attributes #0 = { allocsize(1) }
 define void @gc_frame_lowering(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @gc_frame_lowering
+; BALANCE-LABEL: @gc_frame_lowering
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 4
-; OPAQUE-NEXT: call void @llvm.lifetime.start{{.*}}%gcframe
+; OPAQUE-NOT: call void @llvm.lifetime.start
   %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
 ; OPAQUE: [[GCFRAME_SLOT:%.*]] = call ptr @julia.get_pgcstack()
   %pgcstack = call {}*** @julia.get_pgcstack()
@@ -33,6 +35,10 @@ top:
 ; OPAQUE-DAG: [[PREV_GCFRAME:%.*]] = load ptr, ptr [[GCFRAME_SLOT]], align 8
 ; OPAQUE-DAG: store ptr [[PREV_GCFRAME]], ptr [[PREV_GCFRAME_PTR]], align 8, !tbaa !0
 ; OPAQUE-NEXT: store ptr %gcframe, ptr [[GCFRAME_SLOT]], align 8
+; BALANCE: [[PUSHTOP:%.*]] = load ptr, ptr %pgcstack
+; BALANCE-NEXT: [[SELFLINKED:%.*]] = icmp eq ptr [[PUSHTOP]], %gcframe
+; BALANCE-NEXT: [[PUSHADDR:%.*]] = select i1 [[SELFLINKED]], ptr null, ptr %gcframe
+; BALANCE-NEXT: store volatile i64 0, ptr [[PUSHADDR]]
   call void @julia.push_gc_frame({} addrspace(10)** %gcframe, i32 2)
   %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
 ; OPAQUE: %frame_slot_1 = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 3
@@ -48,7 +54,9 @@ top:
 ; OPAQUE-NEXT: [[PREV_GCFRAME_PTR3:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 1
 ; OPAQUE-NEXT: [[PREV_GCFRAME_PTR4:%.*]] = load ptr addrspace(10), ptr [[PREV_GCFRAME_PTR3]], align 8, !tbaa !0
 ; OPAQUE-NEXT: store ptr addrspace(10) [[PREV_GCFRAME_PTR4]], ptr [[GCFRAME_SLOT]], align 8, !tbaa !0
-; OPAQUE-NEXT: call void @llvm.lifetime.end{{.*}}%gcframe
+; BALANCE: [[MISMATCH:%.*]] = icmp ne ptr [[POPTOP:%.*]], %gcframe
+; BALANCE-NEXT: [[POPADDR:%.*]] = select i1 [[MISMATCH]], ptr null, ptr %gcframe
+; BALANCE-NEXT: store volatile i64 0, ptr [[POPADDR]]
   call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
 ; CHECK-NEXT: ret void
   ret void
