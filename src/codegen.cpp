@@ -342,16 +342,17 @@ struct jl_tbaacache_t {
     MDNode *tbaa_unionselbyte;   // a selector byte in isbits Union struct fields
     MDNode *tbaa_data;       // Any user data that `pointerset/ref` are allowed to alias
     MDNode *tbaa_binding;        // jl_binding_t::value
-    MDNode *tbaa_value;          // jl_value_t, that is not jl_array_t or jl_genericmemory_t
+    MDNode *tbaa_value;          // jl_value_t of statically unknown type; parent of the tags below
     MDNode *tbaa_mutab;              // mutable type
     MDNode *tbaa_datatype;               // datatype
     MDNode *tbaa_immut;              // immutable type
     MDNode *tbaa_ptrarraybuf;    // Data in an array of boxed values
     MDNode *tbaa_arraybuf;       // Data in an array of POD
-    MDNode *tbaa_array;      // jl_array_t or jl_genericmemory_t
+    MDNode *tbaa_array;          // jl_array_t header, mutable: resized in place by the runtime
     MDNode *tbaa_arrayptr;       // The pointer inside a jl_array_t (to a memoryref)
     MDNode *tbaa_arraysize;      // A size in a jl_array_t
     MDNode *tbaa_arrayselbyte;   // a selector byte in a isbits Union jl_genericmemory_t
+    MDNode *tbaa_memory;         // jl_genericmemory_t header, never mutated after construction
     MDNode *tbaa_memoryptr;      // The pointer inside a jl_genericmemory_t
     MDNode *tbaa_memorylen;      // The length in a jl_genericmemory_t
     MDNode *tbaa_memoryown;      // The owner in a foreign jl_genericmemory_t
@@ -363,7 +364,8 @@ struct jl_tbaacache_t {
                     tbaa_value(nullptr), tbaa_mutab(nullptr), tbaa_datatype(nullptr),
                     tbaa_immut(nullptr), tbaa_ptrarraybuf(nullptr), tbaa_arraybuf(nullptr),
                     tbaa_array(nullptr), tbaa_arrayptr(nullptr), tbaa_arraysize(nullptr),
-                    tbaa_arrayselbyte(nullptr), tbaa_memoryptr(nullptr), tbaa_memorylen(nullptr), tbaa_memoryown(nullptr),
+                    tbaa_arrayselbyte(nullptr), tbaa_memory(nullptr),
+                    tbaa_memoryptr(nullptr), tbaa_memorylen(nullptr), tbaa_memoryown(nullptr),
                     tbaa_const(nullptr), initialized(false) {}
 
     auto tbaa_make_child(MDBuilder &mbuilder, const char *name, MDNode *parent = nullptr, bool isConstant = false) {
@@ -395,17 +397,27 @@ struct jl_tbaacache_t {
         std::tie(tbaa_mutab, tbaa_mutab_scalar) =
             tbaa_make_child(mbuilder, "jtbaa_mutab", tbaa_value_scalar);
         tbaa_datatype = tbaa_make_child(mbuilder, "jtbaa_datatype", tbaa_mutab_scalar).first;
-        tbaa_immut = tbaa_make_child(mbuilder, "jtbaa_immut", tbaa_value_scalar).first;
+        MDNode *tbaa_immut_scalar;
+        std::tie(tbaa_immut, tbaa_immut_scalar) =
+            tbaa_make_child(mbuilder, "jtbaa_immut", tbaa_value_scalar);
         tbaa_arraybuf = tbaa_make_child(mbuilder, "jtbaa_arraybuf", tbaa_data_scalar).first;
         tbaa_ptrarraybuf = tbaa_make_child(mbuilder, "jtbaa_ptrarraybuf", tbaa_data_scalar).first;
+        // The header tags must descend from jtbaa_value: an array is also reachable
+        // through a type-erased pointer (a Union or an abstract type, including Any),
+        // which `best_tbaa` tags jtbaa_value, and a disjoint subtree would make that
+        // load NoAlias against the stores that initialize the header.
         MDNode *tbaa_array_scalar;
-        std::tie(tbaa_array, tbaa_array_scalar) = tbaa_make_child(mbuilder, "jtbaa_array");
+        std::tie(tbaa_array, tbaa_array_scalar) =
+            tbaa_make_child(mbuilder, "jtbaa_array", tbaa_mutab_scalar);
         tbaa_arrayptr = tbaa_make_child(mbuilder, "jtbaa_arrayptr", tbaa_array_scalar).first;
         tbaa_arraysize = tbaa_make_child(mbuilder, "jtbaa_arraysize", tbaa_array_scalar).first;
         tbaa_arrayselbyte = tbaa_make_child(mbuilder, "jtbaa_arrayselbyte", tbaa_array_scalar).first;
-        tbaa_memoryptr = tbaa_make_child(mbuilder, "jtbaa_memoryptr", tbaa_array_scalar).first;
-        tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_array_scalar).first;
-        tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_array_scalar).first;
+        MDNode *tbaa_memory_scalar;
+        std::tie(tbaa_memory, tbaa_memory_scalar) =
+            tbaa_make_child(mbuilder, "jtbaa_memory", tbaa_immut_scalar);
+        tbaa_memoryptr = tbaa_make_child(mbuilder, "jtbaa_memoryptr", tbaa_memory_scalar).first;
+        tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_memory_scalar).first;
+        tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_memory_scalar).first;
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
     }
 };
@@ -1648,7 +1660,9 @@ static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) {
         return tbaa_cache.tbaa_value;
     if (jl_is_abstracttype(jt))
         return tbaa_cache.tbaa_value;
-    if (jl_is_genericmemory_type(jt) || jl_is_array_type(jt))
+    if (jl_is_genericmemory_type(jt))
+        return tbaa_cache.tbaa_memory;
+    if (jl_is_array_type(jt))
         return tbaa_cache.tbaa_array;
     // If we're here, we know all subtypes are (im)mutable, even if we
     // don't know what the exact type is
@@ -2209,9 +2223,11 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
 jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
     auto cache = ctx.tbaa();
 
-    // Each top-level TBAA node has a corresponding !alias.scope scope
-    MDNode *tbaa_srcs[5] = { cache.tbaa_gcframe, cache.tbaa_stack, cache.tbaa_data, cache.tbaa_array, cache.tbaa_const };
-    Region regions[5] = { Region::gcframe, Region::stack, Region::data, Region::type_metadata, Region::constant };
+    // Each top-level TBAA node has a corresponding !alias.scope scope.
+    // Array and memory headers descend from jtbaa_data, so they map to Region::data;
+    // nothing currently maps to Region::type_metadata.
+    MDNode *tbaa_srcs[4] = { cache.tbaa_gcframe, cache.tbaa_stack, cache.tbaa_data, cache.tbaa_const };
+    Region regions[4] = { Region::gcframe, Region::stack, Region::data, Region::constant };
 
     if (tbaa != nullptr) {
         MDNode *node = cast<MDNode>(tbaa->getOperand(1));
@@ -2225,7 +2241,7 @@ jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
             }
 
             // Find the matching node's index
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < 4; i++) {
                 if (cast<MDNode>(tbaa_srcs[i]->getOperand(1)) == node)
                     return jl_aliasinfo_t(ctx, regions[i], tbaa);
             }

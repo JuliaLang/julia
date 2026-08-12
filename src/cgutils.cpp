@@ -3343,7 +3343,8 @@ static bool isLoadFromImmut(LoadInst *LI)
     if (LI->getMetadata(LLVMContext::MD_invariant_load))
         return true;
     MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
+    // n.b. jtbaa_memory* derives from jtbaa_immut; jtbaa_array* deliberately does not
+    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"}))
         return true;
     return false;
 }
@@ -3423,19 +3424,17 @@ static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_da
     if (tbaa == ctx.tbaa().tbaa_datatype)
         if (byte_offset != offsetof(jl_datatype_t, types))
             return ctx.tbaa().tbaa_const;
-    if (tbaa == ctx.tbaa().tbaa_array) {
-        if (jl_is_genericmemory_type(jt)) {
-            if (idx == 0)
-                return ctx.tbaa().tbaa_memorylen;
-            if (idx == 1)
-                return ctx.tbaa().tbaa_memoryptr;
-        }
-        else if (jl_is_array_type(jt)) {
-            if (idx == 0)
-                return ctx.tbaa().tbaa_arrayptr;
-            if (idx == 1)
-                return ctx.tbaa().tbaa_arraysize;
-        }
+    if (tbaa == ctx.tbaa().tbaa_memory && jl_is_genericmemory_type(jt)) {
+        if (idx == 0)
+            return ctx.tbaa().tbaa_memorylen;
+        if (idx == 1)
+            return ctx.tbaa().tbaa_memoryptr;
+    }
+    if (tbaa == ctx.tbaa().tbaa_array && jl_is_array_type(jt)) {
+        if (idx == 0)
+            return ctx.tbaa().tbaa_arrayptr;
+        if (idx == 1)
+            return ctx.tbaa().tbaa_arraysize;
     }
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
         return ctx.tbaa().tbaa_const; //TODO: it seems odd to have a field with a tbaa that doesn't alias it's containing struct's tbaa

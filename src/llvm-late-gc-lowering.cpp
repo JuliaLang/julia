@@ -862,7 +862,8 @@ static bool isLoadFromImmut(LoadInst *LI)
     if (LI->getMetadata(LLVMContext::MD_invariant_load))
         return true;
     MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
+    // n.b. jtbaa_memory* derives from jtbaa_immut; jtbaa_array* deliberately does not
+    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"}))
         return true;
     return false;
 }
@@ -1909,7 +1910,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     LI->setMetadata(LLVMContext::MD_invariant_load, NULL);
             }
             if (MDNode *TBAA = I->getMetadata(LLVMContext::MD_tbaa)) {
-                if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memoryptr", "jtbaa_memorylen", "tbaa_memoryown"})) {
+                if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memory"})) {
                     MDNode *MutableTBAA = createMutableTBAAAccessTag(TBAA);
                     if (MutableTBAA != TBAA)
                         I->setMetadata(LLVMContext::MD_tbaa, MutableTBAA);
