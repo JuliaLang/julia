@@ -977,6 +977,17 @@ function enq_work(t::Task)
     else
         @label not_sticky
         tp = Threads.threadpool(t)
+        if tp !== :foreign && Threads.threadpoolsize(tp) == 0
+            # The task's threadpool has no threads, so it can never run;
+            # fail it with a ConcurrencyViolationError rather than queueing
+            # it (the multiqueue heaps are unsized for empty pools, and a
+            # task queued during sysimage bootstrap would be serialized
+            # into the system image).
+            t.result = ConcurrencyViolationError("deadlock detected: cannot schedule task")
+            t._isexception = true
+            @atomic :release t._state = task_state_failed
+            return t
+        end
         if tp === :foreign || Threads.threadpoolsize(tp) == 1
             # There's only one thread in the task's assigned thread pool;
             # use its work queue.
@@ -986,10 +997,27 @@ function enq_work(t::Task)
         else
             # Otherwise, put the task in the multiqueue.
             Partr.multiq_insert(t, t.priority)
-            tid = 0
+            tid = Threads.threadid(t)
+            if tid != 0 && tid != Threads.threadid()
+                # The task's tid is pinned to another thread: typically it is that
+                # thread's current task, parked hosting its thread-sleep logic in
+                # wait(), and only that thread can resume it, so wake it directly
+                # (#58689). If that thread was already awake (busy with other work),
+                # this wake added no running thread; wake a pool thread too so the
+                # number of running threads still scales with enqueued work — the
+                # task is not sticky, so its tid may be cleared later, making it
+                # runnable by any pool thread.
+                if ccall(:jl_wakeup_thread, Cint, (Int16,), (tid - 1) % Int16) == 0
+                    ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+                end
+            else
+                # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
+                ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+            end
+            return t
         end
     end
-    ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    ccall(:jl_wakeup_thread, Cint, (Int16,), (tid - 1) % Int16)
     return t
 end
 
@@ -1161,6 +1189,50 @@ function throwto(t::Task, @nospecialize exc)
     return try_yieldto(identity)
 end
 
+function wait_forever()
+    while true
+        try
+            while true
+                wait()
+            end
+        catch e
+            if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
+                # A Ctrl-C/SIGINT was delivered to this internal scheduler task while
+                # the thread was idle (it parked here after running a completed task).
+                # Forward it to a task that can observe it: the REPL backend if it is
+                # evaluating user code; nothing at an idle REPL prompt (drop it); the
+                # root task otherwise, e.g. a non-interactive script blocked in wait
+                # (#58689).
+                victim = repl_backend_task()
+                if !(victim isa Task)
+                    at_repl_prompt = @isdefined(active_repl_backend) && active_repl_backend !== nothing
+                    victim = (at_repl_prompt || istaskdone(roottask)) ? nothing : roottask
+                end
+                if victim isa Task
+                    try
+                        throwto(victim, e)
+                    catch
+                        # delivery is best-effort: the victim may have been
+                        # rescheduled concurrently, or a second interrupt may arrive
+                        # while this task is suspended in the switch
+                    end
+                end
+            else
+                local errs = stderr
+                # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Internal Task ")
+                display_error(errio, current_exceptions())
+                write(errs, errio)
+            end
+        end
+    end
+end
+
+const get_sched_task = OncePerThread{Task}() do
+    Task(wait_forever)
+end
+
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
     W = workqueue_for(Threads.threadid())
@@ -1197,26 +1269,34 @@ end
 
 checktaskempty = Partr.multiq_check_empty
 
-@noinline function poptask(W::StickyWorkqueue)
-    task = trypoptask(W)
-    if !(task isa Task)
-        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
-    end
-    set_next_task(task)
-    nothing
-end
-
 function wait()
     ct = current_task()
     # [task] user_time -yield-or-done-> wait_time
     record_running_time!(ct)
+    # let GC run
     GC.safepoint()
-    W = workqueue_for(Threads.threadid())
-    poptask(W)
-    result = try_yieldto(ensure_rescheduled)
+    # check for libuv events
     process_events()
-    # return when we come out of the queue
-    return result
+
+    # get the next task to run
+    W = workqueue_for(Threads.threadid())
+    task = trypoptask(W)
+    if task === nothing
+        # No tasks to run. If the current task is done, switch to the scheduler task
+        # to run the thread sleep logic, so that this task's stack can be freed
+        # promptly (#57544). Otherwise run the thread sleep logic in the context of
+        # the current task, so that an asynchronous InterruptException (Ctrl-C) is
+        # delivered to a task that can observe it, rather than swallowed by the
+        # internal scheduler task (#58689).
+        sched_task = get_sched_task()
+        if ct !== sched_task && istaskdone(ct)
+            istaskdone(sched_task) && (sched_task = @task wait())
+            return yieldto(sched_task)
+        end
+        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
+    end
+    set_next_task(task)
+    return try_yieldto(ensure_rescheduled)
 end
 
 if Sys.iswindows()
