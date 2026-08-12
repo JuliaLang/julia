@@ -210,6 +210,12 @@ Standard library changes
 * New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that allocate `Core.Box`
   in their lowered code, which can indicate performance issues from captured variables in closures ([#60478]).
 
+#### TOML
+
+* `TOML.parse`, `TOML.parsefile` (and their `try` variants) now accept a `dicttype` keyword
+  argument, e.g. `TOML.parse(str; dicttype=OrderedDict{String, Any})`, so parsed tables can
+  preserve key order or use another dictionary implementation. ([#62691]).
+
 #### Dates
 
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
