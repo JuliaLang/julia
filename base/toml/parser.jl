@@ -31,15 +31,10 @@ const TOMLDict  = Dict{String, Any}
 # Comments #
 ############
 
-# A path of keys identifying an item in a TOML document, e.g. `("compat", "Dep")`
-# for an entry and `("deps",)` for the table header `[deps]`. The empty tuple
-# identifies the root table.
+# The empty path identifies the root table.
 const CommentPath = Tuple{Vararg{String}}
 
-# The comments associated with a single item (a `key = value` entry or a table
-# header): the whole-line comments directly above the item and the comment on
-# the same line as the item (`nothing` if none; `""` is a bare trailing `#`).
-# Comment text is stored without the leading '#'.
+# Text excludes `#`; `nothing` means no inline comment and `""` a bare `#`.
 mutable struct CommentBlock
     above::Vector{String}
     inline::Union{String, Nothing}
@@ -56,10 +51,7 @@ comments back out. See the TOML stdlib documentation for the rules of how
 comments are associated with items of the document.
 """
 struct Comments
-    # Comments attached to a specific item, keyed by the item's key path
     items::Dict{CommentPath, CommentBlock}
-    # Comments not attached to any item, keyed by the path of the table they
-    # appeared in; printed at the top of that table
     floating::Dict{CommentPath, Vector{String}}
 end
 Comments() = Comments(Dict{CommentPath, CommentBlock}(), Dict{CommentPath, Vector{String}}())
@@ -129,21 +121,12 @@ mutable struct Parser{Dates}
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
 
-    # If not `nothing`, comments are captured into this structure while parsing
     comments::Union{Comments, Nothing}
-    # Scratch state for comment capture; only maintained when `comments !== nothing`:
-    # The current block of contiguous whole-line comments that has not yet been
-    # attached to an item
     pending_comments::Vector{String}
-    # The text of the most recently skipped comment (set by `skip_comment`)
     captured_comment::String
-    # The key path of `active_table`
     active_table_path::Vector{String}
-    # The key path of the most recently defined item, used to attach same-line
-    # comments; `nothing` if the last item cannot take comments
     last_item_path::Union{CommentPath, Nothing}
-    # True while the active table is (inside) an array-of-tables element, where
-    # key paths do not distinguish between elements and comments are dropped
+    # Paths cannot distinguish array-of-tables elements, so their comments are ignored.
     in_array_table::Bool
 end
 
@@ -503,10 +486,7 @@ function skip_ws_nl(l::Parser)::Bool
     return skipped
 end
 
-# Like `skip_ws_nl` but used between top-level items when capturing comments:
-# a blank line separating a comment block from the following item makes the
-# block "floating" (associated with the enclosing table) instead of attached
-# to the item that follows it.
+# A blank line makes pending comments float rather than attach to the next item.
 function skip_ws_nl_toplevel(l::Parser)::Bool
     l.comments === nothing && return skip_ws_nl(l)
     skipped = false
@@ -540,8 +520,7 @@ function skip_ws_nl_toplevel(l::Parser)::Bool
     return skipped
 end
 
-# Returns true if a comment was skipped. When comment capture is enabled the
-# comment text (without the leading '#') is stored in `l.captured_comment`.
+# Returns true if a comment was skipped
 function skip_comment(l::Parser)::Bool
     found_comment = accept(l, '#')
     if found_comment
@@ -561,7 +540,6 @@ function skip_ws_comment(l::Parser)::Bool
     return skip_comment(l)
 end
 
-# Move the pending comment block to the floating comments of the active table
 function flush_pending_comments!(l::Parser)
     isempty(l.pending_comments) && return
     comments = l.comments
@@ -573,7 +551,6 @@ function flush_pending_comments!(l::Parser)
     return
 end
 
-# Attach the pending comment block to the item at `path`
 function attach_pending_comments!(l::Parser, path::CommentPath)
     isempty(l.pending_comments) && return
     block = get!(CommentBlock, (l.comments::Comments).items, path)
@@ -582,7 +559,6 @@ function attach_pending_comments!(l::Parser, path::CommentPath)
     return
 end
 
-# Attach a comment on the same line as an item to the most recently defined item
 function attach_inline_comment!(l::Parser)
     path = l.last_item_path
     path === nothing && return
@@ -591,8 +567,6 @@ function attach_inline_comment!(l::Parser)
     return
 end
 
-# Whether an intermediate along `keys` (starting from the root table) is an
-# array of tables, which makes the key path ambiguous between array elements
 function path_traverses_array(l::Parser, keys::AbstractVector{String})
     d = l.root
     for k in keys
@@ -754,10 +728,7 @@ function parse_array_table(l)::Union{Nothing, ParserError}
     l.active_table = d_new
 
     if l.comments !== nothing
-        # Comments cannot be attached to items inside array-of-tables elements
-        # since the key path does not distinguish between the elements. Only
-        # the comment block above the first `[[...]]` header is kept, attached
-        # to the array itself; all other comments in the array are dropped.
+        # Only the first header has an unambiguous path.
         if first_element && !path_traverses_array(l, @view(table_key[1:end-1]))
             attach_pending_comments!(l, Tuple(table_key))
         else
@@ -773,10 +744,7 @@ end
 
 function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     key = @try parse_key(l)
-    # Comments attach to entries of regular tables; comments captured while
-    # parsing entries of inline tables belong to the entry that owns the
-    # outermost inline table. The path must be computed here since `key`
-    # aliases `l.dotted_keys` which keys in inline table values overwrite.
+    # `key` aliases `dotted_keys`, which parsing an inline table may overwrite.
     capture_comments = l.comments !== nothing && !(d in l.inline_tables)
     entry_path = (capture_comments && !l.in_array_table) ?
         (l.active_table_path..., key...) : nothing
@@ -807,7 +775,6 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     d[last_key_part] = value
     if capture_comments
         if entry_path === nothing
-            # Inside an array-of-tables element: drop any captured comments
             empty!(l.pending_comments)
             l.last_item_path = nothing
         else

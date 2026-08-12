@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+# Comment capture and printing.
 
 using Test
 using TOML
@@ -63,9 +64,6 @@ end
 end
 
 @testset "blank line separates attached from floating" begin
-    # From the discussion in JuliaLang/julia#42697: `1` and `2` are separated
-    # from `bar` by blank lines and float to the top of the (root) table,
-    # `3` is directly above `bar` and attaches to it.
     str = """
     foo = 123
     # 1
@@ -114,9 +112,6 @@ end
 end
 
 @testset "array of tables" begin
-    # Comments cannot be attached to items inside array-of-tables elements
-    # (key paths do not distinguish between elements): only the comment block
-    # above the first `[[...]]` header is kept, attached to the array itself.
     str = """
     # above first
     [[x]]
@@ -153,11 +148,9 @@ end
     data2, comments2 = parse_with_comments(out)
     @test comments2.floating[("a",)] == [" floats in a"]
 
-    # a comment block at EOF without a blank line before it also floats
     data, comments = parse_with_comments("x = 1\n# tail")
     @test comments.floating[()] == [" tail"]
 
-    # only-comments and empty documents
     data, comments = parse_with_comments("# just a comment\n")
     @test isempty(data)
     @test comments.floating[()] == [" just a comment"]
@@ -224,8 +217,6 @@ end
 end
 
 @testset "comments force elided table headers" begin
-    # `[a]` would normally be elided since `a` only contains the table `b`;
-    # a comment associated with `a` must keep its anchor
     str = """
     # keep me
     [a]
@@ -241,7 +232,6 @@ end
     @test comments2 == comments
     @test sprint_with_comments(data2, comments2) == out
 
-    # same for a floating comment inside the elided table
     str = """
     [a]
 
@@ -258,7 +248,6 @@ end
     @test comments2 == comments
     @test sprint_with_comments(data2, comments2) == out
 
-    # without comments the header is still elided
     data, comments = parse_with_comments("[a.b]\nx = 1\n")
     @test !occursin(r"^\[a\]"m, sprint_with_comments(data, comments))
 end
@@ -277,9 +266,6 @@ end
 end
 
 @testset "comments in tables printed inline are hoisted" begin
-    # A table printed via `inline_tables` has no lines for its entries'
-    # comments; they are hoisted above the entry that owns the inline table,
-    # which is where a reparse of the output associates them
     str = """
     [deps]
     Example = "7876af07-990d-54b4-ab0e-23690620f79a"
@@ -302,7 +288,6 @@ end
     @test comments2.items[("sources", "Example")].above ==
         [" above the sources entry", " local checkout", " trailing"]
     @test !haskey(comments2.items, ("sources", "Example", "path"))
-    # stable from the second print onwards
     inline_tables2 = Base.IdSet{Dict{String, Any}}()
     push!(inline_tables2, data2["sources"]["Example"])
     out2 = sprint_with_comments(data2, comments2; inline_tables = inline_tables2, sorted = true)
@@ -317,7 +302,6 @@ end
     @test !haskey(comments.items, ("a",))
     @test isempty(comments)
 
-    # reusing a Parser without comments does not touch a previous capture
     p = TOML.Parser()
     comments = TOML.Comments()
     TOML.parse(p, "# hi\na = 1"; comments)

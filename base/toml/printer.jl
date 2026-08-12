@@ -173,15 +173,11 @@ end
 # Comments #
 ############
 
-# Comments are printed with every character that is not valid inside a TOML
-# comment dropped or replaced, so that emitted comment text can never alter
-# the structure of the document (e.g. a comment containing a newline followed
-# by TOML syntax).
+# Sanitize comment text so it cannot introduce TOML syntax.
 
 function print_comment_line(io::IO, indentstr::String, text::AbstractString)
     Base.print(io, indentstr, '#')
-    # Captured comments keep their original leading whitespace ("# foo" is
-    # stored as " foo"); add a space for comment text that does not have one
+    # Preserve captured whitespace, but format programmatic comments as `# text`.
     if !(isempty(text) || first(text) == ' ' || first(text) == '\t')
         Base.print(io, ' ')
     end
@@ -221,18 +217,10 @@ function print_comment_inline(io::IO, comments::Comments, path::CommentPath)
     end
 end
 
-# Whether any comments are associated with the item or table at `path`.
-# A table header that would normally be elided (because the table only
-# contains other tables) must still be printed if it has comments, so that
-# the comments keep their anchor and round-trip to the same association.
 has_comments(comments::Comments, path::CommentPath) =
     haskey(comments.items, path) || haskey(comments.floating, path)
 
-# Comments associated with items inside a table that is printed inline have no
-# line of their own to be printed on; hoist them above the entry that owns the
-# inline table. This matches how comments inside an inline table value are
-# associated with the owning entry when parsing, so they keep this position
-# on subsequent round trips.
+# Hoist nested comments to an inline table's owning entry.
 function print_hoisted_inline_comments(io::IO, comments::Comments, a::AbstractDict,
                                        path::CommentPath, indentstr::String, sorted::Bool)
     floating = get(comments.floating, path, nothing)
@@ -257,7 +245,6 @@ function print_hoisted_inline_comments(io::IO, comments::Comments, a::AbstractDi
     end
 end
 
-# Returns whether any floating comment lines were printed
 function print_comments_floating(io::IO, comments::Comments, path::CommentPath, indentstr::String)
     lines = get(comments.floating, path, nothing)
     lines === nothing && return false
@@ -295,7 +282,6 @@ function print_table(f::Function, io::IO, a::AbstractDict,
 
     entry_indentstr = ' '^4max(0, indent-1)
     if comments !== nothing
-        # Floating comments are printed at the top of the table they belong to
         if print_comments_floating(io, comments, Tuple(ks), entry_indentstr)
             println(io)
         end
@@ -344,6 +330,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
             _values = @invokelatest values(value)
             header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool || any(v in inline_tables for v in _values)::Bool
             if !header && comments !== nothing
+                # Preserve headers that anchor comments.
                 header = has_comments(comments, Tuple(ks))
             end
             if header
@@ -371,8 +358,6 @@ function print_table(f::Function, io::IO, a::AbstractDict,
             first_block = false
             push!(ks, String(key))
             if comments !== nothing
-                # The comment block attached to an array of tables is printed
-                # above the first `[[...]]` header
                 print_comments_above(io, comments, Tuple(ks), ' '^4indent)
             end
             for v in value
