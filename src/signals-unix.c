@@ -737,10 +737,38 @@ static void jl_exit_thread0_cb(void) JL_CANSAFEPOINT
     jl_raise(thread0_exit_signo);
 }
 
+// The graceful teardown hijacks thread 0 at an arbitrary point, so it can
+// deadlock: the interrupted frame may hold a lock the teardown needs (the
+// JIT/ORC session mid-compilation, the symbol table, an ios lock, ...).
+// Bound the damage with a deadline: if the process is still alive this long
+// after the exit request was dispatched, die abruptly with the original
+// signal (preserving the exit status and core-dump disposition), instead of
+// wedging as an unkillable-by-TERM process.
+#define JL_EXIT_GRACE_PERIOD_S 30
+static void *thread0_exit_watchdog(void *arg)
+{
+    int signo = (int)(uintptr_t)arg;
+    struct timespec ts = {JL_EXIT_GRACE_PERIOD_S, 0};
+    while (nanosleep(&ts, &ts) == -1 && errno == EINTR)
+        ;
+    // The graceful path did not finish in time: force the exit.
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, signo);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    signal(signo, SIG_DFL);
+    raise(signo); // very unlikely to return
+    _exit(128 + signo);
+    return NULL;
+}
+
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     bt_context_t signal_context;
+    pthread_t watchdog;
+    if (pthread_create(&watchdog, NULL, thread0_exit_watchdog, (void*)(uintptr_t)signo) == 0)
+        pthread_detach(watchdog);
     // This also makes sure `sleep` is aborted.
     if (jl_thread_suspend_and_get_state(0, 30, &signal_context)) {
         thread0_exit_signo = signo;
@@ -1347,7 +1375,15 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             uv_tty_reset_mode();
             thread0_exit_count++;
             fflush(NULL);
-            if (thread0_exit_count > 1) {
+            // A repeat request, or a request before initialization has
+            // completed, exits abruptly: hijacking thread 0 into
+            // jl_atexit_hook against a half-restored image crashes (the
+            // teardown walks unrelocated module bindings) or deadlocks (the
+            // interrupted thread may hold runtime locks the teardown needs,
+            // e.g. symtab_lock during the restore's symbol interning), and
+            // no Julia atexit hooks can have been registered yet anyway.
+            if (thread0_exit_count > 1 ||
+                    !jl_atomic_load_acquire(&jl_initialization_complete)) {
                 raise(sig); // very unlikely to return
                 _exit(128 + sig);
             }
