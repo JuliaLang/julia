@@ -946,7 +946,7 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     mode_mapping::Dict{Symbol,Prompt}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(HistoryFile(), 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(HistoryFile(), 1, 1, -1, IOBuffer(),
                         nothing, mode_mapping)
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
@@ -1067,7 +1067,7 @@ end
 
 history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_prev(s, hist, hist.cur_idx - 1 -
-                 (hist.cur_idx > hist.start_idx+1 ? hist.start_idx : 0))
+                 (hist.cur_idx > hist.start_idx ? hist.start_idx-1 : 0))
 
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_next(s, hist, length(update!(hist.history)) - hist.cur_idx + 1)
@@ -1302,7 +1302,7 @@ function mode_keymap(julia_prompt::Prompt)
     end)
 end
 
-repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx, 1))]"
+repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx+1, 1))]"
 repl_filename(repl, hp) = "REPL"
 
 const JL_PROMPT_PASTE = Ref(true)
@@ -1934,7 +1934,7 @@ using ..REPL
 __current_ast_transforms() = Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
 function repl_eval_counter(hp)
-    return length(hp.history) - hp.start_idx
+    return length(hp.history) - hp.start_idx + 1
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
