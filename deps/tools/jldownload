@@ -12,7 +12,8 @@ FETCH=$(which fetch 2>/dev/null)
 TIMEOUT=15 # seconds
 RETRIES=3
 WGET_OPTS="--no-check-certificate --waitretry=$TIMEOUT --tries=$RETRIES --timeout=$TIMEOUT"
-CURL_OPTS="-fkL --connect-timeout $TIMEOUT -y $TIMEOUT --retry $RETRIES --retry-max-time $TIMEOUT"
+# no --retry-max-time: it counts transfer time too, so large downloads got no retries
+CURL_OPTS="-fkL --connect-timeout $TIMEOUT -y $TIMEOUT --retry $RETRIES"
 FETCH_OPTS="-T $TIMEOUT"
 
 if [ $# -eq 1 ]; then
