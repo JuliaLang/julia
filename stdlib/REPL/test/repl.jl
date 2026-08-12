@@ -571,6 +571,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # test that history_first jumps to beginning of current session's history
         @test hp.start_idx == 11
         hp.start_idx -= 5 # temporarily alter history
+        @test REPL.repl_filename(repl, hp) == "REPL[5]"
         LineEdit.history_first(s, hp)
         @test hp.cur_idx == 6
         # we are at the beginning of current session's history, so history_first
@@ -1681,9 +1682,12 @@ fake_repl() do stdin_write, stdout_read, repl
     @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
 end
 
-# Non standard output_prefix, tested via `numbered_prompt!`
+# Test that numbered prompts start at one with initialized session history.
 fake_repl() do stdin_write, stdout_read, repl
     repl.interface = REPL.setup_interface(repl)
+    hp = repl.interface.modes[1].hist
+    @test hp.start_idx == 1
+    @test REPL.history_do_initialize(hp)
 
     backend = REPL.REPLBackend()
     repltask = @async begin
