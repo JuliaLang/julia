@@ -3412,9 +3412,8 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
-# `return_type_tfunc` only models the public definitions of `return_type`; if a call may
-# dispatch to a more specific method, its behavior would be misrepresented by the tfunc,
-# so such calls must be inferred as ordinary generic calls instead (xref JuliaGPU/Metal.jl#908)
+
+# Only model calls that dispatch to the generic, non-overlayed definitions.
 function is_call_to_modeled_return_type(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::AbsIntState)
     2 <= length(argtypes) <= 3 || return true # the tfunc conservatively bails on those itself
     ft = widenconst(argtypes[1])
@@ -3427,7 +3426,8 @@ function is_call_to_modeled_return_type(interp::AbstractInterpreter, argtypes::V
     matches === nothing && return false
     update_valid_age!(sv, get_inference_world(interp), matches.valid_worlds)
     for match in matches
-        contains_is(modeled_sigs, (match::MethodMatch).method.sig) || return false
+        method = (match::MethodMatch).method
+        is_nonoverlayed(method) && contains_is(modeled_sigs, method.sig) || return false
     end
     return true
 end

@@ -42,6 +42,15 @@ function Compiler.add_remark!(interp::MTOverlayInterp, ::Compiler.InferenceState
     return nothing
 end
 
+# An exact-signature overlay is not one of the methods modeled by `return_type_tfunc`.
+@MethodTable RETURN_TYPE_OVERLAY_MT
+@overlay RETURN_TYPE_OVERLAY_MT Compiler.return_type(f, t::DataType) = Float64
+@newinterp ReturnTypeOverlayInterp
+Compiler.method_table(interp::ReturnTypeOverlayInterp) =
+    Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), RETURN_TYPE_OVERLAY_MT)
+return_type_overlay() = Compiler.return_type(+, Tuple{Int,Int})
+@test Base.infer_return_type(return_type_overlay; interp=ReturnTypeOverlayInterp()) == Core.TypeEgal{Float64}
+
 struct StrangeSinError end
 strangesin(x) = sin(x)
 @overlay OVERLAY_MT strangesin(x::Float64) =
