@@ -653,3 +653,14 @@ struct W62022{T}; x::T; end
 @noinline foo62022(::W62022{W62022{W62022{W62022{Int}}}}) = false
 @test foo62022(W62022(1)) === false # test for invalidation
 @test foo62022(W62022(W62022(W62022(1)))) === false
+
+# issue #61667 - rebinding a name in Main must not invalidate the show machinery, which
+# concrete-evals binding queries against Main (via `isvisible`)
+struct ShowInval61667; x::Int; end
+fshow61667(v) = string(v)
+@test fshow61667([ShowInval61667(1)]) isa String
+let ci = method_instance(fshow61667, (Vector{ShowInval61667},)).cache
+    @test ci.max_world == typemax(UInt)
+    Core.eval(Main, :(struct ShowInval61667 end))
+    @test ci.max_world == typemax(UInt)
+end
