@@ -11,20 +11,16 @@ STATISTIC(GetGCFrameSlotCount, "Number of lowered getGCFrameSlotFunc intrinsics"
 STATISTIC(QueueGCRootCount, "Number of lowered queueGCRootFunc intrinsics");
 STATISTIC(SafepointCount, "Number of lowered safepoint intrinsics");
 
-// Debugging aid for shadow-stack corruption (enable e.g. via
-// JULIA_LLVM_ARGS="--julia-check-gc-frame-balance"): every push checks that it
-// does not self-link the frame and every pop checks that the frame it unlinks
-// is the current top of the shadow stack, so an unbalanced or misplaced
-// push/pop faults deterministically at the offending site instead of leaving a
-// dangling frame for a later collection to crash on.
+// Debugging aid (enable via JULIA_LLVM_ARGS="--julia-check-gc-frame-balance"):
+// each push checks that it does not self-link the frame and each pop checks
+// that it unlinks the current shadow-stack top, faulting at the offending
+// site instead of leaving a dangling frame for a later collection.
 static cl::opt<bool> ClCheckGCFrameBalance(
     "julia-check-gc-frame-balance", cl::init(false), cl::Hidden,
     cl::desc("Instrument GC frame pushes/pops with shadow-stack balance checks"));
 
-// Fault at the current insertion point when Bad is true, without needing CFG
-// surgery: volatile-store through a pointer that is null exactly when the
-// check fails. On success this clobbers the frame's nroots word, which every
-// caller either overwrites (push) or has retired (pop).
+// Fault when Bad is true without CFG surgery: volatile-store through a
+// pointer that is null exactly when the check fails.
 static void emitFrameBalanceCheck(IRBuilder<> &builder, Value *Bad, Value *gcframe, Type *T_size)
 {
     Value *Null = ConstantPointerNull::get(cast<PointerType>(gcframe->getType()));
@@ -48,11 +44,9 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, PointerType::getUnqual(T_prjlvalue->getContext())));
     gcframe->takeName(target);
 
-    // For a sunk frame, start its lifetime at setup so unused paths can share
-    // the stack storage. Entry-block frames span the whole function, where the
-    // markers buy nothing; omitting them keeps that codegen unchanged.
-    if (target->getParent() != &F.getEntryBlock())
-        builder.CreateLifetimeStart(gcframe_alloca);
+    // No lifetime markers: the GC's reads of the frame are invisible to LLVM,
+    // so a lifetime.end would let DSE delete frame stores and let stack
+    // coloring reuse the slot while the frame is linked.
     auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
     auto memset_instr = builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16));
     memset_instr->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -94,6 +88,13 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
             gcframe,
             pgcstack,
             Align(sizeof(void*)));
+    // Keep the setup stores above alive: the GC's reads of the frame are
+    // invisible to LLVM, so DSE would otherwise delete them. An atomic
+    // monotonic load is a universal read clobber for alias analysis and
+    // lowers to a plain load; volatile keeps DCE from dropping it.
+    LoadInst *guard = builder.CreateAlignedLoad(T_size, gcframe, Align(sizeof(void*)), "gcframe.published");
+    guard->setAtomic(AtomicOrdering::Monotonic);
+    guard->setVolatile(true);
     target->eraseFromParent();
 }
 
@@ -115,23 +116,16 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     }
     Instruction *gcpop =
         cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
-    Instruction *inst = builder.CreateAlignedLoad(T_prjlvalue, gcpop, Align(sizeof(void*)), "frame.prev");
-    inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    inst = builder.CreateAlignedStore(
-        inst,
+    // Atomic so this load is a read clobber that keeps root-slot stores in
+    // the frame's region alive through DSE; see lowerPushGCFrame.
+    LoadInst *prev = builder.CreateAlignedLoad(T_prjlvalue, gcpop, Align(sizeof(void*)), "frame.prev");
+    prev->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
+    prev->setAtomic(AtomicOrdering::Monotonic);
+    Instruction *inst = builder.CreateAlignedStore(
+        prev,
         pgcstack,
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    // End the lifetime after unlinking if this is a lowered frame alloca whose
-    // lifetime was started at a sunk setup point.
-    if (auto *AI = dyn_cast<AllocaInst>(gcframe->stripPointerCasts())) {
-        bool HasLifetimeStart = llvm::any_of(AI->users(), [](User *U) {
-            auto *II = dyn_cast<IntrinsicInst>(U);
-            return II && II->getIntrinsicID() == Intrinsic::lifetime_start;
-        });
-        if (HasLifetimeStart)
-            builder.CreateLifetimeEnd(AI);
-    }
     target->eraseFromParent();
 }
 

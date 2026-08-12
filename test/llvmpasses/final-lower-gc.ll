@@ -35,6 +35,7 @@ top:
 ; OPAQUE-DAG: [[PREV_GCFRAME:%.*]] = load ptr, ptr [[GCFRAME_SLOT]], align 8
 ; OPAQUE-DAG: store ptr [[PREV_GCFRAME]], ptr [[PREV_GCFRAME_PTR]], align 8, !tbaa !0
 ; OPAQUE-NEXT: store ptr %gcframe, ptr [[GCFRAME_SLOT]], align 8
+; OPAQUE-NEXT: %gcframe.published = load atomic volatile i64, ptr %gcframe monotonic, align 8
 ; BALANCE: [[PUSHTOP:%.*]] = load ptr, ptr %pgcstack
 ; BALANCE-NEXT: [[SELFLINKED:%.*]] = icmp eq ptr [[PUSHTOP]], %gcframe
 ; BALANCE-NEXT: [[PUSHADDR:%.*]] = select i1 [[SELFLINKED]], ptr null, ptr %gcframe
@@ -52,7 +53,7 @@ top:
   call void @boxed_simple({} addrspace(10)* %aboxed, {} addrspace(10)* %bboxed)
 
 ; OPAQUE-NEXT: [[PREV_GCFRAME_PTR3:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 1
-; OPAQUE-NEXT: [[PREV_GCFRAME_PTR4:%.*]] = load ptr addrspace(10), ptr [[PREV_GCFRAME_PTR3]], align 8, !tbaa !0
+; OPAQUE-NEXT: [[PREV_GCFRAME_PTR4:%.*]] = load atomic ptr addrspace(10), ptr [[PREV_GCFRAME_PTR3]] monotonic, align 8, !tbaa !0
 ; OPAQUE-NEXT: store ptr addrspace(10) [[PREV_GCFRAME_PTR4]], ptr [[GCFRAME_SLOT]], align 8, !tbaa !0
 ; BALANCE: [[MISMATCH:%.*]] = icmp ne ptr [[POPTOP:%.*]], %gcframe
 ; BALANCE-NEXT: [[POPADDR:%.*]] = select i1 [[MISMATCH]], ptr null, ptr %gcframe
@@ -62,17 +63,22 @@ top:
   ret void
 }
 
-; Lowering lifetime.end must not depend on the function's block order.
+; Sunk (non-entry-block) frames must not get lifetime markers either.
 define void @gc_frame_block_order() {
 top:
 ; CHECK-LABEL: @gc_frame_block_order
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
+; OPAQUE-NOT: call void @llvm.lifetime
+; OPAQUE: pop:
+; OPAQUE-NOT: call void @llvm.lifetime
+; OPAQUE: cold:
+; OPAQUE-NOT: call void @llvm.lifetime
+; OPAQUE: call void @llvm.memset{{.*}}%gcframe
+; OPAQUE-NOT: call void @llvm.lifetime
   %pgcstack = call {}*** @julia.get_pgcstack()
   br label %cold
 
 pop:
-; OPAQUE: pop:
-; OPAQUE: call void @llvm.lifetime.end{{.*}}%gcframe
   call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
   br label %exit
 
@@ -80,8 +86,6 @@ exit:
   ret void
 
 cold:
-; OPAQUE: cold:
-; OPAQUE: call void @llvm.lifetime.start{{.*}}%gcframe
   %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 1)
   call void @julia.push_gc_frame({} addrspace(10)** %gcframe, i32 1)
   br label %pop
