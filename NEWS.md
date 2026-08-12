@@ -188,6 +188,13 @@ Standard library changes
 
 #### REPL
 
+#### SharedArrays
+
+* `close(::SharedArray)` eagerly releases the shared-memory mappings referenced through the
+  array on all processes, e.g. so the file backing a file-backed `SharedArray` can be deleted
+  immediately ([#62488]).
+
+#### Test
 * Pressing `^C` twice at an empty `julia>` prompt now cancels all still-running
   work started by earlier evaluations (e.g. a runaway `@async` task spewing
   output): each REPL evaluation runs under its own cancellation source, linked
