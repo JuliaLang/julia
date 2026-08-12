@@ -2310,6 +2310,17 @@ static bool current_stmt_is_reset_safe(jl_codectx_t &ctx)
     return (flag & IR_FLAG_RESET_SAFE) != 0;
 }
 
+// Check whether a set of encoded ipo_purity_bits proves the callee's own IPO
+// effects reset-safe. N.B.: kept in sync with Compiler/src/effects.jl
+// (encode_effects); 0 means "no recorded effects" and is treated
+// conservatively.
+static bool effects_ipo_reset_safe(uint32_t effects) JL_NOTSAFEPOINT
+{
+    return effects != 0 &&
+           ((effects >> 3) & 0x03u) == 0u && // is_effect_free
+           ((effects >> 15) & 0x03u) == 0u;  // is_reset_safe
+}
+
 // Mark a call instruction with reset_safe metadata if the current statement has the flag
 static void mark_reset_safe(jl_codectx_t &ctx, CallInst *call)
 {
@@ -5640,7 +5651,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value 
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
 }
 
-static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, jl_returninfo_t &returninfo, ArrayRef<jl_cgval_t> argv, size_t nargs) JL_CANSAFEPOINT
+static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, jl_returninfo_t &returninfo, ArrayRef<jl_cgval_t> argv, size_t nargs, uint32_t effects = 0) JL_CANSAFEPOINT
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
@@ -5748,15 +5759,13 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     call->setAttributes(returninfo.attrs);
     if (gcstack_arg && ctx.emission_context.use_swiftcc)
         call->setCallingConv(CallingConv::Swift);
-    if (returninfo.effects != 0)
-        add_fn_attrs_for_effects(call, returninfo.effects);
     // Mark as reset_safe only if the current statement has that flag AND the
     // invoked code's own IPO effects agree: the statement flag may stem from
     // a constant-propagation refinement stronger than the generic code being
     // invoked here, and only callees whose own effects are reset_safe have
     // their implicit runtime machinery instrumented to participate in a
     // spanned reset region (see llvm-cancellation-lowering.cpp).
-    if (effects_ipo_reset_safe(returninfo.effects))
+    if (effects_ipo_reset_safe(effects))
         mark_reset_safe(ctx, call);
 
     jl_cgval_t retval;
@@ -5802,16 +5811,14 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, llvm::Value *callee, StringRef specFunctionObject,
                                           ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *nreturn_roots, jl_value_t *inferred_retty,
-                                          std::optional<uint32_t> effects = std::nullopt) JL_CANSAFEPOINT
+                                          uint32_t effects = 0) JL_CANSAFEPOINT
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
     jl_returninfo_t returninfo = get_specsig_function(ctx.emission_context, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure);
     *cc = returninfo.cc;
     *nreturn_roots = returninfo.return_roots;
-    if (effects.has_value())
-        returninfo.effects = *effects;
-    jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, specTypes, jlretty, returninfo, argv, nargs);
+    jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, specTypes, jlretty, returninfo, argv, nargs, effects);
     // see if inference has a different / better type for the call than the lambda
     return update_julia_type(ctx, retval, inferred_retty);
 }
