@@ -640,12 +640,8 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
-
-    jl_atomic_store_release(&jl_initialization_complete, 1);
 }
 
-
-JL_DLLEXPORT _Atomic(int) jl_initialization_complete = 0;
 
 JL_DLLEXPORT int jl_default_debug_info_kind;
 JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {

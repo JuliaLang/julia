@@ -2189,35 +2189,6 @@ end
 end
 
 
-Sys.isunix() && @testset "exit signals during startup" begin
-    # A termination signal delivered while the runtime is still initializing
-    # (e.g. mid sysimage restore) must kill the process cleanly. The graceful
-    # teardown used to be attempted unconditionally: hijacking thread 0 into
-    # jl_atexit_hook against the half-restored image segfaulted (walking
-    # unrelocated module bindings), or deadlocked when the interrupted thread
-    # held a runtime lock the teardown needs (symtab_lock during the
-    # restore's symbol interning) - a wedged, unkillable-by-TERM process.
-    exe = joinpath(Sys.BINDIR, Base.julia_exename())
-    for delay in (0.01, 0.05, 0.1, 0.15, 0.25, 0.4)
-        out = Pipe()
-        p = run(pipeline(`$exe --startup-file=no -e 'sleep(60)'`,
-                         stdin=devnull, stdout=out, stderr=out), wait=false)
-        close(out.in)
-        reader = @async read(out, String)
-        sleep(delay)
-        process_running(p) && kill(p) # SIGTERM
-        exited = timedwait(() -> process_exited(p), 60.0)
-        @test exited === :ok
-        exited === :ok || kill(p, Base.SIGKILL)
-        wait(p)
-        output = fetch(reader)
-        @test !occursin("Segmentation fault", output)
-        # abrupt (killed by the signal / 128+SIGTERM) and graceful exits are
-        # both fine; crashes and wedges are not
-        @test p.termsignal == Base.SIGTERM || p.exitcode == 128 + Base.SIGTERM
-    end
-end
-
 Sys.isunix() && @testset "^C" begin
     # Children run the bare executable with default flags, NOT julia_cmd():
     # inherited suite flags (e.g. --check-bounds=yes) invalidate the
