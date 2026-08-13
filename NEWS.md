@@ -158,6 +158,8 @@ New library features
   along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
   etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
   returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
+* New public but unexported function `Base.unsetindex!` unsets the reference from an array
+  or a `MemoryRef` to its value, making it as if it was uninitialized.
 * Calls to `wait` on one-shot `Timer`s that have already triggered no longer throw `EOFError`. Previously
   only the first `wait` returned and subsequent `wait` calls would throw ([#62539])
 * When the display height is too small to show any array entries, the `text/plain` array display
