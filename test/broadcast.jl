@@ -1294,6 +1294,13 @@ end
     Base.size(::WiderGetindex0D62564) = ()
     Base.getindex(::WiderGetindex0D62564) = 1
 
+    struct WeakGetindexNonArray62564 end
+    Base.axes(::WeakGetindexNonArray62564) = (Base.OneTo(0),)
+    Base.ndims(::Type{WeakGetindexNonArray62564}) = 1
+    Base.eltype(::Type{WeakGetindexNonArray62564}) = Float64
+    Base.getindex(::WeakGetindexNonArray62564, i::Int) = Base.inferencebarrier(1.0)
+    Base.Broadcast.broadcastable(A::WeakGetindexNonArray62564) = A
+
     struct IncompatGetindex62564 <: AbstractVector{Int} end
     Base.size(::IncompatGetindex62564) = (2,)
     Base.getindex(::IncompatGetindex62564, i::Int) = "s"
@@ -1305,6 +1312,8 @@ end
     @test identity.(WiderGetindex62564()) == [1.0, 2.0]
     wg0d62564() = ((x, _) -> x).(WiderGetindex0D62564(), [nothing])
     @test @inferred(wg0d62564()) == [1.0]
+    wgnonarray62564() = identity.(WeakGetindexNonArray62564())
+    @test @inferred(wgnonarray62564()) == Float64[]
     @test_throws MethodError identity.(IncompatGetindex62564())
     @test (x -> 0).(IncompatGetindex62564()) == [0, 0]
 
