@@ -740,10 +740,12 @@ broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
+_bc_eltype(x, i) = _broadcast_getindex(x, i)
 _bc_eltype(bc::Broadcasted, i) = bc.f(_bc_eltypes(bc.args, i)...)
+# since these methods only exist to be inferred, A[i] is never actually executed. the
+# inference barrier prevents recursion limiting, and ::eltype gives the desired result
 _bc_eltype(A::AbstractArray, i) = Base.inferencebarrier(A)[i]::eltype(A)
 _bc_eltype(A::AbstractArray{<:Any,0}, i) = Base.inferencebarrier(A)[]::eltype(A)
-_bc_eltype(x, i) = _broadcast_getindex(x, i)
 
 _bc_eltypes(args::Tuple, i) = (_bc_eltype(args[1], i), _bc_eltypes(tail(args), i)...)
 _bc_eltypes(args::Tuple{Any}, i) = (_bc_eltype(args[1], i),)
