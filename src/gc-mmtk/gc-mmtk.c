@@ -392,56 +392,28 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
 }
 
 
-// Based on jl_gc_collect from gc-stock.c
-// called when stopping the thread in `mmtk_block_for_gc`
-JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
+// Arm the GC safepoint and wait for every currently-registered mutator to reach it, on behalf of
+// `Collection::stop_all_mutators` in the mmtk_julia binding.
+//
+// This runs on whichever GC worker thread mmtk-core's own scheduler dedicates to running the
+// current pause's `StopMutators` work -- never on a mutator, and never with a second concurrent
+// caller, both guaranteed by mmtk-core itself. That is what makes this simpler than the mutator-
+// driven `jl_gc_prepare_to_collect` this replaces: there is no "am I the one that gets to run
+// this GC" race to resolve (`jl_safepoint_start_gc_from_gc_thread` has no such race to lose), and
+// this thread is never itself one of the mutators `jl_gc_wait_for_the_world` waits on.
+JL_DLLEXPORT void jl_gc_mmtk_stop_the_world(void)
 {
-    // FIXME: set to JL_GC_AUTO since we're calling it from mmtk
-    // maybe just remove this?
-    JL_PROBE_GC_BEGIN(JL_GC_AUTO);
-
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    if (!mmtk_is_collection_enabled()) {
-        size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
-        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
-        static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
-        jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
-        return;
-    }
-
-    int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
-    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
-    // `jl_safepoint_start_gc()` makes sure only one thread can run the GC.
     uint64_t t0 = jl_hrtime();
-    if (!jl_safepoint_start_gc(ct)) {
-        jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
-        jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
-        jl_gc_notify_task_resume(ct);
-        return;
-    }
+    jl_safepoint_start_gc_from_gc_thread();
 
-    JL_TIMING_SUSPEND_TASK(GC, ct);
-    JL_TIMING(GC, GC);
-
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
-#endif
-    // Now we are ready to wait for other threads to hit the safepoint,
-    // we can do a few things that doesn't require synchronization.
-    //
     // We must sync here with the tls_lock operations, so that we have a
     // seq-cst order between these events now we know that either the new
     // thread must run into our safepoint flag or we must observe the
     // existence of the thread in the jl_n_threads count.
-    //
-    // TODO: concurrently queue objects
     jl_fence();
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
     jl_gc_wait_for_the_world(gc_all_tls_states, gc_n_threads);
-    JL_PROBE_GC_STOP_THE_WORLD();
 
     uint64_t t1 = jl_hrtime();
     uint64_t duration = t1 - t0;
@@ -449,37 +421,44 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
         gc_num.max_time_to_safepoint = duration;
     gc_num.time_to_safepoint = duration;
     gc_num.total_time_to_safepoint += duration;
+}
 
-    if (mmtk_is_collection_enabled()) {
-        JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
-#ifndef __clang_gcanalyzer__
-        mmtk_block_thread_for_gc();
-#endif
-        JL_UNLOCK_NOGC(&finalizers_lock);
-    }
-
-    jl_gc_notify_task_resume(ct);
-
+// The other half of `jl_gc_mmtk_stop_the_world`: disarm the safepoint and let mutators run again,
+// on behalf of `Collection::resume_mutators`. Runs on the same GC worker thread, after the pause's
+// actual GC work is done.
+//
+// Note this drops the inline `run_finalizers` call that used to happen here (on whichever mutator
+// happened to have triggered the just-finished GC): a GC worker thread has no `jl_current_task`
+// to run finalizers on, and unlike before, a pause may now complete with no mutator involved at
+// all (see `poll_from_last_parked_worker` in the mmtk-core patch this pairs with). Finalizers
+// scheduled during this pause still run correctly, just slightly less eagerly, via the existing
+// `jl_gc_have_pending_finalizers` check already woven into `_jl_mutex_unlock` and exception-handler
+// restore -- the same general mechanism `GC.enable_finalizers()` already relies on.
+JL_DLLEXPORT void jl_gc_mmtk_resume_the_world(void)
+{
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
     jl_safepoint_end_gc();
-    jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
-    JL_PROBE_GC_END();
-    jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+}
 
-    // Only disable finalizers on current thread
-    // Doing this on all threads is racy (it's impossible to check
-    // or wait for finalizers on other threads without dead lock).
-    if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
-        JL_TIMING(GC, GC_Finalizers);
-        run_finalizers(ct, 0);
-    }
-    JL_PROBE_GC_FINALIZER();
-
-#ifdef _OS_WINDOWS_
-    SetLastError(last_error);
-#endif
-    errno = last_errno;
+// `Collection::block_for_gc` in the mmtk_julia binding is called on the current thread's own
+// behalf (mirroring `jl_gc_safe_enter`/`jl_gc_safe_leave` above, this needs no explicit `ptls`
+// parameter): by the time a mutator actually gets to block for the GC it was told is needed, the
+// GC may have already been disabled in the meantime (mmtk-core's own `poll()` already checked
+// this once, but nothing prevents a race between that check and this call). If so, there is
+// nothing to wait for; defer the pending allocation instead of waiting on a GC that will not run,
+// the same way `jl_gc_collect` already does for a user-requested collection that arrives disabled.
+// Returns whether collection is disabled (i.e. whether the caller should skip waiting).
+JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
+{
+    if (mmtk_is_collection_enabled())
+        return 0;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
+    static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
+    jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
+    return 1;
 }
 
 // ========================================================================= //

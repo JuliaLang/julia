@@ -215,6 +215,32 @@ int jl_safepoint_start_gc(jl_task_t *ct)
     return 1;
 }
 
+// Arm the GC safepoint on behalf of a GC worker thread -- one that is not itself a registered
+// Julia mutator (no `ptls`/`jl_current_task` of its own) and is never among the threads a pause
+// stops. Used by third-party GC backends (e.g. MMTk) whose own scheduler already guarantees
+// that exactly one of its worker threads calls this per pause, with no other concurrent caller
+// to arbitrate against.
+//
+// This is `jl_safepoint_start_gc` without the parts that only make sense for a mutator calling
+// on its own behalf: there is no `ct`/`suspend_count` to check (a GC worker cannot be the target
+// of `jl_safepoint_suspend_thread`, which only ever addresses threads registered in
+// `jl_all_tls_states`), and no need to retry-or-defer on `jl_gc_running`, since the caller is
+// already guaranteed unique.
+void jl_safepoint_start_gc_from_gc_thread(void) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&safepoint_lock);
+    uint32_t running = 0;
+    int won = jl_atomic_cmpswap(&jl_gc_running, &running, 1);
+    assert(won && "jl_safepoint_start_gc_from_gc_thread must have no concurrent caller"); (void)won;
+    // Unlike jl_safepoint_start_gc, there is no foreign-thread-adoption race to re-check here:
+    // the caller only calls this once its own GC backend has already fully committed to running
+    // this pause (which for MMTk means transitioning out of `GcStatus::Disabled` already), so
+    // collection cannot be globally disabled by the time we get here.
+    jl_safepoint_enable(1);
+    jl_safepoint_enable(2);
+    uv_mutex_unlock(&safepoint_lock);
+}
+
 void jl_safepoint_end_gc(void)
 {
     assert(jl_atomic_load_relaxed(&jl_gc_running));

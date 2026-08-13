@@ -1,6 +1,7 @@
 use crate::SINGLETON;
 use crate::{
-    jl_gc_prepare_to_collect, jl_gc_update_stats, jl_hrtime, jl_throw_out_of_memory_error,
+    jl_gc_mmtk_defer_alloc_if_disabled, jl_gc_mmtk_resume_the_world, jl_gc_mmtk_stop_the_world,
+    jl_gc_safe_enter, jl_gc_safe_leave, jl_gc_update_stats, jl_hrtime, jl_throw_out_of_memory_error,
 };
 use crate::{JuliaVM, USER_TRIGGERED_GC};
 use log::{info, trace};
@@ -9,9 +10,9 @@ use mmtk::util::heap::GCTriggerPolicy;
 use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
-
-use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
+#[cfg(feature = "concurrentimmix")]
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering};
 
 pub static GC_START: AtomicU64 = AtomicU64::new(0);
 
@@ -46,11 +47,14 @@ impl Collection<JuliaVM> for VMCollection {
     where
         F: FnMut(&'static mut Mutator<JuliaVM>),
     {
-        // Wait for all mutators to stop and all finalizers to run
-        while !AtomicBool::load(&WORLD_HAS_STOPPED, Ordering::SeqCst) {
-            // Stay here while the world has not stopped
-            // FIXME add wait var
-        }
+        // Arm the safepoint and wait for every registered mutator to reach it. mmtk-core
+        // guarantees this function has exactly one caller at a time for the current pause, so
+        // this drives the whole handshake itself rather than waiting on some mutator to have
+        // separately triggered it: unlike the busy-spin on a `WORLD_HAS_STOPPED` flag this
+        // replaces, a concurrent GC's closing pause can now complete even if no mutator is
+        // running at all (see `poll_from_last_parked_worker` on the mmtk-core side, which is
+        // what requests that pause in the same situation).
+        unsafe { jl_gc_mmtk_stop_the_world() };
 
         assert!(
             crate::api::mmtk_is_collection_enabled() != 0,
@@ -91,12 +95,6 @@ impl Collection<JuliaVM> for VMCollection {
             )
         }
 
-        // Holding the mutex here guarantees that any mutator that observed
-        // `BLOCK_FOR_GC == true` is already enqueued in `wait()` by the time
-        // we call `notify_all`.
-        let (lock, cvar) = &*STW_COND.clone();
-        let count = lock.lock().unwrap();
-
         #[cfg(feature = "concurrentimmix")]
         {
             // For concurrent Immix, we need to check if SATB is active
@@ -111,17 +109,24 @@ impl Collection<JuliaVM> for VMCollection {
             log::info!("Set CONCURRENT_MARKING_ACTIVE to {concurrent_marking_active}");
         }
 
-        AtomicBool::store(&BLOCK_FOR_GC, false, Ordering::SeqCst);
-        AtomicBool::store(&WORLD_HAS_STOPPED, false, Ordering::SeqCst);
-        cvar.notify_all();
-        drop(count);
+        // Disarm the safepoint and let mutators run again.
+        unsafe { jl_gc_mmtk_resume_the_world() };
+
+        // This pause is now fully done, regardless of whether any mutator was blocked in
+        // `block_for_gc` for it (with a concurrent GC's closing pause, there may not have been
+        // one at all). Reset the nesting depth left over from whatever user-triggered collection
+        // request, if any, led here -- `block_for_gc`, unlike the `mmtk_block_thread_for_gc` this
+        // replaces, has no single "the" blocking mutator to do this from once the pause it was
+        // waiting for actually completes.
+        AtomicIsize::store(&USER_TRIGGERED_GC, 0, Ordering::SeqCst);
 
         // `resume_mutators()` is called after every stop-the-world pause, including the pause
         // that ends a concurrent GC's background-work phase (there's no more targeted mmtk-core
-        // hook for that specifically). Advance the GC epoch to wake any mutator retrying
-        // `mmtk_disable_collection()` after it failed with
-        // `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH`: since a pause just completed, it's
-        // worth retrying (the retry is cheap; if it still fails, the mutator just waits again).
+        // hook for that specifically). Advance the GC epoch to wake every waiter: a mutator
+        // retrying `mmtk_disable_collection()` after it failed with
+        // `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH`, and `block_for_gc` below, both waiting
+        // on the same pause finishing (the retry/return is cheap either way; if disable still
+        // fails, or another pause is already needed, the waiter just waits again).
         let (lock, cvar) = &*crate::GC_EPOCH_COND.clone();
         let mut epoch = lock.lock().unwrap();
         *epoch = epoch.wrapping_add(1);
@@ -138,11 +143,30 @@ impl Collection<JuliaVM> for VMCollection {
     }
 
     fn block_for_gc(_tls: VMMutatorThread) {
-        info!("Triggered GC!");
-
-        unsafe { jl_gc_prepare_to_collect() };
-
-        info!("Finished blocking mutator for GC!");
+        // By the time mmtk-core calls this, a pause has already been requested/scheduled --
+        // that's why it's calling this at all -- and `stop_all_mutators` above will drive it to
+        // completion on its own, regardless of what this mutator does next (it no longer needs
+        // to be the one to run the stop-the-world handshake, unlike the `jl_gc_prepare_to_collect`
+        // this used to call). So this only needs to get out of the way -- enter a GC-safe region
+        // so `stop_all_mutators`'s wait counts this mutator as already stopped without it doing
+        // anything further -- and wait for that pause to finish.
+        //
+        // Capturing the epoch here rather than earlier means a mutator preempted between its own
+        // `poll()` seeing a collection was needed and actually reaching this call may
+        // occasionally end up waiting out a *subsequent* pause instead of the one it originally
+        // observed, if that first one already finished in the meantime. That's harmless -- it
+        // never deadlocks, and by the time it returns, at least one GC has run either way -- and
+        // far simpler than threading the originally-observed epoch through mmtk-core's several
+        // `block_for_gc` call sites (`gc_poll`, `handle_user_collection_request`, the
+        // allocation-fast-path retry in `policy::space`), none of which pass one through.
+        if unsafe { jl_gc_mmtk_defer_alloc_if_disabled() } != 0 {
+            // Collection was disabled by the time we got here; nothing to wait for.
+            return;
+        }
+        let epoch = crate::api::mmtk_gc_epoch();
+        let gc_state = unsafe { jl_gc_safe_enter() };
+        crate::api::mmtk_wait_for_new_gc_epoch(epoch);
+        unsafe { jl_gc_safe_leave(gc_state) };
     }
 
     fn spawn_gc_thread(_tls: VMThread, ctx: GCThreadContext<JuliaVM>) {
@@ -193,22 +217,4 @@ pub fn is_current_gc_nursery() -> bool {
         Some(gen) => gen.is_current_gc_nursery(),
         None => false,
     }
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_block_thread_for_gc() {
-    AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
-
-    let (lock, cvar) = &*STW_COND.clone();
-    let mut count = lock.lock().unwrap();
-
-    info!("Blocking for GC!");
-
-    AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
-
-    while AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) {
-        count = cvar.wait(count).unwrap();
-    }
-
-    AtomicIsize::store(&USER_TRIGGERED_GC, 0, Ordering::SeqCst);
 }

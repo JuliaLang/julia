@@ -73,32 +73,28 @@ pub static mut JULIA_HEADER_SIZE: usize = 0;
 pub static mut JULIA_BUFF_TAG: usize = 0;
 
 #[no_mangle]
-pub static BLOCK_FOR_GC: AtomicBool = AtomicBool::new(false);
-
-#[no_mangle]
-pub static WORLD_HAS_STOPPED: AtomicBool = AtomicBool::new(false);
-
-#[no_mangle]
 pub static USER_TRIGGERED_GC: AtomicIsize = AtomicIsize::new(0);
 
 lazy_static! {
-    pub static ref STW_COND: Arc<(Mutex<usize>, Condvar)> =
-        Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
 
     // The GC epoch: notified by `VMCollection::resume_mutators()` every time a stop-the-world
-    // pause ends (including the pause that ends a concurrent GC's background-work phase). Used
-    // to wake a mutator that's retrying `mmtk_disable_collection()` after it failed with
-    // `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH` (status `InPause`/`InConcurrentGC`; see
-    // `mmtk_wait_for_new_gc_epoch()`), since mmtk-core has no more targeted hook for "a pause or
-    // concurrent GC just ended" specifically.
+    // pause ends (including the pause that ends a concurrent GC's background-work phase). Two
+    // independent waiters use this, both because mmtk-core has no more targeted hook for "a pause
+    // or concurrent GC just ended" specifically:
+    // - A mutator retrying `mmtk_disable_collection()` after it failed with
+    //   `MMTK_DISABLE_COLLECTION_WAIT_FOR_NEW_GC_EPOCH` (status `InPause`/`InConcurrentGC`; see
+    //   `mmtk_wait_for_new_gc_epoch()`).
+    // - `Collection::block_for_gc`, waiting for whatever pause mmtk-core already told it is
+    //   coming (see there for why that's all it needs to do).
     //
     // The guarded `u64` is the epoch counter, incremented on every notification: a waiter should
-    // capture its current value (`mmtk_gc_epoch()`) before giving up on
-    // `mmtk_disable_collection()`, then wait until the epoch differs from that captured value,
-    // rather than waiting unconditionally -- this avoids missing a notification that arrives
-    // between the failed disable attempt and the start of the wait.
+    // capture its current value (`mmtk_gc_epoch()`) before giving up (on `mmtk_disable_collection()`,
+    // or on the collection-required check that led to `block_for_gc` being called at all), then
+    // wait until the epoch differs from that captured value, rather than waiting unconditionally
+    // -- this avoids missing a notification that arrives between that check and the start of the
+    // wait.
     pub static ref GC_EPOCH_COND: Arc<(Mutex<u64>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
 
@@ -129,7 +125,11 @@ extern "C" {
     pub fn jl_gc_get_have_pending_finalizers() -> *mut i32;
     pub fn jl_gc_scan_vm_specific_roots(closure: *mut crate::slots::RootsWorkClosure);
     pub fn jl_gc_update_inlined_array(to: Address, from: Address);
-    pub fn jl_gc_prepare_to_collect();
+    pub fn jl_gc_mmtk_stop_the_world();
+    pub fn jl_gc_mmtk_resume_the_world();
+    pub fn jl_gc_mmtk_defer_alloc_if_disabled() -> i32;
+    pub fn jl_gc_safe_enter() -> i8;
+    pub fn jl_gc_safe_leave(state: i8);
     pub fn jl_gc_get_owner_address_to_mmtk(m: Address) -> Address;
     pub fn jl_gc_genericmemory_how(m: Address) -> usize;
     pub fn jl_gc_get_max_memory() -> usize;
