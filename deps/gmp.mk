@@ -26,7 +26,7 @@ GMP_CONFIGURE_OPTS += CFLAGS="-fPIC"
 endif
 
 $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://ftpmirror.gnu.org/gnu/gmp/$(notdir $@)
+	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$(notdir $@)
 
 $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
