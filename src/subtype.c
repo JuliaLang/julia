@@ -198,6 +198,15 @@ typedef struct jl_stenv_t {
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
+    // Per-query memoization of `var_occurs_invariant(u->body, u->var)` (see
+    // `cached_body_occurs_inv` below). Points to a slot rooted in the frame of
+    // the outermost `forall_exists_subtype`/`intersect_all`; NULL when no
+    // enclosing owner installed one, in which case the predicate runs uncached.
+    jl_array_t **occ_cache;
+    // `subtype_unionall`/`intersect_unionall` entries seen while `*occ_cache`
+    // is still NULL; the cache is only allocated once this passes
+    // OCC_CACHE_MIN_TICKS, so shallow queries never pay the allocation.
+    int occ_ticks;
 } jl_stenv_t;
 
 // state manipulation utilities
@@ -1516,6 +1525,46 @@ static int var_occurs_invariant(jl_value_t *v, jl_tvar_t *var) JL_NOTSAFEPOINT
     return var_occurs_inside(v, var, 0, 1);
 }
 
+// Per-query memoization of `var_occurs_invariant(u->body, u->var)`.
+//
+// The predicate is a pure structural property of the (immutable) UnionAll
+// object, yet it is recomputed on every entry to `subtype_unionall` /
+// `intersect_unionall`, and the ∀∃ union enumeration re-enters the same
+// UnionAlls many times; for unionall-heavy queries (method insertion, pkgimage
+// edge verification) the repeated walks are a measurable share of the query.
+//
+// The cache is a small direct-mapped table of `[u, ans]` object pairs living in
+// an ordinary rooted array, so key objects stay alive for exactly the cache's
+// lifetime and a collision simply overwrites the slot. It is installed by the
+// outermost `forall_exists_subtype`/`intersect_all` (`e->occ_cache` points to a
+// slot in that frame's GC frame) and allocated lazily once a query has entered
+// enough unionalls to suggest the repeated work is worth it.
+#define OCC_CACHE_LEN 61
+#define OCC_CACHE_MIN_TICKS 8
+
+// Allocate the cache once the query is deep enough for it to pay off. Callers
+// must not hold unrooted values (allocation can collect).
+static void occ_cache_prepare(jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    if (e->occ_cache != NULL && *e->occ_cache == NULL &&
+        ++e->occ_ticks >= OCC_CACHE_MIN_TICKS)
+        *e->occ_cache = jl_alloc_vec_any(OCC_CACHE_LEN * 2);
+}
+
+static int cached_body_occurs_inv(jl_stenv_t *e, jl_unionall_t *u) JL_NOTSAFEPOINT
+{
+    if (e->occ_cache == NULL || *e->occ_cache == NULL)
+        return var_occurs_invariant(u->body, u->var);
+    jl_array_t *cache = *e->occ_cache;
+    size_t i = (size_t)((((uintptr_t)u >> 4) * 0x9E3779B97F4A7C15ULL) % OCC_CACHE_LEN) * 2;
+    if (jl_array_ptr_ref(cache, i) == (jl_value_t*)u)
+        return jl_array_ptr_ref(cache, i + 1) == jl_true;
+    int ans = var_occurs_invariant(u->body, u->var);
+    jl_array_ptr_set(cache, i, (jl_value_t*)u);
+    jl_array_ptr_set(cache, i + 1, ans ? jl_true : jl_false);
+    return ans;
+}
+
 static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     jl_varbinding_t *btemp = e->vars;
@@ -1710,9 +1759,10 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     vb.depth0 = e->invdepth;
     vb.prev = e->vars;
     JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
+    occ_cache_prepare(e);
     if (jl_has_typevar(t, u->var))
         u = jl_rename_unionall(u);
-    int body_occurs_inv = var_occurs_invariant(u->body, u->var);
+    int body_occurs_inv = cached_body_occurs_inv(e, u);
     vb.var = u->var;
     vb.lb = u->var->lb;
     vb.ub = u->var->ub;
@@ -3312,6 +3362,13 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl
     //   ∃₁
     assert(e->Runions.depth == 0);
     assert(e->Lunions.depth == 0);
+    // Install the occurrence-predicate cache slot for this query if no enclosing
+    // owner did; the local is the GC root that keeps the cache's keys alive.
+    jl_array_t *occ_cache_root = NULL;
+    int occ_installed = (e->occ_cache == NULL);
+    if (occ_installed)
+        e->occ_cache = &occ_cache_root;
+    JL_GC_PUSH1(&occ_cache_root);
     jl_savedenv_t se;
     save_env(e, &se, 1);
 
@@ -3325,6 +3382,9 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl
     }
 
     free_env(&se);
+    JL_GC_POP();
+    if (occ_installed)
+        e->occ_cache = NULL;
     return sub;
 }
 
@@ -3347,6 +3407,8 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->triangular = 0;
     e->ignore_lb_required = 0;
     e->Loffset = 0;
+    e->occ_cache = NULL;
+    e->occ_ticks = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
     e->Lunions.used = 0;       e->Runions.used = 0;
@@ -3862,6 +3924,9 @@ static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAF
     e2.envidx = e->envidx;
     e2.ignore_lb_required = e->ignore_lb_required;
     e2.Loffset = e->Loffset;
+    // share the outer query's occurrence cache (the outer frame outlives this
+    // nested query, so the rooted slot remains valid)
+    e2.occ_cache = e->occ_cache;
     return forall_exists_subtype(x, y, &e2, PARAM_NONE);
 }
 
@@ -5099,7 +5164,8 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res = NULL;
     jl_savedenv_t se;
-    int body_occurs_inv = var_occurs_invariant(u->body, u->var);
+    occ_cache_prepare(e);
+    int body_occurs_inv = cached_body_occurs_inv(e, u);
     jl_varbinding_t vb;
     memset(&vb, 0, sizeof(vb));
     vb.var = u->var;
@@ -6068,6 +6134,13 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     e->Runions.used = 0;
     jl_value_t **is;
     JL_GC_PUSHARGS(is, 2);
+    // Install the occurrence-predicate cache slot for this intersection if no
+    // enclosing owner did (see `forall_exists_subtype`).
+    jl_array_t *occ_cache_root = NULL;
+    int occ_installed = (e->occ_cache == NULL);
+    if (occ_installed)
+        e->occ_cache = &occ_cache_root;
+    JL_GC_PUSH1(&occ_cache_root);
     jl_savedenv_t se, me;
     save_env(e, &se, 1);
     int niter = 0, total_iter = 0;
@@ -6119,7 +6192,10 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         free_env(&me);
     }
     free_env(&se);
-    JL_GC_POP();
+    JL_GC_POP(); // occ_cache_root
+    if (occ_installed)
+        e->occ_cache = NULL;
+    JL_GC_POP(); // is
     return is[0];
 }
 
