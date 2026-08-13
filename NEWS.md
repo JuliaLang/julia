@@ -139,7 +139,7 @@ New library functions
 
 * `tap(f)` creates a function that calls `f(x)` for side effects and returns `x` ([#61340]).
 * `unsplat(f)` creates a function that bundles its arguments into a tuple and passes them to `f`;
-  it is the inverse of `splat`.
+  it is the inverse of `splat` ([#62714]).
 * `Base.set_binding_visibility!` sets the declared visibility (`:none`, `:public`, or `:export`) of a name
   in a module, allowing an `export` or `public` declaration to be retracted programmatically ([#62131]).
 * `Base.generating_output()` has been made `public` (but not exported) to allow checking whether the current
