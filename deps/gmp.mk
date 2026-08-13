@@ -6,6 +6,8 @@ ifneq ($(USE_BINARYBUILDER_GMP),1)
 GMP_CONFIGURE_OPTS := $(CONFIGURE_COMMON)
 GMP_CONFIGURE_OPTS += --enable-cxx --enable-shared --disable-static
 GMP_CONFIGURE_OPTS += CC_FOR_BUILD="$(HOSTCC)"
+# gmp 6.3.0's configure probes are not C23-clean and reject GCC >= 15 as "not working"
+GMP_CONFIGURE_OPTS += CC="$(CC) $(SANITIZE_OPTS) -std=gnu11"
 
 ifeq ($(BUILD_ARCH),x86_64)
 GMP_CONFIGURE_OPTS += --enable-fat
