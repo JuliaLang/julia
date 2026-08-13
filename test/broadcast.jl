@@ -1290,6 +1290,10 @@ end
     Base.size(::WiderGetindex62564) = (2,)
     Base.getindex(::WiderGetindex62564, i::Int) = i == 1 ? 1.0 : 2.0f0
 
+    struct WiderGetindex0D62564 <: AbstractArray{Float64,0} end
+    Base.size(::WiderGetindex0D62564) = ()
+    Base.getindex(::WiderGetindex0D62564) = 1
+
     struct IncompatGetindex62564 <: AbstractVector{Int} end
     Base.size(::IncompatGetindex62564) = (2,)
     Base.getindex(::IncompatGetindex62564, i::Int) = "s"
@@ -1299,6 +1303,23 @@ end
     wg62564() = identity.(WiderGetindex62564())
     @test @inferred(wg62564()) isa Vector{Float64}
     @test identity.(WiderGetindex62564()) == [1.0, 2.0]
+    wg0d62564() = ((x, _) -> x).(WiderGetindex0D62564(), [nothing])
+    @test @inferred(wg0d62564()) == [1.0]
     @test_throws MethodError identity.(IncompatGetindex62564())
     @test (x -> 0).(IncompatGetindex62564()) == [0, 0]
+
+    struct BottomEltypeAxis62564 <: Base.AbstractOneTo{Int} end
+    Base.first(::BottomEltypeAxis62564) = 1
+    Base.last(::BottomEltypeAxis62564) = 0
+    Base.length(::BottomEltypeAxis62564) = 0
+    Base.iterate(::BottomEltypeAxis62564) = nothing
+    Base.getindex(axis::BottomEltypeAxis62564, i::Int) = throw(BoundsError(axis, i))
+    Base.eltype(::Type{BottomEltypeAxis62564}) = Union{}
+
+    struct BottomEltypeIndices62564 <: AbstractVector{Int} end
+    Base.size(::BottomEltypeIndices62564) = (0,)
+    Base.axes(::BottomEltypeIndices62564) = (BottomEltypeAxis62564(),)
+    Base.getindex(A::BottomEltypeIndices62564, i::Int) = throw(BoundsError(A, i))
+
+    @test identity.(BottomEltypeIndices62564()) == Union{}[]
 end
