@@ -4320,30 +4320,62 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_cancel_source_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(3,
+                        jl_perm_symsvec(7,
                                         "child_head",
+                                        "waiters_head",
+                                        "walk_lock",
                                         "state",
-                                        "nparents"),
-                        jl_svec(3,
+                                        "nparents",
+                                        "dead_count",
+                                        "reg_count"),
+                        jl_svec(7,
                                 jl_any_type, // Union{Nothing, CancellationTokenSource}, weak
+                                jl_any_type, // Union{Nothing, WaitEntry}, strong
+                                jl_any_type, // Union{Nothing, ReentrantLock}, strong
                                 jl_uint8_type,
-                                jl_uint16_type),
+                                jl_uint16_type,
+                                jl_uint32_type,
+                                jl_uint32_type),
                         jl_emptysvec,
-                        0, 1, 3);
-    // Field 3 (nparents) is const; fields 1-2 (child_head, state) are atomic
-    const static uint32_t cancel_source_constfields[1]  = { 0b100 };
-    const static uint32_t cancel_source_atomicfields[1] = { 0b011 };
+                        0, 1, 7);
+    // Field 5 (nparents) is const; fields 1-4 (child_head, waiters_head,
+    // walk_lock, state), 6 (dead_count) and 7 (reg_count) are atomic
+    const static uint32_t cancel_source_constfields[1]  = { 0b0010000 };
+    const static uint32_t cancel_source_atomicfields[1] = { 0b1101111 };
     jl_cancel_source_type->name->constfields = cancel_source_constfields;
     jl_cancel_source_type->name->atomicfields = cancel_source_atomicfields;
     XX(cancel_source);
     assert(jl_datatype_size(jl_cancel_source_type) == sizeof(jl_cancel_source_t));
+
+    // Variable-sized (see jl_wait_entry_t) - only the fixed fields are exposed
+    // to julia; the trailing wait slots are reached through the
+    // jl_wait_entry_slot_* accessors.
+    jl_wait_entry_type = (jl_datatype_t*)
+        jl_new_datatype(jl_symbol("WaitEntryN"), core, jl_any_type,
+                        jl_emptysvec,
+                        jl_perm_symsvec(2,
+                                        "task",
+                                        "nslots"),
+                        jl_svec(2,
+                                jl_any_type, // Union{Nothing, Task}
+                                jl_uint32_type),
+                        jl_emptysvec,
+                        0, 1, 2);
+    // Field 2 (nslots) is const; field 1 (task) is atomic (accessed
+    // relaxed - see jl_wait_entry_t)
+    const static uint32_t wait_entry_constfields[1] = { 0b10 };
+    const static uint32_t wait_entry_atomicfields[1] = { 0b01 };
+    jl_wait_entry_type->name->constfields = wait_entry_constfields;
+    jl_wait_entry_type->name->atomicfields = wait_entry_atomicfields;
+    XX(wait_entry);
+    assert(jl_datatype_size(jl_wait_entry_type) == sizeof(jl_wait_entry_t));
 
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"),
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(30,
+                        jl_perm_symsvec(32,
                                         "next",
                                         "queue",
                                         "storage",
@@ -4355,7 +4387,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "sticky",
                                         "priority",
                                         "_isexception",
-                                        "pad00",
+                                        "preempt_request",
                                         "pad01",
                                         "pad02",
                                         "rngState0",
@@ -4373,8 +4405,10 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "finished_at",
                                         "waiting_on",
                                         "cached_wait_entry",
-                                        "invoked"),
-                        jl_svec(30,
+                                        "cached_cancel_entry",
+                                        "invoked",
+                                        "bound_cancel_token"),
+                        jl_svec(32,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -4404,6 +4438,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint64_type,
                                 jl_any_type,
                                 jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
                                 jl_any_type),
                         jl_emptysvec,
                         0, 1, 6);
@@ -4411,9 +4447,10 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
     // Set field 20 (metrics_enabled) as const
-    // Set fields 8 (_state), 24-27 (metric counters) and 28 (waiting_on) as atomic
+    // Set fields 8 (_state), 12 (preempt_request), 24-27 (metric counters),
+    // 28 (waiting_on) and 32 (bound_cancel_token) as atomic
     const static uint32_t task_constfields[1]  = { 0b00000000000010000000000000000000 };
-    const static uint32_t task_atomicfields[1] = { 0b00001111100000000000000010000000 };
+    const static uint32_t task_atomicfields[1] = { 0b10001111100000000000100010000000 };
     jl_task_type->name->constfields = task_constfields;
     jl_task_type->name->atomicfields = task_atomicfields;
 

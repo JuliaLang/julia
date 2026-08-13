@@ -177,7 +177,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([K"continue"], when=vcx.in_loop) -> pass()
     ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
-    ([K"break"], when=vcx.in_loop) -> pass()
+    # An unlabeled break is also allowed inside anonymous `@label` blocks;
+    # breaking through a named block is rejected with a precise error during
+    # linearization.
+    ([K"break"], when=vcx.in_loop||vcx.in_symblock) -> pass()
     ([K"break" lab], when=vcx.in_loop||vcx.in_symblock) ->
         vst1_ident(vcx, lab; lhs=true)
     ([K"break" lab x], when=vcx.in_loop||vcx.in_symblock) ->
@@ -1056,7 +1059,8 @@ vst1_generator(vcx, st) = let
             vst1(vcx, cond) &
             all(vst1_iter, vcx, is)
         [K"generator" val is...] ->
-            vst1(vcx, val) & all(vst1_iter, vcx, is)
+            vst1(with(vcx; readable_underscore=true), val) &
+            all(vst1_iter, vcx, is)
         [K"generator" _...] -> @fail(st, "malformed `generator`")
         _ -> @fail(st, "expected `generator`")
     end
@@ -1284,10 +1288,9 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"lambda" _...] -> vst2_lam(vcx, st)
     [K"function_decl" x] -> vst2_ident(vcx, x)
     [K"function_type" x] -> vst2(vcx, x)
-    # TODO: check that mtable is equal to the method_defs arg 1?
     [K"method" mtable argtypes lam] -> !vcx.in_method_defs ?
         @fail(st, "method outside of method_defs") :
-        (kind(mtable) === K"nothing" ? pass() : vst2_ident_val(vcx, mtable)) &
+        (kind(mtable) === K"nothing" ? pass() : vst2(vcx, mtable)) &
         vst2(vcx, argtypes) & vst2_lam(vcx, lam)
     [K"method_defs" id [K"block" sps...] body] ->
         (kind(id) === K"nothing" ? pass() : vst2_ident_val(vcx, id)) &

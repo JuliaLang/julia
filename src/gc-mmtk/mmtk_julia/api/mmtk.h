@@ -57,6 +57,7 @@ extern void mmtk_immortal_region_post_alloc(void* addr, size_t size);
 
 // Write barriers
 extern void mmtk_memory_region_copy(MMTk_Mutator mutator, void* src_obj, void* src_addr, void* dst_obj, void* dst_addr, size_t size);
+extern void mmtk_object_reference_write_pre(MMTk_Mutator mutator, const void* src, const void* target);
 extern void mmtk_object_reference_write_post(MMTk_Mutator mutator, const void* src, const void* target);
 extern void mmtk_object_reference_write_slow(MMTk_Mutator mutator, const void* src, const void* target);
 extern _Atomic(uintptr_t) JULIA_MALLOC_BYTES;
@@ -64,7 +65,7 @@ extern _Atomic(uintptr_t) JULIA_MALLOC_BYTES;
 /**
  * Misc
  */
-extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t header_size, uintptr_t tag);
+extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t n_concurrent_gcthreads, uintptr_t header_size, uintptr_t tag);
 extern bool mmtk_will_never_move(void* object);
 extern bool mmtk_is_moving(void);
 extern const char* mmtk_get_plan_name(void);
@@ -102,10 +103,11 @@ extern void mmtk_gc_poll(void *tls);
 extern void mmtk_julia_copy_stack_check(int copy_stack);
 extern void* mmtk_get_possibly_forwarded(void* object);
 extern void mmtk_block_thread_for_gc(void);
+extern void mmtk_set_concurrent_marking_enabled(bool enabled);
 extern void* mmtk_new_mutator_iterator(void);
 extern void* mmtk_get_next_mutator_tls(void*);
 extern void* mmtk_close_mutator_iterator(void*);
-
+extern void mmtk_notify_task_resume(void *mutator, const void *task);
 
 /**
  * VM Accounting

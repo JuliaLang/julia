@@ -177,3 +177,117 @@ function list_deletefirst!(q::LinkedList{T}, val::T) where T
     end
     return q
 end
+
+## Wait-entry lists
+#
+# Wait entries carry uniform {owner, next, aux} slots (see cancellation.jl)
+# and can be registered on several waitables at once (wait-any), so the
+# list operations locate each entry's slot for *this* list through the
+# ILLRef's waitee identity - every list is populated under exactly one
+# identity (the ILLRef invariant above). The generic `.next`/`.queue`
+# methods above keep serving Task scheduler lists.
+
+function push!(qr::ILLRef{WaitEntry}, val::WaitEntry)
+    _find_slot(val, qr.waitee) == 0 || error("val already in this list")
+    _acquire_slot!(val, qr.waitee)
+    q = qr.list
+    tail = q.tail
+    if tail === nothing
+        q.head = q.tail = val
+    else
+        tail = tail::WaitEntry
+        _set_slot_next!(tail, _find_slot(tail, qr.waitee), val)
+        q.tail = val
+    end
+    return q
+end
+
+function pushfirst!(qr::ILLRef{WaitEntry}, val::WaitEntry)
+    _find_slot(val, qr.waitee) == 0 || error("val already in this list")
+    i = _acquire_slot!(val, qr.waitee)
+    q = qr.list
+    head = q.head
+    if head === nothing
+        q.head = q.tail = val
+    else
+        _set_slot_next!(val, i, head)
+        q.head = val
+    end
+    return q
+end
+
+function popfirst!(qr::ILLRef{WaitEntry})
+    q = qr.list
+    val = q.head::WaitEntry
+    i = _find_slot(val, qr.waitee)
+    vnext = _slot_next(val, i)
+    q.head = vnext
+    vnext === nothing && (q.tail = nothing)
+    _release_slot!(val, i)
+    return val
+end
+
+function pop!(qr::ILLRef{WaitEntry})
+    val = qr.list.tail::WaitEntry
+    list_deletefirst!(qr, val) # expensive!
+    return val
+end
+
+# Delete `val` from the list, but only if it is actually in it, as witnessed
+# by its slot for this list's identity. This makes deletion a no-op if `val`
+# was concurrently popped, which various cleanup paths rely upon.
+function list_deletefirst!(qr::ILLRef{WaitEntry}, val::WaitEntry)
+    vi = _find_slot(val, qr.waitee)
+    vi == 0 && return qr.list
+    q = qr.list
+    o = qr.waitee
+    head = q.head
+    if head === val
+        vnext = _slot_next(val, vi)
+        q.head = vnext
+        vnext === nothing && (q.tail = nothing)
+    else
+        head === nothing && return q
+        prev = head::WaitEntry
+        while true
+            previ = _find_slot(prev, o)
+            previ == 0 && return q
+            prevslot = slots(prev)[previ]
+            cur = prevslot.next
+            cur === nothing && return q
+            cur = cur::WaitEntry
+            if cur === val
+                vnext = _slot_next(val, vi)
+                prevslot.next = vnext
+                vnext === nothing && (q.tail = prev)
+                break
+            end
+            prev = cur
+        end
+    end
+    _release_slot!(val, vi)
+    return q
+end
+
+function length(qr::ILLRef{WaitEntry})
+    n = 0
+    w = qr.list.head
+    while w !== nothing
+        n += 1
+        w = _next_on(w::WaitEntry, qr.waitee)
+    end
+    return n
+end
+
+# Whether any entry on the list is still armed (the emptiness that matters
+# to waiters-pending queries; claimed corpses linger until popped).
+function _waitq_isempty(qr::ILLRef{WaitEntry})
+    w = qr.list.head
+    while w !== nothing
+        w = w::WaitEntry
+        t = @atomic :monotonic w.task
+        t isa Task && (@atomic t.waiting_on) === w && return false
+        w = _next_on(w, qr.waitee)
+    end
+    return true
+end

@@ -15,6 +15,7 @@ extern "C" {
 #endif
 
 struct _jl_tls_states_t;
+struct _jl_task_t;
 struct _jl_value_t;
 struct _jl_weakref_t;
 struct _jl_datatype_t;
@@ -165,6 +166,8 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void) JL_NOTSAFEPOINT;
 // each GC should implement it but it will most likely not be used by other code in the runtime.
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+// Notify the GC that a task is resuming execution on a mutator thread.
+void jl_gc_notify_task_resume(struct _jl_task_t *task) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
 // Metrics
@@ -224,6 +227,20 @@ JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc(struct _jl_tls_states_t *ptls
 // allocation of that type in the allocation profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc(struct _jl_tls_states_t *ptls, size_t sz,
                                                  struct _jl_value_t *type) JL_CANSAFEPOINT;
+// Reset-safe variants of jl_gc_small_alloc/jl_gc_big_alloc/jl_gc_alloc_typed/
+// jl_gc_queue_root, selected by the compiler for code that may run inside a
+// published cancellation reset region: they unpublish the current task's
+// reset context around the operation (whose internal frames must never be
+// abandoned by an asynchronously delivered reset), write the object tag, and
+// republish it on the way out. Implemented generically in gc-common.c.
+JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc_reset_safe(struct _jl_tls_states_t *ptls,
+                                                              int offset, int osize,
+                                                              struct _jl_value_t *type) JL_CANSAFEPOINT;
+JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc_reset_safe(struct _jl_tls_states_t *ptls, size_t sz,
+                                                            struct _jl_value_t *type) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_gc_alloc_typed_reset_safe(struct _jl_tls_states_t *ptls, size_t sz,
+                                                void *ty) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_gc_queue_root_reset_safe(const struct _jl_value_t *ptr);
 // Wrapper around Libc malloc that updates Julia allocation counters.
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz) JL_CANSAFEPOINT;
 // Wrapper around Libc calloc that updates Julia allocation counters.
@@ -232,6 +249,10 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz);
 // Wrapper around Libc realloc that updates Julia allocation counters.
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
+// Special reset-safe variants of the above functions for use by GMP.
+JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz) JL_CANSAFEPOINT;
 // Wrapper around Libc malloc that's used to dynamically allocate memory for Arrays and
 // Strings. It increments Julia allocation counters and should check whether we're close to
 // the Julia heap target, and therefore, whether we should run a collection. Note that this

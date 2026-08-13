@@ -157,6 +157,8 @@ static int speccache_eq(size_t idx, const void *ty, jl_value_t *data, uint_t hv)
     if (idx >= jl_svec_len(data))
         return 0; // We got a OOB access, probably due to a data race
     jl_method_instance_t *ml = (jl_method_instance_t*)jl_svecref(data, idx);
+    if (ml == NULL || (jl_value_t*)ml == jl_nothing)
+        return 0; // slot not yet published, probably due to a data race
     jl_value_t *sig = ml->specTypes;
     if (ty == sig)
         return 1;
@@ -472,8 +474,9 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     // increase that limit, we'll need to
     // allocate another bit for the counter.
     ct->reentrant_timing += 0b10;
-    // An asynchronous InterruptException delivered in the middle of inference
-    // corrupts the compiler's state; defer it until inference has finished.
+    // An asynchronous interruption in the middle of inference corrupts the
+    // compiler's state; sigatomic defers asynchronous unwinds (e.g. task
+    // abandonment) until inference has finished.
     JL_SIGATOMIC_BEGIN();
     JL_TRY {
         ci = (jl_code_instance_t*)jl_apply(fargs, 5);
@@ -517,8 +520,8 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         JL_GC_POP();
     }
 
-    // may rethrow a deferred InterruptException, now that the compiler state
-    // is consistent again; keep `ci` rooted across the safepoint
+    // end the deferral region, now that the compiler state is consistent
+    // again; keep `ci` rooted across the safepoint
     fargs[0] = (jl_value_t*)ci;
     JL_SIGATOMIC_END();
     JL_GC_POP();
@@ -1094,6 +1097,8 @@ static void drop_all_methcache(jl_methcache_t *mc) JL_CANSAFEPOINT
             }
         }
     }
+    // Deletion barrier: snapshot the old cache/leafcache for SATB collectors.
+    jl_gc_wb(mc, NULL);
     jl_atomic_store_relaxed(&mc->cache, jl_nothing);
     jl_atomic_store_relaxed(&mc->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
     JL_UNLOCK(&mc->writelock);

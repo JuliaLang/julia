@@ -343,7 +343,7 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                         end
                     end
                 elseif Core.finalizer isa ftyp
-                    if length(stmt.args) == 3
+                    if 3 <= length(stmt.args) <= 5
                         finalizer = argextype(stmt.args[2], codeinfo, sptypes)
                         obj = argextype(stmt.args[3], codeinfo, sptypes)
                         atype = argtypes_to_type(Any[finalizer, obj])
@@ -353,9 +353,8 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                             ci = get(caches, mi, nothing)
                             ci isa CodeInstance && continue
                         end
-
-                        error = "unresolved finalizer registered"
                     end
+                    error = "unresolved finalizer registered"
                 elseif Core._apply isa ftyp
                     error = "trim verification not yet implemented for builtin `Core._apply`"
                 elseif Core._call_in_world_total isa ftyp

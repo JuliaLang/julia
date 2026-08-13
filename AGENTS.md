@@ -32,6 +32,20 @@ depending on your changes.
 After modifying any C/C++ file under `src/`, also run the Clang static analysis
 checks — see the `c-static-analysis` skill ([`doc/src/devdocs/agents/skills/c-static-analysis/`](doc/src/devdocs/agents/skills/c-static-analysis/SKILL.md)).
 
+### Testing LLVM-related changes
+
+When making changes to LLVM passes or codegen, add `LLVM_ASSERTIONS=1` to `Make.user` to enable
+LLVM assertions. This helps catch IR verification errors early:
+
+```bash
+echo "LLVM_ASSERTIONS=1" >> Make.user
+```
+
+To run LLVM pass tests:
+```bash
+make -C test/llvmpasses <testname>.ll
+```
+
 ## Using Revise
 
 If you have made changes to files included in the system image (base/ or stdlib/),

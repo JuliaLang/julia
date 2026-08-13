@@ -385,6 +385,15 @@ private:
     Function *smallAllocFunc;
     Function *bigAllocFunc;
     Function *allocTypedFunc;
+    // Reset-safe variants of the above, used for call sites that
+    // CancellationLowering annotated with julia.reset_region metadata (they
+    // may execute with a cancellation reset region published): these entry
+    // points unpublish/republish the region themselves, so no per-site drop
+    // is needed (see llvm-cancellation-lowering.cpp).
+    Function *queueRootResetSafeFunc;
+    Function *smallAllocResetSafeFunc;
+    Function *bigAllocResetSafeFunc;
+    Function *allocTypedResetSafeFunc;
     Value *pgcstack;
     Type *T_size;
 
