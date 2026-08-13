@@ -1287,6 +1287,31 @@ length(a::Array{T,1}) where {T} = getfield(getfield(a, :size), 1)
 const C_NULL = bitcast(Ptr{Cvoid}, 0)
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
 
+# Install the field generator for a struct with computed field types (declared
+# field-type slots holding Core.ComputedFieldType markers). Called by lowered
+# code from struct definitions, right after the type is resolved. The generator
+# maps the type parameter values to the tuple of field types (a tuple, not an
+# svec, since svec egality is identity, which would preclude proving the
+# generator `:consistent`); the runtime invokes it when a fully concrete
+# instantiation of the type is created.
+#
+# When the full validation machinery is available (see computed_fieldtypes.jl),
+# the generator is required to have provably `:foldable` + `:nortcall` effects
+# and is duplicated into a detached, world-age-independent CodeInstance, stored
+# as `svec(gen, ci)`, so instantiations in any later world (including after
+# loading a precompiled image) compute field types with the definition-time
+# semantics. Before that machinery is loaded (early bootstrap), the generator
+# is stored as `svec(gen)` and invoked dynamically.
+function _set_fieldtype_generator!(@nospecialize(ty), @nospecialize(gen))
+    if isdefinedglobal(Base, :_validate_fieldtype_generator)
+        fg = _validate_fieldtype_generator(ty, gen)
+    else
+        fg = Core.svec(gen)
+    end
+    ccall(:jl_set_fieldtype_generator, Cvoid, (Any, Any), ty, fg)
+    nothing
+end
+
 # Default constructor generation for structs without explicit inner constructors.
 # Called by lowered code from struct definitions (both flisp and JuliaLowering).
 # Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
@@ -1326,10 +1351,14 @@ function _defaultctors(@nospecialize(ty), functionloc)
     @inbounds argnames[1] = self
     i = 1
     nany = 0
+    hascomputed = false
     while i !== n + 1
         @inbounds argnames[i + 1] = names[i]::Symbol
         if fts[i] === Any
             nany = nany + 1
+        end
+        if isa(fts[i], Core.ComputedFieldType)
+            hascomputed = true
         end
         i = i + 1
     end
@@ -1373,7 +1402,10 @@ function _defaultctors(@nospecialize(ty), functionloc)
         i = i - 1
     end
 
-    if constrains_all
+    # Computed field types cannot appear in a method signature; skip the outer
+    # constructor for such types (the inner constructor below resolves field
+    # types at runtime from the concrete type).
+    if constrains_all && !hascomputed
         # Outer constructor: T(x::FT1, y::FT2, ...) = new{A,B,...}(x, y, ...)
         # Build lambda body with direct `new`, no convert calls
         if is_parametric

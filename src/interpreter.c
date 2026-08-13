@@ -150,9 +150,22 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
 
         } else {
             if (codeinst->owner != jl_nothing) {
-                jl_error("Failed to invoke or compile external codeinst");
+                jl_value_t *inf = jl_atomic_load_relaxed(&codeinst->inferred);
+                if (inf != NULL && jl_is_code_info(inf)) {
+                    // externally-owned instance carrying its own code (e.g. a
+                    // detached field generator): interpret exactly that code
+                    // (n.b. &argv[1] may be one-past-the-end when nargs == 2;
+                    // it is never dereferenced then since the arg count is 0)
+                    jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
+                    result = jl_fptr_interpret_call(argv[0], &argv[1], nargs - 2, codeinst);
+                }
+                else {
+                    jl_error("Failed to invoke or compile external codeinst");
+                }
             }
-            result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, jl_get_ci_mi(codeinst));
+            else {
+                result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, jl_get_ci_mi(codeinst));
+            }
         }
     } else {
         result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, (jl_method_instance_t*)c);
@@ -840,13 +853,22 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     // NOTE: from here until `code`/`src` are stored into the GC frame below,
     // they may be reachable only through these locals (a concurrent thread
     // can republish m->source); this stretch must stay free of safepoints.
-    jl_value_t *code = jl_code_or_ci_for_interpreter(mi, world);
     jl_code_instance_t *ci = NULL;
-    if (jl_is_code_instance(code)) {
-        ci = (jl_code_instance_t*)code;
-        src = (jl_code_info_t*)jl_atomic_load_relaxed(&ci->inferred);
-    } else {
-        src = (jl_code_info_t*)code;
+    jl_value_t *inf = jl_atomic_load_relaxed(&codeinst->inferred);
+    if (codeinst->owner != jl_nothing && inf != NULL && jl_is_code_info(inf)) {
+        // externally-owned instances (e.g. detached field generators) carry
+        // their own code; execute exactly that, not a world-based lookup
+        ci = codeinst;
+        src = (jl_code_info_t*)inf;
+    }
+    else {
+        jl_value_t *code = jl_code_or_ci_for_interpreter(mi, world);
+        if (jl_is_code_instance(code)) {
+            ci = (jl_code_instance_t*)code;
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&ci->inferred);
+        } else {
+            src = (jl_code_info_t*)code;
+        }
     }
     jl_array_t *stmts = src->code;
     assert(jl_typetagis(stmts, jl_array_any_type));

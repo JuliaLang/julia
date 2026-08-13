@@ -44,7 +44,7 @@ for (T, c) in (
         (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
-        (Core.TypeName, [:cache, :linearcache, :Typeofwrapper, :max_args, :cache_entry_count]),
+        (Core.TypeName, [:cache, :linearcache, :Typeofwrapper, :max_args, :cache_entry_count, :fieldgen]),
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),

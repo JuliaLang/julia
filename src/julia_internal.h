@@ -1343,11 +1343,39 @@ typedef struct {
 } jl_typeapp_t;
 
 JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos, jl_svec_t *old_types) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_set_fieldtype_generator(jl_value_t *ty, jl_value_t *fieldgen) JL_CANSAFEPOINT;
 // Type predicate for TypeApp (inline: called per type node on hot type-query paths)
 STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return jl_typeapp_type != NULL && jl_typeis(v, jl_typeapp_type);
 }
+// Core.ComputedFieldType: marker in declared field-type slots whose actual
+// field types are produced by the typename's field generator.
+typedef struct {
+    JL_DATA_TYPE
+    jl_value_t *expr; // quoted source expression, for printing/reflection
+} jl_computedfieldtype_t;
+STATIC_INLINE int jl_is_computedfieldtype(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_computedfieldtype_type != NULL && jl_typeis(v, jl_computedfieldtype_type);
+}
+// Return the field-generator function for tn, or NULL if tn has no computed field types.
+STATIC_INLINE jl_value_t *jl_typename_fieldgen_func(jl_typename_t *tn) JL_NOTSAFEPOINT
+{
+    jl_value_t *fg = jl_atomic_load_relaxed(&tn->fieldgen);
+    if (fg == NULL || fg == jl_nothing)
+        return NULL;
+    return jl_svecref(fg, 0);
+}
+// Return the detached CodeInstance for tn's field generator, if one was recorded.
+STATIC_INLINE jl_value_t *jl_typename_fieldgen_ci(jl_typename_t *tn) JL_NOTSAFEPOINT
+{
+    jl_value_t *fg = jl_atomic_load_relaxed(&tn->fieldgen);
+    if (fg == NULL || fg == jl_nothing || jl_svec_len(fg) < 2)
+        return NULL;
+    return jl_svecref(fg, 1);
+}
+int jl_svec_has_computedfields(jl_svec_t *types) JL_NOTSAFEPOINT;
 void jl_init_tasks(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_CANSAFEPOINT;

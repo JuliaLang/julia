@@ -61,7 +61,7 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAF
     while (1) {
         if (jl_is_typevar(v))
             return !typeenv_has(env, (jl_tvar_t*)v);
-        if (jl_is_typeapp(v))
+        if (jl_is_typeapp(v) || jl_is_computedfieldtype(v))
             return 1;
         while (jl_is_unionall(v)) {
             jl_unionall_t *ua = (jl_unionall_t*)v;
@@ -78,6 +78,14 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAF
                 return 0;
             if (dt->layout || !dt->name->mayinlinealloc)
                 return 0;
+            if (dt->name->wrapper != NULL) {
+                // The layout of a non-concrete instantiation of a type with
+                // computed field types depends on its free typevars through the
+                // field generator; don't try to compute its field types here.
+                jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(dt->name->wrapper);
+                if (w->types != NULL && jl_svec_has_computedfields(w->types))
+                    return 1;
+            }
             if (dt->name == jl_namedtuple_typename) {
                 jl_value_t *names = jl_tparam0(dt);
                 jl_value_t *types = jl_tparam1(dt);
@@ -377,6 +385,14 @@ int jl_has_fixed_layout(jl_datatype_t *dt)
     }
     if (dt->name == jl_tuple_typename)
         return 0;
+    if (dt->name->wrapper != NULL) {
+        // Types with computed field types: a non-concrete instantiation has no
+        // fixed layout, and its field types cannot be computed (the generator
+        // requires fully concrete parameters).
+        jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(dt->name->wrapper);
+        if (w->types != NULL && jl_svec_has_computedfields(w->types))
+            return 0;
+    }
     jl_svec_t *types = jl_get_fieldtypes(dt);
     size_t i, l = jl_svec_len(types);
     for (i = 0; i < l; i++) {
@@ -1533,6 +1549,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
 static jl_value_t *instantiate_unionall_(jl_unionall_t *u, jl_value_t *p, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
 static jl_value_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params, int check, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
 static jl_svec_t *compute_fieldtypes_(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT;
+static __thread jl_typestack_t *fieldgen_typestack;
 
 // Build an environment mapping a TypeName's parameters to parameter values.
 // This is the environment needed for instantiating a type's supertype and field types.
@@ -2469,6 +2486,12 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     jl_typename_t *tn = dt->name;
     int istuple = (tn == jl_tuple_typename);
     int isnamedtuple = (tn == jl_namedtuple_typename);
+    if (stack == NULL)
+        // `apply_type` calls made by an in-flight field generator carry their
+        // instantiation stack through this thread-local (see
+        // invoke_fieldtype_generator), so self-references resolve to the
+        // in-flight type instead of recursing
+        stack = fieldgen_typestack;
 
     // check if type cache will be applicable
     // n.b. for deferred instantiations, `cacheable` still controls the cache
@@ -2828,7 +2851,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         }
         else if (cacheable) {
             // recursively instantiate the types of the fields
-            if (dt->types == NULL)
+            if (dt->types == NULL || jl_svec_has_computedfields(ftypes))
                 jl_gc_write(ndt, ndt->types, jl_svec_t, compute_fieldtypes_(ndt, stack, cacheable && !defer, dcache));
             else
                 jl_gc_write(ndt, ndt->types, jl_svec_t, inst_ftypes(ftypes, env, stack, cacheable && !defer, dcache));
@@ -3342,6 +3365,80 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
     return vm;
 }
 
+// In-flight instantiation stack for field-generator invocations: the
+// `apply_type` calls a field generator makes cannot receive the caller's
+// typestack explicitly, so it is threaded through this thread-local instead
+// (declared above), letting self-referential computed field types find the
+// in-flight type (mirroring `lookup_type_stack` for substitution-based fields).
+
+// Invoke the field generator of st->name on st's (fully concrete) parameters.
+// A generator that throws — or returns anything other than closed field types —
+// degrades every field type to Union{}, making the type uninstantiable while
+// keeping type-system internals (intersection, instantiation) throw-free.
+static jl_svec_t *invoke_fieldtype_generator(jl_datatype_t *st JL_PROPAGATES_ROOT, jl_value_t *genfn, jl_typestack_t *stack) JL_CANSAFEPOINT
+{
+    size_t nf = jl_svec_len(st->name->names);
+    size_t np = jl_svec_len(st->parameters);
+    jl_svec_t *ftypes = NULL;
+    jl_value_t *res = NULL;
+    // root ci: tn->fieldgen is a mutable field, so reachability through it is
+    // not stable across safepoints (e.g. if the generator is re-installed)
+    jl_code_instance_t *ci = (jl_code_instance_t*)jl_typename_fieldgen_ci(st->name);
+    JL_GC_PUSH3(&ftypes, &res, &ci);
+    jl_typestack_t top;
+    top.tt = st;
+    top.prev = stack != NULL ? stack : fieldgen_typestack;
+    jl_typestack_t *prev_tls = fieldgen_typestack;
+    fieldgen_typestack = &top;
+    JL_TRY {
+        jl_value_t **args;
+        JL_GC_PUSHARGS(args, np + 1);
+        args[0] = genfn;
+        for (size_t i = 0; i < np; i++)
+            args[i + 1] = jl_svecref(st->parameters, i);
+        jl_callptr_t invoke = NULL;
+        if (ci != NULL) {
+            invoke = jl_atomic_load_acquire(&ci->invoke);
+            if (invoke == NULL) {
+                // freshly created or loaded from an image: detached code is
+                // executed by the interpreter (TODO: native compilation)
+                jl_value_t *inf = jl_atomic_load_relaxed(&ci->inferred);
+                if (inf != NULL && jl_is_code_info(inf)) {
+                    jl_atomic_store_release(&ci->invoke, jl_fptr_interpret_call);
+                    invoke = jl_fptr_interpret_call;
+                }
+            }
+        }
+        if (invoke != NULL) {
+            // world-age-independent detached CodeInstance
+            res = invoke(args[0], &args[1], (uint32_t)np, ci);
+        }
+        else {
+            // dynamic call in the current world (pre-detachment fallback)
+            res = jl_apply(args, np + 1);
+        }
+        JL_GC_POP();
+    }
+    JL_CATCH {
+        res = NULL;
+    }
+    fieldgen_typestack = prev_tls;
+    if (res != NULL && jl_is_tuple(res) && jl_nfields(res) == nf) {
+        ftypes = jl_alloc_svec(nf);
+        for (size_t i = 0; i < nf; i++) {
+            jl_value_t *elt = jl_fieldref(res, i);
+            if (!jl_is_type(elt) || jl_has_free_typevars(elt))
+                elt = jl_bottom_type;
+            jl_svecset(ftypes, i, elt);
+        }
+    }
+    else {
+        ftypes = jl_svec_fill(nf, jl_bottom_type);
+    }
+    JL_GC_POP();
+    return ftypes;
+}
+
 static jl_svec_t *compute_fieldtypes_(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable, jl_deferred_typecache_t *dcache) JL_CANSAFEPOINT
 {
     assert(st->name != jl_namedtuple_typename && st->name != jl_tuple_typename);
@@ -3353,6 +3450,41 @@ static jl_svec_t *compute_fieldtypes_(jl_datatype_t *st JL_PROPAGATES_ROOT, void
     if (wt->types == NULL)
         jl_errorf("cannot determine field types of incomplete type %s",
                   jl_symbol_name(st->name->name));
+    jl_svec_t *decl = wt->types;
+    jl_value_t *genfn = NULL;
+    JL_GC_PUSH2(&decl, &genfn);
+    if (jl_svec_has_computedfields(decl)) {
+        if (!st->hasfreetypevars) {
+            // root genfn: tn->fieldgen is mutable, so reachability through it
+            // is not stable across safepoints
+            genfn = jl_typename_fieldgen_func(st->name);
+            if (genfn == NULL)
+                jl_errorf("field generator for %s has not been installed yet",
+                          jl_symbol_name(st->name->name));
+            jl_gc_write(st, st->types, jl_svec_t, invoke_fieldtype_generator(st, genfn, (jl_typestack_t*)stack));
+            // Instantiations created before the generator was installed (e.g.
+            // self-references during definition) compute types lazily; give
+            // them their layout as well now that the field types are known.
+            if (st->isconcretetype && st->layout == NULL)
+                jl_compute_field_offsets(st);
+            JL_GC_POP();
+            return st->types;
+        }
+        // Partial instantiation: a computed field type is unknown until the
+        // parameters are fully concrete; widen each computed slot to a fresh
+        // unbounded TypeVar (analogous to `fieldtype(Ref, 1) === T`), which
+        // downstream consumers already treat conservatively.
+        size_t nf = jl_svec_len(decl);
+        jl_svec_t *tmp = jl_alloc_svec(nf);
+        decl = tmp;
+        for (i = 0; i < nf; i++) {
+            jl_value_t *ft = jl_svecref(wt->types, i);
+            if (jl_is_computedfieldtype(ft))
+                ft = (jl_value_t*)jl_new_typevar(jl_symbol("#computed#"), jl_bottom_type,
+                                                 (jl_value_t*)jl_any_type);
+            jl_svecset(decl, i, ft);
+        }
+    }
     jl_typeenv_t *env = (jl_typeenv_t*)alloca(n * sizeof(jl_typeenv_t));
     for (i = 0; i < n; i++) {
         env[i].var = (jl_tvar_t*)jl_svecref(wt->parameters, i);
@@ -3362,7 +3494,8 @@ static jl_svec_t *compute_fieldtypes_(jl_datatype_t *st JL_PROPAGATES_ROOT, void
     jl_typestack_t top;
     top.tt = st;
     top.prev = (jl_typestack_t*)stack;
-    jl_gc_write(st, st->types, jl_svec_t, inst_ftypes(wt->types, &env[n - 1], &top, cacheable, dcache));
+    jl_gc_write(st, st->types, jl_svec_t, inst_ftypes(decl, &env[n - 1], &top, cacheable, dcache));
+    JL_GC_POP();
     return st->types;
 }
 
@@ -3421,6 +3554,12 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t, jl_deferred_typecache_t *dca
             jl_typestack_t ndt_top;
             ndt_top.tt = ndt;
             ndt_top.prev = &top;
+            if (jl_svec_has_computedfields(t->types)) {
+                // The field generator is installed after typegroup resolution;
+                // leave the field types unset so they are computed on first use.
+                jl_array_ptr_set(partial, j, NULL);
+                continue;
+            }
             jl_gc_write(ndt, ndt->types, jl_svec_t, inst_ftypes(t->types, &env[n - 1], &ndt_top, dcache == NULL, dcache));
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
@@ -3539,20 +3678,20 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type->name->wrapper = (jl_value_t*)jl_typename_type;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_emptysvec;
-    jl_typename_type->name->n_uninitialized = 19 - 2;
-    jl_typename_type->name->names = jl_perm_symsvec(19, "name", "module", "singletonname",
+    jl_typename_type->name->n_uninitialized = 20 - 2;
+    jl_typename_type->name->names = jl_perm_symsvec(20, "name", "module", "singletonname",
                                                     "names", "atomicfields", "constfields",
                                                     "wrapper", "Typeofwrapper", "cache", "linearcache",
                                                     "partial", "hash", "max_args", "n_uninitialized",
                                                     "flags", // "abstract", "mutable", "mayinlinealloc",
                                                     "cache_entry_count", "max_methods", "constprop_heuristic",
-                                                    "concrete_only");
-    const static uint32_t typename_constfields[1]  = { 0b0000110100001001011 }; // TODO: put back atomicfields and constfields in this list
-    const static uint32_t typename_atomicfields[1] = { 0b0001001001110000000 };
+                                                    "concrete_only", "fieldgen");
+    const static uint32_t typename_constfields[1]  = { 0b00000110100001001011 }; // TODO: put back atomicfields and constfields in this list
+    const static uint32_t typename_atomicfields[1] = { 0b10001001001110000000 };
     jl_typename_type->name->constfields = typename_constfields;
     jl_typename_type->name->atomicfields = typename_atomicfields;
     jl_precompute_memoized_dt(jl_typename_type, 1);
-    jl_typename_type->types = jl_svec(19, jl_symbol_type, jl_any_type /*jl_module_type*/, jl_symbol_type,
+    jl_typename_type->types = jl_svec(20, jl_symbol_type, jl_any_type /*jl_module_type*/, jl_symbol_type,
                                       jl_simplevector_type,
                                       jl_any_type/*jl_voidpointer_type*/, jl_any_type/*jl_voidpointer_type*/,
                                       jl_type_type, jl_simplevector_type, jl_simplevector_type,
@@ -3564,7 +3703,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                       jl_any_type /*jl_uint8_type*/,
                                       jl_any_type /*jl_uint8_type*/,
                                       jl_any_type /*jl_uint8_type*/,
-                                      jl_any_type /*jl_bool_type*/);
+                                      jl_any_type /*jl_bool_type*/,
+                                      jl_any_type);
 
     jl_methcache_type->name = jl_new_typename_in(jl_symbol("MethodCache"), core, 0, 1);
     jl_methcache_type->name->wrapper = (jl_value_t*)jl_methcache_type;
@@ -4597,6 +4737,8 @@ void post_boot_hooks(void)
 
     // Initialize TypeApp type reference for mutually recursive types
     jl_typeapp_type = (jl_datatype_t*)core("TypeApp");
+    // Marker for computed field types (field generators)
+    jl_computedfieldtype_type = (jl_datatype_t*)core("ComputedFieldType");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

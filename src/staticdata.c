@@ -1844,7 +1844,15 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 jl_code_instance_t *newci = (jl_code_instance_t*)&f->buf[reloc_offset];
 
                 if (s->incremental) {
-                    if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
+                    if (ci->owner == (jl_value_t*)jl_symbol("computed_fieldtypes")) {
+                        // detached field-generator instances are world-age
+                        // independent by construction: their code is closed
+                        // (no world-dependent lookups), so they remain valid
+                        // as-is, with no revalidation on load
+                        assert(jl_atomic_load_relaxed(&ci->min_world) == 1);
+                        assert(jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0);
+                    }
+                    else if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
                         //assert(jl_atomic_load_relaxed(&ci->edges) != jl_emptysvec); // some code (such as !==) might add a method lookup restriction but not keep the edges
                         jl_atomic_store_release(&newci->min_world, ~(size_t)0);
                         jl_atomic_store_release(&newci->max_world, WORLD_AGE_REVALIDATION_SENTINEL);
