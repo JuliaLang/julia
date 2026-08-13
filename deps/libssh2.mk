@@ -93,7 +93,7 @@ $(LIBSSH2_SRC_PATH)/source-patched: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66035.p
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(CMAKE_GENERATOR_COMMAND) $(dir $<) $(LIBSSH2_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(LIBSSH2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
