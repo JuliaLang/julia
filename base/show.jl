@@ -3170,19 +3170,21 @@ alignment(io::IO, x::Number) = (alignment_from_show(io, x), 0)
 alignment(io::IO, x::Integer) = (alignment_from_show(io, x), 0)
 function alignment(io::IO, x::Real)
     s = sprint(show, x, context=nocolor(io), sizehint=0)
-    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", s)
+    m = match(r"^(.*)(\..*[eEfF]-.*)|(.*)([\.eEfF].*)$", s)
     m === nothing ? (textwidth(s), 0) :
-                    (textwidth(m.captures[1]), textwidth(m.captures[2]))
+    m.captures[1] === nothing ? (textwidth(m.captures[3]), textwidth(m.captures[4])) :
+                                (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 function alignment(io::IO, x::Complex)
     s = sprint(show, x, context=nocolor(io), sizehint=0)
     m = match(r"^(.*[^ef][\+\-])(.*)$", s)
+    v = match(r" ", s) === nothing ? 1 : 2
     m === nothing ? (textwidth(s), 0) :
-                    (textwidth(m.captures[1]), textwidth(m.captures[2]))
+                    (textwidth(m.captures[1])-v, textwidth(m.captures[2])+v)
 end
 function alignment(io::IO, x::Rational)
     s = sprint(show, x, context=nocolor(io), sizehint=0)
-    m = match(r"^(.*?/)(/.*)$", s)
+    m = match(r"^(.*?)(//.*)$", s)
     m === nothing ? (textwidth(s), 0) :
                     (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
