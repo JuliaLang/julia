@@ -3,6 +3,7 @@
 const start_base_include = time_ns()
 
 include("reflection.jl")
+include("computed_fieldtypes.jl")
 include("refpointer.jl")
 
 # now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
