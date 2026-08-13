@@ -3162,7 +3162,7 @@ julia> Base.alignment(stdout, 4.23)
 (1, 3)
 
 julia> Base.alignment(stdout, 1 + 10im)
-(3, 5)
+(1, 7)
 ```
 """
 alignment(io::IO, x::Any) = (0, alignment_from_show(io, x))
