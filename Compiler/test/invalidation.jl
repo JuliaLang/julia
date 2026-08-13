@@ -361,3 +361,37 @@ end
     @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int})", err_before)
     @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int}) # recompile", err_after)
 end
+
+# `Core.TypeName.concrete_only`: inference records no backedge at call sites with
+# non-concrete argument types, so adding a more-specific method later does not
+# invalidate the caller's compiled code
+abstract type COStyle end
+struct CODefStyle <: COStyle end
+struct COFill end
+function co_callee end
+typeof(co_callee).name.concrete_only = true
+co_callee(::COStyle, op, x) = 1
+struct COBox
+    s::COStyle
+    x::Any
+end
+co_caller(b::COBox) = co_callee(b.s, zero, b.x)
+
+# the non-concrete call site gives up to `Any`
+@test Base.return_types((COBox,); interp=InvalidationTester()) do b
+    co_caller(b)
+end |> only === Any
+
+let mi = Base.method_instance(co_caller, (COBox,))
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+end
+
+# add a more-specific method; the caller must remain valid
+co_callee(::CODefStyle, op, x::COFill) = 2
+let mi = Base.method_instance(co_caller, (COBox,))
+    ci = mi.cache
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+end

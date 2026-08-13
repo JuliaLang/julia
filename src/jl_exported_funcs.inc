@@ -354,6 +354,7 @@
     XX(jl_parse_opts) \
     XX(jl_parse_string) \
     XX(jl_pathname_for_handle) \
+    XX(jl_pathname_for_symbol) \
     XX(jl_pchar_to_array) \
     XX(jl_pchar_to_string) \
     XX(jl_pointerref) \
@@ -503,6 +504,7 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
+    XX(jl_wakeup_threadpool) \
     XX(jl_write_compiler_output) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \

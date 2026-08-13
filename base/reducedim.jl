@@ -344,6 +344,12 @@ _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
+_mapreduce_dim(f, op, nt, R::ReshapedArray, ::Colon) =
+    _mapreduce_dim(f, op, nt, parent(R), :)
+
+_mapreduce_dim(f, op, i::_InitialValue, R::ReshapedArray, ::Colon) =
+    _mapreduce_dim(f, op, i, parent(R), :)
+
 """
     reduce(f, A::AbstractArray; dims=:, [init])
 
@@ -986,6 +992,8 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
         # Underlying implementations using dispatch
         ($_fname)(a, ::Colon; kw...) = ($_fname)(identity, a, :; kw...)
         ($_fname)(f, a, ::Colon; kw...) = mapreduce($mapf, $op, a; kw...)
+
+        ($_fname)(R::ReshapedArray, ::Colon) = ($fname)(parent(R))
     end
 end
 

@@ -1804,12 +1804,13 @@ parent test set (with the context object appended to any failing tests.)
 !!! compat "Julia 1.13"
     Context is shown when a test errors since Julia 1.13.
 
-# Special implicit world age increment for `@testset begin`
+# Special implicit world age increment for `@testset begin` and `@testset for`
 
-World age inside `@testset begin` increments implicitly after every statement.
-This matches the behavior of ordinary toplevel code, but not that of ordinary
-`begin/end` blocks, i.e. with respect to world age, `@testset begin` behaves
-as if the body of the `begin/end` block was written at toplevel.
+World age inside `@testset begin` and inside the loop body of `@testset for`
+increments implicitly after every statement. This matches the behavior of
+ordinary toplevel code, but not that of ordinary `begin/end` blocks or `for`
+loops, i.e. with respect to world age, `@testset begin` and `@testset for`
+behave as if their bodies were written at toplevel.
 
 ## Examples
 ```jldoctest
@@ -2027,7 +2028,7 @@ function testset_forloop(args, testloop, source)
 
     # Uses a similar block as for `@testset`, except that it is
     # wrapped in the outer loop provided by the user
-    tests = testloop.args[2]
+    tests = insert_toplevel_latestworld(testloop.args[2])
     blk = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))

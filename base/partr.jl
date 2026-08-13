@@ -109,6 +109,12 @@ end
 
 function multiq_size(tpid::Int8)
     nt = UInt32(Threads._nthreads_in_pool(tpid))
+    if nt == 0
+        # A pool with no threads can still receive tasks (e.g. during
+        # sysimage bootstrap); size the heaps so insertion can park them
+        # instead of indexing an empty heap vector.
+        nt = UInt32(1)
+    end
     tp = tpid + 1
     tpheaps = heaps[tp]
     heap_c = UInt32(2)
@@ -124,6 +130,9 @@ function multiq_size(tpid::Int8)
         tpheaps = heaps[tp]
         heap_p = UInt32(length(tpheaps))
         nt = UInt32(Threads._nthreads_in_pool(tpid))
+        if nt == 0
+            nt = UInt32(1)
+        end
         if heap_c * nt <= heap_p
             return heap_p
         end
@@ -212,7 +221,14 @@ function multiq_deletemin()
     heap = tpheaps[rn1]
     task = heap.tasks[1]
     if ccall(:jl_set_task_tid, Cint, (Any, Cint), task, tid-1) == 0
+        # This task is sticky to a different thread, so we can't run it.
+        # Wake that thread so it can come pick up its own work, then keep
+        # looking for something we are allowed to run.
+        task_tid = ccall(:jl_get_task_tid, Int16, (Any,), task)
         unlock(heap.lock)
+        if task_tid != Int16(-1)
+            ccall(:jl_wakeup_thread, Cint, (Int16,), task_tid)
+        end
         @goto retry
     end
     ntasks = heap.ntasks

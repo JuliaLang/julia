@@ -57,7 +57,6 @@ failures = [
     "valid/string/multiline-quotes.toml",
     "valid/string/multiline.toml",
     "valid/float/zero.toml", # this one has a buggy .json file
-    "valid/string/escape-esc.toml",
 ]
 
 n_files_valid = 0
@@ -103,7 +102,6 @@ failures = [
     "invalid/control/comment-null.toml",
     "invalid/control/comment-us.toml",
     "invalid/control/comment-cr.toml",
-    "invalid/datetime/time-no-leads.toml",
     "invalid/control/multi-del.toml",
     "invalid/control/multi-lf.toml",
     "invalid/control/multi-null.toml",
@@ -123,10 +121,14 @@ failures = [
     "invalid/control/string-us.toml",
     "invalid/encoding/bad-utf8-in-comment.toml",
     "invalid/encoding/bad-utf8-in-string.toml",
-    "invalid/key/multiline.toml",
-    "invalid/table/append-with-dotted-keys-2.toml",
-    "invalid/table/duplicate-key-dotted-table.toml",
-    "invalid/table/duplicate-key-dotted-table2.toml",
+    # These cases became valid in TOML 1.1.
+    "invalid/datetime/no-secs.toml",
+    "invalid/inline-table/linebreak-1.toml",
+    "invalid/inline-table/linebreak-2.toml",
+    "invalid/inline-table/linebreak-3.toml",
+    "invalid/inline-table/linebreak-4.toml",
+    "invalid/inline-table/trailing-comma.toml",
+    "invalid/string/basic-byte-escapes.toml",
 ]
 
 n_invalid = 0

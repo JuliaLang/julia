@@ -979,7 +979,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             liveprinting = true
                             pkg_liveprinted[] = pkg
                         end
-                        print(io, ansi_cleartoendofline, str)
+                        # in fancy mode clear the progress bar residue from the line first
+                        print(io, fancyprint ? ansi_cleartoendofline : "", str)
                     end
                 end
                 write(get!(IOBuffer, std_outputs, pkg_config), str)
@@ -994,7 +995,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 else
                     # XXX: don't just re-enable IO for random packages without printing the context for them first
                     !liveprinting && !fancyprint && @lock print_lock begin
-                        print(io, ansi_cleartoendofline, str)
+                        print(io, str)
                     end
                 end
             end
@@ -1336,7 +1337,18 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     local plural1 = length(configs) > 1 ? "dependency configurations" : n_loaded[] == 1 ? "dependency" : "dependencies"
                     local plural2 = n_loaded[] == 1 ? "a different version is" : "different versions are"
                     local plural3 = n_loaded[] == 1 ? "" : "s"
-                    local loaded_names = join(sort!([full_name(ext_to_parent, p) for p in loaded_pkgs]), ", ", " and ")
+                    local loaded_names_vec = sort!([full_name(ext_to_parent, p) for p in loaded_pkgs])
+                    local max_loaded_names = 5
+                    local loaded_names = if length(loaded_names_vec) > max_loaded_names
+                        string(
+                            join(first(loaded_names_vec, max_loaded_names), ", ", " and "),
+                            ", and ",
+                            length(loaded_names_vec) - max_loaded_names,
+                            " more"
+                        )
+                    else
+                        join(loaded_names_vec, ", ", " and ")
+                    end
                     # compute how many precompiled packages transitively depend on the loaded packages
                     local n_affected = 0
                     local loaded_set = Set{Base.PkgId}(loaded_pkgs)

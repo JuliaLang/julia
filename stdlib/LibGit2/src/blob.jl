@@ -76,7 +76,7 @@ end
 function Base.show(io::IO, blob::GitBlob)
     if !isbinary(blob)
         conts   = split(content(blob), "\n")
-        showlen = max(length(conts), 3)
+        showlen = min(length(conts), 3)
         println(io, "GitBlob:\nBlob id: ", GitHash(blob), "\nContents:")
         for i in 1:showlen
             println(io, conts[i])

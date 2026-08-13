@@ -616,3 +616,30 @@ end
 # Test that the hash function works without world age issues
 @test hash(bar59429, UInt(0)) isa UInt
 end
+
+# issue #61667 - new array types must not invalidate abstractly-typed array iteration
+struct IterInval61667{T} <: AbstractVector{T}
+    v::Vector{T}
+end
+Base.size(A::IterInval61667) = size(A.v)
+Base.getindex(A::IterInval61667, i::Int) = A.v[i]
+absvec61667() = Base.inferencebarrier(Module[])::AbstractVector{Module}
+iter61667() = invoke(iterate, Tuple{AbstractArray}, absvec61667())
+@test precompile(iter61667, ())
+let ci = method_instance(iter61667, ()).cache
+    @test ci.max_world == typemax(UInt)
+    Base.eachindex(::IndexLinear, A::IterInval61667) = eachindex(A.v)
+    Base.iterate(A::IterInval61667, y...) = iterate(A.v, y...)
+    @test ci.max_world == typemax(UInt)
+end
+
+# issue #61667 - rebinding a name in Main must not invalidate the show machinery, which
+# concrete-evals binding queries against Main (via `isvisible`)
+struct ShowInval61667; x::Int; end
+fshow61667(v) = string(v)
+@test fshow61667([ShowInval61667(1)]) isa String
+let ci = method_instance(fshow61667, (Vector{ShowInval61667},)).cache
+    @test ci.max_world == typemax(UInt)
+    Core.eval(Main, :(struct ShowInval61667 end))
+    @test ci.max_world == typemax(UInt)
+end

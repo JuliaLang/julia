@@ -692,3 +692,31 @@ end
     @test reinterpret(reshape, UInt8, fill(x)) == [0x67, 0x45, 0x23, 0x01, 0xef, 0xcd, 0xab, 0x00]
     @test reinterpret(reshape, UInt8, [x]) == [0x67; 0x45; 0x23; 0x01; 0xef; 0xcd; 0xab; 0x00;;]
 end
+
+# ReinterpretArray must preserve the aligned storage stride of equal-sized element types.
+@testset "aligned elsize for ReinterpretArray" begin
+    primitive type RInt24 24 end
+    primitive type RAlsoInt24 24 end
+    RInt24(x::Int) = Core.Intrinsics.trunc_int(RInt24, x)
+    RAlsoInt24(x::Int) = Core.Intrinsics.trunc_int(RAlsoInt24, x)
+    Base.zero(::Type{RInt24}) = RInt24(0)
+    Base.zero(::Type{RAlsoInt24}) = RAlsoInt24(0)
+
+    a = zeros(RInt24, 3)
+    b = reinterpret(RAlsoInt24, a)
+    @test Base.elsize(b) == Base.elsize(a) == 4
+
+    b[1] = reinterpret(RAlsoInt24, RInt24(10))
+    b[2] = reinterpret(RAlsoInt24, RInt24(20))
+    b[3] = reinterpret(RAlsoInt24, RInt24(30))
+    @test b[1] == reinterpret(RAlsoInt24, RInt24(10))
+    @test b[2] == reinterpret(RAlsoInt24, RInt24(20))
+    @test b[3] == reinterpret(RAlsoInt24, RInt24(30))
+
+    v = view(a, 1:2)
+    c = reinterpret(RAlsoInt24, v)
+    @test Base.elsize(c) == 4
+
+    d = reinterpret(UInt8, zeros(Int32, 5))
+    @test Base.elsize(d) == sizeof(UInt8)
+end

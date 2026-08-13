@@ -571,6 +571,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # test that history_first jumps to beginning of current session's history
         @test hp.start_idx == 11
         hp.start_idx -= 5 # temporarily alter history
+        @test REPL.repl_filename(repl, hp) == "REPL[5]"
         LineEdit.history_first(s, hp)
         @test hp.cur_idx == 6
         # we are at the beginning of current session's history, so history_first
@@ -1299,6 +1300,25 @@ end
     Base.wait(backend.backend_task)
 end
 
+# a stray InterruptException forwarded to the backend between evaluations (e.g. a
+# Ctrl-C arriving just as user code finishes) must not tear down the backend (#58689)
+@testset "stray InterruptException in REPL backend" begin
+    backend = REPL.REPLBackend()
+    errormonitor(@async REPL.start_repl_backend(backend))
+    put!(backend.repl_channel, (:(1+1), false))
+    @test take!(backend.response_channel) == Pair{Any, Bool}(2, false)
+    # the backend task is now parked in take!(repl_channel); inject the interrupt
+    # from a throwaway task, since throwto does not reschedule its caller
+    @async Base.throwto(backend.backend_task, InterruptException())
+    yield()
+    @test !istaskdone(backend.backend_task)
+    put!(backend.repl_channel, (:(1+2), false))
+    @test timedwait(() -> isready(backend.response_channel), 60) === :ok
+    @test take!(backend.response_channel) == Pair{Any, Bool}(3, false)
+    put!(backend.repl_channel, (nothing, -1))
+    Base.wait(backend.backend_task)
+end
+
 # Mimic of JSON.jl's structure
 module JSON54872
 
@@ -1662,9 +1682,12 @@ fake_repl() do stdin_write, stdout_read, repl
     @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
 end
 
-# Non standard output_prefix, tested via `numbered_prompt!`
+# Test that numbered prompts start at one with initialized session history.
 fake_repl() do stdin_write, stdout_read, repl
     repl.interface = REPL.setup_interface(repl)
+    hp = repl.interface.modes[1].hist
+    @test hp.start_idx == 1
+    @test REPL.history_do_initialize(hp)
 
     backend = REPL.REPLBackend()
     repltask = @async begin

@@ -32,12 +32,12 @@ function failval(s, v)
 end
 
 @testset "Numbers" begin
-    @test failval("00"                   , Internals.ErrParsingDateTime)
-    @test failval("-00"                  , Internals.ErrParsingDateTime)
-    @test failval("+00"                  , Internals.ErrParsingDateTime)
-    @test failval("00.0"                 , Internals.ErrParsingDateTime)
-    @test failval("-00.0"                , Internals.ErrParsingDateTime)
-    @test failval("+00.0"                , Internals.ErrParsingDateTime)
+    @test failval("00"                   , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("-00"                  , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("+00"                  , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("00.0"                 , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("-00.0"                , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("+00.0"                , Internals.ErrLeadingZeroNotAllowedInteger)
 
     @test failval("0."        , Internals.ErrNoTrailingDigitAfterDot)
     @test failval("0.e"       , Internals.ErrNoTrailingDigitAfterDot)
@@ -46,8 +46,8 @@ end
     @test failval("0.0e"      , Internals.ErrGenericValueError)
     @test failval("0.0e-"     , Internals.ErrGenericValueError)
     @test failval("0.0e+"     , Internals.ErrGenericValueError)
-    @test_broken failval("0.0e+00" , Internals.ErrGenericValueError)
 
+    @test testval("0.0e+00"     , 0.0)
     @test testval("1.0"         , 1.0)
     @test testval("1.0e0"       , 1.0)
     @test testval("1.0e+0"      , 1.0)
@@ -120,6 +120,13 @@ end
     @test testval("2016-09-09T09:09:09.20"  , DateTime(2016 , 9 , 9 , 9 , 9 , 9  , 200))
     @test testval("2016-09-09T09:09:09.02"  , DateTime(2016 , 9 , 9 , 9 , 9 , 9  , 20))
 
+    # TOML v1.1: optional seconds in datetime
+    @test testval("2016-09-09T09:09"        , DateTime(2016 , 9 , 9 , 9 , 9 , 0))
+    @test testval("2016-09-09T09:09Z"       , DateTime(2016 , 9 , 9 , 9 , 9 , 0))
+    @test testval("2016-09-09 09:09"        , DateTime(2016 , 9 , 9 , 9 , 9 , 0))
+    @test testval("2016-09-09 09:09Z"       , DateTime(2016 , 9 , 9 , 9 , 9 , 0))
+    @test testval("1979-05-27T07:32"        , DateTime(1979 , 5 , 27 , 7 , 32 , 0))
+
     @test failval("2016-09-09T09:09:09.0+10:00"   , Internals.ErrOffsetDateNotSupported)
     @test failval("2016-09-09T09:09:09.012-02:00" , Internals.ErrOffsetDateNotSupported)
     @test failval("2016-09-09T09:09:09.0+10:00"   , Internals.ErrOffsetDateNotSupported)
@@ -142,13 +149,38 @@ end
     @test testval("00:00:00.23"    , Time(0 , 0 , 0 , 230))
     @test testval("00:00:00.234"   , Time(0 , 0 , 0 , 234))
 
-    @test failval("09:09x09", Internals.ErrParsingDateTime)
+    # TOML v1.1: optional seconds in time
+    @test testval("09:09"          , Time(9 , 9 , 0))
+    @test testval("00:00"          , Time(0 , 0 , 0))
+    @test testval("23:59"          , Time(23 , 59 , 0))
+
+    # With optional seconds, "09:09" is a valid time; "x09" triggers newline error
+    @test failval("09:09x09", Internals.ErrExpectedNewLineKeyValue)
+    @test failval("09:09:0x", Internals.ErrParsingDateTime)
 end
 
 # TODO: Add more dedicated value tests
 
 @testset "String" begin
     @test failval("\"foooo", Internals.ErrUnexpectedEndString)
+
+    # TOML v1.1: \e escape sequence (U+001B)
+    @test testval("\"hello\\eworld\"", "hello\eworld")
+    @test testval("\"\\e[31m\"", "\e[31m")
+
+    # TOML v1.1: \xHH hex escape sequence
+    @test testval("\"\\x00\"", "\0")
+    @test testval("\"\\x41\"", "A")
+    @test testval("\"\\x7f\"", "\x7f")
+    @test testval("\"\\xff\"", "\xff")
+    @test testval("\"\\xFF\"", "\xff")
+    @test testval("\"\\x0A\"", "\n")
+
+    # \xHH in multiline strings
+    @test testval("\"\"\"\\x41\"\"\"", "A")
+
+    # Invalid: \x with invalid hex digits
+    @test failval("\"\\xG0\"", Internals.ErrInvalidUnicodeScalar)
 
     #=
     Found these examples of string tests somewhere
@@ -181,4 +213,63 @@ end
     @test testval("[1.0, 2.0, 3.0]", Float64[1.0, 2.0, 3.0])
     @test testval("[1.0, 2.0, 3]", Any[1.0, 2.0, Int64(3)])
     @test testval("[1.0, 2, \"foo\"]", Any[1.0, Int64(2), "foo"])
+end
+
+@testset "Inline tables - TOML v1.1" begin
+    # Trailing comma allowed
+    @test TOML.parse("foo = {a = 1,}")["foo"] == Dict("a" => Int64(1))
+    @test TOML.parse("foo = {a = 1, b = 2,}")["foo"] == Dict("a" => Int64(1), "b" => Int64(2))
+
+    # Newlines allowed in inline tables
+    @test TOML.parse("""
+    foo = {
+      a = 1
+    }
+    """)["foo"] == Dict("a" => Int64(1))
+
+    @test TOML.parse("""
+    foo = {
+      a = 1,
+      b = 2
+    }
+    """)["foo"] == Dict("a" => Int64(1), "b" => Int64(2))
+
+    @test TOML.parse("""
+    foo = {
+      a = 1,
+      b = 2,
+    }
+    """)["foo"] == Dict("a" => Int64(1), "b" => Int64(2))
+
+    # Nested inline tables with newlines and trailing commas
+    @test TOML.parse("""
+    foo = {
+      nested = {
+        key = 1,
+      },
+    }
+    """)["foo"] == Dict("nested" => Dict("key" => Int64(1)))
+
+    # Empty inline table still works
+    @test TOML.parse("foo = {}")["foo"] == Dict{String,Any}()
+    @test TOML.parse("""
+    foo = {
+    }
+    """)["foo"] == Dict{String,Any}()
+
+    # Comments in inline tables with newlines
+    @test TOML.parse("""
+    foo = {
+      a = 1, # comment
+      b = 2,
+    }
+    """)["foo"] == Dict("a" => Int64(1), "b" => Int64(2))
+
+    # Real-world example: Cargo.toml style dependency
+    @test TOML.parse("""
+    serde = {
+        version = "1.0",
+        features = ["derive"],
+    }
+    """)["serde"] == Dict("version" => "1.0", "features" => ["derive"])
 end

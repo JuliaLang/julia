@@ -451,7 +451,22 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        ast_or_func, show_value = take!(backend.repl_channel)
+        # Fetch without consuming, then retry removal so an interrupt cannot lose
+        # or duplicate a request.
+        request = try
+            fetch(backend.repl_channel)
+        catch e
+            e isa InterruptException && continue
+            rethrow()
+        end
+        while isready(backend.repl_channel)
+            try
+                take!(backend.repl_channel)
+            catch e
+                e isa InterruptException || rethrow()
+            end
+        end
+        ast_or_func, show_value = request
         if show_value == -1
             # exit flag
             break
@@ -719,39 +734,43 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     dopushdisplay && pushdisplay(d)
     hit_eof = false
     while true
-        Base.reseteof(repl.terminal)
-        write(repl.terminal, JULIA_PROMPT)
-        line = ""
-        ast = nothing
-        interrupted = false
-        while true
-            try
-                line *= readline(repl.terminal, keep=true)
-            catch e
-                if isa(e,InterruptException)
-                    try # raise the debugger if present
-                        ccall(:jl_raise_debugger, Int, ())
-                    catch
+        try
+            Base.reseteof(repl.terminal)
+            write(repl.terminal, JULIA_PROMPT)
+            line = ""
+            ast = nothing
+            interrupted = false
+            while true
+                try
+                    line *= readline(repl.terminal, keep=true)
+                catch e
+                    if isa(e,InterruptException)
+                        try # raise the debugger if present
+                            ccall(:jl_raise_debugger, Int, ())
+                        catch
+                        end
+                        line = ""
+                        interrupted = true
+                        break
+                    elseif isa(e,EOFError)
+                        hit_eof = true
+                        break
+                    else
+                        rethrow()
                     end
-                    line = ""
-                    interrupted = true
-                    break
-                elseif isa(e,EOFError)
-                    hit_eof = true
-                    break
-                else
-                    rethrow()
                 end
+                ast = Base.parse_input_line(line)
+                (isa(ast,Expr) && ast.head === :incomplete) || break
             end
-            ast = Base.parse_input_line(line)
-            (isa(ast,Expr) && ast.head === :incomplete) || break
+            if !isempty(line)
+                response = eval_on_backend(ast, backend)
+                print_response(repl, response, !ends_with_semicolon(line), false)
+            end
+            write(repl.terminal, '\n')
+            ((!interrupted && isempty(line)) || hit_eof) && break
+        catch e
+            isa(e, InterruptException) || rethrow()
         end
-        if !isempty(line)
-            response = eval_on_backend(ast, backend)
-            print_response(repl, response, !ends_with_semicolon(line), false)
-        end
-        write(repl.terminal, '\n')
-        ((!interrupted && isempty(line)) || hit_eof) && break
     end
     # terminate backend
     put!(backend.repl_channel, (nothing, -1))
@@ -891,7 +910,7 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     mode_mapping::Dict{Symbol,Prompt}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(HistoryFile(), 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(HistoryFile(), 1, 1, -1, IOBuffer(),
                         nothing, mode_mapping)
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
@@ -1012,7 +1031,7 @@ end
 
 history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_prev(s, hist, hist.cur_idx - 1 -
-                 (hist.cur_idx > hist.start_idx+1 ? hist.start_idx : 0))
+                 (hist.cur_idx > hist.start_idx ? hist.start_idx-1 : 0))
 
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_next(s, hist, length(update!(hist.history)) - hist.cur_idx + 1)
@@ -1135,14 +1154,35 @@ find_hist_file() = get(ENV, "JULIA_HISTORY",
 backend(r::AbstractREPL) = hasproperty(r, :backendref) && isdefined(r, :backendref) ? r.backendref : nothing
 
 
-function eval_on_backend(ast, backend::REPLBackendRef)
-    put!(backend.repl_channel, (ast, 1)) # (f, show_value)
-    return take!(backend.response_channel) # (val, iserr)
+# Keep request and response channels paired across asynchronous interrupts.
+function exchange_on_backend(backend::REPLBackendRef, request)
+    # A response can be stale if an interrupt lands after enqueueing but before
+    # `sent` is recorded.
+    while isready(backend.response_channel)
+        take!(backend.response_channel)
+    end
+    sent = false
+    try
+        put!(backend.repl_channel, request)
+        sent = true
+        return take!(backend.response_channel) # (val, iserr)
+    catch e
+        isa(e, InterruptException) || rethrow()
+        sent || rethrow()
+        while true
+            try
+                return take!(backend.response_channel)
+            catch e2
+                isa(e2, InterruptException) || rethrow()
+            end
+        end
+    end
 end
+eval_on_backend(ast, backend::REPLBackendRef) =
+    exchange_on_backend(backend, (ast, 1))
 function call_on_backend(f, backend::REPLBackendRef)
     applicable(f) || error("internal error: f is not callable")
-    put!(backend.repl_channel, (f, 2)) # (f, show_value) 2 indicates function (rather than ast)
-    return take!(backend.response_channel) # (val, iserr)
+    return exchange_on_backend(backend, (f, 2)) # (f, show_value) 2 indicates function (rather than ast)
 end
 # if no backend just eval (used by tests)
 eval_on_backend(ast, backend::Nothing) = error("no backend for eval ast")
@@ -1217,7 +1257,7 @@ function mode_keymap(julia_prompt::Prompt)
     end)
 end
 
-repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx, 1))]"
+repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(max(length(hp.history)-hp.start_idx+1, 1))]"
 repl_filename(repl, hp) = "REPL"
 
 const JL_PROMPT_PASTE = Ref(true)
@@ -1829,7 +1869,7 @@ using ..REPL
 __current_ast_transforms() = Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
 function repl_eval_counter(hp)
-    return length(hp.history) - hp.start_idx
+    return length(hp.history) - hp.start_idx + 1
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
