@@ -575,8 +575,8 @@ end
 
 # Test that broadcast's promotion mechanism handles closures accepting more than one argument.
 # (See issue #19641 and referenced issues and pull requests.)
-let f() = (a = 1; broadcast((x, y) -> x + y + a, 1.0, 1.0))
-    @test @inferred(f()) == 3.0
+let f() = (a = 1; broadcast((x, y) -> x + y + a, [1.0], [1.0]))
+    @test @inferred(f()) == [3.0]
 end
 
 @testset "broadcast resulting in BitArray" begin

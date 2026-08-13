@@ -748,7 +748,6 @@ _bc_eltype(A::AbstractArray, i) = Base.inferencebarrier(A)[i]::eltype(A)
 _bc_eltype(A::AbstractArray{<:Any,0}, i) = Base.inferencebarrier(A)[]::eltype(A)
 
 _bc_eltypes(args::Tuple, i) = (_bc_eltype(args[1], i), _bc_eltypes(tail(args), i)...)
-_bc_eltypes(args::Tuple{Any}, i) = (_bc_eltype(args[1], i),)
 _bc_eltypes(::Tuple{}, i) = ()
 
 function result_eltype(bc::Broadcasted)
