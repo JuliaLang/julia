@@ -1268,6 +1268,155 @@ JL_DLLEXPORT jl_methcache_t *jl_method_get_cache(jl_method_t *method JL_PROPAGAT
     return jl_method_get_table(method)->cache;
 }
 
+// A TypeArith operand must be bound by an earlier invariant position in the
+// signature. Subtyping does not solve these expressions.
+
+static int ptrarray_contains(jl_array_t *a, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    for (size_t i = 0; i < jl_array_nrows(a); i++)
+        if (jl_array_ptr_ref(a, i) == v)
+            return 1;
+    return 0;
+}
+
+static void typearith_check_operands(jl_typearith_t *ta, jl_array_t *bound,
+                                     jl_sym_t *name, jl_sym_t *file, int32_t line)
+{
+    jl_value_t *ops[2] = {ta->a, ta->b};
+    for (int i = 0; i < 2; i++) {
+        if (jl_is_typevar(ops[i])) {
+            if (!ptrarray_contains(bound, ops[i])) {
+                jl_exceptionf(jl_argumenterror_type,
+                              "method definition for %s at %s:%d: static parameter %s is used in a "
+                              "computed type parameter expression before any position that "
+                              "determines its value (computed expressions are checked in match "
+                              "order, left to right, and never solved)",
+                              jl_symbol_name(name),
+                              jl_symbol_name(file),
+                              line,
+                              jl_symbol_name(((jl_tvar_t*)ops[i])->name));
+            }
+        }
+        else if (jl_is_typearith(ops[i])) {
+            typearith_check_operands((jl_typearith_t*)ops[i], bound, name, file, line);
+        }
+    }
+}
+
+static void typearith_check_walk(jl_value_t *t, int invariant, jl_array_t *bound,
+                                 jl_sym_t *name, jl_sym_t *file, int32_t line) JL_CANSAFEPOINT
+{
+    if (jl_is_typevar(t)) {
+        if (invariant && !ptrarray_contains(bound, t))
+            jl_array_ptr_1d_push(bound, t);
+        return;
+    }
+    if (jl_is_typearith(t)) {
+        typearith_check_operands((jl_typearith_t*)t, bound, name, file, line);
+        return;
+    }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        if (jl_has_typearith(ua->var->lb) || jl_has_typearith(ua->var->ub)) {
+            jl_exceptionf(jl_argumenterror_type,
+                          "method definition for %s at %s:%d: computed type parameter expressions "
+                          "are not supported in bounds of type variable %s",
+                          jl_symbol_name(name), jl_symbol_name(file), line,
+                          jl_symbol_name(ua->var->name));
+        }
+        // A variable bound by this UnionAll is local to its body.
+        int had = ptrarray_contains(bound, (jl_value_t*)ua->var);
+        typearith_check_walk(ua->body, invariant, bound, name, file, line);
+        if (!had) {
+            for (size_t i = jl_array_nrows(bound); i > 0; i--) {
+                if (jl_array_ptr_ref(bound, i - 1) == (jl_value_t*)ua->var) {
+                    size_t last = jl_array_nrows(bound) - 1;
+                    jl_array_ptr_set(bound, i - 1, jl_array_ptr_ref(bound, last));
+                    jl_array_del_end(bound, 1);
+                    break;
+                }
+            }
+        }
+        return;
+    }
+    if (jl_is_uniontype(t)) {
+        // Sharing bindings between arms can only admit methods that never match.
+        typearith_check_walk(((jl_uniontype_t*)t)->a, invariant, bound, name, file, line);
+        typearith_check_walk(((jl_uniontype_t*)t)->b, invariant, bound, name, file, line);
+        return;
+    }
+    if (jl_is_typeeq(t) || jl_is_typeegal(t)) {
+        typearith_check_walk(((jl_typeeq_t*)t)->T, 1, bound, name, file, line);
+        return;
+    }
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        // The element type is matched before the length.
+        if (vm->T)
+            typearith_check_walk(vm->T, invariant, bound, name, file, line);
+        if (vm->N) {
+            if (jl_is_typevar(vm->N)) {
+                if (!ptrarray_contains(bound, vm->N))
+                    jl_array_ptr_1d_push(bound, vm->N); // Vararg counts bind exactly
+            }
+            else if (jl_is_typearith(vm->N)) {
+                typearith_check_operands((jl_typearith_t*)vm->N, bound, name, file, line);
+            }
+        }
+        return;
+    }
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        if (!dt->hasfreetypevars)
+            return;
+        int istuple = (dt->name == jl_tuple_typename);
+        for (size_t i = 0; i < jl_nparams(dt); i++)
+            typearith_check_walk(jl_tparam(dt, i), istuple ? invariant : 1, bound, name, file, line);
+    }
+}
+
+// Used by default constructors to skip invalid outer signatures.
+JL_DLLEXPORT int jl_typearith_signature_valid(jl_svec_t *atypes) JL_CANSAFEPOINT
+{
+    int ok = 1;
+    jl_array_t *bound = NULL;
+    JL_GC_PUSH1(&bound);
+    JL_TRY {
+        bound = jl_alloc_vec_any(0);
+        size_t na = jl_svec_len(atypes);
+        for (size_t i = 0; i < na; i++)
+            typearith_check_walk(jl_svecref(atypes, i), 0, bound, jl_empty_sym, jl_empty_sym, 0);
+    }
+    JL_CATCH {
+        ok = 0;
+    }
+    JL_GC_POP();
+    return ok;
+}
+
+static void check_typearith_signature(jl_svec_t *atypes, jl_svec_t *tvars,
+                                      jl_sym_t *name, jl_sym_t *file, int32_t line) JL_CANSAFEPOINT
+{
+    for (size_t i = 0; i < jl_svec_len(tvars); i++) {
+        jl_value_t *tv = jl_svecref(tvars, i);
+        if (jl_is_typevar(tv) &&
+            (jl_has_typearith(((jl_tvar_t*)tv)->lb) || jl_has_typearith(((jl_tvar_t*)tv)->ub))) {
+            jl_exceptionf(jl_argumenterror_type,
+                          "method definition for %s at %s:%d: computed type parameter expressions "
+                          "are not supported in bounds of type variable %s",
+                          jl_symbol_name(name), jl_symbol_name(file), line,
+                          jl_symbol_name(((jl_tvar_t*)tv)->name));
+        }
+    }
+    jl_array_t *bound = NULL;
+    JL_GC_PUSH1(&bound);
+    bound = jl_alloc_vec_any(0);
+    size_t na = jl_svec_len(atypes);
+    for (size_t i = 0; i < na; i++)
+        typearith_check_walk(jl_svecref(atypes, i), 0, bound, name, file, line);
+    JL_GC_POP();
+}
+
 JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                                         jl_methtable_t *mt,
                                         jl_code_info_t *f,
@@ -1367,6 +1516,8 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(file),
                       line);
     }
+    if (jl_has_typearith(argtype))
+        check_typearith_signature(atypes, tvars, name, file, line);
     ft = jl_rewrap_unionall(ft, argtype);
     if (!external_mt && !jl_has_empty_intersection(ft, (jl_value_t*)jl_builtin_type)) // disallow adding methods to Any, Function, Builtin, and subtypes, or Unions of those
         jl_errorf("cannot add methods to builtin function `%s`", jl_symbol_name(name));

@@ -1348,6 +1348,30 @@ STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return jl_typeapp_type != NULL && jl_typeis(v, jl_typeapp_type);
 }
+// Deferred integer arithmetic on type parameters.
+typedef struct {
+    JL_DATA_TYPE
+    ssize_t op;          // inline Int field; see jl_typearith_op
+    jl_value_t *a;       // Int, TypeVar, or nested TypeArith
+    jl_value_t *b;
+} jl_typearith_t;
+
+enum jl_typearith_op {
+    JL_TYPEARITH_ADD = 1,
+    JL_TYPEARITH_SUB = 2,
+    JL_TYPEARITH_MUL = 3,
+    JL_TYPEARITH_DIV = 4,
+    JL_TYPEARITH_MIN = 5,
+    JL_TYPEARITH_MAX = 6,
+    JL_TYPEARITH_POW = 7,
+};
+
+STATIC_INLINE int jl_is_typearith(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_typearith_type != NULL && jl_typeis(v, jl_typearith_type);
+}
+int jl_has_typearith(jl_value_t *v) JL_NOTSAFEPOINT;
+int jl_typearith_eval(ssize_t op, ssize_t x, ssize_t y, ssize_t *r) JL_NOTSAFEPOINT;
 void jl_init_tasks(void) JL_GC_DISABLED JL_NOTSAFEPOINT;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi) JL_CANSAFEPOINT;

@@ -444,6 +444,13 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         return bitmix(jl_object_id((jl_value_t*)tv),
                       type_object_id_(((jl_typeeq_t*)v)->T, env));
     }
+    if (jl_is_typearith(v)) {
+        // Hash bound variables by binder depth, as in egal_types.
+        jl_typearith_t *ta = (jl_typearith_t*)v;
+        uintptr_t h = inthash((uintptr_t)(0x7ea0 + ta->op));
+        h = bitmix(h, type_object_id_(ta->a, env));
+        return bitmix(h, type_object_id_(ta->b, env));
+    }
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
         uintptr_t h = u->var->name->hash;
@@ -1827,9 +1834,12 @@ int jl_valid_type_param(jl_value_t *v)
         return is_nestable_type_param(jl_typeof(v));
     if (jl_is_vararg(v))
         return 0;
+    // Instantiation folds nodes with no free operands.
+    if (jl_is_typearith(v))
+        return jl_has_free_typevars(v);
     // TODO: maybe more things
-    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v)) ||
-        jl_is_module(v);
+    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) ||
+        jl_isbits(jl_typeof(v)) || jl_is_module(v);
 }
 
 JL_CALLABLE(jl_f_apply_type)

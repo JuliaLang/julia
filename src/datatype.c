@@ -2740,6 +2740,10 @@ static jl_datatype_t *unwrap_to_datatype(jl_value_t *v) JL_NOTSAFEPOINT
 // Throws when invalid; returns otherwise.
 void jl_check_valid_supertype(jl_value_t *super, const char *type_name)
 {
+    if (jl_has_typearith(super))
+        jl_errorf("invalid subtyping in definition of %s: computed type parameter "
+                  "expressions (e.g. `N+1`) are only supported in field types, "
+                  "not supertype declarations", type_name);
     if (jl_is_unionall(super)) {
         // delegate to the body first for a more accurate error
         // when parameterizing would not salvage the definition
@@ -2887,6 +2891,13 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                                   jl_symbol_name(tv->name),
                                   jl_symbol_name(((jl_tvar_t*)p)->name),
                                   jl_symbol_name(ref->name));
+                    if (jl_has_typearith(((jl_tvar_t*)p)->lb) ||
+                        jl_has_typearith(((jl_tvar_t*)p)->ub))
+                        jl_errorf("invalid type parameter bound in definition of %s: "
+                                  "computed type parameter expressions (e.g. `N+1`) are only "
+                                  "supported in field types, not in bounds of %s",
+                                  jl_symbol_name(tv->name),
+                                  jl_symbol_name(((jl_tvar_t*)p)->name));
                 }
             }
 

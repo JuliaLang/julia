@@ -61,7 +61,7 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAF
     while (1) {
         if (jl_is_typevar(v))
             return !typeenv_has(env, (jl_tvar_t*)v);
-        if (jl_is_typeapp(v))
+        if (jl_is_typeapp(v) || jl_is_typearith(v))
             return 1;
         while (jl_is_unionall(v)) {
             jl_unionall_t *ua = (jl_unionall_t*)v;
@@ -131,6 +131,13 @@ static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
         }
         if (jl_is_typeapp(v))
             return 1;
+        if (jl_is_typearith(v)) {
+            jl_typearith_t *ta = (jl_typearith_t*)v;
+            if (has_free_typevars(ta->a, env))
+                return 1;
+            v = ta->b;
+            continue;
+        }
         while (jl_is_unionall(v)) {
             jl_unionall_t *ua = (jl_unionall_t*)v;
             if (ua->var->lb != jl_bottom_type && has_free_typevars(ua->var->lb, env))
@@ -146,7 +153,7 @@ static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
         }
         // After unwrapping UnionAll, body might be TypeApp or TypeVar;
         // restart the loop so those checks at the top fire.
-        if (jl_is_typeapp(v) || jl_is_typevar(v))
+        if (jl_is_typeapp(v) || jl_is_typearith(v) || jl_is_typevar(v))
             continue;
         if (jl_is_datatype(v)) {
             int expect = ((jl_datatype_t*)v)->hasfreetypevars;
@@ -188,6 +195,56 @@ JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v) JL_NOTSAFEPOINT
     return has_free_typevars(v, NULL);
 }
 
+// Return whether v contains a TypeArith node.
+int jl_has_typearith(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (jl_is_typearith(v))
+            return 1;
+        if (jl_is_typevar(v)) {
+            jl_tvar_t *tv = (jl_tvar_t*)v;
+            if (jl_has_typearith(tv->lb))
+                return 1;
+            v = tv->ub;
+        }
+        else if (jl_is_unionall(v)) {
+            jl_unionall_t *ua = (jl_unionall_t*)v;
+            if (jl_has_typearith((jl_value_t*)ua->var))
+                return 1;
+            v = ua->body;
+        }
+        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
+            if (jl_has_typearith(((jl_uniontype_t*)v)->a))
+                return 1;
+            v = ((jl_uniontype_t*)v)->b;
+        }
+        else if (jl_is_typeeq(v) || jl_is_typeegal(v)) {
+            v = ((jl_typeeq_t*)v)->T;
+        }
+        else if (jl_is_vararg(v)) {
+            jl_vararg_t *vm = (jl_vararg_t*)v;
+            if (vm->N && jl_has_typearith(vm->N))
+                return 1;
+            if (!vm->T)
+                return 0;
+            v = vm->T;
+        }
+        else if (jl_is_datatype(v)) {
+            if (!((jl_datatype_t*)v)->hasfreetypevars)
+                return 0; // nodes always contain a free typevar
+            size_t i, np = jl_nparams(v);
+            for (i = 0; i < np; i++) {
+                if (jl_has_typearith(jl_tparam(v, i)))
+                    return 1;
+            }
+            return 0;
+        }
+        else {
+            return 0;
+        }
+    }
+}
+
 static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out) JL_CANSAFEPOINT
 {
     while (1) {
@@ -210,6 +267,12 @@ static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out
         if (jl_is_typeapp(v)) {
             jl_array_ptr_1d_push(out, v);
             return;
+        }
+        if (jl_is_typearith(v)) {
+            jl_typearith_t *ta = (jl_typearith_t*)v;
+            find_free_typevars(ta->a, env, out);
+            v = ta->b;
+            continue;
         }
         while (jl_is_unionall(v)) {
             jl_unionall_t *ua = (jl_unionall_t*)v;
@@ -279,6 +342,13 @@ int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
             v = ta->param;
             continue;
         }
+        if (jl_is_typearith(v)) {
+            jl_typearith_t *ta = (jl_typearith_t*)v;
+            if (jl_has_bound_typevars(ta->a, env))
+                return 1;
+            v = ta->b;
+            continue;
+        }
         while (jl_is_unionall(v)) {
             jl_unionall_t *ua = (jl_unionall_t*)v;
             if (ua->var->lb != jl_bottom_type && jl_has_bound_typevars(ua->var->lb, env))
@@ -299,7 +369,7 @@ int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
         }
         // After unwrapping UnionAll, body might be TypeApp or TypeVar;
         // restart the loop so those checks at the top fire.
-        if (jl_is_typeapp(v) || jl_is_typevar(v))
+        if (jl_is_typeapp(v) || jl_is_typearith(v) || jl_is_typevar(v))
             continue;
         if (jl_is_datatype(v)) {
             if (!((jl_datatype_t*)v)->hasfreetypevars)
@@ -1041,7 +1111,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
         }
         else {
             assert(N_has_tv);
-            assert(vm->N == (jl_value_t*)v);
+            assert(vm->N == (jl_value_t*)v || jl_is_typearith(vm->N));
             return (jl_value_t*)jl_wrap_vararg(vm->T, NULL, 1, 0);
         }
     }
@@ -1961,6 +2031,13 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
     }
     else if (jl_is_typeegal(uw)) {
         return typeegal_hash(jl_typeegal_T(uw), failed);
+    }
+    else if (jl_is_typearith(uw)) {
+        // Match the alpha-insensitive TypeVar hashing above.
+        jl_typearith_t *ta = (jl_typearith_t*)uw;
+        unsigned hash = bitmix(type_hash(ta->a, failed), type_hash(ta->b, failed));
+        hash = bitmix((unsigned)(0x7ea0 + ta->op), hash);
+        return hash ? hash : 1;
     }
     else {
         return jl_object_id(uw);
@@ -3013,11 +3090,102 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
 // return `NULL` instead of immediately throwing an error. If `nothrow` == 2 then
 // we further assume that the imprecise instantiation for non invariant parameters
 // is acceptable, and inner error (`NULL`) would be ignored.
+// Fold or rebuild a TypeArith after substituting its operands.
+static jl_value_t *fold_typearith(jl_typearith_t *ta, jl_value_t *a, jl_value_t *b, int nothrow) JL_CANSAFEPOINT
+{
+    int afree = jl_is_typevar(a) || jl_is_typearith(a);
+    int bfree = jl_is_typevar(b) || jl_is_typearith(b);
+    if (afree || bfree) {
+        if (a == ta->a && b == ta->b)
+            return (jl_value_t*)ta;
+        if ((!afree && !jl_is_long(a)) || (!bfree && !jl_is_long(b))) {
+            if (nothrow)
+                return NULL;
+            jl_type_error_rt("TypeArith", "operand", (jl_value_t*)jl_long_type,
+                             (!afree && !jl_is_long(a)) ? a : b);
+        }
+        jl_value_t *op = jl_box_long(ta->op);
+        JL_GC_PUSH1(&op);
+        jl_value_t *r = jl_new_struct(jl_typearith_type, op, a, b);
+        JL_GC_POP();
+        return r;
+    }
+    if (!jl_is_long(a) || !jl_is_long(b)) {
+        if (nothrow)
+            return NULL;
+        jl_type_error_rt("TypeArith", "operand", (jl_value_t*)jl_long_type, jl_is_long(a) ? b : a);
+    }
+    ssize_t x = jl_unbox_long(a);
+    ssize_t y = jl_unbox_long(b);
+    ssize_t r = 0;
+    if (!jl_typearith_eval(ta->op, x, y, &r)) {
+        if (nothrow)
+            return NULL;
+        jl_errorf("arithmetic error in type parameter expression (%zd, %zd)", (ssize_t)x, (ssize_t)y);
+    }
+    return jl_box_long(r);
+}
+
+// Return 0 on arithmetic error or an unknown operation.
+int jl_typearith_eval(ssize_t op, ssize_t x, ssize_t y, ssize_t *r) JL_NOTSAFEPOINT
+{
+    switch (op) {
+    case JL_TYPEARITH_ADD: return !__builtin_add_overflow(x, y, r);
+    case JL_TYPEARITH_SUB: return !__builtin_sub_overflow(x, y, r);
+    case JL_TYPEARITH_MUL: return !__builtin_mul_overflow(x, y, r);
+    case JL_TYPEARITH_DIV:
+        if (y == 0)
+            return 0;
+        if (y == -1) // x ÷ -1 == -x; overflow-checked (typemin ÷ -1)
+            return !__builtin_sub_overflow((ssize_t)0, x, r);
+        *r = x / y;
+        return 1;
+    case JL_TYPEARITH_MIN: *r = x < y ? x : y; return 1;
+    case JL_TYPEARITH_MAX: *r = x < y ? y : x; return 1;
+    case JL_TYPEARITH_POW: {
+        if (y < 0)
+            return 0;
+        ssize_t acc = 1;
+        while (y > 0) {
+            if (y & 1) {
+                if (__builtin_mul_overflow(acc, x, &acc))
+                    return 0;
+            }
+            y >>= 1;
+            if (y && __builtin_mul_overflow(x, x, &x))
+                return 0;
+        }
+        *r = acc;
+        return 1;
+    }
+    }
+    return 0;
+}
+
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow, jl_deferred_typecache_t *dcache)
 {
     size_t i;
     if (jl_is_typeapp(t))
         return t;
+    if (jl_is_typearith(t)) {
+        jl_typearith_t *ta = (jl_typearith_t*)t;
+        jl_value_t *a = NULL;
+        jl_value_t *b = NULL;
+        JL_GC_PUSH2(&a, &b);
+        // Invariant operands cannot use imprecise instantiation.
+        a = inst_type_w_(ta->a, env, stack, check, nothrow ? 1 : 0, dcache);
+        if (a != NULL)
+            b = inst_type_w_(ta->b, env, stack, check, nothrow ? 1 : 0, dcache);
+        if (a == NULL || b == NULL) {
+            assert(nothrow);
+            t = NULL;
+        }
+        else {
+            t = fold_typearith(ta, a, b, nothrow);
+        }
+        JL_GC_POP();
+        return t;
+    }
     if (jl_is_typevar(t)) {
         jl_typeenv_t *e = env;
         while (e != NULL) {
@@ -3294,7 +3462,8 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
     JL_GC_PUSH1(&t);
     if (check) {
         if (n) {
-            if (jl_is_typevar(n) || jl_is_uniontype(jl_unwrap_unionall(n))) {
+            if (jl_is_typevar(n) || (jl_is_typearith(n) && jl_has_free_typevars(n)) ||
+                jl_is_uniontype(jl_unwrap_unionall(n))) {
                 // TODO: this is disabled due to #39698; it is also inconsistent
                 // with other similar checks, where we usually only check substituted
                 // values and not the bounds of variables.
@@ -4597,6 +4766,7 @@ void post_boot_hooks(void)
 
     // Initialize TypeApp type reference for mutually recursive types
     jl_typeapp_type = (jl_datatype_t*)core("TypeApp");
+    jl_typearith_type = (jl_datatype_t*)core("TypeArith");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

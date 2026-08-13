@@ -1557,3 +1557,13 @@ julia> [1, 2] .∉ ([2, 3],)
 ```
 """
 ∉, ∌
+
+# Operators for constructing deferred type-parameter arithmetic.
+const _TypeArithOperand = Union{TypeVar, Core.TypeArith}
+for (f, op) in ((:+, 1), (:-, 2), (:*, 3), (:div, 4), (:min, 5), (:max, 6), (:^, 7))
+    @eval begin
+        $f(a::_TypeArithOperand, b::_TypeArithOperand) = Core.TypeArith($op, a, b)
+        $f(a::_TypeArithOperand, b::Int) = Core.TypeArith($op, a, b)
+        $f(a::Int, b::_TypeArithOperand) = Core.TypeArith($op, a, b)
+    end
+end

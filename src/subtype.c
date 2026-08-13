@@ -788,6 +788,8 @@ int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFE
             jl_value_t *bi = jl_tparam(bd, i);
             if (jl_is_typevar(ai) || jl_is_typevar(bi))
                 continue; // it's possible that Union{} is in this intersection
+            if (jl_is_typearith(ai) || jl_is_typearith(bi))
+                continue; // checked after operand substitution
             if (jl_is_type(ai)) {
                 if (jl_is_type(bi)) {
                     if (istuple && (ai == jl_bottom_type || bi == jl_bottom_type))
@@ -1921,6 +1923,36 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 }
 
 // check n <: (length of vararg type v)
+// Fold a TypeArith when all of its operands are fixed in e.
+static jl_value_t *fold_typearith_stenv(jl_value_t *v, jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    if (jl_is_long(v))
+        return v;
+    if (jl_is_typevar(v)) {
+        jl_varbinding_t *vb = lookup(e, (jl_tvar_t*)v);
+        if (vb && vb->lb == vb->ub && jl_is_long(vb->lb))
+            return vb->lb;
+        return NULL;
+    }
+    if (jl_is_typearith(v)) {
+        jl_typearith_t *ta = (jl_typearith_t*)v;
+        jl_value_t *a = fold_typearith_stenv(ta->a, e);
+        if (a == NULL)
+            return NULL;
+        JL_GC_PUSH1(&a);
+        jl_value_t *b = fold_typearith_stenv(ta->b, e);
+        jl_value_t *r = NULL;
+        if (b != NULL) {
+            ssize_t res;
+            if (jl_typearith_eval(ta->op, jl_unbox_long(a), jl_unbox_long(b), &res))
+                r = jl_box_long(res);
+        }
+        JL_GC_POP();
+        return r;
+    }
+    return NULL;
+}
+
 static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     jl_value_t *N = jl_unwrap_vararg_num(v);
@@ -2797,6 +2829,36 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         jl_intersecttype_t *iy = (jl_intersecttype_t*)y;
         return subtype(x, iy->a, e, param) && subtype(x, iy->b, e, param);
     }
+    if (jl_is_typearith(x) || jl_is_typearith(y)) {
+        // Fold fixed operands; otherwise compare the expression structurally.
+        jl_value_t *xf = jl_is_typearith(x) ? fold_typearith_stenv(x, e) : x;
+        jl_value_t *yf = NULL;
+        int ans;
+        JL_GC_PUSH2(&xf, &yf);
+        yf = jl_is_typearith(y) ? fold_typearith_stenv(y, e) : y;
+        if (xf == NULL || yf == NULL) {
+            if (e->Loffset == 0 && jl_is_typearith(x) && jl_is_typearith(y) &&
+                ((jl_typearith_t*)x)->op == ((jl_typearith_t*)y)->op) {
+                // Compare bound variables modulo alpha-renaming.
+                jl_typearith_t *tx = (jl_typearith_t*)x, *ty = (jl_typearith_t*)y;
+                e->invdepth++;
+                ans = forall_exists_equal(tx->a, ty->a, e) &&
+                      forall_exists_equal(tx->b, ty->b, e);
+                e->invdepth--;
+            }
+            else {
+                ans = e->Loffset == 0 && jl_egal(x, y);
+            }
+            if (!ans && e->intersection) {
+                // Failure to prove equality is not enough to prove disjointness.
+                ans = 1;
+            }
+        }
+        else
+            ans = subtype(xf, yf, e, param);
+        JL_GC_POP();
+        return ans;
+    }
     if (jl_is_typevar(x)) {
         if (jl_is_typevar(y)) {
             if (x == y) return 1;
@@ -3503,6 +3565,9 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
         return 0;
     }
     if (jl_is_intersecttype(x))
+        return 0;
+    if (jl_is_typearith(x) || jl_is_typearith(y))
+        // TypeArith needs an environment to fold its operands.
         return 0;
     if (!jl_is_type(x) || !jl_is_type(y)) {
         *subtype = jl_egal(x, y);
@@ -5186,7 +5251,27 @@ static int intersect_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, int8
     return 1;
 }
 
+static jl_value_t *intersect_varargs_(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t offset, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT;
+
 static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t offset, jl_stenv_t *e, jl_param_pos_t param) JL_CANSAFEPOINT
+{
+    // Fold computed lengths, or drop the length if it remains unknown.
+    jl_value_t *xp2 = jl_unwrap_vararg_num(vmx), *yp2 = jl_unwrap_vararg_num(vmy);
+    if ((xp2 && jl_is_typearith(xp2)) || (yp2 && jl_is_typearith(yp2))) {
+        jl_value_t **roots;
+        JL_GC_PUSHARGS(roots, 4);
+        roots[0] = (xp2 && jl_is_typearith(xp2)) ? fold_typearith_stenv(xp2, e) : xp2;
+        roots[1] = (yp2 && jl_is_typearith(yp2)) ? fold_typearith_stenv(yp2, e) : yp2;
+        roots[2] = (jl_value_t*)jl_wrap_vararg(jl_unwrap_vararg(vmx), roots[0], 1, 0);
+        roots[3] = (jl_value_t*)jl_wrap_vararg(jl_unwrap_vararg(vmy), roots[1], 1, 0);
+        jl_value_t *ii = intersect_varargs_((jl_vararg_t*)roots[2], (jl_vararg_t*)roots[3], offset, e, param);
+        JL_GC_POP();
+        return ii;
+    }
+    return intersect_varargs_(vmx, vmy, offset, e, param);
+}
+
+static jl_value_t *intersect_varargs_(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t offset, jl_stenv_t *e, jl_param_pos_t param)
 {
     // Vararg: covariant in first parameter, invariant in second
     jl_value_t *xp1=jl_unwrap_vararg(vmx), *xp2=jl_unwrap_vararg_num(vmx),
@@ -5663,6 +5748,51 @@ static int has_typevar_via_env(jl_value_t *x, jl_tvar_t *t, jl_stenv_t *e)
 static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
 {
     if (x == y) return y;
+    if (jl_is_typearith(x) || jl_is_typearith(y)) {
+        // Fold fixed operands before intersecting TypeArith nodes.
+        jl_value_t *xf = jl_is_typearith(x) ? fold_typearith_stenv(x, e) : x;
+        jl_value_t *yf = NULL;
+        jl_value_t *ii;
+        JL_GC_PUSH2(&xf, &yf);
+        yf = jl_is_typearith(y) ? fold_typearith_stenv(y, e) : y;
+        if (xf == NULL || yf == NULL) {
+            if (e->Loffset == 0 && jl_egal(x, y)) {
+                ii = x;
+            }
+            else if (e->Loffset == 0 && jl_is_typearith(x) && jl_is_typearith(y) &&
+                     ((jl_typearith_t*)x)->op == ((jl_typearith_t*)y)->op) {
+                // Match bound variables modulo alpha-renaming.
+                jl_typearith_t *tx = (jl_typearith_t*)x, *ty = (jl_typearith_t*)y;
+                jl_value_t *ia = intersect_invariant(tx->a, ty->a, e);
+                xf = ia; // reuse root
+                jl_value_t *ib = (ia == NULL || ia == jl_bottom_type) ? NULL :
+                    intersect_invariant(tx->b, ty->b, e);
+                yf = ib; // reuse root
+                if (ia == NULL || ib == NULL || ia == jl_bottom_type || ib == jl_bottom_type)
+                    // Different operands can still evaluate to the same value.
+                    ii = x;
+                else if (ia == tx->a && ib == tx->b)
+                    ii = x;
+                else if (!(jl_is_long(ia) || jl_is_typevar(ia) || jl_is_typearith(ia)) ||
+                         !(jl_is_long(ib) || jl_is_typevar(ib) || jl_is_typearith(ib)))
+                    ii = x; // the intersection cannot be represented as TypeArith
+                else {
+                    jl_value_t *op = jl_box_long(tx->op);
+                    JL_GC_PUSH1(&op);
+                    ii = jl_new_struct(jl_typearith_type, op, ia, ib);
+                    JL_GC_POP();
+                }
+            }
+            else {
+                // Keep whichever side could be folded.
+                ii = (yf != NULL) ? yf : (xf != NULL ? xf : x);
+            }
+        }
+        else
+            ii = intersect(xf, yf, e, param);
+        JL_GC_POP();
+        return ii;
+    }
     if (jl_is_typevar(x)) {
         if (jl_is_typevar(y)) {
             int xinner = 0, yinner = 0;
@@ -6135,8 +6265,9 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
             return x;
         else if (jl_subtype(y, x))
             return y;
-        else
+        else if (!jl_has_typearith(x) && !jl_has_typearith(y))
             return jl_bottom_type;
+        // TypeArith needs the full intersection algorithm below.
     }
     init_stenv(&e, NULL, 0);
     e.intersection = 1;
@@ -6260,8 +6391,12 @@ static int might_intersect_concrete(jl_value_t *a) JL_NOTSAFEPOINT
     if (jl_is_uniontype(a))
         return might_intersect_concrete(((jl_uniontype_t*)a)->a) ||
                might_intersect_concrete(((jl_uniontype_t*)a)->b);
-    if (jl_is_vararg(a))
+    if (jl_is_vararg(a)) {
+        jl_value_t *N = jl_unwrap_vararg_num((jl_vararg_t*)a);
+        if (N && jl_is_typearith(N))
+            return 1; // the count cannot be checked without its environment
         return might_intersect_concrete(jl_unwrap_vararg(a));
+    }
     if (jl_is_some_Type(a))
         return 1;
     if (jl_is_datatype(a)) {
@@ -6269,7 +6404,7 @@ static int might_intersect_concrete(jl_value_t *a) JL_NOTSAFEPOINT
         int i, n = jl_nparams(a);
         for (i = 0; i < n; i++) {
             jl_value_t *p = jl_tparam(a, i);
-            if (jl_is_typevar(p))
+            if (jl_is_typevar(p) || jl_is_typearith(p))
                 return 1;
             if (tpl && p == jl_bottom_type)
                 return 1;
@@ -6317,7 +6452,8 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         // A dispatch tuple is a concrete leaf type, so its intersection with any other
         // type is just itself (when it is a subtype) or empty. The subtype checks above
         // having failed, the intersection must be empty.
-        if (jl_is_dispatch_tupletype(a) || jl_is_dispatch_tupletype(b))
+        if ((jl_is_dispatch_tupletype(a) || jl_is_dispatch_tupletype(b)) &&
+            !jl_has_typearith(a) && !jl_has_typearith(b))
             goto bot;
         jl_stenv_t e;
         init_stenv(&e, NULL, 0);

@@ -49,6 +49,11 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         if (tv->N && must_be_new_dt(tv->N, news, image_base, sizeof_sysimg))
             return 1;
     }
+    else if (jl_is_typearith(t)) {
+        jl_typearith_t *ta = (jl_typearith_t*)t;
+        return must_be_new_dt(ta->a, news, image_base, sizeof_sysimg) ||
+               must_be_new_dt(ta->b, news, image_base, sizeof_sysimg);
+    }
     else if (jl_is_datatype(t)) {
         jl_datatype_t *dt = (jl_datatype_t*)t;
         assert(jl_astaggedvalue(dt->name)->bits.in_image && "type_in_worklist mistake?");
@@ -259,6 +264,11 @@ static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOIN
         jl_vararg_t *tv = (jl_vararg_t*)v;
         result = ((tv->T && type_in_worklist(tv->T, cache)) ||
                   (tv->N && type_in_worklist(tv->N, cache)));
+    }
+    else if (jl_is_typearith(v)) {
+        jl_typearith_t *ta = (jl_typearith_t*)v;
+        result = type_in_worklist(ta->a, cache) ||
+                 type_in_worklist(ta->b, cache);
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;

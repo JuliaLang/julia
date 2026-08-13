@@ -2875,6 +2875,28 @@ function show(io::IO, tv::TypeVar)
     nothing
 end
 
+function show(io::IO, ta::Core.TypeArith)
+    op = ta.op
+    if op == 5 || op == 6 # min, max
+        print(io, op == 5 ? "min(" : "max(")
+        show(io, ta.a)
+        print(io, ", ")
+        show(io, ta.b)
+        print(io, ")")
+    else
+        function show_operand(io::IO, @nospecialize(x))
+            parens = x isa Core.TypeArith && x.op != 5 && x.op != 6
+            parens && print(io, "(")
+            show(io, x)
+            parens && print(io, ")")
+        end
+        show_operand(io, ta.a)
+        print(io, op == 1 ? " + " : op == 2 ? " - " : op == 3 ? " * " : op == 4 ? " ÷ " : " ^ ")
+        show_operand(io, ta.b)
+    end
+    nothing
+end
+
 function show(io::IO, vm::Core.TypeofVararg)
     print(io, "Vararg")
     if isdefined(vm, :T)

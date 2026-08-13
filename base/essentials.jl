@@ -1291,6 +1291,39 @@ has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, 
 # Called by lowered code from struct definitions (both flisp and JuliaLowering).
 # Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
 
+function _contains_typearith(@nospecialize t)
+    if t isa Core.TypeArith
+        return true
+    end
+    if t isa Core.TypeEq || t isa Core.TypeEgal
+        return _contains_typearith(t.T)
+    end
+    if t isa UnionAll
+        return _contains_typearith(t.var.lb) || _contains_typearith(t.var.ub) || _contains_typearith(t.body)
+    end
+    if t isa Union
+        return _contains_typearith(t.a) || _contains_typearith(t.b)
+    end
+    if t isa Core.TypeofVararg
+        if isdefined(t, :T) && _contains_typearith(t.T)
+            return true
+        end
+        return isdefined(t, :N) && _contains_typearith(t.N)
+    end
+    if t isa DataType
+        params = t.parameters
+        i = 1
+        n = length(params)
+        while i !== n + 1
+            if _contains_typearith(params[i])
+                return true
+            end
+            i = i + 1
+        end
+    end
+    return false
+end
+
 function _defaultctors(@nospecialize(ty), functionloc)
     # Walk the UnionAll chain to collect type variables and get the DataType
     nparams = 0
@@ -1412,9 +1445,21 @@ function _defaultctors(@nospecialize(ty), functionloc)
         end
         outer_atypes = Core.svec(atypes_arr...)
         outer_tvars = Core.svec(tvars...)
-        argdata = Core.svec(outer_atypes, outer_tvars, functionloc)
-        ccall(:jl_method_def, Any, (Any, Ptr{Nothing}, Any, Any),
-              argdata, C_NULL, ci, mod)
+        # Each TypeArith operand must be bound before it appears in the signature.
+        outer_ok = true
+        i = 1
+        while i !== n + 1
+            if _contains_typearith(fts[i])
+                outer_ok = ccall(:jl_typearith_signature_valid, Int32, (Any,), outer_atypes) !== Int32(0)
+                break
+            end
+            i = i + 1
+        end
+        if outer_ok
+            argdata = Core.svec(outer_atypes, outer_tvars, functionloc)
+            ccall(:jl_method_def, Any, (Any, Ptr{Nothing}, Any, Any),
+                  argdata, C_NULL, ci, mod)
+        end
 
         # For non-parametric types where all fields are Any, outer constructor suffices
         if nparams === 0

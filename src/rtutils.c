@@ -1065,6 +1065,25 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_printf(out, "}");
         }
     }
+    else if (vt == jl_typearith_type) {
+        jl_typearith_t *ta = (jl_typearith_t*)v;
+        static const char *opnames[] = {"?", "+", "-", "*", "\xc3\xb7" /* ÷ */, "min", "max", "^"};
+        ssize_t op = (ta->op >= 1 && ta->op <= 7) ? ta->op : 0;
+        if (op >= 5) { // min/max as calls
+            n += jl_printf(out, "%s(", opnames[op]);
+            n += jl_static_show_x(out, ta->a, depth, ctx);
+            n += jl_printf(out, ", ");
+            n += jl_static_show_x(out, ta->b, depth, ctx);
+            n += jl_printf(out, ")");
+        }
+        else {
+            n += jl_printf(out, "(");
+            n += jl_static_show_x(out, ta->a, depth, ctx);
+            n += jl_printf(out, " %s ", opnames[op]);
+            n += jl_static_show_x(out, ta->b, depth, ctx);
+            n += jl_printf(out, ")");
+        }
+    }
     else if (vt == jl_datatype_type) {
         // typeof(v) == DataType, so v is a Type object.
         // Types are printed as a fully qualified name, with parameters, e.g.

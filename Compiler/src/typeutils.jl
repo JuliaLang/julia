@@ -480,3 +480,86 @@ property when there is access to mutation-free global object.
 is_mutation_free_argtype(@nospecialize(argtype)) =
     is_mutation_free_type(widenconst(ignorelimited(argtype)))
 is_mutation_free_type(@nospecialize ty) = ismutationfree(ty)
+
+# Subtyping only evaluates TypeArith after its operands are known. Replace any
+# remaining nodes with fresh TypeVars before using a field type in inference.
+function contains_typearith(@nospecialize t)
+    if t isa DataType
+        # TypeArith always contains a free type variable.
+        has_free_typevars(t) || return false
+        for p in t.parameters
+            contains_typearith(p) && return true
+        end
+        return false
+    end
+    t isa Core.TypeArith && return true
+    if t isa UnionAll
+        return contains_typearith(t.var.lb) || contains_typearith(t.var.ub) ||
+               contains_typearith(t.body)
+    end
+    if t isa Core.TypeEq || t isa Core.TypeEgal
+        return contains_typearith(t.T)
+    end
+    t isa Union && return contains_typearith(t.a) || contains_typearith(t.b)
+    if t isa Core.TypeofVararg
+        isdefined(t, :T) && contains_typearith(t.T) && return true
+        return isdefined(t, :N) && contains_typearith(t.N)
+    end
+    return false
+end
+
+function widen_typearith(@nospecialize t)
+    contains_typearith(t) || return t
+    vars = TypeVar[]
+    t = _substitute_typearith(t, vars)
+    for i = length(vars):-1:1
+        t = UnionAll(vars[i], t)
+    end
+    return t
+end
+
+function _substitute_typearith(@nospecialize(t), vars::Vector{TypeVar})
+    if t isa Core.TypeArith
+        v = TypeVar(Symbol("#ta#"))
+        push!(vars, v)
+        return v
+    end
+    if t isa UnionAll
+        lb = _substitute_typearith(t.var.lb, vars)
+        ub = _substitute_typearith(t.var.ub, vars)
+        body = _substitute_typearith(t.body, vars)
+        if lb === t.var.lb && ub === t.var.ub
+            return body === t.body ? t : UnionAll(t.var, body)
+        end
+        # Rebind the variable after changing its bounds.
+        v = TypeVar(t.var.name, lb, ub)
+        return UnionAll(v, Core.apply_type(UnionAll(t.var, body), v))
+    end
+    if t isa Core.TypeEq
+        x = _substitute_typearith(t.T, vars)
+        return x === t.T ? t : Core.apply_type(Type, x)
+    end
+    # TypeEgal parameters cannot have free type variables.
+    if t isa Union
+        a = _substitute_typearith(t.a, vars)
+        b = _substitute_typearith(t.b, vars)
+        return (a === t.a && b === t.b) ? t : Union{a, b}
+    end
+    if t isa Core.TypeofVararg
+        isdefined(t, :T) || return t
+        T = _substitute_typearith(t.T, vars)
+        if isdefined(t, :N)
+            N = _substitute_typearith(t.N, vars)
+            return (T === t.T && N === t.N) ? t : Core.apply_type(Vararg, T, N)
+        end
+        return T === t.T ? t : Core.apply_type(Vararg, T)
+    end
+    if t isa DataType && contains_typearith(t)
+        np = Vector{Any}(undef, length(t.parameters))
+        for i = 1:length(t.parameters)
+            np[i] = _substitute_typearith(t.parameters[i], vars)
+        end
+        return Core.apply_type(t.name.wrapper, np...)
+    end
+    return t
+end

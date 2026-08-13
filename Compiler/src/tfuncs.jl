@@ -1320,7 +1320,7 @@ end
             # union together types of all fields
             t = Bottom
             for i in 1:nf
-                _ft = unwrapva(ftypes[i])
+                _ft = widen_typearith(unwrapva(ftypes[i]))
                 valid_as_lattice(_ft, true) || continue
                 setfield && isconst(s, i) && continue
                 t = tmerge(t, rewrap_unionall(_ft, s00))
@@ -1340,7 +1340,7 @@ end
         elseif setfield && isconst(s, fld)
             return Bottom
         end
-        R = ftypes[fld]
+        R = widen_typearith(ftypes[fld])
         valid_as_lattice(R, true) || return Bottom
         if isempty(s.parameters)
             return R
@@ -1698,6 +1698,11 @@ end
                 continue
             end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
+            ft1w = widen_typearith(ft1)
+            if ft1w !== ft1
+                exactft1 = false # widened to a strict supertype
+                ft1 = ft1w
+            end
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
                 # `fieldtype` returns exactly (`===`) the stored type, but only
@@ -1745,6 +1750,11 @@ end
     end
 
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
+    ftw = widen_typearith(ft)
+    if ftw !== ft
+        exactft = false # widened to a strict supertype
+        ft = ftw
+    end
     ft = rewrap_unionall(ft, s)
     if exactft
         # only an egality-certain argument pins the stored rep (see above)

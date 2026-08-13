@@ -422,6 +422,27 @@ struct TypeApp
     end
 end
 
+# Deferred integer arithmetic on type parameters. Instantiation folds a node
+# once its operands are known.
+struct TypeArith
+    op::Int              # 1:+ 2:- 3:* 4:div 5:min 6:max 7:^
+    a::Any
+    b::Any
+    function TypeArith(op::Int, @nospecialize(a), @nospecialize(b))
+        if Intrinsics.slt_int(op, 1) || Intrinsics.slt_int(7, op)
+            throw(ArgumentError("invalid TypeArith op code"))
+        end
+        (a isa Int || a isa TypeVar || a isa TypeArith) ||
+            throw(ArgumentError("TypeArith operands must be Int, TypeVar, or TypeArith"))
+        (b isa Int || b isa TypeVar || b isa TypeArith) ||
+            throw(ArgumentError("TypeArith operands must be Int, TypeVar, or TypeArith"))
+        if a isa Int && b isa Int
+            throw(ArgumentError("TypeArith over constant operands must be folded"))
+        end
+        return new(op, a, b)
+    end
+end
+
 # Check if a value contains a TypeApp anywhere in its structure
 function _contains_typeapp(@nospecialize(x))
     if x isa TypeApp
