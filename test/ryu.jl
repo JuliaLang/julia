@@ -405,7 +405,7 @@ end
 @test "-0.00010014" == Ryu.writeshortest(Float16(-0.00010014)) #longest Float16
 end # Float16
 
-@testset "round-trip parsing"
+@testset "round-trip parsing" begin
     function randfloats(T, n)
         x = nextfloat(T(-Inf))
         while x < T(Inf)
