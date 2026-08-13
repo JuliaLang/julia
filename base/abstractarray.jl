@@ -1242,6 +1242,8 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
 iterate_starting_state(A, ::IndexLinear) = firstindex(A)
 iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
+# avoid fragile edges from union-splitting these helpers for abstract arrays (#61667)
+typeof(iterate_starting_state).name.max_methods = UInt8(1)
 @inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate_abstractarray(A, state)
 @inline function _iterate_abstractarray(A::AbstractArray, state::Tuple)
     y = iterate(state...)::Union{Nothing,Tuple}
@@ -1252,6 +1254,7 @@ end
     checkbounds(Bool, A, state) || return nothing
     A[state], state + one(state)
 end
+typeof(_iterate_abstractarray).name.max_methods = UInt8(1)
 
 isempty(a::AbstractArray) = (length(a) == 0)
 
