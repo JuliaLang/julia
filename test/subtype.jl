@@ -3526,3 +3526,27 @@ end
         end
     end
 end
+
+# issue #57427: an envout entry filled by an inner unionall frame may reference
+# an outer right-side var; when that outer frame resolves, its value must be
+# substituted into the already-filled entries rather than escaping the
+# environment as a free typevar (which downstream consumers treat as defined).
+struct S57427{N, Tup}
+    S57427{N, Tup}() where {N, Tuple{Vararg{Nothing, N}} <: Tup <: Tuple{Vararg{Nothing, N}}} = new{N, Tup}()
+end
+let sig = Tuple{Type{S57427{N, Tup}}} where {N, Tuple{Vararg{Nothing, N}} <: Tup <: Tuple{Vararg{Nothing, N}}}
+    @test Tuple{Type{S57427{0, Tuple{}}}} <: sig
+    let (t, e) = intersection_env(Tuple{Type{S57427{0, Tuple{}}}}, sig)
+        @test t == Tuple{Type{S57427{0, Tuple{}}}}
+        @test e == Core.svec(0, Tuple{})
+    end
+    @test S57427{0, Tuple{}}() isa S57427{0, Tuple{}}
+end
+# when the outer var stays unpinned, an entry mentioning it degrades to an
+# undefined (uncertainty-marker) binding instead of leaking the var
+let sig = Tuple{Type{Ref{Tup}}} where {N, Tup >: Tuple{Vararg{Nothing, N}}}
+    let (t, e) = intersection_env(Tuple{Type{Ref{Tuple{Vararg{Nothing}}}}}, sig)
+        @test t == Tuple{Type{Ref{Tuple{Vararg{Nothing}}}}}
+        @test all(v -> ccall(:jl_has_free_typevars, Cint, (Any,), v) == 0, e)
+    end
+end
