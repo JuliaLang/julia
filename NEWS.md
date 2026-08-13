@@ -53,6 +53,7 @@ New language features
   and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
   cancellation continues under the cancelled scope unless it re-arms one itself
   (`ScopedValues.@with Base.CANCEL_TOKEN => Base.sigint_new_episode!() ...`) ([#60281]).
+  * The fraction slash character `U+2044` (`⁄`) is now treated as a valid identifier character rather than an operator, allowing it to be used inside mathematical variable names like `∂x⁄∂t` ([#62668]).
 
 Language changes
 ----------------
