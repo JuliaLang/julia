@@ -840,6 +840,11 @@ function add_inlining_dispatch_edge!(edges::Vector{Any}, mi::MethodInstance,
         add_invoke_edge!(edges, info.atype, mi)
     elseif info isa VirtualMethodMatchInfo
         add_inlining_dispatch_edge!(edges, mi, info.info)
+    elseif info isa MethodMatchInfo || info isa UnionSplitInfo
+        # A standalone `MethodInstance` edge claims `mi.specTypes` has a single
+        # fully-covering match, which is false when this call matched several methods.
+        # Encode the lookup instead; `mi_edge` keeps the invalidation target.
+        _add_edges_impl(edges, info, #=mi_edge=#true)
     else
         add_one_edge!(edges, mi)
     end
