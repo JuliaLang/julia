@@ -957,7 +957,9 @@ JL_CALLABLE(jl_f_tuple) JL_CANSAFEPOINT;
 void jl_install_default_signal_handlers(void) JL_NOTSAFEPOINT;
 void restore_signals(void) JL_NOTSAFEPOINT;
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
+int jl_cancel_source_subtree_member(jl_value_t *node, jl_value_t *src) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_set_sigint_foreground_task(jl_value_t *t) JL_NOTSAFEPOINT;
+jl_task_t *jl_get_sigint_foreground_task(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT;
 extern _Atomic(int) jl_sigint_dispatch_pending;
 
@@ -1397,12 +1399,14 @@ void jl_safepoint_end_gc(void) JL_CANSAFEPOINT;
 void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT;
 void jl_safepoint_wait_thread_resume(jl_task_t *ct) JL_NOTSAFEPOINT;
 void jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-void jl_safepoint_exclude_gc_begin(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-void jl_safepoint_exclude_gc_end(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 int jl_abandon_try_commit(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void JL_NORETURN jl_abandon_task_cb(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_abandon_task_request(jl_task_t *t, jl_task_t *next_task,
+                                         jl_value_t *result, uv_async_t *notify) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_abandon_task_poll(int16_t tid);
+JL_DLLEXPORT int jl_abandon_task_withdraw(int16_t tid);
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_WINDOWS_)

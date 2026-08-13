@@ -309,22 +309,6 @@ JL_DLLEXPORT int jl_wakeup_thread(int16_t tid)
     return wakeup_thread(ct, tid);
 }
 
-// Like jl_wakeup_thread, but callable from non-Julia threads (e.g. the signal
-// listener), which have no task context.
-JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT
-{
-    if (tid < 0)
-        return;
-    jl_fence(); // [^store_buffering_1]
-    if (wake_thread(tid)) {
-        // check if we need to notify uv_run too
-        jl_fence();
-        jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
-        if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
-            wake_libuv();
-    }
-}
 
 // Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-padded
 // stripes so concurrent producers don't contend on a single counter.
@@ -454,37 +438,12 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
 }
 
 
-// Run a pending ^C dispatch pass inline on this (idle, ordinary-task-
-// context) thread: the pass only wakes waiters and walks Julia state, so
-// any scheduling thread can perform it, and the event loop stays out of
-// the delivery path - a worker must not run the shared loop outside
-// threaded regions, and the loop-owning thread may be stuck in a foreign
-// call, which is exactly when ^C must still deliver. Base arbitrates
-// concurrent passes (see `Base.maybe_dispatch_sigint`); errors are caught
-// on the Julia side.
-static void jl_dispatch_sigint_inline(void) JL_CANSAFEPOINT
-{
-    static _Atomic(jl_value_t *) dispatch_f = NULL;
-    jl_value_t *f = jl_atomic_load_relaxed(&dispatch_f);
-    if (f == NULL) {
-        if (jl_base_module == NULL)
-            return;
-        f = jl_get_global(jl_base_module, jl_symbol("maybe_dispatch_sigint"));
-        if (f == NULL)
-            return;
-        jl_atomic_store_relaxed(&dispatch_f, f);
-    }
-    jl_apply(&f, 1);
-}
-
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     uint64_t start_cycles = 0;
 
     while (1) {
-        if (jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
-            jl_dispatch_sigint_inline();
         jl_task_t *task = get_next_task(trypoptask, q);
         if (task)
             return task;

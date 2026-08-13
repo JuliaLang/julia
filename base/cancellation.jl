@@ -462,9 +462,9 @@ end
 
 # A source slot's aux: the low byte is the minimum delivery severity (the
 # "floor"); the watcher bit marks a `wait(::CancellationToken)` slot, whose
-# claimed wake the walk *completes* with the request as a value instead of
-# interrupting the task - the cancellation is the event that wait is for.
-# Staged pre-arm like the floor (see below).
+# claimed wake the walk *completes* with the request as a value (and never
+# freezes) instead of interrupting the task - the cancellation is the event
+# that wait is for. Staged pre-arm like the floor (see below).
 const WAIT_AUX_WATCHER_BIT = UInt64(0x100)
 
 # Return the entry for a cancellable park of `waiter` governed by `src`,
@@ -566,10 +566,10 @@ const _PRUNE_DEAD_THRESHOLD = UInt32(16)
 # the prune rather than let the count sail past the threshold forever.
 # The threshold scales with the (approximate) list length: a prune walk is
 # O(list), so tripping it every fixed number of deaths makes a mass fan-out
-# parking under one source - e.g. any large task tree governed by a shared
-# ambient token - quadratic in its waiter count. Requiring the dead to be a
-# constant fraction of the list amortizes each walk against the corpses it
-# collects.
+# parking under one source - e.g. any large task tree governed by the
+# ambient ^C episode token - quadratic in its waiter count. Requiring the
+# dead to be a constant fraction of the list amortizes each walk against
+# the corpses it collects.
 function _note_dead_registration!(src::CancellationTokenSource)
     dc = @atomic :monotonic src.dead_count += UInt32(1)
     threshold = max(_PRUNE_DEAD_THRESHOLD, (@atomic :monotonic src.reg_count) >> 2)
@@ -690,12 +690,7 @@ function cancel!(src::CancellationTokenSource,
     # source is level-triggered.
     _cancel_walk!(src, sev)
     Threads.atomic_fence_heavy()
-    # Shoot down any task now bound to a cancelled source: threads inside a
-    # compiled cancellation region are asynchronously reset to their
-    # cancellation point, which observes the cancellation and throws.
-    # Best-effort: a task the walk misses recovers level-triggered at its
-    # next cancellation point (or reset-safe allocation).
-    ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
+    _cancel_running!(src, sev)
     return raised
 end
 
@@ -716,8 +711,57 @@ function redeliver!(src::CancellationTokenSource)
     st == 0x00 && return false
     _cancel_walk!(src, st)
     Threads.atomic_fence_heavy()
-    ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
+    _cancel_running!(src, st)
     return true
+end
+
+# Interrupt computations currently running on some thread under the
+# now-cancelled subgraph. For the ordinary severities this is the
+# cancellation-signal shootdown: threads inside a compiled cancellation
+# region are asynchronously reset to their cancellation point, which
+# observes the cancellation and throws; best-effort - a task the shootdown
+# misses recovers level-triggered at its next cancellation point (or
+# reset-safe allocation). An ABANDON_ALL request instead freezes the bound
+# running tasks in place (see `freeze_task!`), ripping each away from its
+# thread; the canceller itself, when bound, unwinds with the request last so
+# the other victims are still processed.
+function _cancel_running!(src::CancellationTokenSource, sev::UInt8)
+    if sev < CANCEL_REQUEST_ABANDON_ALL.request
+        ccall(:jl_shootdown_cancelled_tasks, Cvoid, ())
+        return nothing
+    end
+    creq = CancellationRequest(sev)
+    ct = current_task()
+    self_bound = false
+    tasks = ccall(:jl_cancel_collect_bound, Any, (Any,), src)::Vector{Any}
+    for t in tasks
+        t = t::Task
+        istaskdone(t) && continue
+        if t === ct
+            self_bound = true
+        else
+            freeze_task!(t, creq, src)
+        end
+    end
+    if self_bound
+        _mark_delivered!(src, sev)
+        throw(creq)
+    end
+    return nothing
+end
+
+# Record that some task observed the delivery of severity `sev` from `src`
+# (a bitmask by severity, read async-signal-safely by the C-side ^C episode
+# state machine to distinguish an acknowledged cancellation from one its
+# target never saw).
+function _mark_delivered!(src::CancellationTokenSource, sev::UInt8)
+    bit = 0x01 << sev
+    delivered = @atomic :monotonic src.delivered
+    while delivered & bit == 0x00
+        delivered, ok = @atomicreplace :monotonic :monotonic src.delivered delivered => delivered | bit
+        ok && break
+    end
+    return nothing
 end
 
 function _cancel_walk!(src::CancellationTokenSource, sev::UInt8)
@@ -853,17 +897,20 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
         if aux & WAIT_AUX_WATCHER_BIT != 0x00
             # A watcher (`wait(::CancellationToken)`): this cancellation is
             # the event its wait completes on, so it is woken with the
-            # request as a *value* - a watcher observes this source but
-            # does not run under it.
+            # request as a *value* - and, unlike waiters, never frozen: a
+            # watcher observes this source but does not run under it.
+            _mark_delivered!(node, sev)
             deliver_claimed_value_wake!(t, w, creq)
-            continue
+        elseif sev >= CANCEL_REQUEST_ABANDON_ALL.request
+            # do not wake the task; freeze it in place
+            freeze_task!(t, creq, node)
+        else
+            # The delivery is claim-scoped - the claim above is the wake
+            # ticket, so no re-claiming swap - and dropped when the task has
+            # re-armed meanwhile (see deliver_claimed_wake!).
+            _mark_delivered!(node, sev)
+            deliver_claimed_wake!(t, w, creq)
         end
-        # N.B.: an ABANDON_ALL request also delivers by interruption for
-        # now (freezing the task in place is not yet implemented). The
-        # delivery is claim-scoped - the claim above is the wake ticket, so
-        # no re-claiming swap - and dropped when the task has re-armed
-        # meanwhile (see deliver_claimed_wake!).
-        deliver_claimed_wake!(t, w, creq)
     end
     # Walk the node's (weak, intrusive) child list, advancing every child to
     # this severity and queueing the ones not yet visited (a reconverging
@@ -887,6 +934,22 @@ function _cancel_walk_node!(node::CancellationTokenSource, sev::UInt8,
     return nothing
 end
 
+# Runtime hook (see `start_task` in src/task.c): a task spawned into an
+# ABANDON_ALL-frozen scope must not run its body - the freeze contract is
+# that nothing under the scope makes further progress, and the spawned
+# task's first cancellation point may lie arbitrarily far into (or nowhere
+# in) that body. Milder severities impose no start gate: a task's start is
+# not a cancellation point, and a task spawned under a SAFE-cancelled scope
+# may legitimately run shielded cleanup (`cancel = nothing`) to completion.
+function start_task_cancel_check()
+    s = default_cancel_source()
+    s === nothing && return nothing
+    st = Core.cancellation_point!(s)::UInt8
+    st & SEVERITY_MASK >= CANCEL_REQUEST_ABANDON_ALL.request &&
+        handle_cancellation!(s, st)
+    return nothing
+end
+
 ## Cancellation points
 
 # The slow path of `@cancel_check`: `st` is the (non-zero) status byte
@@ -907,6 +970,7 @@ end
     # re-read: deliver the severity current at throw time, not the one the
     # fast path happened to observe
     st = @atomic :acquire src.state
+    _mark_delivered!(src, st)
     throw(CancellationRequest(st))
 end
 

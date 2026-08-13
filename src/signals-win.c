@@ -238,6 +238,23 @@ __asm__(
 );
 #endif
 
+#if defined(_CPU_X86_64_)
+// A syscall return restores the user Rip through Rcx and the user flags
+// through R11. If the suspended thread was in a syscall, those registers may
+// therefore overwrite values installed by SetThreadContext before the
+// redirected Rip runs. Reload the call target and its first argument from the
+// synthetic frame instead; the syscall return preserves Rsp.
+extern void jl_win_call_in_context_trampoline(void);
+__asm__(
+    "  .globl jl_win_call_in_context_trampoline\n"
+    "jl_win_call_in_context_trampoline:\n"
+    "  cld\n"
+    "  movq 8(%rsp), %rax\n"  // call target in the first register-home slot
+    "  movq 16(%rsp), %rcx\n" // arg0 in the second register-home slot
+    "  jmp *%rax\n"
+);
+#endif
+
 // Runs on the interrupted thread with the interrupted CONTEXT saved on the
 // stack below: invoke the registered cancellation handler with its
 // arguments from the per-thread save area. Returning runs into the restore
@@ -259,11 +276,12 @@ static void jl_win_call_in_context(CONTEXT *ctx, void (*fptr)(void), uintptr_t a
     CONTEXT *saved = (CONTEXT*)sp;
     memcpy(saved, ctx, sizeof(CONTEXT));
     sp -= 32;            // the callee's register-home space, above the return address
+    ((uintptr_t*)sp)[0] = (uintptr_t)fptr;
+    ((uintptr_t*)sp)[1] = arg0;
     sp -= sizeof(void*); // return-address slot: entry Rsp == 8 (mod 16), per the ABI
     *(uintptr_t*)sp = (uintptr_t)&jl_win_restore_trigger;
     ctx->Rsp = sp;
-    ctx->Rip = (uintptr_t)fptr;
-    ctx->Rcx = arg0;
+    ctx->Rip = (uintptr_t)&jl_win_call_in_context_trampoline;
 #elif defined(_CPU_X86_)
     uintptr_t sp = (uintptr_t)ctx->Esp;
     sp = (sp - sizeof(CONTEXT)) & ~(uintptr_t)15;
@@ -375,6 +393,16 @@ static void jl_send_reset_signal(int16_t tid, int reset_code) JL_NOTSAFEPOINT
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
     if (ct2 == NULL)
         goto resume;
+    // A pending ^C episode reaches scoped descendant sources through the
+    // julia-side listener's walk; when the listener is starved, carry it
+    // into the frozen task's own bound source here so its next cancellation
+    // point sees it (the flavor gates below re-read the source state).
+    if (reset_code == JL_RESET_CODE_CANCEL) {
+        bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+        if (bound != NULL && bound != jl_nothing &&
+            jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+            jl_sigint_propagate_to_bound(bound);
+    }
     hctx = jl_atomic_load_acquire(&ct2->cancel_handler_ctx);
     if (hctx != NULL) {
         // Handler flavor: a published foreign-call cancellation-handler
@@ -509,6 +537,10 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     ReleaseSRWLockExclusive(&ctx_rewrite_lock);
 }
 
+// Direct-abandonment request in flight from this console handler (the
+// victim's thread id), or -1 (see the unix listener's state machine).
+static int16_t direct_abandon_tid = -1;
+
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     int sig;
@@ -519,6 +551,24 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         // etc.
         default: sig = SIGTERM; break;
     }
+    if (direct_abandon_tid >= 0) {
+        int verdict = jl_abandon_task_poll(direct_abandon_tid);
+        if (verdict == 1) {
+            direct_abandon_tid = -1;
+            // Let the sigint listener task perform the Julia-side cleanup.
+            jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
+            jl_run_sigint_dispatch();
+        }
+        else if (verdict == -1) {
+            // Transient refusal: re-publish rather than demanding another
+            // press (see the unix listener), with the timer heartbeat
+            // polling the retried verdict.
+            direct_abandon_tid = jl_retry_direct_abandon();
+            if (direct_abandon_tid >= 0)
+                jl_arm_sigint_rescue_timer();
+            jl_safe_printf("\nWARNING: Could not abandon the current task (it holds runtime resources); still trying.\n");
+        }
+    }
     if (!jl_ignore_sigint()) {
         // Before initialization has completed, the orderly teardown
         // (jl_atexit_hook) is unsafe against the half-restored runtime and
@@ -528,6 +578,39 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         if (exit_on_sigint)
             jl_exit(128 + sig); // 128 + SIGINT
         if (sig == SIGINT) {
+            // If the escalation timer has expired, this repeated ^C abandons
+            // the stuck task, unless the julia-side escalation
+            // (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can still make
+            // progress on it.
+            int try_abandon = 0;
+            jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+            // See signals-unix.c: only abandon a thread busy in managed
+            // compute - a GC-safe thread is parked, not the stuck victim -
+            // but give a thread transiently inside the allocator or GC a
+            // brief window rather than consuming the press.
+            if (jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed()) {
+                for (int tries = 0; tries < 100; tries++) {
+                    if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
+                        ptls2->locks.len == 0) {
+                        // consumes the expiry; 0 if the episode completed
+                        // (or was reset) while we waited
+                        try_abandon = jl_check_sigint_rescue_abandon() != NULL;
+                        break;
+                    }
+                    uv_sleep(1);
+                }
+            }
+            if (try_abandon) {
+                // Publish the request and return: the verdict is polled
+                // at the next handler invocation (press or timer tick) -
+                // no waiting here (see the unix listener's state machine).
+                int16_t reqtid = jl_publish_direct_abandon(1);
+                if (reqtid >= 0) {
+                    direct_abandon_tid = reqtid;
+                    return 1;
+                }
+                // no governed victim: fall through to an ordinary redelivery
+            }
             // Deliver the press through the cancellation system (see
             // jl_sigint_request_cancellation).
             jl_sigint_request_cancellation();

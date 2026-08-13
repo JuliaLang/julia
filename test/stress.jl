@@ -80,7 +80,8 @@ if !Sys.iswindows()
     # cancellation scope and is observed at a cancellation point as a
     # CancellationRequest (it is no longer force-thrown asynchronously at GC
     # safepoints). Contain the cancellation in a fresh episode scope so the
-    # enclosing test scope stays live, and close the episode afterwards.
+    # enclosing test scope stays live, and close the episode afterwards so
+    # the SIGINT rescue timer stands down.
     Base.exit_on_sigint(false)
     try
         @test_throws Base.CancellationRequest begin

@@ -529,6 +529,9 @@ function _atexit(exitcode::Cint)
     @atomicswap ct.waiting_on = nothing
     # We are exiting: any pending cancellation of this task's scope is moot
     # and would only disrupt the atexit hooks - run them in a shielded scope.
+    # The ^C escalation machinery likewise stands down (its offers can no
+    # longer be accepted; an armed rescue timer would print into the exit).
+    ccall(:jl_disarm_sigint_rescue_timer, Cvoid, ())
     return ScopedValues.@with(CANCEL_TOKEN => nothing, _run_atexit_hooks(exitcode))
 end
 

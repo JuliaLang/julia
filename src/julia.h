@@ -2564,6 +2564,7 @@ struct _jl_handler_t {
 #define JL_TASK_STATE_DONE      1
 #define JL_TASK_STATE_FAILED    2
 #define JL_TASK_STATE_ABANDONED 3
+#define JL_TASK_STATE_CANCELLED 4
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_cancel_source(jl_value_t **parents, size_t nparents) JL_CANSAFEPOINT;

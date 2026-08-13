@@ -447,6 +447,40 @@ function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x ->
     return backend
 end
 
+# If we had to abandon the REPL's backend task, we're now in an inconsistent state.
+# Inform the frontend of what happened and re-initialize the REPL backend.
+function maybe_rescue_REPL_after_sigint()
+    backend = Base.active_repl_backend
+    backend === nothing && return nothing
+    if backend.backend_task.state === :abandoned
+        # Inform the frontend what happened to its backend
+        exc = Base.ExceptionStack(Any[(exception = Base.CANCEL_REQUEST_ABANDON_ALL, backtrace = Any[])])
+        put!(backend.response_channel, Pair{Any, Bool}(exc, true))
+        # Re-initialize the REPL backend. N.B.: this runs on the adopted
+        # signal thread, whose (foreign) threadpool no scheduler thread
+        # serves - the fresh backend task must be spawned into a real pool
+        # explicitly, or it would never run. `Threads.@spawn` also leaves it
+        # non-sticky, so a later stuck evaluation cannot monopolize any one
+        # particular thread.
+        newbackend = REPLBackend(backend.repl_channel, backend.response_channel, false)
+        newbackend.backend_task = Threads.@spawn :default start_repl_backend(newbackend)
+        setglobal!(Base, :active_repl_backend, newbackend)
+        # The session's shutdown continuation lived on the abandoned task
+        # (with the default REPL the backend loop runs on the task that
+        # started the session), so nothing runs after the rescued backend's
+        # loop finishes (e.g. when the frontend sends the exit flag for ^D).
+        # Complete the shutdown here in that case.
+        Threads.@spawn :default begin
+            Base._wait(newbackend.backend_task)
+            if !Base.istaskfailed(newbackend.backend_task)
+                Core.print(Core.stderr, "\n[DEBUG sigint] rescued-backend shutdown exit\n")
+                exit()
+            end
+        end
+    end
+    return nothing
+end
+
 function repl_backend_loop(backend::REPLBackend, get_module::Function)
     try
         # include looks at this to determine the relative include path
@@ -455,9 +489,11 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
             tls = task_local_storage()
             tls[:SOURCE_PATH] = nothing
             # Control is back with the REPL: close the previous work item's ^C
-            # episode, making a ^C at the idle prompt (or one that raced the end
-            # of the previous evaluation, issue #58689) a no-op. The idle wait
-            # itself is not cancellable.
+            # episode. This stands down the escalation machinery (in particular
+            # the rescue timer, which otherwise keeps offering escalation rungs
+            # for an episode that already completed) and makes a ^C at the idle
+            # prompt (or one that raced the end of the previous evaluation,
+            # issue #58689) a no-op. The idle wait itself is not cancellable.
             Base.sigint_close_episode!()
             ast_or_func, show_value = try
                 take!(backend.repl_channel; cancel=nothing)
