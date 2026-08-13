@@ -1367,6 +1367,34 @@ end
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
 """
+    unsplat(f)
+
+Equivalent to
+```julia
+    my_unsplat(f) = args -> f(args)
+```
+i.e. given a function that takes a single tuple argument, return a new function
+that takes multiple arguments and bundles them into a tuple to pass to the
+original function. This is the inverse of [`splat`](@ref): `unsplat(splat(f))
+=== f` and `splat(unsplat(f)) === f`.
+
+# Examples
+```jldoctest
+julia> unsplat(sum)(1, 2, 3)
+6
+
+julia> unsplat(splat(+)) === +
+true
+```
+
+!!! compat "Julia 1.14"
+    `unsplat` requires at least Julia 1.14.
+"""
+unsplat(f) = f ∘ tuple
+unsplat(s::Splat) = s.f
+splat(f::ComposedFunction{<:Any,typeof(tuple)}) = f.outer
+
+"""
     tap(f)
 
 Create a function that calls `f(x)` and returns `x`.
