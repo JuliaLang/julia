@@ -1406,15 +1406,10 @@ static std::tuple<Value*, jl_gc_roots_t, jl_aliasinfo_t> split_value(jl_codectx_
         setName(ctx.emission_context, alloca, [&]() {
             return "split::" + std::string(jl_symbol_name(typ->name->name));
         });
-        // Label the copy with the layout tag of what it holds, as the no-copy paths
-        // above already do: every access to the temporary goes through the alias
-        // info returned here, so they stay consistent with the copy, and the join of
-        // the two sides of the copy below stays a precise tag rather than the root.
-        // `jtbaa_const` cannot be the tag of a written copy — it also labels
-        // caller-written argument buffers, and a const-tagged copy claims its own
-        // initializing writes cannot happen (pointsToConstantMemory) — so such a
-        // copy takes the layout tag of its type.
-        jl_aliasinfo_t dst_ai = x.aliasinfo && x.aliasinfo.region != jl_aliasinfo_t::Region::constant ? x.aliasinfo : best_aliasinfo(ctx, x.typ);
+        // The alloca contains no pointers (those were split into roots), so this
+        // write-once copy takes the layout tag of what it holds, as the no-copy
+        // paths above already do.
+        jl_aliasinfo_t dst_ai = stack_copy_aliasinfo(ctx, x.aliasinfo, x.typ);
         split_value_into(ctx, x, x_alignment, alloca, align_dst, dst_ai, false);
         return std::make_tuple(alloca, std::move(roots), dst_ai);
     }
@@ -2480,13 +2475,16 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         int union_max = jl_islayout_inline(jltype, &fsz, &al);
         Value *tindex = emit_load_tindex(ctx, ptindex, union_max, ai_ptindex ? ai_ptindex : ai);
         Value *data = ptr;
+        jl_aliasinfo_t data_ai = ai;
         if (fsz > 0) {
             AllocaInst *lv = emit_static_alloca(ctx, fsz, Align(al));
             setName(ctx.emission_context, lv, "immutable_union");
-            emit_memcpy(ctx, lv, ai, ptr, ai, fsz, Align(al), Align(al));
+            // the copy is a private, write-once stack location
+            data_ai = stack_copy_aliasinfo(ctx, ai, jltype);
+            emit_memcpy(ctx, lv, data_ai, ptr, ai, fsz, Align(al), Align(al));
             data = lv;
         }
-        return mark_julia_slot(fsz > 0 ? data : nullptr, jltype, tindex, ai);
+        return mark_julia_slot(fsz > 0 ? data : nullptr, jltype, tindex, data_ai);
     }
 
     assert(isboxed || jl_is_concrete_type(jltype));
@@ -4498,6 +4496,13 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             Instruction *promotion_point = nullptr;
             ssize_t promotion_ssa = -1;
             Value *strct;
+            // This stack object is a write-once copy of an immutable holding no
+            // pointers (those are split into inline_roots), so it keeps the type's
+            // layout tag with the stack region, like its heap counterpart. The
+            // selector bytes below take this same alias info: they overlap the
+            // object, so info unrelated to the object's would let the two be
+            // reordered.
+            const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty).withRegion(ctx, jl_aliasinfo_t::Region::stack);
             SmallVector<Value*,0> inline_roots;
             if (type_is_ghost(lt)) {
                 strct = nullptr;
@@ -4526,10 +4531,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 strct = emit_static_alloca(ctx, lt, Align(julia_alignment(ty)));
                 setName(ctx.emission_context, strct, arg_typename);
             }
-
-            // The selector bytes below take this same tag: they overlap the object,
-            // so a tag unrelated to the object's would let the two be reordered.
-            const jl_aliasinfo_t strct_ai = best_aliasinfo(ctx, ty);
 
             for (unsigned i = 0; i < na; i++) {
                 jl_value_t *jtype = jl_svecref(sty->types, i); // n.b. ty argument must be concrete

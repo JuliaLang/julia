@@ -337,8 +337,9 @@ struct jl_tbaacache_t {
     MDNode *tbaa_root;     // Everything
     MDNode *tbaa_gcframe;    // GC frame
     // LLVM should have enough info for alias analysis of non-gcframe stack slot
-    // this is mainly a place holder for `jl_cgval_t::tbaa`
-    MDNode *tbaa_stack;      // stack slot
+    MDNode *tbaa_stack;      // untyped stack slot (reused slots, union blobs); write-once
+                             // copies of typed data instead keep the type's layout tag
+                             // with Region::stack
     MDNode *tbaa_data;       // Any user data that `pointerset/ref` are allowed to alias
     MDNode *tbaa_binding;        // jl_binding_t::value
     MDNode *tbaa_value;          // jl_value_t of statically unknown type; parent of the tags below
@@ -1742,6 +1743,13 @@ struct jl_aliasinfo_t {
         return tbaa != nullptr;
     }
 
+    // The same layout tag in a different memory region: e.g. a private
+    // stack copy of typed data keeps the type's `!tbaa`, while the region
+    // records that it is not heap memory.
+    jl_aliasinfo_t withRegion(jl_codectx_t &ctx, Region r) const {
+        return jl_aliasinfo_t(ctx, r, this->tbaa);
+    }
+
     // Add !tbaa, !tbaa.struct, !alias.scope, !noalias annotations to an instruction.
     //
     // Also adds `invariant.load` to load instructions from the constant region.
@@ -1784,7 +1792,8 @@ struct jl_aliascache_t {
     // Region::gcframe
     jl_aliasinfo_t gcframe;       // GC frame
     // Region::stack
-    jl_aliasinfo_t stack;         // stack slot
+    jl_aliasinfo_t stack;         // untyped stack slot (typed stack copies pair the
+                                  // type's layout tag with Region::stack instead)
     // Region::data
     jl_aliasinfo_t data;          // Any user data that `pointerset/ref` are allowed to alias
     jl_aliasinfo_t binding;       // jl_binding_t::value
@@ -2279,6 +2288,44 @@ void jl_aliascache_t::initialize(jl_codectx_t &ctx)
     constant = jl_aliasinfo_t(ctx, Region::constant, tbaa.tbaa_const);
 }
 
+// Alias info for the inline data of an `sret` return buffer. Both the caller
+// and the callee compute this from the return type, so that the two sides'
+// alias info for the same memory stays identical if LLVM later inlines the call.
+static jl_aliasinfo_t best_aliasinfo(jl_codectx_t &ctx, jl_value_t *jt);
+static jl_aliasinfo_t sret_aliasinfo(jl_codectx_t &ctx, jl_value_t *jlretty, bool all_roots)
+{
+    // An `all_roots` buffer *is* the static-roots array: its zero-init and the
+    // callee's `store_all_roots` write it as `jtbaa_gcframe`, and a layout tag on a
+    // load of a tracked pointer out of an alloca would tell `LateLowerGCFrame` the
+    // pointer is rooted through an enclosing heap object, which an alloca is not.
+    if (all_roots)
+        return ctx.alias().gcframe;
+    // A union return's payload pointer is a select of the buffer and a box, so it
+    // has to keep a region valid for heap memory too.
+    if (!jl_is_concrete_type(jlretty))
+        return best_aliasinfo(ctx, jlretty);
+    // Otherwise the buffer holds no tracked pointers (those travel in the separate
+    // return_roots buffer), so this write-once copy keeps the return type's layout
+    // tag, with the region recording that it is not heap memory.
+    return best_aliasinfo(ctx, jlretty).withRegion(ctx, jl_aliasinfo_t::Region::stack);
+}
+
+// Alias info for a private, write-once stack copy of data described by `src_ai`.
+// The copy keeps the source's layout tag, so that every access to the copy stays
+// consistent with it and the join of the two sides of the copy stays a precise tag
+// rather than the root. `jtbaa_const` cannot be the tag of a written copy, though
+// -- it also labels caller-written argument buffers, and a const-tagged copy claims
+// its own initializing writes cannot happen (pointsToConstantMemory) -- so such a
+// copy takes the layout tag of its type instead. Either way the region becomes
+// `Region::stack`: the copy is a fresh alloca, disjoint from heap data, from the
+// gcframe, and from constant memory.
+static jl_aliasinfo_t best_aliasinfo(jl_codectx_t &ctx, jl_value_t *jt);
+static jl_aliasinfo_t stack_copy_aliasinfo(jl_codectx_t &ctx, const jl_aliasinfo_t &src_ai, jl_value_t *typ)
+{
+    return (src_ai && src_ai.region != jl_aliasinfo_t::Region::constant ? src_ai : best_aliasinfo(ctx, typ))
+        .withRegion(ctx, jl_aliasinfo_t::Region::stack);
+}
+
 // Select the best (most precise) alias info for a value of the given julia
 // type, when accessed as heap data (e.g. through a boxed pointer).
 static jl_aliasinfo_t best_aliasinfo(jl_codectx_t &ctx, jl_value_t *jt)
@@ -2570,9 +2617,16 @@ static Value *zext_struct(jl_codectx_t &ctx, Value *V);
 static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex) JL_CANSAFEPOINT
 {
     Value *loc;
-    jl_aliasinfo_t ai;
     v = zext_struct(ctx, v);
     Align align(julia_alignment(typ));
+    // This write-once copy of pointer-free typed data keeps the type's layout
+    // tag; only the region records that it is not heap memory. (Pointer-containing
+    // and union copies keep the untyped stack tag: the layout tags of their heap
+    // counterparts are what the GC lowering uses to recognize loads of pointers
+    // that are rooted through an enclosing heap object, which an alloca is not.)
+    jl_aliasinfo_t ai = tindex == nullptr && jl_is_pointerfree(typ) ?
+        best_aliasinfo(ctx, typ).withRegion(ctx, jl_aliasinfo_t::Region::stack) :
+        ctx.alias().stack;
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
         assert(jl_is_concrete_type(typ)); // not legal to have an unboxed abstract type
         loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), align, "_j_const", *jl_Module);
@@ -2586,7 +2640,6 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
         });
         ctx.builder.CreateAlignedStore(v, slot, align);
         loc = slot;
-        ai = best_aliasinfo(ctx, typ);
     }
     return mark_julia_slot(loc, typ, tindex, ai);
 }
@@ -5835,13 +5888,11 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             break;
         case jl_returninfo_t::SRet:
             assert(result);
-            // For all_roots, the sret buffer is a static-roots array: its zero-init
-            // and the callee's store_all_roots write it as `jtbaa_gcframe`, so reads
-            // of it must carry that same tag, not the layout tag of the return type.
+            // must match the callee's alias info for its stores into the buffer
             retval = mark_julia_slot(result,
                                      jlretty,
                                      NULL,
-                                     returninfo.all_roots ? ctx.alias().gcframe : best_aliasinfo(ctx, jlretty),
+                                     sret_aliasinfo(ctx, jlretty, returninfo.all_roots),
                                      make_lazy_gc_roots(return_roots, returninfo.return_roots, ctx.alias().gcframe));
             break;
         case jl_returninfo_t::Union: {
@@ -7712,7 +7763,8 @@ static void emit_specsig_to_specsig(
         Value *sret = &*gf_thunk->arg_begin();
         Align align(julia_alignment(rettype));
         Value *roots = return_roots ? gf_thunk->arg_begin() + 1 : nullptr; // root1 has type [n x {}*]*
-        split_value_into(ctx, gf_retval, align, sret, align, best_aliasinfo(ctx, rettype), roots, ctx.alias().gcframe);
+        bool all_roots = return_roots == 0 && !jl_is_pointerfree(rettype);
+        split_value_into(ctx, gf_retval, align, sret, align, sret_aliasinfo(ctx, rettype, all_roots), roots, ctx.alias().gcframe);
         ctx.builder.CreateRetVoid();
         break;
     }
@@ -10144,12 +10196,13 @@ static jl_llvm_functions_t
             }
             auto roots_ai = ctx.alias().gcframe;
             if (sret) {
+                jl_aliasinfo_t sret_ai = sret_aliasinfo(ctx, jlrettype, returninfo.all_roots);
                 if (returninfo.return_roots || !inline_roots.empty() || retvalinfo.ispointer()) {
-                    emit_unionmove(ctx, sret, jlrettype, best_aliasinfo(ctx, jlrettype), retvalinfo, retvalinfo.TIndex, /*skip*/isboxed_union);
+                    emit_unionmove(ctx, sret, jlrettype, sret_ai, retvalinfo, retvalinfo.TIndex, /*skip*/isboxed_union);
                 }
                 else if (retvalinfo.V) {
                     Align align(returninfo.union_align);
-                    ctx.builder.CreateAlignedStore(retvalinfo.V, sret, align);
+                    sret_ai.decorateInst(ctx.builder.CreateAlignedStore(retvalinfo.V, sret, align));
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
             }
