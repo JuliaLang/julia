@@ -101,8 +101,8 @@ Command-line option changes
 * `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
 * `--code-coverage=@<path>` and `--track-allocation=@<path>` now restrict tracking to the specified file or
   directory tree. For example, `@/src/Foo` tracks `/src/Foo/x.jl`, but not `/src/Foobar/x.jl`. Specifying the
-  filesystem root as `@/` tracks every absolute path. `Base.is_file_tracked` now returns `false`, rather than
-  crashing, when Julia was not started with either `@<path>` option ([#62514]).
+  filesystem root as `@/` tracks every absolute path. `Base.is_file_tracked` now returns `false` when Julia was
+  not started with either `@<path>` option ([#62514]).
 
 Multi-threading changes
 -----------------------

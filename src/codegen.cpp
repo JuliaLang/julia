@@ -9693,8 +9693,8 @@ static jl_llvm_functions_t
     };
     bool mod_is_user_mod = in_user_mod(ctx.module);
     bool mod_is_tracked = in_tracked_path(ctx.file);
-    // A missing module occurs for macro expansions and generated bodies. Sysimage
-    // source paths are relative; other source paths are absolute.
+    // Treat an unknown-module frame with an absolute path as user code. This
+    // preserves user macro coverage but can misclassify absolute sysimage paths.
     auto frame_is_user_code = [&] (jl_module_t *modu, StringRef file) {
         if (modu == NULL)
             return mod_is_user_mod && jl_isabspath(file.data());
