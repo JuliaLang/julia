@@ -1273,6 +1273,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     }
                 }
                 NoteOperandUses(S, BBS, I);
+                // Calls marked "julia.safepoint" can always reach a GC
+                // safepoint, whatever memory effects they advertise; narrow
+                // effects from add_fn_attrs_for_effects only license pre-GC
+                // optimizations and must never skip rooting here.
+                bool MarkedSafepoint = CI->hasFnAttr("julia.safepoint") ||
+                        (callee && callee->hasFnAttribute("julia.safepoint"));
                 if (!CI->canReturnTwice()) {
                     if (callee) {
                         if (callee == gc_preserve_begin_func) {
@@ -1310,8 +1316,9 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             callee->getName() == "memcmp") {
                             continue;
                         }
-                        if (callee->getMemoryEffects().onlyReadsMemory() ||
-                            callee->getMemoryEffects().onlyAccessesArgPointees()) {
+                        if (!MarkedSafepoint &&
+                            (callee->getMemoryEffects().onlyReadsMemory() ||
+                             callee->getMemoryEffects().onlyAccessesArgPointees())) {
                             continue;
                         }
                     }
@@ -1319,7 +1326,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         // Intrinsics are never safepoints.
                         continue;
                     auto effects = CI->getMemoryEffects();
-                    if (effects.onlyAccessesArgPointees() || effects.onlyReadsMemory())
+                    if (!MarkedSafepoint &&
+                        (effects.onlyAccessesArgPointees() || effects.onlyReadsMemory()))
                         // Readonly functions and functions that cannot change GC state (which is inaccessiblemem) are not safepoints
                         continue;
                 }
@@ -2586,7 +2594,10 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
           for (auto &I : BB) {
               if (auto *CI = dyn_cast<CallInst>(&I)) {
                   Function *Callee = CI->getCalledFunction();
-                  if (!Callee || Callee->hasFnAttribute("julia.safepoint")) {
+                  // hasFnAttr covers the attribute on the call site as well
+                  // as on the callee (declarations get it copied by
+                  // add_fn_attrs_for_effects; call sites always carry it).
+                  if (!Callee || CI->hasFnAttr("julia.safepoint")) {
                       CI->setMemoryEffects(MemoryEffects::unknown());
                       for (unsigned i = 0; i < CI->arg_size(); i++) {
                           if (CI->getParamAttr(i, "gcstack").isValid())

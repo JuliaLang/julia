@@ -213,6 +213,121 @@ define swiftcc ptr addrspace(10) @insert_element(ptr swiftself "gcstack" %0) {
 }
 
 
+; Calls marked "julia.safepoint" must stay safepoints even when optimistic
+; memory effects from `add_fn_attrs_for_effects` say they cannot write
+; memory; a tracked value live across such a call still needs a root
+; (JuliaLang/julia#62613).
+
+; Case 1: optimistic effects on the callee declaration.
+declare i64 @safepoint_decl_argmem(i64) #10
+
+define {} addrspace(10)* @root_across_safepoint_decl_argmem(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_decl_argmem
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT1:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT1]]
+; CHECK-NEXT: call i64 @safepoint_decl_argmem
+  %r = call i64 @safepoint_decl_argmem(i64 %a)
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Case 2: optimistic effects only on the call site, as emitted when the
+; callee is a definition rather than a declaration (single-module AOT).
+declare i64 @safepoint_callsite_argmem(i64)
+
+define {} addrspace(10)* @root_across_safepoint_callsite_argmem(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_callsite_argmem
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT2:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT2]]
+; CHECK-NEXT: call i64 @safepoint_callsite_argmem
+  %r = call i64 @safepoint_callsite_argmem(i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Case 3: memory(read) (readonly) instead of argmem-only.
+declare i64 @safepoint_decl_readonly(i64) #11
+
+define {} addrspace(10)* @root_across_safepoint_readonly(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_readonly
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT3:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT3]]
+; CHECK-NEXT: call i64 @safepoint_decl_readonly
+  %r = call i64 @safepoint_decl_readonly(i64 %a)
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Case 4: indirect call carrying the attributes on the call site.
+define {} addrspace(10)* @root_across_safepoint_indirect(i64 %a, ptr %fp) {
+top:
+; CHECK-LABEL: @root_across_safepoint_indirect
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT4:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT4]]
+; CHECK-NEXT: call i64 %fp
+  %r = call i64 %fp(i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Case 5: the optimistic ReadNone on the gcstack parameter must be stripped
+; so post-GC passes cannot assume the callee never reads pgcstack (the frame
+; link store must stay visible).
+declare i64 @safepoint_gcstack({}*** readnone "gcstack", i64) #10
+
+define {} addrspace(10)* @root_across_safepoint_gcstack(i64 %a) {
+top:
+; CHECK-LABEL: @root_across_safepoint_gcstack
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+  %pgcstack = call {}*** @julia.get_pgcstack()
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 1)
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: [[SLOT5:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %v, ptr [[SLOT5]]
+; CHECK-NEXT: call i64 @safepoint_gcstack(ptr "gcstack" %pgcstack, i64 %a)
+  %r = call i64 @safepoint_gcstack({}*** readnone "gcstack" %pgcstack, i64 %a) #10
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret {} addrspace(10)* %v
+}
+
+; Case 6 (negative control): a genuinely readonly helper without
+; "julia.safepoint" is not a safepoint and must not force a frame.
+declare i64 @readonly_helper(i64) #12
+
+define {} addrspace(10)* @no_root_across_readonly_helper(i64 %a) {
+top:
+; CHECK-LABEL: @no_root_across_readonly_helper
+; CHECK-NOT: @julia.new_gc_frame
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %v = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+  %r = call i64 @readonly_helper(i64 %a)
+; CHECK: ret ptr addrspace(10) %v
+  ret {} addrspace(10)* %v
+}
+
+attributes #10 = { nounwind willreturn memory(argmem: read) "julia.safepoint" }
+attributes #11 = { nounwind willreturn memory(read) "julia.safepoint" }
+attributes #12 = { nounwind willreturn memory(argmem: read) }
+
 !0 = !{i64 0, i64 23}
 !1 = !{!1}
 !2 = !{!7} ; scope list
