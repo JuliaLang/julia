@@ -348,8 +348,8 @@ bool Optimizer::isSafepoint(Instruction *inst)
         return false;
     if (auto callee = call->getCalledFunction()) {
         // Known functions emitted in codegen that are not safepoints
-        if (callee == pass.pointer_from_objref_func
-            || callee == pass.gc_loaded_func
+        if (isa<julia::PointerFromObjref>(call)
+            || isa<julia::GCLoaded>(call)
             || callee->getName() == "memcmp") {
             return false;
         }
@@ -381,7 +381,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
-    if (call->getCalledOperand() != pass.alloc_obj_func)
+    if (!isa<julia::GCAllocObj>(call))
         return -1;
     assert(call->arg_size() == 3);
     auto CI = dyn_cast<ConstantInt>(call->getArgOperand(1));
@@ -776,17 +776,17 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
-            if (pass.pointer_from_objref_func == callee) {
+            if (isa<julia::PointerFromObjref>(call)) {
                 call->replaceAllUsesWith(prolog_builder.CreateAddrSpaceCast(new_i, call->getCalledFunction()->getReturnType()));
                 call->eraseFromParent();
                 return;
             }
-            if (pass.gc_loaded_func == callee) {
+            if (isa<julia::GCLoaded>(call)) {
                 // TODO: handle data pointer forwarding, length forwarding, and fence removal
                 user->replaceUsesOfWith(orig_i, Constant::getNullValue(orig_i->getType()));
                 return;
             }
-            if (pass.typeof_func == callee) {
+            if (isa<julia::Typeof>(call)) {
                 ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
@@ -802,7 +802,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 }
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (isa<julia::WriteBarrier>(call)) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -902,13 +902,13 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 removeGCPreserve(call, orig_i);
                 return;
             }
-            if (pass.typeof_func == callee) {
+            if (isa<julia::Typeof>(call)) {
                 ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (isa<julia::WriteBarrier>(call)) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -953,8 +953,7 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
     size_t last_deleted = removed.size();
     for (auto user: orig_inst->users()) {
         if (auto call = dyn_cast<CallInst>(user)) {
-            auto callee = call->getCalledOperand();
-            if (pass.typeof_func == callee) {
+            if (isa<julia::Typeof>(call)) {
                 ++RemovedTypeofs;
                 REMARK([&](){
                     std::string str;
@@ -1227,13 +1226,13 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     return;
                 }
             }
-            if (pass.typeof_func == callee) {
+            if (isa<julia::Typeof>(call)) {
                 ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (isa<julia::WriteBarrier>(call)) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -1331,7 +1330,7 @@ cleanup:
 bool AllocOpt::doInitialization(Module &M)
 {
     initAll(M);
-    if (!alloc_obj_func)
+    if (!getOpDeclaration<julia::GCAllocObj>())
         return false;
 
     DL = &M.getDataLayout();
@@ -1352,8 +1351,8 @@ bool AllocOpt::doInitialization(Module &M)
 
 bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
-    if (!alloc_obj_func) {
-        LLVM_DEBUG(dbgs() << "AllocOpt: no alloc_obj function found, skipping pass\n");
+    if (!getOpDeclaration<julia::GCAllocObj>()) {
+        LLVM_DEBUG(dbgs() << "AllocOpt: no julia.gc_alloc_obj in the module, skipping pass\n");
         return false;
     }
     Optimizer optimizer(F, *this, std::move(GetDT));

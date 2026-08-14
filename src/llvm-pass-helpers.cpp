@@ -28,11 +28,8 @@ JuliaPassContext::JuliaPassContext()
 
         tbaa_gcframe(nullptr), tbaa_tag(nullptr),
 
-        pgcstack_getter(nullptr), adoptthread_func(nullptr), gcroot_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
-        pointer_from_objref_func(nullptr), gc_loaded_func(nullptr), alloc_obj_func(nullptr),
-        typeof_func(nullptr), blackbox_func(nullptr), write_barrier_func(nullptr), pop_handler_noexcept_func(nullptr),
-        call_func(nullptr), call2_func(nullptr), call3_func(nullptr), cancel_point_func(nullptr), module(nullptr)
+        pop_handler_noexcept_func(nullptr), module(nullptr)
 {
 }
 
@@ -47,22 +44,9 @@ void JuliaPassContext::initFunctions(Module &M)
     std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child_with_context(llvmctx, "jtbaa_data");
     tbaa_tag = tbaa_make_child_with_context(llvmctx, "jtbaa_tag", tbaa_data_scalar).first;
 
-    pgcstack_getter = M.getFunction("julia.get_pgcstack");
-    adoptthread_func = M.getFunction("julia.get_pgcstack_or_new");
-    gcroot_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
-    pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
-    gc_loaded_func = M.getFunction("julia.gc_loaded");
-    typeof_func = M.getFunction("julia.typeof");
-    blackbox_func = M.getFunction("julia.blackbox");
-    write_barrier_func = M.getFunction("julia.write_barrier");
-    alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
     pop_handler_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
-    call_func = M.getFunction("julia.call");
-    call2_func = M.getFunction("julia.call2");
-    call3_func = M.getFunction("julia.call3");
-    cancel_point_func = M.getFunction("julia.cancellation_point");
 }
 
 void JuliaPassContext::initAll(Module &M)
@@ -79,14 +63,11 @@ void JuliaPassContext::initAll(Module &M)
 
 llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
-    if (pgcstack_getter || adoptthread_func) {
-        for (auto &I : F.getEntryBlock()) {
-            if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
-                Value *callee = callInst->getCalledOperand();
-                if ((pgcstack_getter && callee == pgcstack_getter) ||
-                    (adoptthread_func && callee == adoptthread_func)) {
-                    return callInst;
-                }
+    for (auto &I : F.getEntryBlock()) {
+        if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
+            if (isa<julia::GetPGCStack>(callInst) ||
+                isa<julia::GetPGCStackOrNew>(callInst)) {
+                return callInst;
             }
         }
     }

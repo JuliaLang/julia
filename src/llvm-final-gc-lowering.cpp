@@ -137,7 +137,8 @@ bool FinalLowerGC::shouldRunFinalGC()
     should_run |= hasUse(*this, jl_intrinsics::GCAllocBytes);
     should_run |= hasUse(*this, jl_intrinsics::queueGCRoot);
     should_run |= hasUse(*this, jl_intrinsics::safepoint);
-    should_run |= (write_barrier_func && !write_barrier_func->use_empty());
+    if (auto *write_barrier = getOpDeclaration<julia::WriteBarrier>())
+        should_run |= !write_barrier->use_empty();
     return should_run;
 }
 
@@ -176,7 +177,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
             Value *callee = CI->getCalledOperand();
 
-            if (write_barrier_func && callee == write_barrier_func) {
+            if (isa<julia::WriteBarrier>(CI)) {
                 assert(CI->arg_size() >= 1);
                 write_barriers.push_back(CI);
             }
@@ -202,11 +203,9 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
     // Write barriers should always be processed beforehand
     // since they may insert julia.queue_gc_root intrinsics
-    if(write_barrier_func) {
-        for (auto CI : write_barriers) {
-            lowerWriteBarrier(CI, F);
-            CI->eraseFromParent();
-        }
+    for (auto CI : write_barriers) {
+        lowerWriteBarrier(CI, F);
+        CI->eraseFromParent();
     }
 
     // Lower all calls to supported intrinsics.
@@ -249,7 +248,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
             Value *callee = CI->getCalledOperand();
             assert(callee);
-            if (write_barrier_func == callee) {
+            if (isa<julia::WriteBarrier>(CI)) {
                 errs() << "Final-GC-lowering didn't eliminate all write barriers from '" << F.getName() << "', dumping entire module!\n\n";
                 errs() << *F.getParent() << "\n";
                 abort();

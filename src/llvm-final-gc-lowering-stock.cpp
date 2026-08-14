@@ -97,7 +97,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
                                                 MDB.createBranchWeights(Weights));
     trigTerm->getParent()->setName("trigger_wb");
     builder.SetInsertPoint(trigTerm);
-    if (target->getCalledOperand() == write_barrier_func) {
+    if (isa<julia::WriteBarrier>(target)) {
         auto qr = builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
         // Propagate CancellationLowering's reset-region annotation to the
         // slow-path call, so lowerQueueGCRoot selects the reset-safe entry.

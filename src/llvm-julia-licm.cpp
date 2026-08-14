@@ -153,10 +153,12 @@ struct JuliaLICM : public JuliaPassContext {
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
-        // We also hoist write barriers here, so we don't exit if write_barrier_func exists
-        if (!gc_preserve_begin_func && !write_barrier_func &&
-            !alloc_obj_func) {
-            LLVM_DEBUG(dbgs() << "No gc_preserve_begin_func or write_barrier_func or alloc_obj_func found, skipping JuliaLICM\n");
+        // We also hoist write barriers here, so we don't exit if the module
+        // uses julia.write_barrier.
+        if (!gc_preserve_begin_func &&
+            !julia::getOpDeclaration<julia::WriteBarrier>(*header->getModule()) &&
+            !julia::getOpDeclaration<julia::GCAllocObj>(*header->getModule())) {
+            LLVM_DEBUG(dbgs() << "No gc_preserve_begin, write_barrier or gc_alloc_obj found, skipping JuliaLICM\n");
             return false;
         }
         auto LI = &GetLI();
@@ -256,7 +258,7 @@ struct JuliaLICM : public JuliaPassContext {
                         });
                     }
                 }
-                else if (callee == write_barrier_func) {
+                else if (isa<julia::WriteBarrier>(call)) {
                     // A SATB (ConcurrentImmix) barrier must fire every iteration to
                     // snapshot each overwritten value, so it can't be hoisted. Other
                     // plans only mark the parent dirty, where hoisting is safe.
@@ -284,7 +286,7 @@ struct JuliaLICM : public JuliaPassContext {
                     });
 #endif
                 }
-                else if (callee == alloc_obj_func) {
+                else if (isa<julia::GCAllocObj>(call)) {
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!makeLoopInvariant(L, call->getArgOperand(i), changed,
