@@ -3,21 +3,21 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-2e6228b5-805d-428d-8822-16b9c1ecffef",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-89ac5dcd-1903-4ca3-9019-447fe8deab2b",
     "creationInfo": {
         "creators": [
             "Organization:  julialang.org  ()",
             "Person:  Simon Avery  ()"
         ],
-        "created": "2025-10-08T08:03:12Z"
+        "created": "2026-08-14T11:19:58Z"
     },
     "packages": [
         {
             "name": "Julia",
             "SPDXID": "SPDXRef-JuliaMain",
-            "versionInfo": "1.13.0-DEV",
+            "versionInfo": "1.14.0-DEV",
             "packageFileName": "./",
-            "downloadLocation": "git+https://github.com/JuliaLang/julia.git@v1.13.0-DEV",
+            "downloadLocation": "git+https://github.com/JuliaLang/julia.git@v1.14.0-DEV",
             "filesAnalyzed": false,
             "homepage": "https://julialang.org",
             "licenseConcluded": "MIT",
@@ -139,7 +139,8 @@
             "licenseConcluded": "MIT",
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2009-2021: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
-            "summary": "SuiteSparse.jl provides Julia wrappers for the SuiteSparse library, and provides Julia's sparse linear algebra capabilities - specifically the solvers."
+            "summary": "SuiteSparse.jl provides Julia wrappers for the SuiteSparse library, and provides Julia's sparse linear algebra capabilities - specifically the solvers.",
+            "versionInfo": "7.10.1+0"
         },
         {
             "name": "SparseArrays.jl",
@@ -229,7 +230,7 @@
             "licenseDeclared": "curl",
             "copyrightText": "Copyright (c) 1996 - 2021, Daniel Stenberg, daniel@haxx.se, and many contributors, see the THANKS file.",
             "summary": "A command line tool and library for transferring data with URL syntax, supporting DICT, FILE, FTP, FTPS, GOPHER, GOPHERS, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, MQTT, POP3, POP3S, RTMP, RTMPS, RTSP, SCP, SFTP, SMB, SMBS, SMTP, SMTPS, TELNET and TFTP. libcurl offers a myriad of powerful features",
-            "versionInfo": "8.16.0"
+            "versionInfo": "8.21.0"
         },
         {
             "name": "libssh2",
@@ -255,7 +256,7 @@
             "licenseDeclared": "Apache-2.0",
             "copyrightText": "Copyright (c) 1998-2024 The OpenSSL Project Authors. Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson.",
             "summary": "OpenSSL is a robust, commercial-grade, full-featured Open Source Toolkit for the TLS (formerly SSL), DTLS and QUIC (currently client side only) protocols.",
-            "versionInfo": "3.5.4"
+            "versionInfo": "3.5.7"
         },
         {
             "name": "mpfr",
@@ -281,7 +282,7 @@
             "licenseDeclared": "BSD-3-Clause",
             "copyrightText": "Copyright (c) 2011-2014, The OpenBLAS Project",
             "summary": "OpenBLAS is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.",
-            "versionInfo": "0.3.29"
+            "versionInfo": "0.3.34"
         },
         {
             "name": "LAPACK",
@@ -306,7 +307,7 @@
             "licenseDeclared": "BSD-3-Clause",
             "copyrightText": "Copyright (c) 1997-2021 University of Cambridge All rights reserved.\nCopyright(c) 2009-2021 Zoltan Herczeg\n",
             "summary": "PCRE2 is a library of functions to support regular expressions whose syntax and semantics are as close as possible to those of the Perl 5 language.",
-            "versionInfo": "10.46"
+            "versionInfo": "10.47"
         },
         {
             "name": "LibSuiteSparse",
@@ -346,7 +347,7 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2012, 2014, 2015, 2016 Tatsuhiro Tsujikawa\nCopyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors",
             "summary": "nghttp2 is an implementation of HTTP/2 and its header compression algorithm HPACK in C.",
-            "versionInfo": "1.67.1"
+            "versionInfo": "1.70.0"
         },
         {
             "name": "libunwind",
@@ -390,7 +391,7 @@
             "copyrightText": "The LLVM project does not collect copyright assignments, which means that the copyright for the code in the project is held by the respective contributors",
             "summary": "The LLVM Project is a collection of modular and reusable compiler and toolchain technologies.",
             "comment": "The Julia project has forked llvm and maintains their own repository of the code",
-            "versionInfo": "20.1.8"
+            "versionInfo": "21.1.8"
         },
         {
             "name": "utf8proc",
@@ -416,7 +417,7 @@
             "copyrightText": "Copyright (c) 2017-2024, Bartosz Taudul <wolf@nereid.pl>",
             "summary": "A real time, nanosecond resolution, remote telemetry, hybrid frame and sampling profiler for games and other applications.",
             "comment": "LibTracyClient is an optional dependency that is not built by default",
-            "versionInfo": "0.9.1"
+            "versionInfo": "0.13.1"
         },
         {
             "name": "ittapi",
@@ -454,7 +455,7 @@
             "licenseDeclared": "Zlib",
             "copyrightText": "Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler",
             "summary": "A massively spiffy yet delicately unobtrusive compression library.",
-            "versionInfo": "1.3.1"
+            "versionInfo": "1.3.2"
         },
         {
             "name": "zstd",
