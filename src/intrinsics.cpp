@@ -489,7 +489,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, Maybe
             std::string type_str = jl_is_datatype(x.typ) ? jl_symbol_name(((jl_datatype_t*)x.typ)->name->name) : "<unknown type>";
             return "unbox::" + type_str;
         });
-        auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+        auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, best_tbaa(ctx.tbaa(), x.typ));
         recombine_value(ctx, x, combined, combined_ai, alignment, false);
         p = combined;
         ai = combined_ai;
@@ -526,8 +526,9 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
         return;
     }
 
-    Value *src = data_pointer(ctx, x);
-    auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
+    MDNode *src_tbaa;
+    Value *src = data_pointer(ctx, x, &src_tbaa);
+    auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, src_tbaa);
     emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(align_dst), align_src ? *align_src : Align(julia_alignment(x.typ)), isVolatile);
 }
 
@@ -1255,7 +1256,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             MDNode *ifelse_tbaa;
             if (!x_ptr && !y_ptr) { // both ghost
                 ifelse_result = NULL;
-                ifelse_tbaa = ctx.tbaa().tbaa_stack;
+                ifelse_tbaa = best_tbaa(ctx.tbaa(), rt_hint);
             }
             else if (!x_ptr) {
                 ifelse_result = y_ptr;

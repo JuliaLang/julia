@@ -103,14 +103,23 @@ static Value *mark_callee_rooted(jl_codectx_t &ctx, Value *V)
 
 static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e) JL_CANSAFEPOINT;
 
-static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x) JL_CANSAFEPOINT
+// If `tbaa` is given, it is set to the tag describing the memory that the
+// returned pointer refers to, which is not always `x.tbaa`: a pointer-free
+// constant is copied into a private constant global, so that copy is
+// `jtbaa_const` memory no matter what the mutability of its type implies.
+static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x, MDNode **tbaa=nullptr) JL_CANSAFEPOINT
 {
     assert(x.ispointer());
     Value *data;
+    if (tbaa)
+        *tbaa = x.tbaa;
     if (x.constant) {
         Constant *val = julia_const_to_llvm(ctx, x.constant);
-        if (val && !type_is_ghost(val->getType()))
+        if (val && !type_is_ghost(val->getType())) {
             data = get_pointer_to_constant(ctx.emission_context, val, Align(julia_alignment(jl_typeof(x.constant))), "_j_const", *jl_Module);
+            if (tbaa)
+                *tbaa = ctx.tbaa().tbaa_const;
+        }
         else
             data = literal_pointer_val(ctx, x.constant);
     }
@@ -1193,7 +1202,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     // that's done, we can expect that in most cases tbaa(src) == tbaa(dst) and the
     // above problem won't be as serious.
 
-    auto merged_ai = dst_ai.merge(src_ai);
+    auto merged_ai = dst_ai.merge(ctx, src_ai);
 #if JL_LLVM_VERSION < 210000
     ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
                              merged_ai.tbaa, merged_ai.tbaa_struct, merged_ai.scope, merged_ai.noalias);
@@ -1214,8 +1223,10 @@ template<typename T1>
 static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, const jl_cgval_t &src,
                         T1 &&sz, Align align_dst, Align align_src, bool is_volatile=false) JL_CANSAFEPOINT
 {
-    auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, src.tbaa);
-    emit_memcpy_llvm(ctx, dst, dst_ai, data_pointer(ctx, src), src_ai, sz, align_dst, align_src, is_volatile);
+    MDNode *src_tbaa;
+    Value *src_ptr = data_pointer(ctx, src, &src_tbaa);
+    auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, src_tbaa);
+    emit_memcpy_llvm(ctx, dst, dst_ai, src_ptr, src_ai, sz, align_dst, align_src, is_volatile);
 }
 
 // compute the space required by split_value_into, by simulating it
@@ -1258,7 +1269,8 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     Type *T_prjlvalue = ctx.types().T_prjlvalue;
     if (inline_roots_ptr == nullptr) {
-        emit_unbox_store(ctx, x, dst, ctx.tbaa().tbaa_stack, align_src, align_dst, isVolatileStore);
+        // n.b. the caller's tag, not `jtbaa_stack`: `dst` is whatever it named
+        emit_unbox_store(ctx, x, dst, dst_ai.tbaa, align_src, align_dst, isVolatileStore);
         return;
     }
     if (!x.inline_roots.empty()) {
@@ -1271,7 +1283,9 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     }
     if (x.V == nullptr && x.constant == nullptr)
         return;
-    Value *src = data_pointer(ctx, value_to_pointer(ctx, x));
+    MDNode *src_tbaa;
+    Value *src = data_pointer(ctx, value_to_pointer(ctx, x), &src_tbaa);
+    src_ai = jl_aliasinfo_t::fromTBAA(ctx, src_tbaa);
     bool isstack = isa<AllocaInst>(src->stripInBoundsOffsets()) || src_ai.tbaa == ctx.tbaa().tbaa_stack;
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
@@ -1327,7 +1341,9 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     }
     if (x.V == nullptr && x.constant == nullptr)
         return;
-    Value *src = data_pointer(ctx, value_to_pointer(ctx, x));
+    MDNode *src_tbaa;
+    Value *src = data_pointer(ctx, value_to_pointer(ctx, x), &src_tbaa);
+    src_ai = jl_aliasinfo_t::fromTBAA(ctx, src_tbaa);
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
     size_t shrunken_size = split_value_size(typ).first;
@@ -1384,11 +1400,20 @@ static std::tuple<Value*, jl_gc_roots_t, MDNode*> split_value(jl_codectx_t &ctx,
         setName(ctx.emission_context, alloca, [&]() {
             return "split::" + std::string(jl_symbol_name(typ->name->name));
         });
-        auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-        split_value_into(ctx, x, x_alignment, alloca, align_dst, stack_ai, false);
-        bits = alloca;
+        // Label the copy with the layout tag of what it holds, as the no-copy paths
+        // above already do. Tagging it `jtbaa_stack` instead would force the copy
+        // below to join two unrelated tags, and the join of `jtbaa_stack` with
+        // anything is the root — an access that aliases all memory, which then
+        // travels with every later load of this value. Every access to the temporary
+        // goes through the tag returned here, so they stay consistent with the copy.
+        // The temporary gives up its `Region::stack` !noalias in exchange, until tbaa
+        // and region are represented separately.
+        MDNode *tbaa_dst = x.ispointer() && x.tbaa ? x.tbaa : best_tbaa(ctx.tbaa(), x.typ);
+        auto dst_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst);
+        split_value_into(ctx, x, x_alignment, alloca, align_dst, dst_ai, false);
+        return std::make_tuple(alloca, std::move(roots), tbaa_dst);
     }
-    return std::make_tuple(bits, std::move(roots), ctx.tbaa().tbaa_stack);
+    return std::make_tuple(bits, std::move(roots), best_tbaa(ctx.tbaa(), x.typ));
 }
 
 // Return the offset values corresponding to jl_field_offset, but into the two buffers for a split value (or -1)
@@ -3601,7 +3626,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             Value *tindex0 = ctx.builder.CreateExtractValue(obj, ArrayRef<unsigned>(ptindex));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), tindex0);
             setNameWithField(ctx.emission_context, tindex, get_objname, jt, idx, Twine(".tindex"));
-            return mark_julia_slot(lv, jfty, tindex, ctx.tbaa().tbaa_stack);
+            return mark_julia_slot(lv, jfty, tindex, best_tbaa(ctx.tbaa(), jfty));
         }
         else {
             unsigned st_idx;
@@ -4539,6 +4564,10 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 setName(ctx.emission_context, strct, arg_typename);
             }
 
+            // The selector bytes below take this same tag: they overlap the object,
+            // so a tag unrelated to the object's would let the two be reordered.
+            MDNode *strct_tbaa = best_tbaa(ctx.tbaa(), ty);
+
             for (unsigned i = 0; i < na; i++) {
                 jl_value_t *jtype = jl_svecref(sty->types, i); // n.b. ty argument must be concrete
                 jl_cgval_t fval_info = argv[i];
@@ -4595,7 +4624,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     fval = boxed(ctx, fval_info, field_promotable);
                     if (!init_as_value) {
                         if (dest) {
-                            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, strct_tbaa);
                             ai.decorateInst(ctx.builder.CreateAlignedStore(fval, dest, Align(jl_field_align(sty, i))));
                         }
                         else {
@@ -4626,12 +4655,12 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                             assert(lt->getStructElementType(llvm_idx) == ET);
                             AllocaInst *lv = emit_static_alloca(ctx, fsz1, Align(al));
                             setName(ctx.emission_context, lv, "unioninit");
-                            emit_unionmove(ctx, lv, jtype, ctx.tbaa().tbaa_stack, fval_info, tindex, /*skip*/nullptr);
+                            emit_unionmove(ctx, lv, jtype, strct_tbaa, fval_info, tindex, /*skip*/nullptr);
                             // emit all of the align-sized words
                             unsigned i = 0;
                             for (; i < fsz1 / al; i++) {
                                 Value *fldp = emit_ptrgep(ctx, lv, i * al);
-                                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, strct_tbaa);
                                 Value *fldv = ai.decorateInst(ctx.builder.CreateAlignedLoad(ET, fldp, Align(al)));
                                 strct = ctx.builder.CreateInsertValue(strct, fldv, ArrayRef<unsigned>(llvm_idx + i));
                             }
@@ -4640,7 +4669,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                 Value *staddr = emit_ptrgep(ctx, lv, i * al);
                                 for (; i < ptindex - llvm_idx; i++) {
                                     Value *fldp = emit_ptrgep(ctx, staddr, i);
-                                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, strct_tbaa);
                                     Value *fldv = ai.decorateInst(ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), fldp, Align(1)));
                                     strct = ctx.builder.CreateInsertValue(strct, fldv, ArrayRef<unsigned>(llvm_idx + i));
                                 }
@@ -4653,10 +4682,10 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     }
                     else {
                         Value *ptindex = emit_ptrgep(ctx, strct, offs + fsz1);
-                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_unionselbyte);
+                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, strct_tbaa);
                         ai.decorateInst(ctx.builder.CreateAlignedStore(stindex, ptindex, Align(1)));
                         if (!rhs_union.isghost)
-                            emit_unionmove(ctx, dest, jtype, ctx.tbaa().tbaa_stack, fval_info, tindex, /*skip*/nullptr);
+                            emit_unionmove(ctx, dest, jtype, strct_tbaa, fval_info, tindex, /*skip*/nullptr);
                     }
                     assert(roots.empty());
                 }
@@ -4674,7 +4703,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     else {
                         if (!roots.empty() && fval_info.inline_roots.empty())
                             fval_info = value_to_pointer(ctx, fval_info);
-                        split_value_into(ctx, fval_info, align_src, dest, align_dst, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), false);
+                        split_value_into(ctx, fval_info, align_src, dest, align_dst, jl_aliasinfo_t::fromTBAA(ctx, strct_tbaa), false);
                         if (!roots.empty()) {
                             auto inline_roots = extract_gc_roots(ctx, fval_info, roots.size());
                             for (size_t i = 0; i < inline_roots.size(); i++)
@@ -4714,7 +4743,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (promotion_point)
                     ctx.builder.SetInsertPoint(promotion_point);
                 if (strct) {
-                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, strct_tbaa);
                     promotion_point = ai.decorateInst(ctx.builder.CreateMemSet(strct, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
                                                                 jl_datatype_size(ty), Align(julia_alignment(ty))));
                 }
@@ -4724,7 +4753,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             else if (init_as_value)
                 return mark_julia_type(ctx, strct, false, ty);
             else {
-                jl_cgval_t ret = mark_julia_slot(strct, ty, NULL, ctx.tbaa().tbaa_stack, jl_gc_roots_t(std::move(inline_roots)));
+                jl_cgval_t ret = mark_julia_slot(strct, ty, NULL, strct_tbaa, jl_gc_roots_t(std::move(inline_roots)));
                 if (is_promotable && promotion_point) {
                     ret.promotion_point = promotion_point;
                     ret.promotion_ssa = promotion_ssa;
