@@ -4342,6 +4342,8 @@ jl_value_t *jl_get_specialization1(jl_tupletype_t *types, size_t world)
 // stays: the bottom object is the unique instance of its `Type`.
 static jl_tupletype_t *egal_normalize_hint_types(jl_tupletype_t *types JL_PROPAGATES_ROOT) JL_CANSAFEPOINT
 {
+    if (!jl_is_datatype(types))
+        return types;
     jl_svec_t *newparams = NULL;
     JL_GC_PUSH1(&newparams);
     size_t i, np = jl_nparams(types);
