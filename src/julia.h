@@ -2820,6 +2820,10 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_LOG_ALL  2
 #define JL_LOG_PATH 3
 
+// Settings for code_coverage_mode
+#define JL_COVERAGE_MODE_HIT   0
+#define JL_COVERAGE_MODE_COUNT 1
+
 #define JL_OPTIONS_CHECK_BOUNDS_DEFAULT 0
 #define JL_OPTIONS_CHECK_BOUNDS_ON 1
 #define JL_OPTIONS_CHECK_BOUNDS_OFF 2
