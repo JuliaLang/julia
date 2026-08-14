@@ -149,7 +149,7 @@ unsetindex!(A::Memory, i::Int) = (@_propagate_inbounds_meta; unsetindex!(memoryr
 unsetindex!(A::Union{Array, Memory}, i::Integer) = unsetindex!(A, to_index(i))
 
 """
-    unsetindex!(ref::AtomicMemoryRef, ordering::Symbol) -> ref
+    unsetindex_atomic!(ref::AtomicMemoryRef, ordering::Symbol) -> ref
 
 Same as `unsetindex!(::MemoryRef)`, but the index is atomically unset with the
 atomic memory ordering set by `ordering`.
@@ -157,14 +157,14 @@ atomic memory ordering set by `ordering`.
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-function unsetindex!(A::AtomicMemoryRef, order::Symbol)
+function unsetindex_atomic!(A::AtomicMemoryRef, order::Symbol)
     @_propagate_inbounds_meta
     Core.memoryrefunset!(A, order, @_boundscheck)
     return A
 end
 
 """
-    unsetindex!(A::AtomicMemory, order::Symbol, i::Integer) -> A
+    unsetindex_atomic!(A::AtomicMemory, order::Symbol, i::Integer) -> A
 
 Same as `unsetindex!(::Memory, ::Integer)`, but the index is atomically unset with the
 atomic memory ordering set by `ordering`.
@@ -172,13 +172,15 @@ atomic memory ordering set by `ordering`.
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-function unsetindex!(A::AtomicMemory, order::Symbol, i::Int)
+function unsetindex_atomic!(A::AtomicMemory, order::Symbol, i::Int)
     @_propagate_inbounds_meta
     unsetindex!(memoryref(A, i), order)
     return A
 end
 
-unsetindex!(A::AtomicMemory, order::Symbol, i::Integer) = unsetindex!(A, order, to_index(i))
+function unsetindex_atomic!(A::AtomicMemory, order::Symbol, i::Integer)
+    return unsetindex_atomic!(A, order, to_index(i))
+end
 
 elsize(@nospecialize _::Type{A}) where {T,A<:GenericMemory{<:Any,T}} = aligned_sizeof(T) # XXX: probably supposed to be the stride?
 sizeof(a::GenericMemory) = Core.sizeof(a)

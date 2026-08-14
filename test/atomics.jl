@@ -1300,7 +1300,7 @@ test_memory_unset_multiptr(TwoInlinePtr,   AtomicMemory{TwoInlinePtr},   Val(:un
 test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:unordered))
 
 # Test the public atomic unsetindex! overloads for memory references and memory.
-@testset "unsetindex! on AtomicMemory" begin
+@testset "unsetindex_atomic!" begin
     for (T, value) in Any[(Any, "value"), (Float32, 1.0f0)]
         mem = AtomicMemory{T}(undef, 3)
         ref = memoryref(mem, 2)
@@ -1308,7 +1308,7 @@ test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:un
             # Unset the ref
             @atomic :monotonic mem[2] = value
             @test isassigned(ref) == isassigned(mem, 2) == true
-            @test Base.unsetindex!(ref, order) === ref
+            @test Base.unsetindex_atomic!(ref, order) === ref
             if T === Any
                 @test isassigned(ref) == isassigned(mem, 2) == false
                 @test_throws UndefRefError ref[]
@@ -1322,7 +1322,7 @@ test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:un
             # Unset the mem
             @atomic :monotonic mem[2] = value
             @test isassigned(ref) == isassigned(mem, 2) == true
-            @test Base.unsetindex!(mem, order, 2) === mem
+            @test Base.unsetindex_atomic!(mem, order, 2) === mem
             if T === Any
                 @test isassigned(ref) == isassigned(mem, 2) == false
                 @test_throws UndefRefError ref[]
@@ -1338,13 +1338,13 @@ test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:un
     mem = AtomicMemory{Any}(undef, 1)
     @atomic :monotonic mem[1] = "value"
     ref = memoryref(mem, 1)
-    @test_throws ConcurrencyViolationError Base.unsetindex!(ref, :acquire)
-    @test_throws ConcurrencyViolationError Base.unsetindex!(ref, :acquire_release)
-    @test_throws ConcurrencyViolationError Base.unsetindex!(ref, :not_atomic)
-    @test_throws ConcurrencyViolationError Base.unsetindex!(mem, :acquire, 1)
-    @test_throws ConcurrencyViolationError Base.unsetindex!(mem, :acquire_release, 1)
-    @test_throws ConcurrencyViolationError Base.unsetindex!(mem, :not_atomic, 1)
-    @test_throws BoundsError Base.unsetindex!(mem, :release, 0)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :acquire)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :acquire_release)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(ref, :not_atomic)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :acquire_release, 1)
+    @test_throws ConcurrencyViolationError Base.unsetindex_atomic!(mem, :not_atomic, 1)
+    @test_throws BoundsError Base.unsetindex_atomic!(mem, :release, 0)
 end
 
 @noinline function _test_once_undef(r)
