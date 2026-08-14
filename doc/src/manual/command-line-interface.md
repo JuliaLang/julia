@@ -207,9 +207,10 @@ The following is a complete list of command-line switches available when launchi
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
 |`--math-mode={ieee\|user*}`            |Always follow `ieee` floating point semantics or respect `@fastmath` declarations|
 |`--polly={yes*\|no}`                   |Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)|
-|`--code-coverage[={none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
-|`--code-coverage=@<path>`              |Count executions but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
+|`--code-coverage[={none*\|user\|all}]` |Record coverage for source lines (omitting setting is equivalent to `user`)|
+|`--code-coverage=@<path>`              |Record coverage only for files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
+|`--code-coverage-mode={hit*\|count}`   |Record whether each line ran (`hit`, the default) or its execution count (`count`, which may be approximate when code runs on multiple threads)|
 |`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
 |`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--task-metrics={yes\|no*}`             |Enable the collection of per-task metrics|

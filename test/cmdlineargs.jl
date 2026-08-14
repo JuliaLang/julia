@@ -167,6 +167,9 @@ end
                             ("--code-coverage=all",  false),
                             ("--code-coverage=none", true),
 
+                            ("--code-coverage-mode=count", false),
+                            ("--code-coverage-mode=hit",   true),
+
                             ("--track-allocation=@",    false),
                             ("--track-allocation=user", false),
                             ("--track-allocation=all",  false),
@@ -574,12 +577,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --code-coverage
     mktempdir() do dir
-        # don't inherit global coverage settings that could confuse these tests
-        cov_exename = `$(Base.julia_cmd()[1]) --startup-file=no --color=no`
+        # Do not inherit global coverage settings. The reference file records
+        # exact counts, so use count mode for the existing tests.
+        cov_exename_hit = `$(Base.julia_cmd()[1]) --startup-file=no --color=no`
+        cov_exename = `$cov_exename_hit --code-coverage-mode=count`
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
         expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
             "<FILENAME>" => realpath(inputfile))
+        # In hit mode every executed line reports a count of exactly one.
+        expected_hit = replace(expected, r"^(DA:\d+,)[1-9]\d*$"m => s"\g<1>1")
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
         defaultcov = readchomp(`$cov_exename -E "Base.JLOptions().code_coverage != 0" -L $inputfile`)
@@ -596,6 +603,25 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) context=(expected, got)
+        # Hit mode reports one for every executed line.
+        @test readchomp(`$cov_exename_hit -E "Int(Base.JLOptions().code_coverage_mode)" -L $inputfile
+            --code-coverage=$covfile --code-coverage`) == "0"
+        @test isfile(covfile)
+        got = read(covfile, String)
+        rm(covfile)
+        @test occursin(expected_hit, got) context=(expected_hit, got)
+
+        # The interpreter may instrument fewer lines because --compile=min does
+        # not compile every method, but every recorded hit must be one.
+        @test success(`$cov_exename_hit --compile=min -L $inputfile
+            --code-coverage=$covfile --code-coverage`)
+        record = only(filter(contains("SF:" * realpath(inputfile)),
+                             split(read(covfile, String), "end_of_record")))
+        rm(covfile)
+        counts = [parse(Int, m[1]) for m in eachmatch(r"^DA:\d+,(\d+)$"m, record)]
+        @test !isempty(counts)
+        @test all(==(1), counts)
+
         @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)

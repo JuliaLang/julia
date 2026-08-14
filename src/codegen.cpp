@@ -2130,6 +2130,9 @@ public:
     // `AllocaInst *` used as stack temporaries. This opts in to optimization via LLVM's StackColoring pass.
     SmallVector<WeakVH, 0> stack_temporaries;
 
+    // Counters already set in each basic block. Only used in hit mode.
+    DenseSet<std::pair<BasicBlock*, _Atomic(uint64_t) *>> coverage_seen;
+
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
@@ -3249,16 +3252,25 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
 
 // Logging for code coverage and memory allocation
 
-static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const char *name)
+static void visitLine(jl_codectx_t &ctx, _Atomic(uint64_t) *ptr, Value *addend, const char *name, bool hit_only)
 {
     Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(ctx.types().T_size, (uintptr_t)ptr),
         getPointerTy(ctx.builder.getContext()));
-    // These approximate counters are seeded to 1 and only incremented, so racy
-    // updates stay nonzero. Avoiding an atomic RMW prevents #62424.
-    Value *v = ctx.builder.CreateLoad(getInt64Ty(ctx.builder.getContext()), pv, true, name);
-    v = ctx.builder.CreateAdd(v, addend);
-    ctx.builder.CreateStore(v, pv, true);
+    // Separate accesses avoid the atomic RMW overhead reported in #62424.
+    // Count mode remains approximate when threads update the same line.
+    if (hit_only) {
+        // Racing stores are harmless because hit mode records only zero or one.
+        StoreInst *s = ctx.builder.CreateAlignedStore(
+            ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 2), pv, Align(8));
+        s->setOrdering(AtomicOrdering::Unordered);
+        return;
+    }
+    LoadInst *v = ctx.builder.CreateAlignedLoad(getInt64Ty(ctx.builder.getContext()), pv, Align(8), name);
+    v->setOrdering(AtomicOrdering::Unordered);
+    Value *sum = ctx.builder.CreateAdd(v, addend);
+    StoreInst *s = ctx.builder.CreateAlignedStore(sum, pv, Align(8));
+    s->setOrdering(AtomicOrdering::Unordered);
 }
 
 // Code coverage
@@ -3269,7 +3281,14 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
         return; // TODO
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    visitLine(ctx, jl_coverage_data_pointer(filename.data(), line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
+    bool hit_only = jl_options.code_coverage_mode == JL_COVERAGE_MODE_HIT;
+    _Atomic(uint64_t) *ptr = jl_coverage_data_pointer(filename.data(), line);
+    if (hit_only) {
+        // One store per block is enough to mark the line as reached.
+        if (!ctx.coverage_seen.insert({ctx.builder.GetInsertBlock(), ptr}).second)
+            return;
+    }
+    visitLine(ctx, ptr, ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt", hit_only);
 }
 
 // Memory allocation log (malloc_log)
@@ -3283,7 +3302,7 @@ static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Val
     Value *addend = sync
         ? ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync})
         : ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
-    visitLine(ctx, jl_malloc_data_pointer(filename.data(), line), addend, "bytecnt");
+    visitLine(ctx, jl_malloc_data_pointer(filename.data(), line), addend, "bytecnt", false);
 }
 
 // --- constant determination ---
