@@ -256,8 +256,9 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOI
 
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
 // to be held for the current thread and will release the lock when the
-// function returns.
-static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE_WITH_CANSAFEPOINT
+// function returns. The caller must republish the returned reset context
+// after restoring any state saved around the finalizer run.
+static jl_reset_ctx_t *jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE_WITH_CANSAFEPOINT
 {
     // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
     // of `finalizer`) in a finalizer:
@@ -266,8 +267,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     // cancellation state is bracketed: unpublish the reset region (finalizer
     // frames must not be abandoned into it) and stash the token binding,
     // which the finalizers' own cancellation points may rebind. Both are
-    // restored below; the republish performs any delivery that was missed
-    // while the region was unpublished.
+    // restored below.
     jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
     jl_value_t *bound_token = jl_atomic_load_relaxed(&ct->bound_cancel_token);
     JL_GC_PUSH1(&bound_token);
@@ -289,7 +289,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     jl_atomic_store_relaxed(&ct->bound_cancel_token, bound_token);
     jl_gc_wb_current_task(ct, bound_token);
     JL_GC_POP(); // matches the JL_GC_PUSH1 above
-    reset_region_republish(ct, reset_ctx);
+    return reset_ctx;
 }
 
 static uint64_t finalizer_rngState[JL_RNG_SIZE];
@@ -333,7 +333,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     // This releases the finalizers lock.
     int8_t was_in_finalizer = ct->ptls->in_finalizer;
     ct->ptls->in_finalizer = !finalizers_thread;
-    jl_gc_run_finalizers_in_list(ct, &copied_list);
+    jl_reset_ctx_t *reset_ctx = jl_gc_run_finalizers_in_list(ct, &copied_list);
     ct->ptls->in_finalizer = was_in_finalizer;
     arraylist_free(&copied_list);
 
@@ -342,6 +342,7 @@ void run_finalizers(jl_task_t *ct, int finalizers_thread)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+    reset_region_republish(ct, reset_ctx);
 }
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
@@ -523,12 +524,14 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
     finalize_object(&finalizer_list_marked, o, &copied_list, 0);
     if (copied_list.len > 0) {
         // This releases the finalizers lock.
-        jl_gc_run_finalizers_in_list(ct, &copied_list);
+        jl_reset_ctx_t *reset_ctx = jl_gc_run_finalizers_in_list(ct, &copied_list);
+        arraylist_free(&copied_list);
+        reset_region_republish(ct, reset_ctx);
     }
     else {
         JL_UNLOCK_NOGC(&finalizers_lock);
+        arraylist_free(&copied_list);
     }
-    arraylist_free(&copied_list);
 }
 
 JL_DLLEXPORT void jl_finalize(jl_value_t *o)
@@ -583,6 +586,9 @@ STATIC_INLINE void reset_region_deliver_pending(jl_task_t *ct)
     jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
     if (bound == NULL || bound == jl_nothing ||
         jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) == 0)
+        return;
+    // Protected foreign calls defer reset delivery until their guard exits.
+    if (jl_atomic_load_acquire(&ct->cancel_handler_ctx) != NULL)
         return;
     jl_reset_ctx_t *reset_ctx = jl_atomic_exchange(&ct->reset_ctx, NULL);
     if (reset_ctx == NULL || reset_ctx->sp == 0)
