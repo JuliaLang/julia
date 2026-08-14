@@ -679,7 +679,9 @@ _should_instrument(::Module) = false
 _should_instrument(::Nothing) = false
 function _should_instrument(info::DebugInfo)
     linetable = info.linetable
-    linetable === nothing || (_should_instrument(linetable) && return true)
+    # a byte-precise linetable is a compressed `String` that carries no file
+    # information of its own; only recurse into nested `DebugInfo`
+    linetable isa DebugInfo && _should_instrument(linetable) && return true
     _should_instrument(info.def) && return true
     return false
 end
