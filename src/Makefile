@@ -110,6 +110,7 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
 	llvm-cancellation-lowering \
 	pipeline llvm_api objcache \
+	JuliaDialect \
 	$(GC_CODEGEN_SRCS)
 FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
@@ -147,6 +148,9 @@ DTRACE_HEADERS :=
 endif
 .SECONDARY: $(addprefix $(BUILDDIR)/,$(DTRACE_HEADERS))
 
+TBLGEN_GENERATED := JuliaDialect.h.inc JuliaDialect.cpp.inc
+.SECONDARY: $(addprefix $(BUILDDIR)/,$(TBLGEN_GENERATED))
+
 # headers are used for dependency tracking, while public headers will be part of the dist
 UV_HEADERS :=
 ifeq ($(USE_SYSTEM_LIBUV),0)
@@ -162,7 +166,7 @@ endif
 ifeq ($(OS),WINNT)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,win32_ucontext.h)
 endif
-HEADERS := $(PUBLIC_HEADERS) $(addprefix $(SRCDIR)/,julia_internal.h options.h timing.h passes.h jl_internal_data.inc) $(addprefix $(BUILDDIR)/,$(DTRACE_HEADERS) jl_internal_funcs.inc jl_data_globals_defs.inc)
+HEADERS := $(PUBLIC_HEADERS) $(addprefix $(SRCDIR)/,julia_internal.h options.h timing.h passes.h jl_internal_data.inc) $(addprefix $(BUILDDIR)/,$(DTRACE_HEADERS) jl_internal_funcs.inc jl_data_globals_defs.inc $(TBLGEN_GENERATED))
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,julia_gcext.h)
 PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)) $(UV_HEADERS))
 
@@ -232,11 +236,11 @@ ifeq ($(OS),WINNT)
 COMMON_LIBPATHS := -L$(build_private_libdir) $(COMMON_LIBPATHS)
 RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd -L$(build_libdir) $(LIBTARGET_PARSING) $(WIN_LD_STDCXX) $(OSLIBS)
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
-CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(LIBTRACYCLIENT) $(LIBITTAPI) $(WIN_LD_STDCXX) $(LIBLMDB) $(OSLIBS)
+CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(LIBTRACYCLIENT) $(LIBITTAPI) $(WIN_LD_STDCXX) $(LIBLMDB) $(OSLIBS) $(LLVMDIALECTS)
 else
 RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd -L$(build_libdir) $(LIBTARGET_PARSING)
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
-CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) $(LIBLMDB)
+CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) $(LIBLMDB) $(LLVMDIALECTS)
 endif
 
 ifeq ($(USEGCC),1)
@@ -310,6 +314,14 @@ $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 LLVM_CONFIG_ABSOLUTE := $(shell which $(LLVM_CONFIG))
+
+# Generate the DTrace header file, while also renaming the macros from
+# JULIA_ to JL_PROBE to clearly delinate them.
+$(BUILDDIR)/JuliaDialect.h.inc : $(SRCDIR)/JuliaDialect.td
+	@$(call PRINT_TBLGEN, $(DIALECTS_TBLGEN) -I$(build_includedir) -I$(SRCDIR) -gen-dialect-decls --dialect julia -o $@ $<)
+
+$(BUILDDIR)/JuliaDialect.cpp.inc : $(SRCDIR)/JuliaDialect.td
+	@$(call PRINT_TBLGEN, $(DIALECTS_TBLGEN) -I$(build_includedir) -I$(SRCDIR) -gen-dialect-defs --dialect julia -o $@ $<)
 
 # Generate the DTrace header file, while also renaming the macros from
 # JULIA_ to JL_PROBE to clearly delinate them.
@@ -516,6 +528,7 @@ $(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj: $(SRCDIR)/serialize.h $(SRCDIR)
 $(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(addprefix $(SRCDIR)/,passes.h jitlayers.h llvm-julia-passes.inc)
 $(BUILDDIR)/llvm_api.o $(BUILDDIR)/llvm_api.dbg.obj: $(SRCDIR)/llvm-julia-passes.inc
 $(BUILDDIR)/objcache.o $(BUILDDIR)/objcache.dbg.obj: $(SRCDIR)/objcache.h $(BUILDDIR)/jl_codegen_hash.inc
+$(BUILDDIR)/JuliaDialect.o $(BUILDDIR)/JuliaDialect.dbg.obj: $(SRCDIR)/JuliaDialect.h $(BUILDDIR)/JuliaDialect.h.inc $(BUILDDIR)/JuliaDialect.cpp.inc
 
 $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc-common.o gc-stock.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
 $(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): $(SRCDIR)/APInt-C.h
