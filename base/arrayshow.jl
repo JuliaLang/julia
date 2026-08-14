@@ -387,14 +387,43 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
         io = IOContext(io, :limit => false)
     end
 
-    if get(io, :limit, false)::Bool
-        # when there is no vertical room to show even one row of entries
-        # plus a vertical ellipsis, show as many entries as fit on a single
-        # line, truncated to the terminal width (#58323)
+    # the packed forms are only for a display of its own: nested inside
+    # another container's display (`print_matrix_row` tries this method first,
+    # and keeps its output when it has no line breaks) they would repeat the
+    # element's type on every row and overflow the width
+    if get(io, :limit, false)::Bool && !haskey(io, :SHOWN_SET)
+        # the vertical layout has `screenheight` lines for entries, the last
+        # of which is a ⋮ when they don't all fit
         screenheight = displaysize(io)[1] - 4
         if screenheight <= 0 || (screenheight == 1 && (ndims(X) > 2 || size(X, 1) > 1))
+            # no vertical room for even one entry: pack them onto the summary
+            # line instead (#58323)
             print(io, ' ')
+            if X isa AbstractVector
+                cols = displaysize(io)[2]
+                used = textwidth(sprint(summary, X; context=io)) + 2
+                lines = _wrapped_entry_lines(io, X, 1, cols - used, false)
+                if lines !== nothing
+                    print(io, lines[1])
+                    return
+                end
+            end
             return _show_oneline_truncated(io, X)
+        elseif X isa AbstractVector && get(io, :compact, false)::Bool
+            # a compact display has been asked for: pack the entries across the
+            # width, over as many of the vertical layout's lines as they need.
+            # This is opt-in, and applies at every display size once opted in,
+            # so that the layout never changes with the shape of the display:
+            # the vertical layout aligns the entries one to a line, which reads
+            # better wherever there is room for it
+            lines = _wrapped_entry_lines(io, X, screenheight, displaysize(io)[2], true)
+            if lines !== nothing
+                for line in lines
+                    println(io)
+                    print(io, line)
+                end
+                return
+            end
         end
     end
     println(io)
@@ -411,6 +440,137 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     # 4) show actual content
     recur_io = IOContext(io, :SHOWN_SET => X)
     print_array(recur_io, X)
+end
+
+# rendering of `X[i]` as the packed layout shows it, or `nothing` for an entry
+# whose `show` spans several lines, which the layout cannot measure
+function _wrapped_entry_string(X::AbstractVector, i::Int, ctx::IOContext)
+    isassigned(X, i) || return undef_ref_str
+    s = sprint(show, X[i]; context=ctx, sizehint=16)
+    return '\n' in s ? nothing : s
+end
+
+# entries of width `width` that fit on one line of `linewidth` columns: each
+# takes `width + 2` columns with its ", " separator, after a two-column indent
+# and before the closing bracket
+_wrapped_per_line(width::Int, linewidth::Int) = max(1, (linewidth - 1) ÷ (width + 2))
+
+"""
+    _wrapped_entry_lines(io, X, nlines, linewidth, pad) -> Union{Vector{String},Nothing}
+
+Lay the entries of `X` out as up to `nlines` lines of at most `linewidth`
+columns, comma-separated inside brackets, taking entries from both ends until
+they no longer fit and marking the omitted middle with `…`. Entries are padded
+to a common width when `pad` is set, so that the columns line up over several
+lines; the lines are then indented by one column.
+
+Returns `nothing` when the layout does not apply: a display too narrow for even
+one entry, or entries whose `show` spans several lines and so cannot be
+measured.
+"""
+function _wrapped_entry_lines(io::IO, X::AbstractVector, nlines::Int, linewidth::Int, pad::Bool)
+    ctx = IOContext(io, :typeinfo => eltype(X), :compact => true)
+    axs = axes1(X)
+    n = length(axs)
+    head, tail = String[], String[]
+    maxwidth = sumwidth = 0
+    headstuck = tailstuck = false
+    while length(head) + length(tail) < n
+        # take from whichever end has fewer, so that equal numbers of leading
+        # and trailing entries are shown. Index arithmetic from the ends, not
+        # positions into `axs`, whose own axes are offset for offset vectors
+        fromhead = !headstuck && (tailstuck || length(head) <= length(tail))
+        i = fromhead ? first(axs) + length(head) : last(axs) - length(tail)
+        s = _wrapped_entry_string(X, i, ctx)
+        stuck = true
+        if s !== nothing
+            w, sw = max(maxwidth, textwidth(s)), sumwidth + textwidth(s)
+            shown = length(head) + length(tail) + 1
+            elided = shown < n # a … cell is still needed while entries remain
+            cells = shown + elided
+            stuck = if pad
+                # entries this wide are only worth packing across the width if
+                # more than one of them fits on a line; otherwise the layout is
+                # the vertical one with brackets added
+                per = _wrapped_per_line(w, linewidth)
+                !(per >= 2 && cld(cells, per) <= nlines)
+            else
+                !(sw + elided + 2 * cells <= linewidth)
+            end
+            if !stuck
+                fromhead ? push!(head, s) : pushfirst!(tail, s)
+                maxwidth, sumwidth = w, sw
+            end
+        end
+        if stuck
+            # this end can grow no further; give up once both are stuck
+            fromhead ? (headstuck = true) : (tailstuck = true)
+            headstuck && tailstuck && break
+        end
+    end
+    shown = length(head) + length(tail)
+    shown == 0 && return nothing
+    epos = shown < n ? length(head) + 1 : 0 # cell index of the …, 0 when whole
+
+    if pad && epos > 0
+        # place the … at the end of the middle line (ties upwards), where it
+        # is easiest to find, by resplitting the shown entries between the two
+        # ends; the balanced split above lands it anywhere in the middle line
+        w = maxwidth
+        for _ in 1:4
+            per = _wrapped_per_line(w, linewidth)
+            h = min(cld(cld(shown + 1, per), 2) * per - 1, shown)
+            rehead, retail = String[], String[]
+            for i in range(first(axs), length=h)
+                s = _wrapped_entry_string(X, i, ctx)
+                s === nothing && @goto resplit_done # keep the balanced split
+                push!(rehead, s)
+            end
+            for i in range(stop=last(axs), length=shown-h)
+                s = _wrapped_entry_string(X, i, ctx)
+                s === nothing && @goto resplit_done
+                push!(retail, s)
+            end
+            neww = max(maximum(textwidth, rehead; init=0),
+                       maximum(textwidth, retail; init=0))
+            if _wrapped_per_line(neww, linewidth) == per && cld(shown + 1, per) <= nlines
+                head, tail, maxwidth = rehead, retail, neww
+                epos = length(head) + 1
+                break
+            end
+            # the resplit pulled in entries wider than any measured; resize
+            # the layout around them and try again
+            neww == w && break
+            w = neww
+        end
+        @label resplit_done
+    end
+
+    cells = epos > 0 ? [head; "…"; tail] : [head; tail]
+    # right-align, as the vertical layout does, so that the padding of one line
+    # never trails into the next
+    pad && map!(s -> lpad(s, maxwidth), cells, cells)
+    per = pad ? _wrapped_per_line(maxwidth, linewidth) : length(cells)
+    lines = String[]
+    for k in 1:per:length(cells)
+        stop = min(k + per - 1, length(cells))
+        buf = IOBuffer()
+        print(buf, k == 1 ? "[" : " ")
+        for j in k:stop
+            print(buf, cells[j])
+            if j == length(cells)
+                print(buf, "]")
+            elseif j == epos - 1 || j == epos
+                # the … keeps the bare "  …  " of `show_vector`'s elision,
+                # with spaces in place of the commas around it
+                j < stop && print(buf, "  ")
+            else
+                print(buf, j < stop ? ", " : ",")
+            end
+        end
+        push!(lines, (pad ? " " : "") * takestring!(buf))
+    end
+    return lines
 end
 
 function _show_oneline_truncated(io::IO, X::AbstractArray)

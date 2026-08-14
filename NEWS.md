@@ -177,7 +177,17 @@ New library features
   only the first `wait` returned and subsequent `wait` calls would throw ([#62539])
 * When the display height is too small to show any array entries, the `text/plain` array display
   (used e.g. by the REPL and when logging values with `@info` etc.) now shows as many entries as
-  fit on a single line, truncated to the display width, instead of showing no data at all ([#62543]).
+  fit on a single line instead of showing no data at all ([#62543]). For vectors, that line now
+  elides from the middle, keeping both ends of the array, rather than being truncated at the
+  display width ([#62592]).
+* The `text/plain` display of a vector packs its entries across the display width, comma-separated
+  inside brackets and aligned, when `:compact => true` is set on the `IOContext`. This shows much
+  more of the array in the lines available. The vertical layout is unchanged without `:compact`
+  ([#62592]).
+* `ConsoleLogger` sets `:compact` for an array value it has few enough lines for, so that logging
+  an array with `@info` etc. shows much more of it. Values other than arrays, and arrays given
+  enough lines for the vertical layout, are unaffected, keeping the precision `:compact` would cost
+  their numbers ([#62592]).
 
 Standard library changes
 ------------------------
