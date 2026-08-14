@@ -85,11 +85,24 @@ Compiler/Runtime improvements
   the LLVM threads each spawns to compile its native image, sharing a single thread budget so idle cores are
   filled during the long tail without oversubscribing the machine when many packages compile at once. The total
   budget can be set with the new `JULIA_PRECOMPILE_THREADS` environment variable ([#61958]).
+* Coverage reports now include code executed by the interpreter, such as top-level statements and method
+  bodies run with `--compile=min`. Consequently, LCOV output and `.cov` files may contain source lines that
+  were absent in earlier releases ([#62514]).
+* Coverage and allocation tracking no longer update counters atomically. This reduces the overhead of
+  instrumented code, but counter values may be inaccurate when the same source line runs concurrently on
+  multiple threads ([#62514]).
+* `--code-coverage=user` no longer includes inlined Base methods whose module cannot be recovered from debug
+  information. This prevents coverage from writing `.cov` files for Base sources into the Julia installation
+  ([#62514]).
 
 Command-line option changes
 ---------------------------
 
 * `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
+* `--code-coverage=@<path>` and `--track-allocation=@<path>` now restrict tracking to the specified file or
+  directory tree. For example, `@/src/Foo` tracks `/src/Foo/x.jl`, but not `/src/Foobar/x.jl`. Specifying the
+  filesystem root as `@/` tracks every absolute path. `Base.is_file_tracked` now returns `false` when Julia was
+  not started with either `@<path>` option ([#62514]).
 
 Multi-threading changes
 -----------------------

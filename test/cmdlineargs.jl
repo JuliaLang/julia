@@ -658,6 +658,135 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isempty(got)
         rm(covfile)
 
+        # a tracked path only matches at a path component boundary
+        mktempdir() do parent
+            foo = realpath(mkdir(joinpath(parent, "Foo")))
+            foobar = realpath(mkdir(joinpath(parent, "Foobar")))
+            srcfile = joinpath(foobar, "boundary.jl")
+            write(srcfile, "f(x) = x + 1\nf(1)\n")
+            outfile = joinpath(dir, "boundary.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foo $srcfile`)
+            @test !contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@$foobar $srcfile`)
+            @test contains(read(outfile, String), realpath(srcfile))
+            rm(outfile)
+        end
+
+        # constructs that have regressed before; see testhelpers/coverage_constructs.jl
+        let constructs = realpath(joinpath(helperdir, "coverage_constructs.jl"))
+            outfile = joinpath(dir, "constructs.info")
+            @test success(`$cov_exename --code-coverage=$outfile --code-coverage=@$constructs $constructs`)
+            hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                        for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
+            rm(outfile)
+            covered = [
+                8, 9, 10,       # `local` without an assignment (#39307)
+                14, 15, 16,     # `let` without an assignment (#39307)
+                22, 23,         # lines a macro adds (#41043)
+                28,
+                33, 35,         # implicit returns (#53557)
+                40, 41,         # a :foldable body that is also concrete-evaluated (#61175)
+                47,
+                54,             # the branch @static keeps (#43237)
+            ]
+            for ln in covered
+                @test get(hits, ln, 0) > 0 context=ln
+            end
+            # compiled-out branch
+            @test !haskey(hits, 56)
+        end
+
+        # coverage for a macro defined in another user file
+        let macrofile = realpath(joinpath(helperdir, "coverage_macros.jl")),
+            usefile = realpath(joinpath(helperdir, "coverage_macrouse.jl"))
+            counts = Dict()
+            for extra in (``, `--compile=min`), mode in (`--code-coverage=user`, `--code-coverage=all`)
+                outfile = joinpath(dir, "macro.info")
+                @test success(`$cov_exename $extra --code-coverage=$outfile $mode $usefile`)
+                record = only(filter(contains("SF:" * macrofile),
+                                     split(read(outfile, String), "end_of_record")))
+                rm(outfile)
+                hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                            for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+                for ln in (11, 12)
+                    @test get(hits, ln, 0) > 0 context=(extra, mode, ln)
+                end
+                # Exclude line 9, which is also counted as a top-level statement.
+                counts[(string(extra), string(mode))] = [get(hits, ln, 0) for ln in 10:12]
+            end
+            @test allequal(values(counts)) context=counts
+        end
+
+        # interpreted code is tracked too, including under --compile=min (#37059)
+        let topfile = realpath(joinpath(helperdir, "coverage_toplevel.jl"))
+            for extra in (``, `--compile=min`)
+                outfile = joinpath(dir, "toplevel.info")
+                @test success(`$cov_exename $extra --code-coverage=$outfile --code-coverage=@$topfile $topfile`)
+                hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                            for m in eachmatch(r"^DA:(\d+),(\d+)$"m, read(outfile, String)))
+                rm(outfile)
+                for ln in (5, 6, 7, 12) # every top-level statement that runs
+                    @test get(hits, ln, 0) > 0 context=(extra, ln)
+                end
+                # The top-level `if` thunk has no line information for its body.
+                @test !haskey(hits, 8)
+            end
+        end
+
+        # --code-coverage=user excludes inlined Base code (#26573)
+        mktempdir() do tdir
+            srcfile = joinpath(tdir, "user.jl")
+            # `sort` inlines generated `Base.merge` code with no recorded module.
+            write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
+            outfile = joinpath(dir, "user.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=user $srcfile`)
+            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            rm(outfile)
+            @test !isempty(source_files)
+            @test all(isabspath, source_files) context=source_files
+        end
+
+        # The unknown-module heuristic requires relative sysimage source paths.
+        mktempdir() do tdir
+            srcfile = joinpath(realpath(tdir), "paths.jl")
+            write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
+            outfile = joinpath(dir, "paths.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=all $srcfile`)
+            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            rm(outfile)
+            @test any(!isabspath, source_files)
+            @test srcfile in source_files
+        end
+
+        # the .cov writer must reproduce source lines of any length
+        mktempdir() do tdir
+            srcfile = joinpath(realpath(tdir), "longline.jl")
+            long = "x" ^ 4000
+            write(srcfile, "f(x) = x + 1 # $long\nf(1)\n")
+            pid = readchomp(`$cov_exename -E "getpid()" -L $srcfile --code-coverage=@$tdir`)
+            covfile = "$srcfile.$pid.cov"
+            got = readlines(covfile)
+            rm(covfile)
+            @test length(got) == 2
+            @test endswith(got[1], " f(x) = x + 1 # $long")
+            @test endswith(got[2], " f(1)")
+        end
+
+        # `@/` tracks absolute paths only.
+        mktempdir() do tdir
+            srcfile = joinpath(realpath(tdir), "root.jl")
+            write(srcfile, "f(v) = sort(v)\nf([3, 1, 2])\n")
+            outfile = joinpath(dir, "root.info")
+            run(`$cov_exename --code-coverage=$outfile --code-coverage=@/ $srcfile`)
+            source_files = [l[4:end] for l in eachline(outfile) if startswith(l, "SF:")]
+            rm(outfile)
+            @test all(isabspath, source_files) context=source_files
+        end
+
+        # is_file_tracked must not read an unset tracked path
+        @test readchomp(`$cov_exename -E "Base.is_file_tracked(:foo)"`) == "false"
+
         function coverage_info_for(src::String)
             mktemp(dir) do srcfile, io
                 write(io, src); close(io)
@@ -682,14 +811,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             do_test()
             """), """
+            DA:1,1
             DA:2,1
             DA:3,1
             DA:5,1
             DA:6,0
-            DA:9,1
+            DA:9,2
             DA:10,1
-            LH:5
-            LF:6
+            DA:12,1
+            LH:7
+            LF:8
             """)
         @test contains(coverage_info_for("""
             function cov_bug()
@@ -708,7 +839,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             cov_bug()
             """), """
-            DA:1,1
+            DA:1,2
             DA:2,1
             DA:3,1
             DA:4,1
@@ -716,9 +847,24 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             DA:8,0
             DA:11,0
             DA:13,1
-            LH:5
-            LF:8
+            DA:15,1
+            LH:6
+            LF:9
             """)
+
+        # counters must survive being driven from many threads at once (#59355, #62424)
+        let threadfile = realpath(joinpath(helperdir, "coverage_threads.jl"))
+            outfile = joinpath(dir, "threads.info")
+            @test success(`$cov_exename -t4 --code-coverage=$outfile $threadfile`)
+            record = only(filter(contains(threadfile),
+                                 split(read(outfile, String), "end_of_record")))
+            rm(outfile)
+            hits = Dict(parse(Int, m[1]) => parse(Int, m[2])
+                        for m in eachmatch(r"^DA:(\d+),(\d+)$"m, record))
+            for ln in 5:10
+                @test get(hits, ln, 0) > 0
+            end
+        end
     end
 
     # --track-allocation
