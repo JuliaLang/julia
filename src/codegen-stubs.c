@@ -198,3 +198,18 @@ JL_DLLEXPORT const char JLJITGetGlobalPrefix_fallback(void* JIT) UNAVAILABLE
 JL_DLLEXPORT const char *JLJITGetDataLayoutString_fallback(void* JIT) UNAVAILABLE
 
 JL_DLLEXPORT void* JLJITGetIRCompileLayer_fallback(void* JIT) UNAVAILABLE
+
+//LLVM C api to the julia LLVM dialect
+JL_DLLEXPORT void* JLDialectsAttachContext_fallback(void* C) UNAVAILABLE
+JL_DLLEXPORT void JLDialectsDisposeContext_fallback(void* DC) UNAVAILABLE
+JL_DLLEXPORT int JLDialectsVerifyModule_fallback(void* M) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildGetPGCStack_fallback(void* B) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildGetPGCStackOrNew_fallback(void* B) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildGCLoaded_fallback(void* B, void* base, void* tracked) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildNewGCFrame_fallback(void* B, void* size) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildPushGCFrame_fallback(void* B, void* frame, void* size) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildPopGCFrame_fallback(void* B, void* frame) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildGetGCFrameSlot_fallback(void* B, void* frame, void* index) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildGCAllocBytes_fallback(void* B, void* ptls, void* size, void* type) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildQueueGCRoot_fallback(void* B, void* root) UNAVAILABLE
+JL_DLLEXPORT void* JLBuildSafepoint_fallback(void* B, void* signal_page) UNAVAILABLE

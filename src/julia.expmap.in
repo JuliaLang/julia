@@ -28,6 +28,8 @@
     _IO_stdin_used*; /* glibc expects this to be exported to detect which version of glibc is being used, see https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=634261#109 for further details */
     _jl_timing_*;
     JLJIT*;
+    JLDialects*;
+    JLBuild*;
     llvmGetPassPluginInfo*;
     MMTK_*;
 
