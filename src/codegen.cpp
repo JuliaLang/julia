@@ -430,10 +430,9 @@ struct jl_noaliascache_t {
         MDNode *gcframe;        // GC frame
         MDNode *stack;          // Stack slot
         MDNode *data;           // Any user data that `pointerset/ref` are allowed to alias
-        MDNode *type_metadata;  // Non-user-accessible type metadata incl. union selectors, etc.
         MDNode *constant;       // Memory that is immutable by the time LLVM can see it
 
-        jl_regions_t(): gcframe(nullptr), stack(nullptr), data(nullptr), type_metadata(nullptr), constant(nullptr) {}
+        jl_regions_t(): gcframe(nullptr), stack(nullptr), data(nullptr), constant(nullptr) {}
 
         void initialize(llvm::LLVMContext &context) {
             MDBuilder mbuilder(context);
@@ -442,7 +441,6 @@ struct jl_noaliascache_t {
             this->gcframe = mbuilder.createAliasScope("jnoalias_gcframe", domain);
             this->stack = mbuilder.createAliasScope("jnoalias_stack", domain);
             this->data = mbuilder.createAliasScope("jnoalias_data", domain);
-            this->type_metadata = mbuilder.createAliasScope("jnoalias_typemd", domain);
             this->constant = mbuilder.createAliasScope("jnoalias_const", domain);
         }
     } regions;
@@ -1736,7 +1734,7 @@ struct jl_aliasinfo_t {
                                      //                    => inst_a, inst_b do not alias.
     MDNode *noalias = nullptr;       // '!noalias': See '!alias.scope' above.
 
-    enum class Region { unknown, gcframe, stack, data, constant, type_metadata }; // See jl_regions_t
+    enum class Region { unknown, gcframe, stack, data, constant }; // See jl_regions_t
 
     explicit jl_aliasinfo_t() = default;
     explicit jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa);
@@ -2188,19 +2186,16 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
         case Region::constant:
             alias_scope = regions.constant;
             break;
-        case Region::type_metadata:
-            alias_scope = regions.type_metadata;
-            break;
     }
 
-    MDNode *all_scopes[5] = { regions.gcframe, regions.stack, regions.data, regions.type_metadata, regions.constant };
+    MDNode *all_scopes[4] = { regions.gcframe, regions.stack, regions.data, regions.constant };
     if (alias_scope) {
         // The matching region is added to !alias.scope
         // All other regions are added to !noalias
 
         int i = 0;
         Metadata *scopes[1] = { alias_scope };
-        Metadata *noaliases[4];
+        Metadata *noaliases[3];
         for (auto const &scope: all_scopes) {
             if (scope == alias_scope) continue;
             noaliases[i++] = scope;
@@ -2232,8 +2227,7 @@ jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
     auto cache = ctx.tbaa();
 
     // Each top-level TBAA node has a corresponding !alias.scope scope.
-    // Array and memory headers descend from jtbaa_data, so they map to Region::data;
-    // nothing currently maps to Region::type_metadata.
+    // Array and memory headers descend from jtbaa_data, so they map to Region::data.
     MDNode *tbaa_srcs[4] = { cache.tbaa_gcframe, cache.tbaa_stack, cache.tbaa_data, cache.tbaa_const };
     Region regions[4] = { Region::gcframe, Region::stack, Region::data, Region::constant };
 
@@ -5796,10 +5790,13 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             break;
         case jl_returninfo_t::SRet:
             assert(result);
+            // For all_roots, the sret buffer is a static-roots array: its zero-init
+            // and the callee's store_all_roots write it as `jtbaa_gcframe`, so reads
+            // of it must carry that same tag, not the layout tag of the return type.
             retval = mark_julia_slot(result,
                                      jlretty,
                                      NULL,
-                                     best_tbaa(ctx.tbaa(), jlretty),
+                                     returninfo.all_roots ? ctx.tbaa().tbaa_gcframe : best_tbaa(ctx.tbaa(), jlretty),
                                      make_lazy_gc_roots(return_roots, returninfo.return_roots, ctx.tbaa().tbaa_gcframe));
             break;
         case jl_returninfo_t::Union: {
@@ -6438,7 +6435,6 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
                         decay_derived(ctx, ptr_phi),
                         decay_derived(ctx, phi));
                 }
-                tbaa = best_tbaa(ctx.tbaa(), phiType);
             }
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, tbaa, jl_gc_roots_t(ArrayRef(roots)));
             val.Vboxed = ptr_phi;
