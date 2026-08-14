@@ -1371,7 +1371,7 @@ show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
 Equivalent to
 ```julia
-    my_unsplat(f) = args -> f(args)
+    my_unsplat(f) = (args...) -> f(args)
 ```
 i.e. given a function that takes a single tuple argument, return a new function
 that takes multiple arguments and bundles them into a tuple to pass to the
