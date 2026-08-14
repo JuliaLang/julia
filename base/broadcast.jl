@@ -759,6 +759,23 @@ function result_eltype(bc::Broadcasted)
     return promote_typejoin_union(rettype)
 end
 
+### this machinery is now dead code in Base, but several packages
+### reach into these internals so it's retained for convenience.
+_broadcast_getindex_eltype(bc::Broadcasted) = combine_eltypes(bc.f, bc.args)
+_broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
+
+eltypes(::Tuple{}) = Tuple{}
+eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
+eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
+eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
+
+# Inferred eltype of result of broadcast(f, args...)
+function combine_eltypes(f, args::Tuple)
+    argT = eltypes(args)
+    argT === Union{} && return Union{}
+    return promote_typejoin_union(Base._return_type(f, argT))
+end
+
 ## Broadcasting core
 
 """
