@@ -1278,6 +1278,13 @@ end
     in31890(i::Interval31890, x) = i.lo <= x <= i.hi
     f31890(i, xs) = in31890.(i, xs)
     @test @inferred(f31890(Interval31890(0.0, 0.5), [0.25, 0.75])) == [true, false]
+
+    typed_in31890(i::Interval31890, x) = in31890(i, x)
+    typed_in31890(::Float64, x) = 1.5
+    g31890(i, xs) = typed_in31890.(i, xs)
+    result = g31890(Interval31890(0.0, 0.5), [0.25, 0.75])
+    @test result isa BitVector
+    @test result == [true, false]
 end
 
 @testset "handling of invalid eltype" begin
