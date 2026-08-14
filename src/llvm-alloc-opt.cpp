@@ -349,7 +349,7 @@ bool Optimizer::isSafepoint(Instruction *inst)
     if (auto callee = call->getCalledFunction()) {
         // Known functions emitted in codegen that are not safepoints
         if (callee == pass.pointer_from_objref_func
-            || callee == pass.gc_loaded_func
+            || isa<julia::GCLoaded>(call)
             || callee->getName() == "memcmp") {
             return false;
         }
@@ -781,7 +781,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 call->eraseFromParent();
                 return;
             }
-            if (pass.gc_loaded_func == callee) {
+            if (isa<julia::GCLoaded>(call)) {
                 // TODO: handle data pointer forwarding, length forwarding, and fence removal
                 user->replaceUsesOfWith(orig_i, Constant::getNullValue(orig_i->getType()));
                 return;

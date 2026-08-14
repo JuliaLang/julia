@@ -1,3 +1,7 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+// Julia LLVM dialect, generated from JuliaDialect.td by llvm-dialects-tblgen.
+// See JuliaDialect.td for the specification of the dialect.
 
 #pragma once
 
@@ -16,7 +20,7 @@ enum AddressSpace {
     LastSpecial = Loaded,
 };
 
-} // namespace xd
+} // namespace julia
 
 #define GET_DIALECT_DECLS
 #include "JuliaDialect.h.inc"

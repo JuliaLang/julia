@@ -575,7 +575,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     // object), and must not invalidate a reset region
                     // published across an adjacent reset-safe foreign call.
                     if (Callee && (Callee->getName() == "julia.pointer_from_objref" ||
-                                   Callee->getName() == "julia.gc_loaded"))
+                                   isa<julia::GCLoaded>(CI)))
                         continue;
                     // Allocations and write barriers are safe to span:
                     // FinalLowerGC (stock and MMTk) lowers annotated sites
