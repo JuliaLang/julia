@@ -4,12 +4,12 @@ module GMP
 
 export BigInt
 
-import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
+import .Base: *, *%, +, +%, -, -%, /, <, <<, >>, >>>, <=, ==, >, >=, ^, ~, &, |, xor,
              binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod, sum, prod,
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
-             widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
+             invmod, _prevpow2, _nextpow2, ndigits0zpb,
+             widen, signed, unsafe_trunc, iszero, isone, big, flipsign, signbit,
              sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
              ispositive, isnegative, clamp
 
@@ -114,11 +114,17 @@ function __init__()
             bits_per_limb() != BITS_PER_LIMB ? @error(msg) : @warn(msg)
         end
 
+        # The jl_gmp_counted_* hooks are the jl_gc_counted_* allocators with a
+        # cancellation-handler region published across them: GMP computations
+        # run under a reset region (see the `reset_safe` annotations in MPZ),
+        # and the hooks are exactly where an asynchronous unwind must not
+        # land - a cancellation delivered inside them is deferred and chained
+        # into the reset on exit instead.
         ccall((:__gmp_set_memory_functions, libgmp), Cvoid,
               (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}),
-              cglobal(:jl_gc_counted_malloc),
-              cglobal(:jl_gc_counted_realloc_with_old_size),
-              cglobal(:jl_gc_counted_free_with_size))
+              cglobal(:jl_gmp_counted_malloc),
+              cglobal(:jl_gmp_counted_realloc_with_old_size),
+              cglobal(:jl_gmp_counted_free_with_size))
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
     catch ex
@@ -167,28 +173,32 @@ for (op, nbits) in (:add => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size))))
                     :fdiv_r => 0, :tdiv_r => 0, :cdiv_r => 0,
                     :gcd => 0, :lcm => 0, :and => 0, :ior => 0, :xor => 0)
     op! = Symbol(op, :!)
+    fname = Symbol(:__gmpz_, op)
     @eval begin
-        $op!(x::BigInt, a::BigInt, b::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t, mpz_t), x, a, b); x)
+        $op!(x::BigInt, a::BigInt, b::BigInt) =
+            (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.$fname(x::mpz_t, a::mpz_t, b::mpz_t)::Cvoid); x)
         $op(a::BigInt, b::BigInt) = $op!(BigInt(nbits=$nbits), a, b)
         $op!(x::BigInt, b::BigInt) = $op!(x, x, b)
     end
 end
 
 invert!(x::BigInt, a::BigInt, b::BigInt) =
-    ccall((:__gmpz_invert, libgmp), Cint, (mpz_t, mpz_t, mpz_t), x, a, b)
+    (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_invert(x::mpz_t, a::mpz_t, b::mpz_t)::Cint)
 invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
 invert(a::BigInt, b::BigInt) = (ret=BigInt(); invert!(ret, a, b); ret)
 
 for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     op! = Symbol(op, :!)
+    fname = Symbol(:__gmpz_, op)
     @eval begin
-        $op!(x::BigInt, a::BigInt, b) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t, Culong), x, a, b); x)
+        $op!(x::BigInt, a::BigInt, b) =
+            (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.$fname(x::mpz_t, a::mpz_t, b::Culong)::Cvoid); x)
         $op(a::BigInt, b) = $op!(BigInt(), a, b)
         $op!(x::BigInt, b) = $op!(x, x, b)
     end
 end
 
-ui_sub!(x::BigInt, a, b::BigInt) = (ccall((:__gmpz_ui_sub, libgmp), Cvoid, (mpz_t, Culong, mpz_t), x, a, b); x)
+ui_sub!(x::BigInt, a, b::BigInt) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_ui_sub(x::mpz_t, a::Culong, b::mpz_t)::Cvoid); x)
 ui_sub(a, b::BigInt) = ui_sub!(BigInt(), a, b)
 
 for op in (:scan1, :scan0)
@@ -197,21 +207,26 @@ for op in (:scan1, :scan0)
     @eval $op(a::BigInt, b) = Int(signed(ccall($(gmpz(op)), Culong, (mpz_t, Culong), a, b)))
 end
 
-mul_si!(x::BigInt, a::BigInt, b) = (ccall((:__gmpz_mul_si, libgmp), Cvoid, (mpz_t, mpz_t, Clong), x, a, b); x)
+mul_si!(x::BigInt, a::BigInt, b) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_mul_si(x::mpz_t, a::mpz_t, b::Clong)::Cvoid); x)
 mul_si(a::BigInt, b) = mul_si!(BigInt(), a, b)
 mul_si!(x::BigInt, b) = mul_si!(x, x, b)
 
 for op in (:neg, :com, :sqrt, :set)
     op! = Symbol(op, :!)
+    fname = Symbol(:__gmpz_, op)
     @eval begin
-        $op!(x::BigInt, a::BigInt) = (ccall($(gmpz(op)), Cvoid, (mpz_t, mpz_t), x, a); x)
+        $op!(x::BigInt, a::BigInt) =
+            (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.$fname(x::mpz_t, a::mpz_t)::Cvoid); x)
         $op(a::BigInt) = $op!(BigInt(), a)
     end
     op === :set && continue # MPZ.set!(x) would make no sense
     @eval $op!(x::BigInt) = $op!(x, x)
 end
 
-for (op, T) in ((:fac_ui, Culong), (:set_ui, Culong), (:set_si, Clong), (:set_d, Cdouble))
+fac_ui!(x::BigInt, a) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_fac_ui(x::mpz_t, a::Culong)::Cvoid); x)
+fac_ui(a) = fac_ui!(BigInt(), a)
+
+for (op, T) in ((:set_ui, Culong), (:set_si, Clong), (:set_d, Cdouble))
     op! = Symbol(op, :!)
     @eval begin
         $op!(x::BigInt, a) = (ccall($(gmpz(op)), Cvoid, (mpz_t, $T), x, a); x)
@@ -225,18 +240,20 @@ mpn_popcount(d::Ptr{Limb}, s::Integer) = Int(ccall((:__gmpn_popcount, libgmp), C
 mpn_popcount(a::BigInt) = mpn_popcount(a.d, abs(a.size))
 
 function tdiv_qr!(x::BigInt, y::BigInt, a::BigInt, b::BigInt)
-    ccall((:__gmpz_tdiv_qr, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, y, a, b)
+    Base.@cancel_check
+    Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_tdiv_qr(x::mpz_t, y::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
     x, y
 end
 tdiv_qr(a::BigInt, b::BigInt) = tdiv_qr!(BigInt(), BigInt(), a, b)
 
 powm!(x::BigInt, a::BigInt, b::BigInt, c::BigInt) =
-    (ccall((:__gmpz_powm, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, a, b, c); x)
+    (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_powm(x::mpz_t, a::mpz_t, b::mpz_t, c::mpz_t)::Cvoid); x)
 powm(a::BigInt, b::BigInt, c::BigInt) = powm!(BigInt(), a, b, c)
 powm!(x::BigInt, b::BigInt, c::BigInt) = powm!(x, x, b, c)
 
 function gcdext!(x::BigInt, y::BigInt, z::BigInt, a::BigInt, b::BigInt)
-    ccall((:__gmpz_gcdext, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t, mpz_t), x, y, z, a, b)
+    Base.@cancel_check
+    Base.@assume_effects :reset_safe @ccall libgmp.__gmpz_gcdext(x::mpz_t, y::mpz_t, z::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
     x, y, z
 end
 gcdext(a::BigInt, b::BigInt) = gcdext!(BigInt(), BigInt(), BigInt(), a, b)
@@ -249,8 +266,8 @@ cmp_d(a::BigInt, b) = Int(ccall((:__gmpz_cmp_d, libgmp), Cint, (mpz_t, Cdouble),
 mpn_cmp(a::Ptr{Limb}, b::Ptr{Limb}, c) = ccall((:__gmpn_cmp, libgmp), Cint, (Ptr{Limb}, Ptr{Limb}, Clong), a, b, c)
 mpn_cmp(a::BigInt, b::BigInt, c) = mpn_cmp(a.d, b.d, c)
 
-get_str!(x, a, b::BigInt) = (ccall((:__gmpz_get_str,libgmp), Ptr{Cchar}, (Ptr{Cchar}, Cint, mpz_t), x, a, b); x)
-set_str!(x::BigInt, a, b) = Int(ccall((:__gmpz_set_str, libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), x, a, b))
+get_str!(x, a, b::BigInt) = (Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_get_str(x::Ptr{Cchar}, a::Cint, b::mpz_t)::Ptr{Cchar}); x)
+set_str!(x::BigInt, a, b) = Int(begin Base.@cancel_check; Base.@assume_effects :reset_safe @ccall(libgmp.__gmpz_set_str(x::mpz_t, a::Ptr{UInt8}, b::Cint)::Cint) end)
 get_d(a::BigInt) = ccall((:__gmpz_get_d, libgmp), Cdouble, (mpz_t,), a)
 
 function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
@@ -332,7 +349,7 @@ function BigInt(x::Integer)
     isbits(x) && typemin(Clong) <= x <= typemax(Clong) && return BigInt((x % Clong)::Clong)
     nd = ndigits(x, base=2)
     z = MPZ.realloc2(nd)
-    ux = unsigned(x < 0 ? -x : x)
+    ux = unsigned(x < 0 ? -%(x) : x)
     size = 0
     limbnbits = sizeof(Limb) << 3
     while nd > 0
@@ -500,6 +517,7 @@ big(n::Integer) = convert(BigInt, n)
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
+                 (:+%, :add), (:-%,:sub), (:*%, :mul),
                  (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
                  (:&, :and), (:|, :ior), (:xor, :xor))
@@ -536,7 +554,7 @@ function invmod(x::BigInt, y::BigInt)
     if y < 0
         MPZ.add!(z, y)
     end
-    # The postcondition is: mod(z * x, y) == mod(big(1), m) && div(z, y) == 0
+    # The postcondition is: mod(z * x, y) == mod(big(1), y) && div(z, y) == 0
     return z
 end
 
@@ -558,10 +576,10 @@ end
 -(x::BigInt, c::CulongMax) = MPZ.sub_ui(x, c)
 -(c::CulongMax, x::BigInt) = MPZ.ui_sub(c, x)
 
-+(x::BigInt, c::ClongMax) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
-+(c::ClongMax, x::BigInt) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
--(x::BigInt, c::ClongMax) = c < 0 ? +(x, -(c % Culong)) : -(x, convert(Culong, c))
--(c::ClongMax, x::BigInt) = c < 0 ? -(x + -(c % Culong)) : -(convert(Culong, c), x)
++(x::BigInt, c::ClongMax) = c < 0 ? -(x, -%(c % Culong)) : x + convert(Culong, c)
++(c::ClongMax, x::BigInt) = c < 0 ? -(x, -%(c % Culong)) : x + convert(Culong, c)
+-(x::BigInt, c::ClongMax) = c < 0 ? +(x, -%(c % Culong)) : -(x, convert(Culong, c))
+-(c::ClongMax, x::BigInt) = c < 0 ? -(x + -%(c % Culong)) : -(convert(Culong, c), x)
 
 *(x::BigInt, c::CulongMax) = MPZ.mul_ui(x, c)
 *(c::CulongMax, x::BigInt) = x * c
@@ -872,7 +890,7 @@ if Limb === UInt64 === UInt
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
-    using .Base: HASH_SECRET, hash_bytes, hash_finalizer
+    using .Base: HASH_SECRET, hash_bytes
 
     # UnsafeLimbView provides a safe iterator interface to BigInt limb data
     struct UnsafeLimbView <: AbstractVector{UInt8}
@@ -927,7 +945,7 @@ if Limb === UInt64 === UInt
                 return hash(unsafe_load(ptr), h)
             elseif sz == -1
                 limb = unsafe_load(ptr)
-                limb <= typemin(Int) % UInt && return hash(-(limb % Int), h)
+                limb <= typemin(Int) % UInt && return hash(-%(limb % Int), h)
             end
             pow = trailing_zeros(x)
             nd = Base.ndigits0z(x, 2)

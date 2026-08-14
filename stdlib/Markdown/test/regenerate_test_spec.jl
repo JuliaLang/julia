@@ -35,7 +35,7 @@ function check_commonmark_spec_html1(tst; report::Bool=false, flavor::Symbol=:ju
     parsed == parsed2 || println("test ", tst["example"], " is parsed differently with CRLF line ends")
 
     input3 = replace(input, "\n" => "\r")
-    parsed3 = Markdown.parse(input2; flavor)
+    parsed3 = Markdown.parse(input3; flavor)
     parsed == parsed3 || println("test ", tst["example"], " is parsed differently with CR line ends")
 
     if expected != actual && report

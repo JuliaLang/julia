@@ -100,11 +100,12 @@ function print(io::IO, v::VersionNumber)
     print(io, v.patch)
     if !isempty(v.prerelease)
         print(io, '-')
-        join(io, v.prerelease,'.')
+        # inline join to make call resolvable for --trim
+        @inline join(io, v.prerelease,'.')
     end
     if !isempty(v.build)
         print(io, '+')
-        join(io, v.build,'.')
+        @inline join(io, v.build,'.')
     end
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
@@ -459,7 +460,6 @@ function Base.union!(ranges::Vector{<:VersionRange})
 
     sort!(ranges, lt = (a, b) -> (isless_ll(a.lower, b.lower) || (a.lower == b.lower && isless_uu(a.upper, b.upper))))
 
-    k0 = 1
     ks = findfirst(!isempty, ranges)
     ks === nothing && return empty!(ranges)
 
@@ -574,7 +574,7 @@ function Base.union(A::VersionSpec, B::VersionSpec)
 end
 
 Base.:(==)(A::VersionSpec, B::VersionSpec) = A.ranges == B.ranges
-Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h + (0x2fd2ca6efa023f44 % UInt))
+Base.hash(s::VersionSpec, h::UInt) = hash(s.ranges, h +% (0x2fd2ca6efa023f44 % UInt))
 
 function Base.print(io::IO, s::VersionSpec)
     isempty(s) && return print(io, _empty_symbol)

@@ -3,7 +3,7 @@
 # Re-exports from `Core`
 export Core,
     # key types
-    Any, DataType, Vararg, NTuple,
+    Any, TypeEq, DataType, Vararg, NTuple,
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
@@ -138,6 +138,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    StringView,
     SubstitutionString,
     Timer,
     UnitRange,
@@ -227,8 +228,11 @@ export
     ÷,
     &,
     *,
+    *%,
     +,
+    +%,
     -,
+    -%,
     /,
     //,
     <,
@@ -320,6 +324,7 @@ export
     fld1,
     fldmod,
     fldmod1,
+    cldmod1,
     flipsign,
     float,
     tryparse,
@@ -882,11 +887,13 @@ export
     exit,
     ntuple,
     splat,
+    tap,
 
 # I/O and events
     close,
     closewrite,
     countlines,
+    DirEntry,
     eachline,
     readeach,
     eof,
@@ -937,6 +944,7 @@ export
     unsafe_read,
     unsafe_write,
     write,
+    writepartial,
 
 # multimedia I/O
     AbstractDisplay,
@@ -1107,6 +1115,7 @@ export
     @gensym,
     @eval,
     @deprecate,
+    @deprecate_binding,
 
     # performance annotations
     @boundscheck,

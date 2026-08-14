@@ -3,12 +3,12 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-jl_value_t *jl_fptr_const_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+static jl_value_t *jl_fptr_const_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     return oc->captures;
 }
 
-jl_value_t *jl_fptr_const_opaque_closure_typeerror(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+static jl_value_t *jl_fptr_const_opaque_closure_typeerror(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_type_error("OpaqueClosure", jl_tparam1(jl_typeof(oc)), oc->captures);
 }
@@ -28,11 +28,16 @@ JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *sourc
 }
 
 static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
-    jl_value_t *source_, jl_value_t *captures, int do_compile, size_t world)
+    jl_value_t *source_, jl_value_t *captures, int do_compile, size_t world) JL_CANSAFEPOINT
 {
     if (!jl_is_tuple_type((jl_value_t*)argt)) {
         jl_error("OpaqueClosure argument tuple must be a tuple type");
     }
+    // the closure must not have free typevars otherwise it's not possible to instantiate it
+    if (jl_has_free_typevars((jl_value_t*)argt))
+        jl_error("OpaqueClosure argument tuple may not contain free typevars");
+    if (jl_has_free_typevars(rt_ub) || jl_has_free_typevars(rt_lb))
+        jl_error("OpaqueClosure return type may not contain free typevars");
     JL_TYPECHK(new_opaque_closure, type, rt_lb);
     JL_TYPECHK(new_opaque_closure, type, rt_ub);
     JL_TYPECHK(new_opaque_closure, method, source_);
@@ -116,9 +121,10 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         jl_method_instance_t *mi_generic = jl_specializations_get_linfo(jl_opaque_closure_method, sigtype, jl_emptysvec);
 
         // OC wrapper methods are not world dependent and have no edges or other info
-        ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL, NULL);
+        ci = jl_get_method_uninferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL, NULL);
         if (!jl_atomic_load_acquire(&ci->invoke)) {
-            jl_emit_codeinst_to_jit(ci, NULL); // confusing this actually calls jl_emit_oc_wrapper and never actually compiles ci (which would be impossible since it cannot have source)
+            jl_code_info_t *src = NULL;
+            jl_emit_codeinsts_to_jit(&ci, &src, 1); // confusing this actually calls jl_emit_oc_wrapper and never actually compiles ci (which would be impossible since it cannot have source)
             jl_compile_codeinst(ci);
         }
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
@@ -145,7 +151,7 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
 }
 
 JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info_in_world(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
-    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred, size_t world)
+    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred, size_t world) JL_CANSAFEPOINT
 {
     jl_value_t *root = NULL, *sigtype = NULL;
     jl_code_instance_t *inst = NULL;
@@ -176,12 +182,12 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info_in_world(
 }
 
 JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
-    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred)
+    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred) JL_CANSAFEPOINT
 {
     return jl_new_opaque_closure_from_code_info_in_world(argt, rt_lb, rt_ub, mod, ci, lineno, file, nargs, isva, env, do_compile, isinferred, jl_current_task->world_age);
 }
 
-JL_CALLABLE(jl_new_opaque_closure_jlcall)
+JL_CALLABLE(jl_new_opaque_closure_jlcall) JL_CANSAFEPOINT
 {
     if (nargs < 5)
         jl_error("new_opaque_closure: Not enough arguments");
@@ -208,7 +214,7 @@ int jl_tupletype_length_compat(jl_value_t *v, size_t nargs)
     return nparams == nargs;
 }
 
-JL_CALLABLE(jl_f_opaque_closure_call)
+JL_CALLABLE(jl_f_opaque_closure_call) JL_CANSAFEPOINT
 {
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)F;
     jl_value_t *argt = jl_tparam0(jl_typeof(oc));

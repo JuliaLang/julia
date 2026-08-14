@@ -35,6 +35,7 @@ public
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,
+    unsetindex!,
 
 # collections
     IteratorEltype,
@@ -59,6 +60,7 @@ public
     get_extension,
     isambiguous,
     isexpr,
+    isfieldatomic,
     isidentifier,
     issingletontype,
     identify_package,
@@ -69,6 +71,7 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+    generating_output,
 
 # AST handling
     IR,
@@ -100,6 +103,7 @@ public
     @locals,
     @propagate_inbounds,
     @__doc__,
+    @nospecializeinfer,
 
 # External processes
     shell_escape,
@@ -111,6 +115,8 @@ public
 
 # Strings
     escape_raw_string,
+    raw_substring,
+    unannotate,
 
 # Chars
     ismalformed,
@@ -141,4 +147,5 @@ public
     runtests,
     text_colors,
     depwarn,
+    blackbox,
     donotdelete

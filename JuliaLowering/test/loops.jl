@@ -223,6 +223,67 @@ let
 end
 """) == [(1,2), (1,4), (2,2), (2,4)]
 
+# Labeled continue skips to next iteration of the named outer loop
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    @label outer for i = 1:3
+        for j = 1:3
+            if j == 2
+                continue outer
+            end
+            push!(a, (i,j))
+        end
+    end
+    a
+end
+""") == [(1,1), (2,1), (3,1)]
+
+# An unlabeled break exits an anonymous `@label` block
+@test JuliaLowering.include_string(test_mod, """
+@label begin
+    break
+    error("unreached")
+end
+""") === nothing
+
+# ... but breaking through a named block is still an error
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
+@label named begin
+    break
+end
+""")
+
+# Values of labeled breaks are scope-resolved: variables (not just
+# literals) work as break values, including from inside nested scopes
+@test JuliaLowering.include_string(test_mod, """
+@label begin
+    let
+        local t = 1
+        break _ t
+    end
+    0
+end
+""") == 1
+
+@test JuliaLowering.include_string(test_mod, """
+@label myblock begin
+    let v = 21
+        break myblock 2v
+    end
+    0
+end
+""") == 42
+
+@test JuliaLowering.include_string(test_mod, """
+let a = []
+    @label outer for i = 1:10
+        x = i * 2
+        i == 3 && break outer x
+        push!(a, i)
+    end
+end
+""") == 6
 
 end
 

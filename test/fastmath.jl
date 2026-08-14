@@ -374,3 +374,15 @@ end
     x = @fastmath 1. + 1. + 1f0
     @test x == 3.0
 end
+
+# fastmath functions that are nothrow should be removable if unused
+@testset "fastmath functions are removable if unused" begin
+    for T in (Float32, Float64)
+        for f in (Base.FastMath.exp_fast, Base.FastMath.exp2_fast, Base.FastMath.exp10_fast,
+                  Base.FastMath.expm1_fast, Base.FastMath.abs_fast, Base.FastMath.atan_fast,
+                  Base.FastMath.sinh_fast, Base.FastMath.cosh_fast, Base.FastMath.tanh_fast,
+                  Base.FastMath.cbrt_fast, Base.FastMath.inv_fast, Base.FastMath.sqrt_fast)
+            @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+        end
+    end
+end

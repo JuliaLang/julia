@@ -48,10 +48,13 @@ post-install-zstd: $(build_prefix)/manifest/zstd $(PATCHELF_MANIFEST)
 	[ -e $(build_private_libexecdir)/zstd$(EXE) ]
 	[ -e $(build_private_libexecdir)/zstdmt$(EXE) ]
 ifeq ($(OS), Darwin)
+	# zstd is relocated from bin/ to libexec/julia/, so its JLL rpath must be updated to keep finding ../libzstd.
+	# but this invalidates the existing signature, and macOS can then refuse to launch zstd, so also call codesign.
 	for j in zstd zstdmt ; do \
 		[ -L $(build_private_libexecdir)/$$j ] && continue; \
 		install_name_tool -rpath @executable_path/$(reverse_build_private_libexecdir_rel) @loader_path/$(build_libdir_rel) $(build_private_libexecdir)/$$j 2>/dev/null || true; \
 		install_name_tool -rpath @loader_path/$(build_libdir_rel) @executable_path/$(reverse_build_private_libexecdir_rel) $(build_private_libexecdir)/$$j || exit 1; \
+		codesign -s - -f $(build_private_libexecdir)/$$j || exit 1; \
 	done
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for j in zstd zstdmt ; do \

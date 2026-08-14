@@ -57,7 +57,7 @@ bb_unreachable(reach::CFGReachability, bb::Int) = reach.scc[bb] == 0
 
 bb_in_irreducible_loop(reach::CFGReachability, bb::Int) = reach.irreducible[bb]
 
-# Returns `true` if a node is 'rooted' as reachable, i.e. it is has an incoming
+# Returns `true` if a node is 'rooted' as reachable, i.e. it has an incoming
 # edge from a resolved SCC other than its own (or it is BasicBlock #1).
 #
 # `tarjan!` takes the transitive closure of this relation in order to detect

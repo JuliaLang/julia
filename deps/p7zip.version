@@ -1,5 +1,7 @@
+# -*- makefile -*-
+
 ## jll artifact
 P7ZIP_JLL_NAME := p7zip
 
 ## source build
-P7ZIP_VER := 25.01
+P7ZIP_VER := 26.00

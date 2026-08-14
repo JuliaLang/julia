@@ -56,7 +56,7 @@ static char *jl_array_typetagdata(jl_array_t *a) JL_NOTSAFEPOINT
     return jl_genericmemory_typetagdata(a->ref.mem) + (uintptr_t)a->ref.ptr_or_offset;
 }
 
-STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem, const jl_datatype_layout_t *layout, uint32_t ndims, size_t *dims)
+STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem, const jl_datatype_layout_t *layout, uint32_t ndims, size_t *dims) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     size_t i;
@@ -72,7 +72,7 @@ STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem,
     return a;
 }
 
-STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
+STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *dims) JL_CANSAFEPOINT
 {
     size_t nel;
     if (jl_array_validate_dims(&nel, ndims, dims))
@@ -87,10 +87,6 @@ STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *d
     JL_GC_POP();
     return a;
 }
-
-jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz);
-
-JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str);
 
 JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                                             size_t nel, int own_buffer)
@@ -198,8 +194,7 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
     size_t newnrows = n + inc;
     if (!isbitsunion && elsz == 0) {
         jl_genericmemory_t *newmem = jl_alloc_genericmemory(mtype, MAXINTVAL - 2);
-        a->ref.mem = newmem;
-        jl_gc_wb(a, newmem);
+        jl_gc_write(a, a->ref.mem, jl_genericmemory_t, newmem);
         a->dimsize[0] = newnrows;
         return;
     }
@@ -227,8 +222,7 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
             char *newtypetagdata = (char*)newmem->ptr + newmaxsize * elsz + oldoffset;
             memcpy(newtypetagdata, typetagdata, n);
         }
-        a->ref.mem = newmem;
-        jl_gc_wb(a, newmem);
+        jl_gc_write(a, a->ref.mem, jl_genericmemory_t, newmem);
         if (isbitsunion)
             a->ref.ptr_or_offset = (void*)oldoffset;
         else
@@ -250,6 +244,9 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
     // don't leave behind deleted data
     if (jl_is_genericmemory_zeroinit(a->ref.mem) && !jl_genericmemory_isbitsunion(a->ref.mem)) {
         size_t elsz = jl_array_elsize(a);
+        // Deletion barrier: snapshot the overwritten references for SATB collectors.
+        // A single object-remembering barrier on the owner covers all cleared slots.
+        jl_gc_wb((jl_value_t*)jl_genericmemory_owner(a->ref.mem), NULL);
         memset(jl_array_data(a,char) + n * elsz, 0, elsz * dec);
     }
 }
@@ -274,8 +271,6 @@ JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2)
         jl_array_ptr_set(a, n + i, jl_array_ptr_ref(a2, i));
     }
 }
-
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *data, size_t len);
 
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary)
 {
@@ -323,15 +318,7 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= jl_array_len(a))
         jl_bounds_error_int((jl_value_t*)a, i + 1);
-    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(a->ref.mem))->layout;
-    if (layout->flags.arrayelem_isboxed) {
-        jl_atomic_store_relaxed(jl_array_data(a,_Atomic(jl_value_t*)) + i, NULL);
-    }
-    else if (layout->first_ptr >= 0) {
-        size_t elsize = layout->size;
-        jl_assume(elsize >= sizeof(void*) && elsize % sizeof(void*) == 0);
-        memset(jl_array_data(a,char) + elsize * i, 0, elsize);
-    }
+    jl_memoryrefunset(jl_memoryrefindex(a->ref, i), 0);
 }
 
 #ifdef __cplusplus

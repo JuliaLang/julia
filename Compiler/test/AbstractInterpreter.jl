@@ -104,6 +104,15 @@ overlay_match(::Any) = nothing
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
 
+# overlay method should shadow the base method with the same signature,
+# filtering it out from method match results
+overlay_shadow_zero() = Any[]
+overlay_shadow_zero(xs::Vector{Int}...) = Int[xs[i][j] for i=eachindex(xs) for j=eachindex(xs[i])]
+@overlay OVERLAY_MT overlay_shadow_zero() = error()
+@test Base.infer_return_type((Vector{Vector{Int}},); interp=MTOverlayInterp()) do x
+    overlay_shadow_zero(x...)
+end == Vector{Int}
+
 # partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
@@ -157,7 +166,7 @@ gpu_factorial3(x::Int) = myfactorial(x, raise_on_gpu3)
 @test Base.infer_effects(gpu_factorial2, (Int,); interp=MTOverlayInterp()) |> Compiler.is_consistent_overlay
 let effects = Base.infer_effects(gpu_factorial3, (Int,); interp=MTOverlayInterp())
     # check if `@consistent_overlay` together works with `@assume_effects`
-    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intetionally) undefined.
+    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intentionally) undefined.
     @test Compiler.is_consistent_overlay(effects)
     @test Compiler.is_foldable(effects)
 end
@@ -564,4 +573,136 @@ let interp = InvokeInterp()
     end
     @test isa(result, String)
     @test contains(result, "[1] error(::Char, ::Char, ::Char, ::Char)")
+end
+
+# Global publication and per-interpreter source/ABI capability are selected separately,
+# including when a winner appears while inference is running.
+@newinterp SourceModeWinnerInterp
+global source_mode_codegen::IdDict{CodeInstance,CodeInfo} = IdDict{CodeInstance,CodeInfo}()
+Compiler.codegen_cache(::SourceModeWinnerInterp) = source_mode_codegen
+
+source_mode_inadequate_winner(x::Int) = x + 1
+let interp = SourceModeWinnerInterp()
+    mi = Base.method_instance(source_mode_inadequate_winner, (Int,))
+    inadequate = Core.CodeInstance(mi, Compiler.cache_owner(interp), Int, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    Compiler.code_cache(interp)[mi] = inadequate
+    @test !Compiler.ci_has_source(interp, inadequate)
+
+    ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_ABI)
+    @test ci !== inadequate
+    @test Compiler.ci_has_source(interp, ci)
+    @test iszero(@ccall jl_mi_cache_has_ci(mi::Any, ci::Any)::Cint)
+    # The capability-blind global winner remains unique. The source-capable result
+    # is session-local and can be reused by this interpreter without allowing it to
+    # escape into the global executable cache.
+    @test get(Compiler.code_cache(interp), mi, nothing) === inadequate
+    @test Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_ABI) === ci
+    overlay = Compiler.OverlayCodeCache(
+        Compiler.code_cache(interp), Compiler.InferenceCache())
+    valid_worlds = Compiler.WorldRange(interp.world)
+    @test Compiler.find_cached_ci(interp, overlay, mi,
+        valid_worlds, Compiler.SOURCE_MODE_ABI) === nothing
+    @test Compiler.find_local_cached_ci(interp, mi,
+        valid_worlds, Compiler.SOURCE_MODE_ABI) === ci
+
+    # JIT compilation uses the local source to compile the ABI-equivalent global
+    # winner; the local CI itself remains outside the executable cache.
+    @test Compiler.typeinf_ext_toplevel(
+        interp, mi, Compiler.SOURCE_MODE_ABI) === inadequate
+    @test Compiler.ci_has_invoke(inadequate)
+    @test iszero(@ccall jl_mi_cache_has_ci(mi::Any, ci::Any)::Cint)
+end
+
+# A source-inadequate winner with a different return ABI cannot suppress normal
+# publication. The completed CI is globally inserted and promoted before JIT use.
+source_mode_nonequivalent_winner(x::Int) = x + 1
+let interp = SourceModeWinnerInterp()
+    mi = Base.method_instance(source_mode_nonequivalent_winner, (Int,))
+    inadequate = Core.CodeInstance(mi, Compiler.cache_owner(interp), Any, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    Compiler.code_cache(interp)[mi] = inadequate
+
+    ci = Compiler.typeinf_ext_toplevel(interp, mi, Compiler.SOURCE_MODE_ABI)
+    @test ci !== inadequate
+    @test ci.rettype === Int
+    @test !iszero(@ccall jl_mi_cache_has_ci(mi::Any, ci::Any)::Cint)
+    @test ci.max_world == typemax(UInt)
+
+    @eval source_mode_world_bump_62338() = nothing
+    newer = SourceModeWinnerInterp(; world=Base.get_world_counter())
+    @test Compiler.typeinf_ext_toplevel(
+        newer, mi, Compiler.SOURCE_MODE_ABI) === ci
+end
+
+# Equivalent-winner selection also goes through the cache abstraction rather than
+# assuming that every executable cache is the native MethodInstance chain.
+@newinterp SourceModeEphemeralInterp true
+global source_mode_ephemeral_codegen::IdDict{CodeInstance,CodeInfo} =
+    IdDict{CodeInstance,CodeInfo}()
+Compiler.codegen_cache(::SourceModeEphemeralInterp) = source_mode_ephemeral_codegen
+source_mode_ephemeral_winner(x::Int) = x + 1
+let interp = SourceModeEphemeralInterp()
+    mi = Base.method_instance(source_mode_ephemeral_winner, (Int,))
+    winner = Core.CodeInstance(mi, Compiler.cache_owner(interp), Int, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    Compiler.code_cache(interp)[mi] = winner
+
+    @test Compiler.typeinf_ext_toplevel(
+        interp, mi, Compiler.SOURCE_MODE_ABI) === winner
+    @test Compiler.code_cache(interp)[mi] === winner
+    @test Compiler.ci_has_invoke(winner)
+    empty!(source_mode_ephemeral_codegen)
+end
+
+const source_mode_interp_ref = Ref{Any}()
+const source_mode_winner_ref = Ref{Any}()
+@generated function source_mode_publish_winner()
+    interp = source_mode_interp_ref[]::SourceModeWinnerInterp
+    winner = source_mode_winner_ref[]::Core.CodeInstance
+    Compiler.code_cache(interp)[winner.def] = winner
+    return :(nothing)
+end
+source_mode_qualifying_winner(x::Int) = (source_mode_publish_winner(); x + 1)
+let interp = SourceModeWinnerInterp()
+    mi = Base.method_instance(source_mode_qualifying_winner, (Int,))
+    winner = Core.CodeInstance(mi, Compiler.cache_owner(interp), Int, Any,
+        nothing, nothing, zero(Int32), UInt(1), typemax(UInt), zero(UInt32),
+        nothing, nothing, Core.svec())
+    source_mode_codegen[winner] = Compiler.retrieve_code_info(mi, interp.world)
+    source_mode_interp_ref[] = interp
+    source_mode_winner_ref[] = winner
+
+    ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_ABI)
+    @test ci === winner
+    local_results = [
+        entry for entry in Compiler.get_inference_cache(interp).results
+        if entry isa Compiler.LocalInferenceResult && entry.result.linfo === mi
+    ]
+    @test length(local_results) == 1
+    local_result = only(local_results)
+    @test local_result.result.replacement_ci === winner
+    @test iszero(@ccall jl_mi_cache_has_ci(mi::Any, local_result.result.ci::Any)::Cint)
+    source_mode_interp_ref[] = nothing
+    source_mode_winner_ref[] = nothing
+    empty!(source_mode_codegen)
+end
+
+# The executable cache for a custom interpreter remains CodeInstance-only even when
+# inference also retains completed local source/proof entries.
+using REPL.REPLCompletions: completions
+@newinterp OverlayCacheInterp true
+@test let
+    interp = OverlayCacheInterp()
+    # `completions` has a call graph deep enough to exercise repeated global and local
+    # cache lookups for the same MethodInstances.
+    f = completions
+    args = ("", 0)
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t,
+        Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    Compiler.typeinf_ext_toplevel(interp, mi, Compiler.SOURCE_MODE_NOT_REQUIRED)
+    true
 end

@@ -75,13 +75,19 @@ struct JLOptions
     target_sanitize_address::Int8
 end
 
-# This runs early in the sysimage != is not defined yet
+# This runs early in the sysimage when `!=` is not defined yet
 if sizeof(JLOptions) === ccall(:jl_sizeof_jl_options, Int, ())
 else
     ccall(:jl_throw, Cvoid, (Any,), "Option structure mismatch")
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
+
+# NOTE: Keep in sync with the JL_OPTIONS_COMPILE_* defines in src/julia.h
+const JL_OPTIONS_COMPILE_OFF = 0
+const JL_OPTIONS_COMPILE_ON  = 1
+const JL_OPTIONS_COMPILE_ALL = 2
+const JL_OPTIONS_COMPILE_MIN = 3
 
 function colored_text(opts::JLOptions)
     return if opts.color != 0

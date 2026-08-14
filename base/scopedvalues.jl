@@ -4,19 +4,7 @@ module ScopedValues
 
 export ScopedValue, LazyScopedValue, with, @with, ScopedThunk
 public get
-
-"""
-    AbstractScopedValue{T}
-
-Abstract base type for scoped values that propagate values across
-dynamic scopes. All scoped value types must extend this abstract type.
-
-See also: [`ScopedValue`](@ref), [`LazyScopedValue`](@ref)
-
-!!! compat "Julia 1.13"
-    AbstractScopedValue requires Julia 1.13+.
-"""
-abstract type AbstractScopedValue{T} end
+using Base: AbstractScopedValue, Scope, ScopeStorage
 
 
 """
@@ -37,7 +25,7 @@ julia> editor[]
 "vim"
 
 julia> with(editor => "emacs") do
-           sval[]
+           editor[]
        end
 "emacs"
 
@@ -102,9 +90,11 @@ Base.eltype(::AbstractScopedValue{T}) where {T} = T
 
 hasdefault(val::ScopedValue) = val.hasdefault
 hasdefault(val::LazyScopedValue) = true
+hasdefault(val::Base.CancelTokenKey) = true
 
 getdefault(val::ScopedValue) = val.hasdefault ? val.default : throw(KeyError(val))
 getdefault(val::LazyScopedValue) = val.getdefault()
+getdefault(val::Base.CancelTokenKey) = nothing
 
 """
     isassigned(val::ScopedValue)
@@ -132,33 +122,6 @@ function Base.isassigned(val::AbstractScopedValue)
     scope === nothing && return false
     return haskey((scope::Scope).values, val)
 end
-
-const ScopeStorage = Base.PersistentDict{AbstractScopedValue, Any}
-
-struct Scope
-    values::ScopeStorage
-end
-
-Scope(scope::Scope) = scope
-
-function Scope(parent::Union{Nothing, Scope}, key::AbstractScopedValue{T}, value) where T
-    val = convert(T, value)
-    if parent === nothing
-        return Scope(ScopeStorage(key=>val))
-    end
-    return Scope(ScopeStorage(parent.values, key=>val))
-end
-
-function Scope(scope, pair::Pair{<:AbstractScopedValue})
-    return Scope(scope, pair...)
-end
-
-function Scope(scope, pair1::Pair{<:AbstractScopedValue}, pair2::Pair{<:AbstractScopedValue}, pairs::Pair{<:AbstractScopedValue}...)
-    # Unroll this loop through recursion to make sure that
-    # our compiler optimization support works
-    return Scope(Scope(scope, pair1...), pair2, pairs...)
-end
-Scope(::Nothing) = nothing
 
 function Base.show(io::IO, scope::Scope)
     print(io, Scope, "(")
@@ -214,7 +177,6 @@ function get(val::AbstractScopedValue{T}) where {T}
         v === nothing && return nothing
         return Some{T}(something(v)::T)
     end
-    return nothing
 end
 
 function Base.getindex(val::AbstractScopedValue{T})::T where T

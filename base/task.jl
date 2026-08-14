@@ -2,7 +2,11 @@
 
 ## basic task functions and TLS
 
-Core.Task(@nospecialize(f), reserved_stack::Int=0) = Core._Task(f, reserved_stack, ThreadSynchronizer())
+function Core.Task(@nospecialize(f), reserved_stack::Int=0)
+    task = Core._task(f, reserved_stack)
+    task.donenotify = ThreadSynchronizer()
+    return task
+end
 
 # Container for a captured exception and its backtrace. Can be serialized.
 struct CapturedException <: Exception
@@ -145,9 +149,11 @@ end
 
 # task states
 
-const task_state_runnable = UInt8(0)
-const task_state_done     = UInt8(1)
-const task_state_failed   = UInt8(2)
+const task_state_runnable  = UInt8(0)
+const task_state_done      = UInt8(1)
+const task_state_failed    = UInt8(2)
+# like _failed, but the task was forcibly abandoned and may have leaked resources
+const task_state_abandoned = UInt8(3)
 
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
@@ -159,6 +165,8 @@ const task_state_failed   = UInt8(2)
             return :done
         elseif st === task_state_failed
             return :failed
+        elseif st === task_state_abandoned
+            return :abandoned
         else
             @assert false "unexpected state"
         end
@@ -172,6 +180,8 @@ const task_state_failed   = UInt8(2)
         error("""
             Querying a Task's `scope` field is disallowed.
             The private `Core.current_scope()` function is better, though still an implementation detail.""")
+    elseif field === :invoked
+        error("Querying a Task's `invoked` field is disallowed because it is an implementation detail.")
     else
         return getfield(t, field)
     end
@@ -180,6 +190,10 @@ end
 @inline function setproperty!(t::Task, field::Symbol, @nospecialize(v))
     if field === :scope
         istaskstarted(t) && error("Setting scope on a started task directly is disallowed.")
+    elseif field === :invoked
+        error("Setting a Task's `invoked` field directly is disallowed because it is an implementation detail.")
+    elseif field === :result
+        error("Setting a Task's `result` field directly is disallowed. The result of a task is determined by the return value of its code; to pass a value to a suspended task, use `schedule(t, val)` or `yieldto(t, val)` instead.")
     end
     return @invoke setproperty!(t::Any, field::Symbol, v::Any)
 end
@@ -250,7 +264,94 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = ((@atomic :acquire t._state) === task_state_failed)
+function istaskfailed(t::Task)
+    st = @atomic :acquire t._state
+    return st === task_state_failed || st === task_state_abandoned
+end
+
+"""
+    unsafe_abandon!(t::Task, next_task::Task) -> Bool
+
+Forcibly abandon task `t` and switch its thread to `next_task`, discarding
+`t`'s execution. Returns `true` if the abandonment committed: `t`'s state is
+`:abandoned` and it will never run another instruction.
+
+Returns `false` - with `t` untouched and still running - when the abandonment
+could not be performed safely: `t` was not (or no longer) running on a
+thread, was found holding runtime state that must not be discarded (runtime
+locks, an in-flight finalizer or GC transition, a signal-deferral region),
+or another abandonment was already in flight for that thread. Blocks (in a
+scheduler-friendly wait) until the delivery settles the request one way or
+the other; a victim thread that never services signals blocks the call
+indefinitely.
+
+`next_task` must be a fresh, never-scheduled task; it takes over the
+victim's thread.
+
+!!! warning
+    Abandonment discards the victim's execution wherever it stands. Any
+    non-runtime resource it holds (locks, buffers, connections) is leaked.
+    This is a last-resort recovery primitive.
+
+!!! note
+    The task must be currently running on a thread for this to have effect;
+    use [`cancel!`](@ref) with `CANCEL_REQUEST_ABANDON_ALL` to also stop
+    parked or queued tasks.
+"""
+unsafe_abandon!(t::Task, next_task::Task) =
+    unsafe_abandon!(t, next_task, CancellationRequest(0x4)) # CANCEL_REQUEST_ABANDON_ALL
+
+function unsafe_abandon!(t::Task, next_task::Task, @nospecialize(result))
+    # The requester's own wakeup handle, staged with the request in the
+    # victim thread's abandon slot: the delivery paths ping it (from signal
+    # context, where uv_async_send is the one legal wakeup) when the
+    # request settles. One requester per slot means one consumer per
+    # handle, which is exactly the AsyncCondition trigger's latched,
+    # consume-once semantics - a settle that lands inside the check/park
+    # window below is caught by the latch.
+    async = AsyncCondition()
+    tid = ccall(:jl_abandon_task_request, Cint, (Any, Any, Any, Ptr{Cvoid}),
+                t, next_task, result, async.handle)
+    if tid < 0
+        close(async)
+        return false
+    end
+    tid = tid % Int16
+    ok = false
+    try
+        while true
+            verdict = ccall(:jl_abandon_task_poll, Cint, (Int16,), tid)
+            if verdict == 1 || verdict == -1
+                ok = verdict == 1
+                break
+            elseif verdict == 2
+                # mid-settle: the ping was already sent (pre-terminal, so it
+                # can never race this handle's close below); the verdict is
+                # microseconds away
+                ccall(:jl_cpu_pause, Cvoid, ())
+            else
+                wait(async; cancel=nothing)
+            end
+        end
+    finally
+        # Safe only after the terminal consume: pings happen strictly
+        # before the terminal state becomes visible.
+        close(async)
+    end
+    if ok
+        # A forcibly abandoned task never goes through the regular task
+        # completion path, so wake up anyone waiting on it. (The waiters
+        # observe the already-stored abandoned state; they do not touch the
+        # task's stack. The root task's donenotify may be `nothing`.)
+        donenotify = t.donenotify
+        if donenotify isa ThreadSynchronizer
+            lock(donenotify)
+            notify(donenotify)
+            unlock(donenotify)
+        end
+    end
+    return ok
+end
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)
@@ -302,26 +403,44 @@ function task_local_storage(body::Function, key, val)
 end
 
 # just wait for a task to be done, no error propagation
-function _wait(t::Task)
-    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
+_wait(t::Task; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _wait(t, resolve_cancel_token(cancel))
+# With `cancel_value`, a cancellation of the governing token (at or above
+# `min_severity`) is returned as the `CancellationRequest` instead of being
+# thrown; `nothing` means the task completed.
+function _wait(t::Task, tok::MaybeToken; min_severity::UInt8=0x00,
+               cancel_value::Bool=false)
+    t === current_task() && throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
+        locked = true
         try
             while !istaskdone(t)
-                wait(donenotify)
+                locked = false
+                r = wait(donenotify, tok; min_severity=min_severity,
+                         cancel_value=cancel_value)
+                locked = true
+                if cancel_value && r isa CancellationRequest
+                    return r
+                end
             end
         finally
-            unlock(donenotify)
+            locked && unlock(donenotify)
         end
     end
     nothing
 end
 
-# have `waiter` wait for `t`
-function _wait2(t::Task, waiter::Task)
+waitqueue(t::Task) = waitqueue(t.donenotify::ThreadSynchronizer)
+
+# Subscribe the not-yet-started `waiter` to `t`'s completion (see the
+# GenericCondition method's contract in condition.jl: a start trigger
+# governed by the waiter's birth cancellation source, not a park)
+function schedule_on_notify!(t::Task, waiter::Task)
+    _assert_fresh_waiter(waiter)
     if !istaskdone(t)
-        # since _wait2 is similar to schedule, we should observe the sticky
+        # since this is similar to schedule, we should observe the sticky
         # bit, even if we don't call `schedule` with early-return below
         if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
             # Issue #41324
@@ -335,30 +454,48 @@ function _wait2(t::Task, waiter::Task)
         end
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
-        if !istaskdone(t)
-            push!(donenotify.waitq, waiter)
-            unlock(donenotify)
-            return nothing
-        else
+        try
+            if !istaskdone(t)
+                schedule_on_notify!(donenotify, waiter)
+                return nothing
+            end
+        finally
             unlock(donenotify)
         end
     end
-    schedule(waiter)
+    # `t` already done: start (or, under a cancelled birth source, kill)
+    # the waiter now
+    _assert_fresh_waiter(waiter)
+    src = _birth_cancel_source(waiter)
+    if src !== nothing && iscancelled(src)
+        _schedule_subscription_cancelled(waiter, src)
+    else
+        schedule(waiter)
+    end
     nothing
 end
 
 """
-    wait(t::Task; throw=true)
+    wait(t::Task; throw=true, cancel=Base.DEFAULT_CANCEL)
 
 Wait for a `Task` to finish.
 
 The keyword `throw` (defaults to `true`) controls whether a failed task results
 in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed task.
 
+The `cancel` keyword argument controls which cancellation token may interrupt
+the wait (see [`CancellationToken`](@ref)); by default the scoped token. A
+cancelled wait throws the [`CancellationRequest`](@ref) and leaves `t`
+unaffected: cancellation reaches `t` only through its own governing token
+(e.g. when both waiter and waitee run under the same cancelled scope).
+
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
-function wait(t::Task; throw=true)
-    _wait(t)
+wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    wait(t, check_cancel_arg(cancel); throw)
+@noinline function wait(t::Task, tok::MaybeToken; throw=true)
+    # Inlining a blocking call buys nothing; this also keeps the inlineable `fetch(::Task)` small.
+    _wait(t, tok)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
     end
@@ -387,7 +524,8 @@ completed tasks, and the other consists of uncompleted tasks.
 !!! compat "Julia 1.12"
     This function requires at least Julia 1.12.
 """
-waitany(tasks; throw=true) = _wait_multiple(collect_tasks(tasks), throw)
+waitany(tasks; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _wait_multiple(collect_tasks(tasks), throw, false, false, check_cancel_arg(cancel))
 
 """
     waitall(tasks; failfast=true, throw=true) -> (done_tasks, remaining_tasks)
@@ -407,7 +545,8 @@ completed tasks, and the other consists of uncompleted tasks.
 !!! compat "Julia 1.12"
     This function requires at least Julia 1.12.
 """
-waitall(tasks; failfast=true, throw=true) = _wait_multiple(collect_tasks(tasks), throw, true, failfast)
+waitall(tasks; failfast=true, throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _wait_multiple(collect_tasks(tasks), throw, true, failfast, check_cancel_arg(cancel))
 
 function collect_tasks(waiting_tasks)
     tasks = Task[]
@@ -418,13 +557,59 @@ function collect_tasks(waiting_tasks)
     return tasks
 end
 
-function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false)
+## Task completion as a waitable (see base/park.jl): a one-shot predicate
+## kind - enqueue declines when the task is already done (its only notify
+## has fired), and the recheck is membership-qualified: the slot witness,
+## cleared when the completion notify pops the entry, is the
+## already-delivered bit (without it a repark! would re-fire forever on
+## consumed completions).
+struct DoneWait
+    t::Task
+end
+
+function wait_enqueue!(x::DoneWait, w::WaitEntry, first::Bool)
+    t = x.t
+    donenotify = t.donenotify::ThreadSynchronizer
+    lock(donenotify)
+    if istaskdone(t)
+        unlock(donenotify)
+        return false
+    end
+    # a duplicate of an already-registered task shares its slot
+    if _find_slot(w, donenotify) == 0
+        push!(waitqueue(t), w)
+    end
+    unlock(donenotify)
+    return true
+end
+
+function wait_recheck(x::DoneWait, w::WaitEntry)
+    t = x.t
+    istaskdone(t) || return false
+    return _find_slot(w, t.donenotify::ThreadSynchronizer) != 0
+end
+
+function wait_dequeue!(x::DoneWait, w::WaitEntry, why::UInt8)
+    # lazy on a normal wake: the claiming completion notify popped its own
+    # registration; eager everywhere else (fired slots must not re-fire,
+    # withdrawal and cleanup must not leave the entry reachable)
+    why == WAKE_VALUE && return nothing
+    t = x.t
+    donenotify = t.donenotify::ThreadSynchronizer
+    lock(donenotify)
+    list_deletefirst!(waitqueue(t), w)
+    unlock(donenotify)
+    return nothing
+end
+
+function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false,
+                        tok::MaybeToken=default_cancel_token())
     if (all && !failfast) || length(tasks) <= 1
         exception = false
         # Force everything to finish synchronously for the case of waitall
         # with failfast=false
         for t in tasks
-            _wait(t)
+            _wait(t, tok)
             exception |= istaskfailed(t)
         end
         if exception && throwexc
@@ -446,7 +631,7 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    # We can return early all tasks are done, or if any is done and we only
+    # We can return early if all tasks are done, or if any is done and we only
     # needed to wait for one, or if any task failed and we have failfast
     if nremaining == 0 || (any(done_mask) && (!all || (failfast && exception)))
         if throwexc && (!all || failfast) && exception
@@ -461,45 +646,37 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    chan = Channel{Int}(Inf)
-    sentinel = current_task()
-    waiter_tasks = fill(sentinel, length(tasks))
-
+    # Park on all remaining tasks at once through a single multi-slot wait
+    # entry - one flat waitable per pending task (duplicates share a slot)
+    # plus the governing cancellation source. Each completion notify claims
+    # the entry through the standard wake-claim protocol; the registrations
+    # stay in place across re-parks, so the loop re-arms (`repark!`)
+    # instead of re-registering after every completion, and the driver's
+    # membership-qualified rechecks make the arm-then-suspend sound while
+    # this bookkeeping runs unarmed.
+    ct = current_task()
+    src = cancel_source(tok)
+    src === nothing || checkcancel(src)
+    ws = Vector{Union{DoneWait, SourceWait}}()
     for (i, done) in enumerate(done_mask)
-        done && continue
-        t = tasks[i]
-        if istaskdone(t)
-            done_mask[i] = true
-            exception |= istaskfailed(t)
-            nremaining -= 1
-            exception && failfast && break
-        else
-            waiter = @task put!(chan, i)
-            waiter.sticky = false
-            _wait2(t, waiter)
-            waiter_tasks[i] = waiter
+        done || push!(ws, DoneWait(tasks[i]))
+    end
+    src === nothing || push!(ws, SourceWait(src, 0x00))
+    w = acquire_wait_entry!(ct, ws)
+    parked = park!(ws, w, false)
+    while true
+        # suspend only when the park armed (a `false` park/re-park means a
+        # waitable fired - a completion, or the source - and the driver
+        # already dequeued the fired slot)
+        parked && wait_safe_interrupt(ws, w)
+        # the fired-source outcome (and, level-triggered, any cancelled
+        # state) delivers here: withdraw and throw
+        if src !== nothing && iscancelled(src)
+            withdraw!(ws, w)
+            checkcancel(src)
         end
-    end
-
-    while nremaining > 0
-        exception && failfast && break
-        i = take!(chan)
-        t = tasks[i]
-        waiter_tasks[i] = sentinel
-        done_mask[i] = true
-        exception |= istaskfailed(t)
-        nremaining -= 1
-        # stop early if requested
-        all || break
-    end
-
-    close(chan)
-
-    # now just read which tasks finished directly: the channel is not needed anymore for that
-    # repeat until we get (acquire) the list of all dependent-exited tasks
-    changed = true
-    while changed
-        changed = false
+        # collect completions (a wake happens-after its completing notify,
+        # so the istaskdone reads below observe it)
         for (i, done) in enumerate(done_mask)
             done && continue
             t = tasks[i]
@@ -507,10 +684,14 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
                 done_mask[i] = true
                 exception |= istaskfailed(t)
                 nremaining -= 1
-                changed = true
             end
         end
+        if nremaining == 0 || (!all && any(done_mask)) || (exception && failfast)
+            break
+        end
+        parked = repark!(ws, w)
     end
+    withdraw!(ws, w)
 
     if nremaining == 0
         if throwexc && exception
@@ -519,19 +700,12 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
         return tasks, Task[]
     else
-        remaining_mask = .~done_mask
-        for i in findall(remaining_mask)
-            waiter = waiter_tasks[i]
-            waiter === sentinel && continue
-            donenotify = tasks[i].donenotify::ThreadSynchronizer
-            @lock donenotify list_deletefirst!(donenotify.waitq, waiter)
-        end
         done_tasks = tasks[done_mask]
         if throwexc && exception
             exceptions = [TaskFailedException(t) for t in done_tasks if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else
-            return done_tasks, tasks[remaining_mask]
+            return done_tasks, tasks[.~done_mask]
         end
     end
 end
@@ -550,16 +724,34 @@ Wait for a [`Task`](@ref) to finish, then return its result value.
 If the task fails with an exception, a [`TaskFailedException`](@ref) (which wraps the failed task)
 is thrown.
 """
-function fetch(t::Task)
-    wait(t)
-    return task_result(t)
+@inline function fetch(t::Task; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    # `cancel` governs the *wait* for the task: a cancellation unwinds this
+    # fetch, the fetched task keeps running.
+    wait(t; cancel)
+    # This typeassert looks redundant, but is required for soundness and must not be
+    # removed: `Task.code`/`Task.result` are mutable, so the precise type inference
+    # may derive here (via `PartialTask`) is a claim that must be re-checked at
+    # runtime, not a proven fact.
+    return task_result(t)::Core.task_result_type(t)
 end
-
 
 ## lexically-scoped waiting for multiple items
 
 struct ScheduledAfterSyncException <: Exception
     values::Vector{Any}
+end
+
+function showerror(io::IO, cr::CancellationRequest)
+    print(io, "CancellationRequest: ")
+    if cr === CANCEL_REQUEST_SAFE
+        print(io, "Safe Cancellation (CANCEL_REQUEST_SAFE)")
+    elseif cr === CANCEL_REQUEST_ABANDON_EXTERNAL
+        print(io, "Abandonment of External Resources (CANCEL_REQUEST_ABANDON_EXTERNAL)")
+    elseif cr === CANCEL_REQUEST_ABANDON_ALL
+        print(io, "Task Abandonment (CANCEL_REQUEST_ABANDON_ALL)")
+    else
+        print(io, "Unknown ($(cr.request))")
+    end
 end
 
 function showerror(io::IO, ex::ScheduledAfterSyncException)
@@ -581,12 +773,20 @@ function showerror(io::IO, ex::ScheduledAfterSyncException)
     print(io, " registered after the end of a `@sync` block")
 end
 
-function sync_end(c::Channel{Any})
+function sync_end(c::Channel{Any}, src::Union{Nothing, CancellationTokenSource}=nothing)
     local c_ex
+    tok = src === nothing ? nothing : CancellationToken(src)
     while isready(c)
         r = take!(c)
         if isa(r, Task)
-            _wait(r)
+            cancelled = _wait(r, tok; cancel_value=tok !== nothing)
+            if cancelled isa CancellationRequest
+                # Our own scope (or an ancestor) was cancelled. The children
+                # run under the same scope's token, so the tree walk already
+                # cancelled them all; await their teardown per severity.
+                return sync_cancel!(c, r, cancelled, tok,
+                                    @isdefined(c_ex) ? c_ex : CompositeException())
+            end
             if istaskfailed(r)
                 if !@isdefined(c_ex)
                     c_ex = CompositeException()
@@ -634,6 +834,57 @@ end
 
 const sync_varname = gensym(:sync)
 
+# Teardown of a `@sync` block whose own scope was cancelled: the scope's
+# token subtree (covering every child) is already cancelled; await the
+# children's unwind per the severity policy. Our own acknowledgement of the
+# request lets these teardown waits park; they are only re-woken by a
+# severity escalation (`min_severity`).
+@noinline function sync_cancel!(c::Channel{Any}, t::Task, cr::CancellationRequest,
+                                tok::CancellationToken, c_ex::CompositeException)
+    waitees = Any[t]
+    while isready(c)
+        push!(waitees, take!(c))
+    end
+    close(c)
+    sev = severity(cr)
+    for r in waitees
+        if isa(r, Task)
+            while sev < CANCEL_REQUEST_ABANDON_ALL.request
+                # Tasks are internal: their cancellation is awaited (for
+                # ABANDON_ALL they were frozen; there is nothing to wait
+                # for). A severity escalation completes the teardown wait
+                # (value-mode; only severities above the acknowledged one
+                # are admitted) - adopt the stronger request and keep
+                # awaiting internal tasks per its policy rather than
+                # unwinding out of the `@sync` while children are still
+                # running.
+                r2 = _wait(r, tok; min_severity=sev + 0x01, cancel_value=true)
+                r2 isa CancellationRequest || break
+                cr = r2
+                sev = severity(r2)
+            end
+            if istaskfailed(r)
+                push!(c_ex, TaskFailedException(r))
+            end
+        else
+            # Non-task waitees are external - the ABANDON_* severities cease
+            # waiting for external resources.
+            sev == CANCEL_REQUEST_SAFE.request || continue
+            try
+                wait(r)
+            catch e
+                push!(c_ex, e)
+            end
+        end
+    end
+    # Reporting the composite outcome constitutes delivery of the request;
+    # include the request itself if no child failure already records it.
+    if isempty(c_ex)
+        throw(cr)
+    end
+    throw(c_ex)
+end
+
 """
     @sync
 
@@ -657,10 +908,21 @@ Thread-id 1, task 2
 """
 macro sync(block)
     var = esc(sync_varname)
+    # The block runs in a new dynamic scope carrying the token of a fresh
+    # cancellation source linked under the enclosing scope's token, so that
+    # cancellation of the enclosing scope reaches every (transitively
+    # spawned) child through the token tree. This expands the equivalent of
+    # `@with CANCEL_TOKEN => token ...` manually: the ScopedValues macro API
+    # is not loaded yet when Base code containing `@sync` is compiled during
+    # bootstrap.
+    scoped_block = Expr(:tryfinally, esc(block), nothing,
+        :(Scope(Core.current_scope()::Union{Nothing, Scope},
+                CANCEL_TOKEN => CancellationToken(var"#sync_src#"))))
     quote
-        let $var = Channel(Inf)
-            v = $(esc(block))
-            sync_end($var)
+        let var"#sync_src#" = CancellationTokenSource(default_cancel_token()),
+            $var = Channel(Inf)
+            v = $scoped_block
+            sync_end($var, var"#sync_src#")
             v
         end
     end
@@ -754,7 +1016,10 @@ Stacktrace:
 ```
 """
 function errormonitor(t::Task)
-    t2 = Task() do
+    # the monitor is diagnostic cleanup: shield it from the constructing
+    # scope's cancellation so a cancelled scope still gets its report
+    t2 = ScopedValues.with(CANCEL_TOKEN => nothing) do
+        Task() do
         if istaskfailed(t)
             local errs = stderr
             try # try to display the failure atomically
@@ -781,8 +1046,9 @@ function errormonitor(t::Task)
         end
         nothing
     end
+    end
     t2.sticky = false
-    _wait2(t, t2)
+    schedule_on_notify!(t, t2)
     return t
 end
 
@@ -846,6 +1112,12 @@ end
 
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
+    # a sticky cancellation-source registration of this task is garbage now
+    w = t.cached_cancel_entry
+    if w isa WaitEntry2
+        o = @atomic :monotonic w.owner2
+        o isa CancellationTokenSource && _note_dead_registration!(o)
+    end
     # `finish_task` sets `sigatomic` before entering this function
     err = istaskfailed(t)
     result = task_result(t)
@@ -856,8 +1128,9 @@ function task_done_hook(t::Task)
         lock(donenotify)
         try
             if !isempty(donenotify.waitq)
-                handled = true
-                notify(donenotify)
+                # only wakes whose claim was won count as having consumed the
+                # result (a stale, already-claimed registration does not)
+                handled = notify(donenotify) > 0
             end
         finally
             unlock(donenotify)
@@ -899,12 +1172,13 @@ mutable struct IntrusiveLinkedListSynchronized{T}
     lock::Threads.SpinLock
     IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
 end
+waitqueue(W::IntrusiveLinkedListSynchronized) = ILLRef(W.queue, W)
 isempty(W::IntrusiveLinkedListSynchronized) = isempty(W.queue)
 length(W::IntrusiveLinkedListSynchronized) = length(W.queue)
 function push!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
-        push!(W.queue, t)
+        push!(waitqueue(W), t)
     finally
         unlock(W.lock)
     end
@@ -913,7 +1187,7 @@ end
 function pushfirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
-        pushfirst!(W.queue, t)
+        pushfirst!(waitqueue(W), t)
     finally
         unlock(W.lock)
     end
@@ -922,7 +1196,7 @@ end
 function pop!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
-        return pop!(W.queue)
+        return pop!(waitqueue(W))
     finally
         unlock(W.lock)
     end
@@ -930,7 +1204,7 @@ end
 function popfirst!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
-        return popfirst!(W.queue)
+        return popfirst!(waitqueue(W))
     finally
         unlock(W.lock)
     end
@@ -938,7 +1212,7 @@ end
 function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
-        list_deletefirst!(W.queue, t)
+        list_deletefirst!(waitqueue(W), t)
     finally
         unlock(W.lock)
     end
@@ -952,7 +1226,17 @@ const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprec
 workqueue_for(tid::Int) = Workqueues[tid]
 
 function enq_work(t::Task)
-    (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    state = t._state
+    if state === task_state_abandoned
+        # A task frozen by forcible abandonment leaves its waitqueue
+        # registrations behind by design; a later notify of such a stale
+        # entry lands here. The wakeup is consumed by the abandoned task -
+        # drop it silently.
+        return t
+    end
+    (state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    (@atomic :monotonic t.waiting_on) === nothing ||
+        throw(ConcurrencyViolationError("schedule: Task is registered on a wait queue"))
 
     # Sticky tasks go into their thread's work queue.
     if t.sticky
@@ -977,6 +1261,17 @@ function enq_work(t::Task)
     else
         @label not_sticky
         tp = Threads.threadpool(t)
+        if tp !== :foreign && Threads.threadpoolsize(tp) == 0
+            # The task's threadpool has no threads, so it can never run;
+            # fail it with a ConcurrencyViolationError rather than queueing
+            # it (the multiqueue heaps are unsized for empty pools, and a
+            # task queued during sysimage bootstrap would be serialized
+            # into the system image).
+            setfield!(t, :result, ConcurrencyViolationError("deadlock detected: cannot schedule task"))
+            t._isexception = true
+            @atomic :release t._state = task_state_failed
+            return t
+        end
         if tp === :foreign || Threads.threadpoolsize(tp) == 1
             # There's only one thread in the task's assigned thread pool;
             # use its work queue.
@@ -986,10 +1281,27 @@ function enq_work(t::Task)
         else
             # Otherwise, put the task in the multiqueue.
             Partr.multiq_insert(t, t.priority)
-            tid = 0
+            tid = Threads.threadid(t)
+            if tid != 0 && tid != Threads.threadid()
+                # The task's tid is pinned to another thread: typically it is that
+                # thread's current task, parked hosting its thread-sleep logic in
+                # wait(), and only that thread can resume it, so wake it directly
+                # (#58689). If that thread was already awake (busy with other work),
+                # this wake added no running thread; wake a pool thread too so the
+                # number of running threads still scales with enqueued work — the
+                # task is not sticky, so its tid may be cleared later, making it
+                # runnable by any pool thread.
+                if ccall(:jl_wakeup_thread, Cint, (Int16,), (tid - 1) % Int16) == 0
+                    ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+                end
+            else
+                # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
+                ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+            end
+            return t
         end
     end
-    ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    ccall(:jl_wakeup_thread, Cint, (Int16,), (tid - 1) % Int16)
     return t
 end
 
@@ -1044,7 +1356,12 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
-        q = t.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
+        # Interrupt path: Unconditionally remove the wait (if any)
+        # TODO: This should use the proper cancellation system instead
+        w = @atomicswap t.waiting_on = nothing
+        w isa WaitEntry && try_unlink_claimed!(w)
+        q = t.queue
+        q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
         setfield!(t, :result, arg)
         setfield!(t, :_isexception, true)
     else
@@ -1055,6 +1372,48 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     maybe_record_enqueued!(t)
     enq_work(t)
     return t
+end
+
+# Deliver `exc` into the parked wait whose wake the caller already claimed
+# by CASing `t.waiting_on` from `w` to nothing (the cancellation walk).
+# Unlike `schedule(t, exc, error=true)` - whose unconditional swap *takes*
+# a claim - this must not re-claim: the claim was the wake ticket. If a
+# claim-less wake (a raw interrupter, `throwto`) resumed the task first and
+# it has since registered a new wait, the claimed park no longer exists and
+# the delivery is dropped - a task still eligibly parked under the
+# cancelled source is impossible (its registration recheck refuses), and
+# anything else must not observe this request.
+function deliver_claimed_wake!(t::Task, w::WaitEntry, @nospecialize(exc))
+    (@atomic :monotonic t.waiting_on) === nothing || return nothing
+    # the claimed waitee-queue entry stays linked (the walk does not take
+    # waitee locks); collect it opportunistically like an interrupter would
+    try_unlink_claimed!(w)
+    # a pending wake somebody enqueued claim-lessly is superseded by the
+    # cancellation delivery, like an interrupt overriding a claimed value
+    q = t.queue
+    q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
+    t._state === task_state_runnable || return nothing
+    setfield!(t, :result, exc)
+    setfield!(t, :_isexception, true)
+    maybe_record_enqueued!(t)
+    enq_work(t)
+    return nothing
+end
+
+# The value-mode variant of `deliver_claimed_wake!`, with the same claim
+# contract: the parked wait *completes*, returning `val` (the cancellation
+# walk's delivery to a watcher - `wait(::CancellationToken)` - whose wait
+# the cancellation is the event for).
+function deliver_claimed_value_wake!(t::Task, w::WaitEntry, @nospecialize(val))
+    (@atomic :monotonic t.waiting_on) === nothing || return nothing
+    try_unlink_claimed!(w)
+    q = t.queue
+    q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
+    t._state === task_state_runnable || return nothing
+    setfield!(t, :result, val)
+    maybe_record_enqueued!(t)
+    enq_work(t)
+    return nothing
 end
 
 """
@@ -1070,7 +1429,7 @@ function yield()
     try
         wait()
     catch
-        q = ct.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
         rethrow()
     end
 end
@@ -1088,12 +1447,13 @@ Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 function yield(t::Task, @nospecialize(x=nothing))
     ct = current_task()
     t === ct && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
-    (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
+    (t._state === task_state_runnable && t.queue === nothing &&
+     (@atomic :monotonic t.waiting_on) === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
     # [task] user_time -yield-> wait_time
     record_running_time!(ct)
     # [task] created -scheduled-> wait_time
     maybe_record_enqueued!(t)
-    t.result = x
+    setfield!(t, :result, x)
     enq_work(ct)
     set_next_task(t)
     return try_yieldto(ensure_rescheduled)
@@ -1113,14 +1473,14 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     # state error instead.
     if t._state === task_state_done
         return x
-    elseif t._state === task_state_failed
+    elseif t._state === task_state_failed || t._state === task_state_abandoned
         throw(t.result)
     end
     # [task] user_time -yield-> wait_time
     record_running_time!(ct)
     # [task] created -scheduled-unfairly-> wait_time
     maybe_record_enqueued!(t)
-    t.result = x
+    setfield!(t, :result, x)
     set_next_task(t)
     return try_yieldto(identity)
 end
@@ -1139,12 +1499,12 @@ function try_yieldto(undo)
     end
     if ct._isexception
         exc = ct.result
-        ct.result = nothing
+        setfield!(ct, :result, nothing)
         ct._isexception = false
         throw(exc)
     end
     result = ct.result
-    ct.result = nothing
+    setfield!(ct, :result, nothing)
     return result
 end
 
@@ -1155,7 +1515,7 @@ function throwto(t::Task, @nospecialize exc)
     record_running_time!(ct)
     # [task] created -scheduled-unfairly-> wait_time
     maybe_record_enqueued!(t)
-    t.result = exc
+    setfield!(t, :result, exc)
     t._isexception = true
     set_next_task(t)
     return try_yieldto(identity)
@@ -1168,16 +1528,39 @@ function wait_forever()
                 wait()
             end
         catch e
-            local errs = stderr
-            # try to display the failure atomically
-            errio = IOContext(PipeBuffer(), errs::IO)
-            emphasize(errio, "Internal Task ")
-            display_error(errio, current_exceptions())
-            write(errs, errio)
-            # victimize another random Task also
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
-                backend = repl_backend_task()
-                backend isa Task && throwto(backend, e)
+                # An InterruptException landed on this internal scheduler task while
+                # the thread was idle (it parked here after running a completed task).
+                # N.B.: SIGINT no longer force-throws InterruptException on any
+                # platform (it cancels the ^C episode source instead), so this
+                # branch is reachable only via an explicit user/library throw
+                # (`throwto`, `schedule(..., error=...)`) into a scheduler
+                # task; kept as defense in depth.
+                # Forward it to a task that can observe it: the REPL backend if it is
+                # evaluating user code; nothing at an idle REPL prompt (drop it); the
+                # root task otherwise, e.g. a non-interactive script blocked in wait
+                # (#58689).
+                victim = repl_backend_task()
+                if !(victim isa Task)
+                    at_repl_prompt = @isdefined(active_repl_backend) && active_repl_backend !== nothing
+                    victim = (at_repl_prompt || istaskdone(roottask)) ? nothing : roottask
+                end
+                if victim isa Task
+                    try
+                        throwto(victim, e)
+                    catch
+                        # delivery is best-effort: the victim may have been
+                        # rescheduled concurrently, or a second interrupt may arrive
+                        # while this task is suspended in the switch
+                    end
+                end
+            else
+                local errs = stderr
+                # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Internal Task ")
+                display_error(errio, current_exceptions())
+                write(errs, errio)
             end
         end
     end
@@ -1204,21 +1587,40 @@ function ensure_rescheduled(othertask::Task)
     nothing
 end
 
+function discard_stale_workqueue_task(t::Task)
+    # A task frozen in place by forcible abandonment is completed without
+    # ever leaving the queues it was registered with (a workqueue, or a
+    # waitqueue whose later notify re-enqueues it here); discard it. Any
+    # other non-runnable state means the task somehow got queued twice -
+    # probably broken now, but try discarding this switch and keep going.
+    # We can't throw here, because it's probably not the fault of the caller
+    # to wait, and don't want to use print() here, because that may try to
+    # incur a task switch.
+    if t._state !== task_state_abandoned
+        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
+    end
+    nothing
+end
+
 function trypoptask(W::StickyWorkqueue)
     while !isempty(W)
         t = popfirst!(W)
         if t._state !== task_state_runnable
-            # assume this somehow got queued twice,
-            # probably broken now, but try discarding this switch and keep going
-            # can't throw here, because it's probably not the fault of the caller to wait
-            # and don't want to use print() here, because that may try to incur a task switch
-            ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
+            discard_stale_workqueue_task(t)
             continue
         end
         return t
     end
-    return Partr.multiq_deletemin()
+    while true
+        t = Partr.multiq_deletemin()
+        t === nothing && return nothing
+        if t._state !== task_state_runnable
+            discard_stale_workqueue_task(t)
+            continue
+        end
+        return t
+    end
 end
 
 checktaskempty = Partr.multiq_check_empty
@@ -1236,10 +1638,14 @@ function wait()
     W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
     if task === nothing
-        # No tasks to run; switch to the scheduler task to run the
-        # thread sleep logic.
+        # No tasks to run. If the current task is done, switch to the scheduler task
+        # to run the thread sleep logic, so that this task's stack can be freed
+        # promptly (#57544). Otherwise run the thread sleep logic in the context of
+        # the current task, so that an asynchronously thrown InterruptException
+        # is delivered to a task that can observe it, rather than swallowed by
+        # the internal scheduler task (#58689).
         sched_task = get_sched_task()
-        if ct !== sched_task
+        if ct !== sched_task && istaskdone(ct)
             istaskdone(sched_task) && (sched_task = @task wait())
             return yieldto(sched_task)
         end
@@ -1258,7 +1664,7 @@ end
 # update the `running_time_ns` field of `t` to include the time since it last started running.
 function record_running_time!(t::Task)
     if t.metrics_enabled && !istaskdone(t)
-        @atomic :monotonic t.running_time_ns += time_ns() - t.last_started_running_at
+        @atomic :monotonic t.running_time_ns +%= time_ns() -% t.last_started_running_at
     end
     return t
 end

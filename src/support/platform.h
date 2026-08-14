@@ -5,7 +5,7 @@
 
 /*
  * This file provides convenient macros to be used to identify the platform
- * based of compiler-specific pre-defined macros. It is based on the
+ * based on compiler-specific pre-defined macros. It is based on the
  * information that can be found at the following address:
  *
  *     https://sourceforge.net/p/predef/wiki/Home/
@@ -134,6 +134,10 @@
 #    define _P32
 #else
 #  error pointer size not known for your platform / compiler
+#endif
+
+#if defined(__LP64__) || defined(__wasm__) || defined(__mips64) || defined(__riscv) || defined(_WIN64)
+#define _HAS_INT128_
 #endif
 
 #endif /* !PLATFORM_H */

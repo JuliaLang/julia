@@ -1,0 +1,9 @@
+name = "Foo"
+uuid = "ab000000-0000-0000-0000-000000000001"
+version = "0.1.0"
+
+[weakdeps]
+Bar = "ab000000-0000-0000-0000-000000000002"
+
+[extensions]
+FooBarExt = "Bar"

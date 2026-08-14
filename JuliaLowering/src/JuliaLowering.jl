@@ -12,19 +12,23 @@ else
     using JuliaSyntax
 end
 
-using .JuliaSyntax: highlight, Kind, @KSet_str, is_leaf, children, numchildren,
-    head, kind, flags, has_flags, filename, first_byte, last_byte, byte_range,
-    sourcefile, source_location, span, sourcetext, is_literal, is_infix_op_call,
-    is_postfix_op_call, @isexpr, SyntaxHead, is_syntactic_operator,
-    is_contextual_keyword, node_string,
-    SyntaxGraph, SyntaxTree, SyntaxList, NodeId, SourceRef, SourceAttrType,
-    ensure_attributes, ensure_attributes!, delete_attributes, new_id!, hasattr,
-    copy_attrs, setattr, setattr!, syntax_graph, is_compatible_graph,
-    check_compatible_graph, copy_node, copy_ast, provenance, sourceref,
-    reparent, mapchildren, flattened_provenance, mkleaf, mknode, newleaf,
-    newnode, tree_ids, @stm, mapsyntax
+using .JuliaSyntax: @KSet_str, @stm, Kind, SourceAttrType, SourceRef,
+    SyntaxList, SyntaxTree, byte_range, children, filename, first_byte,
+    flattened_provenance, head, highlight,
+    is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, newleaf,
+    newnode, node_string, numchildren, provenance, setmeta, setmeta!, getmeta,
+    CompileHints, source_location, sourcefile, sourceref, mapindex, mktree,
+    ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
+    syntax_module, is_flisp_compat, adopt_scope, remove_context, fill_context!,
+    fill_context, JL_NEW_SYNTAX_VERSION, JL_OLD_SYNTAX_VERSION
 
 const DEBUG = true
+
+# Falls back to `Union{}` so that `loc isa MacroSource` is always false on Julia < 1.14
+# where `Core.MacroSource` is not defined.
+const MacroSource = isdefinedglobal(Core, :MacroSource) ? Core.MacroSource : Union{}
+
+const TypeEqOf = isdefinedglobal(Core, :TypeEqOf) ? "TypeEqOf" : "Typeof"
 
 _include("kinds.jl")
 _register_kinds()

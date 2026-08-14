@@ -210,10 +210,10 @@ attributes #3 = {"julia.mv.clones"="6"}
 !1 = !{i32 1, !"julia.mv.annotated", i32 1}
 !2 = !{i32 1, !"julia.mv.specs", !3}
 !3 = !{!4, !5, !6, !7, !8}
-!4 = !{!"cpubase", !"nofeatures", i32 0, i32 2}
-!5 = !{!"cpucloneall", !"cloneall", i32 0, i32 2}
-!6 = !{!"cpufastmath", !"fastmathclone", i32 0, i32 4}
-!7 = !{!"cpuloop", !"loopclone", i32 0, i32 8}
+!4 = !{!"cpubase", !"nofeatures", i32 0, i32 0}
+!5 = !{!"cpucloneall", !"cloneall", i32 0, i32 1}
+!6 = !{!"cpufastmath", !"fastmathclone", i32 0, i32 8}
+!7 = !{!"cpuloop", !"loopclone", i32 0, i32 0}
 !8 = !{!"cpusimd", !"simdclone", i32 0, i32 16}
 ; CHECK-DAG: ![[TBAA_CONST_METADATA]] = !{![[JTBAA_CONST_METADATA:[0-9]+]], ![[JTBAA_CONST_METADATA]]
 ; CHECK-DAG: ![[JTBAA_CONST_METADATA]] = !{!"jtbaa_const"

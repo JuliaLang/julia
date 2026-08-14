@@ -4,8 +4,7 @@ struct ValidationDiagnostic
     loc::LineNumberNode # for noting where failures come from in this file
 end
 ValidationDiagnostic(st::SyntaxTree, msg, loc) =
-    ValidationDiagnostic(
-        SyntaxList(syntax_graph(st), NodeId[st._id]), String[msg], loc)
+    ValidationDiagnostic(SyntaxList(st), String[msg], loc)
 
 """
 The type returned by all `vst` functions.  There are three answers this can
@@ -21,7 +20,7 @@ end
 
 pass() = ValidationResult(true, nothing)
 unknown() = ValidationResult(false, nothing)
-fail(st::SyntaxTree, msg="invalid syntax", loc=nothing) =
+@noinline fail(st::SyntaxTree, msg="invalid syntax", loc=nothing) =
     ValidationResult(false, [ValidationDiagnostic(
         st, msg, something(loc, LineNumberNode(0)))])
 macro fail(st, msg)
@@ -50,7 +49,7 @@ end
 
 abstract type ValidationContext end
 
-function Base.all(f::Function, vcx::ValidationContext, itr; kws...)
+function Base.all(f::T, vcx::ValidationContext, itr; kws...) where {T<:Function}
     ok = pass()
     for i in itr
         ok &= f(vcx, i; kws...)
@@ -81,10 +80,11 @@ Base.@kwdef struct Validation1Context <: ValidationContext
                             # syntax TODO: no return in finally? type decls?
     # assign_ok::Bool=true    # no in vect, curly, [typed_]h/v/ncat
 
-    # fixme: flisp happens to allow reading of underscore vars if they are
-    # introduced like `(function (where (call f (:: arg T)...) _) body)`, and
-    # the underscore is used in T.  See #60626.
-    in_param_t::Bool=false
+    # fixme: flisp happens to allow reading of underscore sparam names if they
+    # are used in function signature types or other sparam bounds.  See #60626.
+    #
+    # Mod._ is also readable
+    readable_underscore::Bool=false
 
     # vst0 shares this context type since macro expansion doesn't recurse
     # into some forms, and most parts of the AST are the same.
@@ -98,11 +98,11 @@ function with(vcx::Validation1Context;
               in_symblock  =vcx.in_symblock,
               inner_cond   =vcx.inner_cond,
               return_ok    =vcx.return_ok,
-              in_param_t   =vcx.in_param_t,
+              readable_underscore=vcx.readable_underscore,
               unexpanded   =vcx.unexpanded)
     Validation1Context(
         toplevel, in_gscope, in_loop, in_symblock, inner_cond, return_ok,
-        in_param_t, unexpanded)
+        readable_underscore, unexpanded)
 end
 
 """
@@ -147,44 +147,40 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"if" _...] -> let
         inner_vcx = vcx.toplevel ? with(vcx; inner_cond=true) : vcx
         @stm st begin
+            [K"if" [K"generated"] t f] ->
+                vst1(inner_vcx, t) & vst1(inner_vcx, f)
+            [K"if" [K"generated"] _...] ->
+                @fail(st, "if-generated requires both true and false cases")
             [K"if" cond t] ->
                 vst1(vcx, cond) & vst1(inner_vcx, t)
             [K"if" cond t f] ->
-                vst1(vcx, cond) & vst1(inner_vcx, t) & vst1_else(inner_vcx, f)
+                vst1(vcx, cond) & vst1(inner_vcx, t) & vst1(inner_vcx, f)
             _ -> @fail(st, "expected (if cond body) or (if cond body else)")
         end
     end
+    [K"elseif" cond t] -> vst1(vcx, cond) & vst1(vcx, t)
+    [K"elseif" cond t f] -> vst1(vcx, cond) & vst1(vcx, t) & vst1(vcx, f)
     [K"try" _...] -> vst1_try(vcx, st)
     [K"function" _...] -> vst1_function(vcx, st)
     [K"call" _...] -> vst1_call(vcx, st)
     [K"'" x] -> vst1(vcx, x)
     [K"." f [K"tuple" _...]] -> vst1_dotcall(vcx, st)
-    [K"do" [K"macrocall" _...] lam] ->
-        vst1_macrocall(vcx, call) & vst1_lam(vcx, lam)
-    [K"do" call lam] -> vst1_call(vcx, call) & vst1_lam(vcx, lam)
-
-    ([K"=" call _], when=(is_eventually_call(call))) ->
-        vst1_function(vcx, st)
-    [K"=" l r] ->
-        vst1_assign_lhs(vcx, l) & vst1(vcx, r)
-    [K".=" l r] ->
-        vst1_dotted_or_op_assign(vcx, st)
-    ([K"unknown_head" l r], when=Base.isoperator(st.name_val)) ->
-        vst1_dotted_or_op_assign(vcx, st)
-    [K"unknown_head"] -> let head = st.name_val
-        head === "latestworld-if-toplevel" ?
-            pass() : @fail(st, string("unknown expr head: ", head))
-    end
-    ([K"." l r], when=kind(r)!==K"tuple") ->
-        vst1(vcx, l) & vst1_simple_dot_rhs(vcx, r)
-    [K"." x] ->
-        vst1(vcx, x) # BroadcastFunction(x)
+    [K"." l r] -> vst1(vcx, l) & vst1_dot_getproperty_rhs(vcx, r)
+    [K"." x] -> vst1(vcx, x) # BroadcastFunction(x)
+    [K"do" call lam] ->
+        (vst1_call(vcx, call) | vst1_dotcall(vcx, call) | vst0_macrocall(vcx, call)) &
+        vst1_lam(vcx, lam)
+    [K"=" _...] -> vst1_assign(vcx, st)
+    (_, when=(vr=vst1_dotted_or_op_assign(vcx, st); is_known(vr))) -> vr
     [K"return" val] -> vcx.return_ok ?
         vst1(vcx, val) :
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([K"continue"], when=vcx.in_loop) -> pass()
     ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
-    ([K"break"], when=vcx.in_loop) -> pass()
+    # An unlabeled break is also allowed inside anonymous `@label` blocks;
+    # breaking through a named block is rejected with a precise error during
+    # linearization.
+    ([K"break"], when=vcx.in_loop||vcx.in_symblock) -> pass()
     ([K"break" lab], when=vcx.in_loop||vcx.in_symblock) ->
         vst1_ident(vcx, lab; lhs=true)
     ([K"break" lab x], when=vcx.in_loop||vcx.in_symblock) ->
@@ -201,7 +197,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"tuple" _...] ->
         vst1_tuple(vcx, st)
     [K"curly" t tvs...] ->
-        vst1(vcx, t) & all(vst1_curly_typevar, vcx, tvs)
+        vst1(vcx, t) & no_assignment(tvs, "type parameter list") &
+        all(vst1_curly_typevar, vcx, tvs)
     [K"where" t tds...] ->
         vst1(vcx, t) & all(vst1_typevar_decl, vcx, tds)
     [K"string" xs...] ->
@@ -212,6 +209,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"generator" _...] -> vst1_generator(vcx, st)
     [K"comprehension" [K"flatten" g]] -> vst1_generator(vcx, g)
     [K"comprehension" g] -> vst1_generator(vcx, g)
+    [K"comprehension" xs...] ->
+        # HACK: We shouldn't be creating trees here, but this is extremely rare
+        # (deprecated even in 2016)
+        vst1_generator(vcx, @ast _ st [K"generator" xs...])
     [K"typed_comprehension" t [K"flatten" g]] ->
         vst1(vcx, t) & vst1_generator(vcx, g)
     [K"typed_comprehension" t g] ->
@@ -222,11 +223,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         # TODO: can we restrict xs[2:2:end] to identifier or .identifier?
         all(vst1, vcx, xs[2:2:end]) &
         all(vst1, vcx, xs[1:2:end])
-    [K"<:" x] -> vst1(vcx, x)
-    [K">:" x] -> vst1(vcx, x)
-    [K"<:" x y] -> vst1(vcx, x) & vst1(vcx, y)
-    [K">:" x y] -> vst1(vcx, x) & vst1(vcx, y)
-    [K"-->" x y] -> vst1(vcx, x) & vst1(vcx, y)
+    [K"<:" xs...] -> all(vst1_call_arg, vcx, xs)
+    [K">:" xs...] -> all(vst1_call_arg, vcx, xs)
+    [K"-->" xs...] -> all(vst1_call_arg, vcx, xs)
     [K"::" x y] -> vst1(vcx, x) & vst1(vcx, y)
     # TODO: inner_cond on args[2:end]
     [K"&&" xs...] -> all(vst1, vcx, xs)
@@ -234,14 +233,16 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K".&&" x y] -> vst1(vcx, x) & vst1(vcx, y)
     [K".||" x y] -> vst1(vcx, x) & vst1(vcx, y)
     (_, when=(vr=vst1_arraylike(vcx, st); is_known(vr))) -> vr
+    # syntax TODO: disallow pre-desugared const, broken with complex rhs
+    [K"const" l r] -> vst1_ident(vcx, l; lhs=true) & vst1(vcx, r)
     [K"const" [K"global" x]] -> !vcx.toplevel ?
         @fail(st, "unsupported `const` inside function") :
         vst1_const_assign(vcx, x)
     [K"const" x] ->  !vcx.toplevel ?
         @fail(st, "unsupported `const` inside function") :
         vst1_const_assign(vcx, x)
-    [K"global" xs...] -> all(vst1_global_arg, vcx, xs)
-    [K"local" xs...] -> all(vst1_local_arg, vcx, xs)
+    [K"global" xs...] -> minlen(st, xs, 1) & all(vst1_global_arg, vcx, xs)
+    [K"local" xs...] -> minlen(st, xs, 1) & all(vst1_local_arg, vcx, xs)
     [K"macrocall" _...] -> vst0_macrocall(vcx, st)
     [K"quote" x] -> vcx.unexpanded ? vst0_quoted(vcx, x; quote_level=1) :
         @fail(st, "interpolating quote not valid syntax after macro expansion")
@@ -249,10 +250,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     #---------------------------------------------------------------------------
     # Forms not produced by the parser
     [K"ssavalue" [K"Value"]] -> pass()
+    [K"static_parameter" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
-    [K"inert_syntaxtree" _] -> pass()
-    [K"core"] -> st.name_val === "nothing" ? pass() :
-        @fail(st, "zero-arg `core` is only used for `Core.nothing`")
+    [K"syntaxinert" _] -> pass()
     [K"core" [K"Identifier"]] -> pass()
     [K"top" [K"Identifier"]] -> pass()
     [K"meta" _...] -> pass() # TODO
@@ -261,39 +261,46 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         all(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
     [K"symboliclabel" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
+    [K"oldsymbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicblock" lab body] ->
         vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
     [K"gc_preserve" x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
+    # lowering TODO: 0 args segfaults
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
     [K"lambda" [K"block" b1...] [K"block" b2...] _] ->
-        all(vst1_ident, vcx, b1) &
-        all(vst1_ident, vcx, b2) &
+        all(vst1_ident, vcx, b1; lhs=true) &
+        all(vst1_ident, vcx, b2; lhs=true) &
         (kind(st[3]) === K"->" ? vst1_lam(vcx, st[3]) :
             vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), st[3]))
     [K"softscope" _] -> pass()
     [K"softscope"] -> pass()
     [K"generated"] -> pass()
-    [K"generated_function" callex gen nongen] -> let
-        f_vcx = with(vcx; return_ok=true, toplevel=false, in_gscope=false)
-        vst1_function_calldecl(with(f_vcx; return_ok=false), callex) &
-            vst1(f_vcx, gen) & vst1(f_vcx, nongen)
-    end
-    [K"foreigncall" _...] -> pass() # TODO (ccall also?)
+    [K"foreigncall" fname rt at cconv roots_args...] ->
+        # TODO: could be stricter
+        vst1(vcx, fname) &
+        vst1(vcx, rt) &
+        vst1(vcx, at) &
+        vst1(vcx, cconv) &
+        all(vst1, vcx, roots_args)
+    [K"foreignglobal" fname] -> vst1(vcx, fname) # TODO: could be stricter
     [K"cfunction" [K"Value"] f rt at [K"inert" [K"Identifier"]]] ->
         vst1(vcx, f) & vst1(vcx, rt) & vst1(vcx, at)
-    [K"cconv" tup nreq] -> (get(tup, :value, nothing) isa Tuple &&
-        get(nreq, :value, nothing) isa Int) ? pass() :
+    [K"cconv" tup nreq] -> (tup.value isa Tuple && nreq.value isa Int) ? pass() :
         @fail(st, "expected (cconv convention_tuple n_req_args)")
     [K"tryfinally" t f] -> vst1(vcx, t) & vst1(vcx, f)
     [K"tryfinally" t f scope] -> vst1(vcx, t) & vst1(vcx, f) & vst1(vcx, scope)
-    [K"inline" _] -> pass()
-    [K"noinline" _] -> pass()
-    [K"inbounds" _] -> pass()
-    [K"boundscheck"] -> pass()
-    [K"boundscheck" _] -> pass()
-    [K"loopinfo" _...] -> pass()
+    [K"loopinfo" _...] -> pass() # TODO
+    [K"boundscheck"] -> pass() # optional bool arg does nothing
+    ([K"boundscheck" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"inbounds" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"inbounds" [K"Identifier"]], when=(syntax_name(st[1]) == "pop")) -> pass()
+    ([K"inline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"noinline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    [K"purity"] -> pass()
+    [K"purity" _ _...] -> numchildren(st) == fieldcount(Base.EffectsOverride) ?
+        pass() : @fail(st, "wrong number of args to `purity` expression")
     [K"locals"] -> pass()
     [K"islocal" _] -> pass()
     [K"isglobal" _] -> pass()
@@ -304,6 +311,12 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "can only be used inside a function") :
         !vcx.return_ok ?
         @fail(st, "current function not defined in comprehension or generator") : pass()
+    [K"unknown_head"] -> let head = syntax_name(st)
+        head === "latestworld-if-toplevel" ? pass() :
+            @fail(st, string("unknown expr head: ", head))
+    end
+    [K"aliasscope"] -> pass()
+    [K"popaliasscope"] -> pass()
 
     #---------------------------------------------------------------------------
     # Invalid forms for which we want to produce detailed errors
@@ -325,7 +338,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"Placeholder"] ->
         @fail(st, "`Placeholder` kind not valid until desugaring")
     [K"unknown_head" _...] ->
-        @fail(st, string("unknown expr head: ", st.name_val))
+        @fail(st, string("unknown expr head: ", syntax_name(st)))
     [K"$" x] -> @fail(st, raw"`$` expression outside string or quote")
     [K"continue" _...] ->
         @fail(st, "`continue` outside of a `while` or `for` loop")
@@ -359,7 +372,7 @@ vst1_toplevel_only(vcx, st) = @stm st begin
     [K"struct" [K"Value"] sig [K"block" body...]] ->
         vst1_typesig(vcx, sig) & (
             !(st[1].value isa Bool) ? @fail(st[1], "expected mutable flag") :
-                all(vst1_struct_arg, vcx, body))
+                _struct_noassign(vcx, body) & all(vst1_struct_arg, vcx, body))
     [K"abstract" sig] ->
         vst1_typesig(vcx, sig)
     [K"primitive" sig n] ->
@@ -370,8 +383,10 @@ vst1_toplevel_only(vcx, st) = @stm st begin
     [K"using"  [K":" p1 ps...]] ->
         (vst1_importpath(vcx, p1; dots_ok=true) &
         all(vst1_importpath, vcx, ps; dots_ok=false))
-    [K"import" ps...] -> all(vst1_importpath, vcx, ps; dots_ok=true)
-    [K"using"  ps...] -> all(vst1_importpath, vcx, ps; dots_ok=true)
+    [K"import" ps...] ->
+        minlen(st, ps, 1) & all(vst1_importpath, vcx, ps; dots_ok=true)
+    [K"using"  ps...] ->
+        minlen(st, ps, 1) & all(vst1_importpath, vcx, ps; dots_ok=true)
     [K"public" xs...] -> all(vst1_ident, vcx, xs)
     [K"export" xs...] -> all(vst1_ident, vcx, xs)
     [K"latestworld"] -> pass()
@@ -389,15 +404,10 @@ vst1_local_arg(vcx, st) = @stm st begin
 end
 
 vst1_global_arg(vcx, st) = @stm st begin
-    [K"Identifier"] -> pass()
-    ([K"Value"], when=(st.value isa GlobalRef)) -> pass
-    [K"=" l r] ->
-        vst1_assign_lhs(vcx, l) & vst1(vcx, r)
     [K"function" _...] -> vcx.toplevel ?
         vst1_function(vcx, st) :
         @fail(st, "global function needs to be placed at top level, or use eval")
-    [K"::" [K"Identifier"] t] -> vst1(vcx, t)
-    _ -> vst1_dotted_or_op_assign(vcx, st) |
+    _ -> vst1_symdecl_or_assign(vcx, st) | vst1_dotted_or_op_assign(vcx, st) |
         @fail(st, "invalid global declaration: expected identifier or assignment")
 end
 
@@ -412,20 +422,21 @@ function vst1_importpath(vcx, st; dots_ok)
         [K"as" [K"." xs...] [K"Identifier"]] -> xs
         [K"as" [K"." xs...] x] -> (ok &= @fail(x, "expected identifier"); xs)
         [K"." xs...] -> xs
+        _ -> return @fail(st, "malformed import path")
     end
     seen_first = false
     for c in path_components
-        if kind(c) === K"."
+        if kind(c) === K"Identifier" && syntax_name(c) === "."
             if !dots_ok || seen_first
                 ok &= @fail(c, "unexpected `.` in import path")
             end
             continue
         end
-        ok = ok & vst1_ident(vcx, seen_first && kind(c) === K"quote" ? c[1] : c)
+        # syntax todo: lhs should probably not be true here
+        ok = ok & (vst1_ident(vcx, c).ok ? pass() : vst1_ident(vcx, c; lhs=true))
         seen_first = true
     end
-    return !seen_first ?
-        @fail(st, "expected identifier in `importpath`") : ok
+    return !seen_first ? @fail(st, "expected identifier in `importpath`") : ok
 end
 
 vst1_tuple(vcx, st) = @stm st begin
@@ -436,15 +447,6 @@ vst1_tuple(vcx, st) = @stm st begin
         all(vst1_call_arg, vcx, args)
     [K"tuple" xs...] -> all(vst1_splat_or_val, vcx, xs)
     _ -> @fail(st, "malformed tuple")
-end
-
-vst1_else(vcx, st) = @stm st begin
-    [K"elseif" cond t] -> vst1(vcx, cond) &
-        vst1(vcx, t)
-    [K"elseif" cond t f] -> vst1(vcx, cond) &
-        vst1(vcx, t) &
-        vst1_else(vcx, f)
-    _ -> vst1(vcx, st)
 end
 
 # TODO: disallow (has-unmatched-symbolic-goto? tryb)
@@ -468,7 +470,7 @@ vst1_try(vcx, st) = @stm st begin
     _ -> @fail(st, "malformed `try` expression")
 end
 
-vst1_try_catchvar(vcx, st) = @stm st begin
+vst1_try_catchvar(_vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
     ([K"Value"], when=st.value===false) -> pass()
 end
@@ -478,36 +480,45 @@ end
 # - single-arg const with no value (presumably to poison this name) was likely
 #   not intended to work, and can only be produced by macros
 vst1_const_assign(vcx, st) = @stm st begin
-    [K"=" l r] -> vst1_assign_lhs(vcx, l; in_const=true) & vst1(vcx, r)
+    [K"=" _ _] -> vst1_assign(vcx, st; in_const=true)
     [K"Identifier"] -> pass()
     [K"local" _...] -> @fail(st, "unsupported `const local` declaration")
     _ -> @fail(st, "expected assignment after `const`")
 end
 
+# syntax TODO: all-underscore variables may be read from with dot syntax
+vst1_dot_getproperty_rhs(vcx, st) = @stm st begin
+    [K"inert" x] -> pass()
+    [K"syntaxinert" x] -> pass()
+    [K"Identifier"] -> pass()
+    (_, when=is_expr_value(st)) -> pass()
+    _ -> @fail(st, "invalid `.` syntax")
+end
+
 # We can't validate A.B in general (usually lowers to getproperty), but it shows
-# up in a number of syntax special cases where we can.
-vst1_dotsym(vcx, st) = @stm st begin
-    [K"." l r] -> vst1_dotsym(vcx, l) & vst1_simple_dot_rhs(vcx, r) |
+# up in a number of syntax special cases where we can. (flisp: sym-ref?)
+vst1_calldecl_dot_name(vcx, st) = @stm st begin
+    [K"." l r] ->
+        vst1_calldecl_dot_name(vcx, l) &
+        vst1_calldecl_dot_name_rhs(vcx, r) |
         @fail(st, "invalid `.` form")
-    [K"Value"] -> typeof(st.value) in (Module, GlobalRef) ? pass() :
-        @fail(st, "expected `.` or identifier")
+    [K"Value"] -> pass()
     i -> vst1_ident(vcx, i)
 end
 
-# syntax TODO: all-underscore variables may be read from with dot syntax
-# syntax TODO: disallow string
-vst1_simple_dot_rhs(vcx, st; lhs=false) = @stm st begin
-    [K"inert" x] -> vst1_simple_dot_rhs(vcx, x)
-    [K"Identifier"] -> pass()
-    [K"String"] -> pass()
+vst1_calldecl_dot_name_rhs(vcx, st) = @stm st begin
+    [K"inert" x] -> vst1_calldecl_dot_name_rhs(vcx, x)
+    [K"syntaxinert" x] ->  vst1_calldecl_dot_name_rhs(vcx, x)
+    [K"Identifier"] -> vst1_ident(vcx, st; lhs=true)
+    ([K"Value"], when=st.value isa String) -> _ident_str(vcx, st, st.value; lhs=true)
+    [K"String"] -> _ident_str(vcx, st, st.value; lhs=true)
     [K"tuple" _...] -> @fail(st, "dotcall syntax not valid here")
     _ -> @fail(st, "invalid `.` syntax")
 end
 
-vst1_symdecl_or_assign(vcx, st) = @stm st begin
-    [K"=" l r] -> vst1_assign_lhs(vcx, l) & vst1(vcx, r)
-    _ -> vst1_symdecl(vcx, st)
-end
+vst1_symdecl_or_assign(vcx, st) =
+    @fail(st, "expected identifier or assignment") |
+    vst1_symdecl(vcx, st) | vst1_assign(vcx, st)
 
 vst1_symdecl(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
@@ -515,32 +526,40 @@ vst1_symdecl(vcx, st) = @stm st begin
     _ -> @fail(st, "expected identifier or `identifier::type`")
 end
 
-# TODO: globalref might not be valid everywhere; check usage of this function
+# TODO: globalref (identifier with .mod) might not be valid everywhere; check
+# usage of this function
 vst1_ident(vcx, st; lhs=false) = @stm st begin
-    ([K"Identifier"], when=(s=st.name_val; true)) -> if all(==('_'), s)
-        lhs || vcx.in_param_t ? pass() :
-            @fail(st, "all-underscore identifiers are write-only and their values cannot be used in expressions")
-    elseif s in ("ccall", "cglobal")
-        # TODO
-        pass()
+    [K"Identifier"] -> _ident_str(vcx, st, syntax_name(st); lhs)
+    _ -> @fail(st, "expected identifier")
+end
+function _ident_str(vcx, st, s::String; lhs=false)
+    if !lhs && (!vcx.readable_underscore || !is_flisp_compat(st)) &&
+        is_writeonly_est_name(s)
+        @fail(st, "all-underscore identifiers are write-only and their values cannot be used in expressions")
+    elseif lhs && s in ("ccall", "cglobal")
+        @fail(st, string(s, " is a reserved identifier"))
     else
         pass()
     end
-    ([K"Value"], when=(st.value isa GlobalRef)) -> pass()
-    _ -> @fail(st, "expected identifier")
+end
+
+"N.B. this shouldn't be used after `est_to_dst`, as JuliaLowering uses the
+Placeholder kind when we have write-only identifiers"
+function is_writeonly_est_name(s::String)
+    (all(==('_'), s) || s == UNUSED) && length(s) > 0
 end
 
 vst1_call(vcx, st) = @stm st begin
-    ([K"call" [K"Identifier"] args...], when=st[1].name_val==="cglobal") ->
+    ([K"call" [K"Identifier"] args...], when=syntax_name(st[1])==="cglobal") ->
         (1 <= length(args) <= 2 ? pass() :
             @fail(st, "cglobal must have one or two arguments")) &
         all(vst1_call_arg, vcx, args)
     [K"call" f [K"parameters" kwargs...] args...] ->
-        vst1(vcx, f) &
+        (vst1_ident(vcx, f) | vst1(vcx, f)) &
         all(vst1_call_arg, vcx, args) &
         all(vst1_call_kwarg, vcx, kwargs)
     [K"call" f args...] ->
-        vst1(vcx, f) &
+        (vst1_ident(vcx, f) | vst1(vcx, f)) &
         all(vst1_call_arg, vcx, args)
     [K"call" _...] -> @fail(st, "malformed `call`")
     _ -> unknown()
@@ -563,15 +582,17 @@ vst1_call_arg(vcx, st) = @stm st begin
 end
 
 # Arg to `parameters` (post-semicolon) in a call (not function decl).  Stricter
-# than `vst1_call_arg`.
+# than `vst1_call_arg`.  `=` desugars to `kw`.
 vst1_call_kwarg(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
     [K"kw" id val] -> vst1_ident(vcx, id; lhs=true) & vst1(vcx, val)
+    [K"=" id val] -> vst1_ident(vcx, id; lhs=true) & vst1(vcx, val)
     [K"..." x] -> vst1(vcx, x)
     [K"." x [K"inert" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
-    ([K"call" [K"Identifier"] symval v], when=(st[1].name_val==="=>")) ->
+    [K"." x [K"syntaxinert" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
+    ([K"call" [K"Identifier"] symval v], when=(syntax_name(st[1])==="=>")) ->
         vst1(vcx, symval) & vst1(vcx, v)
-    _ -> @fail(st, "expected identifier, `=`, or, `...` after semicolon")
+    _ -> @fail(st, "expected identifier, `=`, or `...` after semicolon")
 end
 
 vst1_lam(vcx, st) = let
@@ -579,22 +600,32 @@ vst1_lam(vcx, st) = let
     @stm st begin
         [K"->" l r] ->
             vst1_lam_lhs(with(f_vcx; return_ok=false), l) & vst1(f_vcx, r)
-        _ -> unknown()
+        _ -> @fail(st, "expected `->` expression")
     end
 end
 
 vst1_lam_lhs(vcx, st) = @stm st begin
     [K"tuple" [K"parameters" _...] ps...] ->
-        _calldecl_positionals(vcx, ps, K"=") & vst1_calldecl_kws(vcx, st[1])
+        _calldecl_positionals(vcx, ps, true) & vst1_calldecl_kws(vcx, st[1])
     [K"tuple" ps...] ->
-        _calldecl_positionals(vcx, ps, K"=")
+        _calldecl_positionals(vcx, ps, true)
     [K"where" ps tds...] ->
-        vst1_lam_lhs(vcx, ps) & all(vst1_typevar_decl, vcx, tds)
+        vst1_lam_lhs(vcx, ps) &
+        all(vst1_typevar_decl, with(vcx; readable_underscore=true), tds)
     # syntax TODO: This is handled badly in the parser
-    [K"block" p1 p2] -> pass()
+    [K"block"] -> pass()
+    [K"block" x] -> _calldecl_positionals(vcx, SyntaxList(x), true)
+    [K"block" x p] -> _calldecl_positionals(vcx, SyntaxList(x), true) &
+        @stm p begin
+            [K"=" kw v] -> vst1_param(vcx, kw) & vst1(vcx, v)
+            [K"kw" kw v] -> vst1_param(vcx, kw) & vst1(vcx, v)
+            [K"..." kw] -> vst1_param_varkw(vcx, kw)
+            _ -> vst1_param(vcx, p)
+        end
+    [K"block" _ _ _ _...] -> @fail(st, "more than one semicolon in signature")
     # unwrapped single arg
     _ -> let ps = SyntaxList(st)
-        _calldecl_positionals(vcx, ps, K"=")
+        _calldecl_positionals(vcx, ps, true)
     end
 end
 
@@ -607,10 +638,10 @@ vst1_function(vcx, st) = let
     @stm st begin
         [K"function" name] -> vst1_ident(vcx, name)
         [K"function" callex body] ->
-            vst1_function_calldecl(with(f_vcx; return_ok=false), callex) &
+            vst1_function_calldecl(with(vcx; return_ok=false), callex) &
             vst1(f_vcx, body)
         [K"=" callex body] ->
-            vst1_function_calldecl(with(f_vcx; return_ok=false), callex) &
+            vst1_function_calldecl(with(vcx; return_ok=false), callex) &
             vst1(f_vcx, body)
         _ -> @fail(st, "malformed `function`")
     end
@@ -623,97 +654,98 @@ end
 
 vst1_function_calldecl(vcx, st) = @stm st begin
     [K"where" callex tds...] ->
-        vst1_function_calldecl(vcx, callex) & all(vst1_typevar_decl, vcx, tds)
+        vst1_function_calldecl(vcx, callex) &
+        all(vst1_typevar_decl, with(vcx; readable_underscore=true), tds)
     [K"::" callex rt] ->
-        vst1_simple_calldecl(vcx, callex) &
-        vst1(with(vcx, in_param_t=true), rt)
+        vst1_simple_calldecl(vcx, callex) & vst1(vcx, rt)
     _ -> vst1_simple_calldecl(vcx, st)
 end
 
-vst1_simple_calldecl(vcx, st; in_macro=false) = @stm st begin
+vst1_simple_calldecl(vcx, st) = @stm st begin
     [K"call" f [K"parameters" _...] ps...] ->
         vst1_calldecl_name(vcx, f) &
-        _calldecl_positionals(vcx, ps, K"kw") &
+        _calldecl_positionals(vcx, ps, false) &
         vst1_calldecl_kws(vcx, st[2])
     [K"call" f ps...] -> vst1_calldecl_name(vcx, f) &
-        _calldecl_positionals(vcx, ps, K"kw")
-    # anonymous function syntax `function (x); end`  or `function (x...); end`
-    [K"tuple" _...] -> vst1_lam_lhs(vcx, st)
-    [K"..." va] -> vst1_pparam_typed_tuple(vcx, va)
-    _ -> @fail(st, "malformed `call` in function decl")
+        _calldecl_positionals(vcx, ps, false)
+    # anonymous function syntax `function (x); end` or `function (x...); end` is
+    # subject to bad-arglist rules (block, etc.)
+    _ ->  vst1_lam_lhs(vcx, st) | @fail(st, "malformed `call` in function decl")
 end
 
 vst1_macro(vcx, st) = @stm st begin
-    [K"macro" m] -> vst1_ident(vcx, m)
+    [K"macro" m] -> vst1_ident(vcx, m; lhs=true) | vst1_ident(vcx, m; lhs=false)
     [K"macro" [K"call" _ [K"parameters" _...] _...] _...] ->
         @fail(st[1][end], "macros cannot accept keyword arguments")
     [K"macro" [K"call" m ps...] body] ->
         let vcx = with(vcx; return_ok=false, toplevel=false, in_gscope=false)
             vst1_macro_calldecl_name(vcx, m) &
-                _calldecl_positionals(vcx, ps, K"kw") &
+                _calldecl_positionals(vcx, ps, false) &
                 vst1(with(vcx; return_ok=true), body)
         end
     [K"macro" [K"where" _...] _...] ->
         @fail(st[1], "`where` not allowed in macro signatures")
+    [K"macro" _...] -> @fail(st, "malformed `macro`")
     _ -> unknown()
 end
 
+# Macros may have either underscore or reserved (ccall, cglobal) names
 vst1_macro_calldecl_name(vcx, st) = @stm st begin
-    (_, when=vst1_ident(vcx, st).ok) -> pass()
-    [K"." _ _] -> vst1_dotsym(vcx, st)
-    _ -> @fail(st, "invalid macro name")
+    [K"." _ _] -> vst1_calldecl_dot_name(vcx, st)
+    m -> @fail(st, "invalid macro name") |
+        vst1_ident(vcx, m; lhs=true) | vst1_ident(vcx, m; lhs=false)
 end
 
-vst1_calldecl_name(vcx, st) = @stm st begin
+vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
+    [K"Identifier"] -> vst1_ident(vcx, st; lhs=true) &
+        (!is_dotted_operator(syntax_name(st)) ? pass() :
+        @fail(st, "dotted operator is not a valid function name"))
     [K"." _ _] ->
-        vst1_dotsym(vcx, st)
+        vst1_calldecl_dot_name(vcx, st)
     [K"curly" t tvs...] ->
         vst1_calldecl_name(vcx, t) & all(vst1, vcx, tvs)
     [K"Value"] ->
         pass() # GlobalRef works. Function? Type?
-
-    # callable type
-    [K"::" t] ->
-        vst1(vcx, t)
-    [K"::" x t] ->
-        vst1_pparam_simple_tuple(vcx, x) & vst1(vcx, t)
+    ([K"::" _...], when=!vcx.toplevel) ->
+        @fail(st, "adding methods to callable type only allowed at top level")
+    [K"::" t] -> vst1(vcx, t)
+    [K"::" x t] -> vst1_pparam_simple_tuple(vcx, x) & vst1(vcx, t)
+    # TODO: @overlay broken in many cases, should be stricter
+    [K"overlay" mt x] ->
+        vst1(vcx, mt) & vst1_calldecl_name(vcx, x)
 
     [K"where" t tds...] ->
-        vst1(vcx, t) & all(vst1_typevar_decl, vcx, tds)
-    _ -> @fail(st, "invalid function name") | vst1_ident(vcx, st)
+        vst1_calldecl_name(vcx, t) & all(vst1_typevar_decl, vcx, tds)
+    _ -> @fail(st, "invalid function name")
+end
+
+strip_arg_meta(st) = @stm st begin
+    [K"meta" s arg] -> let meta_s = est_syntax_name(s, "")
+        meta_s isa String || return st
+        kind(arg) === K"meta" ? st :
+            !(meta_s in ("specialize", "nospecialize")) ? st : arg
+    end
+    _ -> st
 end
 
 # Check mandatory and optional positional params:
 # `[pparam* pparam_and_default* pparam_and_splatdefault? pparam_va?]`
 # TODO: add list matching to @stm
-function _calldecl_positionals(vcx, params_meta, kw_kind)
+function _calldecl_positionals(vcx, params_meta, eq_is_kw)
     isempty(params_meta) && return pass()
     ok = Ref(pass())
-    params = map(params_meta) do meta_p
-        @stm meta_p begin
-            [K"meta" s p] -> let meta_s = get(s, :name_val, "")
-                if !(meta_s in ("specialize", "nospecialize"))
-                    ok[] &= @fail(p, "unrecognized meta function arg form")
-                end
-                p
-            end
-            p -> p
-        end
-    end
-    va_ok = vst1_pparam_va(vcx, params[end]; kw_kind)
+    params = map(strip_arg_meta, params_meta)
+    va_ok = vst1_pparam_va(vcx, params[end]; eq_is_kw)
     if is_known(va_ok)
         params = params[1:end-1]
         ok[] &= va_ok
     end
     require_assign = false
-    for p in params
-        if kind(p) === kw_kind
+    for (i, p) in enumerate(params)
+        if kind(p) === K"kw" || kind(p) === K"=" && eq_is_kw
             require_assign = true
-            if p == params[end]
-                ok[] &= vst1_pparam_and_default(vcx, p; kw_kind, allow_val_splat=true)
-            else
-                ok[] &= vst1_pparam_and_default(vcx, p; kw_kind, allow_val_splat=false)
-            end
+            allow_val_splat = i == lastindex(params)
+            ok[] &= vst1_pparam_and_default(vcx, p; eq_is_kw, allow_val_splat)
         elseif kind(p) === K"..."
             ok[] &= @fail(p, "`...` may only be used on the final parameter")
         elseif require_assign # TODO: multi-syntaxtree error
@@ -725,20 +757,23 @@ function _calldecl_positionals(vcx, params_meta, kw_kind)
     return ok[]
 end
 
-vst1_pparam_va(vcx, st; kw_kind) = @stm st begin
-    ([K"kw" [K"..." va] val], when=kw_kind===K"kw") ->
+# TODO: flisp optional-positional-defs counts a wrapped `...` as an optional
+# arg, not a vararg, but it appears to work the same
+vst1_pparam_va(vcx, st; eq_is_kw) = @stm st begin
+    [K"kw" [K"..." va] val] ->
         vst1_pparam_typed_tuple(vcx, va) & vst1_splat_or_val(vcx, val)
-    ([K"=" [K"..." va] val], when=kw_kind===K"=") ->
+    ([K"=" [K"..." va] val], when=eq_is_kw) ->
         vst1_pparam_typed_tuple(vcx, va) & vst1_splat_or_val(vcx, val)
     [K"..." va] -> vst1_pparam_typed_tuple(vcx, va)
     _ -> unknown()
 end
 
-# destructuring args: function f(a, (x, y)) ...
-vst1_pparam_typed_tuple(vcx, st) = @stm st begin
+# destructuring args: function f(a, (x, y)) ...  TODO: the strip_arg_meta call
+# here corresponds to no-op nospecialize, and should ideally be removed.
+vst1_pparam_typed_tuple(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"::" [K"tuple" _...] t] ->
         vst1_pparam_simple_tuple(vcx, st[1]) &
-        vst1(with(vcx; in_param_t=true), t)
+        vst1(with(vcx; readable_underscore=true), t)
     [K"tuple" _...] -> vst1_pparam_simple_tuple(vcx, st)
     _ -> vst1_param(vcx, st)
 end
@@ -762,44 +797,51 @@ vst1_pparam_simple_tuple(vcx, st) = @stm st begin
 end
 
 vst1_param(vcx, st) = @stm st begin
-    [K"Identifier"] -> pass()
-    [K"::" [K"Identifier"] t] -> vst1(with(vcx; in_param_t=true), t)
-    [K"::" t] -> vst1(with(vcx; in_param_t=true), t)
+    [K"Identifier"] -> vst1_ident(vcx, st; lhs=true)
+    [K"::" id t] -> vst1_ident(vcx, id; lhs=true) &
+        vst1(with(vcx; readable_underscore=true), t)
+    [K"::" t] -> vst1(with(vcx; readable_underscore=true), t)
     _ -> @fail(st, "expected identifier or `identifier::type`")
 end
 
 # allow_val_splat=true when this is the final optional param (even if there are
 # varargs after it).  See #50563
-vst1_pparam_and_default(vcx, st; kw_kind, allow_val_splat) = @stm st begin
-    ([K"kw" id val], when=(kw_kind===K"kw")) ->
+vst1_pparam_and_default(vcx, st; eq_is_kw, allow_val_splat) = @stm st begin
+    [K"kw" id val] ->
         vst1_pparam_typed_tuple(vcx, id) & @stm val begin
             [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
                 @fail(val, "splat only allowed on final positional default arg")
-            _ -> vst1(vcx, val)
+            _ -> vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), val)
         end
-    ([K"=" id val], when=(kw_kind===K"=")) ->
+    ([K"=" id val], when=eq_is_kw) ->
         vst1_pparam_typed_tuple(vcx, id) & @stm val begin
             [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
                 @fail(val, "splat only allowed on final positional default arg")
-            _ -> vst1(vcx, val)
+            _ -> vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), val)
         end
     _ -> @fail(st, "malformed optional positional parameter; expected `=`")
 end
 
 vst1_calldecl_kws(vcx, st) = @stm st begin
-    [K"parameters" kws... [K"..." varkw]] ->
-        all(vst1_param_kw, vcx, kws) & @stm varkw begin
-            [K"Identifier"] -> pass()
-            [K"::" _...] ->
-                @fail(varkw, "keyword parameter with `...` may not be given a type")
-        end
+    ([K"parameters" kws... last],
+     when=(varkw = strip_arg_meta(last);
+           kind(varkw) === K"..." && numchildren(varkw) == 1)) ->
+         all(vst1_param_kw, vcx, kws) & vst1_param_varkw(vcx, varkw[1])
     [K"parameters" kws...] -> all(vst1_param_kw, vcx, kws)
-    _ -> unknown()
+    _ -> @fail(st, "malformed keyword parameters")
 end
 
-vst1_param_kw(vcx, st) = @stm st begin
+vst1_param_varkw(vcx, st) = @stm st begin
+    [K"Identifier"] -> vst1_ident(vcx, st; lhs=true)
+    [K"::" _...] ->
+        @fail(st, "keyword parameter with `...` may not be given a type")
+    _ -> @fail(st, "expected identifier")
+end
+
+# note no return_ok in default val, unlike positional defaults, due to bugs
+vst1_param_kw(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"kw" id val] ->
-        vst1_param(vcx, id) & vst1(vcx, val)
+        vst1_param(vcx, id) & vst1(with(vcx; toplevel=false, in_gscope=false), val)
     [K"..." _...] ->
         @fail(st, "`...` may only be used for the final keyword parameter")
     _ -> vst1_param(vcx, st) |
@@ -813,7 +855,7 @@ vst1_typevar_decl(vcx, st) = @stm st begin
     [K">:" t old] ->
         vst1_ident(vcx, t; lhs=true) & vst1(vcx, old)
     ([K"comparison" val_l [K"Identifier"] t [K"Identifier"] val_r],
-     when=(st[2].name_val===st[4].name_val && st[2].name_val in ("<:", ">:"))) ->
+     when=(syntax_name(st[2])===syntax_name(st[4]) && syntax_name(st[2]) in ("<:", ">:"))) ->
          vst1(vcx, val_l) &
          vst1_ident(vcx, t; lhs=true) &
          vst1(vcx, val_r)
@@ -846,14 +888,29 @@ vst1_curly_typevar(vcx, st) = @stm st begin
     _ -> vst1_splat_or_val(vcx, st)
 end
 
-vst1_struct_arg(vcx, st) =
-    vst1_struct_special_form(vcx, st) | vst1(vcx, st)
+# assignment should never be allowed, but flisp fails to check inside blocks or
+# after anything that isn't a field.  See #62075.
+function _struct_noassign(vcx, body)
+    for st in body
+        if kind(st) === K"=" && vst1_struct_field(vcx, st[1]).ok
+            return @fail(st, "assignment syntax in structure fields is reserved")
+        elseif !vst1_struct_field(vcx, st).ok
+            return pass()
+        end
+    end
+    return pass()
+end
 
-vst1_struct_special_form(vcx, st) = @stm st begin
+vst1_struct_arg(vcx, st) = @stm st begin
+    [K"block" xs...] -> all(vst1_struct_arg, vcx, xs)
+    _ -> vst1_struct_field(vcx, st) | vst1(vcx, st)
+end
+
+vst1_struct_field(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
-    [K"::" x t] -> vst1_struct_special_form(vcx, x) & vst1(vcx, t)
-    [K"const" x] -> vst1_struct_special_form(vcx, x)
-    [K"atomic" x] -> vst1_struct_special_form(vcx, x)
+    [K"::" x t] -> vst1_struct_field(vcx, x) & vst1(vcx, t)
+    [K"const" x] -> vst1_struct_field(vcx, x)
+    [K"atomic" x] -> vst1_struct_field(vcx, x)
     _ -> unknown()
 end
 
@@ -863,17 +920,28 @@ end
 #
 # Note simple `op` and `.op` are calls to (dotted) identifiers, so this special
 # handling isn't necessary.
-vst1_dotted_or_op_assign(vcx, st) = let op_s = get(st, :name_val, "")
+vst1_dotted_or_op_assign(vcx, st) = let op_s = est_syntax_name(st, "")
     @stm st begin
         [K".=" l r] -> vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
         (_, when=(!Base.isoperator(op_s))) -> unknown()
-        (_, when=(isempty(op_s) || op_s[end] !== '=')) -> unknown()
-        ([K"unknown_head" l r], when=(op_s[1] === '.')) ->
-             vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
+        (_, when=(isempty(op_s) || op_s[end] !== '=')) ->
+            unknown()
+        ([K"unknown_head" l r], when=((op_s::String)[1] === '.')) ->
+            vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
         ([K"unknown_head" l r]) ->
-             vst1_assign_lhs(vcx, l) & vst1(vcx, r)
+            vst1_assign_lhs(vcx, l) & vst1(vcx, r)
         _ -> unknown()
     end
+end
+
+vst1_assign(vcx, st; in_const = false) = @stm st begin
+    # This case handles a proper function declaration (= (call ...) ...) form.
+    # `vst1_assign_lhs_nontuple` also accepts call forms, but that is a lowering
+    # bug where the "function body" is evaluated immediately
+    ([K"=" l r], when=is_eventually_call(l)) -> vst1_function(vcx, st)
+    [K"=" l r] -> vst1_assign_lhs(vcx, l; in_const) & vst1(vcx, r)
+    [K"=" _...] -> @fail(st, "malformed assignment")
+    _ -> unknown()
 end
 
 # TODO: We could do some destructuring checks here (e.g. fail `(a,b,c) = (1,2)`)
@@ -901,21 +969,20 @@ vst1_assign_lhs(vcx, st; in_const=false, in_tuple=false) = @stm st begin
     _ -> vst1_assign_lhs_nontuple(vcx, st; in_const)
 end
 vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begin
-    [K"Identifier"] -> pass()
     [K"ssavalue" [K"Value"]] -> in_const ? @fail(st, "cannot declare ssavalue const") : pass()
-    ([K"Value"], when=(st.value isa GlobalRef)) -> pass()
     (_, when=(is_eventually_call(st))) ->
         vst1_function_calldecl(vcx, st)
     [K"::" x t] ->
         vst1_assign_lhs(vcx, x; in_const, in_tuple) & vst1(vcx, t)
     [K"." x y] ->
         in_const ? @fail(st, "cannot declare this form constant") :
-        vst1(vcx, x) & vst1_simple_dot_rhs(vcx, y)
+        kind(y) === K"tuple" ? @fail(st, "dotcall syntax not valid here") :
+        vst1(vcx, x) & vst1(vcx, y)
     [K"ref" x is...] ->
         in_const ? @fail(st, "cannot declare this form constant") :
-        vst1(vcx, x) & all(vst1_splat_or_val, vcx, is)
-    [K"curly" [K"Identifier"] tvs...] ->
-        all(vst1_typevar_decl, vcx, tvs)
+        vst1(vcx, x) & all(vst1_call_arg, vcx, is)
+    [K"curly" x tvs...] ->
+        vst1_ident(vcx, x; lhs=true) & all(vst1_typevar_decl, vcx, tvs)
 
     [K"typed_hcat" _...] ->
         @fail(st, "invalid spacing in left side of indexed assignment")
@@ -925,27 +992,56 @@ vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begi
         @fail(st, "unexpected `;` in left side of indexed assignment")
     (_, when=(kind(st) in KSet"vect hcat vcat ncat")) ->
         @fail(st, "use `(a, b) = ...` to assign multiple values")
-    _ -> @fail(st, "invalid syntax in left-hand side of assignment")
+    _ -> @fail(st, "invalid syntax in left-hand side of assignment") |
+        vst1_ident(vcx, st; lhs=true)
 end
 
 vst1_dotassign_lhs(vcx, st) = vst1_assign_lhs(vcx, st) | vst1(vcx, st)
 
 # TODO: more validation is possible here, e.g. when row/nrow can show up in ncat
 vst1_arraylike(vcx, st) = @stm st begin
-    [K"vect" xs...] -> all(vst1_splat_or_val, vcx, xs)
-    [K"hcat" xs...] -> all(vst1_splat_or_val, vcx, xs)
-    [K"vcat" xs...] -> all(vst1_splat_or_val, vcx, xs)
-    [K"ncat" [K"Value"] xs...] -> all(vst1_splat_or_val, vcx, xs)
-    [K"ref" x is...] -> vst1(vcx, x) & all(vst1_splat_or_val, vcx, is)
-    [K"row" xs...] -> all(vst1_splat_or_val, vcx, xs)
-    [K"nrow" [K"Value"] xs...] -> all(vst1_splat_or_val, vcx, xs)
-    [K"typed_hcat" t xs...] ->
-        vst1(vcx, t) & all(vst1_splat_or_val, vcx, xs)
-    [K"typed_vcat" t xs...] ->
-        vst1(vcx, t) & all(vst1_splat_or_val, vcx, xs)
-    [K"typed_ncat" t xs...] ->
-        vst1(vcx, t) & all(vst1_splat_or_val, vcx, xs)
+    [K"vect" xs...] ->
+        no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
+    [K"hcat" xs...] ->
+        no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
+    [K"vcat" xs...] ->
+        no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
+    [K"ncat" [K"Value"] xs...] ->
+        no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
+    [K"ref" x is...] -> vst1(vcx, x) & all(vst1_call_arg, vcx, is)
+    [K"row" xs...] ->
+        no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
+    [K"nrow" [K"Value"] xs...] ->
+        no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
+    [K"typed_hcat" t xs...] -> vst1(vcx, t) &
+        no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
+    [K"typed_vcat" t xs...] -> vst1(vcx, t) &
+        no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
+    [K"typed_ncat" t xs...] -> vst1(vcx, t) &
+        no_assignment(xs, "array expression") & all(vst1_splat_or_val, vcx, xs)
     _ -> unknown()
+end
+
+function no_assignment(sl, hint="this expression")
+    for st in sl
+        if kind(st) === K"="
+            return @fail(st, string(
+                "assignment is not allowed in ", hint))
+        end
+    end
+    return pass()
+end
+
+# If there is both a min and a max, prefer a finite number of match cases
+function minlen(err_st::SyntaxTree, sl, n::Int)
+    length(sl) >= n ? pass() :
+        @fail(err_st, string(
+            "expected at least ", n, " argument", (n === 1 ? "" : "s")))
+end
+function maxlen(err_st::SyntaxTree, sl, n::Int)
+    length(sl) <= n ? pass() :
+        @fail(err_st, string(
+            "expected at most ", n, " argument", (n === 1 ? "" : "s")))
 end
 
 vst1_splat_or_val(vcx, st) = @stm st begin
@@ -963,13 +1059,17 @@ vst1_generator(vcx, st) = let
             vst1(vcx, cond) &
             all(vst1_iter, vcx, is)
         [K"generator" val is...] ->
-            vst1(vcx, val) & all(vst1_iter, vcx, is)
-        _ -> unknown()
+            vst1(with(vcx; readable_underscore=true), val) &
+            all(vst1_iter, vcx, is)
+        [K"generator" _...] -> @fail(st, "malformed `generator`")
+        _ -> @fail(st, "expected `generator`")
     end
 end
 
 vst1_iter(vcx, st) = @stm st begin
     [K"=" [K"outer" i] v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
+    # rare, malformed, happens to work in desugaring
+    [K"=" i [K"..." v]] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     [K"=" i v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     _ -> @fail(st, "expected one of `=`, `in`, `∈`")
 end
@@ -991,7 +1091,6 @@ function valid_st0(st::SyntaxTree)
         isempty(err.sts) || !(kind(err.sts[1]) === K"macrocall")
     end
     vr2 = ValidationResult(isempty(vr2_errors), vr2_errors)
-    showerrors(vr2)
     return vr2.ok
 end
 
@@ -1005,7 +1104,7 @@ vst0_macrocall(vcx, st) = @stm st begin
     (_, when=!vcx.unexpanded) ->
         @fail(st, "macrocall not valid in AST after macro expansion")
     ([K"macrocall" name [K"Value"] args...],
-     when=(typeof(st[2].value) in (LineNumberNode, Core.MacroSource))) ->
+     when=(typeof(st[2].value) in (LineNumberNode, MacroSource))) ->
          pass()
     [K"macrocall" _...] ->
         @fail(st, "expected (macrocall name linenode args...)")
@@ -1024,11 +1123,12 @@ end
 
 #-------------------------------------------------------------------------------
 # Tree invariants assumed everywhere, including `show`, so fallback printing
-# should be used on failure.  (These checks really belong in the type system,
-# but failure should only be possible working on AST-internal functions.)
+# should be used on failure.  (These checks really belong in the type system.)
+# Failure should only be possible working on AST-internal functions.
 
-function assert_syntaxtree(st::SyntaxTree)
-    vr = _assert_syntaxtree(st, NodeId[], pass())
+function assert_syntaxtree(st::SyntaxTree, recursive=true)
+    vr = recursive ? _assert_syntaxtree(st, SyntaxTree[], pass()) :
+        _assert_syntaxtree_node(st)
     @jl_assert is_known(vr) st
     if !vr.ok
         msg = string("assert_syntaxtree failed: ", node_string(st), "\n")
@@ -1041,57 +1141,242 @@ function assert_syntaxtree(st::SyntaxTree)
     nothing
 end
 
-function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
-    if st._id in parents
+function _assert_syntaxtree_node(st::SyntaxTree)
+    vr = pass()
+    # TODO: assert st has context (parser doesn't add any)
+    if is_leaf(st)
+        if kind(st) === K"globalref" && st.mod === nothing
+            vr &= @fail(st, "leaf globalref requires module in .mod")
+        end
+        (needs_val, valtype) = @stm st begin
+            [K"Identifier"] -> (true,String)
+            [K"core"] -> (true,String)
+            [K"top"] -> (true,String)
+            [K"Symbol"] -> (true,String)
+            [K"globalref"] -> (true,String)
+            [K"Placeholder"] -> (false, Any)
+            [K"BindingId"] -> (true,IdTag)
+            [K"label"] -> (true,Int)
+            [K"symboliclabel"] -> (true,String)
+            [K"symbolicgoto"] -> (true,String)
+            [K"oldsymbolicgoto"] -> (true,String)
+            [K"Value"] -> (true,Any)
+            [K"slot"] -> (true,Int)
+            [K"static_parameter"] -> (true,Int)
+            [K"SSAValue"] -> (true,Int)
+            [K"nothing"] -> (false, Any)
+            [K"TOMBSTONE"] -> (false, Any)
+            [K"SourceLocation"] -> (false, Any)
+            [K"latestworld"] -> (false, Any)
+            [K"latestworld_if_toplevel"] -> (false, Any)
+            (_, when=JuliaSyntax.is_literal(st)) -> (true,Any)
+            (_, when=JuliaSyntax.is_trivia(st)) -> (false, Any) # green tree only
+            (_, when=JuliaSyntax.is_operator(st)) -> (true,String) # TODO: remove
+            [K"LambdaBindings"] -> (true,LambdaBindings)
+            [K"Slots"] -> (true,Vector{Slot})
+            _ -> return vr & @fail(st, "unrecognized leaf kind $(kind(st))")
+        end
+        if needs_val
+            if !(st.value isa valtype)
+                vr &= @fail(st, "needs value ::"*string(valtype))
+            end
+        end
+    else
+        # Note some kinds can show up as non-leaves too (mostly from Expr)
+        if kind(st) in KSet"""Identifier Value Placeholder BindingId label
+        Symbol SSAValue nothing TOMBSTONE SourceLocation LambdaBindings Slots"""
+            vr &= @fail(st, "Found leaf-only kind with children")
+        end
+        if kind(st) === K"unknown_head"
+            if !(st.value isa String)
+                vr &= @fail(st, string("needs value ::String"))
+            end
+        end
+    end
+    vr
+end
+
+function _assert_syntaxtree(st::SyntaxTree, parents::Vector{SyntaxTree}, vr)
+    if st in parents
         err = "cycle detected: ["
         for p in parents
-            err *= "\n" * node_string(SyntaxTree(st._graph, p))
+            err *= "\n" * node_string(p)
         end
         return vr & @fail(st, err*"]")
     end
-    for a in (:kind, :source)
-        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
-    end
-    if is_leaf(st)
-        # Note some kinds can show up in non-leaves too
-        required_attrs = @stm st begin
-            [K"Identifier"] -> (:name_val,)
-            [K"core"] -> (:name_val,)
-            [K"top"] -> (:name_val,)
-            [K"Symbol"] -> (:name_val,)
-            [K"globalref"] -> (:name_val,:mod)
-            [K"Placeholder"] -> ()
-            [K"BindingId"] -> (:var_id,)
-            [K"label"] -> (:id,)
-            [K"symboliclabel"] -> (:name_val,)
-            [K"symbolicgoto"] -> (:name_val,)
-            [K"Value"] -> (:value,)
-            [K"slot"] -> (:var_id,)
-            [K"static_parameter"] -> (:var_id,)
-            [K"SSAValue"] -> (:var_id,)
-            [K"TOMBSTONE"] -> ()
-            [K"SourceLocation"] -> ()
-            [K"latestworld"] -> ()
-            [K"latestworld_if_toplevel"] -> ()
-            (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
-            (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
-            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val) # TODO: remove
-            _ -> return vr & @fail(st, "unrecognized leaf kind")
-        end
-    else
-        required_attrs = @stm st begin
-            [K"code_info" _...] -> (:slots, :is_toplevel_thunk)
-            [K"unknown_head" _...] -> (:name_val,)
-            _ -> ()
-        end
-    end
-    for a in required_attrs
-        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
-    end
-    push!(parents, st._id)
-    for c in children(st)
+    vr &= _assert_syntaxtree_node(st)
+    # TODO: Proper traversal along .source and macro prov (need to cache results
+    # to avoid exponential repeated lookups, and figure out how these edges may
+    # form cycles with child edges)
+    st.source === st && (vr &= @fail(st, ".source equal to self ID"))
+    sc = st.context
+    sc isa SyntaxContext &&
+        sc.unexpanded === st && (vr &= @fail(st, "unexpanded equal to self"))
+
+    push!(parents, st)
+    is_leaf(st) || for c in children(st)
         vr &= _assert_syntaxtree(c, parents, vr)
     end
     pop!(parents)
     vr
+end
+
+#-------------------------------------------------------------------------------
+# The post-desugaring tree "st2".  Failure shouldn't be reachable by user code;
+# this is just for internal documentation and debugging purposes.
+
+Base.@kwdef struct Validation2Context <: ValidationContext
+    in_method_defs::Bool=false
+end
+
+function with(vcx::Validation2Context;
+              in_method_defs = vcx.in_method_defs)
+    Validation2Context(in_method_defs)
+end
+
+function valid_st2(st::SyntaxTree)
+    assert_syntaxtree(st)
+    vr = vst2(Validation2Context(), st)
+    @jl_assert is_known(vr) st
+    return vr
+end
+
+vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
+    (_, when=is_leaf(st)) -> kind(st) in KSet"""
+    Identifier BindingId Placeholder nothing static_parameter
+    Bool Char Float Float32 BinInt OctInt HexInt Integer
+    SourceLocation String Symbol Value core top
+    latestworld latestworld_if_toplevel symbolicgoto oldsymbolicgoto symboliclabel TOMBSTONE
+    """ ? pass() : @fail(st, "unrecognized leaf kind $(kind(st))")
+
+    [K"call" [K"static_eval" cg] xs...] -> est_syntax_name(cg, "") === "cglobal" ?
+        all(vst2, vcx, xs) : @fail(st, "expected (call (static_eval cglobal) _...)")
+    [K"call" xs...] -> all(vst2, vcx, xs)
+    [K"block" xs...] -> all(vst2, vcx, xs)
+    [K"scope_block" [K"neutral_scope"] xs...] -> all(vst2, vcx, xs)
+    [K"scope_block" [K"hard_scope"] xs...] -> all(vst2, vcx, xs)
+    [K"=" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
+    [K"assign_or_constdecl_if_global" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
+    [K"global_if_global" x] -> vst2_ident_lhs(vcx, x)
+    [K"constdecl" l] -> vst2_ident_lhs(vcx, l)
+    [K"constdecl" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
+    [K"global" x] -> vst2_ident_lhs(vcx, x)
+    [K"local" x] -> vst2_ident_lhs(vcx, x)
+    [K"decl" x t] -> vst2_ident(vcx, x) & vst2(vcx, t)
+    [K"if" cond t] -> vst2(vcx, cond) & vst2(vcx, t)
+    [K"if" cond t f] -> vst2(vcx, cond) & vst2(vcx, t) & vst2(vcx, f)
+    [K"elseif" cond t] -> vst2(vcx, cond) & vst2(vcx, t)
+    [K"elseif" cond t f] -> vst2(vcx, cond) & vst2(vcx, t) & vst2(vcx, f)
+    [K"&&" xs...] -> all(vst2, vcx, xs)
+    [K"||" xs...] -> all(vst2, vcx, xs)
+    [K"symbolicblock" [K"symboliclabel"] body] -> vst2(vcx, body)
+    [K"break" [K"symboliclabel"]] -> pass()
+    [K"break" [K"symboliclabel"] x] -> vst2(vcx, x)
+    [K"return" x] -> vst2(vcx, x)
+    [K"trycatchelse" t c] -> vst2(vcx, t) & vst2(vcx, c)
+    [K"trycatchelse" t c e] -> vst2(vcx, t) & vst2(vcx, c) & vst2(vcx, e)
+    [K"tryfinally" t f] -> vst2(vcx, t) & vst2(vcx, f)
+    [K"tryfinally" t f scope] -> vst2(vcx, t) & vst2(vcx, f) & vst2(vcx, scope)
+    [K"_opaque_closure" id argt lb ub partial nargs isva src lam] ->
+        vst2_ident(vcx, id) &
+        all(vst2, vcx, children(st)[2:end-1]) &
+        vst2_lam(vcx, lam)
+    [K"_do_while" body cond] -> vst2(vcx, body) & vst2(vcx, cond)
+    [K"_while" cond body] -> vst2(vcx, cond) & vst2(vcx, body)
+    [K"inert" _] -> pass()
+    [K"syntaxinert" _] -> pass()
+    [K"lambda" _...] -> vst2_lam(vcx, st)
+    [K"function_decl" x] -> vst2_ident(vcx, x)
+    [K"function_type" x] -> vst2(vcx, x)
+    [K"method" mtable argtypes lam] -> !vcx.in_method_defs ?
+        @fail(st, "method outside of method_defs") :
+        (kind(mtable) === K"nothing" ? pass() : vst2(vcx, mtable)) &
+        vst2(vcx, argtypes) & vst2_lam(vcx, lam)
+    [K"method_defs" id [K"block" sps...] body] ->
+        (kind(id) === K"nothing" ? pass() : vst2_ident_val(vcx, id)) &
+        all(vst2_typevar, vcx, sps) & vst2(with(vcx; in_method_defs=true), body)
+    [K"new" t args...] -> vst2(vcx, t) & all(vst2, vcx, args)
+    [K"splatnew" t arg] -> vst2(vcx, t) & vst2(vcx, arg)
+    [K"softscope"] -> pass()
+    [K"softscope" _] -> pass()
+    [K"thisfunction"] -> pass()
+    [K"gc_preserve_begin" xs...] -> all(vst2_ident, vcx, xs)
+    [K"gc_preserve_end" xs...] -> minlen(st, xs, 1) & all(vst2_ident, vcx, xs)
+
+    [K"meta" xs...] -> all(vst2, vcx, xs) # TODO
+    [K"loopinfo" xs...] -> all(vst2, vcx, xs) # TODO
+    [K"boundscheck"] -> pass()
+    [K"inbounds_pop"] -> pass()
+    ([K"inbounds" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"inline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"noinline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    [K"purity"] -> pass()
+    [K"purity" _ _...] -> numchildren(st) == fieldcount(Base.EffectsOverride) ?
+        pass() : @fail(st, "wrong number of args to `purity` expression")
+    [K"aliasscope"] -> pass()
+    [K"popaliasscope"] -> pass()
+
+    [K"always_defined" x] -> vst2_ident(vcx, x)
+    [K"assert" [K"Symbol"] x] -> vst2(vcx, x)
+    [K"removable" x] -> vst2(vcx, x)
+    [K"relayered_global" [K"Identifier"]] -> pass()
+
+    # Could be made stricter
+    [K"foreigncall" _ [K"static_eval" rt] [K"static_eval" at] cconv roots_args...] ->
+         vst2(vcx, rt) &
+         vst2(vcx, at) &
+         vst2(vcx, cconv) &
+         all(vst2, vcx, roots_args)
+    [K"foreignglobal" _] -> pass()
+    [K"cfunction" [K"Value"] [K"static_eval" fptr] [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
+         vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
+    [K"cfunction" [K"Value"] fptr [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
+         vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
+
+    [K"isdefined" x] -> vst2_ident_val(vcx, x)
+    [K"isglobal" [K"Placeholder"]] -> pass()
+    [K"islocal" [K"Placeholder"]] -> pass()
+    [K"isglobal" x] -> vst2_ident_val(vcx, x)
+    [K"islocal" x] -> vst2_ident_val(vcx, x)
+    [K"locals"] -> pass()
+    _ -> @fail(st, "unrecognized form out of desugaring")
+end
+
+vst2_ident_lhs(vcx, st) = @stm st begin
+    [K"Identifier"] -> pass()
+    [K"BindingId"] -> pass()
+    [K"Placeholder"] -> pass()
+    _ -> @fail(st, "expected identifier (lhs)")
+end
+
+vst2_ident(vcx, st) = @stm st begin
+    [K"Identifier"] -> pass()
+    [K"BindingId"] -> pass()
+    _ -> @fail(st, "expected identifier or BindingId")
+end
+
+vst2_ident_val(vcx, st) = @stm st begin
+    [K"Identifier"] -> pass()
+    [K"BindingId"] -> pass()
+    [K"core"] -> pass()
+    [K"top"] -> pass()
+    _ -> @fail(st, "expected identifier (val)")
+end
+
+vst2_lam(vcx, st) = @stm st begin
+    [K"lambda" [K"block" args...] [K"block" sps...] body] ->
+        all(vst2_ident_lhs, vcx, args) &
+        all(vst2_ident_lhs, vcx, sps) &
+        vst2(vcx, body)
+    [K"lambda" [K"block" args...] [K"block" sps...] body rett] ->
+        all(vst2_ident_lhs, vcx, args) &
+        all(vst2_ident_lhs, vcx, sps) &
+        vst2(vcx, body) &
+        vst2(vcx, rett)
+    _ -> @fail(st, "malformed lambda")
+end
+
+vst2_typevar(vcx, st) = @stm st begin
+    [K"typevar" tv val] -> vst2_ident_lhs(vcx, tv) & vst2(vcx, val)
+    _ -> @fail(st, "malformed sparam")
 end

@@ -6,11 +6,17 @@ const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
+blackbox(x) = compilerbarrier(:blackbox, x)
+
 # Define minimal array interface here to help code used in macros:
 size(a::Array) = getfield(a, :size)
 length(t::AbstractArray) = (@inline; prod(size(t)))
 size(a::GenericMemory) = (getfield(a, :length),)
+throw_boundserror(A) = (@noinline; throw(BoundsError(A, ())))
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
+throw_boundserror(A, i1, i2, I...) = (@noinline; throw(BoundsError(A, (i1, i2, I...))))
+_throw_boundserror_indices(A) = (@noinline; throw(BoundsError(A, ())))
+_throw_boundserror_indices(A, i1, I...) = (@noinline; throw(BoundsError(A, (i1, I...))))
 
 # multidimensional getindex will be defined later on
 
@@ -124,7 +130,7 @@ macro nospecialize(vars...)
             var.head = :kw
         end
     end
-    return Expr(:meta, :nospecialize, vars...)
+    return Expr(:escape, Expr(:meta, :nospecialize, vars...))
 end
 
 """
@@ -141,7 +147,7 @@ macro specialize(vars...)
             var.head = :kw
         end
     end
-    return Expr(:meta, :specialize, vars...)
+    return Expr(:escape, Expr(:meta, :specialize, vars...))
 end
 
 """
@@ -382,7 +388,7 @@ function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
 end
 function checkbounds(A::AbstractArray, I...)
     @inline
-    checkbounds(Bool, A, I...) || throw_boundserror(A, I)
+    checkbounds(Bool, A, I...) || _throw_boundserror_indices(A, I...)
     nothing
 end
 
@@ -617,7 +623,7 @@ function datatype_min_ninitialized(@nospecialize t0)
         if names isa Tuple
             return length(names)
         end
-        t = argument_datatype(types)
+        t = unwrap_unionall(types)
         t isa DataType || return 0
         t.name === Tuple.name || return 0
     end
@@ -829,6 +835,32 @@ Stacktrace:
 sizeof(x) = Core.sizeof(x)
 
 """
+    Core.bitsizeof(T::DataType)
+    Core.bitsizeof(obj)
+
+Logical size, in bits, of the canonical binary representation of the given `DataType` `T`, if any.
+Or the logical size, in bits, of object `obj` if it is not a `DataType`.
+
+For primitive types, this may differ from `8*sizeof(T)` when the type uses byte-rounded storage
+with unused bits in the last byte.
+
+# Examples
+```jldoctest
+julia> Core.bitsizeof(Float32)
+32
+
+julia> Core.bitsizeof(1.0)
+64
+
+julia> primitive type MyUInt63 <: Unsigned 63 end
+
+julia> Core.bitsizeof(MyUInt63)
+63
+```
+"""
+Core.bitsizeof
+
+"""
     ifelse(condition::Bool, x, y)
 
 Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in
@@ -1015,8 +1047,15 @@ end
 
 `@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
 error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
+
+!!! compat "Julia syntax version 1.14"
+    As of Julia syntax version 1.14, `@goto` is not allowed for jumping out of a `try`, `catch`,
+    or `else` block when a `finally` block is present.
 """
 macro goto(name::Symbol)
+    return esc(Expr(:oldsymbolicgoto, name))
+end
+function var"@goto"(__source__::Core.MacroSource, __module__::Module, name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
 
@@ -1033,7 +1072,12 @@ function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
-setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(A, i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
+function setindex!(A::Memory{Any}, @nospecialize(x), i::Int)
+    @_noub_if_noinbounds_meta
+    (@_boundscheck) && checkbounds(A, i)
+    memoryrefset!(memoryrefnew(A, i, false), x, :not_atomic, false)
+    return A
+end
 setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
@@ -1608,7 +1652,7 @@ end
 _resolve_in_world(world::Integer, gr::GlobalRef) =
     invoke_in_world(UInt(world), Core.getglobal, gr.mod, gr.name)
 
-# Special constprop heuristics for various binary opes
+# Special constprop heuristics for various binary ops
 typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function * end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC

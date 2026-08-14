@@ -81,7 +81,7 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
             c, i = iterate(s,i)::Tuple{Char, Int}
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
-                c, i, j = parseint_iterate(s,i,endpos)
+                _c, _i, j = parseint_iterate(s,i,endpos)
             end
         else
             base = 10
@@ -106,6 +106,7 @@ end
         _A <= _c <= _Z ? _c-_A+ UInt32(10) :
         _a <= _c <= _z ? _c-_a+a           :
         base
+    return d
 end
 
 
@@ -259,46 +260,27 @@ tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as 
 
 ## string to float functions ##
 
-function tryparse(::Type{Float64}, s::String)
+function tryparse(::Type{Float64}, s::DenseUTF8String)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
     hasvalue ? val : nothing
 end
-function tryparse(::Type{Float64}, s::SubString{String})
-    hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits % UInt)
-    hasvalue ? val : nothing
-end
-function tryparse_internal(::Type{Float64}, s::String, startpos::Int, endpos::Int)
+function tryparse_internal(::Type{Float64}, s::DenseUTF8String, startpos::Int, endpos::Int)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
                           (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-function tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int, endpos::Int)
-    hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
-end
-function tryparse(::Type{Float32}, s::String)
+function tryparse(::Type{Float32}, s::DenseUTF8String)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
     hasvalue ? val : nothing
 end
-function tryparse(::Type{Float32}, s::SubString{String})
-    hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits % UInt)
-    hasvalue ? val : nothing
-end
-function tryparse_internal(::Type{Float32}, s::String, startpos::Int, endpos::Int)
+function tryparse_internal(::Type{Float32}, s::DenseUTF8String, startpos::Int, endpos::Int)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
                           (Ptr{UInt8},Csize_t,Csize_t), s, startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int, endpos::Int)
-    hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
-    hasvalue ? val : nothing
-end
+
 tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s)::String)
 tryparse(::Type{Float16}, s::AbstractString) =
     convert(Union{Float16, Nothing}, tryparse(Float32, s))
@@ -307,7 +289,7 @@ tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int
 
 ## string to complex functions ##
 
-function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, raise::Bool) where {T<:Real}
+function tryparse_internal(::Type{Complex{T}}, s::DenseUTF8String, i::Int, e::Int, raise::Bool) where {T<:Real}
     # skip initial whitespace
     while i ≤ e && isspace(s[i])
         i = nextind(s, i)

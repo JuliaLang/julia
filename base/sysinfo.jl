@@ -116,14 +116,14 @@ global SC_CLK_TCK::Clong
 """
     Sys.CPU_NAME::String
 
-A string representing the name of CPU.
+A string representing the name of the host CPU.
 
 # Examples
 For example, `Sys.CPU_NAME` might equal `"tigerlake"` on an
 [Intel Core "Tiger Lake" CPU](https://en.wikipedia.org/wiki/Tiger_Lake),
 or `"apple-m1"` on an [Apple M1 CPU](https://en.wikipedia.org/wiki/Apple_M1).
 
-Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+Note: Included in the output of `versioninfo()`.
 """
 global CPU_NAME::String
 
@@ -139,7 +139,7 @@ julia> Sys.JIT
 "ORCJIT"
 ```
 
-Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+Note: Included in the output of `versioninfo()`.
 """
 global JIT::String
 
@@ -147,6 +147,7 @@ global JIT::String
     Sys.PAGESIZE::Clong
 
 A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
+On Windows, this stores the allocation granularity, not the page size.
 """
 global PAGESIZE::Clong
 
@@ -255,7 +256,7 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
         summary = CPUinfo(cpu[i].model,0,0,0,0,0,0)
         count = j - i + 1
         for x = i:j
-            summary.speed += cpu[i].speed
+            summary.speed += cpu[x].speed
             summary.cpu_times!user += cpu[x].cpu_times!user
             summary.cpu_times!nice += cpu[x].cpu_times!nice
             summary.cpu_times!sys += cpu[x].cpu_times!sys
@@ -286,6 +287,7 @@ function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
         if model != cpu[i].model
             _cpu_summary(io, cpu, first, i-1)
             first = i
+            model = cpu[i].model
         end
     end
     _cpu_summary(io, cpu, first, length(cpu))
@@ -474,7 +476,7 @@ function which(program_name::String)
             push!(program_names, base_pname)
         end
 
-        # But also try appending .exe and .com`
+        # But also try appending .exe and .com
         for pe in (".exe", ".com")
             push!(program_names, string(base_pname, pe))
         end

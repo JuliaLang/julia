@@ -21,7 +21,7 @@ char *shlib_ext = ".so";
 
 /* This simple hand-crafted tolower exists to avoid locale-dependent effects in
  * behaviors (and utf8proc_tolower wasn't linking properly on all platforms) */
-static char ascii_tolower(char c)
+static char ascii_tolower(char c) JL_NOTSAFEPOINT
 {
     if ('A' <= c && c <= 'Z')
         return c - 'A' + 'a';
@@ -181,7 +181,7 @@ static const char opts[]  =
     " --help-hidden                                 Print uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@temp|@.|@script[<rel>]}]   Set <dir> as the active project/environment.\n"
+    " -P, --project[={<dir>|@temp|@.|@script[<rel>]}]  Set <dir> as the active project/environment.\n"
     "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
@@ -225,10 +225,17 @@ static const char opts[]  =
     "                                               interface if supported (Linux and Windows) or to the\n"
     "                                               number of CPU threads if not supported (MacOS) or if\n"
     "                                               process affinity is not configured, and sets M to 1.\n"
+#if defined(WITH_THIRD_PARTY_HEAP) && WITH_THIRD_PARTY_HEAP == 1 // MMTk
+    " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M\n"
+    "                                               (0 <= M <= N) threads for concurrent GC work.\n"
+    "                                               N is set to the number of compute threads and\n"
+    "                                               M is set to 0 if unspecified.\n"
+#else
     " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M (0 or 1)\n"
     "                                               threads for the concurrent sweeping phase of GC.\n"
     "                                               N is set to the number of compute threads and\n"
     "                                               M is set to 0 if unspecified.\n"
+#endif
     " -p, --procs {N|auto}                          Integer value N launches N additional local worker\n"
     "                                               processes `auto` launches as many workers as the\n"
     "                                               number of local CPU threads (logical cores).\n"
@@ -293,7 +300,7 @@ static const char opts[]  =
     " --bug-report=KIND                             Launch a bug report session. It can be used to start\n"
     "                                               a REPL, run a script, or evaluate expressions. It\n"
     "                                               first tries to use BugReporting.jl installed in\n"
-    "                                               current environment and fallbacks to the latest\n"
+    "                                               current environment and falls back to the latest\n"
     "                                               compatible BugReporting.jl if not. For more\n"
     "                                               information, see --bug-report=help.\n\n"
     " --heap-size-hint=<size>[<unit>]               Forces garbage collection if memory usage is higher\n"
@@ -410,7 +417,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compiled_modules,
            opt_pkgimages,
            opt_machine_file,
-           opt_project,
            opt_bug_report,
            opt_image_codegen,
            opt_rr_detach,
@@ -428,7 +434,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compress_sysimage,
            opt_target_sanitize,
     };
-    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
+    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:P:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -454,7 +460,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "threads",         required_argument, 0, 't' },
         { "gcthreads",       required_argument, 0, opt_gc_threads },
         { "machine-file",    required_argument, 0, opt_machine_file },
-        { "project",         optional_argument, 0, opt_project },
+        { "project",         optional_argument, 0, 'P' },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
         { "startup-file",    required_argument, 0, opt_startup_file },
@@ -559,13 +565,17 @@ restart_switch:
             }
             break;
         case 'v': // version
-            jl_printf(JL_STDOUT, "julia version %s\n", JULIA_VERSION_STRING);
+            jl_safe_fprintf(ios_stdout, "julia version %s\n", JULIA_VERSION_STRING);
             exit(0);
         case 'h': // help
-            jl_printf(JL_STDOUT, "%s%s", usage, opts);
+            ios_puts(usage, ios_stdout);
+            ios_puts(opts, ios_stdout);
+            ios_flush(ios_stdout);
             exit(0);
         case opt_help_hidden:
-            jl_printf(JL_STDOUT, "%s%s", usage, opts_hidden);
+            ios_puts(usage, ios_stdout);
+            ios_puts(opts_hidden, ios_stdout);
+            ios_flush(ios_stdout);
             exit(0);
         case 'g': // debug info
             if (optarg != NULL) {
@@ -646,7 +656,7 @@ restart_switch:
                 if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
                     jl_errorf("julia: --sysimage-native-code=no is deprecated");
                 else if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ON)
-                    jl_printf(JL_STDERR, "WARNING: --sysimage-native-code=no is deprecated\n");
+                    jl_safe_printf("WARNING: --sysimage-native-code=no is deprecated\n");
             }
             else {
                 jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);
@@ -750,7 +760,7 @@ restart_switch:
             if (!jl_options.machine_file)
                 jl_error("julia: failed to allocate memory");
             break;
-        case opt_project:
+        case 'P':
             jl_options.project = optarg ? strdup(optarg) : "@.";
             break;
         case opt_color:
@@ -1045,8 +1055,16 @@ restart_switch:
                 errno = 0;
                 char *endptri;
                 long nsweepthreads = strtol(&endptr[1], &endptri, 10);
+#if defined(WITH_THIRD_PARTY_HEAP) && WITH_THIRD_PARTY_HEAP == 1 // MMTk
+                // MMTk uses `m` as the number of concurrent GC threads, which may be any
+                // count up to the number of mark (GC) threads.
+                if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 ||
+                    nsweepthreads > nmarkthreads || nsweepthreads > INT8_MAX)
+                    jl_errorf("julia: --gcthreads=<n>,<m>; m must be an integer with 0 <= m <= n");
+#else
                 if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nsweepthreads < 0 || nsweepthreads > 1)
                     jl_errorf("julia: --gcthreads=<n>,<m>; m must be 0 or 1");
+#endif
                 jl_options.nsweepthreads = (int8_t)nsweepthreads;
             }
         }
@@ -1130,6 +1148,13 @@ restart_switch:
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
+    bool_t emit_native = jl_options.outputo || jl_options.outputbc ||
+                         jl_options.outputunoptbc || jl_options.outputasm;
+    if (jl_options.compress_sysimage && !emit_native && jl_options.outputji) {
+        jl_safe_printf(
+            "WARNING: --compress-sysimage=yes is unsupported when emitting non-split .ji; disabling.\n");
+        jl_options.compress_sysimage = 0;
+    }
     int proc_args = *argcp < optind ? *argcp : optind;
     *argvp += proc_args;
     *argcp -= proc_args;

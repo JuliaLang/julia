@@ -315,7 +315,7 @@ end
     @test timedwait(alwaysfalse, 0) === :timed_out
     @test_throws ArgumentError timedwait(alwaystrue, 0; pollint=0)
 
-    # Allowing a smaller positive `pollint` results in `timewait` hanging
+    # Allowing a smaller positive `pollint` results in `timedwait` hanging
     @test_throws ArgumentError timedwait(alwaystrue, 0, pollint=1e-4)
 
     # Callback passed in raises an exception
@@ -431,7 +431,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq)
+        cb = first(t.cond.waitq).task::Task
         Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
@@ -446,7 +446,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
-        cb = first(t.cond.waitq)
+        cb = first(t.cond.waitq).task::Task
         Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
@@ -460,7 +460,7 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq)
+        cb = first(async.cond.waitq).task::Task
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -496,7 +496,7 @@ end
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
-        cb = first(async.cond.waitq)
+        cb = first(async.cond.waitq).task::Task
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -593,6 +593,53 @@ end
 let a = []
     Timer(t -> push!(a, 1), 0.01, interval = 0, spawn = true)
     @test timedwait(() -> a == [1], 10) === :ok
+end
+
+@testset "wait after closing a one-shot Timer (#34366)" begin
+    t = Timer(600)
+    close(t) # test assumes that thread won't get preempted for 10 minutes...
+    @test_throws EOFError wait(t)
+
+    t = Timer(0)
+    @test wait(t) === nothing
+    @test wait(t) === nothing
+    close(t)
+    @test wait(t) === nothing
+
+    waiters = [Threads.@spawn wait(t) for _ in 1:8]
+    @test all(w -> fetch(w) === nothing, waiters)
+
+    for i in 1:100
+        t = Timer(isodd(i) ? 0 : 0.001)
+        racers = [Threads.@spawn begin
+                for _ in 1:rand(0:8)
+                    yield()
+                end
+                try
+                    wait(t)
+                    wait(t)
+                    true
+                catch e
+                    e isa EOFError || rethrow()
+                    false
+                end
+            end for _ in 1:4]
+        for _ in 1:rand(0:8)
+            yield()
+        end
+        close(t)
+        outcomes = map(fetch, racers)
+        @test all(outcomes) || !any(outcomes)
+    end
+
+    t = Timer(0, interval=600)
+    @test wait(t) === nothing
+    waiter = @task wait(t)
+    yield(waiter)
+    @test timedwait(() -> !isempty(t.cond.waitq) && first(t.cond.waitq).task === waiter, 10) === :ok
+    close(t)
+    @test_throws TaskFailedException wait(waiter)
+    @test waiter.result isa EOFError
 end
 
 # make sure that we don't accidentally create a one-shot timer
@@ -698,5 +745,45 @@ end
     t = Task(f)
     message = "Querying a Task's `scope` field is disallowed.\nThe private `Core.current_scope()` function is better, though still an implementation detail."
     @test_throws ErrorException(message) t.scope
+    message = "Querying a Task's `invoked` field is disallowed because it is an implementation detail."
+    @test_throws ErrorException(message) t.invoked
+    message = "Setting a Task's `invoked` field directly is disallowed because it is an implementation detail."
+    @test_throws ErrorException(message) (t.invoked = nothing)
+    message = "Setting a Task's `result` field directly is disallowed. The result of a task is determined by the return value of its code; to pass a value to a suspended task, use `schedule(t, val)` or `yieldto(t, val)` instead."
+    @test_throws ErrorException(message) (t.result = 42)
     @test t.state == :runnable
+end
+
+function _task(@nospecialize(f), stack::Int, @nospecialize(invoke))
+    t = Core._task(f, stack, invoke)
+    t.donenotify = Base.ThreadSynchronizer()
+    return t
+end
+@testset "Core._task with invoke arguments" begin
+    # Test _task with invoke Type argument
+    f1() = 43
+    f1(x...) = x
+    t1 = _task(f1, 0, Tuple{})
+    @test fetch(schedule(t1)) === 43
+    t1 = _task(f1, 0, Tuple{Vararg})
+    @test fetch(schedule(t1)) === ()
+    t1 = _task(f1, 0, Tuple{typeof(f1)})
+    schedule(t1)
+    @test_throws TaskFailedException fetch(t1)
+
+    # Test _task with Method argument
+    m = which(f1, (Vararg,))
+    t1 = _task(f1, 0, m)
+    @test fetch(schedule(t1)) === ()
+
+    # Test that _task validates argument types
+    @test_throws TypeError Core._task(f1, "invalid_size")
+    @test_throws TypeError Core._task(f1, "invalid_size", m)
+    @test_throws ArgumentError Core._task(f1, 0, m, 1)
+    @test_throws TypeError Core._task(f1, 0, "invalid")
+    @test_throws TypeError Core._task(f1, 0, Int)
+    @test_throws TypeError Core._task(f1, 0, nothing)
+    mi = only(Base.specializations(which(f1, ())))
+    @test mi isa Core.MethodInstance
+    @test_throws TypeError Core._task(f1, 0, mi)
 end

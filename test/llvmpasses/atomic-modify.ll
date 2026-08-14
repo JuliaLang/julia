@@ -49,6 +49,11 @@ define i8 @xchg.i8(i8 %x, i8 %y) {
     ret i8 %y
 }
 
+define i8 @xchgshl.i8(i8 %x, i8 %y) {
+    %z = shl i8 %y, 1
+    ret i8 %z
+}
+
 define double @fadd.f64(double %x, double %y) {
     %z = fadd double %y, %x
     ret double %z
@@ -212,6 +217,17 @@ top:
   %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @xchg.i8, i8 5, i8 1, i8 %b)
   %newval = extractvalue {i8, i8} %oldnew, 1
   ret i8 %newval
+}
+
+define i8 @mod_i8_xchg_computed(ptr %a, i8 %b) {
+; CHECK-LABEL: @mod_i8_xchg_computed
+; CHECK: [[newval:%.*]] = shl i8 %b, 1
+; CHECK-NEXT: [[oldval:%.*]] = atomicrmw xchg ptr %a, i8 [[newval]] release, align 1
+; CHECK-NEXT: ret i8 [[oldval]]
+top:
+  %oldnew = call {i8, i8} (ptr, ptr, i8, i8, ...) @julia.atomicmodify.i8(ptr align(1) %a, ptr @xchgshl.i8, i8 5, i8 1, i8 %b)
+  %oldval = extractvalue {i8, i8} %oldnew, 0
+  ret i8 %oldval
 }
 
 define double @mod_i8_fadd(ptr %a, double %b) {

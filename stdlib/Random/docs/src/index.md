@@ -2,7 +2,7 @@
 EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Random/docs/src/index.md"
 ```
 
-# Random Numbers
+# Random
 
 ```@meta
 DocTestSetup = :(using Random)

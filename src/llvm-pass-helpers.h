@@ -52,18 +52,20 @@ struct JuliaPassContext {
     // Intrinsics.
     llvm::Function *pgcstack_getter;
     llvm::Function *adoptthread_func;
-    llvm::Function *gc_flush_func;
+    llvm::Function *gcroot_flush_func;
     llvm::Function *gc_preserve_begin_func;
     llvm::Function *gc_preserve_end_func;
     llvm::Function *pointer_from_objref_func;
     llvm::Function *gc_loaded_func;
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
+    llvm::Function *blackbox_func;
     llvm::Function *write_barrier_func;
     llvm::Function *pop_handler_noexcept_func;
     llvm::Function *call_func;
     llvm::Function *call2_func;
     llvm::Function *call3_func;
+    llvm::Function *cancel_point_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -85,7 +87,7 @@ struct JuliaPassContext {
 
     // Gets a call to the `julia.get_pgcstack' intrinsic in the entry
     // point of the given function, if there exists such a call.
-    // Otherwise, gets a swiftself argument, if there exists such an argument.
+    // Otherwise, gets a function argument with the 'gcstack' attribute, if there exists such an argument.
     // Otherwise, `nullptr` is returned.
     llvm::Value *getPGCstack(llvm::Function &F) const;
 
@@ -156,6 +158,15 @@ namespace jl_well_known {
 
     // `jl_gc_alloc_typed`: allocates bytes.
     extern const WellKnownFunctionDescription GCAllocTyped;
+
+    // Reset-safe variants of the above (minus the narrowed memory effects):
+    // used in functions that may carry a published cancellation reset
+    // region, these unpublish/republish the current task's reset context
+    // around the operation (see llvm-cancellation-lowering.cpp).
+    extern const WellKnownFunctionDescription GCBigAllocResetSafe;
+    extern const WellKnownFunctionDescription GCSmallAllocResetSafe;
+    extern const WellKnownFunctionDescription GCQueueRootResetSafe;
+    extern const WellKnownFunctionDescription GCAllocTypedResetSafe;
 }
 
 void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info);

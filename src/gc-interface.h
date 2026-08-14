@@ -15,6 +15,7 @@ extern "C" {
 #endif
 
 struct _jl_tls_states_t;
+struct _jl_task_t;
 struct _jl_value_t;
 struct _jl_weakref_t;
 struct _jl_datatype_t;
@@ -96,6 +97,8 @@ typedef struct {
     uint64_t last_full_sweep;
     // Timestamp of the last incremental GC sweep in nanoseconds
     uint64_t last_incremental_sweep;
+    // Number of tracked image objects referencing non-image objects
+    uint64_t image_remset_size;
 } jl_gc_num_t;
 
 // ========================================================================= //
@@ -104,7 +107,7 @@ typedef struct {
 
 // System-wide initialization function. Responsible for initializing global locks as well as
 // global memory parameters (e.g. target heap size) used by the collector.
-void jl_gc_init(void);
+void jl_gc_init(void) JL_NOTSAFEPOINT;
 // Spawns GC threads.
 void jl_start_gc_threads(void);
 
@@ -135,11 +138,18 @@ typedef enum {
 JL_DLLEXPORT int jl_gc_enable(int on);
 // Returns whether the collector is enabled.
 JL_DLLEXPORT int jl_gc_is_enabled(void);
+// Enables or disables (depending on the value of the argument) the collector from a non-mutator.
+// This function should not access ptls, and should not call safepoints either.
+// However, when on == 0 (this function disables GC), this function may block until GC is successfully disabled.
+JL_DLLEXPORT void jl_gc_enable_from_nonmutator(int on) JL_NOTSAFEPOINT;
+// Returns whether the collector is globally enabled. No safepoint should be invoked in this
+// call either.
+JL_DLLEXPORT int jl_gc_is_globally_enabled(void) JL_NOTSAFEPOINT;
 // Sets a soft limit to Julia's heap.
-JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
+JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) JL_NOTSAFEPOINT;
 // Runs a GC cycle. This function's parameter determines whether we're running an
 // incremental, full, or automatic (i.e. heuristic driven) collection.
-JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
+JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) JL_CANSAFEPOINT;
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
 // Enables or disables automatic full (non-generational) collections.
@@ -151,11 +161,13 @@ JL_DLLEXPORT int jl_gc_enable_auto_full_collection(int on);
 JL_DLLEXPORT int jl_gc_auto_full_collection_is_enabled(void);
 // Returns which GC implementation is being used and possibly its version according to the list of supported GCs
 // NB: it should clearly identify the GC by including e.g. 'stock' or 'mmtk' as a substring.
-JL_DLLEXPORT const char* jl_gc_active_impl(void);
+JL_DLLEXPORT const char* jl_gc_active_impl(void) JL_NOTSAFEPOINT;
 // Sweep Julia's stack pools and mtarray buffers. Note that this function has been added to the interface as
 // each GC should implement it but it will most likely not be used by other code in the runtime.
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+// Notify the GC that a task is resuming execution on a mutator thread.
+void jl_gc_notify_task_resume(struct _jl_task_t *task) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
 // Metrics
@@ -195,8 +207,8 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 // to decide whether to allocate a small or a large object. Finally, note that this function
 // **must** also set the type of the returning object to be `ty`. The type `ty` may also be used to record
 // an allocation of that type in the allocation profiler.
-struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
-// Allocates small objects and increments Julia allocation counterst. Size of the object
+struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty) JL_CANSAFEPOINT;
+// Allocates small objects and increments Julia allocation counters. Size of the object
 // header must be included in the object size. The (possibly unused in some implementations)
 // offset to the arena in which we're allocating is passed in the second parameter, and the
 // object size in the third parameter. If thread-local allocators are used, then this
@@ -206,7 +218,7 @@ struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void
 // allocation profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc(struct _jl_tls_states_t *ptls,
                                                    int offset, int osize,
-                                                   struct _jl_value_t *type);
+                                                   struct _jl_value_t *type) JL_CANSAFEPOINT;
 // Description: Allocates large objects and increments Julia allocation counters. Size of
 // the object header must be included in the object size. If thread-local allocators are
 // used, then this function should allocate in the thread-local allocator of the thread
@@ -214,15 +226,33 @@ JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc(struct _jl_tls_states_t *ptls
 // information about the type of the object being allocated may be used to record an
 // allocation of that type in the allocation profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc(struct _jl_tls_states_t *ptls, size_t sz,
-                                                 struct _jl_value_t *type);
+                                                 struct _jl_value_t *type) JL_CANSAFEPOINT;
+// Reset-safe variants of jl_gc_small_alloc/jl_gc_big_alloc/jl_gc_alloc_typed/
+// jl_gc_queue_root, selected by the compiler for code that may run inside a
+// published cancellation reset region: they unpublish the current task's
+// reset context around the operation (whose internal frames must never be
+// abandoned by an asynchronously delivered reset), write the object tag, and
+// republish it on the way out. Implemented generically in gc-common.c.
+JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc_reset_safe(struct _jl_tls_states_t *ptls,
+                                                              int offset, int osize,
+                                                              struct _jl_value_t *type) JL_CANSAFEPOINT;
+JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc_reset_safe(struct _jl_tls_states_t *ptls, size_t sz,
+                                                            struct _jl_value_t *type) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_gc_alloc_typed_reset_safe(struct _jl_tls_states_t *ptls, size_t sz,
+                                                void *ty) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_gc_queue_root_reset_safe(const struct _jl_value_t *ptr);
 // Wrapper around Libc malloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz) JL_CANSAFEPOINT;
 // Wrapper around Libc calloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz);
+JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT;
 // Wrapper around Libc free that updates Julia allocation counters.
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz);
 // Wrapper around Libc realloc that updates Julia allocation counters.
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz);
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
+// Special reset-safe variants of the above functions for use by GMP.
+JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz) JL_CANSAFEPOINT;
 // Wrapper around Libc malloc that's used to dynamically allocate memory for Arrays and
 // Strings. It increments Julia allocation counters and should check whether we're close to
 // the Julia heap target, and therefore, whether we should run a collection. Note that this
@@ -230,12 +260,12 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
 // front of the memory payload): this function is used for Julia object allocations, and we
 // assume that there is already a field in the Julia object being allocated that we may use
 // to store the size of the memory buffer.
-JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
+JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz) JL_CANSAFEPOINT;
 // Allocates a new weak-reference, assigns its value and increments Julia allocation
 // counters. If thread-local allocators are used, then this function should allocate in the
 // thread-local allocator of the thread referenced by the first jl_ptls_t argument.
 JL_DLLEXPORT struct _jl_weakref_t *jl_gc_new_weakref_th(struct _jl_tls_states_t *ptls,
-                                                        struct _jl_value_t *value);
+                                                        struct _jl_value_t *value) JL_CANSAFEPOINT;
 // Permanently allocates a memory slot of the size specified by the first parameter. This
 // block of memory is allocated in an immortal region that is never swept. The second
 // parameter specifies whether the memory should be filled with zeros. The third and fourth
@@ -261,11 +291,11 @@ struct _jl_value_t *jl_gc_permobj(struct _jl_tls_states_t *ptls, size_t sz, void
 // This function notifies the GC about memory addresses that are set when loading the boot image.
 // The GC may use that information to, for instance, determine that such objects should
 // be treated as marked and belonged to the old generation in nursery collections.
-void jl_gc_notify_image_load(const char* img_data, size_t len);
+void jl_gc_notify_image_load(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 // This function notifies the GC about memory addresses that are set when allocating the boot image.
 // The GC may use that information to, for instance, determine that all objects in that chunk of memory should
 // be treated as marked and belonged to the old generation in nursery collections.
-void jl_gc_notify_image_alloc(const char* img_data, size_t len);
+void jl_gc_notify_image_alloc(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
 // Runtime Write-Barriers
@@ -274,6 +304,9 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len);
 // Write barrier slow-path. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
+// Dedicated slow-path for `jl_gc_wb`. If a generational collector is used,
+// it may enqueue an old object into the remembered set of the calling thread.
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
 // In a generational collector is used, this function walks over the fields of the
 // object specified by the second parameter (as defined by the data type in the third
 // parameter). If a field points to a young object, the first parameter is enqueued into the
@@ -318,10 +351,10 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const struct _jl_value_t *own
                                           size_t n, struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
 // Similar to jl_gc_wb_genericmemory_copy but must be used when copying *boxed* elements of a genericmemory
 // object. Note that this barrier also performs the copying unlike jl_gc_wb_genericmemory_copy_ptr.
-// The parameters src_p, dest_p and n will be modified and will contain information about
-// the *uncopied* data after performing this barrier, and will be copied using memmove_refs.
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const struct _jl_value_t *owner, _Atomic(void*) * dest_p,
-                                          struct _jl_genericmemory_t *src, _Atomic(void*) * src_p,
+// `*dest_pp`, `*src_pp` and `*n` will be advanced past any elements the barrier copied inline, so that
+// the caller's trailing memmove_refs picks up where the barrier left off.
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const struct _jl_value_t *owner, _Atomic(void*) ** dest_pp,
+                                          struct _jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
                                           size_t* n) JL_NOTSAFEPOINT;
 #ifdef __cplusplus
 }

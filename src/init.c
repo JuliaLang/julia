@@ -103,7 +103,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 #endif
 }
 
-static void jl_prep_sanitizers(void)
+static void jl_prep_sanitizers(void) JL_NOTSAFEPOINT
 {
 #if !defined(_OS_WINDOWS_)
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
@@ -155,7 +155,7 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
     return rv;
 }
 
-static void jl_close_item_atexit(uv_handle_t *handle)
+static void jl_close_item_atexit(uv_handle_t *handle) JL_CANSAFEPOINT
 {
     if (handle->type != UV_FILE && uv_is_closing(handle))
         return;
@@ -190,11 +190,7 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     }
 }
 
-// This prevents `ct` from returning via error handlers or other unintentional
-// means by destroying some old state before we start destroying that state in atexit hooks.
-void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
-
-// cause this process to exit with WEXITSTATUS(signo), after waiting to finish all julia, C, and C++ cleanup
+// cause this process to exit with WEXITSTATUS(exitcode), after waiting to finish all julia, C, and C++ cleanup
 JL_DLLEXPORT void jl_exit(int exitcode)
 {
     jl_atexit_hook(exitcode);
@@ -230,7 +226,7 @@ JL_DLLEXPORT void jl_raise(int signo)
 #endif
 }
 
-JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
+JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NO_SAFEPOINT_ANALYSIS
 {
     uv_tty_reset_mode();
 
@@ -313,10 +309,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                     //error handling -- continue cleanup, as much as possible
                     assert(item);
                     uv_unref(item->h);
-                    jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
-                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
-                    jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-                    jl_fprint_backtrace(ios_safe_stderr);
+                    ios_printf(ios_stderr, "error during exit cleanup: close: ");
+                    jl_static_show((JL_STREAM*)ios_stderr, jl_current_exception(ct));
+                    ios_printf(ios_stderr, "\n");
+                    jl_fprint_backtrace(ios_stderr);
                     item = next_shutdown_queue_item(item);
                 }
             }
@@ -383,8 +379,6 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
     return;
 }
 
-void post_boot_hooks(void);
-
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
 JL_DLLEXPORT void *jl_RTLD_DEFAULT_handle;
@@ -441,7 +435,7 @@ static int uv_dup(uv_os_fd_t fd, uv_os_fd_t* dupfd) {
 }
 #endif
 
-static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
+static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable) JL_NOTSAFEPOINT
 {
     void *handle;
     int err;
@@ -458,7 +452,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
             jl_errorf("error initializing %s in uv_tty_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         ((uv_tty_t*)handle)->data = NULL;
-        uv_tty_set_mode((uv_tty_t*)handle, UV_TTY_MODE_NORMAL); // initialized cooked stdio
+        uv_tty_set_mode((uv_tty_t*)handle, UV_TTY_MODE_NORMAL); // initializes cooked stdio
         break;
     default:
         assert(0 && "missing case for uv_guess_handle return handling");
@@ -516,7 +510,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     return handle;
 }
 
-static void init_stdio(void)
+static void init_stdio(void) JL_NOTSAFEPOINT
 {
     JL_STDIN  = (uv_stream_t*)init_stdio_handle("stdin", UV_STDIN_FD, 1);
     JL_STDOUT = (uv_stream_t*)init_stdio_handle("stdout", UV_STDOUT_FD, 0);
@@ -543,9 +537,7 @@ int jl_isabspath(const char *in) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_is_file_tracked(jl_sym_t *path)
 {
-    const char* path_ = jl_symbol_name(path);
-    int tpath_len = strlen(jl_options.tracked_path);
-    return (strlen(path_) >= tpath_len) && (strncmp(path_, jl_options.tracked_path, tpath_len) == 0);
+    return jl_path_is_tracked(jl_symbol_name(path));
 }
 
 static void jl_set_io_wait(int v)
@@ -559,9 +551,8 @@ extern jl_mutex_t precomp_statement_out_lock;
 extern jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t global_roots_lock;
 extern jl_mutex_t profile_show_peek_cond_lock;
-extern jl_mutex_t jl_typeinf_lock;
 
-static void restore_fp_env(void)
+static void restore_fp_env(void) JL_NOTSAFEPOINT
 {
     if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
         jl_error("Failed to configure floating point environment");
@@ -573,7 +564,7 @@ static void restore_fp_env(void)
         "See: https://github.com/JuliaLang/julia/issues/50278");
     }
 }
-static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, jl_task_t *ct)
+static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, jl_task_t *ct) JL_CANSAFEPOINT
 {
     JL_TIMING(JULIA_INIT, JULIA_INIT);
 
@@ -582,9 +573,14 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
+    if (jl_options.cpu_target[0] == '\0')
+        jl_error("Invalid target option: empty CPU name");
+
+    // Validate CPU target: check for unknown names, multiple targets, clone_all
+    jl_check_cpu_target(jl_options.cpu_target, jl_generating_output());
 
     // Parse image, perform relocations, and init JIT targets, etc.
-    jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
+    jl_image_t parsed_image = jl_load_sysimg(sysimage, jl_options.cpu_target);
 
     jl_init_codegen();
 
@@ -598,10 +594,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
     }
-
-    // Initialize TypeApp type reference (needed for recursive type support)
-    // This must be set after Core module is available, whether from sysimage or boot.jl
-    jl_typeapp_type = (jl_datatype_t*)jl_get_global(jl_core_module, jl_symbol("TypeApp"));
 
     jl_init_flisp();
     jl_init_serializer();
@@ -646,8 +638,12 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
+
+    jl_atomic_store_release(&jl_initialization_complete, 1);
 }
 
+
+JL_DLLEXPORT _Atomic(int) jl_initialization_complete = 0;
 
 JL_DLLEXPORT int jl_default_debug_info_kind;
 JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
@@ -682,14 +678,13 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
 #endif
 };
 
-static void init_global_mutexes(void) {
+static void init_global_mutexes(void) JL_NOTSAFEPOINT {
     JL_MUTEX_INIT(&jl_modules_mutex, "jl_modules_mutex");
     JL_MUTEX_INIT(&precomp_statement_out_lock, "precomp_statement_out_lock");
     JL_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
-    JL_MUTEX_INIT(&jl_typeinf_lock, "jl_typeinf_lock");
 }
 
 JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
@@ -727,7 +722,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     init_global_mutexes();
     jl_precompile_toplevel_module = NULL;
     ios_set_io_wait_func = jl_set_io_wait;
-    jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
+    jl_io_loop = uv_default_loop(); // this loop will handle internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_init_uv();
     init_stdio();
@@ -749,6 +744,10 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     // have to dlclose() these handles.
     jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1, 0);
     jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_options, /* throw_err */ 1, 0);
+#ifdef __clang_gcanalyzer__
+    #define jl_dlopen jl_dlopen_noload
+    JL_DLLEXPORT jl_libhandle jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT;
+#endif
 #ifdef _OS_WINDOWS_
     /* If this parameter is NULL, GetModuleHandle returns a handle to the file
        used to create the calling process (.exe file). */
@@ -765,24 +764,22 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     // RTLD_DEFAULT is mandatory on POSIX
     jl_RTLD_DEFAULT_handle = RTLD_DEFAULT;
 #endif
+#ifdef __clang_safetyanalysis__
+    #undef jl_dlopen
+#endif
 
     jl_init_rand();
+    jl_init_coverage();
+    jl_init_staticdata();
     jl_init_runtime_ccall();
     jl_init_tasks();
+    jl_init_engine();
     jl_init_threading();
     jl_init_threadinginfra();
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
 
     jl_gc_init();
-
-    arraylist_new(&jl_linkage_blobs, 0);
-    arraylist_new(&jl_image_relocs, 0);
-    arraylist_new(&jl_top_mods, 0);
-    arraylist_new(&eytzinger_image_tree, 0);
-    arraylist_new(&eytzinger_idxs, 0);
-    arraylist_push(&eytzinger_idxs, (void*)0);
-    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push

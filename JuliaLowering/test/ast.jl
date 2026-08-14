@@ -1,24 +1,24 @@
+let node = JS.newleaf(LineNumberNode(1), K"Value", nothing)
+    @test node.value === nothing
+end
+
 @testset "assert_syntaxtree" begin
     st = parsestmt(SyntaxTree, "function foo end")
-    g = st._graph
     @test JuliaLowering.assert_syntaxtree(st) === nothing
 
-    bad_st = JuliaSyntax.newleaf(g, st, K"Identifier")
-    @test_throws "needs attribute name_val" JuliaLowering.assert_syntaxtree(bad_st)
-    @test_throws "needs attribute name_val" show(bad_st)
+    bad_st = JuliaSyntax.newleaf(st, K"Identifier")
+    @test_throws "needs value" JuliaLowering.assert_syntaxtree(bad_st)
+    @test_throws "needs value" show(bad_st)
 
-    bad_st = JuliaSyntax.newleaf(g, st, K"code_info")
+    bad_st = JuliaSyntax.newleaf(st, K"code_info")
     @test_throws "unrecognized leaf kind" JuliaLowering.assert_syntaxtree(bad_st)
 
-    bad_st = JuliaSyntax.newnode(g, st, K"code_info", NodeId[])
-    @test_throws "needs attribute is_toplevel_thunk" JuliaLowering.assert_syntaxtree(bad_st)
-
-    JuliaSyntax.setchildren!(g, bad_st._id, NodeId[bad_st._id])
+    setfield!(bad_st, :children, SyntaxList(bad_st))
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(bad_st)
 
-    cyc_1 = JuliaSyntax.newnode(g, st, K"block", NodeId[])
-    cyc_2 = JuliaSyntax.newnode(g, st, K"block", NodeId[cyc_1._id])
-    JuliaSyntax.setchildren!(g, cyc_1._id, NodeId[cyc_2._id])
+    cyc_1 = JuliaSyntax.newnode(st, K"block", SyntaxList())
+    cyc_2 = JuliaSyntax.newnode(st, K"block", SyntaxList(cyc_1))
+    setfield!(cyc_1, :children, SyntaxList(cyc_2))
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_1)
     @test_throws "cycle detected" JuliaLowering.assert_syntaxtree(cyc_2)
 end
@@ -43,7 +43,7 @@ end
 
         st = @ast_ [K"block" 1::K"Value" [K"block"]]
         @test JuliaLowering.flatten_blocks(st) ≈
-            @ast_ [K"block" 1::K"Value" "nothing"::K"core"]
+            @ast_ [K"block" 1::K"Value" (::K"nothing")]
 
         st = @ast_ [K"block" 1::K"Value" [K"block"] 1::K"Value"]
         @test JuliaLowering.flatten_blocks(st) ≈
@@ -72,7 +72,7 @@ end
 
         st = @ast_ [K"call" [K"block" 1::K"Value" [K"block"]]]
         @test JuliaLowering.flatten_blocks(st) ≈
-            @ast_ [K"call" [K"block" 1::K"Value" "nothing"::K"core"]]
+            @ast_ [K"call" [K"block" 1::K"Value" (::K"nothing")]]
 
         st = @ast_ [K"call" [K"block" 1::K"Value" [K"block"] 1::K"Value"]]
         @test JuliaLowering.flatten_blocks(st) ≈

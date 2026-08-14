@@ -112,7 +112,7 @@ julia> Float64(hi) + Float64(lo)
 ```
 """
 function mul12(x::T, y::T) where {T<:AbstractFloat}
-    (h, l) = Math.two_mul(x, y)
+    (h, l) = two_mul(x, y)
     ifelse(!isfinite(h), (h, h), (h, l))
 end
 mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
@@ -252,7 +252,7 @@ nbitslen(r::StepRangeLen) = nbitslen(eltype(r), length(r), r.offset)
 nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
     min(cld(precision(T), 2), nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
-# is 1 bit higher than the number that are explicitly stored.
+# is 1 bit higher than the number that is explicitly stored.
 nbitslen(len, offset) = len < 2 ? 0 : top_set_bit(max(offset-1, len-offset) - 1) + 1
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
@@ -616,7 +616,7 @@ function sum(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision})
     # Add in contributions of ref
     ref = r.ref * l
     sm_hi, sm_lo = add12(s_hi, ref.hi)
-    add12(sm_hi, sm_lo + ref.lo)[1]
+    add12(sm_hi, sm_lo + s_lo + ref.lo)[1]
 end
 
 # sum(1:n) as a product of two integers
@@ -649,8 +649,8 @@ function range_start_stop_length(start::T, stop::T, len::Integer) where {T<:IEEE
         return steprangelen_hp(T, start, zero(T), 0, len, 1)
     end
     # Attempt to find exact rational approximations
-    start_n, start_d = rat(start)
-    stop_n, stop_d = rat(stop)
+    _, start_d = rat(start)
+    _, stop_d = rat(stop)
     if start_d != 0 && stop_d != 0
         den = lcm_unchecked(start_d, stop_d)
         m = maxintfloat(T, Int)
@@ -798,7 +798,7 @@ function _log_twice64_unchecked(x::Float64)
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
         xu &= ~sign_mask(Float64)
-        xu -= UInt64(52) << 52 # mess with the exponent
+        xu -%= (UInt64(52) << 52) # mess with the exponent
     end
     TwicePrecision(Math._log_ext(xu)...)
 end

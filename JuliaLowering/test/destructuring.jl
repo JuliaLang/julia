@@ -1,5 +1,3 @@
-@testset "Destructuring" begin
-
 test_mod = Module()
 
 @testset "Destructuring via iteration" begin
@@ -219,7 +217,5 @@ let
     (a, b)
 end
 """) == (1, 2)
-
-end
 
 end

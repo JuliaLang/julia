@@ -464,6 +464,70 @@ julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
  (3, 1)
 ```
 
+## [Uninitialized arrays](@id uninitialized-arrays)
+
+Constructors like `fill`, `zeros` and `ones` construct arrays filled with a specific value.
+For performance-sensitive cases, one can instead choose construct arrays that are uninitialized.
+This is typically done with [`UndefInitializer`](@ref) and its singleton value [`undef`](@ref).
+
+### Uninitialized isbits data
+When the element type is stored inline in the array, as is the case for bitstypes
+and small unions of bitstypes, the value stored will created from arbitrary bit patterns:
+
+```julia
+julia> A = Vector{Int}(undef, 3)
+3-element Vector{Int64}:
+  0
+  4197964751427265632
+ -7018743849073437062
+```
+
+While the values are created from arbitrary bits, they are just ordinary values;
+specifically, loading them multiple times will always result in the same value.
+
+Beware that the values are constructed circumventing any inner constructors.
+This means that for custom types whose constructors enforce constraints on the values,
+these checks will not be enforced.
+
+For example, in the code below, the `NeverZero` values in `A` might be invalid,
+as `undef` initialization may yield all-zero bits.
+
+```
+struct NeverZero
+    x::UInt
+
+    function NeverZero(x::UInt)
+        if iszero(x)
+            throw(ValueError("NeverZero cannot store a zero"))
+        else
+            new(x)
+        end
+    end
+end
+
+A = Vector{NeverZero}(undef, 10)
+```
+
+!!! compat "Julia 1.11"
+    Prior to Julia 1.11, access to undefined bits types resulted
+    in **undefined behavior.** and could cause miscompilations
+    and invalid behaviour.
+
+### Uninitialized non-isbits data
+When the element type is not stored inline, as is the case when the element type
+is not `isbits`, attempting to access the data will throw an `UndefRefError`:
+
+```jldoctest
+julia> A = Vector{String}(undef, 2)
+2-element Vector{String}:
+ #undef
+ #undef
+
+julia> A[2]
+ERROR: UndefRefError: access to undefined reference
+[...]
+```
+
 ## [Indexing](@id man-array-indexing)
 
 The general syntax for indexing into an n-dimensional array `A` is:
@@ -555,9 +619,12 @@ The location `i_1, i_2, i_3, ..., i_{n+1}` contains the value at `A[I_1[i_1, i_2
 All dimensions indexed with scalars are dropped. For example, if `J` is an array of indices, then the result of `A[2, J, 3]` is an
 array with size `size(J)`. Its `j`th element is populated by `A[2, J[j], 3]`.
 
-As a special part of this syntax, the `end` keyword may be used to represent the last index of
-each dimension within the indexing brackets, as determined by the size of the innermost array
-being indexed. Indexing syntax without the `end` keyword is equivalent to a call to [`getindex`](@ref):
+As a special part of the `[...]` indexing syntax, the [`end`](@ref) keyword may be used to represent the last index of
+a dimension; specifically, it is "lowered" by the compiler to a call to [`lastindex`](@ref) for that
+dimension of the array for the innermost enclosing brackets.  Similarly, [`begin`](@ref) within `[...]` indexing is
+lowered to a call to [`firstindex`](@ref) (which always returns `1` for built-in types like `Array` and `String`, but
+external packages may implement containers with indices that start at `0` or elsewhere).
+Otherwise, the bracket indexing syntax is equivalent to a call to [`getindex`](@ref):
 
 ```
 X = getindex(A, I_1, I_2, ..., I_n)
@@ -582,6 +649,13 @@ julia> x[1, [2 3; 4 1]]
 2×2 Matrix{Int64}:
   5  9
  13  1
+
+julia> x[:, div(begin + end, 2)]
+4-element Vector{Int64}:
+ 5
+ 6
+ 7
+ 8
 ```
 
 ## [Indexed Assignment](@id man-indexed-assignment)
@@ -884,8 +958,7 @@ julia> LinearIndices(A)[2, 2]
 
 It's important to note that there's a very large asymmetry in the performance
 of these conversions. Converting a linear index to a set of cartesian indices
-requires dividing and taking the remainder, whereas going the other way is just
-multiplies and adds. In modern processors, integer division can be 10-50 times
+requires dividing and taking the remainder, whereas going the other way is just multiplications and additions. In modern processors, integer division can be 10-50 times
 slower than multiplication. While some arrays — like [`Array`](@ref) itself —
 are implemented using a linear chunk of memory and directly use a linear index
 in their implementations, other arrays — like [`Diagonal`](@ref) — need the
@@ -898,7 +971,7 @@ introspect which is which).
     better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
     Not only will this be faster in cases where `A` is `IndexCartesian`,
     but it will also support arrays with custom indexing, such as [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
-    If only the values are needed, then is better to just iterate the array directly, i.e. `for a in A`.
+    If only the values are needed, then it is better to just iterate the array directly, i.e. `for a in A`.
 
 #### Omitted and extra indices
 

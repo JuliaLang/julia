@@ -525,6 +525,6 @@ than the other.)  Likewise, `Tuple{Int,Vararg{Int}}` is not a subtype of `Tuple{
 considered more specific. However, `morespecific` does get a bonus for length: in particular,
 `Tuple{Int,Int}` is more specific than `Tuple{Int,Vararg{Int}}`.
 
-Additionally, if 2 methods are defined with identical signatures, per type-equal, then they
+Additionally, if 2 methods are defined with identical signatures (i.e., type-equal signatures), then they
 will instead be compared by order of addition, such that the later method is more specific
 than the earlier one.

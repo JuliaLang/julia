@@ -621,7 +621,7 @@ end
                 end
             end
         end
-        @testset begin
+        @testset "trig d/pi functions exactness" begin
             # If the machine supports fma (fused multiply add), we require exact equality.
             # Otherwise, we only require approximate equality.
             if has_fma[T]
@@ -644,6 +644,15 @@ end
                 T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
                 T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
             end
+        end
+
+        @testset "tanpi for Complex argument" begin
+            x = Complex{T}(12/11, 2/7)
+            @test tanpi(x) ≈ sinpi(x) / cospi(x)
+            # issue #57450
+            y = Complex{T}(0.5, 1000)
+            @test isfinite(tanpi(y))
+            @test tanpi(y) ≈ im
         end
     end
     scdm = sincosd(missing)
@@ -975,6 +984,8 @@ end
     f19872b(x) = x ^ (-1024)
     @test 0 < f19872b(2.0) < 1e-300
     @test issubnormal(2.0 ^ (-1024))
+    @test !issubnormal(big(2.0 ^ (-1024)))
+    @test !issubnormal(nextfloat(BigFloat(0)))
     @test issubnormal(f19872b(2.0))
     @test !issubnormal(f19872b(0.0))
     @test f19872a(2.0) === 32.0
@@ -1627,6 +1638,31 @@ end
     n = Int64(1024 / log2(E))
     @test E^n == Inf
     @test E^float(n) == Inf
+
+    # integer power of a negative Float16/Float32 base must keep its sign when the
+    # exponent bypasses `pow_by_squaring` (|n| outside -2^12:3*2^13); the sign `s`
+    # used to be computed and then dropped.
+    @testset "sign of $T integer powers" for T in (Float16, Float32)
+        x = -nextfloat(one(T))
+        for n in (24577, 32769, -24577, -32769)   # odd, outside pow_by_squaring range
+            @test signbit(x^n)
+        end
+        for n in (24578, 32768, -24578)            # even, outside pow_by_squaring range
+            @test !signbit(x^n)
+        end
+    end
+    @testset "sign across clamped $T integer exponents" for (T, I) in
+            ((Float16, Int32), (Float32, Int32), (Float64, Int64))
+        W = widen(I)
+        nmax = W(typemax(I))
+        nmin = W(typemin(I))
+        @test !signbit((-T(2))^(nmax + 1))
+        @test signbit((-T(2))^(nmax + 2))
+        @test signbit((-T(2))^(nmin - 1))
+        @test !signbit((-T(2))^(nmin - 2))
+        @test signbit((-zero(T))^24577)
+        @test signbit((-zero(T))^-24577)
+    end
 
     # issue #55831
     @testset "literal pow zero sign" begin

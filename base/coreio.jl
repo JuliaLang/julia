@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function print end
+typeof(print).name.max_methods = UInt8(1)
+
 print(x) = print(stdout, x)
 print(x1, x2) = print(stdout, x1, x2)
 println(x) = print(stdout, x, "\n")

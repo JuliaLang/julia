@@ -468,7 +468,7 @@ module IteratorsMD
     __inc(::Tuple{}, ::Tuple{}) = false, ()
     @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
-        I = state[1] + step(rng)
+        I = state[1] +% step(rng)
         valid = state[1] != last(rng)
         return valid, (I,)
     end
@@ -592,13 +592,13 @@ module IteratorsMD
     @inline __dec(::Tuple{}, ::Tuple{}) = false, ()
     @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
-        I = state[1] - step(rng)
+        I = state[1] -% step(rng)
         valid = state[1] != first(rng)
         return valid, (I,)
     end
     @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
-        I = state[1] - step(rng)
+        I = state[1] -% step(rng)
         if state[1] != first(rng)
             return true, (I, tail(state)...)
         end
@@ -759,12 +759,12 @@ end
 # Here we try to consume N of the indices (if there are that many available)
 @inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{CartesianIndex,Vararg})
     inds1, rest = IteratorsMD.split(inds, Val(length(I[1])))
-    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
+    checkindex(Bool, inds1, I[1]) && checkbounds_indices(Bool, rest, tail(I))
 end
 @inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndex) =
     checkbounds_indices(Bool, inds, I.I)
 @inline checkindex(::Type{Bool}, inds::Tuple, i::AbstractRange{<:CartesianIndex}) =
-    isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
+    isempty(i) | (checkindex(Bool, inds, first(i)) && checkindex(Bool, inds, last(i)))
 
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,
@@ -781,7 +781,7 @@ end
 # Here we try to consume N of the indices (if there are that many available)
 @inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg}) where N
     inds1, rest = IteratorsMD.split(inds, Val(N))
-    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
+    checkindex(Bool, inds1, I[1]) && checkbounds_indices(Bool, rest, tail(I))
 end
 @inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) =
     checkbounds_indices(Bool, inds, I.indices)
@@ -907,12 +907,12 @@ checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractVector{Bool}) =
     checkindex(Bool, eachindex(IndexLinear(), A), i)
 @inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{AbstractArray{Bool},Vararg})
     inds1, rest = IteratorsMD.split(inds, Val(ndims(I[1])))
-    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
+    checkindex(Bool, inds1, I[1]) && checkbounds_indices(Bool, rest, tail(I))
 end
 checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractVector{Bool}) = axes1(I) == inds
 checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractRange{Bool}) = axes1(I) == inds
 checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{Bool}) = _check_boolean_axes(inds, axes(I))
-_check_boolean_axes(inds::Tuple, axes::Tuple) = (inds[1] == axes[1]) & _check_boolean_axes(tail(inds), tail(axes))
+_check_boolean_axes(inds::Tuple, axes::Tuple) = (inds[1] == axes[1]) && _check_boolean_axes(tail(inds), tail(axes))
 _check_boolean_axes(::Tuple{}, axes::Tuple) = all(==(OneTo(1)), axes)
 
 ensure_indexable(I::Tuple{}) = ()
@@ -1401,7 +1401,7 @@ end
     end
 end
 
-# in the general multidimensional non-scalar case, can we do about 10% better
+# in the general multidimensional non-scalar case, we can do about 10% better
 # in most cases by manually hoisting the bitarray chunks access out of the loop
 # (This should really be handled by the compiler or with an immutable BitArray)
 @generated function _unsafe_getindex!(X::BitArray, B::BitArray, I::Union{Int,AbstractArray{Int}}...)
@@ -2048,7 +2048,7 @@ end
 """
     union_split(f, x, ts::Tuple{Vararg{Val}}, args...)
 
-call `f(x, args...)`, union-splitting on all the types specified by `ts`
+Call `f(x, args...)`, union-splitting on all the types specified by `ts`
 
 `union_split(f, x, (Val{T1}(), Val{T2}()), y, z)` is equivalent to
 

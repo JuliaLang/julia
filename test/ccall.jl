@@ -848,8 +848,8 @@ check_code_trampoline(testclosure, (Any, Any, Bool, Type), 2)
 check_code_trampoline(testclosure, (Any, Int, Bool, Type{Int}), 2)
 check_code_trampoline(testclosure, (Any, String, Bool, Type{String}), 2)
 check_code_trampoline(testclosure, (typeof(identity), Any, Bool, Type), 2)
-check_code_trampoline(testclosure, (typeof(identity), Int, Bool, Type{Int}), 0)
-check_code_trampoline(testclosure, (typeof(identity), String, Bool, Type{String}), 0)
+check_code_trampoline(testclosure, (typeof(identity), Int, Bool, Core.TypeEgal{Int}), 0)
+check_code_trampoline(testclosure, (typeof(identity), String, Bool, Core.TypeEgal{String}), 0)
 
 function g(i)
     x = -332210 + i
@@ -1741,6 +1741,23 @@ let
     @test dest[] == (7,8,9)
 end
 
+# issue #61320: the size argument of memcpy/memset/memmove may be declared with a
+# signed integer type; this should be reinterpreted as Csize_t rather than
+# treated as an ABI violation (which previously compiled to a trap)
+let
+    A = Vector{Int64}(undef, 4)
+    B = Int64[1, 2, 3, 4]
+    ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Int), A, B, sizeof(Int64) * 4)
+    @test A == B
+
+    ccall(:memmove, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Int), A, B, sizeof(Int64) * 4)
+    @test A == B
+
+    C = Vector{UInt8}(undef, 8)
+    ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Int), C, 0xab % Cint, length(C))
+    @test all(==(0xab), C)
+end
+
 
 # @ccall macro
 using Base: ccall_macro_parse, ccall_macro_lower
@@ -1754,8 +1771,51 @@ using Base: ccall_macro_parse, ccall_macro_lower
         Any[:Cstring, :Cstring, :Cint],   # argument types
         Any["%s = %d\n", :name, :value],  # argument symbols
         false,                            # is gc_safe
+        nothing,                          # cancellation handler
         1                                 # number of required arguments (for varargs)
     )
+
+    # leading options: gc_safe and cancel_handler, in either order
+    optexpr = ccall_macro_parse((:(gc_safe = true), :(cancel_handler = (h, s)),
+                                 :( foo(x::Cint)::Cvoid )))
+    @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), 0)
+    optexpr = ccall_macro_parse((:(cancel_handler = (h, s)), :(gc_safe = true),
+                                 :( foo(x::Cint)::Cvoid )))
+    @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), 0)
+
+    # `Base.@assume_effects :reset_safe @ccall`: the plain call with the
+    # reset_safe flag in the calling-convention tuple - no cancellation
+    # point is implied; the caller places one before the call to establish
+    # the region
+    rscall = macroexpand(@__MODULE__,
+        :(Base.@assume_effects :reset_safe @ccall foo(x::Cint)::Cvoid))
+    @test Meta.isexpr(rscall, :call) && rscall.args[1] === :ccall
+    @test rscall.args[3].args[1] == (:ccall, UInt16(0), false, false, true)
+    # ... composing with other effect settings, which stay in the standard
+    # effects-override slot
+    rscall = macroexpand(@__MODULE__,
+        :(Base.@assume_effects :nothrow :reset_safe @ccall foo(x::Cint)::Cvoid))
+    @test rscall.args[3].args[1] == (:ccall, Base.encode_effects_override(Base.EffectsOverride(nothrow=true)), false, false, true)
+    # ... and with the cancel_handler option
+    rscall = macroexpand(@__MODULE__,
+        :(Base.@assume_effects :reset_safe @ccall cancel_handler=(h, s) foo(x::Cint)::Cvoid))
+    @test rscall.args[3].args[1] == (:ccall, UInt16(0), false, true, true)
+    # :reset_safe is only applicable to @ccall
+    @test_throws ArgumentError macroexpand(@__MODULE__,
+        :(Base.@assume_effects :reset_safe f() = 1))
+
+    # the cancel_handler lowering: a plain foreigncall with (fn, state)
+    # prepended - the annotation implies no cancellation point of its own
+    callx = ccall_macro_lower(:ccall, ccall_macro_parse((:(cancel_handler = (h, s)),
+        :( foo(x::Cint)::Cvoid )))...)
+    @test Meta.isexpr(callx, :call)
+    @test callx.args[1] === :ccall
+    cconv = callx.args[3]
+    @test cconv.head === :cconv && cconv.args[1] == (:ccall, UInt16(0), false, true)
+    typetup = callx.args[5]
+    @test typetup.args[1] == :(Ptr{Cvoid}) && typetup.args[2] == :(Ptr{Cvoid}) && typetup.args[3] == Expr(:escape, :Cint)
+    @test callx.args[6] == Expr(:escape, :h) && callx.args[7] == Expr(:escape, :s)
+    @test callx.args[8] == Expr(:escape, :x)
 end
 
 @testset "ensure the base-case of @ccall works, including library name and pointer interpolation" begin
@@ -1784,6 +1844,8 @@ end
     @test_throws ArgumentError("C ABI prohibits vararg without one required argument") ccall_macro_parse(:( foo(; x::Cint)::Cint ))
     # not a function pointer
     @test_throws TypeError @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
+    # malformed cancel_handler option
+    @test_throws ArgumentError("cancel_handler must be a `(handler, state)` tuple") ccall_macro_parse((:(cancel_handler = h), :( foo(x::Cint)::Cvoid )))
 end
 
 @testset "check error path for @cfunction" begin
@@ -1911,6 +1973,62 @@ end
     @test_throws(TypeError, cglobal45187fn())
     @test_throws(TypeError, @eval cglobal(nothing))
     @test_throws(TypeError, @eval cglobal((:fn, fn45187)))
+
+    # method-definition-time validation of literal name tuples (#59165 follow-up)
+    @test_throws ErrorException @eval cglobal((:a, :b, :c))
+    @test_throws ErrorException @eval cglobal(())
+    @test_throws TypeError @eval cglobal((1,))
+
+    # Runtime-resolved type argument: cglobal(name, T) lowers to bitcast(Ptr{T}, foreignglobal(name)),
+    # so T may be any runtime expression (including one that depends on local variables).
+    function cglobal_runtime_type(T)
+        return cglobal((:global_var, libccalltest), T)
+    end
+    @test cglobal_runtime_type(Cint) isa Ptr{Cint}
+    @test unsafe_load(cglobal_runtime_type(Cint)) == 1
+end
+
+@testset "cglobal interpreter matches compiler" begin
+    # The `cglobal(...)` calls written directly in `@test` run at top-level, i.e. through
+    # the interpreter; wrapping the same call in a function and calling it forces codegen.
+    # The two must agree on both pointer value and result type (`===` checks both).
+    compiled_tuple()    = cglobal((:global_var, libccalltest))
+    compiled_tuple_T()  = cglobal((:global_var, libccalltest), Cint)
+    compiled_sym()      = cglobal(:sin)
+    compiled_sym_T()    = cglobal(:sin, Cint)
+    compiled_str()      = cglobal("sin")
+    compiled_str_T()    = cglobal("sin", Cint)
+    compiled_ptr(p)     = cglobal(p)
+    compiled_ptr_T(p)   = cglobal(p, Cfloat)
+
+    typed_ptr = convert(Ptr{Cint}, cglobal((:global_var, libccalltest)))
+
+    @test cglobal((:global_var, libccalltest))        === compiled_tuple()
+    @test cglobal((:global_var, libccalltest), Cint)  === compiled_tuple_T()
+    @test cglobal(:sin)                               === compiled_sym()
+    @test cglobal(:sin, Cint)                         === compiled_sym_T()
+    @test cglobal("sin")                              === compiled_str()
+    @test cglobal("sin", Cint)                        === compiled_str_T()
+    @test cglobal(typed_ptr)                          === compiled_ptr(typed_ptr)
+    @test cglobal(typed_ptr, Cfloat)                  === compiled_ptr_T(typed_ptr)
+
+    # the no-type form always normalizes its result to Ptr{Cvoid}, even from a typed pointer
+    @test cglobal((:global_var, libccalltest)) isa Ptr{Cvoid}
+    @test cglobal(:sin)                        isa Ptr{Cvoid}
+    @test cglobal("sin")                       isa Ptr{Cvoid}
+    @test cglobal(typed_ptr)                   isa Ptr{Cvoid}
+
+    # Erroring forms: the pointer-vs-name choice is now syntactic, not value-based.
+    compiled_ptr_arg(x) = cglobal(x)
+    name_sym = :sin
+    name_str = "sin"
+    name_tup = (:global_var, libccalltest)
+    @test_throws TypeError cglobal(name_sym)           # interpreter
+    @test_throws TypeError compiled_ptr_arg(name_sym)  # compiler
+    @test_throws TypeError cglobal(name_str)           # interpreter
+    @test_throws TypeError compiled_ptr_arg(name_str)  # compiler
+    @test_throws TypeError cglobal(name_tup)           # interpreter
+    @test_throws TypeError compiled_ptr_arg(name_tup)  # compiler
 end
 
 @testset "ccall_effects" begin
@@ -1944,7 +2062,7 @@ end
 for A in (reinterpret(UInt, [0]), reshape([0, 0], 1, 2))
     @test pointer(A) == Base.unsafe_convert(Ptr{Cvoid}, A) == Base.unsafe_convert(Ptr{Int}, A)
 end
-# Cglobal with non-static symbols doesn't error
+# Cglobal with non-static symbols errors, just like ccall
 function cglobal_non_static1()
     sym = (:global_var, libccalltest)
     cglobal(sym)
@@ -1952,8 +2070,17 @@ end
 global the_sym = (:global_var, libccalltest)
 cglobal_non_static2() = cglobal(the_sym)
 
-@test isa(cglobal_non_static1(), Ptr)
-@test isa(cglobal_non_static2(), Ptr)
+@test_throws TypeError cglobal_non_static1()
+@test_throws TypeError cglobal_non_static2()
+
+# a ccall pointer argument whose unsafe_convert returns a small union must
+# extract and convert the Ptr and typecheck the other options
+struct UnionConvertPtr; flag::Cint; end
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, w::UnionConvertPtr) = w.flag == 1 ? C_NULL : (w.flag == 2 ? Ptr{Cint}(1) : (:x,))
+union_convert_ptr(w) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Ptr{Cvoid},), w)
+@test union_convert_ptr(UnionConvertPtr(1)) == C_NULL
+@test union_convert_ptr(UnionConvertPtr(2)) == Ptr{Cvoid}(1)
+@test_throws TypeError union_convert_ptr(UnionConvertPtr(3))
 
 @generated function generated_world_counter()
     return :($(Base.get_world_counter()))
@@ -1983,6 +2110,15 @@ let llvm = sprint(code_llvm, gc_safe_ccall, ())
     @test Base.infer_effects(gc_safe_ccall, Tuple{}).nothrow == true
 end
 
+# Non-concrete immutable values with inline roots must use the boxed jl_object_id ccall path.
+abstract type ObjectIdAbstract62001 end
+struct ObjectIdBox62001{T} <: ObjectIdAbstract62001
+    x::Vector{Any}
+end
+const ObjectIdSomeBox62001 = ObjectIdBox62001{T} where {T}
+object_id_abstract_box62001(x::ObjectIdSomeBox62001) = ccall(:jl_object_id, UInt, (Any,), x)
+@test object_id_abstract_box62001(ObjectIdBox62001{Int}(Any[1])) isa UInt
+
 @testset "jl_dlfind and dlsym" begin
     # Test that jl_dlfind finds things in the expected places.
     @test ccall(:jl_dlfind, Int, (Cstring,), "doesnotexist") == 0       # not found (RTLD_DEFAULT)
@@ -1990,7 +2126,7 @@ end
         @test ccall(:jl_dlfind, Int, (Cstring,), "main") == 1               # JL_EXE_LIBNAME
     end
     @test ccall(:jl_dlfind, Int, (Cstring,), "jl_gc_safepoint") == 2    # JL_LIBJULIA_DL_LIBNAME
-    @test ccall(:jl_dlfind, Int, (Cstring,), "ijl_gc_small_alloc") == 3 # JL_LIBJULIA_INTERNAL_DL_LIBNME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "ijl_gc_small_alloc") == 3 # JL_LIBJULIA_INTERNAL_DL_LIBNAME
     @test ccall(:jl_dlfind, Int, (Cstring,), "malloc") ∉ (1, 2, 3)      # Either 0 or msvcrt.dll on Windows
     let hdl = Libdl.dlopen(libccalltest, Libdl.RTLD_GLOBAL)
         try

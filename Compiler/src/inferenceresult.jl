@@ -5,13 +5,32 @@ function matching_cache_argtypes(::AbstractLattice, mi::MethodInstance)
     return most_general_argtypes(isa(def, Method) ? def : nothing, specTypes)
 end
 
+# For `@nospecializeinfer` methods, widen the `@nospecialize`'d argument positions back to
+# `cache_argtypes` values to respect the `@nospecializeinfer` semantics.
+# This also ensures that the constprop `argtypes` have the same length as `cache_argtypes`.
+function get_nospecializeinfer_argtypes(argtypes::Vector{Any}, cache_argtypes::Vector{Any},
+                                        method::Method)
+    is_nospecializeinfer(method) || return argtypes
+    nargs = Int(method.nargs)
+    new_argtypes = Vector{Any}(undef, length(cache_argtypes))
+    for i = 1:length(cache_argtypes)
+        i_arg = min(i - 1, nargs - 1) # 0-indexed, 0 is the function slot
+        if i_arg > 0 && !iszero(method.nospecialize & (1 << (i_arg - 1)))
+            new_argtypes[i] = cache_argtypes[i]
+        else
+            new_argtypes[i] = argtypes[i]
+        end
+    end
+    return new_argtypes
+end
+
 struct SimpleArgtypes
     argtypes::Vector{Any}
 end
 
 # Like `SimpleArgtypes`, but allows the argtypes to be wider than the current call.
 # As a result, it is not legal to refine the cache result with information more
-# precise than was it deducible from the `WidenedSimpleArgtypes`.
+# precise than what was deducible from the `WidenedSimpleArgtypes`.
 struct WidenedArgtypes
     argtypes::Vector{Any}
 end
@@ -165,7 +184,7 @@ function most_general_argtypes(method::Union{Method,Nothing}, @nospecialize(spec
             # replace singleton types with their equivalent Const object
             atyp = Const(atyp.instance)
         elseif isconstType(atyp)
-            atyp = Const(atyp.parameters[1])
+            atyp = Const(type_parameter(atyp))
         else
             atyp = elim_free_typevars(rewrap_unionall(atyp, specTypes))
         end
@@ -194,14 +213,31 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::InferenceCache)
+function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance,
+                                given_argtypes::Vector{Any}, cache::InferenceCache,
+                                world::UInt)
     nargtypes = length(given_argtypes)
     indices = get_indices(cache, mi)
+    found_tombstone = false
     for idx in indices
-        cached_result = cache.results[idx]
-        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
+        cached = cache.results[idx]
+        cached_result = cached isa LocalInferenceResult ? cached.result : cached
+        cached_result.cache_world == world || continue
+        valid_worlds = cached isa LocalInferenceResult ?
+            proof_worlds(cached.proof) : cached_result.valid_worlds
+        world in valid_worlds || continue
         cache_argtypes = cached_result.argtypes
-        @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
+        if length(cache_argtypes) != nargtypes
+            # A `MethodInstance` whose `specTypes` ends in an unbounded `Vararg` (i.e. its
+            # trailing varargs are not specialized to a fixed arity) can be
+            # const-propagated at multiple arities, producing cached results whose
+            # `argtypes` differ in length (e.g. one ending in a `Vararg` element, another
+            # expanded to concrete arguments). Such entries describe distinct argument
+            # refinements, and a query of a different arity cannot reuse them, so skip.
+            # Any other length mismatch would indicate a genuine bug.
+            @assert isvarargtype((unwrap_unionall(mi.specTypes)::DataType).parameters[end]) "invalid `cache_argtypes` for `mi`"
+            @goto next_cache
+        end
         cache_overridden_by_const = cached_result.overridden_by_const
         cache_overridden_by_const === nothing && continue
         cache_overridden_by_const = cache_overridden_by_const::BitVector
@@ -210,8 +246,15 @@ function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given
                 @goto next_cache
             end
         end
-        return cached_result
+        # Don't return tombstoned entries as cache items: they represent rejected work
+        # (due to LimitedAccuracy). Instead, record that a tombstone was found so the
+        # caller can avoid re-attempting the same const-prop that would hit the same limit.
+        if cached_result.tombstone
+            found_tombstone = true
+            @goto next_cache
+        end
+        return cached
         @label next_cache
     end
-    return nothing
+    return found_tombstone ? missing : nothing
 end

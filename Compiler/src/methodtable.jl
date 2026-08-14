@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct MethodLookupResult
-    # Really Vector{Core.MethodMatch}, but it's easier to represent this as
-    # and work with Vector{Any} on the C side.
+    # Really Vector{Core.MethodMatch}, but it's easier to represent this as,
+    # and work with, Vector{Any} on the C side.
     matches::Vector{Any}
     valid_worlds::WorldRange
     ambig::Bool
@@ -32,7 +32,7 @@ end
     struct OverlayMethodTable <: MethodTableView
 
 Overlays the internal method table such that specific queries can be redirected to an
-external table, e.g., to override existing method.
+external table, e.g., to override existing methods.
 """
 struct OverlayMethodTable <: MethodTableView
     world::UInt
@@ -81,9 +81,17 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
     # fall back to the internal method table
     fallback_result = _findall(sig, nothing, table.world, limit)
     fallback_result === nothing && return nothing
-    # merge the fallback match results with the internal method table
+    # merge the fallback match results with the internal method table,
+    # filtering out base methods that are fully covered by overlay methods
+    overlay_matches = result.matches
+    filtered = filter(fallback_result.matches) do base_match::MethodMatch
+        dominated = any(overlay_matches) do overlay_match::MethodMatch
+            base_match.method.sig <: overlay_match.method.sig
+        end
+        return !dominated
+    end
     return MethodLookupResult(
-        vcat(result.matches, fallback_result.matches),
+        vcat(overlay_matches, filtered),
         WorldRange(
             max(result.valid_worlds.min_world, fallback_result.valid_worlds.min_world),
             min(result.valid_worlds.max_world, fallback_result.valid_worlds.max_world)),

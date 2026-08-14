@@ -48,7 +48,7 @@ of these fields is the `types` field observed in the example above.
 ## Subtypes
 
 The *direct* subtypes of any `DataType` may be listed using [`subtypes`](@ref). For example,
-the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
+the abstract `DataType` [`AbstractFloat`](@ref) has five (concrete) subtypes:
 
 ```jldoctest; setup = :(using InteractiveUtils)
 julia> InteractiveUtils.subtypes(AbstractFloat)
@@ -117,8 +117,7 @@ method-specific code-lowering is available using [`code_lowered`](@ref),
 and the type-inferred form is available using [`code_typed`](@ref).
 [`code_warntype`](@ref) adds highlighting to the output of [`code_typed`](@ref).
 
-Closer to the machine, the LLVM intermediate representation of a function may be printed using
-by [`code_llvm`](@ref), and finally the compiled machine code is available
+Closer to the machine, the LLVM intermediate representation of a function may be printed using [`code_llvm`](@ref), and finally the compiled machine code is available
 using [`code_native`](@ref) (this will trigger JIT compilation/code
 generation for any function which has not previously been called).
 
@@ -154,5 +153,5 @@ CodeInfo(
 ```
 
 Possible values for `debuginfo` are: `:none`, `:source`, and `:default`.
-Per default debug information is not printed, but that can be changed
+By default, debug information is not printed, but that can be changed
 by setting `Base.IRShow.default_debuginfo[] = :source`.
