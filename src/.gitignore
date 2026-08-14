@@ -14,6 +14,8 @@
 /jl_internal_funcs.inc
 /jl_codegen_hash.inc
 /jl_static_codegen_fallbacks.inc
+/JuliaDialect.cpp.inc
+/JuliaDialect.h.inc
 
 /libjulia-debug.a
 /libjulia-debug.so
