@@ -492,7 +492,7 @@ version = "1.69.0+0"
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.8.0+0"
+version = "17.8.2+0"
 
     [deps.p7zip_jll.syntax]
     julia_version = "1.6.0"
