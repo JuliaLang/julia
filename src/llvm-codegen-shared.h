@@ -16,15 +16,9 @@
 
 static constexpr std::nullopt_t None = std::nullopt;
 
-enum AddressSpace {
-    Generic = 0,
-    Tracked = 10,
-    Derived = 11,
-    CalleeRooted = 12,
-    Loaded = 13,
-    FirstSpecial = Tracked,
-    LastSpecial = Loaded,
-};
+// The AddressSpace enum is defined together with the Julia LLVM dialect.
+#include "JuliaDialect.h"
+using namespace julia;
 
 namespace JuliaType {
     static inline llvm::StructType* get_jlvalue_ty(llvm::LLVMContext &C) {
