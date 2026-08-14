@@ -1,7 +1,8 @@
 use crate::SINGLETON;
 use crate::{
-    jl_gc_mmtk_defer_alloc_if_disabled, jl_gc_mmtk_resume_the_world, jl_gc_mmtk_stop_the_world,
-    jl_gc_safe_enter, jl_gc_safe_leave, jl_gc_update_stats, jl_hrtime, jl_throw_out_of_memory_error,
+    jl_gc_mmtk_defer_alloc_if_disabled, jl_gc_mmtk_resume_the_world,
+    jl_gc_mmtk_run_pending_finalizers, jl_gc_mmtk_stop_the_world, jl_gc_safe_enter,
+    jl_gc_safe_leave, jl_gc_update_stats, jl_hrtime, jl_throw_out_of_memory_error,
 };
 use crate::{JuliaVM, USER_TRIGGERED_GC};
 use log::{info, trace};
@@ -167,6 +168,12 @@ impl Collection<JuliaVM> for VMCollection {
         let gc_state = unsafe { jl_gc_safe_enter() };
         crate::api::mmtk_wait_for_new_gc_epoch(epoch);
         unsafe { jl_gc_safe_leave(gc_state) };
+
+        // `GC.gc()` and friends are documented/tested to have run pending finalizers by the time
+        // they return (see `jl_gc_mmtk_run_pending_finalizers`'s doc comment for why that can't
+        // be left to happen "eventually" elsewhere): run them now, on this mutator, the same way
+        // `jl_gc_prepare_to_collect` used to at the end of the pause it drove.
+        unsafe { jl_gc_mmtk_run_pending_finalizers() };
     }
 
     fn spawn_gc_thread(_tls: VMThread, ctx: GCThreadContext<JuliaVM>) {

@@ -128,6 +128,7 @@ extern "C" {
     pub fn jl_gc_mmtk_stop_the_world();
     pub fn jl_gc_mmtk_resume_the_world();
     pub fn jl_gc_mmtk_defer_alloc_if_disabled() -> i32;
+    pub fn jl_gc_mmtk_run_pending_finalizers();
     pub fn jl_gc_safe_enter() -> i8;
     pub fn jl_gc_safe_leave(state: i8);
     pub fn jl_gc_get_owner_address_to_mmtk(m: Address) -> Address;

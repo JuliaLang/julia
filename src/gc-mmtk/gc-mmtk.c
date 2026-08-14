@@ -461,6 +461,27 @@ JL_DLLEXPORT int jl_gc_mmtk_defer_alloc_if_disabled(void)
     return 1;
 }
 
+// The other half of `Collection::block_for_gc`'s contract: once the pause it was waiting for has
+// completed, run this mutator's own pending finalizers before returning, exactly as
+// `jl_gc_prepare_to_collect` used to at the end of the pause it drove. `GC.gc()` and friends are
+// documented/tested (e.g. test/misc.jl, test/channels.jl) to have run pending finalizers by the
+// time they return.
+//
+// Like `jl_gc_mmtk_defer_alloc_if_disabled`, this needs no explicit `ptls` parameter: it always
+// runs on the mutator that is calling `block_for_gc` on its own behalf, using `jl_current_task`.
+// Only ever called from a mutator (never a GC worker, which has no task to run finalizers on).
+JL_DLLEXPORT void jl_gc_mmtk_run_pending_finalizers(void)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    // Only disable finalizers on current thread. Doing this on all threads is racy (it's
+    // impossible to check or wait for finalizers on other threads without dead lock).
+    if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
+        JL_TIMING(GC, GC_Finalizers);
+        run_finalizers(ct, 0);
+    }
+}
+
 // ========================================================================= //
 // GC Statistics
 // ========================================================================= //
