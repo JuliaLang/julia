@@ -8959,6 +8959,14 @@ end
 
 @test sizeof(Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})) == 2
 
+# Codegen of a Type{Union{}} isbits-union component.
+typeofbottom_union_constant() =
+    Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})
+code_llvm(devnull, typeofbottom_union_constant, Tuple{})
+let p = typeofbottom_union_constant()
+    @test p.first === Union{} && p.second === Union{}
+end
+
 # Make sure that Core.Compiler has enough NamedTuple infrastructure
 # to properly give error messages for basic kwargs...
 Core.eval(Core.Compiler, quote issue50174(;a=1) = a end)
